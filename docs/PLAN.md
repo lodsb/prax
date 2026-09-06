@@ -45,19 +45,26 @@ path is proven.
 Goal: the existing Zotero library and live browser tabs flow into prax.
 Parsing is a batch job; the serving path never parses.
 
+- [ ] Zotero test fixture: the items listed in `docs/sources.md`, copied
+      from `R:\Zotero` into `tests/fixtures/zotero/` with a reduced
+      `zotero.sqlite`; a few megabytes total
 - [ ] Zotero importer, `scripts/import_zotero.py`: works on a copy of
       `zotero.sqlite` opened read-only; `--dry-run` prints an inventory
       (items by type, attachments by link mode, missing files, duplicate
       hashes) before anything is written. Maps items → documents with
       Zotero key, item type, creators, date, DOI, URL, abstract, tags and
-      collection paths in `meta`; archives attachments by hash; imports
-      notes as text documents. Idempotent on re-run.
-- [ ] Zotero test fixture: a handful of items with small PDFs and notes,
-      exported from the real library, under `tests/fixtures/zotero/`
+      collection paths in `meta`; archives attachments by hash; indexes
+      text straight from `.zotero-ft-cache` where present (98% of PDFs),
+      tagged `meta.text_source`; imports notes as text documents;
+      `--limit N` for trial runs. Idempotent on re-run.
+- [ ] Scratch run on C: (`PRAX_DATA_DIR=C:\prax-data`, about 27 GB):
+      fixture, then `--limit 500`, then the full library. Review the
+      dry-run report before each.
 - [ ] Parse queue, `scripts/parse_pending.py`: every document with
-      `parsed_at IS NULL` is parsed by MIME type (Docling for PDF,
-      trafilatura for HTML, plain read for text) and handed to `index_text`.
-      Runs on the N100 or a laptop, not the Pi.
+      `parsed_at IS NULL`, and later every document whose
+      `meta.text_source` is the Zotero cache, is parsed by MIME type
+      (Docling for PDF, trafilatura for HTML, plain read for text) and
+      handed to `index_text`. Runs on the N100 or a laptop, not the Pi.
 - [ ] Browser capture: a Manifest V3 extension (Chrome and Firefox) with
       "send this tab" and "send all tabs in window". Posts URL, title and the
       rendered DOM to `POST /ingest/html`; a URL-only `POST /ingest/url`

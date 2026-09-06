@@ -9,20 +9,71 @@ and never writes back to where it read from (invariant 10).
 ## 1. Zotero library
 
 The primary corpus: years of curated PDFs with author, date, tag and
-collection metadata. The full library lives on an external disk and is
-large; the local Zotero directory on the dev machine is a stale, empty
-2022 install that is only useful for schema checks.
+collection metadata. The library lives on the external drive at
+`R:\Zotero` (not always mounted). The local Zotero directory on the dev
+machine is a stale, empty 2022 install that is only useful for schema
+checks.
 
 ### Where Zotero keeps things
 
-    <zotero data dir>/
-      zotero.sqlite          all metadata
-      storage/<ITEMKEY>/     imported attachments, one folder per attachment item
-      <linked base dir>/     linked files, outside the data dir
+    R:\Zotero\
+      zotero.sqlite          all metadata (661 MB; mostly Zotero's own full-text index)
+      zotero.sqlite.bak      Zotero's automatic backups; ignore
+      storage/<ITEMKEY>/     one folder per attachment item: the file plus
+                             .zotero-ft-cache, Zotero's extracted plain text
 
 Zotero holds an exclusive lock on `zotero.sqlite` while running. The
 importer therefore always copies the file first and opens the copy with
 `?mode=ro`. It never opens the live database.
+
+### Inventory (read-only census, 2026-09-06)
+
+Schema version 121, one user library, last modified November 2023, nothing
+in the trash.
+
+| What | Count |
+|---|---|
+| Regular items (articles, papers, books, web pages…) | 5,738 |
+| of which journalArticle / conferencePaper / book / bookSection | 4,357 / 686 / 217 / 208 |
+| Attachment items | 12,193 |
+| PDFs on disk | 12,061, 23.2 GB |
+| HTML snapshots (imported URL) | 105 |
+| Linked URLs (no file) | 3 |
+| Attachments with a parent item | 5,699 |
+| Standalone attachments, no parent, no metadata | 6,494 |
+| Attachments whose file is missing on disk | 1 (`R3Q364PJ`) |
+| `.zotero-ft-cache` text files | 11,773, 0.45 GB, average 39 KB |
+| Filenames shared by more than one attachment | 1,122 names over 3,609 attachments |
+| Child notes | 69 (mostly arXiv "Comment:" lines) |
+| Creators / item-creator links | 5,445 / 13,267 |
+| Tags / collections | 278 / 24 (audio-DSP topics: music, physical modelling, filters…) |
+| Items with DOI / abstract / date | 1,682 / 3,051 / 2,844 |
+
+Consequences for the importer:
+
+- **Every file attachment uses a `storage:` path.** No linked-file base
+  directory to resolve; the three linked URLs become URL-only documents.
+- **Zotero has already extracted text for 98% of the PDFs.** The
+  `.zotero-ft-cache` file next to each PDF is pdftotext output. The first
+  import pass indexes from that cache immediately, so search works over
+  the whole library without running Docling. Docling becomes a later
+  re-parse job that upgrades the text artifact (chunks are disposable,
+  rationale R3). Cache text is marked `meta.text_source = "zotero-ft-cache"`
+  so the upgrade job can find it.
+- **Half the library is metadata-less PDFs.** The 6,494 standalone
+  attachments get their title from the filename. Many filenames are arXiv
+  ids (`2104.07636.pdf`); resolving those against arXiv is a later
+  enrichment, not part of the import.
+- **Duplicates are real.** The same paper was often saved several times
+  (four copies of one 44 KB article, for instance). Hashing collapses
+  them; all Zotero keys are kept in `meta.zotero.keys`.
+- **Space.** A full copy import needs about 22–26 GB for the archive plus
+  roughly 1.5 GB for the database and text artifacts. Free space at the
+  time of the census: C: 140 GB, I: 36 GB, R: 16 GB. The plan is a
+  scratch run on C: with `PRAX_DATA_DIR=C:\prax-data`, in three steps:
+  the fixture, then `--limit 500`, then the whole library. A zero-copy
+  variant (hard-linking into an archive on the same NTFS volume as
+  `storage/`) is an option if the store ever has to live on R: itself.
 
 ### Schema mapping
 
@@ -80,12 +131,25 @@ carry no file and become URL-only documents.
 
 ### Test fixture
 
-A handful of real items (a few small PDFs, one note, one linked URL, one
-item with two attachments) are exported from the library into
-`tests/fixtures/zotero/` with their `zotero.sqlite` subset. This is the
-corpus for importer tests and for the Stage 2 eval queries. Pick items that
-are fine to commit publicly, or keep the fixture out of git and document
-how to regenerate it.
+A handful of real items are copied from the library into
+`tests/fixtures/zotero/` as a `storage/` subtree plus a `zotero.sqlite`
+reduced to those items. This is the corpus for importer tests and for the
+Stage 2 eval queries. Candidates from the census, chosen small and varied:
+
+| Shape | Zotero key | Notes |
+|---|---|---|
+| Conference paper, one 8 KB PDF, DOI, abstract, one creator | `9QRPZL68` | Correlated tensor factorization for source separation |
+| Journal article, 44 KB PDF, five creators, saved four times | `4L6ILMZN` and its three twins | exercises hash dedupe and `meta.zotero.keys` |
+| Conference paper, 50 KB PDF, two creators | `6FRF9XDC` | HRTF model |
+| Item with a child note | `EZLSQSMG` | arXiv comment note |
+| Item with an HTML snapshot, ~100 KB | `97KAI26I` (attachment) | trafilatura path |
+| Item with a linked URL, no file | `ZRWHFMBJ` (attachment) | URL-only document |
+| Item with two PDFs, 3.2 MB total | `35UKKWHM` | multi-attachment parent |
+| One standalone PDF, no parent | pick a small one | title-from-filename path |
+
+The fixture must stay a few megabytes. Decide per item whether it is fine
+to commit; otherwise keep `tests/fixtures/zotero/` out of git and document
+the regeneration command in the importer.
 
 ## 2. Browser capture
 
