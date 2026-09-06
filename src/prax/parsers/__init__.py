@@ -9,22 +9,27 @@ disposable, rationale R3).
 Registered extractors (heavy imports happen on first use, never at import
 time, so the serving path never loads them):
 
-| name          | MIME              | what                                       |
-|---------------|-------------------|--------------------------------------------|
-| pymupdf4llm   | application/pdf   | MuPDF, Markdown with headings and tables   |
-| pymupdf       | application/pdf   | MuPDF plain text; 40x faster, no structure |
-| docling       | application/pdf   | IBM Docling layout + table models; slow    |
-| trafilatura   | text/html         | article text, boilerplate stripped         |
-| plain         | text/*            | decode as UTF-8                            |
+| name            | MIME            | what                                          |
+|-----------------|-----------------|-----------------------------------------------|
+| pymupdf4llm     | application/pdf | MuPDF, Markdown with headings and tables      |
+| pymupdf         | application/pdf | MuPDF plain text; 40x faster, no structure    |
+| pymupdf4llm-ocr | application/pdf | as pymupdf4llm plus RapidOCR on scanned pages;|
+|                 |                 | explicit only, page budget PRAX_OCR_MAX_PAGES |
+| docling         | application/pdf | IBM Docling layout + table models; explicit   |
+|                 |                 | only, seconds per page                        |
+| trafilatura     | text/html       | article text, boilerplate stripped            |
+| plain           | text/*          | decode as UTF-8                               |
 
 Adding one: write a function ``bytes -> str``, wrap it in ``Extractor`` and
-append it to ``REGISTRY``. Order within a MIME type is the preference order.
+append it to ``REGISTRY``. Order within a MIME type is the preference and
+fallback order; ``explicit_only`` extractors are used only when named.
 """
 
 from __future__ import annotations
 
 import importlib
 import importlib.metadata
+import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -36,6 +41,7 @@ class Extractor:
     mimes: tuple[str, ...]  # exact types, or a prefix ending in "/"
     fn: Callable[[bytes], str]
     package: str | None = None  # distribution whose version is stamped
+    explicit_only: bool = False  # never chosen by default or as a fallback
 
     def accepts(self, mime: str) -> bool:
         return any(
@@ -84,7 +90,25 @@ def _pymupdf_open(data: bytes) -> Any:  # a pymupdf.Document, imported lazily
 def _pymupdf4llm(data: bytes) -> str:
     pymupdf4llm = importlib.import_module("pymupdf4llm")
     with _pymupdf_open(data) as doc:
-        return pymupdf4llm.to_markdown(doc)
+        return pymupdf4llm.to_markdown(doc, use_ocr=False)
+
+
+def _pymupdf4llm_ocr(data: bytes) -> str:
+    """Markdown with RapidOCR on pages that have no text layer.
+
+    OCR costs seconds per page on a CPU, so documents above
+    ``PRAX_OCR_MAX_PAGES`` (default 60) are refused with ``ExtractionError``
+    and left for a deliberate run with a higher budget.
+    """
+    pymupdf4llm = importlib.import_module("pymupdf4llm")
+    budget = int(os.environ.get("PRAX_OCR_MAX_PAGES", "60"))
+    with _pymupdf_open(data) as doc:
+        if doc.page_count > budget:
+            raise ExtractionError(
+                f"{doc.page_count} pages exceeds the OCR budget of {budget}"
+                " (PRAX_OCR_MAX_PAGES)"
+            )
+        return pymupdf4llm.to_markdown(doc, use_ocr=True)
 
 
 def _pymupdf(data: bytes) -> str:
@@ -121,7 +145,14 @@ def _plain(data: bytes) -> str:
 REGISTRY: list[Extractor] = [
     Extractor("pymupdf4llm", ("application/pdf",), _pymupdf4llm, "pymupdf4llm"),
     Extractor("pymupdf", ("application/pdf",), _pymupdf, "pymupdf"),
-    Extractor("docling", ("application/pdf",), _docling, "docling"),
+    Extractor(
+        "pymupdf4llm-ocr",
+        ("application/pdf",),
+        _pymupdf4llm_ocr,
+        "pymupdf4llm",
+        explicit_only=True,
+    ),
+    Extractor("docling", ("application/pdf",), _docling, "docling", explicit_only=True),
     Extractor(
         "trafilatura",
         ("text/html", "application/xhtml+xml"),
@@ -139,16 +170,24 @@ def by_name(name: str) -> Extractor:
     raise KeyError(f"no extractor named {name!r}; known: {[e.name for e in REGISTRY]}")
 
 
-def for_mime(mime: str, preferred: str | None = None) -> Extractor | None:
-    """The extractor to use for ``mime``: ``preferred`` if it fits and is
-    installed, else the first installed one registered for the type."""
+def candidates(mime: str, preferred: str | None = None) -> list[Extractor]:
+    """Installed extractors for ``mime`` in the order to try them.
+
+    With ``preferred`` the list is that extractor alone (if it fits the
+    type), so an explicit choice never silently falls back to another one.
+    """
     if preferred is not None:
         e = by_name(preferred)
-        return e if e.accepts(mime) and e.available() else None
-    for e in REGISTRY:
-        if e.accepts(mime) and e.available():
-            return e
-    return None
+        return [e] if e.accepts(mime) and e.available() else []
+    return [
+        e for e in REGISTRY if e.accepts(mime) and e.available() and not e.explicit_only
+    ]
+
+
+def for_mime(mime: str, preferred: str | None = None) -> Extractor | None:
+    """The first extractor ``candidates`` would try, or None."""
+    found = candidates(mime, preferred)
+    return found[0] if found else None
 
 
 def names() -> list[str]:

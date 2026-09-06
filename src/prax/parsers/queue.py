@@ -76,37 +76,49 @@ def parse_one(
 ) -> str:
     """Extract and index one document; return the action taken.
 
+    Without an explicit ``extractor`` the registry's candidates for the MIME
+    type are tried in order until one succeeds (MuPDF's Markdown path fails
+    on some PDFs where its plain path does not). Every attempt, failed or
+    not, is recorded in ``meta.parse_history``.
+
     ``created``: first text for the document. ``upgraded``: replaced the old
     text. ``kept``: new text too short, old text left in place (``force``
-    overrides). ``skipped``: no extractor for the MIME type. ``error``: the
-    extractor raised; recorded in ``meta.parse_history``.
+    overrides). ``empty``: too short and there was no old text. ``skipped``:
+    no extractor for the MIME type. Raises when every candidate failed.
     """
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
         raise KeyError(f"no such document: {doc_id}")
-    ext = parsers.for_mime(doc["mime"] or "", extractor)
-    if ext is None:
+    exts = parsers.candidates(doc["mime"] or "", extractor)
+    if not exts:
         return "skipped"
+    data = store.get_original(con, doc_id)
     old_len = doc["text_len"]
-    t0 = time.monotonic()
-    try:
-        text = ext(store.get_original(con, doc_id)).strip()
-    except Exception as exc:  # recorded in meta, then re-raised for the report
-        _record(
-            con,
-            doc_id,
-            {"extractor": ext.stamp, "error": f"{type(exc).__name__}: {exc}"},
-        )
-        raise
-    seconds = round(time.monotonic() - t0, 2)
-    entry = {"extractor": ext.stamp, "chars": len(text), "seconds": seconds}
-    if not force and _too_short(len(text), old_len):
-        _record(con, doc_id, {**entry, "outcome": "kept"})
-        return "kept" if old_len else "empty"
-    action = "upgraded" if old_len else "created"
-    _record(con, doc_id, {**entry, "outcome": action})
-    store.index_text(con, doc_id, text, text_source=ext.stamp)
-    return action
+    last_error: Exception | None = None
+    for ext in exts:
+        t0 = time.monotonic()
+        try:
+            text = ext(data).strip()
+        except Exception as exc:  # noqa: BLE001 - recorded; the next candidate is tried
+            last_error = exc
+            _record(
+                con,
+                doc_id,
+                {"extractor": ext.stamp, "error": f"{type(exc).__name__}: {exc}"},
+            )
+            continue
+        seconds = round(time.monotonic() - t0, 2)
+        entry = {"extractor": ext.stamp, "chars": len(text), "seconds": seconds}
+        if not force and _too_short(len(text), old_len):
+            action = "kept" if old_len else "empty"
+            _record(con, doc_id, {**entry, "outcome": action})
+            return action
+        action = "upgraded" if old_len else "created"
+        _record(con, doc_id, {**entry, "outcome": action})
+        store.index_text(con, doc_id, text, text_source=ext.stamp)
+        return action
+    assert last_error is not None
+    raise last_error
 
 
 def run(

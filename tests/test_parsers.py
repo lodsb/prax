@@ -42,6 +42,13 @@ def test_registry_dispatch() -> None:
     plain = parsers.by_name("plain")
     assert plain.stamp == "plain/1"
     assert plain(b"h\xc3\xa9llo") == "héllo"
+    # explicit-only extractors are never in the default chain, only when named
+    chain = [e.name for e in parsers.candidates("application/pdf")]
+    assert "docling" not in chain and "pymupdf4llm-ocr" not in chain
+    if parsers.by_name("docling").available():
+        assert [e.name for e in parsers.candidates("application/pdf", "docling")] == [
+            "docling"
+        ]
 
 
 @needs_pymupdf
@@ -167,10 +174,35 @@ def test_queue_records_errors_and_continues(
     )
     a = store.ingest_text(con, "first")["doc_id"]
     b = store.ingest_text(con, "second")["doc_id"]
-    report = queue.run(con, [a, b])
+    report = queue.run(con, [a, b], extractor="boom")
     assert report.actions == {"error": 2} and len(report.errors) == 2
     assert "no parser today" in store.get_meta(con, a)["parse_history"][-1]["error"]
     assert store.get_document(con, a)["text"] == "first"  # untouched
+
+
+def test_queue_falls_back_to_next_extractor(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def boom(data: bytes) -> str:
+        raise RuntimeError("markdown path failed")
+
+    monkeypatch.setattr(
+        parsers,
+        "REGISTRY",
+        [parsers.Extractor("boom", ("text/",), boom), *parsers.REGISTRY],
+    )
+    doc_id = store.register(con, b"plain body text " * 20, mime="text/plain")["doc_id"]
+    assert queue.run(con, [doc_id]).actions == {"created": 1}
+    meta = store.get_meta(con, doc_id)
+    assert meta["text_source"] == "plain/1"
+    assert [h.get("error", h.get("outcome")) for h in meta["parse_history"]] == [
+        "RuntimeError: markdown path failed",
+        "created",
+    ]
+    # an explicit extractor never falls back
+    other = store.register(con, b"more body text " * 20, mime="text/plain")["doc_id"]
+    report = queue.run(con, [other], extractor="boom")
+    assert report.actions == {"error": 1}
 
 
 def test_queue_skips_unsupported_mime(con: sqlite3.Connection) -> None:
