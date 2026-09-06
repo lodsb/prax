@@ -75,6 +75,26 @@ Consequences for the importer:
   variant (hard-linking into an archive on the same NTFS volume as
   `storage/`) is an option if the store ever has to live on R: itself.
 
+### Scratch run result (2026-09-07, `C:\prax-data`)
+
+Fixture, then `--limit 500` (36 s), then the whole library (656 s, no
+errors). Dry-run inventory matched the census: 12,188 file attachments,
+3 linked URLs, 17 file-less items, 83 notes, 1 missing file.
+
+| Store after import | |
+|---|---|
+| Documents | 9,235 (9,142 attachments, 73 notes, 17 metadata-only, 3 URL-only) |
+| of which stand for several Zotero records | 1,715 (3,043 attachment rows merged by hash) |
+| Archive | 17 GB for 23.4 GB referenced; database 618 MB |
+| Indexed from the Zotero text cache | 8,044 documents, 372,934 chunks |
+| Waiting for the parse queue (`parsed_at NULL`) | 1,098, almost all PDFs without a cache |
+| Graph | 2,967 paper and 5,129 author entities, 6,756 `authored_by` edges |
+
+Ten of the 83 notes are empty after HTML stripping and are not imported.
+The two embedded-image attachments (link mode 4, no file) are dropped.
+Searching the store for "extended complex Kalman filter pitch tracking"
+returns the Das 2020 URL-only document and its full-text twin first.
+
 ### Schema mapping
 
 Confirmed against the local `zotero.sqlite` (61 tables). The relevant ones:
