@@ -1,0 +1,7 @@
+data/
+__pycache__/
+*.egg-info/
+.venv/
+.ruff_cache/
+.pytest_cache/
+.idea/

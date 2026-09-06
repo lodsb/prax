@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "prax": {
+      "command": "python",
+      "args": ["-m", "prax.mcp_server"]
+    }
+  }
+}

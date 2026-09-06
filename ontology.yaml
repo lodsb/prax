@@ -1,0 +1,20 @@
+# prax ontology v0 — keep this SMALL. Extraction emits triples only against
+# the current version; anything that doesn't fit goes to the review queue.
+version: "0"
+entity_types:
+  - paper
+  - author
+  - concept
+  - method
+  - dataset
+  - tool
+  - claim
+relation_types:
+  - cites          # paper -> paper
+  - authored_by    # paper -> author
+  - about          # paper|claim -> concept
+  - implements     # tool|method -> concept|method
+  - extends        # method|concept -> method|concept
+  - contradicts    # claim -> claim
+  - supports       # claim|paper -> claim
+  - uses           # paper|method -> dataset|tool
