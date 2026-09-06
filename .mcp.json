@@ -1,7 +1,8 @@
 {
   "mcpServers": {
     "prax": {
-      "command": "python",
+      "type": "stdio",
+      "command": "${PRAX_PYTHON:-.venv/Scripts/python.exe}",
       "args": ["-m", "prax.mcp_server"]
     }
   }

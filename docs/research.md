@@ -1,3 +1,8 @@
+> **Status:** raw landscape survey (2025–2026), kept as source material.
+> The decisions drawn from it, with the reasoning that still applies, are in
+> `rationale.md`. Star counts, versions and benchmark figures below are
+> point-in-time and were not re-verified.
+
 # Building a Self-Hosted Research Knowledge Base with a Claude/MCP Interface: Open-Source Landscape and Stack Recommendations
 
 ## TL;DR

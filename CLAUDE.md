@@ -3,7 +3,8 @@
 Successor to the "zoetrope" external-disk store. A self-hosted knowledge base
 (PDFs + web snapshots) with hybrid search, a small knowledge graph, and a
 Claude/MCP agent interface. Runs on a Raspberry Pi / N100 home server behind
-Tailscale.
+Tailscale. Sources: a Zotero library, browser tabs sent from an extension, a
+drop folder (`docs/sources.md`).
 
 ## Architecture invariants (do not violate without updating this file)
 
@@ -12,18 +13,29 @@ Tailscale.
    graph. WAL mode always on. No Postgres, no Neo4j, no server databases.
 2. **Files are content-addressed.** Originals (PDFs, HTML snapshots) live at
    `data/archive/<sha256[:2]>/<sha256>`. The DB stores metadata + hash only.
-   Never store blobs in SQLite.
+   Never store blobs in SQLite. The document hash is the sha256 of the
+   **original bytes**, never of extracted text. Parsed text is its own
+   content-addressed artifact (`documents.text_hash`); chunks are a
+   disposable index derived from it and may be rebuilt at any time.
 3. **One door.** All mutations go through `prax.store` (used by the FastAPI
-   app in `prax.api`). Capture inboxes, cron jobs, and the MCP server are all
-   clients of that layer. No module writes to SQLite directly except
-   `prax.store`.
+   app in `prax.api`). Capture inboxes, importers, cron jobs, and the MCP
+   server are all clients of that layer. No module writes to SQLite directly
+   except `prax.store`. Ingest is two steps: `register` (archive the original,
+   insert the row) and `index_text` (store the text artifact, chunk, FTS).
+   Parsers call `index_text`; `ingest_text` composes both for plain text.
 4. **Single writer.** The service process is the only writer. Batch jobs run
-   through the same store functions, serialized.
+   through the same store functions, serialized behind one lock.
+   *Known deviation:* the stdio MCP server that Claude Code spawns is a
+   second process importing the store directly (invariant 5). WAL plus the
+   5 s busy timeout make this safe at personal scale. Once the service and
+   the MCP server live on the same host permanently, switch the MCP server
+   to proxy the HTTP door instead.
 5. **The MCP server is a thin proxy.** `prax.mcp_server` imports `prax.store`
    directly (same process) and exposes tools; it contains no business logic.
 6. **Agent-shaped endpoints.** `search` returns compact snippets + ids, never
-   full documents. `get` fetches one record fully. `traverse` expands 1–2 hops.
-   Keep responses small; Claude's context is the scarce resource.
+   full documents. `get` fetches one record fully but accepts an offset and a
+   character limit. `traverse` expands 1–2 hops. Keep responses small;
+   Claude's context is the scarce resource.
 7. **Pi-class hardware target.** No dependency that requires >1 GB resident
    RAM in the serving path. Parsing (Docling) and embedding run as batch jobs,
    never inline in a request.
@@ -35,6 +47,9 @@ Tailscale.
 9. **Ontology is small and versioned.** Entity/relation types live in
    `ontology.yaml`. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.
+10. **Importers never write to their source.** The Zotero importer works on
+    a copy of `zotero.sqlite` opened read-only. Nothing in prax modifies a
+    Zotero library, a browser profile, or the old zoetrope disk.
 
 ## Decision thresholds (revisit design only past these)
 
@@ -44,6 +59,8 @@ Tailscale.
 - SQLite write contention across capture sources → the answer is the single
   writer queue, not a new database.
 
+Full reasoning behind each decision: `docs/rationale.md`.
+
 ## Retrieval design
 
 Hybrid: FTS5 (BM25) and vector search run in parallel, fused with Reciprocal
@@ -51,18 +68,23 @@ Rank Fusion. Optional cross-encoder rerank (bge-reranker-v2-m3) over fused
 top-N — benchmark on target hardware before enabling by default. Graph
 traversal expands entry-point hits 1–2 hops. Complement queries ("what is NOT
 connected") and weighted multi-hop scoring are explicit SQL tools, never
-retrieval.
+retrieval. User-supplied search strings are never passed to FTS5 MATCH raw;
+`prax.store` builds the match expression.
 
 ## Conventions
 
-- Python ≥3.11, `pyproject.toml` with uv/pip, `pytest` for tests.
+- Python ≥3.11, `pyproject.toml` with uv/pip, `pytest` for tests. Dev
+  environment is a `.venv` in the repo root (`docs/howto.md`).
 - Type hints everywhere; `ruff` clean.
 - Embeddings: 384-dim (bge-small-class, quantized ONNX). The dimension is
   baked into the `chunks_vec` table — changing models means a migration.
 - Timestamps are UTC ISO-8601 strings.
-- Tests must not touch `data/`; use tmp_path fixtures.
+- Tests must not touch `data/`; use tmp_path fixtures and set
+  `PRAX_DATA_DIR` before importing `prax.mcp_server` or `prax.api`.
+- Commit at the end of each green stage; do not commit failing tests.
 
 ## Roadmap
 
 See `docs/PLAN.md`. Work one stage per session; write tests before wiring
-the MCP layer. Background research and rationale: `docs/research.md`.
+the MCP layer. Background research and rationale: `docs/rationale.md`
+(decisions) and `docs/research.md` (raw survey).

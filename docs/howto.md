@@ -1,0 +1,145 @@
+# How-to
+
+Practical steps for developing, running, testing, and deploying prax. What
+is described here works today unless a section is marked *planned*.
+
+## 1. Development environment
+
+The repo expects a virtualenv at `.venv` in the project root. `.mcp.json`
+points at it.
+
+Windows (PowerShell). Bare `python` is usually the Microsoft Store stub;
+use the `py` launcher:
+
+    py -3.13 -m venv .venv
+    .venv\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    pip install -e ".[dev]"
+
+Linux, macOS, Raspberry Pi:
+
+    python3 -m venv .venv
+    . .venv/bin/activate
+    python -m pip install --upgrade pip
+    pip install -e ".[dev]"
+
+Extras, install only where they run (see `rationale.md` R8):
+
+| Extra | Contents | Where |
+|---|---|---|
+| `dev` | pytest, ruff, httpx | every dev checkout |
+| `embed` | sqlite-vec, onnxruntime | Stage 2; the batch host and the Pi |
+| `ingest` | docling, trafilatura | Stage 1; the batch host only, heavy |
+
+Check the installed FastMCP major version after upgrades; the code targets
+the 4.x line:
+
+    python -c "import fastmcp; print(fastmcp.__version__)"
+
+## 2. Tests and lint
+
+    python -m pytest
+    ruff check src tests
+
+Tests never touch `data/`. Every fixture uses `tmp_path` and points
+`PRAX_DATA_DIR` at it before importing the API or MCP modules.
+
+## 3. Data directory
+
+Layout, all under one directory:
+
+    data/
+      prax.db            SQLite (WAL); the canonical store
+      prax.db-wal, -shm  WAL sidecar files; copy them with the db
+      archive/<xx>/<sha256>   originals and parsed-text artifacts
+      inbox/             drop folder (planned, Stage 1)
+
+The location defaults to `<repo>/data` and is overridden with the
+`PRAX_DATA_DIR` environment variable. On the Pi point it at the SSD.
+
+Stage 0 has no schema migrations. If the schema changes during Stage 0,
+delete `data/` and re-ingest.
+
+## 4. Running the HTTP door
+
+    uvicorn prax.api:app --reload --port 8000
+
+Endpoints:
+
+| Method | Path | Body / params | Returns |
+|---|---|---|---|
+| POST | `/ingest` | JSON `{text, title?, source_url?}` | `{doc_id, hash, created}` |
+| POST | `/ingest/file` | multipart `file`, form `title?`, `source_url?` | `{doc_id, hash, created}` |
+| GET | `/get/{doc_id}` | `offset?`, `max_chars?` | document row plus text |
+| GET | `/search` | `q`, `limit?` | list of `{chunk_id, doc_id, title, snippet, score}` |
+| POST | `/link` | JSON `{src, src_type, rel, dst, dst_type, confidence?, source_doc?}` | `{edge_id}` |
+| GET | `/traverse` | `entity`, `hops?` (max 2) | list of edges with types and hop distance |
+
+A first smoke run from PowerShell:
+
+    Invoke-RestMethod -Method Post http://127.0.0.1:8000/ingest `
+      -ContentType application/json `
+      -Body '{"text": "Granular synthesis smears transients.", "title": "note"}'
+    Invoke-RestMethod "http://127.0.0.1:8000/search?q=granular"
+
+## 5. MCP server in Claude Code
+
+`.mcp.json` in the repo root registers the server. Claude Code runs the
+command with the project root as the working directory, so the interpreter
+path is relative:
+
+    "command": "${PRAX_PYTHON:-.venv/Scripts/python.exe}"
+
+On Linux or macOS set `PRAX_PYTHON=.venv/bin/python` in the shell that
+launches Claude Code. Claude Code reads `.mcp.json` at startup only, so
+restart the session after editing it. The first time it sees the server it
+asks whether to trust it; if that prompt was dismissed, run
+`claude mcp reset-project-choices`.
+
+Inside a session, `/mcp` shows connection state. The tools are `search`,
+`get`, `traverse`, `link`, `ingest`, and `ingest_file`. The server can also
+be run by hand to check it starts:
+
+    python -m prax.mcp_server
+
+It speaks MCP over stdio, so it will sit waiting for input; Ctrl+C ends it.
+
+## 6. Deployment on the Pi / N100 (*planned*)
+
+The shape, to be finalized in Stage 1:
+
+- `data/` on the external SSD, `PRAX_DATA_DIR` set in the service
+  environment.
+- `uvicorn prax.api:app --host 100.x.y.z --port 8000` bound to the
+  Tailscale address only, run from a systemd unit.
+- Parsing and embedding jobs scheduled with systemd timers on the batch
+  host; they share the same `data/` over the network or the file is copied
+  back after each run.
+- The MCP server on the Pi will use the streamable-HTTP transport and proxy
+  the HTTP door (`rationale.md` R5).
+
+## 7. Backup and moving the store
+
+Everything is two things: one SQLite file and one directory of
+content-addressed files.
+
+- Database: use SQLite's online backup so the WAL is folded in, then copy
+  the result.
+
+      python -c "import sqlite3; s=sqlite3.connect('data/prax.db'); d=sqlite3.connect('backup.db'); s.backup(d)"
+
+- Archive: `rsync -a data/archive/ backup/archive/`. Files are immutable
+  and named by hash, so an interrupted copy can simply be resumed.
+
+Litestream replication is on the later list.
+
+## 8. Adding a source
+
+Every source is a client of `prax.store`. The pattern (see `sources.md`):
+
+1. Obtain original bytes and whatever metadata the source has.
+2. `register(...)`: archive, insert the row. Dedupe is automatic by hash.
+3. If text is already available, call `index_text(...)`. Otherwise leave
+   `parsed_at` NULL and let the parse queue pick it up.
+4. Seed graph edges from metadata with `link(...)`, `confidence="EXTRACTED"`
+   and `source_doc` set.
