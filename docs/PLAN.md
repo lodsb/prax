@@ -11,32 +11,34 @@ Goal: text in, search and graph out, reachable from Claude Code. No parsers,
 no embeddings, no real sources yet; those come in Stage 1 and 2 once this
 path is proven.
 
-- [ ] `prax.store`: schema init from `schema.sql`, WAL on, one process-wide
+- [x] `prax.store`: schema init from `schema.sql`, WAL on, one process-wide
       lock, connection usable from worker threads (FastAPI and FastMCP both
       run sync handlers off the main thread)
-- [ ] Two-step ingest: `register` archives the original bytes and inserts
+- [x] Two-step ingest: `register` archives the original bytes and inserts
       the document row (hash = sha256 of the original); `index_text` stores
       the parsed text as its own content-addressed artifact, chunks it
       (~1000-char windows, overlap 150) into `chunks` + FTS5, and stamps
       `parsed_at`. `ingest_text` composes both for plain text.
-- [ ] `get` reads the text artifact (never re-joins overlapping chunks) and
+- [x] `get` reads the text artifact (never re-joins overlapping chunks) and
       accepts `offset` / `max_chars`
-- [ ] `search` (FTS5-only): the store builds the MATCH expression from the
+- [x] `search` (FTS5-only): the store builds the MATCH expression from the
       user string; punctuation and operators in a query never raise
-- [ ] `link`, `traverse` (recursive CTE, max 2 hops, both edge endpoints
+- [x] `link`, `traverse` (recursive CTE, max 2 hops, both edge endpoints
       within the hop limit, valid edges only, result rows carry entity
       types and hop distance)
-- [ ] FastAPI: `POST /ingest` (text), `POST /ingest/file` (multipart),
+- [x] FastAPI: `POST /ingest` (text), `POST /ingest/file` (multipart),
       `GET /get/{id}`, `GET /search`, `POST /link`, `GET /traverse`
-- [ ] FastMCP over stdio: `search`, `get`, `traverse`, `link`, `ingest`,
+- [x] FastMCP over stdio: `search`, `get`, `traverse`, `link`, `ingest`,
       `ingest_file` (server-local path); no connection opened at import time
-- [ ] pytest, all on `tmp_path`: ingest → search, link → traverse, duplicate
+- [x] pytest, all on `tmp_path`: ingest → search, link → traverse, duplicate
       ingest is a no-op, register-without-text then index, plus regression
       tests for the four skeleton bugs (thread affinity, FTS syntax crash,
       traverse off-by-one, chunk reassembly), API through TestClient, MCP
       through the in-process client
-- [ ] `.mcp.json` points at the venv interpreter (relative path,
-      `PRAX_PYTHON` override); tools respond from Claude Code
+- [x] `.mcp.json` points at the venv interpreter (relative path,
+      `PRAX_PYTHON` override); all six tools verified over stdio using that
+      exact command. Confirm once more from a fresh Claude Code session
+      (it reads `.mcp.json` only at startup).
 
 ## Stage 1 — Real sources and parsing
 

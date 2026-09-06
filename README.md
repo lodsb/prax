@@ -47,4 +47,6 @@ instructions in `docs/howto.md`.
 
 ## Status
 
-Stage 0 (prove the core) in progress. See the checklist in `docs/PLAN.md`.
+Stage 0 (prove the core) is complete: text ingest, FTS5 search, graph
+link/traverse, HTTP door, MCP tools, 49 tests. Next is Stage 1, real
+sources and parsing. Checklists in `docs/PLAN.md`.

@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS documents (
     title         TEXT,
     source_url    TEXT,
     original_path TEXT,                          -- pre-migration provenance
+    text_hash     TEXT,                          -- sha256 of the parsed-text artifact; NULL until indexed
     added_at      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ','now')),
     parsed_at     TEXT,
     meta          TEXT                           -- JSON
