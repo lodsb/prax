@@ -95,6 +95,16 @@ The two embedded-image attachments (link mode 4, no file) are dropped.
 Searching the store for "extended complex Kalman filter pitch tracking"
 returns the Das 2020 URL-only document and its full-text twin first.
 
+**The cache-less backlog** (first parse-queue pass, 2026-09-07). The 1,090
+PDFs Zotero had no text for split into 28 with a text layer (indexed by
+pymupdf4llm, two of them through the plain fallback), 1,006 scans with no
+text layer, and 56 files that are not readable PDFs (mostly truncated
+downloads; MuPDF cannot open them). Zotero's cache therefore already
+covered every born-digital PDF. The scans hold 21,886 pages: 937 documents
+of at most 60 pages (4,531 pages, invoices, letters, short papers) go
+through the bounded OCR pass; 71 scanned books (17,355 pages) wait for a
+deliberate run with a raised `PRAX_OCR_MAX_PAGES`.
+
 ### Schema mapping
 
 Confirmed against the local `zotero.sqlite` (61 tables). The relevant ones:
