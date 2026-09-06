@@ -11,7 +11,7 @@ Goal: text in, search and graph out, reachable from Claude Code. No parsers,
 no embeddings, no real sources yet; those come in Stage 1 and 2 once this
 path is proven.
 
-- [x] `prax.store`: schema init from `schema.sql`, WAL on, one process-wide
+- [x] `prax.store`: schema init from numbered migrations, WAL on, one process-wide
       lock, connection usable from worker threads (FastAPI and FastMCP both
       run sync handlers off the main thread)
 - [x] Two-step ingest: `register` archives the original bytes and inserts
@@ -45,10 +45,14 @@ path is proven.
 Goal: the existing Zotero library and live browser tabs flow into prax.
 Parsing is a batch job; the serving path never parses.
 
-- [ ] Zotero test fixture: the items listed in `docs/sources.md`, copied
+- [x] Schema migrations (`src/prax/migrations/`, `PRAGMA user_version`)
+      and a loaded, validated, versioned ontology (`prax.ontology`), so the
+      store can grow past papers without re-ingesting (rationale R12)
+- [x] Zotero test fixture: the items listed in `docs/sources.md`, copied
       from `R:\Zotero` into `tests/fixtures/zotero/` with a reduced
-      `zotero.sqlite`; a few megabytes total
-- [ ] Zotero importer, `scripts/import_zotero.py`: works on a copy of
+      `zotero.sqlite`; 5.5 MB, built by `scripts/make_zotero_fixture.py`
+- [x] Zotero importer, `src/prax/importers/zotero.py` behind
+      `scripts/import_zotero.py`: works on a copy of
       `zotero.sqlite` opened read-only; `--dry-run` prints an inventory
       (items by type, attachments by link mode, missing files, duplicate
       hashes) before anything is written. Maps items → documents with
@@ -57,9 +61,9 @@ Parsing is a batch job; the serving path never parses.
       text straight from `.zotero-ft-cache` where present (98% of PDFs),
       tagged `meta.text_source`; imports notes as text documents;
       `--limit N` for trial runs. Idempotent on re-run.
-- [ ] Scratch run on C: (`PRAX_DATA_DIR=C:\prax-data`, about 27 GB):
+- [x] Scratch run on C: (`PRAX_DATA_DIR=C:\prax-data`, about 27 GB):
       fixture, then `--limit 500`, then the full library. Review the
-      dry-run report before each.
+      dry-run report before each. (Result recorded in `docs/sources.md`.)
 - [ ] Parse queue, `scripts/parse_pending.py`: every document with
       `parsed_at IS NULL`, and later every document whose
       `meta.text_source` is the Zotero cache, is parsed by MIME type
@@ -75,8 +79,9 @@ Parsing is a batch job; the serving path never parses.
 - [ ] Backfill of the old zoetrope disk: the hash inventory in
       `scripts/backfill.py` gains a `--commit` mode that registers files
       through the store; review the dedupe report first
-- [ ] Zotero-derived graph seeds: `authored_by` edges from creators, with
-      `confidence = EXTRACTED` and `source_doc` set
+- [x] Zotero-derived graph seeds: `authored_by` edges from creators, with
+      `confidence = EXTRACTED` and `source_doc` set (part of the importer;
+      one edge per paper title and author, notes excluded)
 
 ## Stage 2 — Hybrid retrieval
 

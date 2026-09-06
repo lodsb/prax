@@ -45,8 +45,12 @@ drop folder (`docs/sources.md`).
    `ingested_at`). Enrichment invalidates edges (sets `valid_to`); it never
    deletes them.
 9. **Ontology is small and versioned.** Entity/relation types live in
-   `ontology.yaml`. Extraction emits triples only against the current
-   version; misfits go to a review queue, not into the graph.
+   `ontology.yaml` and are loaded by `prax.ontology`. `store.link` rejects
+   any edge whose types are not in the current version, and stamps every
+   edge with that version. Growing the ontology is a version bump; renaming
+   or removing a type is a data migration. Extraction emits triples only
+   against the current version; misfits go to a review queue, not into the
+   graph.
 10. **Importers never write to their source.** The Zotero importer works on
     a copy of `zotero.sqlite` opened read-only. Nothing in prax modifies a
     Zotero library, a browser profile, or the old zoetrope disk.
@@ -76,6 +80,11 @@ retrieval. User-supplied search strings are never passed to FTS5 MATCH raw;
 - Python ≥3.11, `pyproject.toml` with uv/pip, `pytest` for tests. Dev
   environment is a `.venv` in the repo root (`docs/howto.md`).
 - Type hints everywhere; `ruff` clean.
+- Schema changes are numbered migrations in `src/prax/migrations/`
+  (`NNNN_name.sql`, contiguous), applied by `store.init_db` and tracked in
+  `PRAGMA user_version`. Never edit an applied migration; add a new one.
+  Document-level extensibility lives in `documents.meta` (JSON): new
+  sources add keys there before they earn a column.
 - Embeddings: 384-dim (bge-small-class, quantized ONNX). The dimension is
   baked into the `chunks_vec` table — changing models means a migration.
 - Timestamps are UTC ISO-8601 strings.

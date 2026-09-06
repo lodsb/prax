@@ -1,20 +1,27 @@
-# prax ontology v0 — keep this SMALL. Extraction emits triples only against
-# the current version; anything that doesn't fit goes to the review queue.
+# prax ontology — keep this SMALL. Extraction emits triples only against the
+# current version; anything that doesn't fit goes to the review queue.
+# `prax.store.link` rejects edges whose types are not listed here.
+#
+# Growing it: add types, bump `version`. Edges keep the version they were
+# written under. Renaming or removing a type is a data migration, not an
+# edit of this file. Format details: src/prax/ontology.py.
 version: "0"
+
 entity_types:
-  - paper
-  - author
-  - concept
-  - method
-  - dataset
-  - tool
-  - claim
+  paper:   {description: a document in the store}
+  author:  {description: a person or group that wrote something}
+  concept: {description: an idea, topic or phenomenon}
+  method:  {description: an algorithm, technique or procedure}
+  dataset: {description: a named corpus or measurement set}
+  tool:    {description: software, hardware or an instrument}
+  claim:   {description: an assertion made by a document}
+
 relation_types:
-  - cites          # paper -> paper
-  - authored_by    # paper -> author
-  - about          # paper|claim -> concept
-  - implements     # tool|method -> concept|method
-  - extends        # method|concept -> method|concept
-  - contradicts    # claim -> claim
-  - supports       # claim|paper -> claim
-  - uses           # paper|method -> dataset|tool
+  cites:       {domain: [paper], range: [paper]}
+  authored_by: {domain: [paper], range: [author]}
+  about:       {domain: [paper, claim], range: [concept]}
+  implements:  {domain: [tool, method], range: [concept, method]}
+  extends:     {domain: [method, concept], range: [method, concept]}
+  contradicts: {domain: [claim], range: [claim]}
+  supports:    {domain: [claim, paper], range: [claim]}
+  uses:        {domain: [paper, method], range: [dataset, tool]}

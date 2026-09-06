@@ -163,3 +163,31 @@ Tailscale. Backups are file copies (Litestream later).
 **Why.** FTS and vector churn plus nightly jobs would wear an SD card; that
 is the top reliability risk. The single-file store makes backup and
 migration a copy.
+
+## R12. Incremental schema and ontology: numbered migrations, versioned types
+
+**Decision.** The schema is a sequence of numbered SQL migrations under
+`src/prax/migrations/`, applied by `store.init_db` and recorded in SQLite's
+`user_version`. The ontology is a versioned YAML file loaded by
+`prax.ontology`; `store.link` validates every edge against it and stamps
+the version. Anything a source knows that has no column yet goes into
+`documents.meta` as JSON.
+
+**Why.** The store is meant to outlive its first corpus: after papers come
+personal, family and music material with different metadata and their own
+entity and relation types. Three cheap mechanisms keep that incremental.
+Migrations mean an old database upgrades in place instead of being
+re-ingested. Versioned ontology stamps mean old edges stay interpretable
+after the type set grows, and validation at the one door keeps misfits out
+without a second code path. JSON `meta` means a new source ships without a
+schema change; a key that turns out to be queried often is promoted to a
+column (or a JSON index) by the next migration. A Stage 0 database with
+`user_version = 0` is recognised and stamped, so nothing was thrown away.
+
+**Cost.** Two files to touch for a schema change (migration plus the store
+code that uses it). Domain/range constraints in the ontology are optional
+so the file can stay small.
+
+**Revisit when.** Migrations need data transformations Python must drive
+(a rename of an entity type, a re-chunking); then add a Python hook per
+migration number alongside the SQL. Not before.

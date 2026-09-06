@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
-from . import config
+from . import config, ontology
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
@@ -58,9 +58,51 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     return con
 
 
-def init_db(con: sqlite3.Connection) -> None:
-    con.executescript(config.SCHEMA_PATH.read_text(encoding="utf-8"))
-    con.commit()
+def migrations() -> list[tuple[int, Path]]:
+    """Numbered ``NNNN_name.sql`` files in ``prax/migrations``, ascending."""
+    found = []
+    for path in config.MIGRATIONS_DIR.glob("*.sql"):
+        head = path.name.split("_", 1)[0]
+        if not head.isdigit():
+            raise ValueError(f"migration file without a number prefix: {path.name}")
+        found.append((int(head), path))
+    found.sort()
+    numbers = [n for n, _ in found]
+    if numbers != list(range(1, len(numbers) + 1)):
+        raise ValueError(
+            f"migrations must be numbered 1..N without gaps, got {numbers}"
+        )
+    return found
+
+
+def schema_version(con: sqlite3.Connection) -> int:
+    """The last migration applied (``PRAGMA user_version``); 0 = empty DB."""
+    return int(con.execute("PRAGMA user_version").fetchone()[0])
+
+
+@_serialized
+def init_db(con: sqlite3.Connection) -> int:
+    """Bring the database up to the latest migration; return its version.
+
+    Each pending migration runs in its own transaction and stamps
+    ``user_version`` on success, so an interrupted upgrade resumes cleanly.
+    Applied migrations are never re-run; extend the schema by adding a new
+    numbered file, never by editing an old one.
+    """
+    current = schema_version(con)
+    for number, path in migrations():
+        if number <= current:
+            continue
+        sql = path.read_text(encoding="utf-8")
+        try:
+            con.executescript(
+                "BEGIN;\n" + sql + f"\nPRAGMA user_version = {number};\nCOMMIT;"
+            )
+        except Exception:
+            con.execute("ROLLBACK")
+            raise
+        current = number
+    return current
 
 
 # ---------------------------------------------------------------- archive
@@ -68,6 +110,15 @@ def init_db(con: sqlite3.Connection) -> None:
 
 def _archive_path(digest: str) -> Path:
     return config.archive_dir() / digest[:2] / digest
+
+
+def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
+    """sha256 of a file read in chunks (for inventories; no archiving)."""
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        while block := f.read(chunk):
+            h.update(block)
+    return h.hexdigest()
 
 
 def _archive_bytes(data: bytes) -> str:
@@ -152,7 +203,8 @@ def register(
 @_serialized
 def index_text(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any]:
     """Store parsed text as its own artifact, (re)build chunks and FTS rows."""
-    if con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone() is None:
+    exists = con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if exists is None:
         raise KeyError(f"no such document: {doc_id}")
     text_hash = _archive_bytes(text.encode("utf-8"))
     chunks = _chunk(text)
@@ -174,6 +226,62 @@ def _is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
         "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     return bool(row and row["text_hash"])
+
+
+@_serialized
+def is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
+    """True once ``index_text`` has stored a text artifact for the document."""
+    return _is_indexed(con, doc_id)
+
+
+@_serialized
+def get_meta(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
+    """The document's ``meta`` JSON without touching the text artifact."""
+    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    return json.loads(row["meta"]) if row["meta"] else {}
+
+
+@_serialized
+def set_meta(
+    con: sqlite3.Connection,
+    doc_id: int,
+    meta: dict[str, Any],
+    *,
+    title: str | None = None,
+    source_url: str | None = None,
+) -> None:
+    """Replace ``meta`` (and optionally title / source_url) of a document.
+
+    Importers use this to merge provenance when a known hash turns up again
+    under another source record.
+    """
+    cur = con.execute(
+        "UPDATE documents SET meta = ?, title = COALESCE(?, title),"
+        " source_url = COALESCE(?, source_url) WHERE id = ?",
+        (json.dumps(meta), title, source_url, doc_id),
+    )
+    if cur.rowcount == 0:
+        raise KeyError(f"no such document: {doc_id}")
+    con.commit()
+
+
+@_serialized
+def meta_index(con: sqlite3.Connection, json_path: str) -> dict[str, int]:
+    """Map every value found at ``json_path`` in any document's meta to its id.
+
+    Array values are expanded, so ``"$.zotero.keys"`` yields one entry per
+    key. Lets importers decide what is already imported without re-reading
+    or re-hashing source files.
+    """
+    rows = con.execute(
+        "SELECT d.id AS id, j.value AS value"
+        " FROM documents d, json_each(json_extract(d.meta, ?)) j"
+        " WHERE json_extract(d.meta, ?) IS NOT NULL",
+        (json_path, json_path),
+    ).fetchall()
+    return {str(r["value"]): r["id"] for r in rows}
 
 
 @_serialized
@@ -204,8 +312,9 @@ def ingest_file(
     )
     if text is None and mime.startswith("text/"):
         text = data.decode("utf-8", errors="replace")
-    if text is not None and (result["created"] or not _is_indexed(con, result["doc_id"])):
-        index_text(con, result["doc_id"], text)
+    doc_id = result["doc_id"]
+    if text is not None and (result["created"] or not _is_indexed(con, doc_id)):
+        index_text(con, doc_id, text)
     return result
 
 
@@ -320,9 +429,17 @@ def link(
     source_doc: int | None = None,
     ontology_version: str | None = None,
 ) -> int:
-    """Insert a currently-valid edge; entities are created on demand."""
+    """Insert a currently-valid edge; entities are created on demand.
+
+    Types are validated against the current ontology (invariant 9); the edge
+    is stamped with that ontology's version unless one is given.
+    """
     if confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"confidence must be one of {CONFIDENCE_LEVELS}")
+    onto = ontology.current()
+    onto.check_edge(edge.src_type, edge.rel, edge.dst_type)
+    if ontology_version is None:
+        ontology_version = onto.version
     src = _entity_id(con, edge.src, edge.src_type)
     dst = _entity_id(con, edge.dst, edge.dst_type)
     cur = con.execute(
@@ -332,6 +449,25 @@ def link(
     )
     con.commit()
     return cur.lastrowid
+
+
+@_serialized
+def find_edges(con: sqlite3.Connection, edge: Edge) -> list[int]:
+    """Ids of currently-valid edges with exactly this src, rel and dst.
+
+    Lets importers seed edges idempotently without touching SQL themselves.
+    """
+    rows = con.execute(
+        """
+        SELECT e.id FROM edges e
+        JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
+        WHERE s.name = ? AND s.type = ? AND e.rel = ?
+          AND t.name = ? AND t.type = ? AND e.valid_to IS NULL
+        ORDER BY e.id
+        """,
+        (edge.src, edge.src_type, edge.rel, edge.dst, edge.dst_type),
+    ).fetchall()
+    return [r["id"] for r in rows]
 
 
 @_serialized

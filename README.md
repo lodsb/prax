@@ -48,5 +48,7 @@ instructions in `docs/howto.md`.
 ## Status
 
 Stage 0 (prove the core) is complete: text ingest, FTS5 search, graph
-link/traverse, HTTP door, MCP tools, 49 tests. Next is Stage 1, real
-sources and parsing. Checklists in `docs/PLAN.md`.
+link/traverse, HTTP door, MCP tools. Stage 1 is under way: numbered schema
+migrations, a validated versioned ontology, and the Zotero importer with
+its test fixture are in; the browser extension, inbox watcher and parse
+queue are next. Checklists in `docs/PLAN.md`.

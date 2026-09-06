@@ -10,7 +10,8 @@ import os
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = REPO_ROOT / "schema.sql"
+MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
+ONTOLOGY_PATH = REPO_ROOT / "ontology.yaml"
 
 
 def data_dir() -> Path:
@@ -23,3 +24,4 @@ def db_path() -> Path:
 
 def archive_dir() -> Path:
     return data_dir() / "archive"
+

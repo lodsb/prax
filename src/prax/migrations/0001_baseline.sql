@@ -1,8 +1,8 @@
--- prax canonical schema. Applied idempotently by prax.store.init_db().
--- sqlite-vec table is created separately in code (extension must be loaded).
+-- prax baseline schema (migration 0001). Applied by prax.store.init_db();
+-- never edit once applied: add a new numbered migration instead.
+-- PRAGMAs (WAL, foreign keys) are set per connection in store.connect().
+-- The sqlite-vec table is created in code once the extension is loaded.
 
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS documents (
     id            INTEGER PRIMARY KEY,

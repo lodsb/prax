@@ -57,8 +57,37 @@ Layout, all under one directory:
 The location defaults to `<repo>/data` and is overridden with the
 `PRAX_DATA_DIR` environment variable. On the Pi point it at the SSD.
 
-Stage 0 has no schema migrations. If the schema changes during Stage 0,
-delete `data/` and re-ingest.
+### Schema migrations
+
+The schema lives in `src/prax/migrations/NNNN_name.sql`. `store.init_db`
+(called by the API, the MCP server and every script) applies the files
+whose number is above the database's `PRAGMA user_version`, each in its own
+transaction, and stamps the version. To change the schema, add the next
+numbered file; never edit one that has been applied. A database created
+before migrations existed (version 0) is upgraded in place.
+
+### Ontology
+
+`ontology.yaml` lists the entity and relation types the graph accepts and a
+`version`. `store.link` rejects anything else. Add types and bump the
+version; edges keep the version they were written under. `PRAX_ONTOLOGY`
+points at a different file (tests use it).
+
+## 3a. Importing the Zotero library
+
+The importer never opens the live `zotero.sqlite`; it copies the file into
+`<data dir>/zotero-import/` and opens the copy read-only. Everything goes
+through `prax.store`. Details of the mapping: `docs/sources.md` §1.
+
+    # read-only census; nothing is written. --hash adds sha256 dedupe (reads every file)
+    python scripts/import_zotero.py R:/Zotero --dry-run
+    # trial run, then the whole library. Re-runs skip what is already imported.
+    $env:PRAX_DATA_DIR = "C:\prax-data"
+    python scripts/import_zotero.py R:/Zotero --commit --limit 500
+    python scripts/import_zotero.py R:/Zotero --commit --quiet
+
+The test fixture in `tests/fixtures/zotero/` is regenerated with
+`scripts/make_zotero_fixture.py` (the exact command is in its docstring).
 
 ## 4. Running the HTTP door
 

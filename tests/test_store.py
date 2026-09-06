@@ -164,9 +164,8 @@ def test_chunk_windows() -> None:
     assert store._chunk("") == []
     assert store._chunk("x" * store.CHUNK_SIZE) == ["x" * store.CHUNK_SIZE]
     chunks = store._chunk(LONG_TEXT)
-    assert "".join(c[store.CHUNK_OVERLAP:] if i else c for i, c in enumerate(chunks)) == (
-        LONG_TEXT
-    )
+    joined = "".join(c[store.CHUNK_OVERLAP :] if i else c for i, c in enumerate(chunks))
+    assert joined == LONG_TEXT
     assert chunks[1][: store.CHUNK_OVERLAP] == chunks[0][-store.CHUNK_OVERLAP :]
     assert all(len(c) <= store.CHUNK_SIZE for c in chunks)
 

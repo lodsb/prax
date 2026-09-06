@@ -115,8 +115,26 @@ carry no file and become URL-only documents.
   `confidence = EXTRACTED`, `source_doc` = the document,
   `ontology_version` = current. Tags and collections are kept in `meta`
   only for now; mapping them onto `concept` entities is a Stage 3 decision.
-- Idempotent: a re-run skips documents whose hash exists and updates
-  `meta.zotero` if the Zotero record changed (`dateModified` is stored).
+- Idempotent: a re-run looks up Zotero keys already recorded in
+  `meta.zotero.keys` (no file is re-read or re-hashed), skips them, and
+  refreshes `meta` when the record's `dateModified` changed
+  (`meta.zotero.modified` holds one stamp per key).
+
+### What the store holds after import
+
+| `meta` key | Content |
+|---|---|
+| `source` | `"zotero"` |
+| `zotero.kind` | `attachment`, `url`, `metadata` (item without a file) or `note` |
+| `zotero.keys` / `zotero.items` | every attachment key and parent item key this document stands for |
+| `zotero.item_type`, `zotero.link_mode`, `zotero.filename`, `zotero.parent` | as in Zotero |
+| `creators` | ordered `{name, first, last, type}` |
+| `date`, `doi`, `abstract`, `tags`, `collections` | lifted from the item |
+| `fields` | every other Zotero field (publicationTitle, pages, ISBN…) |
+| `text_source` | `"zotero-ft-cache"` when indexed from the cache, else null |
+
+Columns: `title` and `source_url` from the parent item, `mime` from the
+attachment, `original_path` the file's path under `storage/`.
 
 ### Workflow
 
@@ -147,9 +165,14 @@ Stage 2 eval queries. Candidates from the census, chosen small and varied:
 | Item with two PDFs, 3.2 MB total | `35UKKWHM` | multi-attachment parent |
 | One standalone PDF, no parent | pick a small one | title-from-filename path |
 
-The fixture must stay a few megabytes. Decide per item whether it is fine
-to commit; otherwise keep `tests/fixtures/zotero/` out of git and document
-the regeneration command in the importer.
+Built (2026-09-07) with `scripts/make_zotero_fixture.py` from the keys
+above plus the three Birbaumer twins (`HW3N7956`, `U263HF74`, `MCNISPSX`)
+and the ATLAS BLAS reference (`VVJITI78`) as the standalone PDF; the 2 MB
+Févotte PDF (`RGI62LBN`) is skipped to keep it at 5.5 MB: 23 items, 11
+storage folders. Committed: all of it is published papers or public
+documentation. Personal documents in the library (invoices, shipping
+labels, contracts among the standalone PDFs) are imported into the private
+store but never into the fixture.
 
 ## 2. Browser capture
 
