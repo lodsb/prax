@@ -164,6 +164,16 @@ Tailscale. Backups are file copies (Litestream later).
 is the top reliability risk. The single-file store makes backup and
 migration a copy.
 
+**Hosts (2026-09).** Development and every batch job (import, parsing,
+embedding, enrichment) run on the Windows desktop, where the full scratch
+store lives at `C:\prax-data`. The serving host is a Pi-class SBC; an
+8 GB Radxa Dragon Q6A (Qualcomm QCS6490, eight Arm cores) is on hand and
+is the first candidate, with a dedicated small box as a later upgrade.
+Sizing rule: the serving path must fit the 8 GB board with room to spare;
+Docling and anything else heavy stays on the desktop. The Q6A's NPU is
+not part of the plan. Moving the service is a copy of the data directory
+onto an SSD attached to the board.
+
 ## R12. Incremental schema and ontology: numbered migrations, versioned types
 
 **Decision.** The schema is a sequence of numbered SQL migrations under
