@@ -201,8 +201,19 @@ def register(
 
 
 @_serialized
-def index_text(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any]:
-    """Store parsed text as its own artifact, (re)build chunks and FTS rows."""
+def index_text(
+    con: sqlite3.Connection,
+    doc_id: int,
+    text: str,
+    *,
+    text_source: str | None = None,
+) -> dict[str, Any]:
+    """Store parsed text as its own artifact, (re)build chunks and FTS rows.
+
+    ``text_source`` names what produced the text (an extractor stamp such as
+    ``"pymupdf4llm/0.0.27"`` or ``"zotero-ft-cache"``) and is written to
+    ``meta.text_source`` in the same transaction.
+    """
     exists = con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if exists is None:
         raise KeyError(f"no such document: {doc_id}")
@@ -217,6 +228,12 @@ def index_text(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any
         f"UPDATE documents SET text_hash = ?, parsed_at = {_NOW} WHERE id = ?",
         (text_hash, doc_id),
     )
+    if text_source is not None:
+        con.execute(
+            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+            " '$.text_source', ?) WHERE id = ?",
+            (text_source, doc_id),
+        )
     con.commit()
     return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": len(chunks)}
 
@@ -265,6 +282,57 @@ def set_meta(
     if cur.rowcount == 0:
         raise KeyError(f"no such document: {doc_id}")
     con.commit()
+
+
+@_serialized
+def get_original(con: sqlite3.Connection, doc_id: int) -> bytes:
+    """The archived original bytes of a document (what its hash names)."""
+    row = con.execute("SELECT hash FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    return _read_archive(row["hash"])
+
+
+def _like_prefix(prefix: str) -> str:
+    """A LIKE pattern matching strings that start with ``prefix`` literally."""
+    escaped = prefix.replace("!", "!!").replace("%", "!%").replace("_", "!_")
+    return escaped + "%"
+
+
+@_serialized
+def select_documents(
+    con: sqlite3.Connection,
+    *,
+    pending: bool = False,
+    text_source_prefix: str | None = None,
+    mime_prefix: str | None = None,
+    limit: int | None = None,
+) -> list[int]:
+    """Document ids for batch jobs, oldest first.
+
+    ``pending`` selects never-indexed documents (``parsed_at IS NULL``);
+    ``text_source_prefix`` selects indexed ones whose ``meta.text_source``
+    starts with the prefix (``"zotero-ft-cache"``, ``"pymupdf/"``). The two
+    are OR-ed when both are given. ``mime_prefix`` narrows either.
+    """
+    clauses: list[str] = []
+    args: list[Any] = []
+    if pending:
+        clauses.append("parsed_at IS NULL")
+    if text_source_prefix is not None:
+        clauses.append("json_extract(meta, '$.text_source') LIKE ? ESCAPE '!'")
+        args.append(_like_prefix(text_source_prefix))
+    if not clauses:
+        return []
+    sql = f"SELECT id FROM documents WHERE ({' OR '.join(clauses)})"
+    if mime_prefix is not None:
+        sql += " AND mime LIKE ? ESCAPE '!'"
+        args.append(_like_prefix(mime_prefix))
+    sql += " ORDER BY id"
+    if limit is not None:
+        sql += " LIMIT ?"
+        args.append(limit)
+    return [r["id"] for r in con.execute(sql, args)]
 
 
 @_serialized
