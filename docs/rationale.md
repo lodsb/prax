@@ -121,16 +121,39 @@ edges to Kùzu (embedded), not Neo4j.
 
 ## R8. Embeddings and parsing are batch jobs on the bigger box
 
-**Decision.** bge-small-class, 384-dim, INT8 ONNX for embeddings. Docling
-for PDF, trafilatura for HTML. All of it runs as scheduled batch work,
-preferably on the N100 or a laptop; the Pi serves.
+**Decision.** bge-small-class, 384-dim, INT8 ONNX for embeddings.
+pymupdf4llm for PDF (plain pymupdf as fallback), trafilatura for HTML,
+through a pluggable extractor registry (`prax.parsers`). OCR and Docling
+exist as explicit-only extractors. All of it runs as scheduled batch work
+on the desktop; the SBC serves.
 
-**Why.** Every latency figure in the survey came from x86; the Pi will be
-slower. Keeping ML dependencies out of the serving path keeps resident RAM
-under 1 GB. Model2Vec is the fallback if even bge-small is too slow.
+**Why.** Every latency figure in the survey came from x86; the serving
+board will be slower. Keeping ML dependencies out of the serving path
+keeps resident RAM under 1 GB. Model2Vec is the fallback if even bge-small
+is too slow.
+
+*PDF extractor (2026-09-07).* The survey favoured Docling on published
+table-accuracy figures. Measured on this library instead
+(`docs/eval/extractors-2026-09-07.md`: twenty table-heavy PDFs, datasheets
+and papers): Docling and pymupdf4llm recover the same table rows with
+identical cells on every document with real tables (201 vs 195, 184 vs
+185, 105 vs 105 rows), the same character volume, and the same failures
+on a broken font. Docling missed a grid pymupdf4llm found and took 420 s
+against 86 s (plain pymupdf: under a second, no structure). No measurable
+gain at five times the cost and a 3 GB PyTorch dependency, so pymupdf4llm
+is the default and Docling stays available for a hand-picked document
+through `--extractor docling`.
+
+*OCR.* pymupdf4llm 1.28 runs RapidOCR on pages without a text layer by
+default. The cache-less backlog is largely scans, one of them a 412-page
+book, so OCR is a separate explicit extractor with a page budget and the
+default refuses documents whose first pages have no text layer (they are
+left pending and reported as empty).
 
 **Cost.** The 384 dimension is baked into `chunks_vec`; changing models is
-a migration.
+a migration. Every extractor stamps `meta.text_source` with its name and
+version, so a future re-extraction pass is a queue selection, not a
+migration.
 
 ## R9. Sources: Zotero first, browser tabs second, front-ends later
 

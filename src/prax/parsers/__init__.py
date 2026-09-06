@@ -87,9 +87,25 @@ def _pymupdf_open(data: bytes) -> Any:  # a pymupdf.Document, imported lazily
     return pymupdf.open(stream=data, filetype="pdf")
 
 
+PROBE_PAGES = 5  # pages sampled to decide whether a PDF has a text layer
+
+
+def _has_text_layer(doc: Any) -> bool:
+    """True if any of the first ``PROBE_PAGES`` pages carries extractable text.
+
+    A scan without OCR has none; running layout analysis over hundreds of
+    image-only pages takes minutes and yields nothing, so such documents are
+    refused up front and left for the explicit OCR extractor.
+    """
+    n = min(doc.page_count, PROBE_PAGES)
+    return any(doc[i].get_text().strip() for i in range(n))
+
+
 def _pymupdf4llm(data: bytes) -> str:
     pymupdf4llm = importlib.import_module("pymupdf4llm")
     with _pymupdf_open(data) as doc:
+        if not _has_text_layer(doc):
+            raise ExtractionError("no text layer in the first pages; needs OCR")
         return pymupdf4llm.to_markdown(doc, use_ocr=False)
 
 

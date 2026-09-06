@@ -63,6 +63,25 @@ def test_pymupdf_extractors_read_the_fixture_pdf() -> None:
     assert parsers.for_mime("application/pdf").name == "pymupdf4llm"
 
 
+@needs_pymupdf
+def test_scanned_pdf_is_refused_by_markdown_and_left_empty(
+    con: sqlite3.Connection,
+) -> None:
+    import pymupdf
+
+    with pymupdf.open() as doc:  # pages with no text layer, like a scan
+        for _ in range(3):
+            doc.new_page()
+        scan = doc.tobytes()
+    with pytest.raises(parsers.ExtractionError, match="needs OCR"):
+        parsers.by_name("pymupdf4llm")(scan)
+    doc_id = store.register(con, scan, mime="application/pdf", title="scan")["doc_id"]
+    assert queue.run(con, [doc_id]).actions == {"empty": 1}
+    history = store.get_meta(con, doc_id)["parse_history"]
+    assert [h.get("outcome", "error") for h in history] == ["error", "empty"]
+    assert store.select_documents(con, pending=True) == [doc_id]  # still pending
+
+
 @needs_trafilatura
 def test_trafilatura_strips_page_chrome() -> None:
     text = parsers.by_name("trafilatura")(SNAPSHOT_HTML.read_bytes())

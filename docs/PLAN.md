@@ -64,11 +64,22 @@ Parsing is a batch job; the serving path never parses.
 - [x] Scratch run on C: (`PRAX_DATA_DIR=C:\prax-data`, about 27 GB):
       fixture, then `--limit 500`, then the full library. Review the
       dry-run report before each. (Result recorded in `docs/sources.md`.)
-- [ ] Parse queue, `scripts/parse_pending.py`: every document with
-      `parsed_at IS NULL`, and later every document whose
-      `meta.text_source` is the Zotero cache, is parsed by MIME type
-      (Docling for PDF, trafilatura for HTML, plain read for text) and
-      handed to `index_text`. Runs on the N100 or a laptop, not the Pi.
+- [x] Parse queue, `scripts/parse_pending.py` over `prax.parsers`: every
+      document with `parsed_at IS NULL` (`--pending`), and every document
+      whose `meta.text_source` matches a prefix (`--upgrade`), is parsed by
+      MIME type through a pluggable extractor registry (pymupdf4llm then
+      pymupdf for PDF with fallback, explicit-only pymupdf4llm-ocr and
+      docling, trafilatura for HTML, plain for text) and handed to
+      `index_text`. Runs on the desktop, not the serving host.
+- [x] Extractor decision: Docling versus pymupdf4llm on a table-heavy
+      sample (`scripts/compare_extractors.py`, `docs/eval/`); verdict in
+      rationale R8: pymupdf4llm stays the default, no Docling upgrade pass
+- [ ] Upgrade pass over the cache-derived PDFs and HTML snapshots with the
+      default extractors (`--upgrade zotero-ft-cache`), so every text
+      artifact carries an extractor stamp; roughly an hour on the desktop
+- [ ] OCR pass over the scanned PDFs the bulk pass left empty
+      (`--extractor pymupdf4llm-ocr`, raise `PRAX_OCR_MAX_PAGES` for the
+      few big books deliberately)
 - [ ] Browser capture: a Manifest V3 extension (Chrome and Firefox) with
       "send this tab" and "send all tabs in window". Posts URL, title and the
       rendered DOM to `POST /ingest/html`; a URL-only `POST /ingest/url`

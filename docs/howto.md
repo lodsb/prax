@@ -29,7 +29,8 @@ Extras, install only where they run (see `rationale.md` R8):
 |---|---|---|
 | `dev` | pytest, ruff, httpx | every dev checkout |
 | `embed` | sqlite-vec, onnxruntime | Stage 2; the batch host and the Pi |
-| `ingest` | docling, trafilatura | Stage 1; the batch host only, heavy |
+| `ingest` | pymupdf4llm, trafilatura | Stage 1 parse queue; the desktop |
+| `docling` | docling (about 3 GB with PyTorch) | optional; only for `--extractor docling` |
 
 Check the installed FastMCP major version after upgrades; the code targets
 the 4.x line:
@@ -88,6 +89,29 @@ through `prax.store`. Details of the mapping: `docs/sources.md` §1.
 
 The test fixture in `tests/fixtures/zotero/` is regenerated with
 `scripts/make_zotero_fixture.py` (the exact command is in its docstring).
+
+## 3b. Parse queue
+
+Extractors live in `prax.parsers` (see its docstring for the table) and are
+picked by MIME type in registry order, falling back to the next one when
+one raises. The queue records every attempt in `meta.parse_history` and the
+winner in `meta.text_source` as `<name>/<version>`, so any pass can be
+redone later with `--upgrade <prefix>`. An upgrade keeps the old text when
+the new one is suspiciously short (login walls, scans without OCR) unless
+`--force` is given. Runs on the desktop, never on the serving host.
+
+    # documents never indexed (registered by an importer or the inbox)
+    python scripts/parse_pending.py --pending
+    # re-extract everything Zotero's cache produced, HTML first
+    python scripts/parse_pending.py --upgrade zotero-ft-cache --mime text/html
+    # scans: OCR is explicit and bounded (PRAX_OCR_MAX_PAGES, default 60)
+    python scripts/parse_pending.py --pending --extractor pymupdf4llm-ocr
+    # Docling on a hand-picked set
+    python scripts/parse_pending.py --ids 12 34 --extractor docling --force
+
+Before switching the default extractor for a document class, run
+`scripts/compare_extractors.py` over a sample and read the texts, not only
+the metrics table it writes.
 
 ## 4. Running the HTTP door
 
