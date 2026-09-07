@@ -32,9 +32,29 @@ def _db() -> sqlite3.Connection:
 
 
 @mcp.tool
-def search(query: str, limit: int = 10) -> list[dict[str, Any]]:
-    """Search the knowledge base (BM25). Returns compact snippets + ids."""
-    return store.search(_db(), query, limit)
+def search(
+    query: str, limit: int = 10, kind: str | None = None
+) -> list[dict[str, Any]]:
+    """Search the knowledge base (BM25). Returns compact snippets + ids.
+
+    Each hit names its chunk ``kind`` (text, table, figure, code), section
+    ``heading`` path and ``page``. ``kind`` restricts to one kind, e.g.
+    ``kind="table"`` for documents with a table about the query.
+    """
+    try:
+        return store.search(_db(), query, limit, kind=kind)
+    except ValueError as exc:
+        return [{"error": str(exc)}]
+
+
+@mcp.tool
+def get_chunk(chunk_id: int) -> dict[str, Any]:
+    """Fetch one chunk in full (ids come from search results).
+
+    Returns its text, kind, heading path, locator (character range and page
+    in the document) and, for tables, ``data`` with header and rows.
+    """
+    return store.get_chunk(_db(), chunk_id) or {"error": "no such chunk"}
 
 
 @mcp.tool

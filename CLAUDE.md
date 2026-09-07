@@ -85,6 +85,11 @@ retrieval. User-supplied search strings are never passed to FTS5 MATCH raw;
   `PRAGMA user_version`. Never edit an applied migration; add a new one.
   Document-level extensibility lives in `documents.meta` (JSON): new
   sources add keys there before they earn a column.
+- Chunks are addressable regions: `kind`, `locator` (character range plus
+  page; `chunk.text == artifact[start:end]` always), `heading` path, table
+  `data`. Chunking lives in `prax.chunking` and chunks are disposable:
+  change the chunker, run `scripts/rechunk.py`. New media add a kind and a
+  locator shape, never a new table for chunks (rationale R13).
 - Embeddings: 384-dim (bge-small-class, quantized ONNX). The dimension is
   baked into the `chunks_vec` table — changing models means a migration.
 - Timestamps are UTC ISO-8601 strings.

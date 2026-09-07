@@ -95,8 +95,22 @@ def get(
 
 
 @app.get("/search")
-def search(q: str, request: Request, limit: int = 10) -> list[dict[str, Any]]:
-    return store.search(request.app.state.con, q, limit)
+def search(
+    q: str, request: Request, limit: int = 10, kind: str | None = None
+) -> list[dict[str, Any]]:
+    try:
+        return store.search(request.app.state.con, q, limit, kind=kind)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/chunk/{chunk_id}")
+def chunk(chunk_id: int, request: Request) -> dict[str, Any]:
+    """One chunk in full, with its kind, heading path, locator and table data."""
+    c = store.get_chunk(request.app.state.con, chunk_id)
+    if c is None:
+        raise HTTPException(404, "no such chunk")
+    return c
 
 
 @app.post("/link")

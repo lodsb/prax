@@ -161,13 +161,16 @@ def test_get_missing_returns_none(con: sqlite3.Connection) -> None:
 
 
 def test_chunk_windows() -> None:
-    assert store._chunk("") == []
-    assert store._chunk("x" * store.CHUNK_SIZE) == ["x" * store.CHUNK_SIZE]
-    chunks = store._chunk(LONG_TEXT)
-    joined = "".join(c[store.CHUNK_OVERLAP :] if i else c for i, c in enumerate(chunks))
+    """The fixed-window fallback lives in prax.chunking now (long paragraphs)."""
+    from prax import chunking
+
+    assert chunking.windows("") == []
+    assert chunking.windows("x" * chunking.WINDOW) == [(0, chunking.WINDOW)]
+    chunks = [LONG_TEXT[a:b] for a, b in chunking.windows(LONG_TEXT)]
+    joined = "".join(c[chunking.OVERLAP :] if i else c for i, c in enumerate(chunks))
     assert joined == LONG_TEXT
-    assert chunks[1][: store.CHUNK_OVERLAP] == chunks[0][-store.CHUNK_OVERLAP :]
-    assert all(len(c) <= store.CHUNK_SIZE for c in chunks)
+    assert chunks[1][: chunking.OVERLAP] == chunks[0][-chunking.OVERLAP :]
+    assert all(len(c) <= chunking.WINDOW for c in chunks)
 
 
 # ----------------------------------------------------------------- search

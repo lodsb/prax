@@ -21,10 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
-from . import config, ontology
+from . import chunking, config, ontology
 
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 150
 MAX_HOPS = 2
 CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 
@@ -140,20 +138,6 @@ def _read_archive(digest: str) -> bytes:
 # --------------------------------------------------------------- chunking
 
 
-def _chunk(text: str) -> list[str]:
-    """Fixed windows of CHUNK_SIZE chars overlapping by CHUNK_OVERLAP."""
-    if not text:
-        return []
-    step = CHUNK_SIZE - CHUNK_OVERLAP
-    chunks: list[str] = []
-    start = 0
-    while True:
-        chunks.append(text[start : start + CHUNK_SIZE])
-        if start + CHUNK_SIZE >= len(text):
-            return chunks
-        start += step
-
-
 def _fts_query(query: str) -> str | None:
     """Build a safe FTS5 MATCH expression: every token quoted, joined by OR.
 
@@ -218,12 +202,7 @@ def index_text(
     if exists is None:
         raise KeyError(f"no such document: {doc_id}")
     text_hash = _archive_bytes(text.encode("utf-8"))
-    chunks = _chunk(text)
-    con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
-    con.executemany(
-        "INSERT INTO chunks (doc_id, seq, text) VALUES (?,?,?)",
-        [(doc_id, i, c) for i, c in enumerate(chunks)],
-    )
+    n_chunks = _write_chunks(con, doc_id, text)
     con.execute(
         f"UPDATE documents SET text_hash = ?, parsed_at = {_NOW} WHERE id = ?",
         (text_hash, doc_id),
@@ -235,7 +214,40 @@ def index_text(
             (text_source, doc_id),
         )
     con.commit()
-    return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": len(chunks)}
+    return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": n_chunks}
+
+
+def _write_chunks(con: sqlite3.Connection, doc_id: int, text: str) -> int:
+    """Replace a document's chunks with structure-aware ones (prax.chunking)."""
+    rows = chunking.rows(chunking.chunk(text))
+    con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+    con.executemany(
+        "INSERT INTO chunks (doc_id, seq, text, kind, locator, heading, data)"
+        " VALUES (?,?,?,?,?,?,?)",
+        [(doc_id, i, *r) for i, r in enumerate(rows)],
+    )
+    return len(rows)
+
+
+@_serialized
+def rechunk(con: sqlite3.Connection, doc_id: int) -> int:
+    """Rebuild a document's chunks from its text artifact; return the count.
+
+    The artifact and everything else stay untouched (chunks are disposable,
+    rationale R3). Used after a chunker change or a schema migration that
+    added chunk columns.
+    """
+    row = con.execute(
+        "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    if not row["text_hash"]:
+        return 0
+    text = _read_archive(row["text_hash"]).decode("utf-8")
+    n = _write_chunks(con, doc_id, text)
+    con.commit()
+    return n
 
 
 def _is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
@@ -441,30 +453,73 @@ def get_document(
     return out
 
 
+def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
+    """The structural fields of a chunk row, decoded (None for legacy rows)."""
+    loc = json.loads(row["locator"]) if row["locator"] else {}
+    return {
+        "kind": row["kind"],
+        "heading": json.loads(row["heading"]) if row["heading"] else [],
+        "page": loc.get("page"),
+    }
+
+
 @_serialized
 def search(
-    con: sqlite3.Connection, query: str, limit: int = 10
+    con: sqlite3.Connection,
+    query: str,
+    limit: int = 10,
+    *,
+    kind: str | None = None,
 ) -> list[dict[str, Any]]:
     """FTS5 search returning compact snippets + ids (agent-shaped).
 
-    Stage 2 turns this into hybrid FTS+vec with RRF; keep the signature.
+    Each hit carries the chunk's ``kind`` (text, table, figure, code), its
+    section ``heading`` path and ``page`` when known; ``kind`` filters to one
+    kind. Stage 2 turns this into hybrid FTS+vec with RRF; keep the shape.
     """
     expr = _fts_query(query)
     if expr is None:
         return []
+    if kind is not None and kind not in chunking.KINDS:
+        raise ValueError(f"kind must be one of {chunking.KINDS}")
+    kind_clause = "AND c.kind = ?" if kind is not None else ""
+    args: tuple[Any, ...] = (expr, kind, limit) if kind is not None else (expr, limit)
     rows = con.execute(
-        """
+        f"""
         SELECT c.id AS chunk_id, c.doc_id, d.title,
                snippet(chunks_fts, 0, '[', ']', '…', 12) AS snippet,
-               bm25(chunks_fts) AS score
+               bm25(chunks_fts) AS score,
+               c.kind, c.locator, c.heading
         FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
                         JOIN documents d ON d.id = c.doc_id
-        WHERE chunks_fts MATCH ?
+        WHERE chunks_fts MATCH ? {kind_clause}
         ORDER BY score LIMIT ?
         """,
-        (expr, limit),
+        args,
     ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        hit = {k: r[k] for k in ("chunk_id", "doc_id", "title", "snippet", "score")}
+        hit.update(_chunk_shape(r))
+        out.append(hit)
+    return out
+
+
+@_serialized
+def get_chunk(con: sqlite3.Connection, chunk_id: int) -> dict[str, Any] | None:
+    """One chunk in full: text, kind, heading, locator and table ``data``."""
+    r = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    if r is None:
+        return None
+    out = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+    out.update(_chunk_shape(r))
+    out["locator"] = json.loads(r["locator"]) if r["locator"] else None
+    out["data"] = json.loads(r["data"]) if r["data"] else None
+    return out
 
 
 # ------------------------------------------------------------------ graph

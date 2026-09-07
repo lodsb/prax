@@ -74,9 +74,13 @@ Parsing is a batch job; the serving path never parses.
 - [x] Extractor decision: Docling versus pymupdf4llm on a table-heavy
       sample (`scripts/compare_extractors.py`, `docs/eval/`); verdict in
       rationale R8: pymupdf4llm stays the default, no Docling upgrade pass
+- [x] Structure-aware chunks (migration 0002, `prax.chunking`, R13):
+      kind, locator, heading path, table data; `search` filters by kind,
+      `get_chunk` returns one chunk; `scripts/rechunk.py`
 - [ ] Upgrade pass over the cache-derived PDFs and HTML snapshots with the
       default extractors (`--upgrade zotero-ft-cache`), so every text
-      artifact carries an extractor stamp; roughly an hour on the desktop
+      artifact carries an extractor stamp and Markdown structure (headings,
+      tables, pages) for the chunker; roughly an hour on the desktop
 - [x] OCR pass over the scanned PDFs the bulk pass left empty
       (`--extractor pymupdf4llm-ocr`): 283 documents gained text, the rest
       is artwork or unreadable (`docs/sources.md`)

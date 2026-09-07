@@ -87,3 +87,16 @@ def test_link_bad_confidence_is_400(client: TestClient) -> None:
     body = {"src": "A", "src_type": "x", "rel": "r", "dst": "B", "dst_type": "x",
             "confidence": "GUESS"}
     assert client.post("/link", json=body).status_code == 400
+
+def test_search_kind_filter_and_chunk_route(client: TestClient) -> None:
+    table = "Table 1: sizes\n\n| part | mm |\n|---|---|\n| bolt | 12 |\n"
+    r = client.post("/ingest", json={"text": table, "title": "t"})
+    hits = client.get("/search", params={"q": "bolt", "kind": "table"}).json()
+    assert hits and hits[0]["kind"] == "table"
+    assert hits[0]["doc_id"] == r.json()["doc_id"]
+    chunk = client.get(f"/chunk/{hits[0]['chunk_id']}").json()
+    assert chunk["data"]["rows"] == [["bolt", "12"]]
+    assert chunk["locator"]["char_start"] == 0
+    assert client.get("/chunk/999999").status_code == 404
+    bad = client.get("/search", params={"q": "bolt", "kind": "audio"})
+    assert bad.status_code == 400

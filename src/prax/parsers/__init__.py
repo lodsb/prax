@@ -106,7 +106,7 @@ def _pymupdf4llm(data: bytes) -> str:
     with _pymupdf_open(data) as doc:
         if not _has_text_layer(doc):
             raise ExtractionError("no text layer in the first pages; needs OCR")
-        return pymupdf4llm.to_markdown(doc, use_ocr=False)
+        return pymupdf4llm.to_markdown(doc, use_ocr=False, page_separators=True)
 
 
 def _pymupdf4llm_ocr(data: bytes) -> str:
@@ -124,7 +124,7 @@ def _pymupdf4llm_ocr(data: bytes) -> str:
                 f"{doc.page_count} pages exceeds the OCR budget of {budget}"
                 " (PRAX_OCR_MAX_PAGES)"
             )
-        return pymupdf4llm.to_markdown(doc, use_ocr=True)
+        return pymupdf4llm.to_markdown(doc, use_ocr=True, page_separators=True)
 
 
 def _pymupdf(data: bytes) -> str:

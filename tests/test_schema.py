@@ -28,9 +28,18 @@ def test_pre_migration_db_gets_stamped(data_dir: Path) -> None:
     baseline = store.migrations()[0][1].read_text(encoding="utf-8")
     con.executescript(baseline)
     assert store.schema_version(con) == 0
-    store.ingest_text(con, "pre-migration row", title="old")
-    assert store.init_db(con) >= 1
-    assert store.search(con, "pre-migration")[0]["title"] == "old"
+    # a Stage 0 row, written the way Stage 0 wrote it (no chunk columns yet)
+    con.execute(
+        "INSERT INTO documents (id, hash, mime, title)"
+        " VALUES (1, 'h', 'text/plain', 'old')"
+    )
+    con.execute(
+        "INSERT INTO chunks (doc_id, seq, text) VALUES (1, 0, 'pre-migration row')"
+    )
+    con.commit()
+    assert store.init_db(con) >= 2
+    hit = store.search(con, "pre-migration")[0]
+    assert hit["title"] == "old" and hit["kind"] is None  # legacy row until rechunked
     con.close()
 
 

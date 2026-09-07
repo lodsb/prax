@@ -113,6 +113,20 @@ Before switching the default extractor for a document class, run
 `scripts/compare_extractors.py` over a sample and read the texts, not only
 the metrics table it writes.
 
+## 3c. Chunks
+
+`prax.chunking` turns each text artifact into structure-aware chunks
+(rationale R13): sections of paragraphs, whole tables with their caption
+and a parsed grid, figure captions, code blocks, each with a heading path
+and a locator (character range and page). Search hits carry `kind`,
+`heading` and `page`; `kind="table"` narrows to tables. After changing the
+chunker, or after a migration that added chunk columns:
+
+    python scripts/rechunk.py --all       # every indexed document
+    python scripts/rechunk.py --legacy    # only rows that have no kind yet
+
+Chunks are disposable; nothing else is touched.
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000
@@ -124,7 +138,8 @@ Endpoints:
 | POST | `/ingest` | JSON `{text, title?, source_url?}` | `{doc_id, hash, created}` |
 | POST | `/ingest/file` | multipart `file`, form `title?`, `source_url?` | `{doc_id, hash, created}` |
 | GET | `/get/{doc_id}` | `offset?`, `max_chars?` | document row plus text |
-| GET | `/search` | `q`, `limit?` | list of `{chunk_id, doc_id, title, snippet, score}` |
+| GET | `/search` | `q`, `limit?`, `kind?` | list of `{chunk_id, doc_id, title, snippet, score, kind, heading, page}` |
+| GET | `/chunk/{chunk_id}` | | one chunk: text, kind, heading, locator, table `data` |
 | POST | `/link` | JSON `{src, src_type, rel, dst, dst_type, confidence?, source_doc?}` | `{edge_id}` |
 | GET | `/traverse` | `entity`, `hops?` (max 2) | list of edges with types and hop distance |
 

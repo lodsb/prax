@@ -224,3 +224,33 @@ so the file can stay small.
 **Revisit when.** Migrations need data transformations Python must drive
 (a rename of an entity type, a re-chunking); then add a Python hook per
 migration number alongside the SQL. Not before.
+
+## R13. A chunk is an addressable region with a searchable rendering
+
+**Decision.** Chunks carry ``kind`` (text, table, figure, code; media kinds
+later), a ``locator`` (for text artifacts a character range plus page, with
+the invariant ``chunk.text == artifact[start:end]``), the section
+``heading`` path, and for tables a parsed grid in ``data``. The chunker
+(`prax.chunking`) parses the Markdown artifact into elements and groups
+paragraphs by section up to a target size; tables, figure captions and
+code blocks are chunks of their own; only over-long paragraphs fall back
+to fixed windows. ``search`` reports kind, heading and page and filters by
+kind; ``get_chunk`` returns one chunk with its grid.
+
+**Why.** Fixed 1000-character windows cut tables mid-row and duplicated
+rows across the overlap, and gave Claude no way to say "the table in
+section 4.1". Structure-aware chunks keep tables whole, let search be
+filtered to tables or figures, and let a hit be fetched exactly through
+its locator instead of a guessed offset. The locator is the seam for
+other media: an audio segment is a time range with its transcript as the
+rendering, an image region a box with its caption; each gets its own
+embedding space when it arrives, fused by the same rank fusion. Doing this
+before Stage 2 means embeddings and the eval harness are built on final
+chunk boundaries, and re-chunking is a script because chunks are
+disposable (R3).
+
+**Cost.** Chunk boundaries now depend on the extractor's Markdown; a
+plain-text artifact (the Zotero cache) yields paragraph chunks without
+headings or tables, which is why the upgrade pass over cache-derived
+documents is worth running. Legacy rows keep NULL structure until
+`scripts/rechunk.py` runs.

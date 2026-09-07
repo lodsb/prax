@@ -16,7 +16,9 @@ from fastmcp import Client
 
 from prax import mcp_server
 
-EXPECTED_TOOLS = {"search", "get", "traverse", "link", "ingest", "ingest_file"}
+EXPECTED_TOOLS = {
+    "search", "get", "get_chunk", "traverse", "link", "ingest", "ingest_file"
+}
 
 
 @pytest.fixture(autouse=True)
@@ -104,3 +106,13 @@ def test_ingest_file(tmp_path: Path) -> None:
 
 def test_ingest_file_missing_returns_error(tmp_path: Path) -> None:
     assert "error" in call("ingest_file", path=str(tmp_path / "nope.pdf"))
+
+def test_search_reports_kind_and_get_chunk() -> None:
+    table = "Table 1: sizes\n\n| part | mm |\n|---|---|\n| bolt | 12 |\n"
+    r = call("ingest", text=table, title="t")
+    hits = call("search", query="bolt", kind="table")
+    assert hits and hits[0]["kind"] == "table" and hits[0]["doc_id"] == r["doc_id"]
+    chunk = call("get_chunk", chunk_id=hits[0]["chunk_id"])
+    assert chunk["data"]["rows"] == [["bolt", "12"]]
+    assert "error" in call("get_chunk", chunk_id=999_999)
+    assert "error" in call("search", query="bolt", kind="audio")[0]
