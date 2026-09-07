@@ -1,0 +1,81 @@
+# Retrieval eval set over tests/fixtures/zotero (docs/PLAN.md, Stage 2).
+#
+# Each query names the documents that should come first, by Zotero key
+# (any key recorded in meta.zotero.keys of the target document). `kind`
+# restricts the search to one chunk kind. `style` is informational:
+#   keyword    words that appear verbatim in the target
+#   paraphrase the idea without the target's wording (vector side)
+#   structure  a table or figure the target contains
+#
+# Fixture contents: Yoshii 2018 (correlated tensor factorization, source
+# separation), Birbaumer 1996 (music perception, EEG dimensional
+# complexity), Brown & Duda 1997 (HRTF model for 3-D sound), Tobar 2019
+# (Bayesian nonparametric spectral estimation), Févotte & Kowalski 2018
+# HTML snapshot (low-rank time-frequency synthesis), Das 2020 URL-only
+# (pitch tracking, extended complex Kalman filter), de Berardinis 2020
+# (hierarchical music structure, community detection; two PDFs), an ATLAS
+# BLAS API reference (standalone PDF), and an arXiv comment note.
+
+queries:
+  - q: correlated tensor factorization audio source separation
+    expect: [T7VVNPCK]
+    style: keyword
+  - q: an extension of NMF that models the full covariance across time-frequency bins
+    expect: [T7VVNPCK]
+    style: paraphrase
+  - q: perception of music and dimensional complexity of brain activity
+    expect: [J2E8FPQW]
+    style: keyword
+  - q: EEG measurements while people listen to music, nonlinear dynamics hypothesis
+    expect: [J2E8FPQW]
+    style: paraphrase
+  - q: efficient HRTF model for 3-D sound
+    expect: [BPADCVJ7]
+    style: keyword
+  - q: cheap way to synthesize binaural audio from a mono source with head-related cues
+    expect: [BPADCVJ7]
+    style: paraphrase
+  - q: Bayesian nonparametric spectral estimation
+    expect: [XG5DAEA3]
+    style: keyword
+  - q: Gaussian process prior over a signal to infer its power spectral density
+    expect: [XG5DAEA3]
+    style: paraphrase
+  - q: estimation with low-rank time-frequency synthesis models
+    expect: [97KAI26I]
+    style: keyword
+  - q: monophonic pitch tracking extended complex Kalman filter
+    expect: [ZRWHFMBJ]
+    style: keyword
+  - q: real-time fundamental frequency estimation using a state-space tracker
+    expect: [ZRWHFMBJ]
+    style: paraphrase
+  - q: hierarchical structure of music multi-resolution community detection
+    expect: [7656ADFF, M7Q9GCW6]
+    style: keyword
+  - q: finding sections and their nesting in a piece by clustering a similarity graph
+    expect: [7656ADFF, M7Q9GCW6]
+    style: paraphrase
+  - q: segmentation performance L-measure comparison of algorithms
+    expect: [7656ADFF, M7Q9GCW6]
+    style: structure
+    kind: table
+  - q: schematic overview of the MSCOM workflow
+    expect: [7656ADFF, M7Q9GCW6]
+    style: structure
+    kind: figure
+  - q: BLAS dgemm matrix multiply routine signature
+    expect: [VVJITI78]
+    style: keyword
+  - q: reference for the C interface of basic linear algebra subprograms
+    expect: [VVJITI78]
+    style: paraphrase
+  - q: NeurIPS 2018 comment 11 pages
+    expect: [9T9VN938]
+    style: keyword
+  - q: nonnegative matrix factorization source separation ICASSP
+    expect: [T7VVNPCK]
+    style: keyword
+  - q: interaural time and level differences head shadow filter
+    expect: [BPADCVJ7]
+    style: paraphrase
