@@ -104,9 +104,14 @@ Parsing is a batch job; the serving path never parses.
 
 ## Stage 2 — Hybrid retrieval
 
-- [ ] Embedding batch job: quantized bge-small ONNX (384-dim) → `chunks_vec`
-      (sqlite-vec; extension loading verified on the dev machine)
-- [ ] `search` becomes hybrid: FTS5 + vec in parallel, RRF fusion
+- [x] Embedding batch job: bge-small-en-v1.5 ONNX (384-dim) → `chunks_vec`
+      (sqlite-vec 0.1.9, cosine, `kind` metadata column) through
+      `prax.embeddings` and `scripts/embed_pending.py`; bookkeeping in
+      `chunk_embeddings` (migration 0003); GPU via DirectML on the desktop,
+      int8 on CPU. Full library: about 4.5 h at 53 chunks/s.
+- [x] `search` is hybrid: FTS5 + vec in parallel, RRF fusion (k = 60),
+      `mode=fts|vec` to force one side, degrades to FTS when vectors are
+      absent; hits carry `fts_rank` and `vec_rank`
 - [ ] Optional cross-encoder rerank behind a flag; benchmark on the Pi
 - [ ] Eval harness: ~20 hand-written queries against the Zotero fixture with
       expected docs, tracked in `tests/eval/`

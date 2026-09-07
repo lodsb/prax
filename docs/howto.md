@@ -125,6 +125,32 @@ re-selects what is left, so batching costs nothing:
 Originals above `PRAX_MAX_LAYOUT_MB` (default 40) skip layout analysis and
 get plain text through the fallback.
 
+## 3d. Embeddings and hybrid search
+
+`prax.embeddings` runs bge-small-en-v1.5 (384-d) through onnxruntime;
+model files download from the Hugging Face hub on first use. Vectors live
+in the sqlite-vec table `chunks_vec`, bookkeeping in `chunk_embeddings`.
+Search is hybrid by default and falls back to FTS when there are no
+vectors, no extension or `PRAX_EMBED=0`.
+
+    pip install -e ".[embed]"
+    # Windows desktop with a GPU: DirectML instead of the CPU runtime
+    pip uninstall -y onnxruntime; pip install onnxruntime-directml
+
+    python scripts/embed_pending.py --dry-run     # counts
+    python scripts/embed_pending.py --batch 64    # everything pending; idempotent
+
+Settings: `PRAX_EMBED` (model name, `hash` for tests, `0` off),
+`PRAX_EMBED_VARIANT` (`fp32` on a GPU, `int8` on CPU by default),
+`PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS`. Changing the model means
+re-embedding: `chunk_embeddings.model` records what each vector came
+from and `embed_pending.py` picks up the difference. A model with another
+dimension is a migration (`chunks_vec` is 384-d).
+
+Query: `search(q, mode="hybrid"|"fts"|"vec", kind=...)` in the store, the
+API (`/search?mode=`) and the MCP tool. Hybrid hits carry `score` (RRF),
+`fts_rank` and `vec_rank`.
+
 ## 3c. Chunks
 
 `prax.chunking` turns each text artifact into structure-aware chunks

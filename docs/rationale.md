@@ -97,6 +97,18 @@ same file, so a deploy is a file copy.
 **Cost.** Embedding is a batch job (R8); search results lag ingest until it
 runs.
 
+*Measured (2026-09-07).* Embedding cost is dominated by sequence length:
+bge-small (33M parameters) needs about 20 GFLOP for a 330-token chunk, so
+a 12-core desktop CPU manages 20 chunks/s with the int8 export and the
+GTX 1070 through DirectML 53 chunks/s with fp32 (batch 64; batch 128 is
+slower). The library's 855 K chunks (median 180 tokens, 3% truncated at
+512) are therefore a 4-5 hour one-off batch. fastembed was dropped: its
+default bge-small file is fp16, which onnxruntime emulates on CPU at
+3 chunks/s. The store talks to onnxruntime and ``tokenizers`` directly,
+with files from the Hugging Face hub. The vec0 table carries ``kind`` as a
+metadata column so a KNN query can be filtered to tables or figures
+without a post-filter.
+
 **Revisit when.** Vectors exceed about 1M. Then move only the vector layer
 to LanceDB.
 
