@@ -29,6 +29,7 @@ CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 _LOCK = threading.RLock()
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
 _TOKEN = re.compile(r"\w+", re.UNICODE)
+_SURROGATE = re.compile(r"[\ud800-\udfff]")
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -204,8 +205,7 @@ def index_text(
     # NUL bytes (pdftotext emits them for some page numbers) truncate SQLite's
     # text functions and the FTS tokenizer; lone surrogates (MuPDF, broken
     # fonts) cannot be encoded at all. Neither carries content.
-    text = text.replace("\x00", "")
-    text = text.encode("utf-8", "surrogatepass").decode("utf-8", "replace")
+    text = _SURROGATE.sub("�", text.replace("\x00", ""))
     data = text.encode("utf-8")
     text_hash = _archive_bytes(data)
     n_chunks = _write_chunks(con, doc_id, text)
