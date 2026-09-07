@@ -113,6 +113,18 @@ Before switching the default extractor for a document class, run
 `scripts/compare_extractors.py` over a sample and read the texts, not only
 the metrics table it writes.
 
+Long passes over thousands of PDFs should run as a loop of short-lived
+processes: MuPDF's layout analysis grows the process over time, and one
+run over 5,000 documents was killed for memory. Every invocation
+re-selects what is left, so batching costs nothing:
+
+    for ($i = 0; $i -lt 40; $i++) {
+      python scripts/parse_pending.py --upgrade zotero-ft-cache --limit 250 --quiet
+    }
+
+Originals above `PRAX_MAX_LAYOUT_MB` (default 40) skip layout analysis and
+get plain text through the fallback.
+
 ## 3c. Chunks
 
 `prax.chunking` turns each text artifact into structure-aware chunks
