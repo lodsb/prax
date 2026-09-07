@@ -77,9 +77,12 @@ Parsing is a batch job; the serving path never parses.
 - [ ] Upgrade pass over the cache-derived PDFs and HTML snapshots with the
       default extractors (`--upgrade zotero-ft-cache`), so every text
       artifact carries an extractor stamp; roughly an hour on the desktop
-- [ ] OCR pass over the scanned PDFs the bulk pass left empty
-      (`--extractor pymupdf4llm-ocr`, raise `PRAX_OCR_MAX_PAGES` for the
-      few big books deliberately)
+- [x] OCR pass over the scanned PDFs the bulk pass left empty
+      (`--extractor pymupdf4llm-ocr`): 283 documents gained text, the rest
+      is artwork or unreadable (`docs/sources.md`)
+- [ ] The 71 scanned books (17 K pages): one deliberate overnight run with
+      `PRAX_OCR_MAX_PAGES=1000`, or leave them until a faster OCR host
+      exists
 - [ ] Browser capture: a Manifest V3 extension (Chrome and Firefox) with
       "send this tab" and "send all tabs in window". Posts URL, title and the
       rendered DOM to `POST /ingest/html`; a URL-only `POST /ingest/url`

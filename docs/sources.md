@@ -105,6 +105,15 @@ of at most 60 pages (4,531 pages, invoices, letters, short papers) go
 through the bounded OCR pass; 71 scanned books (17,355 pages) wait for a
 deliberate run with a raised `PRAX_OCR_MAX_PAGES`.
 
+**OCR pass** (RapidOCR through pymupdf4llm, 87 minutes): 283 scans got
+usable text (median 3.3 K characters: letters, invoices, short papers, a
+few scanned articles); 613 came back empty, and a look at them shows
+single-page artwork (a font-art series of decorated letters, word clouds,
+schematics), not failed OCR; 42 hit MuPDF or pymupdf4llm faults on odd
+files. After both passes 8,448 documents are indexed and 779 PDFs stay
+pending: the 71 books, the 56 unreadable files, the artwork, and the
+faulting few. Every attempt is in `meta.parse_history`.
+
 ### Schema mapping
 
 Confirmed against the local `zotero.sqlite` (61 tables). The relevant ones:
