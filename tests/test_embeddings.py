@@ -87,8 +87,10 @@ def test_vec_table_and_bookkeeping(con: sqlite3.Connection) -> None:
     _load(con)
     pending = store.pending_embeddings(con, "hash-test")
     assert len(pending) == 3 and {p["kind"] for p in pending} == {"text", "table"}
+    assert store.count_pending_embeddings(con, "hash-test") == 3
     assert _embed_all(con) == 3
     assert store.pending_embeddings(con, "hash-test") == []
+    assert store.count_pending_embeddings(con, "hash-test") == 0
     assert len(store.pending_embeddings(con, "other-model")) == 3  # model mismatch
     status = store.vec_status(con)
     assert status == {

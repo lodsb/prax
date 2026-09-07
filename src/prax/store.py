@@ -680,6 +680,16 @@ def pending_embeddings(
 
 
 @_serialized
+def count_pending_embeddings(con: sqlite3.Connection, model: str) -> int:
+    """How many chunks ``pending_embeddings`` would return, without the text."""
+    return con.execute(
+        "SELECT count(*) FROM chunks c LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
+        " WHERE e.chunk_id IS NULL OR e.model != ?",
+        (model,),
+    ).fetchone()[0]
+
+
+@_serialized
 def store_embeddings(
     con: sqlite3.Connection,
     items: list[tuple[int, str | None, Any]],

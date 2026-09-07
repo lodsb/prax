@@ -43,7 +43,7 @@ def main() -> int:
     if hasattr(emb, "batch_size"):
         emb.batch_size = a.batch
     status = store.vec_status(con)
-    pending = len(store.pending_embeddings(con, emb.name))
+    pending = store.count_pending_embeddings(con, emb.name)
     print(
         f"store: {config.db_path()}; model {emb.name}; vectors {status['rows']};"
         f" pending {pending}",
