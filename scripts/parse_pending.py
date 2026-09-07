@@ -54,9 +54,8 @@ def main() -> int:
             pending=a.pending,
             text_source_prefix=a.upgrade,
             mime_prefix=a.mime,
-            limit=a.limit,
         )
-    ids = list(dict.fromkeys(ids))[: a.limit]
+    ids = list(dict.fromkeys(ids))
     print(f"store: {config.db_path()}; {len(ids)} documents selected", file=sys.stderr)
     for e in parsers.REGISTRY:
         state = "installed" if e.available() else "missing"
@@ -69,7 +68,9 @@ def main() -> int:
         if not a.quiet and (n % 25 == 0 or action in ("error", "kept", "empty")):
             print(f"[{n:5}/{len(ids)}] {action:8} doc {doc_id}", file=sys.stderr)
 
-    report = queue.run(con, ids, extractor=a.extractor, force=a.force, log=log)
+    report = queue.run(
+        con, ids, extractor=a.extractor, force=a.force, limit=a.limit, log=log
+    )
     print(report, flush=True)
     for doc_id, err in report.errors[:50]:
         print(f"  error doc {doc_id}: {err}")

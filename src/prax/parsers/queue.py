@@ -63,6 +63,18 @@ def _record(
     return meta
 
 
+def _seen(meta: dict[str, Any], stamp: str) -> bool:
+    """True if this extractor version already tried the document and the
+    result was kept, empty or an error: re-running would repeat that. An
+    ``upgraded``/``created`` entry changes ``text_source``, so such documents
+    leave the selection by themselves."""
+    return any(
+        h.get("extractor") == stamp
+        and (h.get("outcome") in ("kept", "empty") or "error" in h)
+        for h in meta.get("parse_history", [])
+    )
+
+
 def _too_short(new_len: int, old_len: int) -> bool:
     return new_len < MIN_CHARS or (old_len > 0 and new_len < MIN_RATIO * old_len)
 
@@ -84,7 +96,9 @@ def parse_one(
     ``created``: first text for the document. ``upgraded``: replaced the old
     text. ``kept``: new text too short, old text left in place (``force``
     overrides). ``empty``: too short and there was no old text. ``skipped``:
-    no extractor for the MIME type. Raises when every candidate failed.
+    no extractor for the MIME type. ``seen``: this extractor version already
+    tried and kept/emptied/failed (``force`` overrides). Raises when every
+    candidate failed.
     """
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
@@ -92,6 +106,8 @@ def parse_one(
     exts = parsers.candidates(doc["mime"] or "", extractor)
     if not exts:
         return "skipped"
+    if not force and _seen(doc["meta"], exts[0].stamp):
+        return "seen"
     data = store.get_original(con, doc_id)
     old_len = doc["text_len"]
     last_error: Exception | None = None
@@ -127,17 +143,26 @@ def run(
     *,
     extractor: str | None = None,
     force: bool = False,
+    limit: int | None = None,
     log: Callable[[int, int, str], None] | None = None,
 ) -> Report:
+    """Parse ``doc_ids`` in order; ``limit`` caps the documents actually
+    worked on (``seen`` and ``skipped`` ones do not count), so a batch loop
+    over a stable selection always makes progress."""
     report = Report()
     t0 = time.monotonic()
+    worked = 0
     for n, doc_id in enumerate(doc_ids):
+        if limit is not None and worked >= limit:
+            break
         try:
             action = parse_one(con, doc_id, extractor=extractor, force=force)
         except Exception as exc:  # noqa: BLE001 - keep going; the report lists failures
             report.errors.append((doc_id, f"{type(exc).__name__}: {exc}"))
             action = "error"
         report.actions[action] += 1
+        if action not in ("seen", "skipped"):
+            worked += 1
         if log is not None:
             log(n, doc_id, action)
     report.seconds = time.monotonic() - t0

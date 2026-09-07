@@ -237,6 +237,37 @@ def test_queue_falls_back_to_next_extractor(
     assert report.actions == {"error": 1}
 
 
+def test_seen_documents_are_not_retried_and_limit_counts_work(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stub = parsers.Extractor("stub", ("text/",), lambda data: "tiny")
+    monkeypatch.setattr(parsers, "REGISTRY", [stub, *parsers.REGISTRY])
+    ids = [store.ingest_text(con, f"doc {i} " + "x " * 300)["doc_id"] for i in range(3)]
+    assert queue.run(con, ids).actions == {"kept": 3}
+    # a second pass over the same (still cache-like) selection does no work
+    assert queue.run(con, ids).actions == {"seen": 3}
+    assert queue.run(con, ids, force=True).actions == {"upgraded": 3}
+    # limit counts documents worked on, not rows looked at
+    more = [
+        store.ingest_text(con, f"fresh {i} " + "y " * 300)["doc_id"] for i in range(2)
+    ]
+    stub2 = parsers.Extractor("stub2", ("text/",), lambda data: "z " * 200)
+    monkeypatch.setattr(parsers, "REGISTRY", [stub2, *parsers.REGISTRY])
+    seen_first = [store.ingest_text(con, "seen one " + "w " * 300)["doc_id"]]
+    queue.run(con, seen_first)  # stub2 upgrades it... make it 'seen' via kept:
+    monkeypatch.setattr(
+        parsers,
+        "REGISTRY",
+        [parsers.Extractor("stub3", ("text/",), lambda data: "q"), *parsers.REGISTRY],
+    )
+    queue.run(con, seen_first)  # kept by stub3 -> seen next time
+    report = queue.run(con, seen_first + more, limit=1)
+    assert (
+        report.actions["seen"] == 1
+        and sum(v for k, v in report.actions.items() if k != "seen") == 1
+    )
+
+
 def test_queue_skips_unsupported_mime(con: sqlite3.Connection) -> None:
     doc_id = store.register(con, b"\x89PNG", mime="image/png")["doc_id"]
     assert queue.run(con, [doc_id]).actions == {"skipped": 1}
