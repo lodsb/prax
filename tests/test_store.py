@@ -1,6 +1,7 @@
 """prax.store: roundtrips, the two-step ingest, and regression tests for the
 four bugs found in the Stage 0 skeleton (thread affinity, FTS syntax crash,
 traverse off-by-one, chunk reassembly)."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -167,6 +168,14 @@ def test_index_text_strips_nul_bytes(con: sqlite3.Connection) -> None:
     assert "\x00" not in doc["text"] and doc["text"].startswith("page 35 marker")
     assert store.search(con, "real words")[0]["doc_id"] == doc_id
     assert con.execute("SELECT min(length(text)) FROM chunks").fetchone()[0] > 0
+
+
+def test_index_text_survives_lone_surrogates(con: sqlite3.Connection) -> None:
+    doc_id = store.register(con, b"orig", mime="application/pdf")["doc_id"]
+    store.index_text(con, doc_id, "broken font \ud83d glyph then text")
+    doc = store.get_document(con, doc_id)
+    assert doc["text"] == "broken font � glyph then text"
+    assert store.search(con, "glyph")[0]["doc_id"] == doc_id
 
 
 def test_chunk_windows() -> None:

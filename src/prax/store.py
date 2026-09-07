@@ -202,9 +202,12 @@ def index_text(
     if exists is None:
         raise KeyError(f"no such document: {doc_id}")
     # NUL bytes (pdftotext emits them for some page numbers) truncate SQLite's
-    # text functions and the FTS tokenizer; they carry no content.
+    # text functions and the FTS tokenizer; lone surrogates (MuPDF, broken
+    # fonts) cannot be encoded at all. Neither carries content.
     text = text.replace("\x00", "")
-    text_hash = _archive_bytes(text.encode("utf-8"))
+    text = text.encode("utf-8", "surrogatepass").decode("utf-8", "replace")
+    data = text.encode("utf-8")
+    text_hash = _archive_bytes(data)
     n_chunks = _write_chunks(con, doc_id, text)
     con.execute(
         f"UPDATE documents SET text_hash = ?, parsed_at = {_NOW} WHERE id = ?",

@@ -115,9 +115,15 @@ def _pymupdf4llm(data: bytes) -> str:
             " plain extraction instead"
         )
     pymupdf4llm = importlib.import_module("pymupdf4llm")
+    max_pages = int(os.environ.get("PRAX_MAX_LAYOUT_PAGES", "400"))
     with _pymupdf_open(data) as doc:
         if not _has_text_layer(doc):
             raise ExtractionError("no text layer in the first pages; needs OCR")
+        if doc.page_count > max_pages:
+            raise ExtractionError(
+                f"{doc.page_count} pages exceeds PRAX_MAX_LAYOUT_PAGES={max_pages};"
+                " plain extraction instead"
+            )
         return pymupdf4llm.to_markdown(doc, use_ocr=False, page_separators=True)
 
 

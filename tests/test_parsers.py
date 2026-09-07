@@ -86,8 +86,12 @@ def test_scanned_pdf_is_refused_by_markdown_and_left_empty(
 def test_oversized_pdf_falls_back_to_plain_extraction(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("PRAX_MAX_LAYOUT_MB", "0.001")  # the 8 KB fixture is "too big"
     data = YOSHII_PDF.read_bytes()
+    monkeypatch.setenv("PRAX_MAX_LAYOUT_PAGES", "2")  # the 5-page fixture is "too long"
+    with pytest.raises(parsers.ExtractionError, match="PRAX_MAX_LAYOUT_PAGES"):
+        parsers.by_name("pymupdf4llm")(data)
+    monkeypatch.delenv("PRAX_MAX_LAYOUT_PAGES")
+    monkeypatch.setenv("PRAX_MAX_LAYOUT_MB", "0.001")  # the 8 KB fixture is "too big"
     with pytest.raises(parsers.ExtractionError, match="PRAX_MAX_LAYOUT_MB"):
         parsers.by_name("pymupdf4llm")(data)
     doc_id = store.register(con, data, mime="application/pdf", title="big")["doc_id"]
