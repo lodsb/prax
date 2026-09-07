@@ -63,7 +63,9 @@ drop folder (`docs/sources.md`).
 - SQLite write contention across capture sources → the answer is the single
   writer queue, not a new database.
 
-Full reasoning behind each decision: `docs/rationale.md`.
+Full reasoning behind each decision: `docs/rationale.md`. The system as
+built, with the life of a document and of a query and a "where to touch
+what" table: `docs/architecture.md`.
 
 ## Retrieval design
 

@@ -39,6 +39,7 @@ instructions in `docs/howto.md`.
 | File | What it is |
 |---|---|
 | `CLAUDE.md` | Architecture invariants. Loaded into every Claude Code session. |
+| `docs/architecture.md` | The whole system as built: hosts, life of a document and of a query, module map, data model, where to touch what. |
 | `docs/PLAN.md` | Staged build plan with checklists. One stage per session. |
 | `docs/rationale.md` | Decision records: what was chosen, why, and when to revisit. |
 | `docs/howto.md` | Setting up, running, testing, deploying, backing up. |
@@ -47,8 +48,11 @@ instructions in `docs/howto.md`.
 
 ## Status
 
-Stage 0 (prove the core) is complete: text ingest, FTS5 search, graph
-link/traverse, HTTP door, MCP tools. Stage 1 is under way: numbered schema
-migrations, a validated versioned ontology, and the Zotero importer with
-its test fixture are in; the browser extension, inbox watcher and parse
-queue are next. Checklists in `docs/PLAN.md`.
+Stage 0 (prove the core) is complete. Stage 1: schema migrations, a
+validated versioned ontology, the Zotero importer (the whole library is
+in a scratch store), the pluggable parse queue with OCR, and
+structure-aware chunks are in; the browser extension and inbox watcher are
+next. Stage 2: embeddings (bge-small ONNX, sqlite-vec), hybrid search with
+rank fusion, and the retrieval eval harness are in; the rerank decision
+waits for a larger eval set. Checklists in `docs/PLAN.md`; the system as
+built in `docs/architecture.md`.

@@ -112,9 +112,13 @@ Parsing is a batch job; the serving path never parses.
 - [x] `search` is hybrid: FTS5 + vec in parallel, RRF fusion (k = 60),
       `mode=fts|vec` to force one side, degrades to FTS when vectors are
       absent; hits carry `fts_rank` and `vec_rank`
+- [x] Eval harness: 20 hand-written queries against the Zotero fixture
+      with expected docs (`tests/eval/queries.yaml`, `prax.evaluation`,
+      `scripts/eval_retrieval.py`); first run in `docs/eval/`: hit@1 0.95
+      fts, 0.90 vec and hybrid on the 10-document fixture
+- [ ] A larger eval set against the full store (expectations by title),
+      since the fixture is at ceiling; the rerank decision needs it
 - [ ] Optional cross-encoder rerank behind a flag; benchmark on the Pi
-- [ ] Eval harness: ~20 hand-written queries against the Zotero fixture with
-      expected docs, tracked in `tests/eval/`
 
 ## Stage 3 — Graph enrichment
 
