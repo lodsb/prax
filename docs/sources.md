@@ -120,9 +120,9 @@ Zotero's cache had covered; about five hours of desktop time in batches of
 Markdown with page markers, 99 HTML snapshots trafilatura text, 68 plain
 MuPDF text (oversized or layout-hostile originals), and 163 kept the cache
 text because the new extraction was shorter. After re-chunking, 8,448
-indexed documents hold about 986,000 chunks, 916,000 of them with a page
-number; tables, figure captions and code listings are chunks of their
-own. Three guards came out of this pass: lone surrogates from broken
+indexed documents hold 855,731 chunks (median text chunk 742 characters),
+784,742 of them with a page number; tables, figure captions and code
+listings are chunks of their own. The database is 1.8 GB. Three guards came out of this pass: lone surrogates from broken
 fonts are replaced before archiving, layout analysis is capped at 400
 pages and 40 MB, and documents an extractor version has already tried are
 skipped so batch loops always progress.
