@@ -124,6 +124,23 @@ def test_vector_and_hybrid_search(con: sqlite3.Connection) -> None:
         store.search(con, "x", mode="sideways")
 
 
+def test_hybrid_fuses_per_document(con: sqlite3.Connection) -> None:
+    _needs_vec(con)
+    long = "\n\n".join(
+        f"Kalman pitch tracking section {i}. " + "x " * 200 for i in range(6)
+    )
+    big = store.ingest_text(con, long, title="big")["doc_id"]
+    small = store.ingest_text(con, "Kalman pitch tracking, one short note.", title="s")
+    _embed_all(con)
+    hits = store.search(con, "kalman pitch tracking", limit=10)
+    docs = [h["doc_id"] for h in hits]
+    assert len(docs) == len(set(docs)) and set(docs) == {big, small["doc_id"]}
+    assert all(h["fts_rank"] is not None and h["vec_rank"] is not None for h in hits)
+    assert all("[kalman]" in h["snippet"].lower() for h in hits)  # snippets filled
+    chunk_hits = store.search(con, "kalman pitch tracking", limit=10, mode="fts")
+    assert len(chunk_hits) > len(hits)  # fts mode stays chunk-level
+
+
 def test_hybrid_degrades_to_fts_without_vectors(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

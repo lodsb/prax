@@ -27,6 +27,7 @@ from . import chunking, config, embeddings, ontology
 MAX_HOPS = 2
 VEC_DIM = 384  # baked into chunks_vec; another dimension is a migration
 RRF_K = 60  # reciprocal rank fusion constant
+RRF_DEPTH = 100  # candidates per side before fusion (docs/eval: 30 vs 100 vs 300)
 _vec_loaded: dict[int, bool] = {}  # id(con) -> sqlite-vec available on it
 CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 
@@ -516,17 +517,30 @@ SEARCH_MODES = ("hybrid", "fts", "vec")
 
 
 def _fts_search(
-    con: sqlite3.Connection, query: str, limit: int, kind: str | None
+    con: sqlite3.Connection,
+    query: str,
+    limit: int,
+    kind: str | None,
+    *,
+    snippets: bool = True,
 ) -> list[dict[str, Any]]:
+    """BM25 over chunks. ``snippets=False`` skips the snippet() call, which
+    reads every matched chunk's text and dominates the cost of deep lists;
+    ``_fts_snippets`` fills them in for the few hits that survive fusion."""
     expr = _fts_query(query)
     if expr is None:
         return []
     kind_clause = "AND c.kind = ?" if kind is not None else ""
     args: tuple[Any, ...] = (expr, kind, limit) if kind is not None else (expr, limit)
+    snippet_col = (
+        "snippet(chunks_fts, 0, '[', ']', '…', 12)"
+        if snippets
+        else "substr(c.text, 1, 160)"
+    )
     rows = con.execute(
         f"""
         SELECT c.id AS chunk_id, c.doc_id, d.title,
-               snippet(chunks_fts, 0, '[', ']', '…', 12) AS snippet,
+               {snippet_col} AS snippet,
                bm25(chunks_fts) AS score,
                c.kind, c.locator, c.heading
         FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
@@ -542,6 +556,24 @@ def _fts_search(
         hit.update(_chunk_shape(r))
         out.append(hit)
     return out
+
+
+def _fts_snippets(
+    con: sqlite3.Connection, query: str, chunk_ids: list[int]
+) -> dict[int, str]:
+    """Match-marked snippets for a handful of chunks (the fused hits)."""
+    expr = _fts_query(query)
+    if expr is None or not chunk_ids:
+        return {}
+    marks = ",".join("?" * len(chunk_ids))
+    rows = con.execute(
+        f"""
+        SELECT rowid, snippet(chunks_fts, 0, '[', ']', '…', 12) AS snippet
+        FROM chunks_fts WHERE chunks_fts MATCH ? AND rowid IN ({marks})
+        """,
+        (expr, *chunk_ids),
+    ).fetchall()
+    return {r["rowid"]: r["snippet"] for r in rows}
 
 
 def _vec_search(
@@ -584,16 +616,30 @@ def _vec_search(
 def _rrf(
     ranked: list[list[dict[str, Any]]], names: list[str], limit: int
 ) -> list[dict[str, Any]]:
-    """Reciprocal rank fusion: score = sum 1/(RRF_K + rank) over the lists."""
+    """Reciprocal rank fusion at document level.
+
+    Each side contributes a document's best chunk rank: score(doc) = sum over
+    sides of 1/(RRF_K + rank of its first chunk in that list). Fusing chunk
+    ids instead lets a long document's many chunks crowd each list and never
+    adds one document's evidence across sides; measured on the library set
+    that was worse than FTS alone (docs/eval/). One hit per document is
+    returned, carrying the chunk that ranked best on the side that found it
+    first, plus ``fts_rank`` / ``vec_rank`` (document ranks, None if absent).
+    """
     fused: dict[int, dict[str, Any]] = {}
     for hits, name in zip(ranked, names, strict=True):
-        for rank, hit in enumerate(hits, 1):
-            entry = fused.get(hit["chunk_id"])
+        seen: set[int] = set()
+        rank = 0
+        for hit in hits:
+            doc = hit["doc_id"]
+            if doc in seen:
+                continue
+            seen.add(doc)
+            rank += 1
+            entry = fused.get(doc)
             if entry is None:
                 entry = {**hit, "score": 0.0, "fts_rank": None, "vec_rank": None}
-                fused[hit["chunk_id"]] = entry
-            elif name == "fts":  # prefer the FTS snippet with match markers
-                entry["snippet"] = hit["snippet"]
+                fused[doc] = entry
             entry["score"] += 1.0 / (RRF_K + rank)
             entry[f"{name}_rank"] = rank
     out = sorted(fused.values(), key=lambda h: -h["score"])
@@ -647,12 +693,20 @@ def search(
     vector = emb.embed_query(query)
     if mode == "vec":
         return _vec_search(con, vector, limit, kind)
-    depth = max(limit * 3, 20)
-    return _rrf(
-        [_fts_search(con, query, depth, kind), _vec_search(con, vector, depth, kind)],
+    depth = max(limit * 3, RRF_DEPTH)
+    fused = _rrf(
+        [
+            _fts_search(con, query, depth, kind, snippets=False),
+            _vec_search(con, vector, depth, kind),
+        ],
         ["fts", "vec"],
         limit,
     )
+    marked = _fts_snippets(con, query, [h["chunk_id"] for h in fused])
+    for h in fused:
+        if h["chunk_id"] in marked:
+            h["snippet"] = marked[h["chunk_id"]]
+    return fused
 
 
 def _vec_count(con: sqlite3.Connection) -> int:
