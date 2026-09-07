@@ -33,6 +33,7 @@ from typing import Any
 TARGET_CHARS = 1200  # flush a text chunk when the next paragraph would exceed this
 MIN_CHARS = 300  # merge into the previous chunk when smaller than this at a boundary
 MAX_CHARS = 2000  # paragraphs longer than this are windowed
+MIN_CODE_CHARS = 200  # smaller fenced blocks are inline snippets: part of the text
 WINDOW = 1000
 OVERLAP = 150
 
@@ -153,7 +154,23 @@ def _elements(text: str) -> list[_Element]:
         kind = "figure" if _FIGURE.match(stripped) else "para"
         els.append(_Element(kind, start, pend, ptext))
         i = j
+    _assign_pages(els)
     return els
+
+
+def _assign_pages(els: list[_Element]) -> None:
+    """Stamp every content element with its page: the markers say
+    ``end of page N``, so what precedes the first marker is page 1 and what
+    follows marker N is N+1. Without markers pages stay None."""
+    markers = [e for e in els if e.kind == "page"]
+    if not markers:
+        return
+    current = markers[0].page or 1  # text before "end of page N" is page N
+    for e in els:
+        if e.kind == "page":
+            current = (e.page or 0) + 1
+        else:
+            e.page = current
 
 
 def parse_table(markdown: str) -> dict[str, Any]:
@@ -197,7 +214,6 @@ def chunk(text: str) -> list[Chunk]:
     """Split a text artifact into structure-aware chunks (see module doc)."""
     chunks: list[Chunk] = []
     heading: list[tuple[int, str]] = []  # (level, title) stack
-    page: int | None = None
     pending: list[_Element] = []  # paragraphs of the text chunk being built
 
     def path() -> list[str]:
@@ -208,6 +224,7 @@ def chunk(text: str) -> list[Chunk]:
         if not pending:
             return
         start, end = pending[0].start, pending[-1].end
+        page = pending[0].page  # a chunk may span pages; it is filed under its first
         body = text[start:end]
         if len(body) > MAX_CHARS and len(pending) == 1:
             for ws, we in windows(body):
@@ -226,7 +243,6 @@ def chunk(text: str) -> list[Chunk]:
             if (
                 a.kind == b.kind == "text"
                 and a.heading == b.heading
-                and a.page == b.page
                 and len(b.text) < MIN_CHARS
                 and len(a.text) + len(b.text) <= MAX_CHARS
             ):
@@ -243,15 +259,14 @@ def chunk(text: str) -> list[Chunk]:
     els = _elements(text)
     for idx, el in enumerate(els):
         if el.kind == "page":
-            flush()
-            maybe_merge_small_tail()
-            page = el.page + 1  # marker closes page N; what follows is N+1
-            if chunks:
-                # chunks flushed before the first marker belong to page 1
-                for c in chunks:
-                    if c.page is None:
-                        c.page = el.page
+            # a substantial chunk ends with its page; a small one (a running
+            # header, a sentence cut by the break) carries on into the next
+            if pending and pending[-1].end - pending[0].start >= MIN_CHARS:
+                flush()
+                maybe_merge_small_tail()
             continue
+        if el.kind == "code" and len(el.text) < MIN_CODE_CHARS:
+            el = _Element("para", el.start, el.end, el.text, page=el.page)
         if el.kind == "heading":
             flush()
             maybe_merge_small_tail()
@@ -304,7 +319,7 @@ def chunk(text: str) -> list[Chunk]:
                     text[start:end],
                     start,
                     end,
-                    page,
+                    el.page,
                     path(),
                     parse_table(el.text),
                 )
@@ -313,7 +328,9 @@ def chunk(text: str) -> list[Chunk]:
         if el.kind in ("figure", "code"):
             flush()
             chunks.append(
-                Chunk(el.kind, text[el.start : el.end], el.start, el.end, page, path())
+                Chunk(
+                    el.kind, text[el.start : el.end], el.start, el.end, el.page, path()
+                )
             )
             continue
         # blank (consumed caption): nothing

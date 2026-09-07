@@ -35,7 +35,15 @@ Paragraph after the table.
 **Figure 2:** A schematic of the pipeline.
 
 ```python
-print("code stays whole")
+def keep_whole(samples):
+    # a real listing, long enough to stay a code chunk of its own
+    total = 0.0
+    for s in samples:
+        total += s * s
+    return (total / len(samples)) ** 0.5
+
+
+print(keep_whole([0.1, 0.2, 0.3]))
 ```
 
 --- end of page.page_number=1 ---
@@ -94,6 +102,39 @@ def test_caption_after_table_is_folded_in() -> None:
     assert _kinds(cs) == ["table", "text"]
     assert cs[0].text.endswith("Table 3: caption below.")
     assert cs[1].text == "Next paragraph."
+
+
+def test_text_spans_pages_and_running_headers_do_not_fragment() -> None:
+    doc = (
+        "Body of a section that continues over the page break.\n\n"
+        "--- end of page.page_number=3 ---\n\n"
+        "204 – MANUAL\n\n"
+        "and this sentence finishes the thought on the next page.\n\n"
+        "--- end of page.page_number=4 ---\n\n"
+        "# Next section\n\nFresh start.\n"
+    )
+    cs = chunking.chunk(doc)
+    assert [c.kind for c in cs] == ["text", "text"]
+    assert cs[0].page == 3 and "204 – MANUAL" in cs[0].text
+    assert cs[0].text.endswith("next page.")  # the marker line sits inside
+    assert cs[1].page == 5 and cs[1].heading == ["Next section"]
+    # a substantial chunk still ends at the page break
+    long = (
+        "Long paragraph. " * 30
+        + "\n\n--- end of page.page_number=1 ---\n\n"
+        + "Next page, also substantial. " * 20
+    )
+    cs = chunking.chunk(long)
+    assert [c.page for c in cs] == [1, 2] and "end of page" not in cs[0].text
+
+
+def test_small_code_folds_into_text_large_code_stands_alone() -> None:
+    small = "Call it like this:\n\n```\nfoo()\n```\n\nand carry on.\n"
+    cs = chunking.chunk(small)
+    assert [c.kind for c in cs] == ["text"] and "foo()" in cs[0].text
+    big = "Intro.\n\n```\n" + "\n".join(f"x{i} = {i}" for i in range(60)) + "\n```\n"
+    kinds = [c.kind for c in chunking.chunk(big)]
+    assert kinds == ["text", "code"]
 
 
 def test_long_paragraph_is_windowed_with_overlap() -> None:
