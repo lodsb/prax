@@ -114,6 +114,19 @@ files. After both passes 8,448 documents are indexed and 779 PDFs stay
 pending: the 71 books, the 56 unreadable files, the artwork, and the
 faulting few. Every attempt is in `meta.parse_history`.
 
+**Upgrade pass** (2026-09-07, pymupdf4llm and trafilatura over everything
+Zotero's cache had covered; about five hours of desktop time in batches of
+200 documents per process): 7,732 documents now carry pymupdf4llm
+Markdown with page markers, 99 HTML snapshots trafilatura text, 68 plain
+MuPDF text (oversized or layout-hostile originals), and 163 kept the cache
+text because the new extraction was shorter. After re-chunking, 8,448
+indexed documents hold about 986,000 chunks, 916,000 of them with a page
+number; tables, figure captions and code listings are chunks of their
+own. Three guards came out of this pass: lone surrogates from broken
+fonts are replaced before archiving, layout analysis is capped at 400
+pages and 40 MB, and documents an extractor version has already tried are
+skipped so batch loops always progress.
+
 ### Schema mapping
 
 Confirmed against the local `zotero.sqlite` (61 tables). The relevant ones:
