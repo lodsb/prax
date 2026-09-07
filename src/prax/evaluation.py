@@ -18,6 +18,7 @@ embedder. ``evaluate`` runs the set; ``report`` renders a Markdown table.
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -38,7 +39,8 @@ MODES = ("fts", "vec", "hybrid")
 @dataclass
 class Query:
     q: str
-    expect: list[str]
+    expect: list[str] = field(default_factory=list)  # Zotero keys
+    expect_title: list[str] = field(default_factory=list)  # regexes, case-insensitive
     style: str = "keyword"
     kind: str | None = None
 
@@ -82,22 +84,54 @@ def load_queries(path: Path = QUERIES) -> list[Query]:
     return [Query(**q) for q in data["queries"]]
 
 
+@dataclass
+class Resolver:
+    """Turns a query's expectations into document ids for one store."""
+
+    keys: dict[str, int]
+    titles: list[tuple[int, str]]
+
+    @classmethod
+    def for_store(cls, con: sqlite3.Connection) -> Resolver:
+        titles = [
+            (r["id"], r["title"])
+            for r in con.execute(
+                "SELECT id, title FROM documents WHERE title IS NOT NULL"
+            )
+        ]
+        return cls(store.meta_index(con, "$.zotero.keys"), titles)
+
+    def expected(self, query: Query) -> set[int]:
+        ids = {self.keys[k] for k in query.expect if k in self.keys}
+        for pattern in query.expect_title:
+            rx = re.compile(pattern, re.IGNORECASE)
+            ids.update(i for i, t in self.titles if rx.search(t))
+        if not ids:
+            wanted = query.expect or query.expect_title
+            raise KeyError(f"nothing resolves for {wanted} in this store")
+        return ids
+
+
 def resolve_keys(con: sqlite3.Connection) -> dict[str, int]:
     """Zotero key -> document id, over every key the importer recorded."""
     return store.meta_index(con, "$.zotero.keys")
 
 
 def run_query(
-    con: sqlite3.Connection, query: Query, mode: str, keys: dict[str, int], depth: int
+    con: sqlite3.Connection,
+    query: Query,
+    mode: str,
+    resolver: Resolver | dict[str, int],
+    depth: int,
 ) -> QueryResult:
+    if isinstance(resolver, dict):
+        resolver = Resolver(resolver, [])
+    expected = resolver.expected(query)
     hits = store.search(con, query.q, depth, kind=query.kind, mode=mode)
     docs: list[int] = []
     for h in hits:
         if h["doc_id"] not in docs:
             docs.append(h["doc_id"])
-    expected = {keys[k] for k in query.expect if k in keys}
-    if not expected:
-        raise KeyError(f"none of {query.expect} resolve in this store")
     rank = next((i + 1 for i, d in enumerate(docs) if d in expected), None)
     return QueryResult(query, mode, rank, docs)
 
@@ -109,14 +143,14 @@ def evaluate(
     *,
     depth: int = 10,
 ) -> tuple[list[ModeScore], list[QueryResult]]:
-    keys = resolve_keys(con)
+    resolver = Resolver.for_store(con)
     scores: list[ModeScore] = []
     results: list[QueryResult] = []
     for mode in modes:
         score = ModeScore(mode)
         for query in queries:
             try:
-                r = run_query(con, query, mode, keys, depth)
+                r = run_query(con, query, mode, resolver, depth)
             except ValueError:  # e.g. mode=vec with no vectors
                 continue
             results.append(r)

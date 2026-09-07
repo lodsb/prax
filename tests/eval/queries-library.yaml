@@ -1,0 +1,218 @@
+# Retrieval eval set against the FULL Zotero store (not the fixture).
+#
+# Expectations are title regexes (case-insensitive), so duplicates of the
+# same paper all count. Written from the documents' own abstracts:
+#   keyword    words that appear in the title or abstract verbatim
+#   paraphrase the idea in other words (the vector side has to carry it)
+#   structure  a specific table or figure, searched with a kind filter
+# Run: python scripts/eval_retrieval.py --store C:/prax-data \
+#          --queries tests/eval/queries-library.yaml
+
+queries:
+  # ---- pitch, time-frequency, instantaneous frequency
+  - q: real-time pitch tracking extended complex Kalman filter
+    expect_title: ["Extended Complex Kalman"]
+    style: keyword
+  - q: a pitch follower that updates every sample with a state estimator instead of block-based analysis
+    expect_title: ["Extended Complex Kalman"]
+    style: paraphrase
+  - q: pitch detection algorithms singing phrases pYin Praat PLL
+    expect_title: ["pitch detection algorithms for singing"]
+    style: keyword
+  - q: synchrosqueezing S-transform seismic spectral decomposition
+    expect_title: ["Synchrosqueezing S-Transform"]
+    style: keyword
+  - q: sharpening the time-frequency picture of the S-transform by reassigning energy along frequency
+    expect_title: ["Synchrosqueezing S-Transform"]
+    style: paraphrase
+  - q: instantaneous frequency analytic signal Hilbert transform quadrature
+    expect_title: ["^ON INSTANTANEOUS FREQUENCY$"]
+    style: keyword
+  - q: why the Hilbert transform gives a misleading instantaneous frequency and how to compute it from quadrature instead
+    expect_title: ["^ON INSTANTANEOUS FREQUENCY$"]
+    style: paraphrase
+  - q: parameterised time-frequency analysis methods engineering applications review
+    expect_title: ["Parameterised time-frequency analysis"]
+    style: keyword
+  - q: deconvolutive short-time Fourier transform spectrogram Wigner-Ville
+    expect_title: ["Deconvolutive Short-Time Fourier"]
+    style: keyword
+  - q: undoing the window smoothing of a spectrogram to get closer to the Wigner distribution without cross terms
+    expect_title: ["Deconvolutive Short-Time Fourier"]
+    style: paraphrase
+  - q: one or two frequencies empirical mode decomposition two-tone signal
+    expect_title: ["One or Two Frequencies"]
+    style: keyword
+  - q: practical empirical mode decomposition for audio synthesis
+    expect_title: ["Empirical Mode Decomposition for Audio Synthesis"]
+    style: keyword
+  - q: multi-pitch estimation polyphonic music pseudo two-dimensional spectrum
+    expect_title: ["Pseudo Two-Dimensional Spectrum"]
+    style: keyword
+
+  # ---- source separation, factorization, wavelets
+  - q: nonnegative matrix factor 2-D deconvolution blind single channel source separation
+    expect_title: ["Nonnegative Matrix Factor 2-D Deconvolution"]
+    style: keyword
+  - q: separating instruments in a polyphonic recording with a factorization that is convolutive in both time and frequency
+    expect_title: ["Nonnegative Matrix Factor 2-D Deconvolution"]
+    style: paraphrase
+  - q: framework for music analysis resynthesis based on matrix factorization
+    expect_title: ["analysis/resynthesis based on matrix factorization"]
+    style: keyword
+  - q: using NMF to create artificial cross-components for creative sound transformation
+    expect_title: ["analysis/resynthesis based on matrix factorization"]
+    style: paraphrase
+  - q: geometrically motivated primary ambient decomposition center channel extraction
+    expect_title: ["Primary-Ambient Decomposition"]
+    style: keyword
+  - q: rotating a stereo scene so the direct sources land in the middle and then pulling out a center channel for upmixing
+    expect_title: ["Primary-Ambient Decomposition"]
+    style: paraphrase
+  - q: dimension reduction time series blind source separation R package
+    expect_title: ["Dimension Reduction for Time Series"]
+    style: keyword
+  - q: undecimated wavelet transforms image de-noising
+    expect_title: ["Undecimated Wavelet Transforms"]
+    style: keyword
+  - q: signal restoration overcomplete wavelet transforms analysis and synthesis priors
+    expect_title: ["overcomplete wavelet transforms"]
+    style: keyword
+  - q: difference between analysis-prior and synthesis-prior regularization for sparse signal recovery
+    expect_title: ["overcomplete wavelet transforms"]
+    style: paraphrase
+  - q: separation of transient information in musical audio multiresolution analysis
+    expect_title: ["Separation Of Transient Information"]
+    style: keyword
+  - q: splitting the noisy attack of a note from its steady tonal part with wavelets and adaptive thresholds
+    expect_title: ["Separation Of Transient Information"]
+    style: paraphrase
+  - q: multi-microphone noise reduction post-filter superdirective beamformer
+    expect_title: ["SUPERDIRECTIVE BEAMFORMER"]
+    style: keyword
+
+  # ---- synthesis, reverb, spatial audio
+  - q: Matlab implementation of reverberation algorithms
+    expect_title: ["Matlab Implementation of Reverberation"]
+    style: keyword
+  - q: comparing artificial reverb designs by looking at their impulse and phase responses in a scripting environment
+    expect_title: ["Matlab Implementation of Reverberation"]
+    style: paraphrase
+  - q: real-time acoustics simulation mesh-tracing
+    expect_title: ["Mesh-Tracing"]
+    style: keyword
+  - q: room acoustics simulation that combines a waveguide mesh with ray tracing to run in real time
+    expect_title: ["Mesh-Tracing"]
+    style: paraphrase
+  - q: spectral granular synthesis magnitude spectrum phase reconstruction
+    expect_title: ["^Spectral Granular Synthesis"]
+    style: keyword
+  - q: granular synthesis where grains are summed in the frequency domain and the phase is recovered by spectrogram inversion
+    expect_title: ["^Spectral Granular Synthesis"]
+    style: paraphrase
+  - q: statistical modeling of bowing control violin sound synthesis
+    expect_title: ["Bowing Control"]
+    style: keyword
+  - q: learning how a violinist moves the bow so that a physical model can play more naturally
+    expect_title: ["Bowing Control"]
+    style: paraphrase
+  - q: improving binaural ambisonics decoding spherical harmonics tapering coloration
+    expect_title: ["Binaural Ambisonics Decoding"]
+    style: keyword
+  - q: reducing the spectral coloration when a low-order spherical harmonic scene is rendered over headphones
+    expect_title: ["Binaural Ambisonics Decoding"]
+    style: paraphrase
+  - q: streaming frequency-domain DAFx in Csound 5 fsig
+    expect_title: ["Csound 5"]
+    style: keyword
+  - q: mapping control structures for sound synthesis functional and topological perspectives
+    expect_title: ["Mapping Control Structures"]
+    style: keyword
+  - q: segmental spectro-temporal model of musical timbre attack sustain release
+    expect_title: ["Segmental Spectro-Temporal Model"]
+    style: keyword
+  - q: Satellite CCRMA Beagle Board musical interaction platform
+    expect_title: ["Satellite CCRMA"]
+    style: keyword
+
+  # ---- music perception, structure, interfaces
+  - q: nature and perception of fluctuations in human musical rhythms
+    expect_title: ["Fluctuations in Human Musical Rhythms"]
+    style: keyword
+  - q: why perfectly quantized drum patterns sound mechanical and how human timing deviations are structured
+    expect_title: ["Fluctuations in Human Musical Rhythms"]
+    style: paraphrase
+  - q: hierarchical evaluation of segment boundary detection
+    expect_title: ["HIERARCHICAL EVALUATION OF SEGMENT BOUNDARY"]
+    style: keyword
+  - q: scoring music structure annotations that nest rather than flat partitions of a track
+    expect_title: ["HIERARCHICAL EVALUATION OF SEGMENT BOUNDARY", "Hierarchical Structure of Music"]
+    style: paraphrase
+  - q: graphical model chord progressions psychoacoustic space
+    expect_title: ["chord progressions embedded in a psychoacoustic"]
+    style: keyword
+  - q: timbre affects perception of emotion in music
+    expect_title: ["Timbre affects perception of emotion"]
+    style: keyword
+  - q: Audiopad tag-based interface musical performance pucks
+    expect_title: ["^Audiopad"]
+    style: keyword
+  - q: SoundWave using the doppler effect to sense gestures
+    expect_title: ["^SoundWave"]
+    style: keyword
+  - q: detecting hand gestures with a laptop's own speaker and microphone from frequency shifts of an inaudible tone
+    expect_title: ["^SoundWave"]
+    style: paraphrase
+  - q: towards an auditory representation of complexity sonification fractals
+    expect_title: ["AUDITORY REPRESENTATION OF COMPLEXITY"]
+    style: keyword
+
+  # ---- a German document (bge-small is English-only; a multilingual probe)
+  - q: Independent Component Analysis Infomax Algorithmus
+    expect_title: ["^Independent Component Analysis$"]
+    style: keyword
+  - q: wie man Daten linear so transformiert, dass die Komponenten statistisch unabhängig werden
+    expect_title: ["^Independent Component Analysis$"]
+    style: paraphrase
+
+  # ---- structure: specific tables and figures
+  - q: SNR measurements in dB for test signals polyBLAMP triangle
+    expect_title: ["Rounding Corners with BLAMP"]
+    style: structure
+    kind: table
+  - q: reconstruction error comparison on the NSynth dataset wavetable
+    expect_title: ["Differentiable Wavetable Synthesis"]
+    style: structure
+    kind: table
+  - q: time complexity of autoregressive and non-autoregressive waveform models WaveNet WaveRNN
+    expect_title: ["Neural source-filter waveform models"]
+    style: structure
+    kind: table
+  - q: confusion matrix of emotion recognition neutral sadness boredom anger
+    expect_title: ["Recognition of Emotions in Audio Signals"]
+    style: structure
+    kind: table
+  - q: nonnegative Tucker decomposition of a tensor into factor matrices and a core tensor
+    expect_title: ["Nonnegative Tucker"]
+    style: structure
+    kind: figure
+  - q: Bayesian network of the complex ISNMF model with latent and observed variables
+    expect_title: ["Complex ISNMF"]
+    style: structure
+    kind: figure
+  - q: separation of a strummed guitar signal into transient and steady state parts
+    expect_title: ["Separation Of Transient Information"]
+    style: structure
+    kind: figure
+  - q: binaural reverberator built from early reflections and a diffuse feedback delay network
+    expect_title: ["Binaural reverberation using two parallel feedback"]
+    style: structure
+    kind: figure
+  - q: preservation of periodic structures by WSOLA time-stretch
+    expect_title: ["Time-Scale Modification of Music Signals"]
+    style: structure
+    kind: figure
+  - q: comparison of standard DUET and tiled DUET with large relative delays
+    expect_title: ["DUET Blind Source Separation"]
+    style: structure
+    kind: figure
