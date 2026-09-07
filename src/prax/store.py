@@ -8,6 +8,7 @@ Concurrency: FastAPI and FastMCP run sync handlers on worker threads, so the
 connection is created with ``check_same_thread=False`` and every public
 function is serialized behind one process-wide re-entrant lock.
 """
+
 from __future__ import annotations
 
 import functools
@@ -21,9 +22,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
-from . import chunking, config, ontology
+from . import chunking, config, embeddings, ontology
 
 MAX_HOPS = 2
+VEC_DIM = 384  # baked into chunks_vec; another dimension is a migration
+RRF_K = 60  # reciprocal rank fusion constant
+_vec_loaded: dict[int, bool] = {}  # id(con) -> sqlite-vec available on it
 CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 
 _LOCK = threading.RLock()
@@ -54,7 +58,30 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA journal_mode = WAL")
+    _vec_loaded[id(con)] = _load_vec(con)
     return con
+
+
+def _load_vec(con: sqlite3.Connection) -> bool:
+    """Load sqlite-vec into the connection; False when it is not installed
+    or this Python cannot load extensions. The store works without it
+    (FTS-only search); vectors need it."""
+    try:
+        import sqlite_vec
+    except ImportError:
+        return False
+    try:
+        con.enable_load_extension(True)
+        sqlite_vec.load(con)
+        con.enable_load_extension(False)
+    except (AttributeError, sqlite3.OperationalError):
+        return False
+    return True
+
+
+def has_vec(con: sqlite3.Connection) -> bool:
+    """True when sqlite-vec is loaded on this connection."""
+    return _vec_loaded.get(id(con), False)
 
 
 def migrations() -> list[tuple[int, Path]]:
@@ -101,6 +128,13 @@ def init_db(con: sqlite3.Connection) -> int:
             con.execute("ROLLBACK")
             raise
         current = number
+    if has_vec(con):
+        con.execute(
+            "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0("
+            f" chunk_id INTEGER PRIMARY KEY, embedding float[{VEC_DIM}]"
+            " distance_metric=cosine, kind TEXT, +model TEXT)"
+        )
+        con.commit()
     return current
 
 
@@ -226,6 +260,15 @@ def index_text(
 def _write_chunks(con: sqlite3.Connection, doc_id: int, text: str) -> int:
     """Replace a document's chunks with structure-aware ones (prax.chunking)."""
     rows = chunking.rows(chunking.chunk(text))
+    if has_vec(con):  # chunk ids change; their vectors must not outlive them
+        old = [
+            r[0]
+            for r in con.execute("SELECT id FROM chunks WHERE doc_id = ?", (doc_id,))
+        ]
+        for i in range(0, len(old), 500):
+            ids = old[i : i + 500]
+            marks = ",".join("?" * len(ids))
+            con.execute(f"DELETE FROM chunks_vec WHERE chunk_id IN ({marks})", ids)
     con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
     con.executemany(
         "INSERT INTO chunks (doc_id, seq, text, kind, locator, heading, data)"
@@ -469,25 +512,15 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     }
 
 
-@_serialized
-def search(
-    con: sqlite3.Connection,
-    query: str,
-    limit: int = 10,
-    *,
-    kind: str | None = None,
-) -> list[dict[str, Any]]:
-    """FTS5 search returning compact snippets + ids (agent-shaped).
+SEARCH_MODES = ("hybrid", "fts", "vec")
 
-    Each hit carries the chunk's ``kind`` (text, table, figure, code), its
-    section ``heading`` path and ``page`` when known; ``kind`` filters to one
-    kind. Stage 2 turns this into hybrid FTS+vec with RRF; keep the shape.
-    """
+
+def _fts_search(
+    con: sqlite3.Connection, query: str, limit: int, kind: str | None
+) -> list[dict[str, Any]]:
     expr = _fts_query(query)
     if expr is None:
         return []
-    if kind is not None and kind not in chunking.KINDS:
-        raise ValueError(f"kind must be one of {chunking.KINDS}")
     kind_clause = "AND c.kind = ?" if kind is not None else ""
     args: tuple[Any, ...] = (expr, kind, limit) if kind is not None else (expr, limit)
     rows = con.execute(
@@ -509,6 +542,177 @@ def search(
         hit.update(_chunk_shape(r))
         out.append(hit)
     return out
+
+
+def _vec_search(
+    con: sqlite3.Connection, vector: Any, limit: int, kind: str | None
+) -> list[dict[str, Any]]:
+    """KNN over chunks_vec (cosine); ``kind`` uses the vec0 metadata column."""
+    from sqlite_vec import serialize_float32
+
+    kind_clause = "AND kind = ?" if kind is not None else ""
+    args: tuple[Any, ...] = (serialize_float32(list(map(float, vector))), limit)
+    if kind is not None:
+        args = (args[0], kind, limit)
+    rows = con.execute(
+        f"""
+        SELECT v.chunk_id, v.distance, c.doc_id, d.title, c.kind, c.locator,
+               c.heading, substr(c.text, 1, 160) AS head
+        FROM (SELECT chunk_id, distance FROM chunks_vec
+              WHERE embedding MATCH ? {kind_clause} AND k = ?
+              ORDER BY distance) v
+        JOIN chunks c ON c.id = v.chunk_id
+        JOIN documents d ON d.id = c.doc_id
+        ORDER BY v.distance
+        """,
+        args,
+    ).fetchall()
+    out = []
+    for r in rows:
+        hit = {
+            "chunk_id": r["chunk_id"],
+            "doc_id": r["doc_id"],
+            "title": r["title"],
+            "snippet": r["head"],
+            "score": r["distance"],
+        }
+        hit.update(_chunk_shape(r))
+        out.append(hit)
+    return out
+
+
+def _rrf(
+    ranked: list[list[dict[str, Any]]], names: list[str], limit: int
+) -> list[dict[str, Any]]:
+    """Reciprocal rank fusion: score = sum 1/(RRF_K + rank) over the lists."""
+    fused: dict[int, dict[str, Any]] = {}
+    for hits, name in zip(ranked, names, strict=True):
+        for rank, hit in enumerate(hits, 1):
+            entry = fused.get(hit["chunk_id"])
+            if entry is None:
+                entry = {**hit, "score": 0.0, "fts_rank": None, "vec_rank": None}
+                fused[hit["chunk_id"]] = entry
+            elif name == "fts":  # prefer the FTS snippet with match markers
+                entry["snippet"] = hit["snippet"]
+            entry["score"] += 1.0 / (RRF_K + rank)
+            entry[f"{name}_rank"] = rank
+    out = sorted(fused.values(), key=lambda h: -h["score"])
+    return out[:limit]
+
+
+@_serialized
+def vec_status(con: sqlite3.Connection) -> dict[str, Any]:
+    """Whether vectors are usable on this connection and how many exist."""
+    status: dict[str, Any] = {"available": has_vec(con), "rows": 0, "models": {}}
+    rows = con.execute(
+        "SELECT model, count(*) AS n FROM chunk_embeddings GROUP BY model"
+    ).fetchall()
+    status["models"] = {r["model"]: r["n"] for r in rows}
+    status["rows"] = sum(status["models"].values())
+    emb = embeddings.current()
+    status["embedder"] = emb.name if emb else None
+    return status
+
+
+@_serialized
+def search(
+    con: sqlite3.Connection,
+    query: str,
+    limit: int = 10,
+    *,
+    kind: str | None = None,
+    mode: str = "hybrid",
+) -> list[dict[str, Any]]:
+    """Search returning compact snippets + ids (agent-shaped).
+
+    ``hybrid`` (default) runs FTS5/BM25 and vector KNN in parallel and fuses
+    them with reciprocal rank fusion; each hit carries ``score`` (the fused
+    score), ``fts_rank`` and ``vec_rank`` (None when absent from that list).
+    It degrades to FTS-only when embeddings are disabled, sqlite-vec is
+    missing or no vectors exist yet. ``fts`` and ``vec`` force one side.
+    Every hit carries the chunk's ``kind``, section ``heading`` path and
+    ``page``; ``kind`` filters to one kind.
+    """
+    if kind is not None and kind not in chunking.KINDS:
+        raise ValueError(f"kind must be one of {chunking.KINDS}")
+    if mode not in SEARCH_MODES:
+        raise ValueError(f"mode must be one of {SEARCH_MODES}")
+    emb = embeddings.current() if mode != "fts" else None
+    vectors_ready = emb is not None and has_vec(con) and _vec_count(con) > 0
+    if mode == "vec" and not vectors_ready:
+        raise ValueError("vector search unavailable: no embedder, extension or vectors")
+    if not vectors_ready:
+        return _fts_search(con, query, limit, kind)
+    assert emb is not None
+    vector = emb.embed_query(query)
+    if mode == "vec":
+        return _vec_search(con, vector, limit, kind)
+    depth = max(limit * 3, 20)
+    return _rrf(
+        [_fts_search(con, query, depth, kind), _vec_search(con, vector, depth, kind)],
+        ["fts", "vec"],
+        limit,
+    )
+
+
+def _vec_count(con: sqlite3.Connection) -> int:
+    return con.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0]
+
+
+# ------------------------------------------------------------- embeddings
+
+
+@_serialized
+def pending_embeddings(
+    con: sqlite3.Connection, model: str, *, limit: int | None = None
+) -> list[dict[str, Any]]:
+    """Chunks without a vector from ``model``: ``{chunk_id, kind, text}``."""
+    sql = (
+        "SELECT c.id AS chunk_id, c.kind, c.text FROM chunks c"
+        " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
+        " WHERE e.chunk_id IS NULL OR e.model != ? ORDER BY c.id"
+    )
+    args: tuple[Any, ...] = (model,)
+    if limit is not None:
+        sql += " LIMIT ?"
+        args = (model, limit)
+    return [dict(r) for r in con.execute(sql, args)]
+
+
+@_serialized
+def store_embeddings(
+    con: sqlite3.Connection,
+    items: list[tuple[int, str | None, Any]],
+    model: str,
+) -> int:
+    """Write ``(chunk_id, kind, vector)`` rows for ``model``; replaces any
+    earlier vector of the chunk. Requires sqlite-vec on the connection."""
+    if not has_vec(con):
+        raise RuntimeError("sqlite-vec is not loaded on this connection")
+    from sqlite_vec import serialize_float32
+
+    ids = [cid for cid, _, _ in items]
+    for i in range(0, len(ids), 500):
+        part = ids[i : i + 500]
+        con.execute(
+            f"DELETE FROM chunks_vec WHERE chunk_id IN ({','.join('?' * len(part))})",
+            part,
+        )
+    con.executemany(
+        "INSERT INTO chunks_vec (chunk_id, embedding, kind, model) VALUES (?,?,?,?)",
+        [
+            (cid, serialize_float32(list(map(float, vec))), kind, model)
+            for cid, kind, vec in items
+        ],
+    )
+    con.executemany(
+        "INSERT INTO chunk_embeddings (chunk_id, model) VALUES (?, ?)"
+        " ON CONFLICT(chunk_id) DO UPDATE SET model = excluded.model,"
+        f" embedded_at = {_NOW}",
+        [(cid, model) for cid in ids],
+    )
+    con.commit()
+    return len(items)
 
 
 @_serialized

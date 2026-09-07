@@ -96,10 +96,14 @@ def get(
 
 @app.get("/search")
 def search(
-    q: str, request: Request, limit: int = 10, kind: str | None = None
+    q: str,
+    request: Request,
+    limit: int = 10,
+    kind: str | None = None,
+    mode: str = "hybrid",
 ) -> list[dict[str, Any]]:
     try:
-        return store.search(request.app.state.con, q, limit, kind=kind)
+        return store.search(request.app.state.con, q, limit, kind=kind, mode=mode)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

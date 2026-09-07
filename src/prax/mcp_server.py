@@ -33,16 +33,18 @@ def _db() -> sqlite3.Connection:
 
 @mcp.tool
 def search(
-    query: str, limit: int = 10, kind: str | None = None
+    query: str, limit: int = 10, kind: str | None = None, mode: str = "hybrid"
 ) -> list[dict[str, Any]]:
-    """Search the knowledge base (BM25). Returns compact snippets + ids.
+    """Search the knowledge base. Returns compact snippets + ids.
 
-    Each hit names its chunk ``kind`` (text, table, figure, code), section
-    ``heading`` path and ``page``. ``kind`` restricts to one kind, e.g.
-    ``kind="table"`` for documents with a table about the query.
+    ``hybrid`` (default) fuses BM25 keyword search with vector similarity;
+    ``fts`` or ``vec`` force one side. Each hit names its chunk ``kind``
+    (text, table, figure, code), section ``heading`` path and ``page``;
+    ``kind`` restricts to one kind, e.g. ``kind="table"`` for documents
+    with a table about the query. Fetch a hit in full with ``get_chunk``.
     """
     try:
-        return store.search(_db(), query, limit, kind=kind)
+        return store.search(_db(), query, limit, kind=kind, mode=mode)
     except ValueError as exc:
         return [{"error": str(exc)}]
 
