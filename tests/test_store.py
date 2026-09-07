@@ -160,6 +160,15 @@ def test_get_missing_returns_none(con: sqlite3.Connection) -> None:
 # ----------------------------------------------------------------- chunks
 
 
+def test_index_text_strips_nul_bytes(con: sqlite3.Connection) -> None:
+    text = "page \x003\x005 marker\n\nreal words here"
+    doc_id = store.ingest_text(con, text)["doc_id"]
+    doc = store.get_document(con, doc_id)
+    assert "\x00" not in doc["text"] and doc["text"].startswith("page 35 marker")
+    assert store.search(con, "real words")[0]["doc_id"] == doc_id
+    assert con.execute("SELECT min(length(text)) FROM chunks").fetchone()[0] > 0
+
+
 def test_chunk_windows() -> None:
     """The fixed-window fallback lives in prax.chunking now (long paragraphs)."""
     from prax import chunking

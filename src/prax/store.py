@@ -201,6 +201,9 @@ def index_text(
     exists = con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if exists is None:
         raise KeyError(f"no such document: {doc_id}")
+    # NUL bytes (pdftotext emits them for some page numbers) truncate SQLite's
+    # text functions and the FTS tokenizer; they carry no content.
+    text = text.replace("\x00", "")
     text_hash = _archive_bytes(text.encode("utf-8"))
     n_chunks = _write_chunks(con, doc_id, text)
     con.execute(
