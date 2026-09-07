@@ -102,6 +102,18 @@ def _has_text_layer(doc: Any) -> bool:
 
 
 def _pymupdf4llm(data: bytes) -> str:
+    """Markdown via MuPDF's layout analysis, for born-digital PDFs.
+
+    Layout analysis holds page renderings in memory; originals above
+    ``PRAX_MAX_LAYOUT_MB`` (default 40) are refused so the plain extractor
+    handles them instead of the process being killed.
+    """
+    limit_mb = float(os.environ.get("PRAX_MAX_LAYOUT_MB", "40"))
+    if len(data) > limit_mb * 1e6:
+        raise ExtractionError(
+            f"{len(data) / 1e6:.0f} MB exceeds PRAX_MAX_LAYOUT_MB={limit_mb:g};"
+            " plain extraction instead"
+        )
     pymupdf4llm = importlib.import_module("pymupdf4llm")
     with _pymupdf_open(data) as doc:
         if not _has_text_layer(doc):

@@ -82,6 +82,19 @@ def test_scanned_pdf_is_refused_by_markdown_and_left_empty(
     assert store.select_documents(con, pending=True) == [doc_id]  # still pending
 
 
+@needs_pymupdf
+def test_oversized_pdf_falls_back_to_plain_extraction(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PRAX_MAX_LAYOUT_MB", "0.001")  # the 8 KB fixture is "too big"
+    data = YOSHII_PDF.read_bytes()
+    with pytest.raises(parsers.ExtractionError, match="PRAX_MAX_LAYOUT_MB"):
+        parsers.by_name("pymupdf4llm")(data)
+    doc_id = store.register(con, data, mime="application/pdf", title="big")["doc_id"]
+    assert queue.run(con, [doc_id]).actions == {"created": 1}
+    assert store.get_meta(con, doc_id)["text_source"].startswith("pymupdf/")
+
+
 @needs_trafilatura
 def test_trafilatura_strips_page_chrome() -> None:
     text = parsers.by_name("trafilatura")(SNAPSHOT_HTML.read_bytes())
