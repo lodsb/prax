@@ -198,6 +198,8 @@ def test_browsing_endpoints_and_ui(client: TestClient) -> None:
     ).json()
     listing = client.get("/documents").json()
     assert listing["total"] == 2
+    js = client.get("/ui/app.js")
+    assert js.status_code == 200 and js.headers["cache-control"] == "no-cache"
     assert [d["id"] for d in listing["items"]] == [note["doc_id"], pdf["doc_id"]]
     assert listing["items"][0]["n_chunks"] >= 1 and listing["items"][0]["meta"] == {
         "source": "zotero"

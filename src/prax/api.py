@@ -324,4 +324,14 @@ def root() -> RedirectResponse:
     return RedirectResponse("/ui/")
 
 
-app.mount("/ui", StaticFiles(directory=UI_DIR, html=True), name="ui")
+class _UIFiles(StaticFiles):
+    """Static files that browsers revalidate on every load (ETag makes
+    that cheap), so a redeploy never leaves a stale app.js behind."""
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Any:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
+app.mount("/ui", _UIFiles(directory=UI_DIR, html=True), name="ui")
