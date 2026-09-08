@@ -176,10 +176,18 @@ R14). Design in `docs/ui.md`.
       ($50), Haiku 4.5 $50 ($25)
 - [ ] Trial run on ~20 documents with credentials, read the triples, then
       the full run with the chosen model via the batch API
-- [ ] Entity resolution pass (embedding candidates → LLM adjudication);
-      merges recorded via `entities.canonical_id`; `traverse` follows
-      canonical ids
-- [ ] Edge invalidation on contradiction (set `valid_to`, insert successor)
+- [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
+      sure merges (normalized names, author initials forms) apply on their
+      own, likely merges (name embeddings, concept/method/tool/dataset/venue
+      only) go to an adjudicator (none, stub, or Claude); merges recorded
+      via `entities.canonical_id` with chain flattening; `traverse` walks
+      canonical ids. 264 author and title variants merged in the scratch
+      store.
+- [ ] Run the likely tier with the Claude adjudicator once extraction has
+      produced concepts and methods to merge
+- [x] Edge invalidation: `store.invalidate_edge` sets `valid_to` and can
+      insert the successor edge (history kept); the contradiction pass
+      that calls it comes with the second extraction round
 - [x] `traverse` surfaces confidence, evidence, ontology version and
       validity on every edge (store, API and MCP)
 

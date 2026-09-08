@@ -196,6 +196,20 @@ Bumping the ontology version re-selects every document. Review the queue
 with `store.list_review` (a UI view is planned) and close items with
 `resolve_review`.
 
+### Entity resolution
+
+    python scripts/resolve_entities.py --dry-run               # both tiers listed
+    python scripts/resolve_entities.py --commit --no-embed     # sure merges only
+    python scripts/resolve_entities.py --commit --adjudicate   # Claude decides the rest
+
+Sure merges are equal names after normalization (case, accents,
+punctuation, plural, suffixes) and author initials forms that abbreviate
+exactly one full name; they need no model. Likely merges are close by
+name embedding, for concepts, methods, tools, datasets and venues only,
+and merge nothing unless an adjudicator says yes. A merge sets
+`entities.canonical_id`; nothing is deleted, `traverse` and the UI follow
+the pointer, and undoing one is clearing that column.
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000

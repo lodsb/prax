@@ -111,10 +111,14 @@ flowchart TD
    serving process (46 ms per query at 855 K vectors). Re-indexing a
    document leaves stale keys that queries skip and the job compacts. (R6)
 5. **Graph**. The Zotero importer seeds `paper --authored_by--> author`
-   edges with `confidence = EXTRACTED` and `source_doc`; Stage 3 adds
-   LLM-extracted triples. Every edge carries the ontology version it was
+   edges with `confidence = EXTRACTED` and `source_doc`; `prax.extraction`
+   adds Claude-extracted triples with a quoted `evidence`, parking misfits
+   in `review_queue`. Every edge carries the ontology version it was
    written under and bi-temporal validity; nothing is ever deleted, only
-   invalidated. Types are validated against `ontology.yaml` at the door. (R7)
+   invalidated (`invalidate_edge`, optionally with a successor). Entities
+   that name the same thing are merged by `prax.resolution` through
+   `canonical_id`; traversal walks canonical ids. Types are validated
+   against `ontology.yaml` at the door. (R7)
 
 ## 4. Life of a query
 
@@ -151,6 +155,7 @@ and ids, then `get_chunk` or `get` for exactly what is needed.
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
 | `prax.extraction` | document input, ontology-derived prompt and JSON schema, Claude extractor, apply() into edges / review queue / stamps | via store |
 | `prax.rerank` | optional cross-encoder over the top hits; off by default | no |
+| `prax.resolution` | entity merge candidates (normalized names, initials, name embeddings), adjudicators, apply through `merge_entities` | via store |
 | `prax.api` | FastAPI door: agent endpoints, browsing endpoints, serves the UI's static files | via store |
 | `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer; a client of the door (R14) | no |
 | `prax.mcp_server` | FastMCP stdio door; no logic | via store |
