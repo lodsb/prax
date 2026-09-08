@@ -78,7 +78,7 @@ flowchart TD
   D -->|extractor by MIME<br/>meta.text_source = name/version| T[text artifact<br/>Markdown, archived, documents.text_hash]
   T -->|prax.chunking| CH[chunks<br/>kind, locator, heading, data]
   CH --> F[chunks_fts<br/>FTS5 BM25]
-  CH -->|embed_pending.py<br/>chunk_embeddings.model| V[chunks_vec<br/>sqlite-vec 384-d cosine]
+  CH -->|embed_pending.py<br/>chunk_embeddings.model| V[vectors-model.usearch<br/>HNSW 384-d cosine, memory-mapped]
   D -->|importer seeds<br/>later: LLM extraction| G[entities + edges<br/>ontology-typed, bi-temporal]
 ```
 
@@ -104,9 +104,10 @@ flowchart TD
    `scripts/rechunk.py` rebuilds them from the artifacts. (R13)
 4. **Index**. FTS5 rows follow chunk inserts through triggers.
    `scripts/embed_pending.py` embeds chunks that have no vector from the
-   current model (bookkeeping in `chunk_embeddings`, vectors in the
-   sqlite-vec table `chunks_vec` with `kind` as a filterable column).
-   Re-indexing a document deletes its old chunks' vectors. (R6)
+   current model: bookkeeping in `chunk_embeddings`, the vectors in a
+   usearch HNSW file per model next to the database, memory-mapped by the
+   serving process (46 ms per query at 855 K vectors). Re-indexing a
+   document leaves stale keys that queries skip and the job compacts. (R6)
 5. **Graph**. The Zotero importer seeds `paper --authored_by--> author`
    edges with `confidence = EXTRACTED` and `source_doc`; Stage 3 adds
    LLM-extracted triples. Every edge carries the ontology version it was
@@ -118,8 +119,8 @@ flowchart TD
 ```mermaid
 flowchart LR
   Q[query string, kind?, mode] --> FTS[FTS5 MATCH<br/>safe expression, BM25]
-  Q --> QE[query embedding<br/>bge-small, instruction prefix] --> KNN[chunks_vec KNN<br/>k = 3 x limit, kind filter]
-  FTS --> RRF[reciprocal rank fusion<br/>k = 60]
+  Q --> QE[query embedding<br/>bge-small, instruction prefix] --> KNN[usearch KNN<br/>100 candidates, kind filter after]
+  FTS --> RRF[reciprocal rank fusion<br/>per document, k = 60]
   KNN --> RRF
   RRF --> H[hits: chunk_id, doc_id, title, snippet,<br/>kind, heading, page, score, fts_rank, vec_rank]
   H -->|get_chunk| C[one chunk: text, locator, table grid]
@@ -127,10 +128,11 @@ flowchart LR
   H -->|traverse entity| G[1-2 hop neighbourhood, with provenance]
 ```
 
-`search` runs both sides and fuses their rank lists; a hit says which side
-found it. It degrades to FTS-only when there are no vectors, no extension
-or `PRAX_EMBED=0`, so the serving host works before embeddings exist and
-without the model. Responses stay small by design (invariant 6): snippets
+`search` runs both sides and fuses their rank lists per document (each
+side contributes a document's best chunk rank; fusing chunks scored below
+FTS alone); a hit says which side found it. It degrades to FTS-only when
+there is no index file, no usearch or `PRAX_EMBED=0`, so the serving host
+works before embeddings exist and without the model. Responses stay small by design (invariant 6): snippets
 and ids, then `get_chunk` or `get` for exactly what is needed.
 
 ## 5. Module map
@@ -141,6 +143,7 @@ and ids, then `get_chunk` or `get` for exactly what is needed.
 | `prax.chunking` | Markdown → structure-aware chunks with locators | no (pure) |
 | `prax.parsers` | extractor registry by MIME type; `parsers.queue` the parse queue with fallback chain, size/page/OCR guards, history | via store |
 | `prax.embeddings` | ONNX embedder registry (bge-small default), provider/variant selection, hash embedder for tests | no |
+| `prax.vectors` | the usearch index file: view for reads, writable copy for batch jobs, atomic save | no (writes the index file) |
 | `prax.ontology` | parses `ontology.yaml`, validates edge types, versions | no |
 | `prax.importers.zotero` | read-only copy of `zotero.sqlite` → documents, notes, URL-only docs, authored_by seeds; idempotent per key | via store |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
@@ -157,7 +160,7 @@ documents        id, hash (sha256 of original), mime, title, source_url,
 chunks           id, doc_id, seq, text, kind, locator JSON, heading JSON, data JSON
 chunks_fts       FTS5 over chunks.text (content table; triggers keep it in step)
 chunk_embeddings chunk_id, model, embedded_at          (which model made the vector)
-chunks_vec       vec0: chunk_id, embedding float[384] cosine, kind, +model
+vectors-<model>.usearch   HNSW index keyed by chunk id, f16, cosine (a file, not a table)
 entities         id, name, type, canonical_id (resolution merges), created_at
 edges            src, dst, rel, confidence, weight, source_doc, ontology_version,
                  valid_from, valid_to, ingested_at
@@ -165,8 +168,8 @@ edges            src, dst, rel, confidence, weight, source_doc, ontology_version
 
 Schema changes are numbered migrations in `src/prax/migrations/`
 (`0001_baseline`, `0002_chunk_structure`, `0003_chunk_embeddings`), applied
-by `store.init_db` and tracked in `PRAGMA user_version`. `chunks_vec` is
-created in code because a virtual table needs the extension loaded. (R12)
+by `store.init_db` and tracked in `PRAGMA user_version`. The vector index
+is a file beside the database, not a table (R6). (R12)
 
 `documents.meta` is the extension point for anything a source knows that
 has no column yet. Conventions in use:
@@ -189,7 +192,7 @@ stamp. Interrupt any of them and rerun the same command.
 | `import_zotero.py` | Zotero keys not in `meta.zotero.keys`, or changed `dateModified` | documents, text from Zotero's cache, `authored_by` edges | copies `zotero.sqlite`, opens read-only |
 | `parse_pending.py` | `parsed_at IS NULL`, or `meta.text_source` prefix | text artifact, chunks, `text_source`, `parse_history` | fallback chain; scans refused without OCR; 40 MB / 400 page caps; "seen" skip; short new text keeps the old |
 | `rechunk.py` | indexed documents (or legacy rows) | chunks only | none needed |
-| `embed_pending.py` | chunks without a vector from the current model | `chunks_vec`, `chunk_embeddings` | dimension check; batch 64 |
+| `embed_pending.py` | chunks without a vector from the current model | the `.usearch` file, `chunk_embeddings` | dimension check; batch 64; saves every 50 K; reconciles on start |
 | `eval_retrieval.py` | the query set | a report | throwaway store |
 
 Long passes run as batches of short-lived processes (`--limit N` in a
@@ -203,6 +206,7 @@ loop); the queue makes each batch do real work.
 | `PRAX_ONTOLOGY` | alternative `ontology.yaml` |
 | `PRAX_EMBED` | model name, `hash` (tests), `0` (off) |
 | `PRAX_EMBED_VARIANT`, `PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS` | onnxruntime precision, providers, threads |
+| `PRAX_VEC_DTYPE`, `PRAX_VEC_EF` | index precision (`f16`, `i8`) and search expansion |
 | `PRAX_MAX_LAYOUT_MB`, `PRAX_MAX_LAYOUT_PAGES` | caps for MuPDF layout analysis |
 | `PRAX_OCR_MAX_PAGES` | page budget of the OCR extractor |
 | `PRAX_PYTHON` | interpreter for the MCP server in `.mcp.json` |
@@ -215,7 +219,7 @@ loop); the queue makes each batch do real work.
 | add an extractor | a `bytes -> str` function and an `Extractor` entry in `prax.parsers.REGISTRY`; run `parse_pending.py --upgrade <old stamp>` |
 | change chunking | `prax.chunking`; run `rechunk.py --all`; the locator invariant is asserted |
 | add a media kind (audio, image) | a chunk `kind` and locator shape in `prax.chunking`; an analyzer that produces the searchable rendering; a second vec table for its embedding space, fused by the same RRF |
-| change the embedding model | an entry in `prax.embeddings.MODELS`; `embed_pending.py` re-embeds by stamp; another dimension needs a migration and a new vec table |
+| change the embedding model | an entry in `prax.embeddings.MODELS`; `embed_pending.py` re-embeds into a new index file; another dimension also needs `VEC_DIM` |
 | add entity or relation types | `ontology.yaml` plus a version bump; old edges keep their version |
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |
 | add an agent tool | a store function first, then one handler each in `prax.api` and `prax.mcp_server`; keep responses compact |
@@ -227,9 +231,9 @@ loop); the queue makes each batch do real work.
 | Documents | 9,235 (8,448 indexed; 779 PDFs pending: 71 scanned books, 56 unreadable, artwork) |
 | Archive / database | 17 GB / 1.8 GB |
 | Chunks | 855,731: 772,340 text, 41,740 figure captions, 35,060 tables, 6,591 code |
-| Vectors | being written; 53 chunks/s on the GPU, about 4.5 h in total |
+| Vectors | 855,731 in a 784 MB f16 usearch file; 46 ms per query |
 | Graph | 6,756 `authored_by` edges, 2,967 papers, 5,129 authors |
-| Retrieval eval (fixture) | hit@1 0.95 fts, 0.90 vec, 0.90 hybrid; MRR 0.93–0.95 |
+| Retrieval eval (62 queries, full store) | MRR 0.82 fts, 0.81 vec, 0.83 hybrid; hit@1 0.77 hybrid |
 
 ## 11. What is not built yet
 

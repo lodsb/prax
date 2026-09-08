@@ -9,8 +9,12 @@ drop folder (`docs/sources.md`).
 ## Architecture invariants (do not violate without updating this file)
 
 1. **SQLite is the canonical store.** One database file (`data/prax.db`):
-   FTS5 for BM25, sqlite-vec for embeddings, a plain `edges` table for the
-   graph. WAL mode always on. No Postgres, no Neo4j, no server databases.
+   FTS5 for BM25, a plain `edges` table for the graph, `chunk_embeddings`
+   as the record of which chunk has a vector from which model. WAL mode
+   always on. Vectors themselves live in one usearch HNSW file per model
+   next to the database (`data/vectors-<model>.usearch`), memory-mapped by
+   the serving path and rebuilt by the batch job; nothing else lives
+   outside SQLite. No Postgres, no Neo4j, no server databases.
 2. **Files are content-addressed.** Originals (PDFs, HTML snapshots) live at
    `data/archive/<sha256[:2]>/<sha256>`. The DB stores metadata + hash only.
    Never store blobs in SQLite. The document hash is the sha256 of the
@@ -57,7 +61,10 @@ drop folder (`docs/sources.md`).
 
 ## Decision thresholds (revisit design only past these)
 
-- Vectors > ~1M → move the vector layer to LanceDB; everything else stays.
+- Vector query latency or index size on the serving host becomes a
+  problem (the usearch file is memory-mapped: f16 is 784 MB at 855 K
+  vectors) → int8 index (`PRAX_VEC_DTYPE=i8`, half the size, recall 0.93),
+  then LanceDB; everything else stays.
 - Entities > ~50–100k or slow recursive-CTE traversal → move edges to Kùzu
   (embedded); not Neo4j.
 - SQLite write contention across capture sources → the answer is the single
@@ -92,8 +99,9 @@ retrieval. User-supplied search strings are never passed to FTS5 MATCH raw;
   `data`. Chunking lives in `prax.chunking` and chunks are disposable:
   change the chunker, run `scripts/rechunk.py`. New media add a kind and a
   locator shape, never a new table for chunks (rationale R13).
-- Embeddings: 384-dim (bge-small-class, quantized ONNX). The dimension is
-  baked into the `chunks_vec` table — changing models means a migration.
+- Embeddings: 384-dim (bge-small-class ONNX). Vectors are keyed by chunk
+  id in the usearch file; changing the model means re-embedding into a new
+  file, another dimension means a new file and `VEC_DIM`.
 - Timestamps are UTC ISO-8601 strings.
 - Tests must not touch `data/`; use tmp_path fixtures and set
   `PRAX_DATA_DIR` before importing `prax.mcp_server` or `prax.api`.

@@ -143,9 +143,10 @@ Chunks are disposable; nothing else is touched.
 
 `prax.embeddings` runs bge-small-en-v1.5 (384-d) through onnxruntime;
 model files download from the Hugging Face hub on first use. Vectors live
-in the sqlite-vec table `chunks_vec`, bookkeeping in `chunk_embeddings`.
-Search is hybrid by default and falls back to FTS when there are no
-vectors, no extension or `PRAX_EMBED=0`.
+in `<data dir>/vectors-<model>.usearch` (a memory-mapped HNSW index,
+`prax.vectors`), bookkeeping in `chunk_embeddings`. Search is hybrid by
+default and falls back to FTS when there is no index file, no usearch or
+`PRAX_EMBED=0`.
 
     pip install -e ".[embed]"
     # Windows desktop with a GPU: DirectML instead of the CPU runtime
@@ -153,13 +154,22 @@ vectors, no extension or `PRAX_EMBED=0`.
 
     python scripts/embed_pending.py --dry-run     # counts
     python scripts/embed_pending.py --batch 64    # everything pending; idempotent
+    python scripts/embed_pending.py --compact     # after re-parsing: drop stale keys
+
+The job saves the index every 50,000 chunks and reconciles index and
+bookkeeping on start, so an interrupted run is simply started again. Copy
+the `.usearch` file together with `prax.db` when moving the store. A store
+that still has the Stage 2 `chunks_vec` table loses it on the next
+`init_db` (sqlite-vec must still be importable for that); run `VACUUM`
+once afterwards to reclaim about 1.3 GB.
 
 Settings: `PRAX_EMBED` (model name, `hash` for tests, `0` off),
 `PRAX_EMBED_VARIANT` (`fp32` on a GPU, `int8` on CPU by default),
-`PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS`. Changing the model means
-re-embedding: `chunk_embeddings.model` records what each vector came
-from and `embed_pending.py` picks up the difference. A model with another
-dimension is a migration (`chunks_vec` is 384-d).
+`PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS`; `PRAX_VEC_DTYPE` (`f16`
+default, `i8` for half the file at recall 0.93) and `PRAX_VEC_EF` (search
+expansion, 64) for the index. Changing the model means re-embedding into
+a new file: `chunk_embeddings.model` records what each vector came from
+and `embed_pending.py` picks up the difference.
 
 Query: `search(q, mode="hybrid"|"fts"|"vec", kind=...)` in the store, the
 API (`/search?mode=`) and the MCP tool. Hybrid hits carry `score` (RRF),

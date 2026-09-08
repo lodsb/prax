@@ -119,11 +119,10 @@ Parsing is a batch job; the serving path never parses.
 - [x] A larger eval set against the full store (expectations by title):
       62 queries, `tests/eval/queries-library.yaml`; FTS 0.82 MRR, vec
       0.81, hybrid 0.83 after document-level fusion (`docs/eval/`)
-- [ ] Vector index: sqlite-vec brute force is 4 s per query at 855 K
-      vectors; usearch HNSW (memory-mapped) is 46 ms at recall 0.98.
-      Decide and, if agreed, move the vector store to an index file next
-      to `prax.db` (invariant 1 and R6 change), keep `chunk_embeddings` as
-      the bookkeeping, rebuild the index from the batch job
+- [x] Vector index moved to a usearch HNSW file next to `prax.db`
+      (`prax.vectors`, invariant 1 and R6 updated): 46 ms per query at
+      recall 0.98 instead of sqlite-vec's 4 s; `chunk_embeddings` stays the
+      bookkeeping; the batch job appends, saves and compacts
 - [ ] Optional cross-encoder rerank behind a flag: about nine of the 62
       queries land at ranks 2-7 in hybrid, which a reranker over the top 30
       could fix; benchmark a small cross-encoder on the desktop and the SBC

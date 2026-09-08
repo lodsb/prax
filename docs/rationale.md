@@ -82,7 +82,7 @@ from the single-writer invariant.
 host. Then the MCP server should proxy the HTTP door and the deviation
 closes.
 
-## R6. Hybrid retrieval: FTS5 + sqlite-vec fused with RRF, rerank optional
+## R6. Hybrid retrieval: FTS5 + a usearch index fused with RRF, rerank optional
 
 **Decision.** Keyword (BM25) and vector search run in parallel and are fused
 by Reciprocal Rank Fusion. A cross-encoder rerank (bge-reranker-v2-m3) over
@@ -121,6 +121,16 @@ FTS. A memory-mapped usearch HNSW index over the same vectors answers in
 46 ms at recall@10 0.98 (f16, 784 MB file) or 18 ms at 0.93 (int8,
 456 MB). The threshold below was set at 1 M vectors; the wall arrived at
 0.86 M.
+
+*Decision (2026-09-08).* The vector store is a usearch HNSW file per model
+next to `prax.db` (`prax.vectors`), memory-mapped by the serving path
+(the process holds only the pages it touches), rebuilt and appended by the
+batch job, saved atomically. SQLite keeps the bookkeeping
+(`chunk_embeddings`) and nothing else about vectors, which also removes
+the last blob from the database. Deleted chunks leave stale keys that
+queries filter and the job compacts. usearch over LanceDB: one file, no
+Arrow stack, aarch64 wheels, 46 ms per query. sqlite-vec is gone from the
+dependencies; `init_db` drops the legacy table when it can.
 
 **Revisit when.** Vectors exceed about 1M. Then move only the vector layer
 to LanceDB.
