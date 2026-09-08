@@ -163,14 +163,25 @@ R14). Design in `docs/ui.md`.
 
 ## Stage 3 — Graph enrichment
 
-- [ ] `ontology.yaml` v1 (entity + relation types; keep it under ~10 each)
-- [ ] Nightly extraction job (Claude API): triples against ontology,
-      confidence-tagged, `source_doc` + `ontology_version` stamped
+- [x] `ontology.yaml` v1: eight entity types, ten relations, descriptions
+      written as extractor instructions (the prompt is generated from the
+      file)
+- [x] Extraction job (`prax.extraction`, `scripts/extract_graph.py`):
+      structured output against the ontology's JSON schema, confidence and
+      a quoted `evidence` per edge, `source_doc` + `ontology_version`
+      stamped, misfits to `review_queue` (migration 0004), summary in
+      `meta.summary`, incremental by `meta.extraction`; synchronous with a
+      budget or via the Message Batches API. Dry-run estimate for the 8,448
+      indexed documents: Opus 5 about $250 ($125 batch), Sonnet 5 $100
+      ($50), Haiku 4.5 $50 ($25)
+- [ ] Trial run on ~20 documents with credentials, read the triples, then
+      the full run with the chosen model via the batch API
 - [ ] Entity resolution pass (embedding candidates → LLM adjudication);
       merges recorded via `entities.canonical_id`; `traverse` follows
       canonical ids
 - [ ] Edge invalidation on contradiction (set `valid_to`, insert successor)
-- [ ] MCP `traverse` surfaces confidence + provenance in results
+- [x] `traverse` surfaces confidence, evidence, ontology version and
+      validity on every edge (store, API and MCP)
 
 ## Later / maybe
 

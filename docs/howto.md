@@ -139,6 +139,27 @@ chunker, or after a migration that added chunk columns:
 
 Chunks are disposable; nothing else is touched.
 
+## 3e. Graph extraction (Stage 3)
+
+`prax.extraction` sends each document's metadata header and the first
+12,000 characters of its text to Claude with a JSON schema generated from
+`ontology.yaml`, and writes the returned triples through `store.link` with
+a confidence and a quoted evidence string. Triples that do not fit the
+ontology go to `review_queue`; the summary goes to `meta.summary`; the
+document is stamped with the ontology version so reruns are incremental.
+
+    # credentials: ANTHROPIC_API_KEY, or `ant auth login`
+    python scripts/extract_graph.py --dry-run             # selection and cost estimate
+    python scripts/extract_graph.py --limit 20            # trial, synchronous
+    python scripts/extract_graph.py --submit-batch        # whole selection at half price
+    python scripts/extract_graph.py --collect-batch <id>  # apply when the batch has ended
+
+Settings: `PRAX_EXTRACT_MODEL` (default `claude-opus-5`),
+`PRAX_EXTRACT_EFFORT` (default `medium`), `PRAX_EXTRACT=stub` for tests.
+Bumping the ontology version re-selects every document. Review the queue
+with `store.list_review` (a UI view is planned) and close items with
+`resolve_review`.
+
 ## 3d. Embeddings and hybrid search
 
 `prax.embeddings` runs bge-small-en-v1.5 (384-d) through onnxruntime;

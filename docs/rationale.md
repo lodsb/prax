@@ -162,6 +162,16 @@ enhancer for retrieval, and those queries are explicit SQL tools.
 **Revisit when.** Entities pass 50–100k or traversal gets slow. Then move
 edges to Kùzu (embedded), not Neo4j.
 
+*Extraction (2026-09-09).* The extractor's prompt and output schema are
+generated from `ontology.yaml`, so the validator at the door and the
+instructions the model sees cannot drift apart. Every extracted edge
+carries a quoted `evidence` string (migration 0004) rather than a chunk
+id, because chunks are disposable; triples outside the ontology land in
+`review_queue` for a person, never in the graph. Runs are incremental per
+ontology version and budgeted; the Message Batches API halves the cost of
+a backfill. Model choice is a per-run setting because the cost spread is
+five to one between tiers on a 8,448-document library.
+
 ## R8. Embeddings and parsing are batch jobs on the bigger box
 
 **Decision.** bge-small-class, 384-dim, INT8 ONNX for embeddings.

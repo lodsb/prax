@@ -149,6 +149,8 @@ and ids, then `get_chunk` or `get` for exactly what is needed.
 | `prax.ontology` | parses `ontology.yaml`, validates edge types, versions | no |
 | `prax.importers.zotero` | read-only copy of `zotero.sqlite` → documents, notes, URL-only docs, authored_by seeds; idempotent per key | via store |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
+| `prax.extraction` | document input, ontology-derived prompt and JSON schema, Claude extractor, apply() into edges / review queue / stamps | via store |
+| `prax.rerank` | optional cross-encoder over the top hits; off by default | no |
 | `prax.api` | FastAPI door: agent endpoints, browsing endpoints, serves the UI's static files | via store |
 | `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer; a client of the door (R14) | no |
 | `prax.mcp_server` | FastMCP stdio door; no logic | via store |
@@ -166,7 +168,8 @@ chunk_embeddings chunk_id, model, embedded_at          (which model made the vec
 vectors-<model>.usearch   HNSW index keyed by chunk id, f16, cosine (a file, not a table)
 entities         id, name, type, canonical_id (resolution merges), created_at
 edges            src, dst, rel, confidence, weight, source_doc, ontology_version,
-                 valid_from, valid_to, ingested_at
+                 evidence (a quote), valid_from, valid_to, ingested_at
+review_queue     triples the extractor could not fit the ontology, with reason and resolution
 ```
 
 Schema changes are numbered migrations in `src/prax/migrations/`
@@ -207,6 +210,8 @@ loop); the queue makes each batch do real work.
 |---|---|
 | `PRAX_DATA_DIR` | the store directory (default `<repo>/data`) |
 | `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
+| `PRAX_EXTRACT_MODEL`, `PRAX_EXTRACT_EFFORT` | Claude model and effort for graph extraction (`PRAX_EXTRACT=stub` in tests) |
+| `PRAX_RERANK` | cross-encoder name, `stub`, or `0` (default off) |
 | `PRAX_ONTOLOGY` | alternative `ontology.yaml` |
 | `PRAX_EMBED` | model name, `hash` (tests), `0` (off) |
 | `PRAX_EMBED_VARIANT`, `PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS` | onnxruntime precision, providers, threads |
