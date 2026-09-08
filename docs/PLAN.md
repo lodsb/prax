@@ -176,6 +176,15 @@ R14). Design in `docs/ui.md`.
       ($50), Haiku 4.5 $50 ($25)
 - [ ] Trial run on ~20 documents with credentials, read the triples, then
       the full run with the chosen model via the batch API
+- [x] Local model option measured (`docs/eval/local-llm-2026-09-08.md`):
+      llama-cpp-python CUDA wheel runs on the GTX 1070 (`prax.local_llm`,
+      `local` extra, `scripts/bench_local_llm.py`); Qwen2.5-7B Q4 gives
+      valid schema-constrained extractions at 80 s per document, a week
+      of GPU time for the backlog against a $25-125 batch job, so the API
+      stays the default for the bulk run
+- [ ] `LocalExtractor` (`PRAX_EXTRACT=local`) reusing the prompt and
+      schema, with `maxItems` on triples and `maxLength` on evidence so
+      small models terminate; same for the "ask" feature later
 - [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
       sure merges (normalized names, author initials forms) apply on their
       own, likely merges (name embeddings, concept/method/tool/dataset/venue

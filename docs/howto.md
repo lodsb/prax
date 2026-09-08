@@ -210,6 +210,34 @@ and merge nothing unless an adjudicator says yes. A merge sets
 `entities.canonical_id`; nothing is deleted, `traverse` and the UI follow
 the pointer, and undoing one is clearing that column.
 
+## 3f. Local models (optional)
+
+A GGUF model can run in-process through `llama-cpp-python` on the batch
+host, for extraction of new documents without the API, private material,
+and the planned "ask" feature. Measured on the desktop's GTX 1070:
+`docs/eval/local-llm-2026-09-08.md` (Qwen2.5-7B-Instruct Q4_K_M, 5.2 GB
+VRAM, valid schema-constrained extractions at 80 s per document).
+
+    # CPU build (any host)
+    pip install -e ".[local]"
+    # CUDA 12 wheel on Windows or Linux with an NVIDIA driver >= 525
+    pip install -e ".[local]" --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+    pip install nvidia-cuda-runtime-cu12 nvidia-cublas-cu12   # Windows: the DLLs the wheel needs
+    python -c "from prax import local_llm; print(local_llm.llama_class())"
+
+Models are GGUF files, e.g. from the Hugging Face cache:
+
+    python -c "from huggingface_hub import hf_hub_download as d; print(d('bartowski/Qwen2.5-7B-Instruct-GGUF', 'Qwen2.5-7B-Instruct-Q4_K_M.gguf'))"
+    python scripts/bench_local_llm.py <path.gguf> --docs 3
+
+Always go through `prax.local_llm.llama_class()` rather than importing
+`llama_cpp` directly: on Windows the wheel's loader only searches `PATH`,
+and that function puts the venv's `nvidia/*/bin` and `llama_cpp/lib`
+folders there first. A stale `CUDA_PATH` (this desktop has a 10.2 toolkit)
+does no harm. An 8 GB card fits a 7–8B model at Q4 with an 8 K context;
+the Q6A has no usable GPU and would run a 3B model at a few tokens per
+second, which is why the API stays the default there.
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000

@@ -203,6 +203,15 @@ book, so OCR is a separate explicit extractor with a page budget and the
 default refuses documents whose first pages have no text layer (they are
 left pending and reported as empty).
 
+*Local models (2026-09-08).* The same batch host can run a 7B model in
+process through `llama-cpp-python` (`docs/eval/local-llm-2026-09-08.md`):
+Qwen2.5-7B at Q4 fits the 8 GB GTX 1070 and produces valid, grammar
+constrained extractions, but at 80 s per document the 8,448-document
+backlog is a week of GPU time against a $25-125 Claude batch job, so the
+API is the bulk path and the local model the trickle path (new documents,
+private material, the UI's "ask"). The runtime is an optional extra behind
+`prax.local_llm`; the serving host never loads it (invariant 7).
+
 **Cost.** The 384 dimension is baked into `chunks_vec`; changing models is
 a migration. Every extractor stamps `meta.text_source` with its name and
 version, so a future re-extraction pass is a queue selection, not a
