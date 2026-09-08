@@ -102,3 +102,24 @@ Queried through a memory-mapped view, as the serving host would use it; the
 process holds only the pages it touches. This is the route that keeps
 hybrid search interactive; it replaces the sqlite-vec table as the vector
 store (decision recorded in rationale R6 once taken).
+
+## Shipped configuration (usearch f16 index, document-level fusion)
+
+Re-run through the index file after the switch; the store's `prax.db`
+shrank from 2.93 GB to 1.55 GB once the sqlite-vec table was dropped and
+vacuumed.
+
+| mode | hit@1 | hit@3 | MRR |
+|---|---|---|---|
+| vec | 0.76 | 0.82 | 0.80 |
+| hybrid | 0.77 | 0.85 | 0.83 |
+
+| query | hybrid, end to end | with `kind=table` |
+|---|---|---|
+| feedback delay network reverb design | 240 ms | 1.2 s |
+| extended complex kalman filter pitch | 270 ms | 0.6 s |
+| tables of filter coefficients | 1.1 s | 1.0 s |
+
+The remaining cost sits in FTS candidate lists for very common words and in
+the wider KNN the kind filter needs (25 x limit candidates joined to
+chunks); both are tuning items, not blockers.
