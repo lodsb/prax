@@ -123,10 +123,12 @@ Parsing is a batch job; the serving path never parses.
       (`prax.vectors`, invariant 1 and R6 updated): 46 ms per query at
       recall 0.98 instead of sqlite-vec's 4 s; `chunk_embeddings` stays the
       bookkeeping; the batch job appends, saves and compacts
-- [ ] Optional cross-encoder rerank behind a flag: about nine of the 62
-      queries land at ranks 2-7 in hybrid, which a reranker over the top 30
-      could fix; benchmark a small cross-encoder on the desktop and the SBC
-      before enabling
+- [x] Optional cross-encoder rerank behind a flag (`prax.rerank`,
+      `search(rerank=True)`, `PRAX_RERANK`): benchmarked MiniLM-L6 and
+      bge-reranker-base at depths 10 and 30; none beats the fused list
+      beyond noise and depth 30 hurts (`docs/eval/`). Off by default.
+- [ ] Document-aware rerank input (title + heading path + chunk) as a
+      follow-up experiment; the harness and flag are in place
 
 ## Stage 3 — Graph enrichment
 

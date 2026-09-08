@@ -123,3 +123,29 @@ vacuumed.
 The remaining cost sits in FTS candidate lists for very common words and in
 the wider KNN the kind filter needs (25 x limit candidates joined to
 chunks); both are tuning items, not blockers.
+
+## Cross-encoder rerank (same 62 queries, rescoring the top hybrid hits)
+
+Each configuration in its own process (a second onnxruntime session in one
+process segfaulted). "rerank alone" is the reranker's cost on one query's
+candidates, best of three, on the desktop.
+
+| reranker | depth | hit@1 | hit@3 | MRR | keyword | paraphrase | structure | rerank alone |
+|---|---|---|---|---|---|---|---|---|
+| none (hybrid) | | 0.77 | 0.85 | 0.83 | 0.89 | 0.71 | 0.86 | |
+| MiniLM-L6, fp32, GPU | 30 | 0.74 | 0.85 | 0.81 | 0.85 | 0.72 | 0.84 | 226 ms |
+| MiniLM-L6, int8, CPU | 30 | 0.74 | 0.85 | 0.81 | 0.85 | 0.72 | 0.84 | 379 ms |
+| MiniLM-L6, int8, CPU | 10 | 0.77 | 0.87 | 0.84 | 0.89 | 0.73 | 0.87 | 103 ms |
+| bge-reranker-base, fp32, GPU | 30 | 0.68 | 0.77 | 0.75 | 0.71 | 0.75 | 0.91 | 734 ms |
+| bge-reranker-base, int8, CPU | 30 | 0.63 | 0.79 | 0.72 | 0.68 | 0.70 | 0.91 | 1528 ms |
+| bge-reranker-base, int8, CPU | 10 | 0.76 | 0.82 | 0.82 | 0.79 | 0.80 | 0.93 | 427 ms |
+
+Verdict: no configuration beats the fused list by more than noise, and the
+deeper the reranker reaches the more it hurts, especially on keyword
+queries. These cross-encoders are trained on web passages and questions;
+the candidates here are technical Markdown chunks with tables, formulas
+and reference lists, scored without their document's title or section.
+bge-reranker-base at depth 10 lifts paraphrase (0.80) and structure (0.93)
+but drops keyword to 0.79. Reranking stays off by default; the flag and
+the models remain for a document-aware variant (title plus heading path
+plus chunk) to be tried later.

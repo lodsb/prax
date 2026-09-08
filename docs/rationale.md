@@ -132,6 +132,14 @@ queries filter and the job compacts. usearch over LanceDB: one file, no
 Arrow stack, aarch64 wheels, 46 ms per query. sqlite-vec is gone from the
 dependencies; `init_db` drops the legacy table when it can.
 
+*Rerank (2026-09-08).* The optional cross-encoder was benchmarked rather
+than assumed: MiniLM-L6 (MS MARCO) and bge-reranker-base over the top 10
+and 30 hybrid hits. No configuration beat the fused list by more than
+noise (best: MiniLM at depth 10, MRR 0.84 vs 0.83), and depth 30 lowered
+MRR to 0.81 and 0.75. Web-passage cross-encoders do not transfer to raw
+technical chunks scored without their document context. Reranking stays
+off; the plumbing stays for a document-aware variant.
+
 **Revisit when.** Vectors exceed about 1M. Then move only the vector layer
 to LanceDB.
 
