@@ -174,8 +174,12 @@ R14). Design in `docs/ui.md`.
       budget or via the Message Batches API. Dry-run estimate for the 8,448
       indexed documents: Opus 5 about $250 ($125 batch), Sonnet 5 $100
       ($50), Haiku 4.5 $50 ($25)
-- [ ] Trial run on ~20 documents with credentials, read the triples, then
-      the full run with the chosen model via the batch API
+- [x] Trial run: 21 documents with Sonnet 5 (2026-09-09), 181 edges, 38
+      review items, $0.71; Opus/Sonnet/Haiku compared on three papers
+      (`docs/eval/local-llm-2026-09-08.md`); Sonnet 5 with a 20-triple cap
+      chosen. Selection skips documents under 500 characters of text.
+- [ ] Full run over the remaining 7,955 documents via the batch API
+      (about $135 at the measured 2,500 output tokens per document)
 - [x] Local model option measured (`docs/eval/local-llm-2026-09-08.md`):
       llama-cpp-python CUDA wheel runs on the GTX 1070 (`prax.local_llm`,
       `local` extra, `scripts/bench_local_llm.py`); Qwen2.5-7B Q4 gives

@@ -186,6 +186,7 @@ document is stamped with the ontology version so reruns are incremental.
 
     # credentials: ANTHROPIC_API_KEY, or `ant auth login`
     python scripts/extract_graph.py --dry-run             # selection and cost estimate
+    # --min-chars 500 (default) skips notes and empty scans; --mime narrows the type
     python scripts/extract_graph.py --limit 20            # trial, synchronous
     python scripts/extract_graph.py --submit-batch        # whole selection at half price
     python scripts/extract_graph.py --collect-batch <id>  # apply when the batch has ended

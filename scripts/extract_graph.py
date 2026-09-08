@@ -26,12 +26,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from prax import config, extraction, ontology, store
 
+# Output tokens per document measured in the Sonnet 5 trial (20-triple cap).
+EST_OUTPUT_TOKENS = 2500
+
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--limit", type=int)
     ap.add_argument("--ids", type=int, nargs="+")
     ap.add_argument("--mime", help="only this MIME prefix")
+    ap.add_argument(
+        "--min-chars",
+        type=int,
+        default=500,
+        help="skip documents with less text than this (notes, empty scans)",
+    )
     ap.add_argument(
         "--budget-usd", type=float, help="stop once the running estimate passes this"
     )
@@ -54,7 +63,11 @@ def main() -> int:
         return collect(con, ext, a.collect_batch, quiet=a.quiet)
 
     ids = a.ids or store.select_for_extraction(
-        con, ontology_version=version, limit=a.limit, mime_prefix=a.mime
+        con,
+        ontology_version=version,
+        limit=a.limit,
+        mime_prefix=a.mime,
+        min_chars=a.min_chars,
     )
     print(
         f"store: {config.db_path()}; ontology v{version}; extractor {ext.name};"
@@ -66,7 +79,7 @@ def main() -> int:
         per_doc = chars / max(1, min(len(ids), 200))
         est_in = per_doc / 4 + 300
         price_in, price_out = extraction.price(ext.name)
-        per_call = (est_in * price_in + 600 * price_out) / 1e6
+        per_call = (est_in * price_in + EST_OUTPUT_TOKENS * price_out) / 1e6
         print(
             f"about {per_doc:.0f} chars of input per document;"
             f" rough cost {per_call:.4f} USD per document,"

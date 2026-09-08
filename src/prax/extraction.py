@@ -30,8 +30,9 @@ from typing import Any, Protocol
 from prax import ontology, store
 
 DEFAULT_MODEL = "claude-opus-5"
+CALL_TIMEOUT = 180.0  # seconds; a call takes under 90, the SDK default is 600
 INPUT_CHARS = 12_000  # of document text after the metadata header
-MAX_TRIPLES = 40
+MAX_TRIPLES = 20  # the models rarely need more; halves output tokens (docs/eval)
 CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 # Names that are only a number or a bracketed reference ("[12]") are never
 # entities; small models produce them for "cites".
@@ -334,7 +335,7 @@ class ClaudeExtractor:
         if self.client is None:
             import anthropic
 
-            self.client = anthropic.Anthropic()
+            self.client = anthropic.Anthropic(timeout=CALL_TIMEOUT, max_retries=3)
         if self._onto is None:
             self._onto = ontology.current()
 

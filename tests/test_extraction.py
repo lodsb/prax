@@ -137,6 +137,10 @@ def test_selection_follows_the_ontology_version(con: sqlite3.Connection) -> None
     assert store.select_for_extraction(con, ontology_version=version) == [b]
     assert store.select_for_extraction(con, ontology_version="v-next") == [a, b]
     assert store.select_for_extraction(con, ontology_version=version, limit=1) == [b]
+    # "another text" is 12 characters: nothing to extract
+    assert store.select_for_extraction(
+        con, ontology_version="v-next", min_chars=100
+    ) == [a]
 
 
 # ------------------------------------------------------------ claude path

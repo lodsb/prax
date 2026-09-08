@@ -1225,15 +1225,24 @@ def select_for_extraction(
     ontology_version: str,
     limit: int | None = None,
     mime_prefix: str | None = None,
+    min_chars: int = 0,
 ) -> list[int]:
     """Indexed documents not yet extracted under ``ontology_version``
-    (``meta.extraction.ontology_version``), oldest first."""
+    (``meta.extraction.ontology_version``), oldest first. ``min_chars``
+    skips documents whose chunks hold less text than that (Zotero notes,
+    scans without a text layer): nothing to extract, a call wasted."""
     sql = (
         "SELECT id FROM documents WHERE text_hash IS NOT NULL"
         " AND (json_extract(meta, '$.extraction.ontology_version') IS NULL"
         "      OR json_extract(meta, '$.extraction.ontology_version') != ?)"
     )
     args: list[Any] = [ontology_version]
+    if min_chars > 0:
+        sql += (
+            " AND (SELECT coalesce(sum(length(text)), 0) FROM chunks"
+            "      WHERE chunks.doc_id = documents.id) >= ?"
+        )
+        args.append(min_chars)
     if mime_prefix:
         sql += " AND mime LIKE ? ESCAPE '!'"
         args.append(_like_prefix(mime_prefix))

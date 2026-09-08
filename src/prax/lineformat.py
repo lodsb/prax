@@ -36,7 +36,7 @@ from prax.extraction import CONFIDENCES, Extraction, Triple
 SEP = "\t"
 TRIPLE_KEYS = ("src", "src_type", "rel", "dst", "dst_type", "confidence", "evidence")
 UNMAPPED_KEYS = ("src", "rel", "dst", "reason")
-MAX_TRIPLES = 20  # fewer than the Claude prompt's 40: small models over-generate
+MAX_TRIPLES = 20  # same cap as the Claude prompt; small models over-generate
 MAX_UNMAPPED = 5
 NAME_CHARS = 200
 TEXT_CHARS = 300
