@@ -137,23 +137,23 @@ door, nothing more: static files served by the same FastAPI process, a few
 read endpoints for browsing, no framework and no build step (rationale
 R14). Design in `docs/ui.md`.
 
-- [ ] Browsing endpoints on the door: `GET /documents` (paged, filtered
+- [x] Browsing endpoints on the door: `GET /documents` (paged, filtered
       by title, source, MIME), `GET /doc/{id}/original` (archived bytes
       with their MIME type, so a PDF opens in the browser at a page),
       `GET /doc/{id}/text` (the Markdown artifact), `GET /doc/{id}/chunks`
       (the document as its chunks with kind, heading, page, locator),
       `GET /entities?q=` (graph entry points)
-- [ ] Static UI mounted at `/ui/`: `src/prax/ui/` with one page, plain JS
+- [x] Static UI mounted at `/ui/`: `src/prax/ui/` with one page, plain JS
       and CSS, a vendored Markdown renderer; hash routes `#search`,
-      `#doc/<id>`, `#browse`, later `#graph/<entity>`
-- [ ] Document view: metadata, the document rendered chunk by chunk with
+      `#doc/<id>`, `#browse`, `#graph` (lookup and one-hop table for now)
+- [x] Document view: metadata, the document rendered chunk by chunk with
       kind badges, heading path and page, the searched chunk highlighted
-      and scrolled to, tables from their grids, "open original" at the
-      chunk's page in a new tab
-- [ ] Search view: query, mode and kind, results with snippet, kind,
+      and scrolled to, tables from their grids, an outline, "open
+      original" at the chunk's page in a new tab
+- [x] Search view: query, mode and kind, results with snippet, kind,
       heading, page and which side found them, each opening the document
       at that chunk
-- [ ] Browse view: recent and filtered document lists
+- [x] Browse view: recent and filtered document lists
 - [ ] Graph view: entity search, neighbourhood as an SVG force layout,
       expand by click, edges labelled with relation and confidence, source
       documents one click away; `link` from the view through the API
