@@ -5,23 +5,89 @@
 # Growing it: add types, bump `version`. Edges keep the version they were
 # written under. Renaming or removing a type is a data migration, not an
 # edit of this file. Format details: src/prax/ontology.py.
-version: "0"
+#
+# v1 (2026-09-09): descriptions rewritten as instructions for the extractor
+# (prax.extraction builds its prompt from this file); `venue` added so
+# publication context has a home; `cites` requires a title the paper names.
+version: "1"
 
 entity_types:
-  paper:   {description: a document in the store}
-  author:  {description: a person or group that wrote something}
-  concept: {description: an idea, topic or phenomenon}
-  method:  {description: an algorithm, technique or procedure}
-  dataset: {description: a named corpus or measurement set}
-  tool:    {description: software, hardware or an instrument}
-  claim:   {description: an assertion made by a document}
+  paper:
+    description: >-
+      A document in the store, named by its title. The document being
+      extracted is always a paper; other papers appear when the text names
+      them by title.
+  author:
+    description: >-
+      A person or group that wrote something. Name as printed, full form,
+      no titles or affiliations.
+  venue:
+    description: >-
+      A journal, conference series or publisher where a paper appeared
+      (IEEE ICASSP, JAES, DAFx, Springer).
+  concept:
+    description: >-
+      An idea, topic, phenomenon or quantity a document is about: source
+      separation, pitch perception, aliasing, room acoustics. Lowercase
+      noun phrase, singular, no articles.
+  method:
+    description: >-
+      A named algorithm, technique or procedure: nonnegative matrix
+      factorization, extended Kalman filter, wave digital filter, PLP.
+      Use the established name, expand acronyms once in the name if the
+      text does.
+  dataset:
+    description: >-
+      A named corpus, benchmark or measurement set: MUSDB18, NSynth,
+      a specific HRTF database.
+  tool:
+    description: >-
+      Software, hardware, a library or an instrument used or built:
+      Matlab, Csound, Web Audio API, a specific synthesizer.
+  claim:
+    description: >-
+      One sentence stating a result or assertion the document makes, in
+      the document's own terms ("SSST resolves close tones that SST
+      merges"). Only for central findings.
 
 relation_types:
-  cites:       {domain: [paper], range: [paper]}
-  authored_by: {domain: [paper], range: [author]}
-  about:       {domain: [paper, claim], range: [concept]}
-  implements:  {domain: [tool, method], range: [concept, method]}
-  extends:     {domain: [method, concept], range: [method, concept]}
-  contradicts: {domain: [claim], range: [claim]}
-  supports:    {domain: [claim, paper], range: [claim]}
-  uses:        {domain: [paper, method], range: [dataset, tool]}
+  cites:
+    domain: [paper]
+    range: [paper]
+    description: the document names another paper by title
+  authored_by:
+    domain: [paper]
+    range: [author]
+    description: a listed author of the document
+  published_in:
+    domain: [paper]
+    range: [venue]
+    description: the venue the document appeared in
+  about:
+    domain: [paper, claim]
+    range: [concept]
+    description: the document or claim is substantially about the concept
+  implements:
+    domain: [tool, method]
+    range: [concept, method]
+    description: a tool or method realizes a concept or another method
+  extends:
+    domain: [method, concept]
+    range: [method, concept]
+    description: a method or concept builds on or generalizes another
+  contradicts:
+    domain: [claim]
+    range: [claim]
+    description: two claims cannot both hold
+  supports:
+    domain: [claim, paper]
+    range: [claim]
+    description: evidence in favour of a claim
+  uses:
+    domain: [paper, method]
+    range: [dataset, tool, method]
+    description: the document or method employs a dataset, tool or method
+  proposes:
+    domain: [paper]
+    range: [method, tool, claim]
+    description: the document introduces the method, tool or claim as its own contribution

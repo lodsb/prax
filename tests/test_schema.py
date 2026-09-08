@@ -164,6 +164,7 @@ def test_repo_ontology_loads_and_link_validates(con: sqlite3.Connection) -> None
 def test_bumped_ontology_is_picked_up_and_stamps_new_edges(
     con: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    before = ontology.current().version
     store.link(con, store.Edge("p", "paper", "authored_by", "a", "author"))
     path = tmp_path / "ontology.yaml"
     path.write_text(
@@ -177,4 +178,4 @@ def test_bumped_ontology_is_picked_up_and_stamps_new_edges(
     versions = [
         r[0] for r in con.execute("SELECT ontology_version FROM edges ORDER BY id")
     ]
-    assert versions == ["0", "99"]  # old edges keep the version they were written under
+    assert versions == [before, "99"]  # old edges keep their version

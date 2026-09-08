@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from prax import store
+from prax import ontology, store
 from prax.importers import zotero
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zotero"
@@ -180,7 +180,7 @@ def test_import_seeds_authored_by_edges(
     assert edge["confidence"] == "EXTRACTED"
     assert edge["source_doc"] == _docs_by_key(con)["T7VVNPCK"]
     row = con.execute("SELECT ontology_version FROM edges LIMIT 1").fetchone()
-    assert row[0] == "0"
+    assert row[0] == ontology.current().version
 
 
 def test_rerun_is_idempotent(con: sqlite3.Connection, lib: zotero.Library) -> None:

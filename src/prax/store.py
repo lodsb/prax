@@ -1048,11 +1048,13 @@ def link(
     confidence: str = "EXTRACTED",
     source_doc: int | None = None,
     ontology_version: str | None = None,
+    evidence: str | None = None,
 ) -> int:
     """Insert a currently-valid edge; entities are created on demand.
 
     Types are validated against the current ontology (invariant 9); the edge
-    is stamped with that ontology's version unless one is given.
+    is stamped with that ontology's version unless one is given. ``evidence``
+    is a short quote from ``source_doc`` that supports the edge.
     """
     if confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"confidence must be one of {CONFIDENCE_LEVELS}")
@@ -1064,8 +1066,8 @@ def link(
     dst = _entity_id(con, edge.dst, edge.dst_type)
     cur = con.execute(
         "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
-        f" ontology_version, valid_from) VALUES (?,?,?,?,?,?, {_NOW})",
-        (src, dst, edge.rel, confidence, source_doc, ontology_version),
+        f" ontology_version, evidence, valid_from) VALUES (?,?,?,?,?,?,?, {_NOW})",
+        (src, dst, edge.rel, confidence, source_doc, ontology_version, evidence),
     )
     con.commit()
     return cur.lastrowid
@@ -1088,6 +1090,84 @@ def find_edges(con: sqlite3.Connection, edge: Edge) -> list[int]:
         (edge.src, edge.src_type, edge.rel, edge.dst, edge.dst_type),
     ).fetchall()
     return [r["id"] for r in rows]
+
+
+@_serialized
+def queue_review(
+    con: sqlite3.Connection,
+    *,
+    src: str,
+    src_type: str | None,
+    rel: str,
+    dst: str,
+    dst_type: str | None,
+    reason: str,
+    source_doc: int | None = None,
+    evidence: str | None = None,
+    ontology_version: str | None = None,
+) -> int:
+    """Park a triple that does not fit the ontology (invariant 9): it is
+    kept for a person to decide, never written to the graph."""
+    version = ontology_version or ontology.current().version
+    cur = con.execute(
+        "INSERT INTO review_queue (source_doc, src, src_type, rel, dst, dst_type,"
+        " evidence, reason, ontology_version) VALUES (?,?,?,?,?,?,?,?,?)",
+        (source_doc, src, src_type, rel, dst, dst_type, evidence, reason, version),
+    )
+    con.commit()
+    return cur.lastrowid
+
+
+@_serialized
+def list_review(
+    con: sqlite3.Connection, *, open_only: bool = True, limit: int = 100
+) -> list[dict[str, Any]]:
+    where = "WHERE resolved_at IS NULL" if open_only else ""
+    rows = con.execute(
+        f"SELECT * FROM review_queue {where} ORDER BY id LIMIT ?", (limit,)
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@_serialized
+def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> None:
+    """Close a review item: ``linked`` (written as an edge by hand),
+    ``dropped`` or ``ontology`` (the ontology grew to fit it)."""
+    if resolution not in ("linked", "dropped", "ontology"):
+        raise ValueError("resolution must be linked, dropped or ontology")
+    cur = con.execute(
+        f"UPDATE review_queue SET resolved_at = {_NOW}, resolution = ? WHERE id = ?",
+        (resolution, review_id),
+    )
+    if cur.rowcount == 0:
+        raise KeyError(f"no such review item: {review_id}")
+    con.commit()
+
+
+@_serialized
+def select_for_extraction(
+    con: sqlite3.Connection,
+    *,
+    ontology_version: str,
+    limit: int | None = None,
+    mime_prefix: str | None = None,
+) -> list[int]:
+    """Indexed documents not yet extracted under ``ontology_version``
+    (``meta.extraction.ontology_version``), oldest first."""
+    sql = (
+        "SELECT id FROM documents WHERE text_hash IS NOT NULL"
+        " AND (json_extract(meta, '$.extraction.ontology_version') IS NULL"
+        "      OR json_extract(meta, '$.extraction.ontology_version') != ?)"
+    )
+    args: list[Any] = [ontology_version]
+    if mime_prefix:
+        sql += " AND mime LIKE ? ESCAPE '!'"
+        args.append(_like_prefix(mime_prefix))
+    sql += " ORDER BY id"
+    if limit is not None:
+        sql += " LIMIT ?"
+        args.append(limit)
+    return [r["id"] for r in con.execute(sql, args)]
 
 
 @_serialized
@@ -1117,7 +1197,8 @@ def traverse(
         SELECT e.id AS edge_id,
                s.name AS src, s.type AS src_type, e.rel,
                t.name AS dst, t.type AS dst_type,
-               e.confidence, e.source_doc,
+               e.confidence, e.source_doc, e.evidence, e.ontology_version,
+               e.valid_from,
                MAX(rs.depth, rt.depth) AS hop
         FROM edges e
         JOIN reach rs ON rs.entity_id = e.src
