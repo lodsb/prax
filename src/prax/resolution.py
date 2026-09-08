@@ -34,6 +34,11 @@ from prax import embeddings, store
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "phd", "dr", "prof"}
 LIKELY_THRESHOLD = 0.92  # cosine of name embeddings to become a candidate
+# Types whose names are descriptive enough for embedding similarity to mean
+# "the same thing". Author names embed poorly (initials handle them); paper
+# titles and claims that differ by a part number or a qualifier embed almost
+# identically while naming different things, so they are never candidates.
+LIKELY_TYPES = frozenset({"concept", "method", "tool", "dataset", "venue"})
 _PUNCT = re.compile(r"[^\w\s]")
 _SPACES = re.compile(r"\s+")
 
@@ -175,8 +180,8 @@ def plan(
         for e in rest:
             by_type[e["type"]].append(e)
         for t, members in by_type.items():
-            if len(members) < 2 or t == "author":
-                continue  # author names embed poorly; initials handle them
+            if len(members) < 2 or t not in LIKELY_TYPES:
+                continue
             vectors = emb.embed([m["name"] for m in members])
             sims = vectors @ vectors.T
             np.fill_diagonal(sims, 0.0)

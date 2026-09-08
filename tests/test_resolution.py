@@ -156,3 +156,16 @@ def test_shared_initials_between_two_full_names_is_not_merged(
     store.link(con, E("C", "paper", "authored_by", "J. O. Smith", "author"))
     plan = resolution.plan(con, embed=False)
     assert plan.sure == []  # J. O. Smith could be either: left for a person
+
+
+def test_papers_and_claims_are_never_likely_candidates(
+    con: sqlite3.Connection,
+) -> None:
+    store.link(
+        con, E("Lecture 5 Neural Networks Part 4", "paper", "about", "nn", "concept")
+    )
+    store.link(
+        con, E("Lecture 5 Neural Networks Part 2", "paper", "about", "nn", "concept")
+    )
+    plan = resolution.plan(con, embed=True, likely_threshold=0.5)
+    assert plan.sure == [] and plan.likely == []
