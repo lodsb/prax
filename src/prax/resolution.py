@@ -30,7 +30,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from prax import embeddings, store
+from prax import embeddings, extraction, store
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "phd", "dr", "prof"}
 LIKELY_THRESHOLD = 0.92  # cosine of name embeddings to become a candidate
@@ -266,26 +266,25 @@ class ClaudeAdjudicator:
                 f'{i}. [{c.type}] "{c.keep_name}"  vs  "{c.drop_name}"'
                 for i, c in enumerate(part)
             )
+            output_config: dict[str, Any] = {
+                "format": {
+                    "type": "json_schema",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "same": {"type": "array", "items": {"type": "boolean"}}
+                        },
+                        "required": ["same"],
+                        "additionalProperties": False,
+                    },
+                }
+            }
+            if extraction.supports_effort(self.model):
+                output_config["effort"] = "low"
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=4000,
-                output_config={
-                    "effort": "low",
-                    "format": {
-                        "type": "json_schema",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "same": {
-                                    "type": "array",
-                                    "items": {"type": "boolean"},
-                                }
-                            },
-                            "required": ["same"],
-                            "additionalProperties": False,
-                        },
-                    },
-                },
+                output_config=output_config,
                 messages=[
                     {
                         "role": "user",

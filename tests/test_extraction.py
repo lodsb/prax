@@ -189,6 +189,15 @@ def test_claude_extractor_params_and_response_parsing(con: sqlite3.Connection) -
         extraction.ClaudeExtractor.from_message(refused)
 
 
+def test_effort_only_where_supported(con: sqlite3.Connection) -> None:
+    doc = extraction.build_input(con, _doc(con))
+    opus = extraction.ClaudeExtractor(model="claude-opus-5", client=object())
+    assert opus.params(doc)["output_config"]["effort"] == "medium"
+    haiku = extraction.ClaudeExtractor(model="claude-haiku-4-5", client=object())
+    assert "effort" not in haiku.params(doc)["output_config"]
+    assert "format" in haiku.params(doc)["output_config"]
+
+
 def test_current_extractor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRAX_EXTRACT", "stub")
     assert isinstance(extraction.current(), extraction.StubExtractor)

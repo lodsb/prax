@@ -39,6 +39,13 @@ _REFERENCE_NUMBER = re.compile(r"^\W*\d+(\W+\d+)*\W*$")
 # What a small model writes for the document itself instead of its title.
 _SELF_NAMES = frozenset({"paper", "this paper", "the paper", "document"})
 
+
+def supports_effort(model: str) -> bool:
+    """The ``effort`` output setting exists on the Opus and Sonnet lines from
+    4.5/4.6 on; Haiku rejects it with a 400."""
+    return not model.startswith("claude-haiku")
+
+
 # Prices per million tokens (input, output), for the running cost estimate.
 PRICES = {
     "claude-opus-5": (5.0, 25.0),
@@ -335,6 +342,11 @@ class ClaudeExtractor:
         """The request parameters (shared by the sync and the batch path)."""
         self._ensure()
         assert self._onto is not None
+        output_config: dict[str, Any] = {
+            "format": {"type": "json_schema", "schema": output_schema(self._onto)}
+        }
+        if supports_effort(self.model):
+            output_config["effort"] = self.effort
         return {
             "model": self.model,
             "max_tokens": 8000,
@@ -346,10 +358,7 @@ class ClaudeExtractor:
                 }
             ],
             "messages": [{"role": "user", "content": doc.as_message()}],
-            "output_config": {
-                "effort": self.effort,
-                "format": {"type": "json_schema", "schema": output_schema(self._onto)},
-            },
+            "output_config": output_config,
         }
 
     def extract(self, doc: DocumentInput) -> Extraction:
