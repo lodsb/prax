@@ -18,10 +18,13 @@ from __future__ import annotations
 import glob
 import os
 import sys
+from dataclasses import dataclass, field
 from functools import cache
+from pathlib import Path
 from typing import Any
 
 INSTALL_HINT = 'pip install -e ".[local]" (docs/howto.md, section 3f)'
+DEFAULT_CTX = 8192
 
 
 def windows_dll_dirs() -> list[str]:
@@ -53,3 +56,68 @@ def llama_class() -> type[Any]:
     except ImportError as e:
         raise RuntimeError(f"llama-cpp-python is not installed: {INSTALL_HINT}") from e
     return Llama
+
+
+@dataclass
+class LlamaRuntime:
+    """One loaded GGUF model behind the single call the extractors need:
+    a system and a user message in, text and token counts out, optionally
+    under a GBNF grammar. Loads lazily; grammars compile once per string."""
+
+    model_path: str
+    n_ctx: int = DEFAULT_CTX
+    n_gpu_layers: int = -1  # everything on the GPU; 0 for a CPU host
+    _llm: Any = field(default=None, init=False, repr=False)
+    _grammars: dict[str, Any] = field(default_factory=dict, init=False, repr=False)
+
+    @property
+    def name(self) -> str:
+        return "local:" + Path(self.model_path).stem
+
+    def _load(self) -> Any:
+        if self._llm is None:
+            self._llm = llama_class()(
+                model_path=self.model_path,
+                n_ctx=self.n_ctx,
+                n_gpu_layers=self.n_gpu_layers,
+                n_batch=512,
+                verbose=False,
+            )
+        return self._llm
+
+    def _grammar(self, text: str) -> Any:
+        g = self._grammars.get(text)
+        if g is None:
+            from llama_cpp import LlamaGrammar
+
+            g = self._grammars[text] = LlamaGrammar.from_string(text, verbose=False)
+        return g
+
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        grammar: str | None = None,
+        max_tokens: int = 2000,
+        temperature: float = 0.0,
+        repeat_penalty: float = 1.0,
+    ) -> tuple[str, dict[str, int]]:
+        llm = self._load()
+        llm.reset()
+        r = llm.create_chat_completion(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            grammar=self._grammar(grammar) if grammar else None,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            repeat_penalty=repeat_penalty,
+        )
+        text = r["choices"][0]["message"]["content"] or ""
+        u = r["usage"]
+        return text, {
+            "input_tokens": int(u["prompt_tokens"]),
+            "output_tokens": int(u["completion_tokens"]),
+        }

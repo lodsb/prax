@@ -33,6 +33,11 @@ DEFAULT_MODEL = "claude-opus-5"
 INPUT_CHARS = 12_000  # of document text after the metadata header
 MAX_TRIPLES = 40
 CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
+# Names that are only a number or a bracketed reference ("[12]") are never
+# entities; small models produce them for "cites".
+_REFERENCE_NUMBER = re.compile(r"^\W*\d+(\W+\d+)*\W*$")
+# What a small model writes for the document itself instead of its title.
+_SELF_NAMES = frozenset({"paper", "this paper", "the paper", "document"})
 
 # Prices per million tokens (input, output), for the running cost estimate.
 PRICES = {
@@ -172,8 +177,20 @@ def output_schema(onto: ontology.Ontology) -> dict[str, Any]:
     }
 
 
-def system_prompt(onto: ontology.Ontology) -> str:
-    """Built from the ontology file, so the prompt and the validator agree."""
+def system_prompt(
+    onto: ontology.Ontology,
+    *,
+    output: str = "json",
+    max_triples: int = MAX_TRIPLES,
+) -> str:
+    """Built from the ontology file, so the prompt and the validator agree.
+
+    ``output`` is ``json`` (the schema of ``output_schema``, Claude) or
+    ``lines`` (the tab-separated format of ``prax.lineformat``, local
+    models). The json text must stay stable: it is cached across calls.
+    """
+    if output not in ("json", "lines"):
+        raise ValueError(f"unknown output format {output!r}")
     ent = "\n".join(
         f"- {name}: {_desc(onto, name)}" for name in sorted(onto.entity_types)
     )
@@ -188,7 +205,7 @@ def system_prompt(onto: ontology.Ontology) -> str:
             " Every triple about the document uses that name."
         ),
         (
-            f"Emit at most {MAX_TRIPLES} triples. Prefer the few that a reader"
+            f"Emit at most {max_triples} triples. Prefer the few that a reader"
             " searching this library would want: what the paper is about (2-6"
             " concepts), what it proposes, what methods, tools and datasets it uses,"
             " its listed authors and venue, its central claims (at most 3), and"
@@ -215,25 +232,32 @@ def system_prompt(onto: ontology.Ontology) -> str:
             " open the document."
         ),
     ]
-    return "\n".join(
-        [
-            (
-                "You extract a small knowledge graph from one research document at a"
-                " time, for a personal research library about audio, signal processing"
-                " and music. Work only from the text given. Return JSON matching the"
-                " schema."
-            ),
-            "",
-            f"Entity types (ontology version {onto.version}):",
-            ent,
-            "",
-            "Relation types, with the allowed source -> target types:",
-            rel,
-            "",
-            "Rules:",
-            *(f"- {r}" for r in rules),
-        ]
+    answer = (
+        "Return JSON matching the schema."
+        if output == "json"
+        else "Answer in the line format given at the end."
     )
+    parts = [
+        (
+            "You extract a small knowledge graph from one research document at a"
+            " time, for a personal research library about audio, signal processing"
+            f" and music. Work only from the text given. {answer}"
+        ),
+        "",
+        f"Entity types (ontology version {onto.version}):",
+        ent,
+        "",
+        "Relation types, with the allowed source -> target types:",
+        rel,
+        "",
+        "Rules:",
+        *(f"- {r}" for r in rules),
+    ]
+    if output == "lines":
+        from prax import lineformat
+
+        parts += ["", lineformat.prompt_section(max_triples=max_triples)]
+    return "\n".join(parts)
 
 
 def _desc(onto: ontology.Ontology, name: str) -> str:
@@ -413,10 +437,89 @@ class StubExtractor:
         )
 
 
+class Runtime(Protocol):
+    """What ``LocalExtractor`` needs from a model: ``prax.local_llm.LlamaRuntime``
+    or a test double."""
+
+    name: str
+
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        grammar: str | None = None,
+        max_tokens: int = 2000,
+        temperature: float = 0.0,
+        repeat_penalty: float = 1.0,
+    ) -> tuple[str, dict[str, int]]: ...
+
+
+@dataclass
+class LocalExtractor:
+    """A GGUF model in process answering in the line format of
+    ``prax.lineformat`` under a grammar that bounds the output (small models
+    do not stop on their own; see ``docs/eval/local-llm-2026-09-08.md``)."""
+
+    runtime: Runtime
+    max_triples: int = 20
+    max_tokens: int = 2000
+    # Greedy decoding loops on the rigid line format; a little temperature
+    # and a repeat penalty keep a 7B model moving (benchmark in docs/eval).
+    temperature: float = 0.3
+    repeat_penalty: float = 1.1
+    _onto: ontology.Ontology | None = field(default=None, init=False, repr=False)
+    _system: str = field(default="", init=False, repr=False)
+    _grammar: str = field(default="", init=False, repr=False)
+
+    @property
+    def name(self) -> str:
+        return self.runtime.name
+
+    def _ensure(self) -> None:
+        if self._onto is None:
+            from prax import lineformat
+
+            self._onto = ontology.current()
+            self._system = system_prompt(
+                self._onto, output="lines", max_triples=self.max_triples
+            )
+            self._grammar = lineformat.grammar(self._onto, max_triples=self.max_triples)
+
+    def extract(self, doc: DocumentInput) -> Extraction:
+        from prax import lineformat
+
+        self._ensure()
+        text, usage = self.runtime.chat(
+            self._system,
+            doc.as_message(),
+            grammar=self._grammar,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            repeat_penalty=self.repeat_penalty,
+        )
+        result = lineformat.parse(text)
+        for t in result.triples:  # the document is named by its title
+            if t.src.lower() in _SELF_NAMES and t.src_type == "paper":
+                t.src = doc.title
+            if t.dst.lower() in _SELF_NAMES and t.dst_type == "paper":
+                t.dst = doc.title
+        result.usage.update(usage)
+        return result
+
+
 def current() -> Extractor:
     setting = os.environ.get("PRAX_EXTRACT", DEFAULT_MODEL)
     if setting == "stub":
         return StubExtractor()
+    if setting == "local":
+        path = os.environ.get("PRAX_LOCAL_MODEL")
+        if not path:
+            raise RuntimeError("PRAX_EXTRACT=local needs PRAX_LOCAL_MODEL=<model.gguf>")
+        from prax import local_llm
+
+        ctx = int(os.environ.get("PRAX_LOCAL_CTX", local_llm.DEFAULT_CTX))
+        return LocalExtractor(local_llm.LlamaRuntime(path, n_ctx=ctx))
     return ClaudeExtractor(
         model=os.environ.get("PRAX_EXTRACT_MODEL", setting),
         effort=os.environ.get("PRAX_EXTRACT_EFFORT", "medium"),
@@ -448,7 +551,13 @@ def apply(
     report = ApplyReport()
     for t in extraction.triples:
         edge = store.Edge(t.src, t.src_type, t.rel, t.dst, t.dst_type)
-        if not t.src or not t.dst or t.confidence not in CONFIDENCES:
+        if (
+            not t.src
+            or not t.dst
+            or t.confidence not in CONFIDENCES
+            or _REFERENCE_NUMBER.match(t.src)
+            or _REFERENCE_NUMBER.match(t.dst)
+        ):
             report.rejected += 1
             continue
         try:
@@ -508,9 +617,16 @@ def apply(
     return report
 
 
+def price(model: str) -> tuple[float, float]:
+    """USD per million input and output tokens; local models cost nothing."""
+    if model.startswith("local:") or model == "stub":
+        return (0.0, 0.0)
+    return PRICES.get(model, (5.0, 25.0))
+
+
 def cost_usd(model: str, usage: dict[str, int]) -> float:
     """Rough cost of one call from its usage, cache reads at a tenth."""
-    price_in, price_out = PRICES.get(model, (5.0, 25.0))
+    price_in, price_out = price(model)
     plain = usage.get("input_tokens", 0)
     cached = usage.get("cache_read_input_tokens", 0)
     written = usage.get("cache_creation_input_tokens", 0)

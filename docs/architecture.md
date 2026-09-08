@@ -153,7 +153,9 @@ and ids, then `get_chunk` or `get` for exactly what is needed.
 | `prax.ontology` | parses `ontology.yaml`, validates edge types, versions | no |
 | `prax.importers.zotero` | read-only copy of `zotero.sqlite` → documents, notes, URL-only docs, authored_by seeds; idempotent per key | via store |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
-| `prax.extraction` | document input, ontology-derived prompt and JSON schema, Claude extractor, apply() into edges / review queue / stamps | via store |
+| `prax.extraction` | document input, ontology-derived prompt and JSON schema, Claude and local extractors, apply() into edges / review queue / stamps | via store |
+| `prax.lineformat` | tab-separated output format for local models: bounded GBNF grammar from the ontology, parse/render to `Extraction` | no |
+| `prax.local_llm` | optional llama.cpp runtime (`local` extra): DLL path quirk, one loaded GGUF model behind `chat()` | no |
 | `prax.rerank` | optional cross-encoder over the top hits; off by default | no |
 | `prax.resolution` | entity merge candidates (normalized names, initials, name embeddings), adjudicators, apply through `merge_entities` | via store |
 | `prax.api` | FastAPI door: agent endpoints, browsing endpoints, serves the UI's static files | via store |

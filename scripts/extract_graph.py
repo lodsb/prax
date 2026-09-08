@@ -65,7 +65,7 @@ def main() -> int:
         chars = sum(len(extraction.build_input(con, i).as_message()) for i in ids[:200])
         per_doc = chars / max(1, min(len(ids), 200))
         est_in = per_doc / 4 + 300
-        price_in, price_out = extraction.PRICES.get(ext.name, (5.0, 25.0))
+        price_in, price_out = extraction.price(ext.name)
         per_call = (est_in * price_in + 600 * price_out) / 1e6
         print(
             f"about {per_doc:.0f} chars of input per document;"

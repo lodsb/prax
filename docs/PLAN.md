@@ -182,9 +182,11 @@ R14). Design in `docs/ui.md`.
       valid schema-constrained extractions at 80 s per document, a week
       of GPU time for the backlog against a $25-125 batch job, so the API
       stays the default for the bulk run
-- [ ] `LocalExtractor` (`PRAX_EXTRACT=local`) reusing the prompt and
-      schema, with `maxItems` on triples and `maxLength` on evidence so
-      small models terminate; same for the "ask" feature later
+- [x] `LocalExtractor` (`PRAX_EXTRACT=local`, `PRAX_LOCAL_MODEL`): the
+      same prompt and document input, answered as tab-separated lines
+      under a bounded GBNF grammar (`prax.lineformat`, 20 triples, field
+      lengths capped) so small models terminate; parsed into the same
+      `Extraction`; runtime behind `prax.local_llm.LlamaRuntime`
 - [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
       sure merges (normalized names, author initials forms) apply on their
       own, likely merges (name embeddings, concept/method/tool/dataset/venue

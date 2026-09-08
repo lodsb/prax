@@ -191,7 +191,12 @@ document is stamped with the ontology version so reruns are incremental.
     python scripts/extract_graph.py --collect-batch <id>  # apply when the batch has ended
 
 Settings: `PRAX_EXTRACT_MODEL` (default `claude-opus-5`),
-`PRAX_EXTRACT_EFFORT` (default `medium`), `PRAX_EXTRACT=stub` for tests.
+`PRAX_EXTRACT_EFFORT` (default `medium`), `PRAX_EXTRACT=stub` for tests,
+`PRAX_EXTRACT=local` with `PRAX_LOCAL_MODEL=<model.gguf>` for a model on
+this machine (section 3f; `PRAX_LOCAL_CTX`, default 8192). The local path
+asks for tab-separated lines instead of JSON under a grammar that bounds
+the output to 20 triples (`prax.lineformat`); the extractor name stamped
+on documents is `local:<model file>` and its cost is zero.
 Bumping the ontology version re-selects every document. Review the queue
 with `store.list_review` (a UI view is planned) and close items with
 `resolve_review`.

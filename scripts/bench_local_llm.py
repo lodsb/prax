@@ -22,7 +22,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import extraction, local_llm, ontology, store
+from prax import extraction, lineformat, local_llm, ontology, store
 
 
 def vram_mib() -> int:
@@ -54,6 +54,11 @@ def main() -> int:
         action="store_true",
         help="generic JSON grammar, schema in the prompt",
     )
+    ap.add_argument(
+        "--lines",
+        action="store_true",
+        help="the LocalExtractor path: line format under its bounded grammar",
+    )
     ap.add_argument("--temp", type=float, default=0.0)
     ap.add_argument("--repeat", type=float, default=1.0, help="repeat penalty")
     ap.add_argument("--out-dir", help="write raw model output per document here")
@@ -78,6 +83,7 @@ def main() -> int:
     sys_prompt = extraction.system_prompt(onto)
     schema = extraction.output_schema(onto)
     con = store.connect()
+    store.init_db(con)
     ids = store.select_for_extraction(
         con, ontology_version=onto.version, limit=a.docs, mime_prefix="application/pdf"
     )
@@ -107,6 +113,33 @@ def main() -> int:
     n_gen = r["usage"]["completion_tokens"]
     print(f"generation: {n_gen} tokens in {tg:.2f}s = {n_gen / tg:.1f} tok/s")
     print(f"system prompt: {len(llm.tokenize(sys_prompt.encode('utf-8')))} tokens")
+
+    if a.lines:
+        runtime = local_llm.LlamaRuntime(a.model, n_ctx=a.ctx)
+        runtime._llm = llm  # reuse the model loaded above
+        ext = extraction.LocalExtractor(runtime, max_tokens=a.max_tokens)
+        for d in docs:
+            t0 = time.perf_counter()
+            result = ext.extract(d)
+            dt = time.perf_counter() - t0
+            rels: dict[str, int] = {}
+            for t in result.triples:
+                rels[t.rel] = rels.get(t.rel, 0) + 1
+            u = result.usage
+            print(
+                f"doc {d.doc_id} ({d.title[:40]!r}): in {u['input_tokens']},"
+                f" out {u['output_tokens']} tok, {dt:.1f}s -> {len(result.triples)}"
+                f" triples, {len(result.unmapped)} unmapped,"
+                f" {u.get('dropped_lines', 0)} dropped lines"
+            )
+            print("   " + ", ".join(f"{k} {v}" for k, v in sorted(rels.items())))
+            for t in result.triples:
+                print(f"   {t.src[:40]} -{t.rel}-> {t.dst[:40]} [{t.confidence[:3]}]")
+            if a.out_dir:
+                Path(a.out_dir).mkdir(parents=True, exist_ok=True)
+                out = Path(a.out_dir, f"{name}_{d.doc_id}.tsv")
+                out.write_text(lineformat.render(result), encoding="utf-8")
+        return 0
 
     response_format: dict[str, object] | None
     if a.no_grammar:
