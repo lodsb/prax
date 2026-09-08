@@ -4,6 +4,7 @@ No business logic here (CLAUDE.md invariant 5). Same process as the store.
 The connection is opened lazily on the first tool call, so importing this
 module has no side effects.
 """
+
 from __future__ import annotations
 
 import mimetypes
@@ -33,7 +34,11 @@ def _db() -> sqlite3.Connection:
 
 @mcp.tool
 def search(
-    query: str, limit: int = 10, kind: str | None = None, mode: str = "hybrid"
+    query: str,
+    limit: int = 10,
+    kind: str | None = None,
+    mode: str = "hybrid",
+    rerank: bool | None = None,
 ) -> list[dict[str, Any]]:
     """Search the knowledge base. Returns compact snippets + ids.
 
@@ -41,10 +46,12 @@ def search(
     ``fts`` or ``vec`` force one side. Each hit names its chunk ``kind``
     (text, table, figure, code), section ``heading`` path and ``page``;
     ``kind`` restricts to one kind, e.g. ``kind="table"`` for documents
-    with a table about the query. Fetch a hit in full with ``get_chunk``.
+    with a table about the query. ``rerank=True`` rescores the top hits
+    with a cross-encoder when one is configured. Fetch a hit in full with
+    ``get_chunk``.
     """
     try:
-        return store.search(_db(), query, limit, kind=kind, mode=mode)
+        return store.search(_db(), query, limit, kind=kind, mode=mode, rerank=rerank)
     except ValueError as exc:
         return [{"error": str(exc)}]
 

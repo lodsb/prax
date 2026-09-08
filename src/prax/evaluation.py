@@ -34,6 +34,7 @@ from prax.parsers import queue
 QUERIES = config.REPO_ROOT / "tests" / "eval" / "queries.yaml"
 FIXTURE = config.REPO_ROOT / "tests" / "fixtures" / "zotero"
 MODES = ("fts", "vec", "hybrid")
+RERANK_MODE = "rerank"  # hybrid followed by the configured cross-encoder
 
 
 @dataclass
@@ -127,7 +128,10 @@ def run_query(
     if isinstance(resolver, dict):
         resolver = Resolver(resolver, [])
     expected = resolver.expected(query)
-    hits = store.search(con, query.q, depth, kind=query.kind, mode=mode)
+    if mode == RERANK_MODE:
+        hits = store.search(con, query.q, depth, kind=query.kind, rerank=True)
+    else:
+        hits = store.search(con, query.q, depth, kind=query.kind, mode=mode)
     docs: list[int] = []
     for h in hits:
         if h["doc_id"] not in docs:

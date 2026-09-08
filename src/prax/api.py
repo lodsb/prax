@@ -3,6 +3,7 @@
 The store connection is opened in the app lifespan and shared by all
 handlers; prax.store serializes access.
 """
+
 from __future__ import annotations
 
 import mimetypes
@@ -101,9 +102,12 @@ def search(
     limit: int = 10,
     kind: str | None = None,
     mode: str = "hybrid",
+    rerank: bool | None = None,
 ) -> list[dict[str, Any]]:
     try:
-        return store.search(request.app.state.con, q, limit, kind=kind, mode=mode)
+        return store.search(
+            request.app.state.con, q, limit, kind=kind, mode=mode, rerank=rerank
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

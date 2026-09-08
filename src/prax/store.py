@@ -23,8 +23,10 @@ from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
 from . import chunking, config, embeddings, ontology, vectors
+from . import rerank as rerank_mod
 
 MAX_HOPS = 2
+RERANK_DEPTH = 30  # hits rescored by the cross-encoder when reranking is on
 VEC_DIM = 384  # dimension of the vector index; another dimension is a new index file
 RRF_K = 60  # reciprocal rank fusion constant
 RRF_DEPTH = 100  # candidates per side before fusion (docs/eval: 30 vs 100 vs 300)
@@ -704,21 +706,57 @@ def search(
     *,
     kind: str | None = None,
     mode: str = "hybrid",
+    rerank: bool | None = None,
 ) -> list[dict[str, Any]]:
     """Search returning compact snippets + ids (agent-shaped).
 
     ``hybrid`` (default) runs FTS5/BM25 and vector KNN in parallel and fuses
     them with reciprocal rank fusion; each hit carries ``score`` (the fused
     score), ``fts_rank`` and ``vec_rank`` (None when absent from that list).
-    It degrades to FTS-only when embeddings are disabled, sqlite-vec is
-    missing or no vectors exist yet. ``fts`` and ``vec`` force one side.
+    It degrades to FTS-only when embeddings are disabled, no index exists
+    or no vectors exist yet. ``fts`` and ``vec`` force one side.
     Every hit carries the chunk's ``kind``, section ``heading`` path and
     ``page``; ``kind`` filters to one kind.
+
+    ``rerank`` rescores the top ``RERANK_DEPTH`` hits with the configured
+    cross-encoder (``prax.rerank``; None follows ``PRAX_RERANK``, which is
+    off by default) and adds ``rerank_score``.
     """
     if kind is not None and kind not in chunking.KINDS:
         raise ValueError(f"kind must be one of {chunking.KINDS}")
     if mode not in SEARCH_MODES:
         raise ValueError(f"mode must be one of {SEARCH_MODES}")
+    reranker = rerank_mod.current() if rerank is None or rerank else None
+    if rerank and reranker is None:
+        raise ValueError("rerank requested but PRAX_RERANK names no model")
+    fetch = max(limit, RERANK_DEPTH) if reranker else limit
+    hits = _search_hits(con, query, fetch, kind, mode)
+    if reranker is not None and hits:
+        hits = _apply_rerank(con, reranker, query, hits)
+    return hits[:limit]
+
+
+def _apply_rerank(
+    con: sqlite3.Connection,
+    reranker: rerank_mod.Reranker,
+    query: str,
+    hits: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    ids = [h["chunk_id"] for h in hits]
+    marks = ",".join("?" * len(ids))
+    texts = {
+        r["id"]: r["text"]
+        for r in con.execute(f"SELECT id, text FROM chunks WHERE id IN ({marks})", ids)
+    }
+    scores = reranker.score(query, [texts.get(i, "") for i in ids])
+    for h, s in zip(hits, scores, strict=True):
+        h["rerank_score"] = float(s)
+    return sorted(hits, key=lambda h: -h["rerank_score"])
+
+
+def _search_hits(
+    con: sqlite3.Connection, query: str, limit: int, kind: str | None, mode: str
+) -> list[dict[str, Any]]:
     emb = embeddings.current() if mode != "fts" else None
     vectors_ready = (
         emb is not None
