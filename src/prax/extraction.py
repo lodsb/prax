@@ -183,30 +183,46 @@ def system_prompt(onto: ontology.Ontology) -> str:
         for r in (onto.relations[n] for n in sorted(onto.relations))
     )
     rules = [
-        "The document itself is a paper entity named exactly by its Title line."
-        " Every triple about the document uses that name.",
-        f"Emit at most {MAX_TRIPLES} triples. Prefer the few that a reader searching"
-        " this library would want: what the paper is about (2-6 concepts), what it"
-        " proposes, what methods, tools and datasets it uses, its listed authors and"
-        " venue, its central claims (at most 3), and other papers it names by title.",
-        "Entity names are canonical: full author names as printed; concepts and"
-        " methods as established lowercase noun phrases, singular, acronyms expanded"
-        " once if the text does; do not invent entities the text does not support.",
-        "confidence: EXTRACTED when the text states it, INFERRED when it clearly"
-        " follows, AMBIGUOUS when you are unsure. evidence: a short verbatim quote"
-        " (under 200 characters) from the text that supports the triple; for"
-        " authored_by and published_in quote the header line.",
-        "If a relationship matters but no relation or type fits, put it in unmapped"
-        " with a one-line reason instead of forcing it.",
-        "summary: two or three sentences a reader would use to decide whether to"
-        " open the document.",
+        (
+            "The document itself is a paper entity named exactly by its Title line."
+            " Every triple about the document uses that name."
+        ),
+        (
+            f"Emit at most {MAX_TRIPLES} triples. Prefer the few that a reader"
+            " searching this library would want: what the paper is about (2-6"
+            " concepts), what it proposes, what methods, tools and datasets it uses,"
+            " its listed authors and venue, its central claims (at most 3), and"
+            " other papers it names by title."
+        ),
+        (
+            "Entity names are canonical: full author names as printed; concepts and"
+            " methods as established lowercase noun phrases, singular, acronyms"
+            " expanded once if the text does; do not invent entities the text does"
+            " not support."
+        ),
+        (
+            "confidence: EXTRACTED when the text states it, INFERRED when it clearly"
+            " follows, AMBIGUOUS when you are unsure. evidence: a short verbatim quote"
+            " (under 200 characters) from the text that supports the triple; for"
+            " authored_by and published_in quote the header line."
+        ),
+        (
+            "If a relationship matters but no relation or type fits, put it in unmapped"
+            " with a one-line reason instead of forcing it."
+        ),
+        (
+            "summary: two or three sentences a reader would use to decide whether to"
+            " open the document."
+        ),
     ]
     return "\n".join(
         [
-            "You extract a small knowledge graph from one research document at a"
-            " time, for a personal research library about audio, signal processing"
-            " and music. Work only from the text given. Return JSON matching the"
-            " schema.",
+            (
+                "You extract a small knowledge graph from one research document at a"
+                " time, for a personal research library about audio, signal processing"
+                " and music. Work only from the text given. Return JSON matching the"
+                " schema."
+            ),
             "",
             f"Entity types (ontology version {onto.version}):",
             ent,
