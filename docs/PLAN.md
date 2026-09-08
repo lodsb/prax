@@ -157,7 +157,9 @@ R14). Design in `docs/ui.md`.
 - [ ] Graph view: entity search, neighbourhood as an SVG force layout,
       expand by click, edges labelled with relation and confidence, source
       documents one click away; `link` from the view through the API
-- [ ] Bearer token on the door and the UI, Tailscale only
+- [x] Bearer token on the door (`PRAX_TOKEN`, header or session cookie,
+      loopback-only when unset; `prax.auth`) and a token prompt in the UI;
+      Tailscale binding is a deployment step (`docs/howto.md`)
 
 ## Stage 3 — Graph enrichment
 

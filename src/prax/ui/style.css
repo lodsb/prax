@@ -106,4 +106,6 @@ th { background: var(--panel); }
 .doc-list { width: 100%; }
 .doc-list td, .doc-list th { border-left: 0; border-right: 0; }
 .pager { display: flex; gap: 1rem; margin: .6rem 0; }
+.token-box { border: 1px solid var(--line); background: var(--panel); padding: .8rem 1rem; margin-bottom: 1rem; border-radius: 4px; }
+.token-box label { align-self: center; font-weight: 600; }
 .entities { list-style: none; padding: 0; }

@@ -14,11 +14,16 @@ from typing import Annotated, Any
 from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import store
+from . import auth, store
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -35,6 +40,37 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="prax", version="0.0.1", lifespan=_lifespan)
+app.middleware("http")(auth.middleware)
+
+
+class SessionReq(BaseModel):
+    token: str
+
+
+@app.get("/health", include_in_schema=False)
+def health() -> dict[str, Any]:
+    return {"ok": True, "auth": "token" if auth.token() else "loopback-only"}
+
+
+@app.post("/session")
+def session(req: SessionReq, request: Request) -> JSONResponse:
+    """Exchange the bearer token for the session cookie the UI uses."""
+    if auth.token() is None:
+        if not auth.is_loopback(request):
+            raise HTTPException(401, "no token configured")
+        return JSONResponse({"ok": True, "cookie": False})
+    if not auth.valid(req.token):
+        raise HTTPException(401, "invalid token")
+    response = JSONResponse({"ok": True, "cookie": True})
+    auth.session_cookie(response, req.token, secure=request.url.scheme == "https")
+    return response
+
+
+@app.delete("/session")
+def end_session() -> JSONResponse:
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(auth.COOKIE, path="/")
+    return response
 
 
 class IngestText(BaseModel):

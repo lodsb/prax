@@ -179,6 +179,25 @@ API (`/search?mode=`) and the MCP tool. Hybrid hits carry `score` (RRF),
 
     uvicorn prax.api:app --reload --port 8000
 
+### Access
+
+The door checks one shared secret, `PRAX_TOKEN`, on every request except
+the UI's static files and `/health`. Generate one and set it in the
+service's environment:
+
+    python -c "import secrets; print(secrets.token_urlsafe(32))"
+    $env:PRAX_TOKEN = "<the token>"          # PowerShell
+    export PRAX_TOKEN=<the token>             # shell
+
+Scripts and the extension send `Authorization: Bearer <token>`. The UI
+asks for the token once and exchanges it for an HttpOnly session cookie
+(`POST /session`, 30 days, `DELETE /session` to end it), so links to
+originals work in new tabs. Without `PRAX_TOKEN` the door admits
+loopback clients only, which is what a development server needs and what
+keeps a misconfigured deployment closed. Bind the service to the
+Tailscale address (`--host 100.x.y.z`) on the serving host; the MCP
+server over stdio needs no token.
+
 Endpoints:
 
 | Method | Path | Body / params | Returns |

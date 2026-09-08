@@ -206,6 +206,7 @@ loop); the queue makes each batch do real work.
 | Variable | Effect |
 |---|---|
 | `PRAX_DATA_DIR` | the store directory (default `<repo>/data`) |
+| `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
 | `PRAX_ONTOLOGY` | alternative `ontology.yaml` |
 | `PRAX_EMBED` | model name, `hash` (tests), `0` (off) |
 | `PRAX_EMBED_VARIANT`, `PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS` | onnxruntime precision, providers, threads |

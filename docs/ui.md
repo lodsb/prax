@@ -43,6 +43,9 @@ Added for browsing (read-only, thin wrappers over store functions):
   comes through the door. New UI data means a new read endpoint.
 - Responses stay agent-sized where an agent uses them; browsing endpoints
   are separate and may be larger (a document's chunks are one request).
-- Access is the door's bearer token, over Tailscale only.
+- Access is the door's bearer token, over Tailscale only. The page loads
+  without it (static files are open); the first API call that returns
+  401 shows a token prompt, `POST /session` turns the token into an
+  HttpOnly cookie, and nothing is kept in browser storage.
 - No state of its own; if the UI ever needs saved searches or notes, that
   is a table behind the door.
