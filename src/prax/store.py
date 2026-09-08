@@ -1194,13 +1194,32 @@ def queue_review(
 
 @_serialized
 def list_review(
-    con: sqlite3.Connection, *, open_only: bool = True, limit: int = 100
+    con: sqlite3.Connection,
+    *,
+    open_only: bool = True,
+    limit: int = 100,
+    offset: int = 0,
 ) -> list[dict[str, Any]]:
     where = "WHERE resolved_at IS NULL" if open_only else ""
     rows = con.execute(
-        f"SELECT * FROM review_queue {where} ORDER BY id LIMIT ?", (limit,)
+        f"SELECT * FROM review_queue {where} ORDER BY id LIMIT ? OFFSET ?",
+        (limit, offset),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+@_serialized
+def count_review(con: sqlite3.Connection, *, open_only: bool = True) -> int:
+    where = "WHERE resolved_at IS NULL" if open_only else ""
+    return int(con.execute(f"SELECT count(*) FROM review_queue {where}").fetchone()[0])
+
+
+@_serialized
+def get_review(con: sqlite3.Connection, review_id: int) -> dict[str, Any] | None:
+    row = con.execute(
+        "SELECT * FROM review_queue WHERE id = ?", (review_id,)
+    ).fetchone()
+    return dict(row) if row else None
 
 
 @_serialized

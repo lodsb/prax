@@ -89,6 +89,73 @@ def test_link_and_traverse(client: TestClient) -> None:
     assert capped[0]["hop"] == 1 and capped[-1]["hop"] == 2
 
 
+def test_review_queue_endpoints(client: TestClient) -> None:
+    from prax import store
+
+    con = client.app.state.con
+    doc = client.post("/ingest", json={"text": "t", "title": "P"}).json()["doc_id"]
+    a = store.queue_review(
+        con,
+        src="P",
+        src_type="paper",
+        rel="about",
+        dst="STFT",
+        dst_type="method",
+        reason="'about' does not accept dst type 'method'",
+        source_doc=doc,
+        evidence="q",
+    )
+    b = store.queue_review(
+        con,
+        src="P",
+        src_type=None,
+        rel="funded_by",
+        dst="EU",
+        dst_type=None,
+        reason="unmapped: no relation",
+        source_doc=doc,
+    )
+    c = store.queue_review(
+        con, src="x", src_type=None, rel="r", dst="y", dst_type=None, reason="z"
+    )
+    page = client.get("/review", params={"limit": 2}).json()
+    assert page["total"] == 3 and [i["id"] for i in page["items"]] == [a, b]
+    assert (
+        client.get("/review", params={"limit": 2, "offset": 2}).json()["items"][0]["id"]
+        == c
+    )
+    onto = client.get("/ontology").json()
+    assert "paper" in onto["entity_types"] and "about" in onto["relations"]
+    # link with a corrected target type: the edge is written with the item's evidence
+    r = client.post(
+        f"/review/{a}", json={"resolution": "linked", "dst_type": "concept"}
+    )
+    assert r.status_code == 200 and r.json()["edge_id"]
+    edge = client.get("/traverse", params={"entity": "P"}).json()[0]
+    assert (edge["dst"], edge["dst_type"], edge["evidence"], edge["source_doc"]) == (
+        "STFT",
+        "concept",
+        "q",
+        doc,
+    )
+    # an invalid link leaves the item open
+    r = client.post(
+        f"/review/{b}",
+        json={"resolution": "linked", "src_type": "paper", "dst_type": "venue"},
+    )
+    assert r.status_code == 400 and "funded_by" in r.json()["detail"]
+    assert (
+        client.post(f"/review/{b}", json={"resolution": "ontology"}).status_code == 200
+    )
+    assert (
+        client.post(f"/review/{c}", json={"resolution": "dropped"}).status_code == 200
+    )
+    assert client.get("/review").json()["total"] == 0
+    assert client.get("/review", params={"open": False}).json()["total"] == 3
+    assert client.post(f"/review/{c}", json={"resolution": "bogus"}).status_code == 400
+    assert client.post("/review/999", json={"resolution": "dropped"}).status_code == 404
+
+
 def test_link_bad_confidence_is_400(client: TestClient) -> None:
     body = {
         "src": "A",

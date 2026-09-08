@@ -305,11 +305,197 @@ async function viewBrowse(p) {
 }
 
 // ----------------------------------------------------------------- graph
+// The neighbourhood of an entity as an SVG force layout. Nodes are
+// (type, name); edges come from GET /traverse (hops=1) and a click on a
+// node fetches its own neighbourhood and merges it in. The layout is a small
+// spring model run to rest on every change; no library.
+
+const TYPE_COLORS = {
+  paper: "#2f5d8a", author: "#7a5c1e", concept: "#4b7a45", method: "#6a4b7a",
+  claim: "#a0522d", tool: "#3b7a7a", venue: "#8a6d2f", dataset: "#5a5a8a",
+};
+const nodeKey = (name, type) => type + "|" + name;
+const typeColor = (t) => TYPE_COLORS[t] || "#888";
+
+class ForceGraph {
+  constructor(svg, onSelect) {
+    this.svg = svg;
+    this.onSelect = onSelect;
+    this.nodes = new Map();
+    this.edges = new Map();
+    this.selected = null;
+    this.box = { x: -450, y: -300, w: 900, h: 600 };
+    this.bindPanZoom();
+    svg.addEventListener("click", (e) => {
+      const g = e.target.closest(".node");
+      if (!g) return;
+      this.select(g.dataset.key);
+      if (!this.nodes.get(g.dataset.key).expanded) this.expand(g.dataset.key);
+    });
+  }
+
+  node(name, type, near) {
+    const key = nodeKey(name, type);
+    let n = this.nodes.get(key);
+    if (!n) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 60 + Math.random() * 60;
+      n = { key, name, type, expanded: false, degree: 0,
+            x: (near ? near.x : 0) + Math.cos(a) * r, y: (near ? near.y : 0) + Math.sin(a) * r, vx: 0, vy: 0 };
+      this.nodes.set(key, n);
+    }
+    return n;
+  }
+
+  merge(edgeList, aroundKey) {
+    const near = aroundKey ? this.nodes.get(aroundKey) : null;
+    for (const e of edgeList) {
+      if (this.edges.has(e.edge_id)) continue;
+      const s = this.node(e.src, e.src_type, near);
+      const t = this.node(e.dst, e.dst_type, near);
+      s.degree++; t.degree++;
+      this.edges.set(e.edge_id, { ...e, s: s.key, t: t.key });
+    }
+    this.layout();
+    this.draw();
+  }
+
+  async expand(key) {
+    const n = this.nodes.get(key);
+    n.expanded = true;
+    const edges = await api("/traverse", { entity: n.name, hops: 1 });
+    this.merge(edges, key);
+  }
+
+  layout(iterations = 300) {
+    const nodes = [...this.nodes.values()];
+    const edges = [...this.edges.values()];
+    let alpha = 1;
+    for (let it = 0; it < iterations; it++) {
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i];
+        for (let j = i + 1; j < nodes.length; j++) {
+          const b = nodes[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          let d2 = dx * dx + dy * dy || 1;
+          if (d2 < 1) { dx = Math.random() - .5; dy = Math.random() - .5; d2 = 1; }
+          const f = Math.min(6000 / d2, 8) * alpha;
+          const d = Math.sqrt(d2);
+          a.vx -= dx / d * f; a.vy -= dy / d * f;
+          b.vx += dx / d * f; b.vy += dy / d * f;
+        }
+        a.vx -= a.x * 0.01 * alpha; a.vy -= a.y * 0.01 * alpha;
+      }
+      for (const e of edges) {
+        const a = this.nodes.get(e.s), b = this.nodes.get(e.t);
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const f = (d - 110) * 0.04 * alpha;
+        a.vx += dx / d * f; a.vy += dy / d * f;
+        b.vx -= dx / d * f; b.vy -= dy / d * f;
+      }
+      for (const n of nodes) {
+        n.x += n.vx; n.y += n.vy; n.vx *= 0.5; n.vy *= 0.5;
+      }
+      alpha *= 0.985;
+    }
+    this.fit();
+  }
+
+  fit() {
+    const nodes = [...this.nodes.values()];
+    if (!nodes.length) return;
+    const xs = nodes.map((n) => n.x), ys = nodes.map((n) => n.y);
+    const pad = 80;
+    const x = Math.min(...xs) - pad, y = Math.min(...ys) - pad;
+    const w = Math.max(...xs) - x + pad, h = Math.max(...ys) - y + pad;
+    const el = this.svg.getBoundingClientRect();
+    const aspect = (el.width || 900) / (el.height || 600);
+    if (w / h > aspect) this.box = { x, y: y - (w / aspect - h) / 2, w, h: w / aspect };
+    else this.box = { x: x - (h * aspect - w) / 2, y, w: h * aspect, h };
+    this.applyBox();
+  }
+
+  applyBox() {
+    const b = this.box;
+    this.svg.setAttribute("viewBox", `${b.x} ${b.y} ${b.w} ${b.h}`);
+  }
+
+  bindPanZoom() {
+    let drag = null;
+    this.svg.addEventListener("mousedown", (e) => {
+      if (e.target.closest(".node")) return;
+      drag = { x: e.clientX, y: e.clientY, bx: this.box.x, by: this.box.y };
+      this.svg.classList.add("dragging");
+    });
+    window.addEventListener("mousemove", (e) => {
+      if (!drag) return;
+      const el = this.svg.getBoundingClientRect();
+      const k = this.box.w / (el.width || 1);
+      this.box.x = drag.bx - (e.clientX - drag.x) * k;
+      this.box.y = drag.by - (e.clientY - drag.y) * k;
+      this.applyBox();
+    });
+    window.addEventListener("mouseup", () => { drag = null; this.svg.classList.remove("dragging"); });
+    this.svg.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const el = this.svg.getBoundingClientRect();
+      const px = this.box.x + (e.clientX - el.left) / el.width * this.box.w;
+      const py = this.box.y + (e.clientY - el.top) / el.height * this.box.h;
+      const z = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+      this.box = { x: px - (px - this.box.x) * z, y: py - (py - this.box.y) * z, w: this.box.w * z, h: this.box.h * z };
+      this.applyBox();
+    }, { passive: false });
+  }
+
+  select(key) {
+    this.selected = key;
+    this.draw();
+    this.onSelect(this.nodes.get(key), this.edgesOf(key));
+  }
+
+  edgesOf(key) {
+    return [...this.edges.values()].filter((e) => e.s === key || e.t === key);
+  }
+
+  draw() {
+    const lines = [], labels = [], nodes = [];
+    for (const e of this.edges.values()) {
+      const a = this.nodes.get(e.s), b = this.nodes.get(e.t);
+      const cls = [e.confidence === "INFERRED" ? "inferred" : e.confidence === "AMBIGUOUS" ? "ambiguous" : "",
+                   (e.s === this.selected || e.t === this.selected) ? "selected" : ""].join(" ");
+      lines.push(`<line class="${cls}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"><title>${esc(e.src)} ${esc(e.rel)} ${esc(e.dst)} (${esc(e.confidence)})${e.evidence ? "\n" + esc(e.evidence) : ""}</title></line>`);
+      labels.push(`<text class="edge-label" x="${((a.x + b.x) / 2).toFixed(1)}" y="${((a.y + b.y) / 2 - 3).toFixed(1)}" text-anchor="middle">${esc(e.rel)}</text>`);
+    }
+    for (const n of this.nodes.values()) {
+      const r = 6 + Math.min(14, Math.sqrt(n.degree) * 2.2);
+      const cls = ["node", n.expanded ? "expanded" : "", n.key === this.selected ? "selected" : ""].join(" ");
+      const label = n.name.length > 38 ? n.name.slice(0, 36) + "…" : n.name;
+      nodes.push(`<g class="${cls}" data-key="${esc(n.key)}" transform="translate(${n.x.toFixed(1)},${n.y.toFixed(1)})"><circle r="${r.toFixed(1)}" fill="${typeColor(n.type)}"><title>${esc(n.name)} (${esc(n.type)}, ${n.degree} edges here)</title></circle><text x="${(r + 3).toFixed(1)}" y="4">${esc(label)}</text></g>`);
+    }
+    this.svg.innerHTML = `<g>${lines.join("")}${labels.join("")}${nodes.join("")}</g>`;
+  }
+}
+
+function graphPanel(node, edges) {
+  if (!node) return `<p class="muted">Click a node to see its edges; the first click also expands it.</p>`;
+  const rows = edges.map((e) => {
+    const out = e.s === node.key;
+    const other = out ? e.dst : e.src;
+    const otherType = out ? e.dst_type : e.src_type;
+    return `<li>${out ? "" : `<b>${esc(other)}</b> <span class="muted">${esc(otherType)}</span> `}<span class="rel">${out ? "" : "→ "}${esc(e.rel)}${out ? " →" : ""}</span> ${out ? `<b>${esc(other)}</b> <span class="muted">${esc(otherType)}</span>` : ""}
+      <span class="muted">· ${esc(e.confidence)}${e.source_doc ? ` · <a href="#doc/${e.source_doc}">doc ${e.source_doc}</a>` : ""}</span>
+      ${e.evidence ? `<span class="ev">“${esc(e.evidence)}”</span>` : ""}</li>`;
+  });
+  return `<h2>${esc(node.name)}</h2><div class="muted">${esc(node.type)} · ${edges.length} edges shown</div><ul>${rows.join("")}</ul>`;
+}
 
 async function viewGraph(arg, p) {
+  const q = p.q || "";
+  const entity = p.entity || arg || "";
   view.innerHTML = `
   <form id="graph-form" class="search-form">
-    <input name="q" type="search" value="${esc(p.q || arg || "")}" placeholder="entity name…">
+    <input name="q" type="search" value="${esc(q)}" placeholder="find an entity…">
     <button>Find</button>
   </form>
   <div id="graph-out"></div>`;
@@ -319,26 +505,121 @@ async function viewGraph(arg, p) {
     go("graph", "", Object.fromEntries(new FormData(form)));
   });
   const out = document.getElementById("graph-out");
-  const q = p.q || arg;
-  if (!q) { out.innerHTML = `<p class="muted">The graph view arrives with Stage 3; entity lookup and one-hop neighbourhoods work already.</p>`; return; }
+  if (!entity && !q) {
+    out.innerHTML = `<p class="muted">Type part of an entity name (a concept, a method, an author, a paper title) and pick one to see its neighbourhood.</p>`;
+    return;
+  }
   try {
-    const ents = await api("/entities", { q, limit: 30 });
-    if (!ents.length) { out.innerHTML = `<p class="muted">No entity matches.</p>`; return; }
-    out.innerHTML = `<ul class="entities">${ents.map((e) => `<li><a href="#graph?q=${encodeURIComponent(e.name)}&show=1">${esc(e.name)}</a> <span class="muted">${esc(e.type)} · ${e.degree} edges</span></li>`).join("")}</ul><div id="edges"></div>`;
-    if (p.show) {
-      const edges = await api("/traverse", { entity: q, hops: 1 });
-      document.getElementById("edges").innerHTML = edges.length ? `
-        <table class="doc-list"><thead><tr><th>From</th><th>Relation</th><th>To</th><th>Confidence</th><th>Source</th></tr></thead>
-        <tbody>${edges.map((e) => `<tr><td>${esc(e.src)} <span class="muted">${esc(e.src_type)}</span></td><td>${esc(e.rel)}</td><td>${esc(e.dst)} <span class="muted">${esc(e.dst_type)}</span></td><td class="muted">${esc(e.confidence)}</td><td>${e.source_doc ? `<a href="#doc/${e.source_doc}">doc ${e.source_doc}</a>` : ""}</td></tr>`).join("")}</tbody></table>` : `<p class="muted">No edges.</p>`;
+    if (!entity) {
+      const ents = await api("/entities", { q, limit: 40 });
+      if (!ents.length) { out.innerHTML = `<p class="muted">No entity matches.</p>`; return; }
+      out.innerHTML = `<ul class="entities">${ents.map((e) => `<li><a href="#graph?entity=${encodeURIComponent(e.name)}">${esc(e.name)}</a> <span class="muted">${esc(e.type)} · ${e.degree} edges</span></li>`).join("")}</ul>`;
+      return;
     }
+    const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
+    out.innerHTML = `
+      <div class="graph-tools">
+        <span>Neighbourhood of <b>${esc(entity)}</b></span>
+        <span class="muted">· click a node to expand it, drag to pan, wheel to zoom · dashed edges are inferred or ambiguous</span>
+        <button type="button" id="graph-fit" class="secondary">fit</button>
+      </div>
+      <div class="legend">${legend}</div>
+      <div class="graph-layout">
+        <div class="graph-canvas"><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
+      </div>`;
+    const panel = document.getElementById("graph-panel");
+    const graph = new ForceGraph(out.querySelector("svg"), (node, edges) => { panel.innerHTML = graphPanel(node, edges); });
+    document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
+    const edges = await api("/traverse", { entity, hops: 1 });
+    if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity.</p>`; return; }
+    graph.merge(edges, null);
+    const start = [...graph.nodes.values()].find((n) => n.name === entity);
+    if (start) { start.expanded = true; graph.select(start.key); }
   } catch (err) {
     out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
   }
 }
 
+// ---------------------------------------------------------------- review
+// Misfit triples parked by extraction (invariant 9). Each item can be
+// dropped, marked as an ontology gap, or linked as an edge after fixing its
+// types or relation with the current ontology's choices.
+
+async function post(path, body) {
+  setStatus("…");
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  setStatus("");
+  if (res.status === 401) { askForToken(); throw new Error("access token required"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+function options(list, current) {
+  return [`<option value="">–</option>`, ...list.map((x) => `<option ${x === current ? "selected" : ""}>${esc(x)}</option>`)].join("");
+}
+
+function reviewItem(it, onto) {
+  const types = onto.entity_types, rels = Object.keys(onto.relations).sort();
+  const unmapped = (it.reason || "").startsWith("unmapped:");
+  return `
+  <article class="review-item" id="review-${it.id}">
+    <div class="review-triple"><b>${esc(it.src)}</b> <span class="muted">${esc(it.src_type || "?")}</span>
+      <span class="rel">${esc(it.rel)}</span> <b>${esc(it.dst)}</b> <span class="muted">${esc(it.dst_type || "?")}</span></div>
+    <div class="review-meta">#${it.id} · ${esc(it.reason)}${it.source_doc ? ` · <a href="#doc/${it.source_doc}">doc ${it.source_doc}</a>` : ""}${it.evidence ? ` · <i>“${esc(it.evidence)}”</i>` : ""}</div>
+    <form class="review-form" data-id="${it.id}">
+      <select name="src_type" title="source type">${options(types, it.src_type)}</select>
+      <select name="rel" title="relation">${options(rels, unmapped ? "" : it.rel)}</select>
+      <select name="dst_type" title="target type">${options(types, it.dst_type)}</select>
+      <button name="action" value="linked">link</button>
+      <button name="action" value="ontology" class="secondary" title="keep for a later ontology version">ontology gap</button>
+      <button name="action" value="dropped" class="secondary">drop</button>
+      <span class="error msg"></span>
+    </form>
+  </article>`;
+}
+
+async function viewReview(p) {
+  const limit = Number(p.limit || 30);
+  const offset = Number(p.offset || 0);
+  view.innerHTML = `<div id="review-list"><p class="muted">Loading…</p></div>`;
+  const list = document.getElementById("review-list");
+  try {
+    const [res, onto] = await Promise.all([api("/review", { limit, offset }), api("/ontology")]);
+    const pager = `
+      <div class="pager">
+        <span class="muted">${res.total.toLocaleString()} open items · ${res.items.length ? offset + 1 : 0}–${Math.min(offset + limit, res.total)} · ontology v${esc(onto.version)}</span>
+        ${offset > 0 ? `<a href="#review?offset=${Math.max(0, offset - limit)}">‹ previous</a>` : ""}
+        ${offset + limit < res.total ? `<a href="#review?offset=${offset + limit}">next ›</a>` : ""}
+      </div>`;
+    list.innerHTML = pager + res.items.map((it) => reviewItem(it, onto)).join("") + pager;
+    list.querySelectorAll(".review-form").forEach((form) => {
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const action = e.submitter && e.submitter.value;
+        const data = Object.fromEntries(new FormData(form));
+        const body = { resolution: action };
+        if (action === "linked") Object.assign(body, { src_type: data.src_type, rel: data.rel, dst_type: data.dst_type });
+        const msg = form.querySelector(".msg");
+        try {
+          const r = await post(`/review/${form.dataset.id}`, body);
+          const item = document.getElementById(`review-${form.dataset.id}`);
+          item.classList.add("done");
+          form.innerHTML = `<span class="muted">${action}${r.edge_id ? ` · edge ${r.edge_id}` : ""}</span>`;
+        } catch (err) {
+          msg.textContent = err.message;
+        }
+      });
+    });
+  } catch (err) {
+    list.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  }
+}
+
 // ---------------------------------------------------------------- router
 
-const views = { search: viewSearch, browse: viewBrowse };
+const views = { search: viewSearch, browse: viewBrowse, review: viewReview };
 
 async function render() {
   const r = route();

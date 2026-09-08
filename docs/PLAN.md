@@ -154,9 +154,12 @@ R14). Design in `docs/ui.md`.
       heading, page and which side found them, each opening the document
       at that chunk
 - [x] Browse view: recent and filtered document lists
-- [ ] Graph view: entity search, neighbourhood as an SVG force layout,
+- [x] Graph view: entity search, neighbourhood as an SVG force layout,
       expand by click, edges labelled with relation and confidence, source
-      documents one click away; `link` from the view through the API
+      documents one click away
+- [x] Review view: the queue paged, each item dropped, marked as an
+      ontology gap, or linked as an edge after fixing types or relation
+      (`GET /review`, `POST /review/{id}`, `GET /ontology`)
 - [x] Bearer token on the door (`PRAX_TOKEN`, header or session cookie,
       loopback-only when unset; `prax.auth`) and a token prompt in the UI;
       Tailscale binding is a deployment step (`docs/howto.md`)

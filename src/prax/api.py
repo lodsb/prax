@@ -23,7 +23,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, store
+from . import auth, ontology, store
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -182,6 +182,78 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
 @app.get("/traverse")
 def traverse(entity: str, request: Request, hops: int = 1) -> list[dict[str, Any]]:
     return store.traverse(request.app.state.con, entity, hops)
+
+
+@app.get("/ontology")
+def ontology_view() -> dict[str, Any]:
+    """The current ontology: what the graph and the review view may use."""
+    onto = ontology.current()
+    return {
+        "version": onto.version,
+        "entity_types": sorted(onto.entity_types),
+        "relations": {
+            r.name: {
+                "domain": sorted(r.domain),
+                "range": sorted(r.range),
+                "description": r.description,
+            }
+            for r in onto.relations.values()
+        },
+    }
+
+
+# ----------------------------------------------------------- review queue
+
+
+class ReviewReq(BaseModel):
+    resolution: str  # linked | dropped | ontology
+    src_type: str | None = None  # overrides for "linked"
+    rel: str | None = None
+    dst_type: str | None = None
+    confidence: str = "EXTRACTED"
+
+
+@app.get("/review")
+def review(
+    request: Request, limit: int = 50, offset: int = 0, open: bool = True
+) -> dict[str, Any]:
+    """Open review items (misfit triples), oldest first, with the total."""
+    con = request.app.state.con
+    return {
+        "items": store.list_review(con, open_only=open, limit=limit, offset=offset),
+        "total": store.count_review(con, open_only=open),
+    }
+
+
+@app.post("/review/{review_id}")
+def resolve_review(review_id: int, req: ReviewReq, request: Request) -> dict[str, Any]:
+    """Close a review item; ``linked`` writes it as an edge first, with the
+    item's fields unless the request overrides the types or relation."""
+    con = request.app.state.con
+    item = store.get_review(con, review_id)
+    if item is None:
+        raise HTTPException(404, "no such review item")
+    out: dict[str, Any] = {"ok": True}
+    try:
+        if req.resolution == "linked":
+            edge = store.Edge(
+                item["src"],
+                req.src_type or item["src_type"] or "",
+                req.rel or item["rel"],
+                item["dst"],
+                req.dst_type or item["dst_type"] or "",
+            )
+            out["edge_id"] = store.link(
+                con,
+                edge,
+                confidence=req.confidence,
+                source_doc=item["source_doc"],
+                evidence=item["evidence"],
+            )
+        store.resolve_review(con, review_id, req.resolution)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return out
 
 
 # ------------------------------------------------------ browsing (the UI)
