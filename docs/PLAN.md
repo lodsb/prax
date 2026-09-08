@@ -116,9 +116,18 @@ Parsing is a batch job; the serving path never parses.
       with expected docs (`tests/eval/queries.yaml`, `prax.evaluation`,
       `scripts/eval_retrieval.py`); first run in `docs/eval/`: hit@1 0.95
       fts, 0.90 vec and hybrid on the 10-document fixture
-- [ ] A larger eval set against the full store (expectations by title),
-      since the fixture is at ceiling; the rerank decision needs it
-- [ ] Optional cross-encoder rerank behind a flag; benchmark on the Pi
+- [x] A larger eval set against the full store (expectations by title):
+      62 queries, `tests/eval/queries-library.yaml`; FTS 0.82 MRR, vec
+      0.81, hybrid 0.83 after document-level fusion (`docs/eval/`)
+- [ ] Vector index: sqlite-vec brute force is 4 s per query at 855 K
+      vectors; usearch HNSW (memory-mapped) is 46 ms at recall 0.98.
+      Decide and, if agreed, move the vector store to an index file next
+      to `prax.db` (invariant 1 and R6 change), keep `chunk_embeddings` as
+      the bookkeeping, rebuild the index from the batch job
+- [ ] Optional cross-encoder rerank behind a flag: about nine of the 62
+      queries land at ranks 2-7 in hybrid, which a reranker over the top 30
+      could fix; benchmark a small cross-encoder on the desktop and the SBC
+      before enabling
 
 ## Stage 3 — Graph enrichment
 

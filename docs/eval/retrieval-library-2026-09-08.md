@@ -58,3 +58,47 @@ Queries not at rank 1:
 | hybrid | 2 | keyword | Independent Component Analysis Infomax Algorithmus |
 | hybrid | 3 | paraphrase | wie man Daten linear so transformiert, dass die Komponenten statistisch unabhängig werden |
 | hybrid | - | structure | confusion matrix of emotion recognition neutral sadness boredom anger |
+
+## Fusion experiment (same query set, offline over the two candidate lists)
+
+Chunk-level rank fusion (the first implementation) scored below FTS alone.
+Fusing at document level, each side contributing a document's best chunk
+rank, is the variant now in `store.search`.
+
+| variant | depth | hit@1 | MRR | keyword | paraphrase | structure |
+|---|---|---|---|---|---|---|
+| fts only | 100 | 0.74 | 0.82 | 0.87 | 0.69 | 0.88 |
+| vec only | 100 | 0.76 | 0.81 | 0.87 | 0.68 | 0.85 |
+| chunk RRF (before) | 100 | 0.73 | 0.80 | 0.83 | 0.69 | 0.93 |
+| doc RRF, best chunk rank (now) | 100 | 0.77 | 0.84 | 0.91 | 0.69 | 0.88 |
+| doc RRF, vec weighted 1.5 | 100 | 0.77 | 0.83 | 0.90 | 0.68 | 0.87 |
+
+Depth 30 and 300 give the same picture; 100 is the store default.
+In-store hybrid after the change: hit@1 0.77, hit@3 0.85, MRR 0.83.
+
+## Latency at 855,731 vectors (desktop, other jobs running)
+
+sqlite-vec scans every vector. Measured with KNN k = 100:
+
+| storage | median query | recall vs fp32 |
+|---|---|---|
+| fp32 (as stored) | 4.2 s (19 s cold) | 1.00 |
+| int8, `vec_quantize_int8` | 1.8 s | 0.93 @100 |
+| binary, `vec_quantize_binary` | 0.53 s | 0.48 @100 |
+| binary k = 1000 + fp32 rescore | 2.7 s | 1.00 @10 |
+
+FTS alone answers in 0.3 s; hybrid end to end took 5.3 s. Nothing inside
+sqlite-vec gets under a second at this size; an approximate index is
+needed for the vector side (see the usearch line below).
+
+## Approximate index (usearch HNSW, same vectors, memory-mapped file)
+
+| index | build | file | query median | recall@10 vs exact |
+|---|---|---|---|---|
+| usearch f16, connectivity 16, ef_search 64 | 218 s | 784 MB | 46 ms | 0.98 |
+| usearch int8 | 118 s | 456 MB | 18 ms | 0.93 |
+
+Queried through a memory-mapped view, as the serving host would use it; the
+process holds only the pages it touches. This is the route that keeps
+hybrid search interactive; it replaces the sqlite-vec table as the vector
+store (decision recorded in rationale R6 once taken).

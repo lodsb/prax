@@ -109,6 +109,19 @@ with files from the Hugging Face hub. The vec0 table carries ``kind`` as a
 metadata column so a KNN query can be filtered to tables or figures
 without a post-filter.
 
+*Measured on the library (2026-09-08, `docs/eval/retrieval-library-*`).*
+Fusion has to happen per document, not per chunk: chunk-level RRF scored
+below FTS alone (MRR 0.80 vs 0.82); document-level RRF with each side's
+best chunk rank gives hit@1 0.77 and MRR 0.83 on 62 queries against the
+full store, above FTS (0.82) and vectors alone (0.81). Depth 100 per side.
+Latency is the binding constraint: sqlite-vec scans every vector, and at
+855 K vectors a KNN query takes 4.2 s warm (int8 1.8 s, binary with fp32
+rescoring 2.7 s), so hybrid search took 5 s end to end against 0.3 s for
+FTS. A memory-mapped usearch HNSW index over the same vectors answers in
+46 ms at recall@10 0.98 (f16, 784 MB file) or 18 ms at 0.93 (int8,
+456 MB). The threshold below was set at 1 M vectors; the wall arrived at
+0.86 M.
+
 **Revisit when.** Vectors exceed about 1M. Then move only the vector layer
 to LanceDB.
 
