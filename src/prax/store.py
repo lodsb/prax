@@ -977,6 +977,7 @@ def find_entities(
                (SELECT count(*) FROM edges x
                 WHERE (x.src = e.id OR x.dst = e.id) AND x.valid_to IS NULL) AS degree
         FROM entities e WHERE lower(e.name) LIKE ? ESCAPE '!'
+          AND e.canonical_id IS NULL
         ORDER BY degree DESC, e.name LIMIT ?
         """,
         (pattern, max(1, min(limit, 200))),
@@ -1093,6 +1094,79 @@ def find_edges(con: sqlite3.Connection, edge: Edge) -> list[int]:
 
 
 @_serialized
+def merge_entities(con: sqlite3.Connection, duplicate_id: int, into_id: int) -> None:
+    """Record that ``duplicate_id`` is the same thing as ``into_id``.
+
+    Nothing is deleted or rewritten: the duplicate keeps its name and its
+    edges (they are evidence), and gets ``canonical_id`` pointing at the
+    survivor; ``traverse`` and lookups follow the pointer. Chains are
+    flattened so every alias points straight at the final survivor.
+    """
+    if duplicate_id == into_id:
+        raise ValueError("an entity cannot be merged into itself")
+    rows = {
+        r["id"]: r
+        for r in con.execute(
+            "SELECT id, type, canonical_id FROM entities WHERE id IN (?, ?)",
+            (duplicate_id, into_id),
+        )
+    }
+    if len(rows) != 2:
+        raise KeyError("no such entity")
+    if rows[duplicate_id]["type"] != rows[into_id]["type"]:
+        raise ValueError("entities of different types cannot be merged")
+    survivor = rows[into_id]["canonical_id"] or into_id
+    if survivor == duplicate_id:
+        raise ValueError("that merge would form a cycle")
+    con.execute(
+        "UPDATE entities SET canonical_id = ? WHERE id = ? OR canonical_id = ?",
+        (survivor, duplicate_id, duplicate_id),
+    )
+    con.commit()
+
+
+@_serialized
+def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
+    row = con.execute(
+        "SELECT canonical_id FROM entities WHERE id = ?", (entity_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such entity: {entity_id}")
+    return row["canonical_id"] or entity_id
+
+
+@_serialized
+def invalidate_edge(
+    con: sqlite3.Connection,
+    edge_id: int,
+    *,
+    successor: Edge | None = None,
+    confidence: str = "EXTRACTED",
+    source_doc: int | None = None,
+    evidence: str | None = None,
+) -> int | None:
+    """End an edge's validity now (``valid_to``), optionally inserting the
+    edge that supersedes it. The old edge stays as history (invariant 8).
+    Returns the successor's id."""
+    cur = con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE id = ? AND valid_to IS NULL",
+        (edge_id,),
+    )
+    if cur.rowcount == 0:
+        raise KeyError(f"no such currently valid edge: {edge_id}")
+    con.commit()
+    if successor is None:
+        return None
+    return link(
+        con,
+        successor,
+        confidence=confidence,
+        source_doc=source_doc,
+        evidence=evidence,
+    )
+
+
+@_serialized
 def queue_review(
     con: sqlite3.Connection,
     *,
@@ -1180,16 +1254,29 @@ def traverse(
     the hop limit; ``hop`` is the distance of its farther endpoint.
     """
     hops = max(0, min(hops, MAX_HOPS))
+    # Every entity id is mapped to its canonical id first, so a merged alias
+    # and its survivor are one node: the walk runs over canonical ids, and
+    # edges are reported under the canonical names (invariant 8: the edge
+    # rows themselves keep the alias ids they were written with).
     rows = con.execute(
         """
-        WITH RECURSIVE walk(entity_id, depth) AS (
-            SELECT id, 0 FROM entities WHERE name = ?
+        WITH RECURSIVE canon(id, cid) AS (
+            SELECT id, COALESCE(canonical_id, id) FROM entities
+        ),
+        cedges(id, src, dst) AS (
+            SELECT e.id, cs.cid, cd.cid FROM edges e
+            JOIN canon cs ON cs.id = e.src JOIN canon cd ON cd.id = e.dst
+            WHERE e.valid_to IS NULL
+        ),
+        walk(entity_id, depth) AS (
+            SELECT DISTINCT c.cid, 0 FROM entities n JOIN canon c ON c.id = n.id
+            WHERE n.name = ?
             UNION
             SELECT CASE WHEN e.src = w.entity_id THEN e.dst ELSE e.src END,
                    w.depth + 1
-            FROM edges e JOIN walk w
+            FROM cedges e JOIN walk w
                  ON (e.src = w.entity_id OR e.dst = w.entity_id)
-            WHERE w.depth < ? AND e.valid_to IS NULL
+            WHERE w.depth < ?
         ),
         reach(entity_id, depth) AS (
             SELECT entity_id, MIN(depth) FROM walk GROUP BY entity_id
@@ -1200,12 +1287,12 @@ def traverse(
                e.confidence, e.source_doc, e.evidence, e.ontology_version,
                e.valid_from,
                MAX(rs.depth, rt.depth) AS hop
-        FROM edges e
-        JOIN reach rs ON rs.entity_id = e.src
-        JOIN reach rt ON rt.entity_id = e.dst
-        JOIN entities s ON s.id = e.src
-        JOIN entities t ON t.id = e.dst
-        WHERE e.valid_to IS NULL
+        FROM cedges ce
+        JOIN edges e ON e.id = ce.id
+        JOIN reach rs ON rs.entity_id = ce.src
+        JOIN reach rt ON rt.entity_id = ce.dst
+        JOIN entities s ON s.id = ce.src
+        JOIN entities t ON t.id = ce.dst
         ORDER BY hop, e.id
         """,
         (entity_name, hops),
