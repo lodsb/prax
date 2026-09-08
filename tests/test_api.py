@@ -1,4 +1,5 @@
 """FastAPI door: every endpoint through TestClient against a tmp data dir."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
@@ -68,8 +69,13 @@ def test_search_with_punctuation_is_200(client: TestClient) -> None:
 
 
 def test_link_and_traverse(client: TestClient) -> None:
-    body = {"src": "A", "src_type": "concept", "rel": "extends",
-            "dst": "B", "dst_type": "concept"}
+    body = {
+        "src": "A",
+        "src_type": "concept",
+        "rel": "extends",
+        "dst": "B",
+        "dst_type": "concept",
+    }
     assert client.post("/link", json=body).json()["edge_id"] == 1
     body.update(src="B", dst="C")
     client.post("/link", json=body)
@@ -84,9 +90,16 @@ def test_link_and_traverse(client: TestClient) -> None:
 
 
 def test_link_bad_confidence_is_400(client: TestClient) -> None:
-    body = {"src": "A", "src_type": "x", "rel": "r", "dst": "B", "dst_type": "x",
-            "confidence": "GUESS"}
+    body = {
+        "src": "A",
+        "src_type": "x",
+        "rel": "r",
+        "dst": "B",
+        "dst_type": "x",
+        "confidence": "GUESS",
+    }
     assert client.post("/link", json=body).status_code == 400
+
 
 def test_search_kind_filter_and_chunk_route(client: TestClient) -> None:
     table = "Table 1: sizes\n\n| part | mm |\n|---|---|\n| bolt | 12 |\n"
@@ -100,3 +113,69 @@ def test_search_kind_filter_and_chunk_route(client: TestClient) -> None:
     assert client.get("/chunk/999999").status_code == 404
     bad = client.get("/search", params={"q": "bolt", "kind": "audio"})
     assert bad.status_code == 400
+
+
+def test_browsing_endpoints_and_ui(client: TestClient) -> None:
+    pdf = client.post(
+        "/ingest/file",
+        files={"file": ("paper.pdf", b"%PDF-1.4 fake", "application/pdf")},
+        data={"title": "A fake paper"},
+    ).json()
+    note = client.post(
+        "/ingest",
+        json={
+            "text": "# Intro\n\nGranular clouds.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n",
+            "title": "note",
+            "meta": {"source": "zotero"},
+        },
+    ).json()
+    listing = client.get("/documents").json()
+    assert listing["total"] == 2
+    assert [d["id"] for d in listing["items"]] == [note["doc_id"], pdf["doc_id"]]
+    assert listing["items"][0]["n_chunks"] >= 1 and listing["items"][0]["meta"] == {
+        "source": "zotero"
+    }
+    assert client.get("/documents", params={"title": "FAKE"}).json()["total"] == 1
+    assert client.get("/documents", params={"source": "zotero"}).json()["total"] == 1
+    assert (
+        client.get("/documents", params={"mime": "application/pdf"}).json()["total"]
+        == 1
+    )
+
+    orig = client.get(f"/doc/{pdf['doc_id']}/original")
+    assert orig.status_code == 200 and orig.content == b"%PDF-1.4 fake"
+    assert orig.headers["content-type"].startswith("application/pdf")
+    assert "inline" in orig.headers["content-disposition"]
+    assert client.get("/doc/999/original").status_code == 404
+
+    text = client.get(f"/doc/{note['doc_id']}/text")
+    assert text.status_code == 200 and text.text.startswith("# Intro")
+    assert text.headers["content-type"].startswith("text/markdown")
+
+    chunks = client.get(f"/doc/{note['doc_id']}/chunks").json()
+    assert [c["kind"] for c in chunks] == ["text", "table"]
+    assert chunks[1]["data"]["rows"] == [["1", "2"]] and chunks[1]["heading"] == [
+        "Intro"
+    ]
+    assert client.get("/doc/999/chunks").status_code == 404
+
+    client.post(
+        "/link",
+        json={
+            "src": "A fake paper",
+            "src_type": "paper",
+            "rel": "authored_by",
+            "dst": "Ada Lovelace",
+            "dst_type": "author",
+        },
+    )
+    ents = client.get("/entities", params={"q": "lovelace"}).json()
+    assert ents == [
+        {"id": ents[0]["id"], "name": "Ada Lovelace", "type": "author", "degree": 1}
+    ]
+
+    assert client.get("/", follow_redirects=False).status_code == 307
+    page = client.get("/ui/")
+    assert page.status_code == 200 and "<title>prax</title>" in page.text
+    assert client.get("/ui/app.js").status_code == 200
+    assert client.get("/ui/vendor/marked.min.js").status_code == 200

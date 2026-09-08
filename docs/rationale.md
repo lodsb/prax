@@ -268,6 +268,36 @@ so the file can stay small.
 (a rename of an entity type, a re-chunking); then add a Python hook per
 migration number alongside the SQL. Not before.
 
+## R14. The web UI is a client of the door: static files, no framework
+
+**Decision.** The browser UI is a directory of static files (one page,
+plain JavaScript and CSS, a vendored Markdown renderer) served by the
+FastAPI process that already runs on the serving host, mounted at `/ui/`.
+It talks to the same JSON endpoints the agent uses plus a few read-only
+browsing endpoints (document lists, the archived original, the text
+artifact, the chunk outline, entity lookup). Rendering happens in the
+browser. Writes from the UI (a `link` from the graph view) go through the
+existing API, so `prax.store` stays the one door.
+
+**Why.** Everything the UI needs is a read over data the door already
+serves; adding a second server, a template engine or a JavaScript build
+would add a process, a toolchain and a deployment step for no capability.
+Static files behind the existing door cost nothing at rest, survive a
+future change of serving stack unchanged (R6 sketch of a Rust binary), and
+keep the agent-shaped endpoints intact because browsing endpoints are
+additions. The document view renders the document as its chunks, which
+makes "show me the hit in context" a scroll to an element and shows the
+structure the chunker found.
+
+**Cost.** A vendored Markdown renderer (about 40 KB) and, for the graph
+view, a force-layout library; both pinned files in the repo, no package
+manager. Streaming originals from the archive puts file serving on the
+door, which is fine behind Tailscale and a bearer token.
+
+**Revisit when.** The UI wants state of its own (saved searches,
+annotations); then that state is a table behind the door, still not a
+second server.
+
 ## R13. A chunk is an addressable region with a searchable rendering
 
 **Decision.** Chunks carry ``kind`` (text, table, figure, code; media kinds

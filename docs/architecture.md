@@ -35,8 +35,9 @@ flowchart LR
     AR[(archive/<br/>sha256-addressed files)]
   end
   subgraph doors [Doors, serving host]
-    API[FastAPI<br/>/search /get /chunk /link /ingest]
+    API[FastAPI<br/>/search /get /chunk /link /ingest<br/>/documents /doc/id/original /entities]
     MCP[FastMCP stdio<br/>search get get_chunk traverse link ingest]
+    UI[Web UI, static files at /ui/<br/>search, document, browse, graph views]
   end
   Z --> IMP --> store
   B -.-> API
@@ -48,6 +49,7 @@ flowchart LR
   store --> MCP
   MCP --> C[Claude Code]
   API --> U[scripts, extension]
+  API --> UI --> Browser
 ```
 
 ## 2. Two hosts, one directory
@@ -147,7 +149,8 @@ and ids, then `get_chunk` or `get` for exactly what is needed.
 | `prax.ontology` | parses `ontology.yaml`, validates edge types, versions | no |
 | `prax.importers.zotero` | read-only copy of `zotero.sqlite` → documents, notes, URL-only docs, authored_by seeds; idempotent per key | via store |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
-| `prax.api` | FastAPI door | via store |
+| `prax.api` | FastAPI door: agent endpoints, browsing endpoints, serves the UI's static files | via store |
+| `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer; a client of the door (R14) | no |
 | `prax.mcp_server` | FastMCP stdio door; no logic | via store |
 | `prax.config` | paths, `PRAX_DATA_DIR`, migrations dir | no |
 | `scripts/*.py` | thin CLIs over the modules above: import, parse, rechunk, embed, eval, compare extractors, build fixture | via store |
@@ -223,6 +226,7 @@ loop); the queue makes each batch do real work.
 | add entity or relation types | `ontology.yaml` plus a version bump; old edges keep their version |
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |
 | add an agent tool | a store function first, then one handler each in `prax.api` and `prax.mcp_server`; keep responses compact |
+| add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
 
 ## 10. Numbers as of 2026-09-07
 

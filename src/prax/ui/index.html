@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>prax</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#search">prax</a>
+    <nav>
+      <a href="#search" data-view="search">Search</a>
+      <a href="#browse" data-view="browse">Browse</a>
+      <a href="#graph" data-view="graph">Graph</a>
+    </nav>
+    <form id="quick" class="quick" autocomplete="off">
+      <input id="quick-q" type="search" placeholder="search the store…" aria-label="search">
+    </form>
+    <span id="status" class="status"></span>
+  </header>
+  <main id="view"></main>
+  <script src="vendor/marked.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

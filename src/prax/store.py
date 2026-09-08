@@ -899,6 +899,110 @@ def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
 
 
 @_serialized
+def list_documents(
+    con: sqlite3.Connection,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    title: str | None = None,
+    source: str | None = None,
+    mime_prefix: str | None = None,
+) -> dict[str, Any]:
+    """Documents without their text, newest first, for browsing.
+
+    ``title`` is a case-insensitive substring; ``source`` matches
+    ``meta.source``; ``mime_prefix`` a MIME type prefix. Returns
+    ``{"total", "items"}`` where each item carries the row, its decoded
+    ``meta`` and its chunk count.
+    """
+    clauses: list[str] = []
+    args: list[Any] = []
+    if title:
+        clauses.append("lower(d.title) LIKE ? ESCAPE '!'")
+        args.append("%" + _like_prefix(title.lower())[:-1] + "%")
+    if source:
+        clauses.append("json_extract(d.meta, '$.source') = ?")
+        args.append(source)
+    if mime_prefix:
+        clauses.append("d.mime LIKE ? ESCAPE '!'")
+        args.append(_like_prefix(mime_prefix))
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    total = con.execute(f"SELECT count(*) FROM documents d {where}", args).fetchone()[0]
+    rows = con.execute(
+        f"""
+        SELECT d.id, d.title, d.mime, d.source_url, d.added_at, d.parsed_at, d.meta,
+               (SELECT count(*) FROM chunks c WHERE c.doc_id = d.id) AS n_chunks
+        FROM documents d {where}
+        ORDER BY d.added_at DESC, d.id DESC LIMIT ? OFFSET ?
+        """,
+        (*args, max(1, min(limit, 500)), max(0, offset)),
+    ).fetchall()
+    items = []
+    for r in rows:
+        item = dict(r)
+        item["meta"] = json.loads(item["meta"]) if item["meta"] else {}
+        items.append(item)
+    return {"total": total, "items": items}
+
+
+@_serialized
+def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """A document as its chunks in order, with text and structure (the
+    document view renders from this)."""
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE doc_id = ? ORDER BY seq",
+        (doc_id,),
+    ).fetchall()
+    out = []
+    for r in rows:
+        c = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+        c.update(_chunk_shape(r))
+        c["locator"] = json.loads(r["locator"]) if r["locator"] else None
+        c["data"] = json.loads(r["data"]) if r["data"] else None
+        out.append(c)
+    return out
+
+
+@_serialized
+def find_entities(
+    con: sqlite3.Connection, q: str, *, limit: int = 20
+) -> list[dict[str, Any]]:
+    """Entities whose name contains ``q`` (case-insensitive), with their
+    number of currently valid edges, most connected first."""
+    pattern = "%" + _like_prefix(q.lower())[:-1] + "%"
+    rows = con.execute(
+        """
+        SELECT e.id, e.name, e.type,
+               (SELECT count(*) FROM edges x
+                WHERE (x.src = e.id OR x.dst = e.id) AND x.valid_to IS NULL) AS degree
+        FROM entities e WHERE lower(e.name) LIKE ? ESCAPE '!'
+        ORDER BY degree DESC, e.name LIMIT ?
+        """,
+        (pattern, max(1, min(limit, 200))),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@_serialized
+def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
+    """MIME type, title and archive path of a document's original, for
+    serving it; None when the document does not exist."""
+    row = con.execute(
+        "SELECT hash, mime, title, original_path FROM documents WHERE id = ?",
+        (doc_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return {
+        "path": _archive_path(row["hash"]),
+        "mime": row["mime"] or "application/octet-stream",
+        "title": row["title"],
+        "original_path": row["original_path"],
+    }
+
+
+@_serialized
 def get_chunk(con: sqlite3.Connection, chunk_id: int) -> dict[str, Any] | None:
     """One chunk in full: text, kind, heading, locator and table ``data``."""
     r = con.execute(

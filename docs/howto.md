@@ -191,6 +191,10 @@ Endpoints:
 | POST | `/link` | JSON `{src, src_type, rel, dst, dst_type, confidence?, source_doc?}` | `{edge_id}` |
 | GET | `/traverse` | `entity`, `hops?` (max 2) | list of edges with types and hop distance |
 
+The web UI is served by the same process at `http://127.0.0.1:8000/ui/`
+(`/` redirects there): search, document and browse views; the graph view
+follows Stage 3. It needs no build step; the files live in `src/prax/ui/`.
+
 A first smoke run from PowerShell:
 
     Invoke-RestMethod -Method Post http://127.0.0.1:8000/ingest `

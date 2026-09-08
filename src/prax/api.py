@@ -9,12 +9,18 @@ from __future__ import annotations
 import mimetypes
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Annotated, Any
+from urllib.parse import quote
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import store
+
+UI_DIR = Path(__file__).resolve().parent / "ui"
 
 
 @asynccontextmanager
@@ -140,3 +146,74 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
 @app.get("/traverse")
 def traverse(entity: str, request: Request, hops: int = 1) -> list[dict[str, Any]]:
     return store.traverse(request.app.state.con, entity, hops)
+
+
+# ------------------------------------------------------ browsing (the UI)
+
+
+@app.get("/documents")
+def documents(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    title: str | None = None,
+    source: str | None = None,
+    mime: str | None = None,
+) -> dict[str, Any]:
+    """Documents without text, newest first, filtered for browsing."""
+    return store.list_documents(
+        request.app.state.con,
+        limit=limit,
+        offset=offset,
+        title=title,
+        source=source,
+        mime_prefix=mime,
+    )
+
+
+@app.get("/doc/{doc_id}/original")
+def original(doc_id: int, request: Request) -> FileResponse:
+    """The archived original with its MIME type, shown inline (a PDF opens
+    in the browser's viewer; ``#page=N`` selects a page)."""
+    info = store.original_info(request.app.state.con, doc_id)
+    if info is None or not info["path"].exists():
+        raise HTTPException(404, "no such document")
+    name = Path(info["original_path"] or info["title"] or f"document-{doc_id}").name
+    return FileResponse(
+        info["path"],
+        media_type=info["mime"],
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"},
+    )
+
+
+@app.get("/doc/{doc_id}/text")
+def text(doc_id: int, request: Request) -> PlainTextResponse:
+    """The Markdown text artifact of a document."""
+    doc = store.get_document(request.app.state.con, doc_id)
+    if doc is None:
+        raise HTTPException(404, "no such document")
+    return PlainTextResponse(doc["text"], media_type="text/markdown; charset=utf-8")
+
+
+@app.get("/doc/{doc_id}/chunks")
+def chunks(doc_id: int, request: Request) -> list[dict[str, Any]]:
+    """The document as its chunks in order, with kind, heading, page, text."""
+    try:
+        store.get_meta(request.app.state.con, doc_id)
+    except KeyError as exc:
+        raise HTTPException(404, "no such document") from exc
+    return store.list_chunks(request.app.state.con, doc_id)
+
+
+@app.get("/entities")
+def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
+    """Entities whose name contains ``q``, most connected first."""
+    return store.find_entities(request.app.state.con, q, limit=limit)
+
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse("/ui/")
+
+
+app.mount("/ui", StaticFiles(directory=UI_DIR, html=True), name="ui")
