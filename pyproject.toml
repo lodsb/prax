@@ -15,7 +15,7 @@ dependencies = [
 [project.optional-dependencies]
 ingest = ["pymupdf4llm", "trafilatura"]      # Stage 1 parse queue (batch host)
 docling = ["docling"]                         # optional extractor; ~3 GB of PyTorch
-embed = ["sqlite-vec>=0.1.6", "onnxruntime", "tokenizers", "huggingface_hub", "numpy"]  # Stage 2; Windows GPU: onnxruntime-directml instead
+embed = ["usearch>=2.12", "onnxruntime", "tokenizers", "huggingface_hub", "numpy"]  # Stage 2; Windows GPU: onnxruntime-directml instead
 dev = ["pytest>=8", "ruff", "httpx"]
 
 [build-system]

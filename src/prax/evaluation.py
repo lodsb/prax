@@ -181,7 +181,7 @@ def build_fixture_store(
     parsed = queue.run(con, ids)
     n_vec = 0
     emb = embeddings.current() if embed else None
-    if emb is not None and store.has_vec(con):
+    if emb is not None and store.vectors_available():
         rows = store.pending_embeddings(con, emb.name)
         vectors = emb.embed([r["text"] for r in rows])
         n_vec = store.store_embeddings(
@@ -189,6 +189,7 @@ def build_fixture_store(
             [(r["chunk_id"], r["kind"], v) for r, v in zip(rows, vectors, strict=True)],
             emb.name,
         )
+        store.save_vectors(emb.name)
     return {
         "documents": dict(imported.actions),
         "parsed": dict(parsed.actions),

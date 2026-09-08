@@ -21,7 +21,11 @@ needs_pymupdf = pytest.mark.skipif(
 def hash_embedder(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("PRAX_EMBED", "hash")
     embeddings._build.cache_clear()
+    store._indexes.clear()
     yield
+    for idx in list(store._indexes.values()):
+        idx.close()
+    store._indexes.clear()
     embeddings._build.cache_clear()
 
 
@@ -41,7 +45,7 @@ def test_harness_scores_every_mode_and_keyword_floor(
     queries = evaluation.load_queries()
     scores, results = evaluation.evaluate(con, queries)
     by_mode = {s.mode: s.as_dict() for s in scores}
-    modes = {"fts", "hybrid"} | ({"vec"} if store.has_vec(con) else set())
+    modes = {"fts", "hybrid"} | ({"vec"} if store.vectors_available() else set())
     assert set(by_mode) == modes
     assert all(s["n"] == len(queries) for s in by_mode.values())
     keyword = [r for r in results if r.mode == "fts" and r.query.style == "keyword"]

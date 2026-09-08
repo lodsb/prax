@@ -22,13 +22,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
-from . import chunking, config, embeddings, ontology
+from . import chunking, config, embeddings, ontology, vectors
 
 MAX_HOPS = 2
-VEC_DIM = 384  # baked into chunks_vec; another dimension is a migration
+VEC_DIM = 384  # dimension of the vector index; another dimension is a new index file
 RRF_K = 60  # reciprocal rank fusion constant
 RRF_DEPTH = 100  # candidates per side before fusion (docs/eval: 30 vs 100 vs 300)
-_vec_loaded: dict[int, bool] = {}  # id(con) -> sqlite-vec available on it
+VEC_SEARCH_CAP = 4000  # widest KNN candidate set when post-filtering by kind
+_indexes: dict[tuple[str, bool], vectors.VectorIndex] = {}  # (path, writable)
 CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 
 _LOCK = threading.RLock()
@@ -59,30 +60,39 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA journal_mode = WAL")
-    _vec_loaded[id(con)] = _load_vec(con)
     return con
 
 
-def _load_vec(con: sqlite3.Connection) -> bool:
-    """Load sqlite-vec into the connection; False when it is not installed
-    or this Python cannot load extensions. The store works without it
-    (FTS-only search); vectors need it."""
-    try:
-        import sqlite_vec
-    except ImportError:
-        return False
-    try:
-        con.enable_load_extension(True)
-        sqlite_vec.load(con)
-        con.enable_load_extension(False)
-    except (AttributeError, sqlite3.OperationalError):
-        return False
-    return True
+def vectors_available() -> bool:
+    """True when the usearch index library is installed. Without it the
+    store works FTS-only."""
+    return vectors.available()
 
 
-def has_vec(con: sqlite3.Connection) -> bool:
-    """True when sqlite-vec is loaded on this connection."""
-    return _vec_loaded.get(id(con), False)
+def _index_path(model: str) -> Path:
+    return config.data_dir() / f"vectors-{model}.usearch"
+
+
+def _index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
+    """The index for ``model``: a memory-mapped view for reads (None when no
+    file exists yet), or the in-memory writable copy for batch jobs."""
+    path = _index_path(model)
+    key = (str(path), writable)
+    idx = _indexes.get(key)
+    if idx is None:
+        if not writable and not path.exists():
+            return None
+        idx = vectors.VectorIndex(path, VEC_DIM, writable=writable)
+        _indexes[key] = idx
+    return idx
+
+
+def _drop_index_views(model: str) -> None:
+    """Forget the read-only view so the next read reopens the saved file."""
+    key = (str(_index_path(model)), False)
+    idx = _indexes.pop(key, None)
+    if idx is not None:
+        idx.close()
 
 
 def migrations() -> list[tuple[int, Path]]:
@@ -129,14 +139,30 @@ def init_db(con: sqlite3.Connection) -> int:
             con.execute("ROLLBACK")
             raise
         current = number
-    if has_vec(con):
-        con.execute(
-            "CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0("
-            f" chunk_id INTEGER PRIMARY KEY, embedding float[{VEC_DIM}]"
-            " distance_metric=cosine, kind TEXT, +model TEXT)"
-        )
-        con.commit()
+    _drop_legacy_vec_table(con)
     return current
+
+
+def _drop_legacy_vec_table(con: sqlite3.Connection) -> None:
+    """Stage 2 first kept vectors in a sqlite-vec table; the index file
+    replaced it. Drop the table when the extension is still around to do
+    so (it cannot be dropped without its module); run VACUUM afterwards to
+    reclaim the space (docs/howto.md)."""
+    row = con.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'chunks_vec'"
+    ).fetchone()
+    if row is None:
+        return
+    try:
+        import sqlite_vec
+
+        con.enable_load_extension(True)
+        sqlite_vec.load(con)
+        con.enable_load_extension(False)
+        con.execute("DROP TABLE chunks_vec")
+        con.commit()
+    except (ImportError, AttributeError, sqlite3.OperationalError):
+        pass
 
 
 # ---------------------------------------------------------------- archive
@@ -261,15 +287,8 @@ def index_text(
 def _write_chunks(con: sqlite3.Connection, doc_id: int, text: str) -> int:
     """Replace a document's chunks with structure-aware ones (prax.chunking)."""
     rows = chunking.rows(chunking.chunk(text))
-    if has_vec(con):  # chunk ids change; their vectors must not outlive them
-        old = [
-            r[0]
-            for r in con.execute("SELECT id FROM chunks WHERE doc_id = ?", (doc_id,))
-        ]
-        for i in range(0, len(old), 500):
-            ids = old[i : i + 500]
-            marks = ",".join("?" * len(ids))
-            con.execute(f"DELETE FROM chunks_vec WHERE chunk_id IN ({marks})", ids)
+    # chunk ids change: their chunk_embeddings rows cascade away, the index
+    # keeps stale keys that queries filter out and compact_vectors() removes
     con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
     con.executemany(
         "INSERT INTO chunks (doc_id, seq, text, kind, locator, heading, data)"
@@ -579,38 +598,49 @@ def _fts_snippets(
 def _vec_search(
     con: sqlite3.Connection, vector: Any, limit: int, kind: str | None
 ) -> list[dict[str, Any]]:
-    """KNN over chunks_vec (cosine); ``kind`` uses the vec0 metadata column."""
-    from sqlite_vec import serialize_float32
+    """KNN over the usearch index (cosine distance), joined to live chunks.
 
-    kind_clause = "AND kind = ?" if kind is not None else ""
-    args: tuple[Any, ...] = (serialize_float32(list(map(float, vector))), limit)
-    if kind is not None:
-        args = (args[0], kind, limit)
-    rows = con.execute(
-        f"""
-        SELECT v.chunk_id, v.distance, c.doc_id, d.title, c.kind, c.locator,
-               c.heading, substr(c.text, 1, 160) AS head
-        FROM (SELECT chunk_id, distance FROM chunks_vec
-              WHERE embedding MATCH ? {kind_clause} AND k = ?
-              ORDER BY distance) v
-        JOIN chunks c ON c.id = v.chunk_id
-        JOIN documents d ON d.id = c.doc_id
-        ORDER BY v.distance
-        """,
-        args,
-    ).fetchall()
-    out = []
-    for r in rows:
-        hit = {
-            "chunk_id": r["chunk_id"],
-            "doc_id": r["doc_id"],
-            "title": r["title"],
-            "snippet": r["head"],
-            "score": r["distance"],
-        }
-        hit.update(_chunk_shape(r))
-        out.append(hit)
-    return out
+    The index has no filter of its own, so ``kind`` is applied after the
+    search over a wider candidate set (chunks of one kind are a few percent
+    of the index). Keys whose chunk no longer exists are dropped here.
+    """
+    model = embeddings.current().name  # type: ignore[union-attr]
+    idx = _index(model, writable=False)
+    if idx is None:
+        return []
+    want = limit * (25 if kind is not None else 3)
+    found = idx.search(vector, min(max(want, limit), VEC_SEARCH_CAP))
+    if not found:
+        return []
+    distance = dict(found)
+    ids = list(distance)
+    out: list[dict[str, Any]] = []
+    for i in range(0, len(ids), 500):
+        part = ids[i : i + 500]
+        marks = ",".join("?" * len(part))
+        kind_clause = "AND c.kind = ?" if kind is not None else ""
+        args: tuple[Any, ...] = (*part, kind) if kind is not None else tuple(part)
+        rows = con.execute(
+            f"""
+            SELECT c.id AS chunk_id, c.doc_id, d.title, c.kind, c.locator,
+                   c.heading, substr(c.text, 1, 160) AS head
+            FROM chunks c JOIN documents d ON d.id = c.doc_id
+            WHERE c.id IN ({marks}) {kind_clause}
+            """,
+            args,
+        ).fetchall()
+        for r in rows:
+            hit = {
+                "chunk_id": r["chunk_id"],
+                "doc_id": r["doc_id"],
+                "title": r["title"],
+                "snippet": r["head"],
+                "score": distance[r["chunk_id"]],
+            }
+            hit.update(_chunk_shape(r))
+            out.append(hit)
+    out.sort(key=lambda h: h["score"])
+    return out[:limit]
 
 
 def _rrf(
@@ -648,8 +678,9 @@ def _rrf(
 
 @_serialized
 def vec_status(con: sqlite3.Connection) -> dict[str, Any]:
-    """Whether vectors are usable on this connection and how many exist."""
-    status: dict[str, Any] = {"available": has_vec(con), "rows": 0, "models": {}}
+    """Whether vectors are usable and how many exist, per model, plus the
+    state of the current model's index file."""
+    status: dict[str, Any] = {"available": vectors_available(), "rows": 0, "models": {}}
     rows = con.execute(
         "SELECT model, count(*) AS n FROM chunk_embeddings GROUP BY model"
     ).fetchall()
@@ -657,6 +688,11 @@ def vec_status(con: sqlite3.Connection) -> dict[str, Any]:
     status["rows"] = sum(status["models"].values())
     emb = embeddings.current()
     status["embedder"] = emb.name if emb else None
+    status["index"] = None
+    if emb is not None and vectors_available():
+        idx = _index(emb.name, writable=False)
+        if idx is not None:
+            status["index"] = idx.stats()
     return status
 
 
@@ -684,9 +720,14 @@ def search(
     if mode not in SEARCH_MODES:
         raise ValueError(f"mode must be one of {SEARCH_MODES}")
     emb = embeddings.current() if mode != "fts" else None
-    vectors_ready = emb is not None and has_vec(con) and _vec_count(con) > 0
+    vectors_ready = (
+        emb is not None
+        and vectors_available()
+        and _index(emb.name, writable=False) is not None
+        and _vec_count(con) > 0
+    )
     if mode == "vec" and not vectors_ready:
-        raise ValueError("vector search unavailable: no embedder, extension or vectors")
+        raise ValueError("vector search unavailable: no embedder, index or vectors")
     if not vectors_ready:
         return _fts_search(con, query, limit, kind)
     assert emb is not None
@@ -750,26 +791,19 @@ def store_embeddings(
     items: list[tuple[int, str | None, Any]],
     model: str,
 ) -> int:
-    """Write ``(chunk_id, kind, vector)`` rows for ``model``; replaces any
-    earlier vector of the chunk. Requires sqlite-vec on the connection."""
-    if not has_vec(con):
-        raise RuntimeError("sqlite-vec is not loaded on this connection")
-    from sqlite_vec import serialize_float32
-
+    """Add ``(chunk_id, kind, vector)`` rows for ``model`` to its index
+    (in memory until ``save_vectors``) and record them in ``chunk_embeddings``.
+    Requires the usearch library; the batch job calls this."""
+    if not vectors_available():
+        raise RuntimeError("usearch is not installed; vectors cannot be stored")
+    if not items:
+        return 0
+    idx = _index(model, writable=True)
+    assert idx is not None
     ids = [cid for cid, _, _ in items]
-    for i in range(0, len(ids), 500):
-        part = ids[i : i + 500]
-        con.execute(
-            f"DELETE FROM chunks_vec WHERE chunk_id IN ({','.join('?' * len(part))})",
-            part,
-        )
-    con.executemany(
-        "INSERT INTO chunks_vec (chunk_id, embedding, kind, model) VALUES (?,?,?,?)",
-        [
-            (cid, serialize_float32(list(map(float, vec))), kind, model)
-            for cid, kind, vec in items
-        ],
-    )
+    import numpy as np
+
+    idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, _, v in items]))
     con.executemany(
         "INSERT INTO chunk_embeddings (chunk_id, model) VALUES (?, ?)"
         " ON CONFLICT(chunk_id) DO UPDATE SET model = excluded.model,"
@@ -778,6 +812,52 @@ def store_embeddings(
     )
     con.commit()
     return len(items)
+
+
+@_serialized
+def save_vectors(model: str) -> dict[str, Any]:
+    """Write ``model``'s index to disk and drop cached read views so readers
+    in this process reopen the new file. The bookkeeping rows are committed
+    as they are written, so a crash between two saves leaves rows that the
+    next ``pending_embeddings`` run will not repeat; ``compact_vectors``
+    reconciles the two."""
+    idx = _index(model, writable=True)
+    assert idx is not None
+    _drop_index_views(model)  # a mapped view blocks the replace on Windows
+    idx.save()
+    return idx.stats()
+
+
+@_serialized
+def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
+    """Reconcile the index with the bookkeeping: drop keys whose chunk is
+    gone, and forget bookkeeping rows whose vector is missing from the
+    index (so they get embedded again). Saves the index."""
+    idx = _index(model, writable=True)
+    assert idx is not None
+    live = {r[0] for r in con.execute("SELECT id FROM chunks")}
+    booked = {
+        r[0]
+        for r in con.execute(
+            "SELECT chunk_id FROM chunk_embeddings WHERE model = ?", (model,)
+        )
+    }
+    keys = {int(k) for k in idx.all_keys()}
+    stale = keys - live
+    removed = idx.remove(stale)
+    missing = booked - keys
+    if missing:
+        ids = list(missing)
+        for i in range(0, len(ids), 500):
+            part = ids[i : i + 500]
+            marks = ",".join("?" * len(part))
+            con.execute(
+                f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks})", part
+            )
+        con.commit()
+    _drop_index_views(model)
+    idx.save()
+    return {"removed_stale": removed, "forgot_missing": len(missing), "count": len(idx)}
 
 
 @_serialized
