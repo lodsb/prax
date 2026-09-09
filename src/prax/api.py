@@ -319,6 +319,13 @@ def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
     return store.find_entities(request.app.state.con, q, limit=limit)
 
 
+@app.get("/graph/overview")
+def graph_overview(request: Request, limit: int = 30) -> dict[str, Any]:
+    """The most connected concepts, methods, tools and datasets with the
+    edges among them: what the graph view opens on."""
+    return store.hub_graph(request.app.state.con, limit=limit)
+
+
 @app.get("/", include_in_schema=False)
 def root() -> RedirectResponse:
     return RedirectResponse("/ui/")

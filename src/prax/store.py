@@ -964,6 +964,66 @@ def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     return out
 
 
+HUB_TYPES = ("concept", "method", "tool", "dataset")
+
+
+@_serialized
+def hub_graph(
+    con: sqlite3.Connection,
+    *,
+    limit: int = 30,
+    types: tuple[str, ...] = HUB_TYPES,
+) -> dict[str, Any]:
+    """The most connected entities of the given types and the currently
+    valid edges among them: the graph view's starting picture. Degrees and
+    edges are counted over canonical ids, like ``traverse``."""
+    limit = max(1, min(limit, 200))
+    marks = ",".join("?" * len(types))
+    nodes = con.execute(
+        f"""
+        WITH canon(id, cid) AS (SELECT id, COALESCE(canonical_id, id) FROM entities),
+        deg(cid, degree) AS (
+            SELECT c.cid, count(*) FROM edges x
+            JOIN canon c ON c.id = x.src OR c.id = x.dst
+            WHERE x.valid_to IS NULL GROUP BY c.cid
+        )
+        SELECT e.id, e.name, e.type, d.degree FROM deg d JOIN entities e ON e.id = d.cid
+        WHERE e.type IN ({marks}) ORDER BY d.degree DESC, e.name LIMIT ?
+        """,
+        (*types, limit),
+    ).fetchall()
+    ids = [r["id"] for r in nodes]
+    edges: list[dict[str, Any]] = []
+    if ids:
+        idmarks = ",".join("?" * len(ids))
+        edges = [
+            dict(r)
+            for r in con.execute(
+                f"""
+                WITH canon(id, cid) AS (
+                    SELECT id, COALESCE(canonical_id, id) FROM entities
+                )
+                SELECT x.id AS edge_id, s.name AS src, s.type AS src_type, x.rel,
+                       t.name AS dst, t.type AS dst_type, x.confidence,
+                       x.source_doc, x.evidence
+                FROM edges x
+                JOIN canon cs ON cs.id = x.src JOIN canon cd ON cd.id = x.dst
+                JOIN entities s ON s.id = cs.cid JOIN entities t ON t.id = cd.cid
+                WHERE x.valid_to IS NULL
+                  AND cs.cid IN ({idmarks}) AND cd.cid IN ({idmarks})
+                ORDER BY x.id
+                """,
+                (*ids, *ids),
+            ).fetchall()
+        ]
+    return {
+        "nodes": [
+            {"name": r["name"], "type": r["type"], "degree": r["degree"]} for r in nodes
+        ],
+        "edges": edges,
+    }
+
+
 @_serialized
 def find_entities(
     con: sqlite3.Connection, q: str, *, limit: int = 20

@@ -168,6 +168,10 @@ function metaLine(meta) {
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
+  if (meta.citations && meta.citations.resolved) {
+    const c = meta.citations;
+    bits.push(`<span title="${esc(c.source)} ${esc(c.id || "")}">cited by ${Number(c.cited_by_count || 0).toLocaleString()} · ${c.references} references</span>`);
+  }
   return bits.join(" · ");
 }
 
@@ -332,6 +336,10 @@ class ForceGraph {
       this.select(g.dataset.key);
       if (!this.nodes.get(g.dataset.key).expanded) this.expand(g.dataset.key);
     });
+    svg.addEventListener("dblclick", (e) => {
+      const g = e.target.closest(".node");
+      if (g) go("graph", "", { entity: this.nodes.get(g.dataset.key).name });
+    });
   }
 
   node(name, type, near) {
@@ -347,8 +355,9 @@ class ForceGraph {
     return n;
   }
 
-  merge(edgeList, aroundKey) {
+  merge(edgeList, aroundKey, nodeList) {
     const near = aroundKey ? this.nodes.get(aroundKey) : null;
+    for (const n of nodeList || []) this.node(n.name, n.type, null).degree = n.degree || 0;
     for (const e of edgeList) {
       if (this.edges.has(e.edge_id)) continue;
       const s = this.node(e.src, e.src_type, near);
@@ -505,11 +514,28 @@ async function viewGraph(arg, p) {
     go("graph", "", Object.fromEntries(new FormData(form)));
   });
   const out = document.getElementById("graph-out");
-  if (!entity && !q) {
-    out.innerHTML = `<p class="muted">Type part of an entity name (a concept, a method, an author, a paper title) and pick one to see its neighbourhood.</p>`;
-    return;
-  }
   try {
+    if (!entity && !q) {
+      const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
+      out.innerHTML = `
+        <div class="graph-tools">
+          <span>Overview: the most connected concepts, methods, tools and datasets</span>
+          <span class="muted">· click a node to open its neighbourhood, or find an entity above</span>
+          <button type="button" id="graph-fit" class="secondary">fit</button>
+        </div>
+        <div class="legend">${legend}</div>
+        <div class="graph-layout">
+          <div class="graph-canvas"><svg xmlns="http://www.w3.org/2000/svg"></svg></div>
+          <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
+        </div>`;
+      const panel = document.getElementById("graph-panel");
+      const graph = new ForceGraph(out.querySelector("svg"), (node, edges) => { panel.innerHTML = graphPanel(node, edges); });
+      document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
+      const overview = await api("/graph/overview", { limit: 30 });
+      if (!overview.nodes.length) { out.innerHTML = `<p class="muted">The graph is empty; run an extraction first.</p>`; return; }
+      graph.merge(overview.edges, null, overview.nodes);
+      return;
+    }
     if (!entity) {
       const ents = await api("/entities", { q, limit: 40 });
       if (!ents.length) { out.innerHTML = `<p class="muted">No entity matches.</p>`; return; }

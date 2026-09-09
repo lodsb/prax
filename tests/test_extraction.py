@@ -76,6 +76,32 @@ def test_build_input_has_header_and_skips_figures_and_code(
         extraction.build_input(con, 999)
 
 
+def test_build_input_appends_the_closing_sections(con: sqlite3.Connection) -> None:
+    body = "\n\n".join(
+        [
+            "# Intro",
+            "Opening paragraph. " * 30,
+            "## Method",
+            "Method detail. " * 60,
+            "## Experiments",
+            "Numbers. " * 60,
+            "## Conclusion",
+            "We showed that the thing works. " * 5,
+            "## References",
+            "[1] Someone, somewhere. " * 10,
+        ]
+    )
+    doc_id = store.ingest_text(con, body, title="Long paper")["doc_id"]
+    inp = extraction.build_input(con, doc_id, max_chars=700, tail_chars=200)
+    head, _, tail = inp.text.partition(extraction.TAIL_MARK)
+    assert len(head) <= 700 and "Opening paragraph" in head
+    assert "We showed that the thing works" in tail and "Numbers." not in tail
+    assert len(tail) <= 200 and "Someone, somewhere" not in inp.text
+    # a short document has no tail: everything fits in the head
+    whole = extraction.build_input(con, doc_id, max_chars=100_000)
+    assert extraction.TAIL_MARK not in whole.text and "Someone" in whole.text
+
+
 # ------------------------------------------------------------------ apply
 
 

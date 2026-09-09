@@ -89,6 +89,29 @@ def test_link_and_traverse(client: TestClient) -> None:
     assert capped[0]["hop"] == 1 and capped[-1]["hop"] == 2
 
 
+def test_graph_overview(client: TestClient) -> None:
+    from prax import store
+
+    con = client.app.state.con
+    E = store.Edge
+    store.link(con, E("P1", "paper", "uses", "granular synthesis", "method"))
+    store.link(con, E("P2", "paper", "uses", "granular synthesis", "method"))
+    store.link(con, E("P1", "paper", "uses", "phase vocoder", "method"))
+    store.link(
+        con, E("phase vocoder", "method", "uses", "granular synthesis", "method")
+    )
+    store.link(con, E("P3", "paper", "about", "reverb", "concept"))
+    g = client.get("/graph/overview", params={"limit": 2}).json()
+    assert [(n["name"], n["degree"]) for n in g["nodes"]] == [
+        ("granular synthesis", 3),
+        ("phase vocoder", 2),
+    ]
+    assert [(e["src"], e["rel"], e["dst"]) for e in g["edges"]] == [
+        ("phase vocoder", "uses", "granular synthesis")
+    ]
+    assert "P1" not in {n["name"] for n in g["nodes"]}  # papers are not hubs
+
+
 def test_review_queue_endpoints(client: TestClient) -> None:
     from prax import store
 

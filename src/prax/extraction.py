@@ -32,6 +32,14 @@ from prax import ontology, store
 DEFAULT_MODEL = "claude-opus-5"
 CALL_TIMEOUT = 180.0  # seconds; a call takes under 90, the SDK default is 600
 INPUT_CHARS = 12_000  # of document text after the metadata header
+# After the head budget, the closing sections (conclusion, discussion) are
+# appended up to this many characters: that is where a paper states what it
+# showed, and the head alone stops in the middle of the method.
+TAIL_CHARS = 4_000
+_TAIL_HEADING = re.compile(
+    r"conclu|discussion|summary|future work|outlook|limitations", re.IGNORECASE
+)
+TAIL_MARK = "\n\n[...]\n\n"
 MAX_TRIPLES = 20  # the models rarely need more; halves output tokens (docs/eval)
 CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 # Names that are only a number or a bracketed reference ("[12]") are never
@@ -70,7 +78,11 @@ class DocumentInput:
 
 
 def build_input(
-    con: sqlite3.Connection, doc_id: int, *, max_chars: int = INPUT_CHARS
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    max_chars: int = INPUT_CHARS,
+    tail_chars: int = TAIL_CHARS,
 ) -> DocumentInput:
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
@@ -95,24 +107,44 @@ def build_input(
         lines.append(f"DOI: {meta['doi']}")
     if meta.get("abstract"):
         lines.append(f"Abstract: {meta['abstract']}")
-    # the text: chunks in order, figure captions and code skipped, up to the budget
+    # the text: chunks in order, figure captions and code skipped, up to the
+    # head budget; then the closing sections that fell past it, up to the tail
+    chunks = [
+        c
+        for c in store.list_chunks(con, doc_id)
+        if c["kind"] not in ("figure", "code") and c["text"].strip()
+    ]
     parts: list[str] = []
     used = 0
-    for c in store.list_chunks(con, doc_id):
-        if c["kind"] in ("figure", "code"):
-            continue
+    cut = len(chunks)
+    for i, c in enumerate(chunks):
         piece = c["text"].strip()
-        if not piece:
-            continue
         if used + len(piece) > max_chars:
             piece = piece[: max(0, max_chars - used)]
-        parts.append(piece)
+        if piece:
+            parts.append(piece)
         used += len(piece) + 2
         if used >= max_chars:
+            cut = i + 1
             break
-    return DocumentInput(
-        doc_id, doc["title"] or "", "\n".join(lines), "\n\n".join(parts)
-    )
+    tail: list[str] = []
+    tail_used = 0
+    for c in chunks[cut:]:
+        heading = c.get("heading") or []
+        if not (heading and _TAIL_HEADING.search(heading[-1])):
+            continue
+        piece = c["text"].strip()
+        if tail_used + len(piece) > tail_chars:
+            piece = piece[: max(0, tail_chars - tail_used)]
+        if piece:
+            tail.append(piece)
+        tail_used += len(piece) + 2
+        if tail_used >= tail_chars:
+            break
+    text = "\n\n".join(parts)
+    if tail:
+        text += TAIL_MARK + "\n\n".join(tail)
+    return DocumentInput(doc_id, doc["title"] or "", "\n".join(lines), text)
 
 
 # ----------------------------------------------------------------- output
