@@ -149,7 +149,7 @@ def test_similar_documents_by_centroid(con: sqlite3.Connection) -> None:
     ]
     _embed_all(con)
     similar = store.similar_documents(con, ids["pitch"], limit=3)
-    assert similar[0]["doc_id"] == twin and similar[0]["score"] > 0.9
+    assert similar[0]["doc_id"] == twin and similar[0]["score"] >= 1 / (store.RRF_K + 1)
     assert all(d["doc_id"] != ids["pitch"] for d in similar)
     assert store.document_context(con, ids["pitch"])["similar"][0]["doc_id"] == twin
     assert store.similar_documents(con, 999) == []

@@ -1631,6 +1631,7 @@ def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
 HUB_TYPES = ("concept", "method", "tool", "dataset")
 CONTEXT_LIMIT = 8
 CENTROID_CHUNKS = 64  # chunk vectors averaged for a document's similarity query
+CENTROID_MIN_CHARS = 120  # shorter chunks are headers and template lines
 
 
 @_serialized
@@ -1646,48 +1647,65 @@ def similar_documents(
 def _similar_documents(
     con: sqlite3.Connection, doc_id: int, *, limit: int = CONTEXT_LIMIT
 ) -> list[dict[str, Any]]:
+    """Two views fused by reciprocal rank: the document-field vector's
+    neighbours (what the document is; one KNN over the document index) and
+    the chunk-centroid neighbours (what it says; one KNN over the chunk
+    index, grouped by document). The centroid skips chunks under
+    ``CENTROID_MIN_CHARS`` (boilerplate headers) that pull it toward every
+    document sharing the same template."""
     emb = embeddings.current()
     if emb is None:
         return []
-    idx = _index(emb.name, writable=False)
-    if idx is None:
-        return []
     import numpy as np  # the embed extra; only reachable when an index exists
 
-    rows = con.execute(
-        "SELECT c.id FROM chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id"
-        " WHERE c.doc_id = ? AND e.model = ? AND c.kind = 'text' ORDER BY c.seq",
-        (doc_id, emb.name),
-    ).fetchall()
-    ids = [r["id"] for r in rows]
-    if not ids:
+    depth = max(40, 5 * limit)
+    lists: list[list[int]] = []
+    doc_idx = _doc_index(emb.name, writable=False)
+    if doc_idx is not None and (fv := doc_idx.get(doc_id)) is not None:
+        found = doc_idx.search(fv, depth + 1)
+        lists.append([int(k) for k, _ in found if int(k) != doc_id][:depth])
+    idx = _index(emb.name, writable=False)
+    if idx is not None:
+        rows = con.execute(
+            "SELECT c.id FROM chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id"
+            " WHERE c.doc_id = ? AND e.model = ? AND c.kind = 'text'"
+            " AND length(c.text) >= ? ORDER BY c.seq",
+            (doc_id, emb.name, CENTROID_MIN_CHARS),
+        ).fetchall()
+        ids = [r["id"] for r in rows]
+        step = max(1, len(ids) // CENTROID_CHUNKS)
+        vecs = [
+            v for k in ids[::step][:CENTROID_CHUNKS] if (v := idx.get(k)) is not None
+        ]
+        if vecs:
+            centroid = np.mean(np.stack(vecs), axis=0)
+            norm = float(np.linalg.norm(centroid)) or 1.0
+            found = idx.search(
+                (centroid / norm).astype(np.float32), min(VEC_SEARCH_CAP, 40 * limit)
+            )
+            keys = [int(k) for k, _ in found]
+            order: list[int] = []
+            for i in range(0, len(keys), 500):
+                part = keys[i : i + 500]
+                marks = ",".join("?" * len(part))
+                by_chunk = {
+                    r["id"]: r["doc_id"]
+                    for r in con.execute(
+                        f"SELECT id, doc_id FROM chunks WHERE id IN ({marks})", part
+                    )
+                }
+                for k in part:
+                    d = by_chunk.get(k)
+                    if d is not None and d != doc_id and d not in order:
+                        order.append(d)
+            lists.append(order[:depth])
+    if not lists:
         return []
-    step = max(1, len(ids) // CENTROID_CHUNKS)
-    vecs = [v for k in ids[::step][:CENTROID_CHUNKS] if (v := idx.get(k)) is not None]
-    if not vecs:
-        return []
-    centroid = np.mean(np.stack(vecs), axis=0)
-    norm = float(np.linalg.norm(centroid)) or 1.0
-    found = idx.search(
-        (centroid / norm).astype(np.float32), min(VEC_SEARCH_CAP, 40 * limit)
-    )
-    if not found:
-        return []
-    distance = dict(found)
-    keys = list(distance)
-    best: dict[int, float] = {}
-    for i in range(0, len(keys), 500):
-        part = keys[i : i + 500]
-        marks = ",".join("?" * len(part))
-        for r in con.execute(
-            f"SELECT id, doc_id FROM chunks WHERE id IN ({marks})", part
-        ):
-            if r["doc_id"] == doc_id:
-                continue
-            score = 1.0 - distance[r["id"]]
-            if score > best.get(r["doc_id"], -1.0):
-                best[r["doc_id"]] = score
-    top = sorted(best.items(), key=lambda kv: -kv[1])[:limit]
+    scores: dict[int, float] = {}
+    for ranked in lists:
+        for rank, d in enumerate(ranked, 1):
+            scores[d] = scores.get(d, 0.0) + 1.0 / (RRF_K + rank)
+    top = sorted(scores.items(), key=lambda kv: -kv[1])[:limit]
     out = []
     for did, score in top:
         d = con.execute(
@@ -1699,7 +1717,7 @@ def _similar_documents(
                     "doc_id": did,
                     "title": d["title"],
                     "mime": d["mime"],
-                    "score": round(score, 3),
+                    "score": round(score, 4),
                 }
             )
     return out
