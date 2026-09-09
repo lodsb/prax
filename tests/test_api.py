@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -177,6 +178,88 @@ def test_review_queue_endpoints(client: TestClient) -> None:
     assert client.get("/review", params={"open": False}).json()["total"] == 3
     assert client.post(f"/review/{c}", json={"resolution": "bogus"}).status_code == 400
     assert client.post("/review/999", json={"resolution": "dropped"}).status_code == 404
+
+
+def test_review_filters_bulk_and_replay(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from prax import store
+
+    con = client.app.state.con
+    doc = client.post("/ingest", json={"text": "t", "title": "P"}).json()["doc_id"]
+    for i in range(3):
+        store.queue_review(
+            con,
+            src="P",
+            src_type=None,
+            rel="cites",
+            dst=f"[{i}]",
+            dst_type=None,
+            reason="unmapped: reference number",
+            source_doc=doc,
+        )
+    typed = store.queue_review(
+        con,
+        src="P",
+        src_type="paper",
+        rel="uses",
+        dst="Fourier",
+        dst_type="concept",
+        reason="'uses' does not accept dst type 'concept'",
+        source_doc=doc,
+        evidence="q",
+    )
+    store.queue_review(
+        con,
+        src="P",
+        src_type="paper",
+        rel="cites",
+        dst="Matlab",
+        dst_type="tool",
+        reason="'cites' does not accept dst type 'tool'",
+        source_doc=doc,
+    )
+    assert client.get("/review", params={"rel": "cites"}).json()["total"] == 4
+    assert (
+        client.get("/review", params={"rel": "cites", "unmapped": True}).json()["total"]
+        == 3
+    )
+    assert client.get("/review", params={"unmapped": False}).json()["total"] == 2
+    assert (
+        client.post("/review/bulk", json={"resolution": "dropped"}).status_code == 400
+    )
+    assert (
+        client.post(
+            "/review/bulk", json={"resolution": "linked", "rel": "x"}
+        ).status_code
+        == 400
+    )
+    r = client.post(
+        "/review/bulk", json={"resolution": "dropped", "rel": "cites", "unmapped": True}
+    )
+    assert r.json() == {"resolved": 3} and client.get("/review").json()["total"] == 2
+    # replay: nothing fits v1; a widened ontology links the typed item
+    assert client.post("/review/replay").json()["linked"] == 0
+    v2 = (
+        (Path(__file__).parents[1] / "ontology.yaml")
+        .read_text(encoding="utf-8")
+        .replace('version: "1"', 'version: "2"')
+        .replace(
+            "range: [dataset, tool, method]", "range: [dataset, tool, method, concept]"
+        )
+    )
+    (tmp_path / "onto.yaml").write_text(v2, encoding="utf-8")
+    monkeypatch.setenv("PRAX_ONTOLOGY", str(tmp_path / "onto.yaml"))
+    rep = client.post("/review/replay").json()
+    assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == ("2", 1, 1)
+    edge = client.get("/traverse", params={"entity": "Fourier"}).json()[0]
+    assert (edge["rel"], edge["evidence"], edge["ontology_version"]) == (
+        "uses",
+        "q",
+        "2",
+    )
+    assert client.get("/review").json()["total"] == 1  # the cites-tool item stays
+    assert store.get_review(con, typed)["resolution"] == "linked"
 
 
 def test_link_bad_confidence_is_400(client: TestClient) -> None:

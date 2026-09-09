@@ -235,6 +235,30 @@ and merge nothing unless an adjudicator says yes. A merge sets
 `entities.canonical_id`; nothing is deleted, `traverse` and the UI follow
 the pointer, and undoing one is clearing that column.
 
+## 3e'. Citation network
+
+`prax.importers.citations` asks OpenAlex or Crossref for each document's
+reference list and citation count (by DOI, or by exact title with
+`--resolve-titles`) and writes `paper --cites--> paper` edges with the
+source and work ids as evidence; references that are library documents
+are named by their document title. `meta.citations` holds the citation
+count and makes re-runs skip. No key needed; `PRAX_CITATIONS_MAILTO`
+joins the polite pools. Crossref answers in half a second per request;
+OpenAlex needs fewer requests but was unreachable for hours on
+2026-09-10, hence two sources behind one flag.
+
+    python scripts/import_citations.py --dry-run
+    python scripts/import_citations.py --commit --source crossref
+    python scripts/import_citations.py --commit --source crossref --resolve-titles
+
+### Review queue and ontology growth
+
+The review view (`#review`) filters by relation and by unmapped versus
+typed items, drops all matching items in bulk, and replays typed items
+against the current ontology; the same is available as
+`scripts/replay_review.py`. The proposal for ontology v2, built from the
+queue's numbers, is `docs/ontology-v2.md`.
+
 ## 3f. Local models (optional)
 
 A GGUF model can run in-process through `llama-cpp-python` on the batch

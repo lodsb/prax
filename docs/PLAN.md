@@ -183,6 +183,16 @@ R14). Design in `docs/ui.md`.
       chosen. Selection skips documents under 500 characters of text.
 - [ ] Full run over the remaining 7,955 documents via the batch API
       (about $135 at the measured 2,500 output tokens per document)
+- [x] Citation network (2026-09-10): `prax.importers.citations`, OpenAlex
+      or Crossref by DOI or exact title, `cites` edges with evidence,
+      citation counts in `meta.citations`; Crossref pass over the 1,069
+      DOI documents
+- [x] Graph overview by default (hubs and the edges among them); double
+      click opens a neighbourhood
+- [x] Extractor input widened: closing sections appended after the head
+- [x] Review view: filters, bulk drop, replay against the ontology
+      (`scripts/replay_review.py`); ontology v2 proposal in
+      `docs/ontology-v2.md`
 - [x] Code kept as code (2026-09-10): HTML `<pre>` blocks fenced, source
       attachments fenced by extension or Magika; extractor revisions in
       the stamp; 105 pages and 100 attachments re-parsed (48 and 11 code

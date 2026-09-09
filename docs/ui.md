@@ -20,7 +20,8 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `GET /doc/{id}/chunks` | the document as its chunks in order: id, seq, kind, heading, page, locator, text, table data |
 | `GET /entities?q&limit` | entities whose name contains `q`: id, name, type, degree |
 | `GET /ontology` | the current ontology: version, entity types, relations with domain and range |
-| `GET /review?limit&offset&open` | review-queue items with the total; `POST /review/{id}` closes one (`dropped`, `ontology`, or `linked` with optional type and relation overrides, which writes the edge with the item's evidence and source) |
+| `GET /review?limit&offset&open&rel&unmapped` | review-queue items with the total, filtered by relation and by unmapped (untyped) versus typed items; `POST /review/{id}` closes one (`dropped`, `ontology`, or `linked` with optional type and relation overrides, which writes the edge with the item's evidence and source); `POST /review/bulk` closes every open item matching a filter; `POST /review/replay` links the typed items the current ontology accepts |
+| `GET /graph/overview?limit` | the most connected concepts, methods, tools and datasets with the edges among them |
 
 ## Routes (hash-based, one page)
 
@@ -29,8 +30,9 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `#search?q=…&mode=hybrid&kind=` | query form; results as cards: title, kind badge, heading path, page, snippet with match markers, which side found it (fts / vec ranks); a card opens `#doc/<id>?chunk=<chunk_id>`; "original" opens `/doc/<id>/original#page=N` in a new tab |
 | `#doc/<id>?chunk=<chunk_id>` | header with title, metadata (creators, date, DOI, source, tags, collections, extractor stamp) and "open original"; an outline of headings; the body rendered chunk by chunk, each with a kind badge and page number, tables from their grids, code as code; the requested chunk highlighted and scrolled into view |
 | `#browse?title=&source=&mime=&offset=` | paged document list with filters; a row opens the document |
+| `#graph` | the overview: the 30 most connected concepts, methods, tools and datasets as a force layout; a double-click on a node opens its neighbourhood |
 | `#graph?q=…` / `#graph?entity=…` | entity search, then the entity's neighbourhood as an SVG force layout (`GET /traverse`, one hop): nodes coloured by type and sized by degree, edges labelled with the relation, dashed when inferred or ambiguous; a click selects a node and expands it by one more hop; the side panel lists the selected node's edges with confidence, evidence and the source document; drag to pan, wheel to zoom |
-| `#review?offset=` | the review queue: each misfit triple with its reason, evidence and source document, and a row form to drop it, mark it an ontology gap, or fix its types or relation from the current ontology and link it as an edge |
+| `#review?rel=&unmapped=&offset=` | the review queue, filtered by relation and unmapped/typed: each misfit triple with its reason, evidence and source document, and a row form to drop it, mark it an ontology gap, or fix its types or relation from the current ontology and link it as an edge; "drop all matching" and "replay against ontology" act on the whole filter |
 
 ## Files
 

@@ -609,15 +609,54 @@ function reviewItem(it, onto) {
 async function viewReview(p) {
   const limit = Number(p.limit || 30);
   const offset = Number(p.offset || 0);
-  view.innerHTML = `<div id="review-list"><p class="muted">Loading…</p></div>`;
+  const filter = { rel: p.rel || "", unmapped: p.unmapped || "" };
+  view.innerHTML = `
+  <form id="review-filter" class="search-form">
+    <input name="rel" type="search" value="${esc(filter.rel)}" placeholder="relation (cites, uses, …)">
+    <select name="unmapped">
+      <option value="" ${filter.unmapped === "" ? "selected" : ""}>typed and unmapped</option>
+      <option value="true" ${filter.unmapped === "true" ? "selected" : ""}>unmapped only (no types)</option>
+      <option value="false" ${filter.unmapped === "false" ? "selected" : ""}>typed only (rule misfits)</option>
+    </select>
+    <button>Filter</button>
+    <button type="button" id="bulk-drop" class="secondary" title="close every open item matching the filter as dropped">drop all matching</button>
+    <button type="button" id="replay" class="secondary" title="link typed items the current ontology now accepts">replay against ontology</button>
+    <span id="review-msg" class="muted"></span>
+  </form>
+  <div id="review-list"><p class="muted">Loading…</p></div>`;
+  const form = document.getElementById("review-filter");
+  const query = () => ({ rel: filter.rel || undefined, unmapped: filter.unmapped || undefined });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    go("review", "", Object.fromEntries(new FormData(form)));
+  });
+  const msg = document.getElementById("review-msg");
+  document.getElementById("bulk-drop").addEventListener("click", async () => {
+    if (!filter.rel && !filter.unmapped) { msg.textContent = "set a filter first"; return; }
+    const n = (await api("/review", { limit: 1, ...query() })).total;
+    if (!window.confirm(`Drop all ${n.toLocaleString()} open items matching the filter?`)) return;
+    try {
+      const r = await post("/review/bulk", { resolution: "dropped", ...query() });
+      msg.textContent = `dropped ${r.resolved.toLocaleString()}`;
+      render();
+    } catch (err) { msg.textContent = err.message; }
+  });
+  document.getElementById("replay").addEventListener("click", async () => {
+    try {
+      const r = await post("/review/replay", {});
+      msg.textContent = `ontology v${r.ontology_version}: ${r.linked} linked, ${r.existing} already present, ${r.still_open} still open`;
+      render();
+    } catch (err) { msg.textContent = err.message; }
+  });
   const list = document.getElementById("review-list");
   try {
-    const [res, onto] = await Promise.all([api("/review", { limit, offset }), api("/ontology")]);
+    const [res, onto] = await Promise.all([api("/review", { limit, offset, ...query() }), api("/ontology")]);
+    const page = (o) => `#review?${new URLSearchParams({ ...filter, offset: o })}`;
     const pager = `
       <div class="pager">
         <span class="muted">${res.total.toLocaleString()} open items · ${res.items.length ? offset + 1 : 0}–${Math.min(offset + limit, res.total)} · ontology v${esc(onto.version)}</span>
-        ${offset > 0 ? `<a href="#review?offset=${Math.max(0, offset - limit)}">‹ previous</a>` : ""}
-        ${offset + limit < res.total ? `<a href="#review?offset=${offset + limit}">next ›</a>` : ""}
+        ${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
+        ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}
       </div>`;
     list.innerHTML = pager + res.items.map((it) => reviewItem(it, onto)).join("") + pager;
     list.querySelectorAll(".review-form").forEach((form) => {

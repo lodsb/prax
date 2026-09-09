@@ -1252,6 +1252,26 @@ def queue_review(
     return cur.lastrowid
 
 
+def _review_where(
+    open_only: bool, rel: str | None, unmapped: bool | None
+) -> tuple[str, list[Any]]:
+    """The filter shared by listing, counting and bulk resolution: open
+    items only, a relation, and whether the item is an ``unmapped`` triple
+    (no types, the model's own relation name) or a typed misfit."""
+    clauses: list[str] = []
+    args: list[Any] = []
+    if open_only:
+        clauses.append("resolved_at IS NULL")
+    if rel:
+        clauses.append("lower(rel) = ?")
+        args.append(rel.lower())
+    if unmapped is True:
+        clauses.append("reason LIKE 'unmapped:%'")
+    elif unmapped is False:
+        clauses.append("reason NOT LIKE 'unmapped:%'")
+    return (" WHERE " + " AND ".join(clauses)) if clauses else "", args
+
+
 @_serialized
 def list_review(
     con: sqlite3.Connection,
@@ -1259,19 +1279,48 @@ def list_review(
     open_only: bool = True,
     limit: int = 100,
     offset: int = 0,
+    rel: str | None = None,
+    unmapped: bool | None = None,
 ) -> list[dict[str, Any]]:
-    where = "WHERE resolved_at IS NULL" if open_only else ""
+    where, args = _review_where(open_only, rel, unmapped)
     rows = con.execute(
-        f"SELECT * FROM review_queue {where} ORDER BY id LIMIT ? OFFSET ?",
-        (limit, offset),
+        f"SELECT * FROM review_queue{where} ORDER BY id LIMIT ? OFFSET ?",
+        (*args, limit, offset),
     ).fetchall()
     return [dict(r) for r in rows]
 
 
 @_serialized
-def count_review(con: sqlite3.Connection, *, open_only: bool = True) -> int:
-    where = "WHERE resolved_at IS NULL" if open_only else ""
-    return int(con.execute(f"SELECT count(*) FROM review_queue {where}").fetchone()[0])
+def count_review(
+    con: sqlite3.Connection,
+    *,
+    open_only: bool = True,
+    rel: str | None = None,
+    unmapped: bool | None = None,
+) -> int:
+    where, args = _review_where(open_only, rel, unmapped)
+    row = con.execute(f"SELECT count(*) FROM review_queue{where}", args).fetchone()
+    return int(row[0])
+
+
+@_serialized
+def resolve_review_many(
+    con: sqlite3.Connection,
+    resolution: str,
+    *,
+    rel: str | None = None,
+    unmapped: bool | None = None,
+) -> int:
+    """Close every open item matching the filter; returns how many."""
+    if resolution not in ("linked", "dropped", "ontology"):
+        raise ValueError("resolution must be linked, dropped or ontology")
+    where, args = _review_where(True, rel, unmapped)
+    cur = con.execute(
+        f"UPDATE review_queue SET resolved_at = {_NOW}, resolution = ?{where}",
+        (resolution, *args),
+    )
+    con.commit()
+    return cur.rowcount
 
 
 @_serialized

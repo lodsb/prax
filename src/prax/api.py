@@ -23,7 +23,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import auth, ontology, store
+from . import auth, ontology, review, store
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -213,16 +213,50 @@ class ReviewReq(BaseModel):
     confidence: str = "EXTRACTED"
 
 
+class BulkReq(BaseModel):
+    resolution: str  # dropped | ontology
+    rel: str | None = None
+    unmapped: bool | None = None
+
+
 @app.get("/review")
-def review(
-    request: Request, limit: int = 50, offset: int = 0, open: bool = True
+def review_list(
+    request: Request,
+    limit: int = 50,
+    offset: int = 0,
+    open: bool = True,
+    rel: str | None = None,
+    unmapped: bool | None = None,
 ) -> dict[str, Any]:
-    """Open review items (misfit triples), oldest first, with the total."""
+    """Review items (misfit triples), oldest first, with the total; filters
+    by relation and by unmapped (untyped) versus typed items."""
     con = request.app.state.con
+    kw: dict[str, Any] = {"open_only": open, "rel": rel, "unmapped": unmapped}
     return {
-        "items": store.list_review(con, open_only=open, limit=limit, offset=offset),
-        "total": store.count_review(con, open_only=open),
+        "items": store.list_review(con, limit=limit, offset=offset, **kw),
+        "total": store.count_review(con, **kw),
     }
+
+
+@app.post("/review/bulk")
+def review_bulk(req: BulkReq, request: Request) -> dict[str, int]:
+    """Close every open item matching the filter (``dropped`` or
+    ``ontology``); linking in bulk is what ``/review/replay`` does."""
+    if req.resolution not in ("dropped", "ontology"):
+        raise HTTPException(400, "bulk resolution must be dropped or ontology")
+    if not req.rel and req.unmapped is None:
+        raise HTTPException(400, "a filter is required")
+    n = store.resolve_review_many(
+        request.app.state.con, req.resolution, rel=req.rel, unmapped=req.unmapped
+    )
+    return {"resolved": n}
+
+
+@app.post("/review/replay")
+def review_replay(request: Request) -> dict[str, Any]:
+    """Link the typed open items the current ontology now accepts."""
+    rep = review.replay(request.app.state.con)
+    return rep.__dict__
 
 
 @app.post("/review/{review_id}")

@@ -226,6 +226,14 @@ documentation. Personal documents in the library (invoices, shipping
 labels, contracts among the standalone PDFs) are imported into the private
 store but never into the fixture.
 
+## 1b. Citation sources (OpenAlex, Crossref)
+
+Not documents but edges: `scripts/import_citations.py` looks each
+document up by DOI (or exact title) and writes `cites` edges from the
+source's reference list, with the citation count in `meta.citations`.
+Read-only, no key, idempotent per document. Details in
+`prax.importers.citations` and `docs/howto.md` 3e'.
+
 ## 2. Browser capture
 
 Goal: move open tabs into prax with one click, from the machine where they
