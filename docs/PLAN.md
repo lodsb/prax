@@ -187,8 +187,11 @@ R14). Design in `docs/ui.md`.
       or Crossref by DOI or exact title, `cites` edges with evidence,
       citation counts in `meta.citations`; Crossref pass over the 1,069
       DOI documents
-- [x] Graph overview by default (hubs and the edges among them); double
-      click opens a neighbourhood
+- [x] Graph overview by default (hubs, the edges among them and
+      co-occurrence links); double click opens a neighbourhood
+- [x] Document context column (2026-09-10): summary, entities, similar by
+      vector centroid, shared entities, citations in and out, same
+      authors, Zotero parent and siblings (`GET /doc/{id}/context`)
 - [x] Extractor input widened: closing sections appended after the head
 - [x] Review view: filters, bulk drop, replay against the ontology
       (`scripts/replay_review.py`)

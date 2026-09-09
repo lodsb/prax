@@ -90,6 +90,82 @@ def test_link_and_traverse(client: TestClient) -> None:
     assert capped[0]["hop"] == 1 and capped[-1]["hop"] == 2
 
 
+def test_document_context(client: TestClient) -> None:
+    from prax import store
+
+    con = client.app.state.con
+    E = store.Edge
+    a = client.post(
+        "/ingest",
+        json={
+            "text": "a",
+            "title": "Paper A",
+            "meta": {
+                "summary": "A is about grains.",
+                "collections": ["Synthesis"],
+                "tags": ["granular"],
+                "zotero": {"kind": "attachment", "keys": ["ATT1"], "items": ["ITEM1"]},
+            },
+        },
+    ).json()["doc_id"]
+    b = client.post("/ingest", json={"text": "b", "title": "Paper B"}).json()["doc_id"]
+    c = client.post("/ingest", json={"text": "c", "title": "Paper C"}).json()["doc_id"]
+    note = client.post(
+        "/ingest",
+        json={
+            "text": "a note",
+            "title": "Note on A",
+            "meta": {"zotero": {"kind": "note", "keys": ["N1"], "parent": "ITEM1"}},
+        },
+    ).json()["doc_id"]
+    store.link(con, E("Paper A", "paper", "authored_by", "Ada", "author"), source_doc=a)
+    store.link(con, E("Paper B", "paper", "authored_by", "Ada", "author"), source_doc=b)
+    store.link(
+        con,
+        E("Paper A", "paper", "about", "granular synthesis", "concept"),
+        source_doc=a,
+    )
+    store.link(
+        con, E("Paper A", "paper", "uses", "phase vocoder", "method"), source_doc=a
+    )
+    store.link(
+        con,
+        E("Paper C", "paper", "about", "granular synthesis", "concept"),
+        source_doc=c,
+    )
+    store.link(
+        con, E("Paper C", "paper", "uses", "phase vocoder", "method"), source_doc=c
+    )
+    store.link(con, E("Paper A", "paper", "cites", "Paper B", "paper"), source_doc=a)
+    store.link(
+        con, E("Paper A", "paper", "cites", "Outside Work", "paper"), source_doc=a
+    )
+    store.link(con, E("Paper C", "paper", "cites", "Paper A", "paper"), source_doc=c)
+    ctx = client.get(f"/doc/{a}/context").json()
+    assert ctx["summary"] == "A is about grains."
+    assert [(e["name"], e["rel"]) for e in ctx["entities"]] == [
+        ("granular synthesis", "about"),
+        ("phase vocoder", "uses"),
+    ]
+    assert ctx["cites"] == [
+        {"title": "Paper B", "doc_id": b},
+        {"title": "Outside Work", "doc_id": None},
+    ]
+    assert ctx["cited_by"] == [{"doc_id": c, "title": "Paper C"}]
+    assert ctx["shared"][0]["doc_id"] == c and ctx["shared"][0]["count"] == 2
+    assert ctx["same_authors"] == [
+        {"doc_id": b, "title": "Paper B", "authors": ["Ada"]}
+    ]
+    assert ctx["similar"] == []  # no vectors in this fixture
+    z = ctx["zotero"]
+    assert z["collections"] == ["Synthesis"] and z["tags"] == ["granular"]
+    assert [s["doc_id"] for s in z["siblings"]] == [note]  # the note names the item
+    nctx = client.get(f"/doc/{note}/context").json()
+    assert nctx["zotero"]["parent"] == {"key": "ITEM1", "doc_id": a, "title": "Paper A"}
+    assert nctx["entities"] == [] and nctx["cites"] == []
+    assert client.get("/doc/999/context").status_code == 404
+
+
 def test_graph_overview(client: TestClient) -> None:
     from prax import store
 

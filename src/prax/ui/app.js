@@ -250,7 +250,13 @@ async function viewDoc(id, p) {
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
     <div class="doc-body">${chunks.map((c) => renderChunk(c, highlight)).join("")}</div>
+    <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
+  api(`/doc/${id}/context`).then((ctx) => {
+    document.getElementById("doc-context").innerHTML = renderContext(ctx);
+  }).catch((err) => {
+    document.getElementById("doc-context").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  });
   document.querySelectorAll("[data-scroll]").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault();
     const el = document.getElementById("chunk-" + a.dataset.scroll);
@@ -260,6 +266,39 @@ async function viewDoc(id, p) {
     const el = document.getElementById("chunk-" + highlight);
     if (el) el.scrollIntoView({ block: "center" });
   }
+}
+
+// The context column: where the document sits in the library.
+function renderContext(ctx) {
+  const docLink = (d, extra) => `<li><a href="#doc/${d.doc_id}">${esc(d.title || "(untitled)")}</a>${extra ? ` <span class="muted">${extra}</span>` : ""}</li>`;
+  const list = (title, items, render) => items.length ? `<h3>${title}</h3><ul>${items.map(render).join("")}</ul>` : "";
+  const parts = [];
+  if (ctx.summary) parts.push(`<h3>Summary</h3><p class="summary">${esc(ctx.summary)}</p>`);
+  if (ctx.entities.length) {
+    parts.push(`<h3>Entities</h3><div class="chips">${ctx.entities.map((e) =>
+      `<a class="chip" style="--c:${typeColor(e.type)}" href="#graph?entity=${encodeURIComponent(e.name)}" title="${esc(e.rel)} · ${esc(e.type)} · ${esc(e.confidence)}">${esc(e.name)}</a>`).join("")}</div>`);
+  }
+  parts.push(list("Similar documents", ctx.similar, (d) => docLink(d, `${d.score.toFixed(2)}`)));
+  parts.push(list("Shares entities with", ctx.shared, (d) => docLink(d, `${d.count}: ${esc(d.entities.join(", "))}`)));
+  const inLib = ctx.cited_by.length;
+  parts.push(list(`Cited by${inLib ? ` (${inLib} in the library)` : ""}`, ctx.cited_by, (d) => docLink(d)));
+  if (ctx.cites.length) {
+    const libCites = ctx.cites.filter((c) => c.doc_id);
+    const external = ctx.cites.length - libCites.length;
+    parts.push(`<h3>Cites (${ctx.cites.length}${ctx.citations && ctx.citations.cited_by_count != null ? ` · cited by ${Number(ctx.citations.cited_by_count).toLocaleString()} overall` : ""})</h3><ul>${
+      libCites.slice(0, 12).map((c) => `<li><a href="#doc/${c.doc_id}">${esc(c.title)}</a></li>`).join("")
+    }${external ? `<li class="muted">${external} outside the library</li>` : ""}</ul>`);
+  }
+  parts.push(list("Same authors", ctx.same_authors, (d) => docLink(d, esc(d.authors.join(", ")))));
+  const z = ctx.zotero;
+  const zbits = [];
+  if (z.parent) zbits.push(`<li>Part of ${z.parent.doc_id ? `<a href="#doc/${z.parent.doc_id}">${esc(z.parent.title)}</a>` : `<span class="muted">item ${esc(z.parent.key)} (not imported)</span>`}</li>`);
+  for (const s of z.siblings) zbits.push(`<li><a href="#doc/${s.doc_id}">${esc(s.title || "(untitled)")}</a> <span class="muted">${esc(s.kind || "")}</span></li>`);
+  if (z.collections.length) zbits.push(`<li class="muted">📁 ${z.collections.map(esc).join(" · ")}</li>`);
+  if (z.tags.length) zbits.push(`<li class="muted">${z.tags.map(esc).join(" · ")}</li>`);
+  if (zbits.length) parts.push(`<h3>Zotero</h3><ul>${zbits.join("")}</ul>`);
+  const body = parts.filter(Boolean).join("");
+  return body || `<p class="muted">Nothing connects this document yet: no extraction, no citations, no neighbours.</p>`;
 }
 
 // ---------------------------------------------------------------- browse

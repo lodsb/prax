@@ -353,6 +353,17 @@ def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
     return store.find_entities(request.app.state.con, q, limit=limit)
 
 
+@app.get("/doc/{doc_id}/context")
+def doc_context(doc_id: int, request: Request, limit: int = 8) -> dict[str, Any]:
+    """What places the document in the library: summary and entities,
+    citations in and out, nearest documents by vector, documents sharing
+    entities or authors, Zotero parent and siblings."""
+    ctx = store.document_context(request.app.state.con, doc_id, limit=limit)
+    if ctx is None:
+        raise HTTPException(404, "no such document")
+    return ctx
+
+
 @app.get("/graph/overview")
 def graph_overview(
     request: Request, limit: int = 30, min_shared: int = 2

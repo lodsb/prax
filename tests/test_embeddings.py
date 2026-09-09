@@ -126,6 +126,20 @@ def test_vector_and_hybrid_search(con: sqlite3.Connection) -> None:
 
 
 @needs_usearch
+def test_similar_documents_by_centroid(con: sqlite3.Connection) -> None:
+    ids = _load(con)
+    _embed_all(con)
+    twin = store.ingest_text(con, DOCS["pitch"] + " Again.", title="pitch twin")[
+        "doc_id"
+    ]
+    _embed_all(con)
+    similar = store.similar_documents(con, ids["pitch"], limit=3)
+    assert similar[0]["doc_id"] == twin and similar[0]["score"] > 0.9
+    assert all(d["doc_id"] != ids["pitch"] for d in similar)
+    assert store.document_context(con, ids["pitch"])["similar"][0]["doc_id"] == twin
+    assert store.similar_documents(con, 999) == []
+
+
 def test_hybrid_fuses_per_document(con: sqlite3.Connection) -> None:
     long = "\n\n".join(
         f"Kalman pitch tracking section {i}. " + "x " * 200 for i in range(6)

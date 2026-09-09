@@ -965,6 +965,272 @@ def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
 
 
 HUB_TYPES = ("concept", "method", "tool", "dataset")
+CONTEXT_LIMIT = 8
+CENTROID_CHUNKS = 64  # chunk vectors averaged for a document's similarity query
+
+
+@_serialized
+def similar_documents(
+    con: sqlite3.Connection, doc_id: int, *, limit: int = CONTEXT_LIMIT
+) -> list[dict[str, Any]]:
+    """Documents nearest to this one in vector space: the centroid of up to
+    ``CENTROID_CHUNKS`` of its text chunks' vectors (spread over the
+    document), one KNN, grouped by document, scored by the best hit."""
+    return _similar_documents(con, doc_id, limit=limit)
+
+
+def _similar_documents(
+    con: sqlite3.Connection, doc_id: int, *, limit: int = CONTEXT_LIMIT
+) -> list[dict[str, Any]]:
+    emb = embeddings.current()
+    if emb is None:
+        return []
+    idx = _index(emb.name, writable=False)
+    if idx is None:
+        return []
+    import numpy as np  # the embed extra; only reachable when an index exists
+
+    rows = con.execute(
+        "SELECT c.id FROM chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id"
+        " WHERE c.doc_id = ? AND e.model = ? AND c.kind = 'text' ORDER BY c.seq",
+        (doc_id, emb.name),
+    ).fetchall()
+    ids = [r["id"] for r in rows]
+    if not ids:
+        return []
+    step = max(1, len(ids) // CENTROID_CHUNKS)
+    vecs = [v for k in ids[::step][:CENTROID_CHUNKS] if (v := idx.get(k)) is not None]
+    if not vecs:
+        return []
+    centroid = np.mean(np.stack(vecs), axis=0)
+    norm = float(np.linalg.norm(centroid)) or 1.0
+    found = idx.search(
+        (centroid / norm).astype(np.float32), min(VEC_SEARCH_CAP, 40 * limit)
+    )
+    if not found:
+        return []
+    distance = dict(found)
+    keys = list(distance)
+    best: dict[int, float] = {}
+    for i in range(0, len(keys), 500):
+        part = keys[i : i + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT id, doc_id FROM chunks WHERE id IN ({marks})", part
+        ):
+            if r["doc_id"] == doc_id:
+                continue
+            score = 1.0 - distance[r["id"]]
+            if score > best.get(r["doc_id"], -1.0):
+                best[r["doc_id"]] = score
+    top = sorted(best.items(), key=lambda kv: -kv[1])[:limit]
+    out = []
+    for did, score in top:
+        d = con.execute(
+            "SELECT title, mime FROM documents WHERE id = ?", (did,)
+        ).fetchone()
+        if d is not None:
+            out.append(
+                {
+                    "doc_id": did,
+                    "title": d["title"],
+                    "mime": d["mime"],
+                    "score": round(score, 3),
+                }
+            )
+    return out
+
+
+def _doc_ids_by_title(con: sqlite3.Connection, titles: list[str]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for i in range(0, len(titles), 400):
+        part = titles[i : i + 400]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT id, title FROM documents WHERE title IN ({marks}) ORDER BY id",
+            part,
+        ):
+            out.setdefault(r["title"], r["id"])
+    return out
+
+
+def _docs_by_zotero_key(con: sqlite3.Connection, key: str) -> list[dict[str, Any]]:
+    rows = con.execute(
+        """
+        SELECT id, title, json_extract(meta, '$.zotero.kind') AS kind FROM documents
+        WHERE EXISTS (SELECT 1 FROM json_each(meta, '$.zotero.keys') WHERE value = ?)
+           OR EXISTS (SELECT 1 FROM json_each(meta, '$.zotero.items') WHERE value = ?)
+           OR json_extract(meta, '$.zotero.parent') = ?
+        ORDER BY id
+        """,
+        (key, key, key),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@_serialized
+def document_context(
+    con: sqlite3.Connection, doc_id: int, *, limit: int = CONTEXT_LIMIT
+) -> dict[str, Any] | None:
+    """Everything that places a document in the library, for its page: the
+    extraction summary and entities, citations in and out of the library,
+    the nearest documents by vector, documents sharing its entities or its
+    authors, and its Zotero neighbours (parent item, siblings, collections,
+    tags). None when the document does not exist."""
+    doc = con.execute(
+        "SELECT id, title, meta FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if doc is None:
+        return None
+    title = doc["title"] or ""
+    meta = json.loads(doc["meta"] or "{}")
+
+    # the document's own edges, by the entity they point at
+    entities: list[dict[str, Any]] = []
+    author_ids: list[int] = []
+    entity_ids: list[int] = []
+    for r in con.execute(
+        """
+        SELECT x.rel, x.confidence, t.id AS tid, t.name, t.type FROM edges x
+        JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst
+        WHERE x.source_doc = ? AND x.valid_to IS NULL AND s.name = ?
+        ORDER BY t.type, t.name
+        """,
+        (doc_id, title),
+    ):
+        if r["rel"] == "authored_by":
+            author_ids.append(r["tid"])
+            continue
+        if r["rel"] in ("cites", "published_in"):
+            continue
+        entity_ids.append(r["tid"])
+        entities.append(
+            {
+                "name": r["name"],
+                "type": r["type"],
+                "rel": r["rel"],
+                "confidence": r["confidence"],
+            }
+        )
+
+    # citations: what this document cites, and what cites it (source_doc is
+    # the citing document); titles resolved to library documents where present
+    cites_rows = con.execute(
+        """
+        SELECT DISTINCT t.name FROM edges x
+        JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst
+        WHERE x.rel = 'cites' AND x.valid_to IS NULL AND s.name = ? AND s.type = 'paper'
+        ORDER BY t.name
+        """,
+        (title,),
+    ).fetchall()
+    cited_titles = [r["name"] for r in cites_rows]
+    in_library = _doc_ids_by_title(con, cited_titles) if cited_titles else {}
+    cites = sorted(
+        ({"title": t, "doc_id": in_library.get(t)} for t in cited_titles),
+        key=lambda c: (c["doc_id"] is None, c["title"].lower()),
+    )
+    cited_by = [
+        dict(r)
+        for r in con.execute(
+            """
+            SELECT DISTINCT x.source_doc AS doc_id, d.title FROM edges x
+            JOIN entities t ON t.id = x.dst JOIN documents d ON d.id = x.source_doc
+            WHERE x.rel = 'cites' AND x.valid_to IS NULL AND t.name = ?
+              AND t.type = 'paper'
+              AND x.source_doc != ?
+            ORDER BY d.title
+            """,
+            (title, doc_id),
+        )
+    ]
+
+    # documents sharing this one's entities, most shared first
+    shared: list[dict[str, Any]] = []
+    if entity_ids:
+        marks = ",".join("?" * len(entity_ids))
+        for r in con.execute(
+            f"""
+            SELECT x.source_doc AS doc_id, d.title, count(DISTINCT x.dst) AS n,
+                   group_concat(DISTINCT t.name) AS names
+            FROM edges x JOIN entities t ON t.id = x.dst
+            JOIN documents d ON d.id = x.source_doc
+            WHERE x.dst IN ({marks}) AND x.valid_to IS NULL AND x.source_doc != ?
+            GROUP BY x.source_doc ORDER BY n DESC, d.title LIMIT ?
+            """,
+            (*entity_ids, doc_id, limit),
+        ):
+            shared.append(
+                {
+                    "doc_id": r["doc_id"],
+                    "title": r["title"],
+                    "count": r["n"],
+                    "entities": (r["names"] or "").split(",")[:4],
+                }
+            )
+
+    # other documents by the same authors
+    same_authors: list[dict[str, Any]] = []
+    if author_ids:
+        marks = ",".join("?" * len(author_ids))
+        for r in con.execute(
+            f"""
+            SELECT x.source_doc AS doc_id, d.title,
+                   group_concat(DISTINCT a.name) AS authors
+            FROM edges x JOIN entities a ON a.id = x.dst
+            JOIN documents d ON d.id = x.source_doc
+            WHERE x.rel = 'authored_by' AND x.dst IN ({marks}) AND x.valid_to IS NULL
+              AND x.source_doc != ?
+            GROUP BY x.source_doc ORDER BY count(*) DESC, d.title LIMIT ?
+            """,
+            (*author_ids, doc_id, limit),
+        ):
+            same_authors.append(
+                {
+                    "doc_id": r["doc_id"],
+                    "title": r["title"],
+                    "authors": (r["authors"] or "").split(","),
+                }
+            )
+
+    # Zotero neighbours
+    z = meta.get("zotero") or {}
+    parent = None
+    if z.get("parent"):
+        found = [d for d in _docs_by_zotero_key(con, z["parent"]) if d["id"] != doc_id]
+        parent = {
+            "key": z["parent"],
+            "doc_id": found[0]["id"] if found else None,
+            "title": found[0]["title"] if found else None,
+        }
+    siblings: list[dict[str, Any]] = []
+    seen = {doc_id}
+    for key in list(z.get("items") or []) + ([z["parent"]] if z.get("parent") else []):
+        for d in _docs_by_zotero_key(con, key):
+            if d["id"] not in seen:
+                seen.add(d["id"])
+                siblings.append(
+                    {"doc_id": d["id"], "title": d["title"], "kind": d["kind"]}
+                )
+
+    return {
+        "doc_id": doc_id,
+        "summary": meta.get("summary") or "",
+        "extraction": meta.get("extraction"),
+        "citations": meta.get("citations"),
+        "entities": entities,
+        "cites": cites,
+        "cited_by": cited_by,
+        "similar": _similar_documents(con, doc_id, limit=limit),
+        "shared": shared,
+        "same_authors": same_authors,
+        "zotero": {
+            "parent": parent,
+            "siblings": siblings[:limit],
+            "collections": meta.get("collections") or [],
+            "tags": meta.get("tags") or [],
+        },
+    }
 
 
 @_serialized
