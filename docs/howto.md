@@ -247,7 +247,7 @@ document is stamped with the ontology version so reruns are incremental.
 Settings: `PRAX_EXTRACT_MODEL` (default `claude-opus-5`),
 `PRAX_EXTRACT_EFFORT` (default `medium`), `PRAX_EXTRACT=stub` for tests,
 `PRAX_EXTRACT=local` with `PRAX_LOCAL_MODEL=<model.gguf>` for a model on
-this machine (section 3f; `PRAX_LOCAL_CTX`, default 8192). The local path
+this machine (section 3h; `PRAX_LOCAL_CTX`, default 8192). The local path
 asks for tab-separated lines instead of JSON under a grammar that bounds
 the output to 20 triples (`prax.lineformat`); the extractor name stamped
 on documents is `local:<model file>` and its cost is zero.

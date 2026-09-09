@@ -23,7 +23,7 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
-INSTALL_HINT = 'pip install -e ".[local]" (docs/howto.md, section 3f)'
+INSTALL_HINT = 'pip install -e ".[local]" (docs/howto.md, section 3h)'
 DEFAULT_CTX = 8192
 
 
