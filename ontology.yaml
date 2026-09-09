@@ -9,14 +9,20 @@
 # v1 (2026-09-09): descriptions rewritten as instructions for the extractor
 # (prax.extraction builds its prompt from this file); `venue` added so
 # publication context has a home; `cites` requires a title the paper names.
-version: "1"
+# v2 (2026-09-10): from the review queue after 1,021 extracted documents
+# (docs/ontology-v2.md): `uses`, `about`, `extends` and `proposes` widened
+# to the shapes the models kept producing; `defines`, `contrasts` and
+# `advised_by` added; method-versus-concept and reference-number rules put
+# into the descriptions. `related_to` and a music `work` type deliberately
+# left out for now.
+version: "2"
 
 entity_types:
   paper:
     description: >-
       A document in the store, named by its title. The document being
       extracted is always a paper; other papers appear when the text names
-      them by title.
+      them by title. A bracketed reference number is never a name.
   author:
     description: >-
       A person or group that wrote something. Name as printed, full form,
@@ -29,13 +35,15 @@ entity_types:
     description: >-
       An idea, topic, phenomenon or quantity a document is about: source
       separation, pitch perception, aliasing, room acoustics. Lowercase
-      noun phrase, singular, no articles.
+      noun phrase, singular, no articles. The field a technique belongs to
+      is a concept; the technique itself is a method, never both under one
+      name.
   method:
     description: >-
       A named algorithm, technique or procedure: nonnegative matrix
       factorization, extended Kalman filter, wave digital filter, PLP.
       Use the established name, expand acronyms once in the name if the
-      text does.
+      text does. A technique is a method, not also a concept.
   dataset:
     description: >-
       A named corpus, benchmark or measurement set: MUSDB18, NSynth,
@@ -54,7 +62,8 @@ relation_types:
   cites:
     domain: [paper]
     range: [paper]
-    description: the document names another paper by title
+    description: >-
+      the document names another paper by title; never by reference number
   authored_by:
     domain: [paper]
     range: [author]
@@ -65,16 +74,30 @@ relation_types:
     description: the venue the document appeared in
   about:
     domain: [paper, claim]
+    range: [concept, method, tool]
+    description: >-
+      the document or claim is substantially about the concept, method or
+      tool; something discussed at length, not mentioned in passing
+  defines:
+    domain: [paper, claim]
     range: [concept]
-    description: the document or claim is substantially about the concept
+    description: the document gives the concept its definition
   implements:
     domain: [tool, method]
     range: [concept, method]
     description: a tool or method realizes a concept or another method
   extends:
-    domain: [method, concept]
-    range: [method, concept]
-    description: a method or concept builds on or generalizes another
+    domain: [paper, method, concept, tool]
+    range: [method, concept, tool]
+    description: >-
+      the document, method, concept or tool builds on or generalizes a
+      method, concept or tool
+  contrasts:
+    domain: [paper, method, claim]
+    range: [method, claim, paper]
+    description: >-
+      the document sets the two against each other (compared with,
+      as opposed to); for claims that cannot both hold use contradicts
   contradicts:
     domain: [claim]
     range: [claim]
@@ -84,10 +107,19 @@ relation_types:
     range: [claim]
     description: evidence in favour of a claim
   uses:
-    domain: [paper, method]
-    range: [dataset, tool, method]
-    description: the document or method employs a dataset, tool or method
+    domain: [paper, method, tool]
+    range: [dataset, tool, method, concept]
+    description: >-
+      the document, method or tool employs a dataset, tool, method or
+      applies a concept
   proposes:
-    domain: [paper]
-    range: [method, tool, claim]
-    description: the document introduces the method, tool or claim as its own contribution
+    domain: [paper, author]
+    range: [method, tool, claim, concept]
+    description: >-
+      the document introduces the method, tool, claim or concept as its
+      own contribution; or the text credits a named person with
+      introducing it
+  advised_by:
+    domain: [author]
+    range: [author]
+    description: doctoral or research supervision stated in the text

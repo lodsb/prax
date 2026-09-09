@@ -256,27 +256,26 @@ def test_review_filters_bulk_and_replay(
         "/review/bulk", json={"resolution": "dropped", "rel": "cites", "unmapped": True}
     )
     assert r.json() == {"resolved": 3} and client.get("/review").json()["total"] == 2
-    # replay: nothing fits v1; a widened ontology links the typed item
-    assert client.post("/review/replay").json()["linked"] == 0
-    v2 = (
-        (Path(__file__).parents[1] / "ontology.yaml")
-        .read_text(encoding="utf-8")
-        .replace('version: "1"', 'version: "2"')
-        .replace(
-            "range: [dataset, tool, method]", "range: [dataset, tool, method, concept]"
-        )
-    )
-    (tmp_path / "onto.yaml").write_text(v2, encoding="utf-8")
+    # replay: v2 accepts "paper uses concept" and links it with its evidence;
+    # "paper cites tool" stays open until an ontology allows it
+    rep = client.post("/review/replay").json()
+    assert (rep["linked"], rep["still_open"]) == (1, 1)
+    edge = client.get("/traverse", params={"entity": "Fourier"}).json()[0]
+    assert (edge["rel"], edge["evidence"]) == ("uses", "q")
+    assert edge["ontology_version"] == "2"
+    assert client.get("/review").json()["total"] == 1
+    import re
+
+    v2 = (Path(__file__).parents[1] / "ontology.yaml").read_text(encoding="utf-8")
+    v3 = re.sub(
+        r"(cites:\s+domain: \[paper\]\s+range: )\[paper\]", r"\1[paper, tool]", v2
+    ).replace('version: "2"', 'version: "3"')
+    assert 'version: "3"' in v3 and "range: [paper, tool]" in v3
+    (tmp_path / "onto.yaml").write_text(v3, encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(tmp_path / "onto.yaml"))
     rep = client.post("/review/replay").json()
-    assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == ("2", 1, 1)
-    edge = client.get("/traverse", params={"entity": "Fourier"}).json()[0]
-    assert (edge["rel"], edge["evidence"], edge["ontology_version"]) == (
-        "uses",
-        "q",
-        "2",
-    )
-    assert client.get("/review").json()["total"] == 1  # the cites-tool item stays
+    assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == ("3", 1, 0)
+    assert client.get("/review").json()["total"] == 0
     assert store.get_review(con, typed)["resolution"] == "linked"
 
 

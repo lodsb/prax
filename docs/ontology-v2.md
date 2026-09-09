@@ -1,10 +1,17 @@
-# Ontology v2, a draft to edit
+# Ontology v2
 
-A proposal, not a change: `ontology.yaml` is still v1. The evidence is the
-review queue after the first 1,021 extracted documents (2026-09-09): 551
-complete triples that only the domain or range rules rejected, and 2,033
-"unmapped" triples where the model asked for a relation the ontology lacks.
-Once you have edited this into `ontology.yaml` with `version: "2"`, run
+Adopted on 2026-09-10 in the conservative form: `uses`, `about`, `extends`
+and `proposes` widened; `defines`, `contrasts` and `advised_by` added;
+`related_to` and the music `work` type left out (co-occurrence links in
+the overview cover the first, the second belongs with its importer). The
+replay linked 377 of the 551 typed items; 170 stay open, mostly `cites`
+pointing at tools and methods, which are relation errors. The rest of this
+note is the proposal as written from the queue, kept for the reasoning.
+
+The evidence is the review queue after the first 1,021 extracted documents
+(2026-09-09): 551 complete triples that only the domain or range rules
+rejected, and 2,033 "unmapped" triples where the model asked for a
+relation the ontology lacks. After editing `ontology.yaml`, run
 
     python scripts/replay_review.py --dry-run     # how many typed items would link
     python scripts/replay_review.py --commit

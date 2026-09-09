@@ -72,7 +72,10 @@ before migrations existed (version 0) is upgraded in place.
 `ontology.yaml` lists the entity and relation types the graph accepts and a
 `version`. `store.link` rejects anything else. Add types and bump the
 version; edges keep the version they were written under. `PRAX_ONTOLOGY`
-points at a different file (tests use it).
+points at a different file (tests use it). After a bump, replay the review
+queue (`scripts/replay_review.py`, section 3e') before extracting anything
+new; the bump also re-selects every document for extraction. The reasoning
+behind v2 is in `docs/ontology-v2.md`.
 
 ## 3a. Importing the Zotero library
 

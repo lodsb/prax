@@ -191,8 +191,12 @@ R14). Design in `docs/ui.md`.
       click opens a neighbourhood
 - [x] Extractor input widened: closing sections appended after the head
 - [x] Review view: filters, bulk drop, replay against the ontology
-      (`scripts/replay_review.py`); ontology v2 proposal in
-      `docs/ontology-v2.md`
+      (`scripts/replay_review.py`)
+- [x] Ontology v2 (2026-09-10, `docs/ontology-v2.md`): widened rules,
+      `defines`/`contrasts`/`advised_by`; replay linked 377 queued
+      triples, 170 typed items and 1,401 unmapped ones remain open
+- [ ] Decide full re-run versus delta pass for the 1,021 documents
+      extracted under v1 before the next batch
 - [x] Code kept as code (2026-09-10): HTML `<pre>` blocks fenced, source
       attachments fenced by extension or Magika; extractor revisions in
       the stamp; 105 pages and 100 attachments re-parsed (48 and 11 code
