@@ -126,8 +126,12 @@ flowchart TD
 flowchart LR
   Q[query string, kind?, mode] --> FTS[FTS5 MATCH<br/>safe expression, BM25]
   Q --> QE[query embedding<br/>bge-small, instruction prefix] --> KNN[usearch KNN<br/>100 candidates, kind filter after]
+  Q --> DF[document field<br/>BM25 over documents_fts]
+  QE --> DK[document field KNN<br/>vectors-doc-model.usearch]
   FTS --> RRF[reciprocal rank fusion<br/>per document, k = 60]
   KNN --> RRF
+  DF --> RRF
+  DK --> RRF
   RRF --> H[hits: chunk_id, doc_id, title, snippet,<br/>kind, heading, page, score, fts_rank, vec_rank]
   H -->|get_chunk| C[one chunk: text, locator, table grid]
   H -->|get offset/max_chars| T[text window of the artifact]
@@ -173,6 +177,9 @@ chunks           id, doc_id, seq, text, kind, locator JSON, heading JSON, data J
 chunks_fts       FTS5 over chunks.text (content table; triggers keep it in step)
 chunk_embeddings chunk_id, model, embedded_at          (which model made the vector)
 vectors-<model>.usearch   HNSW index keyed by chunk id, f16, cosine (a file, not a table)
+vectors-doc-<model>.usearch   HNSW index of the document field, keyed by document id
+documents_fts             FTS5 over the document field (title, kind, summary, ...)
+document_embeddings       which document has a field vector from which model
 entities         id, name, type, canonical_id (resolution merges), created_at
 edges            src, dst, rel, confidence, weight, source_doc, ontology_version,
                  evidence (a quote), valid_from, valid_to, ingested_at
@@ -205,7 +212,8 @@ stamp. Interrupt any of them and rerun the same command.
 | `import_zotero.py` | Zotero keys not in `meta.zotero.keys`, or changed `dateModified` | documents, text from Zotero's cache, `authored_by` edges | copies `zotero.sqlite`, opens read-only |
 | `parse_pending.py` | `parsed_at IS NULL`, or `meta.text_source` prefix | text artifact, chunks, `text_source`, `parse_history` | fallback chain; scans refused without OCR; 40 MB / 400 page caps; "seen" skip; short new text keeps the old |
 | `rechunk.py` | indexed documents (or legacy rows) | chunks only | none needed |
-| `embed_pending.py` | chunks without a vector from the current model | the `.usearch` file, `chunk_embeddings` | dimension check; batch 64; saves every 50 K; reconciles on start |
+| `embed_pending.py` | chunks without a vector from the current model, then document fields without one | the two `.usearch` files, `chunk_embeddings`, `document_embeddings` | dimension check; batch 64; saves every 50 K; reconciles on start |
+| `refresh_document_fields.py` | every document (or `--ids`) | `documents_fts`; drops the vector of a changed field | backfill after migration 0005 or a change to `store.document_field` |
 | `eval_retrieval.py` | the query set | a report | throwaway store |
 
 Long passes run as batches of short-lived processes (`--limit N` in a

@@ -30,6 +30,14 @@ RERANK_DEPTH = 30  # hits rescored by the cross-encoder when reranking is on
 VEC_DIM = 384  # dimension of the vector index; another dimension is a new index file
 RRF_K = 60  # reciprocal rank fusion constant
 RRF_DEPTH = 100  # candidates per side before fusion (docs/eval: 30 vs 100 vs 300)
+# The document-field BM25 list is short and precise (a field names what a
+# document is); at equal weight a lone rank-1 field hit loses to any document
+# two chunk lists agree on. A short query names a thing, so the field gets
+# FIELD_WEIGHT there; a long paraphrase is about content, and the field's
+# incidental word matches would mislead, so the weight fades to 1 by
+# FIELD_WEIGHT_WORDS words (docs/eval/retrieval-field-2026-09-10.md).
+FIELD_WEIGHT = 2.0
+FIELD_WEIGHT_WORDS = 7
 VEC_SEARCH_CAP = 4000  # widest KNN candidate set when post-filtering by kind
 _indexes: dict[tuple[str, bool], vectors.VectorIndex] = {}  # (path, writable)
 CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
@@ -75,10 +83,11 @@ def _index_path(model: str) -> Path:
     return config.data_dir() / f"vectors-{model}.usearch"
 
 
-def _index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
-    """The index for ``model``: a memory-mapped view for reads (None when no
-    file exists yet), or the in-memory writable copy for batch jobs."""
-    path = _index_path(model)
+def _doc_index_path(model: str) -> Path:
+    return config.data_dir() / f"vectors-doc-{model}.usearch"
+
+
+def _open_index(path: Path, *, writable: bool) -> vectors.VectorIndex | None:
     key = (str(path), writable)
     idx = _indexes.get(key)
     if idx is None:
@@ -89,12 +98,23 @@ def _index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
     return idx
 
 
+def _index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
+    """The chunk index for ``model``: a memory-mapped view for reads (None
+    when no file exists yet), or the in-memory writable copy for batch jobs."""
+    return _open_index(_index_path(model), writable=writable)
+
+
+def _doc_index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
+    """The document-field index for ``model`` (keys are document ids)."""
+    return _open_index(_doc_index_path(model), writable=writable)
+
+
 def _drop_index_views(model: str) -> None:
-    """Forget the read-only view so the next read reopens the saved file."""
-    key = (str(_index_path(model)), False)
-    idx = _indexes.pop(key, None)
-    if idx is not None:
-        idx.close()
+    """Forget the read-only views so the next read reopens the saved files."""
+    for path in (_index_path(model), _doc_index_path(model)):
+        idx = _indexes.pop((str(path), False), None)
+        if idx is not None:
+            idx.close()
 
 
 def migrations() -> list[tuple[int, Path]]:
@@ -282,6 +302,7 @@ def index_text(
             " '$.text_source', ?) WHERE id = ?",
             (text_source, doc_id),
         )
+    _refresh_document_field(con, doc_id)
     con.commit()
     return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": n_chunks}
 
@@ -364,7 +385,119 @@ def set_meta(
     )
     if cur.rowcount == 0:
         raise KeyError(f"no such document: {doc_id}")
+    _refresh_document_field(con, doc_id)
     con.commit()
+
+
+# --------------------------------------------------------- document field
+# What a document *is*, in a few lines, indexed apart from its chunks
+# (migration 0005): title, kind words, creators, venue, the extraction
+# summary, an image description's opening paragraph. A short field makes a
+# match in it strong under BM25 and gives one vector per document, so a
+# query naming a thing finds the document that is that thing, not the
+# documents that mention it most.
+
+DOCTYPES: dict[str, str] = {
+    "pdf": "d.mime = 'application/pdf'",
+    "web": "d.mime IN ('text/html', 'application/xhtml+xml')",
+    "image": "d.mime LIKE 'image/%'",
+    "text": "d.mime = 'text/plain'",
+    "note": "json_extract(d.meta, '$.zotero.kind') = 'note'",
+}
+_KIND_WORDS = {
+    "application/pdf": "PDF document",
+    "text/html": "web page",
+    "application/xhtml+xml": "web page",
+    "text/plain": "text",
+}
+
+
+def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
+    """The retrieval field of a document, or None when it does not exist."""
+    row = con.execute(
+        """
+        SELECT d.title, d.mime, d.meta,
+               (SELECT kind FROM chunks c WHERE c.doc_id = d.id ORDER BY seq LIMIT 1)
+                   AS first_kind
+        FROM documents d WHERE d.id = ?
+        """,
+        (doc_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    meta = json.loads(row["meta"] or "{}")
+    mime = row["mime"] or ""
+    words: list[str] = []
+    if mime.startswith("image/"):
+        words.append("image")
+    elif mime in _KIND_WORDS:
+        words.append(_KIND_WORDS[mime])
+    z = meta.get("zotero") or {}
+    if z.get("kind") == "note":
+        words.append("note")
+    if row["first_kind"] == "code":
+        words.append("source code")
+    source = str(meta.get("text_source") or "")
+    if source.startswith("claude-vision"):
+        words.append("image description")
+    parts = [row["title"] or "", " ".join(words)]
+    creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
+    if creators:
+        parts.append("by " + ", ".join(creators[:6]))
+    fields = meta.get("fields") or {}
+    venue = fields.get("publicationTitle") or fields.get("proceedingsTitle")
+    bits = [b for b in (venue, str(meta.get("date") or "")[:4]) if b]
+    if bits:
+        parts.append(" ".join(bits))
+    if meta.get("summary"):
+        parts.append(str(meta["summary"]))
+    if source.startswith("claude-vision"):
+        shows = con.execute(
+            "SELECT text FROM chunks WHERE doc_id = ?"
+            " AND heading LIKE '%What it shows%' ORDER BY seq LIMIT 1",
+            (doc_id,),
+        ).fetchone()
+        if shows:
+            lines = [ln for ln in shows["text"].splitlines() if not ln.startswith("#")]
+            parts.append(" ".join(lines).strip()[:1200])
+    return "\n".join(p for p in parts if p.strip())
+
+
+def _refresh_document_field(con: sqlite3.Connection, doc_id: int) -> bool:
+    """Rewrite the field row when it changed; a changed field also drops the
+    document's vector bookkeeping so it is embedded again. No commit."""
+    field = document_field(con, doc_id)
+    if field is None:
+        return False
+    old = con.execute(
+        "SELECT field FROM documents_fts WHERE rowid = ?", (doc_id,)
+    ).fetchone()
+    if old is not None and old[0] == field:
+        return False
+    con.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
+    con.execute(
+        "INSERT INTO documents_fts(rowid, field) VALUES (?, ?)", (doc_id, field)
+    )
+    con.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
+    return True
+
+
+@_serialized
+def refresh_document_fields(
+    con: sqlite3.Connection, doc_ids: list[int] | None = None
+) -> int:
+    """Rebuild the field of the given documents (all when None); returns
+    how many changed. The backfill after the migration, and the repair
+    after a change to ``document_field``."""
+    ids = doc_ids or [r[0] for r in con.execute("SELECT id FROM documents ORDER BY id")]
+    changed = 0
+    for i, doc_id in enumerate(ids, 1):
+        if _refresh_document_field(con, doc_id):
+            changed += 1
+        if i % 500 == 0:
+            con.commit()
+    con.commit()
+    return changed
 
 
 @_serialized
@@ -645,8 +778,122 @@ def _vec_search(
     return out[:limit]
 
 
+def _field_fts_search(
+    con: sqlite3.Connection, query: str, limit: int
+) -> list[dict[str, Any]]:
+    """BM25 over the document field; hits carry no chunk yet."""
+    expr = _fts_query(query)
+    if expr is None:
+        return []
+    rows = con.execute(
+        """
+        SELECT f.rowid AS doc_id, d.title,
+               snippet(documents_fts, 0, '[', ']', '…', 14) AS snippet,
+               bm25(documents_fts) AS score
+        FROM documents_fts f JOIN documents d ON d.id = f.rowid
+        WHERE documents_fts MATCH ? ORDER BY score LIMIT ?
+        """,
+        (expr, limit),
+    ).fetchall()
+    return [_field_hit(r["doc_id"], r["title"], r["snippet"], r["score"]) for r in rows]
+
+
+def _field_vec_search(
+    con: sqlite3.Connection, model: str, vector: Any, limit: int
+) -> list[dict[str, Any]]:
+    """KNN over the document-field index."""
+    idx = _doc_index(model, writable=False)
+    if idx is None:
+        return []
+    found = idx.search(vector, limit)
+    if not found:
+        return []
+    distance = dict(found)
+    ids = list(distance)
+    marks = ",".join("?" * len(ids))
+    rows = con.execute(
+        f"SELECT d.id, d.title, f.field FROM documents d"
+        f" JOIN documents_fts f ON f.rowid = d.id WHERE d.id IN ({marks})",
+        ids,
+    ).fetchall()
+    by_id = {r["id"]: r for r in rows}
+    return [
+        _field_hit(i, by_id[i]["title"], by_id[i]["field"][:160], distance[i])
+        for i in ids
+        if i in by_id
+    ]
+
+
+def _field_hit(doc_id: int, title: str, snippet: str, score: float) -> dict[str, Any]:
+    return {
+        "chunk_id": None,
+        "doc_id": doc_id,
+        "title": title,
+        "snippet": snippet,
+        "score": score,
+        "kind": None,
+        "heading": [],
+        "page": None,
+    }
+
+
+def _fill_chunks(
+    con: sqlite3.Connection, hits: list[dict[str, Any]], query: str
+) -> None:
+    """A hit that came from the document field alone gets the document's
+    chunk that matches the query best, else its first chunk, so every hit
+    opens somewhere; the field snippet stays, it says why the document
+    matched."""
+    expr = _fts_query(query)
+    for h in hits:
+        if h.get("chunk_id") is not None:
+            continue
+        row = None
+        if expr is not None:
+            row = con.execute(
+                """
+                SELECT c.id, c.kind, c.locator, c.heading
+                FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
+                WHERE chunks_fts MATCH ? AND c.doc_id = ?
+                ORDER BY bm25(chunks_fts) LIMIT 1
+                """,
+                (expr, h["doc_id"]),
+            ).fetchone()
+        if row is None:
+            row = con.execute(
+                "SELECT id, kind, locator, heading FROM chunks WHERE doc_id = ?"
+                " ORDER BY seq LIMIT 1",
+                (h["doc_id"],),
+            ).fetchone()
+        if row is None:
+            continue
+        h["chunk_id"] = row["id"]
+        h.update(_chunk_shape(row))
+
+
+def _filter_doctype(
+    con: sqlite3.Connection, hits: list[dict[str, Any]], doctype: str
+) -> list[dict[str, Any]]:
+    if not hits:
+        return hits
+    ids = list({h["doc_id"] for h in hits})
+    marks = ",".join("?" * len(ids))
+    keep = {
+        r[0]
+        for r in con.execute(
+            f"SELECT d.id FROM documents d WHERE d.id IN ({marks})"
+            f" AND {DOCTYPES[doctype]}",
+            ids,
+        )
+    }
+    return [h for h in hits if h["doc_id"] in keep]
+
+
 def _rrf(
-    ranked: list[list[dict[str, Any]]], names: list[str], limit: int
+    ranked: list[list[dict[str, Any]]],
+    names: list[str],
+    limit: int,
+    weights: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
     """Reciprocal rank fusion at document level.
 
@@ -660,6 +907,7 @@ def _rrf(
     """
     fused: dict[int, dict[str, Any]] = {}
     for hits, name in zip(ranked, names, strict=True):
+        weight = (weights or {}).get(name, 1.0)
         seen: set[int] = set()
         rank = 0
         for hit in hits:
@@ -670,9 +918,13 @@ def _rrf(
             rank += 1
             entry = fused.get(doc)
             if entry is None:
-                entry = {**hit, "score": 0.0, "fts_rank": None, "vec_rank": None}
+                entry = {**hit, "score": 0.0, **{f"{n}_rank": None for n in names}}
                 fused[doc] = entry
-            entry["score"] += 1.0 / (RRF_K + rank)
+            elif entry.get("chunk_id") is None and hit.get("chunk_id") is not None:
+                # a field-only entry adopts the first chunk another side found
+                for k in ("chunk_id", "kind", "heading", "page"):
+                    entry[k] = hit[k]
+            entry["score"] += weight / (RRF_K + rank)
             entry[f"{name}_rank"] = rank
     out = sorted(fused.values(), key=lambda h: -h["score"])
     return out[:limit]
@@ -688,6 +940,12 @@ def vec_status(con: sqlite3.Connection) -> dict[str, Any]:
     ).fetchall()
     status["models"] = {r["model"]: r["n"] for r in rows}
     status["rows"] = sum(status["models"].values())
+    status["documents"] = {
+        r[0]: r[1]
+        for r in con.execute(
+            "SELECT model, count(*) FROM document_embeddings GROUP BY model"
+        )
+    }
     emb = embeddings.current()
     status["embedder"] = emb.name if emb else None
     status["index"] = None
@@ -707,8 +965,15 @@ def search(
     kind: str | None = None,
     mode: str = "hybrid",
     rerank: bool | None = None,
+    doctype: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search returning compact snippets + ids (agent-shaped).
+
+    ``hybrid`` fuses four rank lists at document level: chunk BM25, chunk
+    KNN, and BM25 and KNN over the document field (title, kind, summary;
+    ``documents_fts``), so a query that names what a document *is* finds it
+    even when other documents mention the term more. ``doctype`` keeps
+    documents of one type: ``pdf``, ``web``, ``image``, ``text``, ``note``.
 
     ``hybrid`` (default) runs FTS5/BM25 and vector KNN in parallel and fuses
     them with reciprocal rank fusion; each hit carries ``score`` (the fused
@@ -726,11 +991,13 @@ def search(
         raise ValueError(f"kind must be one of {chunking.KINDS}")
     if mode not in SEARCH_MODES:
         raise ValueError(f"mode must be one of {SEARCH_MODES}")
+    if doctype is not None and doctype not in DOCTYPES:
+        raise ValueError(f"doctype must be one of {tuple(DOCTYPES)}")
     reranker = rerank_mod.current() if rerank is None or rerank else None
     if rerank and reranker is None:
         raise ValueError("rerank requested but PRAX_RERANK names no model")
     fetch = max(limit, RERANK_DEPTH) if reranker else limit
-    hits = _search_hits(con, query, fetch, kind, mode)
+    hits = _search_hits(con, query, fetch, kind, mode, doctype)
     if reranker is not None and hits:
         hits = _apply_rerank(con, reranker, query, hits)
     return hits[:limit]
@@ -755,7 +1022,12 @@ def _apply_rerank(
 
 
 def _search_hits(
-    con: sqlite3.Connection, query: str, limit: int, kind: str | None, mode: str
+    con: sqlite3.Connection,
+    query: str,
+    limit: int,
+    kind: str | None,
+    mode: str,
+    doctype: str | None = None,
 ) -> list[dict[str, Any]]:
     emb = embeddings.current() if mode != "fts" else None
     vectors_ready = (
@@ -766,26 +1038,62 @@ def _search_hits(
     )
     if mode == "vec" and not vectors_ready:
         raise ValueError("vector search unavailable: no embedder, index or vectors")
-    if not vectors_ready:
-        return _fts_search(con, query, limit, kind)
+    fetch = limit * 4 if doctype else limit
+    if mode == "fts" or not vectors_ready:  # hybrid degrades to FTS-only
+        return _finish(con, _fts_search(con, query, fetch, kind), query, limit, doctype)
     assert emb is not None
     vector = emb.embed_query(query)
     if mode == "vec":
-        return _vec_search(con, vector, limit, kind)
+        return _finish(
+            con, _vec_search(con, vector, fetch, kind), query, limit, doctype
+        )
     depth = max(limit * 3, RRF_DEPTH)
-    fused = _rrf(
-        [
-            _fts_search(con, query, depth, kind, snippets=False),
-            _vec_search(con, vector, depth, kind),
-        ],
-        ["fts", "vec"],
-        limit,
-    )
-    marked = _fts_snippets(con, query, [h["chunk_id"] for h in fused])
-    for h in fused:
-        if h["chunk_id"] in marked:
+    lists = [
+        _fts_search(con, query, depth, kind, snippets=False),
+        _vec_search(con, vector, depth, kind),
+    ]
+    names = ["fts", "vec"]
+    if kind is None:  # the field has no chunk kind to filter by
+        lists.append(_field_fts_search(con, query, depth))
+        names.append("field")
+        lists.append(_field_vec_search(con, emb.name, vector, depth))
+        names.append("dvec")
+    fused = _rrf(lists, names, fetch, {"field": _field_weight(query)})
+    return _finish(con, fused, query, limit, doctype)
+
+
+def _field_weight(query: str) -> float:
+    words = len(query.split())
+    if words <= 3:
+        return FIELD_WEIGHT
+    span = max(1, FIELD_WEIGHT_WORDS - 3)
+    return max(1.0, FIELD_WEIGHT - (FIELD_WEIGHT - 1.0) * (words - 3) / span)
+
+
+def _finish(
+    con: sqlite3.Connection,
+    hits: list[dict[str, Any]],
+    query: str,
+    limit: int,
+    doctype: str | None,
+) -> list[dict[str, Any]]:
+    if doctype:
+        hits = _filter_doctype(con, hits, doctype)
+    hits = hits[:limit]
+    field_only = {h["doc_id"] for h in hits if h.get("chunk_id") is None}
+    _fill_chunks(con, hits, query)
+    chunk_ids = [
+        h["chunk_id"]
+        for h in hits
+        if h.get("chunk_id") is not None
+        and h["doc_id"] not in field_only
+        and h.get("fts_rank") is not None
+    ]
+    marked = _fts_snippets(con, query, chunk_ids) if chunk_ids else {}
+    for h in hits:
+        if h.get("chunk_id") in marked:
             h["snippet"] = marked[h["chunk_id"]]
-    return fused
+    return hits
 
 
 def _vec_count(con: sqlite3.Connection) -> int:
@@ -850,6 +1158,69 @@ def store_embeddings(
     )
     con.commit()
     return len(items)
+
+
+@_serialized
+def pending_document_embeddings(
+    con: sqlite3.Connection, model: str, *, limit: int | None = None
+) -> list[dict[str, Any]]:
+    """Document fields without a vector from ``model``: ``{doc_id, text}``."""
+    sql = (
+        "SELECT f.rowid AS doc_id, f.field AS text FROM documents_fts f"
+        " LEFT JOIN document_embeddings e ON e.doc_id = f.rowid"
+        " WHERE e.doc_id IS NULL OR e.model != ? ORDER BY f.rowid"
+    )
+    args: tuple[Any, ...] = (model,)
+    if limit is not None:
+        sql += " LIMIT ?"
+        args = (model, limit)
+    return [dict(r) for r in con.execute(sql, args)]
+
+
+@_serialized
+def count_pending_document_embeddings(con: sqlite3.Connection, model: str) -> int:
+    return con.execute(
+        "SELECT count(*) FROM documents_fts f"
+        " LEFT JOIN document_embeddings e ON e.doc_id = f.rowid"
+        " WHERE e.doc_id IS NULL OR e.model != ?",
+        (model,),
+    ).fetchone()[0]
+
+
+@_serialized
+def store_document_embeddings(
+    con: sqlite3.Connection, items: list[tuple[int, Any]], model: str
+) -> int:
+    """Add ``(doc_id, vector)`` rows to the document index of ``model`` (in
+    memory until ``save_document_vectors``) and record them."""
+    if not vectors_available():
+        raise RuntimeError("usearch is not installed; vectors cannot be stored")
+    if not items:
+        return 0
+    idx = _doc_index(model, writable=True)
+    assert idx is not None
+    import numpy as np
+
+    ids = [d for d, _ in items]
+    idx.remove([d for d in ids if d in idx])
+    idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, v in items]))
+    con.executemany(
+        "INSERT INTO document_embeddings (doc_id, model) VALUES (?, ?)"
+        " ON CONFLICT(doc_id) DO UPDATE SET model = excluded.model,"
+        f" embedded_at = {_NOW}",
+        [(d, model) for d in ids],
+    )
+    con.commit()
+    return len(items)
+
+
+@_serialized
+def save_document_vectors(model: str) -> dict[str, Any]:
+    idx = _doc_index(model, writable=True)
+    assert idx is not None
+    _drop_index_views(model)
+    idx.save()
+    return idx.stats()
 
 
 @_serialized

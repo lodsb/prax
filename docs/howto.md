@@ -211,9 +211,24 @@ expansion, 64) for the index. Changing the model means re-embedding into
 a new file: `chunk_embeddings.model` records what each vector came from
 and `embed_pending.py` picks up the difference.
 
-Query: `search(q, mode="hybrid"|"fts"|"vec", kind=...)` in the store, the
-API (`/search?mode=`) and the MCP tool. Hybrid hits carry `score` (RRF),
-`fts_rank` and `vec_rank`.
+Query: `search(q, mode="hybrid"|"fts"|"vec", kind=..., doctype=...)` in
+the store, the API (`/search?mode=&doctype=`) and the MCP tool. Hybrid
+fuses four rank lists at document level: chunk BM25, chunk KNN, and BM25
+and KNN over the document field (migration 0005: title, kind words,
+creators, venue, extraction summary, an image description's opening
+paragraph). Hits carry `score` (RRF) and `fts_rank`, `vec_rank`,
+`field_rank`, `dvec_rank`; a hit found only through the field opens at
+the document's best-matching chunk. `doctype` keeps one type: `pdf`,
+`web`, `image`, `text`, `note`. The field follows a document's text and
+metadata on its own; after migration 0005 or a change to
+`store.document_field` rebuild it and embed:
+
+    python scripts/refresh_document_fields.py
+    python scripts/embed_pending.py            # chunks, then document fields
+
+Why: chunk scoring finds documents *about* a term, not the document that
+*is* the thing; "schematic" put a CAD manual first and the one schematic
+nowhere (`docs/eval/retrieval-field-2026-09-10.md`).
 
 ## 3e. Graph extraction (Stage 3)
 

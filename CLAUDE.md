@@ -10,10 +10,13 @@ drop folder (`docs/sources.md`).
 
 1. **SQLite is the canonical store.** One database file (`data/prax.db`):
    FTS5 for BM25, a plain `edges` table for the graph, `chunk_embeddings`
-   as the record of which chunk has a vector from which model. WAL mode
-   always on. Vectors themselves live in one usearch HNSW file per model
-   next to the database (`data/vectors-<model>.usearch`), memory-mapped by
-   the serving path and rebuilt by the batch job; nothing else lives
+   as the record of which chunk has a vector from which model, and
+   `documents_fts` plus `document_embeddings` for the document-level
+   retrieval field (title, kind, summary). WAL mode always on. Vectors
+   themselves live in two usearch HNSW files per model next to the
+   database (`data/vectors-<model>.usearch` keyed by chunk id,
+   `data/vectors-doc-<model>.usearch` keyed by document id), memory-mapped
+   by the serving path and rebuilt by the batch job; nothing else lives
    outside SQLite. No Postgres, no Neo4j, no server databases.
 2. **Files are content-addressed.** Originals (PDFs, HTML snapshots) live at
    `data/archive/<sha256[:2]>/<sha256>`. The DB stores metadata + hash only.
@@ -76,8 +79,10 @@ what" table: `docs/architecture.md`.
 
 ## Retrieval design
 
-Hybrid: FTS5 (BM25) and vector search run in parallel, fused with Reciprocal
-Rank Fusion. Optional cross-encoder rerank (bge-reranker-v2-m3) over fused
+Hybrid: FTS5 (BM25) and vector search over chunks, plus BM25 and vector
+search over the document field (what a document *is*: title, kind,
+summary), fused at document level with Reciprocal Rank Fusion; `doctype`
+filters by document type. Optional cross-encoder rerank (bge-reranker-v2-m3) over fused
 top-N — benchmark on target hardware before enabling by default. Graph
 traversal expands entry-point hits 1–2 hops. Complement queries ("what is NOT
 connected") and weighted multi-hop scoring are explicit SQL tools, never

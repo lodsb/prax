@@ -189,6 +189,10 @@ R14). Design in `docs/ui.md`.
       DOI documents
 - [x] Graph overview by default (hubs, the edges among them and
       co-occurrence links); double click opens a neighbourhood
+- [x] Document-level retrieval field (2026-09-10, migration 0005):
+      title, kind, summary and image description fused into search as two
+      more rank lists; `doctype` filter; the one schematic now answers
+      "schematic"
 - [x] Images as documents (2026-09-10): shown inline; `claude-vision`
       extractor describes and transcribes them (Sonnet 5 read the UREI
       1176LN schematic's revision table and handwritten notes; Haiku did

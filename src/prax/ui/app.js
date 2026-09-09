@@ -111,6 +111,10 @@ function renderSearchForm(p) {
       <option value="" ${kind === "" ? "selected" : ""}>any kind</option>
       ${["text", "table", "figure", "code"].map((k) => `<option ${k === kind ? "selected" : ""}>${k}</option>`).join("")}
     </select>
+    <select name="doctype" title="document type">
+      <option value="" ${!p.doctype ? "selected" : ""}>any type</option>
+      ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
+    </select>
     <input name="limit" type="number" min="1" max="100" value="${esc(p.limit || 20)}" title="limit">
     <button>Search</button>
   </form>`;
@@ -127,7 +131,7 @@ async function viewSearch(p) {
   if (!p.q) return;
   const results = document.getElementById("results");
   try {
-    const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, limit: p.limit || 20 });
+    const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, limit: p.limit || 20 });
     if (!hits.length) { results.innerHTML = `<p class="muted">No hits.</p>`; return; }
     results.innerHTML = hits.map((h) => {
       const page = h.page ? `p. ${h.page}` : "";
@@ -135,6 +139,8 @@ async function viewSearch(p) {
       if (h.fts_rank !== undefined) {
         if (h.fts_rank) sides.push(`fts #${h.fts_rank}`);
         if (h.vec_rank) sides.push(`vec #${h.vec_rank}`);
+        if (h.field_rank) sides.push(`doc #${h.field_rank}`);
+        if (h.dvec_rank) sides.push(`doc-vec #${h.dvec_rank}`);
       }
       return `
       <article class="hit">

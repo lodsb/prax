@@ -143,6 +143,25 @@ off; the plumbing stays for a document-aware variant.
 **Revisit when.** Vectors exceed about 1M. Then move only the vector layer
 to LanceDB.
 
+*Document field (2026-09-10).* Chunk scoring, lexical or vector, rewards
+documents that mention a term often, so "schematic" ranked a CAD manual
+(126 chunks about schematics) first and the library's one schematic
+outside the top 30; "1176 schematic" landed at rank 17 behind page
+numbers. A document's identity lives in one short sentence at the top of
+its description, and chunk scoring treats it like any paragraph. The fix
+is a document-level field (title, kind words, creators, venue, extraction
+summary, an image description's opening paragraph; migration 0005),
+indexed for BM25 and embedded once per document into its own usearch
+file, and fused as two more rank lists in the same document-level RRF. A
+match in a short field is strong under BM25, so a query naming what a
+document is finds it, while documents about the term keep their chunk
+ranks. The field BM25 list is weighted 2 for queries of up to three words
+and fades to 1 by seven: a short query names a thing, a long paraphrase is
+about content, and the field's incidental word matches misled the long
+ones at a flat weight. On the library set hybrid went from MRR 0.79 to
+0.89 (`docs/eval/retrieval-field-2026-09-10.md`). The field also carries
+the kind words that back the `doctype` filter.
+
 ## R7. Graph: plain edge table, bi-temporal, evidence not truth
 
 **Decision.** Edges live in one SQLite table with `confidence`,

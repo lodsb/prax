@@ -67,6 +67,11 @@ def test_search_with_punctuation_is_200(client: TestClient) -> None:
     client.post("/ingest", json={"text": "STFT-based analysis"})
     r = client.get("/search", params={"q": "STFT-based: what's (this)?"})
     assert r.status_code == 200 and r.json()
+    assert client.get("/search", params={"q": "STFT", "doctype": "text"}).json()
+    assert (
+        client.get("/search", params={"q": "STFT", "doctype": "nope"}).status_code
+        == 400
+    )
 
 
 def test_link_and_traverse(client: TestClient) -> None:

@@ -145,10 +145,17 @@ def search(
     kind: str | None = None,
     mode: str = "hybrid",
     rerank: bool | None = None,
+    doctype: str | None = None,
 ) -> list[dict[str, Any]]:
     try:
         return store.search(
-            request.app.state.con, q, limit, kind=kind, mode=mode, rerank=rerank
+            request.app.state.con,
+            q,
+            limit,
+            kind=kind,
+            mode=mode,
+            rerank=rerank,
+            doctype=doctype,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

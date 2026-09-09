@@ -55,6 +55,19 @@ def _embed_all(con: sqlite3.Connection) -> int:
         emb.name,
     )
     store.save_vectors(emb.name)
+    fields = store.pending_document_embeddings(con, emb.name)
+    if fields:
+        store.store_document_embeddings(
+            con,
+            [
+                (r["doc_id"], v)
+                for r, v in zip(
+                    fields, emb.embed([r["text"] for r in fields]), strict=True
+                )
+            ],
+            emb.name,
+        )
+        store.save_document_vectors(emb.name)
     return n
 
 
@@ -114,7 +127,9 @@ def test_vector_and_hybrid_search(con: sqlite3.Connection) -> None:
     hybrid = store.search(con, "kalman pitch estimator")
     assert hybrid[0]["doc_id"] == ids["pitch"]
     assert hybrid[0]["fts_rank"] == 1 and hybrid[0]["vec_rank"] == 1
-    assert hybrid[0]["score"] == pytest.approx(2 / (store.RRF_K + 1))
+    assert hybrid[0]["score"] == pytest.approx(
+        (3 + store.FIELD_WEIGHT) / (store.RRF_K + 1)
+    )
     assert "[pitch]" in hybrid[0]["snippet"].lower()  # FTS snippet wins
     fts = store.search(con, "kalman pitch estimator", mode="fts")
     assert fts[0]["doc_id"] == ids["pitch"] and "fts_rank" not in fts[0]
@@ -138,6 +153,77 @@ def test_similar_documents_by_centroid(con: sqlite3.Connection) -> None:
     assert all(d["doc_id"] != ids["pitch"] for d in similar)
     assert store.document_context(con, ids["pitch"])["similar"][0]["doc_id"] == twin
     assert store.similar_documents(con, 999) == []
+
+
+def test_document_field_follows_text_and_meta(con: sqlite3.Connection) -> None:
+    doc = store.ingest_text(
+        con,
+        "Sidechain notes. " * 5,
+        title="1176sch.gif",
+        meta={"creators": [{"name": "Ada"}], "zotero": {"kind": "note"}},
+    )["doc_id"]
+    field = store.document_field(con, doc)
+    assert field.startswith("1176sch.gif\ntext note\nby Ada")
+    row = con.execute(
+        "SELECT field FROM documents_fts WHERE rowid = ?", (doc,)
+    ).fetchone()
+    assert row[0] == field
+    _embed_all(con)
+    assert store.count_pending_document_embeddings(con, "hash-test") == 0
+    # unchanged metadata keeps the vector; a new summary drops it and rewrites
+    meta = store.get_meta(con, doc)
+    store.set_meta(con, doc, meta)
+    assert store.count_pending_document_embeddings(con, "hash-test") == 0
+    meta["summary"] = "A schematic of the UREI 1176 compressor."
+    store.set_meta(con, doc, meta)
+    assert store.count_pending_document_embeddings(con, "hash-test") == 1
+    assert "schematic of the UREI 1176" in store.document_field(con, doc)
+    assert store.document_field(con, 999) is None
+    assert store.refresh_document_fields(con) == 0  # nothing changed since
+    assert store.vec_status(con)["documents"] == {}  # the row was dropped
+
+
+def test_document_field_ranks_identity_first(con: sqlite3.Connection) -> None:
+    ids = _load(con)
+    sch = store.ingest_text(
+        con,
+        "Schematic notes: the sidechain and the gain cell.",
+        title="1176sch.gif",
+        meta={"summary": "A schematic of the UREI 1176 compressor."},
+    )["doc_id"]
+    manual = store.ingest_text(
+        con,
+        "\n\n".join(
+            "The schematic editor opens a schematic; every schematic sheet holds"
+            " nets and a schematic frame."
+            for _ in range(12)
+        ),
+        title="CAD manual",
+    )["doc_id"]
+    _embed_all(con)
+    fts = store.search(con, "schematic", mode="fts")
+    assert fts[0]["doc_id"] == manual  # chunk scoring rewards repetition
+    hybrid = store.search(con, "schematic")
+    assert hybrid[0]["doc_id"] == sch and hybrid[0]["field_rank"] == 1
+    assert (
+        hybrid[0]["chunk_id"] is not None
+        and "[schematic]" in hybrid[0]["snippet"].lower()
+    )
+    assert manual in {h["doc_id"] for h in hybrid}
+    assert {k for k in hybrid[0] if k.endswith("_rank")} == {
+        "fts_rank",
+        "vec_rank",
+        "field_rank",
+        "dvec_rank",
+    }
+    # doctype filters at the end; kind filters skip the field lists
+    assert store.search(con, "schematic", doctype="image") == []
+    texts = store.search(con, "schematic", doctype="text")
+    assert texts and all(h["doc_id"] in (sch, manual, *ids.values()) for h in texts)
+    with pytest.raises(ValueError):
+        store.search(con, "schematic", doctype="pdf-ish")
+    tables = store.search(con, "schematic", kind="text")
+    assert all(h.get("field_rank") is None for h in tables)
 
 
 def test_hybrid_fuses_per_document(con: sqlite3.Connection) -> None:

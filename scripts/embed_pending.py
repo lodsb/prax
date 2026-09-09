@@ -62,7 +62,10 @@ def main() -> int:
         file=sys.stderr,
     )
     if a.dry_run:
-        print(f"pending: {store.count_pending_embeddings(con, emb.name)}")
+        print(
+            f"pending: {store.count_pending_embeddings(con, emb.name)} chunks,"
+            f" {store.count_pending_document_embeddings(con, emb.name)} document fields"
+        )
         return 0
     if index_count != booked or a.compact:
         rec = store.compact_vectors(con, emb.name)
@@ -108,6 +111,22 @@ def main() -> int:
         f" in {time.monotonic() - t0:.0f} s; index {stats['count']} vectors,"
         f" {stats['bytes'] / 1e6:.0f} MB"
     )
+    # document fields: one vector per document, its own index file
+    fields_done = 0
+    while True:
+        rows = store.pending_document_embeddings(con, emb.name, limit=FETCH)
+        if not rows:
+            break
+        vectors = emb.embed([r["text"] for r in rows])
+        store.store_document_embeddings(
+            con,
+            [(r["doc_id"], v) for r, v in zip(rows, vectors, strict=True)],
+            emb.name,
+        )
+        fields_done += len(rows)
+    if fields_done or store.count_pending_document_embeddings(con, emb.name) == 0:
+        dstats = store.save_document_vectors(emb.name)
+        print(f"embedded {fields_done} document fields; {dstats['count']} in the index")
     con.close()
     return 0
 
