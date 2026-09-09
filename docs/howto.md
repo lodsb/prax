@@ -147,6 +147,18 @@ proportional font; Docling's layout model has an explicit code label and
 is the better extractor for a hand-picked set of code-heavy papers
 (`--ids ... --extractor docling --force`).
 
+Images (schematics, plots, photos, whiteboards) get text through Claude's
+vision: `claude-vision` describes the image and transcribes its printed
+and handwritten text into Markdown, which becomes the document's text
+artifact like any parser's output. Explicit only, a few cents per image
+(`PRAX_VISION_MODEL`, default `claude-sonnet-5`; Haiku 4.5 misread a
+compressor schematic's identity where Sonnet transcribed the whole
+revision table):
+
+    python scripts/parse_pending.py --pending --mime image/ --extractor claude-vision
+
+The document view shows an image inline above its description.
+
 ## 3c. Chunks
 
 `prax.chunking` turns each text artifact into structure-aware chunks
@@ -176,7 +188,13 @@ default and falls back to FTS when there is no index file, no usearch or
 
     python scripts/embed_pending.py --dry-run     # counts
     python scripts/embed_pending.py --batch 64    # everything pending; idempotent
-    python scripts/embed_pending.py --compact     # after re-parsing: drop stale keys
+    python scripts/embed_pending.py --compact     # reconcile only, no embedding
+
+Stop the HTTP door before an embedding run on Windows: the door keeps the
+index file memory-mapped and the save (an atomic rename) is refused while
+it is open (`PermissionError` on the `.tmp` file). Re-parsing documents
+(a new extractor revision, Docling on a few) creates new chunks that need
+a run afterwards; `--compact` alone drops stale keys without embedding.
 
 The job saves the index every 50,000 chunks and reconciles index and
 bookkeeping on start, so an interrupted run is simply started again. Copy

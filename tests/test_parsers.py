@@ -71,6 +71,55 @@ def test_plain_detects_code_without_an_extension() -> None:
     assert parsers.code_language("a: 1", "conf.yaml") == "yaml"  # extension wins
 
 
+def test_claude_vision_describes_an_image(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from types import SimpleNamespace
+
+    from prax.parsers import vision
+
+    seen: dict[str, object] = {}
+
+    class FakeMessages:
+        def create(self, **kw):
+            seen.update(kw)
+            return SimpleNamespace(
+                content=[
+                    SimpleNamespace(
+                        type="text",
+                        text="## What it shows\nA compressor schematic. "
+                        + "Detail. " * 60
+                        + "\n\n"
+                        "## Text in the image\nR12 100k\ngain (handwritten)",
+                    )
+                ]
+            )
+
+    monkeypatch.setattr(
+        vision, "CLIENT_FACTORY", lambda: SimpleNamespace(messages=FakeMessages())
+    )
+    monkeypatch.setenv("PRAX_VISION_MODEL", "claude-test")
+    gif = b"GIF89a" + bytes(40)
+    ext = parsers.by_name("claude-vision")
+    assert ext.explicit_only and ext.accepts("image/gif")
+    assert "claude-vision" not in [e.name for e in parsers.candidates("image/gif")]
+    out = ext(gif, filename="1176sch.gif")
+    assert out.startswith("# 1176sch.gif\n\n*Image described by claude-test.*")
+    assert "gain (handwritten)" in out
+    assert seen["model"] == "claude-test"
+    block = seen["messages"][0]["content"][0]
+    assert block["type"] == "image" and block["source"]["media_type"] == "image/gif"
+    with pytest.raises(parsers.ExtractionError, match="not a"):
+        ext(b"plain text", filename="x.txt")
+    # through the queue: the image gets a text artifact and chunks
+    doc_id = store.register(con, gif, mime="image/gif", title="1176sch.gif")["doc_id"]
+    assert queue.run(con, [doc_id], extractor="claude-vision").actions == {"created": 1}
+    text = store.get_document(con, doc_id, max_chars=5000)["text"]
+    assert "compressor schematic" in text
+    assert store.get_meta(con, doc_id)["text_source"].startswith("claude-vision/")
+    assert queue.run(con, [doc_id]).actions == {"skipped": 1}  # never by default
+
+
 def test_registry_dispatch() -> None:
     assert parsers.for_mime("text/plain").name == "plain"
     assert parsers.for_mime("text/markdown").name == "plain"

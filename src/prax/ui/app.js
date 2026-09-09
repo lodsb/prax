@@ -249,7 +249,7 @@ async function viewDoc(id, p) {
   </header>
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
-    <div class="doc-body">${chunks.map((c) => renderChunk(c, highlight)).join("")}</div>
+    <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? chunks.map((c) => renderChunk(c, highlight)).join("") : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}</div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
   api(`/doc/${id}/context`).then((ctx) => {

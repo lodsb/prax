@@ -108,6 +108,7 @@ mark { background: var(--mark); color: inherit; padding: 0 .1rem; }
 .chunk-body > :last-child { margin-bottom: 0; }
 .chunk-body pre { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); padding: .5rem; border-radius: 4px; }
 .chunk-body img { max-width: 100%; }
+.doc-image { max-width: 100%; border: 1px solid var(--line); background: #fff; margin-bottom: 1rem; }
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; font-size: .9rem; }
 th, td { border: 1px solid var(--line); padding: .2rem .5rem; text-align: left; vertical-align: top; }

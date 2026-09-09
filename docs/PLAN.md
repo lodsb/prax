@@ -189,6 +189,10 @@ R14). Design in `docs/ui.md`.
       DOI documents
 - [x] Graph overview by default (hubs, the edges among them and
       co-occurrence links); double click opens a neighbourhood
+- [x] Images as documents (2026-09-10): shown inline; `claude-vision`
+      extractor describes and transcribes them (Sonnet 5 read the UREI
+      1176LN schematic's revision table and handwritten notes; Haiku did
+      not)
 - [x] Document context column (2026-09-10): summary, entities, similar by
       vector centroid, shared entities, citations in and out, same
       authors, Zotero parent and siblings (`GET /doc/{id}/context`)

@@ -21,6 +21,8 @@ time, so the serving path never loads them):
 |                 |                 | blocks fenced                                 |
 | plain           | text/*          | decode as UTF-8; a source file (by extension, |
 |                 |                 | else Magika) becomes one fenced code block    |
+| claude-vision   | image/*         | Claude describes the image and transcribes    |
+|                 |                 | its text, handwriting included; explicit only |
 
 Adding one: write a function ``bytes -> str``, wrap it in ``Extractor`` and
 append it to ``REGISTRY``. Order within a MIME type is the preference and
@@ -186,6 +188,12 @@ def _trafilatura(data: bytes) -> str:
     return f"# {title}\n\n{text}" if title and title not in text[:200] else text
 
 
+def _claude_vision(data: bytes, *, filename: str | None = None) -> str:
+    from prax.parsers import vision
+
+    return vision.describe(data, filename=filename)
+
+
 def _plain(data: bytes, *, filename: str | None = None) -> str:
     text = data.decode("utf-8", errors="replace")
     lang = code_language(text, filename)
@@ -271,6 +279,14 @@ REGISTRY: list[Extractor] = [
         revision=2,  # Markdown output with fenced code blocks
     ),
     Extractor("plain", ("text/",), _plain, revision=2, hints=True),
+    Extractor(
+        "claude-vision",
+        ("image/",),
+        _claude_vision,
+        "anthropic",
+        explicit_only=True,
+        hints=True,
+    ),
 ]
 
 
