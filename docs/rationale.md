@@ -306,6 +306,24 @@ so the file can stay small.
 (a rename of an entity type, a re-chunking); then add a Python hook per
 migration number alongside the SQL. Not before.
 
+## R15. Pages are documents: a wiki inside the store, with revisions and edges
+
+Notes on a document, ongoing projects and topic write-ups (2026-09-10)
+are documents rows with `source = wiki` and Markdown text, not a second
+system: chunks, the retrieval field, embeddings, extraction and the
+context column apply to them unchanged, and the MCP door can read and
+write them. Identity is the slug (`pages`); every save is a new
+content-addressed text artifact plus an append-only `page_revisions` row
+with its author, so the history is a query and invariant 2 holds for
+living text (the archived original is the first revision with an
+identity line). Relationships are edges, never columns: `page
+--annotates--> paper` with the page as source document, `paper --part_of
+--> project` for reading lists (ontology v3). Two rules keep an agentic
+wiki honest: agent text carries the chunk or document ids it read, and an
+agent revision never overwrites a human one (`write_page` refuses it;
+`append_page` adds a section). The graph stays the structured record;
+pages are prose with citations into it.
+
 ## R14. The web UI is a client of the door: static files, no framework
 
 **Decision.** The browser UI is a directory of static files (one page,

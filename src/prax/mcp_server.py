@@ -106,6 +106,59 @@ def link(
 
 
 @mcp.tool
+def get_page(slug: str) -> dict[str, Any]:
+    """A page of the library's wiki: its Markdown text, kind (addendum,
+    project, topic), author of the latest revision and revision list."""
+    page = store.get_page(_db(), slug)
+    return page if page is not None else {"error": f"no page {slug!r}"}
+
+
+@mcp.tool
+def write_page(
+    slug: str,
+    text: str,
+    title: str | None = None,
+    kind: str = "topic",
+    annotates: list[int] | None = None,
+    part_of: str | None = None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Create a page (kind addendum, project or topic) or replace its text
+    as the agent. Refused when a person wrote the latest revision: use
+    append_page then. ``annotates`` lists document ids the page is about;
+    ``part_of`` names a project page's slug. Cite what you read as
+    chunk ids or document ids in the text so readers can check."""
+    try:
+        return store.write_page(
+            _db(),
+            slug,
+            text,
+            title=title,
+            kind=kind,
+            author="agent",
+            note=note,
+            annotates=annotates,
+            part_of=part_of,
+        )
+    except (ValueError, KeyError, PermissionError) as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool
+def append_page(
+    slug: str, section: str, heading: str | None = None, note: str | None = None
+) -> dict[str, Any]:
+    """Add a section to an existing page as the agent, leaving what a
+    person wrote untouched."""
+    try:
+        return store.append_page(
+            _db(), slug, section, heading=heading, author="agent", note=note
+        )
+    except (ValueError, KeyError) as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool
 def ingest(
     text: str, title: str | None = None, source_url: str | None = None
 ) -> dict[str, Any]:

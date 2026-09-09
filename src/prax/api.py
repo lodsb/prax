@@ -371,6 +371,106 @@ def doc_context(doc_id: int, request: Request, limit: int = 8) -> dict[str, Any]
     return ctx
 
 
+# ------------------------------------------------------------------ pages
+
+
+class PageReq(BaseModel):
+    text: str
+    title: str | None = None
+    kind: str = "topic"  # addendum | project | topic (creation only)
+    author: str = "human"
+    note: str | None = None
+    annotates: list[int] | None = None
+    part_of: str | None = None
+    force: bool = False
+
+
+class AppendReq(BaseModel):
+    section: str
+    heading: str | None = None
+    author: str = "agent"
+    note: str | None = None
+
+
+class MemberReq(BaseModel):
+    doc_id: int
+
+
+@app.get("/pages")
+def pages(request: Request, kind: str | None = None) -> list[dict[str, Any]]:
+    """Pages, most recently revised first."""
+    return store.list_pages(request.app.state.con, kind=kind)
+
+
+@app.get("/page/{slug}")
+def page(slug: str, request: Request) -> dict[str, Any]:
+    p = store.get_page(request.app.state.con, slug)
+    if p is None:
+        raise HTTPException(404, "no such page")
+    return p
+
+
+@app.get("/page/{slug}/revision/{revision}")
+def page_revision(slug: str, revision: int, request: Request) -> dict[str, Any]:
+    try:
+        text = store.page_revision_text(request.app.state.con, slug, revision)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"slug": slug, "revision": revision, "text": text}
+
+
+@app.put("/page/{slug}")
+def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
+    """Create the page or add a revision. An agent revision over a human
+    one is refused with 409 unless ``force``; use append."""
+    try:
+        return store.write_page(
+            request.app.state.con,
+            slug,
+            req.text,
+            title=req.title,
+            kind=req.kind,
+            author=req.author,
+            note=req.note,
+            annotates=req.annotates,
+            part_of=req.part_of,
+            force=req.force,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/page/{slug}/append")
+def append_page(slug: str, req: AppendReq, request: Request) -> dict[str, Any]:
+    try:
+        return store.append_page(
+            request.app.state.con,
+            slug,
+            req.section,
+            heading=req.heading,
+            author=req.author,
+            note=req.note,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/project/{slug}/members")
+def add_member(slug: str, req: MemberReq, request: Request) -> dict[str, Any]:
+    """``part_of`` edge from a document to a project page."""
+    try:
+        eid = store.add_to_project(request.app.state.con, slug, req.doc_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {"edge_id": eid, "existing": eid is None}
+
+
 @app.get("/graph/overview")
 def graph_overview(
     request: Request, limit: int = 30, min_shared: int = 2

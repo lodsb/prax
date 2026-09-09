@@ -147,6 +147,15 @@ th { background: var(--panel); }
 .legend span::before { content: ""; display: inline-block; width: .7rem; height: .7rem; border-radius: 50%; margin-right: .25rem; background: var(--c); vertical-align: middle; }
 .graph-tools { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; margin: .4rem 0; font-size: .85rem; }
 
+/* pages */
+.page-editor { margin: .5rem 0 1rem; }
+.page-editor textarea { width: 100%; min-height: 24rem; font: 13px/1.45 ui-monospace, Consolas, monospace; padding: .5rem; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg); }
+.page-editor .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-top: .4rem; }
+.page-editor input[type="text"] { flex: 1 1 14rem; }
+.page-list td { vertical-align: middle; }
+.kind-pill { display: inline-block; font-size: .75rem; padding: 0 .4rem; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.page-body-note { border-left: 3px solid var(--accent); padding-left: .8rem; }
+
 /* review */
 .review-item { border-bottom: 1px solid var(--line); padding: .6rem 0; }
 .review-triple { font-size: 1rem; }

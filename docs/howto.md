@@ -295,6 +295,25 @@ against the current ontology; the same is available as
 `scripts/replay_review.py`. The proposal for ontology v2, built from the
 queue's numbers, is `docs/ontology-v2.md`.
 
+## 3e''. Pages: notes, projects, topics
+
+Pages are Markdown documents in the store (rationale R15). From the UI:
+"add a note" on any document creates an addendum page linked to it
+(`annotates`), the Pages tab creates topic and project pages and lists
+them, "edit page" opens the editor, every save is a revision with an
+author, and the context column offers "add to project" (`part_of`).
+From code or the MCP door: `write_page`, `append_page`, `get_page`.
+
+    PUT  /page/{slug}        {text, title?, kind?, author?, note?, annotates?, part_of?}
+    POST /page/{slug}/append {section, heading?}         # the agent's way in
+    GET  /page/{slug}, GET /page/{slug}/revision/{n}, GET /pages?kind=
+    POST /project/{slug}/members {doc_id}
+
+An agent revision over a human one is refused (HTTP 409, MCP error);
+`append_page` adds a section instead. Pages are extracted and embedded
+like any document, so a topic page's concepts enter the graph; the
+extractor's header carries `Kind: page` or `Kind: project`.
+
 ## 3f. Local models (optional)
 
 A GGUF model can run in-process through `llama-cpp-python` on the batch

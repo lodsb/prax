@@ -12,7 +12,8 @@ drop folder (`docs/sources.md`).
    FTS5 for BM25, a plain `edges` table for the graph, `chunk_embeddings`
    as the record of which chunk has a vector from which model, and
    `documents_fts` plus `document_embeddings` for the document-level
-   retrieval field (title, kind, summary). WAL mode always on. Vectors
+   retrieval field (title, kind, summary), `pages` and `page_revisions`
+   for the wiki pages that are documents too. WAL mode always on. Vectors
    themselves live in two usearch HNSW files per model next to the
    database (`data/vectors-<model>.usearch` keyed by chunk id,
    `data/vectors-doc-<model>.usearch` keyed by document id), memory-mapped

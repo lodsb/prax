@@ -177,6 +177,72 @@ def test_document_context(client: TestClient) -> None:
     assert client.get("/doc/999/context").status_code == 404
 
 
+def test_page_endpoints(client: TestClient) -> None:
+    paper = client.post(
+        "/ingest", json={"text": "grains", "title": "Grain Paper"}
+    ).json()["doc_id"]
+    r = client.put(
+        "/page/granular-study", json={"text": "# Study\n\nOpen.", "kind": "project"}
+    )
+    assert r.status_code == 200 and r.json()["created"] and r.json()["revision"] == 1
+    r = client.put(
+        "/page/note-1",
+        json={
+            "text": "Figure 3 matters.",
+            "kind": "addendum",
+            "annotates": [paper],
+            "part_of": "granular-study",
+            "title": "Note on grains",
+        },
+    )
+    assert r.status_code == 200
+    note_id = r.json()["doc_id"]
+    page = client.get("/page/note-1").json()
+    assert page["kind"] == "addendum" and page["text"] == "Figure 3 matters."
+    # agent may not overwrite; append works; a person may
+    r = client.put("/page/note-1", json={"text": "x", "author": "agent"})
+    assert r.status_code == 409
+    r = client.post(
+        "/page/note-1/append", json={"section": "Also this.", "heading": "Agent"}
+    )
+    assert r.status_code == 200 and r.json()["revision"] == 2
+    assert client.get("/page/note-1/revision/1").json()["text"] == "Figure 3 matters."
+    assert client.get("/page/note-1/revision/9").status_code == 404
+    assert (
+        client.put("/page/note-1", json={"text": "mine", "author": "human"}).json()[
+            "revision"
+        ]
+        == 3
+    )
+    listed = client.get("/pages").json()
+    assert {pg["slug"] for pg in listed} == {"granular-study", "note-1"}
+    assert [
+        pg["slug"] for pg in client.get("/pages", params={"kind": "project"}).json()
+    ] == ["granular-study"]
+    r = client.post("/project/granular-study/members", json={"doc_id": paper})
+    assert r.status_code == 200 and r.json()["edge_id"]
+    assert client.post(
+        "/project/granular-study/members", json={"doc_id": paper}
+    ).json()["existing"]
+    assert (
+        client.post("/project/nope/members", json={"doc_id": paper}).status_code == 404
+    )
+    ctx = client.get(f"/doc/{paper}/context").json()
+    assert [n["doc_id"] for n in ctx["notes"]] == [note_id]
+    proj = client.get("/page/granular-study").json()
+    pctx = client.get(f"/doc/{proj['doc_id']}/context").json()
+    assert {m["title"] for m in pctx["members"]} == {"Grain Paper", "Note on grains"}
+    assert client.get("/page/missing").status_code == 404
+    assert (
+        client.put("/page/bad", json={"text": "t", "kind": "diary"}).status_code == 400
+    )
+    assert (
+        client.put("/page/n9", json={"text": "t", "annotates": [999]}).status_code
+        == 404
+    )
+    assert client.post("/page/missing/append", json={"section": "s"}).status_code == 404
+
+
 def test_graph_overview(client: TestClient) -> None:
     from prax import store
 

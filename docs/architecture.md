@@ -179,6 +179,8 @@ chunk_embeddings chunk_id, model, embedded_at          (which model made the vec
 vectors-<model>.usearch   HNSW index keyed by chunk id, f16, cosine (a file, not a table)
 vectors-doc-<model>.usearch   HNSW index of the document field, keyed by document id
 documents_fts             FTS5 over the document field (title, kind, summary, ...)
+pages                     slug and kind of the documents that are wiki pages
+page_revisions            append-only: revision, text artifact hash, author, note
 document_embeddings       which document has a field vector from which model
 entities         id, name, type, canonical_id (resolution merges), created_at
 edges            src, dst, rel, confidence, weight, source_doc, ontology_version,

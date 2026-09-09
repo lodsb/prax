@@ -189,6 +189,10 @@ R14). Design in `docs/ui.md`.
       DOI documents
 - [x] Graph overview by default (hubs, the edges among them and
       co-occurrence links); double click opens a neighbourhood
+- [x] Pages (2026-09-10, migration 0006, rationale R15): notes on
+      documents, project threads with reading lists, topic pages; revisions
+      with author; agent appends, never overwrites; MCP tools; ontology v3
+      (page, project, annotates, part_of)
 - [x] Document-level retrieval field (2026-09-10, migration 0005):
       title, kind, summary and image description fused into search as two
       more rank lists; `doctype` filter; the one schematic now answers

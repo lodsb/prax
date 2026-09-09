@@ -21,6 +21,7 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `GET /entities?q&limit` | entities whose name contains `q`: id, name, type, degree |
 | `GET /ontology` | the current ontology: version, entity types, relations with domain and range |
 | `GET /review?limit&offset&open&rel&unmapped` | review-queue items with the total, filtered by relation and by unmapped (untyped) versus typed items; `POST /review/{id}` closes one (`dropped`, `ontology`, or `linked` with optional type and relation overrides, which writes the edge with the item's evidence and source); `POST /review/bulk` closes every open item matching a filter; `POST /review/replay` links the typed items the current ontology accepts |
+| `GET /pages?kind`, `GET /page/{slug}`, `GET /page/{slug}/revision/{n}` | pages (notes, projects, topics) with their revisions; `PUT /page/{slug}` creates or revises (409 when an agent would overwrite a person), `POST /page/{slug}/append` adds a section, `POST /project/{slug}/members` adds a document to a project |
 | `GET /graph/overview?limit&min_shared` | the most connected concepts, methods, tools and datasets, the edges among them, and co-occurrence links between hubs sharing source documents |
 | `GET /doc/{id}/context?limit` | what places a document in the library: extraction summary and entities, citations in and out (library documents resolved), nearest documents by vector (centroid of the document's chunk vectors, one KNN), documents sharing its entities or authors, Zotero parent, siblings, collections and tags |
 
@@ -33,6 +34,8 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `#browse?title=&source=&mime=&offset=` | paged document list with filters; a row opens the document |
 | `#graph` | the overview: the 30 most connected concepts, methods, tools and datasets as a force layout; a double-click on a node opens its neighbourhood |
 | `#graph?q=…` / `#graph?entity=…` | entity search, then the entity's neighbourhood as an SVG force layout (`GET /traverse`, one hop): nodes coloured by type and sized by degree, edges labelled with the relation, dashed when inferred or ambiguous; a click selects a node and expands it by one more hop; the side panel lists the selected node's edges with confidence, evidence and the source document; drag to pan, wheel to zoom |
+| `#pages` | the wiki: create topic and project pages; lists by kind with revision and author; a row opens the document view with the editor |
+| `#doc/<id>?edit=1` | a page's document view with the editor open: textarea, title, change note, revision list; "add a note" on a non-page document creates an addendum linked to it; the context column shows notes on a document, a project's members, and "add to project" |
 | `#review?rel=&unmapped=&offset=` | the review queue, filtered by relation and unmapped/typed: each misfit triple with its reason, evidence and source document, and a row form to drop it, mark it an ontology gap, or fix its types or relation from the current ontology and link it as an edge; "drop all matching" and "replay against ontology" act on the whole filter |
 
 ## Files

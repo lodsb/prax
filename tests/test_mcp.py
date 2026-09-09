@@ -3,6 +3,7 @@
 Tools run on a worker thread inside FastMCP, so this also covers the
 thread-affinity regression from the skeleton.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,8 +18,32 @@ from fastmcp import Client
 from prax import mcp_server
 
 EXPECTED_TOOLS = {
-    "search", "get", "get_chunk", "traverse", "link", "ingest", "ingest_file"
+    "search",
+    "get",
+    "get_chunk",
+    "traverse",
+    "link",
+    "ingest",
+    "ingest_file",
+    "get_page",
+    "write_page",
+    "append_page",
 }
+
+
+def test_page_tools() -> None:
+    r = call("write_page", slug="fdn-notes", text="# FDN\n\nAgent text.", kind="topic")
+    assert r["created"] and r["revision"] == 1
+    assert call("get_page", slug="fdn-notes")["text"].startswith("# FDN")
+    assert (
+        call("append_page", slug="fdn-notes", section="More.", heading="Later")[
+            "revision"
+        ]
+        == 2
+    )
+    assert "Later" in call("get_page", slug="fdn-notes")["text"]
+    assert "error" in call("get_page", slug="missing")
+    assert "error" in call("write_page", slug="x", text="t", kind="diary")
 
 
 @pytest.fixture(autouse=True)
@@ -79,8 +104,9 @@ def test_search_with_punctuation() -> None:
 
 def test_link_and_traverse() -> None:
     for a, b in [("A", "B"), ("B", "C"), ("C", "D")]:
-        r = call("link", src=a, src_type="concept", rel="extends",
-                 dst=b, dst_type="concept")
+        r = call(
+            "link", src=a, src_type="concept", rel="extends", dst=b, dst_type="concept"
+        )
         assert "edge_id" in r
     one = call("traverse", entity="A", hops=1)
     assert {(e["src"], e["dst"]) for e in one} == {("A", "B")}
@@ -89,8 +115,15 @@ def test_link_and_traverse() -> None:
 
 
 def test_link_bad_confidence_returns_error() -> None:
-    r = call("link", src="A", src_type="x", rel="r", dst="B", dst_type="x",
-             confidence="GUESS")
+    r = call(
+        "link",
+        src="A",
+        src_type="x",
+        rel="r",
+        dst="B",
+        dst_type="x",
+        confidence="GUESS",
+    )
     assert "error" in r
 
 
@@ -106,6 +139,7 @@ def test_ingest_file(tmp_path: Path) -> None:
 
 def test_ingest_file_missing_returns_error(tmp_path: Path) -> None:
     assert "error" in call("ingest_file", path=str(tmp_path / "nope.pdf"))
+
 
 def test_search_reports_kind_and_get_chunk() -> None:
     table = "Table 1: sizes\n\n| part | mm |\n|---|---|\n| bolt | 12 |\n"

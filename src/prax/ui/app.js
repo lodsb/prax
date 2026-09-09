@@ -242,16 +242,19 @@ async function viewDoc(id, p) {
   const meta = doc.meta || {};
   const highlight = p.chunk ? Number(p.chunk) : null;
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
+  const pageMeta = meta.page || null;
   view.innerHTML = `
   <header class="doc-head">
-    <h1>${esc(doc.title || "(untitled)")}</h1>
-    <div class="doc-meta">${metaLine(meta)}</div>
+    <h1>${pageMeta ? `<span class="kind-pill">${esc(pageMeta.kind)}</span> ` : ""}${esc(doc.title || "(untitled)")}</h1>
+    <div class="doc-meta">${metaLine(meta)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}</div>
     ${tags(meta)}
     <div class="doc-actions">
+      ${pageMeta ? `<a href="#" id="page-edit">edit page</a>` : `<a href="#" id="add-note">add a note</a>`}
       <a href="${originalHref(doc.id, firstPage)}" target="_blank" rel="noopener">open original ↗</a>
       <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
       <span class="muted">${esc(doc.mime || "")} · ${chunks.length} chunks · ${(doc.text_len || 0).toLocaleString()} chars · doc ${doc.id}</span>
     </div>
+    <div id="page-editor"></div>
   </header>
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
@@ -260,9 +263,28 @@ async function viewDoc(id, p) {
   </div>`;
   api(`/doc/${id}/context`).then((ctx) => {
     document.getElementById("doc-context").innerHTML = renderContext(ctx);
+    bindProjectForm(doc.id);
   }).catch((err) => {
     document.getElementById("doc-context").innerHTML = `<p class="error">${esc(err.message)}</p>`;
   });
+  if (pageMeta) {
+    document.getElementById("page-edit").addEventListener("click", (e) => { e.preventDefault(); openEditor(pageMeta.slug); });
+    if (p.edit) openEditor(pageMeta.slug);
+  } else {
+    document.getElementById("add-note").addEventListener("click", async (e) => {
+      e.preventDefault();
+      const slug = `note-${doc.id}-${Date.now().toString(36)}`;
+      try {
+        const r = await put(`/page/${slug}`, {
+          text: `# Note on ${doc.title || "document " + doc.id}\n\n`,
+          title: `Note on ${(doc.title || "").slice(0, 80)}`,
+          kind: "addendum",
+          annotates: [doc.id],
+        });
+        go("doc", String(r.doc_id), { edit: 1 });
+      } catch (err) { setStatus(err.message); }
+    });
+  }
   document.querySelectorAll("[data-scroll]").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault();
     const el = document.getElementById("chunk-" + a.dataset.scroll);
@@ -274,6 +296,71 @@ async function viewDoc(id, p) {
   }
 }
 
+async function put(path, body) {
+  setStatus("…");
+  const res = await fetch(path, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  setStatus("");
+  if (res.status === 401) { askForToken(); throw new Error("access token required"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
+// The page editor: the current Markdown in a textarea, saved as a new
+// revision; the revision list with links to earlier texts.
+async function openEditor(slug) {
+  const box = document.getElementById("page-editor");
+  if (!box || box.dataset.open) return;
+  box.dataset.open = "1";
+  let page;
+  try { page = await api(`/page/${slug}`); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  box.innerHTML = `
+    <div class="page-editor">
+      <textarea id="page-text">${esc(page.text)}</textarea>
+      <div class="row">
+        <input id="page-title" type="text" value="${esc(page.title || "")}" placeholder="title">
+        <input id="page-note" type="text" placeholder="what changed (optional)">
+        <button id="page-save">Save revision ${page.revision + 1}</button>
+        <button id="page-cancel" class="secondary" type="button">Cancel</button>
+        <span id="page-msg" class="muted"></span>
+      </div>
+      <div class="muted" style="margin-top:.4rem">Revisions: ${page.revisions.map((r) => `<a href="/page/${esc(slug)}/revision/${r.revision}" target="_blank" rel="noopener" title="${esc(r.note || "")}">r${r.revision} ${esc(r.author)} ${esc((r.created_at || "").slice(0, 10))}</a>`).join(" · ")}</div>
+    </div>`;
+  document.getElementById("page-cancel").addEventListener("click", () => { box.innerHTML = ""; delete box.dataset.open; });
+  document.getElementById("page-save").addEventListener("click", async () => {
+    const msg = document.getElementById("page-msg");
+    try {
+      await put(`/page/${slug}`, {
+        text: document.getElementById("page-text").value,
+        title: document.getElementById("page-title").value || null,
+        note: document.getElementById("page-note").value || null,
+        author: "human",
+      });
+      render();
+    } catch (err) { msg.textContent = err.message; }
+  });
+}
+
+async function bindProjectForm(docId) {
+  const form = document.getElementById("project-form");
+  if (!form) return;
+  let projects = [];
+  try { projects = await api("/pages", { kind: "project" }); } catch (_) { return; }
+  if (!projects.length) { form.innerHTML = `<span class="muted">no project pages yet</span>`; return; }
+  form.innerHTML = `<select name="slug">${projects.map((pr) => `<option value="${esc(pr.slug)}">${esc(pr.title)}</option>`).join("")}</select> <button>add to project</button> <span class="muted msg"></span>`;
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const slug = form.querySelector("select").value;
+    try {
+      const r = await post(`/project/${slug}/members`, { doc_id: docId });
+      form.querySelector(".msg").textContent = r.existing ? "already a member" : "added";
+      const ctx = await api(`/doc/${docId}/context`);
+      document.getElementById("doc-context").innerHTML = renderContext(ctx);
+      bindProjectForm(docId);
+    } catch (err) { form.querySelector(".msg").textContent = err.message; }
+  });
+}
+
 // The context column: where the document sits in the library.
 function renderContext(ctx) {
   const docLink = (d, extra) => `<li><a href="#doc/${d.doc_id}">${esc(d.title || "(untitled)")}</a>${extra ? ` <span class="muted">${extra}</span>` : ""}</li>`;
@@ -283,6 +370,10 @@ function renderContext(ctx) {
   if (ctx.entities.length) {
     parts.push(`<h3>Entities</h3><div class="chips">${ctx.entities.map((e) =>
       `<a class="chip" style="--c:${typeColor(e.type)}" href="#graph?entity=${encodeURIComponent(e.name)}" title="${esc(e.rel)} · ${esc(e.type)} · ${esc(e.confidence)}">${esc(e.name)}</a>`).join("")}</div>`);
+  }
+  parts.push(list("Notes on this document", ctx.notes || [], (d) => docLink(d, esc(d.kind))));
+  if (ctx.page && ctx.page.kind === "project") {
+    parts.push(list("In this project", ctx.members || [], (d) => d.doc_id ? docLink(d, esc(d.type)) : `<li>${esc(d.title)} <span class="muted">${esc(d.type)}</span></li>`));
   }
   parts.push(list("Similar documents", ctx.similar, (d) => docLink(d, `${d.score.toFixed(2)}`)));
   parts.push(list("Shares entities with", ctx.shared, (d) => docLink(d, `${d.count}: ${esc(d.entities.join(", "))}`)));
@@ -303,6 +394,7 @@ function renderContext(ctx) {
   if (z.collections.length) zbits.push(`<li class="muted">📁 ${z.collections.map(esc).join(" · ")}</li>`);
   if (z.tags.length) zbits.push(`<li class="muted">${z.tags.map(esc).join(" · ")}</li>`);
   if (zbits.length) parts.push(`<h3>Zotero</h3><ul>${zbits.join("")}</ul>`);
+  if (!(ctx.page && ctx.page.kind === "project")) parts.push(`<h3>Projects</h3><form id="project-form" class="search-form"><span class="muted">…</span></form>`);
   const body = parts.filter(Boolean).join("");
   return body || `<p class="muted">Nothing connects this document yet: no extraction, no citations, no neighbours.</p>`;
 }
@@ -630,6 +722,58 @@ async function viewGraph(arg, p) {
   }
 }
 
+// ----------------------------------------------------------------- pages
+// The wiki: notes on documents, project threads, topic pages. Each is a
+// document, so a row opens the document view with its editor.
+
+async function viewPages(p) {
+  view.innerHTML = `
+  <form id="new-page" class="search-form">
+    <input name="title" type="text" placeholder="new page title…" required>
+    <select name="kind">
+      <option value="topic">topic</option>
+      <option value="project">project</option>
+    </select>
+    <button>Create</button>
+    <span id="page-create-msg" class="error"></span>
+  </form>
+  <div id="pages-list"><p class="muted">Loading…</p></div>`;
+  document.getElementById("new-page").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(e.target));
+    const slug = data.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+    try {
+      const r = await put(`/page/${slug}`, {
+        text: data.kind === "project"
+          ? `# ${data.title}\n\n## Status\n\n## Open questions\n\n## Log\n\n`
+          : `# ${data.title}\n\n`,
+        title: data.title,
+        kind: data.kind,
+      });
+      go("doc", String(r.doc_id), { edit: 1 });
+    } catch (err) { document.getElementById("page-create-msg").textContent = err.message; }
+  });
+  const list = document.getElementById("pages-list");
+  try {
+    const pages = await api("/pages", { kind: p.kind });
+    if (!pages.length) { list.innerHTML = `<p class="muted">No pages yet. Create a topic or project page above, or add a note from any document.</p>`; return; }
+    const groups = { project: "Projects", topic: "Topics", addendum: "Notes on documents" };
+    list.innerHTML = Object.entries(groups).map(([kind, label]) => {
+      const rows = pages.filter((pg) => pg.kind === kind);
+      if (!rows.length) return "";
+      return `<h2 style="font-size:1rem;margin:1rem 0 .3rem">${label}</h2>
+        <table class="doc-list page-list"><tbody>${rows.map((pg) => `<tr>
+          <td><a href="#doc/${pg.doc_id}">${esc(pg.title || pg.slug)}</a></td>
+          <td class="muted">${esc(pg.slug)}</td>
+          <td class="muted">r${pg.revision} · ${esc(pg.author || "")}</td>
+          <td class="muted">${esc((pg.updated_at || "").slice(0, 16).replace("T", " "))}</td>
+        </tr>`).join("")}</tbody></table>`;
+    }).join("");
+  } catch (err) {
+    list.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  }
+}
+
 // ---------------------------------------------------------------- review
 // Misfit triples parked by extraction (invariant 9). Each item can be
 // dropped, marked as an ontology gap, or linked as an edge after fixing its
@@ -747,7 +891,7 @@ async function viewReview(p) {
 
 // ---------------------------------------------------------------- router
 
-const views = { search: viewSearch, browse: viewBrowse, review: viewReview };
+const views = { search: viewSearch, browse: viewBrowse, review: viewReview, pages: viewPages };
 
 async function render() {
   const r = route();
