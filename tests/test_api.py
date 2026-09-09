@@ -11,6 +11,12 @@ from fastapi.testclient import TestClient
 from prax.api import app
 
 
+def ontology_version_now() -> str:
+    from prax import ontology
+
+    return ontology.current().version
+
+
 @pytest.fixture()
 def client() -> Iterator[TestClient]:
     with TestClient(app) as c:  # runs the lifespan: opens the store
@@ -343,19 +349,23 @@ def test_review_filters_bulk_and_replay(
     assert (rep["linked"], rep["still_open"]) == (1, 1)
     edge = client.get("/traverse", params={"entity": "Fourier"}).json()[0]
     assert (edge["rel"], edge["evidence"]) == ("uses", "q")
-    assert edge["ontology_version"] == "2"
+    assert edge["ontology_version"] == ontology_version_now()
     assert client.get("/review").json()["total"] == 1
     import re
 
-    v2 = (Path(__file__).parents[1] / "ontology.yaml").read_text(encoding="utf-8")
-    v3 = re.sub(
-        r"(cites:\s+domain: \[paper\]\s+range: )\[paper\]", r"\1[paper, tool]", v2
-    ).replace('version: "2"', 'version: "3"')
-    assert 'version: "3"' in v3 and "range: [paper, tool]" in v3
-    (tmp_path / "onto.yaml").write_text(v3, encoding="utf-8")
+    v_now = (Path(__file__).parents[1] / "ontology.yaml").read_text(encoding="utf-8")
+    current = re.search(r'^version: "(\d+)"', v_now, re.MULTILINE).group(
+        1
+    )  # the repo file
+    later = str(int(current) + 1)
+    v_next = re.sub(
+        r"(cites:\s+domain: \[[^\]]*\]\s+range: )\[paper\]", r"\1[paper, tool]", v_now
+    ).replace(f'version: "{current}"', f'version: "{later}"')
+    assert f'version: "{later}"' in v_next and "range: [paper, tool]" in v_next
+    (tmp_path / "onto.yaml").write_text(v_next, encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(tmp_path / "onto.yaml"))
     rep = client.post("/review/replay").json()
-    assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == ("3", 1, 0)
+    assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == (later, 1, 0)
     assert client.get("/review").json()["total"] == 0
     assert store.get_review(con, typed)["resolution"] == "linked"
 

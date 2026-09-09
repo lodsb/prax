@@ -15,7 +15,11 @@
 # `advised_by` added; method-versus-concept and reference-number rules put
 # into the descriptions. `related_to` and a music `work` type deliberately
 # left out for now.
-version: "2"
+# v3 (2026-09-10): pages (rationale R15). Entity types `page` and `project`
+# for the living documents in the store; `annotates` and `part_of` connect
+# them to papers and to each other; `cites` and `about` accept a page as
+# source, so an extracted page enters the graph like a paper.
+version: "3"
 
 entity_types:
   paper:
@@ -57,10 +61,20 @@ entity_types:
       One sentence stating a result or assertion the document makes, in
       the document's own terms ("SSST resolves close tones that SST
       merges"). Only for central findings.
+  page:
+    description: >-
+      A page written in this library (a note on a document, a topic
+      write-up), named by its title. The document being extracted is a
+      page when its header says "Kind: page".
+  project:
+    description: >-
+      An ongoing research thread or project page in this library, named
+      by its title. The document being extracted is a project when its
+      header says "Kind: project".
 
 relation_types:
   cites:
-    domain: [paper]
+    domain: [paper, page, project]
     range: [paper]
     description: >-
       the document names another paper by title; never by reference number
@@ -73,7 +87,7 @@ relation_types:
     range: [venue]
     description: the venue the document appeared in
   about:
-    domain: [paper, claim]
+    domain: [paper, claim, page, project]
     range: [concept, method, tool]
     description: >-
       the document or claim is substantially about the concept, method or
@@ -123,3 +137,11 @@ relation_types:
     domain: [author]
     range: [author]
     description: doctoral or research supervision stated in the text
+  annotates:
+    domain: [page]
+    range: [paper, page]
+    description: a page written about a document (a note, a commentary, an addendum)
+  part_of:
+    domain: [paper, page]
+    range: [project]
+    description: the document belongs to a project's reading list or thread

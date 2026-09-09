@@ -89,6 +89,9 @@ def build_input(
         raise KeyError(f"no such document: {doc_id}")
     meta = doc["meta"] or {}
     lines = [f"Title: {doc['title'] or '(untitled)'}"]
+    page = meta.get("page") or {}
+    if page.get("kind"):
+        lines.append(f"Kind: {'project' if page['kind'] == 'project' else 'page'}")
     creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
     if creators:
         lines.append("Authors: " + ", ".join(creators))
@@ -241,8 +244,9 @@ def system_prompt(
     )
     rules = [
         (
-            "The document itself is a paper entity named exactly by its Title line."
-            " Every triple about the document uses that name."
+            "The document itself is a paper entity named exactly by its Title line,"
+            " or a page or project entity when the header has a Kind line saying"
+            " so. Every triple about the document uses that name."
         ),
         (
             f"Emit at most {max_triples} triples. Prefer the few that a reader"
