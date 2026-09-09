@@ -110,11 +110,13 @@ def parse_one(
         return "seen"
     data = store.get_original(con, doc_id)
     old_len = doc["text_len"]
+    path = doc.get("original_path")
+    filename = path.replace("\\", "/").rsplit("/", 1)[-1] if path else None
     last_error: Exception | None = None
     for ext in exts:
         t0 = time.monotonic()
         try:
-            text = ext(data).strip()
+            text = ext(data, filename=filename).strip()
         except Exception as exc:  # noqa: BLE001 - recorded; the next candidate is tried
             last_error = exc
             _record(

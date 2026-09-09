@@ -125,6 +125,25 @@ re-selects what is left, so batching costs nothing:
 Originals above `PRAX_MAX_LAYOUT_MB` (default 40) skip layout analysis and
 get plain text through the fallback.
 
+Code is kept as code. HTML pages come out as Markdown with `<pre>` blocks
+fenced (trafilatura's Markdown output). Text attachments that are source
+files become one fenced block with a language: the filename's extension
+decides when it is telling (`.m`, `.py`, `.scd`, `.h`, ...), otherwise
+Magika, a small content-type model in the `ingest` extra, classifies the
+bytes and only a confident programming-language verdict counts (a
+bibliographic note full of "Key: value" lines scores as YAML and stays
+prose). Extractors carry a `revision` in their stamp (`plain/1-r2`) so
+such changes re-select what they wrote:
+
+    python scripts/parse_pending.py --upgrade trafilatura --mime text/html
+    python scripts/parse_pending.py --upgrade plain --mime text/plain
+    python scripts/embed_pending.py --compact      # vectors for the new chunks
+
+For PDFs, pymupdf4llm fences monospace runs, which misses code set in a
+proportional font; Docling's layout model has an explicit code label and
+is the better extractor for a hand-picked set of code-heavy papers
+(`--ids ... --extractor docling --force`).
+
 ## 3c. Chunks
 
 `prax.chunking` turns each text artifact into structure-aware chunks

@@ -7,6 +7,7 @@ models and takes minutes); everything else runs on every checkout with the
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sqlite3
 from pathlib import Path
@@ -32,6 +33,44 @@ needs_trafilatura = pytest.mark.skipif(
 # ---------------------------------------------------------------- registry
 
 
+def test_plain_fences_source_files_by_extension_or_content() -> None:
+    plain = parsers.by_name("plain")
+    assert plain.stamp == "plain/1-r2" and plain.hints
+    code = b"function y = lim(x, t)\n  y = min(max(x, -t), t);\nend\n"
+    out = plain(code, filename="getFilename.m")
+    assert out.startswith("```matlab\n") and out.endswith("\nend\n```")
+    prose = b"Comment: 11 pages. In Advances in Neural Information Processing Systems"
+    assert plain(prose, filename=None) == prose.decode()
+    assert (
+        plain(code, filename="notes.txt") == code.decode()
+    )  # a telling extension wins
+    assert plain(b"```python\nx = 1\n```", filename="a.py").startswith("```python\nx")
+    assert parsers.code_language("", "x.py") == "python"
+    assert parsers.code_language("hello there", None) is None
+
+
+@pytest.mark.skipif(
+    not parsers.by_name("plain").available()
+    or importlib.util.find_spec("magika") is None,
+    reason="magika not installed",
+)
+def test_plain_detects_code_without_an_extension() -> None:
+    py = (
+        b"import numpy as np\n\ndef stft(x, n=1024):\n"
+        b"    return np.fft.rfft(x[:n] * np.hanning(n))\n"
+    )
+    assert parsers.by_name("plain")(py).startswith("```python\n")
+    text = b"Time-scale modification of audio is an essential tool in music production."
+    assert parsers.by_name("plain")(text) == text.decode()
+    note = (  # bibliographic notes look like YAML to a classifier: not code
+        b'Comment: "Highlights of Spanish Astrophysics V", Proceedings of the VIII'
+        b" Scientific Meeting of the Spanish Astronomical Society (SEA) held in"
+        b" Santander, 7-11 July, 2008. Edited by J. Gorgas, L. J. Goicoechea."
+    )
+    assert parsers.by_name("plain")(note) == note.decode()
+    assert parsers.code_language("a: 1", "conf.yaml") == "yaml"  # extension wins
+
+
 def test_registry_dispatch() -> None:
     assert parsers.for_mime("text/plain").name == "plain"
     assert parsers.for_mime("text/markdown").name == "plain"
@@ -40,7 +79,7 @@ def test_registry_dispatch() -> None:
     with pytest.raises(KeyError):
         parsers.by_name("nope")
     plain = parsers.by_name("plain")
-    assert plain.stamp == "plain/1"
+    assert plain.stamp == "plain/1-r2"
     assert plain(b"h\xc3\xa9llo") == "héllo"
     # explicit-only extractors are never in the default chain, only when named
     chain = [e.name for e in parsers.candidates("application/pdf")]
@@ -97,6 +136,21 @@ def test_oversized_pdf_falls_back_to_plain_extraction(
     doc_id = store.register(con, data, mime="application/pdf", title="big")["doc_id"]
     assert queue.run(con, [doc_id]).actions == {"created": 1}
     assert store.get_meta(con, doc_id)["text_source"].startswith("pymupdf/")
+
+
+@needs_trafilatura
+def test_trafilatura_fences_code_blocks() -> None:
+    html = (
+        b"<html><head><title>Reverb tricks</title></head><body><article>"
+        b"<h1>Reverb tricks</h1><p>Some prose about feedback delay networks that"
+        b" is long enough to be kept by the extractor as the main content.</p>"
+        b"<pre><code>def fdn(x, delays):\n    return sum(x[-d] for d in delays)\n"
+        b"</code></pre><p>More prose after the code block, again long enough to"
+        b" count as content for the extraction step.</p></article></body></html>"
+    )
+    text = parsers.by_name("trafilatura")(html)
+    assert "```\ndef fdn(x, delays):" in text and "# Reverb tricks" in text
+    assert parsers.by_name("trafilatura").stamp.endswith("-r2")
 
 
 @needs_trafilatura
@@ -230,7 +284,7 @@ def test_queue_falls_back_to_next_extractor(
     doc_id = store.register(con, b"plain body text " * 20, mime="text/plain")["doc_id"]
     assert queue.run(con, [doc_id]).actions == {"created": 1}
     meta = store.get_meta(con, doc_id)
-    assert meta["text_source"] == "plain/1"
+    assert meta["text_source"] == "plain/1-r2"
     assert [h.get("error", h.get("outcome")) for h in meta["parse_history"]] == [
         "RuntimeError: markdown path failed",
         "created",

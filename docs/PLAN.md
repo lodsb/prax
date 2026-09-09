@@ -183,6 +183,10 @@ R14). Design in `docs/ui.md`.
       chosen. Selection skips documents under 500 characters of text.
 - [ ] Full run over the remaining 7,955 documents via the batch API
       (about $135 at the measured 2,500 output tokens per document)
+- [x] Code kept as code (2026-09-10): HTML `<pre>` blocks fenced, source
+      attachments fenced by extension or Magika; extractor revisions in
+      the stamp; 105 pages and 100 attachments re-parsed (48 and 11 code
+      chunks where there was 1)
 - [x] Local model option measured (`docs/eval/local-llm-2026-09-08.md`):
       llama-cpp-python CUDA wheel runs on the GTX 1070 (`prax.local_llm`,
       `local` extra, `scripts/bench_local_llm.py`); Qwen2.5-7B Q4 gives

@@ -17,12 +17,16 @@ time, so the serving path never loads them):
 |                 |                 | explicit only, page budget PRAX_OCR_MAX_PAGES |
 | docling         | application/pdf | IBM Docling layout + table models; explicit   |
 |                 |                 | only, seconds per page                        |
-| trafilatura     | text/html       | article text, boilerplate stripped            |
-| plain           | text/*          | decode as UTF-8                               |
+| trafilatura     | text/html       | article Markdown, boilerplate stripped, code  |
+|                 |                 | blocks fenced                                 |
+| plain           | text/*          | decode as UTF-8; a source file (by extension, |
+|                 |                 | else Magika) becomes one fenced code block    |
 
 Adding one: write a function ``bytes -> str``, wrap it in ``Extractor`` and
 append it to ``REGISTRY``. Order within a MIME type is the preference and
-fallback order; ``explicit_only`` extractors are used only when named.
+fallback order; ``explicit_only`` extractors are used only when named. An
+extractor whose output changes without a package release bumps its
+``revision`` so the queue's ``--upgrade`` re-selects what it wrote.
 """
 
 from __future__ import annotations
@@ -39,9 +43,11 @@ from typing import Any
 class Extractor:
     name: str
     mimes: tuple[str, ...]  # exact types, or a prefix ending in "/"
-    fn: Callable[[bytes], str]
+    fn: Callable[..., str]
     package: str | None = None  # distribution whose version is stamped
     explicit_only: bool = False  # never chosen by default or as a fallback
+    revision: int = 1  # our own changes to what the extractor produces
+    hints: bool = False  # the function takes filename= as a keyword
 
     def accepts(self, mime: str) -> bool:
         return any(
@@ -60,18 +66,22 @@ class Extractor:
     @property
     def version(self) -> str:
         if self.package is None:
-            return "1"
-        try:
-            return importlib.metadata.version(self.package)
-        except importlib.metadata.PackageNotFoundError:
-            return "?"
+            base = "1"
+        else:
+            try:
+                base = importlib.metadata.version(self.package)
+            except importlib.metadata.PackageNotFoundError:
+                base = "?"
+        return base if self.revision == 1 else f"{base}-r{self.revision}"
 
     @property
     def stamp(self) -> str:
         """What ``meta.text_source`` records: ``"<name>/<version>"``."""
         return f"{self.name}/{self.version}"
 
-    def __call__(self, data: bytes) -> str:
+    def __call__(self, data: bytes, *, filename: str | None = None) -> str:
+        if self.hints:
+            return self.fn(data, filename=filename)
         return self.fn(data)
 
 
@@ -163,7 +173,11 @@ def _docling(data: bytes) -> str:
 def _trafilatura(data: bytes) -> str:
     trafilatura = importlib.import_module("trafilatura")
     text = trafilatura.extract(
-        data, include_tables=True, include_links=False, include_comments=False
+        data,
+        output_format="markdown",  # headings, lists and fenced code blocks
+        include_tables=True,
+        include_links=False,
+        include_comments=False,
     )
     if not text:
         raise ExtractionError("trafilatura found no main content")
@@ -172,8 +186,70 @@ def _trafilatura(data: bytes) -> str:
     return f"# {title}\n\n{text}" if title and title not in text[:200] else text
 
 
-def _plain(data: bytes) -> str:
-    return data.decode("utf-8", errors="replace")
+def _plain(data: bytes, *, filename: str | None = None) -> str:
+    text = data.decode("utf-8", errors="replace")
+    lang = code_language(text, filename)
+    if lang is None or text.lstrip().startswith("```"):
+        return text
+    return f"```{lang}\n{text.strip()}\n```"
+
+
+# Source files a Zotero attachment or a drop folder may hold, by extension.
+CODE_EXTENSIONS = {
+    "py": "python", "c": "c", "h": "c", "cpp": "cpp", "cc": "cpp", "hpp": "cpp",
+    "js": "javascript", "ts": "typescript", "java": "java", "m": "matlab",
+    "scd": "supercollider", "sc": "supercollider", "lua": "lua", "rs": "rust",
+    "go": "go", "jl": "julia", "r": "r", "sh": "bash", "ps1": "powershell",
+    "pd": "puredata", "dsp": "faust", "lib": "faust", "cs": "csharp",
+    "swift": "swift", "kt": "kotlin", "sql": "sql", "json": "json", "yaml": "yaml",
+    "yml": "yaml", "toml": "toml", "css": "css", "max": "max",
+}  # fmt: skip
+MAGIKA_MIN_SCORE = 0.75
+MAGIKA_SAMPLE = 64_000  # bytes; the classifier looks at the head and tail
+# Content-based detection accepts programming languages only: a bibliographic
+# note full of "Key: value" lines scores as YAML, and data formats are prose
+# to the reader anyway. An extension still wins for these.
+MAGIKA_DATA_LABELS = frozenset(
+    {"yaml", "json", "toml", "xml", "ini", "csv", "tsv", "markdown", "txt", "html"}
+)
+
+
+def code_language(text: str, filename: str | None = None) -> str | None:
+    """The language when ``text`` is source code, else None. The filename's
+    extension decides when it is telling; otherwise Magika (Google's small
+    content-type model, optional) classifies the bytes and its language
+    label is used when it is confident the content is code."""
+    if filename and "." in filename:
+        ext = filename.rsplit(".", 1)[1].lower()
+        if ext in CODE_EXTENSIONS:
+            return CODE_EXTENSIONS[ext]
+        if ext in ("txt", "md", "markdown", "rst", "html", "htm", "csv", "tsv"):
+            return None
+    if not text.strip():
+        return None
+    try:
+        magika = importlib.import_module("magika")
+    except ImportError:
+        return None
+    result = _magika(magika).identify_bytes(text[:MAGIKA_SAMPLE].encode("utf-8"))
+    out = result.output
+    if (
+        out.group == "code"
+        and result.score >= MAGIKA_MIN_SCORE
+        and out.label not in MAGIKA_DATA_LABELS
+    ):
+        return str(out.label)
+    return None
+
+
+_MAGIKA: Any = None
+
+
+def _magika(module: Any) -> Any:
+    global _MAGIKA
+    if _MAGIKA is None:
+        _MAGIKA = module.Magika()
+    return _MAGIKA
 
 
 REGISTRY: list[Extractor] = [
@@ -192,8 +268,9 @@ REGISTRY: list[Extractor] = [
         ("text/html", "application/xhtml+xml"),
         _trafilatura,
         "trafilatura",
+        revision=2,  # Markdown output with fenced code blocks
     ),
-    Extractor("plain", ("text/",), _plain),
+    Extractor("plain", ("text/",), _plain, revision=2, hints=True),
 ]
 
 
