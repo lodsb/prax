@@ -28,9 +28,10 @@ Extras, install only where they run (see `rationale.md` R8):
 | Extra | Contents | Where |
 |---|---|---|
 | `dev` | pytest, ruff, httpx | every dev checkout |
-| `embed` | sqlite-vec, onnxruntime, tokenizers, huggingface_hub | Stage 2; the desktop (GPU via onnxruntime-directml) and the serving host |
-| `ingest` | pymupdf4llm, trafilatura | Stage 1 parse queue; the desktop |
+| `embed` | usearch, onnxruntime, tokenizers, huggingface_hub, numpy | the desktop (GPU via onnxruntime-directml) and the serving host |
+| `ingest` | pymupdf4llm, trafilatura, magika | the parse queue; the desktop |
 | `docling` | docling (about 3 GB with PyTorch) | optional; only for `--extractor docling` |
+| `local` | llama-cpp-python | optional; a GGUF model in process, section 3h |
 
 Check the installed FastMCP major version after upgrades; the code targets
 the 4.x line:
@@ -73,7 +74,7 @@ before migrations existed (version 0) is upgraded in place.
 `version`. `store.link` rejects anything else. Add types and bump the
 version; edges keep the version they were written under. `PRAX_ONTOLOGY`
 points at a different file (tests use it). After a bump, replay the review
-queue (`scripts/replay_review.py`, section 3e') before extracting anything
+queue (`scripts/replay_review.py`, section 3f) before extracting anything
 new; the bump also re-selects every document for extraction. The reasoning
 behind v2 is in `docs/ontology-v2.md`.
 
@@ -198,10 +199,7 @@ a run afterwards; `--compact` alone drops stale keys without embedding.
 
 The job saves the index every 50,000 chunks and reconciles index and
 bookkeeping on start, so an interrupted run is simply started again. Copy
-the `.usearch` file together with `prax.db` when moving the store. A store
-that still has the Stage 2 `chunks_vec` table loses it on the next
-`init_db` (sqlite-vec must still be importable for that); run `VACUUM`
-once afterwards to reclaim about 1.3 GB.
+both `.usearch` files together with `prax.db` when moving the store.
 
 Settings: `PRAX_EMBED` (model name, `hash` for tests, `0` off),
 `PRAX_EMBED_VARIANT` (`fp32` on a GPU, `int8` on CPU by default),
@@ -254,7 +252,7 @@ asks for tab-separated lines instead of JSON under a grammar that bounds
 the output to 20 triples (`prax.lineformat`); the extractor name stamped
 on documents is `local:<model file>` and its cost is zero.
 Bumping the ontology version re-selects every document. Review the queue
-with `store.list_review` (a UI view is planned) and close items with
+in the UI's Review tab (section 3g) or with `store.list_review` and
 `resolve_review`.
 
 ### Entity resolution
@@ -272,7 +270,7 @@ and merge nothing unless an adjudicator says yes. A merge sets
 `entities.canonical_id`; nothing is deleted, `traverse` and the UI follow
 the pointer, and undoing one is clearing that column.
 
-## 3e'. Citation network
+## 3f. Citation network
 
 `prax.importers.citations` asks OpenAlex or Crossref for each document's
 reference list and citation count (by DOI, or by exact title with
@@ -296,7 +294,7 @@ against the current ontology; the same is available as
 `scripts/replay_review.py`. The proposal for ontology v2, built from the
 queue's numbers, is `docs/ontology-v2.md`.
 
-## 3e''. Pages: notes, projects, topics
+## 3g. Pages: notes, projects, topics
 
 Pages are Markdown documents in the store (rationale R15). From the UI:
 "add a note" on any document creates an addendum page linked to it
@@ -315,7 +313,7 @@ An agent revision over a human one is refused (HTTP 409, MCP error);
 like any document, so a topic page's concepts enter the graph; the
 extractor's header carries `Kind: page` or `Kind: project`.
 
-## 3f. Local models (optional)
+## 3h. Local models (optional)
 
 A GGUF model can run in-process through `llama-cpp-python` on the batch
 host, for extraction of new documents without the API, private material,

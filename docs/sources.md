@@ -2,7 +2,7 @@
 
 What feeds prax, how each source maps onto the store, and what each
 importer must and must not do. All of these are Stage 1 work except where
-noted; Stage 0 only provides the `register` / `index_text` / `link` calls
+noted; the store provides the `register` / `index_text` / `link` calls
 they use. Every source is a client of `prax.store` (CLAUDE.md invariant 3)
 and never writes back to where it read from (invariant 10).
 
@@ -232,7 +232,7 @@ Not documents but edges: `scripts/import_citations.py` looks each
 document up by DOI (or exact title) and writes `cites` edges from the
 source's reference list, with the citation count in `meta.citations`.
 Read-only, no key, idempotent per document. Details in
-`prax.importers.citations` and `docs/howto.md` 3e'.
+`prax.importers.citations` and `docs/howto.md` 3f.
 
 ## 2. Browser capture
 
