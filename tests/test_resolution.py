@@ -105,6 +105,28 @@ def test_merge_rules(con: sqlite3.Connection) -> None:
         store.merge_entities(con, 999, smith)
 
 
+def test_concept_method_twins_merge_into_the_method(con: sqlite3.Connection) -> None:
+    store.link(con, E("P", "paper", "about", "empirical mode decomposition", "concept"))
+    store.link(con, E("Q", "paper", "uses", "Empirical Mode Decomposition", "method"))
+    store.link(con, E("Q", "paper", "about", "timbre", "concept"))
+    plan = resolution.plan(con, embed=False)
+    assert plan.sure == []
+    assert [(c.drop_name, c.keep_name) for c in plan.twins] == [
+        ("empirical mode decomposition", "Empirical Mode Decomposition")
+    ]
+    with pytest.raises(ValueError, match="different types"):
+        store.merge_entities(con, plan.twins[0].drop, plan.twins[0].keep)
+    assert resolution.apply(con, plan).merged_twins == 0  # only when asked
+    report = resolution.apply(con, plan, twins=True)
+    assert report.merged_twins == 1
+    edges = store.traverse(con, "Empirical Mode Decomposition", hops=1)
+    assert {(e["src"], e["rel"]) for e in edges} == {("P", "about"), ("Q", "uses")}
+    assert [e["name"] for e in store.find_entities(con, "mode decomposition")] == [
+        "Empirical Mode Decomposition"
+    ]
+    assert resolution.plan(con, embed=False).twins == []
+
+
 def test_likely_tier_needs_an_adjudicator(con: sqlite3.Connection) -> None:
     store.link(con, E("P", "paper", "about", "granular synthesis", "concept"))
     store.link(con, E("Q", "paper", "about", "granular synthesis method", "concept"))

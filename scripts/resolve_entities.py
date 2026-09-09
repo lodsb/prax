@@ -34,6 +34,11 @@ def main() -> int:
         "--adjudicate", action="store_true", help="ask Claude about likely pairs"
     )
     ap.add_argument("--model", default="claude-opus-5")
+    ap.add_argument(
+        "--twins",
+        action="store_true",
+        help="merge a concept into the method of the same name",
+    )
     ap.add_argument("--show", type=int, default=40, help="candidates to print per tier")
     a = ap.parse_args()
 
@@ -45,7 +50,12 @@ def main() -> int:
         f" candidates{' (' + a.type + ')' if a.type else ''}",
         file=sys.stderr,
     )
-    for tier, items in (("sure", plan.sure), ("likely", plan.likely)):
+    print(f"  {len(plan.twins)} concept/method twins", file=sys.stderr)
+    for tier, items in (
+        ("sure", plan.sure),
+        ("twins", plan.twins),
+        ("likely", plan.likely),
+    ):
         for c in items[: a.show]:
             print(
                 f"  {tier:6} {c.score:.2f} [{c.type}] {c.drop_name!r}"
@@ -56,10 +66,10 @@ def main() -> int:
     if a.dry_run:
         return 0
     adjudicator = resolution.ClaudeAdjudicator(model=a.model) if a.adjudicate else None
-    report = resolution.apply(con, plan, adjudicator=adjudicator)
+    report = resolution.apply(con, plan, adjudicator=adjudicator, twins=a.twins)
     print(
-        f"merged {report.merged_sure} sure and {report.merged_likely} likely;"
-        f" {report.declined} declined"
+        f"merged {report.merged_sure} sure, {report.merged_twins} twins and"
+        f" {report.merged_likely} likely; {report.declined} declined"
     )
     con.close()
     return 0

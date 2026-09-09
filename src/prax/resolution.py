@@ -80,21 +80,29 @@ class Candidate:
 class Plan:
     sure: list[Candidate] = field(default_factory=list)
     likely: list[Candidate] = field(default_factory=list)
+    twins: list[Candidate] = field(default_factory=list)  # concept + method, one name
+
+
+# A technique extracted as both a concept and a method (the v1 prompt let
+# that happen; "empirical mode decomposition" had 47 and 103 edges): the
+# ontology says a technique is a method, so the concept merges into it.
+TWIN_TYPES = ("concept", "method")
 
 
 def _entities(con: sqlite3.Connection, etype: str | None) -> list[dict[str, Any]]:
     where = "WHERE canonical_id IS NULL" + (" AND type = ?" if etype else "")
     args: tuple[Any, ...] = (etype,) if etype else ()
+    degree: dict[int, int] = defaultdict(int)
+    for col in ("src", "dst"):  # two indexed group-bys instead of an OR per entity
+        for r in con.execute(
+            f"SELECT {col} AS id, count(*) AS n FROM edges WHERE valid_to IS NULL"
+            f" GROUP BY {col}"
+        ):
+            degree[r["id"]] += r["n"]
     rows = con.execute(
-        f"""
-        SELECT e.id, e.name, e.type,
-               (SELECT count(*) FROM edges x
-                WHERE (x.src = e.id OR x.dst = e.id) AND x.valid_to IS NULL) AS degree
-        FROM entities e {where} ORDER BY e.id
-        """,
-        args,
+        f"SELECT e.id, e.name, e.type FROM entities e {where} ORDER BY e.id", args
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [{**dict(r), "degree": degree.get(r["id"], 0)} for r in rows]
 
 
 def _rank(e: dict[str, Any]) -> tuple[int, int, int, int]:
@@ -172,6 +180,28 @@ def plan(
                 )
             )
             taken.add(drop["id"])
+
+    # tier 1c: the same name as a concept and as a method; the method survives
+    if etype is None or etype in TWIN_TYPES:
+        by_key: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
+        for e in ents:
+            if e["type"] in TWIN_TYPES and e["id"] not in taken:
+                by_key[normalize(e["name"])].setdefault(e["type"], e)
+        for members in by_key.values():
+            if len(members) == 2:
+                keep, drop = members["method"], members["concept"]
+                out.twins.append(
+                    Candidate(
+                        keep["id"],
+                        drop["id"],
+                        keep["name"],
+                        drop["name"],
+                        "method",
+                        "twins",
+                        1.0,
+                    )
+                )
+                taken.add(drop["id"])
 
     # tier 2: close by name embedding, same type, not already taken
     if embed and (emb := embeddings.current()) is not None:
@@ -313,6 +343,7 @@ class ClaudeAdjudicator:
 class Report:
     merged_sure: int = 0
     merged_likely: int = 0
+    merged_twins: int = 0
     declined: int = 0
 
 
@@ -321,13 +352,19 @@ def apply(
     p: Plan,
     *,
     adjudicator: Adjudicator | None = None,
+    twins: bool = False,
 ) -> Report:
-    """Merge every sure candidate; ask the adjudicator about the likely
-    ones. Idempotent: a re-run finds nothing left to merge."""
+    """Merge every sure candidate, the concept/method twins when asked,
+    and ask the adjudicator about the likely ones. Idempotent: a re-run
+    finds nothing left to merge."""
     report = Report()
     for c in p.sure:
         store.merge_entities(con, c.drop, c.keep)
         report.merged_sure += 1
+    if twins:
+        for c in p.twins:
+            store.merge_entities(con, c.drop, c.keep, across_types=True)
+            report.merged_twins += 1
     if p.likely:
         decisions = (adjudicator or NoAdjudicator()).decide(p.likely)
         for c, yes in zip(p.likely, decisions, strict=True):

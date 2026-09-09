@@ -2170,7 +2170,13 @@ def find_edges(con: sqlite3.Connection, edge: Edge) -> list[int]:
 
 
 @_serialized
-def merge_entities(con: sqlite3.Connection, duplicate_id: int, into_id: int) -> None:
+def merge_entities(
+    con: sqlite3.Connection,
+    duplicate_id: int,
+    into_id: int,
+    *,
+    across_types: bool = False,
+) -> None:
     """Record that ``duplicate_id`` is the same thing as ``into_id``.
 
     Nothing is deleted or rewritten: the duplicate keeps its name and its
@@ -2189,7 +2195,7 @@ def merge_entities(con: sqlite3.Connection, duplicate_id: int, into_id: int) -> 
     }
     if len(rows) != 2:
         raise KeyError("no such entity")
-    if rows[duplicate_id]["type"] != rows[into_id]["type"]:
+    if rows[duplicate_id]["type"] != rows[into_id]["type"] and not across_types:
         raise ValueError("entities of different types cannot be merged")
     survivor = rows[into_id]["canonical_id"] or into_id
     if survivor == duplicate_id:
