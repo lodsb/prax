@@ -327,6 +327,7 @@ class ForceGraph {
     this.onSelect = onSelect;
     this.nodes = new Map();
     this.edges = new Map();
+    this.links = [];  // co-occurrence links of the overview: {a, b, weight}
     this.selected = null;
     this.box = { x: -450, y: -300, w: 900, h: 600 };
     this.bindPanZoom();
@@ -355,9 +356,12 @@ class ForceGraph {
     return n;
   }
 
-  merge(edgeList, aroundKey, nodeList) {
+  merge(edgeList, aroundKey, nodeList, linkList) {
     const near = aroundKey ? this.nodes.get(aroundKey) : null;
     for (const n of nodeList || []) this.node(n.name, n.type, null).degree = n.degree || 0;
+    for (const l of linkList || []) {
+      this.links.push({ a: this.node(l.a, l.a_type, null).key, b: this.node(l.b, l.b_type, null).key, weight: l.weight });
+    }
     for (const e of edgeList) {
       if (this.edges.has(e.edge_id)) continue;
       const s = this.node(e.src, e.src_type, near);
@@ -400,6 +404,15 @@ class ForceGraph {
         const dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.sqrt(dx * dx + dy * dy) || 1;
         const f = (d - 110) * 0.04 * alpha;
+        a.vx += dx / d * f; a.vy += dy / d * f;
+        b.vx -= dx / d * f; b.vy -= dy / d * f;
+      }
+      for (const l of this.links) {
+        const a = this.nodes.get(l.a), b = this.nodes.get(l.b);
+        if (!a || !b) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const f = (d - 150) * Math.min(0.03, 0.004 * l.weight) * alpha;
         a.vx += dx / d * f; a.vy += dy / d * f;
         b.vx -= dx / d * f; b.vy -= dy / d * f;
       }
@@ -469,6 +482,11 @@ class ForceGraph {
 
   draw() {
     const lines = [], labels = [], nodes = [];
+    for (const l of this.links) {
+      const a = this.nodes.get(l.a), b = this.nodes.get(l.b);
+      if (!a || !b) continue;
+      lines.push(`<line class="co" style="stroke-width:${Math.min(6, 0.6 + l.weight * 0.5).toFixed(1)}" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"><title>${esc(a.name)} and ${esc(b.name)} share ${l.weight} documents</title></line>`);
+    }
     for (const e of this.edges.values()) {
       const a = this.nodes.get(e.s), b = this.nodes.get(e.t);
       const cls = [e.confidence === "INFERRED" ? "inferred" : e.confidence === "AMBIGUOUS" ? "ambiguous" : "",
@@ -520,7 +538,7 @@ async function viewGraph(arg, p) {
       out.innerHTML = `
         <div class="graph-tools">
           <span>Overview: the most connected concepts, methods, tools and datasets</span>
-          <span class="muted">· click a node to open its neighbourhood, or find an entity above</span>
+          <span class="muted">· faint lines: hubs that share documents · click a node to expand it, double-click to open its neighbourhood</span>
           <button type="button" id="graph-fit" class="secondary">fit</button>
         </div>
         <div class="legend">${legend}</div>
@@ -533,7 +551,7 @@ async function viewGraph(arg, p) {
       document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
       const overview = await api("/graph/overview", { limit: 30 });
       if (!overview.nodes.length) { out.innerHTML = `<p class="muted">The graph is empty; run an extraction first.</p>`; return; }
-      graph.merge(overview.edges, null, overview.nodes);
+      graph.merge(overview.edges, null, overview.nodes, overview.links);
       return;
     }
     if (!entity) {

@@ -973,10 +973,12 @@ def hub_graph(
     *,
     limit: int = 30,
     types: tuple[str, ...] = HUB_TYPES,
+    min_shared: int = 2,
 ) -> dict[str, Any]:
-    """The most connected entities of the given types and the currently
-    valid edges among them: the graph view's starting picture. Degrees and
-    edges are counted over canonical ids, like ``traverse``."""
+    """The most connected entities of the given types, the currently valid
+    edges among them, and ``links``: pairs of hubs that share at least
+    ``min_shared`` source documents (co-occurrence, the topic map). Degrees
+    and edges are counted over canonical ids, like ``traverse``."""
     limit = max(1, min(limit, 200))
     marks = ",".join("?" * len(types))
     nodes = con.execute(
@@ -1016,11 +1018,38 @@ def hub_graph(
                 (*ids, *ids),
             ).fetchall()
         ]
+    links: list[dict[str, Any]] = []
+    if ids:
+        idmarks = ",".join("?" * len(ids))
+        links = [
+            dict(r)
+            for r in con.execute(
+                f"""
+                WITH canon(id, cid) AS (
+                    SELECT id, COALESCE(canonical_id, id) FROM entities
+                ),
+                touch(cid, doc) AS (
+                    SELECT DISTINCT c.cid, x.source_doc FROM edges x
+                    JOIN canon c ON c.id = x.src OR c.id = x.dst
+                    WHERE x.valid_to IS NULL AND x.source_doc IS NOT NULL
+                      AND c.cid IN ({idmarks})
+                )
+                SELECT ea.name AS a, ea.type AS a_type, eb.name AS b, eb.type AS b_type,
+                       count(*) AS weight
+                FROM touch ta JOIN touch tb ON ta.doc = tb.doc AND ta.cid < tb.cid
+                JOIN entities ea ON ea.id = ta.cid JOIN entities eb ON eb.id = tb.cid
+                GROUP BY ta.cid, tb.cid HAVING weight >= ?
+                ORDER BY weight DESC LIMIT 300
+                """,
+                (*ids, max(1, min_shared)),
+            ).fetchall()
+        ]
     return {
         "nodes": [
             {"name": r["name"], "type": r["type"], "degree": r["degree"]} for r in nodes
         ],
         "edges": edges,
+        "links": links,
     }
 
 

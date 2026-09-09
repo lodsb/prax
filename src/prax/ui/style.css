@@ -120,6 +120,7 @@ th { background: var(--panel); }
 .graph-canvas line.inferred { stroke-dasharray: 4 3; }
 .graph-canvas line.ambiguous { stroke-dasharray: 1 3; }
 .graph-canvas line.selected { stroke: var(--accent); stroke-width: 2; opacity: 1; }
+.graph-canvas line.co { stroke: var(--line); opacity: .9; }
 .graph-canvas .edge-label { font-size: 9px; fill: var(--muted); pointer-events: none; }
 .graph-canvas .node { cursor: pointer; }
 .graph-canvas .node circle { stroke: var(--panel); stroke-width: 1.5; }

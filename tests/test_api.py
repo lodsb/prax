@@ -110,6 +110,24 @@ def test_graph_overview(client: TestClient) -> None:
     assert [(e["src"], e["rel"], e["dst"]) for e in g["edges"]] == [
         ("phase vocoder", "uses", "granular synthesis")
     ]
+    # co-occurrence: hubs that share source documents
+    d1 = client.post("/ingest", json={"text": "a", "title": "D1"}).json()["doc_id"]
+    d2 = client.post("/ingest", json={"text": "b", "title": "D2"}).json()["doc_id"]
+    for d in (d1, d2):
+        store.link(
+            con, E("D", "paper", "uses", "granular synthesis", "method"), source_doc=d
+        )
+        store.link(con, E("D", "paper", "about", "reverb", "concept"), source_doc=d)
+    g = client.get("/graph/overview", params={"limit": 5, "min_shared": 2}).json()
+    assert [(l["a"], l["b"], l["weight"]) for l in g["links"]] == [
+        ("granular synthesis", "reverb", 2)
+    ]
+    assert (
+        client.get("/graph/overview", params={"limit": 5, "min_shared": 3}).json()[
+            "links"
+        ]
+        == []
+    )
     assert "P1" not in {n["name"] for n in g["nodes"]}  # papers are not hubs
 
 

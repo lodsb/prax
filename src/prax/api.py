@@ -354,10 +354,13 @@ def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
 
 
 @app.get("/graph/overview")
-def graph_overview(request: Request, limit: int = 30) -> dict[str, Any]:
-    """The most connected concepts, methods, tools and datasets with the
-    edges among them: what the graph view opens on."""
-    return store.hub_graph(request.app.state.con, limit=limit)
+def graph_overview(
+    request: Request, limit: int = 30, min_shared: int = 2
+) -> dict[str, Any]:
+    """The most connected concepts, methods, tools and datasets, the edges
+    among them, and co-occurrence links (hubs sharing at least
+    ``min_shared`` source documents): what the graph view opens on."""
+    return store.hub_graph(request.app.state.con, limit=limit, min_shared=min_shared)
 
 
 @app.get("/", include_in_schema=False)
