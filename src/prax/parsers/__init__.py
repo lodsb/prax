@@ -20,7 +20,8 @@ time, so the serving path never loads them):
 | trafilatura     | text/html       | article Markdown, boilerplate stripped, code  |
 |                 |                 | blocks fenced                                 |
 | plain           | text/*          | decode as UTF-8; a source file (by extension, |
-|                 |                 | else Magika) becomes one fenced code block    |
+|                 |                 | else Magika) becomes one fenced code block;   |
+|                 |                 | code regions inside prose are fenced          |
 | claude-vision   | image/*         | Claude describes the image and transcribes    |
 |                 |                 | its text, handwriting included; explicit only |
 
@@ -36,6 +37,7 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import os
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -196,10 +198,135 @@ def _claude_vision(data: bytes, *, filename: str | None = None) -> str:
 
 def _plain(data: bytes, *, filename: str | None = None) -> str:
     text = data.decode("utf-8", errors="replace")
+    if "```" in text:
+        return text  # already fenced (Markdown)
     lang = code_language(text, filename)
-    if lang is None or text.lstrip().startswith("```"):
+    if lang is not None:
+        return f"```{lang}\n{text.strip()}\n```"
+    return fence_code_regions(text)
+
+
+# ---------------------------------------------------- mixed prose and code
+# A forum thread pasted into a note, a chat log with a function in the
+# middle: the file as a whole is prose, so Magika says "text" and the
+# chunker windows straight through the code. Lines are scored for code
+# signals, runs of code lines become fenced blocks (one chunk each), and the
+# prose around them stays prose.
+
+_CODE_LINE_START = re.compile(
+    r"^\s*(//|/\*|\*/|\*\s|#include|#define|#pragma|#!|import\s|from\s+\S+\s+import"
+    r"|def\s|class\s|return\b|if\s*\(|else\b|for\s*\(|while\s*\(|do\b|switch\s*\("
+    r"|case\b|inline\b|static\b|const\b|void\b|int\b|double\b|float\b|bool\b|char\b"
+    r"|auto\b|var\b|let\b|function\b|end\b|endfunction\b|elif\b|try:|except\b"
+    r"|\}|\{|\)|\]|[A-Za-z_][\w:.]*\s*=\s*[^=]|[A-Za-z_][\w:.]*\s*\+=|self\.|this->)"
+)
+_CODE_LINE_END = re.compile(r"[;{}]\s*$|\)\s*$|\]\s*$|,\s*$")
+_CODE_OPERATORS = re.compile(
+    r"==|!=|<=|>=|&&|\|\||->|::|\+\+|--|\+=|-=|\*=|/=|<<|>>|\(\)"
+)
+_PROSE_END = re.compile(r"[.!?:]\s*$")
+_WORD = re.compile(r"[A-Za-z]{2,}")
+CODE_MIN_LINES = 4  # shorter regions stay prose: an inline snippet
+
+
+def code_line_score(line: str) -> float:
+    """0 for prose, 1 for code, from cheap surface signals; blank lines are
+    neutral (0.5) so they neither start nor end a region."""
+    s = line.strip()
+    if not s:
+        return 0.5
+    score = 0.0
+    if _CODE_LINE_START.match(line):
+        score += 0.5
+    if _CODE_LINE_END.search(s):
+        score += 0.3
+    if _CODE_OPERATORS.search(s):
+        score += 0.3
+    if line.startswith(("    ", "\t")):
+        score += 0.15
+    words = _WORD.findall(s)
+    symbols = sum(1 for ch in s if ch in "{}()[];=<>+*/&|^%!#")
+    if symbols >= 3:
+        score += 0.2
+    if len(words) >= 8 and symbols <= 1 and _PROSE_END.search(s):
+        score -= 0.6
+    elif len(words) >= 12 and symbols <= 2:
+        score -= 0.3
+    if (
+        " " in s
+        and len(words) >= 6
+        and not _CODE_LINE_START.match(line)
+        and symbols == 0
+    ):
+        score -= 0.3
+    return max(0.0, min(1.0, score))
+
+
+def code_regions(lines: list[str], *, threshold: float = 0.5) -> list[tuple[int, int]]:
+    """(start, end) line ranges that look like code: runs of scoring lines,
+    allowing single prose-looking lines inside a run (a comment written as
+    a sentence), trimmed to code lines at both ends, at least
+    ``CODE_MIN_LINES`` long."""
+    scores = [code_line_score(ln) for ln in lines]
+    # everything inside a /* ... */ block comment is code, whatever it says
+    inside = False
+    for k, ln in enumerate(lines):
+        stripped = ln.strip()
+        if inside or stripped.startswith("/*"):
+            scores[k] = 1.0
+            inside = not ("*/" in stripped and not stripped.endswith("/*"))
+        if not inside and stripped.startswith("/*") and "*/" not in stripped:
+            inside = True
+    regions: list[tuple[int, int]] = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        if scores[i] < threshold or not lines[i].strip():
+            i += 1
+            continue
+        j = i
+        miss = 0
+        last_code = i
+        while j < n:
+            sc = scores[j]
+            if not lines[j].strip():
+                j += 1
+                continue
+            if sc >= threshold:
+                last_code = j
+                miss = 0
+            else:
+                miss += 1
+                if miss > 1:
+                    break
+            j += 1
+        start, end = i, last_code + 1
+        code_lines = sum(1 for k in range(start, end) if lines[k].strip())
+        if code_lines >= CODE_MIN_LINES:
+            regions.append((start, end))
+        i = max(end, i + 1)
+    return regions
+
+
+def fence_code_regions(text: str) -> str:
+    """Wrap code regions of a mixed prose/code text in Markdown fences, with
+    the language Magika gives the region when it is confident."""
+    lines = text.split("\n")
+    regions = code_regions(lines)
+    if not regions:
         return text
-    return f"```{lang}\n{text.strip()}\n```"
+    out: list[str] = []
+    pos = 0
+    for start, end in regions:
+        out.extend(lines[pos:start])
+        block = "\n".join(lines[start:end])
+        lang = code_language(block, None) or ""
+        out.append(f"```{lang}")
+        out.append(block)
+        out.append("```")
+        pos = end
+    out.extend(lines[pos:])
+    return "\n".join(out)
 
 
 # Source files a Zotero attachment or a drop folder may hold, by extension.
@@ -278,7 +405,7 @@ REGISTRY: list[Extractor] = [
         "trafilatura",
         revision=2,  # Markdown output with fenced code blocks
     ),
-    Extractor("plain", ("text/",), _plain, revision=2, hints=True),
+    Extractor("plain", ("text/",), _plain, revision=3, hints=True),
     Extractor(
         "claude-vision",
         ("image/",),

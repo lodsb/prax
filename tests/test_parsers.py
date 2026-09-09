@@ -33,9 +33,70 @@ needs_trafilatura = pytest.mark.skipif(
 # ---------------------------------------------------------------- registry
 
 
+FORUM_NOTE = """Line and Newton method
+In my observation, the Newton method over the whole term converges roughly
+10-20% faster than the line method. I think I wrote them so that they're
+identical otherwise. Adjust ranges to taste.
+Urs — Yesterday at 6:10 PM
+Yo, this is as far as I can take it this year, example code pasted in.
+inline double tickTanhs(const double inSample)
+{
+double vIn = inSample;
+double y1;
+do
+{
+// estimates based on linearised Equations:
+double BPE = (-b2*g*g*m1 + vIn*g*m1 - g*m1*s2 + b1*g + s1)/(g*g*m1*m2 + g*k*m1 + 1);
+y1 = (BPE - BP);
+BP = BPE;
+}
+while( fabs(y1) > 0.000001f );
+return BP;
+}
+That converges in three iterations for me, which is plenty fast.
+Thanks for the pointers, I will try the DK method next week.
+"""
+
+
+def test_plain_fences_code_regions_inside_prose() -> None:
+    out = parsers.by_name("plain")(FORUM_NOTE.encode())
+    lines = out.split("\n")
+    opens = [
+        i
+        for i, ln in enumerate(lines)
+        if ln.startswith("```") and len(ln) > 3 or ln == "```"
+    ]
+    assert len(opens) == 2, out
+    fenced = "\n".join(lines[opens[0] + 1 : opens[1]])
+    assert fenced.startswith("inline double tickTanhs") and fenced.endswith("}")
+    assert "return BP;" in fenced and "Thanks for the pointers" not in fenced
+    assert lines[0] == "Line and Newton method" and lines[-2].startswith("Thanks")
+    # the chunker keeps the fenced region as one code chunk
+    from prax import chunking
+
+    kinds = [(c.kind, c.text[:20]) for c in chunking.chunk(out)]
+    assert [k for k, _ in kinds] == ["text", "code", "text"], kinds
+    # prose stays prose; a fenced document is left alone
+    prose = "Just a few sentences about reverb. Nothing to fence here.\n" * 3
+    assert parsers.by_name("plain")(prose.encode()) == prose
+    md = "# Notes\n\n```python\nx = 1\n```\n"
+    assert parsers.by_name("plain")(md.encode()) == md
+    assert parsers.code_regions(["a = 1;", "b = 2;"]) == []  # too short
+    # a block comment is code whatever its lines say
+    comment = [
+        "/*",
+        "EQ1 := g*(Vin - BPE) - LPE",
+        "derivative at error:",
+        "g^2 + 1",
+        "*/",
+    ]
+    assert parsers.code_regions(comment) == [(0, 5)]
+    assert parsers.code_regions(["prose here.", *comment, "x = 1;"]) == [(1, 7)]
+
+
 def test_plain_fences_source_files_by_extension_or_content() -> None:
     plain = parsers.by_name("plain")
-    assert plain.stamp == "plain/1-r2" and plain.hints
+    assert plain.stamp == "plain/1-r3" and plain.hints
     code = b"function y = lim(x, t)\n  y = min(max(x, -t), t);\nend\n"
     out = plain(code, filename="getFilename.m")
     assert out.startswith("```matlab\n") and out.endswith("\nend\n```")
@@ -128,7 +189,7 @@ def test_registry_dispatch() -> None:
     with pytest.raises(KeyError):
         parsers.by_name("nope")
     plain = parsers.by_name("plain")
-    assert plain.stamp == "plain/1-r2"
+    assert plain.stamp == "plain/1-r3"
     assert plain(b"h\xc3\xa9llo") == "héllo"
     # explicit-only extractors are never in the default chain, only when named
     chain = [e.name for e in parsers.candidates("application/pdf")]
@@ -333,7 +394,7 @@ def test_queue_falls_back_to_next_extractor(
     doc_id = store.register(con, b"plain body text " * 20, mime="text/plain")["doc_id"]
     assert queue.run(con, [doc_id]).actions == {"created": 1}
     meta = store.get_meta(con, doc_id)
-    assert meta["text_source"] == "plain/1-r2"
+    assert meta["text_source"] == "plain/1-r3"
     assert [h.get("error", h.get("outcome")) for h in meta["parse_history"]] == [
         "RuntimeError: markdown path failed",
         "created",

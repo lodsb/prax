@@ -136,7 +136,11 @@ decides when it is telling (`.m`, `.py`, `.scd`, `.h`, ...), otherwise
 Magika, a small content-type model in the `ingest` extra, classifies the
 bytes and only a confident programming-language verdict counts (a
 bibliographic note full of "Key: value" lines scores as YAML and stays
-prose). Extractors carry a `revision` in their stamp (`plain/1-r2`) so
+prose). A note that mixes prose and code, a forum thread or a chat log
+with a function pasted in, gets its code regions fenced by a line scorer
+(code signals per line, runs of at least four lines, block comments
+always code), so each function is one chunk and the prose around it stays
+prose. Extractors carry a `revision` in their stamp (`plain/1-r3`) so
 such changes re-select what they wrote:
 
     python scripts/parse_pending.py --upgrade trafilatura --mime text/html
