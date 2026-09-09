@@ -595,8 +595,31 @@ def apply(
     ``meta.extraction`` stamp."""
     onto = ontology.current()
     report = ApplyReport()
+    page_titles = store.page_titles(con)
     for t in extraction.triples:
         edge = store.Edge(t.src, t.src_type, t.rel, t.dst, t.dst_type)
+        # page and project entities exist only as pages in the store; a
+        # model that names one from paper text (a research consortium, a
+        # web page) parks the triple for a person (rationale R15)
+        stray = [
+            n
+            for n, ty in ((t.src, t.src_type), (t.dst, t.dst_type))
+            if ty in ("page", "project") and n not in page_titles
+        ]
+        if stray:
+            store.queue_review(
+                con,
+                src=t.src,
+                src_type=t.src_type,
+                rel=t.rel,
+                dst=t.dst,
+                dst_type=t.dst_type,
+                reason=f"{stray[0]!r} is not a page in the store",
+                source_doc=doc_id,
+                evidence=t.evidence,
+            )
+            report.queued += 1
+            continue
         if (
             not t.src
             or not t.dst

@@ -415,6 +415,19 @@ def _page_original(slug: str, text: str) -> bytes:
 
 
 @_serialized
+def page_titles(con: sqlite3.Connection) -> set[str]:
+    """Titles of the documents that are pages: the only names a page or
+    project entity may carry."""
+    return {
+        r[0]
+        for r in con.execute(
+            "SELECT d.title FROM pages p JOIN documents d ON d.id = p.doc_id"
+        )
+        if r[0]
+    }
+
+
+@_serialized
 def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
     """A page with its current text and revision list, or None."""
     row = con.execute(

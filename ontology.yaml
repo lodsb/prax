@@ -64,13 +64,15 @@ entity_types:
   page:
     description: >-
       A page written in this library (a note on a document, a topic
-      write-up), named by its title. The document being extracted is a
-      page when its header says "Kind: page".
+      write-up), named by its title. Only the document being extracted can
+      be a page, when its header says "Kind: page"; never create a page
+      from the text, and a web page in the text is a paper.
   project:
     description: >-
-      An ongoing research thread or project page in this library, named
-      by its title. The document being extracted is a project when its
-      header says "Kind: project".
+      An ongoing research thread in this library, named by its title.
+      Only the document being extracted can be a project, when its header
+      says "Kind: project". A research project a paper mentions (a funded
+      programme, a consortium) is not a project entity: put it in unmapped.
 
 relation_types:
   cites:

@@ -123,6 +123,28 @@ def test_addendum_and_project_edges_reach_the_context(con: sqlite3.Connection) -
     assert other not in {m["doc_id"] for m in pctx["members"]}
 
 
+def test_apply_parks_invented_pages_and_projects(con: sqlite3.Connection) -> None:
+    paper = store.ingest_text(con, "t", title="P")["doc_id"]
+    proj = store.write_page(con, "ness", "# NESS", kind="project")
+    T = extraction.Triple
+    ex = extraction.Extraction(
+        triples=[
+            T("P", "paper", "part_of", "Ness", "project", "EXTRACTED", "real page"),
+            T("P", "paper", "part_of", "CHIL project", "project", "EXTRACTED", "q"),
+            T("KVR forum", "page", "about", "delay", "concept", "EXTRACTED", "q"),
+        ]
+    )
+    rep = extraction.apply(con, paper, ex, extractor="stub")
+    assert (rep.linked, rep.queued) == (1, 2)
+    assert [e["dst"] for e in store.traverse(con, "P", hops=1)] == ["Ness"]
+    reasons = [it["reason"] for it in store.list_review(con)]
+    assert reasons == [
+        "'CHIL project' is not a page in the store",
+        "'KVR forum' is not a page in the store",
+    ]
+    assert store.page_titles(con) == {"Ness"} and proj["created"]
+
+
 def test_extraction_input_names_the_page_kind(con: sqlite3.Connection) -> None:
     proj = store.write_page(con, "thread", "# Thread\n\nNotes.", kind="project")
     inp = extraction.build_input(con, proj["doc_id"])
