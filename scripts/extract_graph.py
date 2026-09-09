@@ -178,10 +178,22 @@ def collect(
     totals = extraction.ApplyReport()
     spent = 0.0
     n = 0
-    for result in ext.client.messages.batches.results(batch_id):
+    skipped = 0
+    version = ontology.current().version
+    # the results stream can outlast the extractor's call timeout; and a
+    # re-collection after an interruption must not apply a document twice
+    client = ext.client.with_options(timeout=900.0)
+    for result in client.messages.batches.results(batch_id):
         doc_id = int(result.custom_id.split("-", 1)[1])
         if result.result.type != "succeeded":
             print(f"doc {doc_id}: {result.result.type}", file=sys.stderr)
+            continue
+        stamp = store.get_meta(con, doc_id).get("extraction") or {}
+        if (
+            stamp.get("ontology_version") == version
+            and stamp.get("extractor") == ext.name
+        ):
+            skipped += 1
             continue
         try:
             parsed = extraction.ClaudeExtractor.from_message(result.result.message)
@@ -196,8 +208,9 @@ def collect(
         if not quiet and n % 100 == 0:
             print(f"applied {n} documents", file=sys.stderr, flush=True)
     print(
-        f"batch {batch_id}: {n} documents applied, {totals.linked} edges added,"
-        f" {totals.queued} queued for review; ~{spent:.2f} USD"
+        f"batch {batch_id}: {n} documents applied, {skipped} already applied,"
+        f" {totals.linked} edges added, {totals.queued} queued for review;"
+        f" ~{spent:.2f} USD"
     )
     return 0
 
