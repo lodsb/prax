@@ -234,8 +234,10 @@ R14). Design in `docs/ui.md`.
       via `entities.canonical_id` with chain flattening; `traverse` walks
       canonical ids. 264 author and title variants merged in the scratch
       store.
-- [ ] Run the likely tier with the Claude adjudicator once extraction has
-      produced concepts and methods to merge
+- [x] Resolution run after the v3 re-run (2026-09-11): 1,528 sure merges
+      (title case, accents, initials), 471 concept/method twins merged into
+      their methods (`--twins`), likely tier with the Opus adjudicator:
+      636 merged, 746 declined
 - [x] Edge invalidation: `store.invalidate_edge` sets `valid_to` and can
       insert the successor edge (history kept); the contradiction pass
       that calls it comes with the second extraction round

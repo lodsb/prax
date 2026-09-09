@@ -261,6 +261,7 @@ with `store.list_review` (a UI view is planned) and close items with
 
     python scripts/resolve_entities.py --dry-run               # both tiers listed
     python scripts/resolve_entities.py --commit --no-embed     # sure merges only
+    python scripts/resolve_entities.py --commit --twins --no-embed  # concept+method twins
     python scripts/resolve_entities.py --commit --adjudicate   # Claude decides the rest
 
 Sure merges are equal names after normalization (case, accents,
