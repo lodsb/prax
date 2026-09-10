@@ -175,6 +175,27 @@ def test_save_appends_with_sources_and_edges(con: sqlite3.Connection) -> None:
     assert store.get_page(con, "reverb")["revision"] == 3
 
 
+def test_save_can_start_a_synthesis_page(con: sqlite3.Connection) -> None:
+    _library(con)
+    r = ask.ask(con, "reverb methods", answerer=ask.LocalAnswerer(FakeRuntime()))
+    saved = ask.save(con, r, "Reverb Survey", create="synthesis")
+    assert saved["created"] and saved["slug"] == "reverb-survey"
+    page = store.get_page(con, "reverb-survey")
+    assert page["kind"] == "synthesis" and page["author"] == "agent"
+    assert page["text"].startswith("# reverb methods\n\nDelay matrices")
+    rels = {
+        row["rel"]
+        for row in con.execute(
+            "SELECT rel FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+            (page["doc_id"],),
+        )
+    }
+    assert rels == {"synthesizes"}
+    # a second save appends (the page exists now)
+    again = ask.save(con, r, "reverb-survey", create="synthesis", heading="more")
+    assert not again["created"] and again["revision"] == 2
+
+
 def test_save_needs_an_answer(con: sqlite3.Connection) -> None:
     store.write_page(con, "p", "x")
     with pytest.raises(ValueError):

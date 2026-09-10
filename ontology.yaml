@@ -19,7 +19,7 @@
 # for the living documents in the store; `annotates` and `part_of` connect
 # them to papers and to each other; `cites` and `about` accept a page as
 # source, so an extracted page enters the graph like a paper.
-version: "3"
+version: "4"
 
 entity_types:
   paper:
@@ -64,7 +64,7 @@ entity_types:
   page:
     description: >-
       A page written in this library (a note on a document, a topic
-      write-up), named by its title. Only the document being extracted can
+      write-up, a synthesis across several sources), named by its title. Only the document being extracted can
       be a page, when its header says "Kind: page"; never create a page
       from the text, and a web page in the text is a paper.
   project:
@@ -115,13 +115,13 @@ relation_types:
       the document sets the two against each other (compared with,
       as opposed to); for claims that cannot both hold use contradicts
   contradicts:
-    domain: [claim]
+    domain: [claim, page]
     range: [claim]
-    description: two claims cannot both hold
+    description: two claims cannot both hold; a page argues against a claim
   supports:
-    domain: [claim, paper]
+    domain: [claim, paper, page]
     range: [claim]
-    description: evidence in favour of a claim
+    description: evidence in favour of a claim; a page argues for it
   uses:
     domain: [paper, method, tool]
     range: [dataset, tool, method, concept]
@@ -129,7 +129,7 @@ relation_types:
       the document, method or tool employs a dataset, tool, method or
       applies a concept
   proposes:
-    domain: [paper, author]
+    domain: [paper, author, page]
     range: [method, tool, claim, concept]
     description: >-
       the document introduces the method, tool, claim or concept as its
@@ -142,7 +142,14 @@ relation_types:
   annotates:
     domain: [page]
     range: [paper, page]
-    description: a page written about a document (a note, a commentary, an addendum)
+    description: a page written about one document (a note, a commentary, an addendum)
+  synthesizes:
+    domain: [page, project]
+    range: [paper, page]
+    description: >-
+      a synthesis page draws on the document as one of its sources; the
+      page's own claims then carry supports and contradicts edges from
+      the papers
   part_of:
     domain: [paper, page]
     range: [project]

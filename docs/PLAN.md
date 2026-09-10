@@ -241,6 +241,9 @@ R14). Design in `docs/ui.md`.
       recased by rule; old titles kept in `meta.title_history`, paper
       entities follow; hybrid search without vectors now fuses the
       field's BM25 too
+- [x] Ontology v4 (2026-09-11, `docs/ontology-v4.md`): page kind
+      `synthesis`, relation `synthesizes`, pages may support, contradict
+      and propose claims; Ask can start a synthesis page from an answer
 - [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
       sure merges (normalized names, author initials forms) apply on their
       own, likely merges (name embeddings, concept/method/tool/dataset/venue

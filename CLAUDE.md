@@ -95,7 +95,8 @@ retrieval. User-supplied search strings are never passed to FTS5 MATCH raw;
 search plus generation: a bounded bundle (one passage per document,
 the graph's facts about it) to a model chosen per host (`PRAX_ASK`:
 local GGUF, Claude, or none, where the caller's model answers); answers
-cite passage numbers resolved to chunk ids, and are kept on pages.
+cite passage numbers resolved to chunk ids, and are kept on pages; a
+synthesis page `synthesizes` its sources and may argue claims (ontology v4).
 
 ## Conventions
 

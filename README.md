@@ -67,7 +67,7 @@ call the Claude API and need `ANTHROPIC_API_KEY`. Full instructions in
 ## Status
 
 Stages 0 to 3 are built: the store with numbered migrations and a
-versioned ontology (v3), the Zotero importer, a pluggable parse queue
+versioned ontology (v4), the Zotero importer, a pluggable parse queue
 (PDF, HTML, OCR on request, code by extension or Magika, images described
 by Claude vision), structure-aware chunks, hybrid retrieval fusing chunk
 and document-level BM25 and vectors (MRR 0.89 on the library query set),

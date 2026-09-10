@@ -91,7 +91,8 @@ def build_input(
     lines = [f"Title: {doc['title'] or '(untitled)'}"]
     page = meta.get("page") or {}
     if page.get("kind"):
-        lines.append(f"Kind: {'project' if page['kind'] == 'project' else 'page'}")
+        kind = page["kind"]
+        lines.append("Kind: project" if kind == "project" else f"Kind: page ({kind})")
     creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
     if creators:
         lines.append("Authors: " + ", ".join(creators))

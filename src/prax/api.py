@@ -489,6 +489,7 @@ class SaveReq(BaseModel):
     slug: str
     result: dict[str, Any]
     heading: str | None = None
+    create: str | None = None  # a page kind: create the page when the slug is new
 
 
 @app.get("/ask/config")
@@ -524,7 +525,11 @@ def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
     """Append an answer (the result of ``POST /ask``) to a page as the agent."""
     try:
         return ask_mod.save(
-            request.app.state.con, req.result, req.slug, heading=req.heading
+            request.app.state.con,
+            req.result,
+            req.slug,
+            heading=req.heading,
+            create=req.create,
         )
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc

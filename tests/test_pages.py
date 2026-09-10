@@ -10,6 +10,59 @@ import pytest
 from prax import extraction, store
 
 
+def test_synthesis_page_draws_on_sources(con: sqlite3.Connection) -> None:
+    a = store.ingest_text(con, "alpha " * 40, title="Paper A")["doc_id"]
+    b = store.ingest_text(con, "beta " * 40, title="Paper B")["doc_id"]
+    r = store.write_page(
+        con,
+        "reverb-survey",
+        "# Reverb survey\n\nA and B agree.",
+        kind="synthesis",
+        annotates=[a, b],
+    )
+    rels = {
+        (row["rel"], row["name"])
+        for row in con.execute(
+            "SELECT x.rel, t.name FROM edges x JOIN entities t ON t.id = x.dst"
+            " WHERE x.source_doc = ? AND x.valid_to IS NULL",
+            (r["doc_id"],),
+        )
+    }
+    assert rels == {("synthesizes", "Paper A"), ("synthesizes", "Paper B")}
+    assert "synthesis" in store.document_field(con, r["doc_id"])
+    # a topic page still annotates
+    t = store.write_page(con, "note", "text", kind="topic", annotates=[a])
+    assert (
+        con.execute(
+            "SELECT rel FROM edges WHERE source_doc = ?", (t["doc_id"],)
+        ).fetchone()["rel"]
+        == "annotates"
+    )
+
+
+def test_ontology_v4_lets_pages_argue() -> None:
+    from prax import ontology
+
+    onto = ontology.current()
+    assert onto.version == "4"
+    onto.check_edge("page", "supports", "claim")
+    onto.check_edge("page", "contradicts", "claim")
+    onto.check_edge("page", "proposes", "claim")
+    onto.check_edge("project", "synthesizes", "paper")
+    with pytest.raises(ValueError):
+        onto.check_edge("paper", "synthesizes", "paper")
+
+
+def test_extractor_header_names_the_page_kind(con: sqlite3.Connection) -> None:
+    r = store.write_page(con, "s", "# S\n\n" + "words " * 100, kind="synthesis")
+    assert (
+        "Kind: page (synthesis)"
+        in extraction.build_input(con, r["doc_id"]).as_message()
+    )
+    p = store.write_page(con, "p", "# P\n\n" + "words " * 100, kind="project")
+    assert "Kind: project" in extraction.build_input(con, p["doc_id"]).as_message()
+
+
 def test_write_read_and_revise(con: sqlite3.Connection) -> None:
     r = store.write_page(
         con, "Reverb Notes!", "# Reverb\n\nFirst thoughts.", kind="topic"

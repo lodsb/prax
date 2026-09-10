@@ -736,6 +736,7 @@ async function viewPages(p) {
     <input name="title" type="text" placeholder="new page title…" required>
     <select name="kind">
       <option value="topic">topic</option>
+      <option value="synthesis">synthesis</option>
       <option value="project">project</option>
     </select>
     <button>Create</button>
@@ -761,7 +762,7 @@ async function viewPages(p) {
   try {
     const pages = await api("/pages", { kind: p.kind });
     if (!pages.length) { list.innerHTML = `<p class="muted">No pages yet. Create a topic or project page above, or add a note from any document.</p>`; return; }
-    const groups = { project: "Projects", topic: "Topics", addendum: "Notes on documents" };
+    const groups = { project: "Projects", synthesis: "Syntheses", topic: "Topics", addendum: "Notes on documents" };
     list.innerHTML = Object.entries(groups).map(([kind, label]) => {
       const rows = pages.filter((pg) => pg.kind === kind);
       if (!rows.length) return "";
@@ -954,6 +955,7 @@ function renderAnswer(r) {
       <label>Keep on page <select name="slug" id="ask-save-slug"><option value="">loading…</option></select></label>
       <input name="heading" type="text" value="${esc(r.question)}" placeholder="heading" title="section heading">
       <button>Add to page</button>
+      <label>or start a synthesis <input name="new_slug" type="text" placeholder="new page name" title="a new synthesis page seeded with this answer"></label>
       <span id="ask-save-msg" class="muted"></span>
     </form>` : "";
   return `${answer}${saveForm}<h3 class="sources-head">Sources</h3>${sources}`;
@@ -996,10 +998,13 @@ async function viewAsk(p) {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(save));
     const msg = document.getElementById("ask-save-msg");
-    if (!data.slug) { msg.textContent = "pick a page"; return; }
+    const slug = (data.new_slug || "").trim() || data.slug;
+    if (!slug) { msg.textContent = "pick a page or name a new synthesis"; return; }
     try {
-      const res = await post("/ask/save", { slug: data.slug, heading: data.heading, result: r });
-      msg.innerHTML = `saved as revision ${res.revision} of <a href="#doc/${res.doc_id}">${esc(data.slug)}</a>`;
+      const body = { slug, heading: data.heading, result: r };
+      if (data.new_slug && data.new_slug.trim()) body.create = "synthesis";
+      const res = await post("/ask/save", body);
+      msg.innerHTML = `${res.created ? "created" : "saved as revision " + res.revision} <a href="#doc/${res.doc_id}">${esc(res.slug || slug)}</a>`;
     } catch (err) {
       msg.textContent = err.message;
     }

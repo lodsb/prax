@@ -354,10 +354,14 @@ def save(
     slug: str,
     *,
     heading: str | None = None,
+    create: str | None = None,
 ) -> dict[str, Any]:
     """Append an answer to a page as the agent: the question as heading,
     the answer, a source list linking the cited documents (all passages
-    when nothing was cited), and ``annotates`` edges to those documents."""
+    when nothing was cited), and ``annotates`` edges to those documents
+    (``synthesizes`` on a synthesis page). ``create`` names a page kind to
+    create when no page has the slug: a new synthesis page is an answer
+    kept as the seed of a write-up across its sources."""
     answer = (result.get("answer") or "").strip()
     if not answer:
         raise ValueError("nothing to save: the result has no answer")
@@ -383,6 +387,19 @@ def save(
     section = answer + "\n\nSources:\n\n" + "\n".join(lines) if lines else answer
     model = result.get("model") or "?"
     docs = list(dict.fromkeys(c["doc_id"] for c in cited if c.get("title")))
+    if create and store.get_page(con, store.slugify(slug)) is None:
+        title = heading or result.get("question") or slug
+        text = f"# {title}\n\n{section}\n"
+        return store.write_page(
+            con,
+            slug,
+            text,
+            title=title,
+            kind=create,
+            author="agent",
+            note=f"ask: {model}",
+            annotates=docs,
+        )
     return store.append_page(
         con,
         slug,

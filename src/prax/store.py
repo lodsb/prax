@@ -493,7 +493,7 @@ def retitle(
 # refuses an agent revision over a human one unless told to; ``append_page``
 # adds a section instead.
 
-PAGE_KINDS = ("addendum", "project", "topic")
+PAGE_KINDS = ("addendum", "project", "synthesis", "topic")
 PAGE_AUTHORS = ("human", "agent")
 _SLUG_CHARS = re.compile(r"[^a-z0-9]+")
 
@@ -674,6 +674,8 @@ def write_page(
         "SELECT title FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()[0]
     page_type = "project" if kind == "project" else "page"
+    # a synthesis draws on its sources; any other page annotates one document
+    source_rel = "synthesizes" if kind == "synthesis" else "annotates"
     for target in annotates or []:
         t = con.execute(
             "SELECT title FROM documents WHERE id = ?", (target,)
@@ -685,7 +687,7 @@ def write_page(
             if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (target,)).fetchone()
             else "paper"
         )
-        edge = Edge(page_title, page_type, "annotates", t[0], target_type)
+        edge = Edge(page_title, page_type, source_rel, t[0], target_type)
         if not find_edges(con, edge):
             link(
                 con,
@@ -834,9 +836,11 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     page = meta.get("page") or {}
     if page.get("kind"):
         words.append(
-            {"addendum": "note page", "project": "project page"}.get(
-                page["kind"], "wiki page"
-            )
+            {
+                "addendum": "note page",
+                "project": "project page",
+                "synthesis": "synthesis page",
+            }.get(page["kind"], "wiki page")
         )
     if row["first_kind"] == "code":
         words.append("source code")

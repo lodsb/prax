@@ -326,7 +326,10 @@ From code or the MCP door: `write_page`, `append_page`, `get_page`.
     POST /project/{slug}/members {doc_id}
 
 An agent revision over a human one is refused (HTTP 409, MCP error);
-`append_page` adds a section instead. Pages are extracted and embedded
+`append_page` adds a section instead. A `synthesis` page (ontology v4,
+`docs/ontology-v4.md`) draws on several sources: its `annotates` list
+becomes `synthesizes` edges, and extraction may give it claims the
+papers support or contradict. Pages are extracted and embedded
 like any document, so a topic page's concepts enter the graph; the
 extractor's header carries `Kind: page` or `Kind: project`.
 
