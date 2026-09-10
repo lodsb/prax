@@ -259,3 +259,12 @@ def test_identifier_names_become_printed_names() -> None:
     assert lineformat._name("snake_case_only") == "snake case only"
     assert lineformat._name("Mixed_Case") == "Mixed_Case"
     assert lineformat._name("a name") == "a name"
+
+
+def test_control_tokens_are_dropped() -> None:
+    text = (
+        "summary\tx\n"
+        "unmapped\tsrc=A\trel=cites\tdst=[5]\treason=Citation without a title.<tool_call>\n"
+    )
+    ex = lineformat.parse(text)
+    assert ex.unmapped[0]["reason"] == "Citation without a title."

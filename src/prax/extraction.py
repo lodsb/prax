@@ -52,6 +52,24 @@ _SELF_NAMES = frozenset({"paper", "this paper", "the paper", "document"})
 _AUTHOR_YEAR = re.compile(
     r"(\bet al\b|\b(19|20)\d\d[a-z]?\b|^[A-Z][\w'\-]+( (and|&) [A-Z][\w'\-]+)?$)"
 )
+# an unmapped item whose reason admits the text does not say it ("does not
+# mention any dataset", "likely published in") is a guess, not a misfit
+_HEDGED = re.compile(
+    r"\b(does not|doesn't|do not|not) (mention|state|specify|name|say|provide)"
+    r"|\b(likely|probably|presumably|possibly|may be|might be|appears to)\b",
+    re.IGNORECASE,
+)
+
+
+def unmapped_is_noise(item: dict[str, Any]) -> bool:
+    """Unmapped items the review queue should never see: citations by
+    number or author-year, and guesses the model itself hedges."""
+    dst = str(item.get("dst", ""))
+    if item.get("rel") == "cites" and (
+        _REFERENCE_NUMBER.match(dst) or _AUTHOR_YEAR.search(dst)
+    ):
+        return True
+    return bool(_HEDGED.search(str(item.get("reason", ""))))
 
 
 def supports_effort(model: str) -> bool:
@@ -674,7 +692,7 @@ def apply(
         )
         report.linked += 1
     for u in extraction.unmapped:
-        if u.get("rel") == "cites" and _AUTHOR_YEAR.search(str(u.get("dst", ""))):
+        if unmapped_is_noise(u):
             report.rejected += 1
             continue
         store.queue_review(

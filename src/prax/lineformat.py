@@ -37,7 +37,7 @@ SEP = "\t"
 TRIPLE_KEYS = ("src", "src_type", "rel", "dst", "dst_type", "confidence", "evidence")
 UNMAPPED_KEYS = ("src", "rel", "dst", "reason")
 MAX_TRIPLES = 20  # same cap as the Claude prompt; small models over-generate
-MAX_UNMAPPED = 5
+MAX_UNMAPPED = 3  # a 32B model fills five with guesses; three keeps the real misfits
 NAME_CHARS = 200
 TEXT_CHARS = 300
 
@@ -100,8 +100,11 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
                 "The document's own name is its exact Title line, never the word"
                 " 'paper'. Cite other papers by their title only; a bracketed"
                 " reference number is not a name. Do not repeat a triple as"
-                " unmapped, and do not list citations by author and year as"
-                " unmapped: a citation without a title is simply left out."
+                " unmapped, and do not list citations by number or by author and"
+                " year as unmapped: a citation without a title is simply left out."
+                " Unmapped is only for a relationship the text states that fits"
+                " no relation; never add one to say what the text does not"
+                " mention."
                 " Names are written as printed, with spaces, never as"
                 " identifiers. Fields never contain tabs or line breaks; names"
                 f" stay under {NAME_CHARS} and quotes under {TEXT_CHARS}"
@@ -169,9 +172,13 @@ _KEY = re.compile(r"^[a-z_]+=")
 _SNAKE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+$")
 
 
+_TOKENS = re.compile(r"</?tool_call>|<\|im_end\|>|<\|endoftext\|>")
+
+
 def _unkey(field: str) -> str:
-    """``src=Paper X`` -> ``Paper X``; a bare field passes through."""
-    return _KEY.sub("", field.strip(), count=1).strip()
+    """``src=Paper X`` -> ``Paper X``; a bare field passes through; a chat
+    model's control tokens that leak past the grammar are dropped."""
+    return _KEY.sub("", _TOKENS.sub("", field).strip(), count=1).strip()
 
 
 def _name(value: str) -> str:

@@ -260,3 +260,17 @@ def test_apply_drops_author_year_citations_from_unmapped(
     rep = extraction.apply(con, doc_id, ex, extractor="stub")
     assert rep.queued == 1 and rep.rejected == 3
     assert store.count_review(con) == 1
+
+
+def test_unmapped_noise_rules() -> None:
+    noise = extraction.unmapped_is_noise
+    assert noise({"rel": "cites", "dst": "[5]", "reason": "no title"})
+    assert noise({"rel": "cites", "dst": "Solin et al., 2018", "reason": "x"})
+    assert noise(
+        {"rel": "uses", "dst": "MUSDB18", "reason": "The document does not mention"}
+    )
+    assert noise({"rel": "published_in", "dst": "J", "reason": "likely published in"})
+    assert not noise({"rel": "plans", "dst": "a roadmap item", "reason": "stated"})
+    assert not noise(
+        {"rel": "cites", "dst": "A Dictionary of Musical Themes", "reason": "r"}
+    )

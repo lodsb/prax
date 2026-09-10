@@ -124,7 +124,12 @@ def main() -> int:
 
     def extract_one(doc_id: int) -> tuple[int, extraction.Extraction | None, str]:
         try:
-            return doc_id, ext.extract(extraction.build_input(con, doc_id)), ""
+            doc = extraction.build_input(con, doc_id)
+            result = ext.extract(doc)
+            if not result.triples and result.usage.get("dropped_lines"):
+                # a sampled local model occasionally produces nothing parseable
+                result = ext.extract(doc)
+            return doc_id, result, ""
         except Exception as exc:  # noqa: BLE001 - one document must not stop the run
             return doc_id, None, f"{type(exc).__name__}: {exc}"
 
