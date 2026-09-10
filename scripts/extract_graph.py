@@ -6,6 +6,7 @@
     python scripts/extract_graph.py --budget-usd 5     # stop past the estimate
     python scripts/extract_graph.py --submit-batch --limit 2000   # half price, async
     python scripts/extract_graph.py --collect-batch <batch id>    # apply results
+    PRAX_EXTRACT=server-32b python scripts/extract_graph.py --workers 2  # served
 
 Selection: indexed documents whose ``meta.extraction.ontology_version`` is
 not the current one, oldest first. Model and effort come from
@@ -44,12 +45,24 @@ def main() -> int:
     ap.add_argument(
         "--budget-usd", type=float, help="stop once the running estimate passes this"
     )
+    ap.add_argument(
+        "--never-extracted",
+        action="store_true",
+        help="only documents no model has read yet (an ontology bump re-selects"
+        " the others; skip them when the pass is a cheaper model's)",
+    )
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
         "--submit-batch", action="store_true", help="use the Message Batches API"
     )
     ap.add_argument(
         "--collect-batch", metavar="BATCH_ID", help="apply a finished batch"
+    )
+    ap.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="parallel requests to a served model (its --parallel slots)",
     )
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
@@ -65,10 +78,14 @@ def main() -> int:
     ids = a.ids or store.select_for_extraction(
         con,
         ontology_version=version,
-        limit=a.limit,
+        limit=None if a.never_extracted else a.limit,
         mime_prefix=a.mime,
         min_chars=a.min_chars,
     )
+    if a.never_extracted and not a.ids:
+        ids = [i for i in ids if not store.get_meta(con, i).get("extraction")]
+        if a.limit:
+            ids = ids[: a.limit]
     print(
         f"store: {config.db_path()}; ontology v{version}; extractor {ext.name};"
         f" {len(ids)} documents selected",
@@ -97,25 +114,49 @@ def main() -> int:
     t0 = time.monotonic()
     totals = extraction.ApplyReport()
     run = "sync-" + time.strftime("%Y%m%dT%H%M%S")
-    for n, doc_id in enumerate(ids, 1):
+    workers = max(1, a.workers)
+    if workers > 1 and not isinstance(ext, extraction.LocalExtractor):
+        print(
+            "--workers applies to a served model; running one at a time",
+            file=sys.stderr,
+        )
+        workers = 1
+
+    def extract_one(doc_id: int) -> tuple[int, extraction.Extraction | None, str]:
+        try:
+            return doc_id, ext.extract(extraction.build_input(con, doc_id)), ""
+        except Exception as exc:  # noqa: BLE001 - one document must not stop the run
+            return doc_id, None, f"{type(exc).__name__}: {exc}"
+
+    if workers > 1:
+        from concurrent.futures import ThreadPoolExecutor
+
+        pool = ThreadPoolExecutor(max_workers=workers)
+        stream = pool.map(extract_one, ids)
+    else:
+        stream = map(extract_one, ids)
+    for n, (doc_id, result, error) in enumerate(stream, 1):
         if a.budget_usd is not None and spent >= a.budget_usd:
             print(f"budget reached after {n - 1} documents", file=sys.stderr)
             break
+        if result is None:
+            print(f"[{n}] doc {doc_id}: {error}", file=sys.stderr)
+            continue
         try:
-            doc = extraction.build_input(con, doc_id)
-            result = ext.extract(doc)
             rep = extraction.apply(con, doc_id, result, extractor=ext.name, run=run)
-        except Exception as exc:  # noqa: BLE001 - one document must not stop the run
+        except Exception as exc:  # noqa: BLE001
             print(f"[{n}] doc {doc_id}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
         spent += extraction.cost_usd(ext.name, result.usage)
         for k in ("linked", "existing", "queued", "rejected"):
             setattr(totals, k, getattr(totals, k) + getattr(rep, k))
         if not a.quiet:
+            rate = (time.monotonic() - t0) / n
             print(
                 f"[{n}/{len(ids)}] doc {doc_id}: +{rep.linked} edges,"
                 f" {rep.queued} queued, {len(result.triples)} triples;"
-                f" ~{spent:.2f} USD so far",
+                f" ~{spent:.2f} USD, {rate:.0f} s/doc,"
+                f" ~{rate * (len(ids) - n) / 3600:.1f} h left",
                 file=sys.stderr,
                 flush=True,
             )

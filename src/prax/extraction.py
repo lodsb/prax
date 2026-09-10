@@ -47,6 +47,11 @@ CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 _REFERENCE_NUMBER = re.compile(r"^\W*\d+(\W+\d+)*\W*$")
 # What a small model writes for the document itself instead of its title.
 _SELF_NAMES = frozenset({"paper", "this paper", "the paper", "document"})
+# "Turner & Sahani, 2014", "Smith and Goto", "Solin et al., 2018": a citation
+# without a title, which the review queue cannot resolve either
+_AUTHOR_YEAR = re.compile(
+    r"(\bet al\b|\b(19|20)\d\d[a-z]?\b|^[A-Z][\w'\-]+( (and|&) [A-Z][\w'\-]+)?$)"
+)
 
 
 def supports_effort(model: str) -> bool:
@@ -669,6 +674,9 @@ def apply(
         )
         report.linked += 1
     for u in extraction.unmapped:
+        if u.get("rel") == "cites" and _AUTHOR_YEAR.search(str(u.get("dst", ""))):
+            report.rejected += 1
+            continue
         store.queue_review(
             con,
             src=str(u.get("src", "")),

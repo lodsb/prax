@@ -244,3 +244,18 @@ def test_current_local_extractor_from_env(monkeypatch: pytest.MonkeyPatch) -> No
     assert ext.name == "local:Qwen2.5-7B-Instruct-Q4_K_M"
     assert ext.runtime.n_ctx == 4096  # nothing loaded yet
     assert extraction.price(ext.name) == (0.0, 0.0)
+
+
+def test_identifier_names_become_printed_names() -> None:
+    text = (
+        "summary\tx\n"
+        "triple\tsrc=Paper A\tsrc_type=paper\trel=uses\tdst=rwc_pop_dataset"
+        "\tdst_type=dataset\tconfidence=EXTRACTED\tevidence=q\n"
+        "unmapped\tsrc=Paper A\trel=plans\tdst=some_thing\treason=r\n"
+    )
+    ex = lineformat.parse(text)
+    assert ex.triples[0].dst == "rwc pop dataset"
+    assert ex.unmapped[0]["dst"] == "some thing"
+    assert lineformat._name("snake_case_only") == "snake case only"
+    assert lineformat._name("Mixed_Case") == "Mixed_Case"
+    assert lineformat._name("a name") == "a name"

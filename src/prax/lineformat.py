@@ -100,7 +100,10 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
                 "The document's own name is its exact Title line, never the word"
                 " 'paper'. Cite other papers by their title only; a bracketed"
                 " reference number is not a name. Do not repeat a triple as"
-                " unmapped. Fields never contain tabs or line breaks; names"
+                " unmapped, and do not list citations by author and year as"
+                " unmapped: a citation without a title is simply left out."
+                " Names are written as printed, with spaces, never as"
+                " identifiers. Fields never contain tabs or line breaks; names"
                 f" stay under {NAME_CHARS} and quotes under {TEXT_CHARS}"
                 " characters. Fewer good triples beat many weak ones; stop"
                 " after the last line."
@@ -127,7 +130,18 @@ def parse(text: str) -> Extraction:
                 repeats += 1
                 continue
             seen.add(key)
-            ex.triples.append(Triple(*fields[1:7], evidence=fields[7][:TEXT_CHARS]))
+            src, src_type, rel, dst, dst_type, conf = fields[1:7]
+            ex.triples.append(
+                Triple(
+                    _name(src),
+                    src_type,
+                    rel,
+                    _name(dst),
+                    dst_type,
+                    conf,
+                    evidence=fields[7][:TEXT_CHARS],
+                )
+            )
         elif kind == "unmapped" and len(fields) == 5:
             key = tuple(f.lower() for f in fields[:4])
             if key in seen:
@@ -136,9 +150,9 @@ def parse(text: str) -> Extraction:
             seen.add(key)
             ex.unmapped.append(
                 {
-                    "src": fields[1],
+                    "src": _name(fields[1]),
                     "rel": fields[2],
-                    "dst": fields[3],
+                    "dst": _name(fields[3]),
                     "reason": fields[4],
                 }
             )
@@ -152,11 +166,18 @@ def parse(text: str) -> Extraction:
 
 
 _KEY = re.compile(r"^[a-z_]+=")
+_SNAKE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+$")
 
 
 def _unkey(field: str) -> str:
     """``src=Paper X`` -> ``Paper X``; a bare field passes through."""
     return _KEY.sub("", field.strip(), count=1).strip()
+
+
+def _name(value: str) -> str:
+    """A 32B model sometimes writes entity names as identifiers
+    (``rwc_pop_dataset``); the graph wants them as printed."""
+    return value.replace("_", " ") if _SNAKE.match(value) else value
 
 
 def _clean(s: str) -> str:

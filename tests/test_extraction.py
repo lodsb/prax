@@ -237,3 +237,26 @@ def test_current_extractor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert (
         isinstance(ext, extraction.ClaudeExtractor) and ext.model == "claude-sonnet-5"
     )
+
+
+def test_apply_drops_author_year_citations_from_unmapped(
+    con: sqlite3.Connection,
+) -> None:
+    doc_id = store.ingest_text(con, "text " * 50, title="A paper")["doc_id"]
+    ex = extraction.Extraction(
+        summary="s",
+        unmapped=[
+            {
+                "src": "A paper",
+                "rel": "cites",
+                "dst": "Turner & Sahani, 2014",
+                "reason": "r",
+            },
+            {"src": "A paper", "rel": "cites", "dst": "Solin et al.", "reason": "r"},
+            {"src": "A paper", "rel": "cites", "dst": "Smith and Goto", "reason": "r"},
+            {"src": "A paper", "rel": "plans", "dst": "a roadmap item", "reason": "r"},
+        ],
+    )
+    rep = extraction.apply(con, doc_id, ex, extractor="stub")
+    assert rep.queued == 1 and rep.rejected == 3
+    assert store.count_review(con) == 1
