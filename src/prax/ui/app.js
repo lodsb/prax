@@ -174,6 +174,10 @@ function metaLine(meta) {
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
+  if (meta.title_history && meta.title_history.length) {
+    const former = meta.title_history[meta.title_history.length - 1].title;
+    bits.push(`<span class="muted" title="${esc(meta.title_source || "")}">titled by ${esc(meta.title_source || "?")}, was “${esc(former)}”</span>`);
+  }
   if (meta.citations && meta.citations.resolved) {
     const c = meta.citations;
     bits.push(`<span title="${esc(c.source)} ${esc(c.id || "")}">cited by ${Number(c.cited_by_count || 0).toLocaleString()} · ${c.references} references</span>`);

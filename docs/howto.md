@@ -395,6 +395,41 @@ text on the page is never touched. Over MCP the `ask` tool returns the
 bundle by default (Claude Code answers itself) and runs the host's
 model with `answer=True`.
 
+## 3j. Titles worth the name
+
+Half the imported titles were file names (standalone Zotero
+attachments come as `<md5>-slides.pdf`, items without metadata as
+`Unknown - 2002 - No Title.pdf`) and conference papers arrive in ALL
+CAPS. A title is what a search hit, a citation in an answer and a
+`paper` entity are called, so `scripts/repair_titles.py` repairs them:
+
+    python scripts/repair_titles.py --dry-run        # who needs one, and why
+    python scripts/repair_titles.py --sample 20      # the model's guesses, nothing applied
+    python scripts/repair_titles.py --reason caps    # the recase rule only, no model
+    python scripts/repair_titles.py                  # everything, applied
+    python scripts/embed_pending.py                  # afterwards, door stopped
+
+ALL CAPS titles are recased by rule (`titles.recase`: stopwords,
+known acronyms). File names go to the local model (`PRAX_LOCAL_MODEL`
+or `--model`; nothing leaves the machine, about 1.3 s per document on
+the 1070) with the first 1,500 characters of text, the file name, the
+first Markdown heading and the PDF metadata title as hints; it answers
+with the printed title or, for a course sheet or a manual, a short
+descriptive name in the document's language. `meta.title_confidence`
+is `high` when the title's words occur in the text and `low` when the
+model described the document. Documents without text keep their file
+name.
+
+Every change goes through `store.retitle`: the old title stays in
+`meta.title_history` with its source, `meta.title_source` names who
+wrote the current one (the Zotero importer leaves such a title alone
+on refresh), the `paper` entity carrying the old title is renamed or
+merged into the entity of the new one so its edges follow, and the
+document field is refreshed, which queues the document vector for
+`embed_pending.py`. The document page shows the former title. A
+wrong repair is fixed with `--ids <id>` after editing, or by calling
+`store.retitle` with the right title and `source="human"`.
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000

@@ -618,6 +618,13 @@ def _read_cache_text(path: Path) -> str | None:
     return text or None
 
 
+def title_repaired(meta: dict[str, Any]) -> bool:
+    """A title written by the title pass or a person, not by this importer:
+    a refresh from Zotero leaves it alone (``store.retitle``)."""
+    src = meta.get("title_source")
+    return bool(src) and src != "zotero"
+
+
 def _merge_meta(old: dict[str, Any], new: dict[str, Any]) -> dict[str, Any]:
     """``new`` wins, except the provenance lists, which accumulate."""
     merged = {**old, **new}
@@ -681,7 +688,11 @@ def apply(
             report.actions["skipped"] += 1
             return "skipped"
         store.set_meta(
-            con, doc_id, _merge_meta(old, meta), title=p.title, source_url=p.source_url
+            con,
+            doc_id,
+            _merge_meta(old, meta),
+            title=None if title_repaired(old) else p.title,
+            source_url=p.source_url,
         )
         report.actions["refreshed"] += 1
         return "refreshed"

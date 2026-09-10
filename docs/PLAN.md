@@ -234,6 +234,13 @@ R14). Design in `docs/ui.md`.
       MCP client); `[n]` citations resolved to chunk and document ids;
       `POST /ask/save` appends an answer to a page with sources and
       `annotates` edges; Ask tab in the UI; MCP tool `ask`
+- [x] Titles worth the name (2026-09-11, `prax.titles`,
+      `scripts/repair_titles.py`, `store.retitle`): file names and
+      Zotero's "No Title" names replaced by the local model's reading of
+      the first page (printed title or a descriptive name), ALL CAPS
+      recased by rule; old titles kept in `meta.title_history`, paper
+      entities follow; hybrid search without vectors now fuses the
+      field's BM25 too
 - [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
       sure merges (normalized names, author initials forms) apply on their
       own, likely merges (name embeddings, concept/method/tool/dataset/venue

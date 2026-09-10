@@ -196,6 +196,7 @@ what is needed.
 | `prax.extraction` | document input (head plus closing sections), ontology-derived prompt and JSON schema, Claude and local extractors, `apply()` into edges / review queue / stamps with guards | via store |
 | `prax.lineformat` | tab-separated output format for local models: bounded GBNF grammar from the ontology, parse/render to `Extraction` | no |
 | `prax.local_llm` | optional llama.cpp runtime (`local` extra): DLL path quirk, one loaded GGUF model behind `chat()`, shared per process | no |
+| `prax.titles` | titles worth the name: the classifier (file names, Zotero's auto names, ALL CAPS), the recase rule, the local-model guess with hints, confidence from the text | via store (`retitle`) |
 | `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub), citation resolution, saving an answer to a page | via store |
 | `prax.review` | replay of the review queue against a newer ontology | via store |
 | `prax.resolution` | entity merge candidates (normalized names, initials, concept/method twins, name embeddings), adjudicators, apply through `merge_entities` | via store |
@@ -206,6 +207,15 @@ what is needed.
 | `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer, an SVG force layout; a client of the door (R14) | no |
 | `prax.mcp_server` | FastMCP stdio door; no logic | via store |
 | `prax.config` | paths, `PRAX_DATA_DIR`, migrations dir | no |
+
+Schema version: `PRAGMA user_version` is the number of the last applied
+migration; `store.init_db` runs on every connect (door, scripts, MCP)
+and applies the pending numbered files in order, each in its own
+transaction, so any client upgrades the store it opens, and refuses a
+store newer than the code. Data written by a tool carries the tool's
+version on the row (`ontology_version`, `producer`/`run`, the parse
+stamp's extractor and revision, the embedding model, `title_source`),
+which is how a later pass knows what to redo.
 | `scripts/*.py` | thin CLIs over the modules above: import, parse, rechunk, embed, refresh fields, extract, import citations, resolve, replay, eval, compare extractors, bench the local model, build fixture | via store |
 
 ## 6. Data model
@@ -309,6 +319,7 @@ loop); the queue makes each batch do real work.
 | add an agent tool | a store function first, then one handler each in `prax.api` and `prax.mcp_server`; keep responses compact |
 | add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
 | add a page kind | `store.PAGE_KINDS` and the `pages` view; relationships stay edges |
+| fix a document's title | `store.retitle(con, id, title, source="human")`; the old one stays in `meta.title_history`, the paper entity follows; `repair_titles.py --ids` reruns the model for named documents |
 | change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name` and `answer(bundle)` |
 
 ## 10. Numbers as of 2026-09-11

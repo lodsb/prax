@@ -247,7 +247,9 @@ def test_hybrid_degrades_to_fts_without_vectors(
 ) -> None:
     ids = _load(con)
     hits = store.search(con, "reverberation delays")  # no index file yet
-    assert hits[0]["doc_id"] == ids["reverb"] and "fts_rank" not in hits[0]
+    # chunk BM25 fused with field BM25, no vector side
+    assert hits[0]["doc_id"] == ids["reverb"] and hits[0]["fts_rank"] == 1
+    assert hits[0].get("vec_rank") is None and hits[0].get("dvec_rank") is None
     monkeypatch.setenv("PRAX_EMBED", "0")
     embeddings._build.cache_clear()
     assert store.search(con, "reverberation delays")[0]["doc_id"] == ids["reverb"]

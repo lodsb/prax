@@ -19,6 +19,7 @@ import sqlite3
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
@@ -149,7 +150,14 @@ def init_db(con: sqlite3.Connection) -> int:
     numbered file, never by editing an old one.
     """
     current = schema_version(con)
-    for number, path in migrations():
+    known = migrations()
+    latest = known[-1][0] if known else 0
+    if current > latest:
+        raise RuntimeError(
+            f"the store is at schema version {current}, this code knows {latest}:"
+            " update prax before opening it"
+        )
+    for number, path in known:
         if number <= current:
             continue
         sql = path.read_text(encoding="utf-8")
@@ -387,6 +395,93 @@ def set_meta(
         raise KeyError(f"no such document: {doc_id}")
     _refresh_document_field(con, doc_id)
     con.commit()
+
+
+@_serialized
+def retitle(
+    con: sqlite3.Connection,
+    doc_id: int,
+    title: str,
+    *,
+    source: str,
+    run: str | None = None,
+    confidence: str | None = None,
+) -> dict[str, Any]:
+    """Change a document's title, keeping the old one.
+
+    ``meta.title_history`` accumulates the replaced titles with their source;
+    ``meta.title_source`` names who wrote the current one (an importer keeps
+    its hands off a title it did not write). The ``paper`` entity carrying
+    the old title follows: renamed when it is this document's alone, merged
+    into the entity of the new title when one exists, left alone when other
+    documents share the old title. The document field is refreshed, so the
+    new title is searchable and the document vector is embedded again.
+    """
+    title = " ".join(title.split())
+    if not title:
+        raise ValueError("a title cannot be empty")
+    row = con.execute(
+        "SELECT title, meta FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    old = row["title"] or ""
+    meta = json.loads(row["meta"] or "{}")
+    if old == title:
+        return {"doc_id": doc_id, "title": title, "changed": False, "entity": None}
+    history = list(meta.get("title_history") or [])
+    history.append(
+        {
+            "title": old,
+            "source": meta.get("title_source"),
+            "until": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+    )
+    meta["title_history"] = history
+    meta["title_source"] = source
+    meta["title_run"] = run
+    meta["title_confidence"] = confidence
+    con.execute(
+        "UPDATE documents SET title = ?, meta = ? WHERE id = ?",
+        (title, json.dumps(meta), doc_id),
+    )
+    entity_action = None
+    shared = con.execute(
+        "SELECT count(*) FROM documents WHERE title = ? AND id != ?", (old, doc_id)
+    ).fetchone()[0]
+    if old and not shared:
+        e = con.execute(
+            "SELECT id FROM entities WHERE name = ? AND type = 'paper'", (old,)
+        ).fetchone()
+        if e is not None:
+            target = con.execute(
+                "SELECT id, canonical_id FROM entities"
+                " WHERE name = ? AND type = 'paper'",
+                (title,),
+            ).fetchone()
+            if target is None:
+                con.execute(
+                    "UPDATE entities SET name = ? WHERE id = ?", (title, e["id"])
+                )
+                entity_action = "renamed"
+            elif target["id"] != e["id"]:
+                survivor = target["canonical_id"] or target["id"]
+                if survivor != e["id"]:
+                    con.execute(
+                        "UPDATE entities SET canonical_id = ?"
+                        " WHERE id = ? OR canonical_id = ?",
+                        (survivor, e["id"], e["id"]),
+                    )
+                    entity_action = "merged"
+    _refresh_document_field(con, doc_id)
+    con.commit()
+    return {
+        "doc_id": doc_id,
+        "old": old,
+        "title": title,
+        "changed": True,
+        "entity": entity_action,
+    }
 
 
 # ------------------------------------------------------------------ pages
@@ -1347,8 +1442,17 @@ def _search_hits(
     if mode == "vec" and not vectors_ready:
         raise ValueError("vector search unavailable: no embedder, index or vectors")
     fetch = limit * 4 if doctype else limit
-    if mode == "fts" or not vectors_ready:  # hybrid degrades to FTS-only
+    if mode == "fts":
         return _finish(con, _fts_search(con, query, fetch, kind), query, limit, doctype)
+    if not vectors_ready:  # hybrid without vectors: chunk BM25 fused with field BM25
+        depth = max(limit * 3, RRF_DEPTH)
+        lists = [_fts_search(con, query, depth, kind, snippets=False)]
+        names = ["fts"]
+        if kind is None:
+            lists.append(_field_fts_search(con, query, depth))
+            names.append("field")
+        fused = _rrf(lists, names, fetch, {"field": _field_weight(query)})
+        return _finish(con, fused, query, limit, doctype)
     assert emb is not None
     vector = emb.embed_query(query)
     if mode == "vec":

@@ -110,6 +110,7 @@ class LlamaRuntime:
         max_tokens: int = 2000,
         temperature: float = 0.0,
         repeat_penalty: float = 1.0,
+        stop: list[str] | None = None,
     ) -> tuple[str, dict[str, int]]:
         llm = self._load()
         llm.reset()
@@ -122,6 +123,7 @@ class LlamaRuntime:
             max_tokens=max_tokens,
             temperature=temperature,
             repeat_penalty=repeat_penalty,
+            stop=stop,
         )
         text = r["choices"][0]["message"]["content"] or ""
         u = r["usage"]

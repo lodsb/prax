@@ -498,6 +498,7 @@ class Runtime(Protocol):
         max_tokens: int = 2000,
         temperature: float = 0.0,
         repeat_penalty: float = 1.0,
+        stop: list[str] | None = None,
     ) -> tuple[str, dict[str, int]]: ...
 
 
