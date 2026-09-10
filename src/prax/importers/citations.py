@@ -374,6 +374,8 @@ def _one(
             confidence="EXTRACTED",
             source_doc=doc_id,
             evidence=f"{source.name} {work.id} references {ref.doi or ref.id or name}",
+            producer=source.name,
+            run=stamp["fetched_at"][:10],
         )
         linked += 1
     rep.linked += linked

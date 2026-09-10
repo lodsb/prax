@@ -191,6 +191,16 @@ ontology version and budgeted; the Message Batches API halves the cost of
 a backfill. Model choice is a per-run setting because the cost spread is
 five to one between tiers on a 8,448-document library.
 
+*Provenance (2026-09-11).* Which model or importer wrote an edge is a
+column pair on the edge (`producer`, `run`), not a `produced_by` edge to a
+model entity. The graph would otherwise gain 50,000 bookkeeping edges and
+a few hub nodes of degree in the tens of thousands that traversal, the
+overview and the context column would have to step around; what one does
+with provenance is select, retire and upgrade, all WHERE clauses. The
+document keeps every extraction stamp it ever received
+(`meta.extraction_history`), so re-reading a document with another model
+does not erase who read it before.
+
 ## R8. Embeddings and parsing are batch jobs on the bigger box
 
 **Decision.** bge-small-class, 384-dim, INT8 ONNX for embeddings.

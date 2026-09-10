@@ -259,6 +259,19 @@ Bumping the ontology version re-selects every document. Review the queue
 in the UI's Review tab (section 3g) or with `store.list_review` and
 `resolve_review`.
 
+### Provenance and upgrading a producer's work
+
+Every edge records its `producer` (a model name, `zotero`, `crossref`,
+`page`, `replay`, `manual`, `agent`) and `run` (a batch id, a script run,
+a page revision). `store.provenance_summary` lists live and retired edges
+per producer and run; `store.retire_run(producer=..., run=...)` ends a
+run's edges when a better pass has replaced them (history stays). Edges
+written before migration 0007 are tagged once with
+
+    python scripts/backfill_provenance.py
+
+Run it again after any job that was started before the migration ends.
+
 ### Entity resolution
 
     python scripts/resolve_entities.py --dry-run               # both tiers listed

@@ -598,6 +598,8 @@ def write_page(
                 confidence="EXTRACTED",
                 source_doc=doc_id,
                 evidence=f"page {slug} revision {revision}",
+                producer="page",
+                run=f"{slug}@{revision}",
             )
     if part_of:
         project = con.execute(
@@ -615,6 +617,8 @@ def write_page(
                 confidence="EXTRACTED",
                 source_doc=doc_id,
                 evidence=f"page {slug} revision {revision}",
+                producer="page",
+                run=f"{slug}@{revision}",
             )
     con.commit()
     return {"doc_id": doc_id, "slug": slug, "revision": revision, "created": created}
@@ -671,6 +675,8 @@ def add_to_project(
         confidence="EXTRACTED",
         source_doc=project["doc_id"],
         evidence=f"project {project_slug}",
+        producer="page",
+        run=slugify(project_slug),
     )
 
 
@@ -1994,7 +2000,7 @@ def hub_graph(
                 )
                 SELECT x.id AS edge_id, s.name AS src, s.type AS src_type, x.rel,
                        t.name AS dst, t.type AS dst_type, x.confidence,
-                       x.source_doc, x.evidence
+                       x.source_doc, x.evidence, x.producer, x.run
                 FROM edges x
                 JOIN canon cs ON cs.id = x.src JOIN canon cd ON cd.id = x.dst
                 JOIN entities s ON s.id = cs.cid JOIN entities t ON t.id = cd.cid
@@ -2126,6 +2132,8 @@ def link(
     source_doc: int | None = None,
     ontology_version: str | None = None,
     evidence: str | None = None,
+    producer: str | None = None,
+    run: str | None = None,
 ) -> int:
     """Insert a currently-valid edge; entities are created on demand.
 
@@ -2143,8 +2151,19 @@ def link(
     dst = _entity_id(con, edge.dst, edge.dst_type)
     cur = con.execute(
         "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
-        f" ontology_version, evidence, valid_from) VALUES (?,?,?,?,?,?,?, {_NOW})",
-        (src, dst, edge.rel, confidence, source_doc, ontology_version, evidence),
+        " ontology_version, evidence, producer, run, valid_from)"
+        f" VALUES (?,?,?,?,?,?,?,?,?, {_NOW})",
+        (
+            src,
+            dst,
+            edge.rel,
+            confidence,
+            source_doc,
+            ontology_version,
+            evidence,
+            producer,
+            run,
+        ),
     )
     con.commit()
     return cur.lastrowid
@@ -2226,6 +2245,8 @@ def invalidate_edge(
     confidence: str = "EXTRACTED",
     source_doc: int | None = None,
     evidence: str | None = None,
+    producer: str | None = None,
+    run: str | None = None,
 ) -> int | None:
     """End an edge's validity now (``valid_to``), optionally inserting the
     edge that supersedes it. The old edge stays as history (invariant 8).
@@ -2245,7 +2266,96 @@ def invalidate_edge(
         confidence=confidence,
         source_doc=source_doc,
         evidence=evidence,
+        producer=producer,
+        run=run,
     )
+
+
+@_serialized
+def retire_run(
+    con: sqlite3.Connection,
+    *,
+    producer: str | None = None,
+    run: str | None = None,
+) -> int:
+    """End every live edge a producer or a run wrote (both when both are
+    given): what "upgrade" means once a better extractor has re-read the
+    documents. History is kept (invariant 8); returns how many edges."""
+    if producer is None and run is None:
+        raise ValueError("retire_run needs a producer or a run")
+    clauses = ["valid_to IS NULL"]
+    args: list[Any] = []
+    if producer is not None:
+        clauses.append("producer = ?")
+        args.append(producer)
+    if run is not None:
+        clauses.append("run = ?")
+        args.append(run)
+    cur = con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE " + " AND ".join(clauses), args
+    )
+    con.commit()
+    return cur.rowcount
+
+
+@_serialized
+def provenance_summary(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Live and retired edge counts per producer and run."""
+    rows = con.execute(
+        """
+        SELECT producer, run, sum(valid_to IS NULL) AS live,
+               sum(valid_to IS NOT NULL) AS retired, min(ingested_at) AS first_at
+        FROM edges GROUP BY producer, run ORDER BY first_at
+        """
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@_serialized
+def backfill_provenance(con: sqlite3.Connection) -> dict[str, int]:
+    """Fill ``producer`` and ``run`` on edges written before migration 0007,
+    from the evidence prefix (citations, pages) and the source document's
+    stamps (Zotero seeds, extraction). Idempotent: only NULL producers."""
+    counts: dict[str, int] = {}
+
+    def tag(
+        where: str, producer: str, run_expr: str, args: tuple[Any, ...] = ()
+    ) -> None:
+        cur = con.execute(
+            f"UPDATE edges SET producer = ?, run = {run_expr}"
+            f" WHERE producer IS NULL AND {where}",
+            (producer, *args),
+        )
+        counts[producer] = counts.get(producer, 0) + cur.rowcount
+
+    tag("evidence LIKE 'crossref %'", "crossref", "'backfill'")
+    tag("evidence LIKE 'openalex %'", "openalex", "'backfill'")
+    tag("evidence LIKE 'page %' OR evidence LIKE 'project %'", "page", "'backfill'")
+    tag(
+        "evidence IS NULL AND rel IN ('authored_by', 'published_in') AND source_doc IN"
+        " (SELECT id FROM documents WHERE json_extract(meta, '$.source') = 'zotero')",
+        "zotero",
+        "'backfill'",
+    )
+    # extraction: the source document's stamp names the model; the edge's
+    # ontology version names the run
+    cur = con.execute(
+        """
+        UPDATE edges SET
+            producer = COALESCE(
+                (SELECT json_extract(meta, '$.extraction.extractor') FROM documents d
+                 WHERE d.id = edges.source_doc), 'extraction'),
+            run = 'ontology-v' || COALESCE(ontology_version, '?')
+        WHERE producer IS NULL AND evidence IS NOT NULL
+        """
+    )
+    counts["extraction"] = cur.rowcount
+    cur = con.execute(
+        "UPDATE edges SET producer = 'manual', run = 'backfill' WHERE producer IS NULL"
+    )
+    counts["manual"] = cur.rowcount
+    con.commit()
+    return counts
 
 
 @_serialized
@@ -2444,6 +2554,7 @@ def traverse(
                s.name AS src, s.type AS src_type, e.rel,
                t.name AS dst, t.type AS dst_type,
                e.confidence, e.source_doc, e.evidence, e.ontology_version,
+               e.producer, e.run,
                e.valid_from,
                MAX(rs.depth, rt.depth) AS hop
         FROM cedges ce

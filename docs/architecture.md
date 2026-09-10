@@ -218,14 +218,15 @@ vectors-<model>.usearch       HNSW index keyed by chunk id, f16, cosine (a file,
 vectors-doc-<model>.usearch   HNSW index of the document field, keyed by document id
 entities         id, name, type, canonical_id (resolution merges), created_at
 edges            src, dst, rel, confidence, weight, source_doc, ontology_version,
-                 evidence (a quote or a source id), valid_from, valid_to, ingested_at
+                 evidence (a quote or a source id), producer, run,
+                 valid_from, valid_to, ingested_at
 review_queue     triples the extractor could not fit, with reason, evidence, resolution
 pages            doc_id, slug, kind (addendum | project | topic)
 page_revisions   doc_id, revision, text_hash, author (human | agent), note, created_at
 ```
 
 Schema changes are numbered migrations in `src/prax/migrations/`
-(`0001_baseline` through `0006_pages`), applied by `store.init_db` and
+(`0001_baseline` through `0007_provenance`), applied by `store.init_db` and
 tracked in `PRAGMA user_version`. The vector indexes are files beside the
 database, not tables (R6). (R12)
 
@@ -240,7 +241,7 @@ has no column yet. Conventions in use:
 | `text_source` | extractor stamp of the current text artifact |
 | `parse_history` | every extraction attempt: extractor, chars, seconds, outcome or error |
 | `summary` | the extraction's two-sentence summary |
-| `extraction` | stamp of the last extraction: extractor, ontology version, counts, token usage |
+| `extraction`, `extraction_history` | stamp of the last extraction (extractor, ontology version, run, counts, token usage) and every earlier stamp |
 | `citations` | source, work id, citation count, reference count, fetch time |
 | `page` | slug, kind, current revision and author of a page |
 
@@ -260,6 +261,7 @@ stamp. Interrupt any of them and rerun the same command.
 | `import_citations.py` | documents without `meta.citations`, DOIs first (`--resolve-titles` for the rest) | `cites` edges, `meta.citations` | two sources behind one flag; polite-pool contact; retries |
 | `resolve_entities.py` | unmerged entities | `entities.canonical_id` | sure tier automatic; `--twins` and `--adjudicate` opt in |
 | `replay_review.py` | open typed review items | edges, `review_queue.resolution` | links only what the current ontology accepts |
+| `backfill_provenance.py` | edges without a producer | `edges.producer`, `edges.run` | from evidence prefixes and document stamps; idempotent |
 | `eval_retrieval.py` | the query set | a report | throwaway or existing store |
 
 Long passes run as batches of short-lived processes (`--limit N` in a
@@ -296,6 +298,7 @@ loop); the queue makes each batch do real work.
 | change what a document *is* for search | `store.document_field`; run `refresh_document_fields.py`, then `embed_pending.py` |
 | change the embedding model | an entry in `prax.embeddings.MODELS`; `embed_pending.py` re-embeds into new index files; another dimension also needs `VEC_DIM` |
 | add entity or relation types | `ontology.yaml` plus a version bump; `replay_review.py`; old edges keep their version; the bump re-selects documents for extraction |
+| replace one producer's work | re-extract (a new `run`), then `store.retire_run(producer=, run=)` on the old one; history stays |
 | change the extraction prompt | `extraction.system_prompt` (the JSON text is cached across calls) and `docs/eval/` for a before/after on the three benchmark papers |
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |
 | add an agent tool | a store function first, then one handler each in `prax.api` and `prax.mcp_server`; keep responses compact |

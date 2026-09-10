@@ -99,7 +99,9 @@ def link(
     """
     edge = store.Edge(src, src_type, rel, dst, dst_type)
     try:
-        eid = store.link(_db(), edge, confidence=confidence, source_doc=source_doc)
+        eid = store.link(
+            _db(), edge, confidence=confidence, source_doc=source_doc, producer="agent"
+        )
     except ValueError as exc:
         return {"error": str(exc)}
     return {"edge_id": eid}

@@ -180,6 +180,7 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
             confidence=req.confidence,
             source_doc=req.source_doc,
             ontology_version=req.ontology_version,
+            producer="manual",
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -290,6 +291,8 @@ def resolve_review(review_id: int, req: ReviewReq, request: Request) -> dict[str
                 confidence=req.confidence,
                 source_doc=item["source_doc"],
                 evidence=item["evidence"],
+                producer="manual",
+                run=f"review-{review_id}",
             )
         store.resolve_review(con, review_id, req.resolution)
     except ValueError as exc:

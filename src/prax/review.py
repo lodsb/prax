@@ -58,6 +58,8 @@ def replay(
                     confidence="EXTRACTED",
                     source_doc=it["source_doc"],
                     evidence=it["evidence"],
+                    producer="replay",
+                    run=f"ontology-v{onto.version}",
                 )
                 rep.linked += 1
             store.resolve_review(con, it["id"], "linked")

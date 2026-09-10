@@ -589,6 +589,7 @@ def apply(
     extraction: Extraction,
     *,
     extractor: str,
+    run: str | None = None,
 ) -> ApplyReport:
     """Write an extraction: fitting triples become edges (once), misfits go
     to the review queue, the document gets ``meta.summary`` and the
@@ -655,6 +656,8 @@ def apply(
             source_doc=doc_id,
             ontology_version=onto.version,
             evidence=t.evidence or None,
+            producer=extractor,
+            run=run,
         )
         report.linked += 1
     for u in extraction.unmapped:
@@ -672,9 +675,13 @@ def apply(
     meta = store.get_meta(con, doc_id)
     if extraction.summary:
         meta["summary"] = extraction.summary
+    if meta.get("extraction"):  # every model that has read the document
+        history = meta.setdefault("extraction_history", [])
+        history.append(meta["extraction"])
     meta["extraction"] = {
         "extractor": extractor,
         "ontology_version": onto.version,
+        "run": run,
         "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "linked": report.linked,
         "existing": report.existing,

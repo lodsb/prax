@@ -648,7 +648,7 @@ function graphPanel(node, edges) {
     const other = out ? e.dst : e.src;
     const otherType = out ? e.dst_type : e.src_type;
     return `<li>${out ? "" : `<b>${esc(other)}</b> <span class="muted">${esc(otherType)}</span> `}<span class="rel">${out ? "" : "→ "}${esc(e.rel)}${out ? " →" : ""}</span> ${out ? `<b>${esc(other)}</b> <span class="muted">${esc(otherType)}</span>` : ""}
-      <span class="muted">· ${esc(e.confidence)}${e.source_doc ? ` · <a href="#doc/${e.source_doc}">doc ${e.source_doc}</a>` : ""}</span>
+      <span class="muted">· ${esc(e.confidence)}${e.producer ? ` · ${esc(e.producer)}` : ""}${e.source_doc ? ` · <a href="#doc/${e.source_doc}">doc ${e.source_doc}</a>` : ""}</span>
       ${e.evidence ? `<span class="ev">“${esc(e.evidence)}”</span>` : ""}</li>`;
   });
   return `<h2>${esc(node.name)}</h2><div class="muted">${esc(node.type)} · ${edges.length} edges shown</div><ul>${rows.join("")}</ul>`;

@@ -649,6 +649,8 @@ def _seed_edges(con: sqlite3.Connection, p: Planned, doc_id: int, version: str) 
             confidence="EXTRACTED",
             source_doc=doc_id,
             ontology_version=version,
+            producer="zotero",
+            run=p.key,
         )
         n += 1
     return n

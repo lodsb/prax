@@ -49,9 +49,12 @@ drop folder (`docs/sources.md`).
    never inline in a request.
 8. **Graph edges are evidence, not truth.** Every edge carries
    `confidence` (EXTRACTED | INFERRED | AMBIGUOUS), `source_doc`,
-   `ontology_version`, and bi-temporal columns (`valid_from`, `valid_to`,
-   `ingested_at`). Enrichment invalidates edges (sets `valid_to`); it never
-   deletes them.
+   `ontology_version`, `producer` and `run` (which model, importer or
+   person wrote it, in which batch or pass), and bi-temporal columns
+   (`valid_from`, `valid_to`, `ingested_at`). Enrichment invalidates edges
+   (sets `valid_to`); it never deletes them. Provenance is a column on the
+   fact, never an edge in the graph: upgrading a producer's work is
+   `retire_run` plus a new pass.
 9. **Ontology is small and versioned.** Entity/relation types live in
    `ontology.yaml` and are loaded by `prax.ontology`. `store.link` rejects
    any edge whose types are not in the current version, and stamps every

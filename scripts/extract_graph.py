@@ -96,6 +96,7 @@ def main() -> int:
     spent = 0.0
     t0 = time.monotonic()
     totals = extraction.ApplyReport()
+    run = "sync-" + time.strftime("%Y%m%dT%H%M%S")
     for n, doc_id in enumerate(ids, 1):
         if a.budget_usd is not None and spent >= a.budget_usd:
             print(f"budget reached after {n - 1} documents", file=sys.stderr)
@@ -103,7 +104,7 @@ def main() -> int:
         try:
             doc = extraction.build_input(con, doc_id)
             result = ext.extract(doc)
-            rep = extraction.apply(con, doc_id, result, extractor=ext.name)
+            rep = extraction.apply(con, doc_id, result, extractor=ext.name, run=run)
         except Exception as exc:  # noqa: BLE001 - one document must not stop the run
             print(f"[{n}] doc {doc_id}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
@@ -197,7 +198,9 @@ def collect(
             continue
         try:
             parsed = extraction.ClaudeExtractor.from_message(result.result.message)
-            rep = extraction.apply(con, doc_id, parsed, extractor=ext.name)
+            rep = extraction.apply(
+                con, doc_id, parsed, extractor=ext.name, run=batch_id
+            )
         except Exception as exc:  # noqa: BLE001
             print(f"doc {doc_id}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
