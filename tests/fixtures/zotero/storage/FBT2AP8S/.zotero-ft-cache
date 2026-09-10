@@ -1,0 +1,875 @@
+ON THE TRACEABILITY OF THE COMPOSITIONAL PROCESS
+Hanns Holger Rutz
+University of Plymouth
+Interdisciplinary Centre for
+Computer Music Research (ICCMR)
+hanns.rutz@plymouth.ac.uk
+Eduardo Miranda
+University of Plymouth
+Interdisciplinary Centre for
+Computer Music Research (ICCMR)
+eduardo.miranda@plymouth.ac.uk
+Gerhard Eckel
+University of Music
+and Performing Arts Graz
+Institute of Electronic Music
+and Acoustics (IEM)
+eckel@iem.at
+ABSTRACT
+Composition is viewed as a process that has its own
+temporal dimension. This process can sometimes be
+highly non-linear, sometimes is carried out in real-
+time during a performance. A model is proposed that
+uniﬁes the creational and the performance time and
+that traces the history of the creation of a piece. This
+model is based on a transformation that enhances data
+structures to become persistent. Conﬂuent persistence
+allows navigation to any previous version of a piece,
+to create version branches at any point, and to com-
+bine diﬀerent versions with each other. This concept is
+tuned to integrate two important aspects, retroactiv-
+ity and multiplicities. Three representative problems
+are posed: How to deﬁne dependancies on entities that
+change over time, how to introduce changes ex-post
+that aﬀect future versions, and how to continue work-
+ing on parallel versions of a piece.
+Solutions based
+on our test implementation in the Scala language are
+presented.
+Our approach opens new possibilities in
+the area of music analysis and can conﬂate disparate
+notions of composition such as tape composition, in-
+teractive sound installation, and live improvisation.
+They can be represented by the same data structure
+and both oﬄine and realtime manipulations happen
+within the same transactional model.
+1. CONCEPTUAL FOUNDATION
+1.1 The Double Nature of Composition
+Time, along with space the fundamental parameter
+of composing pieces of music and sound art, appears
+in various forms. A fundamental distinction can be
+drawn between the creational time tK – the time in
+which a composer creates or manipulates a piece –
+and performance time tP – the time in which a piece
+is presented to a listener. One feels reminded of the
+double nature of the term composition, as pointed out
+by Koenig: «By musical composition we generally un-
+derstand the production of an instrumental score or
+Copyright:
+c
+⃝2010
+Hanns
+Holger
+Rutz
+et
+al.
+This
+is
+an
+open-access
+article
+distributed
+under
+the
+terms
+of
+the
+Creative Commons Attribution License 3.0 Unported, which per-
+mits unrestricted use,
+distribution,
+and reproduction in any
+medium, provided the original author and source are credited.
+a tape of electronic music. However, we also under-
+stand composition as the result of composing [...] (we
+say for instance: “I have heard a composition by com-
+poser X”).» [1, p. 191] The hermetic view that the
+«concept of composition is accordingly closed with re-
+gard to the result, but open with regard to the mak-
+ing of a composition» [1, ibid.], however is dropped
+in favour of one where the electroacoustic composer
+is regarded as the «ﬁrst listener» 1 , often being able
+to “perform” the piece in total or part while working
+on it, or in fact performing it in a live improvisation
+where part of the work is composed (put together)
+while being performed, not necessarily arriving at one
+pre-deﬁned result.
+A special case is added by the medium of sound
+installation, where the “piece” often does not have a
+beginning or ending, and in which the listener chooses
+the time span of exposure to the sounds, sometimes
+even inﬂuencing the piece in an interactive way.
+It
+is therefore useful to depart from a perspective where
+the process of composition terminates in a ﬁxed com-
+position, but rather to consider indeterminacy as an
+essential ingredient, and therefore to look out for ways
+in which indeterminacy can be represented and ma-
+nipulated in a composition system.
+Tentatively, we
+further divide elements in tP into those forming a vir-
+tual (or prospective) structure and into those forming
+several actual realisations of that structure.
+1.2 Databases
+An interesting taxonomy has been developed in re-
+search on database systems: In a bi-temporal database,
+two timelines are distinguished: The valid time de-
+ﬁnes the time in which a database entry has exis-
+tence in “reality”, when it «accurately modeled real-
+ity» [3]. On the other hand, someone is maintaining
+and editing the database, performing operations on
+the transactional level, where time means «when an
+event is recorded in the database» [4]. The two time-
+lines are often seen as orthogonal to each other, and
+common queries are punctiform with regard to trans-
+actional time and interval based with regard to valid
+time (cf. [5]). It follows that, if a composition is con-
+1 The term is deliberately taken from Daniel Charles who
+demands «a music that takes care to consider the composer not
+as the organizer of a technological ritual but, more modestly, as
+the ﬁrst listener». [2, p. 152]
+
+
+sidered being a kind of database, the composer takes
+the role of the operator on the database, and trans-
+actional time corresponds with tK. The entries in the
+database, the elements from which the music is con-
+structed, form one or more valid timeline fragments in
+virtual tP and eventually become one particular actual
+timeline in tP per performance.
+1.3 Persistence
+The extension of the valid by the transactional time
+layer introduces the history of the creation of a work.
+In the taxonomy of Driscoll et al., we call ephemeral a
+data structure which is agnostic of its history, so that
+any modiﬁcation to it would let the previous state
+fall into oblivion. On the other hand, enhancing an
+ephemeral structure so that its previous states are still
+accessible, makes it become persistent [6]. The dis-
+tinct variants of an ephemeral structure we call “ver-
+sions”, and the versions form vertices in a directed
+graph such that one vertex vj points to another vk if
+vk was created by applying some modiﬁcation to the
+ephemeral structure in version vj.
+In a linear perspective, each transaction corresponds
+with a new version of the database. However, in a non-
+linear perspective, one could depart from any previous
+version and branch oﬀ. Finally one could even create
+a version by combining two previous versions. In the
+ﬁrst case, the graph is a linear path, and the enhanced
+structure is called partially persistent, meaning that
+«all versions can be accessed but only the newest ver-
+sion can be modiﬁed». The second case produces a
+graph which is a tree, and we speak of full persistence,
+where «every version can be both accessed and modi-
+ﬁed». In the last case the enhancement which uses «an
+ephemeral data structure that supports an update in
+which two diﬀerent versions are combined» is called
+conﬂuent persistence, and the versions have the most
+general form of a directed acyclic graph (DAG) [6].
+We will use persistence not only to model the evolu-
+tion of a piece in tK, but also to use version branching
+and melding as a joint between virtual elements and
+one or more actual realisations in tP.
+This way we
+unify the compositional process and the performance
+of pieces.
+A critique of the persistence approach comes from
+Demaine et al. who state that, since versions are never
+overwritten and versions can only depend on previous
+versions, «the dependence relationship between two
+versions never changes.
+[...]
+Thus, the persistence
+paradigm is [...] inappropriate for when changes must
+be made directly to the past state of the structure.» [7]
+Instead they propose «retroactive data structures» as
+a new approach that can incorporate deliberate ma-
+nipulations of past states of a data structure.
+Un-
+like persistence for which general transformations have
+been proposed, retroactivity requires special solutions
+for each particular data structure. In section 2.5 we
+will face a problem that seemingly calls for some kind
+of retroactivity, and we will see that it can well be
+solved within the persistence paradigm.
+1.4 Multiplicities
+If now the compositional process is seen as a sequence
+of decision-making or actualisation, we may integrate
+indeterminacy into this model. Indeterminacy can be
+attributed to three sources: Chance operations, inter-
+active sensorial input, and generative (self-modifying
+or memorising) structures. Indeterminacy can be sub-
+sumed under other forms of multiplicities, namely the
+exploratory behaviour of the composer who concur-
+rently or successively develops diﬀerent versions of
+(parts of) a piece, and scale where diﬀerent versions
+are developed for diﬀerent contexts, e.g. modes of spa-
+tialisation. In total this leads to ﬁve types of multiplic-
+ities. The task is then to elaborate appropriate models
+for the virtual sources of multiplicities, for example a
+model of chance operations, a model of interactive in-
+put, etc. Although this is beyond the scope of this
+paper, we will use a simple placeholder for temporal
+values which are unknown in a version to show that
+our general model can indeed be extended to represent
+multiplicities.
+2. IMPLEMENTATION
+2.1 An Overview of Conﬂuent Persistence
+Fiat and Kaplan [8] have developed general algorithms
+for turning any ephemeral linked data structure into
+its conﬂuently persistent counterpart. Our contribu-
+tion is to apply this framework to the representation
+of temporal objects, extending it in several ways. Be-
+fore we describe problem cases and their solution, it
+is therefore necessary to give a brief overview of this
+framework.
+The ephemeral data structure is considered to be
+composed of any number of nodes each of which can
+have“data”and“pointer”ﬁelds. The pointer ﬁelds are
+used to link nodes together, while the data ﬁelds hold
+primitive values. Instead of distinguishing data and
+pointer ﬁelds, we prefer to speak about mutable ﬁelds
+used to store immutable values and mutable ﬁelds used
+to refer to other mutable objects.
+Each ephemeral node is transformed into a “fat”
+node which contains information about all its states
+through diﬀerent versions, using some kind of dictio-
+nary for each ﬁeld. To distinguish which version we
+are looking at, the notion of a node pedigree is intro-
+duced which basically is a sequence of version identi-
+ﬁers (or vertices), starting from the version in which
+a node was created (the seminal version), and carry-
+ing successively the identiﬁers of the versions through
+which the node was brought to the currently accessed
+version. The identiﬁer of a fat node thus is the tuple
+composed of the node pedigree and a reference to the
+fat node structure.
+To access a ﬁeld in a particular version of a fat
+node, each ephemeral ﬁeld is replaced by a fat ﬁeld
+
+
+which consists of a search trie 2 that carries all values
+that have ever been assigned to that ﬁeld, stored in
+the leaves of the trie, and the paths into the trie being
+the so-called assignment pedigrees, again a sequence
+of version identiﬁers. In the case of pointer ﬁelds –
+references to mutable objects –, node identiﬁers are
+stored in the trie, and in the retrieval a transforma-
+tion called «Pedigree Preﬁx Substitution» is applied
+to update the node identiﬁer so that it becomes a valid
+and unique access identiﬁer within the current path in
+the version DAG.
+The notion of pedigrees allows for the appearance
+of an ephemeral node more than once within the same
+version, while maintaining correct access to each ele-
+ment. The operation by which a node is re-introduced
+into a version is called a “meld”, and it allows for ex-
+ample to catenate a linked list to itself or to an older
+version of itself.
+Our implementation uses Fiat and Kaplan’s com-
+pressed-path representation of pedigrees. It is based
+on the observation that there are often long linear
+sequences in the version graph which produce weak
+performance when using a full-path pedigree repre-
+sentation.
+In the full-path representation, the trie
+keys grow linearly with the number of versions.
+In
+the compressed-path method, the graph is split into
+disjoint (sub-)trees, each of which has an associated
+level ℓ, can only be entered at most once per path
+and will be represented by two symbols – the iden-
+tiﬁer of the version at which one enters the subtree
+and the identiﬁer of the version from which one leaves
+the subtree (or the terminal version if the path ends
+in this subtree). A new subtree with an incremented
+level needs to be created when a meld operation is
+based on elements from versions of the same tree level.
+The so-called index ˜c(p) of the compressed path c(p)
+is used now as key into the search trie of the fat ﬁelds.
+It contains all elements of c(p) but the last, the par-
+ticular version vertex inside one subtree. The value
+stored in the trie is a data structure that contains all
+the mappings from the target vertices of assignments
+(last elements of compressed paths) to the assigned
+values. Given a query key, this structure can ﬁnd the
+nearest ancestor vertex in the subtree.
+For the tries, we employ the lexicographic splay tree
+of Sleator and Tarjan [9], for the target vertex map-
+ping we use a plain list along with a total ordering of
+the vertices imposed by the pre-order and post-order
+of the subtree, as suggested by Dietz [10] 3 , although
+more sophisticated and better performing data struc-
+tures are known (cf. [11]).
+2 A trie, also called preﬁx tree, is an associative data structure
+where the key consists of a sequence of elements. To ﬁnd a value
+in the trie, the ﬁrst element of the key is compared to the root
+node and the according branch is taken, then the second element
+is compared to the node at the second level, and so forth.
+3 Brieﬂy, a vertex vj is ancestor of another vertex vk, if vj
+appears left to vk in the pre-order traversal and right to it in
+the post-order traversal of the tree. Among the candidates, the
+element that is rightmost in the pre-order list is the nearest
+ancestor.
+2.2 Posing a Problem
+We will introduce our approach by posing a simple
+problem, illustrated in Figure 1, that is to be solved.
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 1. First problem: How to deﬁne the depen-
+dancy of region r2 on r1 such that the former automat-
+ically moves along with the latter in future versions?
+Bi-temporality is modeled by associating each ver-
+sion vertex vj with a point on the creational time-
+line (implicit), and the performance timeline tP is ex-
+pressed in the ephemeral data structure such that ob-
+jects in time are associated with a time interval in tP.
+Let the basic class of such objects be (fat) regions, de-
+noted by rj. A region can be anything from an audio
+ﬁle snippet to a code block that generates synthesised
+sound. Let i(rj) be the interval of a region, speciﬁed
+by a beginning time start and a duration dur, such
+that i(rj) = (start, dur). These points in time we call
+periods.
+There are three operations performed by the com-
+poser. In v1, a new region r1 is created, forming the
+initial element of the performance timeline. The sec-
+ond operation, forming the next version v2, adds a
+second region r2 such that i(r2) starts at a ﬁxed oﬀ-
+set after i(r1) stops.
+Finally, the composer decides
+that r1 should last longer and adjusts the duration
+of its interval accordingly. The problem is to deﬁne
+the relationship between r1 and r2 such that under
+the modiﬁcation of r1, we preserve the intention of r2
+following r1.
+We assume a set of arithmetic operations on in-
+tervals and periods, such as addition 4 .
+In v2 we
+would say that i(r2) is created by an expression such as
+(start = stop(i(r1)) + po, dur = pd) where po is some
+period oﬀset and pd some period duration. However,
+the manifest idea of applying the conﬂuent persistence
+technique to either resolve the value of the fat inter-
+val ﬁeld of r1 at version v2 or to create a fat pointer
+reference entry to it at version v2 would create the
+ﬁxed “dependence relationship” that was criticised by
+the retroactive approach – i(r2) would depend on i(r1)
+assigned in the version that is closest ancestor of v2.
+What we want instead is to depend on this interval
+no matter at which version of i(r1) we are looking.
+The solution is to use a kind of dynamic reference.
+4 E.g., we simply deﬁne an interval’s stop as start + dur.
+
+
+Before we give this solution, we present our testing
+framework.
+2.3 The Testing Framework
+For our implementation, we use the Scala program-
+ming language [12].
+Scala combines object-oriented
+and functional approaches and has a rich type system
+with single class inheritance and multiple mixins called
+traits. A trait can declare a set of abstract methods,
+but can also provide concrete deﬁnitions. Although
+Scala is a compiled language, we use a read-eval-print-
+loop (REPL) that allows one to create version vertices
+and navigate between them step-by-step. We also an-
+ticipate that in a composition environment based on
+this framework, the composer would typically create
+structures in a REPL. Furthermore, we provide access
+to the persistence sensitive environment in the form of
+an internal domain speciﬁc language extension which
+is realised by a combination of methods imported into
+the REPL scope and so-called implicit conversions, a
+language construct of Scala that can be used to seem-
+ingly enrich existing classes with new methods. For
+example, we add a method secs to the ﬂoating point
+class Double to create period literals. Figure 2 shows
+an overview of the classes involved.
+The environment maintains two access paths into
+the version graph, one for reading and one for writing.
+When creating a new version, referencing and access-
+ing existing objects involves the reading path which
+denotes the version we are departing from, and assign-
+ments are made using the writing path which denotes
+the newly created version. A single version step is per-
+formed by method t[T](thunk: => T): T which takes
+an argument thunk – a parameterless function with
+result type T – and evaluates it in a context where the
+read access corresponds to the current version, and the
+write access corresponds to a version newly derived
+from the current version.
+The ﬁrst step in ﬁgure 1
+becomes:
+val r1 = t { region("r1", 0.secs :< 3.secs) }
+Note how the interval literal is constructed by tak-
+ing a start and a dur period and catenating them with
+the :< operator. The result of this operation is stored
+in value r1.
+It is a special region handle that the
+environment automatically converts to a region iden-
+tiﬁer when used. This saves us from explicitly updat-
+ing each access identiﬁer when navigating through the
+version graph.
+2.4 Solution to the Problem
+Assuming that method interval on the region object
+returns a reference with the desired semantics as re-
+quested in the conclusion of section 2.2, the code for
+versions v2 and v3 becomes:
+val r2 = t { region("r2", (r1.interval.stop +
+2.secs) :< 5.secs) }
+t { r1.interval = 0.secs :< 7.secs }
+These semantics are achieved by constructing an
+IntervalProxy that wraps the underlying fat interval
+ﬁeld in r1. This proxy delegates the interval methods
+by using a special access method. When arithmetics
+are performed on the proxy’s start or dur ﬁelds, they
+are wrapped in special PeriodExpr objects.
+The access call performs a pedigree preﬁx substi-
+tution as in the pointer retrieval of [8], but prior ac-
+cessing the fat ﬁeld. As a consequence, the proxy ac-
+knowledges all modiﬁcations made to the ﬁeld between
+the creation of the proxy and the current version. We
+therefore call this behaviour “ﬂuent”. In order to ac-
+cess a region’s interval without the ﬂuent behaviour,
+the proxy is ﬁxed via r1.interval.fixed (cf. ﬁg. 2).
+Note that linearity in tK is maintained, so i(r2) in v2
+is still referring to i(r1) in version v1!
+2.5 Retroactive Operations
+In the second problem, the approach of section 2.4
+does not help, as we are now faced with version branch-
+ing. The problem is depicted in ﬁgure 3.
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 3. The second problem addresses changes that
+need to aﬀect more than one future version.
+Here the composer decided to begin with a region
+r1 but leaves its duration subject to a later decision.
+Next, a version v2 is produced by adding another re-
+gion to start after region r1 stops, similar to the pre-
+vious example. The dependency of the regions is in-
+dicated by the arrow from r2 to r1. After completing
+version v2, the composer tries out a diﬀerent variant,
+starting over from version v1, the result of which is
+version v3. The ﬁnishing task, deciding on the ﬁnal in-
+terval of r1, seemingly calls for a retroactive operation
+– a correction of v1. However, throughout our frame-
+work we pursue the preservation of causality, that is,
+the original states of v1 . . . v3 must still be accessible.
+The solution is to insert a new vertex v4 between v1
+and its former children, as shown in ﬁgure 4(a).
+The data structure maintained for the nearest an-
+cestor search within a subtree – and until now we have
+only dealt with graphs consisting of a single tree –
+can be tuned for such a quasi-retroactive insertion.
+Method retroc inserts a new version vertex (here v4)
+right after its parent vertex (here v1) in the pre-order
+traversal list, and right before it in the post-order
+traversal list. In this case, this yields a pre-order of
+⟨v1, v4, v2, v3⟩and a post-order of ⟨v2, v3, v4, v1⟩, sat-
+isfying the condition of v4 being the closest ancestor
+
+
+	
+
+	
+	
+
+		
+ !
+	
+ !
+"#""
+$
+		%&	'"	!("	)		
+
+		%*		!("	+		
+"	,
+
+	**("	!
+
+	-	*-	*
++	+		
+"		+*"	!	+*.
+$
+	
+
+
+	
+	
+
+*	
+&	'"/$
+	.-"	&	'"	
+	-	
+-	*
+&	'"	
+/
+
+
+
+		
+
+
+		
+
+
+
+
+
+ 
+ 
+ 
+!"
+ 
+
+# 
+"
+
+
+ 	
+	
+
+
+
+	**
+
+	+*
+*	
+*"	
+
+ 
+
+$%
+ 
+
+ 
+& 
+ 
+
+
+	"0	
+
+ '"
+	"0	
+(
+)
+
+
+
+
+
+*)
++
+
+
+  (
+)
+
+	'	
+&	'"+*
+*	+*
+	+*
+	"0	
+	"0	
+Figure 2. Class Diagram. Depicted are only those classes, attributes and methods referred to in this paper.
+
+
+
+
+(a)
+
+
+
+
+
+
+
+
+
+(b)
+Figure 4. Retroactive vertices. (a) Single“corrective”
+operation. (b) Incorporating multiplicities.
+of v2 and of v3 (cf. footnote 3 ). The corresponding
+code is:
+val r1 = t { region("r1", 0.secs :< ?) }
+val v1 = currentVersion
+val r2 = t { region("r2", (r1.interval.stop +
+2.secs) :< 5.secs) }
+v1.use
+val r3 = t { region("r3", (r1.interval.stop +
+3.secs) :< 7.secs) }
+v1.use // parent of the retroactive vertex
+retroc { r1.interval = 0.secs :< 4.secs }
+We use ? as a placeholder for an unspeciﬁed period.
+The currentVersion method is used to capture the
+currently accessed version path. Navigation back to
+a particular version is achieved by calling use on a
+version path.
+It has not been explained yet how the linearity of tK
+is preserved, so that the original states of versions v2
+and v3 are not lost. This is achieved by conditioning
+the ancestor lookup using the monotonically increas-
+ing vertex indices: When looking up a target vertex
+vk, only vertices vj, j ≤k are considered. Therefore,
+v4 becomes eﬀective only after creating further de-
+scendants from the graph’s leaves. For example, if v5
+is created from v2, the modiﬁcations of v4 will be ef-
+fective in v5 (since 4 ≤5), but not in v2 (since 4 > 2),
+preserving the original state of v2. This conditional
+behaviour is indicated in ﬁgure 4(a): In v2 and v3 the
+dashed arrows are followed, while in descendants of v2
+and v3 the solid arrows are eﬀective.
+Going back to the conceptual layout, intuitively one
+could think of using repeated retroactive insertions to
+represent the various outcomes of a multiplicity. For
+instance, if
+⋆v5 was a new correction to i(r1), it would
+be inserted as a retroactive child vertex to v4. How-
+ever, the composer would not be able to freely switch
+between these two variants for i(r1) at a later point,
+precisely because we enforced the linearity in tK.
+We introduce another method multi which is ded-
+icated to this problem.
+multi can only be executed
+on leaves of the graph, because it enforces a succes-
+sive tree split. Figure 4(b) illustrates this: Initially,
+multi creates a neutral vertex v2 which functions as
+a common ancestor for any future outcomes of the
+multiplicity.
+The versions v3 and v4 inserted after
+the multiplicity are enforced to start new subtrees
+at level ℓ2.
+All vertices belonging to the multiplic-
+ity, located at the smaller tree level ℓ1, will be explic-
+itly included in the compressed path-representations
+as exiting vertices and can thus be seen as mutual
+switches. For instance, if we wish to access version v3
+incorporating variant v5, the compressed path would
+be ⟨v1, v5, v3, v3⟩, if variant v6 was desired, the path
+would be ⟨v1, v6, v3, v3⟩.
+
+
+2.6 Melding and Parallel Motion of Versions
+The enforcement of tree splitting in multi makes one
+think of the original meld operation. Indeed the ver-
+tices of the versions succeeding a multiplicity may have
+an indegree of > 1 (the indegree is the number of vari-
+ants realised) which is also characteristic of a version
+meld. The diﬀerence is, that in the original conﬂuent
+persistence framework, the set of access pointers to
+the data structure remains the same. With the use of
+multiplicities we are facilitating what we call “parallel
+motion” in the version graph so that there are diﬀer-
+ent access paths to a particular vertex, carrying the
+information about which variant of each multiplicity
+is “active”. This is clariﬁed by a ﬁnal example, shown
+in ﬁgure 5.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Figure 5. The third problem demands a facility to
+continue in a piece without settling on one particular
+version (v3 versus v4).
+Here, the composer has planned a section for live
+improvisation and created a container c1 for it in the
+ﬁrst version. A multiplicity (neutral vertex v2) is cre-
+ated to host the diﬀerent improvisations, so one can
+later switch forth and back between them. The two
+variants v3 and v4 are simply modeled by adding re-
+gions to the container, as the framework really is ag-
+nostic to whether an operation is carried out oﬄine
+or in realtime. As the composition ﬁnally carries on
+in v5, this version automatically has a tree level incre-
+mented from ℓ1 to ℓ2. The following code simulates
+this:
+val c1 = t { container("c1") }
+val m = multi
+c1.use
+val (r1, r2) = m.variant {
+(region("r1", 0.secs :< 4.secs),
+region("r2", 5.secs :< 2.secs)) }
+val v3 = m.lastVariant
+val (r3, r4) = m.variant {
+(region("r3", 0.secs :< 2.5.secs),
+region("r4", 3.5.secs :< 3.secs)) }
+val v4 = m.lastVariant
+rootContainer.use
+val r5 = t { region("r5", (c1.interval.stop +
+2.secs) :< 4.secs) }
+m.useVariant(v3)
+r5.interval.fixed // result: 9.secs :< 4.secs
+m.useVariant(v4)
+r5.interval.fixed // result: 8.5.secs :< 4.secs
+As can be seen, method variant { } creates a new
+variant transaction, while useVariant updates the ac-
+cess path to include a particular variant. Since inde-
+pendent regions are created in the two variants, they
+cannot be used as references for v5.
+This reference
+problem is solved by introducing the container ob-
+ject. Implicitly, in all the previous examples, the re-
+gions had been added to the default rootContainer.
+We explicitly revert to it for region r5 by calling root-
+Container.use.
+The neutral vertex v2 gains additional signiﬁcance
+here: As r5 is created, it is added to the root con-
+tainer. Assuming that containers are modeled using
+a list of the contained objects along with a ﬁeld for
+the size of this list, assignments with compressed path
+⟨v1, v2, v5, v5⟩are produced in the fat root container.
+If now variant v3 is activated, the current access path
+becomes ⟨v1, v3, v5, v5⟩. Consequently, a query for the
+number of objects in the root container would termi-
+nate in the trie at v1, producing the wrong result, since
+c1 was the only container in v1.
+This last problem is solved by enhancing the maxi-
+mum preﬁx search in the trie such that if a vertex (here
+v3) is not found and this vertex belongs to a multiplic-
+ity, it is replaced by the corresponding neutral vertex
+(here v2) and the last splaying is repeated.
+3. CONCLUSION
+We have modeled and an implemented the music com-
+position process as a conﬂuently persistent data struc-
+ture where the version DAG forms the creational time-
+line tK, and the structure itself contains temporal ob-
+jects relating to performance time tP. We have en-
+hanced this structure with two new operations retroc
+to incorporate quasi-retroactive decision making and
+multi to integrate realisation variants of the piece.
+The apriority of Allombert et al. [13] – ”1. The com-
+positional process: the composer builds his interactive
+score [...] 2. The performance process: the interactive
+score is no more edited”– becomes meaningless, as the
+realisations become part of “the piece”, they re-build
+it.
+The framework remains to be tested in a real-world
+and real-time application. For this, an eﬃcient sched-
+uler representation of the temporal objects is needed.
+Changes induced by retroactivity and switching be-
+tween variants of a multiplicity need to be propagated
+(e.g., in some form of publisher-subscriber pattern),
+and cases where queries become invalid must be han-
+dled. This question of inconsistency has been investi-
+gated by Acar et al. [14].
+4. REFERENCES
+[1] G. M. Koenig,
+¨Asthetische Praxis,
+vol. 3 of
+Texte zur Musik, ch. Kompositionsprozesse (1978),
+
+
+pp. 191–210. Saarbr¨ucken: PFAU Verlag, 1993.
+[2] D. Charles,“Entr’acte: “Formal”or“Informal”Mu-
+sic?,” The Musical Quarterly, vol. 51, pp. 144–165,
+Jan 1965.
+[3] R.
+Snodgrass
+and
+I.
+Ahn,
+“A
+taxonomy
+of
+time databases,” ACM SIGMOD Record, vol. 14,
+pp. 236–246, May 1985.
+[4] G. Copeland and D. Maier, “Making smalltalk a
+database system,” ACM SIGMOD Record, vol. 14,
+pp. 316–325, June 1984.
+[5] B. Salzberg and V. J. Tsotras, “Comparison of ac-
+cess methods for time-evolving data,” ACM Com-
+puting Surveys, vol. 31, pp. 158–221, June 1999.
+[6] J. R. Driscoll, N. Sarnak, D. D. Sleator, and R. E.
+Tarjan, “Making data structures persistent,” Jour-
+nal of Computer and System Sciences, vol. 38,
+pp. 86–124, Feb 1989.
+[7] E. D. Demaine, J. Iacono, and S. Langerman,
+“Retroactive data structures,” ACM Transactions
+on Algorithms (TALG), vol. 3, no. 2, pp. 13:1–
+13:20, 2007.
+[8] A. Fiat and H. Kaplan, “Making data structures
+conﬂuently persistent,” in Proceedings of the 12th
+annual ACM-SIAM symposium on Discrete algo-
+rithms, pp. 537–546, 2001.
+[9] D. Sleator and R. E. Tarjan, “Self-adjusting bi-
+nary search trees,” Journal of the ACM (JACM),
+vol. 32, no. 3, pp. 652–686, 1985.
+[10] P. F. Dietz, “Maintaining order in a linked list,” in
+Proceedings of the fourteenth annual ACM sympo-
+sium on Theory of computing, pp. 122–127, 1982.
+[11] S. Alstrup, T. Husfeldt, and T. Rauhe, “Marked
+ancestor problems,” in Proceedings of the 39th An-
+nual Symposium on Foundations of Computer Sci-
+ence, p. 534, 1998.
+[12] M. Odersky,
+P. Altherr,
+V. Cremet,
+I. Dra-
+gos,
+G.
+Dubochet,
+B.
+Emir,
+S.
+McDirmid,
+S. Micheloud, N. Mihaylov, M. Schinz, E. Sten-
+man, L. Spoon, and M. Zenger, An Overview
+of
+the
+Scala
+Programming
+Language,
+Tech-
+nical
+Report
+LAMP-REPORT-2006-001.
+2nd
+ed.,
+2006.
+Online:
+http://www.scala-
+lang.org/docu/ﬁles/ScalaOverview.pdf.
+[13] A. Allombert, G. Assayag, M. Desainte-Catherine,
+and C. Rueda, “Concurrent constraints models for
+interactive scores,” Proceedings of Sound and Mu-
+sic Computing Conferences (SMC), pp. 14:1–14:8,
+2006.
+[14] U. A. Acar, G. E. Blelloch, and K. Tangwongsan,
+“Non-oblivious retroactive data structures,” tech.
+rep., CMU-CS-07-169, Carnegie Mellon University,
+School of Computer Science, 2007.

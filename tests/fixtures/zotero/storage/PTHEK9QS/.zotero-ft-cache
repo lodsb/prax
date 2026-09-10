@@ -1,0 +1,722 @@
+FugueGenerator - Collaborative Melody Composition Based on a Generative
+Approach for Conveying Emotion in Music
+Technische Univerist¨at M¨unchen
+Garching, Germany
+kluegel@in.tum.de
+Technische Univerist¨at M¨unchen
+Garching, Germany
+hagerer@in.tum.de
+Technische Univerist¨at M¨unchen
+Garching, Germany
+grohg@in.tum.de
+ABSTRACT
+This paper exempliﬁes an approach for generative music
+software. Therefore new operational principles are used,
+i.e. drawing melody contours and changing their emotional
+expression by making use of valence and arousal. Known
+connections between music, emotions and algorithms out
+of existing literature are used to deliver a software experi-
+ence that augments the skills of individuals to make music
+according to the emotions they want. A user-study lateron
+shows the soundness of the implementation in this regard.
+A comprehensive analysis of in-game statistics makes it
+possible to measure the music produced by testers so that
+connections between valence, arousal, melody properties
+and contours and emotions will be depicted. In addition,
+temporal sequences of reaction patterns between music mak-
+ing individuals during their creative interaction are made
+visible. A questionnaire ﬁlled out by the testers puts the
+results on a solid foundation and shows that the incorpo-
+rated methods are appreciated by the users to apply emo-
+tions musically as well as for being creative in a free and
+joyful manner.
+1. INTRODUCTION
+The widespread adoption of information technologies in
+the last century did not only lead to an understanding of IT
+systems opening possibilities for new interfaces for musi-
+cal expression but also for mediating roles to conceive and
+manifest musical ideas even for musically inexperienced
+users. Thus, to mediate between human intention and mu-
+sical implementation. In this regard, it is possible to either
+completely generatively create or modify music that ﬁts to
+an emotion selected by users beforehand. In consequence,
+this would be an augmentation of the musical scope of in-
+dividuals so that they are put in the position to implement
+a speciﬁc emotion they have in mind without the necessity
+of being aware of the various related musical construction
+parameters.
+Especially in a collaborative setting such a mediating role
+is important, as it can help to communicate musical intent
+or to facilitate the realization of musical ideas. Further-
+more, in the context of group creativity, the heterogeneity
+Copyright:
+c⃝2014
+et al. This is an open-access article distributed under the
+terms of the Creative Commons Attribution 3.0 Unported License, which permits
+unrestricted use, distribution, and reproduction in any medium, provided the origi-
+nal author and source are credited.
+of individuals, and their overall knowledge diversity, expe-
+rience, and expertise are key elements [1]. The integration
+of these elements is also part of the mediating role of the
+computer. The related phenomenon of Group Flow [2, p.
+158] is beneﬁcial for social creativity, it is a motivator and
+means for the group to innovate in a creative task. The
+personal experience of Flow itself, deﬁned as “a holistic
+sensation that people feel when they act with total involve-
+ment” [3], is an enabler for the empathical involvement
+with music and stimulator for the implicit learning process
+[4]. Group Flow it has been furthermore shown empirically
+to lead to more valuable results [5] and to take place in
+computer supported collaboration [6]. Thus, we see these
+social factors as highly beneﬁcial for musical creativity.
+Although approaches to modify interpretatively existing
+musical material exist [7, 8], not many efforts have been
+made to speciﬁcally support the collaborative creation of
+new music with respect to the desired emotional affect.
+With this paper we would like to contribute to ﬁlling this
+gap. A software will be presented that implements an op-
+erational concept to support users to generatively making
+music by drawing melody contours and have the software
+system interpret these with respect to an emotional intend.
+We will furthermore show the results of a user study that
+investigates whether this concept succeeds in conveying
+the emotional intend. Furthermore we will highlight what
+connections come up between desired emotions and melody
+lines and how users evaluate the additional beneﬁt of the
+application for this collaborative setting. Within this work
+we do not focus on experienced emotion but the perceived
+emotion on structural and performative musical features.
+2. RELATED WORK
+This work is primarily related to research in the interdisci-
+plinary area between music, psychology and in particular
+computer science. Emotions can be, in general, character-
+ized in terms of valence and arousal. This model goes back
+to Hevner [9] and has been elaborated upon by Russel [10]
+in his well known circumplex Valence/Arousal model. In
+such a model any emotion can be positioned as a 2D coor-
+dinate in this valence arousal space.
+Regarding recent research that applies such a view point
+to music one can decide between a transforming and a gen-
+erative approach.
+For the ﬁrst one existing pieces of music by modifying
+either the score or performative features. The KTH Perfor-
+
+
+mance System [11], for example, modiﬁes mainly perfor-
+mative (interpretative) aspects of a piece. In the Compu-
+tational Music Emotion Role System (CMERS) [12] also
+structural (score) parameters of a piece are altered. Impor-
+tantly, the research regarding CMERS involved compre-
+hensive studies to inform about correlations between struc-
+tural and performance features of music on the one hand
+and emotions on the other. These insights were applied
+in this contribution to formulate rules based on evidence
+to manipulate melodies towards their inherent valence and
+arousal values and their respective emotions. Complemen-
+tary to this, Oliveira et al. [8] focuses on a knowledge based
+system that makes use of empirical data to derive a classiﬁ-
+cation model for musical segments that can be then recom-
+bined and transformed towards a desired emotion.
+The latter class of environments generates music with
+emotional content from scratch. In that context Wallis’ Af-
+fective Music Generator [13] takes a coordinate within the
+two dimensional valence and arousal space as input param-
+eter to produce purely generative produced music. Figure
+1 shows the GUI of the Affective Music Generator. The
+construction takes into account structural and performative
+parameters related to rhythm, melody contour, harmony
+and articulation. Further user studies revealed that users
+assessed the generated music correctly [7]. Thus one can
+conclude these generative mappings to be functional. As
+Wallis bases his rules on Livingstone’s work, we used his
+implementation as guideline for our prototype
+Figure 1. A user interface used by Wallis in [13] to pro-
+duce generative music with respect to valence and arousal
+To conclude, there are robust algorithms and consolidated
+knowledge to systematically elicit emotional responses in
+users [13, p. 1]. Nonetheless, we see lack of applied use
+cases and evaluations thereof, especially for the purpose of
+creativity support, entertainment or collaboration. So the
+question remains unanswered if such concepts offer a suit-
+able approach to hide musical complexity for the end-user
+by means of a metaphor for high-level musical expression
+while still offering an experience that gives users joy in
+musical expression.
+3. CONCEPTUAL FRAMING
+As previously pointed out, the main idea is to support users
+to construct music based on their emotional ideas within
+some representation of the valence arousal space. Straight-
+forwardly, to move within it, users could be presented a
+2D surface to control their respective valence arousal vec-
+tor similar to Wallis’ Affective Music generator (see 1).
+However, the question on what basis the musical events
+themselves are generates is thus far unanswered.
+An important issue for collaborative creativity support
+systems, especially for musical applications, is fostering
+the users’ engagement in the creative endeavor [14, 15],
+ideally leading to a direct connection to the musical out-
+put in form of an embodiment of music [16]. In this re-
+gard, we see value in giving the user the ability to shape
+musical events in a way that directly reﬂects an intended
+melody contour and that especially respects this melodic
+intend even when transforming it in respect to the emo-
+tional one. Thus we do not focus on stochastic processes
+but rather simple means to create melodic content which is
+then represented in alternative emotional contexts.
+Regarding the collaborative aspects, the application is de-
+signed for two collaborators since this allows us to perform
+a focused evaluation towards certain aspects such as as-
+sessing the users’ agreement on perceived emotion or turn
+taking patterns. We make use of a multi-touch table as
+shared interface, since this offers means that simplify so-
+cial communication protocols [17, 18].
+3.1 Implementation
+In the following the implementation work for this paper
+called FugueGenerator will be laid out in detail. As the
+name tries to imply, the melodical basis is created by the
+user. The previously discussed shaping of melody contours
+is realized by directly drawing it on a 2D surface. The
+melody lines are continuously repeated while following a
+chord progression. The valence and arousal values can be
+controlled manually and thus modify accordingly the un-
+derlying scale, tempo, articulation and timbre. For collab-
+oration, it is possible for two people to create their own
+respective melody within one shared workspace in paral-
+lel for polyphony. Furthermore, controls for valence and
+arousal are both, part of the shared workspace but also part
+of the private workspace of the respective user: valence is
+a global (shared) control and arousal is a private control for
+each user. This decision will elaborated upon in through-
+out this section.
+3.1.1 GUI and Operational Principle
+The graphical user interface of FugueGenerator consists
+out of the following elements as they are shown in Figure:
+surfaces for the melody contours (ﬁg. 2,1) , controllers for
+the local arousal settings (ﬁg. 2,2) , a global valence control
+(ﬁg. 2,3) , a register control that indicates which melody is
+playing in a lower register (ﬁg. 2,4).
+The application is designed so that each player operates
+from his own side of the screen while standing at the re-
+garding edge of the vertical touch display. Drawing the
+melody contour is done by touching and dragging within
+
+
+Figure 2. A screenshot showing the prototypical imple-
+mentation of our application
+the melody surface as illustrated in Figure 3. The height of
+each bar represents a note, the height indicates the relative
+pitch to the underlying harmonic. The set of bars forms
+a sequence of notes with the currently being played bar
+(note) being highlighted.
+Figure 3. Schematic illustration of the way how drawing
+a melody contour on a melody surface is performed. The
+blue line shows the path of a drag gesture, the red arrow
+points into the direction. The bars adjust to the last touch
+position within the respective row.
+3.1.2 Melody Generation
+The number of bars in a sequence depends on the local
+arousal setting (see paragraph 3.1.4). The tempo is the
+same for both melody contours, while the divisions of a
+beat (the number of bars) are equivalent to note lengths;
+e.g. a sequence with two bars is made of two half notes.
+The tonal system of the melodies is based on the funda-
+mental note, which lies at the center line of the surface.
+The deviation upwards is equivalent to a positive deviation
+in regards to pitch from the root note and vice versa (cp.
+ﬁg. 3). The amount of pitch deviation is also dependent on
+the local arousal (see paragraph 3.1.4) and the global va-
+lence settings (see paragraph 3.1.3). Such relative pitches
+are then steering the selection of absolute pitches as an
+arpeggio of the currently playing chord. The system uses
+a repeating chord progression (Tonic, Subdominant, Dom-
+inant, Tonic). The common tonal basis is a mode, which
+changes in accordance with the global valence value as de-
+scribed in paragraph 3.1.3. Nevertheless, the fundamental
+note always stays the same.
+3.1.3 Controlling Valence
+As previously mentioned, the valence value steers the se-
+lection of the mode. Livingstone [12] showed empirically
+the correlation between valence and happy major or sad
+minor modes, and Persichetti [19] suggested orderings of
+modes reaching from darkest to brightest. Following this,
+we implemented a correlation between valence and modes.
+This was largely inﬂuenced by the work of Wallis [13].
+This ordering by ascending valence or brightness is the
+following: Phrygian, Aeolian, Dorian, Mixolydian, Ionian,
+Lydian.
+3.1.4 Controlling Arousal
+We based the structural and articulation related transfor-
+mations again on the work of Livingstone [12], these are
+shown in table 1.
+Arousal
+Low
+High
+Rhythm
+simple
+complex
+Articulation
+legato
+staccato
+Temperament
+laid-back
+fast-paced
+Tempo
+slow
+fast
+Pitch Range
+narrow
+wide
+Table 1. The inﬂuence of arousal on musical properties
+The rhythm complexity and the tempo are inﬂuenced by
+arousal as an increase of arousal also increases the num-
+ber of bars (and notes) on the melody surface. Therefore,
+the lowest arousal setting has two half, the greatest 16 six-
+teenth notes, this results in fast and agitating melodies at
+a high arousal setting. However, these local arousal values
+also inﬂuence the global tempo (weighted mean), such that
+agreement of users in the extremes of the arousal scale can
+further amplify the effect.
+3.1.5 Cross-Relations between Valence and Arousal
+Thus far, the transformation rules for valence and arousal
+only apply for separate concerns of the shared composi-
+tion. In this section we will inform about additional cross-
+relations that have been additionally implemented and con-
+cern the timbre of the synthesized audio and rhythmic com-
+plexity. These are shown in table 2.
+The synthesis is done with a simple two operator FM syn-
+thesis and additional effects. With increasing arousal, more
+harmonics are added to the synthesized sound. Valence is
+used to add distortion on low settings (dark mood) when
+combined with high arousal settings resulting to a timbre
+similar to a distorted guitar as apparent in music genres like
+Heavy Metal. Complementary, a dark mood in combina-
+tion with decreasing arousal introduces more glide (slur)
+between notes, emphasizing a legato effect. For a bright
+mood, the timbral palette varies according to arousal be-
+tween non-slurred clean sine to bright bell/chiptune-like
+tones. The articulation between staccato and legato can be
+continuously varied by modifying the amplitude envelope
+decay times with respect to the global tempo.
+
+
+Valence
+Arousal
+Low
+.
+High
+.
+Low
+Timbre: slurred &
+low harmonics
+Rhythm: straight
+Timbre:
+low harmonics
+Rhythm: swing
+High
+Timbre: distorted &
+bright
+Rhythm: straight
+Timbre: clean &
+bright
+Rhythm: swing
+Table 2. The inﬂuence on music of valence on musical
+properties
+A further implementation aspect in this context is regarded
+to rhythmical complexity.
+Therefore a measure can be
+used, which deﬁnes how complex a rhythm is [20]. Re-
+garding the aspect of rhythm complexity is related to arousal
+and high valence [12]. The Weighted Note-to-Beat Dis-
+tance (WNBD) has been shown to agree with human per-
+ception [20]. Therefore, we created the inverse function of
+this complexity measure to modify the note durations and
+onsets to have control over the swing added. An increasing
+inverse WNBD value leads to an increasing shift of every
+second or forth note onset while reducing its duration by
+the same shift distance. It was implemented so that the in-
+crease of a local arousal value consequently increases the
+inverse WNBD of a melody but only for high valence val-
+ues.
+4. EVALUATION
+for the evaluation we follow two objectives: ﬁrst, we would
+like to know whether the devised systems helps users con-
+struct simple music with a speciﬁc emotional intend. Thus,
+the question is whether the transformation rules hold and
+whether they overlap with the users’ (subjective) percep-
+tion. Second, it is of interest to evaluate to what degree this
+approach supports collaborative creativity and how collab-
+orative turn taking patterns manifest when a large degree
+of the control steers an emotive interpretation of melodic
+content.
+For this we performed a user study that involved 16 peo-
+ple being paired into 8 groups. The age of the persons was
+between 20 and 35 years. They mostly had an academic
+background with varying ﬁelds of study, i.e. equal in hu-
+manities and technical subjects. They assessed their own
+musical talent as well as their knowledge and experience
+in music theory as being neither very advanced nor very
+bad on average, while excesses on both sides of the scales
+equally occurred.
+4.1 Testing Procedure
+We started each evaluation with a short introduction fol-
+lowed by two parts, where we asked the group to construct
+speciﬁc moods. The second part was unrestricted, giving
+users time to experiment. For the ﬁrst part, users were
+asked to use the application to create the following moods:
+aggression, happiness, despair, being chilled, solemn, an-
+noyed, graceful, relaxed exhilaration. Testers were given
+about two minutes for each emotion and had both to agree
+on the result. Afterwards the participants answered the ﬁrst
+part of a questionnaire that asked about the users’ inter-
+agreements and the agreement to the emotive content of the
+created generated music. The following free session took
+ten minutes so that users had time to produce musical out-
+put that the testers liked most. Again, this part concluded
+with a questionnaire, this time informing about the general
+assessment of the application and the users’ demographic
+data.
+4.2 Logging Data
+Apart from the questionnaire another data source was log-
+ging data generated by the application that contained timed
+information about the characteristics of the melodies (the
+minimal, maximal and average heights of the melody bars
+and their mean deviation) and the controls for valence and
+(local) arousal values. This not only allows to compare
+the valence arousal values of the ﬁrst part to the speciﬁed
+emotions but and to link valence and arousal to the shape of
+melody contours but also to reconstruct turn taking patterns
+or the emotive and melodic development within a session.
+4.2.1 Emotions and Valence/Arousal
+The valence and arousal positions for the speciﬁc construc-
+tion of emotions in the ﬁrst part of the evaluation can be
+seen in ﬁgure 4. These have been gathered using the log-
+ging data.
+Figure 4. A plot showing the median of the valence and
+arousal coordinates gathered by user interaction during
+ﬁrst part of the user study
+The shown emotions represent the median value for all
+groups with valence being represented on the x-axis and
+arousal on the y-axis. This result corresponds to Living-
+stone’s comprehensive outline. Emotions like aggression,
+annoyedness, happiness, gracefullness and solemnity show
+high degrees of similarity in their coordinates of the va-
+lence arousal space. Differences are most likely explained
+by the deviation in word meaning throughout the transla-
+tion (to german) of the words describing these emotions.
+This was especially the case for ”Annoyed” (ambiguously
+translated as ”verdriesslich”) and ”Soft Exhilaration” (trans-
+lated as ”sanfter Rausch”). The latter was used as an Ger-
+man alternative to serene to ﬁt better into the respective
+
+
+position within the valence arousal space. Chilled (trans-
+lated as ”beschwingt”) was chosen as alternative to tender,
+which worked out very well in comparison to Livingstone.
+To conclude, the results on average comply with the out-
+line of the experiments collected by Livingstone. In this
+way, the transformation rules and the basic application con-
+cept is suitable for users to also construct music rather than
+transforming existing pieces for an altered listening experi-
+ence. Moreover, given the musical skills of our participants
+in general, it can be seen as a valid approach to augment
+the users’ musical skills.
+4.2.2 Emotions and Melody Properties
+We now turn to the analysis of the analysis of the logging
+data for the melody contours to see whether connections
+between melody properties and the implemented emotions
+exist. To answer this, it is ﬁrst necessary to deﬁne several
+characteristic properties of melody contours. For this pur-
+pose Livingstone suggests properties as some of them are
+listed in table 3 along with their adaptions to our logging
+data.
+Livingstone
+FugueGenerator
+Pitch Height
+Average Height
+Pitch Range
+Maximum Height – Minimum Height
+Pitch Contour
+Upwards: AHD>0 & Pitch Range>0
+Downwards: AHD<0 & Pitch Range>0
+Oscillating: AHD==0 & Pitch Range>0
+Even: AHD==0 & Pitch Range==0
+Table 3. Comparison of deﬁnitions as they appear in [12]
+and their adoption to our logging data from FugueGenera-
+tor. AHD means Average Height Deviation.
+The deﬁnitions as shown in table 3 were applied to the
+logging data in the same manner as for valence and arousal
+previously, i.e. the pitch height, pitch range and pitch con-
+tour are calculated from the data setting at that time when
+both team members were in agreement about the imple-
+mented emotion. Thus, it is possible to group the median
+of all properties of the melodies by emotion. The pitch
+heights are depicted in ﬁgure 5 and sorted by descending
+valence. The pitch ranges are shown in ﬁgure 7 and sorted
+by descending arousal.
+For both pitch heights and pitch ranges a certain trend
+can be identiﬁed. Concerning the former the pitch heights
+mostly decrease with decreasing valence, with aggressive
+emotion forming an exception. In contrast, the pitch ranges
+are generally relatively high for low arousal and and low
+for high arousal, while happiness is an exception.
+Regarding the direction of the melody contour one can
+differentiate between upwards, downwards, oscillating and
+even motions. For this, we used the rules given in table 3.
+From ﬁgure 7 it is visible that the melodies tend to be
+directed upwards for low and downwards for high valence
+emotions, while oscillating or even melodies do generally
+seldom occur. Compared to Livingstone [12], these results
+are somewhat surprising as he stated that the melody con-
+tours are expected to have opposing directions compared
+Figure 5. The median values of pitch heights for each
+emotion. Emotions are sorted by descending valence (see
+Figure 4). The value range of the scale is just for referential
+purposes.
+Figure 6. The median values of pitch ranges for each emo-
+tion. Emotions are sorted by descending arousal (see Fig-
+ure 4). The value range of the scale is just for referential
+purposes.
+to our ﬁndings [12, p. 46, Table 1]. Nonetheless, he also
+makes it clear that this relationship is not deemed to be
+very strong because many deviations for different arousal
+settings exist and the outcome of his experiments regarding
+melody contours is generally ambiguous.
+To summarize this, it is apparent that certain trends can be
+observed in the statistics, i.e. low arousal leading to high
+pitch ranges as well as high valence leading to low pitch
+heights and downwards directed melody contours. Never-
+theless, these ﬁgures have to be treated with caution, since
+the exceptions themselves need further investigation and
+due to the size of the data set that it is by no means repre-
+sentative.
+4.2.3 Free Game
+In the second part of the test sessions, participants were
+given the opportunity to use the application freely, so ob-
+servations concerning questions about if and how the col-
+laboration and the interaction ﬂow between the teammates
+takes place and how users value the application as a tool
+for expression.
+
+
+Figure 7.
+Graphical illustration of the number of how
+often certain melody contours were created respective to
+their intended emotions in the user study. The emotions
+are sorted by valence (see ﬁg. 4).
+First, we look again at the time series data from the logs
+to see whether common interaction patterns between par-
+ticipants of a group are apparent.
+In ﬁgure 8 the aver-
+age heights of the melody bars are shown of an example
+group. With respect to the interaction ﬂow, we highlighted
+situations in yellow, when simultaneous changes appeared
+for both melodies, and green, when the changes on both
+melodies occurred directly one after another.
+Figure 8. The average height (y-axis) of the bars for the
+melody surface of each user depicted over time (x-axis). A
+green background indicates consecutive and a yellow one
+represents two simultaneous changes of bar heights.
+From this visualization it is evident, that most melody
+changes stand in an strong temporal connection with each
+other. The same applies to ﬁgure 9, that shows the global
+valence and each arousal value from each player (for an-
+other group).
+The observed temporal connections are interesting as such
+behaviors, namely prompt reactions to each other, are well
+typical for other creative musical contexts e.g. especially
+from jam-sessions. We discovered similar patterns in the
+Figure 9. The global valence and local arousal values of
+each user (y-axis) depicted over time (x-axis). A green
+background indicates consecutive changes.
+other groups’ interaction. In this regard, solely focusing on
+this data, it can be said that the application supports musi-
+cal collaboration at least in terms of well-known patterns.
+Nonetheless, a quantiﬁable analysis of mutual inﬂuences in
+terms of statistical dependencies of changes in time would
+help to gain more reliable results by considering all test
+sessions in an objective way.
+4.3 Questionnaires
+We now turn to the questionnaire. It consisted of 40 multiple-
+choice questions. Most answers to the questions are ex-
+pressed in a ﬁve-point Likert scale. We used the arith-
+metic mean of the answers for the evaluation. Besides this,
+some of these results are regarded with respect to two user
+groups, namely the group of users that described them-
+selves as musically talented and the others. This distinction
+by self-assessment is based on their ratings of knowledge
+and practice in music theory (i.e. harmonics, circle of ﬁths,
+modes, rythmics); a user that rated himself with four or ﬁve
+in the respective ﬁelds is regarded as musically talented.
+4.3.1 Appreciation
+With respect to the appreciation of the application, we can
+distinguish between two aspects, namely if the software
+was found helpful to implement a given emotion and how
+the experience felt like during the creative part of the ses-
+sion. These aspects are depicted in Figure 10. It is apparent
+that the application was assessed as helpful. Yet, musically
+talented people stated a lower consent than musically not
+talented. In this context a loss of control about the musical
+construction parameters can be seen as reason as described
+later on. Concerning appreciation for the free and creative
+part of the sessions, all testers evaluated the experience as
+interesting and joyful and only marginally frustrating.
+4.3.2 Collaboration
+For assessing the collaboration we can again distinguish
+between the two parts of the user study. For the ﬁrst test
+part it is not clear if interaction between two people is
+helpful to perform the musical task of implementing an
+emotion, since different opinions, approaches and musical
+
+
+Figure 10. Results of a part of questionnaire regarding
+the general assessment of the application with respect to
+creativity support
+skills between two individuals could lead to discrepancies
+that would distort the previously presented logging data re-
+garding emotions. Figure 11 shows that in the present case
+this can be ruled out as teammates found each other to be
+helpful solving the task. Furthermore, their agreement on
+the emotional assessment of their music as well as their
+mutual inﬂuence of their assessment were rated as posi-
+tive. In addition, users stated that they see FugueGenerator
+to be suitable to fulﬁl the given task. These assessments in-
+dicate that the results of the previously discussed logging
+data are consistent and thus can been seen as reliable.
+Figure 11. Results of a part of questionnaire regarding the
+assessment of the application with respect to implementing
+speciﬁc emotions
+With respect to the free and creative part of the test ses-
+sions, it seems to be particularly interesting whether cre-
+ative exchange between the teammates took place and how
+such processes were experienced. The testers regarded the
+exchange as very positive, active, meaningful and inspiring
+(cp. ﬁgure 11). This is also evident in their assessment that
+they and their teammates inﬂuenced the generated music
+by interaction with the other person. Again, this is con-
+sistent with the observations made in section 4.2.3, where
+changes in melody contours, valence and arousal values
+have a strong temporal relationship. Another aspect is that
+the interaction was evaluated as positive and inspiring and
+thus beneﬁcial for creativity support.
+5. CONCLUSIONS
+As the evaluations clearly showed, the implementation work
+FugueGenerator delivers a creativity supporting generative
+music software, which is clearly appreciated as such by
+users. This can be considered as important due to the in-
+corporation of new operational principles in this context,
+i.e. drawing melodies and particularly their expressional
+modiﬁcation by valence and arousal. It can be claimed
+that these approaches are promising to augment the cre-
+ative skills in a joyful manner for not least musically not
+talented individuals. Thereby collaboration was found out
+to be a beneﬁcial feature, which makes the creative experi-
+ence more valuable.
+Moreover, the implementation allowed to gain various
+deep insights regarding the connection of emotions on the
+one hand and melody lines, valence and arousal on the
+other. While these relationships already were found by
+existing research, these hardly refer to generative music
+software. It was shown in this paper that reasonable meth-
+ods exist to successfully augment the skills of individuals
+to create music according to valence and arousal and re-
+spective emotions. Thereby the valence and arousal set-
+tings of many emotions as known from previous research
+could be conﬁrmed from a creative instead of passive point
+of view. Additionally, solid new methods were delivered
+to create, modify, measure and characterize melody lines,
+which makes them quantiﬁable for analysis in research re-
+garding valence and arousal. Even though connections be-
+tween melody properties and emotions have been found
+through user-studies, more research in terms of testing data
+is necessary to deliver more reliable results.
+Last but not least it appears worthwhile noting that further
+logging data could be used to visualize the interaction ﬂow
+between two creatively music making individuals. Reac-
+tion patterns showed a high mutual activity, which is sim-
+ilarly indicated by the questionnaires, too. However, these
+things were only inquired or exemplary demonstrated so
+that a quantiﬁable analysis of reaction patterns in creative
+music interaction would help gaining more reliable results.
+A software like the presented FugueGenerator would allow
+to do deep research concerning this and thus is advised by
+the authors. Following our previous research, the source
+code for the application is available online 1 .
+Acknowledgments
+We are grateful to Isaac Wallis for sharing his source code
+to base our prototypical implementation on.
+1 http://tobeupdated.org
+
+
+6. REFERENCES
+[1] G. Fischer, “Distances and diversity: sources for social
+creativity,” in Proc. 5th Conf. Creat. Cogn.
+ACM, pp.
+128–136.
+[2] R. K. Sawyer, “Group creativity: musical performance
+and collaboration,” Psychol. Music, no. 2, pp. 148–165,
+Apr.
+[3] M. Csikszentmihalyi, Flow: The Psychology of Opti-
+mal Experience.
+New York, NY, USA: Harper and
+Row, 1990.
+[4] L. Nijs, The musical instrument of natural extension of
+the musician.
+Witwatersrand University Press.
+[5] R. MacDonald, “Creativity and ﬂow in musical com-
+position: an empirical investigation,” Psychol. Music,
+no. 3, pp. 292–306, Jul.
+[6] B. Swift, “A Chasing After the Wind : Experience in
+Computer-supported Group Musicmaking,” OHZCHI,
+pp. 1–6, 2009.
+[7] I. Wallis, T. Ingalls, E. Campana, and J. Goodman,
+“A rule-based generative music system controlled by
+desired valence and arousal,” in Proceedings of 8th
+international sound and music computing conference
+(SMC), 2011.
+[8] A. P. Oliveira and A. Cardoso, “A musical system
+for emotional expression,” Knowledge-Based Systems,
+vol. 23, no. 8, pp. 901–913, 2010.
+[9] K. Hevner, “Experimental studies of the elements of
+expression in music.” The American Journal of Psy-
+chology, 1936.
+[10] J. A. Russell, “A circumplex model of affect.” Journal
+of personality and social psychology, vol. 39, no. 6, p.
+1161, 1980.
+[11] A. Friberg, R. Bresin, and J. Sundberg, “Overview
+of the kth rule system for musical performance,” Ad-
+vances in Cognitive Psychology, vol. 2, no. 2-3, pp.
+145–161, 2006.
+[12] S. R. Livingstone, R. Muhlberger, A. R. Brown, and
+W. F. Thompson, “Changing musical emotion: A com-
+putational rule system for modifying score and perfor-
+mance,” Computer Music Journal, vol. 34, no. 1, pp.
+41–64, 2010.
+[13] I. Wallis, T. Ingalls, and E. Campana, “Computer-
+generating emotional music: The design of an affective
+music algorithm,” DAFx-08, Espoo, Finland, pp. 7–12,
+2008.
+[14] N. Bryan-Kinns, P. G. Healey, and J. Leach, “Explor-
+ing mutual engagement in creative collaborations,” in
+Proceedings of the 6th ACM SIGCHI conference on
+Creativity & cognition.
+ACM, 2007, pp. 223–232.
+[15] E. Vass, “Exploring processes of collaborative creativ-
+ity—the role of emotions in children’s joint creative
+writing,” Thinking Skills and Creativity, vol. 2, no. 2,
+pp. 107–117, 2007.
+[16] T. Blaine and S. Fels, “Contexts of collaborative mu-
+sical experiences,” in Proceedings of the 2003 confer-
+ence on New interfaces for musical expression.
+Na-
+tional University of Singapore, 2003, pp. 129–134.
+[17] D. Wigdor and D. Wixon, Brave NUI World: Design-
+ing Natural User Interfaces for Touch and Gesture.
+Morgan Kaufmann.
+[18] E. Hornecker, P. Marshall, and Y. Rogers, “From entry
+to access: how shareability comes about,” Proc. 2007
+....
+[19] V. Persichetti, “Twentieth-century harmony: Creative
+aspects and practice author: Vincent persichetti,” 1961.
+[20] E. Thul,
+“Measuring the complexity of musical
+rhythm,” Ph.D. dissertation, McGill University, 2008.

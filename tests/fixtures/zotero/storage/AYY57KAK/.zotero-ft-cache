@@ -1,0 +1,365 @@
+Log in
+    Sign up
+
+Signal Processing Stack Exchange is a question and answer site for practitioners of the art and science of signal, image and video processing. It only takes a minute to sign up.
+Sign up to join this community
+Anybody can ask a question
+Anybody can answer
+The best answers are voted up and rise to the top
+Signal Processing
+
+    Home
+        Public
+        Questions
+        Tags
+        Users
+        Companies
+        Unanswered
+        Teams
+        Stack Overflow for Teams – Start collaborating and sharing organizational knowledge. Create a free Team Why Teams?
+
+IIR Hilbert Transformer
+Ask Question
+Asked 6 years ago
+Modified 2 years, 7 months ago
+Viewed 3k times
+This question shows research effort; it is useful and clear
+9
+This question does not show any research effort; it is unclear or not useful
+Save this question.
+Show activity on this post.
+
+I'm beginning to explore discrete Hilbert transformers - ways to achieve 90°. phase shift across a band of perhaps 6 kHz at a 44.1 kHz sampling rate. I'm trying to stick with IIR filters in order to save computation time - in addition to the fact that I only need to phase shift just a band of frequencies.
+
+I saw this post where the author Ross Wilkinson alludes to creating an IIR based Hilbert transformer by setting the transfer function's zeros to:
+
+( 𝑞 𝑛 ) 𝑘 𝑛 = 0 , ‎ ‎ 𝑞 𝑛 = 𝑒 𝜋 2 𝑛 ( q n ) n = 0 k , ‎ ‎ q n = e π 2 n
+
+The RHS poles inside the unit circle (0 < x < 1) are the inverse of the zeros: ( 𝑝 𝑛 ) 𝑘 𝑛 = 0 , 𝑝 𝑛 = 1 𝑞 𝑛 ( p n ) n = 0 k , p n = 1 q n
+
+It would be great if somebody could point me towards another resource that would help explain where that comes from in greater detail.
+
+FYI, I'm trying to make a single side band modulator for audio frequencies. It should be able to process in real time on a laptop, with a sampling rate of 44.1 kHz.
+
+    transform
+    hilbert-transform
+    allpass 
+
+Share
+Improve this question
+Follow
+Follow this question to receive notifications
+edited Apr 13, 2017 at 12:47
+Community's user avatar
+Community Bot
+1
+asked Feb 4, 2017 at 23:01
+Robby Wasabi's user avatar
+Robby Wasabi Robby Wasabi
+331 2 2 silver badges 7 7 bronze badges
+8
+
+    it's a good reference, but you will notice that the IIR All-pass filters (APF) are pretty high order. lotsa poles and zeros. that might not be much savings over an FIR Hilbert Transformer which is a lot easier to understand and design.
+    –  robert bristow-johnson
+    Feb 4, 2017 at 23:14
+    i am interested in this, too, and have posted to the music-dsp mailing list. i'll bet someone there has a good reference.
+    –  robert bristow-johnson
+    Feb 5, 2017 at 0:39
+    I also saw this crazy implementation: webpages.charter.net/wa1sov/technical/allpass/allpass.html , where the author does some kind of elliptic polynomial.
+    –  Robby Wasabi
+    Feb 5, 2017 at 0:51
+    so, with the help of the music-dsp mailing list, i just rediscovered this page from Olli . it looks pretty good, but i don't know how he gets his coefficients.
+    –  robert bristow-johnson
+    Feb 5, 2017 at 3:01
+    Thanks for that link from Olli . Comment #5 refers to a Hilbert transform API in csound - I have no idea what csound is, it seems like a programming language... The API then refers to a paper titled A Hilbert-Transformer Frequency Shifter for Audio , which seemed promising. That paper then refers to a chapter titled Special Filter Designs in Handbook for Digital Signal Processing , which I just purchased for $22.
+    –  Robby Wasabi
+    Feb 5, 2017 at 21:03
+
+ |  Show 3 more comments
+4 Answers 4
+Sorted by: Reset to default
+This answer is useful
+7
+This answer is not useful
+Save this answer.
+Show activity on this post.
+
+This is achievable with two parallel all pass filters.
+
+The two all pass filters synthesize an odd ordered low pass filter whose pass band extends from -90º to +90º in the z-domain. (I will discuss this below) .
+
+𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( 𝑧 ) = 𝐴 0 ( 𝑧 ) + 𝑧 − 1 𝐴 1 ( 𝑧 ) 2 G l o w p a s s ( z ) = A 0 ( z ) + z − 1 A 1 ( z ) 2
+
+The low pass filter is then rotated by +90º so that its pass band extends from 0º to 180º, which approximates the Hilbert transform. Rotation mathematically is: 𝐻 𝐻 𝑖 𝑙 𝑏 𝑒 𝑟 𝑡 ( 𝑧 ) = 𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( − 𝑗 𝑧 ) H H i l b e r t ( z ) = G l o w p a s s ( − j z ) As a consequence, one of the all pass filters becomes completely imaginary - this is the Hilbert transformed signal path. By necessity, since the filter is approximating this Hilbert transform, then the imaginary branch must be applying a 90º phase shift relative to the output of 𝐴 0 ( 𝑧 ) A 0 ( z ) . 𝐻 𝐻 𝑖 𝑙 𝑙 𝑏 𝑒 𝑟 𝑡 ( 𝑧 ) = 𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( − 𝑗 𝑧 ) = 𝐴 0 ( 𝑧 ) + 𝑗 𝑧 − 1 𝐴 1 ( 𝑧 ) 2 H H i l l b e r t ( z ) = G l o w p a s s ( − j z ) = A 0 ( z ) + j z − 1 A 1 ( z ) 2
+
+Example with Elliptical Filter
+
+The following example was taken from Handbook for Digital Signal Processing pg. 920
+
+You can also use this program that I interpreted to design a new half-band elliptic filter with a higher order. Starting with a real, half-band elliptical low pass filter 𝐺 ( 𝑧 ) G ( z ) whose frequency response satisfies 1 − 𝛿 1 ≤ | 𝐺 ( 𝑒 𝑗 𝜔 ) | ≤ 1 𝑓 𝑜 𝑟 0 ≤ 𝜔 ≤ 𝜔 𝑝 1 − δ 1 ≤ | G ( e j ω ) | ≤ 1 f o r 0 ≤ ω ≤ ω p | 𝐺 ( 𝑒 𝑗 𝜔 ) | ≤ 𝛿 2 𝑓 𝑜 𝑟 𝜔 𝑠 ≤ 𝜔 ≤ 𝜋 | G ( e j ω ) | ≤ δ 2 f o r ω s ≤ ω ≤ π To obtain half band we choose: 𝜔 𝑠 + 𝜔 𝑝 = 𝜋 ω s + ω p = π ( 1 − 𝛿 1 ) 2 + 𝛿 2 2 = 1 ( 1 − δ 1 ) 2 + δ 2 2 = 1 But I just used the examples given seventh order poles or an elliptical low pass half-band filter: 𝑧 = 0 , 𝑧 = ± 𝑗 0.436688 , 𝑧 = ± 𝑗 0.743707 , 𝑧 = ± 𝑗 0.927758 z = 0 , z = ± j 0.436688 , z = ± j 0.743707 , z = ± j 0.927758 𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( 𝑧 ) = 𝐴 0 ( 𝑧 ) + 𝑧 − 1 𝐴 1 ( 𝑧 ) 2 G l o w p a s s ( z ) = A 0 ( z ) + z − 1 A 1 ( z ) 2 Distribute the poles between the two all pass filters like so: Pole distribution diagram 𝐴 0 ( 𝑧 ) = 𝑧 − 2 + 0.190696 1 + 0.190696 𝑧 − 2 ⋅ 𝑧 − 2 + 0.860735 1 + 0.860735 𝑧 − 2 A 0 ( z ) = z − 2 + 0.190696 1 + 0.190696 z − 2 ⋅ z − 2 + 0.860735 1 + 0.860735 z − 2 𝐴 1 ( 𝑧 ) = 𝑧 − 2 + 0.553100 1 + 0.553100 − 2 A 1 ( z ) = z − 2 + 0.553100 1 + 0.553100 − 2 Rotate by 90º 𝐻 𝐻 𝑖 𝑙 𝑏 𝑒 𝑟 𝑡 ( 𝑧 ) = 𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( − 𝑗 𝑧 ) = 𝐴 0 ( − 𝑗 𝑧 ) + 𝑗 𝑧 − 1 𝐴 1 ( − 𝑗 𝑧 ) 2 H H i l b e r t ( z ) = G l o w p a s s ( − j z ) = A 0 ( − j z ) + j z − 1 A 1 ( − j z ) 2 𝐴 0 ( − 𝑗 𝑧 ) = 0.190696 − 𝑧 − 2 1 − 0.190696 𝑧 − 2 ⋅ 0.860735 − 𝑧 − 2 1 − 0.860735 𝑧 − 2 A 0 ( − j z ) = 0.190696 − z − 2 1 − 0.190696 z − 2 ⋅ 0.860735 − z − 2 1 − 0.860735 z − 2 𝐴 1 ( 𝑧 ) = 0.553100 − 𝑧 − 2 1 − 0.553100 − 2 A 1 ( z ) = 0.553100 − z − 2 1 − 0.553100 − 2 Phases of 𝐴 0 ( 𝑧 ) A 0 ( z ) and 𝐴 1 ( 𝑧 ) A 1 ( z ) : All pass filter phase response
+
+Magnitude Response of 𝐻 𝐻 𝑖 𝑙 𝑏 𝑒 𝑟 𝑡 ( 𝑧 ) H H i l b e r t ( z ) : Filter response
+
+Phase Difference Between 𝐴 0 ( 𝑧 ) A 0 ( z ) and 𝐴 1 ( 𝑧 ) A 1 ( z ) Branches: Phase difference
+Share
+Improve this answer
+Follow
+Follow this answer to receive notifications
+edited Jul 8, 2020 at 5:55
+answered Feb 20, 2017 at 7:02
+Robby Wasabi's user avatar
+Robby Wasabi Robby Wasabi
+331 2 2 silver badges 7 7 bronze badges
+3
+
+    I see - the poles come from the projection onto a straight line of a set of points along an ellipse. Interesting find! To replicate that phase difference curve, I had a quick trial using ellip() and ncauer() in Octave. The internal mathematics of the latter is ... painful, but I can confirm that it works
+    –  Ross Wilkinson
+    Feb 20, 2017 at 15:22
+    By the way, I think the figure headings "Real Branch" and "Imag Branch" are misleading. As far as I can tell from my tests, all the poles (i.e. both branches) must be rotated by 90 degrees onto the real axis.
+    –  Ross Wilkinson
+    Feb 21, 2017 at 16:59
+    Hi Ross, sorry for the late reply. Recall that the Hilbert transformer comes from a transformed half-band elliptic filter:
+    𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( 𝑧 ) = 𝐴 0 ( 𝑧 ) + 𝑧 − 1 𝐴 1 ( 𝑧 ) 2 G l o w p a s s ( z ) = A 0 ( z ) + z − 1 A 1 ( z ) 2
+    The output of
+    𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( 𝑧 ) G l o w p a s s ( z )
+    is completely real - its filter coefficients are also real. The output of
+    𝐻 𝐻 𝑖 𝑙 𝑏 𝑒 𝑟 𝑡 ( 𝑧 ) = 𝐺 𝑙 𝑜 𝑤 𝑝 𝑎 𝑠 𝑠 ( − 𝑗 𝑧 ) H H i l b e r t ( z ) = G l o w p a s s ( − j z )
+    however, is complex:
+    𝐴 0 ( − 𝑗 𝑧 ) + 𝑗 𝑧 − 1 𝐴 1 ( − 𝑗 𝑧 ) 2 A 0 ( − j z ) + j z − 1 A 1 ( − j z ) 2
+    While the filter coefficients of 𝐴 1 ( − 𝑗 𝑧 ) A 1 ( − j z ) are real, because it is multiplied by 𝑗 𝑧 − 1 j z − 1 , the output data is imaginary. So, when I refer to Real and Imag branches, I'm referring to 𝐴 0 A 0 and 𝐴 1 A 1 .
+    –  Robby Wasabi
+    Feb 25, 2017 at 23:06
+
+Add a comment  | 
+This answer is useful
+6
+This answer is not useful
+Save this answer.
+Show activity on this post.
+
+I have insufficient reputation to answer in the comments, so here goes:
+
+I believe Olli calculated his coefficients using some kind of genetic algorithm (I don't know the details).
+
+All I did was plot (from Olli's coefficients) the resulting pole/zero positions in the z-plane, and then take the logarithm to transform into the s-plane.
+
+Olli's poles and zeros almost formed a geometric pattern, so I played around with them in the s-plane until I made a nice pattern, then took the exponential to re-transform back into the z-plane.
+
+Maybe it's already been done elsewhere - I don't know, so I don't have a reference for you. I was just curious to know whether there was an analytical way to achieve similar results to Olli.
+
+By the way it turns out that Olli's 8th order effort beats mine :-), although with mine you can achieve arbitrarily wide bandwidth using ever higher orders, and rotate the filters in the z-plane to make low-pass / high-pass summation pairs (that doesn't work with Olli's).
+
+You can also base the formula on multiples of numbers different from pi, which changes the response characteristics slightly - e.g you can achieve a higher bandwidth with a given filter order, at the expense of greater oscillation in the frequency response curve.
+Share
+Improve this answer
+Follow
+Follow this answer to receive notifications
+edited Feb 9, 2017 at 13:28
+answered Feb 6, 2017 at 14:41
+Ross Wilkinson's user avatar
+Ross Wilkinson Ross Wilkinson
+101 4 4 bronze badges
+3
+
+    well, i hope i can boost you by 10 points. (everyone should be able to comment, in my opinion.)
+    –  robert bristow-johnson
+    Feb 6, 2017 at 17:52
+    Ross, my theory is that the coefficients are calculated using polynomials such as those used in the Chebyshev and elliptical filters - only instead of shaping magnitude, they are used to shape phase. I'm hoping that this textbook , specifically a chapter in it titled Special Filter Designs by Phillip A. Regalia, will give me some background on how to do that, and where it comes from.
+    –  Robby Wasabi
+    Feb 7, 2017 at 19:17
+    Hi Robby. Looking at the distribution of poles/zeros given by the genetic algorithm (see link in post), it feels like there ought to be some kind of generator function. It's certainly not pi/2^n, or any variant I tried. A related question: Given the generator, what happens to the x-values of the existing poles when you increase from order-8 to order-10? It's possible they will all move to accommodate the additional poles. With pi/2^n you can simply add more terms without affecting the others, so you can build a filter with multiple taps.
+    –  Ross Wilkinson
+    Feb 9, 2017 at 13:26
+
+Add a comment  | 
+This answer is useful
+3
+This answer is not useful
+Save this answer.
+Show activity on this post.
+
+I did use Differential Evolution to calculate the coefficients. But you can re-design the filter pair easily using the HIIR library by Laurent de Soras (its source code will automatically unzip to a subdirectory hiir ). You can use this C++ HilbertDesign.cpp source and compile with g++ using the compile-command quoted on the first line:
+
+ // -*- compile-command: "g++ HilbertDesign.cpp -std=c++11 -msse -I. -g3 -O0 hiir/PolyphaseIir2Designer.cpp -o HilbertDesign" -*- #include <stdio.h> #include "hiir/PolyphaseIir2Designer.h" const int numCoefs = 8; // Number of coefficients, must be even double transition = 2*20.0/44100; // Sampling frequency is 44.1 kHz. Approx. 90 deg phase difference band is from 20 Hz to 22050 Hz - 20 Hz. The transition bandwidth is twice 20 Hz. double coefs[numCoefs]; int main() { hiir::PolyphaseIir2Designer::compute_coefs_spec_order_tbw (coefs, numCoefs, transition); printf("Phase reference path c coefficients:\n"); for (int i = 1; i < numCoefs; i += 2) { printf("%.20f,", coefs[i]); } printf("\n+90 deg path c coefficients:\n"); for (int i = 0; i < numCoefs; i += 2) { printf("%.20f,", coefs[i]); } printf("\n"); return 0; }  
+
+Running HilbertDesign outputs:
+
+ Phase reference path c coefficients: 0.47944111608296202665,0.87624358989504858020,0.97660296916871658368,0.99749940412203375040, +90 deg path c coefficients: 0.16177741706363166219,0.73306690130335572242,0.94536301966806279840,0.99060051416704042460,  
+
+You'd use a coefficient 𝑐 c in a section with transfer function:
+
+𝐻 ( 𝑧 ) = 𝑐 − 𝑧 − 2 1 − 𝑐 𝑧 − 2 , (1) (1) H ( z ) = c − z − 2 1 − c z − 2 ,
+
+implementable by:
+
+𝑦 [ 𝑘 ] = 𝑐 ( 𝑥 [ 𝑘 ] + 𝑦 [ 𝑘 − 2 ] ) − 𝑥 [ 𝑘 − 2 ] , (2) (2) y [ k ] = c ( x [ k ] + y [ k − 2 ] ) − x [ k − 2 ] ,
+
+with input 𝑥 x and output 𝑦 y .
+
+Each of the two paths is a cascade of a number of such sections. The phase reference path should be delayed by an additional one-sample delay. The phase difference between the two paths will be approximately 90 degrees over a band centered about sampling frequency / 4. This symmetry gives the somewhat sparse transfer function (Eq. 1) with a simple computational implementation of the filter (Eq. 2). The coefficients are optimal in equiripple sense.
+
+I used HIIR v1.20. The c coefficients are equivalent to my a^2 coefficients. The square roots of the coefficients from HIIR are quite close to my original pole locations, a , here interleaved for the two paths which gives them in ascending order:
+
+ a sqrt(c) a-sqrt(c) 0.4021921162 0.402215635 -2.35187886997168E-005 0.6923878 0.6924168658 -2.9065827921726E-005 0.8561710882 0.8561932617 -2.21734129581819E-005 0.9360654323 0.9360788374 -1.34051398409385E-005 0.9722909546 0.972297804 -6.84943738937793E-006 0.9882295227 0.9882322446 -2.72186419525422E-006 0.9952884791 0.9952891611 -0.000000682 0.9987488453 0.9987489195 -7.4186057630321E-008  
+
+Share
+Improve this answer
+Follow
+Follow this answer to receive notifications
+edited Jun 28, 2019 at 11:20
+answered Jun 28, 2019 at 8:02
+Olli Niemitalo's user avatar
+Olli Niemitalo Olli Niemitalo
+12.7k 1 1 gold badge 29 29 silver badges 58 58 bronze badges
+Add a comment  | 
+This answer is useful
+1
+This answer is not useful
+Save this answer.
+Show activity on this post.
+
+Another possible option of only slightly more computational complexity than running something like 2 sets of 10 sections, might be to simply lowpass the real input, complex heterodyne that result up (or down) in frequency by the lowpass cutoff frequency to IQ, lowpass both the I and Q again, then complex heterodyne back down (or up) to complex baseband. That should chop off one sideband with the same transition shape as the low pass filter. Heterodyne by slightly more than the low-pass bandwidth (add half the transition width) to reject more of the carrier from the SSB result.
+
+This will work with any cascade of biquad units that implement a your favorite IIR low-pass filter, plus two sets of complex vector multiplications to do the heterodyne. A recursion (or two) can generate the complex heterodyne mixer input or you can use a sinewave table in memory.
+Share
+Improve this answer
+Follow
+Follow this answer to receive notifications
+answered Jul 6, 2020 at 3:58
+hotpaw2's user avatar
+hotpaw2 hotpaw2
+34.5k 8 8 gold badges 44 44 silver badges 88 88 bronze badges
+Add a comment  | 
+Your Answer
+
+Draft saved
+Draft discarded
+Sign up or log in
+Sign up using Google
+Sign up using Facebook
+Sign up using Email and Password
+Submit
+Post as a guest
+Name
+Email
+
+Required, but never shown
+Post as a guest
+Name
+Email
+
+Required, but never shown
+Post Your Answer Discard
+
+By clicking “Post Your Answer”, you agree to our terms of service , privacy policy and cookie policy
+Not the answer you're looking for? Browse other questions tagged
+
+    transform
+    hilbert-transform
+    allpass 
+
+or ask your own question .
+
+    The Overflow Blog
+    Three layers to secure a software development organization
+    Does your professor pass the Turing test? (Ep. 537)
+    Featured on Meta
+    Accessibility Update: Colors
+
+Linked
+4
+Hilbert transform filter for audio applications: Using IIR half-band parallel all pass structure
+Related
+3
+Analog Hilbert transformer
+10
+What is the easiest, most straight-forward way to prove this about minimum-phase filters?
+3
+Hilbert transformer and minimum-phase
+6
+Hilbert transform of sinusoid -- apparent contradiction
+1
+Phase response of a FIR Hilbert transformer
+0
+How to implement Discrete time FIR Hilbert transformer filter?
+2
+Hilbert Transformer processing block by block
+0
+Ideal Discrete Time Hilbert Transformer with constant group delay
+1
+Implementing FIR Hilbert Transformer in Python
+2
+Is it possible to implement a block-wise Hilbert transformer using FFT
+Hot Network Questions
+
+    Why doesn't this 767 nose paint line up with the rest of the paint?
+    What is meant by "stable" vs. "unstable" in terms of particles?
+    How do I make agile process more comfortable for introverts?
+    Lilypond 2.24 on Windows 10 -- can't get log files
+    What does squaring a vector mean?
+    How to exactly calculate the volume?
+    Which way is best to reframe/reinstall this door? Does it need to be more secure?
+    What did Russell mean when he wrote that the null-class, the class having no members, did not exist?
+    Teaching math too soon in middle school and high school
+    Time to shortest transposition
+    Is an uncommon magic item that grants +2 to all dexterity checks broken?
+    How to get better at taking constructive criticism
+    Increase the font in a table whilst fitting it in a page
+    Why doesn't Zemo care about Emil Blonsky's Abomination who's partly a super soldier?
+    Is there a word for 'evangelism' that doesn't necessarily specify the religion?
+    Why are some pH standard solutions 6.86 and 9.18?
+    "I am select for the job" "I got/became select for the job"
+    The editor mixed up the reviews and rejected my paper based on the reviews of a different paper! Now they're denying everything. How to proceed?
+    Map function with Evaluated and Unevaluated parameters
+    singly linked list optimally defined over operations in C?
+    Is it possible to interchange these two sockets since the cables in the wall look the same?
+    Is there any way to control ls output format
+    Memory requirements for undelete command
+    It is really illegal to plug in a device to watch BBC iPlayer or Live TV in a Starbucks?
+
+Question feed
+Subscribe to RSS
+Question feed
+
+To subscribe to this RSS feed, copy and paste this URL into your RSS reader.
+Signal Processing
+
+    Tour
+    Help
+    Chat
+    Contact
+    Feedback
+
+Company
+
+    Stack Overflow
+    Teams
+    Advertising
+    Collectives
+    Talent
+    About
+    Press
+    Legal
+    Privacy Policy
+    Terms of Service
+    Cookie Settings
+    Cookie Policy
+
+Stack Exchange Network
+
+    Technology
+    Culture & recreation
+    Life & arts
+    Science
+    Professional
+    Business
+    API
+    Data
+
+    Blog
+    Facebook
+    Twitter
+    LinkedIn
+    Instagram
+
+Site design / logo © 2023 Stack Exchange Inc; user contributions licensed under CC BY-SA . rev 2023.2.10.43235
