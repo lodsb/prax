@@ -264,7 +264,8 @@ def test_identifier_names_become_printed_names() -> None:
 def test_control_tokens_are_dropped() -> None:
     text = (
         "summary\tx\n"
-        "unmapped\tsrc=A\trel=cites\tdst=[5]\treason=Citation without a title.<tool_call>\n"
+        "unmapped\tsrc=A\trel=cites\tdst=[5]"
+        "\treason=Citation without a title.<tool_call>\n"
     )
     ex = lineformat.parse(text)
     assert ex.unmapped[0]["reason"] == "Citation without a title."
