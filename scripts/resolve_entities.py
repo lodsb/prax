@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import config, resolution, store
+from prax import config, models, resolution, store
 
 
 def main() -> int:
@@ -33,7 +33,10 @@ def main() -> int:
     ap.add_argument(
         "--adjudicate", action="store_true", help="ask Claude about likely pairs"
     )
-    ap.add_argument("--model", default="claude-opus-5")
+    ap.add_argument(
+        "--model",
+        help="a Claude model id or a prax.yaml model name (default: adjudicate step)",
+    )
     ap.add_argument(
         "--twins",
         action="store_true",
@@ -65,7 +68,17 @@ def main() -> int:
             print(f"  … {len(items) - a.show} more {tier}")
     if a.dry_run:
         return 0
-    adjudicator = resolution.ClaudeAdjudicator(model=a.model) if a.adjudicate else None
+    adjudicator = None
+    if a.adjudicate:
+        spec = models.spec(a.model) if a.model else models.resolve("adjudicate")
+        if spec is None or spec.kind != "claude":
+            print(
+                "adjudication needs a Claude model: --model, PRAX_ADJUDICATE or"
+                " steps.adjudicate.model in prax.yaml",
+                file=sys.stderr,
+            )
+            return 2
+        adjudicator = resolution.ClaudeAdjudicator(model=spec.model)
     report = resolution.apply(con, plan, adjudicator=adjudicator, twins=a.twins)
     print(
         f"merged {report.merged_sure} sure, {report.merged_twins} twins and"

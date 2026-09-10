@@ -366,21 +366,22 @@ second, which is why the API stays the default there.
 `prax.ask` turns a question into a bundle (one passage per document from
 the hybrid search, plus what the graph records about those documents)
 and hands it to a model that answers with `[n]` citations. Which model
-is the host's choice, `PRAX_ASK`:
+is the host's choice:
 
 | `PRAX_ASK` | who answers |
 |---|---|
-| `local` | the GGUF model in `PRAX_LOCAL_MODEL`, loaded once into the door's process on the first question (section 3h; Qwen2.5-7B answers in about 20 s on the GTX 1070, 5 GB of VRAM) |
-| `claude` | the API, `PRAX_ASK_MODEL` (default `claude-sonnet-5`, effort low; about a cent per question) |
+| a `gguf` model | loaded once into the door's process on the first question (section 3h; Qwen2.5-7B answers in about 20 s on the GTX 1070, 5 GB of VRAM) |
+| an `openai` model | a llama-server or vLLM elsewhere answers; the door loads nothing |
+| a `claude` model | the API (effort low; about a cent per question) |
 | `none` | nobody: the bundle comes back for the caller's own model |
 
-Unset, it is `local` when `PRAX_LOCAL_MODEL` is set and `none` otherwise,
-so the serving board answers with the bundle. On this desktop the door
-is started with the model:
+The step is `ask` in `prax.yaml` (section 3k), `PRAX_ASK=<name|none>`
+for one run. Without a file it is `local` when `PRAX_LOCAL_MODEL` is set
+and `none` otherwise, so the serving board answers with the bundle. On
+this desktop:
 
     $env:PRAX_DATA_DIR = "C:\prax-data"
-    $env:PRAX_LOCAL_MODEL = "<path>\Qwen2.5-7B-Instruct-Q4_K_M.gguf"
-    uvicorn prax.api:app --port 8000
+    uvicorn prax.api:app --port 8000     # steps.ask.model in prax.yaml (3k)
 
 Then the Ask tab in the UI, or:
 
@@ -432,6 +433,49 @@ document field is refreshed, which queues the document vector for
 `embed_pending.py`. The document page shows the former title. A
 wrong repair is fixed with `--ids <id>` after editing, or by calling
 `store.retitle` with the right title and `source="human"`.
+
+## 3k. Which model does which step: `prax.yaml`
+
+Every AI-assisted step (`extract`, `ask`, `titles`, `vision`,
+`adjudicate`) takes its model from `prax.yaml` in the data directory
+(`PRAX_CONFIG` points elsewhere; `prax.example.yaml` in the repo is the
+template). `models` names backends, `steps` assigns them:
+
+    models:
+      sonnet:     {kind: claude, model: claude-sonnet-5, effort: medium}
+      local-7b:   {kind: gguf, path: <file>.gguf, n_ctx: 8192}
+      server-32b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: qwen2.5-32b}
+    steps:
+      extract:    {model: sonnet, max_triples: 20}
+      ask:        {model: local-7b}
+      titles:     {model: local-7b}
+      vision:     {model: sonnet}
+      adjudicate: {model: opus}
+
+Kinds: `claude` (the API, key in `ANTHROPIC_API_KEY`), `gguf` (llama.cpp
+in the process that runs the step, section 3h), `openai` (any
+OpenAI-compatible server: `llama-server`, vLLM, or a hosted API with
+`api_key_env` naming the variable that holds its key and `price` as
+USD per million input and output tokens for the cost lines), `stub`
+(tests). Names that need no file: any `claude-*` id, `local` (the GGUF
+in `PRAX_LOCAL_MODEL`), `stub`, `none`.
+
+Precedence per step: `PRAX_<STEP>` in the environment (a model name or
+`none`), then the file, then the default (`claude-opus-5` for
+extraction, `local` for ask and titles when a local model exists, else
+`none`, Sonnet 5 for vision, `none` for adjudication).
+`PRAX_<STEP>_MODEL` swaps the Claude model id for a step that resolves
+to Claude, as before. A model is loaded once per process however many
+steps name it, so ask and titles share one 7B in the door.
+
+The extraction step is the one to move when a GPU box is around:
+start `llama-server -m <32B>.gguf -c 8192 -np 4 --port 8080` on it,
+add an `openai` model with its address, point `steps.extract.model`
+at it, and `extract_graph.py` runs the same prompt and grammar against
+the server (llama-server honours the `grammar` field; vLLM does not,
+so use a Claude-kind model or llama-server for extraction). The door
+stays lean: the model lives in the server's process, not the door's
+(invariant 7). `GET /ask/config` shows what the door resolved.
 
 ## 4. Running the HTTP door
 

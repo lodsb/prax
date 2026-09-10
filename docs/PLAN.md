@@ -244,6 +244,11 @@ R14). Design in `docs/ui.md`.
 - [x] Ontology v4 (2026-09-11, `docs/ontology-v4.md`): page kind
       `synthesis`, relation `synthesizes`, pages may support, contradict
       and propose claims; Ask can start a synthesis page from an answer
+- [x] `prax.yaml` (2026-09-11, `prax.models`): named models and the step
+      each serves; kinds claude, gguf, openai (llama-server, vLLM, hosted
+      APIs), stub; environment variables stay as per-run overrides; one
+      loaded runtime per process; ready for a borrowed 4090 running
+      llama-server for the extraction backlog
 - [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
       sure merges (normalized names, author initials forms) apply on their
       own, likely merges (name embeddings, concept/method/tool/dataset/venue

@@ -235,7 +235,7 @@ def test_json_prompt_is_unchanged_by_the_lines_option() -> None:
 def test_current_local_extractor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PRAX_EXTRACT", "local")
     monkeypatch.delenv("PRAX_LOCAL_MODEL", raising=False)
-    with pytest.raises(RuntimeError, match="PRAX_LOCAL_MODEL"):
+    with pytest.raises(ValueError, match="PRAX_LOCAL_MODEL"):
         extraction.current()
     monkeypatch.setenv("PRAX_LOCAL_MODEL", "C:/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf")
     monkeypatch.setenv("PRAX_LOCAL_CTX", "4096")

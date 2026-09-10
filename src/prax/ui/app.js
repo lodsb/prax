@@ -913,15 +913,15 @@ function citeLinks(html, passages) {
 
 function renderAskForm(p) {
   const backend = p.backend || "";
-  const local = askConfig && askConfig.local_model ? askConfig.local_model : null;
-  const dflt = askConfig ? askConfig.default : "";
-  const label = (b) => ({ local: local || "local model", claude: askConfig ? askConfig.claude_model : "claude", none: "bundle only (no model)" }[b]);
+  const dflt = askConfig ? askConfig.default : "none";
+  const names = (askConfig && askConfig.models) || [];
   return `
   <form id="ask-form" class="search-form">
     <input name="question" type="search" value="${esc(p.question || "")}" placeholder="ask the library…" autofocus>
-    <select name="backend" title="which model answers">
-      <option value="" ${backend === "" ? "selected" : ""}>default${dflt ? ` (${esc(label(dflt) || dflt)})` : ""}</option>
-      ${["local", "claude", "none"].map((b) => `<option value="${b}" ${backend === b ? "selected" : ""}>${esc(label(b))}</option>`).join("")}
+    <select name="backend" title="which model answers (prax.yaml)">
+      <option value="" ${backend === "" ? "selected" : ""}>default (${esc(dflt)})</option>
+      ${names.map((n) => `<option value="${esc(n)}" ${backend === n ? "selected" : ""}>${esc(n)}</option>`).join("")}
+      <option value="none" ${backend === "none" ? "selected" : ""}>bundle only (no model)</option>
     </select>
     <select name="doctype" title="document type">
       <option value="" ${!p.doctype ? "selected" : ""}>any type</option>

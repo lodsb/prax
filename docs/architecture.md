@@ -196,6 +196,7 @@ what is needed.
 | `prax.extraction` | document input (head plus closing sections), ontology-derived prompt and JSON schema, Claude and local extractors, `apply()` into edges / review queue / stamps with guards | via store |
 | `prax.lineformat` | tab-separated output format for local models: bounded GBNF grammar from the ontology, parse/render to `Extraction` | no |
 | `prax.local_llm` | optional llama.cpp runtime (`local` extra): DLL path quirk, one loaded GGUF model behind `chat()`, shared per process | no |
+| `prax.models` | `prax.yaml`: named models and the step that uses each; the registry that resolves a step to a spec and a loaded runtime (gguf, OpenAI-compatible server, Claude, stub), once per process | no |
 | `prax.titles` | titles worth the name: the classifier (file names, Zotero's auto names, ALL CAPS), the recase rule, the local-model guess with hints, confidence from the text | via store (`retitle`) |
 | `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub), citation resolution, saving an answer to a page | via store |
 | `prax.review` | replay of the review queue against a newer ontology | via store |
@@ -288,10 +289,10 @@ loop); the queue makes each batch do real work.
 | `PRAX_DATA_DIR` | the store directory (default `<repo>/data`) |
 | `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
 | `ANTHROPIC_API_KEY` | the Claude API for extraction, vision and adjudication |
-| `PRAX_EXTRACT`, `PRAX_EXTRACT_MODEL`, `PRAX_EXTRACT_EFFORT` | extractor (`stub`, `local`, or a Claude model), model and effort |
-| `PRAX_LOCAL_MODEL`, `PRAX_LOCAL_CTX` | GGUF file and context for the local extractor and the local ask backend |
-| `PRAX_ASK`, `PRAX_ASK_MODEL` | who answers questions: `local`, `claude`, `none` (default `local` when a local model is set, else `none`); the Claude model for `claude` (default Sonnet 5) |
-| `PRAX_VISION_MODEL` | Claude model that describes images (default Sonnet 5) |
+| `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `gguf`, `openai`, `stub`) and the `extract`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k) |
+| `PRAX_EXTRACT`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE` | a model name or `none`: overrides the step for one run |
+| `PRAX_EXTRACT_MODEL`, `PRAX_ASK_MODEL`, `PRAX_VISION_MODEL`, `PRAX_EXTRACT_EFFORT` | the Claude model id (and effort) for a step that resolves to Claude |
+| `PRAX_LOCAL_MODEL`, `PRAX_LOCAL_CTX` | the implicit `local` model: a GGUF file and its context, when the file names none |
 | `PRAX_CITATIONS_MAILTO` | polite-pool contact for Crossref and OpenAlex |
 | `PRAX_RERANK` | cross-encoder name, `stub`, or `0` (default off) |
 | `PRAX_ONTOLOGY` | alternative `ontology.yaml` |
@@ -320,6 +321,7 @@ loop); the queue makes each batch do real work.
 | add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
 | add a page kind | `store.PAGE_KINDS` and the `pages` view; relationships stay edges |
 | fix a document's title | `store.retitle(con, id, title, source="human")`; the old one stays in `meta.title_history`, the paper entity follows; `repair_titles.py --ids` reruns the model for named documents |
+| move a step to another model (a GPU box, a cheaper API) | a `models` entry and the step's `model` in `prax.yaml`; nothing in code; `PRAX_<STEP>` for one run |
 | change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name` and `answer(bundle)` |
 
 ## 10. Numbers as of 2026-09-11

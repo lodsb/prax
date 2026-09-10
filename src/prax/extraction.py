@@ -12,15 +12,15 @@ queue (invariant 9), stores the summary in ``meta.summary`` and stamps
 The prompt is built from ``ontology.yaml`` itself, so a version bump changes
 what the model is asked for and re-selects every document. The Claude call
 uses structured output (a JSON schema the response must satisfy) and a
-cached system prompt shared by all documents. ``PRAX_EXTRACT_MODEL``
-chooses the model (default ``claude-opus-5``); ``PRAX_EXTRACT_EFFORT`` the
+cached system prompt shared by all documents. The ``extract`` step of
+``prax.yaml`` (``prax.models``) chooses the model, ``PRAX_EXTRACT`` overrides
+it for a run (default ``claude-opus-5``); ``PRAX_EXTRACT_EFFORT`` the
 effort (default ``medium``). A stub extractor exists for tests.
 """
 
 from __future__ import annotations
 
 import json
-import os
 import re
 import sqlite3
 from dataclasses import dataclass, field
@@ -557,20 +557,26 @@ class LocalExtractor:
 
 
 def current() -> Extractor:
-    setting = os.environ.get("PRAX_EXTRACT", DEFAULT_MODEL)
-    if setting == "stub":
-        return StubExtractor()
-    if setting == "local":
-        path = os.environ.get("PRAX_LOCAL_MODEL")
-        if not path:
-            raise RuntimeError("PRAX_EXTRACT=local needs PRAX_LOCAL_MODEL=<model.gguf>")
-        from prax import local_llm
+    """The extractor for the ``extract`` step of ``prax.yaml`` (or
+    ``PRAX_EXTRACT``): Claude with the JSON schema, a stub, or a local or
+    served model with the line format and grammar."""
+    from prax import models
 
-        ctx = int(os.environ.get("PRAX_LOCAL_CTX", local_llm.DEFAULT_CTX))
-        return LocalExtractor(local_llm.shared_runtime(path, n_ctx=ctx))
-    return ClaudeExtractor(
-        model=os.environ.get("PRAX_EXTRACT_MODEL", setting),
-        effort=os.environ.get("PRAX_EXTRACT_EFFORT", "medium"),
+    spec = models.resolve("extract")
+    if spec is None:
+        raise RuntimeError(
+            "extraction is off: steps.extract.model / PRAX_EXTRACT is none"
+        )
+    if spec.kind == "stub":
+        return StubExtractor()
+    opts = models.settings("extract")
+    if spec.kind == "claude":
+        assert spec.model is not None
+        return ClaudeExtractor(
+            model=spec.model, effort=str(opts.get("effort") or spec.effort or "medium")
+        )
+    return LocalExtractor(
+        models.runtime(spec), max_triples=int(opts.get("max_triples", MAX_TRIPLES))
     )
 
 
@@ -696,8 +702,15 @@ def apply(
 
 
 def price(model: str) -> tuple[float, float]:
-    """USD per million input and output tokens; local models cost nothing."""
-    if model.startswith("local:") or model == "stub":
+    """USD per million input and output tokens: ``prax.yaml`` may price a
+    served model; local models and unpriced servers cost nothing; Claude
+    models come from the table, unknown ones at Opus rates."""
+    from prax import models
+
+    priced = models.price_of(model)
+    if priced:
+        return priced
+    if model.startswith("local:") or model == "stub" or "@" in model:
         return (0.0, 0.0)
     return PRICES.get(model, (5.0, 25.0))
 

@@ -131,19 +131,21 @@ def test_bundle_only_without_backend(con: sqlite3.Connection) -> None:
 
 
 def test_backend_selection(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("PRAX_ASK", raising=False)
-    monkeypatch.delenv("PRAX_LOCAL_MODEL", raising=False)
-    assert ask.default_backend() == "none" and ask.current() is None
+    from prax import models
+
+    for var in ("PRAX_ASK", "PRAX_LOCAL_MODEL", "PRAX_ASK_MODEL", "PRAX_CONFIG"):
+        monkeypatch.delenv(var, raising=False)
+    models.reset()
+    assert ask.current() is None and ask.describe()["default"] == "none"
     monkeypatch.setenv("PRAX_LOCAL_MODEL", "C:/models/qwen.gguf")
-    assert ask.default_backend() == "local"
-    assert ask.describe()["local_model"] == "local:qwen"
+    d = ask.describe()
+    assert d["default"] == "local" and d["runtime"] == "local:qwen"
+    assert isinstance(ask.current(), ask.LocalAnswerer)
     monkeypatch.setenv("PRAX_ASK", "stub")
     assert isinstance(ask.current(), ask.StubAnswerer)
     monkeypatch.setenv("PRAX_ASK", "claude")
     assert ask.current().name == ask.DEFAULT_CLAUDE_MODEL
-    monkeypatch.delenv("PRAX_LOCAL_MODEL")
-    with pytest.raises(RuntimeError):
-        ask.answerer_named("local")
+    assert ask.answerer_named("none") is None
     with pytest.raises(ValueError):
         ask.answerer_named("gpt")
 

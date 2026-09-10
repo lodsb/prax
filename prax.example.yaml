@@ -1,0 +1,48 @@
+# prax.yaml: which model does which step. Copy to the data directory
+# (PRAX_DATA_DIR/prax.yaml, or point PRAX_CONFIG at it). Environment
+# variables PRAX_<STEP> (a model name below, or "none") override a step for
+# one run; PRAX_<STEP>_MODEL swaps the Claude model id. docs/howto.md 3k.
+
+models:
+  # the Claude API; the key comes from ANTHROPIC_API_KEY
+  sonnet:
+    kind: claude
+    model: claude-sonnet-5
+    effort: medium
+  opus:
+    kind: claude
+    model: claude-opus-5
+    effort: medium
+
+  # a GGUF model in the door's own process (llama.cpp, the `local` extra)
+  local-7b:
+    kind: gguf
+    path: C:/Users/me/.cache/huggingface/hub/models--bartowski--Qwen2.5-7B-Instruct-GGUF/snapshots/<hash>/Qwen2.5-7B-Instruct-Q4_K_M.gguf
+    n_ctx: 8192
+
+  # an OpenAI-compatible server: llama-server or vLLM on a GPU box, or a
+  # hosted API (api_key_env names the variable holding its key; price is
+  # USD per million input and output tokens, for the cost lines)
+  server-32b:
+    kind: openai
+    base_url: http://127.0.0.1:8080/v1
+    model: qwen2.5-32b-instruct
+  # deepseek:
+  #   kind: openai
+  #   base_url: https://api.deepseek.com/v1
+  #   model: deepseek-chat
+  #   api_key_env: DEEPSEEK_API_KEY
+  #   price: [0.27, 1.10]
+
+steps:
+  extract:
+    model: sonnet
+    max_triples: 20
+  ask:
+    model: local-7b
+  titles:
+    model: local-7b
+  vision:
+    model: sonnet
+  adjudicate:
+    model: opus

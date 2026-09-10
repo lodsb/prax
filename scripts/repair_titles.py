@@ -8,7 +8,7 @@
     python scripts/repair_titles.py --ids 4056 4170  # named documents, even if repaired
 
 ALL CAPS titles are recased by rule. File names and Zotero's "Unknown - No
-Title" names go to the local model (PRAX_LOCAL_MODEL or --model) with the
+Title" names go to the model of the titles step (prax.yaml, or --model) with the
 beginning of the text, the file name, the first heading and the PDF's
 metadata title as hints. A guess the text does not confirm (low confidence)
 is applied only with --apply-low; documents without text keep their file
@@ -21,14 +21,13 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import config, local_llm, store, titles
+from prax import config, models, store, titles
 
 REASONS = ("empty", "filename", "zotero-auto", "caps")
 
@@ -69,7 +68,10 @@ def main() -> int:
     ap.add_argument("--limit", type=int)
     ap.add_argument("--ids", type=int, nargs="+")
     ap.add_argument("--reason", choices=REASONS, nargs="+", default=list(REASONS))
-    ap.add_argument("--model", help="GGUF path (default PRAX_LOCAL_MODEL)")
+    ap.add_argument(
+        "--model",
+        help="a model name from prax.yaml or a .gguf path (default: the titles step)",
+    )
     ap.add_argument(
         "--apply-low",
         action="store_true",
@@ -109,11 +111,20 @@ def main() -> int:
     runtime = None
     needs_model = any(why != "caps" for _, why in chosen)
     if needs_model:
-        path = a.model or os.environ.get("PRAX_LOCAL_MODEL")
-        if not path:
-            print("the model pass needs PRAX_LOCAL_MODEL or --model", file=sys.stderr)
+        if a.model and a.model.lower().endswith(".gguf"):
+            spec = models.ModelSpec(name="cli", kind="gguf", path=a.model)
+        elif a.model:
+            spec = models.spec(a.model)
+        else:
+            spec = models.resolve("titles")
+        if spec is None:
+            print(
+                "no model for titles: steps.titles.model in prax.yaml, PRAX_TITLES,"
+                " or --model",
+                file=sys.stderr,
+            )
             return 2
-        runtime = local_llm.shared_runtime(path)
+        runtime = models.runtime(spec)
 
     run = "titles-" + time.strftime("%Y%m%dT%H%M%S")
     t0 = time.monotonic()

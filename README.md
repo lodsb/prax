@@ -74,8 +74,9 @@ and document-level BM25 and vectors (MRR 0.89 on the library query set),
 Claude extraction into an evidence-bearing graph with a review queue and
 ontology replay, entity resolution in three tiers, a citation network, a
 web UI with search, ask, document, context, graph, review and pages
-views, a bearer-token door, and an optional local llama.cpp path that
-extracts and answers questions ("ask": passages plus graph facts to a
+views, a bearer-token door, a `prax.yaml` that assigns each AI step
+its model (Claude, a GGUF in process, or an OpenAI-compatible server),
+and an optional local llama.cpp path that extracts and answers questions ("ask": passages plus graph facts to a
 local model, Claude, or the MCP client; answers cite and can be kept on
 a page). Not built: browser capture and the inbox watcher, the move
 onto the serving board. Checklists in `docs/PLAN.md`.

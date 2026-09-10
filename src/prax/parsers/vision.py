@@ -12,7 +12,8 @@ with Sonnet 5), so it runs when named:
 
     python scripts/parse_pending.py --pending --mime image/ --extractor claude-vision
 
-``PRAX_VISION_MODEL`` picks the model (default ``claude-sonnet-5``; Haiku 4.5
+The ``vision`` step of ``prax.yaml`` picks the model, ``PRAX_VISION`` or
+``PRAX_VISION_MODEL`` override it (default ``claude-sonnet-5``; Haiku 4.5
 misread a compressor schematic's identity where Sonnet got everything); the
 model name is written into the artifact's first line for provenance.
 """
@@ -20,7 +21,6 @@ model name is written into the artifact's first line for provenance.
 from __future__ import annotations
 
 import base64
-import os
 from collections.abc import Callable
 from typing import Any
 
@@ -88,7 +88,16 @@ def describe(
         raise ExtractionError("not a PNG, JPEG, GIF or WebP image")
     if len(data) > MAX_BYTES:
         raise ExtractionError(f"image larger than {MAX_BYTES // (1024 * 1024)} MB")
-    model = model or os.environ.get("PRAX_VISION_MODEL", DEFAULT_MODEL)
+    if model is None:
+        from prax import models
+
+        spec = models.resolve("vision")
+        if spec is None or spec.kind != "claude":
+            raise RuntimeError(
+                "images need a Claude model: steps.vision.model in prax.yaml"
+                " or PRAX_VISION"
+            )
+        model = spec.model or DEFAULT_MODEL
     response = _client().messages.create(
         model=model,
         max_tokens=2000,

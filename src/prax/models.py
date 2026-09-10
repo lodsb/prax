@@ -1,0 +1,446 @@
+"""Which model does which step: ``prax.yaml``, the registry, the runtimes.
+
+Every AI-assisted step (``extract``, ``ask``, ``titles``, ``vision``,
+``adjudicate``) picks its model here instead of reading its own
+environment variables. ``prax.yaml`` in the data directory (or
+``PRAX_CONFIG``) names models and assigns them to steps::
+
+    models:
+      sonnet:    {kind: claude, model: claude-sonnet-5, effort: medium}
+      local-7b:  {kind: gguf, path: C:/models/Qwen2.5-7B-Q4_K_M.gguf, n_ctx: 8192}
+      server-32b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: qwen2.5-32b}
+    steps:
+      extract:   {model: sonnet, max_triples: 20}
+      ask:       {model: local-7b}
+      titles:    {model: local-7b}
+      vision:    {model: sonnet}
+      adjudicate: {model: none}
+
+Four kinds: ``claude`` (the API), ``gguf`` (llama.cpp in this process,
+``prax.local_llm``), ``openai`` (any OpenAI-compatible server: llama-server
+or vLLM on a GPU box, or a hosted API; ``api_key_env`` names the variable
+holding its key), ``stub`` (tests). Some names need no file: any
+``claude-*`` id, ``local`` (the GGUF in ``PRAX_LOCAL_MODEL``), ``stub``,
+``none``. Precedence for a step: ``PRAX_<STEP>`` in the environment (a model
+name or ``none``), then the file, then the step's default. ``PRAX_<STEP>_MODEL``
+swaps the Claude model id when the step resolves to Claude, as it always
+did. A runtime is loaded once per process however many steps share it.
+
+Steps build their own objects from the spec: extraction wants a JSON
+schema from Claude and a grammar from llama.cpp, vision sends an image,
+so the registry hands out a ``ModelSpec`` and, for chat-shaped work, a
+``Runtime`` (``chat(system, user, ...)``) of the right kind.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import urllib.error
+import urllib.request
+from dataclasses import dataclass, field
+from functools import cache
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+import yaml
+
+from prax import config, local_llm
+
+CONFIG_NAME = "prax.yaml"
+KINDS = ("claude", "gguf", "openai", "stub")
+STEPS = ("extract", "ask", "titles", "vision", "adjudicate")
+STEP_DEFAULTS = {
+    "extract": "claude-opus-5",
+    "ask": "local",  # falls back to none when no local model is configured
+    "titles": "local",
+    "vision": "claude-sonnet-5",
+    "adjudicate": "none",
+}
+LOCAL_FALLBACK = {"ask": "none", "titles": "none"}
+OPENAI_TIMEOUT = 600.0
+_CLAUDE_TIMEOUT = 180.0
+
+
+@dataclass(frozen=True)
+class ModelSpec:
+    name: str
+    kind: str
+    model: str | None = None  # the API's model id (claude, openai)
+    path: str | None = None  # the GGUF file (gguf)
+    base_url: str | None = None  # the server (openai)
+    api_key_env: str | None = None
+    n_ctx: int = local_llm.DEFAULT_CTX
+    effort: str | None = None
+    price: tuple[float, float] | None = None  # USD per million in, out
+    params: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
+
+    @property
+    def runtime_name(self) -> str:
+        if self.kind == "gguf" and self.path:
+            return "local:" + Path(self.path).stem
+        if self.kind == "openai":
+            host = urlparse(self.base_url or "").netloc or "server"
+            return f"{self.model}@{host}"
+        return self.model or self.name
+
+
+class ConfigError(ValueError):
+    pass
+
+
+# ------------------------------------------------------------------ file
+
+
+def config_path() -> Path:
+    return Path(os.environ.get("PRAX_CONFIG") or config.data_dir() / CONFIG_NAME)
+
+
+def load() -> dict[str, Any]:
+    """The parsed file, ``{}`` when there is none; validated shape."""
+    path = config_path()
+    if not path.is_file():
+        return {}
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ConfigError(f"{path}: expected a mapping at the top")
+    for section in ("models", "steps"):
+        if section in data and not isinstance(data[section], dict):
+            raise ConfigError(f"{path}: '{section}' must be a mapping")
+    for step in data.get("steps", {}):
+        if step not in STEPS:
+            raise ConfigError(f"{path}: unknown step {step!r}; steps are {STEPS}")
+    return data
+
+
+def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
+    kind = raw.get("kind")
+    if kind not in KINDS:
+        raise ConfigError(f"model {name!r}: kind must be one of {KINDS}")
+    known = {
+        "kind",
+        "model",
+        "path",
+        "base_url",
+        "api_key_env",
+        "n_ctx",
+        "effort",
+        "price",
+    }
+    if kind == "gguf" and not raw.get("path"):
+        raise ConfigError(f"model {name!r}: a gguf model needs 'path'")
+    if kind == "openai" and not (raw.get("base_url") and raw.get("model")):
+        raise ConfigError(
+            f"model {name!r}: an openai model needs 'base_url' and 'model'"
+        )
+    if kind == "claude" and not raw.get("model"):
+        raise ConfigError(f"model {name!r}: a claude model needs 'model'")
+    price = raw.get("price")
+    return ModelSpec(
+        name=name,
+        kind=kind,
+        model=raw.get("model"),
+        path=str(raw["path"]) if raw.get("path") else None,
+        base_url=raw.get("base_url"),
+        api_key_env=raw.get("api_key_env"),
+        n_ctx=int(raw.get("n_ctx", local_llm.DEFAULT_CTX)),
+        effort=raw.get("effort"),
+        price=(float(price[0]), float(price[1])) if price else None,
+        params=tuple(sorted((k, v) for k, v in raw.items() if k not in known)),
+    )
+
+
+def spec(name: str) -> ModelSpec | None:
+    """The model behind a name: from the file, or one of the implicit
+    names (``claude-*``, ``local``, ``stub``); ``none`` and unknown names
+    are None."""
+    if name in ("none", ""):
+        return None
+    models = load().get("models", {})
+    if name in models:
+        return _spec_from(name, models[name] or {})
+    if name == "stub":
+        return ModelSpec(name="stub", kind="stub")
+    if name == "local":
+        path = os.environ.get("PRAX_LOCAL_MODEL")
+        if not path:
+            return None
+        return ModelSpec(
+            name="local",
+            kind="gguf",
+            path=path,
+            n_ctx=int(os.environ.get("PRAX_LOCAL_CTX", local_llm.DEFAULT_CTX)),
+        )
+    if name.startswith("claude-"):
+        return ModelSpec(name=name, kind="claude", model=name)
+    return None
+
+
+def names() -> list[str]:
+    """Model names a caller may pick: the file's, then the implicit ones
+    that exist here."""
+    out = list(load().get("models", {}))
+    if os.environ.get("PRAX_LOCAL_MODEL") and "local" not in out:
+        out.append("local")
+    return out
+
+
+# ----------------------------------------------------------------- steps
+
+
+def _env_step(step: str) -> str | None:
+    return os.environ.get(f"PRAX_{step.upper()}")
+
+
+def resolve(step: str) -> ModelSpec | None:
+    """The model for a step, or None when the step is off (``none``)."""
+    if step not in STEPS:
+        raise ValueError(f"step must be one of {STEPS}")
+    chosen = _env_step(step)
+    source = "environment"
+    if chosen is None:
+        chosen = (load().get("steps", {}).get(step) or {}).get("model")
+        source = "prax.yaml"
+    if chosen is None:
+        model_id = os.environ.get(f"PRAX_{step.upper()}_MODEL")
+        if model_id:  # the legacy way of naming a Claude model for a step
+            chosen = model_id
+        else:
+            chosen = STEP_DEFAULTS[step]
+        source = "default"
+    if chosen == "local" and spec("local") is None and step in LOCAL_FALLBACK:
+        chosen = LOCAL_FALLBACK[step]
+    if chosen == "claude":  # legacy PRAX_ASK=claude
+        chosen = os.environ.get(f"PRAX_{step.upper()}_MODEL") or _claude_default(step)
+    result = spec(chosen)
+    if result is None and chosen == "local":
+        raise ConfigError(
+            f"step {step!r}: the local model needs PRAX_LOCAL_MODEL=<model.gguf>"
+            " or a 'local' entry under models in prax.yaml"
+        )
+    if result is None and chosen not in ("none", ""):
+        raise ConfigError(
+            f"step {step!r}: no model named {chosen!r} ({source}); known: {names()}"
+        )
+    if result is not None and result.kind == "claude":
+        model_id = os.environ.get(f"PRAX_{step.upper()}_MODEL")
+        if model_id and model_id != result.model:
+            result = ModelSpec(**{**result.__dict__, "model": model_id})
+    return result
+
+
+def _claude_default(step: str) -> str:
+    return (
+        STEP_DEFAULTS[step]
+        if STEP_DEFAULTS[step].startswith("claude-")
+        else "claude-sonnet-5"
+    )
+
+
+def settings(step: str) -> dict[str, Any]:
+    """The step's own settings from the file (everything but ``model``),
+    with the legacy environment overrides applied."""
+    out = {
+        k: v
+        for k, v in (load().get("steps", {}).get(step) or {}).items()
+        if k != "model"
+    }
+    if step == "extract" and os.environ.get("PRAX_EXTRACT_EFFORT"):
+        out["effort"] = os.environ["PRAX_EXTRACT_EFFORT"]
+    return out
+
+
+def describe(step: str) -> dict[str, Any]:
+    """For a UI: what the step resolves to and what it could use."""
+    try:
+        chosen = resolve(step)
+        error = None
+    except ConfigError as exc:
+        chosen, error = None, str(exc)
+    return {
+        "step": step,
+        "model": chosen.name if chosen else "none",
+        "kind": chosen.kind if chosen else None,
+        "runtime": chosen.runtime_name if chosen else None,
+        "models": names(),
+        "config": str(config_path()) if config_path().is_file() else None,
+        "error": error,
+    }
+
+
+def price_of(runtime_name: str) -> tuple[float, float] | None:
+    """USD per million tokens for a runtime name the file prices; None when
+    the file says nothing (the caller falls back to its own table)."""
+    for name, raw in load().get("models", {}).items():
+        s = _spec_from(name, raw or {})
+        if s.runtime_name == runtime_name and s.price:
+            return s.price
+    return None
+
+
+# -------------------------------------------------------------- runtimes
+
+
+class StubRuntime:
+    """Tests: echoes a fixed line."""
+
+    name = "stub"
+
+    def __init__(self, reply: str = "stub\n") -> None:
+        self.reply = reply
+        self.calls: list[dict[str, Any]] = []
+
+    def chat(self, system: str, user: str, **kw: Any) -> tuple[str, dict[str, int]]:
+        self.calls.append({"system": system, "user": user, **kw})
+        return self.reply, {"input_tokens": len(user) // 4, "output_tokens": 4}
+
+
+@dataclass
+class OpenAIRuntime:
+    """A chat completion against an OpenAI-compatible server. llama-server
+    honours ``grammar`` and ``repeat_penalty`` as extra fields; vLLM ignores
+    them (its structured outputs are a different field), so use the JSON
+    path there. The key, when the server wants one, comes from the variable
+    named in the spec at call time and is never stored."""
+
+    base_url: str
+    model: str
+    api_key_env: str | None = None
+    timeout: float = OPENAI_TIMEOUT
+
+    @property
+    def name(self) -> str:
+        host = urlparse(self.base_url).netloc or "server"
+        return f"{self.model}@{host}"
+
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        grammar: str | None = None,
+        max_tokens: int = 2000,
+        temperature: float = 0.0,
+        repeat_penalty: float = 1.0,
+        stop: list[str] | None = None,
+    ) -> tuple[str, dict[str, int]]:
+        body: dict[str, Any] = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+        }
+        if stop:
+            body["stop"] = stop
+        if repeat_penalty != 1.0:
+            body["repeat_penalty"] = repeat_penalty
+        if grammar:
+            body["grammar"] = grammar
+        data = post_json(
+            self.base_url.rstrip("/") + "/chat/completions", body, self._key()
+        )
+        text = (data["choices"][0]["message"].get("content") or "").strip()
+        u = data.get("usage") or {}
+        return text, {
+            "input_tokens": int(u.get("prompt_tokens", 0) or 0),
+            "output_tokens": int(u.get("completion_tokens", 0) or 0),
+        }
+
+    def _key(self) -> str | None:
+        return os.environ.get(self.api_key_env) if self.api_key_env else None
+
+
+def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
+    """One POST; replaced in tests."""
+    headers = {"Content-Type": "application/json"}
+    if key:
+        headers["Authorization"] = f"Bearer {key}"
+    req = urllib.request.Request(
+        url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=OPENAI_TIMEOUT) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:300]
+        raise RuntimeError(f"{url}: HTTP {exc.code}: {detail}") from exc
+
+
+@dataclass
+class ClaudeRuntime:
+    """Claude as a plain chat runtime for text-in, text-out steps (titles,
+    ask). Grammars are llama.cpp's; extraction with Claude uses its JSON
+    schema through ``extraction.ClaudeExtractor`` instead."""
+
+    model: str
+    effort: str | None = None
+    client: Any = None
+
+    @property
+    def name(self) -> str:
+        return self.model
+
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        grammar: str | None = None,
+        max_tokens: int = 2000,
+        temperature: float = 0.0,
+        repeat_penalty: float = 1.0,
+        stop: list[str] | None = None,
+    ) -> tuple[str, dict[str, int]]:
+        if grammar:
+            raise ValueError("a grammar needs a llama.cpp runtime, not Claude")
+        if self.client is None:
+            import anthropic
+
+            self.client = anthropic.Anthropic(timeout=_CLAUDE_TIMEOUT, max_retries=3)
+        from prax.extraction import supports_effort
+
+        params: dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        }
+        if stop:
+            params["stop_sequences"] = stop
+        if self.effort and supports_effort(self.model):
+            params["output_config"] = {"effort": self.effort}
+        response = self.client.messages.create(**params)
+        text = "".join(b.text for b in response.content if b.type == "text")
+        u = response.usage
+        return text, {
+            "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
+            "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
+        }
+
+
+@cache
+def _runtime(s: ModelSpec) -> Any:
+    if s.kind == "gguf":
+        assert s.path is not None
+        return local_llm.shared_runtime(s.path, n_ctx=s.n_ctx)
+    if s.kind == "openai":
+        assert s.base_url is not None and s.model is not None
+        return OpenAIRuntime(s.base_url, s.model, s.api_key_env)
+    if s.kind == "claude":
+        assert s.model is not None
+        return ClaudeRuntime(s.model, effort=s.effort)
+    return StubRuntime()
+
+
+def runtime(s: ModelSpec) -> Any:
+    """The loaded runtime for a spec, one per process and spec."""
+    return _runtime(s)
+
+
+def reset() -> None:
+    """Tests: forget loaded runtimes."""
+    _runtime.cache_clear()

@@ -5,13 +5,13 @@ takes the best chunk of each of the top documents as a numbered passage,
 and adds what the graph records about those documents (their extracted
 relations, canonical names), everything bounded in characters: the
 bundle is the whole context a model gets, and it fits a 7B model with an
-8 K window. ``answer`` hands the bundle to a generation backend, chosen
-per host with ``PRAX_ASK``: ``local`` runs a GGUF model in process through
-``prax.local_llm`` (the desktop with the GPU; ``PRAX_LOCAL_MODEL``),
-``claude`` calls the API (``PRAX_ASK_MODEL``), ``none`` returns the bundle
-alone, for a client that is itself a model (Claude Code over MCP) and for
-the Pi-class serving host, which loads no model (invariant 7). The
-default is ``local`` when a local model is configured, else ``none``.
+8 K window. ``answer`` hands the bundle to the model of the ``ask`` step
+in ``prax.yaml`` (``prax.models``; ``PRAX_ASK`` overrides it for a run): a
+GGUF model in process, an OpenAI-compatible server, Claude, or ``none``,
+which returns the bundle alone, for a client that is itself a model
+(Claude Code over MCP) and for the Pi-class serving host, which loads no
+model (invariant 7). Without a file the default is the local model when
+one is configured, else ``none``.
 
 The answer cites passages as ``[n]``. ``citations`` resolves the numbers
 back to chunk and document ids, so the UI links them, and ``save``
@@ -22,21 +22,19 @@ becomes part of a topic page, and the graph knows what it drew on.
 
 from __future__ import annotations
 
-import os
 import re
 import sqlite3
 import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from prax import extraction, local_llm, store
+from prax import extraction, models, store
 
 PASSAGES = 8  # documents per bundle; one passage each
 PASSAGE_CHARS = 1200
 FACTS_PER_DOC = 6
 ANSWER_TOKENS = 700
 DEFAULT_CLAUDE_MODEL = "claude-sonnet-5"
-BACKENDS = ("local", "claude", "none", "stub")
 
 SYSTEM = """\
 You answer questions from a personal research library. Use only the numbered
@@ -249,45 +247,42 @@ class StubAnswerer:
         )
 
 
-def answerer_named(backend: str) -> Answerer | None:
-    """The backend for a name; ``none`` is None. ``local`` needs
-    ``PRAX_LOCAL_MODEL`` (RuntimeError otherwise)."""
-    if backend not in BACKENDS:
-        raise ValueError(f"backend must be one of {BACKENDS}")
-    if backend == "none":
+def answerer_for(spec: models.ModelSpec | None) -> Answerer | None:
+    """The answerer for a model spec; None for none."""
+    if spec is None:
         return None
-    if backend == "stub":
+    if spec.kind == "stub":
         return StubAnswerer()
-    if backend == "claude":
-        return ClaudeAnswerer(
-            model=os.environ.get("PRAX_ASK_MODEL", DEFAULT_CLAUDE_MODEL)
-        )
-    path = os.environ.get("PRAX_LOCAL_MODEL")
-    if not path:
-        raise RuntimeError("the local backend needs PRAX_LOCAL_MODEL=<model.gguf>")
-    ctx = int(os.environ.get("PRAX_LOCAL_CTX", local_llm.DEFAULT_CTX))
-    return LocalAnswerer(local_llm.shared_runtime(path, n_ctx=ctx))
+    if spec.kind == "claude":
+        assert spec.model is not None
+        return ClaudeAnswerer(model=spec.model, effort=spec.effort or "low")
+    return LocalAnswerer(models.runtime(spec))
 
 
-def default_backend() -> str:
-    setting = os.environ.get("PRAX_ASK")
-    if setting:
-        return setting
-    return "local" if os.environ.get("PRAX_LOCAL_MODEL") else "none"
+def answerer_named(name: str) -> Answerer | None:
+    """The answerer for a model name (``prax.yaml`` or an implicit name);
+    ``none`` is None; an unknown name is a ValueError."""
+    if name in ("none", ""):
+        return None
+    spec = models.spec(name)
+    if spec is None:
+        raise ValueError(f"no model named {name!r}; known: {models.names()}")
+    return answerer_for(spec)
 
 
 def current() -> Answerer | None:
-    return answerer_named(default_backend())
+    """The ``ask`` step's answerer (``prax.yaml``, ``PRAX_ASK``)."""
+    return answerer_for(models.resolve("ask"))
 
 
 def describe() -> dict[str, Any]:
-    """What the door would answer with: for the UI's backend choice."""
-    backend = default_backend()
-    local = os.environ.get("PRAX_LOCAL_MODEL")
+    """What the door answers with and what it could use, for the UI."""
+    d = models.describe("ask")
     return {
-        "default": backend,
-        "local_model": local_llm.LlamaRuntime(local).name if local else None,
-        "claude_model": os.environ.get("PRAX_ASK_MODEL", DEFAULT_CLAUDE_MODEL),
+        "default": d["model"],
+        "runtime": d["runtime"],
+        "models": d["models"],
+        "error": d["error"],
     }
 
 

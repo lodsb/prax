@@ -116,6 +116,11 @@ synthesis page `synthesizes` its sources and may argue claims (ontology v4).
 - Embeddings: 384-dim (bge-small-class ONNX). Vectors are keyed by chunk
   id in the usearch file; changing the model means re-embedding into a new
   file, another dimension means a new file and `VEC_DIM`.
+- Which model does which AI step is configuration, not code:
+  `prax.yaml` in the data directory read through `prax.models`
+  (`resolve(step)`, `runtime(spec)`); a step module never reads a
+  model-choosing environment variable itself. `PRAX_<STEP>` overrides
+  a step for one run.
 - Timestamps are UTC ISO-8601 strings.
 - Tests must not touch `data/`; use tmp_path fixtures and set
   `PRAX_DATA_DIR` before importing `prax.mcp_server` or `prax.api`.
