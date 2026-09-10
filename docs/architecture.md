@@ -67,7 +67,7 @@ flowchart LR
 | Windows desktop (12 cores, GTX 1070 8 GB) | development, every batch job: import, parse, OCR, vision, embed, extract, resolve, eval; the local llama.cpp path | MuPDF layout analysis, OCR, embedding and a 7B model are CPU/GPU heavy; never on the serving path (invariant 7) |
 | Pi-class SBC (an 8 GB Radxa Dragon Q6A is on hand; a Mac mini or N100 box under consideration) | the HTTP door, the UI and the MCP door over Tailscale | under 1 GB resident: SQLite, FTS5, two memory-mapped usearch files and one query embedding |
 
-The store is one directory (`PRAX_DATA_DIR`, currently `C:\prax-data`):
+The store is one directory (`PRAX_DATA_DIR`):
 
     prax.db, prax.db-wal, prax.db-shm     the database
     archive/<xx>/<sha256>                originals and text artifacts
@@ -328,23 +328,24 @@ loop); the queue makes each batch do real work.
 
 | | |
 |---|---|
-| Documents | 9,236 (8,452 indexed; 9,019 PDFs, 108 web pages, 100 text files, 3 images, 1 page) |
-| Archive / database / vectors | 18 GB / 1.6 GB / 784 MB + 8 MB |
-| Chunks | 855,770: 772,268 text, 41,791 figure captions, 35,062 tables, 6,649 code |
-| Vectors | 855,770 chunk vectors and 9,236 document vectors (bge-small, f16) |
-| Graph | 49,971 live edges: 23,858 citations, 19,356 extracted, 6,756 from Zotero; 52 invalidated |
-| Entities | 22,307 papers, 5,157 authors, 3,633 concepts, 2,460 methods, 2,109 claims, 950 tools, 418 venues, 146 datasets; 2,809 merged aliases |
-| Extraction | 1,018 documents under ontology v3 (Sonnet 5, batch); 3,686 open review items |
-| Citations | 1,280 documents resolved at Crossref (the title pass still running) |
+| Documents | 9,236 (8,452 with text; 9,019 PDFs, 108 web pages, 100 text files, 3 link records, 1 image, 1 page) |
+| Archive / database / vectors | 18 GB / 1.5 GB / 749 MB + 8 MB |
+| Chunks | 855,920: 772,304 text, 41,791 figure captions, 35,062 tables, 6,763 code |
+| Vectors | 855,920 chunk vectors and 9,236 document vectors (bge-small, f16) |
+| Graph | 51,811 live edges: 25,641 citations (Crossref), 19,357 extracted (Sonnet 5), 6,756 from Zotero, 56 by replay, 1 by a page; 52 invalidated |
+| Entities | 23,790 papers, 5,157 authors, 3,634 concepts, 2,460 methods, 2,112 claims, 950 tools, 418 venues, 146 datasets, 18 projects, 8 pages; 2,810 merged aliases |
+| Extraction | 1,019 documents (1,016 under ontology v3, the page under v4, two under v1); 3,632 open review items |
+| Citations | 1,545 documents resolved at Crossref by DOI or exact title |
+| Titles | 3,503 replaced by the local 7B model (text-confirmed), 268 recased; 801 unconfirmed and 782 without text keep their file name |
 | Retrieval eval (62 library queries) | MRR 0.82 fts, 0.79 vec, 0.89 hybrid; hit@1 0.85 hybrid |
-| Costs so far | about $60 of Claude API: three-model comparison, two extraction batches, vision, adjudication |
+| Costs so far | about $60 of Claude API: three-model comparison, two extraction batches, vision, adjudication; the title pass and ask run locally |
 
 ## 11. What is not built yet
 
-Browser capture and the inbox watcher (Stage 1), the zoetrope backfill,
-extraction of the
-remaining 6,900 documents (a model choice: Sonnet in batch, or a cheaper
-provider after a quality trial), a typing pass for the unmapped review
-items, page deletion or archiving, the move of the service onto the
-serving board, and the MCP server proxying the HTTP door instead of
-importing the store.
+Browser capture and the inbox watcher (Stage 1), the backfill of the
+old external-disk store, extraction of the remaining 6,900 documents (a
+model choice: Sonnet in batch, a 32B model on a borrowed GPU through
+llama-server, or a cheaper API after a quality trial), a typing pass for
+the unmapped review items, the 801 unconfirmed titles, page deletion or
+archiving, the move of the service onto the serving board, and the MCP
+server proxying the HTTP door instead of importing the store.

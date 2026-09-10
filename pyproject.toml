@@ -1,8 +1,17 @@
 [project]
 name = "prax"
 version = "0.0.1"
-description = "Personal research knowledge base: SQLite + FastAPI + FastMCP"
+description = "Personal research knowledge base: SQLite, hybrid search, an evidence-bearing graph, doors for people and models"
+readme = "README.md"
 requires-python = ">=3.11"
+keywords = ["knowledge-base", "sqlite", "fts5", "retrieval", "knowledge-graph", "mcp", "zotero"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = [
     "fastapi>=0.115",
     "uvicorn>=0.30",

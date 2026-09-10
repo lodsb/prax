@@ -1,6 +1,8 @@
 # prax build plan
 
-Work one stage per Claude Code session. Each stage ends green: tests pass,
+The staged checklist the project was built against, kept as the record
+of what was done when; ticks carry dates and measurements. Work one
+stage per Claude Code session. Each stage ends green: tests pass,
 `ruff` clean, and the stage's checklist fully ticked before moving on.
 Decisions behind the stages: `docs/rationale.md`. Source details:
 `docs/sources.md`.

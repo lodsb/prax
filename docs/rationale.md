@@ -279,8 +279,8 @@ is the top reliability risk. The single-file store makes backup and
 migration a copy.
 
 **Hosts (2026-09).** Development and every batch job (import, parsing,
-embedding, enrichment) run on the Windows desktop, where the full scratch
-store lives at `C:\prax-data`. The serving host is a Pi-class SBC; an
+embedding, enrichment) run on the Windows desktop, where the full store
+lives on a local SSD. The serving host is a Pi-class SBC; an
 8 GB Radxa Dragon Q6A (Qualcomm QCS6490, eight Arm cores) is on hand and
 is the first candidate, with a dedicated small box as a later upgrade.
 Sizing rule: the serving path must fit the 8 GB board with room to spare;

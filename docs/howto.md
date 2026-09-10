@@ -378,7 +378,7 @@ is the host's choice:
 The step is `ask` in `prax.yaml` (section 3k), `PRAX_ASK=<name|none>`
 for one run. Without a file it is `local` when `PRAX_LOCAL_MODEL` is set
 and `none` otherwise, so the serving board answers with the bundle. On
-this desktop:
+the batch host:
 
     $env:PRAX_DATA_DIR = "C:\prax-data"
     uvicorn prax.api:app --port 8000     # steps.ask.model in prax.yaml (3k)
