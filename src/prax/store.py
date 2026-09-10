@@ -632,9 +632,11 @@ def append_page(
     heading: str | None = None,
     author: str = "agent",
     note: str | None = None,
+    annotates: list[int] | None = None,
 ) -> dict[str, Any]:
     """Add a section to an existing page as a new revision: the agent's way
-    of contributing without touching what a person wrote."""
+    of contributing without touching what a person wrote. ``annotates``
+    adds ``annotates`` edges to the documents the section rests on."""
     page = get_page(con, slugify(slug))
     if page is None:
         raise KeyError(f"no page {slug!r}")
@@ -643,7 +645,14 @@ def append_page(
         block = f"## {heading}\n\n{block}"
     text = page["text"].rstrip() + "\n\n" + block + "\n"
     return write_page(
-        con, page["slug"], text, author=author, note=note, force=True, kind=page["kind"]
+        con,
+        page["slug"],
+        text,
+        author=author,
+        note=note,
+        force=True,
+        kind=page["kind"],
+        annotates=annotates,
     )
 
 
@@ -1754,6 +1763,45 @@ def _docs_by_zotero_key(con: sqlite3.Connection, key: str) -> list[dict[str, Any
         (key, key, key),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+ASK_FACT_RELS_SKIPPED = ("cites",)  # dozens per paper; the passages carry them
+
+
+@_serialized
+def document_facts(
+    con: sqlite3.Connection, doc_ids: list[int], *, limit: int = 8
+) -> dict[int, list[dict[str, Any]]]:
+    """What the graph records about each document, as its own edges: the
+    relations from the document's entity, ``{doc_id: [{rel, name, type}]}``,
+    at most ``limit`` per document, canonical entity names, ``cites``
+    left out. The "what the library knows" part of an ask bundle."""
+    out: dict[int, list[dict[str, Any]]] = {i: [] for i in doc_ids}
+    if not doc_ids:
+        return out
+    marks = ",".join("?" * len(doc_ids))
+    skip = ",".join("?" * len(ASK_FACT_RELS_SKIPPED))
+    rows = con.execute(
+        f"""
+        SELECT x.source_doc AS doc_id, x.rel, t.name, t.type FROM edges x
+        JOIN documents d ON d.id = x.source_doc
+        JOIN entities s ON s.id = x.src
+        JOIN entities t0 ON t0.id = x.dst
+        JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
+        WHERE x.source_doc IN ({marks}) AND x.valid_to IS NULL
+          AND s.name = d.title AND x.rel NOT IN ({skip})
+        ORDER BY x.source_doc, x.rel, t.name
+        """,
+        (*doc_ids, *ASK_FACT_RELS_SKIPPED),
+    )
+    seen: set[tuple[int, str, str]] = set()
+    for r in rows:
+        key = (r["doc_id"], r["rel"], r["name"])
+        if key in seen or len(out[r["doc_id"]]) >= limit:
+            continue
+        seen.add(key)
+        out[r["doc_id"]].append({"rel": r["rel"], "name": r["name"], "type": r["type"]})
+    return out
 
 
 @_serialized

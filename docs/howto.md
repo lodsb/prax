@@ -358,6 +358,43 @@ does no harm. An 8 GB card fits a 7–8B model at Q4 with an 8 K context;
 the Q6A has no usable GPU and would run a 3B model at a few tokens per
 second, which is why the API stays the default there.
 
+## 3i. Ask: questions answered from the library
+
+`prax.ask` turns a question into a bundle (one passage per document from
+the hybrid search, plus what the graph records about those documents)
+and hands it to a model that answers with `[n]` citations. Which model
+is the host's choice, `PRAX_ASK`:
+
+| `PRAX_ASK` | who answers |
+|---|---|
+| `local` | the GGUF model in `PRAX_LOCAL_MODEL`, loaded once into the door's process on the first question (section 3h; Qwen2.5-7B answers in about 20 s on the GTX 1070, 5 GB of VRAM) |
+| `claude` | the API, `PRAX_ASK_MODEL` (default `claude-sonnet-5`, effort low; about a cent per question) |
+| `none` | nobody: the bundle comes back for the caller's own model |
+
+Unset, it is `local` when `PRAX_LOCAL_MODEL` is set and `none` otherwise,
+so the serving board answers with the bundle. On this desktop the door
+is started with the model:
+
+    $env:PRAX_DATA_DIR = "C:\prax-data"
+    $env:PRAX_LOCAL_MODEL = "<path>\Qwen2.5-7B-Instruct-Q4_K_M.gguf"
+    uvicorn prax.api:app --port 8000
+
+Then the Ask tab in the UI, or:
+
+    POST /ask {"question": "...", "limit": 8, "doctype": null, "backend": null}
+    GET  /ask/config
+    POST /ask/save {"slug": "reverb", "heading": "...", "result": <the /ask response>}
+
+`backend` overrides the host setting for one question. The response
+carries the passages (chunk and document ids, text), the facts, the
+answer, the model, the citations it made (invented numbers are
+dropped), token usage, seconds and cost. `save` appends the answer to a
+page as the agent under the question as heading, with a source list
+linking the cited documents and `annotates` edges to them; a human's
+text on the page is never touched. Over MCP the `ask` tool returns the
+bundle by default (Claude Code answers itself) and runs the host's
+model with `answer=True`.
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000
@@ -419,7 +456,8 @@ asks whether to trust it; if that prompt was dismissed, run
 `claude mcp reset-project-choices`.
 
 Inside a session, `/mcp` shows connection state. The tools are `search`,
-`get`, `traverse`, `link`, `ingest`, and `ingest_file`. The server can also
+`get`, `get_chunk`, `traverse`, `link`, `ask`, `get_page`, `write_page`,
+`append_page`, `ingest`, and `ingest_file`. The server can also
 be run by hand to check it starts:
 
     python -m prax.mcp_server

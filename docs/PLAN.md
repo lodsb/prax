@@ -227,6 +227,13 @@ R14). Design in `docs/ui.md`.
       under a bounded GBNF grammar (`prax.lineformat`, 20 triples, field
       lengths capped) so small models terminate; parsed into the same
       `Extraction`; runtime behind `prax.local_llm.LlamaRuntime`
+- [x] Ask (2026-09-11, `prax.ask`, rationale R16): hybrid search to a
+      bundle of one passage per document plus the graph's facts about
+      them; answered by a local GGUF model (`PRAX_ASK=local`, Qwen2.5-7B
+      in about 20 s on the 1070), Claude, or nobody (the bundle for an
+      MCP client); `[n]` citations resolved to chunk and document ids;
+      `POST /ask/save` appends an answer to a page with sources and
+      `annotates` edges; Ask tab in the UI; MCP tool `ask`
 - [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
       sure merges (normalized names, author initials forms) apply on their
       own, likely merges (name embeddings, concept/method/tool/dataset/venue

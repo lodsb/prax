@@ -58,6 +58,14 @@ def llama_class() -> type[Any]:
     return Llama
 
 
+@cache
+def shared_runtime(model_path: str, n_ctx: int = DEFAULT_CTX) -> LlamaRuntime:
+    """One runtime per model file and context size for the whole process:
+    the door's ask backend and an extractor in the same process share the
+    loaded weights instead of holding two copies in VRAM."""
+    return LlamaRuntime(model_path, n_ctx=n_ctx)
+
+
 @dataclass
 class LlamaRuntime:
     """One loaded GGUF model behind the single call the extractors need:

@@ -565,7 +565,7 @@ def current() -> Extractor:
         from prax import local_llm
 
         ctx = int(os.environ.get("PRAX_LOCAL_CTX", local_llm.DEFAULT_CTX))
-        return LocalExtractor(local_llm.LlamaRuntime(path, n_ctx=ctx))
+        return LocalExtractor(local_llm.shared_runtime(path, n_ctx=ctx))
     return ClaudeExtractor(
         model=os.environ.get("PRAX_EXTRACT_MODEL", setting),
         effort=os.environ.get("PRAX_EXTRACT_EFFORT", "medium"),

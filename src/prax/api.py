@@ -23,6 +23,7 @@ from fastapi.responses import (
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import ask as ask_mod
 from . import auth, ontology, review, store
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
@@ -472,6 +473,63 @@ def add_member(slug: str, req: MemberReq, request: Request) -> dict[str, Any]:
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"edge_id": eid, "existing": eid is None}
+
+
+# ------------------------------------------------------------------- ask
+
+
+class AskReq(BaseModel):
+    question: str
+    limit: int = ask_mod.PASSAGES
+    doctype: str | None = None
+    backend: str | None = None  # local | claude | none; None: the host default
+
+
+class SaveReq(BaseModel):
+    slug: str
+    result: dict[str, Any]
+    heading: str | None = None
+
+
+@app.get("/ask/config")
+def ask_config() -> dict[str, Any]:
+    """The backend this host answers with, for the UI's choice."""
+    return ask_mod.describe()
+
+
+@app.post("/ask")
+def ask(req: AskReq, request: Request) -> dict[str, Any]:
+    """Passages and graph facts for a question, and an answer citing them
+    when a backend is configured. Generation runs outside the store lock;
+    a local model answers in tens of seconds."""
+    try:
+        answerer = (
+            ask_mod.answerer_named(req.backend) if req.backend else ask_mod.current()
+        )
+        return ask_mod.ask(
+            request.app.state.con,
+            req.question,
+            limit=max(1, min(req.limit, 20)),
+            doctype=req.doctype,
+            answerer=answerer,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+
+
+@app.post("/ask/save")
+def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
+    """Append an answer (the result of ``POST /ask``) to a page as the agent."""
+    try:
+        return ask_mod.save(
+            request.app.state.con, req.result, req.slug, heading=req.heading
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/graph/overview")

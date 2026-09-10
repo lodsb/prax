@@ -165,6 +165,7 @@ flowchart LR
   H -->|get offset/max_chars| T[text window of the artifact]
   H -->|doc/id/context| X[summary, entities, similar, citations,<br/>shared entities, authors, notes, Zotero]
   H -->|traverse entity| G[1-2 hop neighbourhood, with provenance]
+  H -->|ask| B[bundle: one passage per document,<br/>graph facts per document] --> M[local GGUF model, Claude,<br/>or the MCP client itself] --> A[answer citing n] -->|ask/save| P[page section with sources,<br/>annotates edges]
 ```
 
 `search` fuses four rank lists per document: chunk BM25, chunk KNN, and
@@ -177,6 +178,8 @@ lists; hybrid degrades to FTS-only when no vectors exist, so the serving
 host works before embeddings do. Responses stay small by design (invariant
 6): snippets and ids, then `get_chunk`, `get` or `context` for exactly
 what is needed.
+
+`ask` is retrieval plus generation on top of the same search (`prax.ask`). The bundle is one passage per document (the matched chunk, 1,200 characters) for the top eight documents plus what the graph records about each of them (its extracted relations, canonical names, `cites` left out), about 3,000 tokens, so it fits a 7B model with an 8 K window. Which model answers is a per-host setting (`PRAX_ASK`): `local` runs a GGUF model in the door's process on the desktop (Qwen2.5-7B answers in about 20 s on the GTX 1070), `claude` calls the API, `none` returns the bundle alone, which is what the MCP tool gives Claude Code by default and what the serving board does, since it loads no model (invariant 7). The answer cites passages as `[n]`; the numbers are resolved to chunk and document ids, the UI links them, and an answer worth keeping is appended to a page as the agent with its sources listed and `annotates` edges to the documents it rests on.
 
 ## 5. Module map
 
@@ -192,13 +195,14 @@ what is needed.
 | `prax.importers.citations` | Crossref or OpenAlex by DOI or exact title → `cites` edges, citation counts in `meta.citations`; idempotent per document | via store |
 | `prax.extraction` | document input (head plus closing sections), ontology-derived prompt and JSON schema, Claude and local extractors, `apply()` into edges / review queue / stamps with guards | via store |
 | `prax.lineformat` | tab-separated output format for local models: bounded GBNF grammar from the ontology, parse/render to `Extraction` | no |
-| `prax.local_llm` | optional llama.cpp runtime (`local` extra): DLL path quirk, one loaded GGUF model behind `chat()` | no |
+| `prax.local_llm` | optional llama.cpp runtime (`local` extra): DLL path quirk, one loaded GGUF model behind `chat()`, shared per process | no |
+| `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub), citation resolution, saving an answer to a page | via store |
 | `prax.review` | replay of the review queue against a newer ontology | via store |
 | `prax.resolution` | entity merge candidates (normalized names, initials, concept/method twins, name embeddings), adjudicators, apply through `merge_entities` | via store |
 | `prax.rerank` | optional cross-encoder over the top hits; off by default (measured no gain) | no |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
 | `prax.auth` | bearer token or session cookie on the HTTP door; loopback-only when unset | no |
-| `prax.api` | FastAPI door: agent endpoints, browsing, context, graph overview, review, pages; serves the UI's static files with no-cache | via store |
+| `prax.api` | FastAPI door: agent endpoints, browsing, context, graph overview, review, pages, ask; serves the UI's static files with no-cache | via store |
 | `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer, an SVG force layout; a client of the door (R14) | no |
 | `prax.mcp_server` | FastMCP stdio door; no logic | via store |
 | `prax.config` | paths, `PRAX_DATA_DIR`, migrations dir | no |
@@ -275,7 +279,8 @@ loop); the queue makes each batch do real work.
 | `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
 | `ANTHROPIC_API_KEY` | the Claude API for extraction, vision and adjudication |
 | `PRAX_EXTRACT`, `PRAX_EXTRACT_MODEL`, `PRAX_EXTRACT_EFFORT` | extractor (`stub`, `local`, or a Claude model), model and effort |
-| `PRAX_LOCAL_MODEL`, `PRAX_LOCAL_CTX` | GGUF file and context for the local extractor |
+| `PRAX_LOCAL_MODEL`, `PRAX_LOCAL_CTX` | GGUF file and context for the local extractor and the local ask backend |
+| `PRAX_ASK`, `PRAX_ASK_MODEL` | who answers questions: `local`, `claude`, `none` (default `local` when a local model is set, else `none`); the Claude model for `claude` (default Sonnet 5) |
 | `PRAX_VISION_MODEL` | Claude model that describes images (default Sonnet 5) |
 | `PRAX_CITATIONS_MAILTO` | polite-pool contact for Crossref and OpenAlex |
 | `PRAX_RERANK` | cross-encoder name, `stub`, or `0` (default off) |
@@ -304,6 +309,7 @@ loop); the queue makes each batch do real work.
 | add an agent tool | a store function first, then one handler each in `prax.api` and `prax.mcp_server`; keep responses compact |
 | add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
 | add a page kind | `store.PAGE_KINDS` and the `pages` view; relationships stay edges |
+| change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name` and `answer(bundle)` |
 
 ## 10. Numbers as of 2026-09-11
 
@@ -323,8 +329,7 @@ loop); the queue makes each batch do real work.
 ## 11. What is not built yet
 
 Browser capture and the inbox watcher (Stage 1), the zoetrope backfill,
-the "ask" feature (retrieval plus generation on the door, Claude or the
-local model, writing topic pages with citations), extraction of the
+extraction of the
 remaining 6,900 documents (a model choice: Sonnet in batch, or a cheaper
 provider after a quality trial), a typing pass for the unmapped review
 items, page deletion or archiving, the move of the service onto the

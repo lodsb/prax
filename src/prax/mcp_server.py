@@ -15,6 +15,7 @@ from typing import Any
 
 from fastmcp import FastMCP
 
+from . import ask as ask_mod
 from . import store
 
 mcp = FastMCP("prax")
@@ -105,6 +106,31 @@ def link(
     except ValueError as exc:
         return {"error": str(exc)}
     return {"edge_id": eid}
+
+
+@mcp.tool
+def ask(
+    question: str,
+    limit: int = 8,
+    doctype: str | None = None,
+    answer: bool = False,
+) -> dict[str, Any]:
+    """The context for answering a question from the library: one numbered
+    passage per document from the hybrid search (best chunk, with chunk
+    and document ids) and what the graph records about those documents.
+    Answer from it and cite passages as [n]; ``append_page`` keeps an
+    answer worth keeping. ``answer=True`` also runs this host's configured
+    model (PRAX_ASK; a local model takes tens of seconds) and returns its
+    answer with resolved citations. ``doctype`` keeps pdf, web, image,
+    text, note or page documents.
+    """
+    try:
+        answerer = ask_mod.current() if answer else None
+        return ask_mod.ask(
+            _db(), question, limit=limit, doctype=doctype, answerer=answerer
+        )
+    except (ValueError, RuntimeError) as exc:
+        return {"error": str(exc)}
 
 
 @mcp.tool

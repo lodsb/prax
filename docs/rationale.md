@@ -334,6 +334,30 @@ agent revision never overwrites a human one (`write_page` refuses it;
 `append_page` adds a section). The graph stays the structured record;
 pages are prose with citations into it.
 
+## R16. Ask is retrieval plus a swappable model, and the bundle is the contract
+
+A question (2026-09-11) is answered from what search already finds:
+the bundle is one passage per document from the hybrid ranking plus
+the graph's facts about those documents, bounded to about 3,000
+tokens. Bounding it that small is a choice against long-context
+prompting: it fits a 7B model on the desktop's 8 GB card with room
+for the answer, it keeps a Claude call cheap, and it makes the model's
+job reading, not searching, which is what a small model does well.
+The graph facts are there because the passages are chunks and a chunk
+rarely says what a paper proposes; the facts do, in the canonical
+names the graph uses. Who answers is a per-host setting, not a
+design: the desktop runs the local model in the door's process, the
+serving board runs nothing and returns the bundle (invariant 7), and
+the MCP tool returns the bundle by default because its client is
+Claude and a second model's answer would only be re-read. Citations
+are passage numbers resolved back to chunk and document ids, the same
+rule pages follow (R15): an answer worth keeping is appended to a page
+as the agent, with its sources listed and `annotates` edges to the
+documents, so the prose stays traceable into the store. What this is
+not: a chat with memory, or an agent that searches iteratively; both
+would be built on the MCP side, where the model can call `search`,
+`get_chunk` and `ask` itself.
+
 ## R14. The web UI is a client of the door: static files, no framework
 
 **Decision.** The browser UI is a directory of static files (one page,

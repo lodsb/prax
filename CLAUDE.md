@@ -91,7 +91,11 @@ top-N — benchmark on target hardware before enabling by default. Graph
 traversal expands entry-point hits 1–2 hops. Complement queries ("what is NOT
 connected") and weighted multi-hop scoring are explicit SQL tools, never
 retrieval. User-supplied search strings are never passed to FTS5 MATCH raw;
-`prax.store` builds the match expression.
+`prax.store` builds the match expression. `ask` (`prax.ask`) is the same
+search plus generation: a bounded bundle (one passage per document,
+the graph's facts about it) to a model chosen per host (`PRAX_ASK`:
+local GGUF, Claude, or none, where the caller's model answers); answers
+cite passage numbers resolved to chunk ids, and are kept on pages.
 
 ## Conventions
 

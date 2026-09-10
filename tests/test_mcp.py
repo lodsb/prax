@@ -28,6 +28,7 @@ EXPECTED_TOOLS = {
     "get_page",
     "write_page",
     "append_page",
+    "ask",
 }
 
 

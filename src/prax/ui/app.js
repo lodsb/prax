@@ -889,9 +889,122 @@ async function viewReview(p) {
   }
 }
 
+// ------------------------------------------------------------------- ask
+
+// A question in, an answer with numbered citations out. The door gathers
+// passages and graph facts; which model answers is the host's setting
+// (/ask/config), overridable per question. "bundle only" shows the
+// context without a model, which is what an MCP client gets.
+let askConfig = null;
+
+function citeLinks(html, passages) {
+  const byN = Object.fromEntries((passages || []).map((p) => [p.n, p]));
+  return html.replace(/\[(\d+)\]/g, (m, n) => {
+    const p = byN[n];
+    if (!p) return m;
+    return `<a class="cite" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}" title="${esc(p.title)}">[${n}]</a>`;
+  });
+}
+
+function renderAskForm(p) {
+  const backend = p.backend || "";
+  const local = askConfig && askConfig.local_model ? askConfig.local_model : null;
+  const dflt = askConfig ? askConfig.default : "";
+  const label = (b) => ({ local: local || "local model", claude: askConfig ? askConfig.claude_model : "claude", none: "bundle only (no model)" }[b]);
+  return `
+  <form id="ask-form" class="search-form">
+    <input name="question" type="search" value="${esc(p.question || "")}" placeholder="ask the library…" autofocus>
+    <select name="backend" title="which model answers">
+      <option value="" ${backend === "" ? "selected" : ""}>default${dflt ? ` (${esc(label(dflt) || dflt)})` : ""}</option>
+      ${["local", "claude", "none"].map((b) => `<option value="${b}" ${backend === b ? "selected" : ""}>${esc(label(b))}</option>`).join("")}
+    </select>
+    <select name="doctype" title="document type">
+      <option value="" ${!p.doctype ? "selected" : ""}>any type</option>
+      ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"], ["page", "pages"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
+    </select>
+    <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || 8)}" title="passages">
+    <button>Ask</button>
+  </form>`;
+}
+
+function renderAnswer(r) {
+  const passages = r.passages || [];
+  const facts = r.facts || {};
+  const answer = r.answer
+    ? `<div class="answer">${citeLinks(md(r.answer), passages)}</div>
+       <div class="answer-meta muted">${esc(r.model)} · ${r.seconds} s${r.cost_usd ? ` · $${r.cost_usd.toFixed(4)}` : ""} · ${(r.usage || {}).input_tokens || 0} in / ${(r.usage || {}).output_tokens || 0} out</div>`
+    : `<p class="muted">${passages.length ? "No model answered; the passages below are the context a model would get." : "No passages found."}</p>`;
+  const sources = passages.map((p) => {
+    const f = (facts[p.doc_id] || []);
+    const cited = (r.citations || []).some((c) => c.n === p.n);
+    return `
+    <article class="hit passage ${cited ? "cited" : ""}" id="passage-${p.n}">
+      <a class="hit-title" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}">[${p.n}] ${esc(p.title || "(untitled)")}</a>
+      <div class="hit-meta">${badge(p.kind)} <span>${headingPath(p.heading)}</span> <span>${p.page ? `p. ${p.page}` : ""}</span></div>
+      <p class="snippet">${esc(p.text.slice(0, 400))}${p.text.length > 400 ? "…" : ""}</p>
+      ${f.length ? `<div class="chips">${f.map((x) => `<a class="chip" style="--c:${typeColor(x.type)}" href="#graph?entity=${encodeURIComponent(x.name)}" title="${esc(x.rel)}">${esc(x.rel)}: ${esc(x.name)}</a>`).join("")}</div>` : ""}
+    </article>`;
+  }).join("");
+  const saveForm = r.answer ? `
+    <form id="ask-save" class="ask-save">
+      <label>Keep on page <select name="slug" id="ask-save-slug"><option value="">loading…</option></select></label>
+      <input name="heading" type="text" value="${esc(r.question)}" placeholder="heading" title="section heading">
+      <button>Add to page</button>
+      <span id="ask-save-msg" class="muted"></span>
+    </form>` : "";
+  return `${answer}${saveForm}<h3 class="sources-head">Sources</h3>${sources}`;
+}
+
+async function viewAsk(p) {
+  if (!askConfig) {
+    try { askConfig = await api("/ask/config"); } catch (_) { askConfig = { default: "none" }; }
+  }
+  view.innerHTML = renderAskForm(p) + `<div id="ask-out"></div>`;
+  const form = document.getElementById("ask-form");
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    go("ask", "", Object.fromEntries(new FormData(form)));
+  });
+  if (!p.question) return;
+  const out = document.getElementById("ask-out");
+  const backend = p.backend || askConfig.default;
+  out.innerHTML = `<p class="muted">${backend === "none" ? "gathering passages…" : `asking ${esc(backend)}… (a local model takes tens of seconds)`}</p>`;
+  let r;
+  try {
+    r = await post("/ask", { question: p.question, backend: p.backend || null, doctype: p.doctype || null, limit: Number(p.limit || 8) });
+  } catch (err) {
+    out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    return;
+  }
+  out.innerHTML = renderAnswer(r);
+  const save = document.getElementById("ask-save");
+  if (!save) return;
+  const slugSel = document.getElementById("ask-save-slug");
+  try {
+    const pages = await api("/pages");
+    slugSel.innerHTML = pages.length
+      ? pages.map((pg) => `<option value="${esc(pg.slug)}">${esc(pg.title || pg.slug)} (${esc(pg.kind)})</option>`).join("")
+      : `<option value="">no pages yet: create one under Pages</option>`;
+  } catch (err) {
+    slugSel.innerHTML = `<option value="">${esc(err.message)}</option>`;
+  }
+  save.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(save));
+    const msg = document.getElementById("ask-save-msg");
+    if (!data.slug) { msg.textContent = "pick a page"; return; }
+    try {
+      const res = await post("/ask/save", { slug: data.slug, heading: data.heading, result: r });
+      msg.innerHTML = `saved as revision ${res.revision} of <a href="#doc/${res.doc_id}">${esc(data.slug)}</a>`;
+    } catch (err) {
+      msg.textContent = err.message;
+    }
+  });
+}
+
 // ---------------------------------------------------------------- router
 
-const views = { search: viewSearch, browse: viewBrowse, review: viewReview, pages: viewPages };
+const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages };
 
 async function render() {
   const r = route();

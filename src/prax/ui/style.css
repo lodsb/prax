@@ -166,3 +166,15 @@ th { background: var(--panel); }
 .review-form button { padding: .2rem .6rem; }
 .review-form button.secondary { background: var(--panel); color: var(--fg); border-color: var(--line); }
 .review-item.done { opacity: .5; }
+
+/* ask */
+.answer { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: .8rem 1rem; margin: .5rem 0 .3rem; }
+.answer > :first-child { margin-top: 0; }
+.answer > :last-child { margin-bottom: 0; }
+.answer-meta { font-size: .82rem; margin-bottom: .6rem; }
+.cite { font-size: .8em; vertical-align: super; padding: 0 .1rem; }
+.ask-save { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; font-size: .9rem; margin: .4rem 0 .8rem; }
+.ask-save input[type="text"] { flex: 1 1 16rem; }
+.sources-head { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 1rem 0 .2rem; }
+.passage.cited { border-left: 3px solid var(--accent); padding-left: .6rem; }
+.passage .chips { margin-top: .3rem; }
