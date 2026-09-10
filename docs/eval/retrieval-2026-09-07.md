@@ -1,5 +1,9 @@
 # Retrieval eval
 
+Measured on the first fixture (2026-09-07), replaced on 2026-09-11 by an
+open-access set (`tests/fixtures/zotero/README.md`); the numbers on the new
+set are in `retrieval-2026-09-11.md`.
+
 Fixture store: {'created': 10, 'merged': 3} documents, parsed {'upgraded': 8}, 351 vectors (bge-small-en-v1.5).
 
 | mode | n | hit@1 | hit@3 | MRR | MRR by style |

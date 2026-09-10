@@ -215,10 +215,10 @@ def test_rechunk_rebuilds_legacy_rows(con: sqlite3.Connection) -> None:
     not parsers.by_name("pymupdf4llm").available(), reason="pymupdf4llm not installed"
 )
 def test_real_pdf_yields_pages_tables_and_figures() -> None:
-    pdf = next((FIXTURE / "storage" / "7656ADFF").glob("*.pdf")).read_bytes()
+    pdf = next((FIXTURE / "storage" / "PTHEK9QS").glob("*.pdf")).read_bytes()
     cs = chunking.chunk(parsers.by_name("pymupdf4llm")(pdf))
     kinds = {c.kind for c in cs}
     assert {"text", "table", "figure"} <= kinds
-    assert max(c.page for c in cs) == 16
+    assert max(c.page for c in cs) == 8
     table = next(c for c in cs if c.kind == "table")
     assert table.data["rows"] and table.heading

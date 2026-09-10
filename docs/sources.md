@@ -201,30 +201,36 @@ attachment, `original_path` the file's path under `storage/`.
 
 ### Test fixture
 
-A handful of real items are copied from the library into
+A handful of open-access items are copied from the library into
 `tests/fixtures/zotero/` as a `storage/` subtree plus a `zotero.sqlite`
-reduced to those items. This is the corpus for importer tests and for the
-Stage 2 eval queries. Candidates from the census, chosen small and varied:
+reduced to those items (25 items, 12 storage folders, 6.3 MB). This is
+the corpus for importer tests and for the Stage 2 eval queries. Every
+file is under a licence that allows redistribution (CC BY 3.0 and 4.0
+papers from DAFx, SMC and arXiv, an IEEE open-access letter, a Stack
+Exchange page under CC BY-SA, a CC BY-SA schematic sheet);
+`tests/fixtures/zotero/README.md` lists each with its licence. Personal
+documents in the library and papers under a publisher's copyright are
+imported into the private store but never into the fixture.
 
 | Shape | Zotero key | Notes |
 |---|---|---|
-| Conference paper, one 8 KB PDF, DOI, abstract, one creator | `9QRPZL68` | Correlated tensor factorization for source separation |
-| Journal article, 44 KB PDF, five creators, saved four times | `4L6ILMZN` and its three twins | exercises hash dedupe and `meta.zotero.keys` |
-| Conference paper, 50 KB PDF, two creators | `6FRF9XDC` | HRTF model |
-| Item with a child note | `EZLSQSMG` | arXiv comment note |
-| Item with an HTML snapshot, ~100 KB | `97KAI26I` (attachment) | trafilatura path |
-| Item with a linked URL, no file | `ZRWHFMBJ` (attachment) | URL-only document |
-| Item with two PDFs, 3.2 MB total | `35UKKWHM` | multi-attachment parent |
-| One standalone PDF, no parent | pick a small one | title-from-filename path |
+| Conference paper, one PDF, two creators, a collection | `GMY9D9QD` | Ambrits & Bank, polynomial transition regions |
+| Journal letter, one PDF, DOI | `GE5DX6CB` | Průša & Rajmic, STFT magnitude reconstruction |
+| One file saved four times | `Z9IJ6QGS` and three twins | exercises hash dedupe and `meta.zotero.keys` |
+| Item with a child note | `4MMHC9A4` | Carr & Zukowski, arXiv comment note |
+| Item with three different PDFs | `CF2VW67S` | FugueGenerator, multi-attachment parent |
+| Item with an HTML snapshot, 2 MB | `HR6SU62N` | Stack Exchange question, trafilatura path |
+| Item with a linked URL, no file | `ZRWHFMBJ` (attachment) | Das et al., URL-only document |
+| Metadata-only item, no attachment | `IIJ9PSTU` | a GitHub repository saved as a computer program |
+| One standalone PDF, no parent | `UW29C5GP` | a schematic sheet; title-from-filename path |
 
-Built (2026-09-07) with `scripts/make_zotero_fixture.py` from the keys
-above plus the three Birbaumer twins (`HW3N7956`, `U263HF74`, `MCNISPSX`)
-and the ATLAS BLAS reference (`VVJITI78`) as the standalone PDF; the 2 MB
-Févotte PDF (`RGI62LBN`) is skipped to keep it at 5.5 MB: 23 items, 11
-storage folders. Committed: all of it is published papers or public
-documentation. Personal documents in the library (invoices, shipping
-labels, contracts among the standalone PDFs) are imported into the private
-store but never into the fixture.
+Rebuilt (2026-09-11) with `scripts/make_zotero_fixture.py` from those
+keys. The library drive was not mounted, so the source was a
+Zotero-shaped directory assembled from the importer's private copy of
+`zotero.sqlite` and the archived originals, with `.zotero-ft-cache` files
+written from the store's text artifacts. The earlier fixture (2026-09-07)
+held publisher-copyrighted papers and was removed from the history before
+the repository went public.
 
 ## 1b. Citation sources (OpenAlex, Crossref)
 

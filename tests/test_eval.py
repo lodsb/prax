@@ -41,7 +41,7 @@ def test_harness_scores_every_mode_and_keyword_floor(
     con: sqlite3.Connection, tmp_path: Path
 ) -> None:
     build = evaluation.build_fixture_store(con, tmp_path / "work")
-    assert build["documents"]["created"] == 10 and build["parsed"]["upgraded"] >= 7
+    assert build["documents"]["created"] == 12 and build["parsed"]["upgraded"] >= 7
     queries = evaluation.load_queries()
     scores, results = evaluation.evaluate(con, queries)
     by_mode = {s.mode: s.as_dict() for s in scores}

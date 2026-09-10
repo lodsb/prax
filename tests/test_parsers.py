@@ -19,8 +19,8 @@ from prax.importers import zotero
 from prax.parsers import queue
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zotero"
-YOSHII_PDF = next((FIXTURE / "storage" / "T7VVNPCK").glob("*.pdf"))
-SNAPSHOT_HTML = FIXTURE / "storage" / "97KAI26I" / "1804.html"
+AMBRITS_PDF = next((FIXTURE / "storage" / "FCEK3EI9").glob("*.pdf"))
+SNAPSHOT_HTML = FIXTURE / "storage" / "AYY57KAK" / "iir-hilbert-transformer.html"
 
 needs_pymupdf = pytest.mark.skipif(
     not parsers.by_name("pymupdf4llm").available(), reason="pymupdf4llm not installed"
@@ -202,12 +202,12 @@ def test_registry_dispatch() -> None:
 
 @needs_pymupdf
 def test_pymupdf_extractors_read_the_fixture_pdf() -> None:
-    data = YOSHII_PDF.read_bytes()
+    data = AMBRITS_PDF.read_bytes()
     md = parsers.by_name("pymupdf4llm")(data)
     plain = parsers.by_name("pymupdf")(data)
     for text in (md, plain):
-        assert "Correlated Tensor Factorization" in text
-        assert "nonnegative matrix factorization" in text.lower()
+        assert "POLYNOMIAL TRANSITION REGIONS" in text
+        assert "aliasing" in text.lower()
     assert parsers.by_name("pymupdf4llm").stamp.startswith("pymupdf4llm/")
     assert parsers.for_mime("application/pdf").name == "pymupdf4llm"
 
@@ -235,12 +235,12 @@ def test_scanned_pdf_is_refused_by_markdown_and_left_empty(
 def test_oversized_pdf_falls_back_to_plain_extraction(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    data = YOSHII_PDF.read_bytes()
-    monkeypatch.setenv("PRAX_MAX_LAYOUT_PAGES", "2")  # the 5-page fixture is "too long"
+    data = AMBRITS_PDF.read_bytes()
+    monkeypatch.setenv("PRAX_MAX_LAYOUT_PAGES", "2")  # the 8-page fixture is "too long"
     with pytest.raises(parsers.ExtractionError, match="PRAX_MAX_LAYOUT_PAGES"):
         parsers.by_name("pymupdf4llm")(data)
     monkeypatch.delenv("PRAX_MAX_LAYOUT_PAGES")
-    monkeypatch.setenv("PRAX_MAX_LAYOUT_MB", "0.001")  # the 8 KB fixture is "too big"
+    monkeypatch.setenv("PRAX_MAX_LAYOUT_MB", "0.001")  # the 278 KB fixture is "too big"
     with pytest.raises(parsers.ExtractionError, match="PRAX_MAX_LAYOUT_MB"):
         parsers.by_name("pymupdf4llm")(data)
     doc_id = store.register(con, data, mime="application/pdf", title="big")["doc_id"]
@@ -266,10 +266,10 @@ def test_trafilatura_fences_code_blocks() -> None:
 @needs_trafilatura
 def test_trafilatura_strips_page_chrome() -> None:
     text = parsers.by_name("trafilatura")(SNAPSHOT_HTML.read_bytes())
-    assert text.startswith("# Estimation with Low-Rank Time-Frequency Synthesis Models")
-    assert "signal decomposition" in text
-    assert "Skip to main content" not in text
-    assert "We gratefully acknowledge support" not in text
+    assert text.startswith("# IIR Hilbert Transformer")
+    assert "Differential Evolution" in text
+    assert "Stack Exchange network" not in text
+    assert "Sign up" not in text
 
 
 @needs_trafilatura
@@ -282,8 +282,8 @@ def test_trafilatura_raises_on_empty_page() -> None:
     not os.environ.get("PRAX_TEST_DOCLING"), reason="PRAX_TEST_DOCLING unset"
 )
 def test_docling_reads_the_fixture_pdf() -> None:
-    text = parsers.by_name("docling")(YOSHII_PDF.read_bytes())
-    assert "Correlated Tensor Factorization" in text
+    text = parsers.by_name("docling")(AMBRITS_PDF.read_bytes())
+    assert "POLYNOMIAL TRANSITION REGIONS" in text.upper()
 
 
 # ------------------------------------------------------------------- queue
@@ -291,7 +291,7 @@ def test_docling_reads_the_fixture_pdf() -> None:
 
 def _register_pdf(con: sqlite3.Connection) -> int:
     r = store.register(
-        con, YOSHII_PDF.read_bytes(), mime="application/pdf", title="Yoshii"
+        con, AMBRITS_PDF.read_bytes(), mime="application/pdf", title="Ambrits"
     )
     return r["doc_id"]
 
@@ -305,7 +305,7 @@ def test_queue_indexes_pending_pdf(con: sqlite3.Connection) -> None:
     doc = store.get_document(con, doc_id, max_chars=100)
     assert doc["parsed_at"] and doc["meta"]["text_source"].startswith("pymupdf4llm/")
     assert doc["meta"]["parse_history"][0]["outcome"] == "created"
-    assert store.search(con, "tensor factorization")[0]["doc_id"] == doc_id
+    assert store.search(con, "transition regions")[0]["doc_id"] == doc_id
     assert store.select_documents(con, pending=True) == []
     assert store.select_documents(con, text_source_prefix="pymupdf4llm/") == [doc_id]
     assert (
@@ -320,11 +320,11 @@ def test_queue_upgrades_zotero_cache_text(
     lib = zotero.open_library(FIXTURE, tmp_path / "w")
     zotero.run(lib, con)
     lib.close()
-    doc_id = store.meta_index(con, "$.zotero.keys")["T7VVNPCK"]
+    doc_id = store.meta_index(con, "$.zotero.keys")["FCEK3EI9"]
     before = store.get_document(con, doc_id, max_chars=0)
     assert before["meta"]["text_source"] == "zotero-ft-cache"
     n_cache = len(store.select_documents(con, text_source_prefix="zotero-ft-cache"))
-    assert n_cache == 8  # 11 attachments, the four Birbaumer twins are one document
+    assert n_cache == 9  # 12 attachments, the four Rutz twins are one document
     assert (
         len(
             store.select_documents(
@@ -339,12 +339,12 @@ def test_queue_upgrades_zotero_cache_text(
     after = store.get_document(con, doc_id, max_chars=0)
     assert after["meta"]["text_source"].startswith("pymupdf4llm/")
     assert after["text_hash"] != before["text_hash"]
-    assert after["meta"]["zotero"]["keys"] == ["T7VVNPCK"]  # rest of meta untouched
+    assert after["meta"]["zotero"]["keys"] == ["FCEK3EI9"]  # rest of meta untouched
     assert (
         len(store.select_documents(con, text_source_prefix="zotero-ft-cache"))
         == n_cache - 1
     )
-    assert store.search(con, "correlated tensor")[0]["doc_id"] == doc_id
+    assert store.search(con, "polynomial transition regions")[0]["doc_id"] == doc_id
 
 
 def test_queue_keeps_old_text_when_new_is_short(

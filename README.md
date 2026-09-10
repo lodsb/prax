@@ -132,4 +132,4 @@ but may wait.
 
 ## License
 
-See `LICENSE`.
+MIT, see `LICENSE`. The test fixture under `tests/fixtures/` holds open-access papers under their own Creative Commons terms; `tests/fixtures/zotero/README.md` lists them with their licenses.

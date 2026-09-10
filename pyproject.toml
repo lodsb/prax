@@ -3,12 +3,15 @@ name = "prax"
 version = "0.0.1"
 description = "Personal research knowledge base: SQLite, hybrid search, an evidence-bearing graph, doors for people and models"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 keywords = ["knowledge-base", "sqlite", "fts5", "retrieval", "knowledge-graph", "mcp", "zotero"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Web Environment",
     "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Information Analysis",
 ]
