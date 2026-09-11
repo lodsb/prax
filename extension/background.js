@@ -84,9 +84,9 @@ function runSingleFile(options) {
   };
   const hostFetch = async (url, opts) => {
     try {
-      const r = await fetch(url, { ...opts, cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin" });
+      const r = await fetch(url, { ...opts, cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin", signal: AbortSignal.timeout(30000) });
       if (r.status < 400) return r;
-    } catch (_) { /* refused by the page's origin rules */ }
+    } catch (_) { /* refused by the page's origin rules, or slow */ }
     return viaBackground(url);
   };
   return globalThis.singlefile
@@ -142,8 +142,10 @@ async function readTab(tabId) {
 
 /* The fetch bridge for the snapshot: the page asks, the background fetches
    with the browser's session and host permission, the bytes go back base64. */
+const RESOURCE_TIMEOUT_MS = 30 * 1000;
+
 async function bridgeFetch(url) {
-  const res = await fetch(url, { credentials: "include", cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin" });
+  const res = await fetch(url, { credentials: "include", cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin", signal: AbortSignal.timeout(RESOURCE_TIMEOUT_MS) });
   const buf = await res.arrayBuffer();
   let body = "";
   const bytes = new Uint8Array(buf);
@@ -241,15 +243,62 @@ async function capture(msg) {
   await setProgress({ state: "done", done: results.length, results });
 }
 
+/* What SingleFile's content scripts expect from the extension's background
+   (the SingleFile extension provides the same two services):
+   - the lazy-image loader asks the background to run its timers, because a
+     tab's own timers are throttled: "singlefile.lazyTimeout.setTimeout"
+     {type, delay} is answered later with "singlefile.lazyTimeout.onTimeout"
+     {type} sent to the same frame; "…clearTimeout" cancels;
+   - a frame's answers to the top frame ("singlefile.frameTree.initResponse",
+     "…ackInitRequest") go through the background to frame 0.
+   Without the first, a snapshot waits forever. */
+const lazyTimers = new Map();
+
+function lazyKey(sender, type) {
+  return `${sender.tab ? sender.tab.id : "?"}:${sender.frameId || 0}:${type}`;
+}
+
+function lazySetTimeout(msg, sender) {
+  const key = lazyKey(sender, msg.type);
+  clearTimeout(lazyTimers.get(key));
+  lazyTimers.set(key, setTimeout(() => {
+    lazyTimers.delete(key);
+    if (!sender.tab) return;
+    api.tabs.sendMessage(sender.tab.id, { method: "singlefile.lazyTimeout.onTimeout", type: msg.type }, { frameId: sender.frameId || 0 }).catch(() => { /* the tab is gone */ });
+  }, msg.delay || 0));
+}
+
+function lazyClearTimeout(msg, sender) {
+  const key = lazyKey(sender, msg.type);
+  clearTimeout(lazyTimers.get(key));
+  lazyTimers.delete(key);
+}
+
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg && msg.type === "capture") {
+  if (!msg) return false;
+  if (msg.type === "capture") {
     capture(msg).catch((err) => setProgress({ state: "error", error: err.message }));
     sendResponse({ ok: true });
     return false;
   }
-  if (msg && msg.type === "fetch") {
+  if (msg.type === "fetch") {
     bridgeFetch(msg.url).then(sendResponse, (err) => sendResponse({ error: err.message }));
     return true; // answered asynchronously
+  }
+  if (msg.method === "singlefile.lazyTimeout.setTimeout") {
+    lazySetTimeout(msg, sender);
+    sendResponse({});
+    return false;
+  }
+  if (msg.method === "singlefile.lazyTimeout.clearTimeout") {
+    lazyClearTimeout(msg, sender);
+    sendResponse({});
+    return false;
+  }
+  if (msg.method === "singlefile.frameTree.initResponse" || msg.method === "singlefile.frameTree.ackInitRequest") {
+    if (sender.tab) api.tabs.sendMessage(sender.tab.id, msg, { frameId: 0 }).catch(() => { /* the top frame is gone */ });
+    sendResponse({});
+    return false;
   }
   return false;
 });

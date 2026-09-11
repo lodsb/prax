@@ -41,7 +41,7 @@ domains it offers.
 |---|---|
 | `manifest.json` | MV3; `background.scripts` for Firefox's event page and `background.service_worker` for Chrome side by side; `activeTab`, `scripting`, `storage`, `tabs`; host permissions for http and https (optional in Firefox, requested when needed) |
 | `lib.js` | the pure helpers: session id, what is capturable, PDF detection, the plan (DOM, URL or skip), server normalization; node tests in `tests/ui/extension.test.js` |
-| `background.js`, `background-sw.js` | the sending: reads each tab through `scripting.executeScript`, posts to the door, fetches a PDF with the browser's session and uploads it, keeps progress in `storage.session`, closes tabs when asked; the service-worker file just imports the other two |
+| `background.js`, `background-sw.js` | the sending: reads each tab through `scripting.executeScript`, posts to the door, fetches a PDF with the browser's session and uploads it, keeps progress in `storage.session`, closes tabs when asked; also the two services SingleFile's content scripts expect from a background (timers for the lazy-image loader, relaying frame answers to the top frame) and the fetch bridge for cross-origin resources; the service-worker file just imports the other two |
 | `popup.html/js` | the two buttons, domain checkboxes (from `GET /inbox`), tags, close-after-send, progress and results with links into the UI |
 | `options.html/js` | server, token, default domains, close-after-send; permission request and connection test |
 | `style.css`, `icon48.png`, `icon128.png` | the look; the icons are generated squares |
