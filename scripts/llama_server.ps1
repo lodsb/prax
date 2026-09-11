@@ -10,7 +10,9 @@ names as an `openai` model (docs/howto.md 3k).
 
 Every slot gets CtxPerSlot tokens of context (the server splits -c evenly),
 and the KV cache is stored at 8 bits so a 32B model at Q4 and two slots
-of 8 K fit a 24 GB card. Extraction prompts are about 3,500 tokens in and
+of 8 K fit a 24 GB card. --load-mode none: with the file memory-mapped, Windows
+keeps the 20 GB resident in host RAM next to the VRAM copy and starves
+the door; without it the host copy is freed after the upload. Extraction prompts are about 3,500 tokens in and
 1,100 out, so 8 K per slot is the floor. -PowerLimit sets the card's
 power cap first (needs an administrator shell; 320 W keeps a 4090 within
 a 750 W supply).
@@ -32,12 +34,12 @@ if ($PowerLimit -gt 0) { nvidia-smi -pl $PowerLimit | Out-Null }
 
 $ctx = $Slots * $CtxPerSlot
 $extra = @()
-if ($NoThinking) { $extra += @("--chat-template-kwargs", '{\"enable_thinking\": false}', "--reasoning-budget", "0") }
+if ($NoThinking) { $extra += @("--reasoning", "off", "--reasoning-budget", "0") }
 & $Bin @extra `
     --model $Model `
     --alias $Alias `
     --host 127.0.0.1 --port $Port `
-    --n-gpu-layers 999 `
+    --n-gpu-layers 999 --load-mode none `
     --ctx-size $ctx --parallel $Slots `
     --flash-attn on `
     --cache-type-k q8_0 --cache-type-v q8_0 `
