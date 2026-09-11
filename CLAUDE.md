@@ -34,8 +34,10 @@ drop folder (`docs/sources.md`).
 4. **Single writer.** The service process is the only writer. Batch jobs run
    through the same store functions, serialized behind one lock.
    *Known deviation:* the stdio MCP server that Claude Code spawns is a
-   second process importing the store directly (invariant 5). WAL plus the
-   5 s busy timeout make this safe at personal scale. Once the service and
+   second process importing the store directly (invariant 5), and so are
+   the batch passes on the same host. WAL, a 30 s busy timeout and a
+   retry with rollback in `store._serialized` make this safe at personal
+   scale. Once the service and
    the MCP server live on the same host permanently, switch the MCP server
    to proxy the HTTP door instead.
 5. **The MCP server is a thin proxy.** `prax.mcp_server` imports `prax.store`

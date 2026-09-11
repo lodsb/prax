@@ -17,6 +17,7 @@ import json
 import re
 import sqlite3
 import threading
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -46,6 +47,10 @@ CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 
 _LOCK = threading.RLock()
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+# how long a connection waits for another process's write transaction
+# before "database is locked" (three writers share the file: the door,
+# the watcher, a backlog pass)
+BUSY_TIMEOUT = 30.0
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 _SURROGATE = re.compile(r"[\ud800-\udfff]")
 
@@ -53,11 +58,43 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
+_depth = threading.local()
+LOCK_RETRIES = 6
+
+
 def _serialized(fn: Callable[P, R]) -> Callable[P, R]:
+    """One writer at a time in this process; across processes (the door,
+    the watcher, a backlog pass on one database) SQLite's busy handler
+    waits ``BUSY_TIMEOUT`` and then says "database is locked". The
+    outermost store call rolls back and tries again a few times, so a
+    capture arriving while a batch pass holds a long transaction is not
+    lost."""
+
     @functools.wraps(fn)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         with _LOCK:
-            return fn(*args, **kwargs)
+            depth = getattr(_depth, "n", 0)
+            _depth.n = depth + 1
+            try:
+                for attempt in range(LOCK_RETRIES):
+                    try:
+                        return fn(*args, **kwargs)
+                    except sqlite3.OperationalError as exc:
+                        if (
+                            depth
+                            or "locked" not in str(exc)
+                            or attempt == LOCK_RETRIES - 1
+                        ):
+                            raise
+                        con = next(
+                            (a for a in args if isinstance(a, sqlite3.Connection)), None
+                        )
+                        if con is not None:
+                            con.rollback()
+                        time.sleep(0.3 * (attempt + 1))
+                raise AssertionError("unreachable")
+            finally:
+                _depth.n = depth
 
     return wrapper
 
@@ -68,7 +105,7 @@ def _serialized(fn: Callable[P, R]) -> Callable[P, R]:
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
     path = db_path or config.db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(path, check_same_thread=False, timeout=5.0)
+    con = sqlite3.connect(path, check_same_thread=False, timeout=BUSY_TIMEOUT)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA journal_mode = WAL")
