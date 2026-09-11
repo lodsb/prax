@@ -38,6 +38,13 @@ def test_promoted_documents_know_who_read_them(con: sqlite3.Connection) -> None:
     extraction.apply(con, a, extraction.Extraction(summary="s2"), extractor="local:q")
     assert store.promoted_documents(con, producer="claude-x")[0]["done"]
     assert store.extracted_by(store.get_meta(con, a), "local:q")
+    # a reading under an older ontology is not the pass being asked for
+    meta = store.get_meta(con, b)
+    meta["extraction"] = {"extractor": "claude-x", "ontology_version": "3"}
+    store.set_meta(con, b, meta)
+    assert store.extracted_by(meta, "claude-x")
+    assert not store.extracted_by(meta, "claude-x", ontology_version="5")
+    assert not store.promoted_documents(con, producer="claude-x")[1]["done"]
 
 
 def test_candidates_are_scored(con: sqlite3.Connection) -> None:

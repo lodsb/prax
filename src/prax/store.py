@@ -642,10 +642,18 @@ def unpromote(con: sqlite3.Connection, doc_id: int) -> bool:
     return True
 
 
-def extracted_by(meta: dict[str, Any], producer: str) -> bool:
-    """Whether ``producer`` has read the document, now or in its history."""
+def extracted_by(
+    meta: dict[str, Any], producer: str, *, ontology_version: str | None = None
+) -> bool:
+    """Whether ``producer`` has read the document, now or in its history;
+    with ``ontology_version``, only a reading under that version counts (a
+    pass under an older ontology is not the pass being asked for)."""
     stamps = [meta.get("extraction") or {}, *(meta.get("extraction_history") or [])]
-    return any(s.get("extractor") == producer for s in stamps)
+    return any(
+        s.get("extractor") == producer
+        and (ontology_version is None or s.get("ontology_version") == ontology_version)
+        for s in stamps
+    )
 
 
 @_serialized
@@ -653,7 +661,8 @@ def promoted_documents(
     con: sqlite3.Connection, *, producer: str | None = None
 ) -> list[dict[str, Any]]:
     """Flagged documents, oldest flag first; ``done`` says whether
-    ``producer`` has read each one."""
+    ``producer`` has read each one under the current ontology."""
+    version = ontology.current().version
     out = []
     for r in con.execute(
         "SELECT id, title, meta FROM documents"
@@ -666,7 +675,8 @@ def promoted_documents(
                 "doc_id": r["id"],
                 "title": r["title"],
                 "promote": meta["promote"],
-                "done": bool(producer) and extracted_by(meta, producer),
+                "done": bool(producer)
+                and extracted_by(meta, producer, ontology_version=version),
             }
         )
     return out
