@@ -54,7 +54,6 @@ async function send(tabIds) {
   if (!cfg.server) { $("msg").textContent = "set the server in the options first"; return; }
   if (!tabIds.length) { $("msg").textContent = "nothing to send"; return; }
   $("progress").hidden = false;
-  $("results").innerHTML = "";
   $("fill").style.width = "0%";
   await progressArea().set({ progress: { state: "running", total: tabIds.length, done: 0, results: [] } });
   await api.runtime.sendMessage({ type: "capture", tabIds, domains: chosenDomains(), tags: lib.splitList($("tags").value), close: $("close").checked });
@@ -62,26 +61,48 @@ async function send(tabIds) {
 
 function renderProgress(p) {
   if (!p) return;
-  $("progress").hidden = false;
+  $("progress").hidden = p.state !== "running";
   const pct = p.total ? Math.round((100 * (p.done || 0)) / p.total) : 0;
   $("fill").style.width = `${pct}%`;
   $("fill").className = p.state === "error" ? "error-fill" : "";
-  const items = (p.results || []).map((r) => {
-    const link = r.doc_id && cfg.server ? `<a href="${esc(cfg.server)}/ui/#doc/${r.doc_id}" target="_blank" rel="noopener">doc ${r.doc_id}</a> · ` : "";
-    return `<li class="${r.error ? "error" : ""}"><span class="title">${esc(r.title || r.url)}</span><br><small>${link}${esc(lib.describeResult(r))}${r.note ? ` · ${esc(r.note)}` : ""}</small></li>`;
-  });
-  $("results").innerHTML = items.join("");
   if (p.state === "error" && p.error) $("msg").textContent = p.error;
   if (p.state === "done") $("msg").textContent = `${(p.results || []).filter((r) => !r.error).length} of ${p.total} sent`;
+}
+
+function when(ms) {
+  const d = new Date(ms);
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? d.toTimeString().slice(0, 5) : d.toISOString().slice(5, 16).replace("T", " ");
+}
+
+let history = [];
+function renderHistory(list) {
+  history = list || [];
+  $("recent").hidden = !history.length;
+  $("results").innerHTML = history.map((r) => {
+    const link = r.doc_id && cfg.server ? `<a href="${esc(cfg.server)}/ui/#doc/${r.doc_id}" target="_blank" rel="noopener">doc ${r.doc_id}</a> · ` : "";
+    const state = r.state === "sending" ? "sending…" : r.state === "failed" ? `${esc(lib.describeResult(r))} · <a href="#" class="retry" data-id="${esc(r.id)}">retry</a>` : `${link}${esc(lib.describeResult(r))}${r.note ? ` · ${esc(r.note)}` : ""}`;
+    return `<li class="${r.state === "failed" ? "error" : ""}"><span class="title" title="${esc(r.url)}">${esc(r.title || r.url)}</span><br><small><span class="muted">${when(r.at)}</span> · ${state}</small></li>`;
+  }).join("");
+  $("results").querySelectorAll("a.retry").forEach((a) => a.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const entry = history.find((h) => h.id === a.dataset.id);
+    if (!entry) return;
+    $("msg").textContent = "";
+    await api.runtime.sendMessage({ type: "retry", entry });
+  }));
 }
 
 async function main() {
   await loadSettings();
   checkServer();
-  const cur = (await progressArea().get("progress")).progress;
-  if (cur && cur.state === "running") renderProgress(cur);
+  const stored = await progressArea().get(["progress", "history"]);
+  if (stored.progress && stored.progress.state === "running") renderProgress(stored.progress);
+  renderHistory(stored.history);
+  $("clear-history").addEventListener("click", async (e) => { e.preventDefault(); await api.runtime.sendMessage({ type: "clear-history" }); renderHistory([]); });
   api.storage.onChanged.addListener((changes, area) => {
     if (changes.progress && (area === "session" || area === "local")) renderProgress(changes.progress.newValue);
+    if (changes.history && (area === "session" || area === "local")) renderHistory(changes.history.newValue);
     if (changes.log && (area === "session" || area === "local")) renderLog(changes.log.newValue);
   });
   renderLog((await progressArea().get("log")).log);

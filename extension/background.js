@@ -233,6 +233,20 @@ async function setProgress(patch) {
   await progressArea().set({ progress: { ...cur, ...patch, at: Date.now() } });
 }
 
+/* The history: the last sends, newest first, kept in session storage so
+   the popup shows them again after it closed (a tab switch closes it).
+   A failed entry keeps what it needs for a retry. */
+const HISTORY_LINES = 40;
+let historyChain = Promise.resolve();
+function remember(entry) {
+  historyChain = historyChain.then(async () => {
+    const cur = (await progressArea().get("history")).history || [];
+    const rest = cur.filter((h) => h.id !== entry.id);
+    await progressArea().set({ history: [entry, ...rest].slice(0, HISTORY_LINES) });
+  }).catch(() => { /* storage unavailable */ });
+  return historyChain;
+}
+
 async function capture(msg) {
   log("info", "capture", msg.tabIds);
   const cfg = await settings();
@@ -240,23 +254,43 @@ async function capture(msg) {
     await setProgress({ state: "error", error: "no server configured (options)", results: [] });
     return;
   }
-  const opts = { domains: msg.domains || [], tags: msg.tags || [], session: lib.sessionId(), close: !!msg.close };
+  const opts = { domains: msg.domains || [], tags: msg.tags || [], session: msg.session || lib.sessionId(), close: !!msg.close };
   const tabs = [];
   for (const id of msg.tabIds) {
     try { tabs.push(await api.tabs.get(id)); } catch (_) { /* closed meanwhile */ }
   }
+  if (!tabs.length) {
+    await setProgress({ state: "error", error: "that tab is gone", results: [] });
+    return;
+  }
   await setProgress({ state: "running", session: opts.session, total: tabs.length, done: 0, results: [], error: null });
   const results = [];
   for (const tab of tabs) {
+    const id = `${Date.now()}-${tab.id}`;
+    await remember({ id, at: Date.now(), tabId: tab.id, url: tab.url, title: tab.title, state: "sending", domains: opts.domains, tags: opts.tags, close: opts.close });
     let r;
     try { r = await captureTab(tab, opts, cfg); log("info", "sent", tab.url, r.mode, r.doc_id ? `doc ${r.doc_id}` : ""); } catch (err) { log("warn", "capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
     results.push(r);
+    await remember({ id, at: Date.now(), ...r, state: r.error ? "failed" : "done", domains: opts.domains, tags: opts.tags, close: opts.close });
     await setProgress({ done: results.length, results });
     if (opts.close && !r.error) {
       try { await api.tabs.remove(tab.id); } catch (_) { /* already gone */ }
     }
   }
   await setProgress({ state: "done", done: results.length, results });
+}
+
+/* A retry of a failed entry: the same tab if it is still open, else the
+   first tab showing that URL, else a fresh tab with it (kept open). */
+async function retry(entry) {
+  let tab = null;
+  try { tab = await api.tabs.get(entry.tabId); if (tab.url !== entry.url) tab = null; } catch (_) { tab = null; }
+  if (!tab) {
+    const same = await api.tabs.query({ url: entry.url }).catch(() => []);
+    tab = same[0] || null;
+  }
+  if (!tab) tab = await api.tabs.create({ url: entry.url, active: false });
+  await capture({ tabIds: [tab.id], domains: entry.domains || [], tags: entry.tags || [], close: false });
 }
 
 /* What SingleFile's content scripts expect from the extension's background
@@ -300,6 +334,15 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "fetch") {
     bridgeFetch(msg.url).then(sendResponse, (err) => { log("warn", "resource fetch failed", msg.url, err); sendResponse({ error: err.message }); });
     return true; // answered asynchronously
+  }
+  if (msg.type === "retry") {
+    retry(msg.entry).catch((err) => setProgress({ state: "error", error: err.message }));
+    sendResponse({ ok: true });
+    return false;
+  }
+  if (msg.type === "clear-history") {
+    progressArea().set({ history: [] }).then(() => sendResponse({}), () => sendResponse({}));
+    return true;
   }
   if (msg.type === "clear-log") {
     progressArea().set({ log: [] }).then(() => sendResponse({}), () => sendResponse({}));

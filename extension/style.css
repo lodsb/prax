@@ -19,6 +19,7 @@ header a { margin-left: auto; color: var(--accent); }
 section { margin-bottom: .6rem; }
 label { display: block; margin-bottom: .6rem; }
 label.row { display: flex; align-items: center; gap: .4rem; }
+.row.between { display: flex; justify-content: space-between; align-items: baseline; margin: .5rem 0 .2rem; }
 input[type="text"], input[type="url"], input[type="password"] {
   width: 100%; padding: .3rem .45rem; margin-top: .2rem; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg); font: inherit;
 }

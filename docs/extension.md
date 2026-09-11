@@ -83,7 +83,11 @@ the tab shows, with a small popup for the few choices that matter.
 - **Feedback.** The response says whether the document was new, whether
   it is searchable already, and which document it became; the popup
   shows a link into the UI (`<server>/ui/#doc/<id>`) and, for a
-  re-capture, that the earlier capture is linked.
+  re-capture, that the earlier capture is linked. The popup keeps the
+  last forty sends as a list that survives its closing (session
+  storage: gone when the browser quits), a failed one with a retry
+  link that sends the same tab again, or the first tab showing that URL,
+  or a new tab with it.
 - **Bookmarklet and share target** as fallbacks post a URL only; the
   door fetches. The mobile share target is a tiny page under `/ui/`
   that takes `?url=` and calls `/ingest/url`.
