@@ -344,6 +344,59 @@ function lazyClearTimeout(msg, sender) {
   lazyTimers.delete(key);
 }
 
+/* The context menu: "Send this page to prax" on any page, the PDF viewer
+   included (its own page cannot be read, so the file is fetched with the
+   session, as from the popup), and "Send link to prax" on a link, which
+   fetches the linked file the same way without opening it. Domains and
+   tags are the options page's defaults. */
+async function captureLink(linkUrl, tab) {
+  const cfg = await settings();
+  if (!cfg.server) { await setProgress({ state: "error", error: "no server configured (options)", results: [] }); return; }
+  const id = `${Date.now()}-link`;
+  const common = { url: linkUrl, title: null, domains: cfg.domains.length ? cfg.domains : null, tags: null, session: lib.sessionId() };
+  await remember({ id, at: Date.now(), tabId: tab ? tab.id : null, url: linkUrl, title: linkUrl, state: "sending", domains: cfg.domains, tags: [] });
+  let r;
+  try {
+    let blob = null;
+    let why = null;
+    try { blob = await fetchPdf(linkUrl); } catch (err) { why = `own fetch failed: ${err.message}; the door fetched instead`; }
+    if (blob) {
+      const data = await uploadFile(blob, lib.pdfFileName(linkUrl), common, cfg);
+      r = { url: linkUrl, title: lib.pdfFileName(linkUrl), mode: "file", note: "PDF fetched with your session and uploaded", ...data };
+    } else {
+      const data = await door("/ingest/url", common, cfg);
+      r = { url: linkUrl, title: linkUrl, mode: "url", note: why, ...data };
+    }
+  } catch (err) {
+    r = { url: linkUrl, title: linkUrl, error: err.message };
+  }
+  await remember({ id, at: Date.now(), tabId: tab ? tab.id : null, ...r, state: r.error ? "failed" : "done", domains: cfg.domains, tags: [] });
+}
+
+function installMenus() {
+  const menus = api.contextMenus || api.menus;
+  if (!menus) return;
+  try {
+    menus.removeAll(() => {
+      menus.create({ id: "prax-page", title: "Send this page to prax", contexts: ["page", "frame", "selection", "image"] });
+      menus.create({ id: "prax-link", title: "Send link to prax", contexts: ["link"] });
+    });
+  } catch (_) { /* no menus in this browser */ }
+}
+if (api.runtime.onInstalled) api.runtime.onInstalled.addListener(installMenus);
+if (api.runtime.onStartup) api.runtime.onStartup.addListener(installMenus);
+installMenus();
+if (api.contextMenus || api.menus) {
+  (api.contextMenus || api.menus).onClicked.addListener(async (info, tab) => {
+    const cfg = await settings();
+    if (info.menuItemId === "prax-link" && info.linkUrl) {
+      captureLink(info.linkUrl, tab).catch((err) => log("warn", "link capture failed", err));
+    } else if (info.menuItemId === "prax-page" && tab) {
+      capture({ tabIds: [tab.id], domains: cfg.domains, tags: [], close: false }).catch((err) => log("warn", "capture failed", err));
+    }
+  });
+}
+
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return false;
   if (msg.type === "capture") {

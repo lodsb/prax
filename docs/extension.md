@@ -89,6 +89,12 @@ the tab shows, with a small popup for the few choices that matter.
   link that sends the same tab again, or the first tab showing that URL,
   or a new tab with it; "retry failed" does that for every failed entry
   in turn. A retry updates the entry in place.
+- **The context menu.** "Send this page to prax" on any page, the
+  browser's PDF viewer included (the popup works there too), and "Send
+  link to prax" on a link, which fetches the linked file with the
+  browser's session and uploads it without opening a tab, or lets the
+  door fetch it. Both use the options page's default domains; the
+  result lands in the popup's history.
 - **Bookmarklet and share target** as fallbacks post a URL only; the
   door fetches. The mobile share target is a tiny page under `/ui/`
   that takes `?url=` and calls `/ingest/url`.
