@@ -583,6 +583,207 @@ def retitle(
     }
 
 
+# --------------------------------------------------------------- retiring
+# A document that should not be found any more (a duplicate capture, a
+# page saved by mistake) is retired, not deleted: the row and the archived
+# bytes stay, ``meta.retired`` says why and since when, its chunks and its
+# retrieval field go (so search and the batch jobs pass it by), and its
+# edges end (invariant 8). ``unretire_document`` brings the index back.
+
+
+def is_retired(meta: dict[str, Any]) -> bool:
+    return bool(meta.get("retired"))
+
+
+@_serialized
+def retire_document(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    reason: str,
+    duplicate_of: int | None = None,
+    by: str = "human",
+) -> dict[str, Any]:
+    """Take a document out of the index and the graph, keeping row, bytes
+    and text artifact. Returns what went: chunks, edges, review items."""
+    meta = get_meta(con, doc_id)
+    if duplicate_of is not None and get_meta(con, duplicate_of) is None:
+        raise KeyError(f"no such document: {duplicate_of}")
+    meta["retired"] = {
+        "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "reason": reason,
+        "of": duplicate_of,
+        "by": by,
+    }
+    chunks = con.execute(
+        "SELECT count(*) FROM chunks WHERE doc_id = ?", (doc_id,)
+    ).fetchone()[0]
+    con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+    con.execute("DELETE FROM documents_fts WHERE rowid = ?", (doc_id,))
+    con.execute("DELETE FROM document_embeddings WHERE doc_id = ?", (doc_id,))
+    edges = con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE source_doc = ? AND valid_to IS NULL",
+        (doc_id,),
+    ).rowcount
+    items = con.execute(
+        f"UPDATE review_queue SET resolution = 'dropped', resolved_at = {_NOW}"
+        " WHERE source_doc = ? AND resolution IS NULL",
+        (doc_id,),
+    ).rowcount
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+    return {"doc_id": doc_id, "chunks": chunks, "edges": edges, "review_items": items}
+
+
+@_serialized
+def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
+    """Bring a retired document back into the index (its text artifact is
+    re-chunked); the edges it lost stay history and a new extraction pass
+    re-reads it."""
+    meta = get_meta(con, doc_id)
+    meta.pop("retired", None)
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    n = 0
+    row = con.execute(
+        "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row and row["text_hash"]:
+        text = _read_archive(row["text_hash"]).decode("utf-8")
+        n = _write_chunks(con, doc_id, text)
+        _refresh_document_field(con, doc_id)
+    con.commit()
+    return {"doc_id": doc_id, "chunks": n}
+
+
+def fingerprint_text(text: str) -> frozenset[str]:
+    """The chunk fingerprint of a text: a hash per chunk the chunker would
+    make, so two captures of one page compare by what they say, not by
+    their bytes (a page's markup changes between two visits, its text
+    seldom does)."""
+    rows = chunking.rows(chunking.chunk(text))
+    return frozenset(
+        hashlib.sha1(" ".join(str(r[0]).split()).encode("utf-8")).hexdigest()
+        for r in rows
+        if str(r[0]).strip()
+    )
+
+
+def chunk_fingerprint(con: sqlite3.Connection, doc_id: int) -> frozenset[str]:
+    """The fingerprint of an indexed document, from its chunks."""
+    return frozenset(
+        hashlib.sha1(" ".join(t.split()).encode("utf-8")).hexdigest()
+        for (t,) in con.execute(
+            "SELECT text FROM chunks WHERE doc_id = ? AND kind != 'figure'", (doc_id,)
+        )
+        if t.strip()
+    )
+
+
+def similarity(a: frozenset[str], b: frozenset[str]) -> float:
+    """Jaccard similarity of two fingerprints; 1.0 for the same text."""
+    if not a and not b:
+        return 1.0
+    union = len(a | b)
+    return len(a & b) / union if union else 0.0
+
+
+DUPLICATE_THRESHOLD = 0.9
+
+
+def live_captures_of(con: sqlite3.Connection, url: str) -> list[dict[str, Any]]:
+    """The live (not retired) captures of one canonical URL, oldest first."""
+    out = []
+    for r in con.execute(
+        "SELECT id, meta FROM documents WHERE source_url = ?"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id",
+        (url,),
+    ):
+        meta = json.loads(r["meta"] or "{}")
+        out.append({"doc_id": r["id"], "meta": meta})
+    return out
+
+
+def capture_rank(meta: dict[str, Any]) -> tuple[int, int]:
+    """Which of two captures of one page to keep: a snapshot over a bare
+    DOM, an extracted one over one not yet read; ties go to the older."""
+    mode = (meta.get("capture") or {}).get("mode")
+    return (1 if mode == "snapshot" else 0, 1 if meta.get("extraction") else 0)
+
+
+@_serialized
+def note_recapture(
+    con: sqlite3.Connection, doc_id: int, *, session: str | None, by: str | None
+) -> None:
+    """The page was sent again and said the same: remembered on the
+    document, no new row."""
+    meta = get_meta(con, doc_id)
+    again = meta.setdefault("recaptured", [])
+    again.append(
+        {
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "session": session,
+            "by": by,
+        }
+    )
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+
+
+def dedupe_captures(
+    con: sqlite3.Connection,
+    *,
+    threshold: float = DUPLICATE_THRESHOLD,
+    commit: bool = True,
+) -> dict[str, Any]:
+    """Among the live captures of each URL, keep one (``capture_rank``)
+    and retire the others whose text fingerprint matches it. Two captures
+    of a page that changed in between both stay. Returns the groups."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for r in con.execute(
+        "SELECT id, source_url, meta FROM documents WHERE source_url IS NOT NULL"
+        " AND json_extract(meta, '$.source') = 'capture'"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ):
+        groups.setdefault(r["source_url"], []).append(
+            {"doc_id": r["id"], "meta": json.loads(r["meta"] or "{}")}
+        )
+    report: dict[str, Any] = {"groups": [], "retired": 0, "kept_apart": 0}
+    for url, docs in groups.items():
+        if len(docs) < 2:
+            continue
+        keeper = max(docs, key=lambda d: (capture_rank(d["meta"]), -d["doc_id"]))
+        kfp = chunk_fingerprint(con, keeper["doc_id"])
+        gone, apart = [], []
+        for d in docs:
+            if d is keeper:
+                continue
+            s = similarity(kfp, chunk_fingerprint(con, d["doc_id"]))
+            if s >= threshold:
+                gone.append(d["doc_id"])
+                if commit:
+                    retire_document(
+                        con,
+                        d["doc_id"],
+                        reason="duplicate capture",
+                        duplicate_of=keeper["doc_id"],
+                        by="dedupe",
+                    )
+            else:
+                apart.append((d["doc_id"], round(s, 2)))
+        report["groups"].append(
+            {"url": url, "keep": keeper["doc_id"], "retire": gone, "apart": apart}
+        )
+        report["retired"] += len(gone)
+        report["kept_apart"] += len(apart)
+    return report
+
+
 # ---------------------------------------------------------------- domains
 # Which ontology modules a document is read against (``meta.domains``): the
 # research papers see the research module, the family photos the family
@@ -873,7 +1074,7 @@ def promotion_candidates(
     promoted: set[int] = set()
     for r in con.execute(
         "SELECT id, title, meta FROM documents WHERE title IS NOT NULL"
-        " AND text_hash IS NOT NULL"
+        " AND text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
         " AND coalesce(json_extract(meta, '$.source'), '') != 'wiki'"
     ):
         titles.setdefault(r["title"], r["id"])
@@ -1300,6 +1501,8 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     if row is None:
         return None
     meta = json.loads(row["meta"] or "{}")
+    if meta.get("retired"):
+        return None  # a retired document has no retrieval field
     mime = row["mime"] or ""
     words: list[str] = []
     if mime.startswith("image/"):
@@ -1423,7 +1626,10 @@ def select_documents(
         args.append(_like_prefix(text_source_prefix))
     if not clauses:
         return []
-    sql = f"SELECT id FROM documents WHERE ({' OR '.join(clauses)})"
+    sql = (
+        f"SELECT id FROM documents WHERE ({' OR '.join(clauses)})"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    )
     if mime_prefix is not None:
         sql += " AND mime LIKE ? ESCAPE '!'"
         args.append(_like_prefix(mime_prefix))
@@ -2233,15 +2439,19 @@ def list_documents(
     title: str | None = None,
     source: str | None = None,
     mime_prefix: str | None = None,
+    retired: bool = False,
 ) -> dict[str, Any]:
     """Documents without their text, newest first, for browsing.
 
     ``title`` is a case-insensitive substring; ``source`` matches
-    ``meta.source``; ``mime_prefix`` a MIME type prefix. Returns
+    ``meta.source``; ``mime_prefix`` a MIME type prefix; ``retired`` lists
+    the retired documents instead of the live ones. Returns
     ``{"total", "items"}`` where each item carries the row, its decoded
     ``meta`` and its chunk count.
     """
-    clauses: list[str] = []
+    clauses: list[str] = [
+        "json_extract(d.meta, '$.retired') IS " + ("NOT NULL" if retired else "NULL")
+    ]
     args: list[Any] = []
     if title:
         clauses.append("lower(d.title) LIKE ? ESCAPE '!'")
@@ -3216,6 +3426,7 @@ def select_for_extraction(
     own subset of the ontology, not the whole."""
     sql = (
         "SELECT id FROM documents WHERE text_hash IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
         " AND (json_extract(meta, '$.extraction.ontology_version') IS NULL"
         "      OR json_extract(meta, '$.extraction.ontology_version') != ?)"
     )

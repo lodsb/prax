@@ -619,6 +619,27 @@ a changed page is a new document whose `meta.previous_capture` points at
 the last one with the same canonical URL (fragment and tracking
 parameters stripped).
 
+A page sent again is one document: the markup of a page differs
+between two visits, so its bytes' hash does, but the extracted text does
+not, and the door compares the chunk fingerprints (`store.similarity`,
+Jaccard over hashed chunks, 0.9 or above) of a new capture with the
+earlier live captures of the same canonical URL before it registers
+anything. The same page is noted on the earlier document
+(`meta.recaptured`); a snapshot arriving for a page held only as a bare
+DOM replaces it. A page that changed in between is a new document with
+`meta.previous_capture`. What came in before that check existed is
+handled by `scripts/dedupe_captures.py --dry-run | --commit`, which
+keeps one capture per URL (a snapshot, then an extracted one, then the
+oldest) and retires the rest.
+
+Retiring (`store.retire_document`, "retire…" on a document page, `POST
+/doc/{id}/retire`) takes a document out of search and the graph: chunks
+and retrieval field go, its edges end, open review items close; the
+row, the archived bytes and the text artifact stay, `meta.retired` says
+why and of which document it was a duplicate. Batch jobs and the browse
+list pass retired documents by (`GET /documents?retired=1` lists them);
+"un-retire" re-chunks the text and brings it back.
+
 Four ways in:
 
 - **The Inbox view** (`#inbox`): drop files or pick them, choose domains

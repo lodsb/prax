@@ -124,6 +124,8 @@ class Capture:
     domains: list[str] | None
     previous: int | None = None
     mime: str = ""
+    duplicate_of: int | None = None  # the page said the same as this document
+    replaced: int | None = None  # a bare-DOM capture this snapshot retired
 
 
 def _capture_meta(
@@ -156,10 +158,35 @@ def _previous_capture(
         return None
     row = con.execute(
         "SELECT id FROM documents WHERE source_url = ? AND id != ?"
-        " ORDER BY id DESC LIMIT 1",
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id DESC LIMIT 1",
         (url, exclude),
     ).fetchone()
     return row[0] if row else None
+
+
+def _same_page_as(
+    con: sqlite3.Connection, url: str, data: bytes
+) -> tuple[int | None, dict[str, Any] | None]:
+    """An earlier live capture of ``url`` that says the same as these
+    bytes, by chunk fingerprint of the extracted text: its id and meta,
+    or (None, None). A page whose markup changed but whose text did not is
+    the same page."""
+    earlier = store.live_captures_of(con, url)
+    if not earlier:
+        return None, None
+    try:
+        from prax import parsers
+
+        text = parsers.by_name("trafilatura")(data)
+    except Exception:  # noqa: BLE001 - no extractor, or nothing extractable
+        return None, None
+    mine = store.fingerprint_text(text)
+    for d in reversed(earlier):
+        if store.similarity(mine, store.chunk_fingerprint(con, d["doc_id"])) >= (
+            store.DUPLICATE_THRESHOLD
+        ):
+            return d["doc_id"], d["meta"]
+    return None, None
 
 
 def _give_domains(
@@ -216,6 +243,27 @@ def ingest_bytes(
     capture of the same URL, and give it its domains."""
     url = canonical_url(source_url) if source_url else None
     meta = _capture_meta(source, session=session, by=by, tags=tags, extra=extra_meta)
+    # a page sent again: the bytes differ between two visits, the text does
+    # not; the same page is one document, unless this send is a snapshot
+    # and the earlier one only the bare DOM, in which case this one wins
+    same_id: int | None = None
+    if url and mime in HTML_TYPES and source == "capture":
+        same_id, same_meta = _same_page_as(con, url, data)
+        if same_id is not None:
+            better = store.capture_rank(meta) > store.capture_rank(same_meta or {})
+            if not better:
+                store.note_recapture(con, same_id, session=session, by=by)
+                if domains:
+                    _give_domains(con, same_id, domains, by=by or source)
+                return Capture(
+                    same_id,
+                    False,
+                    store.is_indexed(con, same_id),
+                    store.document_domains(con, same_id),
+                    None,
+                    mime,
+                    duplicate_of=same_id,
+                )
     # HTML is text/* to the store, which would index the markup itself;
     # register it bare and let trafilatura produce the text
     enter = store.register if mime in HTML_TYPES else store.ingest_file
@@ -238,7 +286,23 @@ def ingest_bytes(
             store.set_meta(con, doc_id, m)
     indexed = _index_now(con, doc_id, mime)
     got = _give_domains(con, doc_id, domains, by=by or source)
-    return Capture(doc_id, result["created"], indexed, got, previous, mime)
+    replaced = None
+    if same_id is not None and result["created"] and indexed:
+        # the earlier bare-DOM capture gives way to this snapshot
+        for d in list(store.document_domains(con, same_id) or []):
+            store.add_domain(con, doc_id, d, by="rule")
+        store.retire_document(
+            con,
+            same_id,
+            reason="replaced by a snapshot",
+            duplicate_of=doc_id,
+            by=by or source,
+        )
+        replaced = same_id
+        got = store.document_domains(con, doc_id)
+    return Capture(
+        doc_id, result["created"], indexed, got, previous, mime, replaced=replaced
+    )
 
 
 _TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
@@ -484,6 +548,7 @@ def pending_captures(con: sqlite3.Connection) -> list[int]:
         r[0]
         for r in con.execute(
             "SELECT id FROM documents WHERE text_hash IS NULL"
+            " AND json_extract(meta, '$.retired') IS NULL"
             " AND json_extract(meta, '$.source') IN ('upload', 'capture', 'inbox')"
             " ORDER BY id"
         )
@@ -498,6 +563,7 @@ def recent(con: sqlite3.Connection, *, limit: int = 50) -> list[dict[str, Any]]:
     rows = con.execute(
         "SELECT id, title, mime, source_url, text_hash, meta FROM documents"
         " WHERE json_extract(meta, '$.source') IN ('upload', 'capture', 'inbox')"
+        " AND json_extract(meta, '$.retired') IS NULL"
         " ORDER BY json_extract(meta, '$.capture.at') DESC, id DESC LIMIT ?",
         (limit,),
     ).fetchall()
@@ -517,6 +583,7 @@ def recent(con: sqlite3.Connection, *, limit: int = 50) -> list[dict[str, Any]]:
                 "indexed": bool(r["text_hash"]),
                 "extracted": bool(meta.get("extraction")),
                 "previous_capture": meta.get("previous_capture"),
+                "recaptured": len(meta.get("recaptured") or []),
             }
         )
     return out

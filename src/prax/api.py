@@ -142,7 +142,42 @@ def _capture_out(cap: inbox.Capture) -> dict[str, Any]:
         "domains": cap.domains,
         "previous_capture": cap.previous,
         "mime": cap.mime,
+        "duplicate_of": cap.duplicate_of,
+        "replaced": cap.replaced,
     }
+
+
+class RetireReq(BaseModel):
+    reason: str = "retired by hand"
+    duplicate_of: int | None = None
+
+
+@app.post("/doc/{doc_id}/retire")
+def retire(doc_id: int, req: RetireReq, request: Request) -> dict[str, Any]:
+    """Take a document out of search and the graph; row and bytes stay."""
+    try:
+        return store.retire_document(
+            request.app.state.con,
+            doc_id,
+            reason=req.reason,
+            duplicate_of=req.duplicate_of,
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.delete("/doc/{doc_id}/retire")
+def unretire(doc_id: int, request: Request) -> dict[str, Any]:
+    try:
+        return store.unretire_document(request.app.state.con, doc_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.post("/inbox/dedupe")
+def dedupe(request: Request, commit: bool = False) -> dict[str, Any]:
+    """Retire the duplicate captures of each URL (dry run unless commit)."""
+    return store.dedupe_captures(request.app.state.con, commit=commit)
 
 
 @app.post("/ingest/file")
@@ -444,6 +479,7 @@ def documents(
     title: str | None = None,
     source: str | None = None,
     mime: str | None = None,
+    retired: bool = False,
 ) -> dict[str, Any]:
     """Documents without text, newest first, filtered for browsing."""
     return store.list_documents(
@@ -453,6 +489,7 @@ def documents(
         title=title,
         source=source,
         mime_prefix=mime,
+        retired=retired,
     )
 
 

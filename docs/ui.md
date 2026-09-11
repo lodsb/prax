@@ -14,7 +14,7 @@ Added for browsing (read-only, thin wrappers over store functions):
 
 | Endpoint | Returns |
 |---|---|
-| `GET /documents?limit&offset&title&source&mime` | documents without text, newest first: id, title, mime, added_at, parsed_at, source_url, meta, chunk count |
+| `GET /documents?limit&offset&title&source&mime&retired` | documents without text, newest first (retired ones only with `retired=1`): id, title, mime, added_at, parsed_at, source_url, meta, chunk count |
 | `GET /doc/{id}/original` | the archived original bytes with their MIME type; `Content-Disposition: inline` so a PDF opens in the browser's viewer (`#page=N` from a chunk's locator) |
 | `GET /doc/{id}/text` | the Markdown text artifact as `text/markdown` |
 | `GET /doc/{id}/chunks` | the document as its chunks in order: id, seq, kind, heading, page, locator, text, table data |
@@ -27,6 +27,7 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `GET /doc/{id}/domains`, `PUT /doc/{id}/domains {domains}`, `POST`/`DELETE /doc/{id}/domains/{name}` | the document's domain set (which ontology modules it is read against; null means every module) with the modules to choose from; replace, add one, remove one; `GET /search?domain=` keeps one domain's documents |
 | `POST /ingest/file` (multipart `file`, `title`, `domains`, `tags`, `session`, `by`), `POST /ingest/html {url, html, title, domains, tags, session, mode, note}`, `POST /ingest/url {url, title, domains, tags, session}`, `GET /inbox?limit` | captures: an uploaded file, a page as the browser rendered it, a URL the door fetches; each returns the document id, whether it was new, whether it is searchable already, its domains and the previous capture of the same URL; `/inbox` lists recent captures with state, the drop folder path and the domains to choose from |
 | `GET /promote?limit`, `POST /doc/{id}/promote {reason}`, `DELETE /doc/{id}/promote` | the documents flagged for the expensive model's pass with their status, and scored candidates (project members, synthesis sources, notes, library citations); set and clear the flag |
+| `POST /doc/{id}/retire {reason, duplicate_of}`, `DELETE /doc/{id}/retire`, `POST /inbox/dedupe?commit=` | retire a document (out of search and the graph, row and file kept) and bring it back; retire the duplicate captures of every URL (dry run without `commit`) |
 | `GET /doc/{id}/context?limit` | what places a document in the library: extraction summary and entities, citations in and out (library documents resolved), nearest documents by vector (centroid of the document's chunk vectors, one KNN), documents sharing its entities or authors, Zotero parent, siblings, collections and tags |
 
 ## Routes (hash-based, one page)

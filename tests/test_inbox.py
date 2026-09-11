@@ -209,6 +209,133 @@ def test_html_title() -> None:
     assert inbox.html_title(b"<html><body>no title") is None
 
 
+@needs_trafilatura
+def test_same_page_again_is_one_document(
+    con: sqlite3.Connection, modules: None
+) -> None:
+    first = inbox.ingest_html(
+        con, PAGE, url="https://example.org/same", mode="snapshot", session="a"
+    )
+    # the markup differs (a comment, a changed attribute), the text does not
+    again = inbox.ingest_html(
+        con,
+        PAGE.replace("<body>", "<body data-visit='2'><!-- later -->"),
+        url="https://example.org/same",
+        mode="snapshot",
+        session="b",
+        domains=["family"],
+    )
+    assert again.doc_id == first.doc_id and not again.created
+    assert again.duplicate_of == first.doc_id and again.indexed
+    meta = store.get_meta(con, first.doc_id)
+    assert [r["session"] for r in meta["recaptured"]] == ["b"]
+    assert meta["domains"] == ["family"]  # the second send's choice is kept
+    assert len(inbox.recent(con)) == 1 and inbox.recent(con)[0]["recaptured"] == 1
+    # a changed page is a new document that knows its predecessor
+    changed = inbox.ingest_html(
+        con,
+        PAGE.replace("Feedback delay networks", "Waveguide meshes")
+        .replace("Schroeder used comb and allpass filters", "Nobody used anything")
+        .replace("The matrix keeps the energy", "Nothing keeps anything"),
+        url="https://example.org/same",
+        mode="snapshot",
+    )
+    assert changed.created and changed.previous == first.doc_id
+
+
+@needs_trafilatura
+def test_snapshot_replaces_a_bare_dom_capture(
+    con: sqlite3.Connection, modules: None
+) -> None:
+    dom = inbox.ingest_html(con, PAGE, url="https://example.org/p", mode="dom")
+    store.set_domains(con, dom.doc_id, ["family"])
+    store.link(
+        con,
+        store.Edge("A page about reverb", "paper", "about", "reverb", "concept"),
+        source_doc=dom.doc_id,
+        producer="test",
+    )
+    snap = inbox.ingest_html(
+        con,
+        PAGE.replace("<body>", "<body class='x'>"),
+        url="https://example.org/p",
+        mode="snapshot",
+    )
+    assert snap.created and snap.replaced == dom.doc_id
+    old = store.get_meta(con, dom.doc_id)
+    assert (
+        old["retired"]["of"] == snap.doc_id and "snapshot" in old["retired"]["reason"]
+    )
+    assert store.document_domains(con, snap.doc_id) == ["family"]  # carried over
+    assert (
+        con.execute(
+            "SELECT count(*) FROM chunks WHERE doc_id = ?", (dom.doc_id,)
+        ).fetchone()[0]
+        == 0
+    )
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+            (dom.doc_id,),
+        ).fetchone()[0]
+        == 0
+    )
+    hits = store.search(con, "feedback delay networks", 5)
+    assert [h["doc_id"] for h in hits] == [snap.doc_id]
+    assert [d["doc_id"] for d in inbox.recent(con)] == [snap.doc_id]
+    # and back, by hand
+    store.unretire_document(con, dom.doc_id)
+    assert "retired" not in store.get_meta(con, dom.doc_id)
+    assert (
+        con.execute(
+            "SELECT count(*) FROM chunks WHERE doc_id = ?", (dom.doc_id,)
+        ).fetchone()[0]
+        > 0
+    )
+
+
+def test_dedupe_captures_over_earlier_documents(con: sqlite3.Connection) -> None:
+    text = "the same article text, paragraph after paragraph. " * 30
+    ids = []
+    for i in range(3):
+        r = store.register(
+            con,
+            f"<html><!-- {i} --><body>{text}</body></html>".encode(),
+            mime="text/html",
+            title="Same",
+            source_url="https://example.org/dup",
+            meta={
+                "source": "capture",
+                "capture": {"mode": "snapshot" if i == 1 else "dom"},
+            },
+        )
+        store.index_text(con, r["doc_id"], text)
+        ids.append(r["doc_id"])
+    other = store.register(
+        con,
+        b"<html>other</html>",
+        mime="text/html",
+        title="Other",
+        source_url="https://example.org/dup",
+        meta={"source": "capture"},
+    )["doc_id"]
+    store.index_text(
+        con, other, "an entirely different text about something else. " * 30
+    )
+    dry = store.dedupe_captures(con, commit=False)
+    assert dry["retired"] == 2 and dry["kept_apart"] == 1
+    assert dry["groups"][0]["keep"] == ids[1]  # the snapshot wins over older DOMs
+    assert store.list_documents(con)["total"] == 4
+    rep = store.dedupe_captures(con)
+    assert rep["retired"] == 2
+    assert store.list_documents(con)["total"] == 2
+    assert store.list_documents(con, retired=True)["total"] == 2
+    assert sorted(
+        d["doc_id"] for d in store.live_captures_of(con, "https://example.org/dup")
+    ) == sorted([ids[1], other])
+    assert store.dedupe_captures(con)["retired"] == 0  # idempotent
+
+
 def test_ingest_url_fetches(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -330,3 +457,14 @@ def test_api_captures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
         view["recent"]
     ) >= 2
     assert view["inbox_dir"].endswith("inbox")
+    # retiring through the door, and back
+    a = r["doc_id"]
+    before = client.get("/documents").json()["total"]
+    assert (
+        client.post(f"/doc/{a}/retire", json={"reason": "test"}).json()["doc_id"] == a
+    )
+    assert client.get("/documents").json()["total"] == before - 1
+    assert client.get("/documents", params={"retired": True}).json()["total"] == 1
+    assert client.delete(f"/doc/{a}/retire").json()["doc_id"] == a
+    assert client.get("/documents").json()["total"] == before
+    assert client.post("/inbox/dedupe").json()["retired"] == 0

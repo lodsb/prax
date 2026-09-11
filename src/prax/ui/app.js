@@ -165,6 +165,8 @@ function metaLine(meta) {
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
   if (meta.domains) bits.push(`<span class="muted" title="ontology modules this document is read against">domains: ${meta.domains.map(esc).join(", ")}</span>`);
   if (meta.promote) bits.push(`<span class="muted" title="${esc(meta.promote.reason || "")}">promoted by ${esc(meta.promote.by)}</span>`);
+  if (meta.retired) bits.push(`<span class="error">retired ${esc((meta.retired.at || "").slice(0, 10))}: ${esc(meta.retired.reason || "")}${meta.retired.of ? ` of <a href="#doc/${meta.retired.of}">doc ${meta.retired.of}</a>` : ""}</span>`);
+  if (meta.recaptured && meta.recaptured.length) bits.push(`<span class="muted" title="sent again with the same text">captured ${meta.recaptured.length + 1}×</span>`);
   if (meta.title_history && meta.title_history.length) {
     const former = meta.title_history[meta.title_history.length - 1].title;
     bits.push(`<span class="muted" title="${esc(meta.title_source || "")}">titled by ${esc(meta.title_source || "?")}, was “${esc(former)}”</span>`);
@@ -249,6 +251,7 @@ async function viewDoc(id, p) {
       <a href="${originalHref(doc.id, firstPage)}" target="_blank" rel="noopener">open original ↗</a>
       ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
       <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
+      ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
       <span class="muted">${esc(doc.mime || "")} · ${chunks.length} chunks · ${(doc.text_len || 0).toLocaleString()} chars · doc ${doc.id}</span>
     </div>
@@ -269,6 +272,19 @@ async function viewDoc(id, p) {
     document.getElementById("page-edit").addEventListener("click", (e) => { e.preventDefault(); openEditor(pageMeta.slug); });
     if (p.edit) openEditor(pageMeta.slug);
   }
+  const retireLink = document.getElementById("retire");
+  if (retireLink) retireLink.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const reason = prompt("Retire this document (out of search and the graph; the file stays). Reason:", "retired by hand");
+    if (reason === null) return;
+    try { await post(`/doc/${doc.id}/retire`, { reason }); render(); } catch (err) { setStatus(err.message); }
+  });
+  const unretireLink = document.getElementById("unretire");
+  if (unretireLink) unretireLink.addEventListener("click", async (e) => {
+    e.preventDefault();
+    await fetch(`/doc/${doc.id}/retire`, { method: "DELETE" });
+    render();
+  });
   document.getElementById("domains").addEventListener("click", async (e) => {
     e.preventDefault();
     const cur = await api(`/doc/${doc.id}/domains`);
@@ -1080,7 +1096,7 @@ async function viewInbox(p) {
   const row = (x) => `<tr>
       <td><a href="#doc/${x.doc_id}">${esc(x.title || "(untitled)")}</a>${x.source_url ? ` <a class="muted" href="${esc(x.source_url)}" target="_blank" rel="noopener" title="${esc(x.source_url)}">↗</a>` : ""}</td>
       <td class="muted">${esc(x.source)}${x.capture.by && x.capture.by !== x.source ? ` (${esc(x.capture.by)})` : ""}${x.capture.mode ? ` · ${esc(x.capture.mode)}` : ""}${x.capture.note && x.capture.mode !== "snapshot" ? `<br><small title="${esc(x.capture.note)}">${esc(x.capture.note.slice(0, 60))}</small>` : ""}</td>
-      <td class="muted">${esc((x.domains || []).join(", ") || "all")}</td>
+      <td class="muted">${esc((x.domains || []).join(", ") || "all")}${x.recaptured ? ` <span title="sent again with the same text">·${x.recaptured + 1}×</span>` : ""}</td>
       <td class="muted">${esc((x.capture.at || "").slice(0, 16).replace("T", " "))}</td>
       <td>${x.indexed ? (x.extracted ? "extracted" : "indexed") : `<span class="muted" title="registered; the inbox watcher on the batch host (scripts/inbox.py --watch --parse) extracts its text">pending</span>`}</td>
     </tr>`;
@@ -1104,7 +1120,7 @@ async function viewInbox(p) {
   const msg = document.getElementById("inbox-msg");
   const chosenDomains = () => [...view.querySelectorAll("#up-domains input:checked")].map((i) => i.value);
   const report = (results) => {
-    msg.innerHTML = results.map((r) => r.error ? `<span class="error">${esc(r.name)}: ${esc(r.error)}</span>` : `${esc(r.name)} → <a href="#doc/${r.doc_id}">doc ${r.doc_id}</a>${r.created ? "" : " (already in the store)"}${r.indexed ? ", searchable" : ", waiting for the parse queue"}`).join("<br>");
+    msg.innerHTML = results.map((r) => r.error ? `<span class="error">${esc(r.name)}: ${esc(r.error)}</span>` : `${esc(r.name)} → <a href="#doc/${r.doc_id}">doc ${r.doc_id}</a>${r.duplicate_of ? " (the same page again)" : r.created ? "" : " (already in the store)"}${r.replaced ? `, replaces doc ${r.replaced}` : ""}${r.indexed ? ", searchable" : ", waiting for the parse queue"}`).join("<br>");
   };
   async function upload(files) {
     if (!files.length) return;
