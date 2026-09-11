@@ -208,7 +208,7 @@ R14). Design in `docs/ui.md`.
       (`docs/eval/local-llm-2026-09-08.md`); Sonnet 5 with a 20-triple cap
       chosen. Selection skips documents under 500 characters of text.
 - [x] Full run over the never-extracted documents (2026-09-11/12): not the
-      batch API but Qwen3.6-35B-A3B on a borrowed RTX 4090 through
+      batch API but Qwen3.6-35B-A3B on an RTX 4090 through
       llama-server (`docs/eval/extractors-local-2026-09-11.md`), 6,938
       documents in 8.3 h, 57,808 edges, 20,110 review items; a Sonnet
       second pass on chosen papers remains an option
@@ -327,7 +327,7 @@ R14). Design in `docs/ui.md`.
 - [x] `prax.yaml` (2026-09-11, `prax.models`): named models and the step
       each serves; kinds claude, gguf, openai (llama-server, vLLM, hosted
       APIs), stub; environment variables stay as per-run overrides; one
-      loaded runtime per process; ready for a borrowed 4090 running
+      loaded runtime per process; ready for a 4090 running
       llama-server for the extraction backlog
 - [x] Entity resolution (`prax.resolution`, `scripts/resolve_entities.py`):
       sure merges (normalized names, author initials forms) apply on their

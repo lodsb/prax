@@ -1,7 +1,7 @@
 # Local extractors on the 4090, 2026-09-11
 
 Question: which open-weight model should extract the 6,900-document
-backlog on the borrowed RTX 4090 (24 GB, power-limited to 320 W), and how
+backlog on an RTX 4090 (24 GB, power-limited to 320 W), and how
 does it compare with the Sonnet 5 pass? Setup: `llama-server` b10900 (CUDA
 12.4) started by `scripts/llama_server.ps1` with 8-bit KV cache and flash
 attention, thinking disabled for the Qwen3.6 models; prax's

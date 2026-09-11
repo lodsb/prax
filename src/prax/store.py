@@ -3356,6 +3356,15 @@ def retire_reading(
         " AND coalesce(ontology_version, '') != ?",
         (doc_id, producer, except_version),
     )
+    # the earlier reading's open review items are superseded as well: the
+    # new reading queues its own misfits against the ontology it was read
+    # under (review items carry no producer, so this is per document)
+    con.execute(
+        f"UPDATE review_queue SET resolution = 'dropped', resolved_at = {_NOW}"
+        " WHERE source_doc = ? AND resolution IS NULL"
+        " AND coalesce(ontology_version, '') != ?",
+        (doc_id, except_version),
+    )
     con.commit()
     return cur.rowcount
 

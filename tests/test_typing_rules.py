@@ -193,7 +193,7 @@ def test_decide_unmapped_rules() -> None:
     )
     assert a == "open"
     a, edges, rule = review.decide_unmapped(
-        item("Niklas Klugel", "supervised_by", "Johann Schlichter"), doc
+        item("Erik Lindqvist", "supervised_by", "Maria Novak"), doc
     )
     assert a == "link" and edges[0].rel == "advised_by" and rule == "advised_by"
     a, edges, _ = review.decide_unmapped(

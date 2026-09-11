@@ -14,8 +14,8 @@ of 8 K fit a 24 GB card. --load-mode none: with the file memory-mapped, Windows
 keeps the 20 GB resident in host RAM next to the VRAM copy and starves
 the door; without it the host copy is freed after the upload. Extraction prompts are about 3,500 tokens in and
 1,100 out, so 8 K per slot is the floor. -PowerLimit sets the card's
-power cap first (needs an administrator shell; 320 W keeps a 4090 within
-a 750 W supply).
+power cap first (needs an administrator shell; 320 W keeps a 4090 well
+within a mid-size power supply).
 #>
 param(
     [Parameter(Mandatory = $true)][string]$Model,

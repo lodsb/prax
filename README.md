@@ -64,7 +64,7 @@ Built and in daily use on one library, September 2026:
 | Entities | 34,000 papers, 16,200 concepts, 9,700 methods, 7,000 authors, 4,100 tools, 3,000 claims; 6,900 merged aliases |
 | Retrieval, 62 queries over the library | MRR 0.89 hybrid (0.82 keyword, 0.79 vector); hit@1 0.85 |
 | Titles | 3,771 file-name titles replaced by a local 7B model reading the first page |
-| Extraction | every document with text read once: 6,878 by a local Qwen3.6-35B-A3B on a borrowed 4090 (8 hours), 1,019 by Sonnet 5 |
+| Extraction | every document with text read once: 6,878 by a local Qwen3.6-35B-A3B on an RTX 4090 (8 hours), 1,019 by Sonnet 5 |
 
 Not built: the move of the service onto the serving board, and the MCP
 server proxying the HTTP door instead of importing the store. The browser
