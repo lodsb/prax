@@ -651,6 +651,50 @@ def job_finish(
     con.commit()
 
 
+def _pid_alive(pid: int) -> bool:
+    import os
+    import sys
+
+    if sys.platform == "win32":
+        import ctypes
+
+        handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
+        if not handle:
+            return False
+        ctypes.windll.kernel32.CloseHandle(handle)
+        return True
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+@_serialized
+def job_reap(con: sqlite3.Connection) -> int:
+    """Close the running jobs of this host whose process is gone (killed,
+    crashed, a reboot): they would otherwise sit as stale. Returns how
+    many were closed."""
+    import socket
+
+    n = 0
+    for r in con.execute(
+        "SELECT id, pid FROM jobs WHERE status = 'running' AND host = ?",
+        (socket.gethostname(),),
+    ).fetchall():
+        if r["pid"] and not _pid_alive(r["pid"]):
+            con.execute(
+                f"UPDATE jobs SET status = 'failed', finished_at = {_NOW},"
+                " note = coalesce(note, '') || ' (process gone)' WHERE id = ?",
+                (r["id"],),
+            )
+            n += 1
+    con.commit()
+    return n
+
+
 def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> dict[str, Any]:
     """``running`` (with ``stale`` when the heartbeat is old) and the last
     ``limit`` finished jobs, newest first."""

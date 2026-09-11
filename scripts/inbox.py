@@ -71,6 +71,9 @@ def main() -> int:
     doms = [d.strip() for d in (a.domains or "").split(",") if d.strip()] or None
     con = store.connect()
     store.init_db(con)
+    reaped = store.job_reap(con)
+    if reaped:
+        print(f"closed {reaped} job(s) whose process is gone", file=sys.stderr)
     root = a.from_dir or a.dir or inbox.inbox_dir()
     print(f"{'from' if a.from_dir else 'inbox'}: {root}", file=sys.stderr)
     say = None if a.quiet else (lambda t: print(t, flush=True))
