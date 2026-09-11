@@ -40,6 +40,8 @@ models:
 domains:
   - match: {collection: Family}
     domains: [family]
+  - match: {source: capture}     # pages sent from the browser
+    domains: [research]
   - domains: [research]
 
 steps:

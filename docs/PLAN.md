@@ -90,13 +90,18 @@ Parsing is a batch job; the serving path never parses.
 - [ ] The 71 scanned books (17 K pages): one deliberate overnight run with
       `PRAX_OCR_MAX_PAGES=1000`, or leave them until a faster OCR host
       exists
-- [ ] Browser capture: a Manifest V3 extension (Chrome and Firefox) with
-      "send this tab" and "send all tabs in window". Posts URL, title and the
-      rendered DOM to `POST /ingest/html`; a URL-only `POST /ingest/url`
-      fallback fetches server-side. Captures tagged with a capture-session
-      id. Bearer token, reachable only over Tailscale.
-- [ ] Inbox folder watcher: files dropped in `data/inbox/` are registered
-      and queued for parsing
+- [x] Capture door (2026-09-12, `prax.inbox`): `POST /ingest/html` (URL,
+      title, rendered DOM; trafilatura at once), `POST /ingest/url`
+      (server-side fetch), `POST /ingest/file` with domains and tags, a
+      capture-session id, canonical URLs with `meta.previous_capture`,
+      `GET /inbox`, the Inbox view (drop zone, URL form, recent captures),
+      the `capture_url` MCP tool, `PRAX_CORS_ORIGINS` for an extension
+- [ ] Browser extension: Manifest V3 (Chrome and Firefox), "send this
+      tab" and "send all tabs in window", options for server URL, token
+      and default domain; design in `docs/extension.md`
+- [x] Inbox folder (2026-09-12): `scripts/inbox.py [--watch] [--parse]`
+      registers what lands in `data/inbox/` (subfolder = domain, JSON
+      sidecar, settle time, `failed/`), consumed files removed
 - [ ] Backfill of the old zoetrope disk: the hash inventory in
       `scripts/backfill.py` gains a `--commit` mode that registers files
       through the store; review the dedupe report first

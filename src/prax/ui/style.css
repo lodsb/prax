@@ -115,6 +115,9 @@ th, td { border: 1px solid var(--line); padding: .2rem .5rem; text-align: left; 
 th { background: var(--panel); }
 
 .doc-list { width: 100%; }
+.drop { flex: 1 1 100%; padding: 1rem; border: 2px dashed var(--line); border-radius: 6px; color: var(--muted); text-align: center; }
+.drop.over { border-color: var(--accent); color: var(--fg); }
+.drop label { cursor: pointer; }
 .doc-list td, .doc-list th { border-left: 0; border-right: 0; }
 .pager { display: flex; gap: 1rem; margin: .6rem 0; }
 .token-box { border: 1px solid var(--line); background: var(--panel); padding: .8rem 1rem; margin-bottom: 1rem; border-radius: 4px; }

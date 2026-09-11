@@ -708,19 +708,23 @@ def assign_domains(
     *,
     force: bool = False,
     commit: bool = True,
+    ids: list[int] | None = None,
 ) -> dict[str, int]:
-    """Give every document without a domain set (all of them with ``force``)
-    the domains of the first rule it matches. A rule is ``{match: {source,
-    mime, path, collection, tag}, domains: [...]}``; a rule without
-    ``match`` is the default. Documents whose set a person wrote by hand
-    (``domains_by: human``) are never touched. Returns counts per rule
-    index and ``unmatched``."""
+    """Give every document without a domain set (all of them with ``force``;
+    only ``ids`` when given) the domains of the first rule it matches. A
+    rule is ``{match: {source, mime, path, collection, tag}, domains:
+    [...]}``; a rule without ``match`` is the default. Documents whose set
+    a person wrote by hand (``domains_by: human``) are never touched.
+    Returns counts per rule index and ``unmatched``."""
     counts: dict[str, int] = {"unmatched": 0}
     for rule in rules:
         _check_domains(list(rule.get("domains") or []))
-    for r in con.execute(
-        "SELECT id, mime, original_path, meta FROM documents"
-    ).fetchall():
+    sql = "SELECT id, mime, original_path, meta FROM documents"
+    args: tuple[Any, ...] = ()
+    if ids is not None:
+        sql += f" WHERE id IN ({','.join('?' * len(ids))})"
+        args = tuple(ids)
+    for r in con.execute(sql, args).fetchall():
         meta = json.loads(r["meta"] or "{}")
         if meta.get("domains_by") == "human":
             continue

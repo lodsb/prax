@@ -31,6 +31,7 @@ EXPECTED_TOOLS = {
     "ask",
     "promote",
     "set_domains",
+    "capture_url",
 }
 
 

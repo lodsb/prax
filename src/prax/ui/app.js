@@ -1067,9 +1067,97 @@ async function viewPromote(p) {
 }
 const PROMOTE_W = { project: 5, synthesis: 4, page: 3, cited: 1 };
 
+// ----------------------------------------------------------------- inbox
+// Captures: upload files (drag and drop or pick), send a URL for the door
+// to fetch, and the latest captures with their state. Each capture names
+// its domains; the rules in prax.yaml apply when none is chosen.
+
+async function viewInbox(p) {
+  view.innerHTML = `<p class="muted">Loading…</p>`;
+  let d;
+  try { d = await api("/inbox", { limit: p.limit || 50 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const domainOpts = d.modules.map((m) => `<label class="chip"><input type="checkbox" name="domain" value="${esc(m)}"> ${esc(m)}</label>`).join(" ");
+  const row = (x) => `<tr>
+      <td><a href="#doc/${x.doc_id}">${esc(x.title || "(untitled)")}</a>${x.source_url ? ` <a class="muted" href="${esc(x.source_url)}" target="_blank" rel="noopener" title="${esc(x.source_url)}">↗</a>` : ""}</td>
+      <td class="muted">${esc(x.source)}${x.capture.by && x.capture.by !== x.source ? ` (${esc(x.capture.by)})` : ""}</td>
+      <td class="muted">${esc((x.domains || []).join(", ") || "all")}</td>
+      <td class="muted">${esc((x.capture.at || "").slice(0, 16).replace("T", " "))}</td>
+      <td>${x.indexed ? (x.extracted ? "extracted" : "indexed") : `<span class="muted" title="waiting for the parse queue on the batch host">pending</span>`}</td>
+    </tr>`;
+  view.innerHTML = `
+    <form id="upload" class="search-form" autocomplete="off">
+      <div id="drop" class="drop">Drop files here, or <label><input id="files" type="file" multiple hidden><u>choose</u></label>. Text and HTML are searchable at once; PDFs and images wait for the parse queue.</div>
+      <input id="up-title" type="text" placeholder="title (single file only)" style="flex:1 1 16rem">
+      <span class="chips" id="up-domains">${domainOpts}</span>
+      <input id="up-tags" type="text" placeholder="tags, comma-separated" style="flex:0 1 14rem">
+      <button>Upload</button>
+    </form>
+    <form id="fetch" class="search-form" autocomplete="off">
+      <input id="fetch-url" type="url" placeholder="https://… (the door fetches it: a page, a PDF)" style="flex:1 1 22rem" required>
+      <input id="fetch-title" type="text" placeholder="title (optional)">
+      <button>Fetch</button>
+    </form>
+    <p class="muted">Drop folder on the server: <code>${esc(d.inbox_dir)}</code> (a file in <code>inbox/&lt;domain&gt;/</code> lands in that domain; <code>scripts/inbox.py --watch --parse</code> consumes it).</p>
+    <p id="inbox-msg"></p>
+    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Recent captures (${d.recent.length})</h2>
+    ${d.recent.length ? `<table class="doc-list"><thead><tr><th>document</th><th>source</th><th>domains</th><th>when</th><th>state</th></tr></thead><tbody>${d.recent.map(row).join("")}</tbody></table>` : `<p class="muted">Nothing captured yet.</p>`}`;
+  const msg = document.getElementById("inbox-msg");
+  const chosenDomains = () => [...view.querySelectorAll("#up-domains input:checked")].map((i) => i.value);
+  const report = (results) => {
+    msg.innerHTML = results.map((r) => r.error ? `<span class="error">${esc(r.name)}: ${esc(r.error)}</span>` : `${esc(r.name)} → <a href="#doc/${r.doc_id}">doc ${r.doc_id}</a>${r.created ? "" : " (already in the store)"}${r.indexed ? ", searchable" : ", waiting for the parse queue"}`).join("<br>");
+  };
+  async function upload(files) {
+    if (!files.length) return;
+    setStatus("uploading…");
+    const results = [];
+    for (const f of files) {
+      const fd = new FormData();
+      fd.append("file", f, f.name);
+      if (files.length === 1 && document.getElementById("up-title").value.trim()) fd.append("title", document.getElementById("up-title").value.trim());
+      const doms = chosenDomains();
+      if (doms.length) fd.append("domains", doms.join(","));
+      const tags = document.getElementById("up-tags").value.trim();
+      if (tags) fd.append("tags", tags);
+      try {
+        const res = await fetch("/ingest/file", { method: "POST", body: fd });
+        if (res.status === 401) { askForToken(); throw new Error("access token required"); }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+        results.push({ name: f.name, ...data });
+      } catch (err) { results.push({ name: f.name, error: err.message }); }
+    }
+    setStatus("");
+    report(results);
+    refreshList();
+  }
+  async function refreshList() {
+    try {
+      const fresh = await api("/inbox", { limit: p.limit || 50 });
+      const tbody = view.querySelector("table.doc-list tbody");
+      if (tbody) tbody.innerHTML = fresh.recent.map(row).join("");
+    } catch (_) { /* the list stays as it was */ }
+  }
+  const drop = document.getElementById("drop");
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); upload([...e.dataTransfer.files]); });
+  document.getElementById("files").addEventListener("change", (e) => upload([...e.target.files]));
+  document.getElementById("upload").addEventListener("submit", (e) => { e.preventDefault(); upload([...document.getElementById("files").files]); });
+  document.getElementById("fetch").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const url = document.getElementById("fetch-url").value.trim();
+    const body = { url, title: document.getElementById("fetch-title").value.trim() || null, domains: chosenDomains().length ? chosenDomains() : null };
+    try {
+      const data = await post("/ingest/url", body);
+      report([{ name: url, ...data }]);
+      refreshList();
+    } catch (err) { report([{ name: url, error: err.message }]); }
+  });
+}
+
 // ---------------------------------------------------------------- router
 
-const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages, promote: viewPromote };
+const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages, promote: viewPromote, inbox: viewInbox };
 
 async function render() {
   const r = route();

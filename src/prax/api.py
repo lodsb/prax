@@ -7,7 +7,7 @@ handlers; prax.store serializes access.
 from __future__ import annotations
 
 import logging
-import mimetypes
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import ask as ask_mod
-from . import auth, models, ontology, review, store
+from . import auth, inbox, models, ontology, review, store
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -43,6 +43,23 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="prax", version="0.0.1", lifespan=_lifespan)
 app.middleware("http")(auth.middleware)
+
+# A browser extension calls the door from its own origin
+# (chrome-extension://…, moz-extension://…): PRAX_CORS_ORIGINS lists the
+# origins allowed, comma-separated. Unset, no cross-origin request is
+# answered (the UI is same-origin).
+_cors = [
+    o.strip() for o in os.environ.get("PRAX_CORS_ORIGINS", "").split(",") if o.strip()
+]
+if _cors:
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_cors,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 
 
 class SessionReq(BaseModel):
@@ -80,6 +97,7 @@ class IngestText(BaseModel):
     title: str | None = None
     source_url: str | None = None
     meta: dict[str, Any] | None = None
+    domains: list[str] | None = None
 
 
 class LinkReq(BaseModel):
@@ -95,13 +113,36 @@ class LinkReq(BaseModel):
 
 @app.post("/ingest")
 def ingest(req: IngestText, request: Request) -> dict[str, Any]:
-    return store.ingest_text(
+    result = store.ingest_text(
         request.app.state.con,
         req.text,
         title=req.title,
         source_url=req.source_url,
         meta=req.meta,
     )
+    if req.domains:
+        try:
+            for d in req.domains:
+                store.add_domain(request.app.state.con, result["doc_id"], d)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
+    return result
+
+
+def _split(csv: str | None) -> list[str] | None:
+    items = [s.strip() for s in (csv or "").split(",") if s.strip()]
+    return items or None
+
+
+def _capture_out(cap: inbox.Capture) -> dict[str, Any]:
+    return {
+        "doc_id": cap.doc_id,
+        "created": cap.created,
+        "indexed": cap.indexed,
+        "domains": cap.domains,
+        "previous_capture": cap.previous,
+        "mime": cap.mime,
+    }
 
 
 @app.post("/ingest/file")
@@ -110,21 +151,94 @@ def ingest_file(
     file: Annotated[UploadFile, File()],
     title: Annotated[str | None, Form()] = None,
     source_url: Annotated[str | None, Form()] = None,
+    domains: Annotated[str | None, Form()] = None,
+    tags: Annotated[str | None, Form()] = None,
+    session: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
-    name = file.filename or ""
-    mime = (
-        file.content_type
-        if file.content_type and file.content_type != "application/octet-stream"
-        else mimetypes.guess_type(name)[0] or "application/octet-stream"
-    )
-    return store.ingest_file(
-        request.app.state.con,
-        file.file.read(),
-        mime=mime,
-        title=title or name or None,
-        source_url=source_url,
-        original_path=name or None,
-    )
+    """Upload a file: archived at once, text and HTML indexed at once,
+    anything else parsed by the batch host. ``domains`` and ``tags`` are
+    comma-separated."""
+    try:
+        cap = inbox.ingest_upload(
+            request.app.state.con,
+            file.file.read(),
+            filename=file.filename,
+            mime=file.content_type,
+            title=title,
+            source_url=source_url,
+            domains=_split(domains),
+            tags=_split(tags),
+            session=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _capture_out(cap)
+
+
+class IngestHtml(BaseModel):
+    url: str
+    html: str
+    title: str | None = None
+    domains: list[str] | None = None
+    tags: list[str] | None = None
+    session: str | None = None
+
+
+class IngestUrl(BaseModel):
+    url: str
+    title: str | None = None
+    domains: list[str] | None = None
+    tags: list[str] | None = None
+    session: str | None = None
+
+
+@app.post("/ingest/html")
+def ingest_html(req: IngestHtml, request: Request) -> dict[str, Any]:
+    """A page as the browser rendered it (the extension): archived and
+    indexed through trafilatura at once."""
+    try:
+        cap = inbox.ingest_html(
+            request.app.state.con,
+            req.html,
+            url=req.url,
+            title=req.title,
+            domains=req.domains,
+            tags=req.tags,
+            session=req.session,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return _capture_out(cap)
+
+
+@app.post("/ingest/url")
+def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
+    """Fetch a URL server-side and keep what came back."""
+    try:
+        cap = inbox.ingest_url(
+            request.app.state.con,
+            req.url,
+            title=req.title,
+            domains=req.domains,
+            tags=req.tags,
+            session=req.session,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    except OSError as exc:  # urllib errors: unreachable, 404, timeout
+        raise HTTPException(502, f"fetch failed: {exc}") from exc
+    return _capture_out(cap)
+
+
+@app.get("/inbox")
+def inbox_view(request: Request, limit: int = 50) -> dict[str, Any]:
+    """The latest captures (uploads, sent pages, fetched URLs, dropped
+    files) with their state, the drop folder, and the domains to choose."""
+    return {
+        "recent": inbox.recent(request.app.state.con, limit=limit),
+        "inbox_dir": str(inbox.inbox_dir()),
+        "modules": sorted(m for m in ontology.current().modules if m != ontology.CORE),
+    }
 
 
 @app.get("/get/{doc_id}")

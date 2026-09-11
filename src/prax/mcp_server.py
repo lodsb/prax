@@ -16,7 +16,7 @@ from typing import Any
 from fastmcp import FastMCP
 
 from . import ask as ask_mod
-from . import store
+from . import inbox, store
 
 mcp = FastMCP("prax")
 _con: sqlite3.Connection | None = None
@@ -221,6 +221,25 @@ def ingest(
 ) -> dict[str, Any]:
     """Ingest raw text as a new document (deduped by content hash)."""
     return store.ingest_text(_db(), text, title=title, source_url=source_url)
+
+
+@mcp.tool
+def capture_url(
+    url: str, title: str | None = None, domains: list[str] | None = None
+) -> dict[str, Any]:
+    """Fetch a web page or file by URL and keep it: a page is indexed at
+    once, a PDF waits for the parse queue. ``domains`` names the ontology
+    modules it belongs to (e.g. ["research"])."""
+    try:
+        cap = inbox.ingest_url(_db(), url, title=title, domains=domains, by="agent")
+    except (ValueError, OSError) as exc:
+        return {"error": str(exc)}
+    return {
+        "doc_id": cap.doc_id,
+        "created": cap.created,
+        "indexed": cap.indexed,
+        "domains": cap.domains,
+    }
 
 
 @mcp.tool

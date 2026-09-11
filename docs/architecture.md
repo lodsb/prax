@@ -209,6 +209,7 @@ what is needed.
 | `prax.resolution` | entity merge candidates (normalized names, initials, concept/method twins, name embeddings), adjudicators, apply through `merge_entities` | via store |
 | `prax.rerank` | optional cross-encoder over the top hits; off by default (measured no gain) | no |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
+| `prax.inbox` | captures: uploads, pages sent with their rendered DOM, URLs fetched server-side, the drop folder scan; canonical URLs and re-capture links; HTML indexed at once, the rest left to the queue; domains from the request, the folder or the rules | via store |
 | `prax.auth` | bearer token or session cookie on the HTTP door; loopback-only when unset | no |
 | `prax.api` | FastAPI door: agent endpoints, browsing, context, graph overview, review, pages, ask; serves the UI's static files with no-cache | via store |
 | `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer, an SVG force layout; a client of the door (R14) | no |
@@ -324,6 +325,7 @@ loop); the queue makes each batch do real work.
 | change the extraction prompt | `extraction.system_prompt` (the JSON text is cached across calls) and `docs/eval/` for a before/after on the three benchmark papers |
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |
 | put a document in a domain (which ontology modules it is read against) | `store.set_domains` / `add_domain` / `remove_domain` (`meta.domains`; the document page's "domains…", `PUT /doc/{id}/domains`, the `set_domains` MCP tool) or the `domains:` rules in prax.yaml through `scripts/assign_domains.py`; extraction builds prompt, grammar and schema for `ontology.for_domains(doc.domains)` and stamps the subset's version; `extract_graph.py --domain <name>` re-runs one domain |
+| take in a file, a page or a URL | `prax.inbox` (`ingest_upload`, `ingest_html`, `ingest_url`, `scan`); the Inbox view, `POST /ingest/file|html|url`, the `capture_url` MCP tool, `scripts/inbox.py --watch --parse` on the batch host for the drop folder and the pending parses |
 | send a document to the expensive model | flag it (`store.promote`, the page's "promote", the Promote view, the MCP tool); `extract_graph.py --promoted` runs the `promote` step's model over flagged documents it has not read |
 | add an agent tool | a store function first, then one handler each in `prax.api` and `prax.mcp_server`; keep responses compact |
 | add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
@@ -351,7 +353,8 @@ loop); the queue makes each batch do real work.
 
 ## 11. What is not built yet
 
-Browser capture and the inbox watcher (Stage 1), the backfill of the
+The browser extension (`docs/extension.md`; the door's side, `POST
+/ingest/html`, exists), the backfill of the
 old external-disk store, a second, richer extraction pass by Sonnet on the
 papers that matter (the local pass covered everything once), a typing
 pass for the unmapped review items and an ontology look at what the

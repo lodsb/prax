@@ -59,7 +59,7 @@ Layout, all under one directory:
       prax.db            SQLite (WAL); the canonical store
       prax.db-wal, -shm  WAL sidecar files; copy them with the db
       archive/<xx>/<sha256>   originals and parsed-text artifacts
-      inbox/             drop folder (planned, Stage 1)
+      inbox/             drop folder (section 3l); inbox/failed/ what the store refused
 
 The location defaults to `<repo>/data` and is overridden with the
 `PRAX_DATA_DIR` environment variable. On the Pi point it at the SSD.
@@ -596,6 +596,46 @@ so use a Claude-kind model or llama-server for extraction). The door
 stays lean: the model lives in the server's process, not the door's
 (invariant 7). `GET /ask/config` shows what the door resolved.
 
+## 3l. Captures: uploads, sent pages, fetched URLs, the drop folder
+
+Everything that is not a curated import comes in as a capture
+(`prax.inbox`), with `meta.source` saying how (`upload`, `capture`,
+`inbox`), `meta.capture` saying when and in which send, and a domain set
+from the request, the folder, or the `domains:` rules in prax.yaml. Text
+and HTML are searchable at once (trafilatura is light enough for the
+door); PDFs and images are archived and wait for the parse queue on the
+batch host. A page captured twice with the same bytes is one document;
+a changed page is a new document whose `meta.previous_capture` points at
+the last one with the same canonical URL (fragment and tracking
+parameters stripped).
+
+Four ways in:
+
+- **The Inbox view** (`#inbox`): drop files or pick them, choose domains
+  and tags, or paste a URL for the door to fetch. The list below shows
+  the latest captures with their state (pending, indexed, extracted).
+- **The door**: `POST /ingest/file` (multipart: `file`, `title`,
+  `domains` and `tags` comma-separated, `session`), `POST /ingest/html
+  {url, html, title, domains, tags, session}` for a page as a browser
+  rendered it (the extension's path, `docs/extension.md`), `POST
+  /ingest/url {url, …}` to fetch server-side. `POST /ingest` (text) takes
+  `domains` too. `GET /inbox` lists recent captures.
+- **Claude Code**: the `capture_url` MCP tool.
+- **The drop folder** `data/inbox/`: any file put there is registered by
+
+      python scripts/inbox.py                # one scan
+      python scripts/inbox.py --parse        # then parse what is pending
+      python scripts/inbox.py --watch --parse --interval 30
+
+  A file in `inbox/<module>/` (say `inbox/family/`) lands in that domain;
+  `<file>.json` next to a file is a sidecar (`title`, `source_url`,
+  `domains`, `tags`). Files still being written (younger than two
+  seconds, or `.part`/`.crdownload`) wait for the next scan. Consumed
+  files are removed, the archive holds their bytes; what the store
+  refused goes to `inbox/failed/`. `--parse` also indexes uploads and
+  fetched PDFs the door left pending, so a watcher on the batch host
+  completes what the Pi's door only registered.
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000
@@ -610,7 +650,9 @@ service's environment:
     $env:PRAX_TOKEN = "<the token>"          # PowerShell
     export PRAX_TOKEN=<the token>             # shell
 
-Scripts and the extension send `Authorization: Bearer <token>`. The UI
+Scripts and the extension send `Authorization: Bearer <token>`; an
+extension also needs its origin in `PRAX_CORS_ORIGINS` (comma-separated,
+`docs/extension.md`), unset otherwise. The UI
 asks for the token once and exchanges it for an HttpOnly session cookie
 (`POST /session`, 30 days, `DELETE /session` to end it), so links to
 originals work in new tabs. Without `PRAX_TOKEN` the door admits

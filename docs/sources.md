@@ -275,12 +275,24 @@ are open, without any intermediate service.
   time; the API is bound to the Tailscale address only. CORS allows the
   extension origin.
 
+The server side exists (`prax.inbox`, howto 3l): `POST /ingest/html`
+and `POST /ingest/url` as described, captures with `meta.capture
+{at, session, by}`, canonical URLs and `meta.previous_capture`, a domain
+set per capture, CORS for the extension's origin through
+`PRAX_CORS_ORIGINS`. The extension itself is designed in
+`docs/extension.md`.
+
 ## 3. Inbox folder
 
-`data/inbox/`. A watcher registers any file dropped there, moves it to the
-archive, and leaves `parsed_at NULL`. Useful for PDFs that arrive by mail
-or download and for any future front-end (Karakeep, Linkwarden) that can
-write files to a folder.
+`data/inbox/` (howto 3l). `scripts/inbox.py` registers any file dropped
+there, indexes text at once and leaves the rest for the parse queue
+(`--parse` runs it on the batch host); a subfolder names the domain, a
+JSON sidecar carries title, URL, domains and tags; consumed files are
+removed because the archive holds their bytes, refused ones go to
+`inbox/failed/`. Useful for PDFs that arrive by mail or download and for
+any future front-end (Karakeep, Linkwarden) that can write files to a
+folder. The folder is prax's own, so removing what it consumed does not
+break invariant 10.
 
 ## 4. The old zoetrope disk
 
