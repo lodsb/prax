@@ -1,21 +1,79 @@
 # prax
 
-A personal research knowledge base: one SQLite file, a content-addressed
-archive of the originals, hybrid search, a small evidence-bearing
-knowledge graph, a wiki of pages that are documents too, and doors for
-people (a plain web UI) and for models (an MCP server, an "ask" endpoint).
-Built for one person's library of papers, web snapshots, schematics, code
-and notes, to run on a Pi-class board at home; batch work (parsing,
-embedding, extraction) runs on a desktop with a GPU.
+A personal knowledge base you run yourself: one SQLite file, a
+content-addressed archive of the originals, hybrid search, a small
+evidence-bearing knowledge graph, a wiki of pages that are documents too,
+and doors for people (a plain web UI, a browser extension) and for models
+(an MCP server, an "ask" endpoint). It runs on a Pi-class board at home;
+the heavy work (parsing, embedding, extraction) runs on a desktop with a
+GPU, or on nothing at all when a hosted model is chosen.
 
 The name: the praxinoscope succeeded the zoetrope, same drum, sharper
 image. prax succeeds an external-disk store of the same library.
 
-## What it does
+## What it is for
 
-- **Ingest.** A Zotero library imported read-only; files dropped in by
-  hand or through the HTTP door. Originals are archived by SHA-256; the
-  database holds metadata and hashes only.
+Taking what you read, collect and write back into your own
+infrastructure, and then being able to use it: find it, ask it questions,
+see how it connects, write on top of it. The first library was a
+researcher's: a Zotero collection of papers, web pages, schematics,
+manuals, code and notes. Nothing in the design is specific to papers,
+though. What goes in is decided by the importers and the captures, what
+the graph makes of it is decided by which ontology modules a document
+belongs to, and those are small YAML files. Research literature, gear
+manuals and datasheets, magazine articles, recipes, build logs, family
+documents can live in one store, each read with its own vocabulary, and a
+document may belong to several.
+
+The models are a means, not the point. Which model does which step is a
+line in a config file: a local model through llama.cpp for the pass over
+everything, a hosted API for the few documents worth it, none at all for
+the steps where a person or the calling model does better. Everything a
+model produces carries its provenance, so it can be redone by a better
+model later without losing what the earlier one wrote. Private material
+never has to leave the machine.
+
+## What you can do with it
+
+- **Bring things in.** Import a Zotero library read-only. Drop files
+  into a folder. Upload from the web UI. Send the page you are looking
+  at, or every tab in the window, from the browser: a self-contained
+  snapshot with its images, or the PDF fetched with your own session
+  when it sits behind a login. Everything that needs a model afterwards
+  (text, a proper title, the graph, vectors) happens on its own on the
+  batch host, without spending money unasked.
+- **Find things.** Keyword and vector search fused per document, with the
+  library's own acronyms expanded, filters by document type and domain,
+  similar documents, and a context column on every document: summary,
+  entities, citations in and out, related documents, notes, projects.
+- **Ask.** A question is answered from the best passages and what the
+  graph knows about their documents, with numbered citations back to the
+  chunk. The answer can be kept on a page with edges to the documents it
+  rests on. From Claude Code, the same store is available as MCP tools:
+  search, read, traverse, link, capture, write pages.
+- **See how things connect.** A graph of typed, evidenced relations
+  extracted against a small versioned ontology, grown from what the
+  review queue shows the models wanted to say: papers, methods, claims,
+  organizations, devices and their features and specifications, and
+  whatever the next module adds. Citation edges from Crossref or
+  OpenAlex. Entities resolved in tiers, from sure name variants to a
+  model adjudicating likely pairs.
+- **Write on top of it.** Notes on documents, project threads with
+  reading lists, topic write-ups and syntheses across sources, as
+  Markdown pages with revisions. A model may append to a page and never
+  overwrites a person.
+- **Keep it honest.** Every edge says who wrote it, from which document,
+  under which ontology version, with what evidence. A misfit goes to a
+  review queue, never into the graph. A document sent twice is one
+  document; a wrong one is retired, not deleted, with its history kept.
+
+## What it does, by layer
+
+- **Ingest.** A Zotero library imported read-only; files dropped in a
+  folder, uploaded, or sent from the browser (`extension/`). Originals
+  are archived by SHA-256; the database holds metadata and hashes only.
+  Each document carries a domain set naming the ontology modules it is
+  read against.
 - **Parse.** A pluggable queue: PDFs through pymupdf4llm (Docling
   optional), OCR on request, HTML through trafilatura, source files and
   code regions kept as code (by extension or Magika), images described
@@ -23,34 +81,32 @@ image. prax succeeds an external-disk store of the same library.
 - **Index.** Structure-aware chunks (text, tables, figure captions, code)
   with locators back into the original; FTS5 for keywords; bge-small
   vectors in a usearch index; a document-level field (what a document
-  *is*: title, kind, summary) with its own BM25 and vectors.
-- **Search.** Reciprocal rank fusion of four rank lists per document, a
-  document-type filter, similar documents by vector, and a context column
-  on every document page: summary, entities, citations in and out, related
-  documents, notes, project membership.
-- **Graph.** Typed triples extracted by a model against a small versioned
-  ontology (papers, authors, concepts, methods, claims, tools, datasets,
-  venues, pages, projects). Every edge carries confidence, evidence, the
-  source document, the ontology version, and which producer wrote it in
-  which run; misfits go to a review queue, never into the graph. Citation
-  edges come from Crossref or OpenAlex. Entities are resolved in three
-  tiers, from sure name variants to a model adjudicating likely pairs.
-- **Pages.** Notes on documents, project threads with reading lists, topic
-  write-ups and syntheses across sources, as Markdown documents with
-  revisions. A model may append to a page and never overwrites a person.
-- **Ask.** A question goes to the hybrid search; the best passage per
-  document plus what the graph records about those documents goes to a
-  model, which answers with numbered citations. The answer can be kept on
-  a page with edges to the documents it rests on.
-- **Models are configuration.** `prax.yaml` names models (Claude, a GGUF
-  file in process through llama.cpp, or any OpenAI-compatible server) and
-  assigns one to each AI step: extraction, ask, titles, vision,
-  adjudication. Private material can stay on the machine; the API is used
-  where it is worth it.
+  *is*: title, kind, summary) with its own BM25 and vectors; an acronym
+  table built from the texts.
+- **Search.** Reciprocal rank fusion of the rank lists per document, a
+  document-type and a domain filter, similar documents by vector, and the
+  context column on every document page.
+- **Graph.** Typed triples extracted by a model against the composed
+  ontology of a document's modules (`ontology/`: core, research, studio,
+  more to come). Every edge carries confidence, evidence, the source
+  document, the ontology version, and which producer wrote it in which
+  run; a producer re-reading a document supersedes its own earlier
+  reading; misfits go to a review queue with typing rules over it.
+- **Pages.** Notes, projects, topics, syntheses: Markdown documents with
+  revisions, edited by people and appended to by models.
+- **Ask.** Hybrid search, one passage per document plus the graph's
+  facts, a model of your choosing, citations resolved to chunks.
+- **Pipeline and jobs.** The inbox watcher takes every capture the rest
+  of the way (parse, titles, extract, embed) with a local model; every
+  batch pass is a job the UI shows; the UI follows changes in the store.
+- **Models are configuration.** `prax.yaml` names models (Claude, an
+  OpenAI-compatible server such as llama-server, a GGUF file in process)
+  and assigns one to each step: extraction, promote, ask, titles, vision,
+  adjudication.
 - **Doors.** A FastAPI service with a bearer token, a static web UI
-  (search, ask, browse, document, graph, review, pages), and a thin
-  FastMCP server so Claude Code can search, read, traverse, link, and
-  write pages in the same store.
+  (search, ask, browse, document, graph, review, pages, promote, inbox,
+  jobs), a Manifest V3 browser extension, and a thin FastMCP server so
+  Claude Code can work in the same store.
 
 ## State
 
@@ -58,17 +114,20 @@ Built and in daily use on one library, September 2026:
 
 | | |
 |---|---|
-| Documents | 9,236 (9,019 PDFs, 108 web pages, 100 text files, images, one wiki page); 8,452 with text |
-| Chunks and vectors | 856,000 chunks, all with vectors; 9,236 document vectors |
-| Graph | 110,000 live edges: 77,000 extracted (local model and Sonnet), 25,600 citations, 6,800 from Zotero |
-| Entities | 34,000 papers, 16,200 concepts, 9,700 methods, 7,000 authors, 4,100 tools, 3,000 claims; 6,900 merged aliases |
-| Retrieval, 62 queries over the library | MRR 0.89 hybrid (0.82 keyword, 0.79 vector); hit@1 0.85 |
-| Titles | 3,771 file-name titles replaced by a local 7B model reading the first page |
-| Extraction | every document with text read once: 6,878 by a local Qwen3.6-35B-A3B on an RTX 4090 (8 hours), 1,019 by Sonnet 5 |
+| Documents | 9,538 (9,186 PDFs, 241 web pages, 102 text files, images, one wiki page); 8,752 with text; 302 came in through the drop folder, the UI or the browser extension |
+| Chunks and vectors | 876,000 chunks, all with vectors; 9,534 document vectors; 5,887 acronyms |
+| Graph | 124,000 live edges: 67,900 by a local model, 19,400 by Sonnet 5, 25,600 citations, 6,800 from Zotero, 4,100 by typing rules |
+| Entities | 38,200 papers, 22,100 concepts, 12,600 methods, 8,500 authors, 5,500 tools, 3,400 claims, 1,300 venues, 700 organizations; 6,900 merged aliases |
+| Ontology | core, research and studio modules; 9,517 documents in the research domain, 18 in studio, 2 in both |
+| Retrieval, 62 queries over the library | MRR 0.905 hybrid (0.82 keyword, 0.79 vector); hit@1 0.85 |
+| Extraction | every document with text read once by a local Qwen3.6-35B-A3B on an RTX 4090 or by Sonnet 5; the re-read under the current ontology is under way |
+| Review queue | 21,900 open items, the evidence the next ontology change is drawn from |
 
-Not built: the move of the service onto the serving board, and the MCP
-server proxying the HTTP door instead of importing the store. The browser
-extension (`extension/`) is new and hand-tested in one browser so far. Checklists with dates: `docs/PLAN.md`.
+Not built: the move of the service onto the serving board with the
+desktop draining model work through the door, and the MCP server
+proxying the HTTP door instead of importing the store; the browser
+extension is hand-tested in Firefox and Waterfox so far. Checklists with
+dates and the planned passes: `docs/PLAN.md`.
 
 ## Quick start
 
@@ -84,7 +143,10 @@ An empty store answers on the first request; migrations run on connect.
 Then import a Zotero library (`scripts/import_zotero.py`), parse
 (`scripts/parse_pending.py`), embed (`scripts/embed_pending.py`), and
 extract (`scripts/extract_graph.py`), in that order; each script has a
-dry run. Copy `prax.example.yaml` to the store directory as `prax.yaml`
+dry run. Or skip the library: drop files into the store's `inbox/`
+folder, upload in the UI, or install the browser extension, and run
+`scripts/inbox.py --watch` on the batch host to take them the rest of
+the way. Copy `prax.example.yaml` to the store directory as `prax.yaml`
 to say which model does which step; extraction, image description and
 adjudication with Claude need `ANTHROPIC_API_KEY`. Extras: `embed`
 (vectors), `ingest` (PDF, HTML, code detection), `local` (a GGUF model in
@@ -124,8 +186,8 @@ built, module by module: `docs/architecture.md`.
 ## Scope and status of the project
 
 This is one person's tool, built with Claude Code over a few weeks and
-shaped by one library and one set of machines (a Windows desktop with a
-GTX 1070 for batch work, an 8 GB Arm board as the serving target). It is
+shaped by one library and one set of machines (a Windows desktop with
+an RTX 4090 for batch work, an 8 GB Arm board as the serving target). It is
 published so the design and the measurements can be read and reused, not
 as a packaged product: there is no installer, no multi-user story, and
 the defaults reflect that library. Issues and pull requests are welcome
