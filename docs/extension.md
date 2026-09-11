@@ -89,9 +89,12 @@ the tab shows, with a small popup for the few choices that matter.
   link that sends the same tab again, or the first tab showing that URL,
   or a new tab with it; "retry failed" does that for every failed entry
   in turn. A retry updates the entry in place.
-- **A host that refuses everything but a navigation** (a Cloudflare
-  challenge answers 403 to the extension's own fetch, cookies or not,
-  and to any server). Then the extension uses the browser's downloader,
+- **A host that refuses the extension's own request** (a Cloudflare
+  challenge answers 403 to it, cookies or not, and to any server). Then
+  the extension fetches from inside one of the site's own pages, an open
+  tab of the site or its front page opened in a background tab and
+  closed again, which passes where the page's own scripts do. When even
+  that is refused, the extension uses the browser's downloader,
   which is a navigation: the file lands in `Downloads/prax-inbox/` with
   a sidecar (`<file>.json`: URL, title, domains, tags, session), and the
   inbox watcher on the batch host consumes that folder like the drop

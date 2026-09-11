@@ -230,6 +230,57 @@ async function downloadRoute(url, common) {
   return { mode: "download", title: base, note: `saved to Downloads/${DROP}/${base}; the inbox watcher takes it from there`, downloaded: true };
 }
 
+/* A request from inside a page of the same site: the site's own script
+   fetching, with the page's cookies and cache partition, which a challenge
+   lets pass where the extension's own request (another origin) and the
+   downloader are refused. An open HTML tab of that site serves; otherwise
+   the site's front page is opened in a background tab and closed again. */
+function fetchInPage(u) {
+  return fetch(u, { credentials: "include", cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin" })
+    .then(async (r) => {
+      if (!r.ok) return { error: `the site answered ${r.status} to the page's own request` };
+      const bytes = new Uint8Array(await r.arrayBuffer());
+      if (!(bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46)) return { error: `not a PDF: ${r.headers.get("content-type") || "?"}` };
+      let s = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return { body: btoa(s), size: bytes.length };
+    })
+    .catch((e) => ({ error: String(e && e.message ? e.message : e) }));
+}
+
+function waitForTab(tabId, ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => { api.tabs.onUpdated.removeListener(onUpdated); resolve(false); }, ms);
+    function onUpdated(id, info) {
+      if (id === tabId && info.status === "complete") { clearTimeout(timer); api.tabs.onUpdated.removeListener(onUpdated); resolve(true); }
+    }
+    api.tabs.onUpdated.addListener(onUpdated);
+  });
+}
+
+async function fetchViaSite(url) {
+  const origin = new URL(url).origin;
+  const open = (await api.tabs.query({ url: `${origin}/*` })).filter((t) => t.status === "complete" && !lib.looksLikePdf(t.url, ""));
+  let tab = open[0] || null;
+  let created = false;
+  if (!tab) {
+    tab = await api.tabs.create({ url: `${origin}/`, active: false });
+    created = true;
+    await waitForTab(tab.id, 20000);
+    await new Promise((r) => setTimeout(r, 1500)); // a challenge page settles
+  }
+  try {
+    const results = await api.scripting.executeScript({ target: { tabId: tab.id }, func: fetchInPage, args: [url] });
+    const r = results && results[0] ? results[0].result : null;
+    if (!r || r.error) throw new Error((r && r.error) || "no answer from the page");
+    const bytes = Uint8Array.from(atob(r.body), (c) => c.charCodeAt(0));
+    log("info", "fetched through the site's page", url, `${bytes.length} bytes`);
+    return new Blob([bytes], { type: "application/pdf" });
+  } finally {
+    if (created) api.tabs.remove(tab.id).catch(() => {});
+  }
+}
+
 async function uploadFile(blob, name, common, cfg) {
   const fd = new FormData();
   fd.append("file", blob, name);
@@ -276,8 +327,16 @@ async function captureTab(tab, opts, cfg) {
       return { tabId: tab.id, url, title, mode: "file", note: "PDF fetched with your session and uploaded", ...data };
     }
     if (refused && /answered 4\d\d/.test(refused)) {
-      // the site refuses anything but a navigation: the door will fare no
-      // better, the browser's own downloader will
+      // the site refuses the extension's own request: the door will fare no
+      // better; a request from inside one of the site's pages may, and the
+      // browser's downloader is the last try
+      try {
+        blob = await fetchViaSite(url);
+      } catch (err) { log("warn", "fetch through the site's page failed", url, err); blob = null; }
+      if (blob) {
+        const data = await uploadFile(blob, lib.pdfFileName(url), common, cfg);
+        return { tabId: tab.id, url, title, mode: "file", note: "PDF fetched through the site's own page and uploaded", ...data };
+      }
       const r = await downloadRoute(url, common);
       return { tabId: tab.id, url, title: title || r.title, ...r };
     }
@@ -415,7 +474,14 @@ async function captureLink(linkUrl, tab) {
       const data = await uploadFile(blob, lib.pdfFileName(linkUrl), common, cfg);
       r = { url: linkUrl, title: lib.pdfFileName(linkUrl), mode: "file", note: "PDF fetched with your session and uploaded", ...data };
     } else if (refused && /answered 4\d\d/.test(refused)) {
-      r = { url: linkUrl, ...(await downloadRoute(linkUrl, common)) };
+      let viaSite = null;
+      try { viaSite = await fetchViaSite(linkUrl); } catch (err) { log("warn", "fetch through the site's page failed", linkUrl, err); }
+      if (viaSite) {
+        const data = await uploadFile(viaSite, lib.pdfFileName(linkUrl), common, cfg);
+        r = { url: linkUrl, title: lib.pdfFileName(linkUrl), mode: "file", note: "PDF fetched through the site's own page and uploaded", ...data };
+      } else {
+        r = { url: linkUrl, ...(await downloadRoute(linkUrl, common)) };
+      }
     } else {
       const data = await door("/ingest/url", common, cfg);
       r = { url: linkUrl, title: linkUrl, mode: "url", note: why, ...data };
