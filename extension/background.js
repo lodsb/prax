@@ -178,10 +178,12 @@ const MAX_PDF_BYTES = 64 * 1024 * 1024;
    door fetches the URL as before. */
 async function fetchPdf(url) {
   const res = await fetch(url, { credentials: "include", redirect: "follow" });
-  if (!res.ok) return null;
+  const ct = res.headers.get("content-type") || "?";
+  if (!res.ok) throw new Error(`the site answered ${res.status} to this browser's own request (${ct})`);
   const buf = await res.arrayBuffer();
-  if (buf.byteLength > MAX_PDF_BYTES) return null;
-  if (!lib.isPdfResponse(res.headers.get("content-type"), new Uint8Array(buf, 0, Math.min(5, buf.byteLength)))) return null;
+  if (buf.byteLength > MAX_PDF_BYTES) throw new Error(`larger than ${MAX_PDF_BYTES / 1048576} MB`);
+  if (!lib.isPdfResponse(ct, new Uint8Array(buf, 0, Math.min(5, buf.byteLength)))) throw new Error(`not a PDF: ${ct}, ${buf.byteLength} bytes`);
+  log("info", "own fetch", url, `${buf.byteLength} bytes, ${ct}`);
   return new Blob([buf], { type: "application/pdf" });
 }
 
@@ -224,12 +226,11 @@ async function captureTab(tab, opts, cfg) {
   let why = p.reason || null;
   if (!read || lib.looksLikePdf(url, read.html)) {
     let blob = null;
-    try { blob = await fetchPdf(url); } catch (err) { log("warn", "PDF fetch failed", url, err); why = `own fetch failed (${err.message}); the door fetched instead`; blob = null; }
+    try { blob = await fetchPdf(url); } catch (err) { log("warn", "own fetch failed", url, err); why = `own fetch failed: ${err.message}; the door fetched instead`; blob = null; }
     if (blob) {
       const data = await uploadFile(blob, lib.pdfFileName(url), common, cfg);
       return { tabId: tab.id, url, title, mode: "file", note: "PDF fetched with your session and uploaded", ...data };
     }
-    if (!why) why = "not a PDF by its bytes; the door fetched the URL instead";
   }
   const data = await door("/ingest/url", common, cfg);
   return { tabId: tab.id, url, title, mode: "url", note: why, ...data };
