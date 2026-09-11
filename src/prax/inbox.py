@@ -141,6 +141,10 @@ def _capture_meta(
     if tags:
         meta["tags"] = [t for t in tags if t]
     if extra:
+        extra = dict(extra)
+        for key in ("mode", "note"):  # what the sender says about the page
+            if f"capture_{key}" in extra:
+                meta["capture"][key] = extra.pop(f"capture_{key}")
         meta.update(extra)
     return meta
 
@@ -262,9 +266,17 @@ def ingest_html(
     tags: list[str] | None = None,
     session: str | None = None,
     by: str | None = "extension",
+    mode: str | None = None,
+    note: str | None = None,
 ) -> Capture:
-    """A page as the browser rendered it (the extension's path)."""
+    """A page as the browser rendered it (the extension's path). ``mode``
+    says what the page is (``snapshot``: self-contained, ``dom``: the bare
+    document) and ``note`` why, both kept under ``meta.capture``."""
     data = html.encode("utf-8") if isinstance(html, str) else html
+    extra: dict[str, Any] = {}
+    if mode or note:
+        extra["capture_mode"] = mode
+        extra["capture_note"] = note
     return ingest_bytes(
         con,
         data,
@@ -276,6 +288,7 @@ def ingest_html(
         tags=tags,
         session=session,
         by=by,
+        extra_meta=extra or None,
     )
 
 

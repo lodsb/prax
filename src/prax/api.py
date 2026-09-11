@@ -184,6 +184,8 @@ class IngestHtml(BaseModel):
     domains: list[str] | None = None
     tags: list[str] | None = None
     session: str | None = None
+    mode: str | None = None  # "snapshot" (self-contained) or "dom"
+    note: str | None = None
 
 
 class IngestUrl(BaseModel):
@@ -207,6 +209,8 @@ def ingest_html(req: IngestHtml, request: Request) -> dict[str, Any]:
             domains=req.domains,
             tags=req.tags,
             session=req.session,
+            mode=req.mode,
+            note=req.note,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

@@ -1079,7 +1079,7 @@ async function viewInbox(p) {
   const domainOpts = d.modules.map((m) => `<label class="chip"><input type="checkbox" name="domain" value="${esc(m)}"> ${esc(m)}</label>`).join(" ");
   const row = (x) => `<tr>
       <td><a href="#doc/${x.doc_id}">${esc(x.title || "(untitled)")}</a>${x.source_url ? ` <a class="muted" href="${esc(x.source_url)}" target="_blank" rel="noopener" title="${esc(x.source_url)}">↗</a>` : ""}</td>
-      <td class="muted">${esc(x.source)}${x.capture.by && x.capture.by !== x.source ? ` (${esc(x.capture.by)})` : ""}</td>
+      <td class="muted">${esc(x.source)}${x.capture.by && x.capture.by !== x.source ? ` (${esc(x.capture.by)})` : ""}${x.capture.mode ? ` · ${esc(x.capture.mode)}` : ""}${x.capture.note && x.capture.mode !== "snapshot" ? `<br><small title="${esc(x.capture.note)}">${esc(x.capture.note.slice(0, 60))}</small>` : ""}</td>
       <td class="muted">${esc((x.domains || []).join(", ") || "all")}</td>
       <td class="muted">${esc((x.capture.at || "").slice(0, 16).replace("T", " "))}</td>
       <td>${x.indexed ? (x.extracted ? "extracted" : "indexed") : `<span class="muted" title="registered; the inbox watcher on the batch host (scripts/inbox.py --watch --parse) extracts its text">pending</span>`}</td>

@@ -212,8 +212,9 @@ async function captureTab(tab, opts, cfg) {
   if (p.mode === "skip") return { tabId: tab.id, url, title, error: p.reason };
   const common = { url, title, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session };
   if (p.mode === "html") {
-    const data = await door("/ingest/html", { ...common, html: read.html }, cfg);
-    return { tabId: tab.id, url, title, mode: "html", note: read.snapshot ? "snapshot with images and styles" : (read.note || null), ...data };
+    const note = read.snapshot ? "snapshot with images and styles" : (read.note || "plain DOM");
+    const data = await door("/ingest/html", { ...common, html: read.html, mode: read.snapshot ? "snapshot" : "dom", note }, cfg);
+    return { tabId: tab.id, url, title, mode: "html", note, ...data };
   }
   if (lib.looksLikePdf(url, read && read.html)) {
     let blob = null;

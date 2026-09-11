@@ -288,8 +288,12 @@ def test_api_captures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
                 "url": "https://example.org/p",
                 "html": PAGE,
                 "domains": ["research"],
+                "mode": "dom",
+                "note": "plain DOM (snapshot failed: x)",
             },
         ).json()
+        cap = client.get(f"/get/{h['doc_id']}").json()["meta"]["capture"]
+        assert cap["mode"] == "dom" and cap["note"].startswith("plain DOM")
         assert h["indexed"] and h["domains"] == ["research"]
 
     def fake_fetch(url: str, *, timeout: float = 0) -> tuple[bytes, str, str]:
