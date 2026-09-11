@@ -121,3 +121,95 @@ def test_apply_links_drops_and_leaves(con: sqlite3.Connection) -> None:
     # a second pass finds nothing new
     again = review.apply_typing_rules(con, commit=True)
     assert again.linked == 0 and again.dropped == 0 and again.still_open == 1
+
+
+def test_decide_unmapped_rules() -> None:
+    doc = ("A Paper Title Long Enough", "paper")
+    item = lambda src, rel, dst, reason="": {
+        "src": src,
+        "src_type": None,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": None,
+        "reason": reason,
+    }
+    a, edges, rule = review.decide_unmapped(
+        item("Andrew Barker", "affiliation", "University of Birmingham"), doc
+    )
+    assert a == "link" and rule == "affiliation"
+    assert (edges[0].src, edges[0].rel, edges[0].dst, edges[0].dst_type) == (
+        "Andrew Barker",
+        "affiliated_with",
+        "University of Birmingham",
+        "organization",
+    )
+    # either way round
+    a, edges, _ = review.decide_unmapped(
+        item("Chalmers University of Technology", "affiliation", "Anders Garder"), doc
+    )
+    assert edges[0].src == "Anders Garder" and edges[0].dst_type == "organization"
+    # two people: open
+    a, _, _ = review.decide_unmapped(
+        item("Ann Author", "affiliation", "Bob Author"), doc
+    )
+    assert a == "open"
+    a, edges, rule = review.decide_unmapped(
+        item("Niklas Klugel", "supervised_by", "Johann Schlichter"), doc
+    )
+    assert a == "link" and edges[0].rel == "advised_by" and rule == "advised_by"
+    a, edges, _ = review.decide_unmapped(
+        item("The origins of music: A review of theories", "author", "Walter B Brown"),
+        doc,
+    )
+    assert (
+        a == "link" and edges[0].rel == "authored_by" and edges[0].src_type == "paper"
+    )
+    a, edges, _ = review.decide_unmapped(
+        item("PHASERET", "funded_by", "Austrian Science Fund (FWF)"), doc
+    )
+    assert a == "link" and edges[0].dst_type == "organization"
+    a, edges, _ = review.decide_unmapped(
+        item("single-reed aerophone", "developed_by", "Johann Christoph Denner"), doc
+    )
+    assert edges[0].dst_type == "author" and edges[0].src_type == "tool"
+    a, edges, rule = review.decide_unmapped(
+        item("paper", "mentions", "SyncPlayer", "named tool discussed as related work"),
+        doc,
+    )
+    assert a == "link" and rule == "mentions"
+    assert (edges[0].src, edges[0].dst_type) == ("A Paper Title Long Enough", "tool")
+    a, _, _ = review.decide_unmapped(
+        item("paper", "mentions", "X", "no hint here"), doc
+    )
+    assert a == "open"
+    a, _, _ = review.decide_unmapped(item("rhythm", "related_to", "melody"), doc)
+    assert a == "open"
+
+
+def test_apply_covers_unmapped_items(con: sqlite3.Connection) -> None:
+    doc = store.ingest_text(con, "text " * 40, title="A Paper Title Long Enough")[
+        "doc_id"
+    ]
+    store.queue_review(
+        con,
+        src="Andrew Barker",
+        src_type=None,
+        rel="affiliation",
+        dst="University of Birmingham",
+        dst_type=None,
+        reason="unmapped: Affiliation is stated",
+        source_doc=doc,
+    )
+    store.queue_review(
+        con,
+        src="rhythm",
+        src_type=None,
+        rel="related_to",
+        dst="melody",
+        dst_type=None,
+        reason="unmapped: background",
+        source_doc=doc,
+    )
+    rep = review.apply_typing_rules(con, commit=True)
+    assert rep.linked == 1 and rep.still_open == 1 and rep.by_rule == {"affiliation": 1}
+    assert store.count_review(con) == 1

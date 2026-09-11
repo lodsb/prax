@@ -40,11 +40,29 @@ def test_synthesis_page_draws_on_sources(con: sqlite3.Connection) -> None:
     )
 
 
+def test_ontology_v5_organizations_and_mentions() -> None:
+    from prax import ontology
+
+    onto = ontology.current()
+    assert onto.version == "5"
+    onto.check_edge("author", "affiliated_with", "organization")
+    onto.check_edge("paper", "funded_by", "organization")
+    onto.check_edge("tool", "developed_by", "author")
+    onto.check_edge("paper", "mentions", "dataset")
+    onto.check_edge("paper", "contrasts", "tool")
+    onto.check_edge("paper", "extends", "paper")
+    onto.check_edge("paper", "about", "dataset")
+    onto.check_edge("paper", "part_of", "paper")
+    with pytest.raises(ValueError):
+        onto.check_edge("paper", "affiliated_with", "organization")
+    with pytest.raises(ValueError):
+        onto.check_edge("paper", "mentions", "author")
+
+
 def test_ontology_v4_lets_pages_argue() -> None:
     from prax import ontology
 
     onto = ontology.current()
-    assert onto.version == "4"
     onto.check_edge("page", "supports", "claim")
     onto.check_edge("page", "contradicts", "claim")
     onto.check_edge("page", "proposes", "claim")

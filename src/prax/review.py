@@ -88,6 +88,132 @@ def replay(
 # stays in the queue for a person or a bigger ontology.
 
 RULES_PRODUCER = "typing-rules"
+_ORG = re.compile(
+    r"\b(universit|institut|laborator|\blabs?\b|department|dept\.|faculty|school|"
+    r"college|centre|center|foundation|fund\b|council|academy|gmbh|inc\.?\b|ltd|"
+    r"corporation|company|group|studios?\b|research|cnrs|ircam|ccrma|mit\b|"
+    r"hochschule|fraunhofer|association|society|consortium|programme|program\b|"
+    r"agency|ministry|technolog|audio|software|systems|instruments|electronics|"
+    r"devices|networks|solutions|media|records|project)",
+    re.IGNORECASE,
+)
+_PARTICLES = "van|von|de|der|den|du|la|le|di|da"
+_PERSON = re.compile(
+    r"^[A-ZÀ-Ý][\w'\-\.]*(?: (?:[A-ZÀ-Ý][\w'\-\.]*|" + _PARTICLES + r")){1,4}$"
+)
+_TYPE_WORD = re.compile(
+    r"\b(tool|software|library|plugin|service|system|method|algorithm|technique|dataset|corpus|database|benchmark|concept)\b",
+    re.IGNORECASE,
+)
+_WORD_TYPE = {
+    "tool": "tool",
+    "software": "tool",
+    "library": "tool",
+    "plugin": "tool",
+    "service": "tool",
+    "system": "tool",
+    "method": "method",
+    "algorithm": "method",
+    "technique": "method",
+    "dataset": "dataset",
+    "corpus": "dataset",
+    "database": "dataset",
+    "benchmark": "dataset",
+    "concept": "concept",
+}
+
+
+def _looks_org(name: str) -> bool:
+    return bool(_ORG.search(name)) and not _PERSON.match(name)
+
+
+def _looks_person(name: str) -> bool:
+    return bool(_PERSON.match(name)) and not _ORG.search(name)
+
+
+def decide_unmapped(
+    item: dict[str, Any], doc: tuple[str, str] | None
+) -> tuple[str, list[store.Edge], str | None]:
+    """Rules for items without types: the relation the model named and the
+    shape of the two names decide. Affiliation between a person and an
+    organization, supervision between two people, authorship between a
+    title and a person, funding and development towards an organization,
+    and a mention whose reason names what kind of thing it is."""
+    src, dst, rel = item["src"], item["dst"], (item["rel"] or "").lower()
+    title, own = doc or ("", "paper")
+    if title and src.lower() in ("paper", "this paper", "the paper", "document"):
+        src = title
+    if rel in ("affiliation", "affiliated_with", "affiliated with"):
+        # exactly one side is a person; the other is the institution
+        ps, pd = _looks_person(src), _looks_person(dst)
+        if ps and not pd and not _looks_person(dst):
+            return (
+                "link",
+                [store.Edge(src, "author", "affiliated_with", dst, "organization")],
+                "affiliation",
+            )
+        if pd and not ps:
+            return (
+                "link",
+                [store.Edge(dst, "author", "affiliated_with", src, "organization")],
+                "affiliation",
+            )
+        return "open", [], None
+    if rel in ("advised_by", "supervised_by", "advisor", "supervisor"):
+        if _looks_person(src) and _looks_person(dst):
+            return (
+                "link",
+                [store.Edge(src, "author", "advised_by", dst, "author")],
+                "advised_by",
+            )
+        return "open", [], None
+    if rel in ("author", "author_of", "authored_by", "authors", "written_by"):
+        a, b = (src, dst) if _looks_person(dst) else (dst, src)
+        if _looks_person(b) and not _looks_person(a) and len(a) > 12:
+            return (
+                "link",
+                [store.Edge(a, "paper", "authored_by", b, "author")],
+                "authored_by",
+            )
+        return "open", [], None
+    if (
+        rel in ("funded_by", "funding", "supported_by")
+        and _looks_org(dst)
+        and not _looks_person(src)
+    ):
+        st = own if title and src == title else "paper"
+        return (
+            "link",
+            [store.Edge(src, st, "funded_by", dst, "organization")],
+            "funded_by",
+        )
+    if rel in ("developed_by", "created_by", "made_by", "built_by"):
+        if _looks_org(dst):  # "Waves Audio" reads like two names; the org words win
+            return (
+                "link",
+                [store.Edge(src, "tool", "developed_by", dst, "organization")],
+                "developed_by",
+            )
+        if _looks_person(dst):
+            return (
+                "link",
+                [store.Edge(src, "tool", "developed_by", dst, "author")],
+                "developed_by",
+            )
+        return "open", [], None
+    if rel in ("mentions", "references", "discusses", "names"):
+        m = _TYPE_WORD.search(item.get("reason") or "")
+        if m and (title and src == title or src == item["src"]):
+            st = own if title and src == title else "paper"
+            return (
+                "link",
+                [store.Edge(src, st, "mentions", dst, _WORD_TYPE[m.group(1).lower()])],
+                "mentions",
+            )
+        return "open", [], None
+    return "open", [], None
+
+
 _MALFORMED = re.compile(r"(src_type=|dst_type=|confidence=|evidence=|\trel=)")
 # (rel, src_type, dst_type) -> new relation, after the self-name retyping
 REMAP: dict[tuple[str, str, str], str] = {
@@ -211,15 +337,18 @@ def apply_typing_rules(
     items: list[dict[str, Any]] = []
     offset = 0
     while True:
-        page = store.list_review(con, limit=1000, offset=offset, unmapped=False)
+        page = store.list_review(con, limit=1000, offset=offset)
         if not page:
             break
         offset += len(page)
-        items.extend(it for it in page if it["src_type"] and it["dst_type"])
+        items.extend(page)
     docs = _doc_titles(con, {it["source_doc"] for it in items if it["source_doc"]})
     for it in items:
         rep.checked += 1
-        action, edges, rule = decide(it, docs.get(it["source_doc"]))
+        if it["src_type"] and it["dst_type"]:
+            action, edges, rule = decide(it, docs.get(it["source_doc"]))
+        else:
+            action, edges, rule = decide_unmapped(it, docs.get(it["source_doc"]))
         if action == "open":
             rep.still_open += 1
             continue

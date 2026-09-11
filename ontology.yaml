@@ -19,7 +19,7 @@
 # for the living documents in the store; `annotates` and `part_of` connect
 # them to papers and to each other; `cites` and `about` accept a page as
 # source, so an extracted page enters the graph like a paper.
-version: "4"
+version: "5"
 
 entity_types:
   paper:
@@ -72,7 +72,13 @@ entity_types:
       An ongoing research thread in this library, named by its title.
       Only the document being extracted can be a project, when its header
       says "Kind: project". A research project a paper mentions (a funded
-      programme, a consortium) is not a project entity: put it in unmapped.
+      programme, a consortium) is an organization, not a project.
+  organization:
+    description: >-
+      A university, department, lab, company, funder, consortium or
+      standards body named in the text: Chalmers University of Technology,
+      LMA-CNRS, Waves Audio, Austrian Science Fund. Full name as printed,
+      no city or country unless part of the name.
 
 relation_types:
   cites:
@@ -90,7 +96,7 @@ relation_types:
     description: the venue the document appeared in
   about:
     domain: [paper, claim, page, project]
-    range: [concept, method, tool]
+    range: [concept, method, tool, dataset]
     description: >-
       the document or claim is substantially about the concept, method or
       tool; something discussed at length, not mentioned in passing
@@ -104,13 +110,13 @@ relation_types:
     description: a tool or method realizes a concept or another method
   extends:
     domain: [paper, method, concept, tool]
-    range: [method, concept, tool]
+    range: [method, concept, tool, paper]
     description: >-
       the document, method, concept or tool builds on or generalizes a
-      method, concept or tool
+      method, concept, tool or an earlier paper
   contrasts:
-    domain: [paper, method, claim]
-    range: [method, claim, paper]
+    domain: [paper, method, claim, tool]
+    range: [method, claim, paper, tool, concept]
     description: >-
       the document sets the two against each other (compared with,
       as opposed to); for claims that cannot both hold use contradicts
@@ -152,5 +158,27 @@ relation_types:
       the papers
   part_of:
     domain: [paper, page]
-    range: [project]
-    description: the document belongs to a project's reading list or thread
+    range: [project, paper]
+    description: >-
+      the document belongs to a project's reading list or thread; or a
+      chapter, article or section is part of a book or proceedings volume
+  mentions:
+    domain: [paper, page, project]
+    range: [tool, method, dataset, concept]
+    description: >-
+      the document names a tool, method, dataset or concept without using
+      it or being about it (related work, an aside). The weakest relation:
+      use it only when nothing stronger holds; never for something the
+      document uses or is substantially about
+  affiliated_with:
+    domain: [author]
+    range: [organization]
+    description: the author's institution as stated in the document
+  funded_by:
+    domain: [paper, project]
+    range: [organization]
+    description: a funder or grant programme acknowledged in the document
+  developed_by:
+    domain: [tool]
+    range: [organization, author]
+    description: who built or makes the tool, as the text states it
