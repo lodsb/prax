@@ -86,7 +86,11 @@ what" table: `docs/architecture.md`.
 Hybrid: FTS5 (BM25) and vector search over chunks, plus BM25 and vector
 search over the document field (what a document *is*: title, kind,
 summary), fused at document level with Reciprocal Rank Fusion; `doctype`
-filters by document type. Optional cross-encoder rerank (bge-reranker-v2-m3) over fused
+filters by document type. A query token the library defines as an acronym
+(`acronyms` table, built from "phrase (ACRONYM)" in the texts) is expanded
+to its phrase on the keyword side, and the query's rare acronym-shaped
+terms get a rank list of their own (measured in
+`docs/eval/retrieval-acronyms-2026-09-12.md`). Optional cross-encoder rerank (bge-reranker-v2-m3) over fused
 top-N — benchmark on target hardware before enabling by default. Graph
 traversal expands entry-point hits 1–2 hops. Complement queries ("what is NOT
 connected") and weighted multi-hop scoring are explicit SQL tools, never

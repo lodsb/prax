@@ -127,8 +127,12 @@ def test_vector_and_hybrid_search(con: sqlite3.Connection) -> None:
     hybrid = store.search(con, "kalman pitch estimator")
     assert hybrid[0]["doc_id"] == ids["pitch"]
     assert hybrid[0]["fts_rank"] == 1 and hybrid[0]["vec_rank"] == 1
+    # first on every list: fts, the rare-terms list ("kalman" and "pitch" are
+    # rare in a corpus this small, "estimator" matches nothing), vec, field,
+    # document vec
+    assert hybrid[0]["fts_rare_rank"] == 1
     assert hybrid[0]["score"] == pytest.approx(
-        (3 + store.FIELD_WEIGHT) / (store.RRF_K + 1)
+        (1 + store.RARE_TERMS_WEIGHT + 1 + store.FIELD_WEIGHT + 1) / (store.RRF_K + 1)
     )
     assert "[pitch]" in hybrid[0]["snippet"].lower()  # FTS snippet wins
     fts = store.search(con, "kalman pitch estimator", mode="fts")

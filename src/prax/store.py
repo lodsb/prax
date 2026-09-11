@@ -243,6 +243,105 @@ def _fts_query(query: str) -> str | None:
     return " OR ".join(f'"{t}"' for t in tokens)
 
 
+ACRONYM_MIN_DOCS = 1  # one definition is enough: the phrase only adds an alternative
+ACRONYM_EXPANSIONS = 2
+RARE_CHUNKS = 50  # a token in fewer chunks than this decides the ranking
+RARE_MAX_LEN = 6  # longer tokens are words, not acronyms, unless the table knows them
+# Measured on the 62 library queries (docs/eval/retrieval-acronyms-2026-09-12.md):
+# keyword-side expansion alone lifts MRR 0.89 -> 0.905; expanding the embedder's
+# input and a rank list of chunks holding every term both cost; the rare-terms
+# list costs one query and is what makes "adaa iir" find the ADAA papers.
+ALL_TERMS_WEIGHT = 0.0  # the rank list of chunks holding every query term; 0 = off
+RARE_TERMS_WEIGHT = 3.0  # the rank list of chunks holding the rare terms
+VEC_EXPAND = False  # embed the query as typed; expansions only on the keyword side
+
+
+@_serialized
+def replace_acronyms(con: sqlite3.Connection, rows: list[tuple[str, str, int]]) -> int:
+    """Replace the acronyms table (``scripts/build_acronyms.py``):
+    ``(acronym, expansion, documents)`` rows, lowercased."""
+    con.execute("DELETE FROM acronyms")
+    con.executemany(
+        "INSERT INTO acronyms (acronym, expansion, docs) VALUES (?, ?, ?)",
+        [(a.lower(), e.lower(), int(n)) for a, e, n in rows],
+    )
+    con.commit()
+    return len(rows)
+
+
+def acronym_expansions(
+    con: sqlite3.Connection,
+    token: str,
+    *,
+    min_docs: int = ACRONYM_MIN_DOCS,
+    limit: int = ACRONYM_EXPANSIONS,
+) -> list[str]:
+    """The phrases the library defines ``token`` as, best attested first."""
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT expansion FROM acronyms WHERE acronym = ? AND docs >= ?"
+            " ORDER BY docs DESC, expansion LIMIT ?",
+            (token.lower(), min_docs, limit),
+        )
+    ]
+
+
+def expand_query(con: sqlite3.Connection, query: str) -> list[list[str]]:
+    """The query as terms, each a list of alternatives: the token itself and
+    the phrases the library defines it as (``[["adaa", "antiderivative
+    antialiasing"], ["iir"]]``). Tokens of nine or more characters, and
+    digits, are never acronyms."""
+    terms: list[list[str]] = []
+    for tok in _TOKEN.findall(query):
+        alts = [tok.lower()]
+        if 2 <= len(tok) <= 8 and tok.isalpha():
+            alts += [e for e in acronym_expansions(con, tok) if e != tok.lower()]
+        terms.append(alts)
+    return terms
+
+
+def expanded_text(terms: list[list[str]]) -> str:
+    """The query with its expansions, for the embedder."""
+    return " ".join(alt for term in terms for alt in term)
+
+
+def _expr(terms: list[list[str]], *, all_terms: bool) -> str | None:
+    """MATCH expression: every alternative quoted (a phrase stays a phrase),
+    alternatives OR-ed within a term, terms OR-ed (recall) or AND-ed (the
+    tier that wants every term present)."""
+    if not terms:
+        return None
+    groups = ["(" + " OR ".join(f'"{a}"' for a in term) + ")" for term in terms]
+    return (" AND " if all_terms else " OR ").join(groups)
+
+
+def _rare_terms(con: sqlite3.Connection, terms: list[list[str]]) -> list[list[str]]:
+    """The acronym-shaped terms that match fewer than ``RARE_CHUNKS`` chunks
+    (and at least one): a rare exact token like "adaa" should decide the
+    ranking, not the common words around it, so those terms get a rank list
+    of their own. Only short tokens, tokens with digits and known acronyms
+    qualify: a rare inflection of an ordinary word ("reassigning",
+    "upmixing") pulled paraphrase queries towards the wrong documents."""
+    out = []
+    for term in terms:
+        tok = term[0]
+        acronym_shaped = (
+            len(tok) <= RARE_MAX_LEN or any(ch.isdigit() for ch in tok) or len(term) > 1
+        )
+        if not acronym_shaped:
+            continue
+        expr = _expr([term], all_terms=False)
+        n = con.execute(
+            "SELECT count(*) FROM (SELECT rowid FROM chunks_fts WHERE chunks_fts"
+            " MATCH ? LIMIT ?)",
+            (expr, RARE_CHUNKS),
+        ).fetchone()[0]
+        if 0 < n < RARE_CHUNKS:
+            out.append(term)
+    return out
+
+
 # ----------------------------------------------------------------- ingest
 
 
@@ -1237,11 +1336,12 @@ def _fts_search(
     kind: str | None,
     *,
     snippets: bool = True,
+    expr: str | None = None,
 ) -> list[dict[str, Any]]:
     """BM25 over chunks. ``snippets=False`` skips the snippet() call, which
     reads every matched chunk's text and dominates the cost of deep lists;
     ``_fts_snippets`` fills them in for the few hits that survive fusion."""
-    expr = _fts_query(query)
+    expr = expr or _fts_query(query)
     if expr is None:
         return []
     kind_clause = "AND c.kind = ?" if kind is not None else ""
@@ -1273,10 +1373,10 @@ def _fts_search(
 
 
 def _fts_snippets(
-    con: sqlite3.Connection, query: str, chunk_ids: list[int]
+    con: sqlite3.Connection, query: str, chunk_ids: list[int], expr: str | None = None
 ) -> dict[int, str]:
     """Match-marked snippets for a handful of chunks (the fused hits)."""
-    expr = _fts_query(query)
+    expr = expr or _fts_query(query)
     if expr is None or not chunk_ids:
         return {}
     marks = ",".join("?" * len(chunk_ids))
@@ -1339,10 +1439,10 @@ def _vec_search(
 
 
 def _field_fts_search(
-    con: sqlite3.Connection, query: str, limit: int
+    con: sqlite3.Connection, query: str, limit: int, expr: str | None = None
 ) -> list[dict[str, Any]]:
     """BM25 over the document field; hits carry no chunk yet."""
-    expr = _fts_query(query)
+    expr = expr or _fts_query(query)
     if expr is None:
         return []
     rows = con.execute(
@@ -1398,13 +1498,16 @@ def _field_hit(doc_id: int, title: str, snippet: str, score: float) -> dict[str,
 
 
 def _fill_chunks(
-    con: sqlite3.Connection, hits: list[dict[str, Any]], query: str
+    con: sqlite3.Connection,
+    hits: list[dict[str, Any]],
+    query: str,
+    expr: str | None = None,
 ) -> None:
     """A hit that came from the document field alone gets the document's
     chunk that matches the query best, else its first chunk, so every hit
     opens somewhere; the field snippet stays, it says why the document
     matched."""
-    expr = _fts_query(query)
+    expr = expr or _fts_query(query)
     for h in hits:
         if h.get("chunk_id") is not None:
             continue
@@ -1599,36 +1702,69 @@ def _search_hits(
     if mode == "vec" and not vectors_ready:
         raise ValueError("vector search unavailable: no embedder, index or vectors")
     fetch = limit * 4 if doctype else limit
-    if mode == "fts":
-        return _finish(con, _fts_search(con, query, fetch, kind), query, limit, doctype)
-    if not vectors_ready:  # hybrid without vectors: chunk BM25 fused with field BM25
-        depth = max(limit * 3, RRF_DEPTH)
-        lists = [_fts_search(con, query, depth, kind, snippets=False)]
-        names = ["fts"]
-        if kind is None:
-            lists.append(_field_fts_search(con, query, depth))
+    # the query as terms with the library's own expansions of its acronyms;
+    # one OR expression for recall, one AND expression for the tier that
+    # wants every term present (only when there is more than one term)
+    terms = expand_query(con, query)
+    or_expr = _expr(terms, all_terms=False)
+    and_expr = _expr(terms, all_terms=True) if len(terms) > 1 else None
+    if mode == "fts":  # the raw chunk list, expanded but not fused
+        hits = _fts_search(con, query, fetch, kind, expr=or_expr)
+        return _finish(con, hits, query, limit, doctype, expr=or_expr)
+    depth = max(limit * 3, RRF_DEPTH)
+    # keyword lists: any term (recall), optionally every term, and the rare
+    # terms alone: "adaa iir" must not be decided by the thousands of chunks
+    # that say "iir"
+    weights: dict[str, float] = {
+        "fts_all": ALL_TERMS_WEIGHT,
+        "fts_rare": RARE_TERMS_WEIGHT,
+    }
+    lists = [_fts_search(con, query, depth, kind, snippets=False, expr=or_expr)]
+    names = ["fts"]
+    if and_expr and ALL_TERMS_WEIGHT > 0:
+        lists.append(
+            _fts_search(con, query, depth, kind, snippets=False, expr=and_expr)
+        )
+        names.append("fts_all")
+    rare = _rare_terms(con, terms) if RARE_TERMS_WEIGHT > 0 else []
+    if rare and len(rare) == len(terms):
+        # the whole query is rare tokens ("adaa"): the keyword list carries
+        # the weight itself, vector neighbours of letters must not outvote it
+        weights["fts"] = RARE_TERMS_WEIGHT
+    if rare and len(rare) < len(terms):
+        rare_expr = _expr(rare, all_terms=True)
+        lists.append(
+            _fts_search(con, query, depth, kind, snippets=False, expr=rare_expr)
+        )
+        names.append("fts_rare")
+    if not vectors_ready:
+        if kind is None:  # hybrid without vectors: the field too
+            lists.append(_field_fts_search(con, query, depth, expr=or_expr))
             names.append("field")
-        fused = _rrf(lists, names, fetch, {"field": _field_weight(query)})
-        return _finish(con, fused, query, limit, doctype)
+            weights["field"] = _field_weight(query)
+        fused = _rrf(lists, names, fetch, weights)
+        return _finish(con, fused, query, limit, doctype, expr=or_expr)
     assert emb is not None
-    vector = emb.embed_query(query)
+    vector = emb.embed_query(expanded_text(terms) if VEC_EXPAND else query)
     if mode == "vec":
         return _finish(
-            con, _vec_search(con, vector, fetch, kind), query, limit, doctype
+            con,
+            _vec_search(con, vector, fetch, kind),
+            query,
+            limit,
+            doctype,
+            expr=or_expr,
         )
-    depth = max(limit * 3, RRF_DEPTH)
-    lists = [
-        _fts_search(con, query, depth, kind, snippets=False),
-        _vec_search(con, vector, depth, kind),
-    ]
-    names = ["fts", "vec"]
+    lists.append(_vec_search(con, vector, depth, kind))
+    names.append("vec")
     if kind is None:  # the field has no chunk kind to filter by
-        lists.append(_field_fts_search(con, query, depth))
+        lists.append(_field_fts_search(con, query, depth, expr=or_expr))
         names.append("field")
+        weights["field"] = _field_weight(query)
         lists.append(_field_vec_search(con, emb.name, vector, depth))
         names.append("dvec")
-    fused = _rrf(lists, names, fetch, {"field": _field_weight(query)})
-    return _finish(con, fused, query, limit, doctype)
+    fused = _rrf(lists, names, fetch, weights)
+    return _finish(con, fused, query, limit, doctype, expr=or_expr)
 
 
 def _field_weight(query: str) -> float:
@@ -1645,12 +1781,13 @@ def _finish(
     query: str,
     limit: int,
     doctype: str | None,
+    expr: str | None = None,
 ) -> list[dict[str, Any]]:
     if doctype:
         hits = _filter_doctype(con, hits, doctype)
     hits = hits[:limit]
     field_only = {h["doc_id"] for h in hits if h.get("chunk_id") is None}
-    _fill_chunks(con, hits, query)
+    _fill_chunks(con, hits, query, expr=expr)
     chunk_ids = [
         h["chunk_id"]
         for h in hits
@@ -1658,7 +1795,7 @@ def _finish(
         and h["doc_id"] not in field_only
         and h.get("fts_rank") is not None
     ]
-    marked = _fts_snippets(con, query, chunk_ids) if chunk_ids else {}
+    marked = _fts_snippets(con, query, chunk_ids, expr=expr) if chunk_ids else {}
     for h in hits:
         if h.get("chunk_id") in marked:
             h["snippet"] = marked[h["chunk_id"]]

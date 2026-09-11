@@ -168,8 +168,13 @@ flowchart LR
   H -->|ask| B[bundle: one passage per document,<br/>graph facts per document] --> M[local GGUF model, Claude,<br/>or the MCP client itself] --> A[answer citing n] -->|ask/save| P[page section with sources,<br/>annotates edges]
 ```
 
-`search` fuses four rank lists per document: chunk BM25, chunk KNN, and
-BM25 and KNN over the document field. The field list is weighted 2 for
+`search` first expands the query: a token the library defines as an
+acronym (the `acronyms` table, from "phrase (ACRONYM)" in the texts)
+becomes the token or its phrase for the keyword side (the embedder sees
+the query as typed; expanding it measured worse). It then fuses up to
+five rank lists per document: chunk BM25 over any term, chunk BM25 over
+chunks holding the query's rare acronym-shaped terms (weight 3), chunk
+KNN, and BM25 and KNN over the document field. The field list is weighted 2 for
 queries of up to three words and fades to 1 by seven, because a short
 query names a thing and a long one describes content. A hit says which
 lists found it; a hit found only through the field opens at the
@@ -198,6 +203,7 @@ what is needed.
 | `prax.local_llm` | optional llama.cpp runtime (`local` extra): DLL path quirk, one loaded GGUF model behind `chat()`, shared per process | no |
 | `prax.models` | `prax.yaml`: named models and the step that uses each; the registry that resolves a step to a spec and a loaded runtime (gguf, OpenAI-compatible server, Claude, stub), once per process | no |
 | `prax.titles` | titles worth the name: the classifier (file names, Zotero's auto names, ALL CAPS), the recase rule, the local-model guess with hints, confidence from the text | via store (`retitle`) |
+| `prax.acronyms` | "phrase (ACRONYM)" definitions from a text, letters checked against the phrase's initials; the batch script writes the `acronyms` table the search expands from | no |
 | `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub), citation resolution, saving an answer to a page | via store |
 | `prax.review` | replay of the review queue against a newer ontology; the typing rules that recover what a model meant from its systematic misfits | via store |
 | `prax.resolution` | entity merge candidates (normalized names, initials, concept/method twins, name embeddings), adjudicators, apply through `merge_entities` | via store |

@@ -72,7 +72,8 @@ function route() {
   const [pathPart, query] = hash.split("?");
   const parts = pathPart.split("/");
   const params = Object.fromEntries(new URLSearchParams(query || ""));
-  return { name: parts[0], arg: parts.slice(1).join("/"), params };
+  if (parts[0] === "doc" && parts.length === 3 && /^\d+$/.test(parts[2])) params.chunk = parts[2];
+  return { name: parts[0], arg: parts[1] || "", params };
 }
 
 function go(name, arg, params) {
@@ -167,6 +168,27 @@ function snippetHtml(s) {
 
 // -------------------------------------------------------------- document
 
+// An edge carries its evidence as a quote, never a chunk id (chunks are a
+// disposable index). A link with ?find=<quote> lands on the chunk that
+// contains the quote, or the chunk sharing most of its words.
+const norm = (t) => String(t || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+function locateChunk(chunks, quote) {
+  const q = norm(quote);
+  if (!q) return null;
+  const probe = q.slice(0, 80);
+  const hit = chunks.find((c) => norm(c.text).includes(probe));
+  if (hit) return hit.chunk_id;
+  const words = new Set(q.split(" ").filter((w) => w.length > 3));
+  let best = null, bestN = 0;
+  for (const c of chunks) {
+    const cw = new Set(norm(c.text).split(" "));
+    let n = 0;
+    for (const w of words) if (cw.has(w)) n++;
+    if (n > bestN) { bestN = n; best = c.chunk_id; }
+  }
+  return bestN >= Math.max(2, words.size * 0.4) ? best : null;
+}
+
 function metaLine(meta) {
   const bits = [];
   if (meta.creators && meta.creators.length) bits.push(meta.creators.map((c) => c.name).join(", "));
@@ -245,7 +267,8 @@ async function viewDoc(id, p) {
     return;
   }
   const meta = doc.meta || {};
-  const highlight = p.chunk ? Number(p.chunk) : null;
+  let highlight = p.chunk ? Number(p.chunk) : null;
+  if (!highlight && p.find) highlight = locateChunk(chunks, p.find);
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
   const pageMeta = meta.page || null;
   view.innerHTML = `
@@ -667,7 +690,7 @@ function graphPanel(node, edges) {
     const other = out ? e.dst : e.src;
     const otherType = out ? e.dst_type : e.src_type;
     return `<li>${out ? "" : `<b>${esc(other)}</b> <span class="muted">${esc(otherType)}</span> `}<span class="rel">${out ? "" : "→ "}${esc(e.rel)}${out ? " →" : ""}</span> ${out ? `<b>${esc(other)}</b> <span class="muted">${esc(otherType)}</span>` : ""}
-      <span class="muted">· ${esc(e.confidence)}${e.producer ? ` · ${esc(e.producer)}` : ""}${e.source_doc ? ` · <a href="#doc/${e.source_doc}">doc ${e.source_doc}</a>` : ""}</span>
+      <span class="muted">· ${esc(e.confidence)}${e.producer ? ` · ${esc(e.producer)}` : ""}${e.source_doc ? ` · <a href="#doc/${e.source_doc}${e.evidence ? `?find=${encodeURIComponent(String(e.evidence).slice(0, 120))}` : ""}" title="${esc(e.evidence || "")}">doc ${e.source_doc}</a>` : ""}</span>
       ${e.evidence ? `<span class="ev">“${esc(e.evidence)}”</span>` : ""}</li>`;
   });
   return `<h2>${esc(node.name)}</h2><div class="muted">${esc(node.type)} · ${edges.length} edges shown</div><ul>${rows.join("")}</ul>`;
@@ -820,7 +843,7 @@ function reviewItem(it, onto) {
   <article class="review-item" id="review-${it.id}">
     <div class="review-triple"><b>${esc(it.src)}</b> <span class="muted">${esc(it.src_type || "?")}</span>
       <span class="rel">${esc(it.rel)}</span> <b>${esc(it.dst)}</b> <span class="muted">${esc(it.dst_type || "?")}</span></div>
-    <div class="review-meta">#${it.id} · ${esc(it.reason)}${it.source_doc ? ` · <a href="#doc/${it.source_doc}">doc ${it.source_doc}</a>` : ""}${it.evidence ? ` · <i>“${esc(it.evidence)}”</i>` : ""}</div>
+    <div class="review-meta">#${it.id} · ${esc(it.reason)}${it.source_doc ? ` · <a href="#doc/${it.source_doc}${it.evidence ? `?find=${encodeURIComponent(String(it.evidence).slice(0, 120))}` : ""}">doc ${it.source_doc}</a>` : ""}${it.evidence ? ` · <i>“${esc(it.evidence)}”</i>` : ""}</div>
     <form class="review-form" data-id="${it.id}">
       <select name="src_type" title="source type">${options(types, it.src_type)}</select>
       <select name="rel" title="relation">${options(rels, unmapped ? "" : it.rel)}</select>

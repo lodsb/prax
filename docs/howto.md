@@ -232,6 +232,26 @@ Why: chunk scoring finds documents *about* a term, not the document that
 *is* the thing; "schematic" put a CAD manual first and the one schematic
 nowhere (`docs/eval/retrieval-field-2026-09-10.md`).
 
+### Acronyms
+
+Papers define their acronyms in the text ("antiderivative antialiasing
+(ADAA)"). `scripts/build_acronyms.py` collects those definitions from
+every text artifact into the `acronyms` table (migration 0008; 5,887
+pairings from the library, 1,826 defined by two or more documents), and
+the search expands a query token that is a known acronym to its phrase
+on the keyword side as a phrase match (the embedder sees the query as
+typed: expanding it measured worse). Re-run the
+script after a large import; `--dry-run` shows the top pairings.
+
+One more rank list in the same change: chunks that contain the query's
+rare acronym-shaped terms (at most six letters, digits, or a known
+acronym, in fewer than 50 chunks), weight 3, so "adaa iir" is decided by
+the five documents that say ADAA and not by the thousands that say IIR;
+a query that is only such terms weights the keyword list instead.
+Measured on the library set in `docs/eval/retrieval-acronyms-2026-09-12.md`
+(MRR 0.89 to 0.905); feeding the expansions to the embedder and an
+all-terms tier were tried and left off.
+
 ## 3e. Graph extraction (Stage 3)
 
 `prax.extraction` sends each document's metadata header and the first

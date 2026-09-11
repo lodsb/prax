@@ -246,6 +246,13 @@ R14). Design in `docs/ui.md`.
       recased by rule; old titles kept in `meta.title_history`, paper
       entities follow; hybrid search without vectors now fuses the
       field's BM25 too
+- [x] Acronym expansion and the rare-terms list (2026-09-12, migration
+      0008, `prax.acronyms`, `scripts/build_acronyms.py`): a query token the
+      library defines as an acronym is expanded on the keyword side; the
+      rare acronym-shaped terms get a rank list of their own; library MRR
+      0.89 to 0.905 (`docs/eval/retrieval-acronyms-2026-09-12.md`).
+      "adaa iir algorithms" now finds the ADAA papers. Graph panel and
+      review items link an edge's evidence to its chunk (`?find=`)
 - [x] Promote queue (2026-09-12): `meta.promote` set from the document
       page, the Promote view's scored candidates, the `promote` MCP tool,
       or by the store when a document joins a project or a synthesis;
