@@ -128,7 +128,8 @@ function withTimeout(promise, ms, what) {
 async function readTab(tabId) {
   let plain = null;
   try { plain = await readPlain(tabId); } catch (err) { console.warn("prax: cannot read tab", tabId, err); return null; }
-  if (plain && lib.looksLikePdf(plain.url, plain.html)) return plain; // no snapshot of a viewer
+  if (!plain) { console.warn("prax: the tab answered nothing", tabId); return null; }
+  if (lib.looksLikePdf(plain.url, plain.html)) return plain; // no snapshot of a viewer
   try {
     const snap = await withTimeout(snapshotTab(tabId), SNAPSHOT_TIMEOUT_MS, "the snapshot");
     console.info("prax: snapshot", plain.url, `${snap.html.length} chars`);
@@ -184,6 +185,9 @@ async function uploadFile(blob, name, common, cfg) {
 }
 
 async function captureTab(tab, opts, cfg) {
+  // an internal page (the Add-ons Manager, about:…, a file) cannot be read
+  // by an extension: say so before trying
+  if (!lib.capturable(tab.url)) return { tabId: tab.id, url: tab.url, title: tab.title || null, error: "this kind of page cannot be read" };
   const read = await readTab(tab.id);
   const url = (read && read.url) || tab.url;
   const title = (read && read.title) || tab.title || null;
