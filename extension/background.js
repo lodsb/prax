@@ -216,9 +216,14 @@ async function captureTab(tab, opts, cfg) {
     const data = await door("/ingest/html", { ...common, html: read.html, mode: read.snapshot ? "snapshot" : "dom", note }, cfg);
     return { tabId: tab.id, url, title, mode: "html", note, ...data };
   }
-  if (lib.looksLikePdf(url, read && read.html)) {
+  // A PDF by the look of the URL or the viewer, or a tab the browser would
+  // not let us read at all (its PDF viewer is such a tab, and a publisher's
+  // "view PDF" link rarely ends in .pdf): fetch it here, with the session
+  // this browser has, and upload the bytes when they are a PDF. Only then
+  // does the door fetch the URL itself, without any session.
+  if (!read || lib.looksLikePdf(url, read.html)) {
     let blob = null;
-    try { blob = await fetchPdf(url); } catch (_) { blob = null; }
+    try { blob = await fetchPdf(url); } catch (err) { log("warn", "PDF fetch failed", url, err); blob = null; }
     if (blob) {
       const data = await uploadFile(blob, lib.pdfFileName(url), common, cfg);
       return { tabId: tab.id, url, title, mode: "file", note: "PDF fetched with your session and uploaded", ...data };
