@@ -528,3 +528,15 @@ def test_browsing_endpoints_and_ui(client: TestClient) -> None:
     assert page.status_code == 200 and "<title>prax</title>" in page.text
     assert client.get("/ui/app.js").status_code == 200
     assert client.get("/ui/vendor/marked.min.js").status_code == 200
+
+
+def test_ui_error_is_logged(client: TestClient, caplog) -> None:
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="prax.ui"):
+        r = client.post(
+            "/ui/error",
+            json={"message": "boom", "hash": "#doc/1", "stack": "at x", "agent": "t"},
+        )
+    assert r.status_code == 200 and r.json() == {"logged": True}
+    assert "boom" in caplog.text and "#doc/1" in caplog.text

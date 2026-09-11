@@ -7,9 +7,6 @@ const statusEl = document.getElementById("status");
 
 // ------------------------------------------------------------- utilities
 
-const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({
-  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-}[c]));
 
 async function api(path, params) {
   const url = new URL(path, location.origin);
@@ -67,15 +64,8 @@ function askForToken() {
 
 function setStatus(text) { statusEl.textContent = text; }
 
-function route() {
-  const hash = location.hash.replace(/^#/, "") || "search";
-  const [pathPart, query] = hash.split("?");
-  const parts = pathPart.split("/");
-  const params = Object.fromEntries(new URLSearchParams(query || ""));
-  if (parts[0] === "doc" && parts.length === 3 && /^\d+$/.test(parts[2])) params.chunk = parts[2];
-  return { name: parts[0], arg: parts[1] || "", params };
-}
 
+function route() { return parseHash(location.hash); }
 function go(name, arg, params) {
   const q = new URLSearchParams(params || {}).toString();
   location.hash = name + (arg ? "/" + arg : "") + (q ? "?" + q : "");
@@ -89,9 +79,6 @@ function badge(kind) {
   return `<span class="badge badge-${esc(kind || "text")}">${esc(kind || "text")}</span>`;
 }
 
-function headingPath(h) {
-  return (h || []).map(esc).join(" › ");
-}
 
 function originalHref(docId, page) {
   return `/doc/${docId}/original` + (page ? `#page=${page}` : "");
@@ -168,26 +155,6 @@ function snippetHtml(s) {
 
 // -------------------------------------------------------------- document
 
-// An edge carries its evidence as a quote, never a chunk id (chunks are a
-// disposable index). A link with ?find=<quote> lands on the chunk that
-// contains the quote, or the chunk sharing most of its words.
-const norm = (t) => String(t || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-function locateChunk(chunks, quote) {
-  const q = norm(quote);
-  if (!q) return null;
-  const probe = q.slice(0, 80);
-  const hit = chunks.find((c) => norm(c.text).includes(probe));
-  if (hit) return hit.chunk_id;
-  const words = new Set(q.split(" ").filter((w) => w.length > 3));
-  let best = null, bestN = 0;
-  for (const c of chunks) {
-    const cw = new Set(norm(c.text).split(" "));
-    let n = 0;
-    for (const w of words) if (cw.has(w)) n++;
-    if (n > bestN) { bestN = n; best = c.chunk_id; }
-  }
-  return bestN >= Math.max(2, words.size * 0.4) ? best : null;
-}
 
 function metaLine(meta) {
   const bits = [];
@@ -939,14 +906,6 @@ async function viewReview(p) {
 // context without a model, which is what an MCP client gets.
 let askConfig = null;
 
-function citeLinks(html, passages) {
-  const byN = Object.fromEntries((passages || []).map((p) => [p.n, p]));
-  return html.replace(/\[(\d+)\]/g, (m, n) => {
-    const p = byN[n];
-    if (!p) return m;
-    return `<a class="cite" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}" title="${esc(p.title)}">[${n}]</a>`;
-  });
-}
 
 function renderAskForm(p) {
   const backend = p.backend || "";
@@ -1108,5 +1067,16 @@ document.getElementById("quick").addEventListener("submit", (e) => {
   e.preventDefault();
   go("search", "", { q: document.getElementById("quick-q").value });
 });
+// A client error is otherwise invisible: show it in the status area and
+// tell the door, which logs it (POST /ui/error) so it can be read later.
+function reportError(kind, err) {
+  const message = (err && err.message) || String(err);
+  setStatus("error: " + message);
+  const body = { kind, message, stack: err && err.stack ? String(err.stack).slice(0, 4000) : null, hash: location.hash, agent: navigator.userAgent };
+  fetch("/ui/error", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }).catch(() => {});
+}
+window.addEventListener("error", (e) => reportError("error", e.error || e.message));
+window.addEventListener("unhandledrejection", (e) => reportError("rejection", e.reason));
+
 window.addEventListener("hashchange", render);
 render();

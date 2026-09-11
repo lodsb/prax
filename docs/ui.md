@@ -46,9 +46,21 @@ Added for browsing (read-only, thin wrappers over store functions):
 
     src/prax/ui/
       index.html        the page: nav, a view container, script tags
-      app.js            hash router, API client, one render function per view
+      lib.js            the pure helpers (escaping, hash parsing, chunk locating, citation links); also loaded by the node tests
+      app.js            API client, one render function per view, the error reporter
       style.css         layout, badges, highlight; light and dark via prefers-color-scheme
       vendor/marked.min.js   Markdown renderer (MIT), pinned version noted in vendor/VERSIONS
+
+## Tests and errors
+
+`tests/test_ui_js.py` parses both scripts with `node --check` and runs
+`node --test tests/ui`, the unit tests of `lib.js` (router, chunk locator,
+citation links, escaping), when node is installed; nothing else executes
+JavaScript, and no browser automation is part of the suite. A client
+error (uncaught exception or rejected promise) is shown in the status
+area and posted to `POST /ui/error`, which the door logs at warning level
+with the hash and the browser, so a blank view leaves a line in the
+door's log.
 
 ## Rules
 

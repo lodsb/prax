@@ -33,7 +33,8 @@ HEAD_CHARS = 1500
 TITLE_MAX = 160
 HASH_PREFIX = re.compile(r"^[0-9a-f]{32}-")
 FILE_EXT = re.compile(
-    r"\.(pdf|html?|txt|md|djvu|epub|docx?|pptx?|xlsx?|tex|rtf|ps)\.?$", re.IGNORECASE
+    r"\.(pdf|html?|txt|md|djvu|epub|docx?|pptx?|xlsx?|tex|rtf|ps|gif|png|jpe?g|webp)\.?$",
+    re.IGNORECASE,
 )
 ZOTERO_AUTO = re.compile(r"(^unknown -|- no title\b|^no title\b)", re.IGNORECASE)
 JUNK_PDF_META = re.compile(

@@ -16,6 +16,7 @@ from prax.importers import zotero
     [
         ("", "empty"),
         ("1176thesis.pdf", "filename"),
+        ("1176sch.gif", "filename"),
         ("00a7359a9bbd7c997ec7ee38c86aa41d-l01.pdf", "filename"),
         ("Korrektur_HA5.pdf.", "filename"),
         ("www.silicore.net/wishbone.htm", "filename"),

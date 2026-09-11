@@ -6,6 +6,7 @@ handlers; prax.store serializes access.
 
 from __future__ import annotations
 
+import logging
 import mimetypes
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -582,6 +583,28 @@ def graph_overview(
     among them, and co-occurrence links (hubs sharing at least
     ``min_shared`` source documents): what the graph view opens on."""
     return store.hub_graph(request.app.state.con, limit=limit, min_shared=min_shared)
+
+
+class UIError(BaseModel):
+    kind: str = "error"
+    message: str
+    stack: str | None = None
+    hash: str | None = None
+    agent: str | None = None
+
+
+@app.post("/ui/error", include_in_schema=False)
+def ui_error(err: UIError, request: Request) -> dict[str, bool]:
+    """A client-side error, logged by the door so it can be read later."""
+    logging.getLogger("prax.ui").warning(
+        "browser %s at %s: %s\n%s\n%s",
+        err.kind,
+        err.hash,
+        err.message,
+        err.stack or "",
+        err.agent or "",
+    )
+    return {"logged": True}
 
 
 @app.get("/", include_in_schema=False)

@@ -46,6 +46,11 @@ the 4.x line:
 Tests never touch `data/`. Every fixture uses `tmp_path` and points
 `PRAX_DATA_DIR` at it before importing the API or MCP modules.
 
+The UI's JavaScript is checked when `node` is on the path: both scripts
+must parse, and `tests/ui/lib.test.js` (node's own test runner, no npm)
+covers the pure helpers in `src/prax/ui/lib.js`. Without node those
+tests are skipped.
+
 ## 3. Data directory
 
 Layout, all under one directory:
