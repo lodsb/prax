@@ -346,6 +346,64 @@ R14). Design in `docs/ui.md`.
 - [x] `traverse` surfaces confidence, evidence, ontology version and
       validity on every edge (store, API and MCP)
 
+## Housekeeping pass (planned, after the v5 backlog finishes)
+
+Measured 2026-09-12 against the live store (9,500 documents, 1.7 GB).
+The rule for this pass: quality first; a dependency is dropped only when
+what replaces it is at least as good, and where a library is the right
+tool but a heavy install, vendoring its built files or extracting the
+part in use (as done with SingleFile) beats losing the capability.
+
+Performance, cheap first:
+- [ ] Expression indexes on the JSON paths every document-level filter
+      scans (`meta.source`, `meta.retired`, `meta.extraction.ontology_version`,
+      `meta.domains`; about 120 ms per scan today) and an index on
+      `review_queue.resolution` (an open-item count takes 500 ms). One
+      migration, no code change.
+- [ ] Embedding on the GPU: the DirectML runtime is installed but the CPU
+      provider is chosen (19 chunks/s); select it by configuration and
+      measure.
+- [ ] Batch selections that loop in Python with one query per document
+      (`select_for_extraction` with a domain subset, `captures_ready`,
+      `assign_domains`) folded into SQL once the indexes exist.
+- [ ] `traverse` on hubs (400-500 ms): look at the recursive CTE once
+      the graph is under v5.
+
+Dependencies (188 packages, 3.5 GB in the venv; the serving path needs a
+fraction):
+- [ ] Drop the in-process llama.cpp binding and the `local` extra
+      (1.8 GB plus a CUDA runtime): llama-server through the `openai`
+      kind replaced it; keep the `gguf` kind's documentation pointing
+      there.
+- [ ] Docling (torch, scipy, OpenCV, transformers): never the default
+      extractor; remove the code path or keep it as the documented
+      explicit option without installing it.
+- [ ] Magika (code detection in text attachments): extension-based
+      detection covers nearly all; measure what is lost before dropping.
+- [ ] The Hugging Face client, used once to fetch the embedding model:
+      a documented download (or a vendored model file) instead.
+- [ ] FastMCP: the MCP server becomes a proxy of the HTTP door (already in
+      "Later"), which needs no store import and no store dependencies in
+      that process and ends the second-writer deviation; the official
+      `mcp` package or a small stdio JSON-RPC layer instead of the
+      framework.
+- [ ] A `serve` extra listing exactly what the door on the board needs,
+      and a check that the door's resident memory stays under 1 GB with
+      the memory-mapped index (int8 index if not).
+
+Shape:
+- [ ] `prax.store` (3,800 lines) as a package split by concern (documents
+      and index, search, graph, review, pages, jobs) behind the same door.
+- [ ] One `prax` command with subcommands in place of twenty scripts, so
+      connection setup, logging and job bookkeeping live in one place.
+- [ ] Most `PRAX_*` environment variables moved into prax.yaml sections
+      (the data directory stays an environment variable).
+- [ ] The single writer: three processes write to one SQLite file today
+      (door, watcher, backlog) behind a 30 s busy timeout and a retry; the
+      principled form is the door as the only writer with batch passes
+      posting their results to it. Decide after measuring how often the
+      retry fires.
+
 ## Later / maybe
 
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the
