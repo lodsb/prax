@@ -14,25 +14,35 @@ models:
     model: claude-opus-5
     effort: medium
 
-  # a GGUF model in the door's own process (llama.cpp, the `local` extra)
-  local-7b:
-    kind: gguf
-    path: C:/Users/me/.cache/huggingface/hub/models--bartowski--Qwen2.5-7B-Instruct-GGUF/snapshots/<hash>/Qwen2.5-7B-Instruct-Q4_K_M.gguf
-    n_ctx: 8192
-
-  # an OpenAI-compatible server: llama-server or vLLM on a GPU box, or a
-  # hosted API (api_key_env names the variable holding its key; price is
-  # USD per million input and output tokens, for the cost lines)
-  server-32b:
+  # A local model served by llama.cpp's llama-server (the usual way; any
+  # OpenAI-compatible server works the same: vLLM, Ollama with its
+  # /v1 endpoint). Get a GGUF once, for example
+  #   huggingface-cli download unsloth/Qwen3.6-35B-A3B-GGUF   #     Qwen3.6-35B-A3B-UD-Q4_K_S.gguf --local-dir <data dir>/models
+  # (a 24 GB card; a 7B Q4 file fits 8 GB), then start the server:
+  #   scripts/llama_server.ps1 -Model <data dir>/models/<file>.gguf -Slots 3 -NoThinking
+  # `model` is the name edges carry as their producer, so name the file.
+  local-server:
     kind: openai
     base_url: http://127.0.0.1:8080/v1
-    model: qwen2.5-32b-instruct
+    model: qwen3.6-35b-a3b-ud-q4ks
+
+  # A hosted OpenAI-compatible API (api_key_env names the variable holding
+  # its key; price is USD per million input and output tokens, for the
+  # cost lines). Private material should not go to a third party.
   # deepseek:
   #   kind: openai
   #   base_url: https://api.deepseek.com/v1
   #   model: deepseek-chat
   #   api_key_env: DEEPSEEK_API_KEY
   #   price: [0.27, 1.10]
+
+  # A GGUF model inside the door's own process (llama.cpp through the
+  # `local` extra) instead of a server: simpler on a single machine, but
+  # the door then carries the model. Same download as above, then:
+  # local-7b:
+  #   kind: gguf
+  #   path: <data dir>/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf
+  #   n_ctx: 8192
 
 # which ontology modules a document is read against (scripts/assign_domains.py;
 # first match wins; a rule without match is the default; a person's choice on
@@ -46,15 +56,15 @@ domains:
 
 steps:
   extract:
-    model: sonnet
+    model: local-server   # the pass over everything: local, free; sonnet for quality
     max_triples: 20
   promote:            # the expensive pass over flagged documents (extract_graph.py --promoted)
     model: sonnet
     max_triples: 30
   ask:
-    model: local-7b
+    model: local-server   # or `none`: the bundle alone, the caller's model answers
   titles:
-    model: local-7b
+    model: local-server
   vision:
     model: sonnet
   adjudicate:

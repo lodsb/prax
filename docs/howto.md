@@ -569,12 +569,13 @@ template). `models` names backends, `steps` assigns them:
 
     models:
       sonnet:     {kind: claude, model: claude-sonnet-5, effort: medium}
-      local-7b:   {kind: gguf, path: <file>.gguf, n_ctx: 8192}
+      local-server: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: <gguf name>}
+      local-7b:   {kind: gguf, path: <file>.gguf, n_ctx: 8192}   # in-process instead
       server-32b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: qwen2.5-32b}
     steps:
       extract:    {model: sonnet, max_triples: 20}
-      ask:        {model: local-7b}
-      titles:     {model: local-7b}
+      ask:        {model: local-server}
+      titles:     {model: local-server}
       vision:     {model: sonnet}
       adjudicate: {model: opus}
 

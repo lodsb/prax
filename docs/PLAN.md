@@ -392,6 +392,13 @@ fraction):
       the memory-mapped index (int8 index if not).
 
 Shape:
+- [ ] Models fetched on demand: a `models` entry may name `repo` and
+      `file` instead of `path`; `prax models fetch <name>` (or the first
+      use of the step) downloads into `<data dir>/models/` and records
+      the file's hash; the same for the embedding model, so a fresh
+      install needs no manual download and the config stays
+      declarative. The llama-server binary the same way (howto 3k
+      already documents its download).
 - [ ] `prax.store` (3,800 lines) as a package split by concern (documents
       and index, search, graph, review, pages, jobs) behind the same door.
 - [ ] One `prax` command with subcommands in place of twenty scripts, so
