@@ -132,6 +132,7 @@ async function readPlain(tabId) {
 /* The page as the tab shows it: a SingleFile snapshot, else the bare DOM,
    else nothing (the door fetches the URL). */
 const SNAPSHOT_TIMEOUT_MS = 60 * 1000;
+const TAB_TIMEOUT_MS = 5 * 60 * 1000;
 
 function withTimeout(promise, ms, what) {
   let timer;
@@ -177,7 +178,7 @@ const MAX_PDF_BYTES = 64 * 1024 * 1024;
    file; when the fetch comes back as something else (a login page), the
    door fetches the URL as before. */
 async function fetchPdf(url) {
-  const res = await fetch(url, { credentials: "include", redirect: "follow" });
+  const res = await fetch(url, { credentials: "include", redirect: "follow", signal: AbortSignal.timeout(120000) });
   const ct = res.headers.get("content-type") || "?";
   if (!res.ok) throw new Error(`the site answered ${res.status} to this browser's own request (${ct})`);
   const buf = await res.arrayBuffer();
@@ -259,7 +260,7 @@ async function downloadRoute(url, common) {
    downloader are refused. An open HTML tab of that site serves; otherwise
    the site's front page is opened in a background tab and closed again. */
 function fetchInPage(u) {
-  return fetch(u, { credentials: "include", cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin" })
+  return fetch(u, { credentials: "include", cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin", signal: AbortSignal.timeout(90000) })
     .then(async (r) => {
       if (!r.ok) return { error: `the site answered ${r.status} to the page's own request` };
       const bytes = new Uint8Array(await r.arrayBuffer());
@@ -410,7 +411,8 @@ async function capture(msg) {
     const id = (msg.entryIds && msg.entryIds[tab.id]) || `${Date.now()}-${tab.id}`;
     await remember({ id, at: Date.now(), tabId: tab.id, url: tab.url, title: tab.title, state: "sending", domains: opts.domains, tags: opts.tags, close: opts.close });
     let r;
-    try { r = await captureTab(tab, opts, cfg); log("info", "sent", tab.url, r.mode, r.doc_id ? `doc ${r.doc_id}` : ""); } catch (err) { log("warn", "capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
+    // one tab never holds up the rest: five minutes, then on to the next
+    try { r = await withTimeout(captureTab(tab, opts, cfg), TAB_TIMEOUT_MS, "this tab"); log("info", "sent", tab.url, r.mode, r.doc_id ? `doc ${r.doc_id}` : ""); } catch (err) { log("warn", "capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
     results.push(r);
     await remember({ id, at: Date.now(), ...r, state: r.error ? "failed" : r.manual ? "manual" : "done", domains: opts.domains, tags: opts.tags, close: opts.close });
     await setProgress({ done: results.length, results });
