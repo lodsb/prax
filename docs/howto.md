@@ -631,7 +631,8 @@ Four ways in:
   /ingest/url {url, …}` to fetch server-side. `POST /ingest` (text) takes
   `domains` too. `GET /inbox` lists recent captures.
 - **The browser extension** (`extension/`, `docs/extension.md`): "send
-  this tab" posts the rendered DOM, "send all tabs in window" does the
+  this tab" posts a self-contained snapshot (SingleFile: images, fonts
+  and styles inlined, scripts removed), "send all tabs in window" does the
   same under one session id; a PDF tab is fetched again inside the
   browser, with its session, and uploaded, so paywalled PDFs arrive too. Load the folder unpacked (Waterfox and Firefox: about:debugging;
   Chrome: chrome://extensions) and set the server and token in its

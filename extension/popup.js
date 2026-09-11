@@ -84,14 +84,17 @@ async function main() {
     if (changes.progress && (area === "session" || area === "local")) renderProgress(changes.progress.newValue);
   });
   $("options").addEventListener("click", (e) => { e.preventDefault(); api.runtime.openOptionsPage(); });
+  // Firefox grants host permissions on request only (Chrome at install):
+  // the snapshot fetches a page's images and fonts through the background,
+  // and a background tab cannot be read at all without them
+  const hosts = async () => { try { await api.permissions.request({ origins: ["http://*/*", "https://*/*"] }); } catch (_) { /* granted at install */ } };
   $("send-tab").addEventListener("click", async () => {
+    await hosts();
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     await send(tab ? [tab.id] : []);
   });
   $("send-window").addEventListener("click", async () => {
-    // Firefox grants host permissions on request only; without them a
-    // background tab cannot be read and the door fetches its URL instead
-    try { await api.permissions.request({ origins: ["http://*/*", "https://*/*"] }); } catch (_) { /* granted at install */ }
+    await hosts();
     const tabs = await api.tabs.query({ currentWindow: true });
     const ids = tabs.filter((t) => lib.capturable(t.url)).map((t) => t.id);
     if (ids.length < tabs.length) $("msg").textContent = `${tabs.length - ids.length} tab(s) cannot be read (internal or file pages)`;

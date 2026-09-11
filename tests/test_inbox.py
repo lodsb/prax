@@ -315,6 +315,11 @@ def test_api_captures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
         json={"text": "typed text " * 10, "title": "t", "domains": ["family"]},
     ).json()
     assert client.get(f"/doc/{t['doc_id']}/domains").json()["domains"] == ["family"]
+    # an HTML original is served sandboxed
+    h = client.post("/ingest/html", json={"url": "https://example.org/s", "html": PAGE})
+    orig = client.get(f"/doc/{h.json()['doc_id']}/original")
+    assert orig.status_code == 200
+    assert orig.headers["content-security-policy"].startswith("sandbox")
     view = client.get("/inbox").json()
     assert view["modules"] == ["family", "research", "studio"]
     assert [x["source"] for x in view["recent"]][:2] == ["capture", "upload"] or len(

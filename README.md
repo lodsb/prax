@@ -133,4 +133,7 @@ but may wait.
 
 ## License
 
-MIT, see `LICENSE`. The test fixture under `tests/fixtures/` holds open-access papers under their own Creative Commons terms; `tests/fixtures/zotero/README.md` lists them with their licenses.
+MIT, see `LICENSE`, except the browser extension: `extension/` is AGPL-3.0
+(`extension/LICENSE`) because it bundles SingleFile for page snapshots,
+the way the Zotero connector does; it is a separate program talking to
+the server over HTTP. The test fixture under `tests/fixtures/` holds open-access papers under their own Creative Commons terms; `tests/fixtures/zotero/README.md` lists them with their licenses.

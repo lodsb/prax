@@ -102,7 +102,11 @@ Parsing is a batch job; the serving path never parses.
       `/ingest/url`) and "send all tabs in window" under one session id,
       optional closing; options for server, token, default domains;
       progress and results in the popup; `scripts/build_extension.py`
-      packs an .xpi; node tests for the helpers
+      packs an .xpi; node tests for the helpers. Pages are saved as
+      self-contained snapshots through vendored SingleFile (AGPL, so
+      `extension/` carries its own licence); a PDF tab is fetched with
+      the browser's session and uploaded; HTML originals are served
+      with a sandboxing header
 - [x] Inbox folder (2026-09-12): `scripts/inbox.py [--watch] [--parse]`
       registers what lands in `data/inbox/` (subfolder = domain, JSON
       sidecar, settle time, `failed/`), consumed files removed

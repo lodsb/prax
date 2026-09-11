@@ -7,7 +7,7 @@
   if (typeof module === "object" && module.exports) module.exports = lib;
   root.praxLib = lib;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  const MAX_HTML_BYTES = 8 * 1024 * 1024;
+  const MAX_HTML_BYTES = 32 * 1024 * 1024;
   const UNCAPTURABLE = /^(about|chrome|chrome-extension|moz-extension|edge|file|view-source|data|blob|javascript):/i;
 
   /** A capture-session id: when, plus a short random suffix. */
@@ -37,7 +37,7 @@
     if (!capturable(url)) return { mode: "skip", reason: "this kind of page cannot be read" };
     if (looksLikePdf(url, html)) return { mode: "url", reason: "a PDF: the door fetches it" };
     if (typeof html !== "string" || !html) return { mode: "url", reason: "the page did not answer: the door fetches it" };
-    if (byteLength(html) > MAX_HTML_BYTES) return { mode: "url", reason: "page above 8 MB: the door fetches it" };
+    if (byteLength(html) > MAX_HTML_BYTES) return { mode: "url", reason: "page above 32 MB: the door fetches it" };
     return { mode: "html" };
   }
 

@@ -42,16 +42,27 @@ domains it offers.
 | `popup.html/js` | the two buttons, domain checkboxes (from `GET /inbox`), tags, close-after-send, progress and results with links into the UI |
 | `options.html/js` | server, token, default domains, close-after-send; permission request and connection test |
 | `style.css`, `icon48.png`, `icon128.png` | the look; the icons are generated squares |
+| `vendor/single-file/` | SingleFile's built core and frame scripts, unchanged, with its licence and a `NOTICE.md` naming the commit; AGPL, which makes the extension AGPL (`LICENSE`, `README.md` in `extension/`) while the server stays MIT |
 
 ## What it does
 
 The Zotero Connector was the model: one click on the toolbar saves what
 the tab shows, with a small popup for the few choices that matter.
 
-- **Send this tab.** The content script returns
-  `document.documentElement.outerHTML`, the URL and the title; the popup
-  posts them to `/ingest/html`. The rendered DOM, not a re-fetch, so
-  paywalled, logged-in and script-rendered pages arrive as seen. A tab
+- **Send this tab.** The background injects SingleFile into the tab
+  (`vendor/single-file/`, the built files of
+  https://github.com/gildas-lormeau/SingleFile, the way Zotero's
+  connector does it) and takes the page as one self-contained HTML
+  document: images, fonts and stylesheets inlined, unused styles
+  dropped, scripts removed, lazy-loaded images loaded first, frames
+  included. Resources are fetched from the page, and through the
+  background when the page's origin rules refuse. That file is the
+  original in the archive, so "open original" in the UI shows the page
+  offline, pictures included, served with a sandboxing header. When the
+  snapshot fails (a page that blocks script injection) the bare DOM is
+  sent instead, marked as such in the result. The rendered page, not a
+  re-fetch, so paywalled, logged-in and script-rendered pages arrive as
+  seen. A tab
   showing a PDF cannot be read as DOM: the background fetches the PDF
   again from inside the browser, with the session and cookies the tab
   has (a paywall you are logged into, an institutional proxy), and
@@ -119,7 +130,7 @@ The popup checks `GET /health` on open and shows the server's state
   `{url, title, html}`; no persistent content script.
 - `background.js` (service worker) only for "send all tabs" so the popup
   closing does not abort the loop.
-- Size guard: a DOM above 8 MB is sent as URL only.
+- Size guard: a snapshot above 32 MB is sent as URL only.
 
 ## Not in scope
 

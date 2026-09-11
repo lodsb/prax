@@ -25,16 +25,120 @@ async function door(path, body, cfg) {
   return data;
 }
 
+/* The snapshot: SingleFile (vendor/single-file, AGPL, the way Zotero's
+   connector uses it) turns the page into one self-contained HTML string:
+   images, fonts and stylesheets inlined, scripts removed, lazy images
+   loaded first, frames included. The options follow SingleFile's own
+   defaults for a saved page. */
+const SNAPSHOT_OPTIONS = {
+  removeHiddenElements: true,
+  removeUnusedStyles: true,
+  removeUnusedFonts: true,
+  removeFrames: false,
+  compressHTML: true,
+  compressCSS: false,
+  loadDeferredImages: true,
+  loadDeferredImagesMaxIdleTime: 1500,
+  loadDeferredImagesKeepZoomLevel: false,
+  removeAlternativeFonts: true,
+  removeAlternativeMedias: true,
+  removeAlternativeImages: true,
+  groupDuplicateImages: true,
+  maxSizeDuplicateImages: 512 * 1024,
+  saveRawPage: false,
+  saveFavicon: true,
+  insertMetaCSP: true,
+  insertSingleFileComment: true,
+  blockScripts: true,
+  blockVideos: true,
+  blockAudios: true,
+  blockAlternativeImages: true,
+  removeNoScriptTags: true,
+  resolveLinks: true,
+  networkTimeout: 0,
+  saveOriginalURLs: false,
+  blockMixedContent: false,
+  imageReductionFactor: 1,
+  acceptHeaders: {
+    font: "application/font-woff2;q=1.0,application/font-woff;q=0.9,*/*;q=0.8",
+    image: "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+    stylesheet: "text/css,*/*;q=0.1",
+    script: "*/*",
+    document: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    video: "video/webm,video/ogg,video/*;q=0.9,application/ogg;q=0.7,audio/*;q=0.6,*/*;q=0.5",
+    audio: "audio/webm,audio/ogg,audio/wav,audio/*;q=0.9,application/ogg;q=0.7,video/*;q=0.6,*/*;q=0.5",
+  },
+};
+const SF = "vendor/single-file/";
+
+/* Runs inside the tab (serialized by executeScript): resources are fetched
+   from the page first, and through the background when the page's origin
+   rules refuse (the background has host permission). */
+function runSingleFile(options) {
+  const bridge = globalThis.browser || globalThis.chrome;
+  const viaBackground = async (url) => {
+    const m = await bridge.runtime.sendMessage({ type: "fetch", url });
+    if (!m || m.error) throw new Error((m && m.error) || "background fetch failed");
+    const bytes = Uint8Array.from(atob(m.body), (c) => c.charCodeAt(0));
+    return { status: m.status, headers: { get: (h) => m.headers[String(h).toLowerCase()] || null }, arrayBuffer: async () => bytes.buffer };
+  };
+  const hostFetch = async (url, opts) => {
+    try {
+      const r = await fetch(url, { ...opts, cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin" });
+      if (r.status < 400) return r;
+    } catch (_) { /* refused by the page's origin rules */ }
+    return viaBackground(url);
+  };
+  return globalThis.singlefile
+    .getPageData({ ...options }, { fetch: hostFetch, frameFetch: hostFetch })
+    .then((pageData) => ({ url: location.href, title: pageData.title || document.title, html: pageData.content, snapshot: true }))
+    .catch((err) => ({ url: location.href, title: document.title, error: String(err && err.message ? err.message : err) }));
+}
+
+async function snapshotTab(tabId) {
+  // the hooks in the page's own world and the frame script in every frame
+  // are best effort (a cross-origin frame, a browser without world: MAIN)
+  try { await api.scripting.executeScript({ target: { tabId, allFrames: true }, files: [`${SF}single-file-hooks-frames.js`], world: "MAIN", injectImmediately: true }); } catch (_) { /* optional */ }
+  try { await api.scripting.executeScript({ target: { tabId, allFrames: true }, files: [`${SF}single-file-frames.js`] }); } catch (_) { /* optional */ }
+  await api.scripting.executeScript({ target: { tabId }, files: [`${SF}single-file.js`] });
+  const results = await api.scripting.executeScript({ target: { tabId }, func: runSingleFile, args: [SNAPSHOT_OPTIONS] });
+  const r = results && results[0] ? results[0].result : null;
+  if (!r || r.error || !r.html) throw new Error((r && r.error) || "no snapshot");
+  return r;
+}
+
+async function readPlain(tabId) {
+  const results = await api.scripting.executeScript({
+    target: { tabId },
+    func: () => ({ url: location.href, title: document.title, html: document.documentElement.outerHTML }),
+  });
+  return results && results[0] ? results[0].result : null;
+}
+
+/* The page as the tab shows it: a SingleFile snapshot, else the bare DOM,
+   else nothing (the door fetches the URL). */
 async function readTab(tabId) {
+  let plain = null;
+  try { plain = await readPlain(tabId); } catch (_) { return null; }
+  if (plain && lib.looksLikePdf(plain.url, plain.html)) return plain; // no snapshot of a viewer
   try {
-    const results = await api.scripting.executeScript({
-      target: { tabId },
-      func: () => ({ url: location.href, title: document.title, html: document.documentElement.outerHTML }),
-    });
-    return results && results[0] ? results[0].result : null;
+    return await snapshotTab(tabId);
   } catch (err) {
-    return null; // a page the browser will not let us read: the door fetches
+    return plain ? { ...plain, snapshot: false, note: `plain DOM (snapshot failed: ${err.message})` } : null;
   }
+}
+
+/* The fetch bridge for the snapshot: the page asks, the background fetches
+   with the browser's session and host permission, the bytes go back base64. */
+async function bridgeFetch(url) {
+  const res = await fetch(url, { credentials: "include", cache: "force-cache", referrerPolicy: "strict-origin-when-cross-origin" });
+  const buf = await res.arrayBuffer();
+  let body = "";
+  const bytes = new Uint8Array(buf);
+  for (let i = 0; i < bytes.length; i += 0x8000) body += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  const headers = {};
+  res.headers.forEach((v, k) => { headers[k.toLowerCase()] = v; });
+  return { status: res.status, headers, body: btoa(body) };
 }
 
 const MAX_PDF_BYTES = 64 * 1024 * 1024;
@@ -77,7 +181,7 @@ async function captureTab(tab, opts, cfg) {
   const common = { url, title, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session };
   if (p.mode === "html") {
     const data = await door("/ingest/html", { ...common, html: read.html }, cfg);
-    return { tabId: tab.id, url, title, mode: "html", note: null, ...data };
+    return { tabId: tab.id, url, title, mode: "html", note: read.snapshot ? "snapshot with images and styles" : (read.note || null), ...data };
   }
   if (lib.looksLikePdf(url, read && read.html)) {
     let blob = null;
@@ -126,6 +230,10 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     capture(msg).catch((err) => setProgress({ state: "error", error: err.message }));
     sendResponse({ ok: true });
     return false;
+  }
+  if (msg && msg.type === "fetch") {
+    bridgeFetch(msg.url).then(sendResponse, (err) => sendResponse({ error: err.message }));
+    return true; // answered asynchronously
   }
   return false;
 });

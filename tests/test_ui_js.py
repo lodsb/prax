@@ -57,3 +57,22 @@ def test_manifest_is_one_codebase_for_both_browsers() -> None:
         assert (EXT / page).is_file(), page
     for icon in m["icons"].values():
         assert (EXT / icon).is_file(), icon
+
+
+def test_singlefile_is_vendored_with_its_licence() -> None:
+    sf = EXT / "vendor" / "single-file"
+    core = (sf / "single-file.js").read_text(encoding="utf-8", errors="replace")
+    assert ".singlefile={}" in core[:400]  # the UMD bundle defines the global
+    for name in (
+        "single-file-frames.js",
+        "single-file-hooks-frames.js",
+        "LICENSE",
+        "NOTICE.md",
+    ):
+        assert (sf / name).is_file(), name
+    assert "GNU AFFERO GENERAL PUBLIC LICENSE" in (sf / "LICENSE").read_text(
+        encoding="utf-8"
+    )
+    assert "GNU AFFERO GENERAL PUBLIC LICENSE" in (EXT / "LICENSE").read_text(
+        encoding="utf-8"
+    )

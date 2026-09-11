@@ -460,11 +460,14 @@ def original(doc_id: int, request: Request) -> FileResponse:
     if info is None or not info["path"].exists():
         raise HTTPException(404, "no such document")
     name = Path(info["original_path"] or info["title"] or f"document-{doc_id}").name
-    return FileResponse(
-        info["path"],
-        media_type=info["mime"],
-        headers={"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"},
-    )
+    headers = {"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"}
+    if (info["mime"] or "").split(";")[0] in ("text/html", "application/xhtml+xml"):
+        # a captured page is somebody else's content rendered from this
+        # origin: no scripts, no forms, no access to the door's cookies
+        headers["Content-Security-Policy"] = (
+            "sandbox; default-src data: 'unsafe-inline'"
+        )
+    return FileResponse(info["path"], media_type=info["mime"], headers=headers)
 
 
 @app.get("/doc/{doc_id}/text")
