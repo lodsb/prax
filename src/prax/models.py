@@ -50,9 +50,10 @@ from prax import config, local_llm
 
 CONFIG_NAME = "prax.yaml"
 KINDS = ("claude", "gguf", "openai", "stub")
-STEPS = ("extract", "ask", "titles", "vision", "adjudicate")
+STEPS = ("extract", "promote", "ask", "titles", "vision", "adjudicate")
 STEP_DEFAULTS = {
     "extract": "claude-opus-5",
+    "promote": "claude-sonnet-5",  # the expensive pass over flagged documents
     "ask": "local",  # falls back to none when no local model is configured
     "titles": "local",
     "vision": "claude-sonnet-5",

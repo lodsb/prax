@@ -246,6 +246,12 @@ R14). Design in `docs/ui.md`.
       recased by rule; old titles kept in `meta.title_history`, paper
       entities follow; hybrid search without vectors now fuses the
       field's BM25 too
+- [x] Promote queue (2026-09-12): `meta.promote` set from the document
+      page, the Promote view's scored candidates, the `promote` MCP tool,
+      or by the store when a document joins a project or a synthesis;
+      `extract_graph.py --promoted` runs the `promote` step's model
+      (Sonnet 5, 30 triples) over flagged documents that producer has
+      not read; done-ness from the extraction history
 - [x] Ontology v5 (2026-09-12, `docs/ontology-v5.md`): `organization` with
       `affiliated_with`, `funded_by`, `developed_by`; `mentions` as the weakest
       relation; wider `contrasts`, `extends`, `about`, `part_of`. Replay linked

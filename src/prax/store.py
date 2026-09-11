@@ -484,6 +484,155 @@ def retitle(
     }
 
 
+# -------------------------------------------------------------- promotion
+# A document worth the expensive model: flagged by a person, by Claude Code
+# over MCP, or by the store itself when the document joins a project or
+# becomes a synthesis source. The flag lives in ``meta.promote``; the pass
+# is ``extract_graph.py --promoted`` with the ``promote`` step's model, and
+# a document counts as done when that producer's stamp is in its history.
+
+PROMOTE_WEIGHTS = {"project": 5, "synthesis": 4, "page": 3, "cited": 1}
+
+
+def _set_promote(
+    con: sqlite3.Connection, doc_id: int, *, by: str, reason: str | None
+) -> dict[str, Any] | None:
+    meta = get_meta(con, doc_id)
+    if meta.get("promote"):
+        return None
+    meta["promote"] = {
+        "by": by,
+        "reason": reason,
+        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    return meta["promote"]
+
+
+@_serialized
+def promote(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    by: str = "human",
+    reason: str | None = None,
+) -> dict[str, Any]:
+    """Flag a document for the expensive pass. Returns the flag; a document
+    already flagged keeps its first flag."""
+    if (
+        con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
+        is None
+    ):
+        raise KeyError(f"no such document: {doc_id}")
+    flag = _set_promote(con, doc_id, by=by, reason=reason)
+    con.commit()
+    return flag or get_meta(con, doc_id)["promote"]
+
+
+@_serialized
+def unpromote(con: sqlite3.Connection, doc_id: int) -> bool:
+    meta = get_meta(con, doc_id)
+    if not meta.pop("promote", None):
+        return False
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+    return True
+
+
+def extracted_by(meta: dict[str, Any], producer: str) -> bool:
+    """Whether ``producer`` has read the document, now or in its history."""
+    stamps = [meta.get("extraction") or {}, *(meta.get("extraction_history") or [])]
+    return any(s.get("extractor") == producer for s in stamps)
+
+
+@_serialized
+def promoted_documents(
+    con: sqlite3.Connection, *, producer: str | None = None
+) -> list[dict[str, Any]]:
+    """Flagged documents, oldest flag first; ``done`` says whether
+    ``producer`` has read each one."""
+    out = []
+    for r in con.execute(
+        "SELECT id, title, meta FROM documents"
+        " WHERE json_extract(meta, '$.promote') IS NOT NULL"
+        " ORDER BY json_extract(meta, '$.promote.at'), id"
+    ):
+        meta = json.loads(r["meta"] or "{}")
+        out.append(
+            {
+                "doc_id": r["id"],
+                "title": r["title"],
+                "promote": meta["promote"],
+                "done": bool(producer) and extracted_by(meta, producer),
+            }
+        )
+    return out
+
+
+@_serialized
+def promotion_candidates(
+    con: sqlite3.Connection, *, limit: int = 30
+) -> list[dict[str, Any]]:
+    """Documents the library keeps coming back to, not yet flagged: scored
+    by project membership, synthesis sources, notes on them, and citations
+    from other library documents (weights ``PROMOTE_WEIGHTS``)."""
+    titles: dict[str, int] = {}
+    promoted: set[int] = set()
+    for r in con.execute(
+        "SELECT id, title, meta FROM documents WHERE title IS NOT NULL"
+        " AND text_hash IS NOT NULL"
+        " AND coalesce(json_extract(meta, '$.source'), '') != 'wiki'"
+    ):
+        titles.setdefault(r["title"], r["id"])
+        if json.loads(r["meta"] or "{}").get("promote"):
+            promoted.add(r["id"])
+    counts: dict[int, dict[str, int]] = {}
+
+    def bump(name: str, key: str, n: int = 1) -> None:
+        doc_id = titles.get(name)
+        if doc_id is None or doc_id in promoted:
+            return
+        bucket = counts.setdefault(doc_id, {})
+        bucket[key] = bucket.get(key, 0) + n
+
+    for r in con.execute(
+        "SELECT t.name AS name, count(DISTINCT x.source_doc) AS n FROM edges x"
+        " JOIN entities t ON t.id = x.dst"
+        " WHERE x.rel = 'cites' AND x.valid_to IS NULL AND t.type = 'paper'"
+        " AND x.source_doc IS NOT NULL GROUP BY t.name"
+    ):
+        bump(r["name"], "cited", r["n"])
+    for r in con.execute(
+        "SELECT x.rel AS rel, t.name AS name, count(*) AS n FROM edges x"
+        " JOIN entities t ON t.id = x.dst"
+        " WHERE x.rel IN ('annotates', 'synthesizes') AND x.valid_to IS NULL"
+        " GROUP BY x.rel, t.name"
+    ):
+        bump(r["name"], "synthesis" if r["rel"] == "synthesizes" else "page", r["n"])
+    for r in con.execute(
+        "SELECT s.name AS name, count(*) AS n FROM edges x"
+        " JOIN entities s ON s.id = x.src"
+        " WHERE x.rel = 'part_of' AND x.valid_to IS NULL AND x.producer = 'page'"
+        " GROUP BY s.name"
+    ):
+        bump(r["name"], "project", r["n"])
+    ranked = []
+    for doc_id, c in counts.items():
+        score = sum(PROMOTE_WEIGHTS[k] * v for k, v in c.items())
+        ranked.append({"doc_id": doc_id, "score": score, **c})
+    ranked.sort(key=lambda d: (-d["score"], d["doc_id"]))
+    ranked = ranked[:limit]
+    for d in ranked:
+        d["title"] = con.execute(
+            "SELECT title FROM documents WHERE id = ?", (d["doc_id"],)
+        ).fetchone()[0]
+    return ranked
+
+
 # ------------------------------------------------------------------ pages
 # Living Markdown documents (migration 0006): notes on a document, ongoing
 # projects, topic pages. A page is a document, so everything that applies
@@ -688,6 +837,8 @@ def write_page(
             else "paper"
         )
         edge = Edge(page_title, page_type, source_rel, t[0], target_type)
+        if kind == "synthesis" and target_type == "paper":
+            _set_promote(con, target, by="page", reason=f"source of synthesis {slug}")
         if not find_edges(con, edge):
             link(
                 con,
@@ -775,6 +926,8 @@ def add_to_project(
     )
     if find_edges(con, edge):
         return None
+    if not is_page:
+        _set_promote(con, doc_id, by="page", reason=f"member of project {project_slug}")
     return link(
         con,
         edge,

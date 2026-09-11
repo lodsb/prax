@@ -134,6 +134,18 @@ def ask(
 
 
 @mcp.tool
+def promote(doc_id: int, reason: str | None = None) -> dict[str, Any]:
+    """Flag a document for the expensive model's pass (a richer extraction
+    with claims and relations between methods) when it turned out to matter:
+    cited in an answer, central to a question, worth a page. The pass itself
+    runs later as a batch; this only queues."""
+    try:
+        return store.promote(_db(), doc_id, by="agent", reason=reason)
+    except KeyError as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool
 def get_page(slug: str) -> dict[str, Any]:
     """A page of the library's wiki: its Markdown text, kind (addendum,
     project, topic), author of the latest revision and revision list."""

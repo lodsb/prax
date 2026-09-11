@@ -6,6 +6,7 @@
     python scripts/extract_graph.py --budget-usd 5     # stop past the estimate
     python scripts/extract_graph.py --submit-batch --limit 2000   # half price, async
     python scripts/extract_graph.py --collect-batch <batch id>    # apply results
+    python scripts/extract_graph.py --promoted [--submit-batch]  # flagged documents
     PRAX_EXTRACT=server-32b python scripts/extract_graph.py --workers 2  # served
 
 Selection: indexed documents whose ``meta.extraction.ontology_version`` is
@@ -51,6 +52,11 @@ def main() -> int:
         help="only documents no model has read yet (an ontology bump re-selects"
         " the others; skip them when the pass is a cheaper model's)",
     )
+    ap.add_argument(
+        "--promoted",
+        action="store_true",
+        help="the flagged documents (store.promote) through the promote step's model",
+    )
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument(
         "--submit-batch", action="store_true", help="use the Message Batches API"
@@ -70,18 +76,27 @@ def main() -> int:
     con = store.connect()
     store.init_db(con)
     version = ontology.current().version
-    ext = extraction.current()
+    ext = extraction.current("promote" if a.promoted else "extract")
 
     if a.collect_batch:
         return collect(con, ext, a.collect_batch, quiet=a.quiet)
 
-    ids = a.ids or store.select_for_extraction(
-        con,
-        ontology_version=version,
-        limit=None if a.never_extracted else a.limit,
-        mime_prefix=a.mime,
-        min_chars=a.min_chars,
-    )
+    if a.promoted and not a.ids:
+        ids = [
+            d["doc_id"]
+            for d in store.promoted_documents(con, producer=ext.name)
+            if not d["done"]
+        ]
+        if a.limit:
+            ids = ids[: a.limit]
+    else:
+        ids = a.ids or store.select_for_extraction(
+            con,
+            ontology_version=version,
+            limit=None if a.never_extracted else a.limit,
+            mime_prefix=a.mime,
+            min_chars=a.min_chars,
+        )
     if a.never_extracted and not a.ids:
         ids = [i for i in ids if not store.get_meta(con, i).get("extraction")]
         if a.limit:
@@ -113,7 +128,7 @@ def main() -> int:
     spent = 0.0
     t0 = time.monotonic()
     totals = extraction.ApplyReport()
-    run = "sync-" + time.strftime("%Y%m%dT%H%M%S")
+    run = ("promote-" if a.promoted else "sync-") + time.strftime("%Y%m%dT%H%M%S")
     workers = max(1, a.workers)
     if workers > 1 and not isinstance(ext, extraction.LocalExtractor):
         print(

@@ -287,6 +287,29 @@ and merge nothing unless an adjudicator says yes. A merge sets
 `entities.canonical_id`; nothing is deleted, `traverse` and the UI follow
 the pointer, and undoing one is clearing that column.
 
+### Promoting documents to the expensive model
+
+The local pass reads everything once; the papers you work with deserve
+the richer pass (claims, relations between methods). A document is
+flagged in `meta.promote` from its page ("promote"), from the Promote
+view's candidates (scored by project membership, synthesis sources,
+notes on the document and citations from other library documents), by
+Claude Code through the `promote` MCP tool, or by the store itself when
+the document joins a project or becomes a synthesis source. The flag
+queues; nothing is spent until the pass runs:
+
+    python scripts/extract_graph.py --promoted --dry-run
+    python scripts/extract_graph.py --promoted                  # the promote step's model
+    python scripts/extract_graph.py --promoted --submit-batch   # Claude at half price
+
+The model is the `promote` step in `prax.yaml` (section 3k; default
+Sonnet 5, `max_triples: 30`). A flagged document counts as done once
+that producer's stamp is in its extraction history, so the pass is
+idempotent and a later local pass does not undo it; both producers'
+edges sit side by side. `GET /promote` returns the flagged list with
+status and the candidates; `POST /doc/{id}/promote` and `DELETE` set
+and clear the flag.
+
 ### Typing rules over the queue
 
 A model's misfits are systematic: the document typed as what it is about

@@ -38,6 +38,9 @@ steps:
   extract:
     model: sonnet
     max_triples: 20
+  promote:            # the expensive pass over flagged documents (extract_graph.py --promoted)
+    model: sonnet
+    max_triples: 30
   ask:
     model: local-7b
   titles:

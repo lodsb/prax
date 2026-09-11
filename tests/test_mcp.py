@@ -29,6 +29,7 @@ EXPECTED_TOOLS = {
     "write_page",
     "append_page",
     "ask",
+    "promote",
 }
 
 

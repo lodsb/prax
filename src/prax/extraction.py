@@ -579,20 +579,21 @@ class LocalExtractor:
         return result
 
 
-def current() -> Extractor:
-    """The extractor for the ``extract`` step of ``prax.yaml`` (or
-    ``PRAX_EXTRACT``): Claude with the JSON schema, a stub, or a local or
-    served model with the line format and grammar."""
+def current(step: str = "extract") -> Extractor:
+    """The extractor for a step of ``prax.yaml`` (``extract``, or ``promote``
+    for the expensive pass over flagged documents; ``PRAX_<STEP>`` overrides):
+    Claude with the JSON schema, a stub, or a local or served model with the
+    line format and grammar."""
     from prax import models
 
-    spec = models.resolve("extract")
+    spec = models.resolve(step)
     if spec is None:
         raise RuntimeError(
-            "extraction is off: steps.extract.model / PRAX_EXTRACT is none"
+            f"extraction is off: steps.{step}.model / PRAX_{step.upper()} is none"
         )
     if spec.kind == "stub":
         return StubExtractor()
-    opts = models.settings("extract")
+    opts = models.settings(step)
     if spec.kind == "claude":
         assert spec.model is not None
         return ClaudeExtractor(

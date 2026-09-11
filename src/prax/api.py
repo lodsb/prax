@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import ask as ask_mod
-from . import auth, ontology, review, store
+from . import auth, models, ontology, review, store
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -535,6 +535,43 @@ def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+# --------------------------------------------------------------- promote
+
+
+class PromoteReq(BaseModel):
+    reason: str | None = None
+    by: str = "human"
+
+
+@app.post("/doc/{doc_id}/promote")
+def promote_doc(doc_id: int, req: PromoteReq, request: Request) -> dict[str, Any]:
+    """Flag a document for the expensive pass (``extract_graph.py --promoted``)."""
+    try:
+        return store.promote(
+            request.app.state.con, doc_id, by=req.by, reason=req.reason
+        )
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.delete("/doc/{doc_id}/promote")
+def unpromote_doc(doc_id: int, request: Request) -> dict[str, bool]:
+    return {"removed": store.unpromote(request.app.state.con, doc_id)}
+
+
+@app.get("/promote")
+def promote_view(request: Request, limit: int = 30) -> dict[str, Any]:
+    """The flagged documents with their status under the promote step's
+    model, and the candidates the library keeps coming back to."""
+    step = models.describe("promote")
+    producer = step["runtime"]
+    return {
+        "step": step,
+        "promoted": store.promoted_documents(request.app.state.con, producer=producer),
+        "candidates": store.promotion_candidates(request.app.state.con, limit=limit),
+    }
 
 
 @app.get("/graph/overview")
