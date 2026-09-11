@@ -742,6 +742,40 @@ def promotion_candidates(
     return ranked
 
 
+@_serialized
+def restamp_ontology(
+    con: sqlite3.Connection, src: str, dst: str, *, commit: bool = True
+) -> int:
+    """Rewrite ``meta.extraction.ontology_version`` (and the history entries)
+    from ``src`` to ``dst`` on every document: the ontology's version string
+    changed shape without a change in what it accepts (the split into
+    modules). Edges keep their version. Returns the documents touched."""
+    n = 0
+    for r in con.execute(
+        "SELECT id, meta FROM documents WHERE meta LIKE ?",
+        (f'%"ontology_version": "{src}"%',),
+    ).fetchall():
+        meta = json.loads(r["meta"] or "{}")
+        changed = False
+        for stamp in [
+            meta.get("extraction") or {},
+            *(meta.get("extraction_history") or []),
+        ]:
+            if stamp.get("ontology_version") == src:
+                stamp["ontology_version"] = dst
+                changed = True
+        if changed:
+            n += 1
+            if commit:
+                con.execute(
+                    "UPDATE documents SET meta = ? WHERE id = ?",
+                    (json.dumps(meta), r["id"]),
+                )
+    if commit:
+        con.commit()
+    return n
+
+
 # ------------------------------------------------------------------ pages
 # Living Markdown documents (migration 0006): notes on a document, ongoing
 # projects, topic pages. A page is a document, so everything that applies

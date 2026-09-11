@@ -49,7 +49,8 @@ def test_prompt_and_schema_follow_the_ontology() -> None:
     for name in onto.entity_types:
         assert f"- {name}:" in prompt
     assert "authored_by (paper -> author)" in prompt
-    assert f"ontology version {onto.version}" in prompt
+    assert f"ontology {onto.version}" in prompt
+    assert "(a kind of person)" in prompt  # subtypes name their parent
     schema = extraction.output_schema(onto)
     triple = schema["properties"]["triples"]["items"]
     assert set(triple["properties"]["src"]["properties"]["type"]["enum"]) == set(

@@ -1,0 +1,145 @@
+"""The modular ontology: composition, subtypes, aliases, domains, the repo's
+own modules, and the legacy single file."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from prax import config, ontology
+
+CORE = """
+module: core
+version: 2
+entity_types:
+  person: {description: a human}
+  organization:
+  concept:
+relation_types:
+  affiliated_with: {domain: [person], range: [organization]}
+type_aliases: {institution: organization}
+relation_aliases: {affiliation: affiliated_with}
+"""
+
+RESEARCH = """
+module: research
+version: 7
+requires: [core]
+entity_types:
+  author: {parent: person, description: wrote something}
+  paper:
+relation_types:
+  authored_by: {domain: [paper], range: [author]}
+  about: {domain: [paper], range: [concept]}
+type_aliases: {technique: concept}
+"""
+
+FAMILY = """
+module: family
+version: 1
+requires: [core]
+entity_types:
+  relative: {parent: person}
+relation_types:
+  parent_of: {domain: [person], range: [person]}
+"""
+
+
+def _compose(*texts: str) -> ontology.Ontology:
+    return ontology.compose([ontology.parse_module(t) for t in texts])
+
+
+def test_compose_versions_types_and_subtypes() -> None:
+    o = _compose(CORE, RESEARCH, FAMILY)
+    assert o.version == "core2+family1+research7"
+    assert o.entity_types == {
+        "person",
+        "organization",
+        "concept",
+        "author",
+        "paper",
+        "relative",
+    }
+    assert o.parent("author") == "person" and o.parent("person") is None
+    assert o.ancestors("author") == ["author", "person"]
+    assert o.is_a("relative", "person") and not o.is_a("paper", "person")
+    assert o.types["author"].module == "research"
+    assert o.relations["parent_of"].module == "family"
+    assert o.describe("author") == "wrote something" and o.describe("x") == ""
+
+
+def test_subtypes_pass_where_the_parent_is_allowed() -> None:
+    o = _compose(CORE, RESEARCH, FAMILY)
+    o.check_edge("author", "affiliated_with", "organization")  # author is a person
+    o.check_edge("relative", "parent_of", "author")  # cross-module through person
+    with pytest.raises(ValueError, match="does not accept src"):
+        o.check_edge("paper", "affiliated_with", "organization")
+    with pytest.raises(ValueError, match="unknown entity type"):
+        o.check_edge("planet", "authored_by", "author")
+
+
+def test_aliases() -> None:
+    o = _compose(CORE, RESEARCH)
+    assert o.canonical_type("institution") == "organization"
+    assert o.canonical_type("technique") == "concept"
+    assert o.canonical_type("paper") == "paper"
+    assert o.canonical_relation("affiliation") == "affiliated_with"
+    assert o.canonical_relation("about") == "about"
+
+
+def test_for_domains_keeps_core_and_requirements() -> None:
+    o = _compose(CORE, RESEARCH, FAMILY)
+    fam = o.for_domains(["family"])
+    assert set(fam.modules) == {"core", "family"}
+    assert "paper" not in fam.entity_types and "relative" in fam.entity_types
+    assert fam.version == "core2+family1"
+    assert o.for_domains(None) is o and o.for_domains(["nonesuch"]).version == "core2"
+
+
+def test_composition_errors() -> None:
+    with pytest.raises(ValueError, match="requires 'core'"):
+        _compose(RESEARCH)
+    dup = "module: other\nversion: 1\nentity_types: [person]\n"
+    with pytest.raises(ValueError, match="declared by both"):
+        _compose(CORE, dup)
+    orphan = (
+        "module: o\nversion: 1\nrequires: [core]\n"
+        "entity_types:\n  x: {parent: nothing}\n"
+    )
+    with pytest.raises(ValueError, match="unknown parent"):
+        _compose(CORE, orphan)
+    bad_alias = (
+        "module: o\nversion: 1\nrequires: [core]\ntype_aliases: {person: concept}\n"
+    )
+    with pytest.raises(ValueError, match="type alias"):
+        _compose(CORE, bad_alias)
+
+
+def test_legacy_single_file_keeps_a_plain_version() -> None:
+    o = ontology.parse("version: '9'\nentity_types: [a, b]\nrelation_types: [r]\n")
+    assert o.version == "9" and list(o.modules) == ["main"]
+    o.check_edge("a", "r", "b")
+
+
+def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    o = ontology.current()
+    assert set(o.modules) == {"core", "research"}
+    assert o.version == "core1+research5"
+    assert o.is_a("author", "person") and o.is_a("paper", "document")
+    assert o.is_a("venue", "organization")
+    o.check_edge("author", "affiliated_with", "organization")
+    o.check_edge("tool", "developed_by", "author")  # author is a person
+    assert o.canonical_relation("supervised_by") == "advised_by"
+    # a directory elsewhere works the same way, and a change is picked up
+    d = tmp_path / "onto"
+    d.mkdir()
+    for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
+        (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
+    assert ontology.current().version == "core1+research5"
+    text = (d / "research.yaml").read_text(encoding="utf-8")
+    (d / "research.yaml").write_text(
+        text.replace("version: 5", "version: 6"), encoding="utf-8"
+    )
+    assert ontology.current().version == "core1+research6"

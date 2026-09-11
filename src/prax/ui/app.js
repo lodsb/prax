@@ -462,6 +462,8 @@ async function viewBrowse(p) {
 const TYPE_COLORS = {
   paper: "#2f5d8a", author: "#7a5c1e", concept: "#4b7a45", method: "#6a4b7a",
   claim: "#a0522d", tool: "#3b7a7a", venue: "#8a6d2f", dataset: "#5a5a8a",
+  person: "#7a5c1e", organization: "#8a4b2f", document: "#2f5d8a", place: "#3f6b3f",
+  event: "#7a3f6b", work: "#5a3f8a", page: "#2f7a8a", project: "#2f8a5a",
 };
 const nodeKey = (name, type) => type + "|" + name;
 const typeColor = (t) => TYPE_COLORS[t] || "#888";

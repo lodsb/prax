@@ -1,0 +1,76 @@
+# prax ontology, core module: the types every domain shares. A domain
+# module (research.yaml, later family.yaml or production.yaml) requires
+# this one and subtypes it: an author is a person, a paper is a document.
+# Keep it SMALL; a subtype is accepted wherever its parent is allowed, so
+# relations declared here on person hold for authors. Format:
+# src/prax/ontology.py. Bump `version` when a type or relation changes.
+#
+# core v1 (2026-09-12): split out of the single ontology.yaml (v5); the
+# shared types the modular ontology needs, and the two relations that
+# belong to people and organizations rather than to research.
+module: core
+version: 1
+
+entity_types:
+  person:
+    description: >-
+      A human being named in the text, as printed, full form, no titles.
+      Domain modules subtype this (an author is a person).
+  organization:
+    description: >-
+      A university, department, lab, company, funder, consortium or
+      standards body named in the text: Chalmers University of Technology,
+      LMA-CNRS, Waves Audio, Austrian Science Fund. Full name as printed,
+      no city or country unless part of the name.
+  document:
+    description: >-
+      Something written or recorded that the store holds or the text names
+      by title. Domain modules subtype this (a paper, a page).
+  place:
+    description: >-
+      A named location: a city, a studio, a venue building, a country.
+  event:
+    description: >-
+      A dated happening the text names: a conference edition, a concert,
+      a release, a meeting.
+  work:
+    description: >-
+      A creative work named as such: a piece of music, an album, a film,
+      a book as a work rather than as the document at hand.
+  concept:
+    description: >-
+      An idea, topic, phenomenon or quantity a document is about: source
+      separation, pitch perception, aliasing, room acoustics. Lowercase
+      noun phrase, singular, no articles. The field a technique belongs to
+      is a concept; the technique itself is a method, never both under one
+      name.
+  tool:
+    description: >-
+      Software, hardware, a library or an instrument used or built:
+      Matlab, Csound, Web Audio API, a specific synthesizer.
+
+relation_types:
+  affiliated_with:
+    domain: [person]
+    range: [organization]
+    description: the person's institution as stated in the document
+  developed_by:
+    domain: [tool]
+    range: [organization, person]
+    description: who built or makes the tool, as the text states it
+
+type_aliases:
+  institution: organization
+  university: organization
+  company: organization
+  people: person
+  software: tool
+  library: tool
+  instrument: tool
+
+relation_aliases:
+  affiliation: affiliated_with
+  affiliated: affiliated_with
+  created_by: developed_by
+  built_by: developed_by
+  made_by: developed_by

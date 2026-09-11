@@ -55,11 +55,17 @@ drop folder (`docs/sources.md`).
    (sets `valid_to`); it never deletes them. Provenance is a column on the
    fact, never an edge in the graph: upgrading a producer's work is
    `retire_run` plus a new pass.
-9. **Ontology is small and versioned.** Entity/relation types live in
-   `ontology.yaml` and are loaded by `prax.ontology`. `store.link` rejects
-   any edge whose types are not in the current version, and stamps every
-   edge with that version. Growing the ontology is a version bump; renaming
-   or removing a type is a data migration. Extraction emits triples only
+9. **Ontology is small, versioned and modular.** Entity/relation types
+   live in `ontology/`, one YAML module per domain (`core.yaml` for the
+   shared types: person, organization, document, place, event, work,
+   concept, tool; `research.yaml` for papers, methods, claims and pages;
+   a family or production module later), loaded and composed by
+   `prax.ontology`. Names are unique across modules; a subtype passes
+   wherever its parent is allowed; aliases map what a model says to the
+   canonical name. The composed version (`core1+research5`) is what
+   `store.link` validates against and stamps on every edge. Growing a
+   module is its version bump; renaming or removing a type is a data
+   migration. Extraction emits triples only
    against the current version; misfits go to a review queue, not into the
    graph.
 10. **Importers never write to their source.** The Zotero importer works on

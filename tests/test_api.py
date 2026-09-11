@@ -336,8 +336,8 @@ def test_review_queue_endpoints(client: TestClient) -> None:
     # an invalid link leaves the item open
     r = client.post(
         f"/review/{b}",
-        json={"resolution": "linked", "src_type": "paper", "dst_type": "venue"},
-    )
+        json={"resolution": "linked", "src_type": "paper", "dst_type": "concept"},
+    )  # a venue is an organization now, so funded_by would take it; a concept not
     assert r.status_code == 400 and "funded_by" in r.json()["detail"]
     assert (
         client.post(f"/review/{b}", json={"resolution": "ontology"}).status_code == 200
@@ -417,19 +417,24 @@ def test_review_filters_bulk_and_replay(
     assert (edge["rel"], edge["evidence"]) == ("uses", "q")
     assert edge["ontology_version"] == ontology_version_now()
     assert client.get("/review").json()["total"] == 1
-    import re
+    # a bumped research module in a copy of the ontology directory: cites
+    # may now target a tool, and the replay links the last item under it
+    from prax import config
 
-    v_now = (Path(__file__).parents[1] / "ontology.yaml").read_text(encoding="utf-8")
-    current = re.search(r'^version: "(\d+)"', v_now, re.MULTILINE).group(
-        1
-    )  # the repo file
-    later = str(int(current) + 1)
-    v_next = re.sub(
-        r"(cites:\s+domain: \[[^\]]*\]\s+range: )\[paper\]", r"\1[paper, tool]", v_now
-    ).replace(f'version: "{current}"', f'version: "{later}"')
-    assert f'version: "{later}"' in v_next and "range: [paper, tool]" in v_next
-    (tmp_path / "onto.yaml").write_text(v_next, encoding="utf-8")
-    monkeypatch.setenv("PRAX_ONTOLOGY", str(tmp_path / "onto.yaml"))
+    onto_dir = tmp_path / "onto"
+    onto_dir.mkdir()
+    for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
+        (onto_dir / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    research = (onto_dir / "research.yaml").read_text(encoding="utf-8")
+    research = research.replace("version: 5", "version: 6").replace(
+        "    domain: [paper, page, project]\n    range: [paper]\n",
+        "    domain: [paper, page, project]\n    range: [paper, tool]\n",
+        1,
+    )
+    assert "version: 6" in research and "range: [paper, tool]" in research
+    (onto_dir / "research.yaml").write_text(research, encoding="utf-8")
+    monkeypatch.setenv("PRAX_ONTOLOGY", str(onto_dir))
+    later = "core1+research6"
     rep = client.post("/review/replay").json()
     assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == (later, 1, 0)
     assert client.get("/review").json()["total"] == 0

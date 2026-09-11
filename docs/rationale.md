@@ -182,7 +182,7 @@ enhancer for retrieval, and those queries are explicit SQL tools.
 edges to Kùzu (embedded), not Neo4j.
 
 *Extraction (2026-09-09).* The extractor's prompt and output schema are
-generated from `ontology.yaml`, so the validator at the door and the
+generated from the ontology modules in `ontology/`, so the validator at the door and the
 instructions the model sees cannot drift apart. Every extracted edge
 carries a quoted `evidence` string (migration 0004) rather than a chunk
 id, because chunks are disposable; triples outside the ontology land in

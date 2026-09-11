@@ -200,12 +200,21 @@ def ontology_view() -> dict[str, Any]:
     onto = ontology.current()
     return {
         "version": onto.version,
+        "modules": {
+            m.name: {"version": m.version, "requires": list(m.requires)}
+            for m in onto.modules.values()
+        },
         "entity_types": sorted(onto.entity_types),
+        "types": {
+            t.name: {"module": t.module, "parent": t.parent}
+            for t in onto.types.values()
+        },
         "relations": {
             r.name: {
                 "domain": sorted(r.domain),
                 "range": sorted(r.range),
                 "description": r.description,
+                "module": r.module,
             }
             for r in onto.relations.values()
         },

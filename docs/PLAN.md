@@ -253,6 +253,13 @@ R14). Design in `docs/ui.md`.
       0.89 to 0.905 (`docs/eval/retrieval-acronyms-2026-09-12.md`).
       "adaa iir algorithms" now finds the ADAA papers. Graph panel and
       review items link an edge's evidence to its chunk (`?find=`)
+- [x] Modular ontology (2026-09-12): `ontology/` with `core.yaml` (person,
+      organization, document, place, event, work, concept, tool;
+      affiliated_with, developed_by) and `research.yaml` (requires core;
+      author, paper, venue, page, project as subtypes); composed version
+      `core1+research5`; subtypes pass where the parent is allowed; type and
+      relation aliases; `for_domains` narrows to a document's modules (the
+      per-document domain set is the next step, with the capture inbox)
 - [x] Promote queue (2026-09-12): `meta.promote` set from the document
       page, the Promote view's scored candidates, the `promote` MCP tool,
       or by the store when a document joins a project or a synthesis;

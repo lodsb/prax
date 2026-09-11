@@ -136,7 +136,7 @@ flowchart TD
    edges from Crossref or OpenAlex reference lists. Every edge carries the
    ontology version it was written under and bi-temporal validity; nothing
    is deleted, only invalidated. Types are validated against
-   `ontology.yaml` at the door; when the ontology grows, `prax.review`
+   the composed ontology at the door; when a module grows, `prax.review`
    replays the queue. (R7)
 6. **Resolve**. `prax.resolution` merges entities that name the same thing
    through `canonical_id`: sure merges (case, accents, punctuation, author
@@ -195,7 +195,7 @@ what is needed.
 | `prax.parsers` | extractor registry by MIME type with revisions; `parsers.queue` the parse queue with fallback chain, size/page/OCR guards, history; `parsers.vision` images described by Claude | via store |
 | `prax.embeddings` | ONNX embedder registry (bge-small default), provider/variant selection, hash embedder for tests | no |
 | `prax.vectors` | a usearch index file: view for reads, writable copy for batch jobs, atomic save | no (writes the index file) |
-| `prax.ontology` | parses `ontology.yaml`, validates edge types, versions | no |
+| `prax.ontology` | loads the module files in `ontology/`, composes them (unique names, subtypes, aliases, a composed version), validates edge types, narrows to a document's domains | no |
 | `prax.importers.zotero` | read-only copy of `zotero.sqlite` → documents, notes, attachments, authored_by seeds; idempotent per key | via store |
 | `prax.importers.citations` | Crossref or OpenAlex by DOI or exact title → `cites` edges, citation counts in `meta.citations`; idempotent per document | via store |
 | `prax.extraction` | document input (head plus closing sections), ontology-derived prompt and JSON schema, Claude and local extractors, `apply()` into edges / review queue / stamps with guards | via store |
@@ -301,7 +301,7 @@ loop); the queue makes each batch do real work.
 | `PRAX_LOCAL_MODEL`, `PRAX_LOCAL_CTX` | the implicit `local` model: a GGUF file and its context, when the file names none |
 | `PRAX_CITATIONS_MAILTO` | polite-pool contact for Crossref and OpenAlex |
 | `PRAX_RERANK` | cross-encoder name, `stub`, or `0` (default off) |
-| `PRAX_ONTOLOGY` | alternative `ontology.yaml` |
+| `PRAX_ONTOLOGY` | another ontology directory (or a single legacy file) |
 | `PRAX_EMBED` | model name, `hash` (tests), `0` (off) |
 | `PRAX_EMBED_VARIANT`, `PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS` | onnxruntime precision, providers, threads |
 | `PRAX_VEC_DTYPE`, `PRAX_VEC_EF` | index precision (`f16`, `i8`) and search expansion |
@@ -319,7 +319,7 @@ loop); the queue makes each batch do real work.
 | add a media kind (audio) | a chunk `kind` and locator shape in `prax.chunking`; an analyzer that produces the searchable rendering (images already go through `claude-vision`) |
 | change what a document *is* for search | `store.document_field`; run `refresh_document_fields.py`, then `embed_pending.py` |
 | change the embedding model | an entry in `prax.embeddings.MODELS`; `embed_pending.py` re-embeds into new index files; another dimension also needs `VEC_DIM` |
-| add entity or relation types | `ontology.yaml` plus a version bump; `replay_review.py`; old edges keep their version; the bump re-selects documents for extraction |
+| add entity or relation types | the module file under `ontology/` plus that module's version bump (a new domain is a new file that requires `core`); `replay_review.py`; old edges keep their version; the bump re-selects documents for extraction |
 | replace one producer's work | re-extract (a new `run`), then `store.retire_run(producer=, run=)` on the old one; history stays |
 | change the extraction prompt | `extraction.system_prompt` (the JSON text is cached across calls) and `docs/eval/` for a before/after on the three benchmark papers |
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |

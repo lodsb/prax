@@ -1,10 +1,8 @@
-# prax ontology — keep this SMALL. Extraction emits triples only against the
-# current version; anything that doesn't fit goes to the review queue.
-# `prax.store.link` rejects edges whose types are not listed here.
-#
-# Growing it: add types, bump `version`. Edges keep the version they were
-# written under. Renaming or removing a type is a data migration, not an
-# edit of this file. Format details: src/prax/ontology.py.
+# prax ontology, research module: papers, methods, claims and the pages of
+# this library. Requires core (person, organization, document, concept,
+# tool). Extraction emits triples only against the composed ontology;
+# anything that does not fit goes to the review queue. Growing it: add
+# types, bump `version`. Edges keep the version they were written under.
 #
 # v1 (2026-09-09): descriptions rewritten as instructions for the extractor
 # (prax.extraction builds its prompt from this file); `venue` added so
@@ -13,35 +11,36 @@
 # (docs/ontology-v2.md): `uses`, `about`, `extends` and `proposes` widened
 # to the shapes the models kept producing; `defines`, `contrasts` and
 # `advised_by` added; method-versus-concept and reference-number rules put
-# into the descriptions. `related_to` and a music `work` type deliberately
-# left out for now.
-# v3 (2026-09-10): pages (rationale R15). Entity types `page` and `project`
-# for the living documents in the store; `annotates` and `part_of` connect
-# them to papers and to each other; `cites` and `about` accept a page as
-# source, so an extracted page enters the graph like a paper.
-version: "5"
+# into the descriptions.
+# v3 (2026-09-10): pages (rationale R15): `page` and `project`, `annotates`
+# and `part_of`.
+# v4 (2026-09-11): synthesis pages, `synthesizes`; pages may argue claims.
+# v5 (2026-09-12, docs/ontology-v5.md): organizations, `mentions`, wider
+# `contrasts`, `extends`, `about`, `part_of`. On the same day the file was
+# split: person, organization, concept, tool, affiliated_with and
+# developed_by moved to core.yaml; author, paper, venue, page and project
+# became subtypes of core types. The composed version is core1+research5.
+module: research
+version: 5
+requires: [core]
 
 entity_types:
   paper:
+    parent: document
     description: >-
       A document in the store, named by its title. The document being
       extracted is always a paper; other papers appear when the text names
       them by title. A bracketed reference number is never a name.
   author:
+    parent: person
     description: >-
       A person or group that wrote something. Name as printed, full form,
       no titles or affiliations.
   venue:
+    parent: organization
     description: >-
       A journal, conference series or publisher where a paper appeared
       (IEEE ICASSP, JAES, DAFx, Springer).
-  concept:
-    description: >-
-      An idea, topic, phenomenon or quantity a document is about: source
-      separation, pitch perception, aliasing, room acoustics. Lowercase
-      noun phrase, singular, no articles. The field a technique belongs to
-      is a concept; the technique itself is a method, never both under one
-      name.
   method:
     description: >-
       A named algorithm, technique or procedure: nonnegative matrix
@@ -52,33 +51,26 @@ entity_types:
     description: >-
       A named corpus, benchmark or measurement set: MUSDB18, NSynth,
       a specific HRTF database.
-  tool:
-    description: >-
-      Software, hardware, a library or an instrument used or built:
-      Matlab, Csound, Web Audio API, a specific synthesizer.
   claim:
     description: >-
       One sentence stating a result or assertion the document makes, in
       the document's own terms ("SSST resolves close tones that SST
       merges"). Only for central findings.
   page:
+    parent: document
     description: >-
       A page written in this library (a note on a document, a topic
-      write-up, a synthesis across several sources), named by its title. Only the document being extracted can
-      be a page, when its header says "Kind: page"; never create a page
-      from the text, and a web page in the text is a paper.
+      write-up, a synthesis across several sources), named by its title.
+      Only the document being extracted can be a page, when its header
+      says "Kind: page"; never create a page from the text, and a web page
+      in the text is a paper.
   project:
+    parent: document
     description: >-
       An ongoing research thread in this library, named by its title.
       Only the document being extracted can be a project, when its header
       says "Kind: project". A research project a paper mentions (a funded
       programme, a consortium) is an organization, not a project.
-  organization:
-    description: >-
-      A university, department, lab, company, funder, consortium or
-      standards body named in the text: Chalmers University of Technology,
-      LMA-CNRS, Waves Audio, Austrian Science Fund. Full name as printed,
-      no city or country unless part of the name.
 
 relation_types:
   cites:
@@ -170,15 +162,22 @@ relation_types:
       it or being about it (related work, an aside). The weakest relation:
       use it only when nothing stronger holds; never for something the
       document uses or is substantially about
-  affiliated_with:
-    domain: [author]
-    range: [organization]
-    description: the author's institution as stated in the document
   funded_by:
     domain: [paper, project]
     range: [organization]
     description: a funder or grant programme acknowledged in the document
-  developed_by:
-    domain: [tool]
-    range: [organization, author]
-    description: who built or makes the tool, as the text states it
+
+type_aliases:
+  technique: method
+  algorithm: method
+  corpus: dataset
+  benchmark: dataset
+  finding: claim
+  journal: venue
+  conference: venue
+
+relation_aliases:
+  supervised_by: advised_by
+  discusses: mentions
+  builds_on: extends
+  compares: contrasts

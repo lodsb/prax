@@ -4,7 +4,7 @@
     python scripts/replay_review.py --dry-run
     python scripts/replay_review.py --commit
 
-After `ontology.yaml` grows (widened domains and ranges, new relations),
+After an ontology module grows (widened domains and ranges, new relations),
 typed items the old version rejected are linked as edges with their
 evidence and source document; no model is called. Details: prax.review.
 """

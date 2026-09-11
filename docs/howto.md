@@ -75,7 +75,9 @@ before migrations existed (version 0) is upgraded in place.
 
 ### Ontology
 
-`ontology.yaml` lists the entity and relation types the graph accepts and a
+`ontology/` holds the entity and relation types the graph accepts, one
+module per domain (`core.yaml`, `research.yaml`; format in
+`src/prax/ontology.py`), each with a
 `version`. `store.link` rejects anything else. Add types and bump the
 version; edges keep the version they were written under. `PRAX_ONTOLOGY`
 points at a different file (tests use it). After a bump, replay the review
@@ -261,7 +263,7 @@ all-terms tier were tried and left off.
 
 `prax.extraction` sends each document's metadata header and the first
 12,000 characters of its text to Claude with a JSON schema generated from
-`ontology.yaml`, and writes the returned triples through `store.link` with
+the composed ontology, and writes the returned triples through `store.link` with
 a confidence and a quoted evidence string. Triples that do not fit the
 ontology go to `review_queue`; the summary goes to `meta.summary`; the
 document is stamped with the ontology version so reruns are incremental.

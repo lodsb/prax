@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
-ONTOLOGY_PATH = REPO_ROOT / "ontology.yaml"
+ONTOLOGY_PATH = REPO_ROOT / "ontology"  # a directory of module files
 
 
 def data_dir() -> Path:

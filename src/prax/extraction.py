@@ -9,7 +9,7 @@ triples through ``store.link`` (invariant 3), parks the rest in the review
 queue (invariant 9), stores the summary in ``meta.summary`` and stamps
 ``meta.extraction`` so runs are incremental per ontology version.
 
-The prompt is built from ``ontology.yaml`` itself, so a version bump changes
+The prompt is built from the composed ontology itself, so a version bump changes
 what the model is asked for and re-selects every document. The Claude call
 uses structured output (a JSON schema the response must satisfy) and a
 cached system prompt shared by all documents. The ``extract`` step of
@@ -312,7 +312,7 @@ def system_prompt(
             f" and music. Work only from the text given. {answer}"
         ),
         "",
-        f"Entity types (ontology version {onto.version}):",
+        f"Entity types (ontology {onto.version}):",
         ent,
         "",
         "Relation types, with the allowed source -> target types:",
@@ -329,22 +329,11 @@ def system_prompt(
 
 
 def _desc(onto: ontology.Ontology, name: str) -> str:
-    # Ontology keeps entity descriptions in the YAML; the parsed object holds
-    # only names, so read the file's mapping form again for the prompt.
-    return _entity_descriptions().get(name, "")
-
-
-def _entity_descriptions() -> dict[str, str]:
-    import yaml
-
-    data = yaml.safe_load(ontology.path().read_text(encoding="utf-8")) or {}
-    section = data.get("entity_types") or {}
-    if isinstance(section, dict):
-        return {
-            str(k): str((v or {}).get("description", "")).strip()
-            for k, v in section.items()
-        }
-    return {}
+    """The type's description for the prompt, with its parent when it has
+    one ("a kind of person"), so the model knows the family it belongs to."""
+    text = onto.describe(name)
+    parent = onto.parent(name)
+    return f"{text} (a kind of {parent})" if parent else text
 
 
 # -------------------------------------------------------------- extractors
