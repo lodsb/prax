@@ -287,6 +287,26 @@ and merge nothing unless an adjudicator says yes. A merge sets
 `entities.canonical_id`; nothing is deleted, `traverse` and the UI follow
 the pointer, and undoing one is clearing that column.
 
+### Typing rules over the queue
+
+A model's misfits are systematic: the document typed as what it is about
+("this manual" as a tool), `authored_by` written backwards or with authors
+on both ends, `cites` for a tool or method the paper uses, `about` for a
+claim it makes or a paper it discusses. `scripts/type_review.py` applies
+the rules in `prax.review.apply_typing_rules` to every open typed item:
+
+    python scripts/type_review.py --dry-run    # counts per rule, nothing written
+    python scripts/type_review.py --commit
+
+A rule retypes, flips, renames the relation, or drops what no relation can
+hold; it never invents. What it links is written as INFERRED edges with the
+producer `typing-rules` and one run id per pass, with the item's evidence
+and source document, so a pass can be retired like any other producer's.
+Items the rules do not cover (an `extends` between papers, `contrasts` with
+a tool) stay open as evidence for the next ontology version. After the
+local backlog of 2026-09-12 the first pass closed 2,898 of the 4,300 typed
+items as linked (2,468 new edges, 430 already in the graph) and dropped 769.
+
 ## 3f. Citation network
 
 `prax.importers.citations` asks OpenAlex or Crossref for each document's

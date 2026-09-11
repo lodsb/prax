@@ -246,6 +246,11 @@ R14). Design in `docs/ui.md`.
       recased by rule; old titles kept in `meta.title_history`, paper
       entities follow; hybrid search without vectors now fuses the
       field's BM25 too
+- [x] Typing rules over the review queue (2026-09-12,
+      `prax.review.apply_typing_rules`, `scripts/type_review.py`): the
+      local model's systematic misfits retyped, flipped, renamed or
+      dropped as INFERRED edges with producer `typing-rules`; 2,898 linked
+      (2,468 new edges), 769 dropped, 656 typed items left for a person or ontology v5
 - [x] Ontology v4 (2026-09-11, `docs/ontology-v4.md`): page kind
       `synthesis`, relation `synthesizes`, pages may support, contradict
       and propose claims; Ask can start a synthesis page from an answer
