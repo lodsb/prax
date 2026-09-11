@@ -246,6 +246,14 @@ R14). Design in `docs/ui.md`.
       recased by rule; old titles kept in `meta.title_history`, paper
       entities follow; hybrid search without vectors now fuses the
       field's BM25 too
+- [x] Ontology v5 (2026-09-12, `docs/ontology-v5.md`): `organization` with
+      `affiliated_with`, `funded_by`, `developed_by`; `mentions` as the weakest
+      relation; wider `contrasts`, `extends`, `about`, `part_of`. Replay linked
+      195 typed leftovers; rules for unmapped items (affiliation, supervision,
+      authorship, funding, development, mentions) linked 1,261 more without a
+      model; 232 organizations in the graph; 18,372 items stay open, most of
+      them untyped `about`, `cites`, `part_of` and `published_in` the rules
+      cannot type
 - [x] Typing rules over the review queue (2026-09-12,
       `prax.review.apply_typing_rules`, `scripts/type_review.py`): the
       local model's systematic misfits retyped, flipped, renamed or

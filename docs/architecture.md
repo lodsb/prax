@@ -332,10 +332,10 @@ loop); the queue makes each batch do real work.
 | Archive / database / vectors | 18 GB / 1.6 GB / 749 MB + 8 MB |
 | Chunks | 855,920: 772,304 text, 41,791 figure captions, 35,062 tables, 6,763 code |
 | Vectors | 855,920 chunk vectors and 9,236 document vectors (bge-small, f16) |
-| Graph | 110,170 live edges: 57,808 by Qwen3.6-35B-A3B on the 4090, 25,641 citations (Crossref), 19,357 by Sonnet 5, 6,756 from Zotero, 358 by replay; 52 invalidated |
+| Graph | 114,677 live edges: 58,179 by Qwen3.6-35B-A3B on the 4090, 25,641 citations (Crossref), 19,357 by Sonnet 5, 6,756 from Zotero, 3,729 by the typing rules, 553 by replay; 52 invalidated |
 | Entities | 34,005 papers, 16,246 concepts, 9,717 methods, 7,024 authors, 4,069 tools, 2,976 claims, 1,075 venues, 327 datasets; 6,888 merged aliases |
 | Extraction | 7,897 documents with a summary and entities: 6,878 by the local 35B (8.3 h, about 4 kWh), 1,019 by Sonnet 5 (about $35) |
-| Review queue | 23,502 open items, most from the local pass: relation-type misfits (`cites`, `about`, `authored_by` to a wrong type) and unmapped affiliations |
+| Review queue | 18,372 open items after the typing rules and ontology v5, almost all untyped `about`, `cites`, `part_of` and `published_in` from the local pass |
 | Citations | 1,545 documents resolved at Crossref by DOI or exact title |
 | Titles | 3,503 replaced by the local 7B model (text-confirmed), 268 recased; 801 unconfirmed and 782 without text keep their file name |
 | Retrieval eval (62 library queries) | MRR 0.82 fts, 0.79 vec, 0.89 hybrid; hit@1 0.85 hybrid |

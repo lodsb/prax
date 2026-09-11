@@ -302,8 +302,12 @@ A rule retypes, flips, renames the relation, or drops what no relation can
 hold; it never invents. What it links is written as INFERRED edges with the
 producer `typing-rules` and one run id per pass, with the item's evidence
 and source document, so a pass can be retired like any other producer's.
-Items the rules do not cover (an `extends` between papers, `contrasts` with
-a tool) stay open as evidence for the next ontology version. After the
+Unmapped items are covered too when the relation the model named and the
+shape of the names decide (affiliation between a person and an institution,
+supervision between two people, authorship between a title and a person,
+funding, who built a tool, a mention whose reason names what kind of thing
+it is). Items the rules do not cover stay open as evidence for the next
+ontology version; v5 (`docs/ontology-v5.md`) came out of that evidence. After the
 local backlog of 2026-09-12 the first pass closed 2,898 of the 4,300 typed
 items as linked (2,468 new edges, 430 already in the graph) and dropped 769.
 

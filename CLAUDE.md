@@ -96,7 +96,9 @@ search plus generation: a bounded bundle (one passage per document,
 the graph's facts about it) to a model chosen per host (`PRAX_ASK`:
 local GGUF, Claude, or none, where the caller's model answers); answers
 cite passage numbers resolved to chunk ids, and are kept on pages; a
-synthesis page `synthesizes` its sources and may argue claims (ontology v4).
+synthesis page `synthesizes` its sources and may argue claims (ontology v4);
+v5 adds organizations (affiliation, funding, who built a tool) and the weak
+`mentions` relation, both grown from the review queue's evidence.
 
 ## Conventions
 
