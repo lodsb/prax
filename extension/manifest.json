@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "prax capture",
+  "version": "0.1.0",
+  "description": "Send this tab, or every tab in the window, to your prax knowledge base.",
+  "icons": { "48": "icon48.png", "128": "icon128.png" },
+  "action": {
+    "default_title": "Send to prax",
+    "default_popup": "popup.html",
+    "default_icon": { "48": "icon48.png" }
+  },
+  "options_ui": { "page": "options.html", "open_in_tab": false },
+  "background": {
+    "scripts": ["lib.js", "background.js"],
+    "service_worker": "background-sw.js"
+  },
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "browser_specific_settings": {
+    "gecko": { "id": "prax-capture@lodsb.org", "strict_min_version": "115.0" }
+  }
+}

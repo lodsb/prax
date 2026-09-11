@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>prax capture options</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="options">
+  <form id="form" autocomplete="off">
+    <label>Server
+      <input id="server" type="url" placeholder="http://127.0.0.1:8000 or http://<tailscale-name>:8000" required>
+      <small class="muted">The door's address. Saving asks the browser for permission to talk to it.</small>
+    </label>
+    <label>Access token
+      <input id="token" type="password" placeholder="PRAX_TOKEN (empty on the desktop: loopback needs none)">
+      <small class="muted">Kept in this browser's extension storage only.</small>
+    </label>
+    <label>Default domains
+      <div id="domains" class="chips"><span class="muted">save the server first, then the door's modules appear here</span></div>
+    </label>
+    <label class="row"><input id="close" type="checkbox"> close tabs after "send all tabs in window"</label>
+    <div class="actions">
+      <button>Save</button>
+      <button type="button" id="test" class="secondary">Test connection</button>
+      <span id="msg"></span>
+    </div>
+  </form>
+  <script src="lib.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

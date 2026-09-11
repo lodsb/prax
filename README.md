@@ -66,10 +66,9 @@ Built and in daily use on one library, September 2026:
 | Titles | 3,771 file-name titles replaced by a local 7B model reading the first page |
 | Extraction | every document with text read once: 6,878 by a local Qwen3.6-35B-A3B on a borrowed 4090 (8 hours), 1,019 by Sonnet 5 |
 
-Not built: the browser extension (the door it would talk to exists:
-uploads, sent pages, fetched URLs and a drop folder are in), the move of
-the service onto the serving board, and the MCP server proxying the HTTP
-door instead of importing the store. Checklists with dates: `docs/PLAN.md`.
+Not built: the move of the service onto the serving board, and the MCP
+server proxying the HTTP door instead of importing the store. The browser
+extension (`extension/`) is new and hand-tested in one browser so far. Checklists with dates: `docs/PLAN.md`.
 
 ## Quick start
 
@@ -117,7 +116,7 @@ built, module by module: `docs/architecture.md`.
 | `docs/ontology-v2.md`, `docs/ontology-v4.md`, `docs/ontology-v5.md`, `docs/ontology-studio.md` | How the ontology grew: from the review queue's evidence, for syntheses, for organizations and mentions, and the studio module for gear and its manuals. |
 | `docs/PLAN.md` | Staged build plan with checklists and dates. |
 | `docs/sources.md` | Data sources: the Zotero import, citation sources, captures and the drop folder. |
-| `docs/extension.md` | The browser extension: what it sends, its settings (server, token, domain), how it authenticates. |
+| `docs/extension.md` | The browser extension: installing it, what it sends, its settings (server, token, domains), how it authenticates. |
 | `docs/eval/` | Measurements: extractors, retrieval on the fixture and the library, the local LLM, the document field. |
 | `docs/research.md` | The landscape survey the first decisions were drawn from. |
 | `prax.example.yaml` | Template for `prax.yaml`: models and the step each serves. |

@@ -1,13 +1,51 @@
 # The browser extension
 
-Status: designed, not built. The door it talks to exists (`prax.inbox`,
-howto 3l): `POST /ingest/html` takes a page as the browser rendered it,
-`POST /ingest/url` a bare URL, both with a domain set, tags and a
-capture-session id; `PRAX_CORS_ORIGINS` admits the extension's origin.
+Status: built (`extension/`, 2026-09-12), one Manifest V3 codebase for
+Firefox, Waterfox and Chrome; tested by hand in Waterfox first. The door
+it talks to is `prax.inbox` (howto 3l): `POST /ingest/html` takes a page
+as the browser rendered it, `POST /ingest/url` a bare URL, both with a
+domain set, tags and a capture-session id.
+
+## Installing it
+
+Development, in every browser, means loading the folder, so an edit in
+the repo is live at the next popup open; only manifest or background
+changes need the reload button.
+
+- **Waterfox, Firefox:** `about:debugging#/runtime/this-firefox`, "Load
+  Temporary Add-on…", pick `extension/manifest.json`. That install lasts
+  until the browser restarts. For a permanent one, Waterfox (and Firefox
+  Developer Edition or ESR) accepts unsigned add-ons once
+  `xpinstall.signatures.required` is `false` in `about:config`: build
+  the file with `python scripts/build_extension.py` and drop
+  `dist/prax-capture-<version>.xpi` onto a browser window. Release
+  Firefox wants it signed: Mozilla's self-distribution channel does that
+  in a minute per build.
+- **Chrome, Chromium, Edge:** `chrome://extensions`, developer mode on,
+  "Load unpacked", pick the `extension/` folder (dragging the folder
+  onto the page does the same).
+
+Then open the popup once, follow "options": the server (the door's
+address), the token when the door has one, default domains, and whether
+"send all tabs" closes them. Saving asks the browser for permission to
+talk to that server; Firefox grants host permissions on request, Chrome
+at install. "Test connection" says whether the door answers and which
+domains it offers.
+
+## Files
+
+| File | Role |
+|---|---|
+| `manifest.json` | MV3; `background.scripts` for Firefox's event page and `background.service_worker` for Chrome side by side; `activeTab`, `scripting`, `storage`, `tabs`; host permissions for http and https (optional in Firefox, requested when needed) |
+| `lib.js` | the pure helpers: session id, what is capturable, PDF detection, the plan (DOM, URL or skip), server normalization; node tests in `tests/ui/extension.test.js` |
+| `background.js`, `background-sw.js` | the sending: reads each tab through `scripting.executeScript`, posts to the door, keeps progress in `storage.session`, closes tabs when asked; the service-worker file just imports the other two |
+| `popup.html/js` | the two buttons, domain checkboxes (from `GET /inbox`), tags, close-after-send, progress and results with links into the UI |
+| `options.html/js` | server, token, default domains, close-after-send; permission request and connection test |
+| `style.css`, `icon48.png`, `icon128.png` | the look; the icons are generated squares |
 
 ## What it does
 
-The Zotero Connector is the model: one click on the toolbar saves what
+The Zotero Connector was the model: one click on the toolbar saves what
 the tab shows, with a small popup for the few choices that matter.
 
 - **Send this tab.** The content script returns

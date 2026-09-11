@@ -1,0 +1,39 @@
+:root {
+  --bg: #fbfaf7; --fg: #1f1f1f; --muted: #6b6b6b; --line: #e2ded6; --panel: #fff;
+  --accent: #2f5d8a; --ok: #2e7d32; --err: #b3261e;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #17191c; --fg: #e6e4df; --muted: #9a9a9a; --line: #2f3338; --panel: #1f2226; --accent: #8ab4e8; --ok: #7bc47f; --err: #ef8a7f; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; padding: .75rem; font: 13px/1.4 system-ui, sans-serif; color: var(--fg); background: var(--bg); }
+body.popup { width: 24rem; }
+body.options { max-width: 34rem; }
+header { display: flex; align-items: baseline; gap: .6rem; margin-bottom: .6rem; }
+header strong { font-size: 1.05rem; }
+header a { margin-left: auto; color: var(--accent); }
+.muted { color: var(--muted); }
+.ok { color: var(--ok); }
+.error { color: var(--err); }
+section { margin-bottom: .6rem; }
+label { display: block; margin-bottom: .6rem; }
+label.row { display: flex; align-items: center; gap: .4rem; }
+input[type="text"], input[type="url"], input[type="password"] {
+  width: 100%; padding: .3rem .45rem; margin-top: .2rem; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg); font: inherit;
+}
+#choices input[type="text"] { margin: .4rem 0; }
+small { display: block; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .2rem; }
+.chip { display: inline-flex; align-items: center; gap: .25rem; padding: 0 .5rem; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: .85rem; cursor: pointer; margin: 0; }
+.actions { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+button { padding: .35rem .7rem; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
+button.secondary { background: transparent; color: var(--accent); }
+#bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin: .4rem 0; }
+#fill { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+#fill.error-fill { background: var(--err); }
+#results { list-style: none; margin: 0; padding: 0; max-height: 18rem; overflow: auto; }
+#results li { padding: .25rem 0; border-top: 1px solid var(--line); }
+#results li .title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#results a { color: var(--accent); }
+#msg { margin: .4rem 0 0; }

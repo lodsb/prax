@@ -630,6 +630,12 @@ Four ways in:
   rendered it (the extension's path, `docs/extension.md`), `POST
   /ingest/url {url, …}` to fetch server-side. `POST /ingest` (text) takes
   `domains` too. `GET /inbox` lists recent captures.
+- **The browser extension** (`extension/`, `docs/extension.md`): "send
+  this tab" posts the rendered DOM, "send all tabs in window" does the
+  same under one session id; a PDF tab is sent as a URL for the door to
+  fetch. Load the folder unpacked (Waterfox and Firefox: about:debugging;
+  Chrome: chrome://extensions) and set the server and token in its
+  options.
 - **Claude Code**: the `capture_url` MCP tool.
 - **The drop folder** `data/inbox/`: any file put there is registered by
 

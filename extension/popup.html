@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>prax capture</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="popup">
+  <header>
+    <strong>prax</strong>
+    <span id="server" class="muted">…</span>
+    <a href="#" id="options" title="server, token, defaults">options</a>
+  </header>
+  <section id="choices">
+    <div id="domains" class="chips"><span class="muted">domains…</span></div>
+    <input id="tags" type="text" placeholder="tags, comma-separated">
+    <label class="row"><input id="close" type="checkbox"> close tabs after sending</label>
+  </section>
+  <section class="actions">
+    <button id="send-tab">Send this tab</button>
+    <button id="send-window" class="secondary">Send all tabs in window</button>
+  </section>
+  <section id="progress" hidden>
+    <div id="bar"><div id="fill"></div></div>
+    <ul id="results"></ul>
+  </section>
+  <p id="msg" class="error"></p>
+  <script src="lib.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

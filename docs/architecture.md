@@ -213,6 +213,7 @@ what is needed.
 | `prax.auth` | bearer token or session cookie on the HTTP door; loopback-only when unset | no |
 | `prax.api` | FastAPI door: agent endpoints, browsing, context, graph overview, review, pages, ask; serves the UI's static files with no-cache | via store |
 | `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer, an SVG force layout; a client of the door (R14) | no |
+| `extension/` (repo root) | the browser extension: a client of the door's capture endpoints, nothing of its own (`docs/extension.md`) | no |
 | `prax.mcp_server` | FastMCP stdio door; no logic | via store |
 | `prax.config` | paths, `PRAX_DATA_DIR`, migrations dir | no |
 

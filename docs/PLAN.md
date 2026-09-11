@@ -96,9 +96,13 @@ Parsing is a batch job; the serving path never parses.
       capture-session id, canonical URLs with `meta.previous_capture`,
       `GET /inbox`, the Inbox view (drop zone, URL form, recent captures),
       the `capture_url` MCP tool, `PRAX_CORS_ORIGINS` for an extension
-- [ ] Browser extension: Manifest V3 (Chrome and Firefox), "send this
-      tab" and "send all tabs in window", options for server URL, token
-      and default domain; design in `docs/extension.md`
+- [x] Browser extension (2026-09-12, `extension/`, `docs/extension.md`):
+      Manifest V3 for Firefox, Waterfox and Chrome from one folder; "send
+      this tab" (rendered DOM to `/ingest/html`, PDFs as URL to
+      `/ingest/url`) and "send all tabs in window" under one session id,
+      optional closing; options for server, token, default domains;
+      progress and results in the popup; `scripts/build_extension.py`
+      packs an .xpi; node tests for the helpers
 - [x] Inbox folder (2026-09-12): `scripts/inbox.py [--watch] [--parse]`
       registers what lands in `data/inbox/` (subfolder = domain, JSON
       sidecar, settle time, `failed/`), consumed files removed

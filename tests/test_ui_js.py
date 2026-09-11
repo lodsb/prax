@@ -13,26 +13,47 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "src" / "prax" / "ui"
+EXT = ROOT / "extension"
 NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="node is not installed")
 
 
 @needs_node
-@pytest.mark.parametrize("script", ["app.js", "lib.js"])
-def test_scripts_parse(script: str) -> None:
+@pytest.mark.parametrize(
+    "script",
+    [UI / "app.js", UI / "lib.js", *sorted(EXT.glob("*.js"))],
+    ids=lambda p: p.name,
+)
+def test_scripts_parse(script: Path) -> None:
     proc = subprocess.run(
-        [NODE, "--check", str(UI / script)], capture_output=True, text=True, check=False
+        [NODE, "--check", str(script)], capture_output=True, text=True, check=False
     )
     assert proc.returncode == 0, proc.stderr
 
 
 @needs_node
-def test_lib_helpers() -> None:
+@pytest.mark.parametrize("suite", ["lib.test.js", "extension.test.js"])
+def test_js_helpers(suite: str) -> None:
     proc = subprocess.run(
-        [NODE, "--test", str(ROOT / "tests" / "ui" / "lib.test.js")],
+        [NODE, "--test", str(ROOT / "tests" / "ui" / suite)],
         capture_output=True,
         text=True,
         check=False,
         cwd=str(ROOT),
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_manifest_is_one_codebase_for_both_browsers() -> None:
+    import json
+
+    m = json.loads((EXT / "manifest.json").read_text(encoding="utf-8"))
+    assert m["manifest_version"] == 3
+    assert "scripts" in m["background"] and "service_worker" in m["background"]
+    assert m["browser_specific_settings"]["gecko"]["id"]
+    for name in [*m["background"]["scripts"], m["background"]["service_worker"]]:
+        assert (EXT / name).is_file(), name
+    for page in (m["action"]["default_popup"], m["options_ui"]["page"]):
+        assert (EXT / page).is_file(), page
+    for icon in m["icons"].values():
+        assert (EXT / icon).is_file(), icon
