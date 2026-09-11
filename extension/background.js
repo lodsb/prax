@@ -221,16 +221,18 @@ async function captureTab(tab, opts, cfg) {
   // "view PDF" link rarely ends in .pdf): fetch it here, with the session
   // this browser has, and upload the bytes when they are a PDF. Only then
   // does the door fetch the URL itself, without any session.
+  let why = p.reason || null;
   if (!read || lib.looksLikePdf(url, read.html)) {
     let blob = null;
-    try { blob = await fetchPdf(url); } catch (err) { log("warn", "PDF fetch failed", url, err); blob = null; }
+    try { blob = await fetchPdf(url); } catch (err) { log("warn", "PDF fetch failed", url, err); why = `own fetch failed (${err.message}); the door fetched instead`; blob = null; }
     if (blob) {
       const data = await uploadFile(blob, lib.pdfFileName(url), common, cfg);
       return { tabId: tab.id, url, title, mode: "file", note: "PDF fetched with your session and uploaded", ...data };
     }
+    if (!why) why = "not a PDF by its bytes; the door fetched the URL instead";
   }
   const data = await door("/ingest/url", common, cfg);
-  return { tabId: tab.id, url, title, mode: "url", note: p.reason || null, ...data };
+  return { tabId: tab.id, url, title, mode: "url", note: why, ...data };
 }
 
 async function setProgress(patch) {

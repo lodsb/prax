@@ -45,7 +45,11 @@ from prax import config, models, ontology, store
 log = logging.getLogger("prax.inbox")
 
 HTML_TYPES = ("text/html", "application/xhtml+xml")
-USER_AGENT = "prax/0.0.1 (+https://github.com/lodsb/prax)"
+# a browser's own signature: sites answer 403 to anything else on sight,
+# and the door fetches on a person's behalf, from their own browser's ask
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+)
 FETCH_TIMEOUT = 30.0
 FETCH_MAX_BYTES = 64 * 1024 * 1024
 SETTLE_SECONDS = 2.0  # a file still being written is left for the next scan
@@ -101,7 +105,12 @@ def fetch_url(url: str, *, timeout: float = FETCH_TIMEOUT) -> tuple[bytes, str, 
     redirects. Only http(s)."""
     check_url(url)
     req = urllib.request.Request(
-        url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,*/*;q=0.8"}
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/pdf,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.7",
+        },
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = resp.read(FETCH_MAX_BYTES + 1)

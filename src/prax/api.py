@@ -278,8 +278,11 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    except OSError as exc:  # urllib errors: unreachable, 404, timeout
-        raise HTTPException(502, f"fetch failed: {exc}") from exc
+    except OSError as exc:  # urllib errors: unreachable, 403, 404, timeout
+        why = str(exc)
+        if "403" in why or "401" in why:
+            why += " (the site refused the server; the browser extension fetches with your own session when it may read all sites)"
+        raise HTTPException(502, f"fetch failed: {why}") from exc
     return _capture_out(cap)
 
 
