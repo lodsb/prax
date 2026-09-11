@@ -117,13 +117,24 @@ async function readPlain(tabId) {
 
 /* The page as the tab shows it: a SingleFile snapshot, else the bare DOM,
    else nothing (the door fetches the URL). */
+const SNAPSHOT_TIMEOUT_MS = 60 * 1000;
+
+function withTimeout(promise, ms, what) {
+  let timer;
+  const clock = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${what} took longer than ${ms / 1000} s`)), ms); });
+  return Promise.race([promise, clock]).finally(() => clearTimeout(timer));
+}
+
 async function readTab(tabId) {
   let plain = null;
-  try { plain = await readPlain(tabId); } catch (_) { return null; }
+  try { plain = await readPlain(tabId); } catch (err) { console.warn("prax: cannot read tab", tabId, err); return null; }
   if (plain && lib.looksLikePdf(plain.url, plain.html)) return plain; // no snapshot of a viewer
   try {
-    return await snapshotTab(tabId);
+    const snap = await withTimeout(snapshotTab(tabId), SNAPSHOT_TIMEOUT_MS, "the snapshot");
+    console.info("prax: snapshot", plain.url, `${snap.html.length} chars`);
+    return snap;
   } catch (err) {
+    console.warn("prax: snapshot failed, sending the plain DOM", plain.url, err);
     return plain ? { ...plain, snapshot: false, note: `plain DOM (snapshot failed: ${err.message})` } : null;
   }
 }
@@ -201,6 +212,7 @@ async function setProgress(patch) {
 }
 
 async function capture(msg) {
+  console.info("prax: capture", msg.tabIds);
   const cfg = await settings();
   if (!cfg.server) {
     await setProgress({ state: "error", error: "no server configured (options)", results: [] });
@@ -215,7 +227,7 @@ async function capture(msg) {
   const results = [];
   for (const tab of tabs) {
     let r;
-    try { r = await captureTab(tab, opts, cfg); } catch (err) { r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
+    try { r = await captureTab(tab, opts, cfg); } catch (err) { console.warn("prax: capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
     results.push(r);
     await setProgress({ done: results.length, results });
     if (opts.close && !r.error) {

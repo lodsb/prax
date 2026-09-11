@@ -84,17 +84,17 @@ async function main() {
     if (changes.progress && (area === "session" || area === "local")) renderProgress(changes.progress.newValue);
   });
   $("options").addEventListener("click", (e) => { e.preventDefault(); api.runtime.openOptionsPage(); });
-  // Firefox grants host permissions on request only (Chrome at install):
-  // the snapshot fetches a page's images and fonts through the background,
-  // and a background tab cannot be read at all without them
-  const hosts = async () => { try { await api.permissions.request({ origins: ["http://*/*", "https://*/*"] }); } catch (_) { /* granted at install */ } };
+  // Firefox grants host permissions on request only (Chrome at install),
+  // and its permission prompt closes this popup: so the request is a
+  // separate button, shown only while the permission is missing. Without
+  // it the active tab is still read (activeTab), but the snapshot cannot
+  // fetch a page's images cross-origin and a background tab cannot be read.
+  await showSitesButton();
   $("send-tab").addEventListener("click", async () => {
-    await hosts();
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     await send(tab ? [tab.id] : []);
   });
   $("send-window").addEventListener("click", async () => {
-    await hosts();
     const tabs = await api.tabs.query({ currentWindow: true });
     const ids = tabs.filter((t) => lib.capturable(t.url)).map((t) => t.id);
     if (ids.length < tabs.length) $("msg").textContent = `${tabs.length - ids.length} tab(s) cannot be read (internal or file pages)`;
@@ -102,5 +102,21 @@ async function main() {
   });
   $("close").addEventListener("change", () => api.storage.local.set({ close: $("close").checked }));
 }
+
+async function showSitesButton() {
+  let granted = true;
+  try { granted = await api.permissions.contains({ origins: ALL_SITES }); } catch (_) { granted = true; }
+  const box = $("sites");
+  box.hidden = granted;
+  if (granted) return;
+  $("grant-sites").addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      const ok = await api.permissions.request({ origins: ALL_SITES });
+      if (ok) box.hidden = true;
+    } catch (err) { $("msg").textContent = err.message; }
+  });
+}
+const ALL_SITES = ["http://*/*", "https://*/*"];
 
 main().catch((err) => { $("msg").textContent = err.message; });

@@ -32,7 +32,9 @@ async function probe(server, token) {
 }
 
 async function ensurePermission(server) {
-  const origins = [lib.originPattern(server)];
+  // the server, and every site (the snapshot fetches a page's images and
+  // fonts through the background; "send all tabs" reads background tabs)
+  const origins = [lib.originPattern(server), "http://*/*", "https://*/*"];
   try {
     if (await api.permissions.contains({ origins })) return true;
     return await api.permissions.request({ origins });

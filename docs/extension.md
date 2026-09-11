@@ -28,8 +28,11 @@ changes need the reload button.
 Then open the popup once, follow "options": the server (the door's
 address), the token when the door has one, default domains, and whether
 "send all tabs" closes them. Saving asks the browser for permission to
-talk to that server; Firefox grants host permissions on request, Chrome
-at install. "Test connection" says whether the door answers and which
+talk to that server and to read every site (the snapshot fetches a
+page's images through the extension, "send all tabs" reads background
+tabs); Firefox grants host permissions on request, Chrome at install. In
+Firefox a permission prompt closes the popup, so the popup itself only
+offers the request as a link while the permission is missing. "Test connection" says whether the door answers and which
 domains it offers.
 
 ## Files
