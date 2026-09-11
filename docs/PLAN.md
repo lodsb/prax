@@ -436,6 +436,33 @@ Shape:
       posting their results to it. Decide after measuring how often the
       retry fires.
 
+## Deployment shape: the board holds the store, the desktop does the model work (planned)
+
+Agreed 2026-09-12. The queue already exists implicitly: every document
+carries its state (parsed or not, the ontology version it was read
+under, vectors or not, a title guess tried or not), so "what needs a
+model" is a selection over stamps at any moment, idempotent and
+restartable. What is missing is doing that work from another machine,
+since a batch pass opens the SQLite file directly today.
+
+- [ ] A work protocol on the door: `GET /work/<step>?limit` hands out a
+      batch with a short lease (extraction: the prepared prompt input per
+      document, about 12 KB; titles: text and hints; embedding: chunk
+      texts; parse: the original file), `POST /work/<step>` takes the
+      results (triples, a title, vectors, text) and applies them. The
+      door stays the only writer (the "single writer" item of the
+      housekeeping pass), the index-release dance goes, leases expire
+      back into the pool; results are idempotent anyway.
+- [ ] The watcher's worker mode: `scripts/inbox.py --door http://<board>:8000
+      --work` (or the future `prax work`) drains the queue whenever the
+      desktop is on, with the models of its own prax.yaml and the
+      never-spend-unasked rule; the board's own watcher keeps what needs
+      no model (HTML captures, dedupe).
+- [ ] On the board: the int8 index by default (adding vectors loads the
+      writable index into memory, 800 MB today), bearer token, the door
+      bound to the Tailscale address.
+- [ ] About a day of work; do it with the housekeeping pass.
+
 ## Later / maybe
 
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the
