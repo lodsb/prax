@@ -100,16 +100,19 @@ def main() -> int:
                     report.waiting += more.waiting
             if report.registered or report.failed or not a.watch:
                 print(f"{time.strftime('%H:%M:%S')} {report}", flush=True)
-            done = pipeline.process_captures(
-                con,
-                retitle=not a.no_titles,
-                extract=not a.no_extract,
-                embed=not a.no_embed,
-                workers=a.workers,
-                door=a.door,
-                token=token,
-                log=say,
-            )
+            try:
+                done = pipeline.process_captures(
+                    con,
+                    retitle=not a.no_titles,
+                    extract=not a.no_extract,
+                    embed=not a.no_embed,
+                    workers=a.workers,
+                    door=a.door,
+                    token=token,
+                    log=say,
+                )
+            except Exception as exc:  # noqa: BLE001 - the watcher outlives a bad pass
+                done = {"pass": f"failed: {type(exc).__name__}: {exc}"}
             if done:
                 for step, what in done.items():
                     print(f"{time.strftime('%H:%M:%S')} {step}: {what}", flush=True)

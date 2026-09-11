@@ -330,6 +330,24 @@ def release_door_views(door: str, *, token: str | None = None) -> bool:
         return False
 
 
+def _save_with_retry(
+    save: Callable[[], dict[str, Any]], release: Callable[[], Any] | None
+) -> dict[str, Any]:
+    """The door may have mapped the index again between the probe and the
+    save (a query came in): ask it to let go and try again, a few times."""
+    last: OSError | None = None
+    for attempt in range(5):
+        try:
+            return save()
+        except OSError as exc:  # WinError 5 / 32: the file is mapped
+            last = exc
+            if release:
+                release()
+            time.sleep(0.5 * (attempt + 1))
+    assert last is not None
+    raise IndexBusy(f"the index could not be replaced: {last}") from last
+
+
 def embed_pending(
     con: sqlite3.Connection,
     emb: embeddings.Embedder,
@@ -338,12 +356,17 @@ def embed_pending(
     save_every: int = 50_000,
     log: Log | None = None,
     job: store.Job | None = None,
+    release: Callable[[], Any] | None = None,
 ) -> dict[str, Any]:
     """Embed the chunks and document fields without a vector, saving the
     index files. Raises ``IndexBusy`` before any work when a file cannot
-    be replaced."""
+    be replaced (``release`` asks the door to let go and is retried)."""
     if not index_writable(emb.name):
-        raise IndexBusy(f"the index of {emb.name} is mapped by another process")
+        if release:
+            release()
+            time.sleep(0.5)
+        if not index_writable(emb.name):
+            raise IndexBusy(f"the index of {emb.name} is mapped by another process")
     status = store.vec_status(con)
     index_count = status["index"]["count"] if status["index"] else 0
     booked = status["models"].get(emb.name, 0)
@@ -371,13 +394,13 @@ def embed_pending(
         done += len(rows)
         since_save += len(rows)
         if since_save >= save_every:
-            store.save_vectors(emb.name)
+            _save_with_retry(lambda: store.save_vectors(emb.name), release)
             since_save = 0
         rate = done / max(1e-9, time.monotonic() - t0)
         if job:
             job.update(done=done, note=f"{rate:.0f} chunks/s")
         _say(log, f"[{done}/{pending}] {rate:.1f} chunks/s")
-    stats = store.save_vectors(emb.name)
+    stats = _save_with_retry(lambda: store.save_vectors(emb.name), release)
     out["chunks"] = done
     out["index_count"] = stats["count"]
     out["bytes"] = stats["bytes"]
@@ -394,7 +417,9 @@ def embed_pending(
         )
         fields += len(rows)
     if fields or store.count_pending_document_embeddings(con, emb.name) == 0:
-        dstats = store.save_document_vectors(emb.name)
+        dstats = _save_with_retry(
+            lambda: store.save_document_vectors(emb.name), release
+        )
         out["doc_index_count"] = dstats["count"]
     out["fields"] = fields
     out["seconds"] = time.monotonic() - t0
@@ -445,95 +470,124 @@ def process_captures(
     registered, give file-name titles a real one, read them into the
     graph, embed what has no vector. Each step is a job; a step whose model
     would cost money is skipped and says so. Returns what each step did."""
-    from prax import inbox
-    from prax.parsers import queue
 
     out: dict[str, Any] = {}
-    if parse:
-        from prax import parsers
-
-        ids = []
-        for doc_id in inbox.pending_captures(con):
-            doc = store.get_document(con, doc_id, max_chars=0)
-            if doc is None:
-                continue
-            exts = parsers.candidates(doc["mime"] or "")
-            if exts and not queue._seen(doc["meta"], exts[0].stamp):
-                ids.append(doc_id)
-        if ids:
-            with store.Job(con, "parse", total=len(ids)) as job:
-                rep = queue.run(
-                    con,
-                    ids,
-                    log=lambda n, i, a: job.update(done=n + 1, note=f"{a} doc {i}"),
-                )
-                job.note(str(rep))
-            out["parse"] = str(rep)
-            _say(log, f"parse: {rep}")
-    if retitle:
-        spec = models.resolve("titles")
-        chosen = [
-            (i, why)
-            for i, why in titles_needed(con, untried_only=True)
-            if con.execute(
-                "SELECT json_extract(meta, '$.source') FROM documents WHERE id = ?",
-                (i,),
-            ).fetchone()[0]
-            in CAPTURE_SOURCES
-        ]
-        if spec is None:  # no model: only the recase rule can do anything
-            chosen = [c for c in chosen if c[1] == "caps"]
-        if chosen and _paid(spec):
-            out["titles"] = f"skipped: the titles step is {spec.name} (paid)"
-        elif chosen:
-            runtime = models.runtime(spec) if spec else None
-            with store.Job(con, "titles", total=len(chosen)) as job:
-                rep = retitle_documents(con, chosen, runtime, job=job, log=log)
-                job.note(str(rep))
-            out["titles"] = str(rep)
-            _say(log, f"titles: {rep}")
-    if extract:
-        spec = models.resolve("extract")
-        onto = ontology.current()
-        ids = captures_ready(con, onto)
-        if ids and (spec is None or _paid(spec)):
-            out["extract"] = (
-                f"skipped: {len(ids)} documents wait; the extract step is"
-                f" {spec.name if spec else 'not configured'}"
-                + (" (paid)" if spec else "")
-            )
-            _say(log, out["extract"])
-        elif ids:
-            ext = extraction.current("extract")
-            with store.Job(con, "extract", total=len(ids), note=ext.name) as job:
-                rep = extract_documents(
-                    con, ids, ext, workers=workers, job=job, log=log
-                )
-                job.note(str(rep))
-            out["extract"] = str(rep)
-            _say(log, f"extract: {rep}")
-    if embed:
-        emb = embeddings.current()
-        if emb is not None and store.vectors_available():
-            pending = store.count_pending_embeddings(con, emb.name)
-            pending_fields = store.count_pending_document_embeddings(con, emb.name)
-            if pending or pending_fields:
-                if not index_writable(emb.name) and door:
-                    release_door_views(door, token=token)
-                    time.sleep(0.5)
-                try:
-                    with store.Job(con, "embed", total=pending, note=emb.name) as job:
-                        rep = embed_pending(con, emb, job=job, log=log)
-                        job.note(
-                            f"{rep['chunks']} chunks, {rep['fields']} fields in"
-                            f" {rep.get('seconds', 0):.0f} s"
-                        )
-                    out["embed"] = rep
-                    _say(log, f"embed: {rep['chunks']} chunks, {rep['fields']} fields")
-                except IndexBusy as exc:
-                    out["embed"] = f"deferred: {exc}"
-                    _say(log, out["embed"])
+    release = (lambda: release_door_views(door, token=token)) if door else None
+    try:
+        _parse_step(con, out, log) if parse else None
+    except Exception as exc:  # noqa: BLE001 - the pass goes on
+        out["parse"] = f"failed: {type(exc).__name__}: {exc}"
+        _say(log, out["parse"])
+    try:
+        _titles_step(con, out, log) if retitle else None
+    except Exception as exc:  # noqa: BLE001
+        out["titles"] = f"failed: {type(exc).__name__}: {exc}"
+        _say(log, out["titles"])
+    try:
+        _extract_step(con, out, log, workers) if extract else None
+    except Exception as exc:  # noqa: BLE001
+        out["extract"] = f"failed: {type(exc).__name__}: {exc}"
+        _say(log, out["extract"])
+    try:
+        _embed_step(con, out, log, release) if embed else None
+    except Exception as exc:  # noqa: BLE001
+        out["embed"] = f"failed: {type(exc).__name__}: {exc}"
+        _say(log, out["embed"])
     return out
+
+
+def _parse_step(con: sqlite3.Connection, out: dict[str, Any], log: Log | None) -> None:
+    from prax import inbox, parsers
+    from prax.parsers import queue
+
+    ids = []
+    for doc_id in inbox.pending_captures(con):
+        doc = store.get_document(con, doc_id, max_chars=0)
+        if doc is None:
+            continue
+        exts = parsers.candidates(doc["mime"] or "")
+        if exts and not queue._seen(doc["meta"], exts[0].stamp):
+            ids.append(doc_id)
+    if ids:
+        with store.Job(con, "parse", total=len(ids)) as job:
+            rep = queue.run(
+                con,
+                ids,
+                log=lambda n, i, a: job.update(done=n + 1, note=f"{a} doc {i}"),
+            )
+            job.note(str(rep))
+        out["parse"] = str(rep)
+        _say(log, f"parse: {rep}")
+
+
+def _titles_step(con: sqlite3.Connection, out: dict[str, Any], log: Log | None) -> None:
+    spec = models.resolve("titles")
+    chosen = [
+        (i, why)
+        for i, why in titles_needed(con, untried_only=True)
+        if con.execute(
+            "SELECT json_extract(meta, '$.source') FROM documents WHERE id = ?",
+            (i,),
+        ).fetchone()[0]
+        in CAPTURE_SOURCES
+    ]
+    if spec is None:  # no model: only the recase rule can do anything
+        chosen = [c for c in chosen if c[1] == "caps"]
+    if chosen and _paid(spec):
+        out["titles"] = f"skipped: the titles step is {spec.name} (paid)"
+    elif chosen:
+        runtime = models.runtime(spec) if spec else None
+        with store.Job(con, "titles", total=len(chosen)) as job:
+            rep = retitle_documents(con, chosen, runtime, job=job, log=log)
+            job.note(str(rep))
+        out["titles"] = str(rep)
+        _say(log, f"titles: {rep}")
+
+
+def _extract_step(
+    con: sqlite3.Connection, out: dict[str, Any], log: Log | None, workers: int
+) -> None:
+    spec = models.resolve("extract")
+    onto = ontology.current()
+    ids = captures_ready(con, onto)
+    if ids and (spec is None or _paid(spec)):
+        out["extract"] = (
+            f"skipped: {len(ids)} documents wait; the extract step is"
+            f" {spec.name if spec else 'not configured'}" + (" (paid)" if spec else "")
+        )
+        _say(log, out["extract"])
+    elif ids:
+        ext = extraction.current("extract")
+        with store.Job(con, "extract", total=len(ids), note=ext.name) as job:
+            rep = extract_documents(con, ids, ext, workers=workers, job=job, log=log)
+            job.note(str(rep))
+        out["extract"] = str(rep)
+        _say(log, f"extract: {rep}")
+
+
+def _embed_step(
+    con: sqlite3.Connection,
+    out: dict[str, Any],
+    log: Log | None,
+    release: Callable[[], Any] | None,
+) -> None:
+    emb = embeddings.current()
+    if emb is not None and store.vectors_available():
+        pending = store.count_pending_embeddings(con, emb.name)
+        pending_fields = store.count_pending_document_embeddings(con, emb.name)
+        if pending or pending_fields:
+            try:
+                with store.Job(con, "embed", total=pending, note=emb.name) as job:
+                    rep = embed_pending(con, emb, job=job, log=log, release=release)
+                    job.note(
+                        f"{rep['chunks']} chunks, {rep['fields']} fields in"
+                        f" {rep.get('seconds', 0):.0f} s"
+                    )
+                out["embed"] = rep
+                _say(log, f"embed: {rep['chunks']} chunks, {rep['fields']} fields")
+            except IndexBusy as exc:
+                out["embed"] = f"deferred: {exc}"
+                _say(log, out["embed"])
 
 
 def host_name() -> str:
