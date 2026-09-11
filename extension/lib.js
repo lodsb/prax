@@ -59,6 +59,25 @@
     return s ? `${s}/*` : null;
   }
 
+  /** Whether a fetched response is a PDF: the bytes say so, or the type does
+      and the bytes do not say otherwise (a login page comes back as HTML). */
+  function isPdfResponse(contentType, firstBytes) {
+    const head = firstBytes ? Array.from(firstBytes.slice(0, 5)).map((b) => String.fromCharCode(b)).join("") : "";
+    if (head.startsWith("%PDF")) return true;
+    if (head) return false;
+    return /^application\/pdf\b/i.test(String(contentType || ""));
+  }
+
+  /** A file name for a fetched PDF, from the URL's last path segment. */
+  function pdfFileName(url) {
+    let name = "";
+    try { name = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() || ""); } catch (_) { /* not a URL */ }
+    name = name.replace(/[\\/:*?"<>|]+/g, "_").trim();
+    if (!name) name = "document.pdf";
+    if (!/\.pdf$/i.test(name)) name += ".pdf";
+    return name;
+  }
+
   /** A one-line result for the popup. */
   function describeResult(res) {
     if (res.error) return `failed: ${res.error}`;
@@ -72,5 +91,5 @@
     return String(text || "").split(",").map((s) => s.trim()).filter(Boolean);
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName };
 });

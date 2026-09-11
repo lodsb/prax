@@ -37,6 +37,37 @@ async function readTab(tabId) {
   }
 }
 
+const MAX_PDF_BYTES = 64 * 1024 * 1024;
+
+/* A PDF behind a paywall or a login: the door cannot fetch it, the browser
+   can, with the session the tab already has. The bytes are uploaded as a
+   file; when the fetch comes back as something else (a login page), the
+   door fetches the URL as before. */
+async function fetchPdf(url) {
+  const res = await fetch(url, { credentials: "include", redirect: "follow" });
+  if (!res.ok) return null;
+  const buf = await res.arrayBuffer();
+  if (buf.byteLength > MAX_PDF_BYTES) return null;
+  if (!lib.isPdfResponse(res.headers.get("content-type"), new Uint8Array(buf, 0, Math.min(5, buf.byteLength)))) return null;
+  return new Blob([buf], { type: "application/pdf" });
+}
+
+async function uploadFile(blob, name, common, cfg) {
+  const fd = new FormData();
+  fd.append("file", blob, name);
+  if (common.title) fd.append("title", common.title);
+  fd.append("source_url", common.url);
+  if (common.domains) fd.append("domains", common.domains.join(","));
+  if (common.tags) fd.append("tags", common.tags.join(","));
+  if (common.session) fd.append("session", common.session);
+  fd.append("by", "extension");
+  const headers = cfg.token ? { Authorization: `Bearer ${cfg.token}` } : {};
+  const res = await fetch(`${cfg.server}/ingest/file`, { method: "POST", headers, body: fd });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  return data;
+}
+
 async function captureTab(tab, opts, cfg) {
   const read = await readTab(tab.id);
   const url = (read && read.url) || tab.url;
@@ -44,10 +75,20 @@ async function captureTab(tab, opts, cfg) {
   const p = lib.plan(url, read && read.html);
   if (p.mode === "skip") return { tabId: tab.id, url, title, error: p.reason };
   const common = { url, title, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session };
-  const data = p.mode === "html"
-    ? await door("/ingest/html", { ...common, html: read.html }, cfg)
-    : await door("/ingest/url", common, cfg);
-  return { tabId: tab.id, url, title, mode: p.mode, note: p.reason || null, ...data };
+  if (p.mode === "html") {
+    const data = await door("/ingest/html", { ...common, html: read.html }, cfg);
+    return { tabId: tab.id, url, title, mode: "html", note: null, ...data };
+  }
+  if (lib.looksLikePdf(url, read && read.html)) {
+    let blob = null;
+    try { blob = await fetchPdf(url); } catch (_) { blob = null; }
+    if (blob) {
+      const data = await uploadFile(blob, lib.pdfFileName(url), common, cfg);
+      return { tabId: tab.id, url, title, mode: "file", note: "PDF fetched with your session and uploaded", ...data };
+    }
+  }
+  const data = await door("/ingest/url", common, cfg);
+  return { tabId: tab.id, url, title, mode: "url", note: p.reason || null, ...data };
 }
 
 async function setProgress(patch) {

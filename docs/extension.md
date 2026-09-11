@@ -38,7 +38,7 @@ domains it offers.
 |---|---|
 | `manifest.json` | MV3; `background.scripts` for Firefox's event page and `background.service_worker` for Chrome side by side; `activeTab`, `scripting`, `storage`, `tabs`; host permissions for http and https (optional in Firefox, requested when needed) |
 | `lib.js` | the pure helpers: session id, what is capturable, PDF detection, the plan (DOM, URL or skip), server normalization; node tests in `tests/ui/extension.test.js` |
-| `background.js`, `background-sw.js` | the sending: reads each tab through `scripting.executeScript`, posts to the door, keeps progress in `storage.session`, closes tabs when asked; the service-worker file just imports the other two |
+| `background.js`, `background-sw.js` | the sending: reads each tab through `scripting.executeScript`, posts to the door, fetches a PDF with the browser's session and uploads it, keeps progress in `storage.session`, closes tabs when asked; the service-worker file just imports the other two |
 | `popup.html/js` | the two buttons, domain checkboxes (from `GET /inbox`), tags, close-after-send, progress and results with links into the UI |
 | `options.html/js` | server, token, default domains, close-after-send; permission request and connection test |
 | `style.css`, `icon48.png`, `icon128.png` | the look; the icons are generated squares |
@@ -52,11 +52,12 @@ the tab shows, with a small popup for the few choices that matter.
   `document.documentElement.outerHTML`, the URL and the title; the popup
   posts them to `/ingest/html`. The rendered DOM, not a re-fetch, so
   paywalled, logged-in and script-rendered pages arrive as seen. A tab
-  showing a PDF cannot be read as DOM: the popup posts its URL to
-  `/ingest/url` and the door fetches the file (cookies are not
-  forwarded, so a paywalled PDF is saved through the file upload
-  instead: the browser's download, then the Inbox view or the drop
-  folder).
+  showing a PDF cannot be read as DOM: the background fetches the PDF
+  again from inside the browser, with the session and cookies the tab
+  has (a paywall you are logged into, an institutional proxy), and
+  uploads the bytes to `/ingest/file`; only when that comes back as
+  something else (a login page) or fails does it post the URL to
+  `/ingest/url` for the door to fetch.
 - **Send all tabs in this window.** The same, tab by tab, under one
   capture-session id (`<timestamp>-<4 random chars>`), so "the tabs I
   saved on Tuesday" is a query over `meta.capture.session`. Optional:

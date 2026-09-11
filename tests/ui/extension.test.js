@@ -44,6 +44,22 @@ test("normalizeServer and originPattern", () => {
   assert.equal(lib.originPattern("nope"), null);
 });
 
+test("isPdfResponse: bytes first, then the content type", () => {
+  const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]);
+  const html = new Uint8Array([0x3c, 0x68, 0x74, 0x6d, 0x6c]);
+  assert.ok(lib.isPdfResponse("application/octet-stream", pdf));
+  assert.equal(lib.isPdfResponse("application/pdf", html), false); // a login page
+  assert.ok(lib.isPdfResponse("application/pdf; charset=binary", null));
+  assert.equal(lib.isPdfResponse("text/html", null), false);
+});
+
+test("pdfFileName: the URL's last segment, made safe, ending in .pdf", () => {
+  assert.equal(lib.pdfFileName("https://x.org/papers/smith%202020.pdf?dl=1"), "smith 2020.pdf");
+  assert.equal(lib.pdfFileName("https://x.org/doi/pdf/10.1000/abc"), "abc.pdf");
+  assert.equal(lib.pdfFileName("https://x.org/"), "document.pdf");
+  assert.equal(lib.pdfFileName("nope"), "document.pdf");
+});
+
 test("describeResult and splitList", () => {
   assert.equal(lib.describeResult({ error: "401" }), "failed: 401");
   assert.equal(lib.describeResult({ created: true, indexed: true }), "new, searchable");

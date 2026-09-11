@@ -154,10 +154,11 @@ def ingest_file(
     domains: Annotated[str | None, Form()] = None,
     tags: Annotated[str | None, Form()] = None,
     session: Annotated[str | None, Form()] = None,
+    by: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
     """Upload a file: archived at once, text and HTML indexed at once,
     anything else parsed by the batch host. ``domains`` and ``tags`` are
-    comma-separated."""
+    comma-separated; ``by`` says what sent it (the extension, a script)."""
     try:
         cap = inbox.ingest_upload(
             request.app.state.con,
@@ -169,6 +170,7 @@ def ingest_file(
             domains=_split(domains),
             tags=_split(tags),
             session=session,
+            by=by or "upload",
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

@@ -632,8 +632,8 @@ Four ways in:
   `domains` too. `GET /inbox` lists recent captures.
 - **The browser extension** (`extension/`, `docs/extension.md`): "send
   this tab" posts the rendered DOM, "send all tabs in window" does the
-  same under one session id; a PDF tab is sent as a URL for the door to
-  fetch. Load the folder unpacked (Waterfox and Firefox: about:debugging;
+  same under one session id; a PDF tab is fetched again inside the
+  browser, with its session, and uploaded, so paywalled PDFs arrive too. Load the folder unpacked (Waterfox and Firefox: about:debugging;
   Chrome: chrome://extensions) and set the server and token in its
   options.
 - **Claude Code**: the `capture_url` MCP tool.
