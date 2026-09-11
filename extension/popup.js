@@ -82,7 +82,10 @@ async function main() {
   if (cur && cur.state === "running") renderProgress(cur);
   api.storage.onChanged.addListener((changes, area) => {
     if (changes.progress && (area === "session" || area === "local")) renderProgress(changes.progress.newValue);
+    if (changes.log && (area === "session" || area === "local")) renderLog(changes.log.newValue);
   });
+  renderLog((await progressArea().get("log")).log);
+  $("clear-log").addEventListener("click", async (e) => { e.preventDefault(); await api.runtime.sendMessage({ type: "clear-log" }); renderLog([]); });
   $("options").addEventListener("click", (e) => { e.preventDefault(); api.runtime.openOptionsPage(); });
   // Firefox grants host permissions on request only (Chrome at install),
   // and its permission prompt closes this popup: so the request is a
@@ -101,6 +104,10 @@ async function main() {
     await send(ids);
   });
   $("close").addEventListener("change", () => api.storage.local.set({ close: $("close").checked }));
+}
+
+function renderLog(lines) {
+  $("log").textContent = (lines || []).join("\n");
 }
 
 async function showSitesButton() {

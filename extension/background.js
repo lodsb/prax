@@ -11,6 +11,19 @@ const lib = globalThis.praxLib;
 
 const progressArea = () => api.storage.session || api.storage.local;
 
+/* A short log the popup can show ("diagnostics"), so a failing step can be
+   reported without opening the extension's console. */
+const LOG_LINES = 60;
+let logChain = Promise.resolve();
+function log(level, ...parts) {
+  const line = `${new Date().toISOString().slice(11, 19)} ${parts.map((p) => (p instanceof Error ? p.message : typeof p === "string" ? p : JSON.stringify(p))).join(" ")}`;
+  (console[level] || console.log)("prax:", ...parts);
+  logChain = logChain.then(async () => {
+    const cur = (await progressArea().get("log")).log || [];
+    await progressArea().set({ log: [...cur, line].slice(-LOG_LINES) });
+  }).catch(() => { /* storage unavailable */ });
+}
+
 async function settings() {
   const s = await api.storage.local.get(["server", "token", "domains", "close"]);
   return { server: lib.normalizeServer(s.server), token: s.token || "", domains: s.domains || [], close: !!s.close };
@@ -98,9 +111,10 @@ function runSingleFile(options) {
 async function snapshotTab(tabId) {
   // the hooks in the page's own world and the frame script in every frame
   // are best effort (a cross-origin frame, a browser without world: MAIN)
-  try { await api.scripting.executeScript({ target: { tabId, allFrames: true }, files: [`${SF}single-file-hooks-frames.js`], world: "MAIN", injectImmediately: true }); } catch (_) { /* optional */ }
-  try { await api.scripting.executeScript({ target: { tabId, allFrames: true }, files: [`${SF}single-file-frames.js`] }); } catch (_) { /* optional */ }
+  try { await api.scripting.executeScript({ target: { tabId, allFrames: true }, files: [`${SF}single-file-hooks-frames.js`], world: "MAIN", injectImmediately: true }); log("info", "hooks injected"); } catch (err) { log("warn", "hooks not injected:", err); }
+  try { await api.scripting.executeScript({ target: { tabId, allFrames: true }, files: [`${SF}single-file-frames.js`] }); log("info", "frame script injected"); } catch (err) { log("warn", "frame script not injected:", err); }
   await api.scripting.executeScript({ target: { tabId }, files: [`${SF}single-file.js`] });
+  log("info", "core injected; taking the snapshot");
   const results = await api.scripting.executeScript({ target: { tabId }, func: runSingleFile, args: [SNAPSHOT_OPTIONS] });
   const r = results && results[0] ? results[0].result : null;
   if (!r || r.error || !r.html) throw new Error((r && r.error) || "no snapshot");
@@ -127,15 +141,16 @@ function withTimeout(promise, ms, what) {
 
 async function readTab(tabId) {
   let plain = null;
-  try { plain = await readPlain(tabId); } catch (err) { console.warn("prax: cannot read tab", tabId, err); return null; }
-  if (!plain) { console.warn("prax: the tab answered nothing", tabId); return null; }
+  try { plain = await readPlain(tabId); } catch (err) { log("warn", "cannot read tab", tabId, err); return null; }
+  if (!plain) { log("warn", "the tab answered nothing", tabId); return null; }
+  log("info", "read", plain.url, `${plain.html.length} chars`);
   if (lib.looksLikePdf(plain.url, plain.html)) return plain; // no snapshot of a viewer
   try {
     const snap = await withTimeout(snapshotTab(tabId), SNAPSHOT_TIMEOUT_MS, "the snapshot");
-    console.info("prax: snapshot", plain.url, `${snap.html.length} chars`);
+    log("info", "snapshot", `${snap.html.length} chars`);
     return snap;
   } catch (err) {
-    console.warn("prax: snapshot failed, sending the plain DOM", plain.url, err);
+    log("warn", "snapshot failed, sending the plain DOM:", err);
     return plain ? { ...plain, snapshot: false, note: `plain DOM (snapshot failed: ${err.message})` } : null;
   }
 }
@@ -218,7 +233,7 @@ async function setProgress(patch) {
 }
 
 async function capture(msg) {
-  console.info("prax: capture", msg.tabIds);
+  log("info", "capture", msg.tabIds);
   const cfg = await settings();
   if (!cfg.server) {
     await setProgress({ state: "error", error: "no server configured (options)", results: [] });
@@ -233,7 +248,7 @@ async function capture(msg) {
   const results = [];
   for (const tab of tabs) {
     let r;
-    try { r = await captureTab(tab, opts, cfg); } catch (err) { console.warn("prax: capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
+    try { r = await captureTab(tab, opts, cfg); log("info", "sent", tab.url, r.mode, r.doc_id ? `doc ${r.doc_id}` : ""); } catch (err) { log("warn", "capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
     results.push(r);
     await setProgress({ done: results.length, results });
     if (opts.close && !r.error) {
@@ -282,8 +297,12 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return false;
   }
   if (msg.type === "fetch") {
-    bridgeFetch(msg.url).then(sendResponse, (err) => sendResponse({ error: err.message }));
+    bridgeFetch(msg.url).then(sendResponse, (err) => { log("warn", "resource fetch failed", msg.url, err); sendResponse({ error: err.message }); });
     return true; // answered asynchronously
+  }
+  if (msg.type === "clear-log") {
+    progressArea().set({ log: [] }).then(() => sendResponse({}), () => sendResponse({}));
+    return true;
   }
   if (msg.method === "singlefile.lazyTimeout.setTimeout") {
     lazySetTimeout(msg, sender);

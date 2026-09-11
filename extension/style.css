@@ -37,3 +37,6 @@ button.secondary { background: transparent; color: var(--accent); }
 #results li .title { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #results a { color: var(--accent); }
 #msg { margin: .4rem 0 0; }
+#diag { margin-top: .5rem; font-size: .8rem; }
+#diag summary { cursor: pointer; }
+#log { max-height: 12rem; overflow: auto; white-space: pre-wrap; word-break: break-all; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: .3rem; margin: .3rem 0; user-select: text; }
