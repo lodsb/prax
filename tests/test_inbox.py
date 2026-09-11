@@ -126,6 +126,28 @@ def test_scan_registers_removes_and_dedupes(
     assert store.document_domains(con, rep3.registered[0]) == ["family"]
 
 
+def test_sidecar_without_its_file_waits(
+    con: sqlite3.Connection, tmp_path: Path
+) -> None:
+    root = tmp_path / "inbox"
+    root.mkdir()
+    side = root / "paper.pdf.json"
+    side.write_text(json.dumps({"title": "Early"}), encoding="utf-8")
+    plain = root / "notes.json"
+    plain.write_text(json.dumps({"a": 1}), encoding="utf-8")
+    for p in (side, plain):
+        _old(p)
+    rep = inbox.scan(con, root)
+    assert rep.waiting == 1 and len(rep.registered) == 1 and side.exists()
+    assert store.get_document(con, rep.registered[0], max_chars=0)["title"] == "notes"
+    pdf = root / "paper.pdf"
+    pdf.write_bytes(b"%PDF-1.4 late")
+    _old(pdf)
+    rep = inbox.scan(con, root)
+    assert len(rep.registered) == 1 and not side.exists() and not pdf.exists()
+    assert store.get_document(con, rep.registered[0], max_chars=0)["title"] == "Early"
+
+
 def test_scan_from_somebodys_folder_leaves_files(
     con: sqlite3.Connection, tmp_path: Path, modules: None
 ) -> None:

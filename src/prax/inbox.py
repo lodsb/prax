@@ -70,6 +70,23 @@ def inbox_dir() -> Path:
     return config.data_dir() / "inbox"
 
 
+BROWSER_DROP = "prax-inbox"  # under the browser's download folder
+
+
+def browser_drop_folders() -> list[Path]:
+    """Where the browser extension saves a file it could not fetch itself
+    (a host that challenges everything but a navigation): the browser's
+    own download folder, a ``prax-inbox`` subfolder, consumed like the
+    drop folder when it exists."""
+    home = Path.home()
+    out = []
+    for downloads in (home / "Downloads", home / "Desktop" / "Downloads"):
+        p = downloads / BROWSER_DROP
+        if p.is_dir():
+            out.append(p)
+    return out
+
+
 # ------------------------------------------------------------------ URLs
 
 
@@ -460,6 +477,13 @@ def _sidecar(path: Path) -> tuple[Path | None, dict[str, Any]]:
     return side, data if isinstance(data, dict) else {}
 
 
+def _is_sidecar_name(path: Path) -> bool:
+    """``report.pdf.json`` is a sidecar for ``report.pdf``; ``notes.json``
+    is a file of its own."""
+    stem = path.name[:-5]
+    return "." in stem and not stem.startswith(".")
+
+
 def _settled(path: Path) -> bool:
     try:
         return time.time() - path.stat().st_mtime >= SETTLE_SECONDS
@@ -502,7 +526,9 @@ def scan(
             continue  # a sidecar goes with its file
         if path.name.startswith(".") or path.suffix.lower() in SKIP_SUFFIXES:
             continue
-        if path.suffix == ".json" and path.with_name(path.name[:-5]).exists():
+        if path.suffix == ".json" and _is_sidecar_name(path):
+            if not path.with_name(path.name[:-5]).exists():
+                report.waiting += 1  # the file it belongs to is still coming
             continue  # a sidecar; handled with its file
         if not _settled(path):
             report.waiting += 1

@@ -81,6 +81,7 @@
   /** A one-line result for the popup. */
   function describeResult(res) {
     if (res.error) return `failed: ${res.error}`;
+    if (res.downloaded) return "downloaded for the watcher";
     const bits = [res.created ? "new" : "already in the store"];
     bits.push(res.indexed ? "searchable" : "waiting for the parse queue");
     if (res.previous_capture) bits.push(`follows doc ${res.previous_capture}`);

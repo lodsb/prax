@@ -187,6 +187,49 @@ async function fetchPdf(url) {
   return new Blob([buf], { type: "application/pdf" });
 }
 
+/* The last resort for a file the site will not hand to anything but a
+   navigation (a Cloudflare challenge answers 403 to the extension's own
+   fetch, cookies or not): the browser's downloader, which is a navigation,
+   saves it under Downloads/prax-inbox with a sidecar naming the URL,
+   domains and tags; the inbox watcher on the batch host consumes that
+   folder like the drop folder. No door involved until then. */
+const DROP = "prax-inbox";
+
+function waitForDownload(id) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { api.downloads.onChanged.removeListener(onChange); reject(new Error("the download took longer than 5 minutes")); }, 5 * 60 * 1000);
+    async function onChange(delta) {
+      if (delta.id !== id || !delta.state) return;
+      if (delta.state.current === "complete") {
+        clearTimeout(timer);
+        api.downloads.onChanged.removeListener(onChange);
+        const [item] = await api.downloads.search({ id });
+        resolve(item ? item.filename : null);
+      } else if (delta.state.current === "interrupted") {
+        clearTimeout(timer);
+        api.downloads.onChanged.removeListener(onChange);
+        const [item] = await api.downloads.search({ id });
+        reject(new Error(`download interrupted${item && item.error ? `: ${item.error}` : ""}`));
+      }
+    }
+    api.downloads.onChanged.addListener(onChange);
+  });
+}
+
+async function downloadRoute(url, common) {
+  if (!api.downloads) throw new Error("this browser gives the extension no downloads");
+  const name = lib.pdfFileName(url);
+  const id = await api.downloads.download({ url, filename: `${DROP}/${name}`, saveAs: false, conflictAction: "uniquify" });
+  const finalPath = await waitForDownload(id);
+  const base = (finalPath || name).split(/[\\/]/).pop();
+  const side = { title: common.title || null, source_url: url, domains: common.domains || undefined, tags: common.tags || undefined, session: common.session, by: "extension" };
+  const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(side));
+  const sid = await api.downloads.download({ url: dataUrl, filename: `${DROP}/${base}.json`, saveAs: false, conflictAction: "overwrite" });
+  await waitForDownload(sid);
+  log("info", "downloaded for the watcher", base);
+  return { mode: "download", title: base, note: `saved to Downloads/${DROP}/${base}; the inbox watcher takes it from there`, downloaded: true };
+}
+
 async function uploadFile(blob, name, common, cfg) {
   const fd = new FormData();
   fd.append("file", blob, name);
@@ -226,10 +269,17 @@ async function captureTab(tab, opts, cfg) {
   let why = p.reason || null;
   if (!read || lib.looksLikePdf(url, read.html)) {
     let blob = null;
-    try { blob = await fetchPdf(url); } catch (err) { log("warn", "own fetch failed", url, err); why = `own fetch failed: ${err.message}; the door fetched instead`; blob = null; }
+    let refused = null;
+    try { blob = await fetchPdf(url); } catch (err) { log("warn", "own fetch failed", url, err); refused = err.message; why = `own fetch failed: ${err.message}; the door fetched instead`; blob = null; }
     if (blob) {
       const data = await uploadFile(blob, lib.pdfFileName(url), common, cfg);
       return { tabId: tab.id, url, title, mode: "file", note: "PDF fetched with your session and uploaded", ...data };
+    }
+    if (refused && /answered 4\d\d/.test(refused)) {
+      // the site refuses anything but a navigation: the door will fare no
+      // better, the browser's own downloader will
+      const r = await downloadRoute(url, common);
+      return { tabId: tab.id, url, title: title || r.title, ...r };
     }
   }
   const data = await door("/ingest/url", common, cfg);
@@ -359,10 +409,13 @@ async function captureLink(linkUrl, tab) {
   try {
     let blob = null;
     let why = null;
-    try { blob = await fetchPdf(linkUrl); } catch (err) { why = `own fetch failed: ${err.message}; the door fetched instead`; }
+    let refused = null;
+    try { blob = await fetchPdf(linkUrl); } catch (err) { refused = err.message; why = `own fetch failed: ${err.message}; the door fetched instead`; }
     if (blob) {
       const data = await uploadFile(blob, lib.pdfFileName(linkUrl), common, cfg);
       r = { url: linkUrl, title: lib.pdfFileName(linkUrl), mode: "file", note: "PDF fetched with your session and uploaded", ...data };
+    } else if (refused && /answered 4\d\d/.test(refused)) {
+      r = { url: linkUrl, ...(await downloadRoute(linkUrl, common)) };
     } else {
       const data = await door("/ingest/url", common, cfg);
       r = { url: linkUrl, title: linkUrl, mode: "url", note: why, ...data };

@@ -677,6 +677,11 @@ Four ways in:
   pass is a job (`GET /jobs`, the Jobs view). `--no-titles`,
   `--no-extract`, `--no-embed` switch steps off.
 
+  The watcher also consumes `Downloads/prax-inbox/` when that folder
+  exists (`--also` names others): the browser extension saves a file
+  there, with a sidecar, when a site hands the file to a navigation only
+  (`docs/extension.md`).
+
   A file in `inbox/<module>/` (say `inbox/family/`) lands in that domain;
   `<file>.json` next to a file is a sidecar (`title`, `source_url`,
   `domains`, `tags`). Files still being written (younger than two

@@ -89,6 +89,15 @@ the tab shows, with a small popup for the few choices that matter.
   link that sends the same tab again, or the first tab showing that URL,
   or a new tab with it; "retry failed" does that for every failed entry
   in turn. A retry updates the entry in place.
+- **A host that refuses everything but a navigation** (a Cloudflare
+  challenge answers 403 to the extension's own fetch, cookies or not,
+  and to any server). Then the extension uses the browser's downloader,
+  which is a navigation: the file lands in `Downloads/prax-inbox/` with
+  a sidecar (`<file>.json`: URL, title, domains, tags, session), and the
+  inbox watcher on the batch host consumes that folder like the drop
+  folder (howto 3l; `scripts/inbox.py --also` names other folders). The
+  popup says "downloaded for the watcher"; the document appears in the
+  Inbox view once the watcher has been over it.
 - **The context menu.** "Send this page to prax" on any page, the
   browser's PDF viewer included (the popup works there too), and "Send
   link to prax" on a link, which fetches the linked file with the

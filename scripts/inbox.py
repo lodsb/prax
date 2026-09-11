@@ -40,6 +40,14 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--dir", type=Path, help="the drop folder (default: data/inbox)")
     ap.add_argument(
+        "--also",
+        type=Path,
+        action="append",
+        default=[],
+        help="another folder to consume; by default Downloads/prax-inbox when it"
+        " exists, where the browser extension saves what it could not fetch itself",
+    )
+    ap.add_argument(
         "--from",
         dest="from_dir",
         type=Path,
@@ -82,6 +90,14 @@ def main() -> int:
     try:
         while True:
             report = inbox.scan(con, root, consume=not a.from_dir, domains=doms)
+            for extra in (
+                (a.also or inbox.browser_drop_folders()) if not a.from_dir else []
+            ):
+                if extra.is_dir():
+                    more = inbox.scan(con, extra, consume=True, domains=doms)
+                    for k in ("registered", "duplicates", "failed"):
+                        getattr(report, k).extend(getattr(more, k))
+                    report.waiting += more.waiting
             if report.registered or report.failed or not a.watch:
                 print(f"{time.strftime('%H:%M:%S')} {report}", flush=True)
             done = pipeline.process_captures(
