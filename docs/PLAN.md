@@ -346,6 +346,31 @@ R14). Design in `docs/ui.md`.
 - [x] `traverse` surfaces confidence, evidence, ontology version and
       validity on every edge (store, API and MCP)
 
+## Next modules (planned, after the v5 backlog finishes)
+
+Agreed 2026-09-12. Three small modules, written the way v5 and studio
+were: small first, twenty documents read with the local model, the
+review queue says what is missing.
+
+- [ ] `craft.yaml`: what kitchen and workshop share. `technique` (a named
+      way of doing something: dovetail joint, reflow soldering, sous
+      vide; research's `method` is the scientific kind) and `material`
+      (oak, PLA, solder, flour). Relations: a document `applies` a
+      technique; a thing is `made_of` a material.
+- [ ] `kitchen.yaml` (requires craft): `recipe` as the self type (a kind
+      of document), `dish`, `ingredient`, `cuisine`; equipment is core's
+      `tool`. A recipe `makes` a dish, `calls_for` an ingredient, `needs`
+      a tool, is a `variant_of` another recipe, `belongs_to` a cuisine.
+      Quantities stay in the text.
+- [ ] `workshop.yaml` (requires craft and studio): `build` as the self
+      type (a project description, an instructable, a build log) and
+      `design` (a plan or layout the build follows); studio's `device`,
+      `component`, `standard` and `spec` reused. A build is `made_with`
+      components and tools, `follows` a design, is `derived_from` an
+      earlier build.
+- [ ] Domain rules and the drop subfolders for them; the popup's domain
+      list grows on its own from `GET /inbox`.
+
 ## Housekeeping pass (planned, after the v5 backlog finishes)
 
 Measured 2026-09-12 against the live store (9,500 documents, 1.7 GB).
