@@ -79,6 +79,9 @@ let history = [];
 function renderHistory(list) {
   history = list || [];
   $("recent").hidden = !history.length;
+  const failed = history.filter((h) => h.state === "failed").length;
+  $("retry-failed").hidden = !failed;
+  $("retry-failed").textContent = failed > 1 ? `retry ${failed} failed` : "retry failed";
   $("results").innerHTML = history.map((r) => {
     const link = r.doc_id && cfg.server ? `<a href="${esc(cfg.server)}/ui/#doc/${r.doc_id}" target="_blank" rel="noopener">doc ${r.doc_id}</a> · ` : "";
     const state = r.state === "sending" ? "sending…" : r.state === "failed" ? `${esc(lib.describeResult(r))} · <a href="#" class="retry" data-id="${esc(r.id)}">retry</a>` : `${link}${esc(lib.describeResult(r))}${r.note ? ` · ${esc(r.note)}` : ""}`;
@@ -100,6 +103,7 @@ async function main() {
   if (stored.progress && stored.progress.state === "running") renderProgress(stored.progress);
   renderHistory(stored.history);
   $("clear-history").addEventListener("click", async (e) => { e.preventDefault(); await api.runtime.sendMessage({ type: "clear-history" }); renderHistory([]); });
+  $("retry-failed").addEventListener("click", async (e) => { e.preventDefault(); $("msg").textContent = ""; await api.runtime.sendMessage({ type: "retry-failed" }); });
   api.storage.onChanged.addListener((changes, area) => {
     if (changes.progress && (area === "session" || area === "local")) renderProgress(changes.progress.newValue);
     if (changes.history && (area === "session" || area === "local")) renderHistory(changes.history.newValue);

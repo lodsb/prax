@@ -266,7 +266,8 @@ async function capture(msg) {
   await setProgress({ state: "running", session: opts.session, total: tabs.length, done: 0, results: [], error: null });
   const results = [];
   for (const tab of tabs) {
-    const id = `${Date.now()}-${tab.id}`;
+    // a retry keeps the failed entry's id, so it is updated in place
+    const id = (msg.entryIds && msg.entryIds[tab.id]) || `${Date.now()}-${tab.id}`;
     await remember({ id, at: Date.now(), tabId: tab.id, url: tab.url, title: tab.title, state: "sending", domains: opts.domains, tags: opts.tags, close: opts.close });
     let r;
     try { r = await captureTab(tab, opts, cfg); log("info", "sent", tab.url, r.mode, r.doc_id ? `doc ${r.doc_id}` : ""); } catch (err) { log("warn", "capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
@@ -290,7 +291,18 @@ async function retry(entry) {
     tab = same[0] || null;
   }
   if (!tab) tab = await api.tabs.create({ url: entry.url, active: false });
-  await capture({ tabIds: [tab.id], domains: entry.domains || [], tags: entry.tags || [], close: false });
+  await capture({ tabIds: [tab.id], entryIds: { [tab.id]: entry.id }, domains: entry.domains || [], tags: entry.tags || [], close: false });
+}
+
+/* Every failed entry again, one after the other, each with its own
+   domains and tags; entries are updated in place as they go. */
+async function retryFailed() {
+  const cur = (await progressArea().get("history")).history || [];
+  const failed = cur.filter((h) => h.state === "failed");
+  log("info", "retry failed", failed.length);
+  for (const entry of failed) {
+    try { await retry(entry); } catch (err) { log("warn", "retry failed", entry.url, err); }
+  }
 }
 
 /* What SingleFile's content scripts expect from the extension's background
@@ -337,6 +349,11 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
   if (msg.type === "retry") {
     retry(msg.entry).catch((err) => setProgress({ state: "error", error: err.message }));
+    sendResponse({ ok: true });
+    return false;
+  }
+  if (msg.type === "retry-failed") {
+    retryFailed().catch((err) => setProgress({ state: "error", error: err.message }));
     sendResponse({ ok: true });
     return false;
   }

@@ -87,7 +87,8 @@ the tab shows, with a small popup for the few choices that matter.
   last forty sends as a list that survives its closing (session
   storage: gone when the browser quits), a failed one with a retry
   link that sends the same tab again, or the first tab showing that URL,
-  or a new tab with it.
+  or a new tab with it; "retry failed" does that for every failed entry
+  in turn. A retry updates the entry in place.
 - **Bookmarklet and share target** as fallbacks post a URL only; the
   door fetches. The mobile share target is a tiny page under `/ui/`
   that takes `?url=` and calls `/ingest/url`.
