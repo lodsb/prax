@@ -25,16 +25,25 @@ manuals and datasheets, magazine articles, recipes, build logs, family
 documents can live in one store, each read with its own vocabulary, and a
 document may belong to several.
 
-The models are a means, not the point. Which model does which step is a
-line in a config file: a local model through llama.cpp for the pass over
-everything, a hosted API for the few documents worth it, none at all for
-the steps where a person or the calling model does better. Everything a
-model produces carries its provenance, so it can be redone by a better
-model later without losing what the earlier one wrote. Private material
-never has to leave the machine.
+The models are a means, not the point, and you bring your own. Which
+model does which step is a line in a config file: any GGUF file served by
+llama.cpp on your own GPU, or any OpenAI-compatible server, for the pass
+over everything; the Claude API for the few documents worth it; none at
+all for the steps where a person or the calling model does better. The
+pipeline never spends money unasked, and the extraction prompt, grammar
+and schema are generated from the ontology, so a swapped model needs no
+prompt work. Everything a model produces carries its provenance, so it
+can be redone by a better model later without losing what the earlier
+one wrote. Private material never has to leave the machine: a whole
+library was read by a local model on one card, and the measurements
+comparing it with the hosted one are in `docs/eval/`.
 
 ## What you can do with it
 
+- **Bring your own models.** Run the local ones you can and pay only
+  for what deserves it: extraction, titles and answers through a model
+  on your own hardware, a hosted model for a promoted few, the choice
+  per step in `prax.yaml` and per run on the command line.
 - **Bring things in.** Import a Zotero library read-only. Drop files
   into a folder. Upload from the web UI. Send the page you are looking
   at, or every tab in the window, from the browser: a self-contained
