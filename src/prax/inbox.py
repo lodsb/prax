@@ -397,9 +397,15 @@ def scan(
     root: Path | None = None,
     *,
     session: str | None = None,
+    consume: bool = True,
+    domains: list[str] | None = None,
 ) -> ScanReport:
     """Register every file in the drop folder once, remove what was taken,
-    move what the store refused to ``failed/``."""
+    move what the store refused to ``failed/``. With ``consume`` off the
+    folder is somebody's (a download folder, a project's PDFs): files stay
+    where they are, nothing is moved, and the store's hash keeps a second
+    run from registering them again. ``domains`` applies to every file
+    that names none itself."""
     root = root or inbox_dir()
     root.mkdir(parents=True, exist_ok=True)
     failed_dir = root / FAILED_DIR
@@ -416,7 +422,11 @@ def scan(
             report.waiting += 1
             continue
         side, extra = _sidecar(path)
-        domains = list(extra.get("domains") or []) or _folder_domains(root, path)
+        doms = (
+            list(extra.get("domains") or [])
+            or _folder_domains(root, path)
+            or list(domains or [])
+        )
         try:
             data = path.read_bytes()
             cap = ingest_bytes(
@@ -427,7 +437,7 @@ def scan(
                 title=extra.get("title") or path.stem,
                 source_url=extra.get("source_url"),
                 original_path=str(path.relative_to(root)).replace("\\", "/"),
-                domains=domains or None,
+                domains=doms or None,
                 tags=list(extra.get("tags") or []) or None,
                 session=session,
                 by="inbox",
@@ -435,18 +445,21 @@ def scan(
         except Exception as exc:  # noqa: BLE001 - one bad file must not stop the scan
             log.warning("%s: %s", path, exc)
             report.failed.append(str(path))
-            failed_dir.mkdir(exist_ok=True)
-            shutil.move(str(path), failed_dir / path.name)
-            if side:
-                shutil.move(str(side), failed_dir / side.name)
+            if consume:
+                failed_dir.mkdir(exist_ok=True)
+                shutil.move(str(path), failed_dir / path.name)
+                if side:
+                    shutil.move(str(side), failed_dir / side.name)
             continue
         (report.registered if cap.created else report.duplicates).append(cap.doc_id)
-        path.unlink()
-        if side:
-            side.unlink()
-    for d in sorted((p for p in root.rglob("*") if p.is_dir()), reverse=True):
-        if d != failed_dir and not any(d.iterdir()):
-            d.rmdir()
+        if consume:
+            path.unlink()
+            if side:
+                side.unlink()
+    if consume:
+        for d in sorted((p for p in root.rglob("*") if p.is_dir()), reverse=True):
+            if d != failed_dir and not any(d.iterdir()):
+                d.rmdir()
     return report
 
 

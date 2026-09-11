@@ -632,7 +632,11 @@ Four ways in:
   `domains`, `tags`). Files still being written (younger than two
   seconds, or `.part`/`.crdownload`) wait for the next scan. Consumed
   files are removed, the archive holds their bytes; what the store
-  refused goes to `inbox/failed/`. `--parse` also indexes uploads and
+  refused goes to `inbox/failed/`. A folder that is not prax's own (a
+  download folder, a project's PDFs) is read with `--from <folder>
+  [--domains research]`: every file under it is registered, nothing is
+  moved or removed, and a second run finds them already known by hash.
+  `--parse` also indexes uploads and
   fetched PDFs the door left pending, so a watcher on the batch host
   completes what the Pi's door only registered.
 

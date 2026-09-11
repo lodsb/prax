@@ -126,6 +126,30 @@ def test_scan_registers_removes_and_dedupes(
     assert store.document_domains(con, rep3.registered[0]) == ["family"]
 
 
+def test_scan_from_somebodys_folder_leaves_files(
+    con: sqlite3.Connection, tmp_path: Path, modules: None
+) -> None:
+    folder = tmp_path / "papers"
+    (folder / "sub").mkdir(parents=True)
+    a = folder / "a.txt"
+    a.write_text("paper a about reverb " * 5, encoding="utf-8")
+    b = folder / "sub" / "b.pdf"
+    b.write_bytes(b"%PDF-1.4 fake b")
+    for p in (a, b):
+        _old(p)
+    rep = inbox.scan(con, folder, consume=False, domains=["family"])
+    assert len(rep.registered) == 2 and a.exists() and b.exists()
+    assert (folder / "sub").exists()
+    docs = {store.get_document(con, i, max_chars=0)["title"]: i for i in rep.registered}
+    assert store.document_domains(con, docs["a"]) == ["family"]
+    assert (
+        store.get_document(con, docs["b"], max_chars=0)["original_path"] == "sub/b.pdf"
+    )
+    again = inbox.scan(con, folder, consume=False)
+    assert not again.registered and sorted(again.duplicates) == sorted(rep.registered)
+    assert a.exists() and b.exists()
+
+
 def test_scan_moves_refused_files_to_failed(
     con: sqlite3.Connection, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

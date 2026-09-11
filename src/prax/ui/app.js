@@ -1086,7 +1086,7 @@ async function viewInbox(p) {
     </tr>`;
   view.innerHTML = `
     <form id="upload" class="search-form" autocomplete="off">
-      <div id="drop" class="drop">Drop files here, or <label><input id="files" type="file" multiple hidden><u>choose</u></label>. Text and HTML are searchable at once; PDFs and images wait for the parse queue.</div>
+      <div id="drop" class="drop">Drop files here, or <label><input id="files" type="file" multiple hidden><u>choose files</u></label> or <label><input id="folder" type="file" webkitdirectory multiple hidden><u>a folder</u></label>. Text and HTML are searchable at once; PDFs and images wait for the parse queue.</div>
       <input id="up-title" type="text" placeholder="title (single file only)" style="flex:1 1 16rem">
       <span class="chips" id="up-domains">${domainOpts}</span>
       <input id="up-tags" type="text" placeholder="tags, comma-separated" style="flex:0 1 14rem">
@@ -1142,6 +1142,7 @@ async function viewInbox(p) {
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
   drop.addEventListener("drop", (e) => { e.preventDefault(); drop.classList.remove("over"); upload([...e.dataTransfer.files]); });
   document.getElementById("files").addEventListener("change", (e) => upload([...e.target.files]));
+  document.getElementById("folder").addEventListener("change", (e) => upload([...e.target.files].filter((f) => !f.name.startsWith("."))));
   document.getElementById("upload").addEventListener("submit", (e) => { e.preventDefault(); upload([...document.getElementById("files").files]); });
   document.getElementById("fetch").addEventListener("submit", async (e) => {
     e.preventDefault();
