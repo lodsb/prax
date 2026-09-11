@@ -4,6 +4,7 @@
 import time, so tests can point every module at a temporary directory by
 setting the variable before the first store call.
 """
+
 from __future__ import annotations
 
 import os
@@ -24,4 +25,3 @@ def db_path() -> Path:
 
 def archive_dir() -> Path:
     return data_dir() / "archive"
-

@@ -1,4 +1,5 @@
 """Shared fixtures. Every test runs against a temporary data directory."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
