@@ -732,6 +732,7 @@ def job_reap(con: sqlite3.Connection) -> int:
     return n
 
 
+@_serialized
 def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> dict[str, Any]:
     """``running`` (with ``stale`` when the heartbeat is old) and the last
     ``limit`` finished jobs, newest first."""
@@ -819,10 +820,20 @@ def release_vector_views() -> int:
     return n
 
 
+@_serialized
 def data_version(con: sqlite3.Connection) -> int:
     """Changes whenever another connection commits (``PRAGMA data_version``):
-    the cheap "did anything change" signal the UI polls."""
+    the cheap "did anything change" signal the UI polls. Serialized like
+    every other use of the door's one connection: the endpoints run in a
+    thread pool and a connection's cursor is not shareable."""
     return int(con.execute("PRAGMA data_version").fetchone()[0])
+
+
+@_serialized
+def running_jobs(con: sqlite3.Connection) -> int:
+    return int(
+        con.execute("SELECT count(*) FROM jobs WHERE status = 'running'").fetchone()[0]
+    )
 
 
 # --------------------------------------------------------------- retiring

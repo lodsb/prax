@@ -295,12 +295,9 @@ def changes(request: Request) -> dict[str, Any]:
     another process's commits) and how many jobs are running: the UI polls
     it and re-renders a listing when the stamp moved."""
     con = request.app.state.con
-    running = con.execute(
-        "SELECT count(*) FROM jobs WHERE status = 'running'"
-    ).fetchone()[0]
     return {
         "stamp": f"{store.data_version(con)}-{request.app.state.writes}",
-        "jobs": running,
+        "jobs": store.running_jobs(con),
     }
 
 

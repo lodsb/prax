@@ -400,10 +400,13 @@ def embed_pending(
         if job:
             job.update(done=done, note=f"{rate:.0f} chunks/s")
         _say(log, f"[{done}/{pending}] {rate:.1f} chunks/s")
-    stats = _save_with_retry(lambda: store.save_vectors(emb.name), release)
+    if done or out["reconciled"]:
+        # replacing the 800 MB index file is the expensive part: only when
+        # something changed in it
+        stats = _save_with_retry(lambda: store.save_vectors(emb.name), release)
+        out["index_count"] = stats["count"]
+        out["bytes"] = stats["bytes"]
     out["chunks"] = done
-    out["index_count"] = stats["count"]
-    out["bytes"] = stats["bytes"]
     fields = 0
     while True:
         rows = store.pending_document_embeddings(con, emb.name, limit=FETCH)
@@ -416,7 +419,7 @@ def embed_pending(
             emb.name,
         )
         fields += len(rows)
-    if fields or store.count_pending_document_embeddings(con, emb.name) == 0:
+    if fields:
         dstats = _save_with_retry(
             lambda: store.save_document_vectors(emb.name), release
         )
@@ -565,6 +568,11 @@ def _extract_step(
         _say(log, f"extract: {rep}")
 
 
+FIELD_BATCH = 200  # document fields gathered before an embed pass
+FIELD_WAIT_S = 15 * 60  # or this long, whichever comes first
+_last_embed = [0.0]
+
+
 def _embed_step(
     con: sqlite3.Connection,
     out: dict[str, Any],
@@ -575,7 +583,16 @@ def _embed_step(
     if emb is not None and store.vectors_available():
         pending = store.count_pending_embeddings(con, emb.name)
         pending_fields = store.count_pending_document_embeddings(con, emb.name)
-        if pending or pending_fields:
+        # a backlog pass changes a document field every few seconds (its
+        # summary): those are gathered and embedded in batches, so the
+        # index files are not replaced every pass
+        due = (
+            pending > 0
+            or pending_fields >= FIELD_BATCH
+            or (pending_fields > 0 and time.monotonic() - _last_embed[0] > FIELD_WAIT_S)
+        )
+        if due:
+            _last_embed[0] = time.monotonic()
             try:
                 with store.Job(con, "embed", total=pending, note=emb.name) as job:
                     rep = embed_pending(con, emb, job=job, log=log, release=release)
