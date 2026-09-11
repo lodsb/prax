@@ -2967,6 +2967,29 @@ def invalidate_edge(
 
 
 @_serialized
+def retire_reading(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    producer: str,
+    except_version: str,
+) -> int:
+    """End the live edges ``producer`` wrote from this document under any
+    ontology version but ``except_version``: a producer re-reading a
+    document under its current subset (another domain, a grown module)
+    supersedes its own earlier reading. Other producers' edges stay.
+    History is kept (invariant 8); returns how many edges."""
+    cur = con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE valid_to IS NULL"
+        " AND source_doc = ? AND producer = ?"
+        " AND coalesce(ontology_version, '') != ?",
+        (doc_id, producer, except_version),
+    )
+    con.commit()
+    return cur.rowcount
+
+
+@_serialized
 def retire_run(
     con: sqlite3.Connection,
     *,

@@ -124,8 +124,9 @@ def test_legacy_single_file_keeps_a_plain_version() -> None:
 
 def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     o = ontology.current()
-    assert set(o.modules) == {"core", "research"}
-    assert o.version == "core1+research5"
+    assert set(o.modules) == {"core", "research", "studio"}
+    assert o.version == "core1+research5+studio1"
+    assert o.self_types == ("paper", "manual", "datasheet", "schematic", "article")
     assert o.is_a("author", "person") and o.is_a("paper", "document")
     assert o.is_a("venue", "organization")
     o.check_edge("author", "affiliated_with", "organization")
@@ -137,9 +138,38 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
         (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
-    assert ontology.current().version == "core1+research5"
+    assert ontology.current().version == "core1+research5+studio1"
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
         text.replace("version: 5", "version: 6"), encoding="utf-8"
     )
-    assert ontology.current().version == "core1+research6"
+    assert ontology.current().version == "core1+research6+studio1"
+
+
+def test_studio_module() -> None:
+    o = ontology.current()
+    s = o.for_domains(["studio"])
+    assert set(s.modules) == {"core", "studio"} and s.version == "core1+studio1"
+    assert s.self_types == ("manual", "datasheet", "schematic", "article")
+    assert "paper" not in s.types and "cites" not in s.relations
+    assert s.is_a("device", "tool") and s.is_a("manufacturer", "organization")
+    s.check_edge("manual", "describes", "device")
+    s.check_edge("device", "developed_by", "manufacturer")  # core, via subtypes
+    s.check_edge("device", "conforms_to", "standard")
+    s.check_edge("article", "appeared_in", "publication")
+    assert s.canonical_type("synthesizer") == "device"
+    assert s.canonical_relation("mentions") == "names"
+    with pytest.raises(ValueError):
+        s.check_edge("paper", "describes", "device")
+    with pytest.raises(ValueError):
+        s.check_edge("manual", "describes", "concept")
+    both = o.for_domains(["research", "studio"])
+    assert both.self_types[0] == "paper" and "manual" in both.self_types
+    assert (
+        both.canonical_relation("mentions") == "mentions"
+    )  # research wins nothing: names
+
+
+def test_self_types_must_exist() -> None:
+    with pytest.raises(ValueError, match="self type"):
+        ontology.parse("version: '1'\nentity_types: [a]\nself_types: [b]\n")

@@ -1,5 +1,5 @@
 # prax ontology, core module: the types every domain shares. A domain
-# module (research.yaml, later family.yaml or production.yaml) requires
+# module (research.yaml, studio.yaml, later family.yaml) requires
 # this one and subtypes it: an author is a person, a paper is a document.
 # Keep it SMALL; a subtype is accepted wherever its parent is allowed, so
 # relations declared here on person hold for authors. Format:

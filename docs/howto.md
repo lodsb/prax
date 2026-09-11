@@ -76,14 +76,18 @@ before migrations existed (version 0) is upgraded in place.
 ### Ontology
 
 `ontology/` holds the entity and relation types the graph accepts, one
-module per domain (`core.yaml`, `research.yaml`; format in
+module per domain (`core.yaml`, `research.yaml`, `studio.yaml`; format in
 `src/prax/ontology.py`), each with a
 `version`. `store.link` rejects anything else. Add types and bump the
 version; edges keep the version they were written under. `PRAX_ONTOLOGY`
 points at a different file (tests use it). After a bump, replay the review
 queue (`scripts/replay_review.py`, section 3f) before extracting anything
 new; the bump also re-selects every document for extraction. The reasoning
-behind v2 is in `docs/ontology-v2.md`.
+behind v2 is in `docs/ontology-v2.md`; the studio module (gear, manuals,
+datasheets, magazine articles) in `docs/ontology-studio.md`. A document
+is extracted against the modules of its domain set (section 3e, "A
+document's domains"), so a new module re-selects only documents without
+a set.
 
 ## 3a. Importing the Zotero library
 
@@ -377,14 +381,20 @@ it that are not yet stamped with their subset's version:
     python scripts/extract_graph.py --promoted --domain research
 
 `search(..., domain="family")` (API and MCP `domain=`) keeps the hits
-from that domain; documents without a set are in every domain.
+from that domain; documents without a set are in every domain. When a
+document is read again under another subset (its domains changed, or
+one of its modules grew), the same producer's earlier reading is
+retired as the new one is applied (`store.retire_reading`, history
+kept); other producers' edges stay.
 
 ### Typing rules over the queue
 
 A model's misfits are systematic: the document typed as what it is about
 ("this manual" as a tool), `authored_by` written backwards or with authors
 on both ends, `cites` for a tool or method the paper uses, `about` for a
-claim it makes or a paper it discusses. `scripts/type_review.py` applies
+claim it makes or a paper it discusses, and in the studio domain the
+document put where its device belongs ("the manual has this feature":
+moved onto the device the document describes). `scripts/type_review.py` applies
 the rules in `prax.review.apply_typing_rules` to every open typed item:
 
     python scripts/type_review.py --dry-run    # counts per rule, nothing written

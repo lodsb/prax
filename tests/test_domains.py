@@ -35,7 +35,7 @@ def three_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     (d / "family.yaml").write_text(FAMILY, encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
-    assert set(ontology.current().modules) == {"core", "research", "family"}
+    assert set(ontology.current().modules) == {"core", "research", "studio", "family"}
     return d
 
 
@@ -100,7 +100,7 @@ def test_extraction_uses_the_documents_subset(
     assert inp.domains == ["family"] and "Domains: family" in inp.header
     sub = inp.ontology()
     assert set(sub.modules) == {"core", "family"} and "paper" not in sub.types
-    assert extraction.self_type(sub) == "document"
+    assert extraction.self_types(sub) == ("document",)
     # the Claude extractor builds the prompt and schema for that subset
     ext = extraction.ClaudeExtractor(model="claude-test", client=object())
     params = ext.params(inp)
@@ -140,6 +140,74 @@ def test_extraction_uses_the_documents_subset(
     rep = extraction.apply(con, fam, ex, extractor="stub")
     assert rep.linked == 1 and rep.queued == 1  # "paper" is not in the family subset
     assert store.get_meta(con, fam)["extraction"]["ontology_version"] == "core1+family1"
+
+
+def test_rereading_under_another_subset_retires_the_earlier_reading(
+    con: sqlite3.Connection, three_modules: Path
+) -> None:
+    doc = store.ingest_text(con, "a synth manual " * 30, title="Synth Manual")["doc_id"]
+    first = extraction.Extraction(
+        summary="s",
+        triples=[
+            extraction.Triple(
+                "Synth Manual",
+                "paper",
+                "about",
+                "synthesis",
+                "concept",
+                "EXTRACTED",
+                "e",
+            ),
+        ],
+    )
+    extraction.apply(con, doc, first, extractor="local")
+    other = extraction.Extraction(
+        summary="s",
+        triples=[
+            extraction.Triple(
+                "Synth Manual",
+                "paper",
+                "about",
+                "synthesis",
+                "concept",
+                "EXTRACTED",
+                "e",
+            ),
+        ],
+    )
+    extraction.apply(con, doc, other, extractor="sonnet")  # another producer
+    live = lambda: con.execute(
+        "SELECT producer, ontology_version FROM edges WHERE source_doc = ?"
+        " AND valid_to IS NULL ORDER BY id",
+        (doc,),
+    ).fetchall()
+    whole = ontology.current().version  # no domain set: the whole ontology
+    assert [tuple(r) for r in live()] == [("local", whole)]  # sonnet's: existing
+    store.set_domains(con, doc, ["family"])
+    second = extraction.Extraction(
+        summary="s",
+        triples=[
+            extraction.Triple(
+                "Synth Manual",
+                "document",
+                "depicts",
+                "Grandma",
+                "relative",
+                "EXTRACTED",
+                "e",
+            ),
+        ],
+    )
+    rep = extraction.apply(con, doc, second, extractor="local")
+    assert rep.retired == 1 and rep.linked == 1
+    assert [tuple(r) for r in live()] == [("local", "core1+family1")]
+    assert (
+        con.execute(
+            "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NOT NULL",
+            (doc,),
+        ).fetchone()[0]
+        == 1
+    )  # history kept
 
 
 def test_select_for_extraction_knows_subset_versions(
@@ -198,7 +266,7 @@ def test_api_domains(client: TestClient) -> None:
         "doc_id"
     ]
     r = client.get(f"/doc/{a}/domains").json()
-    assert r["domains"] is None and r["modules"] == ["family", "research"]
+    assert r["domains"] is None and r["modules"] == ["family", "research", "studio"]
     assert client.put(f"/doc/{a}/domains", json={"domains": ["family"]}).json() == {
         "domains": ["family"]
     }

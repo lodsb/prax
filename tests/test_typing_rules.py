@@ -86,6 +86,45 @@ def test_decide_rules() -> None:
     assert a == "open"
 
 
+def test_self_as_device() -> None:
+    doc = ("Iridium User Manual", "manual", "Waldorf Iridium")
+    item = lambda src, st, rel, dst, dt: {
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+    }
+    a, edges, rule = review.decide(
+        item("Iridium User Manual", "manual", "has_feature", "xy pad", "feature"), doc
+    )
+    assert a == "link" and rule == "self-as-device"
+    assert (edges[0].src, edges[0].src_type, edges[0].rel) == (
+        "Waldorf Iridium",
+        "device",
+        "has_feature",
+    )
+    a, edges, rule = review.decide(
+        item("Iridium User Manual", "schematic", "covers", "PIC18", "component"), doc
+    )
+    assert rule == "self-as-device" and edges[0].rel == "has_part"
+    # untyped: the relation names the type of the other end
+    a, edges, rule = review.decide_unmapped(
+        item("Iridium User Manual", None, "has_spec", "128 voices", None), doc
+    )
+    assert rule == "self-as-device" and edges[0].dst_type == "spec"
+    # without a known device, or for another subject, nothing changes
+    a, _, rule = review.decide(
+        item("Iridium User Manual", "manual", "has_feature", "xy pad", "feature"),
+        ("Iridium User Manual", "manual"),
+    )
+    assert rule != "self-as-device"
+    a, _, rule = review.decide(
+        item("Waldorf Quantum", "device", "has_feature", "xy pad", "feature"), doc
+    )
+    assert rule != "self-as-device"
+
+
 def test_apply_links_drops_and_leaves(con: sqlite3.Connection) -> None:
     doc = store.ingest_text(con, "text " * 40, title="A Manual")["doc_id"]
     _queue(con, doc, "A Manual", "tool", "about", "reverb", "concept")

@@ -316,7 +316,7 @@ def test_api_captures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
     ).json()
     assert client.get(f"/doc/{t['doc_id']}/domains").json()["domains"] == ["family"]
     view = client.get("/inbox").json()
-    assert view["modules"] == ["family", "research"]
+    assert view["modules"] == ["family", "research", "studio"]
     assert [x["source"] for x in view["recent"]][:2] == ["capture", "upload"] or len(
         view["recent"]
     ) >= 2

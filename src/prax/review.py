@@ -132,15 +132,17 @@ def _looks_person(name: str) -> bool:
 
 
 def decide_unmapped(
-    item: dict[str, Any], doc: tuple[str, str] | None
+    item: dict[str, Any], doc: tuple[str, ...] | None
 ) -> tuple[str, list[store.Edge], str | None]:
     """Rules for items without types: the relation the model named and the
     shape of the two names decide. Affiliation between a person and an
     organization, supervision between two people, authorship between a
     title and a person, funding and development towards an organization,
     and a mention whose reason names what kind of thing it is."""
+    if (edges := _self_as_device(item, doc)) is not None:
+        return "link", edges, "self-as-device"
     src, dst, rel = item["src"], item["dst"], (item["rel"] or "").lower()
-    title, own = doc or ("", "paper")
+    title, own = (doc or ("", "paper"))[:2]
     if title and src.lower() in ("paper", "this paper", "the paper", "document"):
         src = title
     if rel in ("affiliation", "affiliated_with", "affiliated with"):
@@ -260,26 +262,79 @@ class TypingReport:
         self.by_rule[rule] = self.by_rule.get(rule, 0) + 1
 
 
-def _doc_titles(con: sqlite3.Connection, ids: set[int]) -> dict[int, tuple[str, str]]:
-    """``{doc_id: (title, entity type)}``: a page's own type is page or project."""
+def _doc_titles(
+    con: sqlite3.Connection, ids: set[int]
+) -> dict[int, tuple[str, str, str | None]]:
+    """``{doc_id: (title, own type, device)}``: a page's own type is page or
+    project; otherwise the type the graph gave the document itself (a
+    paper, a manual), paper by default. ``device`` is what a studio
+    document ``describes`` when that is one thing."""
     if not ids:
         return {}
     marks = ",".join("?" * len(ids))
-    out: dict[int, tuple[str, str]] = {}
+    out: dict[int, tuple[str, str, str | None]] = {}
     for r in con.execute(
         f"SELECT d.id, d.title, p.kind FROM documents d LEFT JOIN pages p"
         f" ON p.doc_id = d.id WHERE d.id IN ({marks})",
         tuple(ids),
     ):
-        kind = (
-            "project" if r["kind"] == "project" else ("page" if r["kind"] else "paper")
-        )
-        out[r["id"]] = (r["title"] or "", kind)
+        title = r["title"] or ""
+        if r["kind"]:
+            kind = "project" if r["kind"] == "project" else "page"
+        else:
+            own = con.execute(
+                "SELECT s.type FROM edges e JOIN entities s ON s.id = e.src"
+                " WHERE e.source_doc = ? AND s.name = ? AND e.valid_to IS NULL"
+                " ORDER BY e.id DESC LIMIT 1",
+                (r["id"], title),
+            ).fetchone()
+            kind = own[0] if own else "paper"
+        devices = [
+            x[0]
+            for x in con.execute(
+                "SELECT DISTINCT t.name FROM edges e"
+                " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+                " WHERE e.source_doc = ? AND e.rel = 'describes' AND s.name = ?"
+                " AND t.type = 'device' AND e.valid_to IS NULL",
+                (r["id"], title),
+            )
+        ]
+        out[r["id"]] = (title, kind, devices[0] if len(devices) == 1 else None)
     return out
 
 
+# a studio document put where its device belongs: "the manual has this
+# feature" means the device it describes has it
+DEVICE_RELS = frozenset(
+    {"has_part", "has_feature", "has_spec", "conforms_to", "compatible_with"}
+)
+DEVICE_DST = {
+    "has_part": "component",
+    "has_feature": "feature",
+    "has_spec": "spec",
+    "conforms_to": "standard",
+    "compatible_with": "device",
+}
+
+
+def _self_as_device(
+    item: dict[str, Any], doc: tuple[str, ...] | None
+) -> list[store.Edge] | None:
+    if not doc or len(doc) < 3 or not doc[2]:
+        return None
+    title, device = doc[0], doc[2]
+    src, rel, dt = item["src"], item["rel"], item["dst_type"]
+    if not title or src != title:
+        return None
+    if rel == "covers" and dt == "component":
+        rel = "has_part"
+    if rel not in DEVICE_RELS:
+        return None
+    return [store.Edge(device, "device", rel, item["dst"], dt or DEVICE_DST[rel])]
+
+
 def decide(
-    item: dict[str, Any], doc: tuple[str, str] | None
+    item: dict[str, Any], doc: tuple[str, ...] | None
 ) -> tuple[str, list[store.Edge], str | None]:
     """What the rules say about one typed item: ``("link", edges, rule)``,
     ``("drop", [], rule)`` or ``("open", [], None)``. Pure; the ontology
@@ -288,8 +343,10 @@ def decide(
     rel, st, dt = item["rel"], item["src_type"], item["dst_type"]
     if _MALFORMED.search(src) or _MALFORMED.search(dst):
         return "drop", [], "malformed-name"
-    title, own = doc or ("", "paper")
+    title, own = (doc or ("", "paper"))[:2]
     rule = None
+    if (edges := _self_as_device(item, doc)) is not None:
+        return "link", edges, "self-as-device"
     # the document under a wrong type: it is itself
     if title and src == title and st != own:
         st, rule = own, "self-name"

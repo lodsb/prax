@@ -285,6 +285,18 @@ R14). Design in `docs/ui.md`.
       model; 232 organizations in the graph; 18,372 items stay open, most of
       them untyped `about`, `cites`, `part_of` and `published_in` the rules
       cannot type
+- [x] Studio module (2026-09-12, `ontology/studio.yaml`,
+      `docs/ontology-studio.md`): device, component, manufacturer,
+      publication, manual, datasheet, schematic, article, feature,
+      standard, spec; describes, covers, has_part, has_feature,
+      conforms_to, has_spec, compatible_with, succeeds, appeared_in,
+      written_by, names. Modules declare `self_types`; aliases never
+      shadow a declared name across modules. Composed version
+      `core1+research5+studio1`; 19 gear documents re-extracted under
+      `core1+studio1` (191 edges, 58 more by the `self-as-device` rule;
+      the earlier reading as papers retired: a producer's re-read under
+      another subset supersedes its own earlier reading,
+      `store.retire_reading` in `apply()`)
 - [x] Typing rules over the review queue (2026-09-12,
       `prax.review.apply_typing_rules`, `scripts/type_review.py`): the
       local model's systematic misfits retyped, flipped, renamed or

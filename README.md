@@ -114,7 +114,7 @@ built, module by module: `docs/architecture.md`.
 | `docs/howto.md` | Setting up, every batch job, `prax.yaml`, the doors, the UI, backup. |
 | `docs/rationale.md` | Decision records R1 to R16: what was chosen, why, what was measured, when to revisit. |
 | `docs/ui.md` | The web UI: endpoints it uses, routes, rules. |
-| `docs/ontology-v2.md`, `docs/ontology-v4.md`, `docs/ontology-v5.md` | How the ontology grew: from the review queue's evidence, for syntheses, and for organizations and mentions. |
+| `docs/ontology-v2.md`, `docs/ontology-v4.md`, `docs/ontology-v5.md`, `docs/ontology-studio.md` | How the ontology grew: from the review queue's evidence, for syntheses, for organizations and mentions, and the studio module for gear and its manuals. |
 | `docs/PLAN.md` | Staged build plan with checklists and dates. |
 | `docs/sources.md` | Data sources: the Zotero import, citation sources, captures and the drop folder. |
 | `docs/extension.md` | The browser extension: what it sends, its settings (server, token, domain), how it authenticates. |

@@ -59,10 +59,13 @@ drop folder (`docs/sources.md`).
    live in `ontology/`, one YAML module per domain (`core.yaml` for the
    shared types: person, organization, document, place, event, work,
    concept, tool; `research.yaml` for papers, methods, claims and pages;
-   a family or production module later), loaded and composed by
+   `studio.yaml` for gear and its manuals, datasheets, schematics and
+   articles; a family module later), loaded and composed by
    `prax.ontology`. Names are unique across modules; a subtype passes
    wherever its parent is allowed; aliases map what a model says to the
-   canonical name. The composed version (`core1+research5`) is what
+   canonical name and never shadow a declared one; a module's
+   `self_types` say what the document being extracted may be. The
+   composed version (`core1+research5+studio1`) is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set (`meta.domains`: which modules it is read
    against; none means every module) and is extracted against that

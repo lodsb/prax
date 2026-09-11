@@ -46,7 +46,20 @@ CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 # entities; small models produce them for "cites".
 _REFERENCE_NUMBER = re.compile(r"^\W*\d+(\W+\d+)*\W*$")
 # What a small model writes for the document itself instead of its title.
-_SELF_NAMES = frozenset({"paper", "this paper", "the paper", "document"})
+_SELF_NAMES = frozenset(
+    {
+        "paper",
+        "this paper",
+        "the paper",
+        "document",
+        "this document",
+        "the document",
+        "this manual",
+        "the manual",
+        "this datasheet",
+        "this article",
+    }
+)
 # "Turner & Sahani, 2014", "Smith and Goto", "Solin et al., 2018": a citation
 # without a title, which the review queue cannot resolve either
 _AUTHOR_YEAR = re.compile(
@@ -106,10 +119,33 @@ class DocumentInput:
         return ontology.current().for_domains(self.domains)
 
 
+def self_types(onto: ontology.Ontology) -> tuple[str, ...]:
+    """What the document itself may be in this ontology: the modules'
+    self types (a paper; a manual, datasheet, schematic or article), or a
+    plain document when no module says."""
+    return onto.self_types or ("document",)
+
+
 def self_type(onto: ontology.Ontology) -> str:
-    """What the document itself is in this ontology: a paper where the
-    research module is loaded, a document otherwise."""
-    return "paper" if "paper" in onto.types else "document"
+    """The first of ``self_types``: what the document is when only one
+    kind is possible."""
+    return self_types(onto)[0]
+
+
+def _self_rule(onto: ontology.Ontology) -> str:
+    kinds = self_types(onto)
+    if len(kinds) == 1:
+        what = f"a {kinds[0]} entity"
+    else:
+        what = (
+            "an entity of whichever of these types fits the text best:"
+            f" {', '.join(kinds)}"
+        )
+    return (
+        f"The document itself is {what}, named exactly by its Title line, or"
+        " a page or project entity when the header has a Kind line saying so."
+        " Every triple about the document uses that name."
+    )
 
 
 def build_input(
@@ -284,11 +320,7 @@ def system_prompt(
         for r in (onto.relations[n] for n in sorted(onto.relations))
     )
     rules = [
-        (
-            f"The document itself is a {self_type(onto)} entity named exactly by"
-            " its Title line, or a page or project entity when the header has a"
-            " Kind line saying so. Every triple about the document uses that name."
-        ),
+        _self_rule(onto),
         (
             f"Emit at most {max_triples} triples. Prefer the few that a reader"
             " searching this library would want: what the paper is about (2-6"
@@ -586,11 +618,11 @@ class LocalExtractor:
             repeat_penalty=self.repeat_penalty,
         )
         result = lineformat.parse(text)
-        me = self_type(onto)
+        me = set(self_types(onto))
         for t in result.triples:  # the document is named by its title
-            if t.src.lower() in _SELF_NAMES and t.src_type == me:
+            if t.src.lower() in _SELF_NAMES and t.src_type in me:
                 t.src = doc.title
-            if t.dst.lower() in _SELF_NAMES and t.dst_type == me:
+            if t.dst.lower() in _SELF_NAMES and t.dst_type in me:
                 t.dst = doc.title
         result.usage.update(usage)
         return result
@@ -626,6 +658,7 @@ def current(step: str = "extract") -> Extractor:
 
 @dataclass
 class ApplyReport:
+    retired: int = 0  # the producer's earlier reading under another version
     linked: int = 0
     existing: int = 0
     queued: int = 0
@@ -646,6 +679,11 @@ def apply(
     (its domains), and the stamp carries that subset's version."""
     onto = ontology.current().for_domains(store.document_domains(con, doc_id))
     report = ApplyReport()
+    # the same producer read this document before under another subset
+    # or module version: that reading is superseded by this one
+    report.retired = store.retire_reading(
+        con, doc_id, producer=extractor, except_version=onto.version
+    )
     page_titles = store.page_titles(con)
     for t in extraction.triples:
         edge = store.Edge(t.src, t.src_type, t.rel, t.dst, t.dst_type)

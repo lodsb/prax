@@ -23,6 +23,7 @@
 module: research
 version: 5
 requires: [core]
+self_types: [paper]
 
 entity_types:
   paper:

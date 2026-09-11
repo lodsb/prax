@@ -1,0 +1,184 @@
+# prax ontology, studio module: the gear and its paperwork. Manuals,
+# datasheets, schematics, service documents, magazine reviews and guides
+# about synthesizers, microphones, mixers, motors, boards and the
+# software that drives them. Requires core (organization, document, tool,
+# concept, person). A document in this domain is a manual, datasheet,
+# schematic or article, never a paper; a technical report that is both
+# (a microphone maker's paper) carries the research domain as well.
+#
+# v1 (2026-09-12, docs/ontology-studio.md): grown from what the local
+# model queued for 19 gear documents under the research module: the
+# device and its maker, parts and features, the standards it speaks, its
+# rated specifications, and the document kinds that describe it.
+module: studio
+version: 1
+requires: [core]
+self_types: [manual, datasheet, schematic, article]
+
+entity_types:
+  device:
+    parent: tool
+    description: >-
+      A specific product by model name, as the maker writes it: Waldorf
+      Iridium, Roland XV-5080, Sony C-38B, Rane ONE, Mutable Instruments
+      Clouds, Leadshine iCL57. The maker's name stays in the name when
+      the text uses it. A device is never a concept.
+  component:
+    parent: tool
+    description: >-
+      A part inside or attached to a device, by part number or name:
+      PIC18LF14K22 microcontroller, W25Q32 flash, touchscreen display,
+      oscillator section, crossfader, ribbon element.
+  manufacturer:
+    parent: organization
+    description: >-
+      The company that makes a device or component: Roland, Sony, Waldorf
+      Music, Pioneer DJ, Leadshine, elysia, Fostex, Microchip. Name as the
+      text writes it, without "Corporation" or "GmbH" unless always used.
+  publication:
+    parent: organization
+    description: >-
+      A magazine, website or series an article appeared in: Sound On
+      Sound, Tape Op, monome docs, Elektor.
+  manual:
+    parent: document
+    description: >-
+      A user manual, quick-start guide, cheat sheet, service manual or
+      technical bulletin for a device, named by its title. Only the
+      document being extracted is a manual; a manual the text names is
+      a document.
+  datasheet:
+    parent: document
+    description: >-
+      A specification sheet for a device or component, named by its
+      title. Only the document being extracted.
+  schematic:
+    parent: document
+    description: >-
+      A circuit diagram or wiring drawing, named by its title. Only the
+      document being extracted.
+  article:
+    parent: document
+    description: >-
+      A magazine review, test, tutorial, blog post or forum guide about
+      gear, named by its title. Only the document being extracted.
+  feature:
+    parent: concept
+    description: >-
+      A named function, mode or control of a device: freeze buffer,
+      Patch Finder, CV control, low cut filter, step sequencing. Lowercase
+      unless the maker capitalizes it. Belongs to a device, so it is
+      never the document's subject on its own.
+  standard:
+    parent: concept
+    description: >-
+      A protocol, interface, bus, file format or standard a device speaks
+      or complies with: MIDI, CV/gate, USB, RS-485, Modbus, SCSI, WAV,
+      AES/EBU, General MIDI 2, phantom power.
+  spec:
+    description: >-
+      One rated or measured value as the text states it, unit included:
+      "frequency response 20 Hz to 20 kHz", "holding torque 2.0 Nm",
+      "128 voices of polyphony". Only figures a reader would look up.
+
+relation_types:
+  describes:
+    domain: [manual, datasheet, schematic, article]
+    range: [device, component]
+    description: >-
+      the document is the manual, datasheet, schematic, review or guide
+      of this device or component; its main subject
+  covers:
+    domain: [manual, datasheet, schematic, article]
+    range: [concept, standard]
+    description: >-
+      the document treats a concept or standard at length (granular
+      synthesis in a synth manual, MIDI implementation in an appendix)
+  has_part:
+    domain: [device]
+    range: [component, device]
+    description: a component or sub-device the text says is inside or part of the device
+  has_feature:
+    domain: [device, component]
+    range: [feature]
+    description: a function, mode or control the device offers
+  conforms_to:
+    domain: [device, component]
+    range: [standard]
+    description: the device speaks, connects via or complies with the standard
+  has_spec:
+    domain: [device, component]
+    range: [spec]
+    description: a rated or measured value the text states for the device
+  compatible_with:
+    domain: [device, component]
+    range: [device, component]
+    description: >-
+      the text says the two work together: an expansion board the device
+      hosts, a controller it accepts, a format it loads from another
+      device
+  succeeds:
+    domain: [device]
+    range: [device]
+    description: the device is the newer model replacing or following the other
+  appeared_in:
+    domain: [article, manual]
+    range: [publication]
+    description: the magazine, website or series the document was published in
+  written_by:
+    domain: [article, manual, datasheet, schematic]
+    range: [person]
+    description: a named author of the document (a reviewer, a designer credited on a schematic)
+  names:
+    domain: [manual, datasheet, schematic, article]
+    range: [device, component, manufacturer, standard]
+    description: >-
+      the document names a device, part, maker or standard in passing
+      without describing it (a compatibility list, an aside). The weakest
+      relation; never for the document's own subject
+
+type_aliases:
+  synthesizer: device
+  synth: device
+  microphone: device
+  mixer: device
+  product: device
+  unit: device
+  part: component
+  chip: component
+  module: component
+  maker: manufacturer
+  brand: manufacturer
+  vendor: manufacturer
+  magazine: publication
+  website: publication
+  protocol: standard
+  format: standard
+  interface: standard
+  specification: spec
+  rating: spec
+  user_manual: manual
+  service_manual: manual
+  guide: manual
+  quickstart: manual
+  cheat_sheet: manual
+  review: article
+  tutorial: article
+  data_sheet: datasheet
+
+relation_aliases:
+  documents: describes
+  about: covers
+  contains: has_part
+  includes: has_part
+  supports_standard: conforms_to
+  implements_standard: conforms_to
+  has_specification: has_spec
+  specifies: has_spec
+  works_with: compatible_with
+  connects_to: compatible_with
+  replaces: succeeds
+  published_in: appeared_in
+  authored_by: written_by
+  mentions: names
+  refers_to: names

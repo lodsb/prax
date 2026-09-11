@@ -74,6 +74,9 @@ class Module:
     relations: dict[str, Relation]
     type_aliases: dict[str, str]
     relation_aliases: dict[str, str]
+    # what the document being extracted may be in this module (a paper;
+    # a manual, datasheet, schematic or article); empty: a plain document
+    self_types: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -84,6 +87,7 @@ class Ontology:
     relations: dict[str, Relation] = field(default_factory=dict)
     type_aliases: dict[str, str] = field(default_factory=dict)
     relation_aliases: dict[str, str] = field(default_factory=dict)
+    self_types: tuple[str, ...] = ()
     # composed subsets by domain set (``for_domains`` is asked per document)
     _subsets: dict[frozenset[str], Ontology] = field(
         default_factory=dict, repr=False, compare=False
@@ -229,6 +233,7 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
         relation_aliases={
             str(k): str(v) for k, v in (data.get("relation_aliases") or {}).items()
         },
+        self_types=tuple(str(t) for t in (data.get("self_types") or [])),
     )
 
 
@@ -260,8 +265,6 @@ def compose(modules: list[Module]) -> Ontology:
                     f" and {m.name!r}"
                 )
             relations[n] = r
-        type_aliases.update(m.type_aliases)
-        relation_aliases.update(m.relation_aliases)
     for t in types.values():
         if t.parent and t.parent not in types:
             raise ValueError(f"type {t.name!r} has unknown parent {t.parent!r}")
@@ -272,12 +275,33 @@ def compose(modules: list[Module]) -> Ontology:
                 raise ValueError(
                     f"relation {r.name!r} {side} names unknown types {unknown}"
                 )
-    for alias, target in type_aliases.items():
-        if target not in types or alias in types:
-            raise ValueError(f"type alias {alias!r} -> {target!r} is not valid")
-    for alias, target in relation_aliases.items():
-        if target not in relations or alias in relations:
-            raise ValueError(f"relation alias {alias!r} -> {target!r} is not valid")
+    # An alias may not shadow a name its own module or a required module
+    # declares. When two independent modules meet (research and studio
+    # both loaded) and one's alias names the other's relation, the
+    # declared name wins and the alias is left out.
+    for m in modules:
+        visible = _closure(m, by_name)
+        for alias, target in m.type_aliases.items():
+            if target not in types or (
+                alias in types and types[alias].module in visible
+            ):
+                raise ValueError(f"type alias {alias!r} -> {target!r} is not valid")
+            if alias not in types:
+                type_aliases[alias] = target
+        for alias, target in m.relation_aliases.items():
+            if target not in relations or (
+                alias in relations and relations[alias].module in visible
+            ):
+                raise ValueError(f"relation alias {alias!r} -> {target!r} is not valid")
+            if alias not in relations:
+                relation_aliases[alias] = target
+    self_types: list[str] = []
+    for m in modules:
+        for t in m.self_types:
+            if t not in types:
+                raise ValueError(f"module {m.name!r}: self type {t!r} is unknown")
+            if t not in self_types:
+                self_types.append(t)
     if len(modules) == 1 and modules[0].name == "main":
         version = modules[0].version
     else:
@@ -290,7 +314,21 @@ def compose(modules: list[Module]) -> Ontology:
         relations=relations,
         type_aliases=type_aliases,
         relation_aliases=relation_aliases,
+        self_types=tuple(self_types),
     )
+
+
+def _closure(m: Module, by_name: dict[str, Module]) -> set[str]:
+    """The module and everything it requires, transitively."""
+    seen: set[str] = set()
+    stack = [m.name]
+    while stack:
+        n = stack.pop()
+        if n in seen or n not in by_name:
+            continue
+        seen.add(n)
+        stack.extend(by_name[n].requires)
+    return seen
 
 
 def parse(text: str) -> Ontology:

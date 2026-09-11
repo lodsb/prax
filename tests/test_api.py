@@ -434,7 +434,7 @@ def test_review_filters_bulk_and_replay(
     assert "version: 6" in research and "range: [paper, tool]" in research
     (onto_dir / "research.yaml").write_text(research, encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(onto_dir))
-    later = "core1+research6"
+    later = "core1+research6+studio1"
     rep = client.post("/review/replay").json()
     assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == (later, 1, 0)
     assert client.get("/review").json()["total"] == 0
