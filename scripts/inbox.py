@@ -14,7 +14,9 @@ A file in ``inbox/<module>/`` belongs to that domain (``inbox/family/``);
 ``domains`` and ``tags``. Consumed files are removed (the archive holds
 their bytes); files the store refused go to ``inbox/failed/``. Uploads
 through the door and pages sent by the extension are captures too; with
-``--parse`` this script indexes those the door left pending as well.
+``--parse`` this script indexes those the door left pending as well; a
+``--watch --parse`` loop on the batch host is what turns an uploaded PDF
+from "pending" into "indexed" within one interval.
 """
 
 from __future__ import annotations
@@ -29,14 +31,23 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from prax import inbox, store
 
 
-def _parse_pending(con: store.sqlite3.Connection) -> str:
+def _parse_pending(con: store.sqlite3.Connection, *, quiet: bool) -> str | None:
+    """Parse the captures the door only registered; None when there are
+    none. Skips what this extractor version already tried."""
     from prax.parsers import queue
 
-    ids = store.select_documents(con, pending=True)
+    ids = inbox.pending_captures(con)
     if not ids:
-        return "nothing pending"
-    report = queue.run(con, ids)
-    return f"parsed {len(ids)}: {report}"
+        return None
+    log = (
+        None
+        if quiet
+        else (lambda n, i, a: print(f"  [{n + 1}/{len(ids)}] {a} doc {i}"))
+    )
+    report = queue.run(con, ids, log=log)
+    if report.actions.keys() <= {"seen", "skipped"}:
+        return None  # nothing new to say
+    return f"{time.strftime('%H:%M:%S')} {report}"
 
 
 def main() -> int:
@@ -51,7 +62,12 @@ def main() -> int:
     ap.add_argument(
         "--domains", help="comma-separated domains for files that name none"
     )
-    ap.add_argument("--parse", action="store_true", help="then parse pending documents")
+    ap.add_argument(
+        "--parse",
+        action="store_true",
+        help="also parse captures the door only registered (uploads, fetched PDFs)",
+    )
+    ap.add_argument("--quiet", action="store_true", help="no per-document lines")
     ap.add_argument("--watch", action="store_true", help="keep scanning")
     ap.add_argument(
         "--interval", type=float, default=30.0, help="seconds between scans"
@@ -69,9 +85,11 @@ def main() -> int:
     while True:
         report = inbox.scan(con, root, consume=not a.from_dir, domains=doms)
         if report.registered or report.failed or not a.watch:
-            print(f"{time.strftime('%H:%M:%S')} {report}")
-        if a.parse and (report.registered or not a.watch):
-            print(_parse_pending(con))
+            print(f"{time.strftime('%H:%M:%S')} {report}", flush=True)
+        if a.parse:
+            parsed = _parse_pending(con, quiet=a.quiet)
+            if parsed or not a.watch:
+                print(parsed or "nothing pending", flush=True)
         if not a.watch:
             return 1 if report.failed else 0
         time.sleep(a.interval)

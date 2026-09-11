@@ -637,8 +637,14 @@ Four ways in:
   [--domains research]`: every file under it is registered, nothing is
   moved or removed, and a second run finds them already known by hash.
   `--parse` also indexes uploads and
-  fetched PDFs the door left pending, so a watcher on the batch host
-  completes what the Pi's door only registered.
+  fetched PDFs the door left pending (only captures, not the curated
+  imports' backlog), so a watcher on the batch host completes what the
+  door only registered: an uploaded PDF shows "pending" in the Inbox
+  view until `scripts/inbox.py --watch --parse` has been over it, and
+  the view refreshes itself while something is pending. Titles, graph
+  extraction and vectors are the usual passes afterwards
+  (`repair_titles.py --ids`, `extract_graph.py --ids`,
+  `embed_pending.py`).
 
 ## 4. Running the HTTP door
 

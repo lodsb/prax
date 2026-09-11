@@ -1082,7 +1082,7 @@ async function viewInbox(p) {
       <td class="muted">${esc(x.source)}${x.capture.by && x.capture.by !== x.source ? ` (${esc(x.capture.by)})` : ""}</td>
       <td class="muted">${esc((x.domains || []).join(", ") || "all")}</td>
       <td class="muted">${esc((x.capture.at || "").slice(0, 16).replace("T", " "))}</td>
-      <td>${x.indexed ? (x.extracted ? "extracted" : "indexed") : `<span class="muted" title="waiting for the parse queue on the batch host">pending</span>`}</td>
+      <td>${x.indexed ? (x.extracted ? "extracted" : "indexed") : `<span class="muted" title="registered; the inbox watcher on the batch host (scripts/inbox.py --watch --parse) extracts its text">pending</span>`}</td>
     </tr>`;
   view.innerHTML = `
     <form id="upload" class="search-form" autocomplete="off">
@@ -1130,13 +1130,23 @@ async function viewInbox(p) {
     report(results);
     refreshList();
   }
+  let pendingTimer = null;
   async function refreshList() {
     try {
       const fresh = await api("/inbox", { limit: p.limit || 50 });
       const tbody = view.querySelector("table.doc-list tbody");
       if (tbody) tbody.innerHTML = fresh.recent.map(row).join("");
+      watchPending(fresh.recent);
     } catch (_) { /* the list stays as it was */ }
   }
+  // while a capture is pending, the list follows the watcher's progress
+  function watchPending(recent) {
+    clearTimeout(pendingTimer);
+    if (recent.some((x) => !x.indexed) && route().name === "inbox") {
+      pendingTimer = setTimeout(refreshList, 10000);
+    }
+  }
+  watchPending(d.recent);
   const drop = document.getElementById("drop");
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));

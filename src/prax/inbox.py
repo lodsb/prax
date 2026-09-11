@@ -463,6 +463,20 @@ def scan(
     return report
 
 
+def pending_captures(con: sqlite3.Connection) -> list[int]:
+    """Captures the door only registered (PDFs, images): what the batch
+    host's watcher parses. The curated imports' own backlog is not
+    included; ``parse_pending.py --pending`` is for that."""
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT id FROM documents WHERE text_hash IS NULL"
+            " AND json_extract(meta, '$.source') IN ('upload', 'capture', 'inbox')"
+            " ORDER BY id"
+        )
+    ]
+
+
 # ------------------------------------------------------------- the list
 
 
