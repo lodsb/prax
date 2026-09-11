@@ -6,6 +6,7 @@ names as an `openai` model (docs/howto.md 3k).
 .EXAMPLE
   scripts\llama_server.ps1 -Model C:\models\Qwen2.5-32B-Instruct-Q4_K_M.gguf
   scripts\llama_server.ps1 -Model <gguf> -Slots 4 -CtxPerSlot 8192 -Port 8080
+  scripts\llama_server.ps1 -Model Qwen3.6-27B-Q4_K_M.gguf -Slots 4 -NoThinking
 
 Every slot gets CtxPerSlot tokens of context (the server splits -c evenly),
 and the KV cache is stored at 8 bits so a 32B model at Q4 and two slots
@@ -21,7 +22,8 @@ param(
     [int]$CtxPerSlot = 8192,
     [string]$Bin = "$env:LOCALAPPDATA\prax\llama.cpp\llama-server.exe",
     [int]$PowerLimit = 0,
-    [string]$Alias = "local-server"
+    [string]$Alias = "local-server",
+    [switch]$NoThinking   # Qwen3.x and Gemma 4 think by default; extraction under a grammar must not
 )
 
 if (-not (Test-Path $Bin)) { throw "llama-server not found at $Bin (docs/howto.md 3k)" }
@@ -29,7 +31,9 @@ if (-not (Test-Path $Model)) { throw "model not found: $Model" }
 if ($PowerLimit -gt 0) { nvidia-smi -pl $PowerLimit | Out-Null }
 
 $ctx = $Slots * $CtxPerSlot
-& $Bin `
+$extra = @()
+if ($NoThinking) { $extra += @("--chat-template-kwargs", '{\"enable_thinking\": false}', "--reasoning-budget", "0") }
+& $Bin @extra `
     --model $Model `
     --alias $Alias `
     --host 127.0.0.1 --port $Port `

@@ -469,10 +469,13 @@ to Claude, as before. A model is loaded once per process however many
 steps name it, so ask and titles share one 7B in the door.
 
 The extraction step is the one to move when a GPU box is around:
-start `llama-server -m <32B>.gguf -c 8192 -np 4 --port 8080` on it,
+start the server (`scripts/llama_server.ps1 -Model <gguf> -Slots 3
+-NoThinking`; the switch matters for Qwen3.x and Gemma 4, which think by
+default and would break the grammar), measured choices in
+`docs/eval/extractors-local-2026-09-11.md`,
 add an `openai` model with its address, point `steps.extract.model`
-at it, and `extract_graph.py` runs the same prompt and grammar against
-the server (llama-server honours the `grammar` field; vLLM does not,
+at it, and `extract_graph.py --workers <slots> --never-extracted` runs the
+same prompt and grammar against the server (llama-server honours the `grammar` field; vLLM does not,
 so use a Claude-kind model or llama-server for extraction). The door
 stays lean: the model lives in the server's process, not the door's
 (invariant 7). `GET /ask/config` shows what the door resolved.
