@@ -183,8 +183,11 @@ R14). Design in `docs/ui.md`.
       review items, $0.71; Opus/Sonnet/Haiku compared on three papers
       (`docs/eval/local-llm-2026-09-08.md`); Sonnet 5 with a 20-triple cap
       chosen. Selection skips documents under 500 characters of text.
-- [ ] Full run over the remaining 7,955 documents via the batch API
-      (about $135 at the measured 2,500 output tokens per document)
+- [x] Full run over the never-extracted documents (2026-09-11/12): not the
+      batch API but Qwen3.6-35B-A3B on a borrowed RTX 4090 through
+      llama-server (`docs/eval/extractors-local-2026-09-11.md`), 6,938
+      documents in 8.3 h, 57,808 edges, 20,110 review items; a Sonnet
+      second pass on chosen papers remains an option
 - [x] Citation network (2026-09-10): `prax.importers.citations`, OpenAlex
       or Crossref by DOI or exact title, `cites` edges with evidence,
       citation counts in `meta.citations`; Crossref pass over the 1,069

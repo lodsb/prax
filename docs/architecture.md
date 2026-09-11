@@ -324,28 +324,29 @@ loop); the queue makes each batch do real work.
 | move a step to another model (a GPU box, a cheaper API) | a `models` entry and the step's `model` in `prax.yaml`; nothing in code; `PRAX_<STEP>` for one run |
 | change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name` and `answer(bundle)` |
 
-## 10. Numbers as of 2026-09-11
+## 10. Numbers as of 2026-09-12
 
 | | |
 |---|---|
 | Documents | 9,236 (8,452 with text; 9,019 PDFs, 108 web pages, 100 text files, 3 link records, 1 image, 1 page) |
-| Archive / database / vectors | 18 GB / 1.5 GB / 749 MB + 8 MB |
+| Archive / database / vectors | 18 GB / 1.6 GB / 749 MB + 8 MB |
 | Chunks | 855,920: 772,304 text, 41,791 figure captions, 35,062 tables, 6,763 code |
 | Vectors | 855,920 chunk vectors and 9,236 document vectors (bge-small, f16) |
-| Graph | 51,811 live edges: 25,641 citations (Crossref), 19,357 extracted (Sonnet 5), 6,756 from Zotero, 56 by replay, 1 by a page; 52 invalidated |
-| Entities | 23,790 papers, 5,157 authors, 3,634 concepts, 2,460 methods, 2,112 claims, 950 tools, 418 venues, 146 datasets, 18 projects, 8 pages; 2,810 merged aliases |
-| Extraction | 1,019 documents (1,016 under ontology v3, the page under v4, two under v1); 3,632 open review items |
+| Graph | 110,170 live edges: 57,808 by Qwen3.6-35B-A3B on the 4090, 25,641 citations (Crossref), 19,357 by Sonnet 5, 6,756 from Zotero, 358 by replay; 52 invalidated |
+| Entities | 34,005 papers, 16,246 concepts, 9,717 methods, 7,024 authors, 4,069 tools, 2,976 claims, 1,075 venues, 327 datasets; 6,888 merged aliases |
+| Extraction | 7,897 documents with a summary and entities: 6,878 by the local 35B (8.3 h, about 4 kWh), 1,019 by Sonnet 5 (about $35) |
+| Review queue | 23,502 open items, most from the local pass: relation-type misfits (`cites`, `about`, `authored_by` to a wrong type) and unmapped affiliations |
 | Citations | 1,545 documents resolved at Crossref by DOI or exact title |
 | Titles | 3,503 replaced by the local 7B model (text-confirmed), 268 recased; 801 unconfirmed and 782 without text keep their file name |
 | Retrieval eval (62 library queries) | MRR 0.82 fts, 0.79 vec, 0.89 hybrid; hit@1 0.85 hybrid |
-| Costs so far | about $60 of Claude API: three-model comparison, two extraction batches, vision, adjudication; the title pass and ask run locally |
+| Costs so far | about $60 of Claude API; everything since the title pass ran locally |
 
 ## 11. What is not built yet
 
 Browser capture and the inbox watcher (Stage 1), the backfill of the
-old external-disk store, extraction of the remaining 6,900 documents (a
-model choice: Sonnet in batch, a 32B model on a borrowed GPU through
-llama-server, or a cheaper API after a quality trial), a typing pass for
-the unmapped review items, the 801 unconfirmed titles, page deletion or
+old external-disk store, a second, richer extraction pass by Sonnet on the
+papers that matter (the local pass covered everything once), a typing
+pass for the unmapped review items and an ontology look at what the
+local pass queued (affiliations above all), the 801 unconfirmed titles, page deletion or
 archiving, the move of the service onto the serving board, and the MCP
 server proxying the HTTP door instead of importing the store.
