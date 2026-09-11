@@ -665,6 +665,18 @@ Four ways in:
       python scripts/inbox.py --parse        # then parse what is pending
       python scripts/inbox.py --watch --parse --interval 30
 
+  The watcher is the batch host's side of every capture: on each pass
+  it parses what the door only registered, gives file-name titles a
+  real one, reads the new documents into the graph, and embeds what has
+  no vector (`prax.pipeline.process_captures`). It never spends money
+  (a step whose model is the Claude API is skipped with a note; the
+  promote pass is the way to that model) and never touches the curated
+  imports. Embedding has to replace the index files, which the door on
+  the same machine holds mapped: the watcher asks the door to let go
+  (`POST /vectors/release`, `--door`) and defers when it cannot. Each
+  pass is a job (`GET /jobs`, the Jobs view). `--no-titles`,
+  `--no-extract`, `--no-embed` switch steps off.
+
   A file in `inbox/<module>/` (say `inbox/family/`) lands in that domain;
   `<file>.json` next to a file is a sidecar (`title`, `source_url`,
   `domains`, `tags`). Files still being written (younger than two
@@ -683,6 +695,23 @@ Four ways in:
   extraction and vectors are the usual passes afterwards
   (`repair_titles.py --ids`, `extract_graph.py --ids`,
   `embed_pending.py`).
+
+### Jobs, and a UI that follows
+
+Every batch pass announces itself in the `jobs` table (`store.Job`,
+migration 0009): name, host and pid, a heartbeat, done and total, a
+note. `GET /jobs` and the Jobs view show what runs and what ran; a job
+without a heartbeat for ten minutes is marked stale. The rows are
+bookkeeping, nothing reads them to decide what to do.
+
+The UI polls `GET /changes` every ten seconds while its tab is visible:
+a stamp made of SQLite's `data_version` (another process committed) and
+the door's own write count, plus the number of running jobs for the
+badge in the navigation. When the stamp moved and a listing is open
+(inbox, browse, a document, review, promote, jobs, pages), the view is
+rendered again in place, keeping the scroll position and never while
+something is being typed. One small query per ten seconds per open tab
+is the whole cost.
 
 ## 4. Running the HTTP door
 

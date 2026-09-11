@@ -1184,12 +1184,83 @@ async function viewInbox(p) {
 
 // ---------------------------------------------------------------- router
 
-const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages, promote: viewPromote, inbox: viewInbox };
+// ------------------------------------------------------------------ jobs
+// What runs on the batch host (GET /jobs): running passes with a bar and a
+// heartbeat, then what ran lately. The change poll below keeps it current.
 
-async function render() {
+function jobRow(j) {
+  const pct = j.total ? Math.min(100, Math.round((100 * j.done) / j.total)) : (j.status === "running" ? 0 : 100);
+  const when = (s) => (s || "").slice(5, 16).replace("T", " ");
+  const state = j.status === "running" ? (j.stale ? `<span class="error" title="no heartbeat for ${j.age} s">stale?</span>` : `running · ${j.age}s ago`) : j.status;
+  return `<tr>
+      <td>${esc(j.name)}</td>
+      <td><div class="jobbar ${j.stale ? "stale" : ""}" title="${j.done}${j.total ? ` / ${j.total}` : ""}"><div style="width:${pct}%"></div></div></td>
+      <td class="num">${j.done}${j.total ? ` / ${j.total}` : ""}</td>
+      <td class="muted" title="${esc(j.note || "")}">${esc((j.note || "").slice(0, 90))}</td>
+      <td class="muted">${when(j.started_at)}</td>
+      <td class="${j.status === "failed" ? "error" : ""}">${state}</td>
+      <td class="muted">${esc(j.host || "")}${j.pid ? `:${j.pid}` : ""}</td>
+    </tr>`;
+}
+
+async function viewJobs(p) {
+  view.innerHTML = `<p class="muted">Loading…</p>`;
+  let d;
+  try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
+  view.innerHTML = `
+    <p class="muted">The batch passes announce themselves here: the inbox watcher, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale.</p>
+    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Running (${d.running.length})</h2>
+    ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the batch host: <code>scripts/inbox.py --watch</code> keeps captures moving.</p>`}
+    <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>
+    ${d.recent.length ? table(d.recent) : `<p class="muted">No finished jobs yet.</p>`}`;
+}
+
+// --------------------------------------------------------------- changes
+// A small poll: GET /changes returns a stamp that moves when the store
+// changed (this door's writes, or another process's commits) and how many
+// jobs run. When the stamp moved and a listing is open, it is re-rendered in
+// place (not while something is being typed, not while the tab is hidden).
+
+const LIVE_VIEWS = new Set(["inbox", "browse", "doc", "review", "promote", "jobs", "pages"]);
+let lastStamp = null;
+function typing() {
+  const el = document.activeElement;
+  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") || !!route().params.edit;
+}
+function setJobsBadge(n) {
+  const b = document.getElementById("jobs-badge");
+  if (!b) return;
+  b.hidden = !n;
+  b.textContent = n || "";
+}
+async function pollChanges() {
+  if (document.visibilityState !== "visible") return;
+  let d;
+  try {
+    const res = await fetch("/changes");
+    if (!res.ok) return;
+    d = await res.json();
+  } catch (_) { return; }
+  setJobsBadge(d.jobs);
+  const moved = lastStamp !== null && d.stamp !== lastStamp;
+  lastStamp = d.stamp;
+  if (moved && LIVE_VIEWS.has(route().name) && !typing()) {
+    const y = window.scrollY;
+    await render({ keepScroll: true });
+    window.scrollTo(0, y);
+  }
+}
+setInterval(pollChanges, 10000);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pollChanges(); });
+pollChanges();
+
+const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages, promote: viewPromote, inbox: viewInbox, jobs: viewJobs };
+
+async function render(opts) {
   const r = route();
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === r.name));
-  window.scrollTo(0, 0);
+  if (!(opts && opts.keepScroll)) window.scrollTo(0, 0);
   if (r.name === "doc") return viewDoc(r.arg, r.params);
   if (r.name === "graph") return viewGraph(r.arg, r.params);
   return (views[r.name] || viewSearch)(r.params);

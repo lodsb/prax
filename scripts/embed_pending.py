@@ -18,12 +18,11 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import config, embeddings, store
+from prax import config, embeddings, pipeline, store
 
 FETCH = 2048  # chunks pulled from the store per round
 
@@ -67,66 +66,33 @@ def main() -> int:
             f" {store.count_pending_document_embeddings(con, emb.name)} document fields"
         )
         return 0
-    if index_count != booked or a.compact:
+    if a.compact:
         rec = store.compact_vectors(con, emb.name)
         print(f"reconciled index and bookkeeping: {rec}", file=sys.stderr)
-        if a.compact:
-            return 0
-
-    pending = store.count_pending_embeddings(con, emb.name)
-    print(f"pending: {pending}", file=sys.stderr)
-    done = 0
-    since_save = 0
-    t0 = time.monotonic()
-    while True:
-        want = FETCH if a.limit is None else min(FETCH, a.limit - done)
-        if want <= 0:
-            break
-        rows = store.pending_embeddings(con, emb.name, limit=want)
-        if not rows:
-            break
-        vectors = emb.embed([r["text"] for r in rows])
-        store.store_embeddings(
-            con,
-            [(r["chunk_id"], r["kind"], v) for r, v in zip(rows, vectors, strict=True)],
-            emb.name,
-        )
-        done += len(rows)
-        since_save += len(rows)
-        if since_save >= a.save_every:
-            store.save_vectors(emb.name)
-            since_save = 0
-        rate = done / (time.monotonic() - t0)
-        eta = (pending - done) / rate / 60 if rate else 0
+        return 0
+    say = lambda t: print(t, file=sys.stderr, flush=True)
+    try:
+        with store.Job(con, "embed", note=emb.name) as job:
+            rep = pipeline.embed_pending(
+                con, emb, limit=a.limit, save_every=a.save_every, log=say, job=job
+            )
+            job.note(f"{rep['chunks']} chunks, {rep['fields']} fields")
+    except pipeline.IndexBusy as exc:
         print(
-            f"[{done:7}/{pending}] {rate:5.1f} chunks/s, ~{eta:.0f} min left",
+            f"{exc}: stop the door, or let it release its views"
+            " (POST /vectors/release; the inbox watcher does this itself)",
             file=sys.stderr,
-            flush=True,
         )
-    stats = store.save_vectors(emb.name)
+        return 1
+    if rep["reconciled"]:
+        print(f"reconciled index and bookkeeping: {rep['reconciled']}", file=sys.stderr)
     variant = getattr(emb, "variant", None)
     providers = getattr(emb, "providers", None)
     print(
-        f"embedded {done} chunks with {emb.name} ({variant}, {providers})"
-        f" in {time.monotonic() - t0:.0f} s; index {stats['count']} vectors,"
-        f" {stats['bytes'] / 1e6:.0f} MB"
+        f"embedded {rep['chunks']} chunks with {emb.name} ({variant}, {providers})"
+        f" in {rep['seconds']:.0f} s; index {rep.get('index_count')} vectors,"
+        f" {rep.get('bytes', 0) / 1e6:.0f} MB; {rep['fields']} document fields"
     )
-    # document fields: one vector per document, its own index file
-    fields_done = 0
-    while True:
-        rows = store.pending_document_embeddings(con, emb.name, limit=FETCH)
-        if not rows:
-            break
-        vectors = emb.embed([r["text"] for r in rows])
-        store.store_document_embeddings(
-            con,
-            [(r["doc_id"], v) for r, v in zip(rows, vectors, strict=True)],
-            emb.name,
-        )
-        fields_done += len(rows)
-    if fields_done or store.count_pending_document_embeddings(con, emb.name) == 0:
-        dstats = store.save_document_vectors(emb.name)
-        print(f"embedded {fields_done} document fields; {dstats['count']} in the index")
     con.close()
     return 0
 

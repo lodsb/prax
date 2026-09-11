@@ -20,45 +20,21 @@ refreshed (run ``embed_pending.py`` afterwards, with the door stopped).
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import config, models, store, titles
+from prax import config, models, pipeline, store, titles
 
 REASONS = ("empty", "filename", "zotero-auto", "caps")
-
-
-def _pdf_title(con: store.sqlite3.Connection, doc: dict) -> str | None:
-    if doc["mime"] != "application/pdf":
-        return None
-    try:
-        import pymupdf
-
-        path = config.archive_dir() / doc["hash"][:2] / doc["hash"]
-        with pymupdf.open(str(path)) as pdf:
-            return titles.pdf_meta_title((pdf.metadata or {}).get("title"))
-    except Exception:  # noqa: BLE001 - a hint only
-        return None
-
-
-def _filename(doc: dict) -> str | None:
-    z = (doc["meta"] or {}).get("zotero") or {}
-    return z.get("filename") or doc["title"]
 
 
 def select(
     con: store.sqlite3.Connection, reasons: tuple[str, ...]
 ) -> list[tuple[int, str]]:
-    out = []
-    for r in con.execute("SELECT id, title, meta FROM documents ORDER BY id"):
-        why = titles.needs_title(r["title"], json.loads(r["meta"] or "{}"))
-        if why in reasons:
-            out.append((r["id"], why))
-    return out
+    return pipeline.titles_needed(con, reasons=reasons)
 
 
 def main() -> int:
@@ -127,71 +103,21 @@ def main() -> int:
         runtime = models.runtime(spec)
 
     run = "titles-" + time.strftime("%Y%m%dT%H%M%S")
-    t0 = time.monotonic()
-    done = skipped = failed = unconfirmed = 0
-    entity_actions: dict[str, int] = {}
-    sample_left = a.sample or 0
-    for n, (doc_id, why) in enumerate(chosen, 1):
-        doc = store.get_document(con, doc_id, max_chars=60000)
-        if doc is None:
-            continue
-        old = doc["title"] or ""
-        source: str
-        confidence: str | None = None
-        if why == "caps":
-            new = titles.recase(old)
-            source = "recase"
-        else:
-            if not doc["text"].strip():
-                skipped += 1
-                continue
-            assert runtime is not None
-            guess = titles.guess_title(
-                runtime,
-                doc["text"],
-                filename=_filename(doc),
-                heading=titles.first_heading(doc["text"]),
-                pdf_title=_pdf_title(con, doc),
-            )
-            if guess is None:
-                failed += 1
-                if not a.quiet:
-                    print(f"  {doc_id}: no usable title", file=sys.stderr)
-                continue
-            new, source, confidence = guess.title, runtime.name, guess.confidence
-            if confidence == "low" and not a.sample and not a.apply_low:
-                # the text does not confirm it: the file name stays for now
-                unconfirmed += 1
-                continue
-        if a.sample:
-            print(f"  {doc_id} [{why}] {old[:60]!r}")
-            print(f"      -> {new!r} ({confidence or 'rule'})")
-            sample_left -= 1
-            if sample_left <= 0:
-                break
-            continue
-        r = store.retitle(
-            con, doc_id, new, source=source, run=run, confidence=confidence
+    say = None if a.quiet else (lambda t: print(t, file=sys.stderr, flush=True))
+    if a.sample:
+        rep = pipeline.retitle_documents(
+            con, chosen[: a.sample], runtime, run=run, apply=False, log=say
         )
-        if r["changed"]:
-            done += 1
-            if r["entity"]:
-                entity_actions[r["entity"]] = entity_actions.get(r["entity"], 0) + 1
-        if not a.quiet and (n % 50 == 0 or n == len(chosen)):
-            rate = (time.monotonic() - t0) / n
-            left = rate * (len(chosen) - n) / 60
-            print(
-                f"  {n}/{len(chosen)} ({rate:.1f} s/doc, ~{left:.0f} min left)",
-                file=sys.stderr,
-                flush=True,
-            )
-    if not a.sample:
-        print(
-            f"run {run}: {done} retitled, {skipped} without text, {failed} without a"
-            f" usable guess, {unconfirmed} unconfirmed (file name kept),"
-            f" entities {entity_actions or 'untouched'};"
-            f" {time.monotonic() - t0:.0f} s. Next: embed_pending.py (door stopped)."
+        for g in rep.guesses:
+            print(f"  {g['doc_id']} [{g['why']}] {g['old'][:60]!r}")
+            print(f"      -> {g['new']!r} ({g['confidence'] or 'rule'})")
+        return 0
+    with store.Job(con, "titles", total=len(chosen)) as job:
+        rep = pipeline.retitle_documents(
+            con, chosen, runtime, run=run, apply_low=a.apply_low, log=say, job=job
         )
+        job.note(str(rep))
+    print(f"run {run}: {rep}. Next: embed_pending.py, or the inbox watcher.")
     return 0
 
 

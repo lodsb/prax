@@ -49,6 +49,10 @@ nav a.active { color: var(--fg); font-weight: 600; }
 .quick { margin-left: auto; }
 .quick input { width: 22rem; max-width: 40vw; }
 .status { min-width: 1.5rem; color: var(--muted); }
+.count { display: inline-block; min-width: 1.1rem; padding: 0 .3rem; margin-left: .25rem; border-radius: 999px; background: var(--accent); color: #fff; font-size: .7rem; text-align: center; vertical-align: middle; }
+.jobbar { height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; min-width: 8rem; }
+.jobbar div { height: 100%; background: var(--accent); }
+.jobbar.stale div { background: var(--muted); }
 
 main { max-width: 1100px; margin: 0 auto; padding: 1.2rem; }
 

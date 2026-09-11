@@ -43,6 +43,18 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="prax", version="0.0.1", lifespan=_lifespan)
 app.middleware("http")(auth.middleware)
+app.state.writes = 0
+
+
+@app.middleware("http")
+async def _count_writes(request: Request, call_next: Any) -> Any:
+    """Every mutating request bumps a counter: with SQLite's data_version
+    (other writers) it makes the change stamp the UI polls."""
+    response = await call_next(request)
+    if request.method not in ("GET", "HEAD", "OPTIONS") and response.status_code < 400:
+        request.app.state.writes += 1
+    return response
+
 
 # A browser extension calls the door from its own origin
 # (chrome-extension://…, moz-extension://…): PRAX_CORS_ORIGINS lists the
@@ -269,6 +281,34 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
     except OSError as exc:  # urllib errors: unreachable, 404, timeout
         raise HTTPException(502, f"fetch failed: {exc}") from exc
     return _capture_out(cap)
+
+
+@app.get("/changes")
+def changes(request: Request) -> dict[str, Any]:
+    """A stamp that changes when the store changed (this door's writes or
+    another process's commits) and how many jobs are running: the UI polls
+    it and re-renders a listing when the stamp moved."""
+    con = request.app.state.con
+    running = con.execute(
+        "SELECT count(*) FROM jobs WHERE status = 'running'"
+    ).fetchone()[0]
+    return {
+        "stamp": f"{store.data_version(con)}-{request.app.state.writes}",
+        "jobs": running,
+    }
+
+
+@app.get("/jobs")
+def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
+    """What runs on the batch host and what ran lately."""
+    return store.list_jobs(request.app.state.con, limit=limit)
+
+
+@app.post("/vectors/release")
+def vectors_release() -> dict[str, Any]:
+    """Drop the door's memory-mapped index views so a batch job on this
+    machine can replace the files; they reopen on the next query."""
+    return {"released": store.release_vector_views()}
 
 
 @app.get("/inbox")

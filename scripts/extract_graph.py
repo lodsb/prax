@@ -27,7 +27,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import config, extraction, ontology, store
+from prax import config, extraction, ontology, pipeline, store
 
 # Output tokens per document measured in the Sonnet 5 trial (20-triple cap).
 EST_OUTPUT_TOKENS = 2500
@@ -133,9 +133,6 @@ def main() -> int:
     if a.submit_batch:
         return submit(con, ext, ids)
 
-    spent = 0.0
-    t0 = time.monotonic()
-    totals = extraction.ApplyReport()
     run = ("promote-" if a.promoted else "sync-") + time.strftime("%Y%m%dT%H%M%S")
     workers = max(1, a.workers)
     if workers > 1 and not isinstance(ext, extraction.LocalExtractor):
@@ -144,55 +141,24 @@ def main() -> int:
             file=sys.stderr,
         )
         workers = 1
-
-    def extract_one(doc_id: int) -> tuple[int, extraction.Extraction | None, str]:
-        try:
-            doc = extraction.build_input(con, doc_id)
-            result = ext.extract(doc)
-            if not result.triples and result.usage.get("dropped_lines"):
-                # a sampled local model occasionally produces nothing parseable
-                result = ext.extract(doc)
-            return doc_id, result, ""
-        except Exception as exc:  # noqa: BLE001 - one document must not stop the run
-            return doc_id, None, f"{type(exc).__name__}: {exc}"
-
-    if workers > 1:
-        from concurrent.futures import ThreadPoolExecutor
-
-        pool = ThreadPoolExecutor(max_workers=workers)
-        stream = pool.map(extract_one, ids)
-    else:
-        stream = map(extract_one, ids)
-    for n, (doc_id, result, error) in enumerate(stream, 1):
-        if a.budget_usd is not None and spent >= a.budget_usd:
-            print(f"budget reached after {n - 1} documents", file=sys.stderr)
-            break
-        if result is None:
-            print(f"[{n}] doc {doc_id}: {error}", file=sys.stderr)
-            continue
-        try:
-            rep = extraction.apply(con, doc_id, result, extractor=ext.name, run=run)
-        except Exception as exc:  # noqa: BLE001
-            print(f"[{n}] doc {doc_id}: {type(exc).__name__}: {exc}", file=sys.stderr)
-            continue
-        spent += extraction.cost_usd(ext.name, result.usage)
-        for k in ("linked", "existing", "queued", "rejected"):
-            setattr(totals, k, getattr(totals, k) + getattr(rep, k))
-        if not a.quiet:
-            rate = (time.monotonic() - t0) / n
-            print(
-                f"[{n}/{len(ids)}] doc {doc_id}: +{rep.linked} edges,"
-                f" {rep.queued} queued, {len(result.triples)} triples;"
-                f" ~{spent:.2f} USD, {rate:.0f} s/doc,"
-                f" ~{rate * (len(ids) - n) / 3600:.1f} h left",
-                file=sys.stderr,
-                flush=True,
-            )
-    print(
-        f"extracted with {ext.name}: {totals.linked} edges added, {totals.existing}"
-        f" existing, {totals.queued} queued for review, {totals.rejected} rejected;"
-        f" ~{spent:.2f} USD in {time.monotonic() - t0:.0f} s"
-    )
+    say = None if a.quiet else (lambda t: print(t, file=sys.stderr, flush=True))
+    with store.Job(
+        con, "promote" if a.promoted else "extract", total=len(ids), note=ext.name
+    ) as job:
+        rep = pipeline.extract_documents(
+            con,
+            ids,
+            ext,
+            workers=workers,
+            run=run,
+            budget_usd=a.budget_usd,
+            log=say,
+            job=job,
+        )
+        job.note(str(rep))
+    if rep.stopped:
+        print(rep.stopped, file=sys.stderr)
+    print(f"extracted with {ext.name}: {rep}")
     return 0
 
 

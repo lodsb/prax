@@ -96,6 +96,13 @@ Parsing is a batch job; the serving path never parses.
       capture-session id, canonical URLs with `meta.previous_capture`,
       `GET /inbox`, the Inbox view (drop zone, URL form, recent captures),
       the `capture_url` MCP tool, `PRAX_CORS_ORIGINS` for an extension
+- [x] Jobs and the capture pipeline (2026-09-12): `jobs` table (migration
+      0009) with `store.Job` around every batch pass, `GET /jobs` and the
+      Jobs view; `prax.pipeline` with the passes as functions and
+      `process_captures` (parse, titles, extract, embed) that the inbox
+      watcher runs over new captures, never spending money; the door
+      releases its index views on request so embedding can save; the UI
+      polls `GET /changes` and re-renders listings in place
 - [x] Retiring and duplicate captures (2026-09-12): `store.retire_document`
       (chunks, field and edges go; row, bytes and text stay), the same page
       sent again is one document by chunk fingerprint, a snapshot replaces
