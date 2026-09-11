@@ -427,7 +427,15 @@ Shape:
 - [ ] `prax.store` (3,800 lines) as a package split by concern (documents
       and index, search, graph, review, pages, jobs) behind the same door.
 - [ ] One `prax` command with subcommands in place of twenty scripts, so
-      connection setup, logging and job bookkeeping live in one place.
+      connection setup, logging and job bookkeeping live in one place:
+      `prax serve`, `prax import zotero <dir>`, `prax inbox [--watch]`,
+      `prax parse | titles | extract | embed` with the same selections
+      as the scripts, `prax domains assign`, `prax dedupe`, `prax review
+      type`, `prax models fetch <name>`, `prax jobs`, `prax status` (the
+      state table of the README from the live store). The scripts stay
+      as thin aliases for one release, then go. The user asked for this
+      explicitly (2026-09-12); the README is to get a second look once
+      it exists.
 - [ ] Most `PRAX_*` environment variables moved into prax.yaml sections
       (the data directory stays an environment variable).
 - [ ] The single writer: three processes write to one SQLite file today
