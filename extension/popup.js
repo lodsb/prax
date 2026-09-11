@@ -85,7 +85,7 @@ function renderHistory(list) {
   $("results").innerHTML = history.map((r) => {
     const link = r.doc_id && cfg.server ? `<a href="${esc(cfg.server)}/ui/#doc/${r.doc_id}" target="_blank" rel="noopener">doc ${r.doc_id}</a> · ` : "";
     const state = r.state === "sending" ? "sending…" : r.state === "failed" ? `${esc(lib.describeResult(r))} · <a href="#" class="retry" data-id="${esc(r.id)}">retry</a>` : `${link}${esc(lib.describeResult(r))}${r.note ? ` · ${esc(r.note)}` : ""}`;
-    return `<li class="${r.state === "failed" ? "error" : ""}"><span class="title" title="${esc(r.url)}">${esc(r.title || r.url)}</span><br><small><span class="muted">${when(r.at)}</span> · ${state}</small></li>`;
+    return `<li class="${r.state === "failed" ? "error" : r.state === "manual" ? "manual" : ""}"><span class="title" title="${esc(r.url)}">${esc(r.title || r.url)}</span><br><small><span class="muted">${when(r.at)}</span> · ${state}</small></li>`;
   }).join("");
   $("results").querySelectorAll("a.retry").forEach((a) => a.addEventListener("click", async (e) => {
     e.preventDefault();

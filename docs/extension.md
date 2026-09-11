@@ -94,7 +94,13 @@ the tab shows, with a small popup for the few choices that matter.
   the extension fetches from inside one of the site's own pages, an open
   tab of the site or its front page opened in a background tab and
   closed again, which passes where the page's own scripts do. When even
-  that is refused, the extension uses the browser's downloader,
+  that is refused, the extension uses the browser's downloader, and when
+  the downloader is refused as well (the site hands the file to a page
+  load only), it writes the sidecar and asks you to press Ctrl+S in the
+  viewer tab and save the file under the name it shows into
+  `Downloads/prax-inbox/`; the watcher pairs file and sidecar. Such an
+  entry shows as "waiting for you" in the popup's history. The
+  downloader,
   which is a navigation: the file lands in `Downloads/prax-inbox/` with
   a sidecar (`<file>.json`: URL, title, domains, tags, session), and the
   inbox watcher on the batch host consumes that folder like the drop

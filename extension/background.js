@@ -216,16 +216,30 @@ function waitForDownload(id) {
   });
 }
 
-async function downloadRoute(url, common) {
-  if (!api.downloads) throw new Error("this browser gives the extension no downloads");
-  const name = lib.pdfFileName(url);
-  const id = await api.downloads.download({ url, filename: `${DROP}/${name}`, saveAs: false, conflictAction: "uniquify" });
-  const finalPath = await waitForDownload(id);
-  const base = (finalPath || name).split(/[\\/]/).pop();
+async function writeSidecar(base, url, common) {
   const side = { title: common.title || null, source_url: url, domains: common.domains || undefined, tags: common.tags || undefined, session: common.session, by: "extension" };
   const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(side));
   const sid = await api.downloads.download({ url: dataUrl, filename: `${DROP}/${base}.json`, saveAs: false, conflictAction: "overwrite" });
   await waitForDownload(sid);
+}
+
+async function downloadRoute(url, common) {
+  if (!api.downloads) throw new Error("this browser gives the extension no downloads");
+  const name = lib.pdfFileName(url);
+  let finalPath = null;
+  try {
+    const id = await api.downloads.download({ url, filename: `${DROP}/${name}`, saveAs: false, conflictAction: "uniquify" });
+    finalPath = await waitForDownload(id);
+  } catch (err) {
+    // the site hands the file to a full page load only: the viewer tab has
+    // the bytes, Ctrl+S saves them; the sidecar waits in the folder for a
+    // file of that name and the watcher pairs the two
+    log("warn", "download refused", url, err);
+    await writeSidecar(name, url, common);
+    return { mode: "manual", title: name, manual: true, note: `this site hands its PDF to a page load only. In that tab press Ctrl+S and save it as ${name} into Downloads/${DROP}/ (the sidecar with the URL and domains is already there); the inbox watcher takes it from there` };
+  }
+  const base = (finalPath || name).split(/[\\/]/).pop();
+  await writeSidecar(base, url, common);
   log("info", "downloaded for the watcher", base);
   return { mode: "download", title: base, note: `saved to Downloads/${DROP}/${base}; the inbox watcher takes it from there`, downloaded: true };
 }
@@ -389,7 +403,7 @@ async function capture(msg) {
     let r;
     try { r = await captureTab(tab, opts, cfg); log("info", "sent", tab.url, r.mode, r.doc_id ? `doc ${r.doc_id}` : ""); } catch (err) { log("warn", "capture failed", tab.url, err); r = { tabId: tab.id, url: tab.url, title: tab.title, error: err.message }; }
     results.push(r);
-    await remember({ id, at: Date.now(), ...r, state: r.error ? "failed" : "done", domains: opts.domains, tags: opts.tags, close: opts.close });
+    await remember({ id, at: Date.now(), ...r, state: r.error ? "failed" : r.manual ? "manual" : "done", domains: opts.domains, tags: opts.tags, close: opts.close });
     await setProgress({ done: results.length, results });
     if (opts.close && !r.error) {
       try { await api.tabs.remove(tab.id); } catch (_) { /* already gone */ }
@@ -489,7 +503,7 @@ async function captureLink(linkUrl, tab) {
   } catch (err) {
     r = { url: linkUrl, title: linkUrl, error: err.message };
   }
-  await remember({ id, at: Date.now(), tabId: tab ? tab.id : null, ...r, state: r.error ? "failed" : "done", domains: cfg.domains, tags: [] });
+  await remember({ id, at: Date.now(), tabId: tab ? tab.id : null, ...r, state: r.error ? "failed" : r.manual ? "manual" : "done", domains: cfg.domains, tags: [] });
 }
 
 function installMenus() {
