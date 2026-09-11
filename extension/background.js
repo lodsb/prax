@@ -218,9 +218,18 @@ function waitForDownload(id) {
 
 async function writeSidecar(base, url, common) {
   const side = { title: common.title || null, source_url: url, domains: common.domains || undefined, tags: common.tags || undefined, session: common.session, by: "extension" };
-  const dataUrl = "data:application/json;charset=utf-8," + encodeURIComponent(JSON.stringify(side));
-  const sid = await api.downloads.download({ url: dataUrl, filename: `${DROP}/${base}.json`, saveAs: false, conflictAction: "overwrite" });
-  await waitForDownload(sid);
+  const text = JSON.stringify(side);
+  // Firefox refuses a data: URL in a download and offers blob URLs (an
+  // event page has a DOM); Chrome's service worker has no blob URLs and
+  // takes data: ones
+  const blobUrl = typeof URL.createObjectURL === "function" ? URL.createObjectURL(new Blob([text], { type: "application/json" })) : null;
+  const sideUrl = blobUrl || "data:application/json;charset=utf-8," + encodeURIComponent(text);
+  try {
+    const sid = await api.downloads.download({ url: sideUrl, filename: `${DROP}/${base}.json`, saveAs: false, conflictAction: "overwrite" });
+    await waitForDownload(sid);
+  } finally {
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+  }
 }
 
 async function downloadRoute(url, common) {
