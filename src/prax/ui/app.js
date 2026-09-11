@@ -312,7 +312,6 @@ async function viewDoc(id, p) {
       await fetch(`/doc/${doc.id}/promote`, { method: "DELETE" });
       render();
     });
-  } else {
     document.getElementById("add-note").addEventListener("click", async (e) => {
       e.preventDefault();
       const slug = `note-${doc.id}-${Date.now().toString(36)}`;
