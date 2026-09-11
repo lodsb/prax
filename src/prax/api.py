@@ -148,6 +148,7 @@ def search(
     mode: str = "hybrid",
     rerank: bool | None = None,
     doctype: str | None = None,
+    domain: str | None = None,
 ) -> list[dict[str, Any]]:
     try:
         return store.search(
@@ -158,6 +159,7 @@ def search(
             mode=mode,
             rerank=rerank,
             doctype=doctype,
+            domain=domain,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -545,6 +547,59 @@ def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+# ---------------------------------------------------------------- domains
+
+
+class DomainsReq(BaseModel):
+    domains: list[str] | None = None  # None: every module
+
+
+@app.get("/doc/{doc_id}/domains")
+def get_domains(doc_id: int, request: Request) -> dict[str, Any]:
+    try:
+        return {
+            "domains": store.document_domains(request.app.state.con, doc_id),
+            "modules": sorted(
+                m for m in ontology.current().modules if m != ontology.CORE
+            ),
+        }
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.put("/doc/{doc_id}/domains")
+def put_domains(doc_id: int, req: DomainsReq, request: Request) -> dict[str, Any]:
+    """Replace the document's domain set; null means every module."""
+    try:
+        return {
+            "domains": store.set_domains(
+                request.app.state.con, doc_id, req.domains, by="human"
+            )
+        }
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/doc/{doc_id}/domains/{domain}")
+def post_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
+    try:
+        return {"domains": store.add_domain(request.app.state.con, doc_id, domain)}
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/doc/{doc_id}/domains/{domain}")
+def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
+    try:
+        return {"domains": store.remove_domain(request.app.state.con, doc_id, domain)}
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 # --------------------------------------------------------------- promote

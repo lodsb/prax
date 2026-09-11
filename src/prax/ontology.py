@@ -84,6 +84,10 @@ class Ontology:
     relations: dict[str, Relation] = field(default_factory=dict)
     type_aliases: dict[str, str] = field(default_factory=dict)
     relation_aliases: dict[str, str] = field(default_factory=dict)
+    # composed subsets by domain set (``for_domains`` is asked per document)
+    _subsets: dict[frozenset[str], Ontology] = field(
+        default_factory=dict, repr=False, compare=False
+    )
 
     @property
     def entity_types(self) -> frozenset[str]:
@@ -151,15 +155,20 @@ class Ontology:
         or an empty set is the whole ontology."""
         if not domains:
             return self
-        wanted: set[str] = {CORE}
-        stack = [d for d in domains if d in self.modules]
-        while stack:
-            m = stack.pop()
-            if m in wanted:
-                continue
-            wanted.add(m)
-            stack.extend(self.modules[m].requires)
-        return compose([self.modules[m] for m in self.modules if m in wanted])
+        key = frozenset(d for d in domains if d in self.modules)
+        if key not in self._subsets:
+            wanted: set[str] = {CORE}
+            stack = list(key)
+            while stack:
+                m = stack.pop()
+                if m in wanted:
+                    continue
+                wanted.add(m)
+                stack.extend(self.modules[m].requires)
+            self._subsets[key] = compose(
+                [self.modules[m] for m in self.modules if m in wanted]
+            )
+        return self._subsets[key]
 
 
 def _names(section: Any, what: str) -> dict[str, dict[str, Any]]:

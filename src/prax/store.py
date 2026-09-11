@@ -583,6 +583,169 @@ def retitle(
     }
 
 
+# ---------------------------------------------------------------- domains
+# Which ontology modules a document is read against (``meta.domains``): the
+# research papers see the research module, the family photos the family
+# module, a document that is both sees both. No domain set means every
+# module, which is what the library had before modules existed. Set by a
+# rule at assignment time (``assign_domains``, rules in prax.yaml), by hand
+# (``set_domains``), or by an importer that knows its source.
+
+
+def document_domains(con: sqlite3.Connection, doc_id: int) -> list[str] | None:
+    """The document's domains, None when it belongs to every module."""
+    row = con.execute(
+        "SELECT json_extract(meta, '$.domains') FROM documents WHERE id = ?",
+        (doc_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    return list(json.loads(row[0])) if row[0] else None
+
+
+def _check_domains(domains: list[str]) -> list[str]:
+    modules = ontology.current().modules
+    out = []
+    for d in domains:
+        if d == ontology.CORE or d not in modules:
+            raise ValueError(
+                f"unknown domain {d!r}; the modules are"
+                f" {sorted(m for m in modules if m != ontology.CORE)}"
+            )
+        if d not in out:
+            out.append(d)
+    return out
+
+
+@_serialized
+def set_domains(
+    con: sqlite3.Connection,
+    doc_id: int,
+    domains: list[str] | None,
+    *,
+    by: str = "human",
+) -> list[str] | None:
+    """Replace a document's domain set (None: every module). Names must be
+    modules of the current ontology other than core."""
+    meta = get_meta(con, doc_id)
+    if domains is None:
+        meta.pop("domains", None)
+        meta.pop("domains_by", None)
+    else:
+        meta["domains"] = _check_domains(domains)
+        meta["domains_by"] = by
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+    return meta.get("domains")
+
+
+def add_domain(
+    con: sqlite3.Connection, doc_id: int, domain: str, *, by: str = "human"
+) -> list[str]:
+    """Add a domain to a document that keeps its others (a family photo
+    that also matters to the research)."""
+    current = document_domains(con, doc_id) or []
+    if domain in current:
+        return current
+    return set_domains(con, doc_id, [*current, domain], by=by) or []
+
+
+def remove_domain(
+    con: sqlite3.Connection, doc_id: int, domain: str
+) -> list[str] | None:
+    """Take a domain away; the last one leaves the document in every module."""
+    current = document_domains(con, doc_id)
+    if not current or domain not in current:
+        return current
+    rest = [d for d in current if d != domain]
+    return set_domains(con, doc_id, rest or None)
+
+
+def documents_in_domain(con: sqlite3.Connection, domain: str) -> list[int]:
+    """Documents whose domain set names ``domain`` (documents without a set
+    are in every module but are not listed here: a re-run per domain means
+    the documents that were assigned to it)."""
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT d.id FROM documents d, json_each(d.meta, '$.domains') j"
+            " WHERE j.value = ? ORDER BY d.id",
+            (domain,),
+        )
+    ]
+
+
+def _rule_matches(rule: dict[str, Any], doc: dict[str, Any]) -> bool:
+    meta = doc["meta"]
+    m = rule.get("match") or {}
+    if not m:
+        return True
+    if "source" in m and meta.get("source") != m["source"]:
+        return False
+    if "mime" in m and not (doc["mime"] or "").startswith(m["mime"]):
+        return False
+    if "path" in m and not (doc["original_path"] or "").lower().startswith(
+        str(m["path"]).lower()
+    ):
+        return False
+    if "collection" in m:
+        names = [c.lower() for c in meta.get("collections") or []]
+        if str(m["collection"]).lower() not in names:
+            return False
+    if "tag" in m:
+        tags = [t.lower() for t in meta.get("tags") or []]
+        if str(m["tag"]).lower() not in tags:
+            return False
+    return True
+
+
+@_serialized
+def assign_domains(
+    con: sqlite3.Connection,
+    rules: list[dict[str, Any]],
+    *,
+    force: bool = False,
+    commit: bool = True,
+) -> dict[str, int]:
+    """Give every document without a domain set (all of them with ``force``)
+    the domains of the first rule it matches. A rule is ``{match: {source,
+    mime, path, collection, tag}, domains: [...]}``; a rule without
+    ``match`` is the default. Documents whose set a person wrote by hand
+    (``domains_by: human``) are never touched. Returns counts per rule
+    index and ``unmatched``."""
+    counts: dict[str, int] = {"unmatched": 0}
+    for rule in rules:
+        _check_domains(list(rule.get("domains") or []))
+    for r in con.execute(
+        "SELECT id, mime, original_path, meta FROM documents"
+    ).fetchall():
+        meta = json.loads(r["meta"] or "{}")
+        if meta.get("domains_by") == "human":
+            continue
+        if meta.get("domains") and not force:
+            continue
+        doc = {"mime": r["mime"], "original_path": r["original_path"], "meta": meta}
+        for i, rule in enumerate(rules):
+            if _rule_matches(rule, doc):
+                key = f"rule {i}"
+                counts[key] = counts.get(key, 0) + 1
+                if commit:
+                    meta["domains"] = list(rule["domains"])
+                    meta["domains_by"] = "rule"
+                    con.execute(
+                        "UPDATE documents SET meta = ? WHERE id = ?",
+                        (json.dumps(meta), r["id"]),
+                    )
+                break
+        else:
+            counts["unmatched"] += 1
+    if commit:
+        con.commit()
+    return counts
+
+
 # -------------------------------------------------------------- promotion
 # A document worth the expensive model: flagged by a person, by Claude Code
 # over MCP, or by the store itself when the document joins a project or
@@ -642,6 +805,16 @@ def unpromote(con: sqlite3.Connection, doc_id: int) -> bool:
     return True
 
 
+def expected_version(
+    meta: dict[str, Any], onto: ontology.Ontology | None = None
+) -> str:
+    """The ontology version a reading of this document should be stamped
+    with: the version of its own domains' subset, or of the whole ontology
+    when it has no domain set."""
+    onto = onto or ontology.current()
+    return onto.for_domains(meta.get("domains") or None).version
+
+
 def extracted_by(
     meta: dict[str, Any], producer: str, *, ontology_version: str | None = None
 ) -> bool:
@@ -662,7 +835,7 @@ def promoted_documents(
 ) -> list[dict[str, Any]]:
     """Flagged documents, oldest flag first; ``done`` says whether
     ``producer`` has read each one under the current ontology."""
-    version = ontology.current().version
+    onto = ontology.current()
     out = []
     for r in con.execute(
         "SELECT id, title, meta FROM documents"
@@ -675,8 +848,11 @@ def promoted_documents(
                 "doc_id": r["id"],
                 "title": r["title"],
                 "promote": meta["promote"],
+                "domains": meta.get("domains"),
                 "done": bool(producer)
-                and extracted_by(meta, producer, ontology_version=version),
+                and extracted_by(
+                    meta, producer, ontology_version=expected_version(meta, onto)
+                ),
             }
         )
     return out
@@ -1673,6 +1849,7 @@ def search(
     mode: str = "hybrid",
     rerank: bool | None = None,
     doctype: str | None = None,
+    domain: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search returning compact snippets + ids (agent-shaped).
 
@@ -1703,11 +1880,35 @@ def search(
     reranker = rerank_mod.current() if rerank is None or rerank else None
     if rerank and reranker is None:
         raise ValueError("rerank requested but PRAX_RERANK names no model")
+    if domain is not None and domain not in ontology.current().modules:
+        raise ValueError(f"unknown domain {domain!r}")
     fetch = max(limit, RERANK_DEPTH) if reranker else limit
+    if domain:
+        fetch *= 3
     hits = _search_hits(con, query, fetch, kind, mode, doctype)
+    if domain:
+        hits = _filter_domain(con, hits, domain)
     if reranker is not None and hits:
         hits = _apply_rerank(con, reranker, query, hits)
     return hits[:limit]
+
+
+def _filter_domain(
+    con: sqlite3.Connection, hits: list[dict[str, Any]], domain: str
+) -> list[dict[str, Any]]:
+    """Keep hits whose document is in ``domain``; a document without a
+    domain set is in every module and stays."""
+    ids = {h["doc_id"] for h in hits}
+    if not ids:
+        return hits
+    marks = ",".join("?" * len(ids))
+    rows = con.execute(
+        "SELECT id, json_extract(meta, '$.domains') FROM documents"
+        f" WHERE id IN ({marks})",
+        tuple(ids),
+    ).fetchall()
+    allowed = {r[0] for r in rows if not r[1] or domain in json.loads(r[1])}
+    return [h for h in hits if h["doc_id"] in allowed]
 
 
 def _apply_rerank(
@@ -2976,17 +3177,28 @@ def select_for_extraction(
     limit: int | None = None,
     mime_prefix: str | None = None,
     min_chars: int = 0,
+    domain: str | None = None,
+    onto: ontology.Ontology | None = None,
 ) -> list[int]:
     """Indexed documents not yet extracted under ``ontology_version``
     (``meta.extraction.ontology_version``), oldest first. ``min_chars``
     skips documents whose chunks hold less text than that (Zotero notes,
-    scans without a text layer): nothing to extract, a call wasted."""
+    scans without a text layer): nothing to extract, a call wasted.
+    ``domain`` keeps the documents assigned to that module; with ``onto``
+    a document with a domain set is compared against the version of its
+    own subset of the ontology, not the whole."""
     sql = (
         "SELECT id FROM documents WHERE text_hash IS NOT NULL"
         " AND (json_extract(meta, '$.extraction.ontology_version') IS NULL"
         "      OR json_extract(meta, '$.extraction.ontology_version') != ?)"
     )
     args: list[Any] = [ontology_version]
+    if domain:
+        sql += (
+            " AND EXISTS (SELECT 1 FROM json_each(documents.meta, '$.domains')"
+            " WHERE value = ?)"
+        )
+        args.append(domain)
     if min_chars > 0:
         sql += (
             " AND (SELECT coalesce(sum(length(text)), 0) FROM chunks"
@@ -2997,10 +3209,21 @@ def select_for_extraction(
         sql += " AND mime LIKE ? ESCAPE '!'"
         args.append(_like_prefix(mime_prefix))
     sql += " ORDER BY id"
-    if limit is not None:
+    if limit is not None and onto is None:
         sql += " LIMIT ?"
         args.append(limit)
-    return [r["id"] for r in con.execute(sql, args)]
+    ids = [r["id"] for r in con.execute(sql, args)]
+    if onto is not None:
+        # a document read under the version of its own domains is done
+        kept = []
+        for doc_id in ids:
+            meta = get_meta(con, doc_id)
+            stamp = (meta.get("extraction") or {}).get("ontology_version")
+            if meta.get("domains") and stamp == expected_version(meta, onto):
+                continue
+            kept.append(doc_id)
+        ids = kept[:limit] if limit is not None else kept
+    return ids
 
 
 @_serialized

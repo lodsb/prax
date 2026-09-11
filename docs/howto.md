@@ -337,6 +337,48 @@ edges sit side by side. `GET /promote` returns the flagged list with
 status and the candidates; `POST /doc/{id}/promote` and `DELETE` set
 and clear the flag.
 
+### A document's domains
+
+A document is read against the ontology modules it belongs to, its
+domain set in `meta.domains`: the papers against `core` plus `research`,
+the family photos against `core` plus a `family` module, a document that
+is both (a relative's thesis, a photo from a conference) against both.
+No domain set means every module, which is what the library had before
+modules existed. The extraction prompt, the grammar and the JSON schema
+are built for that subset, the document itself is a `paper` where the
+research module is loaded and a `document` otherwise, and the stamp
+carries the subset's version (`core1+family1`), so a document is due
+again when one of *its* modules grows, not when any module does.
+
+Sets come from rules in `prax.yaml` (first match wins; a rule without
+`match` is the default; `match` keys `source`, `mime`, `path`,
+`collection`, `tag`):
+
+    domains:
+      - match: {collection: Family}
+        domains: [family]
+      - match: {source: zotero}
+        domains: [research]
+      - domains: [research]
+
+    python scripts/assign_domains.py --dry-run        # counts per rule
+    python scripts/assign_domains.py --commit         # documents without a set
+    python scripts/assign_domains.py --commit --force # re-assign rule-set ones too
+
+A set written by hand ("domains…" in the document page's action row,
+`PUT /doc/{id}/domains`, `POST`/`DELETE /doc/{id}/domains/{name}`, the
+`set_domains` MCP tool) is never overwritten by the rules. Adding a
+domain keeps the others; removing the last one puts the document back in
+every module. A re-run for one domain reads the documents assigned to
+it that are not yet stamped with their subset's version:
+
+    python scripts/extract_graph.py --domain family --dry-run
+    python scripts/extract_graph.py --domain family
+    python scripts/extract_graph.py --promoted --domain research
+
+`search(..., domain="family")` (API and MCP `domain=`) keeps the hits
+from that domain; documents without a set are in every domain.
+
 ### Typing rules over the queue
 
 A model's misfits are systematic: the document typed as what it is about

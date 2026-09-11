@@ -34,6 +34,14 @@ models:
   #   api_key_env: DEEPSEEK_API_KEY
   #   price: [0.27, 1.10]
 
+# which ontology modules a document is read against (scripts/assign_domains.py;
+# first match wins; a rule without match is the default; a person's choice on
+# the document page is never overwritten)
+domains:
+  - match: {collection: Family}
+    domains: [family]
+  - domains: [research]
+
 steps:
   extract:
     model: sonnet

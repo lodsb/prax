@@ -163,6 +163,7 @@ function metaLine(meta) {
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
+  if (meta.domains) bits.push(`<span class="muted" title="ontology modules this document is read against">domains: ${meta.domains.map(esc).join(", ")}</span>`);
   if (meta.promote) bits.push(`<span class="muted" title="${esc(meta.promote.reason || "")}">promoted by ${esc(meta.promote.by)}</span>`);
   if (meta.title_history && meta.title_history.length) {
     const former = meta.title_history[meta.title_history.length - 1].title;
@@ -247,6 +248,7 @@ async function viewDoc(id, p) {
       ${pageMeta ? `<a href="#" id="page-edit">edit page</a>` : `<a href="#" id="add-note">add a note</a>`}
       <a href="${originalHref(doc.id, firstPage)}" target="_blank" rel="noopener">open original ↗</a>
       ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
+      <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
       <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
       <span class="muted">${esc(doc.mime || "")} · ${chunks.length} chunks · ${(doc.text_len || 0).toLocaleString()} chars · doc ${doc.id}</span>
     </div>
@@ -266,7 +268,20 @@ async function viewDoc(id, p) {
   if (pageMeta) {
     document.getElementById("page-edit").addEventListener("click", (e) => { e.preventDefault(); openEditor(pageMeta.slug); });
     if (p.edit) openEditor(pageMeta.slug);
-  } else {
+  }
+  document.getElementById("domains").addEventListener("click", async (e) => {
+    e.preventDefault();
+    const cur = await api(`/doc/${doc.id}/domains`);
+    const answer = prompt(`Domains for this document (comma-separated; empty = every module).\nModules: ${cur.modules.join(", ")}`, (cur.domains || []).join(", "));
+    if (answer === null) return;
+    const domains = answer.split(",").map((s) => s.trim()).filter(Boolean);
+    try {
+      const res = await fetch(`/doc/${doc.id}/domains`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains: domains.length ? domains : null }) });
+      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
+      render();
+    } catch (err) { setStatus(err.message); }
+  });
+  if (!pageMeta) {
     const pr = document.getElementById("promote");
     if (pr) pr.addEventListener("click", async (e) => {
       e.preventDefault();

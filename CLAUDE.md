@@ -63,11 +63,13 @@ drop folder (`docs/sources.md`).
    `prax.ontology`. Names are unique across modules; a subtype passes
    wherever its parent is allowed; aliases map what a model says to the
    canonical name. The composed version (`core1+research5`) is what
-   `store.link` validates against and stamps on every edge. Growing a
+   `store.link` validates against and stamps on every edge. A document
+   carries its domain set (`meta.domains`: which modules it is read
+   against; none means every module) and is extracted against that
+   subset, stamped with the subset's version (`core1+family1`). Growing a
    module is its version bump; renaming or removing a type is a data
-   migration. Extraction emits triples only
-   against the current version; misfits go to a review queue, not into the
-   graph.
+   migration. Extraction emits triples only against the current version;
+   misfits go to a review queue, not into the graph.
 10. **Importers never write to their source.** The Zotero importer works on
     a copy of `zotero.sqlite` opened read-only. Nothing in prax modifies a
     Zotero library, a browser profile, or the old zoetrope disk.

@@ -7,6 +7,7 @@
     python scripts/extract_graph.py --submit-batch --limit 2000   # half price, async
     python scripts/extract_graph.py --collect-batch <batch id>    # apply results
     python scripts/extract_graph.py --promoted [--submit-batch]  # flagged documents
+    python scripts/extract_graph.py --domain family               # a re-run per domain
     PRAX_EXTRACT=server-32b python scripts/extract_graph.py --workers 2  # served
 
 Selection: indexed documents whose ``meta.extraction.ontology_version`` is
@@ -53,6 +54,10 @@ def main() -> int:
         " the others; skip them when the pass is a cheaper model's)",
     )
     ap.add_argument(
+        "--domain",
+        help="only documents assigned to this ontology module (a re-run per domain)",
+    )
+    ap.add_argument(
         "--promoted",
         action="store_true",
         help="the flagged documents (store.promote) through the promote step's model",
@@ -75,7 +80,8 @@ def main() -> int:
 
     con = store.connect()
     store.init_db(con)
-    version = ontology.current().version
+    onto = ontology.current()
+    version = onto.version
     ext = extraction.current("promote" if a.promoted else "extract")
 
     if a.collect_batch:
@@ -85,7 +91,7 @@ def main() -> int:
         ids = [
             d["doc_id"]
             for d in store.promoted_documents(con, producer=ext.name)
-            if not d["done"]
+            if not d["done"] and (not a.domain or a.domain in (d["domains"] or []))
         ]
         if a.limit:
             ids = ids[: a.limit]
@@ -96,6 +102,8 @@ def main() -> int:
             limit=None if a.never_extracted else a.limit,
             mime_prefix=a.mime,
             min_chars=a.min_chars,
+            domain=a.domain,
+            onto=onto,
         )
     if a.never_extracted and not a.ids:
         ids = [i for i in ids if not store.get_meta(con, i).get("extraction")]
@@ -241,7 +249,7 @@ def collect(
     spent = 0.0
     n = 0
     skipped = 0
-    version = ontology.current().version
+    onto = ontology.current()
     # the results stream can outlast the extractor's call timeout; and a
     # re-collection after an interruption must not apply a document twice
     client = ext.client.with_options(timeout=900.0)
@@ -250,9 +258,10 @@ def collect(
         if result.result.type != "succeeded":
             print(f"doc {doc_id}: {result.result.type}", file=sys.stderr)
             continue
-        stamp = store.get_meta(con, doc_id).get("extraction") or {}
+        meta = store.get_meta(con, doc_id)
+        stamp = meta.get("extraction") or {}
         if (
-            stamp.get("ontology_version") == version
+            stamp.get("ontology_version") == store.expected_version(meta, onto)
             and stamp.get("extractor") == ext.name
         ):
             skipped += 1

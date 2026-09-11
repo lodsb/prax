@@ -30,6 +30,7 @@ EXPECTED_TOOLS = {
     "append_page",
     "ask",
     "promote",
+    "set_domains",
 }
 
 

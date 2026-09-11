@@ -95,9 +95,21 @@ class DocumentInput:
     title: str
     header: str  # metadata lines
     text: str  # the text budget of the document
+    domains: list[str] | None = None  # the ontology modules to read it against
 
     def as_message(self) -> str:
         return f"{self.header}\n\n---\n\n{self.text}"
+
+    def ontology(self) -> ontology.Ontology:
+        """The ontology this document is extracted against: the core plus
+        its domains, or the whole when it has no domain set."""
+        return ontology.current().for_domains(self.domains)
+
+
+def self_type(onto: ontology.Ontology) -> str:
+    """What the document itself is in this ontology: a paper where the
+    research module is loaded, a document otherwise."""
+    return "paper" if "paper" in onto.types else "document"
 
 
 def build_input(
@@ -111,7 +123,10 @@ def build_input(
     if doc is None:
         raise KeyError(f"no such document: {doc_id}")
     meta = doc["meta"] or {}
+    domains = list(meta["domains"]) if meta.get("domains") else None
     lines = [f"Title: {doc['title'] or '(untitled)'}"]
+    if domains:
+        lines.append("Domains: " + ", ".join(domains))
     page = meta.get("page") or {}
     if page.get("kind"):
         kind = page["kind"]
@@ -171,7 +186,9 @@ def build_input(
     text = "\n\n".join(parts)
     if tail:
         text += TAIL_MARK + "\n\n".join(tail)
-    return DocumentInput(doc_id, doc["title"] or "", "\n".join(lines), text)
+    return DocumentInput(
+        doc_id, doc["title"] or "", "\n".join(lines), text, domains=domains
+    )
 
 
 # ----------------------------------------------------------------- output
@@ -268,9 +285,9 @@ def system_prompt(
     )
     rules = [
         (
-            "The document itself is a paper entity named exactly by its Title line,"
-            " or a page or project entity when the header has a Kind line saying"
-            " so. Every triple about the document uses that name."
+            f"The document itself is a {self_type(onto)} entity named exactly by"
+            " its Title line, or a page or project entity when the header has a"
+            " Kind line saying so. Every triple about the document uses that name."
         ),
         (
             f"Emit at most {max_triples} triples. Prefer the few that a reader"
@@ -374,7 +391,11 @@ class ClaudeExtractor:
     model: str = DEFAULT_MODEL
     effort: str = "medium"
     client: Any = None
-    _onto: ontology.Ontology | None = field(default=None, init=False, repr=False)
+    # prompt and schema per ontology subset (a document's domains), keyed by
+    # the subset's version so the cached prompt text stays identical
+    _prompts: dict[str, tuple[str, dict[str, Any]]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     @property
     def name(self) -> str:
@@ -385,15 +406,19 @@ class ClaudeExtractor:
             import anthropic
 
             self.client = anthropic.Anthropic(timeout=CALL_TIMEOUT, max_retries=3)
-        if self._onto is None:
-            self._onto = ontology.current()
+
+    def _prompt(self, doc: DocumentInput) -> tuple[str, dict[str, Any]]:
+        onto = doc.ontology()
+        if onto.version not in self._prompts:
+            self._prompts[onto.version] = (system_prompt(onto), output_schema(onto))
+        return self._prompts[onto.version]
 
     def params(self, doc: DocumentInput) -> dict[str, Any]:
         """The request parameters (shared by the sync and the batch path)."""
         self._ensure()
-        assert self._onto is not None
+        system, schema = self._prompt(doc)
         output_config: dict[str, Any] = {
-            "format": {"type": "json_schema", "schema": output_schema(self._onto)}
+            "format": {"type": "json_schema", "schema": schema}
         }
         if supports_effort(self.model):
             output_config["effort"] = self.effort
@@ -403,7 +428,7 @@ class ClaudeExtractor:
             "system": [
                 {
                     "type": "text",
-                    "text": system_prompt(self._onto),
+                    "text": system,
                     "cache_control": {"type": "ephemeral"},
                 }
             ],
@@ -528,41 +553,44 @@ class LocalExtractor:
     # and a repeat penalty keep a 7B model moving (benchmark in docs/eval).
     temperature: float = 0.3
     repeat_penalty: float = 1.1
-    _onto: ontology.Ontology | None = field(default=None, init=False, repr=False)
-    _system: str = field(default="", init=False, repr=False)
-    _grammar: str = field(default="", init=False, repr=False)
+    _prompts: dict[str, tuple[str, str]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     @property
     def name(self) -> str:
         return self.runtime.name
 
-    def _ensure(self) -> None:
-        if self._onto is None:
-            from prax import lineformat
+    def _prompt(self, doc: DocumentInput) -> tuple[ontology.Ontology, str, str]:
+        from prax import lineformat
 
-            self._onto = ontology.current()
-            self._system = system_prompt(
-                self._onto, output="lines", max_triples=self.max_triples
+        onto = doc.ontology()
+        if onto.version not in self._prompts:
+            self._prompts[onto.version] = (
+                system_prompt(onto, output="lines", max_triples=self.max_triples),
+                lineformat.grammar(onto, max_triples=self.max_triples),
             )
-            self._grammar = lineformat.grammar(self._onto, max_triples=self.max_triples)
+        system, grammar = self._prompts[onto.version]
+        return onto, system, grammar
 
     def extract(self, doc: DocumentInput) -> Extraction:
         from prax import lineformat
 
-        self._ensure()
+        onto, system, grammar = self._prompt(doc)
         text, usage = self.runtime.chat(
-            self._system,
+            system,
             doc.as_message(),
-            grammar=self._grammar,
+            grammar=grammar,
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             repeat_penalty=self.repeat_penalty,
         )
         result = lineformat.parse(text)
+        me = self_type(onto)
         for t in result.triples:  # the document is named by its title
-            if t.src.lower() in _SELF_NAMES and t.src_type == "paper":
+            if t.src.lower() in _SELF_NAMES and t.src_type == me:
                 t.src = doc.title
-            if t.dst.lower() in _SELF_NAMES and t.dst_type == "paper":
+            if t.dst.lower() in _SELF_NAMES and t.dst_type == me:
                 t.dst = doc.title
         result.usage.update(usage)
         return result
@@ -614,8 +642,9 @@ def apply(
 ) -> ApplyReport:
     """Write an extraction: fitting triples become edges (once), misfits go
     to the review queue, the document gets ``meta.summary`` and the
-    ``meta.extraction`` stamp."""
-    onto = ontology.current()
+    ``meta.extraction`` stamp. The ontology is the document's own subset
+    (its domains), and the stamp carries that subset's version."""
+    onto = ontology.current().for_domains(store.document_domains(con, doc_id))
     report = ApplyReport()
     page_titles = store.page_titles(con)
     for t in extraction.triples:

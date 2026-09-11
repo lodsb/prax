@@ -40,6 +40,7 @@ def search(
     kind: str | None = None,
     mode: str = "hybrid",
     rerank: bool | None = None,
+    domain: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search the knowledge base. Returns compact snippets + ids.
 
@@ -48,11 +49,15 @@ def search(
     (text, table, figure, code), section ``heading`` path and ``page``;
     ``kind`` restricts to one kind, e.g. ``kind="table"`` for documents
     with a table about the query. ``rerank=True`` rescores the top hits
-    with a cross-encoder when one is configured. Fetch a hit in full with
+    with a cross-encoder when one is configured. ``domain`` keeps the
+    documents of one ontology module (``research``, ``family``; documents
+    without a domain set are in every module). Fetch a hit in full with
     ``get_chunk``.
     """
     try:
-        return store.search(_db(), query, limit, kind=kind, mode=mode, rerank=rerank)
+        return store.search(
+            _db(), query, limit, kind=kind, mode=mode, rerank=rerank, domain=domain
+        )
     except ValueError as exc:
         return [{"error": str(exc)}]
 
@@ -130,6 +135,18 @@ def ask(
             _db(), question, limit=limit, doctype=doctype, answerer=answerer
         )
     except (ValueError, RuntimeError) as exc:
+        return {"error": str(exc)}
+
+
+@mcp.tool
+def set_domains(doc_id: int, domains: list[str] | None) -> dict[str, Any]:
+    """Which ontology modules a document is read against (its domains, e.g.
+    ["research"], ["family", "research"] for a document that is both, or
+    null for every module). A document extracted afterwards, or in a re-run
+    per domain, uses only those modules' types and relations."""
+    try:
+        return {"domains": store.set_domains(_db(), doc_id, domains, by="agent")}
+    except (KeyError, ValueError) as exc:
         return {"error": str(exc)}
 
 

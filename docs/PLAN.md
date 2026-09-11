@@ -258,8 +258,14 @@ R14). Design in `docs/ui.md`.
       affiliated_with, developed_by) and `research.yaml` (requires core;
       author, paper, venue, page, project as subtypes); composed version
       `core1+research5`; subtypes pass where the parent is allowed; type and
-      relation aliases; `for_domains` narrows to a document's modules (the
-      per-document domain set is the next step, with the capture inbox)
+      relation aliases; `for_domains` narrows to a document's modules
+- [x] Per-document domain set (2026-09-12): `meta.domains` (none = every
+      module) from `domains:` rules in prax.yaml (`assign_domains.py`),
+      by hand on the document page / API / `set_domains` MCP tool (never
+      overwritten by rules); extraction builds prompt, grammar and schema
+      for the document's subset, names the document `paper` or `document`
+      accordingly and stamps the subset's version; `extract_graph.py
+      --domain` re-runs one domain; `search(domain=)`
 - [x] Promote queue (2026-09-12): `meta.promote` set from the document
       page, the Promote view's scored candidates, the `promote` MCP tool,
       or by the store when a document joins a project or a synthesis;
