@@ -16,7 +16,7 @@ image. prax succeeds an external-disk store of the same library.
 
 ## What you can do
 
-**Bring things in.** Import a Zotero library, read-only. Drop files in
+**Sources.** Import a Zotero library, read-only. Drop files in
 a folder. Send the page you are looking at, or every tab in the window,
 from the browser — a self-contained snapshot with its images, or the PDF
 fetched with your own session when it sits behind a login. `prax add` a
@@ -26,18 +26,18 @@ CSV, Medium's export. What arrives gets its text, a proper title, its
 place in the graph and its vectors on its own, on the machine with the
 models.
 
-**Find.** Search that fuses words and meaning and ranks documents, not
+**Search.** Search that fuses words and meaning and ranks documents, not
 fragments; that knows the library's own acronyms; that filters by kind
 of document and by module (papers, gear, recipes…); that shows similar
 documents, and a context column on every document: summary, entities,
 citations in and out, related documents, notes, projects.
 
-**Ask.** A question is answered from the best passages and from what the
+**Questions.** A question is answered from the best passages and from what the
 graph knows about their documents, with numbered citations back to the
 exact lines. The answer can be kept as a page with edges to the
 documents it rests on.
 
-**See how things connect.** A graph of typed, evidenced relations —
+**The graph.** A graph of typed, evidenced relations —
 papers, methods, claims, organizations; devices, their manuals and
 specifications; recipes and ingredients; builds and their parts —
 extracted against a small ontology you can read in an afternoon, one
@@ -45,15 +45,15 @@ module per kind of life, grown from what the review queue shows the
 models wanted to say. Citation edges from Crossref or OpenAlex. An
 interactive map that expands a node at a time and folds it again.
 
-**Write.** Notes on documents, project threads with reading lists, topic
+**Pages.** Notes on documents, project threads with reading lists, topic
 write-ups and syntheses across sources, as Markdown pages with
 revisions. A model may append to a page; it never overwrites a person.
 
-**Build on it.** The same library answers to more than the web UI:
+**From scripts and agents.** The same library answers to more than the web UI:
 
 - From Claude Code it is a set of tools — search, read a passage, walk
   the graph, link, capture, write or append a page — so an agent can do
-  a piece of research in it and file the result *back into it*, as a
+  a piece of research in it and file the result back into it, as a
   page with edges to what it rests on, its own name on every edge. "What
   do the papers in this project claim about wave digital filters, with
   the passages" is a question an agent answers from the store and
@@ -65,7 +65,7 @@ revisions. A model may append to a page; it never overwrites a person.
   traversal, not a prompt.
 - From a script it is `prax … --json`, or the same HTTP the UI uses.
   From anything else it is one SQLite file, a folder of originals named
-  by their hash, Markdown pages and YAML ontology files. Nothing is
+  by their hash, Markdown pages and YAML ontology files; nothing is
   locked in.
 
 And it lives: captures, imports and the worker keep it growing on their
@@ -73,14 +73,14 @@ own; a better model re-reads what an earlier one read without losing
 the earlier reading; the UI follows a change feed, and a workflow can
 follow the same one.
 
-**Trust it.** Every edge says who wrote it, from which document, under
+**Provenance.** Every edge says who wrote it, from which document, under
 which ontology version, with what evidence. A misfit goes to a review
 queue, never into the graph. A document sent twice is one document; a
 wrong one is retired, not deleted, with its history kept. `prax heal`
 finds the damage that recurs and mends it in the open; `prax backup`
 copies the whole store, incrementally, to a directory of your choosing.
 
-**Own it.** It runs on your machines: a small board at home for the
+**Where it runs, whose models.** It runs on your machines: a small board at home for the
 service, a desktop with a GPU for the heavy passes — or nothing at all
 when you choose a hosted model. Which model does which step is a line
 in a config file: a model served by llama.cpp on your own card, any
