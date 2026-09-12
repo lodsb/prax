@@ -461,11 +461,14 @@ fraction):
       one resumable HTTPS GET per file into `<data dir>/models/`, the
       old cache reused; `scripts/fetch_model.py` fetches the embedder
       and the GGUFs `prax.yaml` names.
-- [ ] FastMCP: the MCP server becomes a proxy of the HTTP door (already in
-      "Later"), which needs no store import and no store dependencies in
-      that process and ends the second-writer deviation; the official
-      `mcp` package or a small stdio JSON-RPC layer instead of the
-      framework.
+- [x] FastMCP replaced (2026-09-12): `prax.mcp_server` is a proxy of
+      the door on the official `mcp` package (2.x, `MCPServer`), each
+      tool one HTTP call through `prax.client` (shared with the
+      worker); the process imports no store module, which a test
+      checks in a subprocess. The door's request bodies carry who acts
+      (`producer`, `by`, `author`: "agent" from the proxy). The
+      second-writer deviation of the MCP server is over; only the
+      one-off scripts remain.
 - [ ] A `serve` extra listing exactly what the door on the board needs,
       and a check that the door's resident memory stays under 1 GB with
       the memory-mapped index (int8 index if not).

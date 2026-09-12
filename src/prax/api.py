@@ -162,6 +162,7 @@ class LinkReq(BaseModel):
     confidence: str = "EXTRACTED"
     source_doc: int | None = None
     ontology_version: str | None = None
+    producer: str = "manual"  # "agent" from the MCP proxy
 
 
 @app.post("/ingest")
@@ -282,6 +283,7 @@ class IngestUrl(BaseModel):
     domains: list[str] | None = None
     tags: list[str] | None = None
     session: str | None = None
+    by: str | None = "url"  # "agent" from the MCP proxy
 
 
 @app.post("/ingest/html")
@@ -316,6 +318,7 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
             domains=req.domains,
             tags=req.tags,
             session=req.session,
+            by=req.by,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -520,7 +523,7 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
             confidence=req.confidence,
             source_doc=req.source_doc,
             ontology_version=req.ontology_version,
-            producer="manual",
+            producer=req.producer,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -895,6 +898,7 @@ def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
 
 class DomainsReq(BaseModel):
     domains: list[str] | None = None  # None: every module
+    by: str = "human"  # "agent" from the MCP proxy
 
 
 @app.get("/doc/{doc_id}/domains")
@@ -915,7 +919,7 @@ def put_domains(doc_id: int, req: DomainsReq, request: Request) -> dict[str, Any
     """Replace the document's domain set; null means every module."""
     try:
         return {
-            "domains": store.set_domains(_con(request), doc_id, req.domains, by="human")
+            "domains": store.set_domains(_con(request), doc_id, req.domains, by=req.by)
         }
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc

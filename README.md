@@ -114,7 +114,7 @@ comparing it with the hosted one are in `docs/eval/`.
   adjudication.
 - **Doors.** A FastAPI service with a bearer token, a static web UI
   (search, ask, browse, document, graph, review, pages, promote, inbox,
-  jobs), a Manifest V3 browser extension, and a thin FastMCP server so
+  jobs), a Manifest V3 browser extension, and a thin MCP proxy of the door so
   Claude Code can work in the same store.
 
 ## State
@@ -161,7 +161,9 @@ adjudication with Claude need `ANTHROPIC_API_KEY`. Extras: `embed`
 (vectors), `ingest` (PDF, HTML, code detection), `docling` (a heavier
 PDF extractor); a local model runs in llama-server, never in prax's
 own process. Claude Code picks up the
-MCP server from `.mcp.json` when it opens this repository. Every step,
+MCP server from `.mcp.json` when it opens this repository; the server
+is a proxy, so the door has to be running (`PRAX_DOOR`, default the
+local one). Every step,
 with the commands: `docs/howto.md`.
 
 ## Design

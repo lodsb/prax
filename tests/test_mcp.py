@@ -1,19 +1,18 @@
-"""FastMCP proxy: tools called through the in-process client.
-
-Tools run on a worker thread inside FastMCP, so this also covers the
-thread-affinity regression from the skeleton.
-"""
+"""The MCP server is a proxy of the door: every tool is one HTTP call, the
+process imports no store module, errors come back as {"error": ...}."""
 
 from __future__ import annotations
 
 import asyncio
 import json
+import subprocess
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
-from fastmcp import Client
+from fastapi.testclient import TestClient
 
 from prax import mcp_server
 
@@ -35,55 +34,55 @@ EXPECTED_TOOLS = {
 }
 
 
-def test_page_tools() -> None:
-    r = call("write_page", slug="fdn-notes", text="# FDN\n\nAgent text.", kind="topic")
-    assert r["created"] and r["revision"] == 1
-    assert call("get_page", slug="fdn-notes")["text"].startswith("# FDN")
-    assert (
-        call("append_page", slug="fdn-notes", section="More.", heading="Later")[
-            "revision"
-        ]
-        == 2
-    )
-    assert "Later" in call("get_page", slug="fdn-notes")["text"]
-    assert "error" in call("get_page", slug="missing")
-    assert "error" in call("write_page", slug="x", text="t", kind="diary")
-
-
 @pytest.fixture(autouse=True)
-def fresh_server(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
-    """Each test gets its own lazily-opened connection in its own tmp dir."""
-    monkeypatch.setattr(mcp_server, "_con", None)
-    yield
-    if mcp_server._con is not None:
-        mcp_server._con.close()
+def proxied(data_dir: Path) -> Iterator[TestClient]:
+    """The proxy talks to a door started on this test's data directory."""
+    from prax.api import app
+
+    with TestClient(app) as client:
+        mcp_server.configure(client=client, base_url="http://testserver", token="")
+        yield client
+    mcp_server._door = None
 
 
 def _data(result: Any) -> Any:
-    data = getattr(result, "data", None)
-    if data is not None:
-        return data
-    return json.loads(result.content[0].text)
+    sc = result.structured_content
+    if sc is not None:
+        return sc.get("result", sc) if isinstance(sc, dict) and "result" in sc else sc
+    texts = [c.text for c in result.content]
+    if len(texts) == 1:
+        return json.loads(texts[0])
+    return [json.loads(t) for t in texts]
 
 
 def call(name: str, **args: Any) -> Any:
-    async def _run() -> Any:
-        async with Client(mcp_server.mcp) as client:
-            return _data(await client.call_tool(name, args))
-
-    return asyncio.run(_run())
+    return _data(asyncio.run(mcp_server.mcp.call_tool(name, args)))
 
 
 def test_tools_are_exposed() -> None:
-    async def _run() -> set[str]:
-        async with Client(mcp_server.mcp) as client:
-            return {t.name for t in await client.list_tools()}
-
-    assert asyncio.run(_run()) == EXPECTED_TOOLS
+    tools = asyncio.run(mcp_server.mcp.list_tools())
+    assert {t.name for t in tools} == EXPECTED_TOOLS
 
 
-def test_import_has_no_side_effects(data_dir: Path) -> None:
-    assert not (data_dir / "prax.db").exists()
+def test_the_proxy_imports_no_store() -> None:
+    out = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import sys, prax.mcp_server;"
+                " print(sorted(m for m in sys.modules if m.startswith('prax.')))"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        env={**__import__("os").environ, "PYTHONPATH": "src"},
+    )
+    loaded = json.loads(out.stdout.replace("'", '"'))
+    assert "prax.store" not in loaded and "prax.api" not in loaded
+    assert loaded == ["prax.client", "prax.mcp_server"]
 
 
 def test_ingest_search_get() -> None:
@@ -106,7 +105,7 @@ def test_search_with_punctuation() -> None:
     assert call("search", query="STFT-based: (what's) this?")
 
 
-def test_link_and_traverse() -> None:
+def test_link_and_traverse(proxied: TestClient) -> None:
     for a, b in [("A", "B"), ("B", "C"), ("C", "D")]:
         r = call(
             "link", src=a, src_type="concept", rel="extends", dst=b, dst_type="concept"
@@ -114,6 +113,7 @@ def test_link_and_traverse() -> None:
         assert "edge_id" in r
     one = call("traverse", entity="A", hops=1)
     assert {(e["src"], e["dst"]) for e in one} == {("A", "B")}
+    assert one[0]["producer"] == "agent"
     two = call("traverse", entity="A", hops=2)
     assert {(e["src"], e["dst"]) for e in two} == {("A", "B"), ("B", "C")}
 
@@ -154,3 +154,42 @@ def test_search_reports_kind_and_get_chunk() -> None:
     assert chunk["data"]["rows"] == [["bolt", "12"]]
     assert "error" in call("get_chunk", chunk_id=999_999)
     assert "error" in call("search", query="bolt", kind="audio")[0]
+
+
+def test_page_tools() -> None:
+    r = call("write_page", slug="fdn-notes", text="# FDN\n\nAgent text.", kind="topic")
+    assert r["created"] and r["revision"] == 1
+    page = call("get_page", slug="fdn-notes")
+    assert page["text"].startswith("# FDN") and page["author"] == "agent"
+    assert (
+        call("append_page", slug="fdn-notes", section="More.", heading="Later")[
+            "revision"
+        ]
+        == 2
+    )
+    assert "Later" in call("get_page", slug="fdn-notes")["text"]
+    assert "error" in call("get_page", slug="missing")
+    assert "error" in call("write_page", slug="x", text="t", kind="diary")
+
+
+def test_domains_and_promote_as_the_agent(proxied: TestClient) -> None:
+    r = call("ingest", text="a paper about reverb " * 20, title="p")
+    assert call("set_domains", doc_id=r["doc_id"], domains=["research"]) == {
+        "domains": ["research"]
+    }
+    assert proxied.get(f"/doc/{r['doc_id']}/domains").json()["domains"] == ["research"]
+    p = call("promote", doc_id=r["doc_id"], reason="central")
+    assert p.get("by") == "agent" or p.get("promote", {}).get("by") == "agent"
+    assert "error" in call("promote", doc_id=99_999)
+
+
+def test_ask_returns_the_bundle() -> None:
+    call("ingest", text="feedback delay networks make reverberation " * 10, title="r")
+    r = call("ask", question="how is reverberation made?")
+    assert r["passages"] and r["answer"] is None
+
+
+def test_unreachable_door_is_an_error_not_a_crash() -> None:
+    mcp_server.configure(base_url="http://127.0.0.1:9", token="")
+    r = call("search", query="anything")
+    assert "error" in r[0] and "not reachable" in r[0]["error"]

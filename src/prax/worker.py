@@ -17,10 +17,8 @@ from __future__ import annotations
 
 import json
 import logging
-import mimetypes
 import os
 import shutil
-import socket
 import time
 from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
@@ -28,71 +26,11 @@ from pathlib import Path
 from typing import Any
 
 from prax import embeddings, extraction, hostinfo, inbox, models, parsers, titles, work
+from prax.client import Door
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
 STEPS = ("parse", "titles", "extract", "embed")
-
-
-class Door:
-    """The door as a worker sees it: a few JSON calls and one download.
-    ``client`` is an httpx client or a test client with the same shape."""
-
-    def __init__(
-        self,
-        base_url: str,
-        *,
-        token: str | None = None,
-        client: Any = None,
-        name: str | None = None,
-    ) -> None:
-        self.base_url = base_url.rstrip("/")
-        self.name = name or socket.gethostname()
-        self.headers = {"X-Prax-Worker": self.name}
-        if token:
-            self.headers["Authorization"] = f"Bearer {token}"
-        if client is None:
-            import httpx
-
-            client = httpx.Client(base_url=self.base_url, timeout=600.0)
-        self.client = client
-
-    def _check(self, res: Any) -> Any:
-        if res.status_code >= 400:
-            detail = ""
-            try:
-                detail = res.json().get("detail", "")
-            except Exception:  # noqa: BLE001
-                detail = res.text[:200] if hasattr(res, "text") else ""
-            raise RuntimeError(f"the door answered {res.status_code}: {detail}")
-        return res
-
-    def get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
-        return self._check(
-            self.client.get(path, params=params, headers=self.headers)
-        ).json()
-
-    def post_json(self, path: str, body: dict[str, Any]) -> Any:
-        return self._check(
-            self.client.post(path, json=body, headers=self.headers)
-        ).json()
-
-    def get_bytes(self, path: str) -> bytes:
-        return self._check(self.client.get(path, headers=self.headers)).content
-
-    def upload(self, path: Path, fields: dict[str, str]) -> Any:
-        with path.open("rb") as fh:
-            files = {
-                "file": (
-                    path.name,
-                    fh,
-                    mimetypes.guess_type(path.name)[0] or "application/octet-stream",
-                )
-            }
-            res = self.client.post(
-                "/ingest/file", files=files, data=fields, headers=self.headers
-            )
-        return self._check(res).json()
 
 
 # ------------------------------------------------------------------ steps

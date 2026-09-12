@@ -246,32 +246,3 @@ def test_api_ask_and_save(client: TestClient) -> None:
     assert "## granular synthesis" in page["text"] and "[A](#doc/" in page["text"]
     r = client.post("/ask/save", json={"slug": "nope", "result": body})
     assert r.status_code == 404
-
-
-def test_mcp_ask_returns_bundle(
-    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import asyncio
-
-    from fastmcp import Client
-
-    from prax import mcp_server
-
-    _library(con)
-    monkeypatch.setenv("PRAX_ASK", "stub")
-    monkeypatch.setattr(mcp_server, "_con", None)
-
-    def call(**args: object) -> dict:
-        async def _run() -> dict:
-            async with Client(mcp_server.mcp) as client:
-                res = await client.call_tool("ask", args)
-                return res.data if getattr(res, "data", None) is not None else res
-
-        return asyncio.run(_run())
-
-    r = call(question="reverb")
-    assert r["answer"] is None and r["passages"][0]["n"] == 1
-    r = call(question="reverb", answer=True)
-    assert r["model"] == "stub"
-    if mcp_server._con is not None:
-        mcp_server._con.close()

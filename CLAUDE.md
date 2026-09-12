@@ -40,15 +40,16 @@ drop folder (`docs/sources.md`).
    `scripts/work.py` runs it) and never open the database; the door
    consumes its own drop folder and holds the vector delta indexes.
    Inside the door, reads use a connection per request thread and
-   writes go one at a time behind the store's lock. *Known deviation:*
-   the stdio MCP server that Claude Code spawns imports the store
-   directly (invariant 5), and the one-off maintenance scripts (import,
-   backfill, acronyms, resolution, typing rules, replay, dedupe) still
-   open the file; WAL, a 30 s busy timeout and a retry with rollback in
-   `store._serialized` are the safety net for those, not a mechanism to
-   rely on. The MCP server is to become a proxy of the door.
-5. **The MCP server is a thin proxy.** `prax.mcp_server` imports `prax.store`
-   directly (same process) and exposes tools; it contains no business logic.
+   writes go one at a time behind the store's lock. The MCP server is
+   a proxy of the door too (invariant 5). *Known deviation:* the one-off
+   maintenance scripts (import, backfill, acronyms, resolution, typing
+   rules, replay, dedupe) still open the file; WAL, a 30 s busy timeout
+   and a retry with rollback in `store._serialized` are the safety net
+   for those, not a mechanism to rely on.
+5. **The MCP server is a thin proxy.** `prax.mcp_server` exposes tools
+   that each make one HTTP call to the door (`prax.client`, `PRAX_DOOR`,
+   `PRAX_TOKEN`); it imports no store module, opens no database and
+   contains no business logic. The door's handlers are the contract.
 6. **Agent-shaped endpoints.** `search` returns compact snippets + ids, never
    full documents. `get` fetches one record fully but accepts an offset and a
    character limit. `traverse` expands 1–2 hops. Keep responses small;
@@ -149,7 +150,7 @@ v5 adds organizations (affiliation, funding, who built a tool) and the weak
   a step for one run.
 - Timestamps are UTC ISO-8601 strings.
 - Tests must not touch `data/`; use tmp_path fixtures and set
-  `PRAX_DATA_DIR` before importing `prax.mcp_server` or `prax.api`.
+  `PRAX_DATA_DIR` before importing `prax.api`.
 - Commit at the end of each green stage; do not commit failing tests.
 
 ## Roadmap

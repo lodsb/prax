@@ -32,10 +32,10 @@ Extras, install only where they run (see `rationale.md` R8):
 | `ingest` | pymupdf4llm, trafilatura, magika | the parse queue; the desktop |
 | `docling` | docling (about 3 GB with PyTorch) | optional; only for `--extractor docling` |
 
-Check the installed FastMCP major version after upgrades; the code targets
-the 4.x line:
+The MCP server uses the official `mcp` package (2.x); check after
+upgrades:
 
-    python -c "import fastmcp; print(fastmcp.__version__)"
+    python -c "import importlib.metadata as m; print(m.version('mcp'))"
 
 ## 2. Tests and lint
 
@@ -809,18 +809,21 @@ path is relative:
 
 On Linux or macOS set `PRAX_PYTHON=.venv/bin/python` in the shell that
 launches Claude Code. Claude Code reads `.mcp.json` at startup only, so
-restart the session after editing it. The first time it sees the server it
-asks whether to trust it; if that prompt was dismissed, run
-`claude mcp reset-project-choices`.
+restart it after editing the file.
 
-Inside a session, `/mcp` shows connection state. The tools are `search`,
-`get`, `get_chunk`, `traverse`, `link`, `ask`, `get_page`, `write_page`,
-`append_page`, `ingest`, and `ingest_file`. The server can also
-be run by hand to check it starts:
-
-    python -m prax.mcp_server
-
-It speaks MCP over stdio, so it will sit waiting for input; Ctrl+C ends it.
+The server is a proxy: every tool is one HTTP call to the door
+(`prax.client`), the process imports no store module and opens no
+database (CLAUDE.md invariants 4 and 5). So the door has to be running,
+here or on the board: `PRAX_DOOR` names it (default
+`http://127.0.0.1:8000`) and `PRAX_TOKEN` is sent when the door asks for
+one; `.mcp.json` passes both through from the shell that launches Claude
+Code. A tool called while the door is down answers `{"error": "the door
+is not reachable ..."}` rather than failing. Tools: `search`, `get`,
+`get_chunk`, `traverse`, `link`, `ask`, `set_domains`, `promote`,
+`get_page`, `write_page`, `append_page`, `ingest`, `capture_url`,
+`ingest_file` (a file on the machine running Claude Code, uploaded to
+the door). What the agent writes is stamped `agent` (edges' producer,
+pages' author, domain sets, promotions).
 
 ## 6. Deployment on the Pi / N100 (*planned*)
 
