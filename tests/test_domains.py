@@ -288,3 +288,44 @@ def test_api_domains(client: TestClient) -> None:
     }
     hits = client.get("/search", params={"q": "alpha", "domain": "family"}).json()
     assert hits and hits[0]["doc_id"] == a  # no set: in every module
+
+
+def test_browse_and_similar_take_a_domain(
+    con: sqlite3.Connection, three_modules: Path
+) -> None:
+    fam = store.ingest_text(con, "reverb at the family party " * 20, title="Party")[
+        "doc_id"
+    ]
+    res = store.ingest_text(con, "reverb in a concert hall " * 20, title="Hall")[
+        "doc_id"
+    ]
+    free = store.ingest_text(con, "reverb everywhere " * 20, title="Free")["doc_id"]
+    store.set_domains(con, fam, ["family"])
+    store.set_domains(con, res, ["research"])
+    listed = store.list_documents(con, domain="family")
+    assert {d["id"] for d in listed["items"]} == {fam, free}  # unset is everywhere
+    assert listed["total"] == 2
+    assert {d["id"] for d in store.list_documents(con)["items"]} == {fam, res, free}
+
+
+def test_the_door_browses_and_places_within_a_domain(three_modules: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from prax.api import app
+
+    with TestClient(app) as client:
+        a = client.post("/ingest", json={"text": "x " * 40, "title": "A"}).json()
+        b = client.post("/ingest", json={"text": "y " * 40, "title": "B"}).json()
+        client.put(f"/doc/{a['doc_id']}/domains", json={"domains": ["family"]})
+        client.put(f"/doc/{b['doc_id']}/domains", json={"domains": ["research"]})
+        ids = {
+            d["id"]
+            for d in client.get("/documents", params={"domain": "family"}).json()[
+                "items"
+            ]
+        }
+        assert ids == {a["doc_id"]}
+        ctx = client.get(
+            f"/doc/{a['doc_id']}/context", params={"domain": "family"}
+        ).json()
+        assert "similar" in ctx  # the filter is accepted; vectors decide the rest

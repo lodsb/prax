@@ -937,16 +937,25 @@ CENTROID_MIN_CHARS = 120  # shorter chunks are headers and template lines
 
 @_serialized
 def similar_documents(
-    con: sqlite3.Connection, doc_id: int, *, limit: int = CONTEXT_LIMIT
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    limit: int = CONTEXT_LIMIT,
+    domain: str | None = None,
 ) -> list[dict[str, Any]]:
     """Documents nearest to this one in vector space: the centroid of up to
     ``CENTROID_CHUNKS`` of its text chunks' vectors (spread over the
-    document), one KNN, grouped by document, scored by the best hit."""
-    return _similar_documents(con, doc_id, limit=limit)
+    document), one KNN, grouped by document, scored by the best hit.
+    ``domain`` keeps the neighbours of one ontology module."""
+    return _similar_documents(con, doc_id, limit=limit, domain=domain)
 
 
 def _similar_documents(
-    con: sqlite3.Connection, doc_id: int, *, limit: int = CONTEXT_LIMIT
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    limit: int = CONTEXT_LIMIT,
+    domain: str | None = None,
 ) -> list[dict[str, Any]]:
     """Two views fused by reciprocal rank: the document-field vector's
     neighbours (what the document is; one KNN over the document index) and
@@ -1010,9 +1019,15 @@ def _similar_documents(
     for ranked in lists:
         for rank, d in enumerate(ranked, 1):
             scores[d] = scores.get(d, 0.0) + 1.0 / (RRF_K + rank)
-    top = sorted(scores.items(), key=lambda kv: -kv[1])[:limit]
+    ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+    if domain:  # a wider slice, then the module's documents, then the cut
+        ranked = [
+            (did, score)
+            for did, score in ranked[: max(limit * 5, 40)]
+            if _filter_domain(con, [{"doc_id": did}], domain)
+        ]
     out = []
-    for did, score in top:
+    for did, score in ranked[:limit]:
         d = con.execute(
             "SELECT title, mime FROM documents WHERE id = ?", (did,)
         ).fetchone()

@@ -185,3 +185,4 @@ th { background: var(--panel); }
 .sources-head { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 1rem 0 .2rem; }
 .passage.cited { border-left: 3px solid var(--accent); padding-left: .6rem; }
 .passage .chips { margin-top: .3rem; }
+.ctx-domain select { font-size: .75rem; text-transform: none; letter-spacing: 0; margin-left: .4rem; padding: 0 .2rem; }

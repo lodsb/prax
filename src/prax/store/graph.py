@@ -95,7 +95,11 @@ def document_facts(
 
 @_serialized
 def document_context(
-    con: sqlite3.Connection, doc_id: int, *, limit: int = CONTEXT_LIMIT
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    limit: int = CONTEXT_LIMIT,
+    domain: str | None = None,
 ) -> dict[str, Any] | None:
     """Everything that places a document in the library, for its page: the
     extraction summary and entities, citations in and out of the library,
@@ -285,7 +289,7 @@ def document_context(
         "entities": entities,
         "cites": cites,
         "cited_by": cited_by,
-        "similar": _similar_documents(con, doc_id, limit=limit),
+        "similar": _similar_documents(con, doc_id, limit=limit, domain=domain),
         "shared": shared,
         "same_authors": same_authors,
         "zotero": {

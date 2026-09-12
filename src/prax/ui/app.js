@@ -86,6 +86,25 @@ function originalHref(docId, page) {
 
 // ---------------------------------------------------------------- search
 
+// The ontology's modules, once per page load, for the domain selectors:
+// "every module" is the empty value, which the door reads as no filter.
+let MODULES = null;
+async function modules() {
+  if (MODULES) return MODULES;
+  try {
+    const onto = await api("/ontology");
+    MODULES = Object.keys(onto.modules || {}).filter((m) => m !== "core").sort();
+  } catch (err) {
+    MODULES = [];
+  }
+  return MODULES;
+}
+
+function domainSelect(selected, name = "domain", title = "ontology module") {
+  const opts = (MODULES || []).map((m) => `<option value="${esc(m)}" ${m === selected ? "selected" : ""}>${esc(m)}</option>`).join("");
+  return `<select name="${name}" title="${title}"><option value="" ${!selected ? "selected" : ""}>every module</option>${opts}</select>`;
+}
+
 function renderSearchForm(p) {
   const mode = p.mode || "hybrid";
   const kind = p.kind || "";
@@ -103,12 +122,14 @@ function renderSearchForm(p) {
       <option value="" ${!p.doctype ? "selected" : ""}>any type</option>
       ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
     </select>
+    ${domainSelect(p.domain || "")}
     <input name="limit" type="number" min="1" max="100" value="${esc(p.limit || 20)}" title="limit">
     <button>Search</button>
   </form>`;
 }
 
 async function viewSearch(p) {
+  await modules();
   view.innerHTML = renderSearchForm(p) + `<div id="results"></div>`;
   const form = document.getElementById("search-form");
   form.addEventListener("submit", (e) => {
@@ -119,7 +140,7 @@ async function viewSearch(p) {
   if (!p.q) return;
   const results = document.getElementById("results");
   try {
-    const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, limit: p.limit || 20 });
+    const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, domain: p.domain || undefined, limit: p.limit || 20 });
     if (!hits.length) { results.innerHTML = `<p class="muted">No hits.</p>`; return; }
     results.innerHTML = hits.map((h) => {
       const page = h.page ? `p. ${h.page}` : "";
@@ -262,12 +283,20 @@ async function viewDoc(id, p) {
     <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? chunks.map((c) => renderChunk(c, highlight)).join("") : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}</div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
-  api(`/doc/${id}/context`).then((ctx) => {
-    document.getElementById("doc-context").innerHTML = renderContext(ctx);
-    bindProjectForm(doc.id);
-  }).catch((err) => {
-    document.getElementById("doc-context").innerHTML = `<p class="error">${esc(err.message)}</p>`;
-  });
+  const loadContext = async (domain) => {
+    try {
+      await modules();
+      const ctx = await api(`/doc/${id}/context`, domain ? { domain } : {});
+      ctx.domain = domain || "";
+      document.getElementById("doc-context").innerHTML = renderContext(ctx);
+      bindProjectForm(doc.id);
+      const sel = document.querySelector("#doc-context select[name=similar-domain]");
+      if (sel) sel.addEventListener("change", () => loadContext(sel.value));
+    } catch (err) {
+      document.getElementById("doc-context").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    }
+  };
+  loadContext(p.domain || "");
   if (pageMeta) {
     document.getElementById("page-edit").addEventListener("click", (e) => { e.preventDefault(); openEditor(pageMeta.slug); });
     if (p.edit) openEditor(pageMeta.slug);
@@ -414,7 +443,8 @@ function renderContext(ctx) {
   if (ctx.page && ctx.page.kind === "project") {
     parts.push(list("In this project", ctx.members || [], (d) => d.doc_id ? docLink(d, esc(d.type)) : `<li>${esc(d.title)} <span class="muted">${esc(d.type)}</span></li>`));
   }
-  parts.push(list("Similar documents", ctx.similar, (d) => docLink(d, `${d.score.toFixed(2)}`)));
+  parts.push(`<h3>Similar documents <span class="ctx-domain">${domainSelect(ctx.domain || "", "similar-domain", "similar documents within one module")}</span></h3>`
+    + (ctx.similar.length ? `<ul>${ctx.similar.map((d) => docLink(d, `${d.score.toFixed(2)}`)).join("")}</ul>` : `<p class="muted">none in this module</p>`));
   parts.push(list("Shares entities with", ctx.shared, (d) => docLink(d, `${d.count}: ${esc(d.entities.join(", "))}`)));
   const inLib = ctx.cited_by.length;
   parts.push(list(`Cited by${inLib ? ` (${inLib} in the library)` : ""}`, ctx.cited_by, (d) => docLink(d)));
@@ -443,11 +473,13 @@ function renderContext(ctx) {
 async function viewBrowse(p) {
   const limit = Number(p.limit || 50);
   const offset = Number(p.offset || 0);
+  await modules();
   view.innerHTML = `
   <form id="browse-form" class="search-form">
     <input name="title" type="search" value="${esc(p.title || "")}" placeholder="title contains…">
     <input name="source" type="text" value="${esc(p.source || "")}" placeholder="source (zotero)">
     <input name="mime" type="text" value="${esc(p.mime || "")}" placeholder="mime (application/pdf)">
+    ${domainSelect(p.domain || "")}
     <button>Filter</button>
   </form>
   <div id="browse-list"></div>`;
@@ -458,7 +490,7 @@ async function viewBrowse(p) {
   });
   const list = document.getElementById("browse-list");
   try {
-    const res = await api("/documents", { limit, offset, title: p.title, source: p.source, mime: p.mime });
+    const res = await api("/documents", { limit, offset, title: p.title, source: p.source, mime: p.mime, domain: p.domain || undefined });
     const rows = res.items.map((d) => `
       <tr>
         <td><a href="#doc/${d.id}">${esc(d.title || "(untitled)")}</a></td>

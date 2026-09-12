@@ -705,8 +705,10 @@ def documents(
     source: str | None = None,
     mime: str | None = None,
     retired: bool = False,
+    domain: str | None = None,
 ) -> dict[str, Any]:
-    """Documents without text, newest first, filtered for browsing."""
+    """Documents without text, newest first, filtered for browsing;
+    ``domain`` keeps one ontology module's documents."""
     return store.list_documents(
         _con(request),
         limit=limit,
@@ -715,6 +717,7 @@ def documents(
         source=source,
         mime_prefix=mime,
         retired=retired,
+        domain=domain or None,
     )
 
 
@@ -762,11 +765,16 @@ def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
 
 
 @app.get("/doc/{doc_id}/context")
-def doc_context(doc_id: int, request: Request, limit: int = 8) -> dict[str, Any]:
+def doc_context(
+    doc_id: int, request: Request, limit: int = 8, domain: str | None = None
+) -> dict[str, Any]:
     """What places the document in the library: summary and entities,
-    citations in and out, nearest documents by vector, documents sharing
-    entities or authors, Zotero parent and siblings."""
-    ctx = store.document_context(_con(request), doc_id, limit=limit)
+    citations in and out, nearest documents by vector (within ``domain``
+    when given), documents sharing entities or authors, Zotero parent and
+    siblings."""
+    ctx = store.document_context(
+        _con(request), doc_id, limit=limit, domain=domain or None
+    )
     if ctx is None:
         raise HTTPException(404, "no such document")
     return ctx
