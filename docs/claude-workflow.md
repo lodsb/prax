@@ -24,6 +24,12 @@ commands and a session-end hook:
 | `/prax:sync [--dry-run]` | the project's `.md`/`.rst`/`.txt`/`.adoc` files into the library |
 | hook `SessionEnd` | runs the sync for a project with a `.prax-project` file |
 
+From a checkout, `claude plugin marketplace add /path/to/prax` in place
+of the GitHub name. Restart Claude Code after installing or updating:
+plugins, servers and tools are read at startup. Inside the prax
+repository itself the repo's `.mcp.json` registers a second `prax`
+server; disable one of the two there.
+
 Without the plugin, the same server is one line at user scope —
 `claude mcp add --scope user prax -e PRAX_DOOR=… -- <python> -m
 prax.mcp_server` — and the skill's guidance goes into the project's
@@ -45,7 +51,8 @@ Three levels, from the cheapest up:
    (`--refresh`) and nothing is sent twice. Source code stays in git;
    what was decided and why is what the library keeps.
 2. **The project's page.** `project-<name>` in the wiki, kind
-   `project`: the agent appends decisions, findings and open questions
+   `project` (slugs are slugified: `Project Synth` and `project/synth`
+   both become `project-synth`): the agent appends decisions, findings and open questions
    as it goes (`/prax:remember`), citing the documents they rest on;
    the page is a document — searchable, in the graph, with revisions —
    and the agent appends, never overwrites.

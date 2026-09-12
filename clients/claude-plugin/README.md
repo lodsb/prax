@@ -21,8 +21,17 @@ environment on Windows, the shell profile elsewhere). Then:
     claude plugin marketplace add lodsb/prax
     claude plugin install prax@prax
 
-Restart Claude Code. `/prax:scope` in any project says what the library
-holds for it.
+From a checkout instead of GitHub (a private fork, or before a push),
+the marketplace is the repository's path:
+
+    claude plugin marketplace add /path/to/prax        # Windows: I:\proj\prax
+    claude plugin install prax@prax
+
+Restart Claude Code: plugins, MCP servers and their tools are read at
+startup only, so a fresh install or an update (`claude plugin update
+prax`) shows up in the next session, not the current one. Then
+`/prax:scope` in any project says what the library holds for it;
+`claude plugin uninstall prax` takes it out again.
 
 ## What it adds
 
@@ -46,9 +55,13 @@ ontology modules its documents are read against:
     include: ["README.md", "docs/**/*.md", "adr/*.md"]
 
 With it, the session-end hook sends the project's docs every time a
-session ends; without it, `/prax:sync` does the same on request. The
-project's page in the library is `project-<name>`; `/prax:remember`
-appends to it.
+session ends; without it, `/prax:sync` does the same on request.
+
+The project's page in the library is `project-<name>`. Page slugs are
+slugified — lower case, letters and digits, hyphens for the rest — so
+`project/synth-firmware` and `Project Synth Firmware` both become
+`project-synth-firmware`; `/prax:remember` appends to that page and
+`context(slug="project-synth-firmware")` reads it.
 
 ## Notes
 
@@ -56,6 +69,10 @@ appends to it.
   pages' author), so a session's work can be found and retired as a
   unit.
 - When Claude Code is opened in the prax repository itself, the repo's
-  own `.mcp.json` registers a second `prax` server; disable one.
+  own `.mcp.json` registers a second `prax` server with the same tools;
+  disable one of them there (`/mcp`), or the agent sees each tool twice.
+- The hook runs `python`; when that interpreter has no prax, `PRAX_PYTHON`
+  must name one that does, or the hook says so on stderr and does
+  nothing. A door that is down is a warning, never a failed session.
 - The plugin packages the client side only. The door, the store and the
   models are prax's own business (`docs/howto.md`).
