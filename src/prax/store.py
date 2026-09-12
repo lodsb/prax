@@ -3939,48 +3939,59 @@ def traverse(
     the hop limit; ``hop`` is the distance of its farther endpoint.
     """
     hops = max(0, min(hops, MAX_HOPS))
-    # Every entity id is mapped to its canonical id first, so a merged alias
-    # and its survivor are one node: the walk runs over canonical ids, and
-    # edges are reported under the canonical names (invariant 8: the edge
-    # rows themselves keep the alias ids they were written with).
+    # The walk runs over raw entity ids and, at every step, expands the
+    # entity reached to its whole alias group (idx_entities_canonical), so
+    # a merged alias and its survivor are one node and the recursion uses
+    # the edge indexes (a canon CTE in the recursion had no index and
+    # scanned every live edge per frontier row: minutes on a hub at two
+    # hops). Edges are reported under the canonical names (invariant 8:
+    # the rows keep the alias ids they were written with).
     rows = con.execute(
         """
-        WITH RECURSIVE canon(id, cid) AS (
-            SELECT id, COALESCE(canonical_id, id) FROM entities
+        WITH RECURSIVE
+        start(cid) AS (
+            SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ?
         ),
-        cedges(id, src, dst) AS (
-            SELECT e.id, cs.cid, cd.cid FROM edges e
-            JOIN canon cs ON cs.id = e.src JOIN canon cd ON cd.id = e.dst
-            WHERE e.valid_to IS NULL
-        ),
-        walk(entity_id, depth) AS (
-            SELECT DISTINCT c.cid, 0 FROM entities n JOIN canon c ON c.id = n.id
-            WHERE n.name = ?
+        walk(id, depth) AS (
+            SELECT n.id, 0 FROM entities n
+            JOIN start s ON COALESCE(n.canonical_id, n.id) = s.cid
             UNION
-            SELECT CASE WHEN e.src = w.entity_id THEN e.dst ELSE e.src END,
-                   w.depth + 1
-            FROM cedges e JOIN walk w
-                 ON (e.src = w.entity_id OR e.dst = w.entity_id)
+            SELECT m.id, w.depth + 1
+            FROM walk w
+            JOIN edges e ON e.src = w.id AND e.valid_to IS NULL
+            JOIN entities nb ON nb.id = e.dst
+            JOIN entities m
+                 ON COALESCE(m.canonical_id, m.id) = COALESCE(nb.canonical_id, nb.id)
+            WHERE w.depth < ?
+            UNION
+            SELECT m.id, w.depth + 1
+            FROM walk w
+            JOIN edges e ON e.dst = w.id AND e.valid_to IS NULL
+            JOIN entities nb ON nb.id = e.src
+            JOIN entities m
+                 ON COALESCE(m.canonical_id, m.id) = COALESCE(nb.canonical_id, nb.id)
             WHERE w.depth < ?
         ),
-        reach(entity_id, depth) AS (
-            SELECT entity_id, MIN(depth) FROM walk GROUP BY entity_id
+        reach(id, depth) AS (
+            SELECT id, MIN(depth) FROM walk GROUP BY id
         )
         SELECT e.id AS edge_id,
-               s.name AS src, s.type AS src_type, e.rel,
-               t.name AS dst, t.type AS dst_type,
+               cs.name AS src, cs.type AS src_type, e.rel,
+               cd.name AS dst, cd.type AS dst_type,
                e.confidence, e.source_doc, e.evidence, e.ontology_version,
                e.producer, e.run,
                e.valid_from,
-               MAX(rs.depth, rt.depth) AS hop
-        FROM cedges ce
-        JOIN edges e ON e.id = ce.id
-        JOIN reach rs ON rs.entity_id = ce.src
-        JOIN reach rt ON rt.entity_id = ce.dst
-        JOIN entities s ON s.id = ce.src
-        JOIN entities t ON t.id = ce.dst
+               MAX(rs.depth, rd.depth) AS hop
+        FROM edges e
+        JOIN reach rs ON rs.id = e.src
+        JOIN reach rd ON rd.id = e.dst
+        JOIN entities s ON s.id = e.src
+        JOIN entities cs ON cs.id = COALESCE(s.canonical_id, s.id)
+        JOIN entities d ON d.id = e.dst
+        JOIN entities cd ON cd.id = COALESCE(d.canonical_id, d.id)
+        WHERE e.valid_to IS NULL
         ORDER BY hop, e.id
         """,
-        (entity_name, hops),
+        (entity_name, hops, hops),
     ).fetchall()
     return [dict(r) for r in rows]

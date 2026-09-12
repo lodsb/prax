@@ -433,8 +433,14 @@ Performance, cheap first:
       reading carries the whole ontology's version (read before its set
       was assigned) is due again under its subset; the old Python filter
       let those pass. 66 captures on the desktop, re-read by the worker.
-- [ ] `traverse` on hubs (400-500 ms): look at the recursive CTE once
-      the graph is under v5.
+- [x] `traverse` on hubs (2026-09-12, migration 0011): the old query
+      joined a canon CTE (no index) into the recursion and scanned every
+      live edge per frontier row; at two hops from the biggest hub it
+      ran for over ten minutes on the live graph (114k entities, 125k
+      live edges). The walk now runs over raw ids with the edge indexes
+      and expands alias groups through an expression index on the
+      canonical id: 10-25 ms at one hop, 30-190 ms at two hops on the
+      four biggest hubs, same results.
 
 Dependencies (188 packages, 3.5 GB in the venv; the serving path needs a
 fraction):
