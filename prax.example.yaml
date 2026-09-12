@@ -114,3 +114,4 @@ steps:
 
 # paths:
 #   models: /path/to/models    # [PRAX_MODELS_DIR] where fetched model files go
+#   backup: /path/to/copy      # [PRAX_BACKUP] where `prax backup` copies the store

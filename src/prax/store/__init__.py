@@ -22,6 +22,7 @@ process-wide re-entrant lock (invariant 4).
 | ``jobs`` | what runs and what ran |
 | ``summary`` | what the store holds, counted |
 | ``repair`` | the damage that recurs: `health` finds it, `heal` mends it |
+| ``backup`` | a copy of the store somewhere else, incrementally |
 """
 
 from __future__ import annotations
@@ -32,6 +33,11 @@ import sqlite3  # noqa: F401 - callers type against store.sqlite3
 from prax import chunking, config, embeddings, ontology, vectors  # noqa: F401
 from prax import rerank as rerank_mod  # noqa: F401
 
+from .backup import (  # noqa: F401
+    MANIFEST,
+    backup,
+    backup_target,
+)
 from .base import (  # noqa: F401
     _LOCK,
     _NOW,
@@ -165,6 +171,7 @@ from .jobs import (  # noqa: F401
     _job_now,
     _pid_alive,
     data_version,
+    get_job,
     job_finish,
     job_reap,
     job_start,

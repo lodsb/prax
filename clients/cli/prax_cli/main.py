@@ -32,7 +32,7 @@ examples
 
 commands
   everyday     search, ask, add, show, open, graph, pages
-  running it   status, jobs, inbox, work, heal, serve, doctor, models
+  running it   status, jobs, inbox, work, heal, backup, serve, doctor, models
 """
 
 
@@ -302,6 +302,32 @@ def build_parser() -> argparse.ArgumentParser:
         "--apply", action="store_true", help="repair, instead of only looking"
     )
     s.set_defaults(func=running.heal, needs_door=True)
+
+    s = sub.add_parser(
+        "backup",
+        parents=[door_opts, as_json],
+        help="copy the store to a directory on the door's host",
+        description=(
+            "The door copies its store: the database as one consistent snapshot,"
+            " the vector indexes, the config, and the archive files the copy does"
+            " not have yet (they are named by hash and never change, so a nightly"
+            " run copies only what the day added). The directory is on the door's"
+            " machine; the copy is a store of its own."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax backup D:/prax-backup\n"
+            "  prax backup                 # the door's paths.backup setting"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument(
+        "dest",
+        nargs="?",
+        metavar="DIR",
+        help="where; default: paths.backup in prax.yaml",
+    )
+    s.set_defaults(func=running.backup, needs_door=True)
 
     s = sub.add_parser(
         "doctor",

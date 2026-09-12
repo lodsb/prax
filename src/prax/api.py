@@ -475,6 +475,37 @@ def heal_apply(req: HealReq, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+class BackupReq(BaseModel):
+    dest: str | None = None  # None: the paths.backup setting
+
+
+@app.post("/backup")
+def backup_start(req: BackupReq, request: Request) -> dict[str, Any]:
+    """Copy the store to a directory on this host (``dest``, or the
+    ``paths.backup`` setting): the database as a consistent snapshot, the
+    vector indexes, the config, and the archive files the copy lacks. The
+    copy runs on a thread of its own and is a job; poll ``GET /jobs/{id}``
+    for its progress and its last note."""
+    try:
+        dest = store.backup_target(req.dest)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    job = store.Job(_con(request), "backup", note=str(dest))
+
+    def run() -> None:
+        con = store.connect()
+        try:
+            with store.Job.existing(con, job.id) as mine:
+                store.backup(con, dest, job=mine)
+        except Exception:  # the job row carries the error
+            logging.getLogger("prax.backup").exception("backup to %s failed", dest)
+        finally:
+            con.close()
+
+    threading.Thread(target=run, name="backup", daemon=True).start()
+    return {"job": job.id, "dest": str(dest)}
+
+
 @app.get("/stats")
 def stats(request: Request) -> dict[str, Any]:
     """What the store holds: documents, chunks, vectors, the graph, the
@@ -489,6 +520,14 @@ def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
     out = store.list_jobs(_con(request), limit=limit)
     out["host"] = {"name": socket.gethostname(), **hostinfo.memory()}
     return out
+
+
+@app.get("/jobs/{job_id}")
+def job(job_id: int, request: Request) -> dict[str, Any]:
+    row = store.get_job(_con(request), job_id)
+    if row is None:
+        raise HTTPException(404, f"no job {job_id}")
+    return row
 
 
 @app.post("/vectors/release")

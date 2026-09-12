@@ -203,3 +203,15 @@ def test_every_command_has_help_and_an_example() -> None:
     assert len(commands) >= 14
     for name, sub in commands.items():
         assert sub.description, name
+
+
+def test_backup_follows_the_job_to_the_end(
+    door: TestClient, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    door.post("/ingest", json={"text": "granular synthesis " * 30, "title": "G"})
+    assert run("backup", str(tmp_path / "copy")) == 0
+    printed = capsys.readouterr().out
+    assert "Backup" in printed and "new archive files" in printed
+    assert (tmp_path / "copy" / "prax.db").is_file()
+    assert run("backup", "not/absolute") == 1
+    assert "absolute" in capsys.readouterr().err

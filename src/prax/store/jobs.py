@@ -152,6 +152,11 @@ def job_reap(con: sqlite3.Connection) -> int:
 
 
 @_serialized
+def get_job(con: sqlite3.Connection, job_id: int) -> dict[str, Any] | None:
+    row = con.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    return dict(row) if row else None
+
+
 def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> dict[str, Any]:
     """``running`` (with ``stale`` when the heartbeat is old) and the last
     ``limit`` finished jobs, newest first."""
@@ -196,6 +201,19 @@ class Job:
         self.con = con
         self.name = name
         self.id = job_start(con, name, total=total, note=note)
+
+    @classmethod
+    def existing(cls, con: sqlite3.Connection, job_id: int) -> Job:
+        """The job row another thread started, to carry on and finish
+        here (a thread that opens its own connection)."""
+        job = cls.__new__(cls)
+        job.con = con
+        job.id = job_id
+        row = con.execute("SELECT name FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            raise KeyError(f"no job {job_id}")
+        job.name = row["name"]
+        return job
 
     def update(
         self,

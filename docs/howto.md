@@ -909,6 +909,7 @@ One command for the everyday work, and the same one wherever the door is:
     prax inbox                        what came in, what still waits
     prax jobs                         passes running now and lately
     prax heal                         what recurring damage is in the store
+    prax backup D:/prax-backup        copy the store (only what is new)
     prax work --watch                 be the worker for a door
     prax serve                        run the door here
     prax doctor                       when something feels wrong
@@ -1004,18 +1005,29 @@ whether the vector index is `i8` or a copy of the desktop's `f16`.
 
 ## 7. Backup and moving the store
 
-Everything is two things: one SQLite file and one directory of
-content-addressed files.
+Everything is three things: one SQLite file, a few index files, and one
+directory of content-addressed files. `prax backup` copies them:
 
-- Database: use SQLite's online backup so the WAL is folded in, then copy
-  the result.
+    prax backup D:/prax-backup       # a directory on the door's machine
+    prax backup                      # paths.backup in prax.yaml [PRAX_BACKUP]
 
-      python -c "import sqlite3; s=sqlite3.connect('data/prax.db'); d=sqlite3.connect('backup.db'); s.backup(d)"
+The door does the copying (`POST /backup`, a job you can watch in `prax
+jobs` and the Jobs view): the database through SQLite's online backup —
+one consistent snapshot, the WAL folded in, writers not blocked — then
+the `vectors-*.usearch` files and `prax.yaml`, then every archive file
+the copy does not have yet. Archive files are immutable and named by
+their hash, so the second run costs what the day added, and an
+interrupted copy is simply resumed by the next one. A `backup.json`
+manifest records what was copied and when.
 
-- Archive: `rsync -a data/archive/ backup/archive/`. Files are immutable
-  and named by hash, so an interrupted copy can simply be resumed.
+The copy is a store: `PRAX_DATA_DIR` pointed at it opens it, on this
+machine or another. The delta vector index is copied as it stands, so a
+vector written between the snapshot and the file copy may be missing
+there; `prax heal` finds those (`chunks-without-vectors`) and a worker
+re-embeds them. Model files are not copied (`prax models fetch`).
 
-Litestream replication is on the later list.
+A nightly copy is one scheduled task running `prax backup`; Litestream
+replication is on the later list.
 
 ## 8. Adding a source
 

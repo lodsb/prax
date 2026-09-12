@@ -7,6 +7,7 @@ import json
 import os
 import sys
 import textwrap
+import time
 from pathlib import Path
 from typing import Any
 
@@ -629,3 +630,37 @@ def print_version() -> int:
         version = "unknown"
     print(f"prax {version} (python {sys.version.split()[0]})")
     return 0
+
+
+# ------------------------------------------------------------------ backup
+
+
+def backup(door: Door, a: Any) -> int:
+    """Ask the door to copy its store to a directory on its host, and
+    follow the job until it is done."""
+    started = door.post_json("/backup", {"dest": a.dest})
+    job_id = started["job"]
+    if not a.json:
+        out.say(out.bold("Backup") + out.dim(f"   to {started['dest']} · job {job_id}"))
+    last = ""
+    while True:
+        row = door.get_json(f"/jobs/{job_id}")
+        note = row.get("note") or ""
+        if row["status"] != "running":
+            break
+        if note != last and not a.json:
+            out.hint("  " + note)
+            last = note
+        time.sleep(2)
+    if a.json:
+        print(json.dumps(row, indent=2))
+        return 0 if row["status"] == "done" else 1
+    if row["status"] == "done":
+        out.say("  " + note.removeprefix("done: "))
+        out.hint(
+            "  the copy is a store: PRAX_DATA_DIR pointed at it opens it;"
+            " prax heal there finds any vector the delta missed"
+        )
+        return 0
+    out.fail(f"the backup {row['status']}: {note}")
+    return 1

@@ -190,7 +190,7 @@ what is needed.
 
 | Module | Responsibility | Writes SQLite? |
 |---|---|---|
-| `prax.store` | the only door, a package of seven modules whose `__init__` re-exports every name (so callers keep writing `store.<name>`) | yes, the only one |
+| `prax.store` | the only door, a package of nine modules whose `__init__` re-exports every name (so callers keep writing `store.<name>`) | yes, the only one |
 | `store.base` | the connection, the lock and its retry, migrations, the content-addressed archive, the index files | yes |
 | `store.documents` | register, index_text, chunks, get, list, meta, domains, promotion, retiring, the document field | yes |
 | `store.retrieval` | acronym expansion and the match expression, BM25 and KNN over chunks and the field, fusion, rerank, the vector index and its delta, embedding bookkeeping | yes |
@@ -199,6 +199,7 @@ what is needed.
 | `store.jobs` | what runs, heartbeats, reaping, the change stamp | yes |
 | `store.summary` | `stats`: what the store holds, counted for `prax status` | reads |
 | `store.repair` | the damage that recurs (placeholder entities, mangled names, self-edges, stale jobs): `health` finds it, `heal` mends it through the store's own functions | yes |
+| `store.backup` | a copy of the store somewhere else: the database as one snapshot, the index files, the archive files the copy lacks; `POST /backup` runs it as a job | no (reads; writes the copy) |
 | `prax.chunking` | Markdown → structure-aware chunks with locators | no (pure) |
 | `prax.parsers` | extractor registry by MIME type with revisions; `parsers.queue` the parse queue with fallback chain, size/page/OCR guards, history; `parsers.vision` images described by Claude | via store |
 | `prax.embeddings` | ONNX embedder registry (bge-small default), provider/variant selection, hash embedder for tests | no |
@@ -325,6 +326,7 @@ loop); the queue makes each batch do real work.
 | `parse.ocr_language`, `.ocr_gpu` | the OCR recognizer's script (`ch`, `en`, `latin`, `arabic`, `cyrillic`…; part of the text-source stamp) and whether it runs on DirectML |
 | `door.cors_origins`, `door.inbox_scan_seconds` | the extension's origin; how often the door reads its drop folder |
 | `paths.models` | where fetched model files go (default `<data dir>/models`) |
+| `paths.backup` [`PRAX_BACKUP`] | where `prax backup` copies the store when no directory is given |
 | **environment only** | `PRAX_DATA_DIR`, `PRAX_CONFIG`, `PRAX_TOKEN`, `PRAX_DOOR`, `PRAX_OFFLINE`, `PRAX_DEBUG`; a setting's own `PRAX_*` name overrides the file for one run |
 | `PRAX_PYTHON` | interpreter for the MCP server in `.mcp.json` |
 
