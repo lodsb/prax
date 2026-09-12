@@ -35,6 +35,9 @@ def main() -> int:
         help="documents whose meta.text_source starts with PREFIX",
     )
     sel.add_argument("--ids", type=int, nargs="+", help="explicit document ids")
+    sel.add_argument(
+        "--title", metavar="TEXT", help="documents whose title contains TEXT"
+    )
     ap.add_argument("--mime", help="only this MIME prefix, e.g. application/pdf")
     ap.add_argument("--extractor", choices=parsers.names(), help="override the default")
     ap.add_argument("--limit", type=int)
@@ -42,17 +45,18 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="list the selection only")
     ap.add_argument("--quiet", action="store_true")
     a = ap.parse_args()
-    if not (a.pending or a.upgrade or a.ids):
-        ap.error("select something: --pending, --upgrade PREFIX or --ids")
+    if not (a.pending or a.upgrade or a.ids or a.title):
+        ap.error("select something: --pending, --upgrade PREFIX, --title TEXT or --ids")
 
     con = store.connect()
     store.init_db(con)
     ids = list(a.ids or [])
-    if a.pending or a.upgrade:
+    if a.pending or a.upgrade or a.title:
         ids += store.select_documents(
             con,
             pending=a.pending,
             text_source_prefix=a.upgrade,
+            title=a.title,
             mime_prefix=a.mime,
         )
     ids = list(dict.fromkeys(ids))

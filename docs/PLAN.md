@@ -87,9 +87,13 @@ Parsing is a batch job; the serving path never parses.
 - [x] OCR pass over the scanned PDFs the bulk pass left empty
       (`--extractor pymupdf4llm-ocr`): 283 documents gained text, the rest
       is artwork or unreadable (`docs/sources.md`)
-- [ ] The 71 scanned books (17 K pages): one deliberate overnight run with
-      `PRAX_OCR_MAX_PAGES=1000`, or leave them until a faster OCR host
-      exists
+- [x] The 71 scanned books (17 K pages): one deliberate run with
+      `PRAX_OCR_MAX_PAGES=1000` (2026-09-12, about a second a page on the
+      desktop's CPU). English and Latin came out clean; the Arabic books
+      came out as letter salad because RapidOCR's default recognizer reads
+      Chinese and English, so the recognizer is now a setting
+      (`parse.ocr_language`, in the text-source stamp) and those books get
+      a second run with `arabic`
 - [x] Capture door (2026-09-12, `prax.inbox`): `POST /ingest/html` (URL,
       title, rendered DOM; trafilatura at once), `POST /ingest/url`
       (server-side fetch), `POST /ingest/file` with domains and tags, a

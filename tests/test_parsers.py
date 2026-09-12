@@ -460,3 +460,43 @@ def test_a_budget_refusal_is_not_an_attempt() -> None:
     assert not queue._seen(refused, stamp)
     assert queue._seen(failed, stamp)
     assert queue._seen(empty, stamp)
+
+
+def test_the_ocr_language_is_a_setting_and_part_of_the_stamp(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scan read with the wrong recognizer is letter salad; the language
+    is a setting, and a document read in one language has not been read in
+    another, so the stamp carries it (the default language does not)."""
+    ocr = parsers.by_name("pymupdf4llm-ocr")
+    monkeypatch.delenv("PRAX_OCR_LANGUAGE", raising=False)
+    assert ocr.stamp.startswith("pymupdf4llm-ocr/")
+    assert "+" not in ocr.stamp
+    monkeypatch.setenv("PRAX_OCR_LANGUAGE", "arabic")
+    assert ocr.stamp.endswith("+arabic")
+    assert ocr.stamp != parsers.by_name("pymupdf4llm").stamp + "+arabic"
+    from prax.parsers import queue
+
+    tried_in_chinese = {
+        "parse_history": [{"extractor": ocr.stamp.replace("+arabic", ""), "chars": 5}]
+    }
+    assert not queue._seen(tried_in_chinese, ocr.stamp)
+
+
+@pytest.mark.skipif(
+    importlib.util.find_spec("rapidocr") is None, reason="rapidocr not installed"
+)
+def test_a_language_gets_the_newest_recognizer_rapidocr_ships() -> None:
+    assert parsers._ocr_model_version("arabic") == "PP-OCRv5"
+    assert parsers._ocr_model_version("latin") in ("PP-OCRv4", "PP-OCRv5")
+    with pytest.raises(parsers.ExtractionError):
+        parsers._ocr_model_version("klingon")
+
+
+def test_select_documents_by_title(con: sqlite3.Connection) -> None:
+    a = store.ingest_text(con, "one", title="In Arabic--Harmony")["doc_id"]
+    b = store.ingest_text(con, "two", title="Piston - Harmony")["doc_id"]
+    store.ingest_text(con, "three", title="Counterpoint")
+    assert store.select_documents(con, title="harmony") == [a, b]
+    assert store.select_documents(con, title="in arabic") == [a]
+    assert store.select_documents(con, title="100%") == []  # a literal, not a wildcard

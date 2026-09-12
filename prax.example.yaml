@@ -95,6 +95,10 @@ steps:
 
 # parse:
 #   ocr_max_pages: 60          # [PRAX_OCR_MAX_PAGES] budget of the OCR extractor
+#   ocr_language: ch           # [PRAX_OCR_LANGUAGE] the recognizer's script: ch
+#                              #   (Chinese and English), en, latin, arabic,
+#                              #   cyrillic, devanagari, japan, korean, el, th…
+#   ocr_gpu: false             # [PRAX_OCR_GPU] DirectML (onnxruntime-directml)
 #   max_layout_mb: 40          # [PRAX_MAX_LAYOUT_MB] above this, no layout analysis
 #   max_layout_pages: 400      # [PRAX_MAX_LAYOUT_PAGES]
 

@@ -62,6 +62,7 @@ class Extractor:
     revision: int = 1  # our own changes to what the extractor produces
     hints: bool = False  # the function takes filename= as a keyword
     check: Callable[[], bool] | None = None  # more than an import: a program
+    variant: Callable[[], str] | None = None  # a setting that changes the output
 
     def accepts(self, mime: str) -> bool:
         return any(
@@ -88,11 +89,16 @@ class Extractor:
                 base = importlib.metadata.version(self.package)
             except importlib.metadata.PackageNotFoundError:
                 base = "?"
-        return base if self.revision == 1 else f"{base}-r{self.revision}"
+        if self.revision != 1:
+            base = f"{base}-r{self.revision}"
+        variant = self.variant() if self.variant else ""
+        return f"{base}+{variant}" if variant else base
 
     @property
     def stamp(self) -> str:
-        """What ``meta.text_source`` records: ``"<name>/<version>"``."""
+        """What ``meta.text_source`` records: ``"<name>/<version>"``, with
+        a ``+<variant>`` when a setting changed what the extractor reads
+        (``pymupdf4llm-ocr/1.28.2+arabic``)."""
         return f"{self.name}/{self.version}"
 
     def __call__(self, data: bytes, *, filename: str | None = None) -> str:
@@ -153,12 +159,92 @@ def _pymupdf4llm(data: bytes) -> str:
         return pymupdf4llm.to_markdown(doc, use_ocr=False, page_separators=True)
 
 
+OCR_DEFAULT_LANGUAGE = "ch"  # RapidOCR's own default: Chinese and English
+
+
+def _ocr_language() -> str:
+    """Which script the OCR recognizer reads (``parse.ocr_language``): one
+    of RapidOCR's recognizer languages, ``ch`` (Chinese and English, the
+    default), ``en``, ``latin``, ``arabic``, ``cyrillic``, ``devanagari``,
+    ``japan``, ``korean``, ``el``, ``th``... A scan in another script read
+    with the wrong recognizer comes out as letter salad, silently."""
+    lang = config.setting(
+        "parse.ocr_language", "PRAX_OCR_LANGUAGE", OCR_DEFAULT_LANGUAGE
+    )
+    return str(lang or OCR_DEFAULT_LANGUAGE).strip().lower()
+
+
+def _ocr_variant() -> str:
+    """The stamp's ``+<language>`` when it is not the default one."""
+    lang = _ocr_language()
+    return "" if lang == OCR_DEFAULT_LANGUAGE else lang
+
+
+def _ocr_gpu() -> bool:
+    """``parse.ocr_gpu``: run the OCR models on DirectML (needs
+    ``onnxruntime-directml``); a page takes a fraction of a second instead
+    of one."""
+    flag = str(config.setting("parse.ocr_gpu", "PRAX_OCR_GPU", "0")).lower()
+    return flag in ("1", "true", "yes", "on")
+
+
+def _ocr_engine() -> None:
+    """Point pymupdf4llm's RapidOCR backend at the configured recognizer.
+
+    pymupdf4llm builds one ``RapidOCR()`` with the defaults and keeps it in
+    its backend module; the language and the execution provider can only
+    be chosen by building that engine ourselves and putting it there, once
+    per choice. The recognizer for a language is the newest one RapidOCR
+    ships (PP-OCRv5 for most scripts); detection stays the default, which
+    finds text in any script.
+    """
+    choice = (_ocr_language(), _ocr_gpu())
+    backend = importlib.import_module("pymupdf4llm.ocr.rapidocr_391_backend")
+    if getattr(backend, "_prax_choice", None) == choice:
+        return
+    lang, gpu = choice
+    params: dict[str, Any] = {}
+    if lang != OCR_DEFAULT_LANGUAGE:
+        typings = importlib.import_module("rapidocr.utils.typings")
+        try:
+            params["Rec.lang_type"] = typings.LangRec(lang)
+        except ValueError as exc:
+            known = ", ".join(m.value for m in typings.LangRec)
+            raise ExtractionError(
+                f"parse.ocr_language {lang!r} is not a RapidOCR language ({known})"
+            ) from exc
+        params["Rec.ocr_version"] = typings.OCRVersion(_ocr_model_version(lang))
+        params["Rec.model_type"] = typings.ModelType("mobile")
+    if gpu:
+        params["EngineConfig.onnxruntime.use_dml"] = True
+    rapidocr = importlib.import_module("rapidocr")
+    backend.ENGINE = rapidocr.RapidOCR(params=params) if params else None
+    backend._prax_choice = choice
+
+
+def _ocr_model_version(lang: str) -> str:
+    """The newest PP-OCR version with a mobile recognizer for ``lang`` in
+    RapidOCR's model catalogue."""
+    import yaml
+
+    rapidocr = importlib.import_module("rapidocr")
+    catalogue = Path(rapidocr.__file__).parent / "default_models.yaml"
+    models = yaml.safe_load(catalogue.read_text(encoding="utf-8"))
+    for version in ("PP-OCRv6", "PP-OCRv5", "PP-OCRv4", "PP-OCRv3"):
+        names = models.get("onnxruntime", {}).get(version, {}).get("rec", {})
+        if any(n.startswith(f"{lang}_") for n in names):
+            return version
+    raise ExtractionError(f"RapidOCR ships no recognizer for {lang!r}")
+
+
 def _pymupdf4llm_ocr(data: bytes) -> str:
     """Markdown with RapidOCR on pages that have no text layer.
 
     OCR costs seconds per page on a CPU, so documents above
     ``PRAX_OCR_MAX_PAGES`` (default 60) are refused with ``ExtractionError``
-    and left for a deliberate run with a higher budget.
+    and left for a deliberate run with a higher budget. The recognizer's
+    language and device are settings (``parse.ocr_language``,
+    ``parse.ocr_gpu``); the language is part of the text-source stamp.
     """
     pymupdf4llm = importlib.import_module("pymupdf4llm")
     budget = config.whole("parse.ocr_max_pages", "PRAX_OCR_MAX_PAGES", 60)
@@ -168,6 +254,7 @@ def _pymupdf4llm_ocr(data: bytes) -> str:
                 f"{doc.page_count} pages exceeds the OCR budget of {budget}"
                 " (PRAX_OCR_MAX_PAGES)"
             )
+        _ocr_engine()
         return pymupdf4llm.to_markdown(doc, use_ocr=True, page_separators=True)
 
 
@@ -615,6 +702,7 @@ REGISTRY: list[Extractor] = [
         _pymupdf4llm_ocr,
         "pymupdf4llm",
         explicit_only=True,
+        variant=_ocr_variant,  # the language is in the stamp
     ),
     Extractor("docling", ("application/pdf",), _docling, "docling", explicit_only=True),
     Extractor(

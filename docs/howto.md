@@ -141,6 +141,11 @@ the new one is suspiciously short (login walls, scans without OCR) unless
     python scripts/parse_pending.py --upgrade zotero-ft-cache --mime text/html
     # scans: OCR is explicit and bounded (PRAX_OCR_MAX_PAGES, default 60)
     python scripts/parse_pending.py --pending --extractor pymupdf4llm-ocr
+    # scans in another script: the recognizer is a setting (parse.ocr_language:
+    # ch reads Chinese and English; en, latin, arabic, cyrillic, devanagari,
+    # japan, korean, el, th...) and part of the stamp, so a book read with the
+    # wrong one has not been read with the right one; --title picks them out
+    PRAX_OCR_LANGUAGE=arabic python scripts/parse_pending.py --title "In Arabic"         --extractor pymupdf4llm-ocr --force
     # Docling on a hand-picked set
     python scripts/parse_pending.py --ids 12 34 --extractor docling --force
 

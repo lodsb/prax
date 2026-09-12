@@ -977,6 +977,7 @@ def select_documents(
     *,
     pending: bool = False,
     text_source_prefix: str | None = None,
+    title: str | None = None,
     mime_prefix: str | None = None,
     limit: int | None = None,
 ) -> list[int]:
@@ -984,8 +985,9 @@ def select_documents(
 
     ``pending`` selects never-indexed documents (``parsed_at IS NULL``);
     ``text_source_prefix`` selects indexed ones whose ``meta.text_source``
-    starts with the prefix (``"zotero-ft-cache"``, ``"pymupdf/"``). The two
-    are OR-ed when both are given. ``mime_prefix`` narrows either.
+    starts with the prefix (``"zotero-ft-cache"``, ``"pymupdf/"``);
+    ``title`` selects by a case-insensitive substring of the title. The
+    three are OR-ed when several are given. ``mime_prefix`` narrows any.
     """
     clauses: list[str] = []
     args: list[Any] = []
@@ -994,6 +996,9 @@ def select_documents(
     if text_source_prefix is not None:
         clauses.append("json_extract(meta, '$.text_source') LIKE ? ESCAPE '!'")
         args.append(_like_prefix(text_source_prefix))
+    if title:
+        clauses.append("title LIKE ? ESCAPE '!'")
+        args.append("%" + _like_prefix(title)[:-1] + "%")
     if not clauses:
         return []
     sql = (

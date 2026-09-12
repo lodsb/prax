@@ -322,6 +322,7 @@ loop); the queue makes each batch do real work.
 | `vectors.dtype`, `vectors.ef` | index precision (`f16`, `i8`) and search expansion |
 | `parse.max_layout_mb`, `.max_layout_pages` | caps for MuPDF layout analysis |
 | `parse.ocr_max_pages` | page budget of the OCR extractor |
+| `parse.ocr_language`, `.ocr_gpu` | the OCR recognizer's script (`ch`, `en`, `latin`, `arabic`, `cyrillic`…; part of the text-source stamp) and whether it runs on DirectML |
 | `door.cors_origins`, `door.inbox_scan_seconds` | the extension's origin; how often the door reads its drop folder |
 | `paths.models` | where fetched model files go (default `<data dir>/models`) |
 | **environment only** | `PRAX_DATA_DIR`, `PRAX_CONFIG`, `PRAX_TOKEN`, `PRAX_DOOR`, `PRAX_OFFLINE`, `PRAX_DEBUG`; a setting's own `PRAX_*` name overrides the file for one run |
