@@ -190,7 +190,14 @@ what is needed.
 
 | Module | Responsibility | Writes SQLite? |
 |---|---|---|
-| `prax.store` | the only door: connect, migrations, register, index_text, chunks, the document field, search (FTS, vec, hybrid, doctype), get, context, similar documents, hubs, link, traverse, invalidate, review queue, pages, embedding bookkeeping for chunks and fields | yes, the only one |
+| `prax.store` | the only door, a package of seven modules whose `__init__` re-exports every name (so callers keep writing `store.<name>`) | yes, the only one |
+| `store.base` | the connection, the lock and its retry, migrations, the content-addressed archive, the index files | yes |
+| `store.documents` | register, index_text, chunks, get, list, meta, domains, promotion, retiring, the document field | yes |
+| `store.retrieval` | acronym expansion and the match expression, BM25 and KNN over chunks and the field, fusion, rerank, the vector index and its delta, embedding bookkeeping | yes |
+| `store.graph` | entities, edges with their provenance, traversal, resolution, the review queue, selection for extraction, hubs, a document's facts and context | yes |
+| `store.pages` | pages and their revisions (documents too), project membership | yes |
+| `store.jobs` | what runs, heartbeats, reaping, the change stamp | yes |
+| `store.summary` | `stats`: what the store holds, counted for `prax status` | reads |
 | `prax.chunking` | Markdown → structure-aware chunks with locators | no (pure) |
 | `prax.parsers` | extractor registry by MIME type with revisions; `parsers.queue` the parse queue with fallback chain, size/page/OCR guards, history; `parsers.vision` images described by Claude | via store |
 | `prax.embeddings` | ONNX embedder registry (bge-small default), provider/variant selection, hash embedder for tests | no |

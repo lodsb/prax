@@ -82,7 +82,7 @@ def test_delta_then_merge(
     hits = store.search(con, "granular cloud textures", mode="vec")
     assert hits and hits[0]["doc_id"] == b
     # a large delta merges by itself on save
-    monkeypatch.setattr(store, "DELTA_MERGE_AT", 1)
+    monkeypatch.setattr(store.retrieval, "DELTA_MERGE_AT", 1)
     store.ingest_text(con, "wave digital filter diode clipper " * 20, title="C")
     _embed_all(con)
     assert not delta.exists()

@@ -502,8 +502,16 @@ fraction):
       install needs no manual download and the config stays
       declarative. The llama-server binary the same way (howto 3k
       already documents its download).
-- [ ] `prax.store` (3,800 lines) as a package split by concern (documents
-      and index, search, graph, review, pages, jobs) behind the same door.
+- [x] `prax.store` split into a package (2026-09-12): `base` (connection,
+      lock, archive, index files), `documents` (ingest, read, meta,
+      domains, promotion, retiring, the document field), `retrieval`
+      (query expansion, FTS, vectors and their delta, fusion, rerank),
+      `graph` (entities, edges, traversal, review, selection), `pages`,
+      `jobs`, `summary` (`stats`). The `__init__` re-exports all 203
+      names, so `store.<name>` is unchanged everywhere and no caller
+      imports a submodule; inside, a module may import only from the
+      ones before it in that order, which is checked by the split
+      itself. 4,099 lines became seven files of 120 to 1,230.
 - [x] The `prax` command (2026-09-12, `clients/cli/`): a client like
       the extension beside it, one HTTP call per command, no database.
       Everyday: search, ask, add (files, folders, URLs, a pipe), show,

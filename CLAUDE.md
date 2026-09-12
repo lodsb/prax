@@ -34,6 +34,10 @@ drop folder (`docs/sources.md`).
    except `prax.store`. Ingest is two steps: `register` (archive the original,
    insert the row) and `index_text` (store the text artifact, chunk, FTS).
    Parsers call `index_text`; `ingest_text` composes both for plain text.
+   The store is a package (`base`, `documents`, `retrieval`, `graph`,
+   `pages`, `jobs`, `summary`) whose `__init__` re-exports every name, so
+   a caller writes `store.<name>` and never imports a submodule; inside it,
+   a module imports only from the ones before it in that order.
 4. **Single writer.** The service process (the door) is the only writer.
    The recurring passes (parse, titles, extract, embed) are done by
    workers that fetch work and post results through the door
