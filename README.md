@@ -139,27 +139,35 @@ planned passes: `docs/PLAN.md`.
 ## Where it sits among the others
 
 Every neighbour exposes tools to an agent now, so that is not what
-sets anything apart. Roughly, by family (the full comparison with
-sources, September 2026: `docs/research.md`):
+sets anything apart. The closest ones, one per family, on what does
+(● yes, ◐ partly or through an add-on, – no; September 2026, from the
+projects' own pages — the full comparison with sources is in
+`docs/research.md`):
 
-| if you want | look at | prax instead |
-|---|---|---|
-| to save, tag and find links and PDFs, with apps and extensions | Karakeep, Linkwarden, Raindrop, Readwise | reads what was saved rather than filing it: originals by hash, addressable chunks, a graph with evidence; no mobile app, no tagging UI |
-| your Zotero library open to an agent | ZotSeek, ZotPilot, zotero-mcp | imports the library read-only and puts captures, chats, stars and bookmarks in the same store, with a graph and pages on top |
-| a Markdown wiki an agent maintains | Karpathy's LLM wiki, SwarmVault, TideMind, Basic Memory, Obsidian + Smart Connections | keeps the originals canonical and the pages as one layer; a hand-written, versioned ontology instead of a schema the model infers; built at 10k documents and 900k chunks, where a wiki of pages is not the index |
-| memory or GraphRAG for an application you are building | Cognee, Graphiti, LightRAG, txtai, mem0 | a finished tool for a person, which agents also use; provenance on every edge (evidence, source, ontology version, producer, run, validity), a review queue, retire-not-delete; one SQLite file, no server databases |
-| an OCR archive of household paperwork | Paperless-ngx (+ paperless-ai) | research and making rather than administration; the graph, not tags, as the structure |
-| an agent that writes a literature review on its own | PaperQA2 | `ask` is the modest cousin: a bounded bundle, citations to the line, the answer kept as a page |
+| | originals kept, by hash | reads PDFs and papers | words + meaning search | typed graph | an ontology you write | who wrote each edge, from what | local models | no server database | apps, extension |
+|---|---|---|---|---|---|---|---|---|---|
+| **prax** | ● | ● | ● | ● | ● | ● | ● | ● | ◐ extension, no mobile |
+| Karakeep (bookmarks) | ◐ page archives | ◐ stored, text searched | ● | – | – | – | ● | ◐ SQLite + Meilisearch | ● |
+| Zotero + an MCP server | ● Zotero's own | ● | ◐ meaning | – | – | – | ● | ◐ Zotero's SQLite + an index | ● |
+| SwarmVault (LLM wiki) | ● `raw/` | ● | ● | ● | ◐ a schema file | ◐ extracted / inferred / ambiguous | ● | ● | ◐ clipper |
+| Cognee (agent memory) | – | ● | ● | ● | ● RDF | ◐ | ● | ◐ three embedded engines | – |
+| Paperless-ngx (documents) | ● | ● OCR | ◐ add-on | – | – | – | ◐ add-on | – | ◐ third-party apps |
 
-Its own, as far as that survey can see: the content-addressed store
-under one writer, the small modular ontology written by hand and
-stamped on every edge, provenance complete enough to redo a model's
-work, models as configuration with a measured local-first stance, and a
-Pi-class serving target with the model work drained through the door —
-on one real library rather than a demo. What it lacks that they have:
-mobile apps, audio and video ingestion, whole-corpus summaries, a
-hosted or multi-user option, thirty-tool MCP surfaces with CRUD on
-everything.
+Read the columns, not the dots: the bookmark manager is the one to
+keep links in and has the mobile app; the Zotero servers are the way to
+give an agent a curated library and nothing else; the LLM-wiki family
+makes the generated pages the index, where prax keeps the originals
+canonical and the pages as one layer among several; Cognee is a
+framework for an application's agents, prax a finished tool for a
+person that agents also use; Paperless files paperwork. Its own, as far
+as that survey can see: the content-addressed store under one writer,
+the small modular ontology written by hand and stamped on every edge,
+provenance complete enough to redo a model's work, models as
+configuration with a measured local-first stance, and a Pi-class
+serving target with the model work drained through the door — on one
+real library rather than a demo. What it lacks that they have: mobile
+apps, audio and video ingestion, whole-corpus summaries, a hosted or
+multi-user option, thirty-tool MCP surfaces with CRUD on everything.
 
 ## Quick start
 
