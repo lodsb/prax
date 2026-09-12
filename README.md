@@ -14,6 +14,31 @@ Claude Code.
 The name: the praxinoscope succeeded the zoetrope, same drum, sharper
 image. prax succeeds an external-disk store of the same library.
 
+## Four ways in
+
+**The web UI** is where you work: search and ask, read a document with
+its context column, browse, the graph, the review queue, pages, the
+inbox, the jobs. The service serves it itself, at `/ui/`.
+
+**The `prax` command** is the same library from a shell. `prax search`,
+`prax ask`, `prax add`, `prax import`, `prax show` are the everyday;
+`prax status`, `prax jobs`, `prax heal`, `prax backup` keep it; `prax
+serve` and `prax work` run it. Every command is one call to the
+service, `--json` makes it a script's, and `--door` points it at
+another machine — the board across the network, from the desktop.
+
+**The browser extension** sends in what you are reading: this tab or
+every tab in the window, as a self-contained snapshot with its images,
+or the PDF fetched with your own session when it sits behind a login.
+
+**The MCP server** opens the same library to Claude Code as tools —
+search, read, traverse, link, capture, write pages. It is a proxy with
+no logic of its own.
+
+Behind all four is one service that is the only writer, so a thing
+done in the UI, in the shell or by an agent goes the same way and
+leaves the same trace.
+
 ## What you can do
 
 **Sources.** Import a Zotero library, read-only. Drop files in
