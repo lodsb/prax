@@ -5,7 +5,7 @@
     python scripts/build_extension.py            # dist/prax-capture-<version>.xpi
     python scripts/build_extension.py --zip      # …and a .zip with the same content
 
-Development does not need this: load the clients/extension/ folder unpacked
+Development does not need this: load the clients/browser-extension/ folder unpacked
 (docs/extension.md). The .xpi is for a permanent install in a browser that
 allows unsigned add-ons (Waterfox, Firefox Developer Edition, ESR) or for
 signing through Mozilla's self-distribution channel.
@@ -20,7 +20,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-EXT = ROOT / "clients" / "extension"
+EXT = ROOT / "clients" / "browser-extension"
 
 
 def main() -> int:

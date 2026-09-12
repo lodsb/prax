@@ -79,7 +79,7 @@ comparing it with the hosted one are in `docs/eval/`.
 ## What it does, by layer
 
 - **Ingest.** A Zotero library imported read-only; files dropped in a
-  folder, uploaded, or sent from the browser (`clients/extension/`). Originals
+  folder, uploaded, or sent from the browser (`clients/browser-extension/`). Originals
   are archived by SHA-256; the database holds metadata and hashes only.
   Each document carries a domain set naming the ontology modules it is
   read against.
@@ -212,8 +212,8 @@ but may wait.
 
 ## License
 
-MIT, see `LICENSE`, except the browser extension: `clients/extension/` is
-AGPL-3.0 (`clients/extension/LICENSE`) because it bundles SingleFile for
+MIT, see `LICENSE`, except the browser extension: `clients/browser-extension/` is
+AGPL-3.0 (`clients/browser-extension/LICENSE`) because it bundles SingleFile for
 page snapshots,
 the way the Zotero connector does; it is a separate program talking to
 the server over HTTP. The test fixture under `tests/fixtures/` holds open-access papers under their own Creative Commons terms; `tests/fixtures/zotero/README.md` lists them with their licenses.

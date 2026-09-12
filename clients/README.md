@@ -11,7 +11,7 @@ machine and against the one on the board:
 | | What | Talks to |
 |---|---|---|
 | `cli/` | the `prax` command: search, ask, add, show, status, work, serve (`docs/howto.md` 4a) | the door, through `prax.client` |
-| `extension/` | the browser extension: send a page, a PDF or a link to the library (`docs/extension.md`) | `/ingest/html`, `/ingest/file`, `/ingest/url` |
+| `browser-extension/` | the browser extension: send a page, a PDF or a link to the library (`docs/extension.md`) | `/ingest/html`, `/ingest/file`, `/ingest/url` |
 
 Two more clients live outside this folder because they ship inside the
 package: `prax.mcp_server` (the tools Claude Code sees, also a proxy of
@@ -20,5 +20,5 @@ work and posts results). The web UI in `src/prax/ui/` is served by the
 door itself.
 
 Licensing: the CLI is MIT with the rest of the repository;
-`extension/` is AGPL-3.0 (`extension/LICENSE`) because it vendors
+`browser-extension/` is AGPL-3.0 (`browser-extension/LICENSE`) because it vendors
 SingleFile for page snapshots.

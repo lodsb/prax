@@ -13,7 +13,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 UI = ROOT / "src" / "prax" / "ui"
-EXT = ROOT / "clients" / "extension"
+EXT = ROOT / "clients" / "browser-extension"
 NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="node is not installed")
 

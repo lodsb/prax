@@ -1,6 +1,6 @@
 # The browser extension
 
-Status: built (`clients/extension/`, 2026-09-12), one Manifest V3 codebase for
+Status: built (`clients/browser-extension/`, 2026-09-12), one Manifest V3 codebase for
 Firefox, Waterfox and Chrome; tested by hand in Waterfox first. The door
 it talks to is `prax.inbox` (howto 3l): `POST /ingest/html` takes a page
 as the browser rendered it, `POST /ingest/url` a bare URL, both with a
@@ -13,7 +13,7 @@ the repo is live at the next popup open; only manifest or background
 changes need the reload button.
 
 - **Waterfox, Firefox:** `about:debugging#/runtime/this-firefox`, "Load
-  Temporary Add-on…", pick `clients/extension/manifest.json`. That install lasts
+  Temporary Add-on…", pick `clients/browser-extension/manifest.json`. That install lasts
   until the browser restarts. For a permanent one, Waterfox (and Firefox
   Developer Edition or ESR) accepts unsigned add-ons once
   `xpinstall.signatures.required` is `false` in `about:config`: build
@@ -22,7 +22,7 @@ changes need the reload button.
   Firefox wants it signed: Mozilla's self-distribution channel does that
   in a minute per build.
 - **Chrome, Chromium, Edge:** `chrome://extensions`, developer mode on,
-  "Load unpacked", pick the `clients/extension/` folder (dragging the folder
+  "Load unpacked", pick the `clients/browser-extension/` folder (dragging the folder
   onto the page does the same).
 
 Then open the popup once, follow "options": the server (the door's

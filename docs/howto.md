@@ -712,7 +712,7 @@ Four ways in:
   rendered it (the extension's path, `docs/extension.md`), `POST
   /ingest/url {url, …}` to fetch server-side. `POST /ingest` (text) takes
   `domains` too. `GET /inbox` lists recent captures.
-- **The browser extension** (`clients/extension/`, `docs/extension.md`): "send
+- **The browser extension** (`clients/browser-extension/`, `docs/extension.md`): "send
   this tab" posts a self-contained snapshot (SingleFile: images, fonts
   and styles inlined, scripts removed), "send all tabs in window" does the
   same under one session id; a PDF tab is fetched again inside the

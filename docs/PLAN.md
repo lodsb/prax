@@ -107,7 +107,7 @@ Parsing is a batch job; the serving path never parses.
       (chunks, field and edges go; row, bytes and text stay), the same page
       sent again is one document by chunk fingerprint, a snapshot replaces
       a bare-DOM capture, `scripts/dedupe_captures.py` for what came before
-- [x] Browser extension (2026-09-12, `clients/extension/`, `docs/extension.md`):
+- [x] Browser extension (2026-09-12, `clients/browser-extension/`, `docs/extension.md`):
       Manifest V3 for Firefox, Waterfox and Chrome from one folder; "send
       this tab" (rendered DOM to `/ingest/html`, PDFs as URL to
       `/ingest/url`) and "send all tabs in window" under one session id,
@@ -115,7 +115,7 @@ Parsing is a batch job; the serving path never parses.
       progress and results in the popup; `scripts/build_extension.py`
       packs an .xpi; node tests for the helpers. Pages are saved as
       self-contained snapshots through vendored SingleFile (AGPL, so
-      `clients/extension/` carries its own licence); a PDF tab is fetched with
+      `clients/browser-extension/` carries its own licence); a PDF tab is fetched with
       the browser's session and uploaded; HTML originals are served
       with a sandboxing header
 - [x] Inbox folder (2026-09-12): `scripts/inbox.py [--watch] [--parse]`

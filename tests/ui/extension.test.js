@@ -1,10 +1,10 @@
-// The extension's pure helpers (clients/extension/lib.js):
+// The extension's pure helpers (clients/browser-extension/lib.js):
 // node --test tests/ui/extension.test.js
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const lib = require(path.join(__dirname, "..", "..", "clients", "extension", "lib.js"));
+const lib = require(path.join(__dirname, "..", "..", "clients", "browser-extension", "lib.js"));
 
 test("sessionId is a UTC stamp plus four hex characters", () => {
   const id = lib.sessionId(new Date(Date.UTC(2026, 8, 12, 9, 5, 7)), 0.5);
