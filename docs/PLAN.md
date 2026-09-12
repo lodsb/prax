@@ -457,6 +457,10 @@ Shape:
       proxy only if the door were ever exposed. Tailscale stays as one
       example (it is the least setup). About twenty mentions across
       CLAUDE.md, README, howto, architecture, extension.md and sources.md.
+- [ ] Word documents (`.doc`, `.docx`): no extractor today, a capture
+      stays pending forever. `.docx` is a zip of XML (a small extractor
+      of our own); `.doc` needs LibreOffice's headless conversion as an
+      explicit-only extractor, the way OCR is.
 - [ ] Models fetched on demand: a `models` entry may name `repo` and
       `file` instead of `path`; `prax models fetch <name>` (or the first
       use of the step) downloads into `<data dir>/models/` and records
