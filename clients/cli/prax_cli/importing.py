@@ -17,7 +17,7 @@ from . import out
 if TYPE_CHECKING:
     from prax.importers import feed
 
-WHAT = ("github", "chat", "links", "project")
+WHAT = ("github", "chat", "links", "project", "claude")
 
 
 def import_(door: Door, a: Any) -> int:
@@ -29,6 +29,8 @@ def import_(door: Door, a: Any) -> int:
         return _links(door, a)
     if a.what == "project":
         return _project(door, a)
+    if a.what == "claude":
+        return _claude(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
 
@@ -133,6 +135,44 @@ def _project(door: Door, a: Any) -> int:
         return 0
     a.domain = list(dict.fromkeys([*(a.domain or []), *cfg.domains])) or None
     return _run(door, a, project.SOURCE, items)
+
+
+def _claude(door: Door, a: Any) -> int:
+    from datetime import datetime
+
+    from prax.importers import claude
+
+    paths = [Path(p) for p in a.files] or [Path.cwd()]
+    since = None
+    if a.since:
+        try:
+            since = datetime.fromisoformat(a.since)
+        except ValueError:
+            out.fail(f"--since {a.since!r}: not a date (YYYY-MM-DD)")
+            return 2
+    found = list(claude.sessions(paths, since=since))
+    if not a.quiet:
+        where = ", ".join(str(p) for p in paths)
+        out.say(
+            out.bold("Claude Code sessions")
+            + out.dim(f"   {out.plural(len(found), 'session')} for {where}")
+        )
+        for s in found[:12]:
+            day = s.started.strftime("%Y-%m-%d") if s.started else "?"
+            out.hint(
+                f"  {day}  {(s.title or s.id[:8])[:50]}  ·  {len(s.messages)} turns,"
+                f" {s.tools} tool calls left out"
+            )
+        if len(found) > 12:
+            out.hint(f"  … and {len(found) - 12} more")
+    if not found:
+        if not a.quiet:
+            out.hint(
+                "  no transcripts: Claude Code keeps them under ~/.claude/projects/;"
+                " give a project directory, a transcript or a folder of them"
+            )
+        return 0
+    return _run(door, a, claude.SOURCE, claude.items(found))
 
 
 def _run(door: Door, a: Any, source: str, items: Iterable[feed.Item]) -> int:

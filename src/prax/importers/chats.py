@@ -237,14 +237,41 @@ def _pretty(month: str) -> str:
 
 def render(conv: Conversation, month: str, msgs: list[Message]) -> str:
     app = conv.app.capitalize()
-    pretty = _pretty(month)
-    lines = [f"# {conv.name} — {app}, {pretty}", ""]
+    return render_conversation(
+        conv, msgs, heading=f"# {conv.name} — {app}, {_pretty(month)}"
+    )
+
+
+_MD_HEADING = re.compile(r"^(#{1,6})(\s)", re.MULTILINE)
+
+
+def render_conversation(
+    conv: Conversation,
+    msgs: list[Message],
+    *,
+    heading: str,
+    preface: str | None = None,
+    style: str = "lines",
+) -> str:
+    """Messages as Markdown under day headings. ``lines``: one line per
+    message (chats); ``turns``: a heading per message with the text
+    verbatim beneath, its own headings demoted (a session with an agent,
+    whose answers are long and structured)."""
+    lines = [heading, ""]
+    if preface:
+        lines += [preface, ""]
     day = None
     for m in msgs:
         d = m.at.strftime("%Y-%m-%d")
         if d != day:
             lines += [f"## {d}", ""]
             day = d
+        if style == "turns":
+            lines += [f"### {m.who} · {m.at.strftime('%H:%M')}", ""]
+            if m.quote:
+                lines += [f"> {' '.join(m.quote.split())[:300]}", ""]
+            lines += [_MD_HEADING.sub(r"###\1\2", m.text.strip()), ""]
+            continue
         head = f"**{m.who}** {m.at.strftime('%H:%M')} —"
         if m.quote:
             lines.append(f"> {' '.join(m.quote.split())[:300]}")

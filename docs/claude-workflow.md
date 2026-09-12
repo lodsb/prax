@@ -22,7 +22,8 @@ commands and a session-end hook:
 | `/prax:research <question>` | search, read, answer with `doc:<id>` citations; offers to keep the answer as a page |
 | `/prax:remember [what]` | this session's decisions and findings appended to the project's page, facts as edges |
 | `/prax:sync [--dry-run]` | the project's `.md`/`.rst`/`.txt`/`.adoc` files into the library |
-| hook `SessionEnd` | runs the sync for a project with a `.prax-project` file |
+| `/prax:archive [--since DATE] [--dry-run]` | the raw record: the project's Claude Code sessions (words, not tool calls) and the agent's memory files |
+| hook `SessionEnd` | runs the sync for a project with a `.prax-project` file, and the archive when it lists `archive: [transcripts, memory]` |
 
 From a checkout, `claude plugin marketplace add /path/to/prax` in place
 of the GitHub name. Restart Claude Code after installing or updating:
@@ -61,6 +62,15 @@ Three levels, from the cheapest up:
    `source_doc`. Everything the agent writes is stamped `agent`, so a
    session's work can be found and, if it was wrong, retired as a unit
    (`retire_run`).
+4. **The raw record.** `prax import claude .` (or `/prax:archive`, or
+   the hook with `archive: [transcripts, memory]` in `.prax-project`)
+   keeps each Claude Code session as a document: the person's turns and
+   the assistant's prose, tool calls and results left out, keyed by
+   session id and refreshed while the session grows; the project's
+   memory files go as `<name>-memory`. The page (2) is what was decided;
+   this is what was said. Transcripts can carry what was pasted into
+   them, which is why it is a separate opt-in and `--dry-run` lists the
+   sessions first.
 
 ## Library → project
 

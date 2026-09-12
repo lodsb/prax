@@ -43,7 +43,8 @@ prax`) shows up in the next session, not the current one. Then
 | `/prax:research <question>` | search, read, answer with citations; offers to keep the answer as a page |
 | `/prax:remember [what]` | this session's decisions and findings appended to the project's page, with edges for the facts |
 | `/prax:sync [--dry-run]` | the project's `.md`/`.rst`/`.txt`/`.adoc` files into the library, keyed by path |
-| hook `SessionEnd` | runs the sync for a project that has a `.prax-project` file; silent otherwise |
+| `/prax:archive [--since DATE] [--dry-run]` | the raw record: the project's Claude Code sessions (what was said, not what was run) and the agent's memory files |
+| hook `SessionEnd` | runs the sync for a project that has a `.prax-project` file, and the archive when that file asks for it; silent otherwise |
 
 ## Opting a project in
 
@@ -56,6 +57,27 @@ ontology modules its documents are read against:
 
 With it, the session-end hook sends the project's docs every time a
 session ends; without it, `/prax:sync` does the same on request.
+
+## What was decided, and what was said
+
+`/prax:remember` keeps what a session decided, distilled by the agent
+onto the project's page. `/prax:archive` keeps what was said: each
+Claude Code session as one document — the person's turns and the
+assistant's prose, with tool calls, results, thinking, sub-agent side
+chains and injected notifications left out — titled by the session's
+own title, keyed by session id, refreshed while it grows; and the
+memory files Claude Code keeps for the project, as `<name>-memory`.
+Later, "what did we decide" is a read of the page and "what did we say
+about the filter's tuning" is a search over the sessions.
+
+Transcripts can carry what was pasted into them, so archiving is a
+separate opt-in:
+
+    archive: [transcripts, memory]
+
+in `.prax-project` makes the session-end hook do it; without that line
+`/prax:archive` asks before sending, and `--dry-run` only lists the
+sessions.
 
 The project's page in the library is `project-<name>`. Page slugs are
 slugified — lower case, letters and digits, hyphens for the rest — so

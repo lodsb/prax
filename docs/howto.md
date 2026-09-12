@@ -961,8 +961,9 @@ Claude Code, uploaded to the door). What the agent writes is stamped
 For every other project, the plugin (`clients/claude-plugin/`,
 `docs/claude-workflow.md`) registers the server at user scope and adds
 the skill that says when to use it, the commands `/prax:scope`,
-`/prax:research`, `/prax:remember`, `/prax:sync`, and a session-end
-hook that syncs a project's docs:
+`/prax:research`, `/prax:remember`, `/prax:sync`, `/prax:archive`, and
+a session-end hook that syncs a project's docs (and, when asked, its
+sessions and memory files):
 
     export PRAX_PYTHON=/path/to/prax/.venv/bin/python
     claude plugin marketplace add lodsb/prax
@@ -1052,6 +1053,7 @@ or an app exported, sent through `POST /ingest` or `POST /ingest/url`.
     prax import links bookmarks.html pocket.csv medium-export.zip
     prax import links reading.txt --dry-run             # what would be added
     prax import project ~/work/synth --domain workshop   # a project's docs, keyed by path
+    prax import claude ~/work/synth --since 2026-09-01   # its Claude Code sessions, words only
 
 Every run skips what the library already holds (by key, or by URL) and
 `--refresh` re-reads what changed at the source. A new source of this

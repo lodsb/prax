@@ -35,8 +35,8 @@ or the PDF fetched with your own session when it sits behind a login.
 search, read, traverse, link, capture, write pages. It is a proxy with
 no logic of its own. The Claude Code plugin packages it with a skill
 that says when to reach for the library, `/prax:scope`, `/prax:research`,
-`/prax:remember` and `/prax:sync`, and a hook that keeps a project's
-docs in the library.
+`/prax:remember`, `/prax:sync` and `/prax:archive`, and a hook that
+keeps a project's docs — and, when asked, its sessions — in the library.
 
 Behind all four is one service that is the only writer, so a thing
 done in the UI, in the shell or by an agent goes the same way and
@@ -50,7 +50,8 @@ from the browser — a self-contained snapshot with its images, or the PDF
 fetched with your own session when it sits behind a login. `prax add` a
 file, a folder or a URL; `prax import` your GitHub stars, a Telegram,
 Signal or WhatsApp export, a browser's bookmarks, a Pocket or Raindrop
-CSV, Medium's export. What arrives gets its text, a proper title, its
+CSV, Medium's export, a project's docs, your Claude Code sessions. What
+arrives gets its text, a proper title, its
 place in the graph and its vectors on its own, on the machine with the
 models.
 
@@ -251,9 +252,10 @@ stamped on every edge. `GET /changes` is a stamp that moves when the
 store did; the UI polls it, and so can anything else. The Claude Code
 plugin (`clients/claude-plugin/`, `docs/claude-workflow.md`) adds the
 judgement: a skill for when to use the library, commands to orient a
-session, answer with citations, file decisions on the project's page
-and sync the project's docs, and a session-end hook that does the last
-on its own. The agent story is built for Claude Code today; the change
+session, answer with citations, file decisions on the project's page,
+sync the project's docs and archive its sessions (what was said, tool
+calls left out), and a session-end hook that does the last two on its
+own. The agent story is built for Claude Code today; the change
 feed is polling, not push; and "scheduled" means a cron line running
 `prax backup` or `prax import`.
 

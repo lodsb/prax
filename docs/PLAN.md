@@ -136,8 +136,11 @@ Parsing is a batch job; the serving path never parses.
       for when to use the library, `/prax:scope`, `/prax:research`,
       `/prax:remember`, `/prax:sync`, a session-end hook; underneath,
       `prax import project` (docs keyed by path, versioned by content)
-      and the `context` and `documents` tools. Open: whether a project
-      module (decision, requirement, component) earns ontology types
+      and the `context` and `documents` tools; `/prax:archive` and
+      `prax import claude` keep the sessions themselves (words, not
+      tool calls) as the raw record beside the page's distillation.
+      Open: whether a project module (decision, requirement, component)
+      earns ontology types
 - [ ] Backfill of the old zoetrope disk: the hash inventory in
       `scripts/backfill.py` gains a `--commit` mode that registers files
       through the store; review the dedupe report first

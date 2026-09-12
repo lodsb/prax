@@ -651,3 +651,193 @@ def test_a_project_lands_once_and_a_rewritten_note_replaces_itself(
     assert fresh["id"] != design["id"]
     assert "state variable" in door.get_json(f"/get/{fresh['id']}")["text"]
     assert door.get_json(f"/get/{design['id']}")["meta"]["retired"]["of"] == fresh["id"]
+
+
+# ------------------------------------------------------------------- claude
+
+
+def _transcript(path: Path, session: str, *, extra_turn: bool = False) -> None:
+    """A Claude Code transcript with every kind of line the reader meets."""
+    cwd = "I:\\work\\gadget"
+
+    def row(kind: str, **more: Any) -> str:
+        base = {
+            "type": kind,
+            "sessionId": session,
+            "cwd": cwd,
+            "gitBranch": "main",
+            "isSidechain": False,
+        }
+        return json.dumps({**base, **more})
+
+    lines = [
+        row("mode", mode="default"),
+        row("ai-title", aiTitle="Gadget filter tuning"),
+        row(
+            "user",
+            timestamp="2026-09-10T10:00:00.000Z",
+            message={"role": "user", "content": "how should we tune the filter?"},
+        ),
+        row(
+            "assistant",
+            timestamp="2026-09-10T10:00:05.000Z",
+            requestId="r1",
+            message={
+                "role": "assistant",
+                "content": [
+                    {"type": "thinking", "thinking": "private"},
+                    {"type": "text", "text": "Let me look at the manual."},
+                    {"type": "tool_use", "id": "t1", "name": "Read", "input": {}},
+                ],
+            },
+        ),
+        row(
+            "user",
+            timestamp="2026-09-10T10:00:06.000Z",
+            message={
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "t1", "content": "…"}
+                ],
+            },
+        ),
+        row(
+            "assistant",
+            timestamp="2026-09-10T10:00:09.000Z",
+            requestId="r1",
+            message={
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "## Tuning\n\nSet the cutoff to 2 kHz; see https://example.org/manual.",
+                    }
+                ],
+            },
+        ),
+        row(
+            "user",
+            timestamp="2026-09-10T10:01:00.000Z",
+            isMeta=True,
+            message={
+                "role": "user",
+                "content": "<local-command-stdout>x</local-command-stdout>",
+            },
+        ),
+        row(
+            "user",
+            timestamp="2026-09-10T10:01:01.000Z",
+            message={
+                "role": "user",
+                "content": "<task-notification>done</task-notification>",
+            },
+        ),
+        row(
+            "user",
+            timestamp="2026-09-10T10:01:02.000Z",
+            isSidechain=True,
+            message={"role": "user", "content": "subagent chatter"},
+        ),
+        row(
+            "user",
+            timestamp="2026-09-10T10:02:00.000Z",
+            message={
+                "role": "user",
+                "content": [{"type": "text", "text": "good, do that"}],
+            },
+        ),
+    ]
+    if extra_turn:
+        lines.append(
+            row(
+                "assistant",
+                timestamp="2026-09-11T09:00:00.000Z",
+                requestId="r2",
+                message={
+                    "role": "assistant",
+                    "content": [{"type": "text", "text": "Done."}],
+                },
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_a_claude_session_keeps_the_words_and_drops_the_machinery(
+    tmp_path: Path,
+) -> None:
+    from prax.importers import claude
+
+    t = tmp_path / "abcd1234-0000.jsonl"
+    _transcript(t, "abcd1234-0000")
+    s = claude.read(t)
+    assert (s.id, s.project, s.title, s.branch) == (
+        "abcd1234-0000",
+        "gadget",
+        "Gadget filter tuning",
+        "main",
+    )
+    assert [(m.who, m.text[:12]) for m in s.messages] == [
+        ("me", "how should w"),
+        ("claude", "Let me look "),
+        ("me", "good, do tha"),
+    ]
+    assert "Set the cutoff" in s.messages[1].text  # the two lines of one answer, merged
+    assert s.tools == 1 and s.dropped == {
+        "tool result": 1,
+        "meta": 1,
+        "injected": 1,
+        "side chain": 1,
+    }
+    (item,) = claude.items([s])
+    assert item.key == "gadget/abcd1234-0000" and item.version == str(s.lines)
+    assert item.title == "Gadget filter tuning (gadget, 2026-09-10)"
+    assert item.tags == ["claude", "project:gadget"]
+    assert item.text.startswith(
+        "# Gadget filter tuning — Claude Code session in gadget, 2026-09-10\n"
+    )
+    assert "1 tool calls left out_" in item.text
+    assert "### me · 10:00\n\nhow should we tune the filter?" in item.text
+    assert "##### Tuning\n" in item.text  # the answer's own heading, demoted
+    assert item.text.rstrip().endswith("## Links\n\n- https://example.org/manual")
+    assert item.meta["turns"] == 3 and item.meta["links"] == 1
+    assert claude.transcripts_for(Path("I:/proj/prax")).name == "I--proj-prax"
+
+
+def test_claude_sessions_are_found_by_project_and_land_once(
+    door: Door, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from prax.importers import claude
+
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    project = tmp_path / "gadget"
+    project.mkdir()
+    store_dir = claude.transcripts_for(project)
+    store_dir.mkdir(parents=True)
+    _transcript(store_dir / "s1.jsonl", "s1")
+    _transcript(store_dir / "s2.jsonl", "s2")
+    found = list(claude.sessions([project]))
+    assert {s.id for s in found} == {"s1", "s2"}
+    assert (
+        list(
+            claude.sessions(
+                [project], since=__import__("datetime").datetime(2026, 9, 11)
+            )
+        )
+        == []
+    )
+    report = feed.run(door, claude.SOURCE, claude.items(found))
+    assert (report.added, report.failed) == (2, [])
+    again = feed.run(door, claude.SOURCE, claude.items(claude.sessions([project])))
+    assert (again.added, again.seen) == (0, 2)
+    # the session went on: a longer transcript refreshes its document
+    _transcript(store_dir / "s1.jsonl", "s1", extra_turn=True)
+    third = feed.run(
+        door, claude.SOURCE, claude.items(claude.sessions([project])), refresh=True
+    )
+    assert (third.refreshed, third.seen) == (1, 1)
+    docs = door.get_json("/documents", {"source": "claude"})
+    assert docs["total"] == 2
+    s1 = next(d for d in docs["items"] if d["meta"]["claude"]["session"] == "s1")
+    assert s1["meta"]["claude"]["turns"] == 4
+    assert "Done." in door.get_json(f"/get/{s1['id']}")["text"]
