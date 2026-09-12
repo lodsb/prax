@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Import a Zotero library into prax.
 
-    python scripts/import_zotero.py R:/Zotero --dry-run            # inventory only
-    python scripts/import_zotero.py R:/Zotero --dry-run --hash     # + sha256 dedupe
-    python scripts/import_zotero.py R:/Zotero --commit --limit 500 # trial run
-    python scripts/import_zotero.py R:/Zotero --commit             # the whole library
+    python scripts/import_zotero.py /path/to/Zotero --dry-run            # inventory only
+    python scripts/import_zotero.py /path/to/Zotero --dry-run --hash     # + sha256 dedupe
+    python scripts/import_zotero.py /path/to/Zotero --commit --limit 500 # trial run
+    python scripts/import_zotero.py /path/to/Zotero --commit             # the whole library
 
 The library's ``zotero.sqlite`` is copied to ``--workdir`` (default: the prax
 data directory) and opened read-only; the live file is never touched.

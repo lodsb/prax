@@ -5,7 +5,7 @@ Copies the chosen items (plus their parents, attachments and notes) into a
 reduced ``zotero.sqlite`` and copies their ``storage/<KEY>/`` folders. The
 source library is opened read-only from a private copy and never modified.
 
-    python scripts/make_zotero_fixture.py R:/Zotero tests/fixtures/zotero \\
+    python scripts/make_zotero_fixture.py /path/to/Zotero tests/fixtures/zotero \\
         --keys 9QRPZL68 4L6ILMZN HW3N7956 U263HF74 MCNISPSX 6FRF9XDC \\
                EZLSQSMG 97KAI26I ZRWHFMBJ 35UKKWHM VVJITI78 \\
         --skip RGI62LBN

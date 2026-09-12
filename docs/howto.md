@@ -116,11 +116,11 @@ The importer never opens the live `zotero.sqlite`; it copies the file into
 through `prax.store`. Details of the mapping: `docs/sources.md` §1.
 
     # read-only census; nothing is written. --hash adds sha256 dedupe (reads every file)
-    python scripts/import_zotero.py R:/Zotero --dry-run
+    python scripts/import_zotero.py /path/to/Zotero --dry-run
     # trial run, then the whole library. Re-runs skip what is already imported.
     $env:PRAX_DATA_DIR = "C:\prax-data"
-    python scripts/import_zotero.py R:/Zotero --commit --limit 500
-    python scripts/import_zotero.py R:/Zotero --commit --quiet
+    python scripts/import_zotero.py /path/to/Zotero --commit --limit 500
+    python scripts/import_zotero.py /path/to/Zotero --commit --quiet
 
 The test fixture in `tests/fixtures/zotero/` is regenerated with
 `scripts/make_zotero_fixture.py` (the exact command is in its docstring).

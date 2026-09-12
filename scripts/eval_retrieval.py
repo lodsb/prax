@@ -3,7 +3,7 @@
 
     python scripts/eval_retrieval.py                       # fixture store, all modes
     python scripts/eval_retrieval.py --out docs/eval/retrieval-2026-09-07.md
-    python scripts/eval_retrieval.py --store C:/prax-data  # an existing store
+    python scripts/eval_retrieval.py --store /path/to/store  # an existing store
     PRAX_EMBED=0 python scripts/eval_retrieval.py --modes fts
 
 Without ``--store`` a throwaway store is built from the Zotero fixture in a

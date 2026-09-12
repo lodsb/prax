@@ -9,14 +9,14 @@ and never writes back to where it read from (invariant 10).
 ## 1. Zotero library
 
 The primary corpus: years of curated PDFs with author, date, tag and
-collection metadata. The library lives on the external drive at
-`R:\Zotero` (not always mounted). The local Zotero directory on the dev
+collection metadata. The library lives on an external drive (not always
+mounted; `<zotero dir>` below). The local Zotero directory on the dev
 machine is a stale, empty 2022 install that is only useful for schema
 checks.
 
 ### Where Zotero keeps things
 
-    R:\Zotero\
+    <zotero dir>\
       zotero.sqlite          all metadata (661 MB; mostly Zotero's own full-text index)
       zotero.sqlite.bak      Zotero's automatic backups; ignore
       storage/<ITEMKEY>/     one folder per attachment item: the file plus
@@ -68,14 +68,15 @@ Consequences for the importer:
   (four copies of one 44 KB article, for instance). Hashing collapses
   them; all Zotero keys are kept in `meta.zotero.keys`.
 - **Space.** A full copy import needs about 22–26 GB for the archive plus
-  roughly 1.5 GB for the database and text artifacts. Free space at the
-  time of the census: C: 140 GB, I: 36 GB, R: 16 GB. The plan is a
-  scratch run on C: with `PRAX_DATA_DIR=C:\prax-data`, in three steps:
-  the fixture, then `--limit 500`, then the whole library. A zero-copy
+  roughly 1.5 GB for the database and text artifacts; the external drive
+  had no room for a second copy, the system drive did. The plan is a
+  scratch run there with `PRAX_DATA_DIR` set, in three steps: the
+  fixture, then `--limit 500`, then the whole library. A zero-copy
   variant (hard-linking into an archive on the same NTFS volume as
-  `storage/`) is an option if the store ever has to live on R: itself.
+  `storage/`) is an option if the store ever has to live beside the
+  library.
 
-### Scratch run result (2026-09-07, `C:\prax-data`)
+### Scratch run result (2026-09-07)
 
 Fixture, then `--limit 500` (36 s), then the whole library (656 s, no
 errors). Dry-run inventory matched the census: 12,188 file attachments,
