@@ -121,7 +121,7 @@ the tab shows, with a small popup for the few choices that matter.
 
 | Setting | What | Default |
 |---|---|---|
-| Server | the door's URL: `http://<tailscale-name>:8000` on the serving host, `http://127.0.0.1:8000` on the desktop | empty; the popup refuses to send until set |
+| Server | the door's URL: `http://<host on your private network>:8000` on the serving host, `http://127.0.0.1:8000` on the desktop | empty; the popup refuses to send until set |
 | Token | `PRAX_TOKEN`, stored in `chrome.storage.local` (never `sync`) | empty |
 | Default domains | preselected in the popup | none |
 | Close tabs after sending | for "send all tabs" | off |
@@ -140,11 +140,11 @@ The popup checks `GET /health` on open and shows the server's state
   `browser_specific_settings.gecko.id`, and the door can also take a
   wildcard for development. Preflight (OPTIONS) is answered by the CORS
   middleware without the token.
-- Transport: the door is reached over Tailscale (WireGuard), so plain
-  HTTP on the tailnet is private; the extension asks for
-  `host_permissions` on the server URL only, granted at install for the
-  configured host. HTTPS with Tailscale's certificates is a later step
-  if the door ever leaves the tailnet.
+- Transport: the door is reached over your private network (the LAN
+  or a VPN; Tailscale is one example), so plain HTTP is private there;
+  the extension asks for `host_permissions` on the server URL only,
+  granted at install for the configured host. TLS through a reverse
+  proxy is a later step if the door ever left the private network.
 - The token is a bearer secret in the browser's extension storage; it is
   as safe as the profile. Rotating it is setting a new `PRAX_TOKEN` and
   pasting it into the options page.

@@ -477,8 +477,10 @@ fraction):
       (invariant 7's 1 GB holds; the board's own number is still to be
       taken when it runs there). The venv on the desktop after this
       pass: 170 packages, 0.77 GB (from 188 and 4.0 GB).
-- [ ] Docs: "reachable over your private network" instead of Tailscale
-      as the assumption. Nothing in prax needs it; any VPN or the LAN
+- [x] Docs (2026-09-12): "reachable over your private network" instead
+      of Tailscale as the assumption, Tailscale kept as one example
+      (CLAUDE.md, howto 4 and 6, architecture, extension.md, sources.md,
+      ui.md, rationale R11, the options page). The note as written: Nothing in prax needs it; any VPN or the LAN
       does, the door listens on that interface and checks a token, plain
       HTTP inside the private network is fine, TLS through a reverse
       proxy only if the door were ever exposed. Tailscale stays as one

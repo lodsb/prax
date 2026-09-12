@@ -250,8 +250,8 @@ are open, without any intermediate service.
 - Manifest V3, one codebase for Chrome and Firefox.
 - Popup with two actions: *send this tab* and *send all tabs in this
   window*. Optional: close tabs after a successful send.
-- Options page: server URL (the Tailscale name of the Pi) and a bearer
-  token.
+- Options page: server URL (the Pi's name or address on your private
+  network) and a bearer token.
 - For each tab the extension injects a content script that returns
   `document.documentElement.outerHTML`, the URL, and the title, and posts
   them to `POST /ingest/html`. Capturing the rendered DOM rather than
@@ -272,8 +272,8 @@ are open, without any intermediate service.
   same canonical URL and records `meta.previous_capture` so versions are
   linked. Canonicalization strips tracking parameters and fragments.
 - Auth: bearer token in the `Authorization` header, compared in constant
-  time; the API is bound to the Tailscale address only. CORS allows the
-  extension origin.
+  time; the API is bound to the private network's interface only. CORS
+  allows the extension origin.
 
 The server side exists (`prax.inbox`, howto 3l): `POST /ingest/html`
 and `POST /ingest/url` as described, captures with `meta.capture

@@ -6,8 +6,9 @@ produce are in `CLAUDE.md`. Numbered so other docs can cite them (R1, R2…).
 
 ## R1. Compose around SQLite; do not adopt a monolith
 
-**Decision.** Build from libraries (FTS5, sqlite-vec, FastAPI, FastMCP,
-Docling, trafilatura) around one SQLite file rather than deploying Khoj,
+**Decision.** Build from libraries (FTS5, sqlite-vec, FastAPI, the
+official `mcp` package, Docling, trafilatura) around one SQLite file
+rather than deploying Khoj,
 RAGFlow, R2R, Cognee, or LightRAG-server.
 
 **Why.** Every all-in-one drags in Postgres, Elasticsearch, Neo4j, or Docker
@@ -262,20 +263,28 @@ path from "reading now" to "in the base" and needs nothing but the API.
 Both write through `prax.store`, so a front-end can be swapped without
 touching search. Importers are read-only on their source by invariant.
 
-## R10. FastMCP standalone, pinned to the 4.x line
+## R10. The MCP server is a proxy of the door, on the official `mcp` package
 
-**Decision.** Depend on `fastmcp>=4,<5` rather than the official `mcp`
-package's server API.
+**Decision.** `prax.mcp_server` depends on `mcp>=2,<3` (its `MCPServer`
+over stdio) and makes one HTTP call to the door per tool through
+`prax.client`; it imports no store module.
 
-**Why.** FastMCP is the de-facto standard and supports both stdio and
-streamable HTTP. Its versioning moves fast, so the pin is a major-version
-range and the installed version is checked in `howto.md`.
+**Why.** Until 2026-09-12 the server was a standalone FastMCP 4.x
+process importing the store, which made it a second writer next to the
+door (invariant 4's known deviation). A proxy needs no store
+dependencies in the process Claude Code spawns, works against a door on
+another machine, and the official package is what FastMCP itself builds
+on, so the framework bought nothing the proxy uses. Kept from the old
+decision: stdio only; a streamable-HTTP transport stays a "Later" item.
 
-## R11. Deployment: single file on an SSD, behind Tailscale
+## R11. Deployment: single file on an SSD, on a private network
 
 **Decision.** `data/` (database plus archive) lives on an external SSD on
-the Pi, never the SD card. The API and MCP-over-HTTP are reachable only over
-Tailscale. Backups are file copies (Litestream later).
+the Pi, never the SD card. The door is bound to the private network's
+interface only (the LAN or any VPN; Tailscale is one example, the least
+setup) and checks a bearer token; plain HTTP is fine there, TLS through
+a reverse proxy only if the door were ever exposed. Backups are file
+copies (Litestream later).
 
 **Why.** FTS and vector churn plus nightly jobs would wear an SD card; that
 is the top reliability risk. The single-file store makes backup and
@@ -385,7 +394,7 @@ structure the chunker found.
 **Cost.** A vendored Markdown renderer (about 40 KB) and, for the graph
 view, a force-layout library; both pinned files in the repo, no package
 manager. Streaming originals from the archive puts file serving on the
-door, which is fine behind Tailscale and a bearer token.
+door, which is fine inside a private network and behind a bearer token.
 
 **Revisit when.** The UI wants state of its own (saved searches,
 annotations); then that state is a table behind the door, still not a

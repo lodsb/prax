@@ -2,8 +2,9 @@
 
 Successor to the "zoetrope" external-disk store. A self-hosted knowledge base
 (PDFs + web snapshots) with hybrid search, a small knowledge graph, and a
-Claude/MCP agent interface. Runs on a Raspberry Pi / N100 home server behind
-Tailscale. Sources: a Zotero library, browser tabs sent from an extension, a
+Claude/MCP agent interface. Runs on a Raspberry Pi / N100 home server
+reachable over a private network (the LAN, any VPN; Tailscale is one
+example). Sources: a Zotero library, browser tabs sent from an extension, a
 drop folder (`docs/sources.md`).
 
 ## Architecture invariants (do not violate without updating this file)

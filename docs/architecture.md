@@ -65,7 +65,7 @@ flowchart LR
 | Where | What runs | Why |
 |---|---|---|
 | Windows desktop (12 cores, GTX 1070 8 GB) | development, every batch job: import, parse, OCR, vision, embed, extract, resolve, eval; the local llama.cpp path | MuPDF layout analysis, OCR, embedding and a 7B model are CPU/GPU heavy; never on the serving path (invariant 7) |
-| Pi-class SBC (an 8 GB Radxa Dragon Q6A is on hand; a Mac mini or N100 box under consideration) | the HTTP door, the UI and the MCP door over Tailscale | under 1 GB resident: SQLite, FTS5, two memory-mapped usearch files and one query embedding |
+| Pi-class SBC (an 8 GB Radxa Dragon Q6A is on hand; a Mac mini or N100 box under consideration) | the HTTP door and the UI, reachable over the private network (the MCP server runs where Claude Code runs and talks to the door) | under 1 GB resident: SQLite, FTS5, two memory-mapped usearch files and one query embedding |
 
 The store is one directory (`PRAX_DATA_DIR`):
 

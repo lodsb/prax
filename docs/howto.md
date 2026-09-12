@@ -782,9 +782,12 @@ asks for the token once and exchanges it for an HttpOnly session cookie
 (`POST /session`, 30 days, `DELETE /session` to end it), so links to
 originals work in new tabs. Without `PRAX_TOKEN` the door admits
 loopback clients only, which is what a development server needs and what
-keeps a misconfigured deployment closed. Bind the service to the
-Tailscale address (`--host 100.x.y.z`) on the serving host; the MCP
-server over stdio needs no token.
+keeps a misconfigured deployment closed. On the serving host bind the
+service to the private network's interface (`--host <that address>`:
+the LAN, a VPN address; Tailscale's `100.x.y.z` is one example) and
+never to a public one; plain HTTP inside the private network is fine,
+TLS through a reverse proxy only if the door were ever exposed. The MCP
+server talks to the door with the same token.
 
 Endpoints:
 
@@ -841,8 +844,8 @@ The shape, to be finalized in Stage 1:
 
 - `data/` on the external SSD, `PRAX_DATA_DIR` set in the service
   environment.
-- `uvicorn prax.api:app --host 100.x.y.z --port 8000` bound to the
-  Tailscale address only, run from a systemd unit.
+- `uvicorn prax.api:app --host <private address> --port 8000` bound
+  to the private network's interface only, run from a systemd unit.
 - Parsing and embedding jobs scheduled with systemd timers on the batch
   host; they share the same `data/` over the network or the file is copied
   back after each run.

@@ -75,7 +75,7 @@ door's log.
   comes through the door. New UI data means a new read endpoint.
 - Responses stay agent-sized where an agent uses them; browsing endpoints
   are separate and may be larger (a document's chunks are one request).
-- Access is the door's bearer token, over Tailscale only. The page loads
+- Access is the door's bearer token, inside the private network. The page loads
   without it (static files are open); the first API call that returns
   401 shows a token prompt, `POST /session` turns the token into an
   HttpOnly cookie, and nothing is kept in browser storage.
