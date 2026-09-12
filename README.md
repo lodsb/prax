@@ -154,8 +154,8 @@ Then import a Zotero library (`scripts/import_zotero.py`), parse
 extract (`scripts/extract_graph.py`), in that order; each script has a
 dry run. Or skip the library: drop files into the store's `inbox/`
 folder, upload in the UI, or install the browser extension, and run
-`scripts/inbox.py --watch` on the batch host to take them the rest of
-the way. Copy `prax.example.yaml` to the store directory as `prax.yaml`
+`scripts/work.py --watch` on the machine with the models to take them
+the rest of the way (it talks to the door, never to the database). Copy `prax.example.yaml` to the store directory as `prax.yaml`
 to say which model does which step; extraction, image description and
 adjudication with Claude need `ANTHROPIC_API_KEY`. Extras: `embed`
 (vectors), `ingest` (PDF, HTML, code detection), `local` (a GGUF model in

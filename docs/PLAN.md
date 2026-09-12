@@ -381,17 +381,16 @@ part in use (as done with SingleFile) beats losing the capability.
 
 First, the process model (the cause of every failure on 2026-09-12:
 three processes writing one SQLite file, which invariant 4 forbids):
-- [ ] The door as the only writer. Batch passes become workers that
-      fetch work and post results through the door (the work protocol of
-      the deployment shape below), on the same machine or another; no
-      batch process opens the database file. The door holds the vector
-      index, adds vectors as they arrive and saves on its own schedule,
-      so the release-and-remap of the index file goes away. Reads get a
-      connection per thread, writes one lock, so a poll can never race a
-      search on the shared connection. The busy-timeout retry stays as a
-      safety net, not a mechanism. Estimated at a day; done before the
-      dependency cuts because it removes a class of failure, not a few
-      packages.
+- [x] The door as the only writer (2026-09-12): the work protocol
+      (`prax.work`: `GET/POST /work/{step}` with leases, session jobs),
+      the worker (`prax.worker`, `scripts/work.py`: parse, titles,
+      extract, embed with this machine's models, local drop folders
+      uploaded, never a paid model unasked, never the database), the
+      door consuming its own drop folder, vectors into a delta index
+      the door holds (merged into the main file on a schedule, so no
+      other process replaces a mapped file), a connection per request
+      thread for reads. Left as known deviations: the MCP server and the
+      one-off maintenance scripts, which still open the file.
 
 Memory on the batch host (found 2026-09-12 at 04:30, with the machine
 within a gigabyte of its commit limit):
@@ -492,19 +491,16 @@ model" is a selection over stamps at any moment, idempotent and
 restartable. What is missing is doing that work from another machine,
 since a batch pass opens the SQLite file directly today.
 
-- [ ] A work protocol on the door: `GET /work/<step>?limit` hands out a
-      batch with a short lease (extraction: the prepared prompt input per
-      document, about 12 KB; titles: text and hints; embedding: chunk
-      texts; parse: the original file), `POST /work/<step>` takes the
-      results (triples, a title, vectors, text) and applies them. The
-      door stays the only writer (the "single writer" item of the
-      housekeeping pass), the index-release dance goes, leases expire
-      back into the pool; results are idempotent anyway.
-- [ ] The watcher's worker mode: `scripts/inbox.py --door http://<board>:8000
-      --work` (or the future `prax work`) drains the queue whenever the
-      desktop is on, with the models of its own prax.yaml and the
-      never-spend-unasked rule; the board's own watcher keeps what needs
-      no model (HTML captures, dedupe).
+- [x] A work protocol on the door (2026-09-12, `prax.work`): `GET
+      /work/{step}?limit&scope` hands out a leased batch, `POST
+      /work/{step}` applies the results; the door stays the only writer,
+      the index-release dance is gone (delta indexes), leases expire
+      back into the pool.
+- [x] The worker (2026-09-12, `prax.worker`, `scripts/work.py --door
+      http://<board>:8000 --watch`): drains the queue whenever this
+      machine is on, with its own prax.yaml and the never-spend rule;
+      the door itself keeps what needs no model (the drop folder, HTML
+      captures, dedupe).
 - [ ] On the board: the int8 index by default (adding vectors loads the
       writable index into memory, 800 MB today), bearer token, the door
       bound to the Tailscale address.

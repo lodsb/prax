@@ -17,8 +17,10 @@ drop folder (`docs/sources.md`).
    themselves live in two usearch HNSW files per model next to the
    database (`data/vectors-<model>.usearch` keyed by chunk id,
    `data/vectors-doc-<model>.usearch` keyed by document id), memory-mapped
-   by the serving path and rebuilt by the batch job; nothing else lives
-   outside SQLite. No Postgres, no Neo4j, no server databases.
+   by the serving path, each with a small writable delta file beside it
+   (`…delta.usearch`) that takes new vectors and is folded into the main
+   file by a merge; nothing else lives outside SQLite. No Postgres, no
+   Neo4j, no server databases.
 2. **Files are content-addressed.** Originals (PDFs, HTML snapshots) live at
    `data/archive/<sha256[:2]>/<sha256>`. The DB stores metadata + hash only.
    Never store blobs in SQLite. The document hash is the sha256 of the
@@ -31,15 +33,20 @@ drop folder (`docs/sources.md`).
    except `prax.store`. Ingest is two steps: `register` (archive the original,
    insert the row) and `index_text` (store the text artifact, chunk, FTS).
    Parsers call `index_text`; `ingest_text` composes both for plain text.
-4. **Single writer.** The service process is the only writer. Batch jobs run
-   through the same store functions, serialized behind one lock.
-   *Known deviation:* the stdio MCP server that Claude Code spawns is a
-   second process importing the store directly (invariant 5), and so are
-   the batch passes on the same host. WAL, a 30 s busy timeout and a
-   retry with rollback in `store._serialized` make this safe at personal
-   scale. Once the service and
-   the MCP server live on the same host permanently, switch the MCP server
-   to proxy the HTTP door instead.
+4. **Single writer.** The service process (the door) is the only writer.
+   The recurring passes (parse, titles, extract, embed) are done by
+   workers that fetch work and post results through the door
+   (`prax.work` hands out and takes in, `prax.worker` does the work,
+   `scripts/work.py` runs it) and never open the database; the door
+   consumes its own drop folder and holds the vector delta indexes.
+   Inside the door, reads use a connection per request thread and
+   writes go one at a time behind the store's lock. *Known deviation:*
+   the stdio MCP server that Claude Code spawns imports the store
+   directly (invariant 5), and the one-off maintenance scripts (import,
+   backfill, acronyms, resolution, typing rules, replay, dedupe) still
+   open the file; WAL, a 30 s busy timeout and a retry with rollback in
+   `store._serialized` are the safety net for those, not a mechanism to
+   rely on. The MCP server is to become a proxy of the door.
 5. **The MCP server is a thin proxy.** `prax.mcp_server` imports `prax.store`
    directly (same process) and exposes tools; it contains no business logic.
 6. **Agent-shaped endpoints.** `search` returns compact snippets + ids, never

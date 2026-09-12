@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""The inbox watcher: what arrives (the drop folder, uploads, pages sent
-from the browser) is taken the rest of the way on the batch host: parsed,
-titled, read into the graph, embedded.
+"""One pass over the drop folder and the captures, on the store host,
+straight through the store (the door does this by itself while it runs:
+it scans ``data/inbox/`` and a worker, ``scripts/work.py``, does the
+model passes). This script is for the cases without a door: registering
+somebody's folder once, or a pass on a machine where nothing else runs.
 
     python scripts/inbox.py                       # one pass over everything new
-    python scripts/inbox.py --watch --interval 20 # keep going (the usual way)
     python scripts/inbox.py --no-extract --no-embed   # parse and titles only
     python scripts/inbox.py --dir D:/drop         # another drop folder (consumed)
     python scripts/inbox.py --from D:/papers --domains research
                                                   # somebody's folder: files stay
+
+``--watch`` still works but is not the way any more: two processes writing
+one store is what the worker protocol exists to avoid.
 
 Files: a file in ``inbox/<module>/`` belongs to that domain; ``<file>.json``
 next to a file is a sidecar (``title``, ``source_url``, ``domains``,

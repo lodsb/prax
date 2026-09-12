@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -30,14 +31,48 @@ from . import auth, embeddings, inbox, models, ontology, review, store, work
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
 
+def _con(request: Request) -> Any:
+    """The connection for this request's thread (reads in parallel, writes
+    one at a time behind the store's lock)."""
+    return store.thread_connection()
+
+
+def _scan_inbox(app: FastAPI, stop: threading.Event, every: float) -> None:
+    """The door consumes its own drop folder (``data/inbox/``): what lands
+    there is registered through the store without any other process.
+    Parsing and the model passes are a worker's business (``prax.worker``)."""
+    con = store.connect()
+    try:
+        while not stop.wait(every):
+            try:
+                rep = inbox.scan(con, inbox.inbox_dir())
+                if rep.registered or rep.failed:
+                    logging.getLogger("prax.inbox").info("drop folder: %s", rep)
+            except Exception:
+                logging.getLogger("prax.inbox").exception("drop folder scan failed")
+    finally:
+        con.close()
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     con = store.connect()
     store.init_db(con)
-    app.state.con = con
+    app.state.con = con  # the main connection: migrations, the change stamp
+    stop = threading.Event()
+    every = float(os.environ.get("PRAX_INBOX_SCAN", "20") or 0)
+    scanner = None
+    if every > 0:
+        scanner = threading.Thread(
+            target=_scan_inbox, args=(app, stop, every), name="prax-inbox", daemon=True
+        )
+        scanner.start()
     try:
         yield
     finally:
+        stop.set()
+        if scanner is not None:
+            scanner.join(timeout=5)
         con.close()
 
 
@@ -126,7 +161,7 @@ class LinkReq(BaseModel):
 @app.post("/ingest")
 def ingest(req: IngestText, request: Request) -> dict[str, Any]:
     result = store.ingest_text(
-        request.app.state.con,
+        _con(request),
         req.text,
         title=req.title,
         source_url=req.source_url,
@@ -135,7 +170,7 @@ def ingest(req: IngestText, request: Request) -> dict[str, Any]:
     if req.domains:
         try:
             for d in req.domains:
-                store.add_domain(request.app.state.con, result["doc_id"], d)
+                store.add_domain(_con(request), result["doc_id"], d)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
     return result
@@ -169,7 +204,7 @@ def retire(doc_id: int, req: RetireReq, request: Request) -> dict[str, Any]:
     """Take a document out of search and the graph; row and bytes stay."""
     try:
         return store.retire_document(
-            request.app.state.con,
+            _con(request),
             doc_id,
             reason=req.reason,
             duplicate_of=req.duplicate_of,
@@ -181,7 +216,7 @@ def retire(doc_id: int, req: RetireReq, request: Request) -> dict[str, Any]:
 @app.delete("/doc/{doc_id}/retire")
 def unretire(doc_id: int, request: Request) -> dict[str, Any]:
     try:
-        return store.unretire_document(request.app.state.con, doc_id)
+        return store.unretire_document(_con(request), doc_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
 
@@ -189,7 +224,7 @@ def unretire(doc_id: int, request: Request) -> dict[str, Any]:
 @app.post("/inbox/dedupe")
 def dedupe(request: Request, commit: bool = False) -> dict[str, Any]:
     """Retire the duplicate captures of each URL (dry run unless commit)."""
-    return store.dedupe_captures(request.app.state.con, commit=commit)
+    return store.dedupe_captures(_con(request), commit=commit)
 
 
 @app.post("/ingest/file")
@@ -208,7 +243,7 @@ def ingest_file(
     comma-separated; ``by`` says what sent it (the extension, a script)."""
     try:
         cap = inbox.ingest_upload(
-            request.app.state.con,
+            _con(request),
             file.file.read(),
             filename=file.filename,
             mime=file.content_type,
@@ -249,7 +284,7 @@ def ingest_html(req: IngestHtml, request: Request) -> dict[str, Any]:
     indexed through trafilatura at once."""
     try:
         cap = inbox.ingest_html(
-            request.app.state.con,
+            _con(request),
             req.html,
             url=req.url,
             title=req.title,
@@ -269,7 +304,7 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
     """Fetch a URL server-side and keep what came back."""
     try:
         cap = inbox.ingest_url(
-            request.app.state.con,
+            _con(request),
             req.url,
             title=req.title,
             domains=req.domains,
@@ -320,14 +355,14 @@ def work_session(req: WorkSessionReq, request: Request) -> dict[str, Any]:
     """A worker announces itself: a job row the Jobs view shows, with the
     worker's heartbeats."""
     job_id = store.job_start(
-        request.app.state.con, req.name, note=req.note, host=req.host, pid=0
+        _con(request), req.name, note=req.note, host=req.host, pid=0
     )
     return {"job_id": job_id, "leases": work.leases()}
 
 
 @app.post("/work/session/{job_id}")
 def work_beat(job_id: int, req: SessionBeat, request: Request) -> dict[str, Any]:
-    con = request.app.state.con
+    con = _con(request)
     if req.status in ("done", "failed"):
         store.job_finish(con, job_id, status=req.status, note=req.note)
     else:
@@ -342,7 +377,7 @@ def work_out(
     """A leased batch of work: parse, titles, extract or embed."""
     try:
         return work.hand_out(
-            request.app.state.con,
+            _con(request),
             step,
             limit=limit,
             scope=scope,
@@ -366,7 +401,7 @@ def work_in(step: str, req: WorkIn, request: Request) -> dict[str, Any]:
     """The results of a batch, applied by the door."""
     try:
         return work.take_in(
-            request.app.state.con,
+            _con(request),
             step,
             req.model_dump(exclude_none=True),
             worker=_worker(request),
@@ -389,8 +424,8 @@ def changes(request: Request) -> dict[str, Any]:
     """A stamp that changes when the store changed (this door's writes or
     another process's commits) and how many jobs are running: the UI polls
     it and re-renders a listing when the stamp moved."""
-    con = request.app.state.con
-    return {
+    con = request.app.state.con  # one fixed connection: its data_version moves
+    return {  # when any other connection commits, this door's threads included
         "stamp": f"{store.data_version(con)}-{request.app.state.writes}",
         "jobs": store.running_jobs(con),
     }
@@ -399,7 +434,7 @@ def changes(request: Request) -> dict[str, Any]:
 @app.get("/jobs")
 def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
     """What runs on the batch host and what ran lately."""
-    return store.list_jobs(request.app.state.con, limit=limit)
+    return store.list_jobs(_con(request), limit=limit)
 
 
 @app.post("/vectors/release")
@@ -414,7 +449,7 @@ def inbox_view(request: Request, limit: int = 50) -> dict[str, Any]:
     """The latest captures (uploads, sent pages, fetched URLs, dropped
     files) with their state, the drop folder, and the domains to choose."""
     return {
-        "recent": inbox.recent(request.app.state.con, limit=limit),
+        "recent": inbox.recent(_con(request), limit=limit),
         "inbox_dir": str(inbox.inbox_dir()),
         "modules": sorted(m for m in ontology.current().modules if m != ontology.CORE),
     }
@@ -424,9 +459,7 @@ def inbox_view(request: Request, limit: int = 50) -> dict[str, Any]:
 def get(
     doc_id: int, request: Request, offset: int = 0, max_chars: int | None = None
 ) -> dict[str, Any]:
-    doc = store.get_document(
-        request.app.state.con, doc_id, offset=offset, max_chars=max_chars
-    )
+    doc = store.get_document(_con(request), doc_id, offset=offset, max_chars=max_chars)
     if doc is None:
         raise HTTPException(404, "no such document")
     return doc
@@ -445,7 +478,7 @@ def search(
 ) -> list[dict[str, Any]]:
     try:
         return store.search(
-            request.app.state.con,
+            _con(request),
             q,
             limit,
             kind=kind,
@@ -461,7 +494,7 @@ def search(
 @app.get("/chunk/{chunk_id}")
 def chunk(chunk_id: int, request: Request) -> dict[str, Any]:
     """One chunk in full, with its kind, heading path, locator and table data."""
-    c = store.get_chunk(request.app.state.con, chunk_id)
+    c = store.get_chunk(_con(request), chunk_id)
     if c is None:
         raise HTTPException(404, "no such chunk")
     return c
@@ -472,7 +505,7 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
     edge = store.Edge(req.src, req.src_type, req.rel, req.dst, req.dst_type)
     try:
         eid = store.link(
-            request.app.state.con,
+            _con(request),
             edge,
             confidence=req.confidence,
             source_doc=req.source_doc,
@@ -486,7 +519,7 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
 
 @app.get("/traverse")
 def traverse(entity: str, request: Request, hops: int = 1) -> list[dict[str, Any]]:
-    return store.traverse(request.app.state.con, entity, hops)
+    return store.traverse(_con(request), entity, hops)
 
 
 @app.get("/ontology")
@@ -544,7 +577,7 @@ def review_list(
 ) -> dict[str, Any]:
     """Review items (misfit triples), oldest first, with the total; filters
     by relation and by unmapped (untyped) versus typed items."""
-    con = request.app.state.con
+    con = _con(request)
     kw: dict[str, Any] = {"open_only": open, "rel": rel, "unmapped": unmapped}
     return {
         "items": store.list_review(con, limit=limit, offset=offset, **kw),
@@ -561,7 +594,7 @@ def review_bulk(req: BulkReq, request: Request) -> dict[str, int]:
     if not req.rel and req.unmapped is None:
         raise HTTPException(400, "a filter is required")
     n = store.resolve_review_many(
-        request.app.state.con, req.resolution, rel=req.rel, unmapped=req.unmapped
+        _con(request), req.resolution, rel=req.rel, unmapped=req.unmapped
     )
     return {"resolved": n}
 
@@ -569,7 +602,7 @@ def review_bulk(req: BulkReq, request: Request) -> dict[str, int]:
 @app.post("/review/replay")
 def review_replay(request: Request) -> dict[str, Any]:
     """Link the typed open items the current ontology now accepts."""
-    rep = review.replay(request.app.state.con)
+    rep = review.replay(_con(request))
     return rep.__dict__
 
 
@@ -577,7 +610,7 @@ def review_replay(request: Request) -> dict[str, Any]:
 def resolve_review(review_id: int, req: ReviewReq, request: Request) -> dict[str, Any]:
     """Close a review item; ``linked`` writes it as an edge first, with the
     item's fields unless the request overrides the types or relation."""
-    con = request.app.state.con
+    con = _con(request)
     item = store.get_review(con, review_id)
     if item is None:
         raise HTTPException(404, "no such review item")
@@ -621,7 +654,7 @@ def documents(
 ) -> dict[str, Any]:
     """Documents without text, newest first, filtered for browsing."""
     return store.list_documents(
-        request.app.state.con,
+        _con(request),
         limit=limit,
         offset=offset,
         title=title,
@@ -635,7 +668,7 @@ def documents(
 def original(doc_id: int, request: Request) -> FileResponse:
     """The archived original with its MIME type, shown inline (a PDF opens
     in the browser's viewer; ``#page=N`` selects a page)."""
-    info = store.original_info(request.app.state.con, doc_id)
+    info = store.original_info(_con(request), doc_id)
     if info is None or not info["path"].exists():
         raise HTTPException(404, "no such document")
     name = Path(info["original_path"] or info["title"] or f"document-{doc_id}").name
@@ -652,7 +685,7 @@ def original(doc_id: int, request: Request) -> FileResponse:
 @app.get("/doc/{doc_id}/text")
 def text(doc_id: int, request: Request) -> PlainTextResponse:
     """The Markdown text artifact of a document."""
-    doc = store.get_document(request.app.state.con, doc_id)
+    doc = store.get_document(_con(request), doc_id)
     if doc is None:
         raise HTTPException(404, "no such document")
     return PlainTextResponse(doc["text"], media_type="text/markdown; charset=utf-8")
@@ -662,16 +695,16 @@ def text(doc_id: int, request: Request) -> PlainTextResponse:
 def chunks(doc_id: int, request: Request) -> list[dict[str, Any]]:
     """The document as its chunks in order, with kind, heading, page, text."""
     try:
-        store.get_meta(request.app.state.con, doc_id)
+        store.get_meta(_con(request), doc_id)
     except KeyError as exc:
         raise HTTPException(404, "no such document") from exc
-    return store.list_chunks(request.app.state.con, doc_id)
+    return store.list_chunks(_con(request), doc_id)
 
 
 @app.get("/entities")
 def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
     """Entities whose name contains ``q``, most connected first."""
-    return store.find_entities(request.app.state.con, q, limit=limit)
+    return store.find_entities(_con(request), q, limit=limit)
 
 
 @app.get("/doc/{doc_id}/context")
@@ -679,7 +712,7 @@ def doc_context(doc_id: int, request: Request, limit: int = 8) -> dict[str, Any]
     """What places the document in the library: summary and entities,
     citations in and out, nearest documents by vector, documents sharing
     entities or authors, Zotero parent and siblings."""
-    ctx = store.document_context(request.app.state.con, doc_id, limit=limit)
+    ctx = store.document_context(_con(request), doc_id, limit=limit)
     if ctx is None:
         raise HTTPException(404, "no such document")
     return ctx
@@ -713,12 +746,12 @@ class MemberReq(BaseModel):
 @app.get("/pages")
 def pages(request: Request, kind: str | None = None) -> list[dict[str, Any]]:
     """Pages, most recently revised first."""
-    return store.list_pages(request.app.state.con, kind=kind)
+    return store.list_pages(_con(request), kind=kind)
 
 
 @app.get("/page/{slug}")
 def page(slug: str, request: Request) -> dict[str, Any]:
-    p = store.get_page(request.app.state.con, slug)
+    p = store.get_page(_con(request), slug)
     if p is None:
         raise HTTPException(404, "no such page")
     return p
@@ -727,7 +760,7 @@ def page(slug: str, request: Request) -> dict[str, Any]:
 @app.get("/page/{slug}/revision/{revision}")
 def page_revision(slug: str, revision: int, request: Request) -> dict[str, Any]:
     try:
-        text = store.page_revision_text(request.app.state.con, slug, revision)
+        text = store.page_revision_text(_con(request), slug, revision)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"slug": slug, "revision": revision, "text": text}
@@ -739,7 +772,7 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
     one is refused with 409 unless ``force``; use append."""
     try:
         return store.write_page(
-            request.app.state.con,
+            _con(request),
             slug,
             req.text,
             title=req.title,
@@ -762,7 +795,7 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
 def append_page(slug: str, req: AppendReq, request: Request) -> dict[str, Any]:
     try:
         return store.append_page(
-            request.app.state.con,
+            _con(request),
             slug,
             req.section,
             heading=req.heading,
@@ -779,7 +812,7 @@ def append_page(slug: str, req: AppendReq, request: Request) -> dict[str, Any]:
 def add_member(slug: str, req: MemberReq, request: Request) -> dict[str, Any]:
     """``part_of`` edge from a document to a project page."""
     try:
-        eid = store.add_to_project(request.app.state.con, slug, req.doc_id)
+        eid = store.add_to_project(_con(request), slug, req.doc_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     return {"edge_id": eid, "existing": eid is None}
@@ -818,7 +851,7 @@ def ask(req: AskReq, request: Request) -> dict[str, Any]:
             ask_mod.answerer_named(req.backend) if req.backend else ask_mod.current()
         )
         return ask_mod.ask(
-            request.app.state.con,
+            _con(request),
             req.question,
             limit=max(1, min(req.limit, 20)),
             doctype=req.doctype,
@@ -835,7 +868,7 @@ def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
     """Append an answer (the result of ``POST /ask``) to a page as the agent."""
     try:
         return ask_mod.save(
-            request.app.state.con,
+            _con(request),
             req.result,
             req.slug,
             heading=req.heading,
@@ -858,7 +891,7 @@ class DomainsReq(BaseModel):
 def get_domains(doc_id: int, request: Request) -> dict[str, Any]:
     try:
         return {
-            "domains": store.document_domains(request.app.state.con, doc_id),
+            "domains": store.document_domains(_con(request), doc_id),
             "modules": sorted(
                 m for m in ontology.current().modules if m != ontology.CORE
             ),
@@ -872,9 +905,7 @@ def put_domains(doc_id: int, req: DomainsReq, request: Request) -> dict[str, Any
     """Replace the document's domain set; null means every module."""
     try:
         return {
-            "domains": store.set_domains(
-                request.app.state.con, doc_id, req.domains, by="human"
-            )
+            "domains": store.set_domains(_con(request), doc_id, req.domains, by="human")
         }
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
@@ -885,7 +916,7 @@ def put_domains(doc_id: int, req: DomainsReq, request: Request) -> dict[str, Any
 @app.post("/doc/{doc_id}/domains/{domain}")
 def post_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
     try:
-        return {"domains": store.add_domain(request.app.state.con, doc_id, domain)}
+        return {"domains": store.add_domain(_con(request), doc_id, domain)}
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
@@ -895,7 +926,7 @@ def post_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
 @app.delete("/doc/{doc_id}/domains/{domain}")
 def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
     try:
-        return {"domains": store.remove_domain(request.app.state.con, doc_id, domain)}
+        return {"domains": store.remove_domain(_con(request), doc_id, domain)}
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
 
@@ -912,16 +943,14 @@ class PromoteReq(BaseModel):
 def promote_doc(doc_id: int, req: PromoteReq, request: Request) -> dict[str, Any]:
     """Flag a document for the expensive pass (``extract_graph.py --promoted``)."""
     try:
-        return store.promote(
-            request.app.state.con, doc_id, by=req.by, reason=req.reason
-        )
+        return store.promote(_con(request), doc_id, by=req.by, reason=req.reason)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
 
 
 @app.delete("/doc/{doc_id}/promote")
 def unpromote_doc(doc_id: int, request: Request) -> dict[str, bool]:
-    return {"removed": store.unpromote(request.app.state.con, doc_id)}
+    return {"removed": store.unpromote(_con(request), doc_id)}
 
 
 @app.get("/promote")
@@ -932,8 +961,8 @@ def promote_view(request: Request, limit: int = 30) -> dict[str, Any]:
     producer = step["runtime"]
     return {
         "step": step,
-        "promoted": store.promoted_documents(request.app.state.con, producer=producer),
-        "candidates": store.promotion_candidates(request.app.state.con, limit=limit),
+        "promoted": store.promoted_documents(_con(request), producer=producer),
+        "candidates": store.promotion_candidates(_con(request), limit=limit),
     }
 
 
@@ -944,7 +973,7 @@ def graph_overview(
     """The most connected concepts, methods, tools and datasets, the edges
     among them, and co-occurrence links (hubs sharing at least
     ``min_shared`` source documents): what the graph view opens on."""
-    return store.hub_graph(request.app.state.con, limit=limit, min_shared=min_shared)
+    return store.hub_graph(_con(request), limit=limit, min_shared=min_shared)
 
 
 class UIError(BaseModel):

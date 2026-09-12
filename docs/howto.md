@@ -660,28 +660,36 @@ Four ways in:
   Chrome: chrome://extensions) and set the server and token in its
   options.
 - **Claude Code**: the `capture_url` MCP tool.
-- **The drop folder** `data/inbox/`: any file put there is registered by
+- **The drop folder** `data/inbox/`: the door consumes it by itself
+  while it runs (every `PRAX_INBOX_SCAN` seconds, 20 by default, 0 to
+  turn it off): any file put there is registered through the store
+  without another process.
 
-      python scripts/inbox.py                # one scan
-      python scripts/inbox.py --parse        # then parse what is pending
-      python scripts/inbox.py --watch --parse --interval 30
+- **The worker** takes every capture the rest of the way: it asks the
+  door for work, does it with the models of its own prax.yaml, and posts
+  the results (`prax.work` on the door, `prax.worker` here; howto 4
+  for the door):
 
-  The watcher is the batch host's side of every capture: on each pass
-  it parses what the door only registered, gives file-name titles a
-  real one, reads the new documents into the graph, and embeds what has
-  no vector (`prax.pipeline.process_captures`). It never spends money
-  (a step whose model is the Claude API is skipped with a note; the
-  promote pass is the way to that model) and never touches the curated
-  imports. Embedding has to replace the index files, which the door on
-  the same machine holds mapped: the watcher asks the door to let go
-  (`POST /vectors/release`, `--door`) and defers when it cannot. Each
-  pass is a job (`GET /jobs`, the Jobs view). `--no-titles`,
-  `--no-extract`, `--no-embed` switch steps off.
+      python scripts/work.py                       # one pass against the local door
+      python scripts/work.py --watch               # keep going (the usual way)
+      python scripts/work.py --door http://board:8000 --watch   # from another machine
+      python scripts/work.py --scope all --steps extract --limit 20   # a backlog pass
 
-  The watcher also consumes `Downloads/prax-inbox/` when that folder
-  exists (`--also` names others): the browser extension saves a file
-  there, with a sidecar, when a site hands the file to a navigation only
-  (`docs/extension.md`).
+  Four steps, each a batch the door hands out with a lease: parse (the
+  worker fetches the original and posts the text), titles, extract (the
+  door sends the prepared prompt input, the worker posts the triples),
+  embed (chunk and field texts out, vectors in, into the door's delta
+  index). The worker never spends money (a step whose model is the Claude
+  API is skipped with a note; the promote pass is the way to that model),
+  never opens the database, and never touches the curated imports unless
+  `--scope all` says so. It announces itself as a job with heartbeats, so
+  the Jobs view shows it wherever it runs. `--no-titles`, `--no-extract`,
+  `--no-embed`, `--no-parse` switch steps off.
+
+  The worker also uploads this machine's `Downloads/prax-inbox/` when
+  that folder exists (`--also` names others), sidecars included: the
+  browser extension saves a file there when a site hands the file to a
+  navigation only (`docs/extension.md`).
 
   A file in `inbox/<module>/` (say `inbox/family/`) lands in that domain;
   `<file>.json` next to a file is a sidecar (`title`, `source_url`,
@@ -692,15 +700,13 @@ Four ways in:
   download folder, a project's PDFs) is read with `--from <folder>
   [--domains research]`: every file under it is registered, nothing is
   moved or removed, and a second run finds them already known by hash.
-  `--parse` also indexes uploads and
-  fetched PDFs the door left pending (only captures, not the curated
-  imports' backlog), so a watcher on the batch host completes what the
-  door only registered: an uploaded PDF shows "pending" in the Inbox
-  view until `scripts/inbox.py --watch --parse` has been over it, and
-  the view refreshes itself while something is pending. Titles, graph
-  extraction and vectors are the usual passes afterwards
+  An uploaded PDF shows "pending" in the Inbox view until a worker has
+  been over it, and the view refreshes itself while something is
+  pending. `scripts/inbox.py` (one pass, straight through the store) is
+  for a machine without a door and for `--from`; the by-hand passes
   (`repair_titles.py --ids`, `extract_graph.py --ids`,
-  `embed_pending.py`).
+  `embed_pending.py`) still exist for a store host with the door
+  stopped.
 
 ### Jobs, and a UI that follows
 

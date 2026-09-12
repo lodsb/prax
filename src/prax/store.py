@@ -102,6 +102,21 @@ def _serialized(fn: Callable[P, R]) -> Callable[P, R]:
 # ------------------------------------------------------------- connection
 
 
+_local = threading.local()
+
+
+def thread_connection() -> sqlite3.Connection:
+    """This thread's own connection to the store (opened on first use,
+    kept for the thread's life). The door's request threads read on their
+    own connections; writes are still one at a time behind ``_LOCK``, and
+    the schema is applied once by the process's main connection."""
+    con = getattr(_local, "con", None)
+    if con is None:
+        con = connect()
+        _local.con = con
+    return con
+
+
 def connect(db_path: Path | None = None) -> sqlite3.Connection:
     path = db_path or config.db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
