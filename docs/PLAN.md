@@ -393,6 +393,25 @@ three processes writing one SQLite file, which invariant 4 forbids):
       dependency cuts because it removes a class of failure, not a few
       packages.
 
+Memory on the batch host (found 2026-09-12 at 04:30, with the machine
+within a gigabyte of its commit limit):
+- [ ] The watcher's resident footprint between passes: the embedding
+      runtime and the writable copies of the index files (4.8 GB of
+      commit) stay loaded after an embed pass. Release them when a pass
+      is over and load on demand, or run the embed step in a child
+      process that exits. With the door as the only writer (above) the
+      writable index copies leave the watcher altogether.
+- [ ] llama-server on Windows charges 20-30 GB of commit for a 22 GB
+      model whatever the load mode (the driver backs VRAM with system
+      commit); `--load-mode mmap` is the lighter one (launcher script
+      updated). Document the page-file requirement (at least twice the
+      RAM) in the howto's hardware section, and have the Jobs view show
+      available commit and free RAM so the wall is visible before it is
+      hit.
+- [ ] The extraction pass and the watcher share llama-server's three
+      slots; a fourth writer or a second GPU job would not fit. Note in
+      the howto which passes may run side by side on this machine.
+
 Performance, cheap first:
 - [ ] Expression indexes on the JSON paths every document-level filter
       scans (`meta.source`, `meta.retired`, `meta.extraction.ontology_version`,
