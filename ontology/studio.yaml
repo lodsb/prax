@@ -10,8 +10,15 @@
 # model queued for 19 gear documents under the research module: the
 # device and its maker, parts and features, the standards it speaks, its
 # rated specifications, and the document kinds that describe it.
+# v2 (2026-09-12): `describes`, `covers`, `names` and `written_by` take
+# any `document` rather than only this module's four kinds. The first
+# twelve workshop documents queued 67 items that were nothing but this:
+# a build log describes the device it makes, covers a concept, names a
+# part in passing and has an author, exactly as a manual does. A subtype
+# passes wherever its parent is allowed, so one word in each domain lets
+# every module's documents speak; nothing else changed.
 module: studio
-version: 1
+version: 2
 requires: [core]
 self_types: [manual, datasheet, schematic, article]
 
@@ -83,13 +90,13 @@ entity_types:
 
 relation_types:
   describes:
-    domain: [manual, datasheet, schematic, article]
+    domain: [document]
     range: [device, component]
     description: >-
       the document is the manual, datasheet, schematic, review or guide
       of this device or component; its main subject
   covers:
-    domain: [manual, datasheet, schematic, article]
+    domain: [document]
     range: [concept, standard]
     description: >-
       the document treats a concept or standard at length (granular
@@ -126,12 +133,12 @@ relation_types:
     range: [publication]
     description: the magazine, website or series the document was published in
   written_by:
-    domain: [article, manual, datasheet, schematic]
-    range: [person]
+    domain: [document]
+    range: [person, organization]
     description: a named author of the document (a reviewer, a designer credited on a schematic)
   names:
-    domain: [manual, datasheet, schematic, article]
-    range: [device, component, manufacturer, standard]
+    domain: [document]
+    range: [device, component, manufacturer, standard, tool]
     description: >-
       the document names a device, part, maker or standard in passing
       without describing it (a compatibility list, an aside). The weakest

@@ -656,6 +656,15 @@ def current(step: str = "extract") -> Extractor:
 # ------------------------------------------------------------------ apply
 
 
+def _placeholder(name: str) -> bool:
+    """A name the model copied out of its own prompt instead of reading it
+    from the text: "source name", "<name>", "unknown". The heal pass
+    (`store.repair`) mends what older passes wrote; this keeps new ones
+    from writing it at all."""
+    plain = name.strip().lower()
+    return plain in store.PLACEHOLDER_NAMES or not store.clean_name(name)
+
+
 @dataclass
 class ApplyReport:
     retired: int = 0  # the producer's earlier reading under another version
@@ -715,6 +724,8 @@ def apply(
             or t.confidence not in CONFIDENCES
             or _REFERENCE_NUMBER.match(t.src)
             or _REFERENCE_NUMBER.match(t.dst)
+            or _placeholder(t.src)
+            or _placeholder(t.dst)
         ):
             report.rejected += 1
             continue

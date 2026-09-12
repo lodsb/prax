@@ -91,13 +91,16 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
             ),
             f"summary{t}two or three sentences",
             (
-                f"triple{t}src=source name{t}src_type=source type{t}rel=relation"
-                f"{t}dst=target name{t}dst_type=target type{t}confidence=..."
-                f"{t}evidence=verbatim quote"
+                f"triple{t}src=<name>{t}src_type=<type>{t}rel=<relation>"
+                f"{t}dst=<name>{t}dst_type=<type>{t}confidence=<EXTRACTED or"
+                f" INFERRED or AMBIGUOUS>{t}evidence=<verbatim quote>"
             ),
-            f"unmapped{t}src=source name{t}rel=relation{t}dst=target name{t}reason=...",
+            f"unmapped{t}src=<name>{t}rel=<relation>{t}dst=<name>{t}reason=<why>",
             (
-                "The document's own name is its exact Title line, never the word"
+                "Angle brackets above mark what you replace: never write a"
+                " line that still contains them, and never use the words"
+                " inside them as a name."
+                " The document's own name is its exact Title line, never the word"
                 " 'paper'. Cite other papers by their title only; a bracketed"
                 " reference number is not a name. Do not repeat a triple as"
                 " unmapped, and do not list citations by number or by author and"

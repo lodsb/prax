@@ -173,7 +173,8 @@ def test_local_extractor_prompts_with_lines_and_applies(
     assert "Return JSON" not in str(call["system"])
     assert "Emit at most 9 triples" in str(call["system"])
     assert f"summary{SEP}two or three sentences" in str(call["system"])
-    assert f"triple{SEP}src=source name{SEP}src_type=" in str(call["system"])
+    assert f"triple{SEP}src=<name>{SEP}src_type=<type>" in str(call["system"])
+    assert "never use the words inside them as a name" in str(call["system"])
     assert "triple{1,9}" in str(call["grammar"])
     assert "Title: Paper X" in str(call["user"])
     assert result.triples == _sample().triples

@@ -189,7 +189,9 @@ from .pages import (  # noqa: F401
 )
 from .repair import (  # noqa: F401
     AILMENTS,
+    PLACEHOLDER_NAMES,
     Ailment,
+    clean_name,
     heal,
     health,
 )

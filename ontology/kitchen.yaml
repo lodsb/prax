@@ -11,8 +11,11 @@
 # v1 (2026-09-12): written with craft and workshop, before any document had
 # been read against it; the review queue of the first twenty says what is
 # missing.
+# v2 (2026-09-12): the first two recipes wanted to say that a frittata
+# is an omelette, so `variant_of` says it takes that too, with the words
+# the model reached for as aliases.
 module: kitchen
-version: 1
+version: 2
 requires: [craft]
 self_types: [recipe]
 
@@ -62,9 +65,10 @@ relation_types:
     domain: [recipe, dish]
     range: [recipe, dish]
     description: >-
-      this recipe or dish is a version of another one the text names: a
-      vegan variant, a regional version, "adapted from", "after Elizabeth
-      David"
+      this recipe or dish is a version or a kind of another one the text
+      names: a vegan variant, a regional version, "adapted from", "after
+      Elizabeth David", and a dish that is a kind of another dish (a
+      frittata is an omelette)
   belongs_to:
     domain: [recipe, dish]
     range: [cuisine]
@@ -96,5 +100,8 @@ relation_aliases:
   adapted_from: variant_of
   version_of: variant_of
   variation_of: variant_of
+  kind_of: variant_of
+  type_of: variant_of
+  category: variant_of
   from_cuisine: belongs_to
   cuisine_of: belongs_to

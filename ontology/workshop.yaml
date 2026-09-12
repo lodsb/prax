@@ -14,8 +14,12 @@
 # for modifying or repairing an existing device (`derived_from` and
 # `made_with` carry most of it), the bill of materials as a thing of its
 # own, and anything about cost or time.
+# v2 (2026-09-12): the first twelve builds wanted studio's `has_part`
+# for what a build contains, so `made_with` says in as many words that it
+# is the one to use; `follows` accepts a published schematic, which is
+# how half of these builds name their plan.
 module: workshop
-version: 1
+version: 2
 requires: [craft, studio]
 self_types: [build]
 
@@ -40,10 +44,12 @@ relation_types:
     range: [component, device, tool, material]
     description: >-
       a part, board, tool or material the build uses — the bill of
-      materials as far as the text names it. Quantities stay in the text
+      materials as far as the text names it. Quantities stay in the text.
+      This is the relation for what a build contains; `has_part` is for
+      what is inside a finished device somebody else made
   follows:
     domain: [build]
-    range: [design, technique]
+    range: [design, technique, schematic]
     description: >-
       the build is made to this design or by this technique, as the text
       says (a published schematic, a kit's instructions, a joint)
