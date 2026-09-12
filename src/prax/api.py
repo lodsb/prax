@@ -340,6 +340,7 @@ def _worker(request: Request) -> str:
 class WorkSessionReq(BaseModel):
     name: str = "worker"
     host: str | None = None
+    pid: int | None = None
     note: str | None = None
 
 
@@ -355,7 +356,7 @@ def work_session(req: WorkSessionReq, request: Request) -> dict[str, Any]:
     """A worker announces itself: a job row the Jobs view shows, with the
     worker's heartbeats."""
     job_id = store.job_start(
-        _con(request), req.name, note=req.note, host=req.host, pid=0
+        _con(request), req.name, note=req.note, host=req.host, pid=req.pid or 0
     )
     return {"job_id": job_id, "leases": work.leases()}
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import os
 import shutil
 import socket
 import time
@@ -431,7 +432,12 @@ def watch(
     try:
         session = door.post_json(
             "/work/session",
-            {"name": "worker", "host": door.name, "note": ", ".join(steps)},
+            {
+                "name": "worker",
+                "host": door.name,
+                "pid": os.getpid(),
+                "note": ", ".join(steps),
+            },
         )["job_id"]
     except Exception as exc:  # noqa: BLE001
         _say(log_, f"no session job: {exc}")
