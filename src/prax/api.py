@@ -758,9 +758,11 @@ def documents(
     mime: str | None = None,
     retired: bool = False,
     domain: str | None = None,
+    tag: str | None = None,
 ) -> dict[str, Any]:
     """Documents without text, newest first, filtered for browsing;
-    ``domain`` keeps one ontology module's documents."""
+    ``domain`` keeps one ontology module's documents, ``tag`` the
+    documents carrying a tag (``project:synth``)."""
     return store.list_documents(
         _con(request),
         limit=limit,
@@ -770,6 +772,7 @@ def documents(
         mime_prefix=mime,
         retired=retired,
         domain=domain or None,
+        tag=tag or None,
     )
 
 
@@ -865,7 +868,7 @@ def pages(request: Request, kind: str | None = None) -> list[dict[str, Any]]:
 
 @app.get("/page/{slug}")
 def page(slug: str, request: Request) -> dict[str, Any]:
-    p = store.get_page(_con(request), slug)
+    p = store.get_page(_con(request), store.slugify(slug))
     if p is None:
         raise HTTPException(404, "no such page")
     return p

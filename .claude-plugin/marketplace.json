@@ -1,0 +1,12 @@
+{
+  "name": "prax",
+  "owner": { "name": "lodsb", "url": "https://github.com/lodsb" },
+  "description": "prax, a library you run yourself, for Claude Code",
+  "plugins": [
+    {
+      "name": "prax",
+      "source": "./clients/claude-plugin",
+      "description": "Your library in every session: search, ask, the graph, pages, and a project's docs kept in it."
+    }
+  ]
+}

@@ -212,6 +212,98 @@ def promote(doc_id: int, reason: str | None = None) -> dict[str, Any]:
     )
 
 
+def _brief(rows: Any, keys: tuple[str, ...], limit: int) -> list[dict[str, Any]]:
+    out = []
+    for r in list(rows or [])[:limit]:
+        if isinstance(r, dict):
+            out.append({k: r[k] for k in keys if k in r})
+    return out
+
+
+@mcp.tool()
+def context(
+    doc_id: int | None = None, slug: str | None = None, limit: int = 8
+) -> dict[str, Any]:
+    """What places a document (by id) or a page (by slug) in the library,
+    compactly: its title and summary, the entities its edges point at,
+    what it cites and what cites it, the nearest documents, the notes on
+    it, and — for a project page — its members. Where ``search`` finds
+    things, ``context`` says what the library already knows around one;
+    a session on a project starts with ``context(slug="project/<name>")``.
+    Follow an id with ``get`` or ``get_chunk``; a name with ``traverse``.
+    """
+
+    def call() -> dict[str, Any]:
+        d = door()
+        if doc_id is None:
+            if not slug:
+                return {"error": "give a doc_id or a page slug"}
+            page = d.get_json(f"/page/{slug}")
+            target = page["doc_id"]
+        else:
+            target = doc_id
+        ctx = d.get_json(f"/doc/{target}/context", {"limit": limit})
+        return {
+            "doc_id": ctx.get("doc_id"),
+            "title": ctx.get("title"),
+            "summary": (ctx.get("summary") or "")[:1200],
+            "page": ctx.get("page"),
+            "entities": _brief(ctx.get("entities"), ("name", "type", "rel"), 40),
+            "cites": _brief(ctx.get("cites"), ("doc_id", "title"), limit),
+            "cited_by": _brief(ctx.get("cited_by"), ("doc_id", "title"), limit),
+            "similar": _brief(ctx.get("similar"), ("doc_id", "title", "score"), limit),
+            "notes": _brief(ctx.get("notes"), ("doc_id", "slug", "title"), limit),
+            "members": _brief(ctx.get("members"), ("doc_id", "title"), 40),
+        }
+
+    return _guard(call)
+
+
+@mcp.tool()
+def documents(
+    domain: str | None = None,
+    tag: str | None = None,
+    source: str | None = None,
+    title: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """List documents, newest first, without their text: by ontology
+    module (``domain``), by tag (``project:<name>``, ``chat:<name>``,
+    ``github:<topic>``), by source (``zotero``, ``capture``, ``github``,
+    ``chat``, ``project``), or by a title substring. Each row has the id,
+    title, mime, source and tags; read one with ``get``."""
+
+    def call() -> list[dict[str, Any]]:
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
+        for k, v in (
+            ("domain", domain),
+            ("tag", tag),
+            ("source", source),
+            ("title", title),
+        ):
+            if v:
+                params[k] = v
+        page = door().get_json("/documents", params)
+        rows = []
+        for r in page.get("items") or []:
+            meta = r.get("meta") or {}
+            rows.append(
+                {
+                    "doc_id": r.get("id"),
+                    "title": r.get("title"),
+                    "mime": r.get("mime"),
+                    "source": meta.get("source"),
+                    "tags": meta.get("tags") or [],
+                    "domains": meta.get("domains"),
+                    "created_at": r.get("created_at"),
+                }
+            )
+        return rows
+
+    return _guarded_list(call)
+
+
 @mcp.tool()
 def get_page(slug: str) -> dict[str, Any]:
     """A page of the library's wiki: its Markdown text, kind (addendum,

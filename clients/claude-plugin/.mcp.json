@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "prax": {
+      "type": "stdio",
+      "command": "${PRAX_PYTHON:-python}",
+      "args": ["-m", "prax.mcp_server"],
+      "env": {
+        "PRAX_DOOR": "${PRAX_DOOR:-http://127.0.0.1:8000}",
+        "PRAX_TOKEN": "${PRAX_TOKEN:-}"
+      }
+    }
+  }
+}

@@ -245,3 +245,22 @@ def test_import_links_dry_run_then_for_real(
     monkeypatch.delenv("PRAX_GITHUB_TOKEN", raising=False)
     monkeypatch.delenv("PRAX_GITHUB_USER", raising=False)
     assert run("import", "github") == 2  # whose stars?
+
+
+def test_import_project_reads_the_directory_quietly(
+    door: TestClient, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = tmp_path / "gadget"
+    root.mkdir()
+    (root / "NOTES.md").write_text("# Gadget\n\nDecisions.\n", encoding="utf-8")
+    (root / ".prax-project").write_text("domains: [workshop]\n", encoding="utf-8")
+    assert run("import", "project", str(root), "--quiet") == 0
+    assert capsys.readouterr().out == ""
+    assert run("import", "project", str(root)) == 0
+    printed = capsys.readouterr().out
+    assert "Project" in printed and "gadget" in printed and "1 already there" in printed
+    listing = door.get("/documents", params={"tag": "project:gadget"}).json()
+    assert listing["total"] == 1 and listing["items"][0]["meta"]["domains"] == [
+        "workshop"
+    ]
+    assert run("import", "project", str(tmp_path / "missing")) == 2

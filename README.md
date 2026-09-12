@@ -33,7 +33,10 @@ or the PDF fetched with your own session when it sits behind a login.
 
 **The MCP server** opens the same library to Claude Code as tools —
 search, read, traverse, link, capture, write pages. It is a proxy with
-no logic of its own.
+no logic of its own. The Claude Code plugin packages it with a skill
+that says when to reach for the library, `/prax:scope`, `/prax:research`,
+`/prax:remember` and `/prax:sync`, and a hook that keeps a project's
+docs in the library.
 
 Behind all four is one service that is the only writer, so a thing
 done in the UI, in the shell or by an agent goes the same way and
@@ -235,9 +238,9 @@ ids, `get` a window of one document, `traverse` a hop or two — so a
 model's context stays cheap.
 
 **For agents.** `prax.mcp_server` exposes the door to Claude Code as
-tools: `search`, `get`, `get_chunk`, `traverse`, `link`, `ask`,
-`get_page`, `write_page`, `append_page`, `ingest`, `ingest_file`,
-`capture_url`, `promote`, `set_domains`. It is a proxy with no logic of
+tools: `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`,
+`link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`,
+`ingest_file`, `capture_url`, `promote`, `set_domains`. It is a proxy with no logic of
 its own, so the door's handlers are the whole contract. Everything is
 addressable — document ids, chunk ids with character ranges, entity
 names, page slugs — and everything a model writes carries its
@@ -245,10 +248,14 @@ provenance, so an agent's contribution can coexist with yours, be
 inspected, and be retired as a unit when a better reading replaces it.
 The ontology module is the schema a workflow can trust: versioned, and
 stamped on every edge. `GET /changes` is a stamp that moves when the
-store did; the UI polls it, and so can anything else. The agent story
-is built for Claude Code today (`.mcp.json`); the change feed is
-polling, not push; and "scheduled" means a cron line running `prax
-backup` or `prax import`.
+store did; the UI polls it, and so can anything else. The Claude Code
+plugin (`clients/claude-plugin/`, `docs/claude-workflow.md`) adds the
+judgement: a skill for when to use the library, commands to orient a
+session, answer with citations, file decisions on the project's page
+and sync the project's docs, and a session-end hook that does the last
+on its own. The agent story is built for Claude Code today; the change
+feed is polling, not push; and "scheduled" means a cron line running
+`prax backup` or `prax import`.
 
 **For sources.** A new importer is a reader that yields items — a
 document of its own with a key and a version, or a link for the door to
@@ -299,6 +306,7 @@ built, module by module, with a "where to touch what" table:
 | `docs/PLAN.md` | Staged build plan with checklists and dates. |
 | `docs/sources.md` | Data sources: the Zotero import, citation sources, captures, the drop folder, `prax import` and what else would fit. |
 | `docs/extension.md` | The browser extension: installing it, what it sends, its settings, how it authenticates. |
+| `docs/claude-workflow.md` | prax in a Claude Code workflow: the plugin, a project's knowledge into the library and the library's into a project. |
 | `docs/eval/` | Measurements: extractors, retrieval on the fixture and the library, the local LLM, the document field. |
 | `docs/research.md` | The landscape survey the first decisions were drawn from, and a revisit from September 2026 placing prax among its neighbours. |
 | `prax.example.yaml` | Template for `prax.yaml`: models, steps, and every other setting. |

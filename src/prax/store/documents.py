@@ -1139,6 +1139,7 @@ def list_documents(
     mime_prefix: str | None = None,
     retired: bool = False,
     domain: str | None = None,
+    tag: str | None = None,
 ) -> dict[str, Any]:
     """Documents without their text, newest first, for browsing.
 
@@ -1146,9 +1147,10 @@ def list_documents(
     ``meta.source``; ``mime_prefix`` a MIME type prefix; ``retired`` lists
     the retired documents instead of the live ones; ``domain`` keeps the
     documents of one ontology module (a document without a domain set is
-    in every module and stays, as in search). Returns ``{"total",
-    "items"}`` where each item carries the row, its decoded ``meta`` and
-    its chunk count.
+    in every module and stays, as in search); ``tag`` keeps the documents
+    carrying that tag (``project:synth``). Returns ``{"total", "items"}``
+    where each item carries the row, its decoded ``meta`` and its chunk
+    count.
     """
     clauses: list[str] = [
         "json_extract(d.meta, '$.retired') IS " + ("NOT NULL" if retired else "NULL")
@@ -1160,6 +1162,11 @@ def list_documents(
             " (SELECT 1 FROM json_each(d.meta, '$.domains') WHERE value = ?))"
         )
         args.append(domain)
+    if tag:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM json_each(d.meta, '$.tags') WHERE value = ?)"
+        )
+        args.append(tag)
     if title:
         clauses.append("lower(d.title) LIKE ? ESCAPE '!'")
         args.append("%" + _like_prefix(title.lower())[:-1] + "%")

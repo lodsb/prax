@@ -551,3 +551,103 @@ def test_a_fetch_that_fails_is_reported_and_the_run_goes_on(
     assert "404" in report.failed[0][1]
     assert str(report) == "links: 1 added, 1 failed"
     assert feed.held_capture(door, "not a url") is None
+
+
+# ------------------------------------------------------------------ project
+
+
+def _project_tree(root: Path) -> None:
+    from prax.importers import project
+
+    (root / "README.md").write_text("# Synth firmware\n\nA build.\n", encoding="utf-8")
+    (root / "docs").mkdir()
+    (root / "docs" / "design.md").write_text(
+        "# Design\n\nWe chose a wave digital filter.\n", encoding="utf-8"
+    )
+    (root / "docs" / "notes.txt").write_text("plain notes\n", encoding="utf-8")
+    (root / "LICENSE.md").write_text("MIT\n", encoding="utf-8")
+    (root / "src").mkdir()
+    (root / "src" / "main.c").write_text(
+        "int main(void) { return 0; }\n", encoding="utf-8"
+    )
+    (root / "node_modules" / "x").mkdir(parents=True)
+    (root / "node_modules" / "x" / "README.md").write_text(
+        "vendored\n", encoding="utf-8"
+    )
+    (root / ".git").mkdir()
+    (root / ".git" / "COMMIT_EDITMSG.txt").write_text("wip\n", encoding="utf-8")
+    assert project.SETTINGS_FILE == ".prax-project"
+
+
+def test_a_projects_docs_are_read_with_keys_and_versions(tmp_path: Path) -> None:
+    from prax.importers import project
+
+    root = tmp_path / "synth-firmware"
+    root.mkdir()
+    _project_tree(root)
+    cfg = project.settings(root)
+    assert cfg.name == "synth-firmware" and cfg.domains == []
+    items = list(project.items(root, cfg))
+    assert [i.key for i in items] == [
+        "synth-firmware/README.md",
+        "synth-firmware/docs/design.md",
+        "synth-firmware/docs/notes.txt",
+    ]
+    design = items[1]
+    assert design.title == "Design (synth-firmware)"
+    assert design.tags == ["project:synth-firmware"]
+    assert design.meta["path"] == "docs/design.md" and len(design.version) == 16
+    assert items[2].title == "docs/notes.txt (synth-firmware)"
+    # the project's own file: name, modules, tags, what to include
+    (root / ".prax-project").write_text(
+        "name: synth\ndomains: [workshop, studio]\ntags: [firmware]\n"
+        "include: ['docs/**/*.md']\n",
+        encoding="utf-8",
+    )
+    cfg = project.settings(root)
+    assert (cfg.name, cfg.domains, cfg.tags) == (
+        "synth",
+        ["workshop", "studio"],
+        ["firmware"],
+    )
+    items = list(project.items(root, cfg))
+    assert [i.key for i in items] == ["synth/docs/design.md"]
+    assert items[0].tags == ["project:synth", "firmware"]
+    assert project.settings(root, name="other").name == "other"
+
+
+def test_a_project_lands_once_and_a_rewritten_note_replaces_itself(
+    door: Door, tmp_path: Path
+) -> None:
+    from prax.importers import project
+
+    root = tmp_path / "synth"
+    root.mkdir()
+    _project_tree(root)
+    cfg = project.settings(root)
+    first = feed.run(
+        door, project.SOURCE, project.items(root, cfg), domains=["workshop"]
+    )
+    assert (first.added, first.failed) == (3, [])
+    docs = door.get_json("/documents", {"tag": "project:synth"})
+    assert docs["total"] == 3
+    design = next(
+        d for d in docs["items"] if d["meta"]["project"]["path"] == "docs/design.md"
+    )
+    assert design["meta"]["domains"] == ["workshop"]
+    again = feed.run(door, project.SOURCE, project.items(root, cfg))
+    assert (again.added, again.seen) == (0, 3)
+    (root / "docs" / "design.md").write_text(
+        "# Design\n\nWe chose a wave digital filter, then a state variable filter.\n",
+        encoding="utf-8",
+    )
+    third = feed.run(door, project.SOURCE, project.items(root, cfg), refresh=True)
+    assert (third.refreshed, third.seen) == (1, 2)
+    now = door.get_json("/documents", {"tag": "project:synth"})
+    assert now["total"] == 3
+    fresh = next(
+        d for d in now["items"] if d["meta"]["project"]["path"] == "docs/design.md"
+    )
+    assert fresh["id"] != design["id"]
+    assert "state variable" in door.get_json(f"/get/{fresh['id']}")["text"]
+    assert door.get_json(f"/get/{design['id']}")["meta"]["retired"]["of"] == fresh["id"]

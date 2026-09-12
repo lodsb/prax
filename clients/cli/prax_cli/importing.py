@@ -17,7 +17,7 @@ from . import out
 if TYPE_CHECKING:
     from prax.importers import feed
 
-WHAT = ("github", "chat", "links")
+WHAT = ("github", "chat", "links", "project")
 
 
 def import_(door: Door, a: Any) -> int:
@@ -27,6 +27,8 @@ def import_(door: Door, a: Any) -> int:
         return _chat(door, a)
     if a.what == "links":
         return _links(door, a)
+    if a.what == "project":
+        return _project(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
 
@@ -103,9 +105,40 @@ def _links(door: Door, a: Any) -> int:
     return _run(door, a, links.SOURCE, items)
 
 
+def _project(door: Door, a: Any) -> int:
+    from prax.importers import project
+
+    root = Path(a.files[0]) if a.files else Path.cwd()
+    if not root.is_dir():
+        out.fail(f"{root}: not a directory")
+        return 2
+    try:
+        cfg = project.settings(root, name=a.name)
+    except (OSError, ValueError) as exc:
+        out.fail(str(exc))
+        return 2
+    items = list(project.items(root, cfg))
+    if not a.quiet:
+        modules = f" · modules {', '.join(cfg.domains)}" if cfg.domains else ""
+        out.say(
+            out.bold("Project")
+            + out.dim(
+                f"   {cfg.name} · {out.plural(len(items), 'document file')}"
+                f" under {root}{modules}"
+            )
+        )
+    if not items:
+        if not a.quiet:
+            out.hint("  nothing to send: no .md, .rst, .txt or .adoc files found")
+        return 0
+    a.domain = list(dict.fromkeys([*(a.domain or []), *cfg.domains])) or None
+    return _run(door, a, project.SOURCE, items)
+
+
 def _run(door: Door, a: Any, source: str, items: Iterable[feed.Item]) -> int:
     from prax.importers import feed
 
+    quiet = a.quiet or a.json
     report = feed.run(
         door,
         source,
@@ -115,7 +148,7 @@ def _run(door: Door, a: Any, source: str, items: Iterable[feed.Item]) -> int:
         refresh=a.refresh,
         limit=a.limit,
         dry_run=a.dry_run,
-        log=None if a.json else out.hint,
+        log=None if quiet else out.hint,
     )
     if a.json:
         print(
@@ -151,6 +184,10 @@ def _run(door: Door, a: Any, source: str, items: Iterable[feed.Item]) -> int:
             out.hint(f"  … and {len(report.planned) - 60} more")
         out.hint("Nothing was sent. Drop --dry-run to import.")
         return 0
+    if a.quiet:
+        for key, why in report.failed[:20]:
+            out.warn(f"{source}: {key}: {why}")
+        return 0 if not report.failed else 1
     out.say()
     out.say(out.bold(str(report)))
     for key, why in report.failed[:20]:

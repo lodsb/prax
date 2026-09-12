@@ -152,14 +152,17 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser(
         "import",
         parents=[door_opts, as_json],
-        help="what a service or an app exported: GitHub stars, chats, links",
+        help="what you keep elsewhere: GitHub stars, chats, links, a project's docs",
         description=(
             "Bring in what you keep elsewhere. github: your starred repositories"
             " (README and facts, one document each). chat: a Telegram Desktop or"
             " sigtop JSON export, a WhatsApp .txt, one document per conversation"
             " and month. links: browser bookmarks (.html), Pocket or Raindrop"
             " (.csv), a text file of URLs, or Medium's export (.zip); the door"
-            " fetches each link. Every run skips what the library already has."
+            " fetches each link. project: the documentation files under a"
+            " directory (.md, .rst, .txt, .adoc; a .prax-project file names the"
+            " project and its modules), keyed by path so --refresh replaces a"
+            " rewritten note. Every run skips what the library already has."
         ),
         epilog=(
             "examples:\n"
@@ -167,7 +170,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  PRAX_GITHUB_TOKEN=… prax import github        # your own stars\n"
             "  prax import chat 'Telegram Desktop/result.json' --links\n"
             "  prax import links bookmarks.html pocket.csv medium-export.zip\n"
-            "  prax import links reading.txt --dry-run"
+            "  prax import links reading.txt --dry-run\n"
+            "  prax import project . --domain workshop --refresh"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -176,7 +180,10 @@ def build_parser() -> argparse.ArgumentParser:
         "files",
         nargs="*",
         metavar="FILE",
-        help="export files (chat, links); for github, a user name",
+        help="export files (chat, links); a directory (project); a user name (github)",
+    )
+    s.add_argument(
+        "--name", metavar="NAME", help="project: its name (default: the directory's)"
     )
     s.add_argument(
         "--domain",
@@ -196,6 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument("--limit", type=int, metavar="N", help="send at most N")
     s.add_argument("--dry-run", action="store_true", help="list what would be added")
+    s.add_argument("--quiet", action="store_true", help="only failures are printed")
     s.add_argument("--token-github", metavar="TOKEN", help=argparse.SUPPRESS)
     s.set_defaults(func=importing.import_, needs_door=True)
 
@@ -423,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.command == "import":
         a.user = a.files[0] if a.what == "github" and a.files else None
-        if a.what != "github" and not a.files:
+        if a.what not in ("github", "project") and not a.files:
             out.fail("which files?", f"prax import {a.what} FILE…")
             return 2
     if a.command == "models":  # "prax models fetch <name>" reads better than a flag

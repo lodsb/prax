@@ -31,6 +31,8 @@ EXPECTED_TOOLS = {
     "promote",
     "set_domains",
     "capture_url",
+    "context",
+    "documents",
 }
 
 
@@ -193,3 +195,33 @@ def test_unreachable_door_is_an_error_not_a_crash() -> None:
     mcp_server.configure(base_url="http://127.0.0.1:9", token="")
     r = call("search", query="anything")
     assert "error" in r[0] and "not reachable" in r[0]["error"]
+
+
+def test_context_and_documents_are_compact() -> None:
+    a = call("ingest", text="wave digital filters model circuits " * 30, title="WDF")
+    b = call("ingest", text="feedback delay networks make reverb " * 30, title="FDN")
+    for rel, dst, dst_type in (("cites", "FDN", "paper"), ("uses", "Faust", "tool")):
+        call(
+            "link",
+            src="WDF",
+            src_type="paper",
+            rel=rel,
+            dst=dst,
+            dst_type=dst_type,
+            source_doc=a["doc_id"],
+        )
+    ctx = call("context", doc_id=a["doc_id"])
+    assert ctx["doc_id"] == a["doc_id"] and ctx["title"] == "WDF"
+    assert set(ctx) >= {"summary", "entities", "cites", "cited_by", "similar", "notes"}
+    assert [(e["name"], e["rel"]) for e in ctx["entities"]] == [("Faust", "uses")]
+    assert [c["title"] for c in ctx["cites"]] == ["FDN"]
+    assert "error" in call("context")
+    assert "error" in call("context", slug="no-such-page")
+    call("write_page", slug="Project Synth", text="# Synth\n\nA build.", kind="project")
+    page = call("context", slug="project-synth")
+    assert page["title"] == "Project synth" and page["page"]["slug"] == "project-synth"
+    rows = call("documents", title="wdf")
+    assert [r["doc_id"] for r in rows] == [a["doc_id"]]
+    assert rows[0]["source"] is None and rows[0]["tags"] == []
+    assert call("documents", tag="project:none") == []
+    assert {r["doc_id"] for r in call("documents")} >= {a["doc_id"], b["doc_id"]}

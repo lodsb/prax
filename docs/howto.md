@@ -952,11 +952,21 @@ here or on the board: `PRAX_DOOR` names it (default
 one; `.mcp.json` passes both through from the shell that launches Claude
 Code. A tool called while the door is down answers `{"error": "the door
 is not reachable ..."}` rather than failing. Tools: `search`, `get`,
-`get_chunk`, `traverse`, `link`, `ask`, `set_domains`, `promote`,
-`get_page`, `write_page`, `append_page`, `ingest`, `capture_url`,
-`ingest_file` (a file on the machine running Claude Code, uploaded to
-the door). What the agent writes is stamped `agent` (edges' producer,
-pages' author, domain sets, promotions).
+`get_chunk`, `context`, `documents`, `traverse`, `link`, `ask`,
+`set_domains`, `promote`, `get_page`, `write_page`, `append_page`,
+`ingest`, `capture_url`, `ingest_file` (a file on the machine running
+Claude Code, uploaded to the door). What the agent writes is stamped
+`agent` (edges' producer, pages' author, domain sets, promotions).
+
+For every other project, the plugin (`clients/claude-plugin/`,
+`docs/claude-workflow.md`) registers the server at user scope and adds
+the skill that says when to use it, the commands `/prax:scope`,
+`/prax:research`, `/prax:remember`, `/prax:sync`, and a session-end
+hook that syncs a project's docs:
+
+    export PRAX_PYTHON=/path/to/prax/.venv/bin/python
+    claude plugin marketplace add lodsb/prax
+    claude plugin install prax@prax
 
 ## 6. Deployment on the board (*the code is ready; the move is not made*)
 
@@ -1041,6 +1051,7 @@ or an app exported, sent through `POST /ingest` or `POST /ingest/url`.
     prax import chat signal/*.json                      # sigtop export-messages -f json
     prax import links bookmarks.html pocket.csv medium-export.zip
     prax import links reading.txt --dry-run             # what would be added
+    prax import project ~/work/synth --domain workshop   # a project's docs, keyed by path
 
 Every run skips what the library already holds (by key, or by URL) and
 `--refresh` re-reads what changed at the source. A new source of this

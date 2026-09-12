@@ -280,6 +280,7 @@ def document_context(
         ]
     return {
         "doc_id": doc_id,
+        "title": title,
         "page": dict(page_row) if page_row else None,
         "notes": notes,
         "members": members,

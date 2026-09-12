@@ -131,6 +131,13 @@ Parsing is a batch job; the serving path never parses.
       and Raindrop CSV, text, Medium's export); a reader yields items,
       `feed.run` sends them through the door and skips what is held
       (`docs/sources.md` 6, with the candidates that would fit next)
+- [x] Claude Code plugin (2026-09-13, `clients/claude-plugin/`,
+      `docs/claude-workflow.md`): the MCP server at user scope, a skill
+      for when to use the library, `/prax:scope`, `/prax:research`,
+      `/prax:remember`, `/prax:sync`, a session-end hook; underneath,
+      `prax import project` (docs keyed by path, versioned by content)
+      and the `context` and `documents` tools. Open: whether a project
+      module (decision, requirement, component) earns ontology types
 - [ ] Backfill of the old zoetrope disk: the hash inventory in
       `scripts/backfill.py` gains a `--commit` mode that registers files
       through the store; review the dedupe report first

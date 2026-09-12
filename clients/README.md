@@ -12,6 +12,7 @@ machine and against the one on the board:
 |---|---|---|
 | `cli/` | the `prax` command: search, ask, add, show, status, work, serve (`docs/howto.md` 4a) | the door, through `prax.client` |
 | `browser-extension/` | the browser extension: send a page, a PDF or a link to the library (`docs/extension.md`) | `/ingest/html`, `/ingest/file`, `/ingest/url` |
+| `claude-plugin/` | the Claude Code plugin: the MCP server registered for every session, a skill saying when to use the library, `/prax:scope`, `/prax:research`, `/prax:remember`, `/prax:sync`, a session-end hook (`docs/claude-workflow.md`) | the door, through `prax.mcp_server` and the `prax` command |
 
 Two more clients live outside this folder because they ship inside the
 package: `prax.mcp_server` (the tools Claude Code sees, also a proxy of
