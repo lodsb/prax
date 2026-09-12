@@ -194,6 +194,7 @@ what is needed.
 | `prax.chunking` | Markdown → structure-aware chunks with locators | no (pure) |
 | `prax.parsers` | extractor registry by MIME type with revisions; `parsers.queue` the parse queue with fallback chain, size/page/OCR guards, history; `parsers.vision` images described by Claude | via store |
 | `prax.embeddings` | ONNX embedder registry (bge-small default), provider/variant selection, hash embedder for tests | no |
+| `prax.config` | where the store is, and `prax.yaml`: the sections, dotted lookup, an environment variable overriding one setting for one run | no |
 | `prax.fetch` | model files fetched once into `<data dir>/models/` (plain HTTPS, resumable, the old Hugging Face cache reused); the embedder, the reranker and `scripts/fetch_model.py` for the GGUFs `prax.yaml` names with `repo` and `file` | no |
 | `prax.vectors` | a usearch index file: view for reads, writable copy for batch jobs, atomic save | no (writes the index file) |
 | `prax.ontology` | loads the module files in `ontology/` (core, research, studio), composes them (unique names, subtypes, aliases that never shadow a declared name, self types, a composed version), validates edge types, narrows to a document's domains | no |
@@ -305,14 +306,17 @@ loop); the queue makes each batch do real work.
 | `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `openai`, `stub`) and the `extract`, `promote`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k); `domains:` rules that give documents their domain set (`scripts/assign_domains.py`) |
 | `PRAX_EXTRACT`, `PRAX_PROMOTE`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE` | a model name or `none`: overrides the step for one run |
 | `PRAX_EXTRACT_MODEL`, `PRAX_ASK_MODEL`, `PRAX_VISION_MODEL`, `PRAX_EXTRACT_EFFORT` | the Claude model id (and effort) for a step that resolves to Claude |
-| `PRAX_CITATIONS_MAILTO` | polite-pool contact for Crossref and OpenAlex |
-| `PRAX_RERANK` | cross-encoder name, `stub`, or `0` (default off) |
-| `PRAX_ONTOLOGY` | another ontology directory (or a single legacy file) |
-| `PRAX_EMBED` | model name, `hash` (tests), `0` (off) |
-| `PRAX_EMBED_VARIANT`, `PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS` | onnxruntime precision, providers, threads |
-| `PRAX_VEC_DTYPE`, `PRAX_VEC_EF` | index precision (`f16`, `i8`) and search expansion |
-| `PRAX_MAX_LAYOUT_MB`, `PRAX_MAX_LAYOUT_PAGES` | caps for MuPDF layout analysis |
-| `PRAX_OCR_MAX_PAGES` | page budget of the OCR extractor |
+| `citations.mailto` [`PRAX_CITATIONS_MAILTO`] | polite-pool contact for Crossref and OpenAlex |
+| `rerank.model` [`PRAX_RERANK`] | cross-encoder name, `stub`, or `0` (default off) |
+| `ontology.dir` [`PRAX_ONTOLOGY`] | another ontology directory (or a single legacy file) |
+| `embeddings.model` [`PRAX_EMBED`] | model name, `hash` (tests), `0` (off) |
+| `embeddings.variant`, `.providers`, `.threads` | onnxruntime precision, providers, threads |
+| `vectors.dtype`, `vectors.ef` | index precision (`f16`, `i8`) and search expansion |
+| `parse.max_layout_mb`, `.max_layout_pages` | caps for MuPDF layout analysis |
+| `parse.ocr_max_pages` | page budget of the OCR extractor |
+| `door.cors_origins`, `door.inbox_scan_seconds` | the extension's origin; how often the door reads its drop folder |
+| `paths.models` | where fetched model files go (default `<data dir>/models`) |
+| **environment only** | `PRAX_DATA_DIR`, `PRAX_CONFIG`, `PRAX_TOKEN`, `PRAX_DOOR`, `PRAX_OFFLINE`, `PRAX_DEBUG`; a setting's own `PRAX_*` name overrides the file for one run |
 | `PRAX_PYTHON` | interpreter for the MCP server in `.mcp.json` |
 
 ## 9. Where to touch what

@@ -30,7 +30,10 @@ class Offline(RuntimeError):
 
 
 def models_dir() -> Path:
-    return Path(os.environ.get("PRAX_MODELS_DIR") or config.data_dir() / "models")
+    return Path(
+        config.setting("paths.models", "PRAX_MODELS_DIR")
+        or config.data_dir() / "models"
+    )
 
 
 def hub_url(repo: str, file: str, revision: str = "main") -> str:

@@ -6,17 +6,18 @@ fetched once into ``<data dir>/models`` (``prax.fetch``). Nothing here is import
 by the serving path until the first hybrid search, and ``PRAX_EMBED=0``
 keeps it out entirely (search stays FTS-only).
 
-Environment:
-
-* ``PRAX_EMBED``: ``0`` disables embeddings; ``hash`` selects the
-  deterministic test embedder; otherwise a model name from ``MODELS``
+Settings (``embeddings:`` in prax.yaml; the environment variable in
+brackets overrides it for one run):
+* ``model`` [``PRAX_EMBED``]: ``0`` disables embeddings; ``hash`` selects
+  the deterministic test embedder; otherwise a model name from ``MODELS``
   (default ``bge-small-en-v1.5``).
-* ``PRAX_EMBED_VARIANT``: ``int8`` (default: the faster one on CPU and on
-  DirectML alike, and what every vector in the store was made with) or
-  ``fp32``.
-* ``PRAX_EMBED_PROVIDERS``: comma-separated onnxruntime providers (default:
-  DirectML if the runtime offers it, else CPU).
-* ``PRAX_EMBED_THREADS``: intra-op threads for the CPU provider.
+* ``variant`` [``PRAX_EMBED_VARIANT``]: ``int8`` (default: the faster one
+  on CPU and on DirectML alike, and what every vector in the store was
+  made with) or ``fp32``.
+* ``providers`` [``PRAX_EMBED_PROVIDERS``]: onnxruntime providers
+  (default: DirectML if the runtime offers it, else CPU).
+* ``threads`` [``PRAX_EMBED_THREADS``]: intra-op threads for the CPU
+  provider.
 
 Every vector is L2-normalized, so cosine similarity is a dot product. The
 model name is what the store records per vector; changing the model means
@@ -35,7 +36,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from prax import fetch
+from prax import config, fetch
 
 
 @dataclass(frozen=True)
@@ -114,18 +115,22 @@ class OnnxEmbedder:
         available = ort.get_available_providers()
         providers = (
             self.providers
-            or _env_list("PRAX_EMBED_PROVIDERS")
+            or config.words("embeddings.providers", "PRAX_EMBED_PROVIDERS")
             or (
                 ["DmlExecutionProvider", "CPUExecutionProvider"]
                 if "DmlExecutionProvider" in available
                 else ["CPUExecutionProvider"]
             )
         )
-        variant = self.variant or os.environ.get("PRAX_EMBED_VARIANT") or "int8"
+        variant = (
+            self.variant or config.setting("embeddings.variant", "PRAX_EMBED_VARIANT")
+        ) or "int8"
         path = str(fetch.model_file(self.spec.repo, self.spec.files[variant]))
         opts = ort.SessionOptions()
         opts.log_severity_level = 3
-        threads = self.threads or int(os.environ.get("PRAX_EMBED_THREADS", "0"))
+        threads = self.threads or config.whole(
+            "embeddings.threads", "PRAX_EMBED_THREADS", 0
+        )
         if threads:
             opts.intra_op_num_threads = threads
         self._session = ort.InferenceSession(path, opts, providers=providers)
@@ -227,4 +232,4 @@ def current() -> Embedder | None:
 
     Built once per setting; the ONNX session itself loads on first use.
     """
-    return _build(os.environ.get("PRAX_EMBED", DEFAULT_MODEL))
+    return _build(str(config.setting("embeddings.model", "PRAX_EMBED", DEFAULT_MODEL)))

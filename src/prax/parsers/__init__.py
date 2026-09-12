@@ -42,13 +42,14 @@ import functools
 import importlib
 import importlib.metadata
 import mimetypes
-import os
 import re
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from prax import config
 
 
 @dataclass(frozen=True)
@@ -133,14 +134,14 @@ def _pymupdf4llm(data: bytes) -> str:
     ``PRAX_MAX_LAYOUT_MB`` (default 40) are refused so the plain extractor
     handles them instead of the process being killed.
     """
-    limit_mb = float(os.environ.get("PRAX_MAX_LAYOUT_MB", "40"))
+    limit_mb = config.number("parse.max_layout_mb", "PRAX_MAX_LAYOUT_MB", 40)
     if len(data) > limit_mb * 1e6:
         raise ExtractionError(
             f"{len(data) / 1e6:.0f} MB exceeds PRAX_MAX_LAYOUT_MB={limit_mb:g};"
             " plain extraction instead"
         )
     pymupdf4llm = importlib.import_module("pymupdf4llm")
-    max_pages = int(os.environ.get("PRAX_MAX_LAYOUT_PAGES", "400"))
+    max_pages = config.whole("parse.max_layout_pages", "PRAX_MAX_LAYOUT_PAGES", 400)
     with _pymupdf_open(data) as doc:
         if not _has_text_layer(doc):
             raise ExtractionError("no text layer in the first pages; needs OCR")
@@ -160,7 +161,7 @@ def _pymupdf4llm_ocr(data: bytes) -> str:
     and left for a deliberate run with a higher budget.
     """
     pymupdf4llm = importlib.import_module("pymupdf4llm")
-    budget = int(os.environ.get("PRAX_OCR_MAX_PAGES", "60"))
+    budget = config.whole("parse.ocr_max_pages", "PRAX_OCR_MAX_PAGES", 60)
     with _pymupdf_open(data) as doc:
         if doc.page_count > budget:
             raise ExtractionError(

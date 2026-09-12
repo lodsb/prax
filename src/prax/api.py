@@ -7,7 +7,6 @@ handlers; prax.store serializes access.
 from __future__ import annotations
 
 import logging
-import os
 import socket
 import threading
 from collections.abc import AsyncIterator
@@ -27,7 +26,18 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import ask as ask_mod
-from . import auth, embeddings, hostinfo, inbox, models, ontology, review, store, work
+from . import (
+    auth,
+    config,
+    embeddings,
+    hostinfo,
+    inbox,
+    models,
+    ontology,
+    review,
+    store,
+    work,
+)
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -66,7 +76,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.con = con  # the main connection: migrations, the change stamp
     store.job_reap(con)  # sessions left behind by a killed door or worker
     stop = threading.Event()
-    every = float(os.environ.get("PRAX_INBOX_SCAN", "20") or 0)
+    every = config.number("door.inbox_scan_seconds", "PRAX_INBOX_SCAN", 20.0)
     scanner = None
     if every > 0:
         scanner = threading.Thread(
@@ -98,12 +108,10 @@ async def _count_writes(request: Request, call_next: Any) -> Any:
 
 
 # A browser extension calls the door from its own origin
-# (chrome-extension://…, moz-extension://…): PRAX_CORS_ORIGINS lists the
-# origins allowed, comma-separated. Unset, no cross-origin request is
-# answered (the UI is same-origin).
-_cors = [
-    o.strip() for o in os.environ.get("PRAX_CORS_ORIGINS", "").split(",") if o.strip()
-]
+# (chrome-extension://…, moz-extension://…): door.cors_origins in prax.yaml
+# (or PRAX_CORS_ORIGINS, comma-separated) lists the origins allowed. Unset,
+# no cross-origin request is answered (the UI is same-origin).
+_cors = [o for o in config.words("door.cors_origins", "PRAX_CORS_ORIGINS")]
 if _cors:
     from fastapi.middleware.cors import CORSMiddleware
 

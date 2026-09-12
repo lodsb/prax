@@ -518,8 +518,15 @@ fraction):
       known deviation. `prax import`, `prax review type` and
       `prax domains assign` are worth adding once those move behind the
       door.
-- [ ] Most `PRAX_*` environment variables moved into prax.yaml sections
-      (the data directory stays an environment variable).
+- [x] Settings moved into prax.yaml (2026-09-12): sections
+      `embeddings`, `vectors`, `rerank`, `parse`, `citations`, `door`,
+      `ontology`, `paths` beside `models`, `steps` and `domains`, read
+      through `prax.config` (`setting`, `number`, `whole`, `words` by
+      dotted path). The matching `PRAX_*` variable still wins for one
+      run, so nothing that worked stopped working; an unknown section is
+      an error rather than a silent typo. Environment-only: the data
+      directory, the config path, the token, `PRAX_DOOR`, `PRAX_OFFLINE`,
+      `PRAX_DEBUG` and `PRAX_<STEP>`.
 
 ## Deployment shape: the board holds the store, the desktop does the model work (planned)
 

@@ -27,6 +27,8 @@ from typing import Any
 
 import numpy as np
 
+from prax import config
+
 DEFAULT_DTYPE = "f16"  # f16: recall 0.98, 784 MB; i8: 0.93, 456 MB (855 K x 384)
 DEFAULT_CONNECTIVITY = 16
 DEFAULT_EXPANSION_ADD = 128
@@ -49,8 +51,8 @@ class VectorIndex:
         self.path = path
         self.dim = dim
         self.writable = writable
-        dtype = os.environ.get("PRAX_VEC_DTYPE", DEFAULT_DTYPE)
-        ef = int(os.environ.get("PRAX_VEC_EF", DEFAULT_EXPANSION_SEARCH))
+        dtype = str(config.setting("vectors.dtype", "PRAX_VEC_DTYPE", DEFAULT_DTYPE))
+        ef = config.whole("vectors.ef", "PRAX_VEC_EF", DEFAULT_EXPANSION_SEARCH)
         if path.exists():
             if writable:
                 self._index = idx_mod.Index.restore(path, view=False)

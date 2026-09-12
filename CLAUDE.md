@@ -144,11 +144,15 @@ v5 adds organizations (affiliation, funding, who built a tool) and the weak
 - Embeddings: 384-dim (bge-small-class ONNX). Vectors are keyed by chunk
   id in the usearch file; changing the model means re-embedding into a new
   file, another dimension means a new file and `VEC_DIM`.
-- Which model does which AI step is configuration, not code:
-  `prax.yaml` in the data directory read through `prax.models`
-  (`resolve(step)`, `runtime(spec)`); a step module never reads a
-  model-choosing environment variable itself. `PRAX_<STEP>` overrides
-  a step for one run.
+- What a host chooses is configuration, not code: `prax.yaml` in the
+  data directory, read through `prax.models` for the models and steps
+  (`resolve(step)`, `runtime(spec)`) and `prax.config` for the rest
+  (`setting`, `number`, `words`, by dotted path: `embeddings`,
+  `vectors`, `rerank`, `parse`, `citations`, `door`, `ontology`,
+  `paths`). A module never invents an environment variable of its own;
+  it names a setting, and the matching `PRAX_*` variable overrides it
+  for one run. Environment-only: the data directory, the config path,
+  the token, the door's address, and the per-run switches.
 - Timestamps are UTC ISO-8601 strings.
 - Tests must not touch `data/`; use tmp_path fixtures and set
   `PRAX_DATA_DIR` before importing `prax.api`.

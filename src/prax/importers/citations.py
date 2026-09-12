@@ -26,7 +26,6 @@ their polite pools. Nothing here writes to the source or to the library
 from __future__ import annotations
 
 import json
-import os
 import re
 import sqlite3
 import time
@@ -39,7 +38,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from prax import store
+from prax import config, store
 
 OPENALEX = "https://api.openalex.org"
 CROSSREF = "https://api.crossref.org"
@@ -72,7 +71,9 @@ class HttpFetcher:
     def __init__(
         self, mailto: str | None = None, *, pause: float = 0.1, timeout: float = 30
     ) -> None:
-        self.mailto = mailto or os.environ.get("PRAX_CITATIONS_MAILTO")
+        self.mailto = mailto or config.setting(
+            "citations.mailto", "PRAX_CITATIONS_MAILTO"
+        )
         self.pause = pause
         self.timeout = timeout
         self.calls = 0

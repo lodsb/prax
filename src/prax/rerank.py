@@ -6,12 +6,13 @@ independent embeddings, at the price of one forward pass per candidate. It
 is therefore applied only to the top ``depth`` hits of a search, never to
 the index. The same ONNX + ``tokenizers`` route as ``prax.embeddings``.
 
-Environment:
-
-* ``PRAX_RERANK``: ``0`` (default, off), ``stub`` (token-overlap scorer for
-  tests), or a model name from ``MODELS``;
-* ``PRAX_RERANK_VARIANT``: ``fp32`` or ``int8`` (default int8 on CPU);
-* ``PRAX_RERANK_PROVIDERS``: onnxruntime providers.
+Settings (``rerank:`` in prax.yaml, the variable in brackets overrides
+it for one run):
+* ``model`` [``PRAX_RERANK``]: ``0`` (default, off), ``stub`` (a
+  token-overlap scorer for tests), or a model name from ``MODELS``;
+* ``variant`` [``PRAX_RERANK_VARIANT``]: ``fp32`` or ``int8`` (default
+  int8 on CPU);
+* ``providers`` [``PRAX_RERANK_PROVIDERS``]: onnxruntime providers.
 """
 
 from __future__ import annotations
@@ -25,7 +26,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from prax import fetch
+from prax import config, fetch
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,7 @@ DEFAULT_MODEL = "ms-marco-MiniLM-L-6-v2"
 def current_spec() -> ModelSpec | None:
     """The model ``PRAX_RERANK`` names, or None when reranking is off or a
     stub."""
-    name = os.environ.get("PRAX_RERANK", "0")
+    name = str(config.setting("rerank.model", "PRAX_RERANK", "0"))
     return MODELS.get(name)
 
 
@@ -88,7 +89,7 @@ class OnnxReranker:
         available = ort.get_available_providers()
         providers = (
             self.providers
-            or _env_list("PRAX_RERANK_PROVIDERS")
+            or config.words("rerank.providers", "PRAX_RERANK_PROVIDERS")
             or (
                 ["DmlExecutionProvider", "CPUExecutionProvider"]
                 if "DmlExecutionProvider" in available
@@ -98,7 +99,7 @@ class OnnxReranker:
         gpu = providers[0] != "CPUExecutionProvider"
         variant = (
             self.variant
-            or os.environ.get("PRAX_RERANK_VARIANT")
+            or config.setting("rerank.variant", "PRAX_RERANK_VARIANT")
             or ("fp32" if gpu else "int8")
         )
         opts = ort.SessionOptions()
@@ -181,4 +182,4 @@ def _build(setting: str) -> Reranker | None:
 
 def current() -> Reranker | None:
     """The configured reranker, or None (the default: reranking is off)."""
-    return _build(os.environ.get("PRAX_RERANK", "0"))
+    return _build(str(config.setting("rerank.model", "PRAX_RERANK", "0")))

@@ -64,3 +64,43 @@ steps:
     model: sonnet
   adjudicate:
     model: opus
+
+# ---------------------------------------------------------------------------
+# What this host does, as opposed to which model it asks. Every setting below
+# has a sane default; an environment variable of the same name in brackets
+# overrides it for one run (PRAX_EMBED=hash pytest). Delete what you do not
+# need — an empty section is the default.
+
+# embeddings:
+#   model: bge-small-en-v1.5   # [PRAX_EMBED] `0` off, `hash` for tests
+#   variant: int8              # [PRAX_EMBED_VARIANT] int8 (faster) or fp32
+#   providers: [DmlExecutionProvider, CPUExecutionProvider]  # [PRAX_EMBED_PROVIDERS]
+#   threads: 0                 # [PRAX_EMBED_THREADS] 0: onnxruntime decides
+
+# vectors:
+#   dtype: f16                 # [PRAX_VEC_DTYPE] f16 (recall .98) or i8 (.93,
+#                              #   half the file: the board's setting)
+#   ef: 64                     # [PRAX_VEC_EF] search expansion
+
+# rerank:
+#   model: "0"                 # [PRAX_RERANK] off; a cross-encoder name, or `stub`
+#   variant: int8              # [PRAX_RERANK_VARIANT]
+#   providers: []              # [PRAX_RERANK_PROVIDERS]
+
+# parse:
+#   ocr_max_pages: 60          # [PRAX_OCR_MAX_PAGES] budget of the OCR extractor
+#   max_layout_mb: 40          # [PRAX_MAX_LAYOUT_MB] above this, no layout analysis
+#   max_layout_pages: 400      # [PRAX_MAX_LAYOUT_PAGES]
+
+# citations:
+#   mailto: you@example.org    # [PRAX_CITATIONS_MAILTO] Crossref's polite pool
+
+# door:
+#   cors_origins: []           # [PRAX_CORS_ORIGINS] the browser extension's origin
+#   inbox_scan_seconds: 20     # [PRAX_INBOX_SCAN] the drop folder; 0 turns it off
+
+# ontology:
+#   dir: /path/to/ontology     # [PRAX_ONTOLOGY] another set of module files
+
+# paths:
+#   models: /path/to/models    # [PRAX_MODELS_DIR] where fetched model files go

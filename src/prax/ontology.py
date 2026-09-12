@@ -1,6 +1,6 @@
 """The versioned ontology: which entity and relation types the graph accepts.
 
-``ontology/`` (repo root, or ``PRAX_ONTOLOGY``) holds one YAML file per
+``ontology/`` (repo root, or ``ontology.dir`` in prax.yaml) holds one YAML file per
 module: ``core.yaml`` with the types every domain shares (person,
 organization, document, place, event, work, concept, tool) and one file
 per domain, ``research.yaml`` today, a ``family.yaml`` or ``production.yaml``
@@ -36,7 +36,6 @@ experiments).
 from __future__ import annotations
 
 import functools
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -346,7 +345,7 @@ def load_dir(directory: Path) -> Ontology:
 
 
 def path() -> Path:
-    return Path(os.environ.get("PRAX_ONTOLOGY", config.ONTOLOGY_PATH))
+    return Path(config.setting("ontology.dir", "PRAX_ONTOLOGY", config.ONTOLOGY_PATH))
 
 
 def _stamp(p: Path) -> tuple[Any, ...]:

@@ -594,12 +594,29 @@ document field is refreshed, which queues the document vector for
 wrong repair is fixed with `--ids <id>` after editing, or by calling
 `store.retitle` with the right title and `source="human"`.
 
-## 3k. Which model does which step: `prax.yaml`
+## 3k. What this host does: `prax.yaml`
 
-Every AI-assisted step (`extract`, `ask`, `titles`, `vision`,
-`adjudicate`) takes its model from `prax.yaml` in the data directory
-(`PRAX_CONFIG` points elsewhere; `prax.example.yaml` in the repo is the
-template). `models` names backends, `steps` assigns them:
+One file in the data directory (`PRAX_CONFIG` points elsewhere;
+`prax.example.yaml` in the repo is the template) holds what a host
+chooses, in sections: `models` and `steps` (which model does which step),
+`domains` (which ontology modules a document is read against),
+`embeddings`, `vectors`, `rerank`, `parse`, `citations`, `door`,
+`ontology` and `paths`. Everything has a default, so the file may hold
+only what differs.
+
+Each setting can still be given as an environment variable for one run,
+and the variable wins: `PRAX_EMBED=hash pytest`,
+`PRAX_VEC_DTYPE=i8 python scripts/embed_pending.py`. The names are in
+`prax.example.yaml` beside each setting, and `prax.config` is where they
+are read. What lives in the environment and nowhere else: `PRAX_DATA_DIR`
+(it is what finds the file), `PRAX_CONFIG`, `PRAX_TOKEN` (a secret),
+`PRAX_DOOR` (which door a client talks to), and the per-run switches
+`PRAX_<STEP>`, `PRAX_OFFLINE` and `PRAX_DEBUG`. A section the code does
+not know is an error, not a silent typo.
+
+Every AI-assisted step (`extract`, `promote`, `ask`, `titles`, `vision`,
+`adjudicate`) takes its model from the same file. `models` names
+backends, `steps` assigns them:
 
     models:
       sonnet:     {kind: claude, model: claude-sonnet-5, effort: medium}

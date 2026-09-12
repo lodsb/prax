@@ -45,8 +45,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-import yaml
-
 from prax import config
 
 CONFIG_NAME = "prax.yaml"
@@ -87,25 +85,20 @@ class ModelSpec:
         return self.model or self.name
 
 
-class ConfigError(ValueError):
-    pass
+ConfigError = config.ConfigError  # the file says something we cannot follow
 
 
 # ------------------------------------------------------------------ file
 
 
 def config_path() -> Path:
-    return Path(os.environ.get("PRAX_CONFIG") or config.data_dir() / CONFIG_NAME)
+    return config.config_path()
 
 
 def load() -> dict[str, Any]:
     """The parsed file, ``{}`` when there is none; validated shape."""
     path = config_path()
-    if not path.is_file():
-        return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if not isinstance(data, dict):
-        raise ConfigError(f"{path}: expected a mapping at the top")
+    data = config.document()
     for section in ("models", "steps"):
         if section in data and not isinstance(data[section], dict):
             raise ConfigError(f"{path}: '{section}' must be a mapping")
