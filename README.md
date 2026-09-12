@@ -141,8 +141,9 @@ planned passes: `docs/PLAN.md`.
 Every neighbour exposes tools to an agent now, so that is not what
 sets anything apart. The closest ones, one per family, on what does
 (● yes, ◐ partly or through an add-on, – no; September 2026, from the
-projects' own pages — the full comparison with sources is in
-`docs/research.md`):
+projects' own pages). The [table by family](docs/research.md#where-prax-sits)
+in `docs/research.md` says what each family is for and what prax does
+differently, with sources, after a note on what changed in a year.
 
 | | originals kept, by hash | reads PDFs and papers | words + meaning search | typed graph | an ontology you write | who wrote each edge, from what | local models | no server database | apps, extension |
 |---|---|---|---|---|---|---|---|---|---|
