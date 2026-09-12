@@ -526,6 +526,32 @@ def merge_entities(
 
 
 @_serialized
+def rename_entity(con: sqlite3.Connection, entity_id: int, name: str) -> str:
+    """Give an entity a better name — what the heal pass does with a title
+    a citation importer left markup in. When another entity of the same
+    type already carries that name, this one is merged into it instead
+    (two rows with one name is what the unique index forbids and what the
+    graph means anyway). Returns ``renamed``, ``merged`` or ``unchanged``."""
+    row = con.execute(
+        "SELECT name, type FROM entities WHERE id = ?", (entity_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such entity: {entity_id}")
+    name = name.strip()
+    if not name or name == row["name"]:
+        return "unchanged"
+    other = con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = ?", (name, row["type"])
+    ).fetchone()
+    if other is not None and other["id"] != entity_id:
+        merge_entities(con, entity_id, other["id"])
+        return "merged"
+    con.execute("UPDATE entities SET name = ? WHERE id = ?", (name, entity_id))
+    con.commit()
+    return "renamed"
+
+
+@_serialized
 def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
     row = con.execute(
         "SELECT canonical_id FROM entities WHERE id = ?", (entity_id,)

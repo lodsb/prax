@@ -449,6 +449,32 @@ def changes(request: Request) -> dict[str, Any]:
     }
 
 
+class HealReq(BaseModel):
+    checks: list[str] | None = None  # None: every ailment that can be repaired
+
+
+@app.get("/heal")
+def heal_findings(
+    request: Request, check: str | None = None, examples: int = 6
+) -> dict[str, Any]:
+    """What is wrong with the store: each ailment, how many rows it finds
+    and a few to look at. Reads only; `POST /heal` is what repairs."""
+    try:
+        return store.health(_con(request), only=_split(check), examples=examples)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/heal")
+def heal_apply(req: HealReq, request: Request) -> dict[str, Any]:
+    """Repair what the named ailments find (every repairable one when none
+    are named). Edges are invalidated, never deleted; the pass is a job."""
+    try:
+        return store.heal(_con(request), only=req.checks)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @app.get("/stats")
 def stats(request: Request) -> dict[str, Any]:
     """What the store holds: documents, chunks, vectors, the graph, the

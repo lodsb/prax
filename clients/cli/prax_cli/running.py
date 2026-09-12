@@ -350,6 +350,92 @@ def models(a: Any) -> int:
     return 0
 
 
+# -------------------------------------------------------------------- heal
+
+
+def _example_line(name: str, row: dict[str, Any]) -> str:
+    """One finding in a few words, whatever kind of row it is."""
+    if "edges" in row:  # an entity and what it carries
+        return f"{row.get('name')!r} ({row.get('type')}) · {row['edges']} edges"
+    if "rel" in row:  # an edge or a review item
+        parts = [str(row.get("rel"))]
+        if row.get("name"):
+            parts.append(str(row["name"]))
+        if row.get("src") and row.get("dst"):
+            parts.append(f"{row['src']} → {row['dst']}")
+        if row.get("title"):
+            parts.append(str(row["title"])[:40])
+        if row.get("source_doc"):
+            parts.append(f"doc {row['source_doc']}")
+        return " · ".join(parts)
+    if "mime" in row:
+        return (
+            f"{row['mime']} · {row.get('documents')} documents"
+            f" · doc {row.get('first_id')}"
+        )
+    if "chunks" in row:
+        return f"{out.num(row['chunks'])} chunks · {row.get('model')}"
+    if "host" in row:  # a job
+        return f"{row.get('name')} on {row.get('host')} · since {row.get('updated_at')}"
+    return str(row)
+
+
+def heal(door: Door, a: Any) -> int:
+    """What is wrong with the store, and (with --apply) the repair."""
+    params: dict[str, Any] = {}
+    if a.check:
+        params["check"] = ",".join(a.check)
+    found = door.get_json("/heal", params)
+    if a.json and not a.apply:
+        print(json.dumps(found, indent=2))
+        return 0
+    ailments = found["ailments"]
+    hurt = [x for x in ailments if x["count"]]
+    out.say(
+        out.bold("The store's health")
+        + out.dim(f"   {len(hurt)} of {len(ailments)} ailments found")
+    )
+    out.say()
+    for x in ailments:
+        if not x["count"]:
+            out.hint(f"  ok   {x['name']}")
+            continue
+        count = out.num(x["count"]) + ("+" if x["capped"] else "")
+        out.say(f"{out.paint(x['name'], 'yellow')}  {out.bold(count)}  {x['what']}")
+        for row in x["examples"]:
+            out.hint("       " + _example_line(x["name"], row))
+        out.hint(f"       {'repair' if x['repairable'] else 'by hand'}: {x['fix']}")
+        out.say()
+    if not hurt:
+        out.say("Nothing to repair.")
+        return 0
+    if not a.apply:
+        which = f" --check {','.join(a.check)}" if a.check else ""
+        out.hint(f"Nothing was changed. Repair it with: prax heal --apply{which}")
+        return 0
+    repairable = [x["name"] for x in hurt if x["repairable"]]
+    if not repairable:
+        out.say("Nothing here can be repaired from the store; see above.")
+        return 0
+    done = door.post_json("/heal", {"checks": a.check or repairable})
+    if a.json:
+        print(json.dumps(done, indent=2))
+        return 0
+    out.say(out.bold("Repaired"))
+    for name, result in done.items():
+        if isinstance(result, dict):
+            out.say(
+                f"  {name}: {out.num(result['repaired'])} of {out.num(result['found'])}"
+            )
+        else:
+            out.say(f"  {name}: {result}")
+    out.hint(
+        "Edges were ended, not deleted: they stay as history with a"
+        " valid_to (invariant 8). Run `prax heal` again to see what is left."
+    )
+    return 0
+
+
 # ------------------------------------------------------------------ doctor
 
 

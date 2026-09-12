@@ -32,7 +32,7 @@ examples
 
 commands
   everyday     search, ask, add, show, open, graph, pages
-  running it   status, jobs, inbox, work, serve, doctor, models
+  running it   status, jobs, inbox, work, heal, serve, doctor, models
 """
 
 
@@ -274,6 +274,34 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--port", type=int, default=8000)
     s.add_argument("--reload", action="store_true", help="restart on code changes")
     s.set_defaults(func=running.serve, needs_door=False)
+
+    s = sub.add_parser(
+        "heal",
+        parents=[door_opts, as_json],
+        help="find what goes wrong often, and repair it",
+        description=(
+            "The store's ailments: entities named after the prompt, edges"
+            " from a thing to itself, edges of a retired duplicate, review"
+            " items nobody can resolve. Looks only, until --apply."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax heal                              what is wrong\n"
+            "  prax heal --apply                      repair all of it\n"
+            "  prax heal --check self-edges --apply   one kind"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument(
+        "--check",
+        action="append",
+        metavar="NAME",
+        help="one ailment by name (repeatable); all of them by default",
+    )
+    s.add_argument(
+        "--apply", action="store_true", help="repair, instead of only looking"
+    )
+    s.set_defaults(func=running.heal, needs_door=True)
 
     s = sub.add_parser(
         "doctor",

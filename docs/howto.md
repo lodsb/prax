@@ -790,6 +790,44 @@ rendered again in place, keeping the scroll position and never while
 something is being typed. One small query per ten seconds per open tab
 is the whole cost.
 
+## 3m. Healing what recurs
+
+Extraction at scale leaves the same few kinds of damage behind, and they
+come back with every pass, so they have names and a place:
+`prax.store.repair`.
+
+    prax heal                              what is wrong (changes nothing)
+    prax heal --apply                      repair all of it
+    prax heal --check self-edges --apply   one kind
+    prax heal --json                       for a script
+
+| ailment | what it is | what repairing does |
+|---|---|---|
+| `placeholder-entities` | a model copied a word out of its own prompt: "source name", "target name", "unknown", "n/a" | ends every edge they carry; the entity stays as the record of what happened |
+| `reference-number-entities` | "[12]", "fig. 3", a bare year — the ontology says a reference number is never a name | ends their edges |
+| `mangled-names` | a citation importer left markup or line breaks in a title: `<i>The Origins of Music</i>` | cleans the name, or merges into the entity that already carries the clean one |
+| `unnamed-entities` | no name at all, or a whole citation as one (a claim is a sentence and is left alone) | ends their edges |
+| `self-edges` | an edge from a thing to itself, left after two names were merged | ends them |
+| `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
+| `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
+| `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
+| `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
+
+Nothing is deleted. An edge is invalidated, so it keeps its provenance
+and its place in history (invariant 8) and a later pass can write the
+right one; a review item is resolved as dropped; a job row is closed. The
+pass announces itself as a job, and `GET /heal` is the looking half of
+`POST /heal`, so the UI and a cron line see the same thing the command
+does.
+
+Adding an ailment is a `find` (what is wrong, as rows a person can read),
+optionally a `repair`, and an entry in `AILMENTS`. The rule this module
+lives by: **look before repairing**. The first draft of
+`unnamed-entities` flagged every name over 200 characters and would have
+thrown away 27 real claims and 94 real citations; the dry run against the
+library is what caught it, which is why the dry run is the default.
+
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000
@@ -855,6 +893,7 @@ One command for the everyday work, and the same one wherever the door is:
     prax status                       the store, the graph, this host
     prax inbox                        what came in, what still waits
     prax jobs                         passes running now and lately
+    prax heal                         what recurring damage is in the store
     prax work --watch                 be the worker for a door
     prax serve                        run the door here
     prax doctor                       when something feels wrong

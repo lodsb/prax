@@ -21,6 +21,7 @@ process-wide re-entrant lock (invariant 4).
 | ``pages`` | the notes that are documents too |
 | ``jobs`` | what runs and what ran |
 | ``summary`` | what the store holds, counted |
+| ``repair`` | the damage that recurs: `health` finds it, `heal` mends it |
 """
 
 from __future__ import annotations
@@ -185,6 +186,12 @@ from .pages import (  # noqa: F401
     page_titles,
     slugify,
     write_page,
+)
+from .repair import (  # noqa: F401
+    AILMENTS,
+    Ailment,
+    heal,
+    health,
 )
 from .retrieval import (  # noqa: F401
     ACRONYM_EXPANSIONS,
