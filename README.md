@@ -158,8 +158,9 @@ folder, upload in the UI, or install the browser extension, and run
 the rest of the way (it talks to the door, never to the database). Copy `prax.example.yaml` to the store directory as `prax.yaml`
 to say which model does which step; extraction, image description and
 adjudication with Claude need `ANTHROPIC_API_KEY`. Extras: `embed`
-(vectors), `ingest` (PDF, HTML, code detection), `local` (a GGUF model in
-process), `docling` (a heavier PDF extractor). Claude Code picks up the
+(vectors), `ingest` (PDF, HTML, code detection), `docling` (a heavier
+PDF extractor); a local model runs in llama-server, never in prax's
+own process. Claude Code picks up the
 MCP server from `.mcp.json` when it opens this repository. Every step,
 with the commands: `docs/howto.md`.
 

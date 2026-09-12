@@ -46,7 +46,7 @@ def main() -> int:
     ap.add_argument("--reason", choices=REASONS, nargs="+", default=list(REASONS))
     ap.add_argument(
         "--model",
-        help="a model name from prax.yaml or a .gguf path (default: the titles step)",
+        help="a model name from prax.yaml (default: the titles step)",
     )
     ap.add_argument(
         "--apply-low",
@@ -87,9 +87,7 @@ def main() -> int:
     runtime = None
     needs_model = any(why != "caps" for _, why in chosen)
     if needs_model:
-        if a.model and a.model.lower().endswith(".gguf"):
-            spec = models.ModelSpec(name="cli", kind="gguf", path=a.model)
-        elif a.model:
+        if a.model:
             spec = models.spec(a.model)
         else:
             spec = models.resolve("titles")

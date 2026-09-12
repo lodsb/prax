@@ -165,7 +165,7 @@ flowchart LR
   H -->|get offset/max_chars| T[text window of the artifact]
   H -->|doc/id/context| X[summary, entities, similar, citations,<br/>shared entities, authors, notes, Zotero]
   H -->|traverse entity| G[1-2 hop neighbourhood, with provenance]
-  H -->|ask| B[bundle: one passage per document,<br/>graph facts per document] --> M[local GGUF model, Claude,<br/>or the MCP client itself] --> A[answer citing n] -->|ask/save| P[page section with sources,<br/>annotates edges]
+  H -->|ask| B[bundle: one passage per document,<br/>graph facts per document] --> M[a local model server, Claude,<br/>or the MCP client itself] --> A[answer citing n] -->|ask/save| P[page section with sources,<br/>annotates edges]
 ```
 
 `search` first expands the query: a token the library defines as an
@@ -200,8 +200,7 @@ what is needed.
 | `prax.importers.citations` | Crossref or OpenAlex by DOI or exact title → `cites` edges, citation counts in `meta.citations`; idempotent per document | via store |
 | `prax.extraction` | document input (head plus closing sections), ontology-derived prompt and JSON schema, Claude and local extractors, `apply()` into edges / review queue / stamps with guards | via store |
 | `prax.lineformat` | tab-separated output format for local models: bounded GBNF grammar from the ontology, parse/render to `Extraction` | no |
-| `prax.local_llm` | optional llama.cpp runtime (`local` extra): DLL path quirk, one loaded GGUF model behind `chat()`, shared per process | no |
-| `prax.models` | `prax.yaml`: named models and the step that uses each; the registry that resolves a step to a spec and a loaded runtime (gguf, OpenAI-compatible server, Claude, stub), once per process | no |
+| `prax.models` | `prax.yaml`: named models and the step that uses each; the registry that resolves a step to a spec and a runtime (OpenAI-compatible server such as llama-server, Claude, stub), once per process | no |
 | `prax.titles` | titles worth the name: the classifier (file names, Zotero's auto names, ALL CAPS), the recase rule, the local-model guess with hints, confidence from the text | via store (`retitle`) |
 | `prax.acronyms` | "phrase (ACRONYM)" definitions from a text, letters checked against the phrase's initials; the batch script writes the `acronyms` table the search expands from | no |
 | `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub), citation resolution, saving an answer to a page | via store |
@@ -300,10 +299,9 @@ loop); the queue makes each batch do real work.
 | `PRAX_DATA_DIR` | the store directory (default `<repo>/data`) |
 | `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
 | `ANTHROPIC_API_KEY` | the Claude API for extraction, vision and adjudication |
-| `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `gguf`, `openai`, `stub`) and the `extract`, `promote`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k); `domains:` rules that give documents their domain set (`scripts/assign_domains.py`) |
+| `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `openai`, `stub`) and the `extract`, `promote`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k); `domains:` rules that give documents their domain set (`scripts/assign_domains.py`) |
 | `PRAX_EXTRACT`, `PRAX_PROMOTE`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE` | a model name or `none`: overrides the step for one run |
 | `PRAX_EXTRACT_MODEL`, `PRAX_ASK_MODEL`, `PRAX_VISION_MODEL`, `PRAX_EXTRACT_EFFORT` | the Claude model id (and effort) for a step that resolves to Claude |
-| `PRAX_LOCAL_MODEL`, `PRAX_LOCAL_CTX` | the implicit `local` model: a GGUF file and its context, when the file names none |
 | `PRAX_CITATIONS_MAILTO` | polite-pool contact for Crossref and OpenAlex |
 | `PRAX_RERANK` | cross-encoder name, `stub`, or `0` (default off) |
 | `PRAX_ONTOLOGY` | another ontology directory (or a single legacy file) |

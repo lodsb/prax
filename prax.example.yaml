@@ -36,14 +36,6 @@ models:
   #   api_key_env: DEEPSEEK_API_KEY
   #   price: [0.27, 1.10]
 
-  # A GGUF model inside the door's own process (llama.cpp through the
-  # `local` extra) instead of a server: simpler on a single machine, but
-  # the door then carries the model. Same download as above, then:
-  # local-7b:
-  #   kind: gguf
-  #   path: <data dir>/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf
-  #   n_ctx: 8192
-
 # which ontology modules a document is read against (scripts/assign_domains.py;
 # first match wins; a rule without match is the default; a person's choice on
 # the document page is never overwritten)

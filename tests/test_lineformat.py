@@ -5,10 +5,11 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 
-from prax import extraction, lineformat, local_llm, ontology, store
+from prax import config, extraction, lineformat, models, ontology, store
 
 T = extraction.Triple
 SEP = lineformat.SEP
@@ -25,17 +26,6 @@ def test_grammar_follows_the_ontology_and_bounds_the_output() -> None:
     assert 'conf ::= "AMBIGUOUS" | "EXTRACTED" | "INFERRED"' in g
     assert f"text ::= char{{1,{lineformat.TEXT_CHARS}}}" in g
     assert "char ::= [^\\t\\n\\r]" in g
-
-
-def test_grammar_compiles_in_llama_cpp() -> None:
-    try:
-        local_llm.llama_class()  # puts the runtime DLLs on PATH first
-    except RuntimeError as e:
-        pytest.skip(str(e))
-    from llama_cpp import LlamaGrammar
-
-    g = lineformat.grammar(ontology.current())
-    assert LlamaGrammar.from_string(g, verbose=False) is not None
 
 
 def _sample() -> extraction.Extraction:
@@ -232,17 +222,22 @@ def test_json_prompt_is_unchanged_by_the_lines_option() -> None:
         extraction.system_prompt(onto, output="xml")
 
 
-def test_current_local_extractor_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PRAX_EXTRACT", "local")
-    monkeypatch.delenv("PRAX_LOCAL_MODEL", raising=False)
-    with pytest.raises(ValueError, match="PRAX_LOCAL_MODEL"):
-        extraction.current()
-    monkeypatch.setenv("PRAX_LOCAL_MODEL", "C:/models/Qwen2.5-7B-Instruct-Q4_K_M.gguf")
-    monkeypatch.setenv("PRAX_LOCAL_CTX", "4096")
+def test_current_local_extractor_from_the_file(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PRAX_EXTRACT", raising=False)
+    monkeypatch.delenv("PRAX_CONFIG", raising=False)
+    cfg = Path(config.data_dir()) / models.CONFIG_NAME
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(
+        "models: {srv: {kind: openai, base_url: http://127.0.0.1:1/v1, model: q}}\n"
+        "steps: {extract: {model: srv}}\n",
+        encoding="utf-8",
+    )
+    models.reset()
     ext = extraction.current()
     assert isinstance(ext, extraction.LocalExtractor)
-    assert ext.name == "local:Qwen2.5-7B-Instruct-Q4_K_M"
-    assert ext.runtime.n_ctx == 4096  # nothing loaded yet
+    assert ext.name == "q@127.0.0.1:1"  # nothing loaded, nothing called
     assert extraction.price(ext.name) == (0.0, 0.0)
 
 

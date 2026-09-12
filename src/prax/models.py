@@ -7,27 +7,28 @@ environment variables. ``prax.yaml`` in the data directory (or
 
     models:
       sonnet:    {kind: claude, model: claude-sonnet-5, effort: medium}
-      local-7b:  {kind: gguf, path: C:/models/Qwen2.5-7B-Q4_K_M.gguf, n_ctx: 8192}
-      server-32b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: qwen2.5-32b}
+      server-35b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: qwen3.6-35b}
     steps:
-      extract:   {model: sonnet, max_triples: 20}
-      ask:       {model: local-7b}
-      titles:    {model: local-7b}
+      extract:   {model: server-35b, max_triples: 20}
+      ask:       {model: server-35b}
+      titles:    {model: server-35b}
       vision:    {model: sonnet}
       adjudicate: {model: none}
 
-Four kinds: ``claude`` (the API), ``gguf`` (llama.cpp in this process,
-``prax.local_llm``), ``openai`` (any OpenAI-compatible server: llama-server
-or vLLM on a GPU box, or a hosted API; ``api_key_env`` names the variable
-holding its key), ``stub`` (tests). Some names need no file: any
-``claude-*`` id, ``local`` (the GGUF in ``PRAX_LOCAL_MODEL``), ``stub``,
-``none``. Precedence for a step: ``PRAX_<STEP>`` in the environment (a model
-name or ``none``), then the file, then the step's default. ``PRAX_<STEP>_MODEL``
+Three kinds: ``claude`` (the API), ``openai`` (any OpenAI-compatible
+server: llama-server or vLLM on this or another machine, or a hosted
+API; ``api_key_env`` names the variable holding its key), ``stub``
+(tests). A local model always lives in its own server process
+(``scripts/llama_server.ps1``), never in the process that runs the step:
+the door stays lean and the worker stays small. Some names need no file:
+any ``claude-*`` id, ``stub``, ``none``. Precedence for a step:
+``PRAX_<STEP>`` in the environment (a model name or ``none``), then the
+file, then the step's default. ``PRAX_<STEP>_MODEL``
 swaps the Claude model id when the step resolves to Claude, as it always
 did. A runtime is loaded once per process however many steps share it.
 
 Steps build their own objects from the spec: extraction wants a JSON
-schema from Claude and a grammar from llama.cpp, vision sends an image,
+schema from Claude and a grammar from llama-server, vision sends an image,
 so the registry hands out a ``ModelSpec`` and, for chat-shaped work, a
 ``Runtime`` (``chat(system, user, ...)``) of the right kind.
 """
@@ -46,20 +47,20 @@ from urllib.parse import urlparse
 
 import yaml
 
-from prax import config, local_llm
+from prax import config
 
 CONFIG_NAME = "prax.yaml"
-KINDS = ("claude", "gguf", "openai", "stub")
+KINDS = ("claude", "openai", "stub")
 STEPS = ("extract", "promote", "ask", "titles", "vision", "adjudicate")
 STEP_DEFAULTS = {
     "extract": "claude-opus-5",
     "promote": "claude-sonnet-5",  # the expensive pass over flagged documents
-    "ask": "local",  # falls back to none when no local model is configured
-    "titles": "local",
+    "ask": "none",  # the caller's own model answers unless the file says otherwise
+    "titles": "none",
     "vision": "claude-sonnet-5",
     "adjudicate": "none",
 }
-LOCAL_FALLBACK = {"ask": "none", "titles": "none"}
+DEFAULT_CTX = 8192  # what a step may assume of a server's context per slot
 OPENAI_TIMEOUT = 600.0
 _CLAUDE_TIMEOUT = 180.0
 
@@ -69,18 +70,15 @@ class ModelSpec:
     name: str
     kind: str
     model: str | None = None  # the API's model id (claude, openai)
-    path: str | None = None  # the GGUF file (gguf)
     base_url: str | None = None  # the server (openai)
     api_key_env: str | None = None
-    n_ctx: int = local_llm.DEFAULT_CTX
+    n_ctx: int = DEFAULT_CTX  # the server's context per slot (openai)
     effort: str | None = None
     price: tuple[float, float] | None = None  # USD per million in, out
     params: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
 
     @property
     def runtime_name(self) -> str:
-        if self.kind == "gguf" and self.path:
-            return "local:" + Path(self.path).stem
         if self.kind == "openai":
             host = urlparse(self.base_url or "").netloc or "server"
             return f"{self.model}@{host}"
@@ -122,15 +120,12 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
     known = {
         "kind",
         "model",
-        "path",
         "base_url",
         "api_key_env",
         "n_ctx",
         "effort",
         "price",
     }
-    if kind == "gguf" and not raw.get("path"):
-        raise ConfigError(f"model {name!r}: a gguf model needs 'path'")
     if kind == "openai" and not (raw.get("base_url") and raw.get("model")):
         raise ConfigError(
             f"model {name!r}: an openai model needs 'base_url' and 'model'"
@@ -142,10 +137,9 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
         name=name,
         kind=kind,
         model=raw.get("model"),
-        path=str(raw["path"]) if raw.get("path") else None,
         base_url=raw.get("base_url"),
         api_key_env=raw.get("api_key_env"),
-        n_ctx=int(raw.get("n_ctx", local_llm.DEFAULT_CTX)),
+        n_ctx=int(raw.get("n_ctx", DEFAULT_CTX)),
         effort=raw.get("effort"),
         price=(float(price[0]), float(price[1])) if price else None,
         params=tuple(sorted((k, v) for k, v in raw.items() if k not in known)),
@@ -154,8 +148,7 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
 
 def spec(name: str) -> ModelSpec | None:
     """The model behind a name: from the file, or one of the implicit
-    names (``claude-*``, ``local``, ``stub``); ``none`` and unknown names
-    are None."""
+    names (``claude-*``, ``stub``); ``none`` and unknown names are None."""
     if name in ("none", ""):
         return None
     models = load().get("models", {})
@@ -163,28 +156,14 @@ def spec(name: str) -> ModelSpec | None:
         return _spec_from(name, models[name] or {})
     if name == "stub":
         return ModelSpec(name="stub", kind="stub")
-    if name == "local":
-        path = os.environ.get("PRAX_LOCAL_MODEL")
-        if not path:
-            return None
-        return ModelSpec(
-            name="local",
-            kind="gguf",
-            path=path,
-            n_ctx=int(os.environ.get("PRAX_LOCAL_CTX", local_llm.DEFAULT_CTX)),
-        )
     if name.startswith("claude-"):
         return ModelSpec(name=name, kind="claude", model=name)
     return None
 
 
 def names() -> list[str]:
-    """Model names a caller may pick: the file's, then the implicit ones
-    that exist here."""
-    out = list(load().get("models", {}))
-    if os.environ.get("PRAX_LOCAL_MODEL") and "local" not in out:
-        out.append("local")
-    return out
+    """Model names a caller may pick: the file's."""
+    return list(load().get("models", {}))
 
 
 # ----------------------------------------------------------------- steps
@@ -210,16 +189,9 @@ def resolve(step: str) -> ModelSpec | None:
         else:
             chosen = STEP_DEFAULTS[step]
         source = "default"
-    if chosen == "local" and spec("local") is None and step in LOCAL_FALLBACK:
-        chosen = LOCAL_FALLBACK[step]
     if chosen == "claude":  # legacy PRAX_ASK=claude
         chosen = os.environ.get(f"PRAX_{step.upper()}_MODEL") or _claude_default(step)
     result = spec(chosen)
-    if result is None and chosen == "local":
-        raise ConfigError(
-            f"step {step!r}: the local model needs PRAX_LOCAL_MODEL=<model.gguf>"
-            " or a 'local' entry under models in prax.yaml"
-        )
     if result is None and chosen not in ("none", ""):
         raise ConfigError(
             f"step {step!r}: no model named {chosen!r} ({source}); known: {names()}"
@@ -425,9 +397,6 @@ class ClaudeRuntime:
 
 @cache
 def _runtime(s: ModelSpec) -> Any:
-    if s.kind == "gguf":
-        assert s.path is not None
-        return local_llm.shared_runtime(s.path, n_ctx=s.n_ctx)
     if s.kind == "openai":
         assert s.base_url is not None and s.model is not None
         return OpenAIRuntime(s.base_url, s.model, s.api_key_env)

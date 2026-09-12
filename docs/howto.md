@@ -31,7 +31,6 @@ Extras, install only where they run (see `rationale.md` R8):
 | `embed` | usearch, onnxruntime, tokenizers, huggingface_hub, numpy | the desktop (GPU via onnxruntime-directml) and the serving host |
 | `ingest` | pymupdf4llm, trafilatura, magika | the parse queue; the desktop |
 | `docling` | docling (about 3 GB with PyTorch) | optional; only for `--extractor docling` |
-| `local` | llama-cpp-python | optional; a GGUF model in process, section 3h |
 
 Check the installed FastMCP major version after upgrades; the code targets
 the 4.x line:
@@ -281,11 +280,11 @@ document is stamped with the ontology version so reruns are incremental.
 
 Settings: `PRAX_EXTRACT_MODEL` (default `claude-opus-5`),
 `PRAX_EXTRACT_EFFORT` (default `medium`), `PRAX_EXTRACT=stub` for tests,
-`PRAX_EXTRACT=local` with `PRAX_LOCAL_MODEL=<model.gguf>` for a model on
-this machine (section 3h; `PRAX_LOCAL_CTX`, default 8192). The local path
-asks for tab-separated lines instead of JSON under a grammar that bounds
-the output to 20 triples (`prax.lineformat`); the extractor name stamped
-on documents is `local:<model file>` and its cost is zero.
+`PRAX_EXTRACT=<name>` for an `openai` model of `prax.yaml` (section
+3h: llama-server on this or another machine). The local path asks for
+tab-separated lines instead of JSON under a grammar that bounds the
+output to 20 triples (`prax.lineformat`); the extractor name stamped on
+documents is `<model>@<host>` and its cost is zero.
 Bumping the ontology version re-selects every document. Review the queue
 in the UI's Review tab (section 3g) or with `store.list_review` and
 `resolve_review`.
@@ -461,31 +460,38 @@ extractor's header carries `Kind: page` or `Kind: project`.
 
 ## 3h. Local models (optional)
 
-A GGUF model can run in-process through `llama-cpp-python` on the batch
-host, for extraction of new documents without the API, private material,
-and the planned "ask" feature. Measured on the desktop's GTX 1070:
-`docs/eval/local-llm-2026-09-08.md` (Qwen2.5-7B-Instruct Q4_K_M, 5.2 GB
-VRAM, valid schema-constrained extractions at 80 s per document).
+A local model runs in **llama-server** (llama.cpp's HTTP server), on the
+machine with the GPU, and prax talks to it as an `openai` model in
+`prax.yaml` (section 3k). Nothing of the model lives in prax's own
+process: the door stays lean (invariant 7), the worker stays small, and
+the same server serves extraction, titles and ask at once through its
+slots. Measured choices: `docs/eval/extractors-local-2026-09-11.md`
+(Qwen3.6-35B-A3B on a 24 GB card, 4-5 s per document with 3 slots;
+Qwen2.5-7B on an 8 GB card, `docs/eval/local-llm-2026-09-08.md`).
 
-    # CPU build (any host)
-    pip install -e ".[local]"
-    # CUDA 12 wheel on Windows or Linux with an NVIDIA driver >= 525
-    pip install -e ".[local]" --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
-    pip install nvidia-cuda-runtime-cu12 nvidia-cublas-cu12   # Windows: the DLLs the wheel needs
-    python -c "from prax import local_llm; print(local_llm.llama_class())"
+    # llama.cpp release binaries (CUDA, Vulkan, Metal or CPU builds):
+    #   https://github.com/ggml-org/llama.cpp/releases
+    # a GGUF model into the data directory (or anywhere):
+    python scripts/fetch_model.py server-35b       # repo and file from prax.yaml
+    # the server (Windows; other hosts run llama-server with the same flags):
+    scripts/llama_server.ps1 -Model <data dir>/models/<file>.gguf -Slots 3 -NoThinking
 
-Models are GGUF files, e.g. from the Hugging Face cache:
+Then in `prax.yaml`:
 
-    python -c "from huggingface_hub import hf_hub_download as d; print(d('bartowski/Qwen2.5-7B-Instruct-GGUF', 'Qwen2.5-7B-Instruct-Q4_K_M.gguf'))"
-    python scripts/bench_local_llm.py <path.gguf> --docs 3
+    models:
+      server-35b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: <name the server reports>}
+    steps:
+      extract: {model: server-35b}
+      titles:  {model: server-35b}
+      ask:     {model: server-35b}
 
-Always go through `prax.local_llm.llama_class()` rather than importing
-`llama_cpp` directly: on Windows the wheel's loader only searches `PATH`,
-and that function puts the venv's `nvidia/*/bin` and `llama_cpp/lib`
-folders there first. A stale `CUDA_PATH` (this desktop has a 10.2 toolkit)
-does no harm. An 8 GB card fits a 7–8B model at Q4 with an 8 K context;
-the Q6A has no usable GPU and would run a 3B model at a few tokens per
-second, which is why the API stays the default there.
+The grammar-constrained line format (`prax.lineformat`) needs a server
+that honours the `grammar` field: llama-server does, vLLM does not.
+`-NoThinking` matters for models that think by default (Qwen3.x, Gemma
+4): thinking tokens would break the grammar. Memory on a Windows host:
+howto 3l, "Jobs". An 8 GB card fits a 7-8B model at Q4 with an 8 K
+context; a board without a usable GPU leaves the steps at `none` or
+points them at a server elsewhere on the private network.
 
 ## 3i. Ask: questions answered from the library
 
@@ -496,15 +502,13 @@ is the host's choice:
 
 | `PRAX_ASK` | who answers |
 |---|---|
-| a `gguf` model | loaded once into the door's process on the first question (section 3h; Qwen2.5-7B answers in about 20 s on the GTX 1070, 5 GB of VRAM) |
-| an `openai` model | a llama-server or vLLM elsewhere answers; the door loads nothing |
+| an `openai` model | a llama-server or vLLM on this or another machine answers; the door loads nothing (section 3h; a 7B answers in about 20 s on an 8 GB card, a 35B-A3B in a few seconds on a 24 GB one) |
 | a `claude` model | the API (effort low; about a cent per question) |
 | `none` | nobody: the bundle comes back for the caller's own model |
 
 The step is `ask` in `prax.yaml` (section 3k), `PRAX_ASK=<name|none>`
-for one run. Without a file it is `local` when `PRAX_LOCAL_MODEL` is set
-and `none` otherwise, so the serving board answers with the bundle. On
-the batch host:
+for one run. Without a file it is `none`, so the serving board answers
+with the bundle. On the batch host:
 
     $env:PRAX_DATA_DIR = "C:\prax-data"
     uvicorn prax.api:app --port 8000     # steps.ask.model in prax.yaml (3k)
@@ -540,9 +544,9 @@ CAPS. A title is what a search hit, a citation in an answer and a
     python scripts/embed_pending.py                  # afterwards, door stopped
 
 ALL CAPS titles are recased by rule (`titles.recase`: stopwords,
-known acronyms). File names go to the local model (`PRAX_LOCAL_MODEL`
-or `--model`; nothing leaves the machine, about 1.3 s per document on
-the 1070) with the first 1,500 characters of text, the file name, the
+known acronyms). File names go to the titles step's model (`prax.yaml`
+or `--model`; a local server keeps everything on the machine, about a
+second per document) with the first 1,500 characters of text, the file name, the
 first Markdown heading and the PDF metadata title as hints; it answers
 with the printed title or, for a course sheet or a manual, a short
 descriptive name in the document's language. `meta.title_confidence`
@@ -569,9 +573,8 @@ template). `models` names backends, `steps` assigns them:
 
     models:
       sonnet:     {kind: claude, model: claude-sonnet-5, effort: medium}
-      local-server: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: <gguf name>}
-      local-7b:   {kind: gguf, path: <file>.gguf, n_ctx: 8192}   # in-process instead
-      server-32b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: qwen2.5-32b}
+      local-server: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: <name the server reports>}
+      server-32b: {kind: openai, base_url: http://gpu-box:8080/v1, model: qwen2.5-32b}
     steps:
       extract:    {model: sonnet, max_triples: 20}
       ask:        {model: local-server}
@@ -579,21 +582,20 @@ template). `models` names backends, `steps` assigns them:
       vision:     {model: sonnet}
       adjudicate: {model: opus}
 
-Kinds: `claude` (the API, key in `ANTHROPIC_API_KEY`), `gguf` (llama.cpp
-in the process that runs the step, section 3h), `openai` (any
-OpenAI-compatible server: `llama-server`, vLLM, or a hosted API with
-`api_key_env` naming the variable that holds its key and `price` as
-USD per million input and output tokens for the cost lines), `stub`
-(tests). Names that need no file: any `claude-*` id, `local` (the GGUF
-in `PRAX_LOCAL_MODEL`), `stub`, `none`.
+Kinds: `claude` (the API, key in `ANTHROPIC_API_KEY`), `openai` (any
+OpenAI-compatible server: `llama-server` on this or another machine,
+section 3h, vLLM, or a hosted API with `api_key_env` naming the variable
+that holds its key and `price` as USD per million input and output
+tokens for the cost lines; `n_ctx` says what context a slot has), `stub`
+(tests). Names that need no file: any `claude-*` id, `stub`, `none`.
 
 Precedence per step: `PRAX_<STEP>` in the environment (a model name or
 `none`), then the file, then the default (`claude-opus-5` for
-extraction, `local` for ask and titles when a local model exists, else
-`none`, Sonnet 5 for vision, `none` for adjudication).
+extraction, `none` for ask and titles, Sonnet 5 for vision, `none` for
+adjudication).
 `PRAX_<STEP>_MODEL` swaps the Claude model id for a step that resolves
-to Claude, as before. A model is loaded once per process however many
-steps name it, so ask and titles share one 7B in the door.
+to Claude, as before. A runtime is built once per process however many
+steps name it; the model itself lives in its server.
 
 The extraction step is the one to move when a GPU box is around:
 start the server (`scripts/llama_server.ps1 -Model <gguf> -Slots 3

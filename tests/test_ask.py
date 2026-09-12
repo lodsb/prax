@@ -4,11 +4,12 @@ keeping an answer on a page with annotates edges."""
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import ask, store
+from prax import ask, config, store
 
 
 def _library(con: sqlite3.Connection) -> tuple[int, int]:
@@ -133,13 +134,20 @@ def test_bundle_only_without_backend(con: sqlite3.Connection) -> None:
 def test_backend_selection(monkeypatch: pytest.MonkeyPatch) -> None:
     from prax import models
 
-    for var in ("PRAX_ASK", "PRAX_LOCAL_MODEL", "PRAX_ASK_MODEL", "PRAX_CONFIG"):
+    for var in ("PRAX_ASK", "PRAX_ASK_MODEL", "PRAX_CONFIG"):
         monkeypatch.delenv(var, raising=False)
     models.reset()
     assert ask.current() is None and ask.describe()["default"] == "none"
-    monkeypatch.setenv("PRAX_LOCAL_MODEL", "C:/models/qwen.gguf")
+    cfg = Path(config.data_dir()) / models.CONFIG_NAME
+    cfg.parent.mkdir(parents=True, exist_ok=True)
+    cfg.write_text(
+        "models: {srv: {kind: openai, base_url: http://127.0.0.1:1/v1, model: q}}\n"
+        "steps: {ask: {model: srv}}\n",
+        encoding="utf-8",
+    )
+    models.reset()
     d = ask.describe()
-    assert d["default"] == "local" and d["runtime"] == "local:qwen"
+    assert d["default"] == "srv" and d["runtime"] == "q@127.0.0.1:1"
     assert isinstance(ask.current(), ask.LocalAnswerer)
     monkeypatch.setenv("PRAX_ASK", "stub")
     assert isinstance(ask.current(), ask.StubAnswerer)

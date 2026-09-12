@@ -12,7 +12,7 @@ from prax import models
 YAML = """
 models:
   sonnet: {kind: claude, model: claude-sonnet-5, effort: low}
-  tiny: {kind: gguf, path: C:/models/tiny.gguf, n_ctx: 4096}
+  tiny: {kind: openai, base_url: http://127.0.0.1:1/v1, model: tiny, n_ctx: 4096}
   server:
     kind: openai
     base_url: http://gpu-box:8080/v1
@@ -39,7 +39,6 @@ def cfg(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         "PRAX_VISION",
         "PRAX_VISION_MODEL",
         "PRAX_ADJUDICATE",
-        "PRAX_LOCAL_MODEL",
         "PRAX_CONFIG",
     ):
         monkeypatch.delenv(var, raising=False)
@@ -59,7 +58,7 @@ def test_file_names_and_steps(cfg: Path) -> None:
         and a.runtime_name == "qwen-32b@gpu-box:8080"
     )
     t = models.resolve("titles")
-    assert t is not None and t.kind == "gguf" and t.runtime_name == "local:tiny"
+    assert t is not None and t.kind == "openai" and t.runtime_name == "tiny@127.0.0.1:1"
     assert t.n_ctx == 4096
     assert models.resolve("vision").model == "claude-sonnet-5"  # the default
     assert models.resolve("adjudicate") is None
@@ -73,7 +72,7 @@ def test_environment_overrides_the_file(
     monkeypatch.setenv("PRAX_EXTRACT", "stub")
     assert models.resolve("extract").kind == "stub"
     monkeypatch.setenv("PRAX_EXTRACT", "tiny")
-    assert models.resolve("extract").kind == "gguf"
+    assert models.resolve("extract").kind == "openai"
     monkeypatch.setenv("PRAX_EXTRACT", "none")
     assert models.resolve("extract") is None
     monkeypatch.setenv("PRAX_EXTRACT", "nope")
@@ -88,15 +87,13 @@ def test_environment_overrides_the_file(
 
 
 def test_implicit_names_without_a_file(monkeypatch: pytest.MonkeyPatch) -> None:
-    for var in ("PRAX_ASK", "PRAX_LOCAL_MODEL", "PRAX_EXTRACT", "PRAX_EXTRACT_MODEL"):
+    for var in ("PRAX_ASK", "PRAX_EXTRACT", "PRAX_EXTRACT_MODEL"):
         monkeypatch.delenv(var, raising=False)
     assert models.load() == {}
     assert models.resolve("extract").model == "claude-opus-5"
-    assert models.resolve("ask") is None  # local wanted, none configured
+    assert models.resolve("ask") is None  # nobody answers unless the file says
     assert models.resolve("titles") is None
-    monkeypatch.setenv("PRAX_LOCAL_MODEL", "C:/models/qwen.gguf")
-    assert models.resolve("ask").runtime_name == "local:qwen"
-    assert models.names() == ["local"]
+    assert models.names() == []
     monkeypatch.setenv("PRAX_ASK", "claude")  # legacy spelling
     assert models.resolve("ask").model == "claude-sonnet-5"
     monkeypatch.setenv("PRAX_ASK_MODEL", "claude-opus-5")
@@ -111,8 +108,8 @@ def test_bad_files_are_refused(data_dir: Path, monkeypatch: pytest.MonkeyPatch) 
     p.write_text("steps: {frobnicate: {model: x}}", encoding="utf-8")
     with pytest.raises(models.ConfigError, match="unknown step"):
         models.load()
-    p.write_text("models: {bad: {kind: gguf}}", encoding="utf-8")
-    with pytest.raises(models.ConfigError, match="needs 'path'"):
+    p.write_text("models: {bad: {kind: openai, model: m}}", encoding="utf-8")
+    with pytest.raises(models.ConfigError, match="needs 'base_url'"):
         models.spec("bad")
     p.write_text("models: {bad: {kind: laser}}", encoding="utf-8")
     with pytest.raises(models.ConfigError, match="kind must be"):

@@ -10,8 +10,8 @@ in ``prax.yaml`` (``prax.models``; ``PRAX_ASK`` overrides it for a run): a
 GGUF model in process, an OpenAI-compatible server, Claude, or ``none``,
 which returns the bundle alone, for a client that is itself a model
 (Claude Code over MCP) and for the Pi-class serving host, which loads no
-model (invariant 7). Without a file the default is the local model when
-one is configured, else ``none``.
+model (invariant 7). Without a file the default is ``none``: the bundle
+comes back for the caller's own model.
 
 The answer cites passages as ``[n]``. ``citations`` resolves the numbers
 back to chunk and document ids, so the UI links them, and ``save``

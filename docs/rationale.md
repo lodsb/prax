@@ -238,8 +238,11 @@ Qwen2.5-7B at Q4 fits the 8 GB GTX 1070 and produces valid, grammar
 constrained extractions, but at 80 s per document the 8,448-document
 backlog is a week of GPU time against a $25-125 Claude batch job, so the
 API is the bulk path and the local model the trickle path (new documents,
-private material, the UI's "ask"). The runtime is an optional extra behind
-`prax.local_llm`; the serving host never loads it (invariant 7).
+private material, the UI's "ask"). The in-process binding was dropped on
+2026-09-12 once llama-server (an `openai` model in `prax.yaml`) did the
+same job from its own process with no wheel, no CUDA runtime in the
+venv and no model inside the door or the worker (invariant 7); the
+measurements stand.
 
 **Cost.** The 384 dimension is baked into `chunks_vec`; changing models is
 a migration. Every extractor stamps `meta.text_source` with its name and

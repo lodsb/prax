@@ -554,8 +554,8 @@ class StubExtractor:
 
 
 class Runtime(Protocol):
-    """What ``LocalExtractor`` needs from a model: ``prax.local_llm.LlamaRuntime``
-    or a test double."""
+    """What ``LocalExtractor`` needs from a model: ``prax.models.OpenAIRuntime``
+    (llama-server honours the grammar) or a test double."""
 
     name: str
 

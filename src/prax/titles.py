@@ -11,9 +11,9 @@ along.
 
 ``needs_title`` says why a title should go. For ALL CAPS titles ``recase``
 is a rule (title case with stopwords and known acronyms), no model. For
-filenames the beginning of the document goes to the local model
-(``prax.local_llm``; private material never leaves the machine, and the
-call is a few seconds) for one line: the title as printed when there is
+filenames the beginning of the document goes to the titles step's model
+(``prax.models``; a local server keeps private material on the machine,
+and the call is a few seconds) for one line: the title as printed when there is
 one, otherwise a short
 descriptive name in the document's language, which for a course sheet or
 a manual is what a person would type to find it. PDF metadata and the
