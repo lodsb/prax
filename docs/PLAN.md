@@ -555,10 +555,13 @@ since a batch pass opens the SQLite file directly today.
       machine is on, with its own prax.yaml and the never-spend rule;
       the door itself keeps what needs no model (the drop folder, HTML
       captures, dedupe).
-- [ ] On the board: the int8 index by default (adding vectors loads the
-      writable index into memory, 800 MB today), bearer token, the door
-      bound to the Tailscale address.
-- [ ] About a day of work; do it with the housekeeping pass.
+- [~] On the board: everything the code needs is in place (2026-09-12) —
+      the `serve` extra, `vectors: {dtype: i8}` in prax.yaml, the token,
+      `prax serve --host <private address>`, the worker and the MCP proxy
+      pointed at it with `--door`/`PRAX_DOOR`; howto 6 is the recipe.
+      What is left is the move itself: the service file, the memory
+      measured there, and whether the index is re-embedded as `i8` or
+      copied as `f16`. That is the user's call and needs the board.
 
 ## Later / maybe
 

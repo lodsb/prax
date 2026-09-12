@@ -901,19 +901,48 @@ is not reachable ..."}` rather than failing. Tools: `search`, `get`,
 the door). What the agent writes is stamped `agent` (edges' producer,
 pages' author, domain sets, promotions).
 
-## 6. Deployment on the Pi / N100 (*planned*)
+## 6. Deployment on the board (*the code is ready; the move is not made*)
 
-The shape, to be finalized in Stage 1:
+The board holds the store and runs the door; the machine with the GPU
+does the model work through it (howto 3l). Nothing else has to move.
 
-- `data/` on the external SSD, `PRAX_DATA_DIR` set in the service
-  environment.
-- `uvicorn prax.api:app --host <private address> --port 8000` bound
-  to the private network's interface only, run from a systemd unit.
-- Parsing and embedding jobs scheduled with systemd timers on the batch
-  host; they share the same `data/` over the network or the file is copied
-  back after each run.
-- The MCP server on the Pi will use the streamable-HTTP transport and proxy
-  the HTTP door (`rationale.md` R5).
+**On the board.** Copy the data directory over (section 7), then:
+
+    pip install "prax[serve]"        # the core plus vectors; no parsers, no models
+    export PRAX_DATA_DIR=/srv/prax   # the SSD, never the SD card
+    export PRAX_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
+    prax serve --host <its address on your private network> --port 8000
+
+as a systemd unit with those two variables in its environment. In the
+board's `prax.yaml`:
+
+    vectors:
+      dtype: i8        # half the file, recall 0.93: the memory a board has
+    steps:             # nothing local answers here
+      ask: {model: none}
+      titles: {model: none}
+      extract: {model: none}
+
+An index written as `f16` stays `f16`: the setting takes effect when the
+vectors are written, so re-embed into a fresh file
+(`python scripts/embed_pending.py --compact` after removing the old
+`vectors-*.usearch`) or copy the desktop's file and accept its precision.
+
+**On the machine with the models**, pointing at the board:
+
+    prax --door http://<board>:8000 --token <the token> status
+    prax work --watch --door http://<board>:8000 --token <the token>
+
+**In Claude Code**, `PRAX_DOOR=http://<board>:8000` and `PRAX_TOKEN` in
+the shell that launches it; the MCP server is a proxy and needs nothing
+else (section 5).
+
+**The browser extension** points at the same address, and the board's
+`door.cors_origins` lists the extension's origin.
+
+What is still to do on the board itself: put the service file in place,
+measure the door's memory there (invariant 7's gigabyte), and decide
+whether the vector index is `i8` or a copy of the desktop's `f16`.
 
 ## 7. Backup and moving the store
 
