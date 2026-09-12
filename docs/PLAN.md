@@ -180,7 +180,7 @@ R14). Design in `docs/ui.md`.
       heading, page and which side found them, each opening the document
       at that chunk
 - [x] Browse view: recent and filtered document lists
-- [x] Graph view: entity search, neighbourhood as an SVG force layout,
+- [x] Graph view: entity search, neighbourhood as a canvas force layout,
       expand by click, edges labelled with relation and confidence, source
       documents one click away
 - [x] Review view: the queue paged, each item dropped, marked as an

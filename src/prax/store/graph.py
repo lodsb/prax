@@ -312,16 +312,25 @@ def hub_graph(
     """The most connected entities of the given types, the currently valid
     edges among them, and ``links``: pairs of hubs that share at least
     ``min_shared`` source documents (co-occurrence, the topic map). Degrees
-    and edges are counted over canonical ids, like ``traverse``."""
+    and edges are counted over canonical ids, like ``traverse``.
+
+    Every step walks the edge indexes: the ends of the live edges as one
+    list, each end mapped to its canonical entity by primary key. A join
+    on ``c.id = x.src OR c.id = x.dst`` can use neither index and took
+    two seconds on 126k edges; this takes a tenth of that."""
     limit = max(1, min(limit, 200))
     marks = ",".join("?" * len(types))
     nodes = con.execute(
         f"""
-        WITH canon(id, cid) AS (SELECT id, COALESCE(canonical_id, id) FROM entities),
+        WITH ends(id) AS (
+            SELECT src FROM edges WHERE valid_to IS NULL
+            UNION ALL
+            SELECT dst FROM edges WHERE valid_to IS NULL
+        ),
         deg(cid, degree) AS (
-            SELECT c.cid, count(*) FROM edges x
-            JOIN canon c ON c.id = x.src OR c.id = x.dst
-            WHERE x.valid_to IS NULL GROUP BY c.cid
+            SELECT COALESCE(n.canonical_id, n.id), count(*)
+            FROM ends JOIN entities n ON n.id = ends.id
+            GROUP BY COALESCE(n.canonical_id, n.id)
         )
         SELECT e.id, e.name, e.type, d.degree FROM deg d JOIN entities e ON e.id = d.cid
         WHERE e.type IN ({marks}) ORDER BY d.degree DESC, e.name LIMIT ?
@@ -329,61 +338,71 @@ def hub_graph(
         (*types, limit),
     ).fetchall()
     ids = [r["id"] for r in nodes]
-    edges: list[dict[str, Any]] = []
-    if ids:
-        idmarks = ",".join("?" * len(ids))
-        edges = [
-            dict(r)
-            for r in con.execute(
-                f"""
-                WITH canon(id, cid) AS (
-                    SELECT id, COALESCE(canonical_id, id) FROM entities
-                )
-                SELECT x.id AS edge_id, s.name AS src, s.type AS src_type, x.rel,
-                       t.name AS dst, t.type AS dst_type, x.confidence,
-                       x.source_doc, x.evidence, x.producer, x.run
-                FROM edges x
-                JOIN canon cs ON cs.id = x.src JOIN canon cd ON cd.id = x.dst
-                JOIN entities s ON s.id = cs.cid JOIN entities t ON t.id = cd.cid
-                WHERE x.valid_to IS NULL
-                  AND cs.cid IN ({idmarks}) AND cd.cid IN ({idmarks})
-                ORDER BY x.id
-                """,
-                (*ids, *ids),
-            ).fetchall()
-        ]
+    if not ids:
+        return {"nodes": [], "edges": [], "links": []}
+    # every alias of the hubs, so an edge written under an alias counts
+    idmarks = ",".join("?" * len(ids))
+    members = [
+        r[0]
+        for r in con.execute(
+            f"SELECT id FROM entities WHERE COALESCE(canonical_id, id) IN ({idmarks})",
+            ids,
+        )
+    ]
+    mm = ",".join("?" * len(members))
+    edges = [
+        dict(r)
+        for r in con.execute(
+            f"""
+            SELECT x.id AS edge_id, s.name AS src, s.type AS src_type, x.rel,
+                   t.name AS dst, t.type AS dst_type, x.confidence,
+                   x.source_doc, x.evidence, x.producer, x.run
+            FROM edges x
+            JOIN entities a ON a.id = x.src
+            JOIN entities b ON b.id = x.dst
+            JOIN entities s ON s.id = COALESCE(a.canonical_id, a.id)
+            JOIN entities t ON t.id = COALESCE(b.canonical_id, b.id)
+            WHERE x.valid_to IS NULL AND x.src IN ({mm}) AND x.dst IN ({mm})
+            ORDER BY x.id
+            """,
+            (*members, *members),
+        ).fetchall()
+    ]
+    # co-occurrence: which documents each hub (through any alias) appears in
+    touch: dict[int, set[int]] = {}
+    for side in ("src", "dst"):
+        for cid, doc in con.execute(
+            f"""
+            SELECT COALESCE(n.canonical_id, n.id), x.source_doc
+            FROM edges x JOIN entities n ON n.id = x.{side}
+            WHERE x.valid_to IS NULL AND x.source_doc IS NOT NULL
+              AND x.{side} IN ({mm})
+            """,
+            members,
+        ):
+            touch.setdefault(cid, set()).add(doc)
+    by_id = {r["id"]: r for r in nodes}
     links: list[dict[str, Any]] = []
-    if ids:
-        idmarks = ",".join("?" * len(ids))
-        links = [
-            dict(r)
-            for r in con.execute(
-                f"""
-                WITH canon(id, cid) AS (
-                    SELECT id, COALESCE(canonical_id, id) FROM entities
-                ),
-                touch(cid, doc) AS (
-                    SELECT DISTINCT c.cid, x.source_doc FROM edges x
-                    JOIN canon c ON c.id = x.src OR c.id = x.dst
-                    WHERE x.valid_to IS NULL AND x.source_doc IS NOT NULL
-                      AND c.cid IN ({idmarks})
+    for i, a in enumerate(ids):
+        for b in ids[i + 1 :]:
+            shared = len(touch.get(a, set()) & touch.get(b, set()))
+            if shared >= max(1, min_shared):
+                links.append(
+                    {
+                        "a": by_id[a]["name"],
+                        "a_type": by_id[a]["type"],
+                        "b": by_id[b]["name"],
+                        "b_type": by_id[b]["type"],
+                        "weight": shared,
+                    }
                 )
-                SELECT ea.name AS a, ea.type AS a_type, eb.name AS b, eb.type AS b_type,
-                       count(*) AS weight
-                FROM touch ta JOIN touch tb ON ta.doc = tb.doc AND ta.cid < tb.cid
-                JOIN entities ea ON ea.id = ta.cid JOIN entities eb ON eb.id = tb.cid
-                GROUP BY ta.cid, tb.cid HAVING weight >= ?
-                ORDER BY weight DESC LIMIT 300
-                """,
-                (*ids, max(1, min_shared)),
-            ).fetchall()
-        ]
+    links.sort(key=lambda r: -r["weight"])
     return {
         "nodes": [
             {"name": r["name"], "type": r["type"], "degree": r["degree"]} for r in nodes
         ],
         "edges": edges,
-        "links": links,
+        "links": links[:300],
     }
 
 
