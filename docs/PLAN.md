@@ -379,6 +379,20 @@ what replaces it is at least as good, and where a library is the right
 tool but a heavy install, vendoring its built files or extracting the
 part in use (as done with SingleFile) beats losing the capability.
 
+First, the process model (the cause of every failure on 2026-09-12:
+three processes writing one SQLite file, which invariant 4 forbids):
+- [ ] The door as the only writer. Batch passes become workers that
+      fetch work and post results through the door (the work protocol of
+      the deployment shape below), on the same machine or another; no
+      batch process opens the database file. The door holds the vector
+      index, adds vectors as they arrive and saves on its own schedule,
+      so the release-and-remap of the index file goes away. Reads get a
+      connection per thread, writes one lock, so a poll can never race a
+      search on the shared connection. The busy-timeout retry stays as a
+      safety net, not a mechanism. Estimated at a day; done before the
+      dependency cuts because it removes a class of failure, not a few
+      packages.
+
 Performance, cheap first:
 - [ ] Expression indexes on the JSON paths every document-level filter
       scans (`meta.source`, `meta.retired`, `meta.extraction.ontology_version`,
@@ -438,11 +452,6 @@ Shape:
       it exists.
 - [ ] Most `PRAX_*` environment variables moved into prax.yaml sections
       (the data directory stays an environment variable).
-- [ ] The single writer: three processes write to one SQLite file today
-      (door, watcher, backlog) behind a 30 s busy timeout and a retry; the
-      principled form is the door as the only writer with batch passes
-      posting their results to it. Decide after measuring how often the
-      retry fires.
 
 ## Deployment shape: the board holds the store, the desktop does the model work (planned)
 
