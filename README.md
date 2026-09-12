@@ -124,19 +124,21 @@ Built and in daily use on one library, September 2026:
 
 | | |
 |---|---|
-| Documents | 9,538 (9,186 PDFs, 241 web pages, 102 text files, images, one wiki page); 8,752 with text; 302 came in through the drop folder, the UI or the browser extension |
-| Chunks and vectors | 876,000 chunks, all with vectors; 9,534 document vectors; 5,887 acronyms |
-| Graph | 124,000 live edges: 67,900 by a local model, 19,400 by Sonnet 5, 25,600 citations, 6,800 from Zotero, 4,100 by typing rules |
-| Entities | 38,200 papers, 22,100 concepts, 12,600 methods, 8,500 authors, 5,500 tools, 3,400 claims, 1,300 venues, 700 organizations; 6,900 merged aliases |
-| Ontology | core, research and studio modules; 9,517 documents in the research domain, 18 in studio, 2 in both |
+| Documents | 9,671 (9,221 PDFs, 267 web pages, 103 text files, 73 notes, 3 images, one wiki page); 8,887 with text; 365 came in through the drop folder, the UI or the browser extension |
+| Chunks and vectors | 878,000 chunks, all with vectors; 9,601 document vectors; 5,887 acronyms |
+| Graph | 125,900 live edges: 62,000 by a local model, 19,400 by Sonnet 5, 25,600 citations, 11,300 by typing rules, 6,800 from Zotero |
+| Entities | 39,400 papers, 26,900 concepts, 15,900 methods, 8,900 authors, 7,900 tools, 4,000 claims, 2,500 organizations, 1,300 venues; 6,900 merged aliases |
+| Ontology | core, research and studio modules; 9,582 documents in the research domain, 20 in studio |
 | Retrieval, 62 queries over the library | MRR 0.905 hybrid (0.82 keyword, 0.79 vector); hit@1 0.85 |
 | Extraction | every document with text read once by a local Qwen3.6-35B-A3B on an RTX 4090 or by Sonnet 5; the re-read under the current ontology is under way |
-| Review queue | 21,900 open items, the evidence the next ontology change is drawn from |
+| Review queue | 25,600 open items, the evidence the next ontology change is drawn from |
 
-Not built: the move of the service onto the serving board with the
-desktop draining model work through the door, and the MCP server
-proxying the HTTP door instead of importing the store; the browser
-extension is hand-tested in Firefox and Waterfox so far. Checklists with
+`prax status` prints this table from the live store.
+
+Not built: the move of the service onto the serving board, with the
+desktop draining model work through the door — the code for it is in
+place (`docs/howto.md` 6), the move is not made. The browser extension
+is hand-tested in Firefox and Waterfox so far. Checklists with
 dates and the planned passes: `docs/PLAN.md`.
 
 ## Quick start
