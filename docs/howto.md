@@ -28,7 +28,7 @@ Extras, install only where they run (see `rationale.md` R8):
 | Extra | Contents | Where |
 |---|---|---|
 | `dev` | pytest, ruff, httpx | every dev checkout |
-| `embed` | usearch, onnxruntime, tokenizers, huggingface_hub, numpy | the desktop (GPU via onnxruntime-directml) and the serving host |
+| `embed` | usearch, onnxruntime, tokenizers, numpy | the desktop (GPU via onnxruntime-directml) and the serving host |
 | `ingest` | pymupdf4llm, trafilatura, magika | the parse queue; the desktop |
 | `docling` | docling (about 3 GB with PyTorch) | optional; only for `--extractor docling` |
 
@@ -191,15 +191,21 @@ Chunks are disposable; nothing else is touched.
 ## 3d. Embeddings and hybrid search
 
 `prax.embeddings` runs bge-small-en-v1.5 (384-d) through onnxruntime;
-model files download from the Hugging Face hub on first use. Vectors live
+the model files are fetched once into `<data dir>/models/` on first use
+(`prax.fetch`, plain HTTPS from the Hugging Face hub, resumable; a copy
+in an old Hugging Face cache is taken from there; `PRAX_OFFLINE=1`
+refuses to download; `python scripts/fetch_model.py --embed` fetches
+ahead of time). Vectors live
 in `<data dir>/vectors-<model>.usearch` (a memory-mapped HNSW index,
 `prax.vectors`), bookkeeping in `chunk_embeddings`. Search is hybrid by
 default and falls back to FTS when there is no index file, no usearch or
 `PRAX_EMBED=0`.
 
     pip install -e ".[embed]"
-    # Windows desktop with a GPU: DirectML instead of the CPU runtime
-    pip uninstall -y onnxruntime; pip install onnxruntime-directml
+    # Windows desktop with a GPU: DirectML instead of the CPU runtime.
+    # Never both: the two packages share one module and the last one
+    # installed wins, silently (the desktop ran on the CPU for days so).
+    pip uninstall -y onnxruntime onnxruntime-directml; pip install onnxruntime-directml
 
     python scripts/embed_pending.py --dry-run     # counts
     python scripts/embed_pending.py --batch 64    # everything pending; idempotent
@@ -216,8 +222,11 @@ bookkeeping on start, so an interrupted run is simply started again. Copy
 both `.usearch` files together with `prax.db` when moving the store.
 
 Settings: `PRAX_EMBED` (model name, `hash` for tests, `0` off),
-`PRAX_EMBED_VARIANT` (`fp32` on a GPU, `int8` on CPU by default),
-`PRAX_EMBED_PROVIDERS`, `PRAX_EMBED_THREADS`; `PRAX_VEC_DTYPE` (`f16`
+`PRAX_EMBED_VARIANT` (`int8` by default everywhere: measured 2026-09-12
+on 1,024 real chunks, CPU int8 23 chunks/s, CPU fp32 17, DirectML fp32
+45, DirectML int8 80, so int8 is the faster one on both and keeps the
+store's vectors from one variant), `PRAX_EMBED_PROVIDERS` (DirectML
+first when the runtime offers it), `PRAX_EMBED_THREADS`; `PRAX_VEC_DTYPE` (`f16`
 default, `i8` for half the file at recall 0.93) and `PRAX_VEC_EF` (search
 expansion, 64) for the index. Changing the model means re-embedding into
 a new file: `chunk_embeddings.model` records what each vector came from

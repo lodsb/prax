@@ -415,9 +415,13 @@ Performance, cheap first:
       listings, the retired and promote lists and a document's open
       review items went from 12-37 ms scans to under a millisecond; the
       extraction selection stays a scan (it returns most rows).
-- [ ] Embedding on the GPU: the DirectML runtime is installed but the CPU
-      provider is chosen (19 chunks/s); select it by configuration and
-      measure.
+- [x] Embedding on the GPU (2026-09-12): the cause was two onnxruntime
+      packages in one venv (the CPU one installed last shadowed the
+      DirectML one). Measured on 1,024 real chunks: CPU int8 23
+      chunks/s, CPU fp32 17, DirectML fp32 45, DirectML int8 80. The
+      default variant is int8 on every provider now (faster on both,
+      one variant for the whole store); the desktop venv keeps only
+      onnxruntime-directml; howto 3d says never both.
 - [x] Batch selections folded into SQL (2026-09-12):
       `select_for_extraction` compares each document against the
       version of its own domain subset with one CASE over the domain
@@ -434,17 +438,23 @@ Performance, cheap first:
 
 Dependencies (188 packages, 3.5 GB in the venv; the serving path needs a
 fraction):
-- [ ] Drop the in-process llama.cpp binding and the `local` extra
-      (1.8 GB plus a CUDA runtime): llama-server through the `openai`
-      kind replaced it; keep the `gguf` kind's documentation pointing
-      there.
-- [ ] Docling (torch, scipy, OpenCV, transformers): never the default
-      extractor; remove the code path or keep it as the documented
-      explicit option without installing it.
-- [ ] Magika (code detection in text attachments): extension-based
-      detection covers nearly all; measure what is lost before dropping.
-- [ ] The Hugging Face client, used once to fetch the embedding model:
-      a documented download (or a vendored model file) instead.
+- [x] The in-process llama.cpp binding and the `local` extra dropped
+      (2026-09-12, `prax.local_llm`, the `gguf` kind, `PRAX_LOCAL_*`):
+      an `openai` model at llama-server does the same from its own
+      process; howto 3h is about llama-server now.
+- [x] Docling (2026-09-12): kept as the documented explicit extractor
+      in its own extra, uninstalled from the desktop venv with its
+      stack (4.0 GB to 0.8 GB for the whole venv).
+- [x] Magika measured (2026-09-12) and kept optional: it labels the
+      language of 39 of 6,855 fenced code blocks (the blocks themselves
+      come from the line scorer) and decides "code" for 2 of 13
+      whole-file code attachments that have no extension. Small either
+      way; it stays in the `ingest` extra and degrades to nothing when
+      absent, as before.
+- [x] The Hugging Face client replaced (2026-09-12) by `prax.fetch`:
+      one resumable HTTPS GET per file into `<data dir>/models/`, the
+      old cache reused; `scripts/fetch_model.py` fetches the embedder
+      and the GGUFs `prax.yaml` names.
 - [ ] FastMCP: the MCP server becomes a proxy of the HTTP door (already in
       "Later"), which needs no store import and no store dependencies in
       that process and ends the second-writer deviation; the official
@@ -466,7 +476,9 @@ Shape:
       stays pending forever. `.docx` is a zip of XML (a small extractor
       of our own); `.doc` needs LibreOffice's headless conversion as an
       explicit-only extractor, the way OCR is.
-- [ ] Models fetched on demand: a `models` entry may name `repo` and
+- [x] Models fetched on demand (2026-09-12, `scripts/fetch_model.py`,
+      `repo` and `file` on a models entry, the example config shows
+      it). The original note: a `models` entry may name `repo` and
       `file` instead of `path`; `prax models fetch <name>` (or the first
       use of the step) downloads into `<data dir>/models/` and records
       the file's hash; the same for the embedding model, so a fresh

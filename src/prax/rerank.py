@@ -25,6 +25,8 @@ from typing import Any, Protocol
 
 import numpy as np
 
+from prax import fetch
+
 
 @dataclass(frozen=True)
 class ModelSpec:
@@ -51,6 +53,13 @@ MODELS: dict[str, ModelSpec] = {
 DEFAULT_MODEL = "ms-marco-MiniLM-L-6-v2"
 
 
+def current_spec() -> ModelSpec | None:
+    """The model ``PRAX_RERANK`` names, or None when reranking is off or a
+    stub."""
+    name = os.environ.get("PRAX_RERANK", "0")
+    return MODELS.get(name)
+
+
 class Reranker(Protocol):
     name: str
 
@@ -75,7 +84,6 @@ class OnnxReranker:
         if self._session is not None:
             return
         ort = importlib.import_module("onnxruntime")
-        hub = importlib.import_module("huggingface_hub")
         tokenizers = importlib.import_module("tokenizers")
         available = ort.get_available_providers()
         providers = (
@@ -96,13 +104,13 @@ class OnnxReranker:
         opts = ort.SessionOptions()
         opts.log_severity_level = 3
         self._session = ort.InferenceSession(
-            hub.hf_hub_download(self.spec.repo, self.spec.files[variant]),
+            str(fetch.model_file(self.spec.repo, self.spec.files[variant])),
             opts,
             providers=providers,
         )
         self._inputs = {i.name for i in self._session.get_inputs()}
         tok = tokenizers.Tokenizer.from_file(
-            hub.hf_hub_download(self.spec.repo, "tokenizer.json")
+            str(fetch.model_file(self.spec.repo, "tokenizer.json"))
         )
         tok.enable_truncation(self.spec.max_tokens)
         tok.enable_padding()

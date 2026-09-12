@@ -72,6 +72,8 @@ class ModelSpec:
     model: str | None = None  # the API's model id (claude, openai)
     base_url: str | None = None  # the server (openai)
     api_key_env: str | None = None
+    repo: str | None = None  # where the file comes from (scripts/fetch_model.py)
+    file: str | None = None
     n_ctx: int = DEFAULT_CTX  # the server's context per slot (openai)
     effort: str | None = None
     price: tuple[float, float] | None = None  # USD per million in, out
@@ -121,6 +123,8 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
         "kind",
         "model",
         "base_url",
+        "repo",
+        "file",
         "api_key_env",
         "n_ctx",
         "effort",
@@ -139,6 +143,8 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
         model=raw.get("model"),
         base_url=raw.get("base_url"),
         api_key_env=raw.get("api_key_env"),
+        repo=raw.get("repo"),
+        file=raw.get("file"),
         n_ctx=int(raw.get("n_ctx", DEFAULT_CTX)),
         effort=raw.get("effort"),
         price=(float(price[0]), float(price[1])) if price else None,

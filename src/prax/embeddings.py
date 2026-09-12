@@ -1,8 +1,8 @@
 """Text embeddings: a small registry of ONNX models behind one interface.
 
 The default is bge-small-en-v1.5 (384 dimensions, rationale R6/R8), run
-through onnxruntime with the ``tokenizers`` library; model files come from
-the Hugging Face hub on first use and are cached. Nothing here is imported
+through onnxruntime with the ``tokenizers`` library; model files are
+fetched once into ``<data dir>/models`` (``prax.fetch``). Nothing here is imported
 by the serving path until the first hybrid search, and ``PRAX_EMBED=0``
 keeps it out entirely (search stays FTS-only).
 
@@ -11,8 +11,9 @@ Environment:
 * ``PRAX_EMBED``: ``0`` disables embeddings; ``hash`` selects the
   deterministic test embedder; otherwise a model name from ``MODELS``
   (default ``bge-small-en-v1.5``).
-* ``PRAX_EMBED_VARIANT``: ``fp32`` or ``int8`` (default: fp32 on a GPU
-  provider, int8 on CPU).
+* ``PRAX_EMBED_VARIANT``: ``int8`` (default: the faster one on CPU and on
+  DirectML alike, and what every vector in the store was made with) or
+  ``fp32``.
 * ``PRAX_EMBED_PROVIDERS``: comma-separated onnxruntime providers (default:
   DirectML if the runtime offers it, else CPU).
 * ``PRAX_EMBED_THREADS``: intra-op threads for the CPU provider.
@@ -33,6 +34,8 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import numpy as np
+
+from prax import fetch
 
 
 @dataclass(frozen=True)
@@ -107,7 +110,6 @@ class OnnxEmbedder:
         if self._session is not None:
             return
         ort = importlib.import_module("onnxruntime")
-        hub = importlib.import_module("huggingface_hub")
         tokenizers = importlib.import_module("tokenizers")
         available = ort.get_available_providers()
         providers = (
@@ -119,13 +121,8 @@ class OnnxEmbedder:
                 else ["CPUExecutionProvider"]
             )
         )
-        gpu = providers[0] != "CPUExecutionProvider"
-        variant = (
-            self.variant
-            or os.environ.get("PRAX_EMBED_VARIANT")
-            or ("fp32" if gpu else "int8")
-        )
-        path = hub.hf_hub_download(self.spec.repo, self.spec.files[variant])
+        variant = self.variant or os.environ.get("PRAX_EMBED_VARIANT") or "int8"
+        path = str(fetch.model_file(self.spec.repo, self.spec.files[variant]))
         opts = ort.SessionOptions()
         opts.log_severity_level = 3
         threads = self.threads or int(os.environ.get("PRAX_EMBED_THREADS", "0"))
@@ -134,7 +131,7 @@ class OnnxEmbedder:
         self._session = ort.InferenceSession(path, opts, providers=providers)
         self._inputs = {i.name for i in self._session.get_inputs()}
         tok = tokenizers.Tokenizer.from_file(
-            hub.hf_hub_download(self.spec.repo, self.spec.tokenizer)
+            str(fetch.model_file(self.spec.repo, self.spec.tokenizer))
         )
         tok.enable_truncation(self.spec.max_tokens)
         tok.enable_padding()

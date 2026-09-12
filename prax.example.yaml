@@ -16,15 +16,18 @@ models:
 
   # A local model served by llama.cpp's llama-server (the usual way; any
   # OpenAI-compatible server works the same: vLLM, Ollama with its
-  # /v1 endpoint). Get a GGUF once, for example
-  #   huggingface-cli download unsloth/Qwen3.6-35B-A3B-GGUF   #     Qwen3.6-35B-A3B-UD-Q4_K_S.gguf --local-dir <data dir>/models
-  # (a 24 GB card; a 7B Q4 file fits 8 GB), then start the server:
-  #   scripts/llama_server.ps1 -Model <data dir>/models/<file>.gguf -Slots 3 -NoThinking
+  # /v1 endpoint). `repo` and `file` say where the GGUF comes from:
+  #   python scripts/fetch_model.py local-server
+  # puts it under <data dir>/models/<repo>/<file> (a 24 GB card; a 7B Q4
+  # file fits 8 GB), then start the server with the printed path:
+  #   scripts/llama_server.ps1 -Model <that path> -Slots 3 -NoThinking
   # `model` is the name edges carry as their producer, so name the file.
   local-server:
     kind: openai
     base_url: http://127.0.0.1:8080/v1
     model: qwen3.6-35b-a3b-ud-q4ks
+    repo: unsloth/Qwen3.6-35B-A3B-GGUF
+    file: Qwen3.6-35B-A3B-UD-Q4_K_S.gguf
 
   # A hosted OpenAI-compatible API (api_key_env names the variable holding
   # its key; price is USD per million input and output tokens, for the
