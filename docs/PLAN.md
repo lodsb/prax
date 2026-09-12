@@ -486,10 +486,13 @@ fraction):
       proxy only if the door were ever exposed. Tailscale stays as one
       example (it is the least setup). About twenty mentions across
       CLAUDE.md, README, howto, architecture, extension.md and sources.md.
-- [ ] Word documents (`.doc`, `.docx`): no extractor today, a capture
-      stays pending forever. `.docx` is a zip of XML (a small extractor
-      of our own); `.doc` needs LibreOffice's headless conversion as an
-      explicit-only extractor, the way OCR is.
+- [x] Word documents (2026-09-12): `docx` reads the zip of XML here
+      (headings by outline level or style name, lists, tables as
+      Markdown), `office` converts `.doc`, `.rtf` and `.odt` through
+      LibreOffice when a machine has it and is simply not offered when
+      it does not (`Extractor.check`). `prax.parsers.guess_mime` names
+      the office types Python's table misses. The one `.doc` capture in
+      the store parses now.
 - [x] Models fetched on demand (2026-09-12, `scripts/fetch_model.py`,
       `repo` and `file` on a models entry, the example config shows
       it). The original note: a `models` entry may name `repo` and

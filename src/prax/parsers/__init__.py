@@ -19,6 +19,10 @@ time, so the serving path never loads them):
 |                 |                 | only, seconds per page                        |
 | trafilatura     | text/html       | article Markdown, boilerplate stripped, code  |
 |                 |                 | blocks fenced                                 |
+| docx            | .docx           | Word: zip of XML read here, headings, lists,  |
+|                 |                 | tables; no dependency                         |
+| office          | .doc .rtf .odt  | LibreOffice converts to .docx, then as above; |
+|                 |                 | needs LibreOffice installed                   |
 | plain           | text/*          | decode as UTF-8; a source file (by extension, |
 |                 |                 | else Magika) becomes one fenced code block;   |
 |                 |                 | code regions inside prose are fenced          |
@@ -34,12 +38,16 @@ extractor whose output changes without a package release bumps its
 
 from __future__ import annotations
 
+import functools
 import importlib
 import importlib.metadata
+import mimetypes
 import os
 import re
+import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -52,6 +60,7 @@ class Extractor:
     explicit_only: bool = False  # never chosen by default or as a fallback
     revision: int = 1  # our own changes to what the extractor produces
     hints: bool = False  # the function takes filename= as a keyword
+    check: Callable[[], bool] | None = None  # more than an import: a program
 
     def accepts(self, mime: str) -> bool:
         return any(
@@ -59,6 +68,8 @@ class Extractor:
         )
 
     def available(self) -> bool:
+        if self.check is not None and not self.check():
+            return False
         if self.package is None:
             return True
         try:
@@ -387,6 +398,213 @@ def _magika(module: Any) -> Any:
     return _MAGIKA
 
 
+# ------------------------------------------------------------ Word documents
+# A .docx is a zip of XML and needs no dependency: word/document.xml holds the
+# body in document order. Old .doc files, RTF and OpenDocument go through
+# LibreOffice, which a person installs for themselves; prax only calls it.
+
+DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+OFFICE_TIMEOUT = 180.0
+# Heading styles as Word writes them in the languages this library holds; the
+# outline level below is checked first and is language-independent.
+_HEADING = re.compile(
+    r"^(heading|berschrift|überschrift|titre|titolo|encabezado|rubrik|kop)(\d)$"
+)
+
+
+def _docx_runs(paragraph: Any) -> str:
+    """The text of one paragraph: runs joined, tabs and breaks kept. Field
+    codes and tracked deletions carry their own tags and are left out."""
+    parts: list[str] = []
+    for node in paragraph.iter():
+        if node.tag == f"{W}t":
+            parts.append(node.text or "")
+        elif node.tag == f"{W}tab":
+            parts.append("\t")
+        elif node.tag in (f"{W}br", f"{W}cr"):
+            parts.append("\n")
+    return "".join(parts).strip()
+
+
+def _docx_heading(paragraph: Any) -> int:
+    """The heading level of a paragraph, 0 for body text."""
+    properties = paragraph.find(f"{W}pPr")
+    if properties is None:
+        return 0
+    outline = properties.find(f"{W}outlineLvl")
+    if outline is not None:
+        try:
+            return min(int(outline.get(f"{W}val", "")) + 1, 6)
+        except ValueError:
+            pass
+    style = properties.find(f"{W}pStyle")
+    name = ((style.get(f"{W}val") if style is not None else "") or "").lower()
+    flat = re.sub(r"[\s_-]", "", name)
+    if flat == "title":
+        return 1
+    if flat == "subtitle":
+        return 2
+    found = _HEADING.match(flat)
+    return min(int(found.group(2)), 6) if found else 0
+
+
+def _docx_table(table: Any) -> str:
+    """A table as Markdown, which is what the chunker reads as a table."""
+    rows: list[list[str]] = []
+    for row in table.findall(f"{W}tr"):
+        cells = []
+        for cell in row.findall(f"{W}tc"):
+            texts = [t for t in (_docx_runs(p) for p in cell.findall(f"{W}p")) if t]
+            cells.append(" ".join(texts).replace("|", r"\|"))
+        if any(cells):
+            rows.append(cells)
+    if not rows:
+        return ""
+    width = max(len(r) for r in rows)
+    rows = [r + [""] * (width - len(r)) for r in rows]
+    head, *rest = rows
+    lines = ["| " + " | ".join(head) + " |", "|" + "|".join(["---"] * width) + "|"]
+    lines += ["| " + " | ".join(r) + " |" for r in rest]
+    return "\n".join(lines)
+
+
+def _docx_blocks(parent: Any) -> list[tuple[str, str]]:
+    blocks: list[tuple[str, str]] = []
+    for child in parent:
+        if child.tag == f"{W}p":
+            text = _docx_runs(child)
+            if not text:
+                continue
+            level = _docx_heading(child)
+            if level:
+                blocks.append(("h", "#" * level + " " + text))
+            elif child.find(f"{W}pPr/{W}numPr") is not None:
+                blocks.append(("li", "- " + text))
+            else:
+                blocks.append(("p", text))
+        elif child.tag == f"{W}tbl":
+            table = _docx_table(child)
+            if table:
+                blocks.append(("table", table))
+        elif child.tag == f"{W}sdt":  # a content control wraps real content
+            content = child.find(f"{W}sdtContent")
+            if content is not None:
+                blocks.extend(_docx_blocks(content))
+    return blocks
+
+
+def _docx(data: bytes) -> str:
+    """A Word document as Markdown: headings by outline level or style name,
+    numbered and bulleted paragraphs as list items, tables as Markdown
+    tables, the rest as paragraphs."""
+    import io
+    import zipfile
+    from xml.etree import ElementTree
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            xml = archive.read("word/document.xml")
+    except KeyError as exc:  # a zip, but not a Word one
+        raise ValueError("not a Word document (no word/document.xml)") from exc
+    except zipfile.BadZipFile as exc:  # .doc and .rtf land here: the office
+        raise ValueError(  # extractor converts those first
+            "not a Word document (not a zip: an old .doc or .rtf goes"
+            " through the office extractor)"
+        ) from exc
+    body = ElementTree.fromstring(xml).find(f"{W}body")
+    if body is None:
+        return ""
+    blocks = _docx_blocks(body)
+    lines: list[str] = []
+    for i, (kind, text) in enumerate(blocks):
+        if i and not (kind == "li" and blocks[i - 1][0] == "li"):
+            lines.append("")
+        lines.append(text)
+    return "\n".join(lines).strip()
+
+
+@functools.cache
+def soffice_path() -> str | None:
+    """LibreOffice's binary, when this machine has one."""
+    for name in ("soffice", "libreoffice"):
+        found = shutil.which(name)
+        if found:
+            return found
+    for guess in (
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+        "/usr/bin/soffice",
+        "/usr/local/bin/soffice",
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+    ):
+        if Path(guess).exists():
+            return guess
+    return None
+
+
+def _office(data: bytes, *, filename: str | None = None) -> str:
+    """An old .doc, an .rtf or an OpenDocument text: LibreOffice converts it
+    to .docx in a scratch directory with a profile of its own (so it never
+    clashes with the person's running LibreOffice) and ``_docx`` reads that."""
+    import subprocess
+    import tempfile
+
+    soffice = soffice_path()
+    if soffice is None:
+        raise RuntimeError(
+            "LibreOffice is not installed: it is what converts .doc, .rtf and"
+            " .odt (libreoffice.org; prax only calls it)"
+        )
+    suffix = Path(filename or "").suffix.lower() or ".doc"
+    with tempfile.TemporaryDirectory(prefix="prax-office-") as tmp:
+        work = Path(tmp)
+        source = work / f"input{suffix}"
+        source.write_bytes(data)
+        done = subprocess.run(
+            [
+                soffice,
+                f"-env:UserInstallation=file:///{(work / 'profile').as_posix()}",
+                "--headless",
+                "--norestore",
+                "--convert-to",
+                "docx",
+                "--outdir",
+                str(work),
+                str(source),
+            ],
+            capture_output=True,
+            timeout=OFFICE_TIMEOUT,
+            check=False,
+        )
+        converted = work / "input.docx"
+        if not converted.exists():
+            said = (done.stderr or done.stdout or b"").decode("utf-8", "replace")
+            raise RuntimeError(
+                f"LibreOffice did not convert the file: {said.strip()[:200]}"
+            )
+        return _docx(converted.read_bytes())
+
+
+def guess_mime(name: str | None, fallback: str = "application/octet-stream") -> str:
+    """The MIME type of a file name. Python's table is the machine's table
+    and misses the office types on some of them, so those are named here."""
+    suffix = Path(name or "").suffix.lower()
+    if suffix in EXTRA_MIME_TYPES:
+        return EXTRA_MIME_TYPES[suffix]
+    return mimetypes.guess_type(name or "")[0] or fallback
+
+
+EXTRA_MIME_TYPES = {
+    ".docx": DOCX_MIME,
+    ".doc": "application/msword",
+    ".rtf": "application/rtf",
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".md": "text/markdown",
+    ".epub": "application/epub+zip",
+}
+
+
 REGISTRY: list[Extractor] = [
     Extractor("pymupdf4llm", ("application/pdf",), _pymupdf4llm, "pymupdf4llm"),
     Extractor("pymupdf", ("application/pdf",), _pymupdf, "pymupdf"),
@@ -404,6 +622,19 @@ REGISTRY: list[Extractor] = [
         _trafilatura,
         "trafilatura",
         revision=2,  # Markdown output with fenced code blocks
+    ),
+    Extractor("docx", (DOCX_MIME,), _docx),
+    Extractor(
+        "office",
+        (
+            "application/msword",
+            "application/rtf",
+            "text/rtf",
+            "application/vnd.oasis.opendocument.text",
+        ),
+        _office,
+        hints=True,
+        check=lambda: soffice_path() is not None,
     ),
     Extractor("plain", ("text/",), _plain, revision=3, hints=True),
     Extractor(

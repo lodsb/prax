@@ -133,6 +133,17 @@ the new one is suspiciously short (login walls, scans without OCR) unless
     # Docling on a hand-picked set
     python scripts/parse_pending.py --ids 12 34 --extractor docling --force
 
+Word documents need nothing installed for `.docx`: it is a zip of XML and
+`prax.parsers` reads it here (headings by outline level or style name in
+any language, numbered and bulleted paragraphs as list items, tables as
+Markdown tables). The older `.doc`, `.rtf` and OpenDocument `.odt` go
+through LibreOffice, which converts them to `.docx` in a scratch
+directory with a profile of its own: install it
+([libreoffice.org](https://www.libreoffice.org), or `soffice` on PATH)
+and the `office` extractor appears; without it those documents stay
+pending and say why. Python's MIME table misses `.docx` on some machines,
+so `prax.parsers.guess_mime` names the office types itself.
+
 Before switching the default extractor for a document class, run
 `scripts/compare_extractors.py` over a sample and read the texts, not only
 the metrics table it writes.

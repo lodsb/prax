@@ -84,9 +84,10 @@ comparing it with the hosted one are in `docs/eval/`.
   Each document carries a domain set naming the ontology modules it is
   read against.
 - **Parse.** A pluggable queue: PDFs through pymupdf4llm (Docling
-  optional), OCR on request, HTML through trafilatura, source files and
-  code regions kept as code (by extension or Magika), images described
-  and transcribed by a vision model.
+  optional), OCR on request, HTML through trafilatura, Word documents
+  (`.docx` here, `.doc`/`.rtf`/`.odt` through LibreOffice when it is
+  installed), source files and code regions kept as code (by extension
+  or Magika), images described and transcribed by a vision model.
 - **Index.** Structure-aware chunks (text, tables, figure captions, code)
   with locators back into the original; FTS5 for keywords; bge-small
   vectors in a usearch index; a document-level field (what a document

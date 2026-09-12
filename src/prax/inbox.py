@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import json
 import logging
-import mimetypes
 import re
 import shutil
 import sqlite3
@@ -40,7 +39,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from prax import config, models, ontology, store
+from prax import config, models, ontology, parsers, store
 
 log = logging.getLogger("prax.inbox")
 
@@ -432,7 +431,7 @@ def ingest_upload(
     """A file handed over the door (the UI's upload, a script)."""
     name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1] or None
     if not mime or mime == "application/octet-stream":
-        mime = mimetypes.guess_type(name or "")[0] or "application/octet-stream"
+        mime = parsers.guess_mime(name)
     return ingest_bytes(
         con,
         data,
@@ -544,7 +543,7 @@ def scan(
             cap = ingest_bytes(
                 con,
                 data,
-                mime=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+                mime=parsers.guess_mime(path.name),
                 source="inbox",
                 title=extra.get("title") or path.stem,
                 source_url=extra.get("source_url"),
