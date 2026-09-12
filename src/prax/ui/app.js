@@ -574,7 +574,7 @@ class ForceGraph {
     if (!n) {
       const a = Math.random() * Math.PI * 2;
       const r = 60 + Math.random() * 60;
-      n = { key, name, type, expanded: false, degree: 0, hidden: [],
+      n = { key, name, type, expanded: false, degree: 0, hidden: [], by: near ? near.key : null,
             x: (near ? near.x : 0) + Math.cos(a) * r, y: (near ? near.y : 0) + Math.sin(a) * r, vx: 0, vy: 0 };
       this.nodes.set(key, n);
     }
@@ -612,7 +612,7 @@ class ForceGraph {
       const s = this.node(e.src, e.src_type, near);
       const t = this.node(e.dst, e.dst_type, near);
       s.degree++; t.degree++;
-      this.edges.set(e.edge_id, { ...e, s: s.key, t: t.key });
+      this.edges.set(e.edge_id, { ...e, s: s.key, t: t.key, by: aroundKey });
     }
     this.fitPending = true;
     this.kick(1);
@@ -632,8 +632,40 @@ class ForceGraph {
     const n = this.nodes.get(key);
     n.expanded = true;
     const edges = await api("/traverse", { entity: n.name, hops: 1 });
+    if (!n.expanded) return;  // folded while the fetch was in flight
     this.merge(edges, key);
     this.select(key);
+  }
+
+  // Undo an expansion: its edges go, and so does everything only they
+  // justified, with whatever those nodes had opened in turn. Seeds (the
+  // overview's hubs, the entity the view started on) always stay.
+  fold(key) {
+    const n = this.nodes.get(key);
+    if (!n) return;
+    this.unfold(key);
+    const kept = new Set(this.links.flatMap((l) => [l.a, l.b]));
+    for (const e of this.edges.values()) { kept.add(e.s); kept.add(e.t); }
+    for (const m of [...this.nodes.values()]) {
+      if (m.by !== null && m.key !== key && !kept.has(m.key)) this.nodes.delete(m.key);
+    }
+    if (this.hover && !this.nodes.has(this.hover)) this.hover = null;
+    this.kick(0.5);
+    this.select(key);
+  }
+
+  unfold(key) {
+    const n = this.nodes.get(key);
+    n.expanded = false;
+    n.hidden = [];
+    for (const [id, e] of [...this.edges]) {
+      if (e.by !== key) continue;
+      this.edges.delete(id);
+      for (const k of [e.s, e.t]) { const m = this.nodes.get(k); if (m) m.degree = Math.max(0, m.degree - 1); }
+    }
+    for (const m of this.nodes.values()) {
+      if (m.by === key && m.key !== key && m.expanded) this.unfold(m.key);
+    }
   }
 
   kick(alpha) {
@@ -831,6 +863,7 @@ class ForceGraph {
       if (moved) return;
       const n = this.hit(...at(e));
       if (!n) return;
+      if (n.expanded && n.key === this.selected) { this.fold(n.key); return; }
       this.select(n.key);
       if (!n.expanded) this.expand(n.key);
     });
@@ -860,7 +893,7 @@ class ForceGraph {
 }
 
 function graphPanel(node, edges) {
-  if (!node) return `<p class="muted">Click a node to see its edges; the first click also expands it.</p>`;
+  if (!node) return `<p class="muted">Click a node to see its edges; the first click also expands it, a second click on the selected node folds it again.</p>`;
   const rows = edges.map((e) => {
     const out = e.s === node.key;
     const other = out ? e.dst : e.src;
@@ -870,7 +903,22 @@ function graphPanel(node, edges) {
       ${e.evidence ? `<span class="ev">“${esc(e.evidence)}”</span>` : ""}</li>`;
   });
   const hidden = (node.hidden || []).length;
-  return `<h2>${esc(node.name)}</h2><div class="muted">${esc(node.type)} · ${edges.length} edges drawn${hidden ? ` · ${hidden} more neighbours <a href="#" id="graph-show-all">draw them</a>` : ""}</div><ul>${rows.join("")}</ul>`;
+  const more = hidden ? ` · ${hidden} more neighbours <a href="#" id="graph-show-all">draw them</a>` : "";
+  const fold = node.expanded ? ` · <a href="#" id="graph-fold">fold</a>` : "";
+  return `<h2>${esc(node.name)}</h2><div class="muted">${esc(node.type)} · ${edges.length} edges drawn${more}${fold}</div><ul>${rows.join("")}</ul>`;
+}
+
+// The panel follows the selection; its links act on the graph.
+function graphPanelUpdater(panel, graphOf) {
+  return (node, edges) => {
+    panel.innerHTML = graphPanel(node, edges);
+    const on = (id, act) => {
+      const el = panel.querySelector(id);
+      if (el) el.addEventListener("click", (e) => { e.preventDefault(); act(graphOf()); });
+    };
+    on("#graph-show-all", (g) => g.showHidden(node.key));
+    on("#graph-fold", (g) => g.fold(node.key));
+  };
 }
 
 async function viewGraph(arg, p) {
@@ -894,7 +942,7 @@ async function viewGraph(arg, p) {
       out.innerHTML = `
         <div class="graph-tools">
           <span>Overview: the most connected concepts, methods, tools and datasets</span>
-          <span class="muted">· faint lines: hubs that share documents · click a node to expand it, double-click to open its neighbourhood</span>
+          <span class="muted">· faint lines: hubs that share documents · click a node to expand it, click it again to fold it, double-click to open its neighbourhood</span>
           <button type="button" id="graph-fit" class="secondary">fit</button>
         </div>
         <div class="legend">${legend}</div>
@@ -903,11 +951,7 @@ async function viewGraph(arg, p) {
           <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
         </div>`;
       const panel = document.getElementById("graph-panel");
-      const graph = new ForceGraph(out.querySelector("canvas"), (node, edges) => {
-        panel.innerHTML = graphPanel(node, edges);
-        const more = panel.querySelector("#graph-show-all");
-        if (more) more.addEventListener("click", (e) => { e.preventDefault(); graph.showHidden(node.key); });
-      });
+      const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
       document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
       const overview = await api("/graph/overview", { limit: 30 });
       if (!overview.nodes.length) { out.innerHTML = `<p class="muted">The graph is empty; run an extraction first.</p>`; return; }
@@ -924,7 +968,7 @@ async function viewGraph(arg, p) {
     out.innerHTML = `
       <div class="graph-tools">
         <span>Neighbourhood of <b>${esc(entity)}</b></span>
-        <span class="muted">· click a node to expand it, drag to pan, wheel to zoom · dashed edges are inferred or ambiguous</span>
+        <span class="muted">· click a node to expand it, click it again to fold it · drag to pan, wheel to zoom · dashed edges are inferred or ambiguous</span>
         <button type="button" id="graph-fit" class="secondary">fit</button>
       </div>
       <div class="legend">${legend}</div>
@@ -933,17 +977,16 @@ async function viewGraph(arg, p) {
         <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
       </div>`;
     const panel = document.getElementById("graph-panel");
-    const graph = new ForceGraph(out.querySelector("canvas"), (node, edges) => {
-      panel.innerHTML = graphPanel(node, edges);
-      const more = panel.querySelector("#graph-show-all");
-      if (more) more.addEventListener("click", (e) => { e.preventDefault(); graph.showHidden(node.key); });
-    });
+    const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
     document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
     const edges = await api("/traverse", { entity, hops: 1 });
     if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity.</p>`; return; }
-    graph.merge(edges, null);
-    const start = [...graph.nodes.values()].find((n) => n.name === entity);
-    if (start) { start.expanded = true; graph.select(start.key); }
+    const first = edges.find((e) => e.src === entity || e.dst === entity);
+    if (!first) { graph.merge(edges, null); return; }
+    const start = graph.node(entity, first.src === entity ? first.src_type : first.dst_type, null);
+    start.expanded = true;
+    graph.merge(edges, start.key);
+    graph.select(start.key);
   } catch (err) {
     out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
   }
