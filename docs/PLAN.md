@@ -125,6 +125,12 @@ Parsing is a batch job; the serving path never parses.
 - [x] Inbox folder (2026-09-12): `scripts/inbox.py [--watch] [--parse]`
       registers what lands in `data/inbox/` (subfolder = domain, JSON
       sidecar, settle time, `failed/`), consumed files removed
+- [x] Door-side importers (2026-09-13, `prax import`): GitHub stars,
+      chat exports (Telegram Desktop, Signal via sigtop, WhatsApp) by
+      conversation and month, lists of links (browser bookmarks, Pocket
+      and Raindrop CSV, text, Medium's export); a reader yields items,
+      `feed.run` sends them through the door and skips what is held
+      (`docs/sources.md` 6, with the candidates that would fit next)
 - [ ] Backfill of the old zoetrope disk: the hash inventory in
       `scripts/backfill.py` gains a `--commit` mode that registers files
       through the store; review the dedupe report first

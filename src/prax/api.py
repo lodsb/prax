@@ -236,6 +236,17 @@ def unretire(doc_id: int, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@app.get("/captures")
+def captures(url: str, request: Request) -> list[dict[str, Any]]:
+    """The live captures of one URL (canonicalised here), oldest first:
+    what an importer asks before fetching a link it may already hold."""
+    try:
+        inbox.check_url(url)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return store.live_captures_of(_con(request), inbox.canonical_url(url))
+
+
 @app.post("/inbox/dedupe")
 def dedupe(request: Request, commit: bool = False) -> dict[str, Any]:
     """Retire the duplicate captures of each URL (dry run unless commit)."""
@@ -291,7 +302,8 @@ class IngestUrl(BaseModel):
     domains: list[str] | None = None
     tags: list[str] | None = None
     session: str | None = None
-    by: str | None = "url"  # "agent" from the MCP proxy
+    by: str | None = "url"  # "agent" from the MCP proxy, "import:…" from an importer
+    note: str | None = None  # what the sender said about it
 
 
 @app.post("/ingest/html")
@@ -327,6 +339,7 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
             tags=req.tags,
             session=req.session,
             by=req.by,
+            note=req.note,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

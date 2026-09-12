@@ -215,3 +215,33 @@ def test_backup_follows_the_job_to_the_end(
     assert (tmp_path / "copy" / "prax.db").is_file()
     assert run("backup", "not/absolute") == 1
     assert "absolute" in capsys.readouterr().err
+
+
+def test_import_links_dry_run_then_for_real(
+    door: TestClient,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from prax import inbox
+
+    page = "<html><head><title>WDF</title></head><body><p>{}</p></body></html>"
+
+    def fake_fetch(url: str, *, timeout: float = 0) -> tuple[bytes, str, str]:
+        return page.format("wave digital filters " * 40).encode(), "text/html", url
+
+    monkeypatch.setattr(inbox, "fetch_url", fake_fetch)
+    reading = tmp_path / "reading.txt"
+    reading.write_text("https://example.org/wdf the classic\n", encoding="utf-8")
+    assert run("import", "links", str(reading), "--dry-run") == 0
+    printed = capsys.readouterr().out
+    assert "Would add 1" in printed and "Nothing was sent" in printed
+    assert run("import", "links", str(reading), "--domain", "research") == 0
+    printed = capsys.readouterr().out
+    assert "links: 1 added" in printed
+    assert run("import", "links", str(reading)) == 0
+    assert "1 already there" in capsys.readouterr().out
+    assert run("import", "chat") == 2  # which files?
+    monkeypatch.delenv("PRAX_GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("PRAX_GITHUB_USER", raising=False)
+    assert run("import", "github") == 2  # whose stars?

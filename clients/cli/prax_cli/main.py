@@ -18,7 +18,7 @@ import httpx
 
 from prax.client import Door, DoorError
 
-from . import library, out, running
+from . import importing, library, out, running
 
 DEFAULT_DOOR = "http://127.0.0.1:8000"
 EPILOG = """\
@@ -27,11 +27,12 @@ examples
   prax search granular synthesis   find documents
   prax ask what is a wave digital filter
   prax add ~/Downloads/paper.pdf   add a file, a folder or a URL
+  prax import links bookmarks.html what a service exported
   prax show 4312                   read one
   prax work --watch                keep new documents moving
 
 commands
-  everyday     search, ask, add, show, open, graph, pages
+  everyday     search, ask, add, import, show, open, graph, pages
   running it   status, jobs, inbox, work, heal, backup, serve, doctor, models
 """
 
@@ -147,6 +148,56 @@ def build_parser() -> argparse.ArgumentParser:
         "-r", "--recursive", action="store_true", help="folders: go into subfolders"
     )
     s.set_defaults(func=library.add, needs_door=True)
+
+    s = sub.add_parser(
+        "import",
+        parents=[door_opts, as_json],
+        help="what a service or an app exported: GitHub stars, chats, links",
+        description=(
+            "Bring in what you keep elsewhere. github: your starred repositories"
+            " (README and facts, one document each). chat: a Telegram Desktop or"
+            " sigtop JSON export, a WhatsApp .txt, one document per conversation"
+            " and month. links: browser bookmarks (.html), Pocket or Raindrop"
+            " (.csv), a text file of URLs, or Medium's export (.zip); the door"
+            " fetches each link. Every run skips what the library already has."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax import github octocat --domain workshop\n"
+            "  PRAX_GITHUB_TOKEN=… prax import github        # your own stars\n"
+            "  prax import chat 'Telegram Desktop/result.json' --links\n"
+            "  prax import links bookmarks.html pocket.csv medium-export.zip\n"
+            "  prax import links reading.txt --dry-run"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("what", choices=importing.WHAT, metavar="SOURCE")
+    s.add_argument(
+        "files",
+        nargs="*",
+        metavar="FILE",
+        help="export files (chat, links); for github, a user name",
+    )
+    s.add_argument(
+        "--domain",
+        action="append",
+        metavar="NAME",
+        help="ontology module to read them against (repeatable)",
+    )
+    s.add_argument("--tag", action="append", metavar="NAME", help="a tag for each")
+    s.add_argument(
+        "--refresh",
+        action="store_true",
+        help="re-read what changed at the source (a repository pushed to, a month"
+        " that grew)",
+    )
+    s.add_argument(
+        "--links", action="store_true", help="chat: capture the links sent, too"
+    )
+    s.add_argument("--limit", type=int, metavar="N", help="send at most N")
+    s.add_argument("--dry-run", action="store_true", help="list what would be added")
+    s.add_argument("--token-github", metavar="TOKEN", help=argparse.SUPPRESS)
+    s.set_defaults(func=importing.import_, needs_door=True)
 
     s = sub.add_parser(
         "show",
@@ -370,6 +421,11 @@ def main(argv: list[str] | None = None) -> int:
     if not getattr(a, "func", None):
         parser.print_help()
         return 0
+    if a.command == "import":
+        a.user = a.files[0] if a.what == "github" and a.files else None
+        if a.what != "github" and not a.files:
+            out.fail("which files?", f"prax import {a.what} FILE…")
+            return 2
     if a.command == "models":  # "prax models fetch <name>" reads better than a flag
         if a.fetch == "fetch":
             a.fetch = a.name

@@ -308,3 +308,58 @@ Karakeep (organization, local AI tagging) or Linkwarden (archival) can sit
 in front of the inbox. prax re-indexes everything into its own FTS5 and
 vector tables, so a front-end can be swapped or removed without touching
 search.
+
+## 6. What you keep elsewhere: `prax import`
+
+The Zotero importer opens the database on the door's host. The importers
+that came after it are clients of the door (`prax.importers.feed`): they
+read an export or an API, send each item through `POST /ingest` (a
+document of their own) or `POST /ingest/url` (a link the door fetches),
+and run wherever the `prax` command runs. Idempotence is by key: a text
+item carries `meta.<source>.key` and a version (what changes when the
+source's item changes), and the run lists the library's documents of its
+source first; a link asks `GET /captures?url=` before fetching. `--refresh`
+re-sends what changed and retires the earlier document as replaced;
+`--dry-run` lists what would be sent. Every run takes `--domain` and
+`--tag`.
+
+| `prax import …` | reads | becomes | key, version |
+|---|---|---|---|
+| `github [USER]` | the starred repositories of a user, or of the token's account (`PRAX_GITHUB_TOKEN`, `sources.github.token`; without one GitHub allows sixty requests an hour and a README is one) | one Markdown document per repository: description, language, stars, licence, topics (as `github:<topic>` tags), when starred and last pushed, then the README | `owner/name`, `pushed_at` |
+| `chat FILE…` | Telegram Desktop's JSON export (`result.json`, one chat or all), sigtop's JSON export of Signal Desktop (`sigtop export-messages -f json`, one file per conversation), WhatsApp's "Export chat" `.txt` | one document per conversation and month: a heading per day, a line per message, attachments in brackets, the links sent listed at the end; `--links` captures each link too, the message as its note | `app/conversation/YYYY-MM`, message count and last stamp |
+| `links FILE…` | a browser's bookmark file (`.html`; folders become `folder:` tags), Pocket's or Raindrop's CSV (any CSV with a `url` column), a text file of URLs, Medium's export zip (`bookmarks/`, `lists/`, `highlights/` as `medium:` tags, a highlight as the note) | a capture per link, fetched by the door | the URL |
+
+Neither reads an app's own database: Signal Desktop's is encrypted and
+sigtop is the tool that knows how to read it; a browser's bookmarks are
+exported, not opened. Nothing writes back (invariant 10). Medium serves
+a public story to the door's fetch; a member-only one comes back as its
+preview, and the extension is the way to capture that with your own
+session.
+
+### What else could feed it
+
+The same shape fits most of what a person keeps: a reader that yields
+`Item`s, and `feed.run`. Candidates, roughly by how much of the work is
+already done:
+
+- **Any HTML or CSV of links** already works (`links`): Hacker News
+  favourites (the page), Pinboard (its bookmark export is the Netscape
+  file), Raindrop, Instapaper (CSV), a Mastodon or Bluesky bookmark export
+  once it is a list of links.
+- **Telegram groups and channels** already work (`chat`), so a channel
+  someone curates is a feed.
+- **Kindle highlights** (`My Clippings.txt`, or the Kindle notebook
+  export): one document per book, the highlights as quotes with their
+  locations — a small reader, and the book itself is often in the library.
+- **RSS and Atom feeds**: a reader that polls a list of feed URLs and
+  yields each entry as a link, with the feed's name as a tag; the
+  captures are what the extension would have made. The run becomes a
+  scheduled task like the backup.
+- **YouTube** (Watch later, playlists, a channel): the video page is thin;
+  the transcript is the document, fetched per video.
+- **Newsletters in a mailbox**: an mbox or a folder of `.eml` files, one
+  document per issue, the links inside as captures.
+- **Obsidian or any Markdown folder**: the drop folder does this already
+  (a subfolder names the domain).
+- **Discord**: no export of one's own; a bot that mirrors a channel to the
+  drop folder is the shape.

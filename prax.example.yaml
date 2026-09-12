@@ -112,6 +112,12 @@ steps:
 # ontology:
 #   dir: /path/to/ontology     # [PRAX_ONTOLOGY] another set of module files
 
+# sources:
+#   github:
+#     user: octocat            # [PRAX_GITHUB_USER] whose stars `prax import github` reads
+#     token: ghp_…             # [PRAX_GITHUB_TOKEN] better kept in the environment
+#                              #   (5,000 requests an hour instead of 60; your own stars)
+
 # paths:
 #   models: /path/to/models    # [PRAX_MODELS_DIR] where fetched model files go
 #   backup: /path/to/copy      # [PRAX_BACKUP] where `prax backup` copies the store

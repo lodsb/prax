@@ -903,6 +903,7 @@ One command for the everyday work, and the same one wherever the door is:
     prax ask --answer how does a feedback delay network work
     prax add ~/Downloads/paper.pdf --domain research
     prax add https://example.org/article
+    prax import links bookmarks.html  what a service or an app exported
     prax show 4312                    read one in the terminal
     prax open 4312                    …or in the browser
     prax status                       the store, the graph, this host
@@ -1031,7 +1032,24 @@ replication is on the later list.
 
 ## 8. Adding a source
 
-Every source is a client of `prax.store`. The pattern (see `sources.md`):
+Most sources are a client of the door (`sources.md` 6): what a service
+or an app exported, sent through `POST /ingest` or `POST /ingest/url`.
+
+    prax import github octocat --domain workshop        # someone's stars
+    PRAX_GITHUB_TOKEN=… prax import github              # your own, 5,000 requests an hour
+    prax import chat "Telegram Desktop/result.json" --links
+    prax import chat signal/*.json                      # sigtop export-messages -f json
+    prax import links bookmarks.html pocket.csv medium-export.zip
+    prax import links reading.txt --dry-run             # what would be added
+
+Every run skips what the library already holds (by key, or by URL) and
+`--refresh` re-reads what changed at the source. A new source of this
+kind is a reader in `prax.importers` that yields `feed.Item`s — text of
+its own with a key and a version, or a link — and a line in
+`clients/cli/prax_cli/importing.py`; `feed.run` does the rest.
+
+A source that must open something on the door's host (the Zotero
+importer, the backfill) is a client of `prax.store` instead:
 
 1. Obtain original bytes and whatever metadata the source has.
 2. `register(...)`: archive, insert the row. Dedupe is automatic by hash.

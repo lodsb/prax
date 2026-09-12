@@ -390,13 +390,20 @@ def ingest_url(
     tags: list[str] | None = None,
     session: str | None = None,
     by: str | None = "url",
+    note: str | None = None,
 ) -> Capture:
-    """Fetch a URL server-side (bookmarklet, share target, MCP) and keep
-    what came back: a page, a PDF, anything."""
+    """Fetch a URL server-side (bookmarklet, share target, MCP, an
+    importer) and keep what came back: a page, a PDF, anything. ``note``
+    is what the sender said about it (``meta.capture.note``)."""
     check_url(url)
     data, ctype, final = fetch_url(url)
     mime = "text/html" if ctype in HTML_TYPES else ctype
     name = urllib.parse.urlsplit(final).path.rsplit("/", 1)[-1] or None
+    extra: dict[str, Any] = {}
+    if canonical_url(url) != canonical_url(final):
+        extra["requested_url"] = url
+    if note:
+        extra["capture_note"] = note
     return ingest_bytes(
         con,
         data,
@@ -409,9 +416,7 @@ def ingest_url(
         tags=tags,
         session=session,
         by=by,
-        extra_meta={"requested_url": url}
-        if canonical_url(url) != canonical_url(final)
-        else None,
+        extra_meta=extra or None,
     )
 
 

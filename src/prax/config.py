@@ -40,7 +40,8 @@ SECTIONS = (
     "citations",  # mailto
     "door",  # cors_origins, inbox_scan_seconds
     "ontology",  # dir
-    "paths",  # models (where fetched model files go)
+    "paths",  # models (where fetched model files go), backup
+    "sources",  # what the importers need: github user and token
 )
 
 
