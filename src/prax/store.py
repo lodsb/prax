@@ -699,6 +699,7 @@ def retitle(
 # reported stale. Bookkeeping only (migration 0009).
 
 JOB_STALE_SECONDS = 600
+JOB_DEAD_SECONDS = 1800  # no heartbeat this long: the job is closed as failed
 
 
 def _job_now() -> str:
@@ -796,7 +797,9 @@ def _pid_alive(pid: int) -> bool:
 @_serialized
 def job_reap(con: sqlite3.Connection) -> int:
     """Close the running jobs of this host whose process is gone (killed,
-    crashed, a reboot): they would otherwise sit as stale. Returns how
+    crashed, a reboot) and, from any host, those without a heartbeat for
+    ``JOB_DEAD_SECONDS``: they would otherwise sit as stale for ever. The
+    door does this at startup and on each drop-folder pass. Returns how
     many were closed."""
     import socket
 
@@ -812,6 +815,16 @@ def job_reap(con: sqlite3.Connection) -> int:
                 (r["id"],),
             )
             n += 1
+    # a job from another host, or one without a pid to check, whose
+    # heartbeat stopped long ago is gone too (a worker's pass is far shorter)
+    cur = con.execute(
+        f"UPDATE jobs SET status = 'failed', finished_at = {_NOW},"
+        " note = coalesce(note, '') || ' (no heartbeat)'"
+        " WHERE status = 'running'"
+        " AND (julianday('now') - julianday(updated_at)) * 86400 > ?",
+        (JOB_DEAD_SECONDS,),
+    )
+    n += cur.rowcount
     con.commit()
     return n
 

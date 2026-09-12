@@ -148,3 +148,16 @@ def test_index_busy_is_detected(
         if hasattr(pipeline, "LOCK_RETRIES")
         else len(asked) >= 1
     )
+
+
+def test_reap_closes_jobs_without_heartbeat(con) -> None:
+    jid = store.job_start(con, "worker", host="elsewhere", pid=0)
+    assert store.job_reap(con) == 0  # fresh heartbeat: alive
+    con.execute(
+        "UPDATE jobs SET updated_at = datetime('now', '-1 hour') WHERE id = ?",
+        (jid,),
+    )
+    con.commit()
+    assert store.job_reap(con) == 1
+    row = con.execute("SELECT status, note FROM jobs WHERE id = ?", (jid,)).fetchone()
+    assert row["status"] == "failed" and "no heartbeat" in row["note"]

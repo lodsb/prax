@@ -48,6 +48,10 @@ def _scan_inbox(app: FastAPI, stop: threading.Event, every: float) -> None:
                 rep = inbox.scan(con, inbox.inbox_dir())
                 if rep.registered or rep.failed:
                     logging.getLogger("prax.inbox").info("drop folder: %s", rep)
+                if store.job_reap(con):
+                    logging.getLogger("prax.jobs").info(
+                        "closed jobs whose process is gone"
+                    )
             except Exception:
                 logging.getLogger("prax.inbox").exception("drop folder scan failed")
     finally:
@@ -59,6 +63,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     con = store.connect()
     store.init_db(con)
     app.state.con = con  # the main connection: migrations, the change stamp
+    store.job_reap(con)  # sessions left behind by a killed door or worker
     stop = threading.Event()
     every = float(os.environ.get("PRAX_INBOX_SCAN", "20") or 0)
     scanner = None
