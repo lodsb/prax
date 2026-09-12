@@ -673,7 +673,7 @@ Four ways in:
   rendered it (the extension's path, `docs/extension.md`), `POST
   /ingest/url {url, …}` to fetch server-side. `POST /ingest` (text) takes
   `domains` too. `GET /inbox` lists recent captures.
-- **The browser extension** (`extension/`, `docs/extension.md`): "send
+- **The browser extension** (`clients/extension/`, `docs/extension.md`): "send
   this tab" posts a self-contained snapshot (SingleFile: images, fonts
   and styles inlined, scripts removed), "send all tabs in window" does the
   same under one session id; a PDF tab is fetched again inside the
@@ -811,6 +811,41 @@ A first smoke run from PowerShell:
       -ContentType application/json `
       -Body '{"text": "Granular synthesis smears transients.", "title": "note"}'
     Invoke-RestMethod "http://127.0.0.1:8000/search?q=granular"
+
+## 4a. The `prax` command
+
+One command for the everyday work, and the same one wherever the door is:
+
+    prax                              where things stand, and what to type
+    prax search granular synthesis    find documents
+    prax ask --answer how does a feedback delay network work
+    prax add ~/Downloads/paper.pdf --domain research
+    prax add https://example.org/article
+    prax show 4312                    read one in the terminal
+    prax open 4312                    …or in the browser
+    prax status                       the store, the graph, this host
+    prax inbox                        what came in, what still waits
+    prax jobs                         passes running now and lately
+    prax work --watch                 be the worker for a door
+    prax serve                        run the door here
+    prax doctor                       when something feels wrong
+    prax models                       which model does which step
+    prax graph "wave digital filter"  what the graph knows around a name
+    prax pages                        the notes kept in the library
+
+It is a client (`clients/cli/`, `prax.client`): every command is one HTTP
+call, nothing opens the database, and `--door` (or `PRAX_DOOR`) points it
+at another machine — `prax --door http://board:8000 status` from the
+desktop, `prax work --watch --door http://board:8000` to drain that
+board's queue with this machine's models. `PRAX_TOKEN` or `--token`
+carries the bearer token when the door asks for one. Every read command
+takes `--json` for a script to parse, and colour goes away when the
+output is piped.
+
+`prax work` is `scripts/work.py` under a shorter name, and `prax serve`
+is the uvicorn line. The one-off maintenance scripts (import, backfill,
+resolution, typing rules, rechunk, replay) stay scripts: they open the
+database directly and are the known deviation of invariant 4.
 
 ## 5. MCP server in Claude Code
 

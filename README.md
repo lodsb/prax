@@ -79,7 +79,7 @@ comparing it with the hosted one are in `docs/eval/`.
 ## What it does, by layer
 
 - **Ingest.** A Zotero library imported read-only; files dropped in a
-  folder, uploaded, or sent from the browser (`extension/`). Originals
+  folder, uploaded, or sent from the browser (`clients/extension/`). Originals
   are archived by SHA-256; the database holds metadata and hashes only.
   Each document carries a domain set naming the ontology modules it is
   read against.
@@ -146,16 +146,18 @@ dates and the planned passes: `docs/PLAN.md`.
     pytest
 
     export PRAX_DATA_DIR=/path/to/store      # Windows: $env:PRAX_DATA_DIR = "D:\prax-data"
-    uvicorn prax.api:app --port 8000         # http://127.0.0.1:8000/ui/
+    prax serve                               # http://127.0.0.1:8000/ui/
+    prax status                              # what the library holds
 
 An empty store answers on the first request; migrations run on connect.
 Then import a Zotero library (`scripts/import_zotero.py`), parse
 (`scripts/parse_pending.py`), embed (`scripts/embed_pending.py`), and
 extract (`scripts/extract_graph.py`), in that order; each script has a
 dry run. Or skip the library: drop files into the store's `inbox/`
-folder, upload in the UI, or install the browser extension, and run
-`scripts/work.py --watch` on the machine with the models to take them
-the rest of the way (it talks to the door, never to the database). Copy `prax.example.yaml` to the store directory as `prax.yaml`
+folder, `prax add <file, folder or URL>`, upload in the UI, or install
+the browser extension, and run `prax work --watch` on the machine with
+the models to take them the rest of the way (it talks to the door, never
+to the database). Copy `prax.example.yaml` to the store directory as `prax.yaml`
 to say which model does which step; extraction, image description and
 adjudication with Claude need `ANTHROPIC_API_KEY`. Extras: `serve`
 (the door on the board: vectors for hybrid search), `work` (the worker:
@@ -163,8 +165,8 @@ parsing, code detection, vectors), `docling` (a heavier PDF extractor);
 a local model runs in llama-server, never in prax's own process. Claude Code picks up the
 MCP server from `.mcp.json` when it opens this repository; the server
 is a proxy, so the door has to be running (`PRAX_DOOR`, default the
-local one). Every step,
-with the commands: `docs/howto.md`.
+local one). The clients — the `prax` command and the browser extension —
+live in `clients/`. Every step, with the commands: `docs/howto.md`.
 
 ## Design
 
@@ -207,7 +209,8 @@ but may wait.
 
 ## License
 
-MIT, see `LICENSE`, except the browser extension: `extension/` is AGPL-3.0
-(`extension/LICENSE`) because it bundles SingleFile for page snapshots,
+MIT, see `LICENSE`, except the browser extension: `clients/extension/` is
+AGPL-3.0 (`clients/extension/LICENSE`) because it bundles SingleFile for
+page snapshots,
 the way the Zotero connector does; it is a separate program talking to
 the server over HTTP. The test fixture under `tests/fixtures/` holds open-access papers under their own Creative Commons terms; `tests/fixtures/zotero/README.md` lists them with their licenses.

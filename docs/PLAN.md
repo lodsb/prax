@@ -107,7 +107,7 @@ Parsing is a batch job; the serving path never parses.
       (chunks, field and edges go; row, bytes and text stay), the same page
       sent again is one document by chunk fingerprint, a snapshot replaces
       a bare-DOM capture, `scripts/dedupe_captures.py` for what came before
-- [x] Browser extension (2026-09-12, `extension/`, `docs/extension.md`):
+- [x] Browser extension (2026-09-12, `clients/extension/`, `docs/extension.md`):
       Manifest V3 for Firefox, Waterfox and Chrome from one folder; "send
       this tab" (rendered DOM to `/ingest/html`, PDFs as URL to
       `/ingest/url`) and "send all tabs in window" under one session id,
@@ -115,7 +115,7 @@ Parsing is a batch job; the serving path never parses.
       progress and results in the popup; `scripts/build_extension.py`
       packs an .xpi; node tests for the helpers. Pages are saved as
       self-contained snapshots through vendored SingleFile (AGPL, so
-      `extension/` carries its own licence); a PDF tab is fetched with
+      `clients/extension/` carries its own licence); a PDF tab is fetched with
       the browser's session and uploaded; HTML originals are served
       with a sandboxing header
 - [x] Inbox folder (2026-09-12): `scripts/inbox.py [--watch] [--parse]`
@@ -501,16 +501,20 @@ fraction):
       already documents its download).
 - [ ] `prax.store` (3,800 lines) as a package split by concern (documents
       and index, search, graph, review, pages, jobs) behind the same door.
-- [ ] One `prax` command with subcommands in place of twenty scripts, so
-      connection setup, logging and job bookkeeping live in one place:
-      `prax serve`, `prax import zotero <dir>`, `prax inbox [--watch]`,
-      `prax parse | titles | extract | embed` with the same selections
-      as the scripts, `prax domains assign`, `prax dedupe`, `prax review
-      type`, `prax models fetch <name>`, `prax jobs`, `prax status` (the
-      state table of the README from the live store). The scripts stay
-      as thin aliases for one release, then go. The user asked for this
-      explicitly (2026-09-12); the README is to get a second look once
-      it exists.
+- [x] The `prax` command (2026-09-12, `clients/cli/`): a client like
+      the extension beside it, one HTTP call per command, no database.
+      Everyday: search, ask, add (files, folders, URLs, a pipe), show,
+      open, graph, pages. Running it: status (the README's state table
+      from the live store, through the new `GET /stats`), jobs, inbox,
+      work, serve, doctor, models (and `models fetch <name>`). Colour
+      and separators go away when the console cannot take them; `--json`
+      on every read command; `--door`/`PRAX_DOOR` points it at the
+      board. Left as scripts: the one-off maintenance passes (import,
+      backfill, resolution, typing rules, rechunk, replay, dedupe,
+      domains assign), which open the database and are invariant 4's
+      known deviation. `prax import`, `prax review type` and
+      `prax domains assign` are worth adding once those move behind the
+      door.
 - [ ] Most `PRAX_*` environment variables moved into prax.yaml sections
       (the data directory stays an environment variable).
 

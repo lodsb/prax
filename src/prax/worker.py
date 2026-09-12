@@ -400,7 +400,7 @@ def watch(
                         f"/work/session/{session}",
                         {
                             "note": f"last pass {time.strftime('%H:%M:%S')}:"
-                            f" {json.dumps(done)[:120]}"
+                            f" {json.dumps(done)[:120] if done else 'nothing waiting'}"
                             + (f" · {mb} MB" if (mb := hostinfo.process_mb()) else "")
                         },
                     )

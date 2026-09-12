@@ -441,6 +441,13 @@ def changes(request: Request) -> dict[str, Any]:
     }
 
 
+@app.get("/stats")
+def stats(request: Request) -> dict[str, Any]:
+    """What the store holds: documents, chunks, vectors, the graph, the
+    review queue, the ontology (`prax status`)."""
+    return store.stats(_con(request))
+
+
 @app.get("/jobs")
 def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
     """What runs and what ran lately, and what this door's host has left

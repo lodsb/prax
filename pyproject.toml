@@ -34,19 +34,22 @@ serve = ["prax[embed]"]                       # the door on the board: the core 
 work = ["prax[embed,ingest]"]                 # the worker on the machine with the models: parse, titles, extract, embed
 dev = ["pytest>=8", "ruff"]
 
+[project.scripts]
+prax = "prax_cli.main:main"       # the command; clients/cli/
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/prax"]
+packages = ["src/prax", "clients/cli/prax_cli"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/prax/migrations" = "prax/migrations"
 "src/prax/ui" = "prax/ui"
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "clients/cli"]
 
 [tool.ruff]
 line-length = 88

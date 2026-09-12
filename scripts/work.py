@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """The worker: model work for a door, from this machine, without opening
-the database (docs/howto.md 3l).
+the database (docs/howto.md 3l). ``prax work`` is the same thing under a
+shorter name; this script is what a cron line or a service unit calls
+without the package's console script on PATH.
 
     python scripts/work.py                          # one pass against the local door
     python scripts/work.py --watch                  # keep going (the usual way)
