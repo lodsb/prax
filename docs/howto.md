@@ -945,6 +945,9 @@ pages' author, domain sets, promotions).
 
 The board holds the store and runs the door; the machine with the GPU
 does the model work through it (howto 3l). Nothing else has to move.
+`deploy/` holds the pieces — an install script, the systemd unit, the
+board's `prax.yaml`, the worker launcher for the desktop — and its README
+is the step-by-step; this section is the reasoning.
 
 **On the board.** Copy the data directory over (section 7), then:
 

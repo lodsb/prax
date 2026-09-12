@@ -586,10 +586,13 @@ since a batch pass opens the SQLite file directly today.
 - [~] On the board: everything the code needs is in place (2026-09-12) —
       the `serve` extra, `vectors: {dtype: i8}` in prax.yaml, the token,
       `prax serve --host <private address>`, the worker and the MCP proxy
-      pointed at it with `--door`/`PRAX_DOOR`; howto 6 is the recipe.
-      What is left is the move itself: the service file, the memory
-      measured there, and whether the index is re-embedded as `i8` or
-      copied as `f16`. That is the user's call and needs the board.
+      pointed at it with `--door`/`PRAX_DOOR`; and `deploy/` (later the
+      same day) holds the install script, the systemd unit with a 1.5 GB
+      cap, the board's `prax.yaml`, the env file for the address and the
+      token, and `worker.ps1` for the desktop. What is left is the move
+      itself, which needs the board: copy the store, run the install
+      script, measure the door's memory there, decide `i8` or the
+      desktop's `f16`.
 
 ## Later / maybe
 

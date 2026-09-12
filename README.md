@@ -169,7 +169,7 @@ a local model runs in llama-server, never in prax's own process. Claude Code pic
 MCP server from `.mcp.json` when it opens this repository; the server
 is a proxy, so the door has to be running (`PRAX_DOOR`, default the
 local one). The clients — the `prax` command and the browser extension —
-live in `clients/`. Every step, with the commands: `docs/howto.md`.
+live in `clients/`; `deploy/` is the door on a board as a service. Every step, with the commands: `docs/howto.md`.
 
 ## Design
 

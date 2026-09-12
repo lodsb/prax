@@ -109,3 +109,17 @@ def test_editing_the_file_is_seen_by_the_next_call(written: Path) -> None:
     assert config.setting("vectors.dtype") == "i8"
     written.write_text("vectors:\n  dtype: f16\n", encoding="utf-8")
     assert config.setting("vectors.dtype") == "f16"
+
+
+def test_the_boards_config_loads_and_names_no_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from prax import models
+
+    board = Path(__file__).resolve().parents[1] / "deploy" / "prax.board.yaml"
+    monkeypatch.setenv("PRAX_CONFIG", str(board))
+    for var in ("PRAX_EXTRACT", "PRAX_ASK", "PRAX_TITLES"):
+        monkeypatch.delenv(var, raising=False)
+    assert config.setting("vectors.dtype") == "i8"
+    for step in ("extract", "ask", "titles"):
+        assert models.resolve(step) is None  # the worker's job, not the board's

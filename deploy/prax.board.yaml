@@ -1,0 +1,36 @@
+# prax.yaml for the board: /srv/prax/prax.yaml. The board holds the store
+# and answers searches; every model step is done elsewhere, by a worker
+# that fetches work from this door (docs/howto.md 3l), so nothing here
+# names a model.
+
+# no model runs on the board; a worker with its own prax.yaml does the
+# reading, and `ask` hands the bundle back to the caller's model
+steps:
+  extract: {model: none}
+  titles: {model: none}
+  ask: {model: none}
+
+vectors:
+  dtype: i8          # half the file of f16, recall 0.93: what 8 GB has room
+                     # for. Takes effect when vectors are written (deploy/README.md)
+
+embeddings:
+  model: bge-small-en-v1.5   # a query needs the embedder; the int8 ONNX runs on
+  variant: int8              # the board's CPU in tens of milliseconds
+
+door:
+  inbox_scan_seconds: 20
+  cors_origins: []   # the browser extension's origin goes here, e.g.
+                     # [moz-extension://<id>] — the extension's options page
+                     # shows it
+
+# which modules a document is read against (scripts/assign_domains.py or the
+# worker's uploads); a person's choice on the document page wins
+domains:
+  - match: {source: capture}
+    domains: [research]
+  - match: {path: kitchen/}
+    domains: [kitchen]
+  - match: {path: workshop/}
+    domains: [workshop]
+  - domains: [research]

@@ -1,0 +1,33 @@
+# The prax door on the board: /etc/systemd/system/prax-door.service
+# (deploy/install.sh puts it there). The address it binds and the token it
+# checks come from /etc/prax/door.env, which is root-readable only.
+
+[Unit]
+Description=prax door (the store's HTTP door and web UI)
+Documentation=https://github.com/lodsb/prax
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=prax
+Group=prax
+WorkingDirectory=/srv/prax
+Environment=PRAX_DATA_DIR=/srv/prax
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/etc/prax/door.env
+ExecStart=/srv/prax/venv/bin/prax serve --host ${PRAX_BIND} --port 8000
+Restart=on-failure
+RestartSec=5
+# invariant 7: the serving path stays under a gigabyte resident; the cap is
+# the alarm, not the budget
+MemoryMax=1536M
+Nice=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/prax
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

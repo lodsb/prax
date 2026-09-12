@@ -64,13 +64,27 @@ def main() -> int:
         print(" ".join(map(str, ids)))
         return 0
 
+    worked = 0
+
     def log(n: int, doc_id: int, action: str) -> None:
+        nonlocal worked
+        if action not in ("seen", "skipped"):
+            worked += 1
+            job.update(done=worked, note=f"{action} doc {doc_id}")
         if not a.quiet and (n % 25 == 0 or action in ("error", "kept", "empty")):
             print(f"[{n:5}/{len(ids)}] {action:8} doc {doc_id}", file=sys.stderr)
 
-    report = queue.run(
-        con, ids, extractor=a.extractor, force=a.force, limit=a.limit, log=log
-    )
+    # announced as a job, so the Jobs view and `prax jobs` show the pass
+    with store.Job(
+        con,
+        f"parse ({a.extractor or 'default'})",
+        total=min(a.limit, len(ids)) if a.limit else len(ids),
+        note=f"{len(ids)} selected",
+    ) as job:
+        report = queue.run(
+            con, ids, extractor=a.extractor, force=a.force, limit=a.limit, log=log
+        )
+        job.update(note=str(report)[:200])
     print(report, flush=True)
     for doc_id, err in report.errors[:50]:
         print(f"  error doc {doc_id}: {err}")
