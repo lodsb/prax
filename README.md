@@ -6,7 +6,10 @@ search it, ask it questions, see how the things in it connect, and write
 on top of it; a script can query it, an agent can do a piece of work in
 it and leave the result there. It began with a researcher's papers.
 Manuals, recipes, build logs, chats, starred repositories and bookmarks
-go in the same way and are read with their own vocabulary.
+go in the same way and are read with their own vocabulary. You work in
+it through a web UI; a browser extension sends in what you are reading;
+a command and an MCP server open the same library to scripts and to
+Claude Code.
 
 The name: the praxinoscope succeeded the zoetrope, same drum, sharper
 image. prax succeeds an external-disk store of the same library.
