@@ -49,7 +49,9 @@ def test_changes_stamp_moves_on_writes(client: TestClient) -> None:
     b = client.get("/changes").json()
     assert b["stamp"] != a["stamp"]
     assert client.get("/changes").json()["stamp"] == b["stamp"]  # reads move nothing
-    assert client.get("/jobs").json() == {"running": [], "recent": []}
+    j = client.get("/jobs").json()
+    assert j["running"] == [] and j["recent"] == []
+    assert j["host"]["name"] and "ram_free_mb" in j["host"]  # what the host has left
     assert client.post("/vectors/release").json()["released"] == 0
 
 

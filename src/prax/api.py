@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import socket
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -26,7 +27,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import ask as ask_mod
-from . import auth, embeddings, inbox, models, ontology, review, store, work
+from . import auth, embeddings, hostinfo, inbox, models, ontology, review, store, work
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -439,8 +440,11 @@ def changes(request: Request) -> dict[str, Any]:
 
 @app.get("/jobs")
 def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
-    """What runs on the batch host and what ran lately."""
-    return store.list_jobs(_con(request), limit=limit)
+    """What runs and what ran lately, and what this door's host has left
+    (free RAM, commit headroom) so a wall is visible before it is hit."""
+    out = store.list_jobs(_con(request), limit=limit)
+    out["host"] = {"name": socket.gethostname(), **hostinfo.memory()}
+    return out
 
 
 @app.post("/vectors/release")
