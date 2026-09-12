@@ -439,3 +439,24 @@ def test_seen_documents_are_not_retried_and_limit_counts_work(
 def test_queue_skips_unsupported_mime(con: sqlite3.Connection) -> None:
     doc_id = store.register(con, b"\x89PNG", mime="image/png")["doc_id"]
     assert queue.run(con, [doc_id]).actions == {"skipped": 1}
+
+
+def test_a_budget_refusal_is_not_an_attempt() -> None:
+    """A document the OCR extractor refused for its page budget has not
+    been read; a run with a bigger budget must get it again, while a real
+    error or an empty result still counts as tried."""
+    from prax.parsers import queue
+
+    stamp = "pymupdf4llm-ocr/1.0"
+    refused = {
+        "parse_history": [
+            {"extractor": stamp, "error": "98 pages exceeds the OCR budget of 60"}
+        ]
+    }
+    failed = {
+        "parse_history": [{"extractor": stamp, "error": "FileDataError: cannot open"}]
+    }
+    empty = {"parse_history": [{"extractor": stamp, "outcome": "empty"}]}
+    assert not queue._seen(refused, stamp)
+    assert queue._seen(failed, stamp)
+    assert queue._seen(empty, stamp)

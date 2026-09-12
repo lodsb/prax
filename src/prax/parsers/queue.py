@@ -67,10 +67,15 @@ def _seen(meta: dict[str, Any], stamp: str) -> bool:
     """True if this extractor version already tried the document and the
     result was kept, empty or an error: re-running would repeat that. An
     ``upgraded``/``created`` entry changes ``text_source``, so such documents
-    leave the selection by themselves."""
+    leave the selection by themselves. A refusal for the OCR page budget is
+    not an attempt — nothing was read — so a run with a bigger budget gets
+    another go."""
     return any(
         h.get("extractor") == stamp
-        and (h.get("outcome") in ("kept", "empty") or "error" in h)
+        and (
+            h.get("outcome") in ("kept", "empty")
+            or ("error" in h and "OCR budget" not in str(h.get("error") or ""))
+        )
         for h in meta.get("parse_history", [])
     )
 
