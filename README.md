@@ -157,10 +157,10 @@ folder, upload in the UI, or install the browser extension, and run
 `scripts/work.py --watch` on the machine with the models to take them
 the rest of the way (it talks to the door, never to the database). Copy `prax.example.yaml` to the store directory as `prax.yaml`
 to say which model does which step; extraction, image description and
-adjudication with Claude need `ANTHROPIC_API_KEY`. Extras: `embed`
-(vectors), `ingest` (PDF, HTML, code detection), `docling` (a heavier
-PDF extractor); a local model runs in llama-server, never in prax's
-own process. Claude Code picks up the
+adjudication with Claude need `ANTHROPIC_API_KEY`. Extras: `serve`
+(the door on the board: vectors for hybrid search), `work` (the worker:
+parsing, code detection, vectors), `docling` (a heavier PDF extractor);
+a local model runs in llama-server, never in prax's own process. Claude Code picks up the
 MCP server from `.mcp.json` when it opens this repository; the server
 is a proxy, so the door has to be running (`PRAX_DOOR`, default the
 local one). Every step,

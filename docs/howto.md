@@ -27,10 +27,20 @@ Extras, install only where they run (see `rationale.md` R8):
 
 | Extra | Contents | Where |
 |---|---|---|
-| `dev` | pytest, ruff, httpx | every dev checkout |
-| `embed` | usearch, onnxruntime, tokenizers, numpy | the desktop (GPU via onnxruntime-directml) and the serving host |
-| `ingest` | pymupdf4llm, trafilatura, magika | the parse queue; the desktop |
+| `serve` | the core plus `embed` | the door on the board: `pip install "prax[serve]"` and nothing else |
+| `work` | `embed` plus `ingest` | the worker on the machine with the models |
+| `embed` | usearch, onnxruntime, tokenizers, numpy | vectors for hybrid search (Windows GPU: onnxruntime-directml instead, never both) |
+| `ingest` | pymupdf4llm, trafilatura, magika | parsing PDFs and pages, code detection |
 | `docling` | docling (about 3 GB with PyTorch) | optional; only for `--extractor docling` |
+| `dev` | pytest, ruff | every dev checkout |
+
+The core (what `pip install prax` brings) is the door and the MCP proxy:
+fastapi, uvicorn, pydantic, python-multipart, pyyaml, httpx, anthropic
+(the Claude-kind steps), mcp. Measured on the desktop on 2026-09-12: the
+door's working set is about 70 MB with the vector index mapped and the
+embedder loaded, its private memory 0.8 GB (the ONNX runtime and the
+usearch views; under the 1 GB of invariant 7); the worker sits at 0.8 GB
+between passes.
 
 The MCP server uses the official `mcp` package (2.x); check after
 upgrades:

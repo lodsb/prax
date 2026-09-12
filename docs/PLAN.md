@@ -469,11 +469,14 @@ fraction):
       (`producer`, `by`, `author`: "agent" from the proxy). The
       second-writer deviation of the MCP server is over; only the
       one-off scripts remain.
-- [ ] A `serve` extra listing exactly what the door on the board needs,
-      and a check that the door's resident memory stays under 1 GB with
-      the memory-mapped index (int8 index if not).
-
-Shape:
+- [x] A `serve` extra (2026-09-12): `prax[serve]` is the core plus
+      `embed`, `prax[work]` is `embed` plus `ingest`; the core itself is
+      fastapi, uvicorn, pydantic, python-multipart, pyyaml, httpx,
+      anthropic and mcp (howto 1). The door on the desktop: 70 MB working
+      set, 0.8 GB private with the embedder loaded and the index mapped
+      (invariant 7's 1 GB holds; the board's own number is still to be
+      taken when it runs there). The venv on the desktop after this
+      pass: 170 packages, 0.77 GB (from 188 and 4.0 GB).
 - [ ] Docs: "reachable over your private network" instead of Tailscale
       as the assumption. Nothing in prax needs it; any VPN or the LAN
       does, the door listens on that interface and checks a token, plain
