@@ -140,15 +140,13 @@ def test_graph_keeps_self_edges_out_of_the_way(
 
 
 def test_the_overview_is_what_a_bare_prax_prints(
-    door: TestClient,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
+    door: TestClient, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    monkeypatch.setattr(cli.running, "Door", lambda *a, **k: cli._door_of(None))
-    assert cli.main([]) == 0
+    door.post("/ingest", json={"text": "one document " * 30, "title": "One"})
+    assert cli.main([]) == 0  # the bare command talks to the same door
     printed = capsys.readouterr().out
     assert "prax search" in printed and "prax work --watch" in printed
-    assert "documents" in printed
+    assert "1 documents" in printed or "1 document" in printed
 
 
 def test_a_door_that_is_not_there_is_said_plainly(

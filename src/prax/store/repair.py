@@ -34,7 +34,6 @@ from typing import Any
 from .base import _NOW, _serialized
 from .graph import invalidate_edge, rename_entity, resolve_review
 from .jobs import Job, job_finish
-from .retrieval import count_pending_embeddings
 
 # How many rows one pass looks at and repairs; a bigger mess is cleared by
 # running it again, which keeps a single call short and a single lock brief.
@@ -274,13 +273,24 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def _unembedded_chunks(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    from prax import embeddings
-
-    emb = embeddings.current()
-    if emb is None:
+    """Chunks with no vector from any model. Asked of the bookkeeping table
+    alone: a check must never load an embedder to answer a question about
+    rows (it would fetch a model file to say "none missing")."""
+    waiting = con.execute(
+        "SELECT count(*) FROM chunks c"
+        " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
+        " WHERE e.chunk_id IS NULL"
+    ).fetchone()[0]
+    if not waiting:
         return []
-    waiting = count_pending_embeddings(con, emb.name)
-    return [{"model": emb.name, "chunks": waiting}] if waiting else []
+    models = ", ".join(
+        r[0]
+        for r in con.execute(
+            "SELECT model, count(*) FROM chunk_embeddings GROUP BY model"
+            " ORDER BY 2 DESC LIMIT 3"
+        )
+    )
+    return [{"chunks": waiting, "model": models or "no vectors yet"}]
 
 
 # ----------------------------------------------------------------- repair

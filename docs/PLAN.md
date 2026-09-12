@@ -372,6 +372,29 @@ review queue says what is missing.
       and grow them from the review queue, the way studio v1 was grown.
       Nothing has been read against craft, kitchen or workshop yet.
 
+## The heal pass (done 2026-09-12)
+
+Asked for with the three modules: a place for the damage that recurs, so
+that "source name" and its kind are a named ailment rather than a
+one-off clean-up.
+
+- [x] `prax.store.repair`: nine ailments, each a `find` and (when it is
+      safe) a `repair` that goes through the store's own functions —
+      edges invalidated, never deleted; review items resolved; jobs
+      closed. `GET /heal` looks, `POST /heal` repairs, `prax heal` is
+      both with a dry run by default (howto 3m).
+- [x] Found in the library on the first run: 42 placeholder entities
+      (968 edges under "source name" as a paper alone), 291 names with
+      markup a citation importer left in, 71 self-edges from merged
+      aliases, 5 reference numbers as names, 5 whole citations as names.
+- [x] The dry run earned its place immediately: the first
+      `unnamed-entities` rule would have thrown away 27 real claims and
+      94 real citations, and the repair for mangled names became "mend
+      the name" instead of "end the edges".
+- [ ] Ailments worth adding when they show up: entities that differ only
+      by case or punctuation, edges whose evidence quote is no longer in
+      the document, documents whose archive file is missing.
+
 ## Housekeeping pass (planned, after the v5 backlog finishes)
 
 Measured 2026-09-12 against the live store (9,500 documents, 1.7 GB).

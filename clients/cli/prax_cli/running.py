@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -356,7 +357,11 @@ def models(a: Any) -> int:
 def _example_line(name: str, row: dict[str, Any]) -> str:
     """One finding in a few words, whatever kind of row it is."""
     if "edges" in row:  # an entity and what it carries
-        return f"{row.get('name')!r} ({row.get('type')}) · {row['edges']} edges"
+        carries = out.plural(row["edges"], "edge")
+        said = f"{row.get('name')!r} ({row.get('type')}) · {carries}"
+        if row.get("cleaned"):
+            said += f" → {row['cleaned']!r}"
+        return said
     if "rel" in row:  # an edge or a review item
         parts = [str(row.get("rel"))]
         if row.get("name"):
@@ -391,20 +396,31 @@ def heal(door: Door, a: Any) -> int:
         return 0
     ailments = found["ailments"]
     hurt = [x for x in ailments if x["count"]]
+    clear = [x["name"] for x in ailments if not x["count"]]
     out.say(
         out.bold("The store's health")
         + out.dim(f"   {len(hurt)} of {len(ailments)} ailments found")
     )
     out.say()
-    for x in ailments:
-        if not x["count"]:
-            out.hint(f"  ok   {x['name']}")
-            continue
+    for x in hurt:
         count = out.num(x["count"]) + ("+" if x["capped"] else "")
-        out.say(f"{out.paint(x['name'], 'yellow')}  {out.bold(count)}  {x['what']}")
+        out.say(f"{out.paint(x['name'], 'yellow')}   {out.bold(count)}")
+        for line in textwrap.wrap(x["what"], max(30, out.width() - 4)):
+            out.hint("    " + line)
         for row in x["examples"]:
-            out.hint("       " + _example_line(x["name"], row))
-        out.hint(f"       {'repair' if x['repairable'] else 'by hand'}: {x['fix']}")
+            out.hint("      · " + _example_line(x["name"], row))
+        head = "    repair: " if x["repairable"] else "    by hand: "
+        for i, line in enumerate(
+            textwrap.wrap(x["fix"], max(30, out.width() - len(head)))
+        ):
+            out.hint((head if i == 0 else " " * len(head)) + line)
+        out.say()
+    if clear:
+        head = "clear: "
+        for i, line in enumerate(
+            textwrap.wrap(", ".join(clear), max(30, out.width() - len(head)))
+        ):
+            out.hint((head if i == 0 else " " * len(head)) + line)
         out.say()
     if not hurt:
         out.say("Nothing to repair.")

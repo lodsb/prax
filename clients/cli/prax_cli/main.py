@@ -332,10 +332,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
-    if not args:
-        return running.overview(
-            Door(os.environ.get("PRAX_DOOR", DEFAULT_DOOR), name="cli")
+    if not args:  # `prax` alone: the same door every command would use
+        bare = argparse.Namespace(
+            door=os.environ.get("PRAX_DOOR", DEFAULT_DOOR),
+            token=os.environ.get("PRAX_TOKEN") or None,
         )
+        return running.overview(_door_of(bare))
     a = parser.parse_args(args)
     if getattr(a, "version", False):
         return running.print_version()
