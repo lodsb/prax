@@ -25,7 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import ask as ask_mod
-from . import auth, inbox, models, ontology, review, store
+from . import auth, embeddings, inbox, models, ontology, review, store, work
 
 UI_DIR = Path(__file__).resolve().parent / "ui"
 
@@ -287,6 +287,101 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
             )
         raise HTTPException(502, f"fetch failed: {why}") from exc
     return _capture_out(cap)
+
+
+# ------------------------------------------------------------------ work
+# The door hands model work out and takes results in (prax.work), so a
+# worker on this machine or another does the parsing, titling, extraction
+# and embedding without opening the database.
+
+
+def _worker(request: Request) -> str:
+    return request.headers.get("x-prax-worker") or (
+        request.client.host if request.client else "worker"
+    )
+
+
+# the session routes come before the {step} routes: FastAPI matches in order
+class WorkSessionReq(BaseModel):
+    name: str = "worker"
+    host: str | None = None
+    note: str | None = None
+
+
+class SessionBeat(BaseModel):
+    done: int | None = None
+    total: int | None = None
+    note: str | None = None
+    status: str | None = None  # "done" or "failed" ends the session
+
+
+@app.post("/work/session")
+def work_session(req: WorkSessionReq, request: Request) -> dict[str, Any]:
+    """A worker announces itself: a job row the Jobs view shows, with the
+    worker's heartbeats."""
+    job_id = store.job_start(
+        request.app.state.con, req.name, note=req.note, host=req.host, pid=0
+    )
+    return {"job_id": job_id, "leases": work.leases()}
+
+
+@app.post("/work/session/{job_id}")
+def work_beat(job_id: int, req: SessionBeat, request: Request) -> dict[str, Any]:
+    con = request.app.state.con
+    if req.status in ("done", "failed"):
+        store.job_finish(con, job_id, status=req.status, note=req.note)
+    else:
+        store.job_update(con, job_id, done=req.done, total=req.total, note=req.note)
+    return {"ok": True}
+
+
+@app.get("/work/{step}")
+def work_out(
+    step: str, request: Request, limit: int = 10, scope: str = "captures"
+) -> dict[str, Any]:
+    """A leased batch of work: parse, titles, extract or embed."""
+    try:
+        return work.hand_out(
+            request.app.state.con,
+            step,
+            limit=limit,
+            scope=scope,
+            worker=_worker(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class WorkIn(BaseModel):
+    results: list[dict[str, Any]] | None = None
+    extractor: str | None = None
+    run: str | None = None
+    model: str | None = None
+    chunks: list[list[Any]] | None = None
+    fields: list[list[Any]] | None = None
+
+
+@app.post("/work/{step}")
+def work_in(step: str, req: WorkIn, request: Request) -> dict[str, Any]:
+    """The results of a batch, applied by the door."""
+    try:
+        return work.take_in(
+            request.app.state.con,
+            step,
+            req.model_dump(exclude_none=True),
+            worker=_worker(request),
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/vectors/merge")
+def vectors_merge() -> dict[str, Any]:
+    """Fold the delta indexes into the main files now."""
+    emb = embeddings.current()
+    if emb is None or not store.vectors_available():
+        raise HTTPException(400, "no embedder or no usearch")
+    return store.merge_vectors(emb.name)
 
 
 @app.get("/changes")

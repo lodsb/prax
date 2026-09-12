@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,6 +16,12 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Point PRAX_DATA_DIR at tmp_path before any store, API or MCP call."""
     d = tmp_path / "data"
     monkeypatch.setenv("PRAX_DATA_DIR", str(d))
+    # the process-wide cache of opened vector indexes is keyed by path: views
+    # of an earlier test's files must not linger into this one
+    for idx in list(store._indexes.values()):
+        with contextlib.suppress(Exception):
+            idx.close()
+    store._indexes.clear()
     return d
 
 

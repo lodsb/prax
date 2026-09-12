@@ -697,7 +697,11 @@ def job_start(
     *,
     total: int | None = None,
     note: str | None = None,
+    host: str | None = None,
+    pid: int | None = None,
 ) -> int:
+    """A job row for this process, or for a worker elsewhere (``host``,
+    ``pid`` 0: the reaper leaves those to their heartbeat)."""
     import os
     import socket
 
@@ -705,7 +709,15 @@ def job_start(
     cur = con.execute(
         "INSERT INTO jobs (name, host, pid, started_at, updated_at, status, done,"
         " total, note) VALUES (?,?,?,?,?,'running',0,?,?)",
-        (name, socket.gethostname(), os.getpid(), now, now, total, note),
+        (
+            name,
+            host or socket.gethostname(),
+            os.getpid() if pid is None else pid,
+            now,
+            now,
+            total,
+            note,
+        ),
     )
     con.commit()
     return int(cur.lastrowid or 0)
