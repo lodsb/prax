@@ -425,7 +425,10 @@ Performance, cheap first:
       8,700 reads per worker pass), takes `sources` and
       `skip_mime_prefix` so `captures_ready` and the work hand-out are
       one query; `assign_domains` selects only the documents without a
-      set.
+      set. One intended change: a document with a domain set whose
+      reading carries the whole ontology's version (read before its set
+      was assigned) is due again under its subset; the old Python filter
+      let those pass. 66 captures on the desktop, re-read by the worker.
 - [ ] `traverse` on hubs (400-500 ms): look at the recursive CTE once
       the graph is under v5.
 
