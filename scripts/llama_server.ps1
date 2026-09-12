@@ -10,9 +10,15 @@ names as an `openai` model (docs/howto.md 3k).
 
 Every slot gets CtxPerSlot tokens of context (the server splits -c evenly),
 and the KV cache is stored at 8 bits so a 32B model at Q4 and two slots
-of 8 K fit a 24 GB card. --load-mode none: with the file memory-mapped, Windows
-keeps the 20 GB resident in host RAM next to the VRAM copy and starves
-the door; without it the host copy is freed after the upload. Extraction prompts are about 3,500 tokens in and
+of 8 K fit a 24 GB card. Memory on Windows (measured 2026-09-12 with a
+22 GB model on a 32 GB machine): the driver backs every VRAM allocation
+with system commit, so the server charges 20-30 GB of commit whatever
+the load mode; --load-mode mmap keeps that at about 22 GB (the model's
+pages are file-backed and evictable, so its working set looks large but
+is reclaimable), --load-mode none at about 30 GB with a smaller working
+set. With IDEs and a browser open the commit limit is what runs out
+first (allocation failures in other programs), so a page file of at
+least twice the RAM is the setting that matters. Extraction prompts are about 3,500 tokens in and
 1,100 out, so 8 K per slot is the floor. -PowerLimit sets the card's
 power cap first (needs an administrator shell; 320 W keeps a 4090 well
 within a mid-size power supply).
@@ -39,7 +45,7 @@ if ($NoThinking) { $extra += @("--reasoning", "off", "--reasoning-budget", "0") 
     --model $Model `
     --alias $Alias `
     --host 127.0.0.1 --port $Port `
-    --n-gpu-layers 999 --load-mode none `
+    --n-gpu-layers 999 --load-mode mmap `
     --ctx-size $ctx --parallel $Slots `
     --flash-attn on `
     --cache-type-k q8_0 --cache-type-v q8_0 `
