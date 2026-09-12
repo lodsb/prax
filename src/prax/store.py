@@ -1270,17 +1270,18 @@ def assign_domains(
     counts: dict[str, int] = {"unmatched": 0}
     for rule in rules:
         _check_domains(list(rule.get("domains") or []))
-    sql = "SELECT id, mime, original_path, meta FROM documents"
+    sql = (
+        "SELECT id, mime, original_path, meta FROM documents"
+        " WHERE coalesce(json_extract(meta, '$.domains_by'), '') != 'human'"
+    )
     args: tuple[Any, ...] = ()
+    if not force:  # only the documents without a set (the index knows them)
+        sql += " AND json_extract(meta, '$.domains') IS NULL"
     if ids is not None:
-        sql += f" WHERE id IN ({','.join('?' * len(ids))})"
+        sql += f" AND id IN ({','.join('?' * len(ids))})"
         args = tuple(ids)
     for r in con.execute(sql, args).fetchall():
         meta = json.loads(r["meta"] or "{}")
-        if meta.get("domains_by") == "human":
-            continue
-        if meta.get("domains") and not force:
-            continue
         doc = {"mime": r["mime"], "original_path": r["original_path"], "meta": meta}
         for i, rule in enumerate(rules):
             if _rule_matches(rule, doc):
@@ -3847,6 +3848,8 @@ def select_for_extraction(
     min_chars: int = 0,
     domain: str | None = None,
     onto: ontology.Ontology | None = None,
+    sources: tuple[str, ...] | None = None,
+    skip_mime_prefix: str | None = None,
 ) -> list[int]:
     """Indexed documents not yet extracted under ``ontology_version``
     (``meta.extraction.ontology_version``), oldest first. ``min_chars``
@@ -3854,14 +3857,27 @@ def select_for_extraction(
     scans without a text layer): nothing to extract, a call wasted.
     ``domain`` keeps the documents assigned to that module; with ``onto``
     a document with a domain set is compared against the version of its
-    own subset of the ontology, not the whole."""
+    own subset of the ontology, not the whole (one query: a CASE over
+    the domain sets in use). ``sources`` keeps documents of those
+    ``meta.source`` values (captures); ``skip_mime_prefix`` drops images
+    and the like."""
+    stamp = "json_extract(meta, '$.extraction.ontology_version')"
     sql = (
         "SELECT id FROM documents WHERE text_hash IS NOT NULL"
         " AND json_extract(meta, '$.retired') IS NULL"
-        " AND (json_extract(meta, '$.extraction.ontology_version') IS NULL"
-        "      OR json_extract(meta, '$.extraction.ontology_version') != ?)"
     )
-    args: list[Any] = [ontology_version]
+    args: list[Any] = []
+    if sources is not None:
+        sql += (
+            f" AND json_extract(meta, '$.source') IN ({','.join('?' * len(sources))})"
+        )
+        args.extend(sources)
+    want, want_args = _subset_version_case(con, onto, ontology_version)
+    sql += f" AND ({stamp} IS NULL OR {stamp} != {want})"
+    args.extend(want_args)
+    if skip_mime_prefix:
+        sql += " AND coalesce(mime, '') NOT LIKE ? ESCAPE '!'"
+        args.append(_like_prefix(skip_mime_prefix))
     if domain:
         sql += (
             " AND EXISTS (SELECT 1 FROM json_each(documents.meta, '$.domains')"
@@ -3878,21 +3894,39 @@ def select_for_extraction(
         sql += " AND mime LIKE ? ESCAPE '!'"
         args.append(_like_prefix(mime_prefix))
     sql += " ORDER BY id"
-    if limit is not None and onto is None:
+    if limit is not None:
         sql += " LIMIT ?"
         args.append(limit)
-    ids = [r["id"] for r in con.execute(sql, args)]
-    if onto is not None:
-        # a document read under the version of its own domains is done
-        kept = []
-        for doc_id in ids:
-            meta = get_meta(con, doc_id)
-            stamp = (meta.get("extraction") or {}).get("ontology_version")
-            if meta.get("domains") and stamp == expected_version(meta, onto):
-                continue
-            kept.append(doc_id)
-        ids = kept[:limit] if limit is not None else kept
-    return ids
+    return [r["id"] for r in con.execute(sql, args)]
+
+
+def _subset_version_case(
+    con: sqlite3.Connection, onto: ontology.Ontology | None, whole: str
+) -> tuple[str, list[Any]]:
+    """The SQL for "the version this document's reading should carry": a
+    CASE over the domain sets in use (few) mapping each to the version of
+    its subset of ``onto``, ``whole`` for a document without a set. Without
+    ``onto`` every document is held to ``whole``."""
+    if onto is None:
+        return "?", [whole]
+    whens: list[str] = []
+    args: list[Any] = []
+    for (raw,) in con.execute(
+        "SELECT DISTINCT json_extract(meta, '$.domains') FROM documents"
+        " WHERE json_extract(meta, '$.domains') IS NOT NULL"
+    ):
+        try:
+            domains = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        if not domains:
+            continue
+        whens.append("WHEN ? THEN ?")
+        args.extend([raw, onto.for_domains(domains).version])
+    if not whens:
+        return "?", [whole]
+    args.append(whole)
+    return f"CASE json_extract(meta, '$.domains') {' '.join(whens)} ELSE ? END", args
 
 
 @_serialized

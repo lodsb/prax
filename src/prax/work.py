@@ -100,18 +100,16 @@ def hand_out(
     if step == "extract":
         onto = ontology.current()
         due = store.select_for_extraction(
-            con, ontology_version=onto.version, min_chars=pipeline.MIN_CHARS, onto=onto
+            con,
+            ontology_version=onto.version,
+            min_chars=pipeline.MIN_CHARS,
+            onto=onto,
+            sources=tuple(pipeline.CAPTURE_SOURCES) if scope == "captures" else None,
+            skip_mime_prefix="image/",
         )
         items = []
         for doc_id in due:
             if len(items) >= limit or not _free(step, doc_id, now):
-                continue
-            if not _in_scope(con, doc_id, scope):
-                continue
-            mime = con.execute(
-                "SELECT mime FROM documents WHERE id = ?", (doc_id,)
-            ).fetchone()[0]
-            if (mime or "").startswith("image/"):
                 continue
             doc = extraction.build_input(con, doc_id)
             items.append(

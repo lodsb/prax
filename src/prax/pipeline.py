@@ -436,22 +436,14 @@ def _paid(spec: models.ModelSpec | None) -> bool:
 def captures_ready(con: sqlite3.Connection, onto: ontology.Ontology) -> list[int]:
     """Captures with text that the current ontology has not read yet, worth
     reading: not an image, not retired, at least ``MIN_CHARS`` of text."""
-    ids = store.select_for_extraction(
-        con, ontology_version=onto.version, min_chars=MIN_CHARS, onto=onto
+    return store.select_for_extraction(
+        con,
+        ontology_version=onto.version,
+        min_chars=MIN_CHARS,
+        onto=onto,
+        sources=tuple(CAPTURE_SOURCES),
+        skip_mime_prefix="image/",
     )
-    out = []
-    for doc_id in ids:
-        row = con.execute(
-            "SELECT mime, json_extract(meta, '$.source') AS source FROM documents"
-            " WHERE id = ?",
-            (doc_id,),
-        ).fetchone()
-        if row is None or row["source"] not in CAPTURE_SOURCES:
-            continue
-        if (row["mime"] or "").startswith("image/"):
-            continue
-        out.append(doc_id)
-    return out
 
 
 def process_captures(

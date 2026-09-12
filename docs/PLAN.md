@@ -407,17 +407,25 @@ within a gigabyte of its commit limit):
 - [x] Which passes run side by side: howto 3l ("Jobs").
 
 Performance, cheap first:
-- [ ] Expression indexes on the JSON paths every document-level filter
-      scans (`meta.source`, `meta.retired`, `meta.extraction.ontology_version`,
-      `meta.domains`; about 120 ms per scan today) and an index on
-      `review_queue.resolution` (an open-item count takes 500 ms). One
-      migration, no code change.
+- [x] Expression indexes (2026-09-12, migration 0010): `meta.source`
+      (live documents), `meta.retired`, `meta.domains`,
+      `meta.extraction.ontology_version`, `meta.promote.at`,
+      `meta.zotero.parent`, and the review queue's open items by
+      document. Measured on a copy of the live store: the capture
+      listings, the retired and promote lists and a document's open
+      review items went from 12-37 ms scans to under a millisecond; the
+      extraction selection stays a scan (it returns most rows).
 - [ ] Embedding on the GPU: the DirectML runtime is installed but the CPU
       provider is chosen (19 chunks/s); select it by configuration and
       measure.
-- [ ] Batch selections that loop in Python with one query per document
-      (`select_for_extraction` with a domain subset, `captures_ready`,
-      `assign_domains`) folded into SQL once the indexes exist.
+- [x] Batch selections folded into SQL (2026-09-12):
+      `select_for_extraction` compares each document against the
+      version of its own domain subset with one CASE over the domain
+      sets in use (it used to read every candidate's meta in Python:
+      8,700 reads per worker pass), takes `sources` and
+      `skip_mime_prefix` so `captures_ready` and the work hand-out are
+      one query; `assign_domains` selects only the documents without a
+      set.
 - [ ] `traverse` on hubs (400-500 ms): look at the recursive CTE once
       the graph is under v5.
 
