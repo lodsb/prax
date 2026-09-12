@@ -109,7 +109,6 @@ def parse_one(
     if not force and _seen(doc["meta"], exts[0].stamp):
         return "seen"
     data = store.get_original(con, doc_id)
-    old_len = doc["text_len"]
     path = doc.get("original_path")
     filename = path.replace("\\", "/").rsplit("/", 1)[-1] if path else None
     last_error: Exception | None = None
@@ -119,24 +118,54 @@ def parse_one(
             text = ext(data, filename=filename).strip()
         except Exception as exc:  # noqa: BLE001 - recorded; the next candidate is tried
             last_error = exc
-            _record(
-                con,
-                doc_id,
-                {"extractor": ext.stamp, "error": f"{type(exc).__name__}: {exc}"},
+            apply_parse(
+                con, doc_id, stamp=ext.stamp, error=f"{type(exc).__name__}: {exc}"
             )
             continue
-        seconds = round(time.monotonic() - t0, 2)
-        entry = {"extractor": ext.stamp, "chars": len(text), "seconds": seconds}
-        if not force and _too_short(len(text), old_len):
-            action = "kept" if old_len else "empty"
-            _record(con, doc_id, {**entry, "outcome": action})
-            return action
-        action = "upgraded" if old_len else "created"
-        _record(con, doc_id, {**entry, "outcome": action})
-        store.index_text(con, doc_id, text, text_source=ext.stamp)
-        return action
+        return apply_parse(
+            con,
+            doc_id,
+            stamp=ext.stamp,
+            text=text,
+            seconds=round(time.monotonic() - t0, 2),
+            force=force,
+        )
     assert last_error is not None
     raise last_error
+
+
+def apply_parse(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    stamp: str,
+    text: str | None = None,
+    error: str | None = None,
+    seconds: float = 0.0,
+    force: bool = False,
+) -> str:
+    """Take in what an extractor produced for a document, here or on a
+    worker: record the attempt in ``meta.parse_history`` and index the
+    text unless it is suspiciously short next to the old one (``force``
+    overrides). Returns the action: ``created``, ``upgraded``, ``kept``,
+    ``empty`` or ``error``."""
+    doc = store.get_document(con, doc_id, max_chars=0)
+    if doc is None:
+        raise KeyError(f"no such document: {doc_id}")
+    if error or text is None:
+        _record(con, doc_id, {"extractor": stamp, "error": error or "no text"})
+        return "error"
+    text = text.strip()
+    old_len = doc["text_len"]
+    entry = {"extractor": stamp, "chars": len(text), "seconds": seconds}
+    if not force and _too_short(len(text), old_len):
+        action = "kept" if old_len else "empty"
+        _record(con, doc_id, {**entry, "outcome": action})
+        return action
+    action = "upgraded" if old_len else "created"
+    _record(con, doc_id, {**entry, "outcome": action})
+    store.index_text(con, doc_id, text, text_source=stamp)
+    return action
 
 
 def run(

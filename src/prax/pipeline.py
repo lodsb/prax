@@ -303,6 +303,7 @@ def index_writable(model: str) -> bool:
     """Whether the index files can be replaced: on Windows a file another
     process has mapped refuses to be renamed, and that is what the save
     does. A rename there and back is the probe."""
+    store._drop_index_views(model)  # this process's own views are not the question
     for path in (store._index_path(model), store._doc_index_path(model)):
         if not path.exists():
             continue
@@ -361,12 +362,8 @@ def embed_pending(
     """Embed the chunks and document fields without a vector, saving the
     index files. Raises ``IndexBusy`` before any work when a file cannot
     be replaced (``release`` asks the door to let go and is retried)."""
-    if not index_writable(emb.name):
-        if release:
-            release()
-            time.sleep(0.5)
-        if not index_writable(emb.name):
-            raise IndexBusy(f"the index of {emb.name} is mapped by another process")
+    # new vectors go into the delta file, which nobody maps; only a merge
+    # replaces the main file, and _save_with_retry handles that one
     status = store.vec_status(con)
     index_count = status["index"]["count"] if status["index"] else 0
     booked = status["models"].get(emb.name, 0)

@@ -156,6 +156,63 @@ def _drop_index_views(model: str) -> None:
             idx.close()
 
 
+# The delta index: new vectors go into a small writable index of their own
+# (``vectors-<model>.delta.usearch``) that the process holding it searches
+# together with the memory-mapped main file. The main file is rewritten
+# only by ``merge_vectors``, which folds the delta in. So the door can take
+# vectors as they arrive without keeping the whole index writable in
+# memory (800 MB at 876 K vectors), and no other process has to replace a
+# file the door has mapped.
+
+DELTA_MERGE_AT = 50_000  # vectors in the delta before a merge is due
+
+
+def _delta_path(path: Path) -> Path:
+    return path.with_name(path.stem + ".delta" + path.suffix)
+
+
+def _delta(path: Path) -> vectors.VectorIndex:
+    """The writable delta index beside ``path`` (created empty when there
+    is no file yet)."""
+    return _open_index(_delta_path(path), writable=True)  # type: ignore[return-value]
+
+
+def _knn(path: Path, vector: Any, k: int) -> list[tuple[int, float]]:
+    """Nearest keys from the main view and the delta, merged by distance;
+    a key in both takes the delta's (newer) place."""
+    out: dict[int, float] = {}
+    main = _open_index(path, writable=False)
+    if main is not None:
+        for key, d in main.search(vector, k):
+            out[key] = d
+    dpath = _delta_path(path)
+    delta = _indexes.get((str(dpath), True))
+    if delta is None and dpath.exists():
+        delta = _delta(path)
+    if delta is not None and len(delta):
+        for key, d in delta.search(vector, k):
+            out[key] = d
+    return sorted(out.items(), key=lambda kv: kv[1])[:k]
+
+
+def _get_vector(path: Path, key: int) -> Any:
+    dpath = _delta_path(path)
+    delta = _indexes.get((str(dpath), True))
+    if delta is None and dpath.exists():
+        delta = _delta(path)
+    if delta is not None and key in delta:
+        return delta.get(key)
+    main = _open_index(path, writable=False)
+    return main.get(key) if main is not None else None
+
+
+def _has_vectors(path: Path) -> bool:
+    if path.exists():
+        return True
+    dpath = _delta_path(path)
+    return dpath.exists() or (str(dpath), True) in _indexes
+
+
 def migrations() -> list[tuple[int, Path]]:
     """Numbered ``NNNN_name.sql`` files in ``prax/migrations``, ascending."""
     found = []
@@ -2083,11 +2140,10 @@ def _vec_search(
     of the index). Keys whose chunk no longer exists are dropped here.
     """
     model = embeddings.current().name  # type: ignore[union-attr]
-    idx = _index(model, writable=False)
-    if idx is None:
+    if not _has_vectors(_index_path(model)):
         return []
     want = limit * (25 if kind is not None else 3)
-    found = idx.search(vector, min(max(want, limit), VEC_SEARCH_CAP))
+    found = _knn(_index_path(model), vector, min(max(want, limit), VEC_SEARCH_CAP))
     if not found:
         return []
     distance = dict(found)
@@ -2145,10 +2201,9 @@ def _field_vec_search(
     con: sqlite3.Connection, model: str, vector: Any, limit: int
 ) -> list[dict[str, Any]]:
     """KNN over the document-field index."""
-    idx = _doc_index(model, writable=False)
-    if idx is None:
+    if not _has_vectors(_doc_index_path(model)):
         return []
-    found = idx.search(vector, limit)
+    found = _knn(_doc_index_path(model), vector, limit)
     if not found:
         return []
     distance = dict(found)
@@ -2299,6 +2354,13 @@ def vec_status(con: sqlite3.Connection) -> dict[str, Any]:
         idx = _index(emb.name, writable=False)
         if idx is not None:
             status["index"] = idx.stats()
+        try:
+            status["delta"] = delta_counts(emb.name)
+        except Exception:  # noqa: BLE001 - a status must not fail on a stale file
+            status["delta"] = None
+        if status["index"] is not None and status["delta"]:
+            # what a query can find: the main file plus the delta
+            status["index"]["count"] += status["delta"]["chunks"]
     return status
 
 
@@ -2404,7 +2466,7 @@ def _search_hits(
     vectors_ready = (
         emb is not None
         and vectors_available()
-        and _index(emb.name, writable=False) is not None
+        and _has_vectors(_index_path(emb.name))
         and _vec_count(con) > 0
     )
     if mode == "vec" and not vectors_ready:
@@ -2558,8 +2620,7 @@ def store_embeddings(
         raise RuntimeError("usearch is not installed; vectors cannot be stored")
     if not items:
         return 0
-    idx = _index(model, writable=True)
-    assert idx is not None
+    idx = _delta(_index_path(model))
     ids = [cid for cid, _, _ in items]
     import numpy as np
 
@@ -2611,12 +2672,10 @@ def store_document_embeddings(
         raise RuntimeError("usearch is not installed; vectors cannot be stored")
     if not items:
         return 0
-    idx = _doc_index(model, writable=True)
-    assert idx is not None
+    idx = _delta(_doc_index_path(model))
     import numpy as np
 
     ids = [d for d, _ in items]
-    idx.remove([d for d in ids if d in idx])
     idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, v in items]))
     con.executemany(
         "INSERT INTO document_embeddings (doc_id, model) VALUES (?, ?)"
@@ -2628,27 +2687,89 @@ def store_document_embeddings(
     return len(items)
 
 
+def _save_delta(path: Path) -> dict[str, Any]:
+    """Write the delta beside ``path`` (small, nobody maps it) and merge it
+    into the main file when it has grown past ``DELTA_MERGE_AT``."""
+    delta = _delta(path)
+    delta.save()
+    if len(delta) >= DELTA_MERGE_AT or not path.exists():
+        return _merge(path)  # a large delta, or no main file yet
+    main = _open_index(path, writable=False)
+    return {
+        "count": (len(main) if main is not None else 0) + len(delta),
+        "delta": len(delta),
+        "bytes": path.stat().st_size if path.exists() else 0,
+    }
+
+
+def _merge(path: Path) -> dict[str, Any]:
+    """Fold the delta into the main file: load the main index writable, add
+    the delta's vectors, save, drop this process's views, start an empty
+    delta. Needs the main index in memory for the duration."""
+    delta = _delta(path)
+    main = _open_index(path, writable=True)
+    assert main is not None
+    n = len(delta)
+    if n:
+        import numpy as np
+
+        keys = [int(k) for k in delta.all_keys()]
+        vecs = np.vstack([delta.get(k) for k in keys])
+        main.add(keys, vecs)
+    for key in [(str(path), False), (str(_delta_path(path)), True)]:
+        idx = _indexes.pop(key, None)
+        if idx is not None:
+            idx.close()
+    main.save()
+    _indexes.pop((str(path), True), None)
+    main.close()
+    dpath = _delta_path(path)
+    if dpath.exists():
+        dpath.unlink()
+    reopened = _open_index(path, writable=False)
+    return {
+        "count": len(reopened) if reopened is not None else 0,
+        "merged": n,
+        "delta": 0,
+        "bytes": path.stat().st_size,
+    }
+
+
 @_serialized
 def save_document_vectors(model: str) -> dict[str, Any]:
-    idx = _doc_index(model, writable=True)
-    assert idx is not None
-    _drop_index_views(model)
-    idx.save()
-    return idx.stats()
+    return _save_delta(_doc_index_path(model))
 
 
 @_serialized
 def save_vectors(model: str) -> dict[str, Any]:
-    """Write ``model``'s index to disk and drop cached read views so readers
-    in this process reopen the new file. The bookkeeping rows are committed
-    as they are written, so a crash between two saves leaves rows that the
-    next ``pending_embeddings`` run will not repeat; ``compact_vectors``
-    reconciles the two."""
-    idx = _index(model, writable=True)
-    assert idx is not None
-    _drop_index_views(model)  # a mapped view blocks the replace on Windows
-    idx.save()
-    return idx.stats()
+    """Write ``model``'s new vectors (the delta) to disk; the main file is
+    rewritten only when the delta is large (``merge_vectors``). The
+    bookkeeping rows are committed as they are written, so a crash between
+    two saves leaves rows that the next ``pending_embeddings`` run will not
+    repeat; ``compact_vectors`` reconciles the two."""
+    return _save_delta(_index_path(model))
+
+
+@_serialized
+def merge_vectors(model: str) -> dict[str, Any]:
+    """Fold both deltas of ``model`` into their main files now."""
+    return {
+        "chunks": _merge(_index_path(model)),
+        "documents": _merge(_doc_index_path(model)),
+    }
+
+
+@_serialized
+def delta_counts(model: str) -> dict[str, int]:
+    out = {}
+    paths = (("chunks", _index_path(model)), ("documents", _doc_index_path(model)))
+    for name, path in paths:
+        dpath = _delta_path(path)
+        idx = _indexes.get((str(dpath), True))
+        if idx is None and dpath.exists():
+            idx = _delta(path)
+        out[name] = len(idx) if idx is not None else 0
+    return out
 
 
 @_serialized
@@ -2656,6 +2777,7 @@ def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
     """Reconcile the index with the bookkeeping: drop keys whose chunk is
     gone, and forget bookkeeping rows whose vector is missing from the
     index (so they get embedded again). Saves the index."""
+    _merge(_index_path(model))
     idx = _index(model, writable=True)
     assert idx is not None
     live = {r[0] for r in con.execute("SELECT id FROM chunks")}
@@ -2680,7 +2802,10 @@ def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
         con.commit()
     _drop_index_views(model)
     idx.save()
-    return {"removed_stale": removed, "forgot_missing": len(missing), "count": len(idx)}
+    count = len(idx)
+    _indexes.pop((str(_index_path(model)), True), None)
+    idx.close()  # the writable copy is not kept around: the delta takes new vectors
+    return {"removed_stale": removed, "forgot_missing": len(missing), "count": count}
 
 
 @_serialized
@@ -2785,12 +2910,12 @@ def _similar_documents(
 
     depth = max(40, 5 * limit)
     lists: list[list[int]] = []
-    doc_idx = _doc_index(emb.name, writable=False)
-    if doc_idx is not None and (fv := doc_idx.get(doc_id)) is not None:
-        found = doc_idx.search(fv, depth + 1)
+    dpath = _doc_index_path(emb.name)
+    if _has_vectors(dpath) and (fv := _get_vector(dpath, doc_id)) is not None:
+        found = _knn(dpath, fv, depth + 1)
         lists.append([int(k) for k, _ in found if int(k) != doc_id][:depth])
-    idx = _index(emb.name, writable=False)
-    if idx is not None:
+    cpath = _index_path(emb.name)
+    if _has_vectors(cpath):
         rows = con.execute(
             "SELECT c.id FROM chunks c JOIN chunk_embeddings e ON e.chunk_id = c.id"
             " WHERE c.doc_id = ? AND e.model = ? AND c.kind = 'text'"
@@ -2800,13 +2925,17 @@ def _similar_documents(
         ids = [r["id"] for r in rows]
         step = max(1, len(ids) // CENTROID_CHUNKS)
         vecs = [
-            v for k in ids[::step][:CENTROID_CHUNKS] if (v := idx.get(k)) is not None
+            v
+            for k in ids[::step][:CENTROID_CHUNKS]
+            if (v := _get_vector(cpath, k)) is not None
         ]
         if vecs:
             centroid = np.mean(np.stack(vecs), axis=0)
             norm = float(np.linalg.norm(centroid)) or 1.0
-            found = idx.search(
-                (centroid / norm).astype(np.float32), min(VEC_SEARCH_CAP, 40 * limit)
+            found = _knn(
+                cpath,
+                (centroid / norm).astype(np.float32),
+                min(VEC_SEARCH_CAP, 40 * limit),
             )
             keys = [int(k) for k, _ in found]
             order: list[int] = []

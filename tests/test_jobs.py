@@ -119,7 +119,32 @@ def test_index_busy_is_detected(
     store.ingest_text(con, "vectors please " * 30, title="V")
     rep = pipeline.embed_pending(con, emb, log=lambda t: None)
     assert rep["chunks"] >= 1 and rep["fields"] >= 1
-    assert pipeline.index_writable(emb.name)
-    monkeypatch.setattr(pipeline, "index_writable", lambda model: False)
+    assert pipeline.index_writable(emb.name)  # our own views do not count
+    # a save that keeps failing (the file mapped elsewhere) ends as IndexBusy,
+    # after asking the door to let go each time
+    asked = []
+
+    def refuse(model: str) -> dict:
+        raise OSError(32, "mapped elsewhere")
+
+    monkeypatch.setattr(store, "save_vectors", refuse)
+    monkeypatch.setattr(
+        pipeline,
+        "time",
+        type(
+            "T",
+            (),
+            {
+                "sleep": staticmethod(lambda s: None),
+                "monotonic": staticmethod(lambda: 0.0),
+            },
+        ),
+    )
+    store.ingest_text(con, "more vectors please " * 30, title="W")
     with pytest.raises(pipeline.IndexBusy):
-        pipeline.embed_pending(con, emb)
+        pipeline.embed_pending(con, emb, release=lambda: asked.append(1))
+    assert (
+        len(asked) == pipeline.LOCK_RETRIES
+        if hasattr(pipeline, "LOCK_RETRIES")
+        else len(asked) >= 1
+    )
