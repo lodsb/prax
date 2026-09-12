@@ -194,8 +194,14 @@ def clean_name(name: str) -> str:
 
 
 def _mangled_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Only entities that are a name in their own right: an alias merged
+    into another entity keeps the string it was found under, which is
+    history rather than a name, and mending it would only collide with the
+    clean one it already points at."""
     found = []
-    for row in con.execute("SELECT id, name, type FROM entities"):
+    for row in con.execute(
+        "SELECT id, name, type FROM entities WHERE canonical_id IS NULL"
+    ):
         if not MANGLED.search(row["name"] or ""):
             continue
         cleaned = clean_name(row["name"])
@@ -301,7 +307,7 @@ def _invalidate(con: sqlite3.Connection, edge_ids: list[int]) -> int:
     for edge_id in edge_ids:
         try:
             invalidate_edge(con, edge_id)
-        except KeyError:  # another pass ended it first
+        except (KeyError, ValueError):  # another pass ended it first
             continue
         done += 1
     return done
@@ -341,6 +347,13 @@ def _repair_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
             how = rename_entity(con, row["id"], row["cleaned"])
         except KeyError:  # merged away by an earlier row of this pass
             continue
+        except ValueError:
+            # the clean name is already an alias of this one: an earlier
+            # resolution pass merged them the other way round and the graph
+            # already treats them as one thing. Only the display name is
+            # ugly, and flipping which of the two is canonical is not
+            # something a repair should do behind a person's back.
+            continue
         if how != "unchanged":
             done += 1
     return done
@@ -351,16 +364,21 @@ def _repair_review(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     for row in rows:
         try:
             resolve_review(con, row["id"], "dropped")
-        except KeyError:
+        except (KeyError, ValueError):
             continue
         done += 1
     return done
 
 
 def _repair_jobs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    done = 0
     for row in rows:
-        job_finish(con, row["id"], status="failed", note="closed by the heal pass")
-    return len(rows)
+        try:
+            job_finish(con, row["id"], status="failed", note="closed by the heal pass")
+        except (KeyError, ValueError):
+            continue
+        done += 1
+    return done
 
 
 # --------------------------------------------------------------- the list
@@ -522,5 +540,7 @@ def heal(con: sqlite3.Connection, *, only: list[str] | None = None) -> dict[str,
             repaired = ailment.repair(con, rows)
             done += repaired
             out[ailment.name] = {"found": len(rows), "repaired": repaired}
+            if repaired < len(rows):
+                out[ailment.name]["left alone"] = len(rows) - repaired
             job.update(done=done, note=ailment.name)
     return out
