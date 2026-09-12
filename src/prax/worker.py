@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from prax import embeddings, extraction, inbox, models, parsers, titles, work
+from prax import embeddings, extraction, hostinfo, inbox, models, parsers, titles, work
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
@@ -463,6 +463,7 @@ def watch(
                         {
                             "note": f"last pass {time.strftime('%H:%M:%S')}:"
                             f" {json.dumps(done)[:120]}"
+                            + (f" · {mb} MB" if (mb := hostinfo.process_mb()) else "")
                         },
                     )
             except Exception as exc:  # noqa: BLE001 - the worker outlives a bad pass

@@ -394,22 +394,17 @@ three processes writing one SQLite file, which invariant 4 forbids):
 
 Memory on the batch host (found 2026-09-12 at 04:30, with the machine
 within a gigabyte of its commit limit):
-- [ ] The watcher's resident footprint between passes: the embedding
-      runtime and the writable copies of the index files (4.8 GB of
-      commit) stay loaded after an embed pass. Release them when a pass
-      is over and load on demand, or run the embed step in a child
-      process that exits. With the door as the only writer (above) the
-      writable index copies leave the watcher altogether.
-- [ ] llama-server on Windows charges 20-30 GB of commit for a 22 GB
-      model whatever the load mode (the driver backs VRAM with system
-      commit); `--load-mode mmap` is the lighter one (launcher script
-      updated). Document the page-file requirement (at least twice the
-      RAM) in the howto's hardware section, and have the Jobs view show
-      available commit and free RAM so the wall is visible before it is
-      hit.
-- [ ] The extraction pass and the watcher share llama-server's three
-      slots; a fourth writer or a second GPU job would not fit. Note in
-      the howto which passes may run side by side on this machine.
+- [x] The watcher's resident footprint (2026-09-12): with the door as
+      the only writer the writable index copies left the worker; it
+      sits at about 850 MB of private memory between passes (the
+      embedding runtime, loaded on first use), down from 4.8 GB.
+- [x] Commit on Windows (2026-09-12): `--load-mode mmap` in the launcher;
+      the page-file requirement and the side-by-side rule are in howto
+      3l ("Jobs"); `GET /jobs` carries the host's free RAM and commit
+      headroom (`prax.hostinfo`, ctypes on Windows, /proc on Linux) and
+      the Jobs view shows them, red when under 4 GB or 10 %; the
+      worker's heartbeat carries its own footprint.
+- [x] Which passes run side by side: howto 3l ("Jobs").
 
 Performance, cheap first:
 - [ ] Expression indexes on the JSON paths every document-level filter

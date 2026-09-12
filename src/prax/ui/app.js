@@ -1203,15 +1203,24 @@ function jobRow(j) {
     </tr>`;
 }
 
+function hostLine(h) {
+  if (!h || h.ram_total_mb == null) return "";
+  const gb = (mb) => (mb / 1024).toFixed(1);
+  const tight = h.commit_free_mb != null && (h.commit_free_mb < 4096 || h.commit_free_mb < 0.1 * h.commit_limit_mb);
+  return `<p class="muted">This door runs on <b>${esc(h.name || "")}</b>: ${gb(h.ram_free_mb)} of ${gb(h.ram_total_mb)} GB RAM free` +
+    (h.commit_limit_mb != null ? `, commit headroom <span class="${tight ? "error" : ""}" title="RAM plus page file, minus what every process has charged; a GPU model server on Windows charges its VRAM here">${gb(h.commit_free_mb)} of ${gb(h.commit_limit_mb)} GB</span>${tight ? " (tight: close something or enlarge the page file)" : ""}` : "") + `.</p>`;
+}
+
 async function viewJobs(p) {
   view.innerHTML = `<p class="muted">Loading…</p>`;
   let d;
   try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
   view.innerHTML = `
-    <p class="muted">The batch passes announce themselves here: the inbox watcher, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale.</p>
+    <p class="muted">The passes announce themselves here: the worker's session, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale; one gone for half an hour is closed.</p>
+    ${hostLine(d.host)}
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Running (${d.running.length})</h2>
-    ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the batch host: <code>scripts/inbox.py --watch</code> keeps captures moving.</p>`}
+    ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the machine with the models: <code>scripts/work.py --watch</code> keeps captures moving.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>
     ${d.recent.length ? table(d.recent) : `<p class="muted">No finished jobs yet.</p>`}`;
 }

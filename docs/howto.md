@@ -713,8 +713,23 @@ Four ways in:
 Every batch pass announces itself in the `jobs` table (`store.Job`,
 migration 0009): name, host and pid, a heartbeat, done and total, a
 note. `GET /jobs` and the Jobs view show what runs and what ran; a job
-without a heartbeat for ten minutes is marked stale. The rows are
-bookkeeping, nothing reads them to decide what to do.
+without a heartbeat for ten minutes is marked stale, and the door closes
+one whose process is gone or whose heartbeat stopped half an hour ago.
+The rows are bookkeeping, nothing reads them to decide what to do.
+
+The same view shows what the door's host has left: free RAM and commit
+headroom (`prax.hostinfo`, no dependency; the worker's heartbeat carries
+its own footprint, under a gigabyte between passes). Commit is the
+number to watch on a Windows batch host: a GPU model server charges
+system commit for the VRAM it fills (a 22 GB model is 22 GB of commit
+with `--load-mode mmap`, 30 GB without), so with IDEs and a browser open
+a 32 GB machine reaches its commit limit before its RAM runs out, and
+processes then fail to start. Give such a machine a fixed page file of
+at least twice its RAM, or close the big programs during a long pass.
+Side by side on one GPU: the worker's steps and one by-hand pass
+(`extract_graph.py`, `repair_titles.py`) share the model server's slots
+(three on the desktop), which is the limit; a second GPU model or a
+second model server does not fit next to a 22 GB one on a 24 GB card.
 
 The UI polls `GET /changes` every ten seconds while its tab is visible:
 a stamp made of SQLite's `data_version` (another process committed) and
