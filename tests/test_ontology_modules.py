@@ -132,7 +132,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "studio",
         "workshop",
     }
-    assert o.version == "core1+craft1+kitchen2+research5+studio2+workshop2"
+    assert o.version == "core1+craft1+kitchen2+research5+studio3+workshop2"
     assert set(o.self_types) == {
         "paper",
         "manual",
@@ -155,7 +155,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert (
         ontology.current().version
-        == "core1+craft1+kitchen2+research5+studio2+workshop2"
+        == "core1+craft1+kitchen2+research5+studio3+workshop2"
     )
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
@@ -163,7 +163,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert (
         ontology.current().version
-        == "core1+craft1+kitchen2+research6+studio2+workshop2"
+        == "core1+craft1+kitchen2+research6+studio3+workshop2"
     )
 
 
@@ -187,7 +187,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 
     workshop = o.for_domains(["workshop"])
     assert set(workshop.modules) == {"core", "craft", "studio", "workshop"}
-    assert workshop.version == "core1+craft1+studio2+workshop2"
+    assert workshop.version == "core1+craft1+studio3+workshop2"
     workshop.check_edge("build", "made_with", "component")  # studio's component
     workshop.check_edge("build", "made_with", "material")  # craft's material
     workshop.check_edge("build", "follows", "design")
@@ -209,7 +209,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 def test_studio_module() -> None:
     o = ontology.current()
     s = o.for_domains(["studio"])
-    assert set(s.modules) == {"core", "studio"} and s.version == "core1+studio2"
+    assert set(s.modules) == {"core", "studio"} and s.version == "core1+studio3"
     assert s.self_types == ("manual", "datasheet", "schematic", "article")
     assert "paper" not in s.types and "cites" not in s.relations
     assert s.is_a("device", "tool") and s.is_a("manufacturer", "organization")

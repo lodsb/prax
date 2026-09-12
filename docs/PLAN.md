@@ -368,9 +368,13 @@ review queue says what is missing.
       `prax.example.yaml` shows `path: kitchen/`, `path: workshop/` and
       a tag rule; the extension's domain list already grows on its own
       from `GET /inbox`.
-- [ ] Read twenty documents under each new module with the local model
-      and grow them from the review queue, the way studio v1 was grown.
-      Nothing has been read against craft, kitchen or workshop yet.
+- [x] Grown from the library's own documents (2026-09-12): a sweep found
+      two recipes and twelve builds, read with the local model; the queue
+      grew studio to v3, workshop and kitchen to v2 (docs/ontology-craft.md
+      "The first fourteen"). Twenty each would need documents the library
+      does not hold yet: drop them into `data/inbox/kitchen/` and
+      `…/workshop/`. Surfaced for later: "who wrote this" belongs in core
+      (a core v2, with the next full re-read).
 
 ## The heal pass (done 2026-09-12)
 

@@ -4,10 +4,11 @@ Three modules for the part of a library that is not research and not
 gear-as-bought: things made by hand. `craft` holds what making shares,
 `kitchen` and `workshop` are the two domains that were asked for. They
 were written together, before any document had been read against them —
-the opposite of how `studio` was grown — so the first twenty documents
-read under each will decide what is missing, through the review queue.
+the opposite of how `studio` was grown — and then grown the same day from
+the first fourteen documents the library turned out to hold (two recipes,
+twelve build documents; see "The first fourteen" below).
 
-    core1+craft1+kitchen1+research5+studio1+workshop1
+    core1+craft1+kitchen2+research5+studio3+workshop2
 
 A document carries its domain set, so a recipe is read against
 `core1+craft1+kitchen1` and a build against `core1+craft1+studio1+workshop1`.
@@ -99,3 +100,43 @@ queue collected:
 
 The queue is the evidence for the next version of these modules, the way
 the 19 gear documents were the evidence for studio v1.
+
+## The first fourteen (2026-09-12)
+
+The library is a research library; a sweep found two genuine recipes (a
+vegetable frittata, a forum cookbook) and twelve genuine builds
+(assembly instructions for a microphonic soundbox, a passive I/O module
+and an XLR connector, a kit parts list, two hardware-hacking books, an
+instrument-making workbook, a "how to make" paper, a TV script on
+glueing, a CPU cooler's installation guide). They were given their
+domains by hand and read with the local model.
+
+| pass | edges | queued | what the queue said |
+|---|---|---|---|
+| v1 | 68 | 146 | two thirds of it was one thing: studio's `describes`, `covers`, `names` and `written_by` accepted only studio's four kinds of document, so a build could not describe the device it makes, cover a concept, name a part in passing or have an author |
+| v2 (studio 2, workshop 2, kitchen 2) | 152 | 77 | those relations take any `document` now; `made_with` says it is the one for what a build contains; `variant_of` carries "a frittata is an omelette" |
+| v3 (studio 3) | 148 | 82 | `names` reaches a person and an organization; `covers` says when to use `describes` and `applies` instead. The queue stopped moving: what is left is the model's free-form lines and the kind of judgement a person makes in the Review tab |
+
+What the graph holds now: the frittata `makes` its dish, `calls_for`
+eleven ingredients and is a `variant_of` an omelette; the soundbox is
+`made_with` a contact microphone, wood, copper foil and a PCB, `needs` a
+soldering iron, sandpaper, a wire cutter and an ESD wristband, and
+`covers` woodworking.
+
+Two things the pass surfaced that are not the modules' to fix:
+
+- The local model copied its own prompt into the graph ("source name",
+  "target name") — 1,357 edges' worth over the whole library. The line
+  format now marks its placeholders as `<name>` and forbids emitting
+  them, `extraction.apply` rejects such a triple outright, and the heal
+  pass (howto 3m) mended what older passes had written.
+- Every domain wants to say who wrote a document. Studio's `written_by`
+  now takes any document, but a recipe read on its own (kitchen does not
+  require studio) still has no relation for its author, and research has
+  its own `authored_by`. "Who wrote this" belongs in core; that is a core
+  v2, which re-selects the whole library, so it waits for the next full
+  re-read.
+
+To grow them further: drop recipes into `data/inbox/kitchen/` and build
+logs into `data/inbox/workshop/`; the door takes them in, the worker
+reads them, and the queue says what is missing.

@@ -10,6 +10,10 @@
 # model queued for 19 gear documents under the research module: the
 # device and its maker, parts and features, the standards it speaks, its
 # rated specifications, and the document kinds that describe it.
+# v3 (2026-09-12): after the re-read, what the builds still queued was
+# `covers` aimed at a device or a technique (where `describes` and craft's
+# `applies` belong) and `names` aimed at a person or an organization. The
+# descriptions now say which is which, and `names` reaches both.
 # v2 (2026-09-12): `describes`, `covers`, `names` and `written_by` take
 # any `document` rather than only this module's four kinds. The first
 # twelve workshop documents queued 67 items that were nothing but this:
@@ -18,7 +22,7 @@
 # passes wherever its parent is allowed, so one word in each domain lets
 # every module's documents speak; nothing else changed.
 module: studio
-version: 2
+version: 3
 requires: [core]
 self_types: [manual, datasheet, schematic, article]
 
@@ -100,7 +104,9 @@ relation_types:
     range: [concept, standard]
     description: >-
       the document treats a concept or standard at length (granular
-      synthesis in a synth manual, MIDI implementation in an appendix)
+      synthesis in a synth manual, MIDI implementation in an appendix).
+      For a device or a part use `describes`; for a way of doing
+      something, craft's `applies`
   has_part:
     domain: [device]
     range: [component, device]
@@ -138,7 +144,7 @@ relation_types:
     description: a named author of the document (a reviewer, a designer credited on a schematic)
   names:
     domain: [document]
-    range: [device, component, manufacturer, standard, tool]
+    range: [device, component, manufacturer, standard, tool, organization, person]
     description: >-
       the document names a device, part, maker or standard in passing
       without describing it (a compatibility list, an aside). The weakest
