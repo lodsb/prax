@@ -123,6 +123,64 @@ _WORD_TYPE = {
 }
 
 
+_URL = re.compile(r"^(https?://|www\.)", re.IGNORECASE)
+_ACRONYM = re.compile(r"^[A-Z]{2,7}$")
+_NOISE_NAMES = frozenset(
+    {
+        "unknown",
+        "none",
+        "n/a",
+        "n.d.",
+        "s.n.",
+        "[s.n.]",
+        "s.n.]",
+        "?",
+        "-",
+        "title",
+        "no claims",
+        "no authors",
+        "not stated",
+        "[venue not stated]",
+        "various",
+    }
+)
+_NOT_A_NAME = re.compile(r"not stated|unknown|/|\bn\.?d\.?\b|^\W*$", re.IGNORECASE)
+
+
+def _placeholder(name: str) -> bool:
+    """A name the model left as a placeholder or a non-name: "source name",
+    "target name", "unknown", a bare URL, an empty pattern."""
+    low = " ".join(name.lower().split())
+    return (
+        low in store.PLACEHOLDER_NAMES
+        or low in _NOISE_NAMES
+        or bool(_URL.match(low))
+        or bool(_MALFORMED.search(name))
+    )
+
+
+def _looks_title(name: str) -> bool:
+    """A cited work rather than a person, a tool or a fragment: several
+    words and some length."""
+    return (
+        len(name) >= 30
+        and len(name.split()) >= 5
+        and not _looks_person(name)
+        and not _placeholder(name)
+    )
+
+
+def _looks_venue(name: str) -> bool:
+    """A journal, conference, publisher or series: some letters, no URL
+    path, not a placeholder for one."""
+    return (
+        len(name) >= 4
+        and not _placeholder(name)
+        and not _NOT_A_NAME.search(name)
+        and bool(re.search(r"[A-Za-zÀ-ÿ]{3}", name))
+    )
+
+
 def _looks_org(name: str) -> bool:
     return bool(_ORG.search(name)) and not _PERSON.match(name)
 
@@ -145,6 +203,11 @@ def decide_unmapped(
     title, own = (doc or ("", "paper"))[:2]
     if title and src.lower() in ("paper", "this paper", "the paper", "document"):
         src = title
+    if _placeholder(src) or _placeholder(dst):
+        return "drop", [], "placeholder-name"
+    if rel in ("unknown", ""):  # related_to stays: the queue is its evidence
+        return "drop", [], "no-relation"
+    is_self = bool(title) and src == title
     if rel in ("affiliation", "affiliated_with", "affiliated with"):
         # exactly one side is a person; the other is the institution
         ps, pd = _looks_person(src), _looks_person(dst)
@@ -159,6 +222,24 @@ def decide_unmapped(
                 "link",
                 [store.Edge(dst, "author", "affiliated_with", src, "organization")],
                 "affiliation",
+            )
+        return "open", [], None
+    if rel in ("published_in", "published in", "appeared_in", "venue"):
+        # the document itself, in something that is not a person
+        if is_self and not _looks_person(dst) and _looks_venue(dst):
+            return (
+                "link",
+                [store.Edge(src, own, "published_in", dst, "venue")],
+                "published_in",
+            )
+        return "open", [], None
+    if rel in ("cites", "references", "cited"):
+        # the document itself citing something shaped like a work's title
+        if is_self and _looks_title(dst):
+            return (
+                "link",
+                [store.Edge(src, own, "cites", dst, "paper")],
+                "cites-title",
             )
         return "open", [], None
     if rel in ("advised_by", "supervised_by", "advisor", "supervisor"):
@@ -180,7 +261,7 @@ def decide_unmapped(
         return "open", [], None
     if (
         rel in ("funded_by", "funding", "supported_by")
-        and _looks_org(dst)
+        and (_looks_org(dst) or _ACRONYM.match(dst))
         and not _looks_person(src)
     ):
         st = own if title and src == title else "paper"
@@ -231,6 +312,20 @@ REMAP: dict[tuple[str, str, str], str] = {
     ("about", "method", "method"): "implements",
     ("implements", "paper", "method"): "uses",
     ("implements", "paper", "concept"): "about",
+}
+# (rel, src_type, dst_type) -> (src_type, dst_type): a near miss retyped —
+# a cited "document" or "work" in a research library is a paper, a listed
+# "person" on authored_by is its author
+RETYPE: dict[tuple[str, str, str], tuple[str, str]] = {
+    ("cites", "paper", "document"): ("paper", "paper"),
+    ("cites", "paper", "work"): ("paper", "paper"),
+    ("cites", "document", "paper"): ("paper", "paper"),
+    ("cites", "document", "document"): ("paper", "paper"),
+    ("authored_by", "paper", "person"): ("paper", "author"),
+    ("authored_by", "document", "author"): ("paper", "author"),
+    ("authored_by", "document", "person"): ("paper", "author"),
+    ("published_in", "paper", "organization"): ("paper", "venue"),
+    ("published_in", "document", "venue"): ("paper", "venue"),
 }
 # (rel, src_type, dst_type) with "*" as a wildcard -> dropped
 DROP: set[tuple[str, str, str]] = {
@@ -343,6 +438,10 @@ def decide(
     rel, st, dt = item["rel"], item["src_type"], item["dst_type"]
     if _MALFORMED.search(src) or _MALFORMED.search(dst):
         return "drop", [], "malformed-name"
+    if _placeholder(src) or _placeholder(dst):
+        return "drop", [], "placeholder-name"
+    if rel == "unknown":
+        return "drop", [], "no-relation"
     title, own = (doc or ("", "paper"))[:2]
     rule = None
     if (edges := _self_as_device(item, doc)) is not None:
@@ -352,7 +451,7 @@ def decide(
         st, rule = own, "self-name"
     # authored_by written backwards, or with authors on both ends
     if rel == "authored_by" and st == "author":
-        if dt == own and title and dst == title:
+        if title and dst == title and (dt == own or _looks_person(src)):
             return (
                 "link",
                 [store.Edge(title, own, "authored_by", src, "author")],
@@ -365,6 +464,15 @@ def decide(
                 [store.Edge(title, own, "authored_by", n, "author") for n in names],
                 "authors-both-ends",
             )
+    if (rel, st, dt) in RETYPE and not (
+        rel == "cites" and len(dst) < 12 and len(dst.split()) < 2
+    ):  # a one-word "document" is not a paper we can name
+        st2, dt2 = RETYPE[(rel, st, dt)]
+        return (
+            "link",
+            [store.Edge(src, st2, rel, dst, dt2)],
+            f"retype-{rel}-{st}-{dt}",
+        )
     if (rel, st, dt) in REMAP:
         return (
             "link",

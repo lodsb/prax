@@ -252,3 +252,90 @@ def test_apply_covers_unmapped_items(con: sqlite3.Connection) -> None:
     rep = review.apply_typing_rules(con, commit=True)
     assert rep.linked == 1 and rep.still_open == 1 and rep.by_rule == {"affiliation": 1}
     assert store.count_review(con) == 1
+
+
+def test_placeholders_and_near_misses() -> None:
+    """The second batch of rules, written from the queue after the v5
+    re-read: placeholder names are dropped on either side, a cited
+    "document" or "work" is a paper, a listed "person" is the author, the
+    document itself is published in a venue-shaped thing and cites a
+    title-shaped thing; one-word documents and URL venues stay open."""
+    doc = ("Polyphonic Piano Note Transcription With Recurrent Networks", "paper")
+    typed = lambda src, st, rel, dst, dt: {
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+        "reason": "",
+    }
+    untyped = lambda src, rel, dst: typed(src, None, rel, dst, None)
+    title = doc[0]
+    assert (
+        review.decide(
+            typed("source name", "author", "authored_by", "Ada", "person"), doc
+        )[0]
+        == "drop"
+    )
+    assert review.decide_unmapped(untyped(title, "published_in", "?"), doc)[0] == "drop"
+    assert (
+        review.decide_unmapped(untyped(title, "unknown", "R55"), doc)[2]
+        == "no-relation"
+    )
+    assert (
+        review.decide_unmapped(untyped("rhythm", "related_to", "melody"), doc)[0]
+        == "open"
+    )
+    a, edges, rule = review.decide(
+        typed(title, "paper", "cites", "The Scientist's Guide to DSP", "document"), doc
+    )
+    assert (a, rule, edges[0].dst_type) == (
+        "link",
+        "retype-cites-paper-document",
+        "paper",
+    )
+    assert (
+        review.decide(typed(title, "paper", "cites", "Galton", "document"), doc)[0]
+        == "open"
+    )
+    a, edges, rule = review.decide(
+        typed(title, "paper", "authored_by", "Ben Mildenhall", "person"), doc
+    )
+    assert (a, edges[0].dst_type) == ("link", "author")
+    a, edges, rule = review.decide_unmapped(
+        untyped(title, "published_in", "Journal of Personality and Social Psychology"),
+        doc,
+    )
+    assert (a, rule, edges[0].dst_type, edges[0].src_type) == (
+        "link",
+        "published_in",
+        "venue",
+        "paper",
+    )
+    assert (
+        review.decide_unmapped(
+            untyped(title, "published_in", "www4.in.tum.de/~rumpe/se"), doc
+        )[0]
+        == "open"
+    )
+    assert (
+        review.decide_unmapped(
+            untyped(title, "published_in", "[Venue Not Stated]"), doc
+        )[0]
+        == "drop"
+    )
+    assert (
+        review.decide_unmapped(
+            untyped("Some Other Paper", "published_in", "Leonardo"), doc
+        )[0]
+        == "open"
+    )
+    a, edges, rule = review.decide_unmapped(
+        untyped(title, "cites", "A Territorial Survey of Oceanic Music and Dance"), doc
+    )
+    assert (a, rule, edges[0].dst_type) == ("link", "cites-title", "paper")
+    assert (
+        review.decide_unmapped(untyped(title, "cites", "Hans Boehm"), doc)[0] == "open"
+    )
+    a, edges, rule = review.decide_unmapped(untyped(title, "funded_by", "DFG"), doc)
+    assert (a, edges[0].dst_type) == ("link", "organization")
