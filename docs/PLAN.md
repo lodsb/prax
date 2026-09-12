@@ -352,24 +352,25 @@ Agreed 2026-09-12. Three small modules, written the way v5 and studio
 were: small first, twenty documents read with the local model, the
 review queue says what is missing.
 
-- [ ] `craft.yaml`: what kitchen and workshop share. `technique` (a named
-      way of doing something: dovetail joint, reflow soldering, sous
-      vide; research's `method` is the scientific kind) and `material`
-      (oak, PLA, solder, flour). Relations: a document `applies` a
-      technique; a thing is `made_of` a material.
-- [ ] `kitchen.yaml` (requires craft): `recipe` as the self type (a kind
-      of document), `dish`, `ingredient`, `cuisine`; equipment is core's
-      `tool`. A recipe `makes` a dish, `calls_for` an ingredient, `needs`
-      a tool, is a `variant_of` another recipe, `belongs_to` a cuisine.
-      Quantities stay in the text.
-- [ ] `workshop.yaml` (requires craft and studio): `build` as the self
-      type (a project description, an instructable, a build log) and
-      `design` (a plan or layout the build follows); studio's `device`,
-      `component`, `standard` and `spec` reused. A build is `made_with`
-      components and tools, `follows` a design, is `derived_from` an
-      earlier build.
-- [ ] Domain rules and the drop subfolders for them; the popup's domain
-      list grows on its own from `GET /inbox`.
+- [x] `craft.yaml` v1 (2026-09-12, docs/ontology-craft.md): `technique`
+      and `material`, with `applies`, `made_of` and `needs` (`needs`
+      moved down from kitchen: a build needs a bandsaw as a recipe needs
+      a mixer).
+- [x] `kitchen.yaml` v1 (2026-09-12): `recipe` as the self type, `dish`
+      (a work), `ingredient` (a material), `cuisine` (a concept);
+      `makes`, `calls_for`, `variant_of`, `belongs_to`. Quantities stay
+      in the text.
+- [x] `workshop.yaml` v1 (2026-09-12): `build` as the self type and
+      `design`, studio's `device` and `component` reused; `made_with`,
+      `follows`, `derived_from`. A relation for repairs and mods was
+      left out until the queue asks for it.
+- [x] Domain rules and the drop subfolders for them (2026-09-12):
+      `prax.example.yaml` shows `path: kitchen/`, `path: workshop/` and
+      a tag rule; the extension's domain list already grows on its own
+      from `GET /inbox`.
+- [ ] Read twenty documents under each new module with the local model
+      and grow them from the review queue, the way studio v1 was grown.
+      Nothing has been read against craft, kitchen or workshop yet.
 
 ## Housekeeping pass (planned, after the v5 backlog finishes)
 

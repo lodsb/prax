@@ -1,0 +1,100 @@
+# prax ontology, kitchen module: recipes and what they make. Requires craft
+# (technique, material, needs) and through it core (document, work, concept,
+# tool, person). A document in this domain is a recipe; a cookbook chapter,
+# a printed card, a page saved from a food blog, a note of a family dish.
+#
+# What stays in the text and never becomes an edge: quantities, times,
+# temperatures and the order of steps. The graph answers "what can I make
+# with what I have, whose recipe is this a version of, what tradition is it
+# from"; the text answers how much and how long.
+#
+# v1 (2026-09-12): written with craft and workshop, before any document had
+# been read against it; the review queue of the first twenty says what is
+# missing.
+module: kitchen
+version: 1
+requires: [craft]
+self_types: [recipe]
+
+entity_types:
+  recipe:
+    parent: document
+    description: >-
+      Instructions for making something to eat or drink, named by its
+      title as written: "Tarte Tatin", "Sauerteigbrot mit Roggen",
+      "Grandma's Christmas biscuits". The document being extracted is
+      always the recipe; another recipe it names by title is a recipe too.
+  dish:
+    parent: work
+    description: >-
+      What is made, under the name a person would say at the table: tarte
+      tatin, ragù alla bolognese, sourdough loaf, cold brew, pierogi. The
+      dish is the thing itself and the recipe is the writing about it, so
+      a document and its dish often share a name — that is expected.
+  ingredient:
+    parent: material
+    description: >-
+      Something that goes into the dish: flour, egg yolk, San Marzano
+      tomatoes, miso, ice, dry yeast. Singular and lowercase, without the
+      amount and without the preparation ("finely chopped onion" is
+      `onion`, "200 g plain flour" is `plain flour`).
+  cuisine:
+    parent: concept
+    description: >-
+      A cooking tradition or style a dish belongs to: Italian, Sichuan,
+      Levantine, Neapolitan pizza, sourdough baking, my grandmother's
+      Sunday cooking. Only when the text places the dish in one.
+
+relation_types:
+  makes:
+    domain: [recipe]
+    range: [dish]
+    description: >-
+      the dish this recipe produces; its point. One recipe usually makes
+      one dish
+  calls_for:
+    domain: [recipe, dish]
+    range: [ingredient]
+    description: >-
+      an ingredient the recipe uses. The quantity stays in the text; the
+      edge is the ingredient alone
+  variant_of:
+    domain: [recipe, dish]
+    range: [recipe, dish]
+    description: >-
+      this recipe or dish is a version of another one the text names: a
+      vegan variant, a regional version, "adapted from", "after Elizabeth
+      David"
+  belongs_to:
+    domain: [recipe, dish]
+    range: [cuisine]
+    description: the tradition or style the text places the dish in
+
+type_aliases:
+  food: dish
+  meal: dish
+  course: dish
+  drink: dish
+  bake: dish
+  preserve: dish
+  spice: ingredient
+  herb: ingredient
+  produce: ingredient
+  cook: person
+  chef: person
+  cookbook: document
+  tradition: cuisine
+  regional_cuisine: cuisine
+
+relation_aliases:
+  yields: makes
+  produces: makes
+  makes_dish: makes
+  uses_ingredient: calls_for
+  needs_ingredient: calls_for
+  ingredient_of: calls_for
+  adapted_from: variant_of
+  version_of: variant_of
+  variation_of: variant_of
+  from_cuisine: belongs_to
+  cuisine_of: belongs_to

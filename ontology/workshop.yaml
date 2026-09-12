@@ -1,0 +1,79 @@
+# prax ontology, workshop module: things built, and the plans they follow.
+# Requires craft (technique, material, needs) and studio (device, component,
+# standard, spec), and through them core. A document in this domain is a
+# build: a project write-up, an instructable, a build log, a repair report.
+#
+# The line to studio: studio is the paperwork of gear somebody else made (a
+# manual, a datasheet, a review), workshop is the writing about making or
+# changing something yourself. A document that is both — a build log that
+# doubles as a device's manual — carries both domains.
+#
+# v1 (2026-09-12): written with craft and kitchen, before any document had
+# been read against it; the review queue of the first twenty says what is
+# missing. Deliberately left out until the queue asks for it: a relation
+# for modifying or repairing an existing device (`derived_from` and
+# `made_with` carry most of it), the bill of materials as a thing of its
+# own, and anything about cost or time.
+module: workshop
+version: 1
+requires: [craft, studio]
+self_types: [build]
+
+entity_types:
+  build:
+    parent: document
+    description: >-
+      A description of something made or changed: a project write-up, an
+      instructable, a build log, a repair report, a modification guide,
+      a workshop notebook entry. Named by its title. The document being
+      extracted is always the build; another build it names is a build too.
+  design:
+    parent: document
+    description: >-
+      A plan the build follows and that exists apart from it: a published
+      schematic, a PCB layout, a cutting list, a 3D model, a sewing
+      pattern, a kit's instructions. Named by its title or designation.
+
+relation_types:
+  made_with:
+    domain: [build]
+    range: [component, device, tool, material]
+    description: >-
+      a part, board, tool or material the build uses — the bill of
+      materials as far as the text names it. Quantities stay in the text
+  follows:
+    domain: [build]
+    range: [design, technique]
+    description: >-
+      the build is made to this design or by this technique, as the text
+      says (a published schematic, a kit's instructions, a joint)
+  derived_from:
+    domain: [build, design]
+    range: [build, design]
+    description: >-
+      this build or design is a modification, fork or continuation of
+      another one the text names: "based on", "a remix of", "v2 of"
+
+type_aliases:
+  project: build
+  instructable: build
+  build_log: build
+  repair: build
+  modification: build
+  plan: design
+  blueprint: design
+  layout: design
+  pattern: design
+  drawing: design
+  cutting_list: design
+
+relation_aliases:
+  built_with: made_with
+  built_from: made_with
+  uses_part: made_with
+  bill_of_materials: made_with
+  follows_plan: follows
+  built_to: follows
+  based_on: derived_from
+  forked_from: derived_from
+  modification_of: derived_from

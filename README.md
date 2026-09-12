@@ -128,7 +128,7 @@ Built and in daily use on one library, September 2026:
 | Chunks and vectors | 878,000 chunks, all with vectors; 9,601 document vectors; 5,887 acronyms |
 | Graph | 125,900 live edges: 62,000 by a local model, 19,400 by Sonnet 5, 25,600 citations, 11,300 by typing rules, 6,800 from Zotero |
 | Entities | 39,400 papers, 26,900 concepts, 15,900 methods, 8,900 authors, 7,900 tools, 4,000 claims, 2,500 organizations, 1,300 venues; 6,900 merged aliases |
-| Ontology | core, research and studio modules; 9,582 documents in the research domain, 20 in studio |
+| Ontology | six modules: core, research, studio, and craft with kitchen and workshop on top of it; 9,582 documents in the research domain, 20 in studio |
 | Retrieval, 62 queries over the library | MRR 0.905 hybrid (0.82 keyword, 0.79 vector); hit@1 0.85 |
 | Extraction | every document with text read once by a local Qwen3.6-35B-A3B on an RTX 4090 or by Sonnet 5; the re-read under the current ontology is under way |
 | Review queue | 25,600 open items, the evidence the next ontology change is drawn from |

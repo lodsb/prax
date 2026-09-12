@@ -44,7 +44,7 @@ def test_ontology_v5_organizations_and_mentions() -> None:
     from prax import ontology
 
     onto = ontology.current()
-    assert onto.version == "core1+research5+studio1"
+    assert onto.version == "core1+craft1+kitchen1+research5+studio1+workshop1"
     onto.check_edge("author", "affiliated_with", "organization")
     onto.check_edge("paper", "funded_by", "organization")
     onto.check_edge("tool", "developed_by", "author")

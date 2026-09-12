@@ -85,7 +85,8 @@ before migrations existed (version 0) is upgraded in place.
 ### Ontology
 
 `ontology/` holds the entity and relation types the graph accepts, one
-module per domain (`core.yaml`, `research.yaml`, `studio.yaml`; format in
+module per domain (`core.yaml`, `research.yaml`, `studio.yaml`,
+`craft.yaml`, `kitchen.yaml`, `workshop.yaml`; format in
 `src/prax/ontology.py`), each with a
 `version`. `store.link` rejects anything else. Add types and bump the
 version; edges keep the version they were written under. `PRAX_ONTOLOGY`

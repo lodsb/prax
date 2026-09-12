@@ -31,8 +31,12 @@ relation_types:
 def three_modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     d = tmp_path / "onto"
     d.mkdir()
-    for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
-        (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    # the three the domain tests reason about, plus one of their own: the
+    # repo's other modules are tested where they belong and would only make
+    # these assertions move whenever one is added
+    for name in ("core.yaml", "research.yaml", "studio.yaml"):
+        f = Path(config.ONTOLOGY_PATH) / name
+        (d / name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     (d / "family.yaml").write_text(FAMILY, encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert set(ontology.current().modules) == {"core", "research", "studio", "family"}

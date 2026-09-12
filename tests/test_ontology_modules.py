@@ -124,9 +124,24 @@ def test_legacy_single_file_keeps_a_plain_version() -> None:
 
 def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     o = ontology.current()
-    assert set(o.modules) == {"core", "research", "studio"}
-    assert o.version == "core1+research5+studio1"
-    assert o.self_types == ("paper", "manual", "datasheet", "schematic", "article")
+    assert set(o.modules) == {
+        "core",
+        "craft",
+        "kitchen",
+        "research",
+        "studio",
+        "workshop",
+    }
+    assert o.version == "core1+craft1+kitchen1+research5+studio1+workshop1"
+    assert set(o.self_types) == {
+        "paper",
+        "manual",
+        "datasheet",
+        "schematic",
+        "article",
+        "recipe",
+        "build",
+    }
     assert o.is_a("author", "person") and o.is_a("paper", "document")
     assert o.is_a("venue", "organization")
     o.check_edge("author", "affiliated_with", "organization")
@@ -138,12 +153,57 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
         (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
-    assert ontology.current().version == "core1+research5+studio1"
+    assert (
+        ontology.current().version
+        == "core1+craft1+kitchen1+research5+studio1+workshop1"
+    )
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
         text.replace("version: 5", "version: 6"), encoding="utf-8"
     )
-    assert ontology.current().version == "core1+research6+studio1"
+    assert (
+        ontology.current().version
+        == "core1+craft1+kitchen1+research6+studio1+workshop1"
+    )
+
+
+def test_craft_kitchen_and_workshop_modules() -> None:
+    o = ontology.current()
+    kitchen = o.for_domains(["kitchen"])
+    assert set(kitchen.modules) == {"core", "craft", "kitchen"}
+    assert kitchen.version == "core1+craft1+kitchen1"
+    assert kitchen.self_types == ("recipe",)
+    assert "paper" not in kitchen.types and "device" not in kitchen.types
+    kitchen.check_edge("recipe", "makes", "dish")
+    kitchen.check_edge("recipe", "calls_for", "ingredient")
+    kitchen.check_edge("recipe", "needs", "tool")  # craft's, on any document
+    kitchen.check_edge("recipe", "applies", "technique")
+    kitchen.check_edge("dish", "belongs_to", "cuisine")
+    kitchen.check_edge("dish", "variant_of", "recipe")
+    assert kitchen.canonical_type("spice") == "ingredient"
+    assert kitchen.canonical_relation("adapted_from") == "variant_of"
+    with pytest.raises(ValueError):  # an ingredient is not a dish
+        kitchen.check_edge("recipe", "makes", "ingredient")
+
+    workshop = o.for_domains(["workshop"])
+    assert set(workshop.modules) == {"core", "craft", "studio", "workshop"}
+    assert workshop.version == "core1+craft1+studio1+workshop1"
+    workshop.check_edge("build", "made_with", "component")  # studio's component
+    workshop.check_edge("build", "made_with", "material")  # craft's material
+    workshop.check_edge("build", "follows", "design")
+    workshop.check_edge("build", "follows", "technique")
+    workshop.check_edge("build", "derived_from", "build")
+    workshop.check_edge("build", "needs", "tool")
+    assert workshop.canonical_type("instructable") == "build"
+    assert workshop.canonical_relation("based_on") == "derived_from"
+    with pytest.raises(ValueError):
+        workshop.check_edge("build", "made_with", "cuisine")
+
+    # a technique is craft's when craft is loaded; research alone still
+    # reads the word as its own method
+    assert o.canonical_type("technique") == "technique"
+    assert o.for_domains(["research"]).canonical_type("technique") == "method"
+    assert o.for_domains(["research"]).version == "core1+research5"
 
 
 def test_studio_module() -> None:

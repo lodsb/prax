@@ -1,0 +1,84 @@
+# prax ontology, craft module: what making things shares, whatever is being
+# made. Kitchen and workshop both require this one, because a recipe and a
+# build are the same shape of document — a way of doing something, with
+# materials, using tools. Requires core (document, tool, work, concept).
+#
+# Nothing here is about research: a paper's `method` is the scientific kind
+# (an algorithm, an experimental procedure), a `technique` is the hands-on
+# kind (a joint, a solder profile, a fermentation). Both may be loaded at
+# once; the descriptions below are what tells them apart in the prompt.
+#
+# v1 (2026-09-12): written together with kitchen and workshop, before any
+# document had been read against it. Grown the way research v2 and studio
+# v1 were: read twenty documents with the local model, then let the review
+# queue say what is missing.
+module: craft
+version: 1
+requires: [core]
+
+entity_types:
+  technique:
+    description: >-
+      A named way of doing something with hands, tools or heat: dovetail
+      joint, reflow soldering, sous vide, lost-wax casting, French
+      polishing, blind baking, wet sanding. The practical kind, learned by
+      doing and named by makers; research's `method` is the scientific kind
+      (an algorithm, an experimental procedure). Lowercase unless it
+      carries a person's or a place's name.
+  material:
+    description: >-
+      What a thing is made of, as a kind and never as an amount: oak, 3 mm
+      plywood, PLA, 60/40 solder, plain flour, linseed oil, brass sheet.
+      Singular, as the text names it, with the quantity left in the text
+      ("200 g of plain flour" is the material `flour`). A material is
+      consumed or becomes part of the thing; what you pick up and put down
+      again is a `tool`.
+
+relation_types:
+  applies:
+    domain: [document]
+    range: [technique]
+    description: >-
+      the document teaches, follows or demonstrates the technique — how
+      the thing is made, not a technique named in passing
+  made_of:
+    domain: [tool, work, material]
+    range: [material]
+    description: >-
+      the thing is made of this material (a bench of oak, solder of tin
+      and lead, a dough of rye flour)
+  needs:
+    domain: [document, technique]
+    range: [tool]
+    description: >-
+      the document or technique needs this tool or piece of equipment to
+      be carried out: a bandsaw, a stand mixer, a hot air station, a jig.
+      Only what the text says is needed, not everything it names
+
+type_aliases:
+  process: technique
+  procedure: technique
+  craft_technique: technique
+  skill: technique
+  substance: material
+  medium: material
+  supply: material
+  consumable: material
+  equipment: tool
+  utensil: tool
+  appliance: tool
+  machine: tool
+  jig: tool
+  maker: person
+  craftsman: person
+
+relation_aliases:
+  uses_technique: applies
+  demonstrates: applies
+  technique_used: applies
+  built_of: made_of
+  composed_of: made_of
+  consists_of: made_of
+  requires: needs
+  requires_tool: needs
+  uses_tool: needs

@@ -45,6 +45,12 @@ models:
 domains:
   - match: {collection: Family}
     domains: [family]
+  - match: {path: kitchen/}      # dropped into data/inbox/kitchen/
+    domains: [kitchen]
+  - match: {path: workshop/}     # …/workshop/: builds, repairs, plans
+    domains: [workshop]
+  - match: {tag: recipe}         # a Zotero tag, a tag sent with a capture
+    domains: [kitchen]
   - match: {source: capture}     # pages sent from the browser
     domains: [research]
   - domains: [research]

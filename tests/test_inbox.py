@@ -474,7 +474,10 @@ def test_api_captures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
     assert orig.status_code == 200
     assert orig.headers["content-security-policy"].startswith("sandbox")
     view = client.get("/inbox").json()
-    assert view["modules"] == ["family", "research", "studio"]
+    assert view["modules"] == sorted(
+        m for m in ontology.current().modules if m != ontology.CORE
+    )
+    assert "family" in view["modules"]  # the fixture's own module is offered
     assert [x["source"] for x in view["recent"]][:2] == ["capture", "upload"] or len(
         view["recent"]
     ) >= 2
