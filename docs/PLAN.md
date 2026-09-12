@@ -503,8 +503,14 @@ fraction):
       anthropic and mcp (howto 1). The door on the desktop: 70 MB working
       set, 0.8 GB private with the embedder loaded and the index mapped
       (invariant 7's 1 GB holds; the board's own number is still to be
-      taken when it runs there). The venv on the desktop after this
-      pass: 170 packages, 0.77 GB (from 188 and 4.0 GB).
+      taken when it runs there). Fresh venvs from the declared extras
+      (2026-09-12, evening): `prax[serve]` is 54 packages and 228 MB,
+      `prax[work,dev]` 92 packages and 648 MB, of which OpenCV (118 MB)
+      is RapidOCR's price for reading scans. The desktop's own venv had
+      accumulated 771 MB and 168 packages through the removals; rebuild
+      it when nothing runs on it. Nothing further worth cutting without
+      losing a capability: cryptography comes with mcp, hf_xet with
+      tokenizers, babel with trafilatura.
 - [x] Docs (2026-09-12): "reachable over your private network" instead
       of Tailscale as the assumption, Tailscale kept as one example
       (CLAUDE.md, howto 4 and 6, architecture, extension.md, sources.md,

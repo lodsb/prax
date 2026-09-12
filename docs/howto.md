@@ -36,11 +36,21 @@ Extras, install only where they run (see `rationale.md` R8):
 
 The core (what `pip install prax` brings) is the door and the MCP proxy:
 fastapi, uvicorn, pydantic, python-multipart, pyyaml, httpx, anthropic
-(the Claude-kind steps), mcp. Measured on the desktop on 2026-09-12: the
-door's working set is about 70 MB with the vector index mapped and the
-embedder loaded, its private memory 0.8 GB (the ONNX runtime and the
-usearch views; under the 1 GB of invariant 7); the worker sits at 0.8 GB
-between passes.
+(the Claude-kind steps), mcp. Fresh venvs on 2026-09-12, from the
+declared extras alone:
+
+| install | packages | on disk | the big ones |
+|---|---|---|---|
+| `prax[serve]` (the board) | 54 | 228 MB | onnxruntime 46, numpy 53, then cryptography (mcp), hf_xet (tokenizers) |
+| `prax[work,dev]` (the desktop) | 92 | 648 MB | OpenCV 118 (RapidOCR's), pymupdf 109, onnxruntime 46, rapidocr 33, numpy 53 |
+
+A venv that has lived through removals carries their leftovers (the
+desktop's was 771 MB and 168 packages before a rebuild); `pip install`
+into a fresh one is the honest number. Measured running: the door's
+working set is about 70 MB with the vector index mapped and the embedder
+loaded, its private memory 0.8 GB (the ONNX runtime and the usearch
+views; under the 1 GB of invariant 7); the worker sits at 0.8 GB between
+passes and 1.7 GB after an embedding batch.
 
 The MCP server uses the official `mcp` package (2.x); check after
 upgrades:
