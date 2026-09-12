@@ -111,6 +111,31 @@ in place, `deploy/`; the move is not made). The browser extension is
 hand-tested in Firefox and Waterfox. Checklists with dates and the
 planned passes: `docs/PLAN.md`.
 
+## Where it sits among the others
+
+Every neighbour exposes tools to an agent now, so that is not what
+sets anything apart. Roughly, by family (the full comparison with
+sources, September 2026: `docs/research.md`):
+
+| if you want | look at | prax instead |
+|---|---|---|
+| to save, tag and find links and PDFs, with apps and extensions | Karakeep, Linkwarden, Raindrop, Readwise | reads what was saved rather than filing it: originals by hash, addressable chunks, a graph with evidence; no mobile app, no tagging UI |
+| your Zotero library open to an agent | ZotSeek, ZotPilot, zotero-mcp | imports the library read-only and puts captures, chats, stars and bookmarks in the same store, with a graph and pages on top |
+| a Markdown wiki an agent maintains | Karpathy's LLM wiki, SwarmVault, TideMind, Basic Memory, Obsidian + Smart Connections | keeps the originals canonical and the pages as one layer; a hand-written, versioned ontology instead of a schema the model infers; built at 10k documents and 900k chunks, where a wiki of pages is not the index |
+| memory or GraphRAG for an application you are building | Cognee, Graphiti, LightRAG, txtai, mem0 | a finished tool for a person, which agents also use; provenance on every edge (evidence, source, ontology version, producer, run, validity), a review queue, retire-not-delete; one SQLite file, no server databases |
+| an OCR archive of household paperwork | Paperless-ngx (+ paperless-ai) | research and making rather than administration; the graph, not tags, as the structure |
+| an agent that writes a literature review on its own | PaperQA2 | `ask` is the modest cousin: a bounded bundle, citations to the line, the answer kept as a page |
+
+Its own, as far as that survey can see: the content-addressed store
+under one writer, the small modular ontology written by hand and
+stamped on every edge, provenance complete enough to redo a model's
+work, models as configuration with a measured local-first stance, and a
+Pi-class serving target with the model work drained through the door —
+on one real library rather than a demo. What it lacks that they have:
+mobile apps, audio and video ingestion, whole-corpus summaries, a
+hosted or multi-user option, thirty-tool MCP surfaces with CRUD on
+everything.
+
 ## Quick start
 
     python -m venv .venv && . .venv/bin/activate    # Windows: .venv\Scripts\Activate.ps1
@@ -241,7 +266,7 @@ built, module by module, with a "where to touch what" table:
 | `docs/sources.md` | Data sources: the Zotero import, citation sources, captures, the drop folder, `prax import` and what else would fit. |
 | `docs/extension.md` | The browser extension: installing it, what it sends, its settings, how it authenticates. |
 | `docs/eval/` | Measurements: extractors, retrieval on the fixture and the library, the local LLM, the document field. |
-| `docs/research.md` | The landscape survey the first decisions were drawn from. |
+| `docs/research.md` | The landscape survey the first decisions were drawn from, and a revisit from September 2026 placing prax among its neighbours. |
 | `prax.example.yaml` | Template for `prax.yaml`: models, steps, and every other setting. |
 
 ## Scope and status

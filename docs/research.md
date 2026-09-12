@@ -1,9 +1,109 @@
-> **Status:** raw landscape survey (2025–2026), kept as source material.
-> The decisions drawn from it, with the reasoning that still applies, are in
-> `rationale.md`. Star counts, versions and benchmark figures below are
-> point-in-time and were not re-verified.
+> **Status:** the landscape survey the first decisions were drawn from
+> (2025–2026), kept as source material, with a revisit written after the
+> system was built (2026-09-13) placed first. The decisions, with the
+> reasoning that still applies, are in `rationale.md`. Star counts,
+> versions and benchmark figures are point-in-time and were not
+> re-verified.
 
-# Building a Self-Hosted Research Knowledge Base with a Claude/MCP Interface: Open-Source Landscape and Stack Recommendations
+## Revisit, 2026-09-13: the landscape a year on, and where prax sits
+
+The survey below was written before the first line of prax; this
+section looks at the same field with the system built, and says where
+it lands. Numbers are from the projects' own pages on 2026-09-13 and
+were not re-verified beyond that; the point is the shape of each
+neighbour, not its star count.
+
+### What changed in a year
+
+- **MCP is table stakes.** Every neighbour that matters exposes tools to
+  an agent now: Karakeep's server grew from 8 to 29 tools, Cognee,
+  Graphiti, LightRAG, txtai, SwarmVault, Basic Memory and Smart
+  Connections ship one, Zotero has four third-party ones (ZotSeek,
+  ZotPilot, zotero-mcp, llm-for-zotero) that read `zotero.sqlite` and
+  build a vector index beside it, Paperless-ngx has one with 115 tools.
+  "An agent can search my library" no longer distinguishes anything.
+- **The Markdown-wiki pattern arrived.** Karpathy's "LLM wiki" gist
+  (April 2026, 5k stars) — raw sources, an agent-maintained wiki of
+  pages, a schema file, ingest/query/lint — spawned a family:
+  SwarmVault (TypeScript, MIT, ~700 stars) compiles 30+ formats into a
+  wiki plus a `graph.json`, hybrid SQLite FTS and embeddings, and tags
+  "every edge `extracted`, `inferred`, or `ambiguous`" with
+  contradiction detection; TideMind is a single-SQLite "memory layer"
+  between note apps and AI tools with decay and reinforcement; Basic
+  Memory keeps typed relations in Markdown for an assistant's memory.
+  These are the closest relatives in spirit, and the convergence on the
+  same three confidence words was independent.
+- **The agent-memory platforms grew up.** Cognee reached 1.0 in April
+  2026 (30k stars, a seed round, an embedded SQLite + LanceDB + Kùzu
+  stack, RDF ontologies, fourteen retrieval modes, a UI and MCP);
+  Graphiti's bi-temporal graph now runs on embedded Kùzu as well as
+  Neo4j/FalkorDB; LightRAG merged multimodal parsing (May 2026) and has
+  role-specific model configuration; txtai 9 added sparse and late-
+  interaction retrieval. All are frameworks or memory for agents, not a
+  library for a person.
+- **The bookmark managers learned to read.** Karakeep (AGPL, 29k stars,
+  SQLite + Meilisearch) added semantic search (0.33), embedding-guided
+  auto-tagging with local Ollama, highlights, browser extensions and
+  mobile apps; Linkwarden added AI tagging through OpenAI, Anthropic and
+  Ollama. Neither has a graph or provenance; both organise what was
+  saved rather than read it.
+- **Khoj Cloud closed (April 2026)**; the self-hosted Django + Postgres
+  app remains, with an embedded-database option for pip installs.
+- **Reference managers stayed put.** Zotero 7/8 have no AI of their own;
+  the MCP servers around it give an agent passage-level search over the
+  library and nothing more (no captures, no graph, no pages).
+- **Literature agents** (PaperQA2, FutureHouse) got the headlines for
+  autonomous reviews with citations; they are a library over a folder
+  of PDFs, not a store that grows from other sources.
+- **Commercial desktop**: DEVONthink 4 (macOS) added local models via
+  Ollama/LM Studio, versioning and a reader view — the closest
+  commercial "one person's everything", closed and Mac-only.
+
+### Where prax sits
+
+| family | representatives (2026-09) | what they are | what prax does differently |
+|---|---|---|---|
+| bookmark and read-later managers | Karakeep, Linkwarden, Raindrop, Readwise Reader | save, tag, summarise, search what you saved; apps and extensions | reads what was saved: originals archived by hash, text artifacts, addressable chunks, a graph with evidence; papers and books first-class; no mobile app, no tagging UI |
+| reference managers and their MCPs | Zotero + ZotSeek / ZotPilot / zotero-mcp | the curated library, and an agent searching it by passage | imports the library read-only and owns the rest: captures, chats, stars, bookmarks in the same store; a graph and pages on top; models chosen per step |
+| Markdown wikis for agents | Karpathy's LLM wiki, SwarmVault, TideMind, Basic Memory, Obsidian + Smart Connections | an agent-maintained wiki or memory as plain files, with a graph derived from them | the originals stay canonical and the wiki is one layer among several (pages are documents); a hand-written, versioned ontology per kind of life instead of a schema the model infers; built and measured at 10k documents and 900k chunks, where a wiki of pages is not the index |
+| agent memory and GraphRAG platforms | Cognee, Graphiti/Zep, LightRAG, txtai, mem0 | frameworks: extract, store, retrieve for an application's agents | a finished tool for a person that agents also use; provenance on every edge (confidence, evidence, source document, ontology version, producer, run, bi-temporal), a review queue for misfits, retire-not-delete, heal; one SQLite file, no server databases |
+| document archives | Paperless-ngx (+ paperless-ai, PaperCortex, paperless-mcp) | OCR and file administrative documents; AI tagging and semantic search bolted on | research and making rather than administration; OCR explicit, bounded and language-aware; the graph as the organising structure instead of tags and correspondents |
+| literature agents | PaperQA2 | an agent that reviews a folder of PDFs with citations | `ask` is the modest cousin: a bounded bundle, citations resolved to chunks, the answer kept on a page; the store, not the agent, is the product |
+
+What is genuinely prax's own, as far as this survey can see: the
+combination of a **content-addressed store of the originals** under a
+single-writer door, a **small modular ontology written by hand and
+versioned** (one module per kind of life, a document read against its
+subset, the version stamped on the edge), **provenance complete enough
+to redo a model's work** (producer and run on every edge, `retire_run`,
+bi-temporal validity), **models as configuration with a measured
+local-first stance** (`docs/eval/`: a 35B model on one card against
+Sonnet 5 over the same papers), and a **Pi-class serving target** with
+the model work drained through the door from wherever the GPU is —
+exercised on one library of 9,700 documents rather than a demo.
+
+What the neighbours have that prax does not: mobile apps and a
+tagging-first UI (Karakeep); audio, video, e-mail and calendar
+ingestion (SwarmVault); memory that decays and reinforces (TideMind);
+global "summarise the whole corpus" retrieval over community summaries
+(GraphRAG, Cognee's modes); an autonomous literature review (PaperQA2);
+a hosted option and multi-user (Khoj, Basic Memory Cloud, Zep); RDF
+ontologies (Cognee); thirty-tool MCP surfaces with CRUD on everything
+(Karakeep, LightRAG, Paperless). The agent story here is Claude Code
+first, the change feed is polling, scheduling is cron.
+
+Sources consulted: Karakeep [releases](https://github.com/karakeep-app/karakeep/releases) and [README](https://github.com/karakeep-app/karakeep);
+Linkwarden [2.10](https://linuxiac.com/linkwarden-2-10-bookmark-manager-released/) and [linkwarden-mcp-server](https://deepwiki.com/irfansofyana/linkwarden-mcp-server);
+Khoj [setup](https://docs.khoj.dev/get-started/setup/) and [app.khoj.dev](https://app.khoj.dev/) (cloud sunset);
+Zotero MCPs: [ZotSeek](https://github.com/introfini/ZotSeek), [ZotPilot](https://forums.zotero.org/discussion/130483/zotpilot-mcp-server-for-semantic-search-classification-and-literature-review-drafting-from-your-z), [zotero-mcp](https://github.com/54yyyu/zotero-mcp), [llm-for-zotero](https://yilewang.github.io/llm-for-zotero/), [an overview](https://danielborek.me/2026/zotero-mcp-ai/);
+[Karpathy's LLM wiki gist](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f), [SwarmVault](https://github.com/swarmclawai/swarmvault), [TideMind](https://github.com/SawyerHan-AI/TideMind), [Basic Memory](https://docs.basicmemory.com/start-here/what-is-basic-memory), [Smart Connections](https://community.obsidian.md/plugins/smart-connections), [Neural Composer](https://community.obsidian.md/plugins/neural-composer);
+[Cognee](https://github.com/topoteretes/cognee) and its [MCP](https://github.com/topoteretes/cognee/tree/main/cognee-mcp), [Graphiti](https://github.com/getzep/graphiti), [LightRAG](https://github.com/hkuds/lightrag) and [lightrag-mcp](https://pypi.org/project/lightrag-mcp/), [txtai 9.0](https://medium.com/neuml/whats-new-in-txtai-9-0-d522bb150afa);
+Paperless-ngx: [paperless-mcp](https://www.npmjs.com/package/@orellbuehler/paperless-mcp), [PaperCortex](https://github.com/renefichtmueller/PaperCortex), [paperless-ai](https://github.com/clusterzx/paperless-ai);
+[PaperQA2](https://github.com/future-house/paper-qa); [DEVONthink 4](https://www.devontechnologies.com/apps/devonthink/new) and [local AI](https://www.devontechnologies.com/blog/20251111-local-ai-devonthink).
+
+---
+
+# The original survey (2025–2026): Building a Self-Hosted Research Knowledge Base with a Claude/MCP Interface: Open-Source Landscape and Stack Recommendations
 
 ## TL;DR
 - **Compose from libraries around SQLite, don't adopt a monolith.** Your planned architecture (SQLite + FTS5 + sqlite-vec + edge table, content-hash files, one FastAPI door, thin MCP server, replaceable capture front-ends, nightly LLM enrichment) is the right shape for Pi-class hardware and a single maintainer. No existing all-in-one (Khoj, RAGFlow, R2R, Cognee) matches it without dragging in Postgres/Elasticsearch/Neo4j/Docker sprawl that fights your low-power, single-file-durability goals.
