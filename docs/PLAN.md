@@ -450,6 +450,13 @@ fraction):
       the memory-mapped index (int8 index if not).
 
 Shape:
+- [ ] Docs: "reachable over your private network" instead of Tailscale
+      as the assumption. Nothing in prax needs it; any VPN or the LAN
+      does, the door listens on that interface and checks a token, plain
+      HTTP inside the private network is fine, TLS through a reverse
+      proxy only if the door were ever exposed. Tailscale stays as one
+      example (it is the least setup). About twenty mentions across
+      CLAUDE.md, README, howto, architecture, extension.md and sources.md.
 - [ ] Models fetched on demand: a `models` entry may name `repo` and
       `file` instead of `path`; `prax models fetch <name>` (or the first
       use of the step) downloads into `<data dir>/models/` and records
