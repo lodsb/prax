@@ -25,6 +25,7 @@ pinned to Claude, the name the earlier descriptions carry.
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Callable
 from typing import Any
 
@@ -95,11 +96,30 @@ def describe(
     filename: str | None = None,
     model: str | None = None,
     claude_only: bool = False,
+    previous: str | None = None,
 ) -> str:
     """Markdown describing the image, headed by its filename and the model.
     ``model`` names a Claude model outright; otherwise the ``vision`` step
     says which model, Claude or a vision-capable server (``claude_only``
-    refuses the latter, for the ``claude-vision`` name)."""
+    refuses the latter, for the ``claude-vision`` name). ``previous`` is
+    the document's current text: when it is an earlier reading of the
+    image, the new reading is put first and the earlier ones kept after
+    it, each section headed with its model, so a second model adds to
+    the picture instead of replacing it (a re-run of the same model does
+    replace its own reading)."""
+    fresh = _describe(
+        data, filename=filename, model=model, claude_only=claude_only
+    )
+    return merge_readings(fresh, previous) if previous else fresh
+
+
+def _describe(
+    data: bytes,
+    *,
+    filename: str | None,
+    model: str | None,
+    claude_only: bool,
+) -> str:
     from prax.parsers import ExtractionError
 
     mt = media_type(data)
@@ -167,3 +187,46 @@ def _artifact(filename: str | None, model: str, text: str) -> str:
         raise ExtractionError("the model returned no text")
     head = f"# {filename}" if filename else "# Image"
     return f"{head}\n\n*Image described by {model}.*\n\n{text.strip()}\n"
+
+
+_BY_LINE = re.compile(r"^\*Image described by (.+?)\.\*$", re.MULTILINE)
+_SECTION = re.compile(r"^## (.+?)(?: \(([^()]+)\))?$", re.MULTILINE)
+
+
+def readings(text: str) -> list[tuple[str, str]]:
+    """The readings in an image artifact as ``(model, body)`` pairs, the
+    body being that model's sections with plain headings; ``[]`` when the
+    text is not an image description."""
+    m = _BY_LINE.search(text)
+    if not m:
+        return []
+    models = [s.strip() for s in re.split(r";\s*read again by\s*", m.group(1))]
+    first = models[0]
+    out: dict[str, list[str]] = {}
+    body = text[m.end() :]
+    found = list(_SECTION.finditer(body))
+    if not found:
+        return [(first, body.strip())] if body.strip() else []
+    for i, s in enumerate(found):
+        end = found[i + 1].start() if i + 1 < len(found) else len(body)
+        section = f"## {s.group(1)}\n" + body[s.end() : end].strip("\n")
+        out.setdefault(s.group(2) or first, []).append(section.strip())
+    return [(who, "\n\n".join(parts)) for who, parts in out.items()]
+
+
+def merge_readings(fresh: str, previous: str) -> str:
+    """The fresh reading first, then the earlier readings of other models,
+    every section headed with its model; the same model's earlier reading
+    is dropped. ``previous`` that is no image description is dropped too
+    (the image had OCR text, say)."""
+    new = readings(fresh)
+    old = [r for r in readings(previous) if r[0] not in {m for m, _ in new}]
+    if not new or not old:
+        return fresh
+    head = fresh.split("\n", 1)[0]
+    allr = new + old
+    by = "; read again by ".join(m for m, _ in allr)
+    parts = [head, "", f"*Image described by {by}.*"]
+    for model, body in allr:
+        parts += ["", _SECTION.sub(lambda s, m=model: f"## {s.group(1)} ({m})", body)]
+    return "\n".join(parts).rstrip() + "\n"

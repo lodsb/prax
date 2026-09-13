@@ -67,6 +67,7 @@ class Extractor:
     hints: bool = False  # the function takes filename= as a keyword
     check: Callable[[], bool] | None = None  # more than an import: a program
     variant: Callable[[], str] | None = None  # a setting that changes the output
+    previous: bool = False  # takes previous= (the current text) and may keep it
 
     def accepts(self, mime: str) -> bool:
         return any(
@@ -105,10 +106,15 @@ class Extractor:
         (``pymupdf4llm-ocr/1.28.2+arabic``)."""
         return f"{self.name}/{self.version}"
 
-    def __call__(self, data: bytes, *, filename: str | None = None) -> str:
+    def __call__(
+        self, data: bytes, *, filename: str | None = None, previous: str | None = None
+    ) -> str:
+        kw: dict[str, Any] = {}
         if self.hints:
-            return self.fn(data, filename=filename)
-        return self.fn(data)
+            kw["filename"] = filename
+        if self.previous:
+            kw["previous"] = previous
+        return self.fn(data, **kw)
 
 
 class ExtractionError(RuntimeError):
@@ -358,10 +364,12 @@ def _trafilatura(data: bytes) -> str:
     return f"# {title}\n\n{text}" if title and title not in text[:200] else text
 
 
-def _vision(data: bytes, *, filename: str | None = None) -> str:
+def _vision(
+    data: bytes, *, filename: str | None = None, previous: str | None = None
+) -> str:
     from prax.parsers import vision
 
-    return vision.describe(data, filename=filename)
+    return vision.describe(data, filename=filename, previous=previous)
 
 
 def _claude_vision(data: bytes, *, filename: str | None = None) -> str:
@@ -933,6 +941,7 @@ REGISTRY: list[Extractor] = [
         explicit_only=True,
         hints=True,
         variant=_vision_model,
+        previous=True,  # a second model's reading joins the first, never replaces it
     ),
     Extractor(
         "claude-vision",

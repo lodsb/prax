@@ -263,6 +263,15 @@ def test_a_promoted_image_is_described_again_by_the_promote_model(
     png = b"\x89PNG\r\n\x1a\n" + bytes(40)
     doc_id = store.register(con, png, mime="image/png", title="panel.png")["doc_id"]
     text_id = store.ingest_text(con, "words " * 50, title="a paper")["doc_id"]
+    # the local reading first: the vision step's server, faked at the HTTP level
+    local = "## What it shows\nA panel. " + "Detail. " * 60 + "\n\n## Notes\nR12 100k"
+    monkeypatch.setattr(
+        models,
+        "post_json",
+        lambda url, body, key: {"choices": [{"message": {"content": local}}]},
+    )
+    assert queue.run(con, [doc_id], extractor="vision").actions == {"created": 1}
+    assert store.get_meta(con, doc_id)["text_source"] == "vision/1+vl@127.0.0.1:1"
 
     script_path = Path(__file__).resolve().parents[1] / "scripts" / "extract_graph.py"
     spec = importlib.util.spec_from_file_location("extract_graph", script_path)
@@ -274,6 +283,19 @@ def test_a_promoted_image_is_described_again_by_the_promote_model(
     assert store.get_meta(con, doc_id)["text_source"] == "vision/1+claude-sonnet-5"
     assert os.environ.get("PRAX_VISION") is None  # the override was for that run only
     assert models.resolve("vision").name == "server"
+    # the second reading joined the first: both models' sections, the new one first
+    text = store.get_document(con, doc_id)["text"]
+    assert "*Image described by claude-sonnet-5; read again by vl@127.0.0.1:1.*" in text
+    assert text.index("## What it shows (claude-sonnet-5)") < text.index(
+        "## What it shows (vl@127.0.0.1:1)"
+    )
+    assert "## Notes (vl@127.0.0.1:1)\nR12 100k" in text
+    who = [m for m, _ in vision.readings(text)]
+    assert who == ["claude-sonnet-5", "vl@127.0.0.1:1"]
+    # a chunk per section, each heading carrying its model
+    heads = [" ".join(c["heading"] or []) for c in store.list_chunks(con, doc_id)]
+    assert any("What it shows (claude-sonnet-5)" in h for h in heads)
+    assert "image description" in store.document_field(con, doc_id)
 
 
 def test_registry_dispatch() -> None:

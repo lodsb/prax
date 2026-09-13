@@ -232,6 +232,12 @@ The document view shows an image inline above its description. An image
 that matters gets the expensive reading the way a paper does: promote it
 (section 3e), and `extract_graph.py --promoted` describes it again with
 the promote step's model (Sonnet here) before extracting from that.
+Readings add up rather than replace each other: the second model's
+reading goes first in the artifact, the earlier ones follow, every
+section headed with its model (`## Text in the image (qwen…)`), so the
+verbatim list one model is good at and the interpretation the other is
+good at are both searchable and both feed the extraction; the same
+model read again replaces only its own reading (`vision.merge_readings`).
 
 ## 3c. Chunks
 
