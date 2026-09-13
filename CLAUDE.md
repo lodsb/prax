@@ -78,12 +78,14 @@ drop folder (`docs/sources.md`).
    `studio.yaml` for gear and its manuals, datasheets, schematics and
    articles; `craft.yaml` for what making shares, with `kitchen.yaml`
    (recipes) and `workshop.yaml` (builds) on top of it; a family module
-   later), loaded and composed by
+   later; `core.yaml` also holds the relations every kind of document
+   and organization shares: `authored_by`, `published_by`, `part_of`,
+   `located_in`, `affiliated_with`, `developed_by`), loaded and composed by
    `prax.ontology`. Names are unique across modules; a subtype passes
    wherever its parent is allowed; aliases map what a model says to the
    canonical name and never shadow a declared one; a module's
    `self_types` say what the document being extracted may be. The
-   composed version (`core1+craft1+kitchen2+research6+studio3+workshop2`)
+   composed version (`core2+craft1+kitchen2+research7+studio4+workshop2`)
    is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set (`meta.domains`: which modules it is read

@@ -8,8 +8,15 @@
 # core v1 (2026-09-12): split out of the single ontology.yaml (v5); the
 # shared types the modular ontology needs, and the two relations that
 # belong to people and organizations rather than to research.
+# core v2 (2026-09-13, docs/ontology-v7.md): what every kind of document
+# shares came here from the domain modules — `authored_by` (research had
+# it, studio had `written_by` for the same thing) and `part_of`, widened
+# to organizations (a lab in a university, a subsidiary in a group) —
+# and two relations the review queue asked for: `located_in`
+# (organization or event → place) and `published_by` (document →
+# organization, the publisher or issuing body).
 module: core
-version: 1
+version: 2
 
 entity_types:
   person:
@@ -58,6 +65,35 @@ relation_types:
     domain: [tool]
     range: [organization, person]
     description: who built or makes the tool, as the text states it
+  authored_by:
+    domain: [document]
+    range: [person, organization]
+    description: >-
+      a listed author of the document (a paper's authors, a reviewer, a
+      designer credited on a schematic); or the organization that issued
+      it when no person is named (a standards body, a manufacturer's
+      manual)
+  published_by:
+    domain: [document]
+    range: [organization]
+    description: >-
+      the publisher or issuing body (Springer, O'Reilly, the manufacturer
+      behind a manual); where it appeared — the journal, the conference —
+      is published_in
+  part_of:
+    domain: [document, organization]
+    range: [document, organization]
+    description: >-
+      a document within a larger one (a chapter in a book, an article in a
+      proceedings volume, a paper on a project's reading list); or an
+      organization within a larger one (a lab or department in a
+      university, a subsidiary in a group)
+  located_in:
+    domain: [organization, event]
+    range: [place]
+    description: >-
+      where an organization is based or an event was held, as the text
+      states it (a city, a country)
 
 type_aliases:
   institution: organization
@@ -70,6 +106,14 @@ type_aliases:
 
 relation_aliases:
   affiliation: affiliated_with
+  written_by: authored_by
+  author: authored_by
+  author_of: authored_by
+  authors: authored_by
+  is_part_of: part_of
+  publisher: published_by
+  located_at: located_in
+  based_in: located_in
   affiliated: affiliated_with
   created_by: developed_by
   built_by: developed_by

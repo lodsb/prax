@@ -131,11 +131,11 @@ Two things the pass surfaced that are not the modules' to fix:
   them, `extraction.apply` rejects such a triple outright, and the heal
   pass (howto 3m) mended what older passes had written.
 - Every domain wants to say who wrote a document. Studio's `written_by`
-  now takes any document, but a recipe read on its own (kitchen does not
-  require studio) still has no relation for its author, and research has
-  its own `authored_by`. "Who wrote this" belongs in core; that is a core
-  v2, which re-selects the whole library, so it waits for the next full
-  re-read.
+  took any document, but a recipe read on its own (kitchen does not
+  require studio) had no relation for its author, and research had its
+  own `authored_by`. "Who wrote this" belongs in core: core v2
+  (`docs/ontology-v7.md`, 2026-09-13) has `authored_by` for every kind of
+  document, `written_by` is an alias, and a recipe has an author.
 
 To grow them further: drop recipes into `data/inbox/kitchen/` and build
 logs into `data/inbox/workshop/`; the door takes them in, the worker

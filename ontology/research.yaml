@@ -27,8 +27,11 @@
 # `about` from any document and towards people, organizations, places,
 # events and works, `authored_by` towards an organization that issued the
 # document, `published_in` from any document.
+# v7 (2026-09-13, docs/ontology-v7.md): `authored_by` and `part_of` moved
+# to core (every kind of document has authors and belongs to something;
+# `part_of` now holds between organizations too). Nothing else changed.
 module: research
-version: 6
+version: 7
 requires: [core]
 self_types: [paper]
 
@@ -86,12 +89,6 @@ relation_types:
     range: [paper]
     description: >-
       the document names another paper by title; never by reference number
-  authored_by:
-    domain: [document]
-    range: [author, organization]
-    description: >-
-      a listed author of the document; or the organization that issued it
-      when no person is named (a standards body, a manufacturer's manual)
   written_at:
     domain: [document]
     range: [organization]
@@ -166,12 +163,6 @@ relation_types:
       a synthesis page draws on the document as one of its sources; the
       page's own claims then carry supports and contradicts edges from
       the papers
-  part_of:
-    domain: [paper, page]
-    range: [project, paper]
-    description: >-
-      the document belongs to a project's reading list or thread; or a
-      chapter, article or section is part of a book or proceedings volume
   mentions:
     domain: [document]
     range: [tool, method, dataset, concept, person, organization, document, place, event, work]

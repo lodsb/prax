@@ -132,7 +132,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "studio",
         "workshop",
     }
-    assert o.version == "core1+craft1+kitchen2+research6+studio3+workshop2"
+    assert o.version == "core2+craft1+kitchen2+research7+studio4+workshop2"
     assert set(o.self_types) == {
         "paper",
         "manual",
@@ -155,15 +155,15 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert (
         ontology.current().version
-        == "core1+craft1+kitchen2+research6+studio3+workshop2"
+        == "core2+craft1+kitchen2+research7+studio4+workshop2"
     )
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
-        text.replace("version: 5", "version: 6"), encoding="utf-8"
+        text.replace("version: 7", "version: 99", 1), encoding="utf-8"
     )
     assert (
         ontology.current().version
-        == "core1+craft1+kitchen2+research6+studio3+workshop2"
+        == "core2+craft1+kitchen2+research99+studio4+workshop2"
     )
 
 
@@ -171,7 +171,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     o = ontology.current()
     kitchen = o.for_domains(["kitchen"])
     assert set(kitchen.modules) == {"core", "craft", "kitchen"}
-    assert kitchen.version == "core1+craft1+kitchen2"
+    assert kitchen.version == "core2+craft1+kitchen2"
     assert kitchen.self_types == ("recipe",)
     assert "paper" not in kitchen.types and "device" not in kitchen.types
     kitchen.check_edge("recipe", "makes", "dish")
@@ -187,7 +187,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 
     workshop = o.for_domains(["workshop"])
     assert set(workshop.modules) == {"core", "craft", "studio", "workshop"}
-    assert workshop.version == "core1+craft1+studio3+workshop2"
+    assert workshop.version == "core2+craft1+studio4+workshop2"
     workshop.check_edge("build", "made_with", "component")  # studio's component
     workshop.check_edge("build", "made_with", "material")  # craft's material
     workshop.check_edge("build", "follows", "design")
@@ -203,13 +203,13 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     # reads the word as its own method
     assert o.canonical_type("technique") == "technique"
     assert o.for_domains(["research"]).canonical_type("technique") == "method"
-    assert o.for_domains(["research"]).version == "core1+research6"
+    assert o.for_domains(["research"]).version == "core2+research7"
 
 
 def test_studio_module() -> None:
     o = ontology.current()
     s = o.for_domains(["studio"])
-    assert set(s.modules) == {"core", "studio"} and s.version == "core1+studio3"
+    assert set(s.modules) == {"core", "studio"} and s.version == "core2+studio4"
     assert s.self_types == ("manual", "datasheet", "schematic", "article")
     assert "paper" not in s.types and "cites" not in s.relations
     assert s.is_a("device", "tool") and s.is_a("manufacturer", "organization")

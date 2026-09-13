@@ -304,7 +304,7 @@ built, module by module, with a "where to touch what" table:
 | `docs/howto.md` | Setting up, every batch job, `prax.yaml`, the doors, the UI, the board, backup. |
 | `docs/rationale.md` | Decision records R1 to R16: what was chosen, why, what was measured, when to revisit. |
 | `docs/ui.md` | The web UI: endpoints it uses, routes, rules. |
-| `docs/ontology-v2.md`, `-v4.md`, `-v5.md`, `-v6.md`, `docs/ontology-studio.md`, `docs/ontology-craft.md` | How the ontology grew: from the review queue's evidence, for syntheses, for organizations and mentions, for where a document was written and the weak relation widened; the studio module for gear; craft with kitchen and workshop on top of it. |
+| `docs/ontology-v2.md`, `-v4.md`, `-v5.md`, `-v6.md`, `-v7.md`, `docs/ontology-studio.md`, `docs/ontology-craft.md` | How the ontology grew: from the review queue's evidence, for syntheses, for organizations and mentions, for where a document was written and the weak relation widened, and to a first stable shape with authorship, publishing, place and part-of in core; the studio module for gear; craft with kitchen and workshop on top of it. |
 | `docs/PLAN.md` | Staged build plan with checklists and dates. |
 | `docs/sources.md` | Data sources: the Zotero import, citation sources, captures, the drop folder, `prax import` and what else would fit. |
 | `docs/extension.md` | The browser extension: installing it, what it sends, its settings, how it authenticates. |

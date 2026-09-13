@@ -147,6 +147,11 @@ Parsing is a batch job; the serving path never parses.
       batch of typing rules before it (placeholders, near misses,
       venues, cited titles: 3,091 linked, 3,390 dropped). Open: a model
       typing pass for the untyped remainder; the v6 re-read decision
+- [x] Ontology v7 (2026-09-13, docs/ontology-v7.md): `authored_by` and
+      `part_of` moved to core (part_of holds between organizations),
+      `located_in` and `published_by` added, studio's `written_by` folded
+      in (migration 0012). A first stable shape across the domains; the
+      review queue is evidence again (~3.5k items) rather than a backlog
 - [ ] Backfill of the old zoetrope disk: the hash inventory in
       `scripts/backfill.py` gains a `--commit` mode that registers files
       through the store; review the dedupe report first

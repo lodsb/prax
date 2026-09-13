@@ -43,7 +43,7 @@ def test_status_says_what_the_store_holds(
     assert run("status") == 0
     printed = capsys.readouterr().out
     assert "1 documents" in printed or "1 document" in printed
-    assert "Ontology" in printed and "core1" in printed
+    assert "Ontology" in printed and "core2" in printed
     assert "Store" in printed
 
 

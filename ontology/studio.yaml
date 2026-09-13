@@ -21,8 +21,11 @@
 # part in passing and has an author, exactly as a manual does. A subtype
 # passes wherever its parent is allowed, so one word in each domain lets
 # every module's documents speak; nothing else changed.
+# v4 (2026-09-13): `written_by` gone — it was core's `authored_by` under
+# another name, and core v2 has that for every kind of document; the
+# name stays as an alias.
 module: studio
-version: 3
+version: 4
 requires: [core]
 self_types: [manual, datasheet, schematic, article]
 
@@ -138,10 +141,6 @@ relation_types:
     domain: [article, manual]
     range: [publication]
     description: the magazine, website or series the document was published in
-  written_by:
-    domain: [document]
-    range: [person, organization]
-    description: a named author of the document (a reviewer, a designer credited on a schematic)
   names:
     domain: [document]
     range: [device, component, manufacturer, standard, tool, organization, person]
@@ -192,6 +191,5 @@ relation_aliases:
   connects_to: compatible_with
   replaces: succeeds
   published_in: appeared_in
-  authored_by: written_by
   mentions: names
   refers_to: names

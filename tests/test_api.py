@@ -427,16 +427,16 @@ def test_review_filters_bulk_and_replay(
     for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
         (onto_dir / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     research = (onto_dir / "research.yaml").read_text(encoding="utf-8")
-    research = research.replace("version: 5", "version: 6").replace(
+    research = research.replace("version: 7", "version: 99", 1).replace(
         "    domain: [paper, page, project]\n    range: [paper]\n",
         "    domain: [paper, page, project]\n    range: [paper, tool]\n",
         1,
     )
-    assert "version: 6" in research and "range: [paper, tool]" in research
+    assert "version: 99" in research and "range: [paper, tool]" in research
     (onto_dir / "research.yaml").write_text(research, encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(onto_dir))
-    later = ontology.current().version  # every module, research at 6 now
-    assert "research6" in later
+    later = ontology.current().version  # every module, research at 99 now
+    assert "research99" in later
     rep = client.post("/review/replay").json()
     assert (rep["ontology_version"], rep["linked"], rep["still_open"]) == (later, 1, 0)
     assert client.get("/review").json()["total"] == 0
