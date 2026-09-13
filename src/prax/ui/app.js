@@ -222,6 +222,46 @@ function snippetHtml(s) {
 // -------------------------------------------------------------- document
 
 
+// A reading request: which extractor a person may ask for on a document
+// of this type, and what became of the last request (meta.reading).
+const READINGS = {
+  "application/pdf": [
+    ["vision-pages", "the vision model over the scanned pages (handwriting, scores, what OCR cannot read)"],
+    ["pymupdf4llm-ocr", "OCR (RapidOCR) on the pages without a text layer"],
+    ["docling", "Docling's layout model (code, tables); slow"],
+  ],
+  "image/": [["vision", "the vision model describes the image; a second model's reading joins the first"]],
+};
+function readingChoices(mime) {
+  for (const [prefix, choices] of Object.entries(READINGS)) {
+    if ((mime || "").startsWith(prefix)) return choices;
+  }
+  return [];
+}
+function readingForm(doc) {
+  const choices = readingChoices(doc.mime);
+  if (!choices.length) return `<p class="muted">No extractor to ask for on ${esc(doc.mime || "this type")}.</p>`;
+  return `
+  <form class="reading-form">
+    <label>Read with
+      <select name="extractor">${choices.map(([v, l]) => `<option value="${v}">${esc(v)} — ${esc(l)}</option>`).join("")}</select>
+    </label>
+    <label class="reading-mode">pages
+      <select name="mode"><option value="scans">the scanned ones (no text layer)</option><option value="all">every page (printed pages with notes in the margin)</option></select>
+    </label>
+    <button>Request</button>
+    <span class="muted">A worker picks it up (Jobs shows what is waiting); the result replaces the text, except an image's readings, which add up.</span>
+  </form>`;
+}
+function readingLine(r) {
+  if (!r) return "";
+  const when = (r.finished_at || r.at || "").replace("T", " ").slice(0, 16);
+  const what = `${esc(r.extractor)}${r.mode && r.mode !== "scans" ? ` (${esc(r.mode)})` : ""}`;
+  if (r.state === "requested") return `<p class="reading-line muted">reading requested: ${what} by ${esc(r.by || "?")}, ${when} — waiting for a worker <a href="#" id="reading-cancel">cancel</a></p>`;
+  if (r.state === "error") return `<p class="reading-line"><span class="error">reading failed:</span> ${what} — ${esc(r.error || "")} <a href="#" id="reading-cancel" class="muted">dismiss</a></p>`;
+  return `<p class="reading-line muted">read again ${when}: ${esc(r.stamp || what)} → ${esc(r.outcome || r.state)} <a href="#" id="reading-cancel">dismiss</a></p>`;
+}
+
 function metaLine(meta) {
   const bits = [];
   if (meta.creators && meta.creators.length) bits.push(meta.creators.map((c) => c.name).join(", "));
@@ -317,10 +357,13 @@ async function viewDoc(id, p) {
       <a href="${originalHref(doc.id, firstPage)}" target="_blank" rel="noopener">open original ↗</a>
       ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
       <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
+      ${pageMeta ? "" : `<a href="#" id="reading" title="run a named extractor on this document: the vision model over scanned pages, a second reading of an image, OCR, Docling">read again…</a>`}
       ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
       <span class="muted">${esc(doc.mime || "")} · ${chunks.length} chunks · ${(doc.text_len || 0).toLocaleString()} chars · doc ${doc.id}</span>
     </div>
+    ${readingLine(meta.reading)}
+    <div id="reading-form" hidden></div>
     <div id="page-editor"></div>
   </header>
   <div class="doc-layout">
@@ -358,6 +401,31 @@ async function viewDoc(id, p) {
     e.preventDefault();
     await fetch(`/doc/${doc.id}/retire`, { method: "DELETE" });
     render();
+  });
+  const rd = document.getElementById("reading");
+  if (rd) rd.addEventListener("click", (e) => {
+    e.preventDefault();
+    const box = document.getElementById("reading-form");
+    if (!box.hidden) { box.hidden = true; return; }
+    box.innerHTML = readingForm(doc);
+    box.hidden = false;
+    const form = box.querySelector("form");
+    const pick = form.extractor;
+    const modeLabel = form.querySelector(".reading-mode");
+    const showMode = () => { modeLabel.hidden = pick.value !== "vision-pages"; };
+    pick.addEventListener("change", showMode);
+    showMode();
+    form.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const body = { extractor: pick.value, mode: pick.value === "vision-pages" ? form.mode.value : null };
+      try { await post(`/doc/${doc.id}/reading`, body); render({ keepScroll: true }); } catch (err) { setStatus(err.message); }
+    });
+  });
+  const cancelReading = document.getElementById("reading-cancel");
+  if (cancelReading) cancelReading.addEventListener("click", async (e) => {
+    e.preventDefault();
+    await fetch(`/doc/${doc.id}/reading`, { method: "DELETE" });
+    render({ keepScroll: true });
   });
   document.getElementById("domains").addEventListener("click", async (e) => {
     e.preventDefault();
@@ -1690,16 +1758,31 @@ function serverLines(servers) {
   return `<ul class="servers">${rows.join("")}</ul>`;
 }
 
+// Reading requests (a person asked for an extractor on a document): what
+// waits for a worker, and what came back lately.
+function readingLines(r) {
+  if (!r || (!r.requested.length && !r.recent.length)) return "";
+  const row = (x) => `<li><a href="#doc/${x.doc_id}">${esc(x.title || "doc " + x.doc_id)}</a> · ${esc(x.extractor)}${x.mode && x.mode !== "scans" ? ` (${esc(x.mode)})` : ""} · ${esc(x.by || "?")} ${esc((x.finished_at || x.at || "").replace("T", " ").slice(0, 16))}${x.state === "requested" ? "" : ` → <span class="${x.state === "error" ? "error" : ""}">${esc(x.outcome || x.state)}${x.error ? ": " + esc(x.error) : ""}</span>`}</li>`;
+  const vision = r.vision && r.vision.model ? `the vision step is <b>${esc(r.vision.model)}</b>${r.vision.kind === "claude" ? " (paid: a worker will not run it; run parse_pending.py yourself)" : ""}` : "no vision model is set";
+  return `
+    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Readings asked for (${r.requested.length} waiting)</h2>
+    <p class="muted">A reading is an extractor a person asked for on one document (its page's "read again…"); the worker takes these before the pending captures. ${vision.charAt(0).toUpperCase() + vision.slice(1)}.</p>
+    ${r.requested.length ? `<ul class="servers">${r.requested.map(row).join("")}</ul>` : ""}
+    ${r.recent.length ? `<p class="muted" style="margin:.4rem 0 .1rem">Came back:</p><ul class="servers">${r.recent.map(row).join("")}</ul>` : ""}`;
+}
+
 async function viewJobs(p) {
   view.innerHTML = `<p class="muted">Loading…</p>`;
-  let d, servers = [];
+  let d, servers = [], readings = null;
   try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   try { servers = (await api("/models/servers")).servers; } catch (_) { /* the list is a nicety */ }
+  try { readings = await api("/readings", { limit: 20 }); } catch (_) { /* so is this one */ }
   const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
   view.innerHTML = `
     <p class="muted">The passes announce themselves here: the worker's session, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale; one gone for half an hour is closed.</p>
     ${hostLine(d.host)}
     ${serverLines(servers)}
+    ${readingLines(readings)}
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Running (${d.running.length})</h2>
     ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the machine with the models: <code>scripts/work.py --watch</code> keeps captures moving.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>

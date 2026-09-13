@@ -1081,6 +1081,55 @@ def unpromote_doc(doc_id: int, request: Request) -> dict[str, bool]:
     return {"removed": store.unpromote(_con(request), doc_id)}
 
 
+class ReadingReq(BaseModel):
+    extractor: str  # one of store.READINGS
+    mode: str | None = None  # vision-pages: scans (default) or all
+    by: str = "human"
+
+
+@app.post("/doc/{doc_id}/reading")
+def request_reading(doc_id: int, req: ReadingReq, request: Request) -> dict[str, Any]:
+    """Ask for a named extractor on this document — the vision model over
+    its scanned pages, a second reading of an image, OCR, Docling. A
+    worker picks it up (``GET /work/parse`` hands requests out first);
+    the outcome lands in ``meta.reading``."""
+    from prax import parsers
+
+    doc = store.get_document(_con(request), doc_id, max_chars=0)
+    if doc is None:
+        raise HTTPException(404, "no such document")
+    if req.extractor not in store.READINGS:
+        raise HTTPException(400, f"extractor must be one of {store.READINGS}")
+    if not parsers.candidates(doc["mime"] or "", preferred=req.extractor):
+        raise HTTPException(400, f"{req.extractor} does not read {doc['mime']}")
+    try:
+        return store.request_reading(
+            _con(request), doc_id, req.extractor, mode=req.mode, by=req.by
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/doc/{doc_id}/reading")
+def cancel_reading(doc_id: int, request: Request) -> dict[str, bool]:
+    return {"removed": store.cancel_reading(_con(request), doc_id)}
+
+
+@app.get("/readings")
+def readings(request: Request, limit: int = 50) -> dict[str, Any]:
+    """Reading requests: the waiting ones and the recently finished."""
+    con = _con(request)
+    return {
+        "requested": store.reading_requests(con, state="requested", limit=limit),
+        "recent": [
+            r
+            for r in store.reading_requests(con, state=None, limit=limit)
+            if r.get("state") != "requested"
+        ],
+        "vision": models.describe("vision"),
+    }
+
+
 @app.get("/promote")
 def promote_view(request: Request, limit: int = 30) -> dict[str, Any]:
     """The flagged documents with their status under the promote step's

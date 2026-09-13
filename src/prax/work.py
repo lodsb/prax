@@ -150,6 +150,31 @@ def hand_out(
         from prax import parsers
 
         items = []
+        # requested readings first: a person asked, whatever the scope
+        for req in store.reading_requests(con):
+            doc_id = req["doc_id"]
+            if len(items) >= limit or not _free(step, doc_id, now):
+                continue
+            doc = store.get_document(con, doc_id, max_chars=0)
+            if doc is None:
+                continue
+            path = doc.get("original_path")
+            item = {
+                "doc_id": doc_id,
+                "mime": doc["mime"],
+                "filename": path.replace("\\", "/").rsplit("/", 1)[-1]
+                if path
+                else None,
+                "original": f"/doc/{doc_id}/original",
+                "old_len": doc["text_len"],
+                "extractor": req["extractor"],
+                "mode": req.get("mode"),
+                "force": True,
+            }
+            if req["extractor"] == "vision" and doc["text_len"]:
+                # a second reading of an image joins the first (vision.merge_readings)
+                item["previous"] = store.get_document(con, doc_id)["text"]
+            items.append(item)
         for doc_id in inbox.pending_captures(con):
             if len(items) >= limit or not _free(step, doc_id, now):
                 continue
@@ -308,20 +333,26 @@ def take_in(
         for r in results:
             doc_id = int(r["doc_id"])
             _release(step, [doc_id])
+            stamp = str(r.get("extractor") or worker)
             try:
                 action = queue.apply_parse(
                     con,
                     doc_id,
-                    stamp=str(r.get("extractor") or worker),
+                    stamp=stamp,
                     text=r.get("text"),
                     error=r.get("error"),
                     seconds=float(r.get("seconds") or 0.0),
+                    force=bool(r.get("force")),
                 )
             except Exception as exc:  # noqa: BLE001
                 out["errors"].append(
                     {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
                 )
                 continue
+            if r.get("requested"):
+                store.finish_reading(
+                    con, doc_id, outcome=action, stamp=stamp, error=r.get("error")
+                )
             actions[action] = actions.get(action, 0) + 1
             out["applied"] += 1
         out["actions"] = actions

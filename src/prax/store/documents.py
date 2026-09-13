@@ -691,6 +691,116 @@ def unpromote(con: sqlite3.Connection, doc_id: int) -> bool:
     return True
 
 
+# A reading request: a person (or an agent) asks for a named extractor on
+# one document — the vision model over its scanned pages, a second reading
+# of an image, OCR in another script, Docling — and a worker does it
+# through the work protocol, which hands requests out before the pending
+# captures. The request lives in ``meta.reading`` until the result comes
+# back, then records the outcome, so the document page can say what
+# happened and the Jobs page what is waiting.
+
+READINGS = ("vision-pages", "vision", "pymupdf4llm-ocr", "docling")
+
+
+@_serialized
+def request_reading(
+    con: sqlite3.Connection,
+    doc_id: int,
+    extractor: str,
+    *,
+    mode: str | None = None,
+    by: str = "human",
+) -> dict[str, Any]:
+    """Ask for ``extractor`` (one of ``READINGS``) on a document; ``mode``
+    is the extractor's setting for this run (``vision-pages``: ``scans``
+    or ``all``). A request replaces an earlier one."""
+    if extractor not in READINGS:
+        raise ValueError(f"extractor must be one of {READINGS}")
+    if mode is not None and mode not in ("scans", "all"):
+        raise ValueError("mode must be scans or all")
+    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"]) if row["meta"] else {}
+    meta["reading"] = {
+        "extractor": extractor,
+        "mode": mode,
+        "by": by,
+        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "state": "requested",
+    }
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+    return meta["reading"]
+
+
+@_serialized
+def cancel_reading(con: sqlite3.Connection, doc_id: int) -> bool:
+    """Withdraw a request (or forget a finished one)."""
+    meta = get_meta(con, doc_id)
+    if not meta.pop("reading", None):
+        return False
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+    return True
+
+
+@_serialized
+def finish_reading(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    outcome: str,
+    stamp: str,
+    error: str | None = None,
+) -> None:
+    """The worker's result for a requested reading: ``outcome`` is the
+    parse action (``upgraded``, ``created``, ``kept``, ``empty``) or
+    ``error`` with its message."""
+    meta = get_meta(con, doc_id)
+    reading = meta.get("reading")
+    if not reading:
+        return
+    reading.update(
+        state="error" if error else "done",
+        outcome=outcome,
+        stamp=stamp,
+        error=error,
+        finished_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+
+
+def reading_requests(
+    con: sqlite3.Connection, *, state: str | None = "requested", limit: int = 50
+) -> list[dict[str, Any]]:
+    """Documents with a reading request: the waiting ones (``state``
+    ``requested``), or every state (None), newest first."""
+    rows = con.execute(
+        "SELECT id, title, mime, meta FROM documents"
+        " WHERE json_extract(meta, '$.reading') IS NOT NULL"
+        + (" AND json_extract(meta, '$.reading.state') = ?" if state else "")
+        + " ORDER BY json_extract(meta, '$.reading.at') DESC LIMIT ?",
+        ((state, limit) if state else (limit,)),
+    ).fetchall()
+    return [
+        {
+            "doc_id": r["id"],
+            "title": r["title"],
+            "mime": r["mime"],
+            **json.loads(r["meta"])["reading"],
+        }
+        for r in rows
+    ]
+
+
 def expected_version(
     meta: dict[str, Any], onto: ontology.Ontology | None = None
 ) -> str:

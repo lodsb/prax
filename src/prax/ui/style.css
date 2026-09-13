@@ -252,5 +252,7 @@ main.stage { max-width: 1400px; }
   .turn-q { max-width: 100%; }
 }
 .servers { margin: .2rem 0 .8rem; padding-left: 1.2rem; font-size: .9rem; }
+.reading-form { display: flex; gap: .7rem; flex-wrap: wrap; align-items: center; font-size: .9rem; margin: 0 0 .8rem; }
+.reading-line { font-size: .88rem; margin: -.4rem 0 .8rem; }
 .servers li { margin: .15rem 0; }
 .ctx-domain select { font-size: .75rem; text-transform: none; letter-spacing: 0; margin-left: .4rem; padding: 0 .2rem; }

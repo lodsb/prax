@@ -174,6 +174,13 @@ with Sonnet.
     # every page, for printed pages with notes in the margin
     PRAX_VISION_PAGES=all python scripts/parse_pending.py --ids 8605 --extractor vision-pages --force
 
+Or from the document's page in the web UI: "read again…" asks for the
+extractor (and the pages) and a running worker (`scripts/work.py
+--watch`) does it next — requests go out before the pending captures —
+with the outcome shown on the page and the queue on Jobs. A worker
+refuses a reading whose model would cost money (the vision step set to
+Claude) and says so; those stay a command you run yourself.
+
 Measured on an orchestral score (Cowell, doc 8605, 2026-09-14): where
 OCR produced table-shaped garbage, the local model gave "a page of
 orchestral sheet music showing staves for Percussion, Trumpet, Horns

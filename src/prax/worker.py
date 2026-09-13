@@ -15,12 +15,13 @@ the Jobs view shows it wherever it runs.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import shutil
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -36,19 +37,43 @@ STEPS = ("parse", "titles", "extract", "embed")
 # ------------------------------------------------------------------ steps
 
 
+def _requested(it: dict[str, Any]) -> tuple[list[Any], str | None]:
+    """The extractors to try for an item: a requested reading names one
+    (and is refused when its model would cost money, so nobody's click
+    spends unasked — the request stays on the document with that
+    reason); otherwise the candidates for the type."""
+    name = it.get("extractor")
+    if not name:
+        return parsers.candidates(it.get("mime") or ""), None
+    try:
+        ext = parsers.by_name(name)
+    except KeyError as exc:
+        return [], str(exc)
+    if name.startswith("vision") and _paid(models.resolve("vision")):
+        spec = models.resolve("vision")
+        return [], (
+            f"the vision step is {spec.name if spec else 'none'} (paid): run"
+            " parse_pending.py yourself, or point the step at a local server"
+        )
+    if not ext.available():
+        return [], f"{name} is not installed on this worker"
+    return [ext], None
+
+
 def do_parse(
     door: Door, items: list[dict[str, Any]], *, log_: Log | None = None
 ) -> list[dict[str, Any]]:
     results = []
     for it in items:
         doc_id = it["doc_id"]
-        exts = parsers.candidates(it.get("mime") or "")
+        exts, refused = _requested(it)
         if not exts:
             results.append(
                 {
                     "doc_id": doc_id,
-                    "extractor": "none",
-                    "error": "no extractor for this type",
+                    "extractor": it.get("extractor") or "none",
+                    "error": refused or "no extractor for this type",
+                    "requested": it.get("extractor"),
                 }
             )
             continue
@@ -63,19 +88,25 @@ def do_parse(
         for ext in exts:
             t0 = time.monotonic()
             try:
-                text = ext(data, filename=it.get("filename")).strip()
+                with _mode(it.get("mode")):
+                    stamp = ext.stamp
+                    text = ext(
+                        data, filename=it.get("filename"), previous=it.get("previous")
+                    ).strip()
             except Exception as exc:  # noqa: BLE001
                 last = (ext.stamp, f"{type(exc).__name__}: {exc}")
                 continue
             results.append(
                 {
                     "doc_id": doc_id,
-                    "extractor": ext.stamp,
+                    "extractor": stamp,
                     "text": text,
                     "seconds": round(time.monotonic() - t0, 2),
+                    "force": bool(it.get("force")),
+                    "requested": it.get("extractor"),
                 }
             )
-            _say(log_, f"parse doc {doc_id}: {len(text)} chars ({ext.stamp})")
+            _say(log_, f"parse doc {doc_id}: {len(text)} chars ({stamp})")
             break
         else:
             results.append(
@@ -83,9 +114,28 @@ def do_parse(
                     "doc_id": doc_id,
                     "extractor": last[0] if last else exts[0].stamp,
                     "error": last[1] if last else "failed",
+                    "requested": it.get("extractor"),
                 }
             )
     return results
+
+
+@contextlib.contextmanager
+def _mode(mode: str | None) -> Iterator[None]:
+    """The requested mode as the extractor's setting for one call
+    (``vision-pages``: every page or the scans)."""
+    if not mode:
+        yield
+        return
+    before = os.environ.get("PRAX_VISION_PAGES")
+    os.environ["PRAX_VISION_PAGES"] = mode
+    try:
+        yield
+    finally:
+        if before is None:
+            os.environ.pop("PRAX_VISION_PAGES", None)
+        else:
+            os.environ["PRAX_VISION_PAGES"] = before
 
 
 def do_titles(

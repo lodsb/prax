@@ -5,6 +5,7 @@ only writer."""
 from __future__ import annotations
 
 import json
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -195,3 +196,71 @@ def test_leases_expire(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> N
     # a fresh hand-out after the lease ran out
     work._leases.clear()
     assert len(client.get("/work/extract").json()["items"]) == 1
+
+
+def test_a_requested_reading_goes_out_first_and_comes_back_with_its_outcome(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A person asks for the vision model over a scanned PDF from the
+    document page; the door hands the request out before the pending
+    captures, the worker runs the named extractor in the asked mode with
+    force, and the outcome lands on the document."""
+    import pymupdf
+
+    from prax import models
+
+    con = client.app.state.con
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "A printed page.")
+    doc.new_page()  # a scan
+    pdf = doc.tobytes()
+    doc.close()
+    scan = store.register(con, pdf, mime="application/pdf", title="scan.pdf")["doc_id"]
+    store.index_text(con, scan, "old OCR text " * 40, text_source="pymupdf4llm-ocr/1")
+    # the request: validated against the type
+    r = client.post(f"/doc/{scan}/reading", json={"extractor": "vision", "mode": None})
+    assert r.status_code == 400 and "does not read" in r.json()["detail"]
+    ask = {"extractor": "vision-pages", "mode": "all"}
+    r = client.post(f"/doc/{scan}/reading", json=ask)
+    assert r.status_code == 200 and r.json()["state"] == "requested"
+    assert client.get("/readings").json()["requested"][0]["doc_id"] == scan
+    # the door hands it out first, named, forced, in its mode
+    batch = client.get("/work/parse").json()
+    item = batch["items"][0]
+    assert item["doc_id"] == scan and item["extractor"] == "vision-pages"
+    assert item["mode"] == "all" and item["force"] is True and "previous" not in item
+    work._leases.clear()
+    # the worker: a fake vision model; every page rendered, since mode is all
+    seen: list[str] = []
+    spec = models.ModelSpec(
+        name="server-vl", kind="openai", base_url="http://127.0.0.1:1/v1", model="vl"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: spec if s == "vision" else None)
+
+    class FakeRuntime:
+        def chat(self, system, user, **kw):
+            seen.append(os.environ.get("PRAX_VISION_PAGES") or "")
+            return "(handwritten) a transcribed page " + "word " * 100, {}
+
+    monkeypatch.setattr(models, "runtime", lambda s: FakeRuntime())
+    monkeypatch.delenv("PRAX_VISION_PAGES", raising=False)
+    out = worker.run_once(_door(client), steps=("parse",), log_=lambda t: None)
+    assert out["parse"].startswith("1 parsed")
+    assert seen == ["all", "all"] and os.environ.get("PRAX_VISION_PAGES") is None
+    text = store.get_document(con, scan)["text"]
+    assert "(handwritten) a transcribed page" in text and "old OCR" not in text
+    reading = store.get_meta(con, scan)["reading"]
+    assert reading["state"] == "done" and reading["outcome"] == "upgraded"
+    assert reading["stamp"].startswith("vision-pages/")
+    assert reading["stamp"].endswith("+vl@127.0.0.1:1+all")
+    assert client.get("/work/parse").json()["items"] == []  # done, not handed out again
+    assert client.get("/readings").json()["recent"][0]["state"] == "done"
+    # a paid vision model is refused, and the refusal is the outcome
+    client.post(f"/doc/{scan}/reading", json={"extractor": "vision-pages"})
+    work._leases.clear()
+    paid = models.ModelSpec(name="sonnet", kind="claude", model="claude-sonnet-5")
+    monkeypatch.setattr(models, "resolve", lambda s: paid if s == "vision" else None)
+    worker.run_once(_door(client), steps=("parse",), log_=lambda t: None)
+    reading = store.get_meta(con, scan)["reading"]
+    assert reading["state"] == "error" and "(paid)" in reading["error"]
+    assert client.delete(f"/doc/{scan}/reading").json()["removed"] is True
