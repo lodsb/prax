@@ -26,6 +26,10 @@ time, so the serving path never loads them):
 | plain           | text/*          | decode as UTF-8; a source file (by extension, |
 |                 |                 | else Magika) becomes one fenced code block;   |
 |                 |                 | code regions inside prose are fenced          |
+| vision-pages    | .pdf            | scanned pages read by the vision step's model |
+|                 |                 | (handwriting, scores, what OCR cannot read);  |
+|                 |                 | pages with a text layer keep it; explicit     |
+|                 |                 | only, PRAX_VISION_PAGES=all reads every page  |
 | vision          | image/*         | the vision step's model (Claude, or llama-    |
 |                 |                 | server with a projector) describes the image  |
 |                 |                 | and transcribes its text, handwriting         |
@@ -262,7 +266,7 @@ def _ocr_pages(doc: Any, engine: Any, *, right_to_left: bool) -> str:
             texts = [] if result.txts is None else list(result.txts)
             text = "\n".join(_ocr_rows(boxes, texts, right_to_left=right_to_left))
         out.append(text)
-        out.append(f"\n\n--- end of page.page_number={page.number} ---\n\n")
+        out.append(f"\n\n--- end of page.page_number={page.number + 1} ---\n\n")
     return "".join(out)
 
 
@@ -331,6 +335,56 @@ def _pymupdf4llm_ocr(data: bytes) -> str:
         if lang in _OWN_OCR_SCRIPTS:
             return _ocr_pages(doc, engine, right_to_left=lang in _RIGHT_TO_LEFT)
         return pymupdf4llm.to_markdown(doc, use_ocr=True, page_separators=True)
+
+
+def _vision_pages_mode() -> str:
+    mode = str(config.setting("parse.vision_pages", "PRAX_VISION_PAGES", "scans"))
+    if mode not in ("scans", "all"):
+        raise ExtractionError(f"parse.vision_pages must be scans or all, not {mode!r}")
+    return mode
+
+
+def _vision_pages_variant() -> str:
+    from prax.parsers import vision
+
+    mode = _vision_pages_mode()
+    return vision.model_name() + ("" if mode == "scans" else f"+{mode}")
+
+
+def _vision_pages(data: bytes) -> str:
+    """The document page by page through the vision model.
+
+    A page with a text layer keeps it (as MuPDF reads it); a page without
+    one — a scan, a photo of a notebook, a score — is rendered and
+    transcribed by the vision step's model, which reads handwriting and
+    describes figures where OCR gives up. ``parse.vision_pages=all``
+    renders every page (printed pages with handwritten notes in the
+    margin). Page markers as the OCR extractor writes them, so the chunker
+    knows every line's page. The model takes ten to twenty seconds a page
+    locally, so documents above ``parse.vision_max_pages`` are refused and
+    left for a deliberate run with a higher budget.
+    """
+    from prax.parsers import vision
+
+    mode = _vision_pages_mode()
+    budget = config.whole("parse.vision_max_pages", "PRAX_VISION_MAX_PAGES", 200)
+    dpi = config.whole("parse.vision_dpi", "PRAX_VISION_DPI", 150)
+    with _pymupdf_open(data) as doc:
+        if doc.page_count > budget:
+            raise ExtractionError(
+                f"{doc.page_count} pages exceeds the vision budget of {budget}"
+                " (PRAX_VISION_MAX_PAGES)"
+            )
+        out: list[str] = []
+        for page in doc:
+            text = page.get_text().strip()
+            if mode == "scans" and len(text) >= 20:
+                out.append(text)
+            else:
+                pix = page.get_pixmap(dpi=dpi)
+                out.append(vision.transcribe_page(pix.tobytes("jpg", jpg_quality=88)))
+            out.append(f"\n\n--- end of page.page_number={page.number + 1} ---\n\n")
+    return "".join(out)
 
 
 def _pymupdf(data: bytes) -> str:
@@ -916,6 +970,14 @@ REGISTRY: list[Extractor] = [
         variant=_ocr_variant,  # the language is in the stamp
     ),
     Extractor("docling", ("application/pdf",), _docling, "docling", explicit_only=True),
+    Extractor(
+        "vision-pages",
+        ("application/pdf",),
+        _vision_pages,
+        "pymupdf",
+        explicit_only=True,
+        variant=_vision_pages_variant,  # the model, and "all" when every page is read
+    ),
     Extractor(
         "trafilatura",
         ("text/html", "application/xhtml+xml"),

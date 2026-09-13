@@ -153,8 +153,36 @@ recognized with Droid Sans Fallback, which has Latin, Greek, Cyrillic and
 CJK), prax runs the recognizer itself and writes the lines as text in
 reading order (right to left for Arabic), page markers included; no
 layout analysis, which a scanned book rarely has to give.
+
     # Docling on a hand-picked set
     python scripts/parse_pending.py --ids 12 34 --extractor docling --force
+
+**Pages OCR cannot read** — handwriting, scores, photographed notebooks —
+go through the vision model page by page: `vision-pages` keeps a page
+that has a text layer and renders every other page (150 dpi,
+`parse.vision_dpi`) for the `vision` step's model with a transcription
+prompt (verbatim text, `(handwritten)` marked, a figure or a score as one
+`[Figure: …]` line, `[illegible]` rather than a guess). Page markers as
+the OCR extractor writes them, so chunks keep their pages. The stamp
+carries the model (`vision-pages/1.28+<model>`); explicit only, and
+bounded (`parse.vision_max_pages`, default 200), since a page takes
+4–10 s locally (2–3 s to read the picture, the rest writing; the first
+page after the server starts took two minutes once) and a cent or two
+with Sonnet.
+
+    python scripts/parse_pending.py --ids 8605 --extractor vision-pages --force
+    # every page, for printed pages with notes in the margin
+    PRAX_VISION_PAGES=all python scripts/parse_pending.py --ids 8605 --extractor vision-pages --force
+
+Measured on an orchestral score (Cowell, doc 8605, 2026-09-14): where
+OCR produced table-shaped garbage, the local model gave "a page of
+orchestral sheet music showing staves for Percussion, Trumpet, Horns
+I–II and III–IV, Trombones, and Tuba … *mf*, *cresc.*, *senza sord.*" —
+findable, not a transcription of the notes; and on some pages only the
+bar numbers, so look at a few pages of a document before running the
+whole of it. The pass replaces the document's text (the OCR reading
+stays in the archive and in `parse_history`), as every PDF extractor
+does; the additive reading is the image extractor's, section 3b above.
 
 Office documents need nothing installed for `.docx` and `.odt`: both
 are a zip of XML and `prax.parsers` reads them here (headings by outline

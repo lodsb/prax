@@ -63,6 +63,23 @@ Anything a reader would want to know: what device or paper it belongs to
 if the image says so, oddities, what is unreadable.
 """
 
+PAGE_PROMPT = """\
+This is one page of a scanned document in a personal research library
+(notes, a book, a manual, a paper, a score). Transcribe it as Markdown:
+
+- every line of printed or handwritten text, verbatim, in reading order,
+  in the original language and spelling; write "(handwritten)" once at
+  the start of a handwritten passage;
+- headings as Markdown headings, lists as lists, tables as Markdown
+  tables, formulas in LaTeX between $ signs;
+- a figure, diagram, photo or musical score as one line "[Figure: ...]"
+  saying what it shows and any labels or lyrics in it;
+- a word you cannot read as "[illegible]"; never guess or invent text;
+- an empty page as "[blank page]".
+
+No commentary and no summary: the page's content only.
+"""
+
 # Replaceable in tests: a callable returning an object with messages.create.
 CLIENT_FACTORY: Callable[[], Any] | None = None
 
@@ -120,6 +137,24 @@ def _describe(
     model: str | None,
     claude_only: bool,
 ) -> str:
+    text, who = read(
+        data, PROMPT, model=model, claude_only=claude_only, max_tokens=3000
+    )
+    return _artifact(filename, who, text)
+
+
+def read(
+    data: bytes,
+    prompt: str,
+    *,
+    model: str | None = None,
+    claude_only: bool = False,
+    max_tokens: int = 2000,
+) -> tuple[str, str]:
+    """One image and one prompt through the vision model: the text it
+    wrote and the model's name. ``model`` names a Claude model outright;
+    otherwise the ``vision`` step says which model, Claude or a
+    vision-capable server."""
     from prax.parsers import ExtractionError
 
     mt = media_type(data)
@@ -143,12 +178,12 @@ def _describe(
                     "claude-vision wants a Claude model; the vision step names"
                     f" {spec.name!r} — use the 'vision' extractor for it"
                 )
-            text = _describe_server(models.runtime(spec), data, mt)
-            return _artifact(filename, spec.runtime_name, text)
+            text = _read_server(models.runtime(spec), data, mt, prompt, max_tokens)
+            return text, spec.runtime_name
         model = spec.model or DEFAULT_MODEL
     response = _client().messages.create(
         model=model,
-        max_tokens=2000,
+        max_tokens=max_tokens,
         messages=[
             {
                 "role": "user",
@@ -161,21 +196,30 @@ def _describe(
                             "data": base64.b64encode(data).decode("ascii"),
                         },
                     },
-                    {"type": "text", "text": PROMPT},
+                    {"type": "text", "text": prompt},
                 ],
             }
         ],
     )
     text = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
-    return _artifact(filename, model, text)
+    return text, model
 
 
-def _describe_server(runtime: Any, data: bytes, mt: str) -> str:
-    """The same prompt through an OpenAI-shaped server; a little temperature
+def transcribe_page(image: bytes) -> str:
+    """A scanned page as Markdown: what it says, line by line, handwriting
+    marked, figures as one line each (``PAGE_PROMPT``)."""
+    text, _who = read(image, PAGE_PROMPT, max_tokens=3000)
+    return text.strip()
+
+
+def _read_server(
+    runtime: Any, data: bytes, mt: str, prompt: str, max_tokens: int
+) -> str:
+    """The prompt through an OpenAI-shaped server; a little temperature
     keeps a local model out of the repetition loops greedy decoding falls
     into on long transcriptions."""
     text, _usage = runtime.chat(
-        "", PROMPT, images=[(data, mt)], max_tokens=2000, temperature=0.2
+        "", prompt, images=[(data, mt)], max_tokens=max_tokens, temperature=0.2
     )
     return text
 

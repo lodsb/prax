@@ -298,6 +298,66 @@ def test_a_promoted_image_is_described_again_by_the_promote_model(
     assert "image description" in store.document_field(con, doc_id)
 
 
+@needs_pymupdf
+def test_vision_pages_reads_the_scanned_pages_and_keeps_the_text_layer(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page with a text layer keeps it; a page without one is rendered and
+    transcribed by the vision step's model; page markers throughout; the
+    stamp names the model, and 'all' the mode."""
+    import pymupdf
+
+    from prax import models
+
+    doc = pymupdf.open()
+    page = doc.new_page()
+    page.insert_text((72, 72), "Printed page one, with a proper text layer.")
+    doc.new_page()  # blank: a scan as far as the text layer knows
+    pdf = doc.tobytes()
+    doc.close()
+
+    seen: list[bytes] = []
+
+    class FakeRuntime:
+        def chat(self, system, user, **kw):
+            seen.append(kw["images"][0][0])
+            assert user == parsers.vision.PAGE_PROMPT
+            page = "(handwritten) Notes on the 1176: attack 800 us. " + "More. " * 400
+            return page + "\n\n[Figure: a sketch]", {}
+
+    spec = models.ModelSpec(
+        name="server-vl", kind="openai", base_url="http://127.0.0.1:1/v1", model="vl"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: spec if s == "vision" else None)
+    monkeypatch.setattr(models, "runtime", lambda s: FakeRuntime())
+    monkeypatch.delenv("PRAX_VISION_PAGES", raising=False)
+    ext = parsers.by_name("vision-pages")
+    assert ext.explicit_only and ext.stamp.endswith("+vl@127.0.0.1:1")
+    stamp = ext.stamp
+    out = ext(pdf)
+    assert "Printed page one, with a proper text layer." in out
+    assert "(handwritten) Notes on the 1176: attack 800 us." in out
+    assert out.count("--- end of page.page_number=") == 2
+    assert out.index("page_number=1") < out.index("(handwritten)")
+    assert len(seen) == 1 and seen[0][:2] == b"\xff\xd8"  # one page rendered, as JPEG
+    # every page, when asked; and the page budget
+    monkeypatch.setenv("PRAX_VISION_PAGES", "all")
+    assert ext.stamp == stamp + "+all"
+    ext(pdf)
+    assert len(seen) == 3
+    monkeypatch.setenv("PRAX_VISION_MAX_PAGES", "1")
+    with pytest.raises(parsers.ExtractionError, match="exceeds the vision budget"):
+        ext(pdf)
+    monkeypatch.delenv("PRAX_VISION_MAX_PAGES")
+    monkeypatch.setenv("PRAX_VISION_PAGES", "scans")
+    # through the queue: chunks with pages
+    doc_id = store.register(con, pdf, mime="application/pdf", title="n.pdf")["doc_id"]
+    assert queue.run(con, [doc_id], extractor="vision-pages").actions == {"created": 1}
+    pages = {c["page"] for c in store.list_chunks(con, doc_id)}
+    assert pages == {1, 2}  # the scanned page is its own chunk, on page 2
+    assert store.get_meta(con, doc_id)["text_source"] == stamp
+
+
 def test_registry_dispatch() -> None:
     assert parsers.for_mime("text/plain").name == "plain"
     assert parsers.for_mime("text/markdown").name == "plain"
