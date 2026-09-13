@@ -231,3 +231,36 @@ def test_the_door_serves_a_figure_and_a_re_read_that_changes_nothing_is_same(
     assert store.get_meta(con, doc_id)["text_source"].startswith("trafilatura/")
     history = store.get_meta(con, doc_id)["parse_history"]
     assert history[-1]["extractor"] == "figure-refs/1"
+
+
+def test_prune_drops_references_the_original_no_longer_yields() -> None:
+    keep = figures.sha(PHOTO)
+    gone = "ab" * 32
+    text = (
+        f"Prose.\n\n![kept](figure:{keep})\n*Figure, as read by m:* fine.\n\n"
+        f"![stale](figure:{gone})\n*Figure, as read by m:* stale reading.\n\n"
+        f"More.\n\n{figures.FIGURES_HEADING}\n\n![stale too](figure:{gone})\n"
+    )
+    out = figures.prune(text, {keep})
+    assert gone not in out and "stale reading" not in out
+    assert f"![kept](figure:{keep})\n*Figure, as read by m:* fine." in out
+    assert figures.FIGURES_HEADING not in out and out.rstrip().endswith("More.")
+
+
+@needs_pymupdf
+def test_a_scanned_page_is_not_a_figure() -> None:
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page()  # a scan: the whole page is one image, no text
+    page.insert_image(page.rect, stream=PHOTO)
+    strips = doc.new_page()  # a scan in pieces, no text either
+    for k in range(4):
+        rect = pymupdf.Rect(30, 30 + k * 150, 500, 170 + k * 150)
+        strips.insert_image(rect, stream=PLOT)
+    assert figures.pdf_figures(doc) == []
+    # the same picture on a page with text is a figure
+    born = doc.new_page()
+    born.insert_text((72, 72), "A born-digital page with a picture below.")
+    born.insert_image(pymupdf.Rect(72, 100, 372, 300), stream=PLOT)
+    assert [f.page for f in figures.pdf_figures(doc)] == [3]

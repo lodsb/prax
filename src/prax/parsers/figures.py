@@ -19,8 +19,9 @@ What counts as a figure. HTML: an image inside ``<figure>`` (author's
 markup, with its ``<figcaption>``), or an image with a real ``alt`` text,
 or a big one — and only images the snapshot carries inline (data URLs;
 the door does not fetch). PDF: a placed raster image at least
-``MIN_PDF_PT`` points on each side that is not repeated on many pages
-(a logo), with the nearest "Figure N" block below it as caption. Vector
+``MIN_PDF_PT`` points on each side, not the whole page (a scan) and not
+repeated on many pages (a logo), with the nearest "Figure N" block below
+it as caption. Vector
 drawings are not found this way; a page rendered for ``vision-pages``
 covers those.
 """
@@ -38,6 +39,7 @@ MIN_HTML_BYTES = 4_000  # smaller inline images are icons
 BIG_HTML_BYTES = 40_000  # a photo, caption or not
 MIN_ALT_WORDS = 3
 MIN_PDF_PT = 90  # points on each side
+MAX_PDF_PAGE_SHARE = 0.8  # an image covering more of the page is the page (a scan)
 MAX_PDF_REPEATS = 3  # an image placed on more pages than this is a logo
 MAX_FIGURES = 60  # per document
 MAX_SIDE = 1600  # pixels, for the vision model
@@ -144,6 +146,9 @@ def pdf_figures(doc: Any) -> list[Figure]:
             infos = page.get_image_info(xrefs=True)
         except Exception:  # noqa: BLE001, S112 - a page MuPDF cannot walk
             continue
+        if len(page.get_text().strip()) < 20:
+            continue  # a scanned page: its images are the page, not figures
+        page_area = max(1.0, page.rect.width * page.rect.height)
         for info in infos:
             xref = info.get("xref") or 0
             bbox = info.get("bbox")
@@ -152,6 +157,8 @@ def pdf_figures(doc: Any) -> list[Figure]:
             w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
             if w < MIN_PDF_PT or h < MIN_PDF_PT:
                 continue
+            if w * h >= MAX_PDF_PAGE_SHARE * page_area:
+                continue  # the whole page as one picture: a scan, not a figure
             placements.setdefault(xref, []).append((page.number, bbox))
     out: list[Figure] = []
     seen: set[str] = set()
@@ -328,8 +335,31 @@ def of(data: bytes) -> list[Figure]:
 def add_refs(data: bytes, previous: str) -> str:
     """The current text with the original's figures referenced in it — the
     cheap half of the retroactive pass: no layout analysis, no model, the
-    text as it is plus the image lines it lacked."""
-    return place(previous, of(data))
+    text as it is plus the image lines it lacked, minus references the
+    original no longer yields (an earlier rule's mistakes)."""
+    found = of(data)
+    return place(prune(previous, {f.ref for f in found}), found)
+
+
+def prune(text: str, keep: set[str]) -> str:
+    """The text without the figure lines whose reference is not in
+    ``keep``, their readings under them gone too."""
+    out: list[str] = []
+    skipping = False
+    for line in text.split("\n"):
+        m = REF.match(line)
+        if m:
+            skipping = m.group("ref") not in keep
+            if skipping:
+                continue
+        elif skipping and READ_BY.match(line):
+            continue
+        else:
+            skipping = False
+        out.append(line)
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(out))
+    # an emptied "## Figures" section goes too
+    return re.sub(rf"\n*{re.escape(FIGURES_HEADING)}\s*$", "\n", text)
 
 
 def refs(text: str) -> list[dict[str, Any]]:
