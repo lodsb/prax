@@ -11,6 +11,25 @@ it through a web UI; a browser extension sends in what you are reading;
 a command and an MCP server open the same library to scripts and to
 Claude Code.
 
+<table>
+<tr>
+<td width="50%"><a href="docs/images/search.png"><img src="docs/images/search.png" alt="Search results: hybrid hits with the side that found each"></a></td>
+<td width="50%"><a href="docs/images/ask.png"><img src="docs/images/ask.png" alt="Ask: an answer citing passages, the sources beside it, a follow-up"></a></td>
+</tr>
+<tr>
+<td><sub>Search: hybrid hits, each saying which side found it — keywords, vectors, the document field.</sub></td>
+<td><sub>Ask: an answer with numbered citations, the cited passages beside it, and a follow-up that knows the turns before.</sub></td>
+</tr>
+<tr>
+<td><a href="docs/images/graph.png"><img src="docs/images/graph.png" alt="Graph: the most connected concepts, a paper's neighbourhood with its evidence"></a></td>
+<td><a href="docs/images/image-recognition.png"><img src="docs/images/image-recognition.png" alt="An image described and transcribed by the vision model, in the document view with its context"></a></td>
+</tr>
+<tr>
+<td><sub>Graph: the most connected concepts, methods and tools; a paper's neighbourhood, every edge with its evidence and its source.</sub></td>
+<td><sub>A schematic as a document: described and transcribed by the vision model, with its entities, similar documents and projects beside it.</sub></td>
+</tr>
+</table>
+
 The name: the praxinoscope succeeded the zoetrope, same drum, sharper
 image. prax succeeds an external-disk store of the same library.
 
@@ -117,7 +136,7 @@ OpenAI-compatible server, the Claude API for the few documents worth
 it, none for the steps where a person or the calling model does better.
 Nothing is spent unasked, and private material never has to leave the
 house: a whole library was read by a local model on one card, and the
-measurements comparing it with the hosted one are in `docs/eval/`.
+measurements comparing it with the hosted one are in [`docs/eval/`](docs/eval/).
 
 ## What it holds today
 
@@ -136,9 +155,9 @@ store):
 | Review queue | 25,700 open items: the evidence the next ontology change is drawn from |
 
 Not built: the move of the service onto the serving board (the code is
-in place, `deploy/`; the move is not made). The browser extension is
+in place, [`deploy/`](deploy/); the move is not made). The browser extension is
 hand-tested in Firefox and Waterfox. Checklists with dates and the
-planned passes: `docs/PLAN.md`.
+planned passes: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Where it sits among the others
 
@@ -146,7 +165,7 @@ Every neighbour exposes tools to an agent now, so that is not what
 sets anything apart. The closest ones, one per family, on what does
 (● yes, ◐ partly or through an add-on, – no; September 2026, from the
 projects' own pages). The [table by family](docs/research.md#where-prax-sits)
-in `docs/research.md` says what each family is for and what prax does
+in [`docs/research.md`](docs/research.md) says what each family is for and what prax does
 differently, with sources, after a note on what changed in a year.
 
 | | originals kept, by hash | reads PDFs and papers | words + meaning search | typed graph | an ontology you write | who wrote each edge, from what | local models | no server database | apps, extension |
@@ -186,9 +205,9 @@ open the UI. An empty store answers on the first request. `prax work
 --watch` on the machine with the models takes new documents the rest of
 the way (text, title, graph, vectors) through the door, never through
 the database; `prax` alone says where things stand and what to type
-next. Copy `prax.example.yaml` to the store as `prax.yaml` to say which
+next. Copy [`prax.example.yaml`](prax.example.yaml) to the store as `prax.yaml` to say which
 model does which step. Every step, with the commands — the Zotero import,
-the batch passes, the extension, the board: `docs/howto.md`.
+the batch passes, the extension, the board: [`docs/howto.md`](docs/howto.md).
 
 ---
 
@@ -250,7 +269,7 @@ inspected, and be retired as a unit when a better reading replaces it.
 The ontology module is the schema a workflow can trust: versioned, and
 stamped on every edge. `GET /changes` is a stamp that moves when the
 store did; the UI polls it, and so can anything else. The Claude Code
-plugin (`clients/claude-plugin/`, `docs/claude-workflow.md`) adds the
+plugin (`clients/claude-plugin/`, [`docs/claude-workflow.md`](docs/claude-workflow.md)) adds the
 judgement: a skill for when to use the library, commands to orient a
 session, answer with citations, file decisions on the project's page,
 sync the project's docs and archive its sessions (what was said, tool
@@ -263,7 +282,7 @@ feed is polling, not push; and "scheduled" means a cron line running
 document of its own with a key and a version, or a link for the door to
 fetch — and `feed.run` sends them through the door, skipping what the
 library already holds; the GitHub, chat and links importers are each a
-file (`docs/sources.md`). The drop folder takes anything, with a
+file ([`docs/sources.md`](docs/sources.md)). The drop folder takes anything, with a
 subfolder naming the module. The extension posts what a browser sees.
 
 **Models are configuration.** `prax.yaml` names models — the Claude
@@ -284,34 +303,34 @@ a gigabyte of memory.
 
 ## Design
 
-Ten invariants in `CLAUDE.md` hold the shape: SQLite is the canonical
+Ten invariants in [`CLAUDE.md`](CLAUDE.md) hold the shape: SQLite is the canonical
 store and the only database; files are content-addressed; every mutation
 goes through one module; one writer; a thin MCP proxy; agent-shaped
 endpoints that return snippets and ids, never whole documents; nothing in
 the serving path that needs more than a gigabyte of memory; edges are
 evidence with provenance, never truth; a small versioned ontology;
 importers never write to their source. The reasoning behind each, with
-what was measured and when to revisit: `docs/rationale.md`. The system as
+what was measured and when to revisit: [`docs/rationale.md`](docs/rationale.md). The system as
 built, module by module, with a "where to touch what" table:
-`docs/architecture.md`.
+[`docs/architecture.md`](docs/architecture.md).
 
 ## Documentation
 
 | File | What it is |
 |---|---|
-| `CLAUDE.md` | Architecture invariants and conventions. Loaded into every Claude Code session. |
-| `docs/architecture.md` | The system as built: hosts, life of a document and of a query, module map, data model, batch jobs, configuration, where to touch what, numbers. |
-| `docs/howto.md` | Setting up, every batch job, `prax.yaml`, the doors, the UI, the board, backup. |
-| `docs/rationale.md` | Decision records R1 to R16: what was chosen, why, what was measured, when to revisit. |
-| `docs/ui.md` | The web UI: endpoints it uses, routes, rules. |
-| `docs/ontology-v2.md`, `-v4.md`, `-v5.md`, `-v6.md`, `-v7.md`, `docs/ontology-studio.md`, `docs/ontology-craft.md` | How the ontology grew: from the review queue's evidence, for syntheses, for organizations and mentions, for where a document was written and the weak relation widened, and to a first stable shape with authorship, publishing, place and part-of in core; the studio module for gear; craft with kitchen and workshop on top of it. |
-| `docs/PLAN.md` | Staged build plan with checklists and dates. |
-| `docs/sources.md` | Data sources: the Zotero import, citation sources, captures, the drop folder, `prax import` and what else would fit. |
-| `docs/extension.md` | The browser extension: installing it, what it sends, its settings, how it authenticates. |
-| `docs/claude-workflow.md` | prax in a Claude Code workflow: the plugin, a project's knowledge into the library and the library's into a project. |
-| `docs/eval/` | Measurements: extractors, retrieval on the fixture and the library, the local LLM, the document field. |
-| `docs/research.md` | The landscape survey the first decisions were drawn from, and a revisit from September 2026 placing prax among its neighbours. |
-| `prax.example.yaml` | Template for `prax.yaml`: models, steps, and every other setting. |
+| [`CLAUDE.md`](CLAUDE.md) | Architecture invariants and conventions. Loaded into every Claude Code session. |
+| [`docs/architecture.md`](docs/architecture.md) | The system as built: hosts, life of a document and of a query, module map, data model, batch jobs, configuration, where to touch what, numbers. |
+| [`docs/howto.md`](docs/howto.md) | Setting up, every batch job, `prax.yaml`, the doors, the UI, the board, backup. |
+| [`docs/rationale.md`](docs/rationale.md) | Decision records R1 to R16: what was chosen, why, what was measured, when to revisit. |
+| [`docs/ui.md`](docs/ui.md) | The web UI: endpoints it uses, routes, rules. |
+| [`docs/ontology-v2.md`](docs/ontology-v2.md), [`-v4`](docs/ontology-v4.md), [`-v5`](docs/ontology-v5.md), [`-v6`](docs/ontology-v6.md), [`-v7`](docs/ontology-v7.md), [`docs/ontology-studio.md`](docs/ontology-studio.md), [`docs/ontology-craft.md`](docs/ontology-craft.md) | How the ontology grew: from the review queue's evidence, for syntheses, for organizations and mentions, for where a document was written and the weak relation widened, and to a first stable shape with authorship, publishing, place and part-of in core; the studio module for gear; craft with kitchen and workshop on top of it. |
+| [`docs/PLAN.md`](docs/PLAN.md) | Staged build plan with checklists and dates. |
+| [`docs/sources.md`](docs/sources.md) | Data sources: the Zotero import, citation sources, captures, the drop folder, `prax import` and what else would fit. |
+| [`docs/extension.md`](docs/extension.md) | The browser extension: installing it, what it sends, its settings, how it authenticates. |
+| [`docs/claude-workflow.md`](docs/claude-workflow.md) | prax in a Claude Code workflow: the plugin, a project's knowledge into the library and the library's into a project. |
+| [`docs/eval/`](docs/eval/) | Measurements: extractors, retrieval on the fixture and the library, the local LLM, the document field. |
+| [`docs/research.md`](docs/research.md) | The landscape survey the first decisions were drawn from, and a revisit from September 2026 placing prax among its neighbours. |
+| [`prax.example.yaml`](prax.example.yaml) | Template for `prax.yaml`: models, steps, and every other setting. |
 
 ## Scope and status
 
@@ -326,9 +345,9 @@ welcome but may wait.
 ## License
 
 MIT, see `LICENSE`, except the browser extension:
-`clients/browser-extension/` is AGPL-3.0 (its own `LICENSE`) because it
+[`clients/browser-extension/`](clients/browser-extension/) is AGPL-3.0 (its own `LICENSE`) because it
 bundles SingleFile for page snapshots, the way the Zotero connector does;
 it is a separate program talking to the server over HTTP. The test
-fixture under `tests/fixtures/` holds open-access papers under their own
-Creative Commons terms; `tests/fixtures/zotero/README.md` lists them
+fixture under [`tests/fixtures/`](tests/fixtures/) holds open-access papers under their own
+Creative Commons terms; [`tests/fixtures/zotero/README.md`](tests/fixtures/zotero/README.md) lists them
 with their licenses.
