@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from prax import models, ontology, store
-from prax.review import REMAP, _doc_titles, _placeholder
+from prax.review import REMAP, RETYPE, _doc_titles, _placeholder
 
 STEP = "typing"
 PRODUCER_PREFIX = "typing"
@@ -260,7 +260,10 @@ def _apply(
             store.resolve_review(con, it["id"], "dropped")
         return
     rel = b.onto.canonical_relation(it["rel"])
-    rel = REMAP.get((rel, st, dt), rel)  # a "cited" tool is used, a person mentioned
+    # the rules' near-miss tables: a venue typed as an organization is a
+    # venue, a "cited" tool is used, a "cited" person is mentioned
+    st, dt = RETYPE.get((rel, st, dt), (st, dt))
+    rel = REMAP.get((rel, st, dt), rel)
     try:
         b.onto.check_edge(st, rel, dt)
     except ValueError:

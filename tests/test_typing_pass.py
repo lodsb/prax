@@ -34,7 +34,7 @@ class FakeModel:
             if "junk" in dst:
                 lines.append(f"{n}: paper -> none")
             elif rel == "published_in":
-                lines.append(f"{n}: paper -> venue")
+                lines.append(f"{n}: paper -> organization")  # retyped to a venue
             elif rel == "authored_by":
                 lines.append(f"{n}: paper -> author")
             elif rel == "uses":
