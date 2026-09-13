@@ -35,7 +35,9 @@ already keeps; the library holds what was read and what was decided.
    wiki. Read the hit before citing it: `get_chunk(chunk_id)` for the
    passage, `get(doc_id, offset, max_chars)` for more of the document.
 2. `ask(question)` — the best passage per document plus the graph's
-   facts, ready to answer from; cite the passage numbers it gives.
+   facts, ready to answer from; cite the passage numbers it gives. For
+   a follow-up, pass the turns so far as `history=[{question, answer}]`
+   and the search stays in the conversation's neighbourhood.
 3. `context(doc_id | slug)` — what the library knows around one
    document or page: summary, entities, citations, nearest documents,
    notes, a project page's members. Start a project session with

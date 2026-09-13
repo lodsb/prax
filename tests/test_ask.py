@@ -246,3 +246,51 @@ def test_api_ask_and_save(client: TestClient) -> None:
     assert "## granular synthesis" in page["text"] and "[A](#doc/" in page["text"]
     r = client.post("/ask/save", json={"slug": "nope", "result": body})
     assert r.status_code == 404
+
+
+def test_a_follow_up_carries_the_conversation(con: sqlite3.Connection) -> None:
+    """Earlier turns reach the model before the new question, a short or
+    pointing-back question widens the search with the previous one, and
+    the citations are this turn's only."""
+    _library(con)
+    history = [
+        {
+            "question": "how does a feedback delay network make reverb?",
+            "answer": "It feeds delays back [1].",
+        },
+        {"junk": True},
+        {"question": "", "answer": "empty"},
+    ]
+    turns = ask.clean_history(history)
+    assert turns == [history[0]]
+    assert ask.search_query("what about its density?", turns).endswith(
+        "how does a feedback delay network make reverb?"
+    )
+    assert ask.search_query("and the second one", turns).startswith(
+        "and the second one how"
+    )
+    assert ask.search_query(
+        "granular synthesis with many short grains of sound", turns
+    ) == ("granular synthesis with many short grains of sound")
+    assert ask.search_query("anything", []) == "anything"
+
+    class Recorder:
+        name = "recorder"
+        seen = ""
+
+        def answer(self, bundle: ask.Bundle) -> tuple[str, dict[str, int]]:
+            self.seen = bundle.as_message()
+            return "Denser with more delays [1].", {}
+
+    rec = Recorder()
+    out = ask.ask(con, "what about its density?", answerer=rec, history=history)
+    assert out["turns_before"] == 1 and out["answer"].startswith("Denser")
+    assert rec.seen.startswith(
+        "Earlier in this conversation:\n\nQ: how does a feedback"
+    )
+    assert "A: It feeds delays back [1]." in rec.seen
+    assert "\nQuestion: what about its density?\n" in rec.seen
+    assert out["citations"] and out["citations"][0]["n"] == 1
+    # a long, self-contained follow-up searches on its own words
+    long = ask.clean_history([{"question": "q", "answer": "a"}] * 10)
+    assert len(long) == ask.HISTORY_TURNS

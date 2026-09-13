@@ -5,6 +5,50 @@
 const view = document.getElementById("view");
 const statusEl = document.getElementById("status");
 
+// ---------------------------------------------------------------- settings
+// What this browser prefers: the theme, a few defaults. localStorage, this
+// browser only, never sent to the door (the session cookie is the only
+// thing the door sees). The theme is also applied by an inline script in
+// index.html before the first paint, so a reload does not flash.
+const SETTINGS_KEY = "prax.settings";
+const SETTINGS_DEFAULTS = { theme: "system", ask_limit: 8, search_limit: 20 };
+
+function settings() {
+  try { return { ...SETTINGS_DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; }
+  catch (_) { return { ...SETTINGS_DEFAULTS }; }
+}
+function saveSettings(s) {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (_) { /* private mode */ }
+  applyTheme(s.theme);
+}
+function applyTheme(theme) {
+  if (!theme || theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+  // the canvas reads its colours when it draws; a settled graph must be told
+  const live = ForceGraph.live;
+  if (live && document.contains(live.canvas)) live.draw();
+}
+function openSettings() {
+  const dlg = document.getElementById("settings");
+  const form = document.getElementById("settings-form");
+  const s = settings();
+  form.theme.value = s.theme;
+  form.ask_limit.value = s.ask_limit;
+  form.search_limit.value = s.search_limit;
+  form.theme.onchange = () => applyTheme(form.theme.value);  // a live preview
+  dlg.onclose = () => {
+    const next = {
+      theme: form.theme.value,
+      ask_limit: Math.max(1, Math.min(20, Number(form.ask_limit.value) || 8)),
+      search_limit: Math.max(5, Math.min(100, Number(form.search_limit.value) || 20)),
+    };
+    saveSettings(next);
+  };
+  dlg.showModal();
+}
+document.getElementById("settings-btn").addEventListener("click", openSettings);
+// (the theme itself is applied by the inline script in index.html, before paint)
+
 // ------------------------------------------------------------- utilities
 
 
@@ -31,7 +75,8 @@ async function api(path, params) {
 // ------------------------------------------------------------------ auth
 // The door wants a bearer token (PRAX_TOKEN). The UI exchanges it once for
 // an HttpOnly session cookie via POST /session, so plain links (originals,
-// raw text) work in new tabs too. Nothing is kept in localStorage.
+// raw text) work in new tabs too. The token is never kept in the browser
+// (localStorage holds the settings, sessionStorage the ask conversation).
 
 function askForToken() {
   if (document.getElementById("token-form")) return;
@@ -123,7 +168,7 @@ function renderSearchForm(p) {
       ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
     </select>
     ${domainSelect(p.domain || "")}
-    <input name="limit" type="number" min="1" max="100" value="${esc(p.limit || 20)}" title="limit">
+    <input name="limit" type="number" min="1" max="100" value="${esc(p.limit || settings().search_limit)}" title="limit">
     <button>Search</button>
   </form>`;
 }
@@ -140,7 +185,7 @@ async function viewSearch(p) {
   if (!p.q) return;
   const results = document.getElementById("results");
   try {
-    const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, domain: p.domain || undefined, limit: p.limit || 20 });
+    const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, domain: p.domain || undefined, limit: p.limit || settings().search_limit });
     if (!hits.length) { results.innerHTML = `<p class="muted">No hits.</p>`; return; }
     results.innerHTML = hits.map((h) => {
       const page = h.page ? `p. ${h.page}` : "";
@@ -540,6 +585,7 @@ class ForceGraph {
   // a few steps per animation frame with a decaying alpha instead of three
   // hundred at once, so the page answers while the layout settles.
   constructor(canvas, onSelect) {
+    ForceGraph.live = this;  // the one on screen, for a theme change
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.onSelect = onSelect;
@@ -1169,6 +1215,23 @@ async function viewReview(p) {
 let askConfig = null;
 
 
+// The conversation lives in this tab's sessionStorage: a follow-up sends
+// the earlier turns along (the door searches in their neighbourhood and
+// the model sees them), "New ask" starts over, and a reload shows the
+// conversation instead of asking again.
+const ASK_KEY = "prax.ask";
+
+function askSession() {
+  try { return JSON.parse(sessionStorage.getItem(ASK_KEY) || "null") || { turns: [] }; }
+  catch (_) { return { turns: [] }; }
+}
+function saveAskSession(s) {
+  try { sessionStorage.setItem(ASK_KEY, JSON.stringify(s)); } catch (_) { /* full or blocked */ }
+}
+function clearAskSession() {
+  try { sessionStorage.removeItem(ASK_KEY); } catch (_) { /* nothing to clear */ }
+}
+
 function renderAskForm(p) {
   const backend = p.backend || "";
   const dflt = askConfig ? askConfig.default : "none";
@@ -1185,9 +1248,39 @@ function renderAskForm(p) {
       <option value="" ${!p.doctype ? "selected" : ""}>any type</option>
       ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"], ["page", "pages"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
     </select>
-    <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || 8)}" title="passages">
+    <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || settings().ask_limit)}" title="passages">
     <button>Ask</button>
-  </form>`;
+  </form>
+  <div id="ask-tools" class="ask-tools"></div>`;
+}
+
+// The bar under the form: how long the conversation is, and the way out
+// of it. The input turns into a follow-up box once there is a turn.
+function updateAskTools(form) {
+  const turns = askSession().turns;
+  const tools = document.getElementById("ask-tools");
+  if (!turns.length) {
+    tools.innerHTML = "";
+    form.question.placeholder = "ask the library…";
+    return;
+  }
+  tools.innerHTML = `<span class="muted">${turns.length} turn${turns.length > 1 ? "s" : ""} in this conversation (kept in this tab); a follow-up may refer to them.</span>
+    <button type="button" id="ask-new">New ask</button>`;
+  form.question.placeholder = "ask a follow-up…";
+  document.getElementById("ask-new").addEventListener("click", () => {
+    clearAskSession();
+    if (location.hash === "#ask") render(); else go("ask", "", {});
+  });
+}
+
+function renderTurn(r, earlier) {
+  const q = `<div class="turn-q">${esc(r.question)}</div>`;
+  if (!earlier) return `<div class="turn current">${q}${renderAnswer(r)}</div>`;
+  const cited = (r.citations || []).map((c) => `[${c.n}] <a href="#doc/${c.doc_id}">${esc(c.title || "(untitled)")}</a>`);
+  const answer = r.answer
+    ? `<div class="answer">${citeLinks(md(r.answer), r.passages || [])}</div>`
+    : `<p class="muted">no answer (bundle only)</p>`;
+  return `<div class="turn earlier">${q}${answer}${cited.length ? `<div class="turn-sources">cited: ${cited.join(" · ")}</div>` : ""}</div>`;
 }
 
 function renderAnswer(r) {
@@ -1229,18 +1322,47 @@ async function viewAsk(p) {
     e.preventDefault();
     go("ask", "", Object.fromEntries(new FormData(form)));
   });
-  if (!p.question) return;
+  updateAskTools(form);
   const out = document.getElementById("ask-out");
-  const backend = p.backend || askConfig.default;
-  out.innerHTML = `<p class="muted">${backend === "none" ? "gathering passages…" : `asking ${esc(backend)}… (a local model takes tens of seconds)`}</p>`;
-  let r;
-  try {
-    r = await post("/ask", { question: p.question, backend: p.backend || null, doctype: p.doctype || null, limit: Number(p.limit || 8) });
-  } catch (err) {
-    out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  const session = askSession();
+  const params = JSON.stringify([p.backend || "", p.doctype || "", p.limit || ""]);
+  // a reload, or the back button: the turn is already here, so show the
+  // conversation with that turn in full rather than asking again
+  const kept = p.question ? session.turns.findIndex((t) => t.question === p.question && t.params === params) : -1;
+  const earlierTurns = kept >= 0 ? session.turns.slice(0, kept) : session.turns;
+  const earlier = earlierTurns.map((t) => renderTurn(t, true)).join("");
+  if (!p.question) {
+    out.innerHTML = earlier;
     return;
   }
-  out.innerHTML = renderAnswer(r);
+  let r;
+  if (kept >= 0) {
+    r = session.turns[kept];
+  } else {
+    const backend = p.backend || askConfig.default;
+    out.innerHTML = earlier + `<p class="muted">${backend === "none" ? "gathering passages…" : `asking ${esc(backend)}… (a local model takes tens of seconds)`}</p>`;
+    try {
+      r = await post("/ask", {
+        question: p.question,
+        backend: p.backend || null,
+        doctype: p.doctype || null,
+        limit: Number(p.limit || settings().ask_limit),
+        history: session.turns.filter((t) => t.answer).map((t) => ({ question: t.question, answer: t.answer })),
+      });
+    } catch (err) {
+      out.innerHTML = earlier + `<p class="error">${esc(err.message)}</p>`;
+      return;
+    }
+    if (route().name !== "ask") return;  // navigated away meanwhile
+    r.params = params;
+    session.turns.push(r);
+    saveAskSession(session);
+  }
+  const later = kept >= 0 ? session.turns.slice(kept + 1).map((t) => renderTurn(t, true)).join("") : "";
+  out.innerHTML = earlier + renderTurn(r, false) + later;
+  updateAskTools(form);
+  form.question.value = "";  // the next thing typed is a follow-up
+  if (earlierTurns.length) document.querySelector(".turn.current").scrollIntoView({ block: "start" });
   const save = document.getElementById("ask-save");
   if (!save) return;
   const slugSel = document.getElementById("ask-save-slug");

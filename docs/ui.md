@@ -23,7 +23,7 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `GET /review?limit&offset&open&rel&unmapped` | review-queue items with the total, filtered by relation and by unmapped (untyped) versus typed items; `POST /review/{id}` closes one (`dropped`, `ontology`, or `linked` with optional type and relation overrides, which writes the edge with the item's evidence and source); `POST /review/bulk` closes every open item matching a filter; `POST /review/replay` links the typed items the current ontology accepts |
 | `GET /pages?kind`, `GET /page/{slug}`, `GET /page/{slug}/revision/{n}` | pages (notes, projects, topics) with their revisions; `PUT /page/{slug}` creates or revises (409 when an agent would overwrite a person), `POST /page/{slug}/append` adds a section, `POST /project/{slug}/members` adds a document to a project |
 | `GET /graph/overview?limit&min_shared` | the most connected concepts, methods, tools and datasets, the edges among them, and co-occurrence links between hubs sharing source documents |
-| `POST /ask {question, limit, doctype, backend}`, `GET /ask/config`, `POST /ask/save {slug, heading, result}` | the passages (one per document, with chunk and document ids) and graph facts for a question, and an answer citing them when a backend answers (`local`, `claude`, `none`; the host's default from `/ask/config`); `save` appends a result to a page as the agent with a source list and `annotates` edges |
+| `POST /ask {question, limit, doctype, backend, history}`, `GET /ask/config`, `POST /ask/save {slug, heading, result}` | the passages (one per document, with chunk and document ids) and graph facts for a question, and an answer citing them when a backend answers (`local`, `claude`, `none`; the host's default from `/ask/config`); `history` is the conversation so far as `[{question, answer}, …]` (the last six turns ride along for the model, and a follow-up that leans on them — short, or pointing back with "it", "that", "the second one" — is searched together with the previous question; the answer cites only this turn's passages; `turns_before` in the result says how many were used); `save` appends a result to a page as the agent with a source list and `annotates` edges |
 | `GET /doc/{id}/domains`, `PUT /doc/{id}/domains {domains}`, `POST`/`DELETE /doc/{id}/domains/{name}` | the document's domain set (which ontology modules it is read against; null means every module) with the modules to choose from; replace, add one, remove one; `GET /search?domain=` keeps one domain's documents |
 | `POST /ingest/file` (multipart `file`, `title`, `domains`, `tags`, `session`, `by`), `POST /ingest/html {url, html, title, domains, tags, session, mode, note}`, `POST /ingest/url {url, title, domains, tags, session}`, `GET /inbox?limit` | captures: an uploaded file, a page as the browser rendered it, a URL the door fetches; each returns the document id, whether it was new, whether it is searchable already, its domains and the previous capture of the same URL; `/inbox` lists recent captures with state, the drop folder path and the domains to choose from |
 | `GET /promote?limit`, `POST /doc/{id}/promote {reason}`, `DELETE /doc/{id}/promote` | the documents flagged for the expensive model's pass with their status, and scored candidates (project members, synthesis sources, notes, library citations); set and clear the flag |
@@ -42,7 +42,7 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `#promote` | the queue for the expensive model: flagged documents (who, why, when, done or pending under the promote step's model) with an un-promote control, and candidates with their score breakdown and a promote button; a document page has "promote" in its action row, and "domains…" to set which ontology modules it is read against (shown as `domains: family, research` in its meta line) |
 | `#inbox` | captures: a drop zone and file picker (several files at once, or a whole folder), domain checkboxes and tags applied to the upload, a title for a single file; a URL form the door fetches; the drop folder's path; the recent captures with source, domains, time and state (pending, indexed, extracted); each result links to its document |
 | `#jobs` | the batch passes running now (name, progress bar, done/total, note, heartbeat, host) and the recent ones; the navigation shows a badge with the running count |
-| `#ask?question=…&backend=&doctype=&limit=` | a question, which model answers (the host's default, the local model, Claude, or bundle only), document type and passage count; the answer rendered with `[n]` as links to the cited chunk; "keep on page" appends it to a chosen page; the passages as cards, cited ones marked, each with its graph facts as chips |
+| `#ask?question=…&backend=&doctype=&limit=` | a question, which model answers (the host's default, the local model, Claude, or bundle only), document type and passage count; the answer rendered with `[n]` as links to the cited chunk; "keep on page" appends it to a chosen page; the passages as cards, cited ones marked, each with its graph facts as chips. The view is a conversation: every answered turn is kept in the tab's `sessionStorage` (`prax.ask`), earlier turns are shown above the newest one folded to question, answer and the cited titles, the input becomes "ask a follow-up…" and sends the earlier turns as `history`; a reload or the back button shows the kept answer instead of asking again; "New ask" forgets the conversation. It ends with the tab |
 | `#doc/<id>?chunk=<chunk_id>`, `#doc/<id>/<chunk_id>`, `#doc/<id>?find=<quote>` | header with title, metadata (creators, date, DOI, source, tags, collections, extractor stamp, citation count, the former title when the title pass replaced it) and "open original"; an outline of headings; the body rendered chunk by chunk, each with a kind badge and page number, tables from their grids, code as code; the requested chunk highlighted and scrolled into view (`find` locates the chunk holding a quote client-side, which is how an edge's evidence in the graph panel and a review item link to their chunk; chunk ids are disposable, quotes are not); an image document shows the image itself above its description; a context column (`GET /doc/{id}/context`): summary, entity chips opening the graph, similar documents, documents sharing entities, cited by, cites, same authors, Zotero parent and siblings |
 | `#browse?title=&source=&mime=&offset=` | paged document list with filters; a row opens the document |
 | `#graph` | the overview: the 30 most connected concepts, methods, tools and datasets as a force layout; a double-click on a node opens its neighbourhood |
@@ -51,13 +51,26 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `#doc/<id>?edit=1` | a page's document view with the editor open: textarea, title, change note, revision list; "add a note" on a non-page document creates an addendum linked to it; the context column shows notes on a document, a project's members, and "add to project" |
 | `#review?rel=&unmapped=&offset=` | the review queue, filtered by relation and unmapped/typed: each misfit triple with its reason, evidence and source document, and a row form to drop it, mark it an ontology gap, or fix its types or relation from the current ontology and link it as an edge; "drop all matching" and "replay against ontology" act on the whole filter |
 
+## Settings
+
+The gear in the header opens a small dialog: the theme (follow the
+system, light, dark, or paper — a warm sepia), the passages per ask and
+the hits per search. It is kept in `localStorage` (`prax.settings`) in
+this browser only and never sent to the door; an inline script in
+`index.html` applies the theme before the first paint, so a reload does
+not flash. Themes are `data-theme` on `<html>` over the same CSS
+variables: no attribute follows `prefers-color-scheme`, an explicit
+choice wins over it, and the graph canvas reads the variables when it
+draws, so it follows too. Other browser-side preferences go into the
+same dialog and the same key.
+
 ## Files
 
     src/prax/ui/
       index.html        the page: nav, a view container, script tags
       lib.js            the pure helpers (escaping, hash parsing, chunk locating, citation links); also loaded by the node tests
       app.js            API client, one render function per view, the error reporter
-      style.css         layout, badges, highlight; light and dark via prefers-color-scheme
+      style.css         layout, badges, highlight; the themes as CSS variables (system, light, dark, paper)
       vendor/marked.min.js   Markdown renderer (MIT), pinned version noted in vendor/VERSIONS
 
 ## Tests and errors
@@ -80,6 +93,9 @@ door's log.
 - Access is the door's bearer token, inside the private network. The page loads
   without it (static files are open); the first API call that returns
   401 shows a token prompt, `POST /session` turns the token into an
-  HttpOnly cookie, and nothing is kept in browser storage.
-- No state of its own; if the UI ever needs saved searches or notes, that
-  is a table behind the door.
+  HttpOnly cookie, and the token is never kept in browser storage.
+- No state of its own beyond the browser's: the settings (`localStorage`)
+  and the ask conversation (`sessionStorage`, gone with the tab) are
+  conveniences of one browser; anything worth keeping — an answer, a
+  note — goes to a page behind the door. If the UI ever needs saved
+  searches, that is a table behind the door.

@@ -43,7 +43,20 @@ knowledge of these documents. After each claim, cite the passages that
 support it in square brackets, like [2] or [1][3]; cite nothing else and
 never invent a number. When the passages do not answer the question, say so
 in one sentence and say what they do cover. Answer in plain Markdown under
-250 words, without a heading, and name documents by their titles."""
+250 words, without a heading, and name documents by their titles. When
+earlier turns of the conversation are given, the question may refer to
+them ("that method", "the second one"); answer the new question in their
+light, but cite only the passages numbered below it, never an earlier
+turn's."""
+
+HISTORY_TURNS = 6  # what a follow-up carries along, at most
+HISTORY_CHARS = 1500  # of each earlier answer
+_FOLLOW_UP = re.compile(
+    r"\b(it|its|that|this|these|those|they|them|their|the same|the other|"
+    r"the second|the first|the latter|the former|he|she|his|her|also|too|"
+    r"instead|why|how so|more)\b",
+    re.IGNORECASE,
+)
 
 
 @dataclass
@@ -86,10 +99,19 @@ class Bundle:
     question: str
     passages: list[Passage] = field(default_factory=list)
     facts: dict[int, list[dict[str, Any]]] = field(default_factory=dict)
+    history: list[dict[str, str]] = field(default_factory=list)  # earlier turns
 
     def as_message(self) -> str:
         n = len(self.passages)
-        parts = [f"Question: {self.question.strip()}", "", f"Passages (1 to {n}):"]
+        parts: list[str] = []
+        if self.history:
+            parts.append("Earlier in this conversation:")
+            for turn in self.history:
+                q = " ".join(str(turn.get("question", "")).split())
+                a = " ".join(str(turn.get("answer", "")).split())[:HISTORY_CHARS]
+                parts += ["", f"Q: {q}", f"A: {a}"]
+            parts.append("")
+        parts += [f"Question: {self.question.strip()}", "", f"Passages (1 to {n}):"]
         for p in self.passages:
             parts += ["", f"[{p.n}] {p.label()}", p.text]
         lines = []
@@ -112,7 +134,34 @@ class Bundle:
             "question": self.question,
             "passages": [p.to_dict() for p in self.passages],
             "facts": {str(k): v for k, v in self.facts.items()},
+            "turns_before": len(self.history),
         }
+
+
+def clean_history(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
+    """The last few turns, question and answer only, each a string."""
+    turns = []
+    for t in history or []:
+        if not isinstance(t, dict):
+            continue
+        q = str(t.get("question") or "").strip()
+        a = str(t.get("answer") or "").strip()
+        if q and a:
+            turns.append({"question": q, "answer": a})
+    return turns[-HISTORY_TURNS:]
+
+
+def search_query(question: str, history: list[dict[str, str]]) -> str:
+    """What to search for: the question, and when it leans on the
+    conversation — short, or pointing back with "it", "that", "the second
+    one" — the previous question's words too, so the passages come from
+    the same neighbourhood."""
+    q = " ".join(question.split())
+    if not history:
+        return q
+    if len(q.split()) <= 5 or _FOLLOW_UP.search(q):
+        return f"{q} {history[-1]['question']}"
+    return q
 
 
 def gather(
@@ -122,16 +171,20 @@ def gather(
     limit: int = PASSAGES,
     doctype: str | None = None,
     passage_chars: int = PASSAGE_CHARS,
+    history: list[dict[str, str]] | None = None,
 ) -> Bundle:
     """The context for a question: one passage per document from the
     hybrid search (the matched chunk, or the document field for a hit that
-    came from the field alone) and the graph facts about those documents."""
-    bundle = Bundle(question=question.strip())
+    came from the field alone) and the graph facts about those documents.
+    ``history`` (earlier turns) rides along for the model and widens the
+    search when the question leans on it."""
+    bundle = Bundle(question=question.strip(), history=list(history or []))
     if not bundle.question:
         return bundle
     # hybrid search fuses at document level; the FTS-only fallback does not,
     # so one passage per document is enforced here and the search over-fetches
-    hits = store.search(con, bundle.question, limit * 3, doctype=doctype)
+    query = search_query(bundle.question, bundle.history)
+    hits = store.search(con, query, limit * 3, doctype=doctype)
     seen: set[int] = set()
     for h in hits:
         if h["doc_id"] in seen or len(bundle.passages) >= limit:
@@ -321,11 +374,17 @@ def ask(
     limit: int = PASSAGES,
     doctype: str | None = None,
     answerer: Answerer | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Gather, then answer with ``answerer`` (None: the bundle alone, the
-    caller's model answers). The store is only held while gathering; the
-    model runs outside the lock."""
-    bundle = gather(con, question, limit=limit, doctype=doctype)
+    caller's model answers). ``history`` is the conversation so far, as
+    the client kept it: the model sees the earlier turns, the search
+    widens for a follow-up, and the answer cites only this turn's
+    passages. The store is only held while gathering; the model runs
+    outside the lock."""
+    bundle = gather(
+        con, question, limit=limit, doctype=doctype, history=clean_history(history)
+    )
     out = bundle.to_dict()
     out.update(answer=None, model=None, citations=[], usage={}, seconds=0.0)
     if answerer is None or not bundle.passages:

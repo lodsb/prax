@@ -170,6 +170,7 @@ def ask(
     limit: int = 8,
     doctype: str | None = None,
     answer: bool = False,
+    history: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """The context for answering a question from the library: one numbered
     passage per document from the hybrid search (best chunk, with chunk
@@ -178,9 +179,14 @@ def ask(
     answer worth keeping. ``answer=True`` also runs the door host's
     configured model (a local model takes seconds to tens of seconds) and
     returns its answer with resolved citations. ``doctype`` keeps pdf,
-    web, image, text, note or page documents.
+    web, image, text, note or page documents. ``history`` is the
+    conversation so far as ``[{question, answer}, …]``: a follow-up
+    ("and the second method?") searches in the earlier question's
+    neighbourhood and the model sees the earlier turns.
     """
     body: dict[str, Any] = {"question": question, "limit": limit, "doctype": doctype}
+    if history:
+        body["history"] = history
     if not answer:
         body["backend"] = "none"
     return _guard(lambda: door().post_json("/ask", body))

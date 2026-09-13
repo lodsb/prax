@@ -13,8 +13,11 @@
   --code: #6a4b7a;
   color-scheme: light dark;
 }
+/* Themes: the light values above are the base; "system" follows the
+   OS, and an explicit choice (data-theme on <html>, from the settings
+   dialog) wins over it in both directions. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --bg: #17191c;
     --fg: #e6e4df;
     --muted: #9a9a9a;
@@ -23,8 +26,46 @@
     --accent: #8ab4e8;
     --mark: #5a4d10;
     --highlight: #232d3b;
+    color-scheme: dark;
   }
 }
+:root[data-theme="dark"] {
+  --bg: #17191c;
+  --fg: #e6e4df;
+  --muted: #9a9a9a;
+  --line: #2f3338;
+  --panel: #1f2226;
+  --accent: #8ab4e8;
+  --mark: #5a4d10;
+  --highlight: #232d3b;
+  color-scheme: dark;
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="paper"] {
+  --bg: #f3ead7;
+  --fg: #33291b;
+  --muted: #7a6a52;
+  --line: #d9cbae;
+  --panel: #faf4e6;
+  --accent: #8a4b1e;
+  --mark: #f2d98a;
+  --highlight: #efe3c7;
+  --text: #6a4a2a;
+  color-scheme: light;
+}
+.gear { margin-left: .4rem; border: 0; background: none; color: var(--muted); font-size: 1.2rem; cursor: pointer; line-height: 1; }
+.gear:hover { color: var(--fg); }
+dialog#settings { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--fg); padding: 1rem 1.3rem; min-width: 18rem; }
+dialog#settings::backdrop { background: rgba(0, 0, 0, .35); }
+dialog#settings h2 { margin: 0 0 .2rem; font-size: 1.05rem; }
+dialog#settings label { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin: .6rem 0; }
+dialog#settings input[type="number"] { width: 5rem; }
+.dialog-actions { text-align: right; margin-top: .8rem; }
+.turn { margin: 0 0 1.2rem; }
+.turn-q { font-weight: 600; margin: .8rem 0 .2rem; }
+.turn.earlier .answer { opacity: .85; }
+.turn-sources { font-size: .85rem; color: var(--muted); margin: .2rem 0 .6rem; }
+.ask-tools { display: flex; gap: .6rem; align-items: center; margin: -.4rem 0 .8rem; font-size: .9rem; }
 * { box-sizing: border-box; }
 body {
   margin: 0;

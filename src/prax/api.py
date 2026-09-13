@@ -943,6 +943,7 @@ class AskReq(BaseModel):
     limit: int = ask_mod.PASSAGES
     doctype: str | None = None
     backend: str | None = None  # local | claude | none; None: the host default
+    history: list[dict[str, Any]] | None = None  # earlier turns: question, answer
 
 
 class SaveReq(BaseModel):
@@ -973,6 +974,7 @@ def ask(req: AskReq, request: Request) -> dict[str, Any]:
             limit=max(1, min(req.limit, 20)),
             doctype=req.doctype,
             answerer=answerer,
+            history=req.history,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
