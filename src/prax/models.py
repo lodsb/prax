@@ -415,8 +415,8 @@ def server_status(s: ModelSpec) -> dict[str, Any]:
     """What a llama-server (or another OpenAI-shaped server) says about
     itself: its model and slots from ``/props``, and when it was started
     with ``--metrics``, the load from ``/metrics`` — tokens per second,
-    KV cache use, requests running and waiting. Unreachable is a state,
-    not an error."""
+    busy slots, requests running and waiting, prompt tokens served from
+    the cache. Unreachable is a state, not an error."""
     root = _server_root(s.base_url or "")
     out: dict[str, Any] = {
         "name": s.name,
@@ -448,10 +448,11 @@ def server_status(s: ModelSpec) -> dict[str, Any]:
     out["metrics"] = {
         "prompt_tps": m.get("prompt_tokens_seconds"),
         "predicted_tps": m.get("predicted_tokens_seconds"),
-        "kv_cache_usage": m.get("kv_cache_usage_ratio"),
+        "busy_slots": m.get("n_busy_slots_per_decode"),
         "processing": m.get("requests_processing"),
         "deferred": m.get("requests_deferred"),
         "prompt_tokens_total": m.get("prompt_tokens_total"),
+        "prompt_tokens_cached": m.get("prompt_tokens_cached_total"),
         "predicted_tokens_total": m.get("tokens_predicted_total"),
     }
     return out

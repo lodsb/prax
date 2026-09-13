@@ -599,7 +599,8 @@ budget. For those, a run with `-Slots 1 -CtxPerSlot 24576` and
 Prometheus text at `/metrics`; the door's `GET /models/servers` reads it
 with `/props` for every `openai` model in `prax.yaml`, and the Jobs page
 shows each server: model file, slots, whether it sees images, requests
-running and waiting, KV cache use, tokens per second.
+running and waiting, tokens per second, tokens read since the start and
+how many of them came from the prompt cache.
 
 **A reranker in llama-server.** `-Reranker` starts the same binary with
 a cross-encoder GGUF (`--reranking`, one slot, its own port) and

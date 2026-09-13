@@ -190,12 +190,13 @@ METRICS = """\
 # HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
 # TYPE llamacpp:prompt_tokens_total counter
 llamacpp:prompt_tokens_total 12345
+llamacpp:prompt_tokens_cached_total 9000
 llamacpp:tokens_predicted_total 678
 llamacpp:prompt_tokens_seconds 1500.5
 llamacpp:predicted_tokens_seconds 92.25
-llamacpp:kv_cache_usage_ratio 0.31
 llamacpp:requests_processing 2
 llamacpp:requests_deferred 0
+llamacpp:n_busy_slots_per_decode 2
 """
 
 
@@ -223,7 +224,8 @@ def test_server_status_reads_props_and_metrics(
     assert up["reachable"] and up["slots"] == 3 and up["vision"] is True
     assert up["file"] == "q.gguf" and up["alias"] == "local-server"
     assert up["metrics"]["prompt_tps"] == 1500.5
-    assert up["metrics"]["kv_cache_usage"] == 0.31
+    assert up["metrics"]["busy_slots"] == 2
+    assert up["metrics"]["prompt_tokens_cached"] == 9000
     assert up["metrics"]["processing"] == 2 and up["metrics"]["deferred"] == 0
     assert up["metrics"]["predicted_tokens_total"] == 678
     down = models.server_status(models.spec("tiny"))

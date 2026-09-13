@@ -1679,10 +1679,11 @@ function serverLines(servers) {
     if (!s.reachable) return `<li>${head} — <span class="error">not reachable</span> <span class="muted">(${esc(s.error || "")})</span></li>`;
     const m = s.metrics;
     const load = m
-      ? ` · ${m.processing || 0} running, ${m.deferred || 0} waiting · KV cache ${Math.round((m.kv_cache_usage || 0) * 100)}%` +
+      ? ` · ${m.processing || 0} running, ${m.deferred || 0} waiting` +
         (m.prompt_tps ? ` · reading ${Math.round(m.prompt_tps)} tok/s` : "") +
         (m.predicted_tps ? ` · writing ${Math.round(m.predicted_tps)} tok/s` : "") +
-        (m.predicted_tokens_total ? ` · ${(m.predicted_tokens_total / 1000).toFixed(0)}k tokens written since start` : "")
+        (m.prompt_tokens_total ? ` · ${(m.prompt_tokens_total / 1000).toFixed(0)}k tokens read since start${m.prompt_tokens_cached ? ` (${Math.round(100 * m.prompt_tokens_cached / m.prompt_tokens_total)}% from the prompt cache)` : ""}` : "") +
+        (m.predicted_tokens_total ? `, ${(m.predicted_tokens_total / 1000).toFixed(0)}k written` : "")
       : ` · <span class="muted">no load figures (start it with --metrics)</span>`;
     return `<li>${head}: ${esc(s.file || s.alias || s.model)} · ${s.slots} slot${s.slots === 1 ? "" : "s"}${s.vision ? " · sees images" : ""}${load}</li>`;
   });
