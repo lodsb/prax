@@ -68,6 +68,8 @@ steps:
     model: local-server
   vision:
     model: sonnet
+  typing:               # the review queue's untyped items (scripts/type_review.py --model)
+    model: local-server
   adjudicate:
     model: opus
 

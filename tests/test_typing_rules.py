@@ -68,8 +68,11 @@ def test_decide_rules() -> None:
     )
     assert edges[0].rel == "implements"
     # drops
-    a, _, rule = review.decide(item("A Manual", "paper", "cites", "Ann", "author"), doc)
-    assert a == "drop" and rule.startswith("drop-cites")
+    # v6: a "cited" person is mentioned (the weak relation takes people now)
+    a, edges, rule = review.decide(
+        item("A Manual", "paper", "cites", "Ann", "author"), doc
+    )
+    assert a == "link" and edges[0].rel == "mentions" and rule == "cites->mentions"
     a, _, _ = review.decide(item("Ann", "author", "about", "reverb", "concept"), doc)
     assert a == "drop"
     a, _, rule = review.decide(
@@ -133,15 +136,15 @@ def test_apply_links_drops_and_leaves(con: sqlite3.Connection) -> None:
     _queue(con, doc, "A Manual", "paper", "cites", "Ann", "author")
     _queue(con, doc, "A Manual", "paper", "contrasts", "Matlab", "tool")
     dry = review.apply_typing_rules(con, commit=False)
-    assert (dry.checked, dry.linked, dry.dropped, dry.still_open) == (5, 3, 1, 1)
+    assert (dry.checked, dry.linked, dry.dropped, dry.still_open) == (5, 4, 0, 1)
     assert store.count_review(con) == 5  # nothing written
     rep = review.apply_typing_rules(con, commit=True)
-    assert (rep.linked, rep.dropped, rep.still_open) == (3, 1, 1)
+    assert (rep.linked, rep.dropped, rep.still_open) == (4, 0, 1)
     assert rep.by_rule == {
         "self-name": 1,
         "flip-authored_by": 1,
         "cites->uses": 1,
-        "drop-cites-paper-author": 1,
+        "cites->mentions": 1,
     }
     assert store.count_review(con) == 1
     edges = {
@@ -156,6 +159,7 @@ def test_apply_links_drops_and_leaves(con: sqlite3.Connection) -> None:
         ("A Manual", "about", "reverb", "INFERRED", "typing-rules"),
         ("A Manual", "authored_by", "Ann Author", "INFERRED", "typing-rules"),
         ("A Manual", "uses", "Matlab", "INFERRED", "typing-rules"),
+        ("A Manual", "mentions", "Ann", "INFERRED", "typing-rules"),
     }
     # a second pass finds nothing new
     again = review.apply_typing_rules(con, commit=True)

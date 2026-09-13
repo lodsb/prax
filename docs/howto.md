@@ -457,6 +457,25 @@ it is). Items the rules do not cover stay open as evidence for the next
 ontology version; v5 (`docs/ontology-v5.md`) came out of that evidence. After the
 local backlog of 2026-09-12 the first pass closed 2,898 of the 4,300 typed
 items as linked (2,468 new edges, 430 already in the graph) and dropped 769.
+A second batch of rules after the v5 re-read (placeholder names, a cited
+"document" that is a paper, a listed "person" who is the author, venues,
+cited titles) linked 3,091 and dropped 3,390 of 25,827; research v6 and a
+replay took 6,680 more.
+
+What no rule can decide — an item with no types at all, "X about Y" with
+nothing but the names — goes to a model (`prax.typing_pass`): a batch of
+two dozen items with the document's title, its own type and the ontology
+subset it is read against, answered as `<n>: <type> -> <type>` or `none`.
+An answer that fits the ontology (after the same remaps the rules use: a
+"cited" tool is used, a "cited" person is mentioned) becomes an INFERRED
+edge, producer `typing:<model>`; `none` drops; a misfit stays open. The
+model is the `typing` step (`prax.yaml` or `PRAX_TYPING=…` for one run):
+
+    PRAX_TYPING=server-35b python scripts/type_review.py --model --dry-run --limit 240
+    PRAX_TYPING=server-35b python scripts/type_review.py --model --commit --workers 3
+
+On 480 items of the live queue the local 35B linked 263, dropped 21 and
+left 48 misfits, at about 30 s a request of 24 items on the 4090.
 
 ## 3f. Citation network
 

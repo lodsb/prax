@@ -58,7 +58,7 @@ def test_ontology_v5_organizations_and_mentions() -> None:
     onto.check_edge("paper", "mentions", "author")  # v6: the weak relation, anything
     onto.check_edge("paper", "written_at", "organization")  # v6
     with pytest.raises(ValueError):
-        onto.check_edge("author", "written_at", "organization")  # a person is affiliated
+        onto.check_edge("author", "written_at", "organization")  # a person: affiliated
 
 
 def test_ontology_v4_lets_pages_argue() -> None:

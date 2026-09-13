@@ -315,7 +315,7 @@ loop); the queue makes each batch do real work.
 | `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
 | `ANTHROPIC_API_KEY` | the Claude API for extraction, vision and adjudication |
 | `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `openai`, `stub`) and the `extract`, `promote`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k); `domains:` rules that give documents their domain set (`scripts/assign_domains.py`) |
-| `PRAX_EXTRACT`, `PRAX_PROMOTE`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE` | a model name or `none`: overrides the step for one run |
+| `PRAX_EXTRACT`, `PRAX_PROMOTE`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE`, `PRAX_TYPING` | a model name or `none`: overrides the step for one run |
 | `PRAX_EXTRACT_MODEL`, `PRAX_ASK_MODEL`, `PRAX_VISION_MODEL`, `PRAX_EXTRACT_EFFORT` | the Claude model id (and effort) for a step that resolves to Claude |
 | `citations.mailto` [`PRAX_CITATIONS_MAILTO`] | polite-pool contact for Crossref and OpenAlex |
 | `rerank.model` [`PRAX_RERANK`] | cross-encoder name, `stub`, or `0` (default off) |

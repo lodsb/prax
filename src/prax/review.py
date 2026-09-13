@@ -147,15 +147,32 @@ _NOISE_NAMES = frozenset(
 _NOT_A_NAME = re.compile(r"not stated|unknown|/|\bn\.?d\.?\b|^\W*$", re.IGNORECASE)
 
 
+_VAGUE = re.compile(
+    r"^(this|these|those|our|the proposed|a proposed|specific|various|different|"
+    r"several|some|other)\b"
+)
+_NOT_A_THING = re.compile(
+    r"^(unknown\b|\(unknown|comment: \d+ pages?|supporting document\b"
+    r"|fig(ure)?\.? ?\d)",
+    re.IGNORECASE,
+)
+_REFNUM = re.compile(r"\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]")
+
+
 def _placeholder(name: str) -> bool:
     """A name the model left as a placeholder or a non-name: "source name",
-    "target name", "unknown", a bare URL, an empty pattern."""
+    "target name", "unknown", "(unknown paper)", "this inference scheme",
+    "supporting document [34]", a bare URL, an empty pattern."""
     low = " ".join(name.lower().split())
+    if _REFNUM.search(name) and len(_REFNUM.sub("", name).split()) <= 3:
+        return True
     return (
         low in store.PLACEHOLDER_NAMES
         or low in _NOISE_NAMES
         or bool(_URL.match(low))
         or bool(_MALFORMED.search(name))
+        or bool(_VAGUE.match(name))  # lower case on purpose: "The Beatles" stays
+        or bool(_NOT_A_THING.match(name))
     )
 
 
@@ -304,7 +321,9 @@ def decide_unmapped(
     return "open", [], None
 
 
-_MALFORMED = re.compile(r"(src_type=|dst_type=|confidence=|evidence=|\trel=)")
+_MALFORMED = re.compile(
+    r"(src_type=|dst_type=|confidence=|evidence=|\trel=|target name=|source name=)"
+)
 # (rel, src_type, dst_type) -> new relation, after the self-name retyping
 REMAP: dict[tuple[str, str, str], str] = {
     ("affiliated_with", "paper", "organization"): "written_at",
@@ -315,6 +334,15 @@ REMAP: dict[tuple[str, str, str], str] = {
     ("cites", "paper", "method"): "uses",
     ("cites", "paper", "dataset"): "uses",
     ("cites", "paper", "concept"): "about",
+    ("cites", "paper", "person"): "mentions",
+    ("cites", "paper", "author"): "mentions",
+    ("cites", "paper", "organization"): "mentions",
+    ("cites", "paper", "work"): "mentions",
+    ("cites", "paper", "event"): "mentions",
+    ("cites", "paper", "place"): "mentions",
+    ("part_of", "paper", "venue"): "published_in",
+    ("part_of", "paper", "event"): "mentions",
+    ("part_of", "paper", "organization"): "mentions",
     ("about", "paper", "claim"): "proposes",
     ("about", "paper", "paper"): "cites",
     ("about", "tool", "concept"): "implements",
@@ -340,7 +368,6 @@ RETYPE: dict[tuple[str, str, str], tuple[str, str]] = {
 }
 # (rel, src_type, dst_type) with "*" as a wildcard -> dropped
 DROP: set[tuple[str, str, str]] = {
-    ("cites", "paper", "author"),
     ("cites", "paper", "venue"),
     ("cites", "paper", "claim"),
     ("cites", "paper", "project"),
