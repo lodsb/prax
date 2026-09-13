@@ -141,6 +141,12 @@ Parsing is a batch job; the serving path never parses.
       tool calls) as the raw record beside the page's distillation.
       Open: whether a project module (decision, requirement, component)
       earns ontology types
+- [x] Research v6 (2026-09-13, docs/ontology-v6.md): `written_at`,
+      `mentions` and `about` widened, `authored_by` towards an
+      organization, from the 18,848 items the v5 re-read left; a second
+      batch of typing rules before it (placeholders, near misses,
+      venues, cited titles: 3,091 linked, 3,390 dropped). Open: a model
+      typing pass for the untyped remainder; the v6 re-read decision
 - [ ] Backfill of the old zoetrope disk: the hash inventory in
       `scripts/backfill.py` gains a `--commit` mode that registers files
       through the store; review the dedupe report first

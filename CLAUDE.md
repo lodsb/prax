@@ -83,7 +83,7 @@ drop folder (`docs/sources.md`).
    wherever its parent is allowed; aliases map what a model says to the
    canonical name and never shadow a declared one; a module's
    `self_types` say what the document being extracted may be. The
-   composed version (`core1+craft1+kitchen1+research5+studio1+workshop1`)
+   composed version (`core1+craft1+kitchen2+research6+studio3+workshop2`)
    is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set (`meta.domains`: which modules it is read

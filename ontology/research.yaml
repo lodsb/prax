@@ -20,8 +20,15 @@
 # split: person, organization, concept, tool, affiliated_with and
 # developed_by moved to core.yaml; author, paper, venue, page and project
 # became subtypes of core types. The composed version is core1+research5.
+# v6 (2026-09-13, docs/ontology-v6.md): from the 18,848 items the v5
+# re-read left in the queue: `written_at` (the institution a document came
+# out of; the models wrote it as affiliated_with 2,800 times), `mentions`
+# from any document to any kind of thing (it is the weak relation),
+# `about` from any document and towards people, organizations, places,
+# events and works, `authored_by` towards an organization that issued the
+# document, `published_in` from any document.
 module: research
-version: 5
+version: 6
 requires: [core]
 self_types: [paper]
 
@@ -80,19 +87,29 @@ relation_types:
     description: >-
       the document names another paper by title; never by reference number
   authored_by:
-    domain: [paper]
-    range: [author]
-    description: a listed author of the document
+    domain: [document]
+    range: [author, organization]
+    description: >-
+      a listed author of the document; or the organization that issued it
+      when no person is named (a standards body, a manufacturer's manual)
+  written_at:
+    domain: [document]
+    range: [organization]
+    description: >-
+      the institution the document came out of, as it states it (the
+      authors' affiliation on the first page, the company behind a
+      manual); affiliated_with is for a person, this is for the document
   published_in:
-    domain: [paper]
+    domain: [document]
     range: [venue]
     description: the venue the document appeared in
   about:
-    domain: [paper, claim, page, project]
-    range: [concept, method, tool, dataset]
+    domain: [document, claim]
+    range: [concept, method, tool, dataset, person, organization, place, event, work]
     description: >-
-      the document or claim is substantially about the concept, method or
-      tool; something discussed at length, not mentioned in passing
+      the document or claim is substantially about the concept, method,
+      tool, dataset — or the person, organization, place, event or work
+      it studies; something discussed at length, not mentioned in passing
   defines:
     domain: [paper, claim]
     range: [concept]
@@ -156,13 +173,14 @@ relation_types:
       the document belongs to a project's reading list or thread; or a
       chapter, article or section is part of a book or proceedings volume
   mentions:
-    domain: [paper, page, project]
-    range: [tool, method, dataset, concept]
+    domain: [document]
+    range: [tool, method, dataset, concept, person, organization, document, place, event, work]
     description: >-
-      the document names a tool, method, dataset or concept without using
-      it or being about it (related work, an aside). The weakest relation:
-      use it only when nothing stronger holds; never for something the
-      document uses or is substantially about
+      the document names a thing — a tool, method, dataset, concept,
+      person, organization, another document, a place, an event, a work —
+      without using it or being about it (related work, an aside). The
+      weakest relation: use it only when nothing stronger holds; never for
+      something the document uses, cites or is substantially about
   funded_by:
     domain: [paper, project]
     range: [organization]
@@ -179,6 +197,8 @@ type_aliases:
 
 relation_aliases:
   supervised_by: advised_by
+  produced_at: written_at
+  from_institution: written_at
   discusses: mentions
   builds_on: extends
   compares: contrasts

@@ -44,7 +44,7 @@ def test_ontology_v5_organizations_and_mentions() -> None:
     from prax import ontology
 
     onto = ontology.current()
-    assert onto.version == "core1+craft1+kitchen2+research5+studio3+workshop2"
+    assert onto.version == "core1+craft1+kitchen2+research6+studio3+workshop2"
     onto.check_edge("author", "affiliated_with", "organization")
     onto.check_edge("paper", "funded_by", "organization")
     onto.check_edge("tool", "developed_by", "author")
@@ -55,8 +55,10 @@ def test_ontology_v5_organizations_and_mentions() -> None:
     onto.check_edge("paper", "part_of", "paper")
     with pytest.raises(ValueError):
         onto.check_edge("paper", "affiliated_with", "organization")
+    onto.check_edge("paper", "mentions", "author")  # v6: the weak relation, anything
+    onto.check_edge("paper", "written_at", "organization")  # v6
     with pytest.raises(ValueError):
-        onto.check_edge("paper", "mentions", "author")
+        onto.check_edge("author", "written_at", "organization")  # a person is affiliated
 
 
 def test_ontology_v4_lets_pages_argue() -> None:

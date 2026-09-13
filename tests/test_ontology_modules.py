@@ -132,7 +132,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "studio",
         "workshop",
     }
-    assert o.version == "core1+craft1+kitchen2+research5+studio3+workshop2"
+    assert o.version == "core1+craft1+kitchen2+research6+studio3+workshop2"
     assert set(o.self_types) == {
         "paper",
         "manual",
@@ -155,7 +155,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert (
         ontology.current().version
-        == "core1+craft1+kitchen2+research5+studio3+workshop2"
+        == "core1+craft1+kitchen2+research6+studio3+workshop2"
     )
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
@@ -203,7 +203,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     # reads the word as its own method
     assert o.canonical_type("technique") == "technique"
     assert o.for_domains(["research"]).canonical_type("technique") == "method"
-    assert o.for_domains(["research"]).version == "core1+research5"
+    assert o.for_domains(["research"]).version == "core1+research6"
 
 
 def test_studio_module() -> None:

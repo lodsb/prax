@@ -48,7 +48,7 @@ def test_prompt_and_schema_follow_the_ontology() -> None:
     prompt = extraction.system_prompt(onto)
     for name in onto.entity_types:
         assert f"- {name}:" in prompt
-    assert "authored_by (paper -> author)" in prompt
+    assert "authored_by (document -> author, organization)" in prompt
     assert f"ontology {onto.version}" in prompt
     assert "(a kind of person)" in prompt  # subtypes name their parent
     schema = extraction.output_schema(onto)

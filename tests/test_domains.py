@@ -122,7 +122,7 @@ def test_extraction_uses_the_documents_subset(
     store.set_domains(con, paper, ["research"])
     system2 = ext.params(extraction.build_input(con, paper))["system"][0]["text"]
     assert "paper entity" in system2 and "parent_of" not in system2
-    assert set(ext._prompts) == {"core1+family1", "core1+research5"}
+    assert set(ext._prompts) == {"core1+family1", "core1+research6"}
     # apply validates against the subset and stamps its version
     ex = extraction.Extraction(
         summary="s",

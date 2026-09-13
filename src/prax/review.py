@@ -209,6 +209,13 @@ def decide_unmapped(
         return "drop", [], "no-relation"
     is_self = bool(title) and src == title
     if rel in ("affiliation", "affiliated_with", "affiliated with"):
+        # the document itself and an institution: written there
+        if is_self and not _looks_person(dst) and _looks_venue(dst):
+            return (
+                "link",
+                [store.Edge(src, own, "written_at", dst, "organization")],
+                "written_at",
+            )
         # exactly one side is a person; the other is the institution
         ps, pd = _looks_person(src), _looks_person(dst)
         if ps and not pd and not _looks_person(dst):
@@ -300,6 +307,10 @@ def decide_unmapped(
 _MALFORMED = re.compile(r"(src_type=|dst_type=|confidence=|evidence=|\trel=)")
 # (rel, src_type, dst_type) -> new relation, after the self-name retyping
 REMAP: dict[tuple[str, str, str], str] = {
+    ("affiliated_with", "paper", "organization"): "written_at",
+    ("affiliated_with", "document", "organization"): "written_at",
+    ("affiliated_with", "page", "organization"): "written_at",
+    ("affiliated_with", "project", "organization"): "written_at",
     ("cites", "paper", "tool"): "uses",
     ("cites", "paper", "method"): "uses",
     ("cites", "paper", "dataset"): "uses",
