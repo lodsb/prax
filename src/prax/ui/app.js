@@ -1214,10 +1214,12 @@ async function viewReview(p) {
 // context without a model, which is what an MCP client gets.
 let askConfig = null;
 
-
-// The conversation lives in this tab's sessionStorage: a follow-up sends
-// the earlier turns along (the door searches in their neighbourhood and
-// the model sees them), "New ask" starts over, and a reload shows the
+// A conversation laid out like a chat: the turns in a thread, the composer
+// at its foot, and the sources of the selected turn in a column beside it
+// (a [n] in an answer points at its card there; the card opens the
+// document). The turns live in this tab's sessionStorage: a follow-up
+// sends the earlier ones along (the door searches in their neighbourhood
+// and the model sees them), "New ask" starts over, and a reload shows the
 // conversation instead of asking again.
 const ASK_KEY = "prax.ask";
 
@@ -1225,147 +1227,97 @@ function askSession() {
   try { return JSON.parse(sessionStorage.getItem(ASK_KEY) || "null") || { turns: [] }; }
   catch (_) { return { turns: [] }; }
 }
-function saveAskSession(s) {
-  try { sessionStorage.setItem(ASK_KEY, JSON.stringify(s)); } catch (_) { /* full or blocked */ }
+function saveAskSession(turns) {
+  const kept = turns.filter((t) => !t.pending && !t.error);
+  try { sessionStorage.setItem(ASK_KEY, JSON.stringify({ turns: kept })); } catch (_) { /* full or blocked */ }
 }
 function clearAskSession() {
   try { sessionStorage.removeItem(ASK_KEY); } catch (_) { /* nothing to clear */ }
 }
 
-function renderAskForm(p) {
+function renderComposer(p) {
   const backend = p.backend || "";
   const dflt = askConfig ? askConfig.default : "none";
   const names = (askConfig && askConfig.models) || [];
   return `
-  <form id="ask-form" class="search-form">
-    <input name="question" type="search" value="${esc(p.question || "")}" placeholder="ask the library…" autofocus>
-    <select name="backend" title="which model answers (prax.yaml)">
-      <option value="" ${backend === "" ? "selected" : ""}>default (${esc(dflt)})</option>
-      ${names.map((n) => `<option value="${esc(n)}" ${backend === n ? "selected" : ""}>${esc(n)}</option>`).join("")}
-      <option value="none" ${backend === "none" ? "selected" : ""}>bundle only (no model)</option>
-    </select>
-    <select name="doctype" title="document type">
-      <option value="" ${!p.doctype ? "selected" : ""}>any type</option>
-      ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"], ["page", "pages"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
-    </select>
-    <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || settings().ask_limit)}" title="passages">
-    <button>Ask</button>
-  </form>
-  <div id="ask-tools" class="ask-tools"></div>`;
+  <form id="ask-form" class="composer" autocomplete="off">
+    <textarea name="question" rows="1" placeholder="ask the library…" aria-label="question" autofocus>${esc(p.question || "")}</textarea>
+    <button class="composer-send" title="ask (Enter; Shift+Enter for a new line)">Ask</button>
+    <div class="composer-opts">
+      <select name="backend" title="which model answers (prax.yaml)">
+        <option value="" ${backend === "" ? "selected" : ""}>default (${esc(dflt)})</option>
+        ${names.map((n) => `<option value="${esc(n)}" ${backend === n ? "selected" : ""}>${esc(n)}</option>`).join("")}
+        <option value="none" ${backend === "none" ? "selected" : ""}>bundle only (no model)</option>
+      </select>
+      <select name="doctype" title="document type">
+        <option value="" ${!p.doctype ? "selected" : ""}>any type</option>
+        ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"], ["page", "pages"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
+      </select>
+      <label>passages <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || settings().ask_limit)}" title="passages per turn"></label>
+      <span id="ask-count"></span>
+      <button type="button" id="ask-new" class="composer-new" hidden title="forget this conversation">New ask</button>
+    </div>
+  </form>`;
 }
 
-// The bar under the form: how long the conversation is, and the way out
-// of it. The input turns into a follow-up box once there is a turn.
-function updateAskTools(form) {
-  const turns = askSession().turns;
-  const tools = document.getElementById("ask-tools");
-  if (!turns.length) {
-    tools.innerHTML = "";
-    form.question.placeholder = "ask the library…";
-    return;
-  }
-  tools.innerHTML = `<span class="muted">${turns.length} turn${turns.length > 1 ? "s" : ""} in this conversation (kept in this tab); a follow-up may refer to them.</span>
-    <button type="button" id="ask-new">New ask</button>`;
-  form.question.placeholder = "ask a follow-up…";
-  document.getElementById("ask-new").addEventListener("click", () => {
-    clearAskSession();
-    if (location.hash === "#ask") render(); else go("ask", "", {});
-  });
+function renderTurn(t, i) {
+  const passages = t.passages || [];
+  const cited = new Set((t.citations || []).map((c) => c.n));
+  let body;
+  if (t.error) body = `<p class="error">${esc(t.error)}</p>`;
+  else if (t.pending) body = `<p class="turn-pending muted">${esc(t.pending)}</p>`;
+  else if (t.answer) body = `<div class="answer">${citeLinks(md(t.answer), passages)}</div>`;
+  else body = `<p class="muted">${passages.length ? "No model answered; the sources beside are what a model would have been given." : "No passages found."}</p>`;
+  const meta = (t.pending || t.error) ? "" : `
+    <div class="turn-meta muted">
+      ${t.model ? `<span>${esc(t.model)} · ${t.seconds} s${t.cost_usd ? ` · $${t.cost_usd.toFixed(4)}` : ""} · ${(t.usage || {}).input_tokens || 0} in / ${(t.usage || {}).output_tokens || 0} out</span>` : ""}
+      <button type="button" class="linkish turn-sources-link">${passages.length} source${passages.length === 1 ? "" : "s"}${cited.size ? `, ${cited.size} cited` : ""}</button>
+      ${t.answer ? `<button type="button" class="linkish turn-keep-link">keep on page…</button>` : ""}
+    </div>
+    <div class="turn-keep" hidden></div>`;
+  return `<article class="turn" data-turn="${i}">
+    <div class="turn-q">${esc(t.question)}</div>
+    <div class="turn-a">${body}${meta}</div>
+  </article>`;
 }
 
-function renderTurn(r, earlier) {
-  const q = `<div class="turn-q">${esc(r.question)}</div>`;
-  if (!earlier) return `<div class="turn current">${q}${renderAnswer(r)}</div>`;
-  const cited = (r.citations || []).map((c) => `[${c.n}] <a href="#doc/${c.doc_id}">${esc(c.title || "(untitled)")}</a>`);
-  const answer = r.answer
-    ? `<div class="answer">${citeLinks(md(r.answer), r.passages || [])}</div>`
-    : `<p class="muted">no answer (bundle only)</p>`;
-  return `<div class="turn earlier">${q}${answer}${cited.length ? `<div class="turn-sources">cited: ${cited.join(" · ")}</div>` : ""}</div>`;
-}
-
-function renderAnswer(r) {
-  const passages = r.passages || [];
-  const facts = r.facts || {};
-  const answer = r.answer
-    ? `<div class="answer">${citeLinks(md(r.answer), passages)}</div>
-       <div class="answer-meta muted">${esc(r.model)} · ${r.seconds} s${r.cost_usd ? ` · $${r.cost_usd.toFixed(4)}` : ""} · ${(r.usage || {}).input_tokens || 0} in / ${(r.usage || {}).output_tokens || 0} out</div>`
-    : `<p class="muted">${passages.length ? "No model answered; the passages below are the context a model would get." : "No passages found."}</p>`;
-  const sources = passages.map((p) => {
-    const f = (facts[p.doc_id] || []);
-    const cited = (r.citations || []).some((c) => c.n === p.n);
+function renderSources(t, i) {
+  if (!t || t.pending || t.error) return `<p class="muted side-empty">The sources of an answer appear here: one passage per document, the cited ones marked, each with what the graph knows about its document.</p>`;
+  const passages = t.passages || [];
+  const facts = t.facts || {};
+  const cited = new Set((t.citations || []).map((c) => c.n));
+  const cards = passages.map((p) => {
+    const f = facts[p.doc_id] || [];
+    const cut = p.text.length > 300;
     return `
-    <article class="hit passage ${cited ? "cited" : ""}" id="passage-${p.n}">
-      <a class="hit-title" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}">[${p.n}] ${esc(p.title || "(untitled)")}</a>
-      <div class="hit-meta">${badge(p.kind)} <span>${headingPath(p.heading)}</span> <span>${p.page ? `p. ${p.page}` : ""}</span></div>
-      <p class="snippet">${esc(p.text.slice(0, 400))}${p.text.length > 400 ? "…" : ""}</p>
-      ${f.length ? `<div class="chips">${f.map((x) => `<a class="chip" style="--c:${typeColor(x.type)}" href="#graph?entity=${encodeURIComponent(x.name)}" title="${esc(x.rel)}">${esc(x.rel)}: ${esc(x.name)}</a>`).join("")}</div>` : ""}
+    <article class="source ${cited.has(p.n) ? "cited" : ""}" id="source-${p.n}">
+      <div class="source-n">[${p.n}]</div>
+      <div class="source-body">
+        <a class="source-title" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}">${esc(p.title || "(untitled)")}</a>
+        <div class="hit-meta">${badge(p.kind)} <span>${headingPath(p.heading)}</span> <span>${p.page ? `p. ${p.page}` : ""}</span></div>
+        <p class="snippet source-short">${esc(p.text.slice(0, 300))}${cut ? `… <button type="button" class="linkish source-more">more</button>` : ""}</p>
+        ${cut ? `<p class="snippet source-full" hidden>${esc(p.text)} <button type="button" class="linkish source-more">less</button></p>` : ""}
+        ${f.length ? `<div class="chips">${f.map((x) => `<a class="chip" style="--c:${typeColor(x.type)}" href="#graph?entity=${encodeURIComponent(x.name)}" title="${esc(x.rel)}">${esc(x.rel)}: ${esc(x.name)}</a>`).join("")}</div>` : ""}
+      </div>
     </article>`;
   }).join("");
-  const saveForm = r.answer ? `
-    <form id="ask-save" class="ask-save">
-      <label>Keep on page <select name="slug" id="ask-save-slug"><option value="">loading…</option></select></label>
-      <input name="heading" type="text" value="${esc(r.question)}" placeholder="heading" title="section heading">
-      <button>Add to page</button>
-      <label>or start a synthesis <input name="new_slug" type="text" placeholder="new page name" title="a new synthesis page seeded with this answer"></label>
-      <span id="ask-save-msg" class="muted"></span>
-    </form>` : "";
-  return `${answer}${saveForm}<h3 class="sources-head">Sources</h3>${sources}`;
+  return `<div class="side-head"><span>Sources</span><span>turn ${i + 1} · ${passages.length}${cited.size ? `, ${cited.size} cited` : ""}</span></div>
+    <div class="sources ${t.answer ? "with-answer" : ""}">${cards || `<p class="muted side-empty">No passages found for this turn.</p>`}</div>`;
 }
 
-async function viewAsk(p) {
-  if (!askConfig) {
-    try { askConfig = await api("/ask/config"); } catch (_) { askConfig = { default: "none" }; }
-  }
-  view.innerHTML = renderAskForm(p) + `<div id="ask-out"></div>`;
-  const form = document.getElementById("ask-form");
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
-    go("ask", "", Object.fromEntries(new FormData(form)));
-  });
-  updateAskTools(form);
-  const out = document.getElementById("ask-out");
-  const session = askSession();
-  const params = JSON.stringify([p.backend || "", p.doctype || "", p.limit || ""]);
-  // a reload, or the back button: the turn is already here, so show the
-  // conversation with that turn in full rather than asking again
-  const kept = p.question ? session.turns.findIndex((t) => t.question === p.question && t.params === params) : -1;
-  const earlierTurns = kept >= 0 ? session.turns.slice(0, kept) : session.turns;
-  const earlier = earlierTurns.map((t) => renderTurn(t, true)).join("");
-  if (!p.question) {
-    out.innerHTML = earlier;
-    return;
-  }
-  let r;
-  if (kept >= 0) {
-    r = session.turns[kept];
-  } else {
-    const backend = p.backend || askConfig.default;
-    out.innerHTML = earlier + `<p class="muted">${backend === "none" ? "gathering passages…" : `asking ${esc(backend)}… (a local model takes tens of seconds)`}</p>`;
-    try {
-      r = await post("/ask", {
-        question: p.question,
-        backend: p.backend || null,
-        doctype: p.doctype || null,
-        limit: Number(p.limit || settings().ask_limit),
-        history: session.turns.filter((t) => t.answer).map((t) => ({ question: t.question, answer: t.answer })),
-      });
-    } catch (err) {
-      out.innerHTML = earlier + `<p class="error">${esc(err.message)}</p>`;
-      return;
-    }
-    if (route().name !== "ask") return;  // navigated away meanwhile
-    r.params = params;
-    session.turns.push(r);
-    saveAskSession(session);
-  }
-  const later = kept >= 0 ? session.turns.slice(kept + 1).map((t) => renderTurn(t, true)).join("") : "";
-  out.innerHTML = earlier + renderTurn(r, false) + later;
-  updateAskTools(form);
-  form.question.value = "";  // the next thing typed is a follow-up
-  if (earlierTurns.length) document.querySelector(".turn.current").scrollIntoView({ block: "start" });
-  const save = document.getElementById("ask-save");
-  if (!save) return;
-  const slugSel = document.getElementById("ask-save-slug");
+function renderKeepForm(t) {
+  return `
+    <form class="ask-save">
+      <label>Keep on page <select name="slug"><option value="">loading…</option></select></label>
+      <input name="heading" type="text" value="${esc(t.question)}" placeholder="heading" title="section heading">
+      <button>Add to page</button>
+      <label>or start a synthesis <input name="new_slug" type="text" placeholder="new page name" title="a new synthesis page seeded with this answer"></label>
+      <span class="ask-save-msg muted"></span>
+    </form>`;
+}
+
+async function bindKeepForm(form, t) {
+  const slugSel = form.slug;
   try {
     const pages = await api("/pages");
     slugSel.innerHTML = pages.length
@@ -1374,14 +1326,14 @@ async function viewAsk(p) {
   } catch (err) {
     slugSel.innerHTML = `<option value="">${esc(err.message)}</option>`;
   }
-  save.addEventListener("submit", async (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const data = Object.fromEntries(new FormData(save));
-    const msg = document.getElementById("ask-save-msg");
+    const data = Object.fromEntries(new FormData(form));
+    const msg = form.querySelector(".ask-save-msg");
     const slug = (data.new_slug || "").trim() || data.slug;
     if (!slug) { msg.textContent = "pick a page or name a new synthesis"; return; }
     try {
-      const body = { slug, heading: data.heading, result: r };
+      const body = { slug, heading: data.heading, result: t };
       if (data.new_slug && data.new_slug.trim()) body.create = "synthesis";
       const res = await post("/ask/save", body);
       msg.innerHTML = `${res.created ? "created" : "saved as revision " + res.revision} <a href="#doc/${res.doc_id}">${esc(res.slug || slug)}</a>`;
@@ -1389,6 +1341,161 @@ async function viewAsk(p) {
       msg.textContent = err.message;
     }
   });
+}
+
+async function viewAsk(p) {
+  if (!askConfig) {
+    try { askConfig = await api("/ask/config"); } catch (_) { askConfig = { default: "none" }; }
+  }
+  view.classList.add("stage");
+  view.innerHTML = `
+    <div class="ask">
+      <section class="ask-thread">
+        <div id="ask-turns" class="ask-turns"></div>
+        ${renderComposer(p)}
+      </section>
+      <aside id="ask-side" class="ask-side"></aside>
+    </div>`;
+  const turns = askSession().turns;
+  const turnsEl = document.getElementById("ask-turns");
+  const side = document.getElementById("ask-side");
+  const form = document.getElementById("ask-form");
+  const box = form.question;
+  let selected = -1;
+
+  const onScreen = () => document.contains(turnsEl);
+  const toEnd = () => window.scrollTo(0, document.body.scrollHeight);
+  function autosize() {
+    box.style.height = "auto";
+    box.style.height = Math.min(box.scrollHeight, 220) + "px";
+  }
+  function paint() {
+    turnsEl.innerHTML = turns.length ? turns.map(renderTurn).join("") : `
+      <div class="ask-empty muted">
+        <p>Ask the library a question. The answer cites passages, one per document, shown beside it; a follow-up may refer to the earlier turns ("and the second one?").</p>
+      </div>`;
+    const done = turns.filter((t) => !t.pending && !t.error).length;
+    document.getElementById("ask-new").hidden = !turns.length;
+    document.getElementById("ask-count").textContent = done ? `${done} turn${done > 1 ? "s" : ""} in this tab; a follow-up may refer to them` : "";
+    box.placeholder = done ? "ask a follow-up…" : "ask the library…";
+    if (selected >= 0) turnsEl.querySelectorAll(".turn").forEach((el) => el.classList.toggle("selected", Number(el.dataset.turn) === selected));
+  }
+  function select(i) {
+    selected = i;
+    turnsEl.querySelectorAll(".turn").forEach((el) => el.classList.toggle("selected", Number(el.dataset.turn) === i));
+    side.innerHTML = renderSources(turns[i], i);
+  }
+  function showSource(n) {
+    const card = document.getElementById(`source-${n}`);
+    if (!card) return;
+    card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    card.classList.remove("flash");
+    void card.offsetWidth;  // restart the animation
+    card.classList.add("flash");
+  }
+
+  async function ask(question, opts) {
+    const backend = opts.backend || askConfig.default;
+    const earlier = turns.filter((t) => t.answer).map((t) => ({ question: t.question, answer: t.answer }));
+    const turn = { question, pending: backend === "none" ? "gathering passages…" : `asking ${backend}… (a local model takes tens of seconds)` };
+    turns.push(turn);
+    paint();
+    toEnd();
+    let r;
+    try {
+      r = await post("/ask", {
+        question,
+        backend: opts.backend || null,
+        doctype: opts.doctype || null,
+        limit: Number(opts.limit || settings().ask_limit),
+        history: earlier,
+      });
+    } catch (err) {
+      delete turn.pending;
+      turn.error = err.message;
+      if (onScreen()) { paint(); toEnd(); }
+      return;
+    }
+    delete turn.pending;
+    Object.assign(turn, r);
+    saveAskSession(turns);
+    if (!onScreen()) return;  // navigated away meanwhile; the turn is kept
+    paint();
+    select(turns.length - 1);
+    turnsEl.lastElementChild.scrollIntoView({ block: "start", behavior: "smooth" });
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const question = box.value.trim();
+    if (!question) return;
+    box.value = "";
+    autosize();
+    if (location.hash !== "#ask") history.replaceState(null, "", "#ask");  // a reload shows the conversation, not a re-ask
+    ask(question, { backend: form.backend.value, doctype: form.doctype.value, limit: form.limit.value });
+  });
+  box.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
+  });
+  box.addEventListener("input", autosize);
+  document.getElementById("ask-new").addEventListener("click", () => {
+    clearAskSession();
+    turns.length = 0;
+    selected = -1;
+    paint();
+    side.innerHTML = renderSources(null);
+    if (location.hash !== "#ask") history.replaceState(null, "", "#ask");
+    box.focus();
+  });
+  turnsEl.addEventListener("click", (e) => {
+    const art = e.target.closest(".turn");
+    if (!art) return;
+    const i = Number(art.dataset.turn);
+    const cite = e.target.closest("a.cite");
+    if (cite && !(e.ctrlKey || e.metaKey || e.shiftKey || e.button)) {
+      // a plain click on [n] shows the source beside; a modified one opens the document
+      e.preventDefault();
+      if (selected !== i) select(i);
+      showSource(Number(cite.textContent.replace(/\D/g, "")));
+      return;
+    }
+    if (e.target.closest(".turn-sources-link")) {
+      select(i);
+      if (window.innerWidth <= 900) side.scrollIntoView({ block: "start", behavior: "smooth" });
+      return;
+    }
+    if (e.target.closest(".turn-keep-link")) {
+      const slot = art.querySelector(".turn-keep");
+      if (!slot.hidden) { slot.hidden = true; return; }
+      slot.innerHTML = renderKeepForm(turns[i]);
+      slot.hidden = false;
+      bindKeepForm(slot.querySelector("form"), turns[i]);
+      return;
+    }
+    if (!e.target.closest("a, button, form")) select(i);
+  });
+  side.addEventListener("click", (e) => {
+    if (!e.target.closest(".source-more")) return;
+    const card = e.target.closest(".source");
+    const full = card.querySelector(".source-full");
+    full.hidden = !full.hidden;
+    card.querySelector(".source-short").hidden = !full.hidden;
+  });
+
+  paint();
+  autosize();
+  side.innerHTML = renderSources(null);
+  const kept = p.question ? turns.findIndex((t) => t.question === p.question) : -1;
+  if (turns.length) {
+    select(kept >= 0 ? kept : turns.length - 1);
+    if (kept >= 0) turnsEl.children[kept].scrollIntoView({ block: "start" }); else toEnd();
+  }
+  if (p.question && kept < 0) {
+    // a question in the link: ask it, then the link becomes the conversation
+    box.value = "";
+    history.replaceState(null, "", "#ask");
+    await ask(p.question, p);
+  }
 }
 
 // --------------------------------------------------------------- promote
@@ -1620,6 +1727,7 @@ const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: vi
 async function render(opts) {
   const r = route();
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === r.name));
+  view.classList.remove("stage");  // the ask view widens the page; others get the default
   if (!(opts && opts.keepScroll)) window.scrollTo(0, 0);
   if (r.name === "doc") return viewDoc(r.arg, r.params);
   if (r.name === "graph") return viewGraph(r.arg, r.params);
