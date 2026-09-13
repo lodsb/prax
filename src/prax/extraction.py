@@ -792,6 +792,16 @@ def apply(
         **extraction.usage,
     }
     store.set_meta(con, doc_id, meta)
+    if report.queued:
+        # the rules never invent; what they can settle from the names and
+        # the document's title need not wait in the queue for a pass
+        from prax import review
+
+        rules = review.apply_typing_rules(
+            con, onto=onto, source_doc=doc_id, run=f"typing-after-{run or extractor}"
+        )
+        report.queued -= rules.linked + rules.existing + rules.dropped
+        report.linked += rules.linked
     return report
 
 

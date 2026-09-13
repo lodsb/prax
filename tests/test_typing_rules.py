@@ -298,10 +298,10 @@ def test_placeholders_and_near_misses() -> None:
         "retype-cites-paper-document",
         "paper",
     )
-    assert (
-        review.decide(typed(title, "paper", "cites", "Galton", "document"), doc)[0]
-        == "open"
+    a, edges, rule = review.decide(
+        typed(title, "paper", "cites", "Galton", "document"), doc
     )
+    assert (a, edges[0].rel, edges[0].dst_type) == ("link", "mentions", "document")
     a, edges, rule = review.decide(
         typed(title, "paper", "authored_by", "Ben Mildenhall", "person"), doc
     )

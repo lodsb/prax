@@ -114,7 +114,9 @@ def test_stub_extract_and_apply(con: sqlite3.Connection) -> None:
     assert ("authored_by", "author") in rels and ("published_in", "venue") in rels
     assert ("about", "concept") in rels and result.unmapped
     report = extraction.apply(con, doc_id, result, extractor="stub")
-    assert report.linked == len(result.triples) and report.queued == 1
+    # the stub's one unmapped item has "?" for a target: the rules that run
+    # after every extraction drop it, so nothing is left queued
+    assert report.linked == len(result.triples) and report.queued == 0
     edges = store.traverse(con, result.triples[0].src, hops=1)
     assert len(edges) == len(result.triples)
     assert all(e["source_doc"] == doc_id and e["evidence"] for e in edges)
@@ -124,7 +126,7 @@ def test_stub_extract_and_apply(con: sqlite3.Connection) -> None:
     assert meta["extraction"]["linked"] == report.linked
     assert meta["extraction"]["ontology_version"] == ontology.current().version
     queue = store.list_review(con)
-    assert len(queue) == 1 and queue[0]["reason"].startswith("unmapped")
+    assert queue == []  # the "?" item was dropped by the rules after the extraction
     # a second apply adds nothing (edges exist), stamps again
     again = extraction.apply(con, doc_id, result, extractor="stub")
     assert again.linked == 0 and again.existing == len(result.triples)

@@ -142,6 +142,13 @@ _NOISE_NAMES = frozenset(
         "not stated",
         "[venue not stated]",
         "various",
+        "author",
+        "authors",
+        "paper",
+        "source",
+        "target",
+        "entity",
+        "document",
     }
 )
 _NOT_A_NAME = re.compile(r"not stated|unknown|/|\bn\.?d\.?\b|^\W*$", re.IGNORECASE)
@@ -322,7 +329,8 @@ def decide_unmapped(
 
 
 _MALFORMED = re.compile(
-    r"(src_type=|dst_type=|confidence=|evidence=|\trel=|target name=|source name=)"
+    r"(src_type=|dst_type=|confidence=|evidence=|\trel=|target name=|source name=|"
+    r"^(?:paper|author|source|target|src|dst|title|name|entity)=)"
 )
 # (rel, src_type, dst_type) -> new relation, after the self-name retyping
 REMAP: dict[tuple[str, str, str], str] = {
@@ -334,10 +342,13 @@ REMAP: dict[tuple[str, str, str], str] = {
     ("cites", "paper", "method"): "uses",
     ("cites", "paper", "dataset"): "uses",
     ("cites", "paper", "concept"): "about",
+    ("cites", "paper", "document"): "mentions",  # when not title-shaped (RETYPE)
+    ("cites", "paper", "work"): "mentions",
+    ("about", "paper", "document"): "mentions",
+    ("affiliated_with", "paper", "author"): "authored_by",
     ("cites", "paper", "person"): "mentions",
     ("cites", "paper", "author"): "mentions",
     ("cites", "paper", "organization"): "mentions",
-    ("cites", "paper", "work"): "mentions",
     ("cites", "paper", "event"): "mentions",
     ("cites", "paper", "place"): "mentions",
     ("part_of", "paper", "venue"): "published_in",
@@ -356,6 +367,7 @@ REMAP: dict[tuple[str, str, str], str] = {
 # a cited "document" or "work" in a research library is a paper, a listed
 # "person" on authored_by is its author
 RETYPE: dict[tuple[str, str, str], tuple[str, str]] = {
+    ("affiliated_with", "paper", "person"): ("paper", "author"),
     ("cites", "paper", "document"): ("paper", "paper"),
     ("cites", "paper", "work"): ("paper", "paper"),
     ("cites", "document", "paper"): ("paper", "paper"),
@@ -484,6 +496,20 @@ def decide(
     rule = None
     if (edges := _self_as_device(item, doc)) is not None:
         return "link", edges, "self-as-device"
+    # written backwards: the author "authored_by" the paper, the
+    # organization "affiliated_with" the person
+    if rel == "authored_by" and st == "author" and dt in ("paper", "document"):
+        return (
+            "link",
+            [store.Edge(dst, "paper", "authored_by", src, "author")],
+            "flip-authored_by",
+        )
+    if rel == "affiliated_with" and st == "organization" and dt in ("person", "author"):
+        return (
+            "link",
+            [store.Edge(dst, "author", "affiliated_with", src, "organization")],
+            "flip-affiliated_with",
+        )
     # the document under a wrong type: it is itself
     if title and src == title and st != own:
         st, rule = own, "self-name"
@@ -502,14 +528,21 @@ def decide(
                 [store.Edge(title, own, "authored_by", n, "author") for n in names],
                 "authors-both-ends",
             )
+    if " ".join(src.lower().split()) == " ".join(dst.lower().split()):
+        return (
+            "drop",
+            [],
+            "self-edge",
+        )  # after the authored_by rules: both ends an author
     if (rel, st, dt) in RETYPE and not (
         rel == "cites" and len(dst) < 12 and len(dst.split()) < 2
     ):  # a one-word "document" is not a paper we can name
         st2, dt2 = RETYPE[(rel, st, dt)]
+        rel2 = REMAP.get((rel, st2, dt2), rel)
         return (
             "link",
-            [store.Edge(src, st2, rel, dst, dt2)],
-            f"retype-{rel}-{st}-{dt}",
+            [store.Edge(src, st2, rel2, dst, dt2)],
+            f"retype-{rel}-{st}-{dt}" + (f"->{rel2}" if rel2 != rel else ""),
         )
     if (rel, st, dt) in REMAP:
         return (
@@ -529,14 +562,20 @@ def apply_typing_rules(
     *,
     commit: bool = True,
     onto: ontology.Ontology | None = None,
+    source_doc: int | None = None,
+    run: str | None = None,
 ) -> TypingReport:
-    """Run the rules over every open typed item. Links carry the item's
-    evidence and source document, confidence INFERRED (a rule read what
-    the model meant), producer ``typing-rules`` and one run id per pass;
-    an edge already in the graph closes the item as ``linked`` too. With
-    ``commit=False`` nothing is written and the report says what would be."""
+    """Run the rules over every open typed item (or one document's, with
+    ``source_doc``: what the door does right after an extraction). Links
+    carry the item's evidence and source document, confidence INFERRED (a
+    rule read what the model meant), producer ``typing-rules`` and one run
+    id per pass; an edge already in the graph closes the item as
+    ``linked`` too. With ``commit=False`` nothing is written and the
+    report says what would be."""
     onto = onto or ontology.current()
-    rep = TypingReport(run="typing-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S"))
+    rep = TypingReport(
+        run=run or "typing-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
+    )
     items: list[dict[str, Any]] = []
     offset = 0
     while True:
@@ -544,7 +583,9 @@ def apply_typing_rules(
         if not page:
             break
         offset += len(page)
-        items.extend(page)
+        items.extend(
+            it for it in page if source_doc is None or it["source_doc"] == source_doc
+        )
     docs = _doc_titles(con, {it["source_doc"] for it in items if it["source_doc"]})
     for it in items:
         rep.checked += 1
