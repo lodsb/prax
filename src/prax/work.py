@@ -343,6 +343,7 @@ def take_in(
                     error=r.get("error"),
                     seconds=float(r.get("seconds") or 0.0),
                     force=bool(r.get("force")),
+                    keep_source=bool(r.get("keep_source")),
                 )
             except Exception as exc:  # noqa: BLE001
                 out["errors"].append(

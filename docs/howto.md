@@ -204,12 +204,15 @@ half, the reading:
 or "read again… → figures" on the page. The reading goes under the
 image line as `*Figure, as read by <model>:* …` (a model reads a figure
 once; another model's reading joins it), and the figure chunk carries
-it — findable, and read by the extraction. The retroactive pass over
-the library is the re-read with the parse extractors, which now find
-figures (`trafilatura` r3, `pymupdf4llm` r2):
+it — findable, and read by the extraction. The parsers find
+figures as they read (`trafilatura` r3, `pymupdf4llm` r2); the
+retroactive pass over a library parsed before that is `figure-refs`,
+which puts the original's figures into the current text without
+re-reading the pages (pymupdf4llm's layout analysis takes 10–30 s a
+document; this takes a fraction of a second):
 
-    python scripts/parse_pending.py --upgrade trafilatura/2.2.0-r2 --mime text/html
-    python scripts/parse_pending.py --upgrade pymupdf4llm/1.28.2 --mime application/pdf
+    python scripts/parse_pending.py --upgrade trafilatura/2.2.0-r2 --mime text/html   # 284 pages: 2 min
+    python scripts/parse_pending.py --upgrade pymupdf4llm/1.28.2 --extractor figure-refs --force
 
 A document whose text comes out the same is `same` — the stamp moves,
 nothing is rebuilt — and one that gained a figure keeps every chunk

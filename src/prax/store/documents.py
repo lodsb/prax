@@ -758,6 +758,7 @@ READINGS = (
     "vision-pages",
     "vision",
     "figures",
+    "figure-refs",
     "pymupdf4llm-ocr",
     "docling",
     "trafilatura",

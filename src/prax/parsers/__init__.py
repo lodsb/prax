@@ -26,6 +26,11 @@ time, so the serving path never loads them):
 | plain           | text/*          | decode as UTF-8; a source file (by extension, |
 |                 |                 | else Magika) becomes one fenced code block;   |
 |                 |                 | code regions inside prose are fenced          |
+| figures         | .pdf .html      | the vision model reads every figure the text   |
+|                 |                 | references and writes what it shows under it  |
+| figure-refs     | .pdf .html      | the original's figures referenced in the      |
+|                 |                 | current text, nothing else touched (the       |
+|                 |                 | retroactive pass; the parsers find them now)  |
 | vision-pages    | .pdf            | scanned pages read by the vision step's model |
 |                 |                 | (handwriting, scores, what OCR cannot read);  |
 |                 |                 | pages with a text layer keep it; explicit     |
@@ -73,6 +78,7 @@ class Extractor:
     check: Callable[[], bool] | None = None  # more than an import: a program
     variant: Callable[[], str] | None = None  # a setting that changes the output
     previous: bool = False  # takes previous= (the current text) and may keep it
+    annotates: bool = False  # adds to the current text: its source stamp stays
 
     def accepts(self, mime: str) -> bool:
         return any(
@@ -435,6 +441,17 @@ def _figures_model() -> str:
     from prax.parsers import vision
 
     return vision.model_name()
+
+
+def _figure_refs(
+    data: bytes, *, filename: str | None = None, previous: str | None = None
+) -> str:
+    """The original's figures referenced in the current text, nothing else
+    changed: the retroactive pass over a library parsed before figures
+    were found, without re-reading the pages."""
+    if not previous:
+        raise ExtractionError("no text to put the figures in: parse the document first")
+    return figures.add_refs(data, previous)
 
 
 def _vision(
@@ -1018,6 +1035,16 @@ REGISTRY: list[Extractor] = [
         hints=True,
         variant=_figures_model,
         previous=True,  # writes into the current text
+        annotates=True,
+    ),
+    Extractor(
+        "figure-refs",
+        ("text/html", "application/xhtml+xml", "application/pdf"),
+        _figure_refs,
+        explicit_only=True,
+        hints=True,
+        previous=True,
+        annotates=True,
     ),
     Extractor("docx", (DOCX_MIME,), _docx),
     Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),

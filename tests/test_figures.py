@@ -223,3 +223,11 @@ def test_the_door_serves_a_figure_and_a_re_read_that_changes_nothing_is_same(
     assert queue.run(con, [doc_id], force=True).actions == {"same": 1}
     assert [c["chunk_id"] for c in store.list_chunks(con, doc_id)] == before
     assert store.get_meta(con, doc_id)["parse_history"][-1]["outcome"] == "same"
+    # figure-refs on a text that has its figures already: same, and the
+    # parser's stamp stays (an annotating extractor never takes it over)
+    assert queue.run(con, [doc_id], extractor="figure-refs", force=True).actions == {
+        "same": 1
+    }
+    assert store.get_meta(con, doc_id)["text_source"].startswith("trafilatura/")
+    history = store.get_meta(con, doc_id)["parse_history"]
+    assert history[-1]["extractor"] == "figure-refs/1"

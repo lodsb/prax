@@ -137,6 +137,7 @@ def parse_one(
             text=text,
             seconds=round(time.monotonic() - t0, 2),
             force=force,
+            keep_source=ext.annotates,
         )
     assert last_error is not None
     raise last_error
@@ -151,13 +152,16 @@ def apply_parse(
     error: str | None = None,
     seconds: float = 0.0,
     force: bool = False,
+    keep_source: bool = False,
 ) -> str:
     """Take in what an extractor produced for a document, here or on a
     worker: record the attempt in ``meta.parse_history`` and index the
     text unless it is suspiciously short next to the old one (``force``
     overrides) or the same as the current text (``same``: the stamp moves,
     nothing is rebuilt). Returns the action: ``created``, ``upgraded``,
-    ``same``, ``kept``, ``empty`` or ``error``."""
+    ``same``, ``kept``, ``empty`` or ``error``. ``keep_source``: the
+    extractor added to the text (figures, their readings) — the attempt
+    is recorded under its stamp, ``meta.text_source`` stays the parser's."""
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
         raise KeyError(f"no such document: {doc_id}")
@@ -171,7 +175,8 @@ def apply_parse(
         # a re-read that found nothing new (an upgrade pass over the
         # library): the stamp moves on, chunks and vectors stay
         _record(con, doc_id, {**entry, "outcome": "same"})
-        store.set_text_source(con, doc_id, stamp)
+        if not keep_source:
+            store.set_text_source(con, doc_id, stamp)
         return "same"
     if not force and _too_short(len(text), old_len):
         action = "kept" if old_len else "empty"
@@ -179,7 +184,7 @@ def apply_parse(
         return action
     action = "upgraded" if old_len else "created"
     _record(con, doc_id, {**entry, "outcome": action})
-    store.index_text(con, doc_id, text, text_source=stamp)
+    store.index_text(con, doc_id, text, text_source=None if keep_source else stamp)
     return action
 
 

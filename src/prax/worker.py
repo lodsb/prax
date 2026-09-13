@@ -104,6 +104,7 @@ def do_parse(
                     "seconds": round(time.monotonic() - t0, 2),
                     "force": bool(it.get("force")),
                     "requested": it.get("extractor"),
+                    "keep_source": ext.annotates,
                 }
             )
             _say(log_, f"parse doc {doc_id}: {len(text)} chars ({stamp})")

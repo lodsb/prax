@@ -303,18 +303,33 @@ def find(data: bytes, ref: str) -> tuple[bytes, str] | None:
     snapshot, told apart by their bytes), with their media type; None when
     the original has no such image."""
     if data[:5] == b"%PDF-":
-        import pymupdf
-
-        with pymupdf.open(stream=data, filetype="pdf") as doc:
-            for fig in pdf_figures(doc):
-                if fig.ref == ref:
-                    return fig.data, fig.media_type
+        for fig in of(data):
+            if fig.ref == ref:
+                return fig.data, fig.media_type
         return None
     for m in re.finditer(rb'src="(data:image/[^"]+)"', data):
         found = _data_url(m.group(1).decode("ascii", "replace"))
         if found and sha(found[0]) == ref:
             return found
     return None
+
+
+def of(data: bytes) -> list[Figure]:
+    """The figures of an original, a PDF or an HTML snapshot told apart by
+    their bytes."""
+    if data[:5] == b"%PDF-":
+        import pymupdf
+
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            return pdf_figures(doc)
+    return html_figures(data)
+
+
+def add_refs(data: bytes, previous: str) -> str:
+    """The current text with the original's figures referenced in it — the
+    cheap half of the retroactive pass: no layout analysis, no model, the
+    text as it is plus the image lines it lacked."""
+    return place(previous, of(data))
 
 
 def refs(text: str) -> list[dict[str, Any]]:
