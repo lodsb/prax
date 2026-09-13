@@ -535,6 +535,14 @@ def test_browsing_endpoints_and_ui(client: TestClient) -> None:
     assert page.status_code == 200 and "<title>prax</title>" in page.text
     assert client.get("/ui/app.js").status_code == 200
     assert client.get("/ui/vendor/marked.min.js").status_code == 200
+    # the rendered Markdown of strangers (captured pages, a model's answer)
+    # cannot run script in the UI: no inline script, only the UI's own files
+    policy = page.headers["content-security-policy"]
+    scripts = [d for d in policy.split(";") if d.strip().startswith("script-src")]
+    assert scripts == [" script-src 'self'"]
+    assert "frame-ancestors 'none'" in policy and "form-action 'self'" in policy
+    assert "<script src=" in page.text and "<script>" not in page.text
+    assert client.get("/ui/theme.js").status_code == 200
 
 
 def test_ui_error_is_logged(client: TestClient, caplog) -> None:

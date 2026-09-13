@@ -5,14 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>prax</title>
   <link rel="stylesheet" href="style.css">
-  <script>
-    // the chosen theme, before the first paint (settings live in this
-    // browser only: localStorage, never sent to the door)
-    try {
-      var s = JSON.parse(localStorage.getItem("prax.settings") || "{}");
-      if (s.theme && s.theme !== "system") document.documentElement.dataset.theme = s.theme;
-    } catch (e) {}
-  </script>
+  <script src="theme.js"></script>
 </head>
 <body>
   <header class="top">

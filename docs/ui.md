@@ -71,6 +71,7 @@ same dialog and the same key.
       lib.js            the pure helpers (escaping, hash parsing, chunk locating, citation links); also loaded by the node tests
       app.js            API client, one render function per view, the error reporter
       style.css         layout, badges, highlight; the themes as CSS variables (system, light, dark, paper)
+      theme.js          applies the chosen theme before the first paint (loaded in <head>)
       vendor/marked.min.js   Markdown renderer (MIT), pinned version noted in vendor/VERSIONS
 
 ## Tests and errors
@@ -94,6 +95,15 @@ door's log.
   without it (static files are open); the first API call that returns
   401 shows a token prompt, `POST /session` turns the token into an
   HttpOnly cookie, and the token is never kept in browser storage.
+- What the UI renders is often somebody else's text: a captured page's
+  Markdown, a model's answer, and marked passes raw HTML in it through.
+  The door sends the UI's files with a content security policy
+  (`api.UI_POLICY`): script only from the UI's own files, nothing
+  inline (which is why the theme script is `theme.js`, not a `<script>`
+  block), no `javascript:` links, forms only to the door, images only
+  from the door or `data:`, no framing. A `<script>` or an `onerror=`
+  in a document or an answer is inert. Keep it so: no inline scripts or
+  handlers in `index.html` or in rendered HTML.
 - No state of its own beyond the browser's: the settings (`localStorage`)
   and the ask conversation (`sessionStorage`, gone with the tab) are
   conveniences of one browser; anything worth keeping — an answer, a

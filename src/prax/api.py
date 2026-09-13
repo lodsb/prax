@@ -1123,13 +1123,30 @@ def root() -> RedirectResponse:
     return RedirectResponse("/ui/")
 
 
+# What the UI page may load and run. The UI renders Markdown that other
+# people wrote (captured pages, a model's answer) into HTML, and marked
+# passes raw HTML through; this is what keeps a <script> or an onerror=
+# in that text from running with the session cookie: only the UI's own
+# files run as script, nothing inline, no javascript: links, no forms
+# posting elsewhere, no framing, images only from the door itself.
+UI_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+    "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+)
+
+
 class _UIFiles(StaticFiles):
     """Static files that browsers revalidate on every load (ETag makes
-    that cheap), so a redeploy never leaves a stale app.js behind."""
+    that cheap), so a redeploy never leaves a stale app.js behind, and
+    that carry the UI's content security policy."""
 
     def file_response(self, *args: Any, **kwargs: Any) -> Any:
         response = super().file_response(*args, **kwargs)
         response.headers["Cache-Control"] = "no-cache"
+        response.headers["Content-Security-Policy"] = UI_POLICY
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Referrer-Policy"] = "no-referrer"
         return response
 
 
