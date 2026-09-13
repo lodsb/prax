@@ -343,3 +343,62 @@ def test_placeholders_and_near_misses() -> None:
     )
     a, edges, rule = review.decide_unmapped(untyped(title, "funded_by", "DFG"), doc)
     assert (a, edges[0].dst_type) == ("link", "organization")
+
+
+def test_v7_relations_for_untyped_items() -> None:
+    doc = ("Reaktor 5 Core Reference", "manual")
+    item = lambda src, rel, dst: {
+        "src": src,
+        "src_type": None,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": None,
+        "reason": "",
+    }
+    a, edges, rule = review.decide_unmapped(
+        item("Native Instruments GmbH", "located_in", "Berlin"), doc
+    )
+    assert (a, rule, edges[0].src_type, edges[0].dst_type) == (
+        "link",
+        "located_in",
+        "organization",
+        "place",
+    )
+    assert (
+        review.decide_unmapped(item("Ada Lovelace", "located_in", "London"), doc)[0]
+        == "open"
+    )
+    a, edges, rule = review.decide_unmapped(
+        item("Reaktor 5 Core Reference", "published_by", "Native Instruments GmbH"), doc
+    )
+    assert (a, edges[0].src_type, edges[0].rel, edges[0].dst_type) == (
+        "link",
+        "manual",
+        "published_by",
+        "organization",
+    )
+    a, edges, rule = review.decide_unmapped(
+        item(
+            "CCRMA Center for Computer Research",
+            "affiliated_with",
+            "Stanford University",
+        ),
+        doc,
+    )
+    assert (a, rule, edges[0].rel) == ("link", "affiliation->part_of", "part_of")
+    a, edges, rule = review.decide_unmapped(
+        item("Music and Audio Research Lab", "part_of", "New York University"), doc
+    )
+    assert (a, rule) == ("link", "part_of-organizations")
+    # a university and its lecture course are not two organizations
+    assert (
+        review.decide_unmapped(
+            item(
+                "Technische Universität München",
+                "affiliated_with",
+                "Grundlagen Betriebssysteme",
+            ),
+            doc,
+        )[0]
+        == "open"
+    )

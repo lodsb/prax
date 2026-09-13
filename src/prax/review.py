@@ -205,12 +205,39 @@ def _looks_venue(name: str) -> bool:
     )
 
 
+_TOP_ORG = re.compile(
+    r"universit|hochschule|college|institute of technology|gmbh|\binc\b|\bltd|"
+    r"corporation|foundation|ministry|agency",
+    re.IGNORECASE,
+)
+
+
+def _inside(src: str, dst: str) -> bool:
+    """Two organizations where the first can be part of the second: a
+    lab in a university, a group in a company — never a university in a
+    course, and never two universities (aliases of one, more likely)."""
+    return (
+        _looks_org(src)
+        and _looks_org(dst)
+        and not (_TOP_ORG.search(src) and not _TOP_ORG.search(dst))
+        and not (_TOP_ORG.search(src) and _TOP_ORG.search(dst))
+    )
+
+
 def _looks_org(name: str) -> bool:
-    return bool(_ORG.search(name)) and not _PERSON.match(name)
+    # an organization word wins over the shape of a name: "Stanford
+    # University" and "Waves Audio" are two capitalized words, and organizations
+    return bool(_ORG.search(name))
 
 
 def _looks_person(name: str) -> bool:
-    return bool(_PERSON.match(name)) and not _ORG.search(name)
+    # two to five capitalized words, none an organization word and none
+    # longer than a surname gets ("Betriebssysteme" is a course, not a person)
+    return (
+        bool(_PERSON.match(name))
+        and not _ORG.search(name)
+        and all(len(w) <= 14 for w in name.split())
+    )
 
 
 def decide_unmapped(
@@ -240,6 +267,13 @@ def decide_unmapped(
                 [store.Edge(src, own, "written_at", dst, "organization")],
                 "written_at",
             )
+        # two institutions "affiliated": the smaller is part of the larger
+        if not is_self and _inside(src, dst):
+            return (
+                "link",
+                [store.Edge(src, "organization", "part_of", dst, "organization")],
+                "affiliation->part_of",
+            )
         # exactly one side is a person; the other is the institution
         ps, pd = _looks_person(src), _looks_person(dst)
         if ps and not pd and not _looks_person(dst):
@@ -253,6 +287,32 @@ def decide_unmapped(
                 "link",
                 [store.Edge(dst, "author", "affiliated_with", src, "organization")],
                 "affiliation",
+            )
+        return "open", [], None
+    if rel in ("located_in", "located_at", "based_in", "location"):
+        # an organization and a place: nothing else is located anywhere
+        if not is_self and _looks_org(src) and not _looks_person(dst) and len(dst) >= 3:
+            return (
+                "link",
+                [store.Edge(src, "organization", "located_in", dst, "place")],
+                "located_in",
+            )
+        return "open", [], None
+    if rel in ("published_by", "publisher", "issued_by"):
+        if is_self and not _looks_person(dst) and _looks_venue(dst):
+            return (
+                "link",
+                [store.Edge(src, own, "published_by", dst, "organization")],
+                "published_by",
+            )
+        return "open", [], None
+    if rel in ("part_of", "is_part_of", "member_of", "belongs_to", "division_of"):
+        # a lab in a university, a subsidiary in a group: both organizations
+        if not is_self and _inside(src, dst):
+            return (
+                "link",
+                [store.Edge(src, "organization", "part_of", dst, "organization")],
+                "part_of-organizations",
             )
         return "open", [], None
     if rel in ("published_in", "published in", "appeared_in", "venue"):
