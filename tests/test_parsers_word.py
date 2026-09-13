@@ -83,10 +83,65 @@ needs_libreoffice = pytest.mark.skipif(
 )
 
 
+def test_an_rtf_is_read_without_libreoffice() -> None:
+    rtf = (
+        rb"{\rtf1\ansi{\fonttbl\f0 Times;}\f0 Plain words from an old format."
+        rb"\par Second paragraph.\par}"
+    )
+    text = parsers.by_name("rtf")(rtf)
+    assert "Plain words from an old format." in text and "Second paragraph." in text
+    assert parsers.candidates("application/rtf")[0].name == "rtf"
+    with pytest.raises(ValueError, match="not an RTF"):
+        parsers.by_name("rtf")(b"plain text")
+
+
+def _odt(content_xml: str) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("mimetype", "application/vnd.oasis.opendocument.text")
+        zf.writestr("content.xml", content_xml)
+    return buf.getvalue()
+
+
+ODT = """<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content
+  xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+  xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+  xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0">
+ <office:body><office:text>
+  <text:h text:outline-level="1">A Title</text:h>
+  <text:p>First<text:s text:c="2"/>paragraph with a
+   <text:span>span</text:span>.</text:p>
+  <text:h text:outline-level="2">Parts</text:h>
+  <text:list><text:list-item><text:p>bolt</text:p></text:list-item>
+   <text:list-item><text:p>nut</text:p></text:list-item></text:list>
+  <table:table><table:table-row><table:table-cell><text:p>part</text:p></table:table-cell>
+   <table:table-cell><text:p>mm</text:p></table:table-cell></table:table-row>
+   <table:table-row><table:table-cell><text:p>bolt</text:p></table:table-cell>
+   <table:table-cell><text:p>12</text:p></table:table-cell></table:table-row></table:table>
+  <text:p>Last<text:line-break/>line.</text:p>
+ </office:text></office:body></office:document-content>
+"""
+
+
+def test_an_odt_becomes_markdown_without_libreoffice() -> None:
+    text = parsers.by_name("odt")(_odt(ODT))
+    head = "# A Title\n\nFirst  paragraph with a span.\n\n## Parts\n\n- bolt\n- nut\n\n"
+    assert text.startswith(head)
+    assert "| part | mm |\n|---|---|\n| bolt | 12 |" in text
+    assert text.endswith("Last\nline.")
+    assert (
+        parsers.candidates("application/vnd.oasis.opendocument.text")[0].name == "odt"
+    )
+    with pytest.raises(ValueError, match="not an OpenDocument"):
+        parsers.by_name("odt")(b"nope")
+
+
 @needs_libreoffice
-def test_an_rtf_goes_through_libreoffice(tmp_path: Path) -> None:
+def test_an_old_doc_goes_through_libreoffice(tmp_path: Path) -> None:
+    # RTF bytes under a .doc name: LibreOffice reads the content, not the suffix
     rtf = rb"{\rtf1\ansi Plain words from an old format.\par}"
-    text = parsers.by_name("office")(rtf, filename="old.rtf")
+    text = parsers.by_name("office")(rtf, filename="old.doc")
     assert "Plain words from an old format." in text
 
 
@@ -97,3 +152,8 @@ def test_office_without_libreoffice_is_simply_not_offered(
     assert parsers.candidates("application/msword") == []
     with pytest.raises(RuntimeError, match="LibreOffice is not installed"):
         parsers.by_name("office")(b"anything", filename="x.doc")
+    # the formats that never needed it are still offered
+    assert parsers.candidates("application/rtf")[0].name == "rtf"
+    assert (
+        parsers.candidates("application/vnd.oasis.opendocument.text")[0].name == "odt"
+    )

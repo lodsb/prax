@@ -668,13 +668,128 @@ def _docx(data: bytes) -> str:
     body = ElementTree.fromstring(xml).find(f"{W}body")
     if body is None:
         return ""
-    blocks = _docx_blocks(body)
+    return _join_blocks(_docx_blocks(body))
+
+
+def _join_blocks(blocks: list[tuple[str, str]]) -> str:
+    """Blocks as Markdown: a blank line between them, list items adjacent."""
     lines: list[str] = []
     for i, (kind, text) in enumerate(blocks):
         if i and not (kind == "li" and blocks[i - 1][0] == "li"):
             lines.append("")
         lines.append(text)
     return "\n".join(lines).strip()
+
+
+# ---- OpenDocument text: the same idea as .docx, other namespaces
+_ODT_TEXT = "{urn:oasis:names:tc:opendocument:xmlns:text:1.0}"
+_ODT_TABLE = "{urn:oasis:names:tc:opendocument:xmlns:table:1.0}"
+_ODT_OFFICE = "{urn:oasis:names:tc:opendocument:xmlns:office:1.0}"
+
+
+def _odt_runs(node: Any) -> str:
+    """The text of one paragraph or heading: spans flattened, ``text:s``
+    (n spaces), tabs and line breaks kept. Whitespace inside a text node
+    collapses to one space, as ODF reads it; the explicit elements are the
+    only way to say more."""
+    parts: list[str] = []
+    if node.text:
+        parts.append(re.sub(r"\s+", " ", node.text))
+    for child in node:
+        tag = child.tag
+        if tag == f"{_ODT_TEXT}s":
+            parts.append(" " * int(child.get(f"{_ODT_TEXT}c", "1") or 1))
+        elif tag == f"{_ODT_TEXT}tab":
+            parts.append("\t")
+        elif tag == f"{_ODT_TEXT}line-break":
+            parts.append("\n")
+        elif tag == f"{_ODT_TEXT}note":  # a footnote: its body, not its number
+            body = child.find(f"{_ODT_TEXT}note-body")
+            if body is not None:
+                parts.append(" (" + " ".join(_odt_runs(p) for p in body) + ")")
+        else:
+            parts.append(_odt_runs(child))
+        if child.tail:
+            parts.append(re.sub(r"\s+", " ", child.tail))
+    return "".join(parts).strip()
+
+
+def _odt_blocks(parent: Any) -> list[tuple[str, str]]:
+    blocks: list[tuple[str, str]] = []
+    for child in parent:
+        tag = child.tag
+        if tag == f"{_ODT_TEXT}h":
+            text = _odt_runs(child)
+            if text:
+                level = min(int(child.get(f"{_ODT_TEXT}outline-level", "1") or 1), 6)
+                blocks.append(("h", "#" * level + " " + text))
+        elif tag == f"{_ODT_TEXT}p":
+            text = _odt_runs(child)
+            if text:
+                blocks.append(("p", text))
+        elif tag == f"{_ODT_TEXT}list":
+            for item in child.iter(f"{_ODT_TEXT}list-item"):
+                text = " ".join(
+                    t
+                    for t in (_odt_runs(p) for p in item.findall(f"{_ODT_TEXT}p"))
+                    if t
+                )
+                if text:
+                    blocks.append(("li", "- " + text))
+        elif tag == f"{_ODT_TABLE}table":
+            rows: list[list[str]] = []
+            for row in child.iter(f"{_ODT_TABLE}table-row"):
+                cells = [
+                    " ".join(_odt_runs(p) for p in cell.iter(f"{_ODT_TEXT}p")).replace(
+                        "|", r"\|"
+                    )
+                    for cell in row.findall(f"{_ODT_TABLE}table-cell")
+                ]
+                if any(cells):
+                    rows.append(cells)
+            if rows:
+                width = max(len(r) for r in rows)
+                rows = [r + [""] * (width - len(r)) for r in rows]
+                head, *rest = rows
+                table = [
+                    "| " + " | ".join(head) + " |",
+                    "|" + "|".join(["---"] * width) + "|",
+                ]
+                table += ["| " + " | ".join(r) + " |" for r in rest]
+                blocks.append(("table", "\n".join(table)))
+        elif tag in (f"{_ODT_TEXT}section", f"{_ODT_OFFICE}text"):
+            blocks.extend(_odt_blocks(child))
+    return blocks
+
+
+def _odt(data: bytes) -> str:
+    """An OpenDocument text as Markdown: headings by outline level, lists,
+    tables, paragraphs; ``content.xml`` in the zip, nothing installed."""
+    import io
+    import zipfile
+    from xml.etree import ElementTree
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            xml = archive.read("content.xml")
+    except (KeyError, zipfile.BadZipFile) as exc:
+        raise ValueError("not an OpenDocument text (no content.xml)") from exc
+    body = ElementTree.fromstring(xml).find(f"{_ODT_OFFICE}body")
+    if body is None:
+        return ""
+    return _join_blocks(_odt_blocks(body))
+
+
+def _rtf(data: bytes) -> str:
+    """Rich Text as plain text: striprtf reads the control words, keeps the
+    words; RTF carries little structure worth a heading."""
+    from striprtf.striprtf import rtf_to_text
+
+    text = data.decode("cp1252", "replace")
+    if not text.lstrip().startswith("{\\rtf"):
+        raise ValueError("not an RTF file")
+    out = rtf_to_text(text, errors="ignore")
+    return re.sub(r"\n{3,}", "\n\n", out).strip()
 
 
 @functools.cache
@@ -697,42 +812,49 @@ def soffice_path() -> str | None:
 
 
 def _office(data: bytes, *, filename: str | None = None) -> str:
-    """An old .doc, an .rtf or an OpenDocument text: LibreOffice converts it
-    to .docx in a scratch directory with a profile of its own (so it never
-    clashes with the person's running LibreOffice) and ``_docx`` reads that."""
+    """An old binary .doc: LibreOffice converts it to .docx in a scratch
+    directory with a profile of its own (so it never clashes with the
+    person's running LibreOffice) and ``_docx`` reads that. Its output goes
+    to a file, not a pipe: soffice.exe hands the work to a child that keeps
+    a pipe open past the conversion, and a pipe would make the wait outlive
+    the work."""
     import subprocess
     import tempfile
 
     soffice = soffice_path()
     if soffice is None:
         raise RuntimeError(
-            "LibreOffice is not installed: it is what converts .doc, .rtf and"
-            " .odt (libreoffice.org; prax only calls it)"
+            "LibreOffice is not installed: it is what converts an old .doc"
+            " (libreoffice.org; prax only calls it)"
         )
     suffix = Path(filename or "").suffix.lower() or ".doc"
     with tempfile.TemporaryDirectory(prefix="prax-office-") as tmp:
         work = Path(tmp)
         source = work / f"input{suffix}"
         source.write_bytes(data)
-        done = subprocess.run(
-            [
-                soffice,
-                f"-env:UserInstallation=file:///{(work / 'profile').as_posix()}",
-                "--headless",
-                "--norestore",
-                "--convert-to",
-                "docx",
-                "--outdir",
-                str(work),
-                str(source),
-            ],
-            capture_output=True,
-            timeout=OFFICE_TIMEOUT,
-            check=False,
-        )
+        said_path = work / "soffice.log"
+        with said_path.open("wb") as said_file:
+            subprocess.run(
+                [
+                    soffice,
+                    f"-env:UserInstallation=file:///{(work / 'profile').as_posix()}",
+                    "--headless",
+                    "--norestore",
+                    "--convert-to",
+                    "docx",
+                    "--outdir",
+                    str(work),
+                    str(source),
+                ],
+                stdin=subprocess.DEVNULL,
+                stdout=said_file,
+                stderr=subprocess.STDOUT,
+                timeout=OFFICE_TIMEOUT,
+                check=False,
+            )
         converted = work / "input.docx"
         if not converted.exists():
-            said = (done.stderr or done.stdout or b"").decode("utf-8", "replace")
+            said = said_path.read_text(encoding="utf-8", errors="replace")
             raise RuntimeError(
                 f"LibreOffice did not convert the file: {said.strip()[:200]}"
             )
@@ -778,14 +900,11 @@ REGISTRY: list[Extractor] = [
         revision=2,  # Markdown output with fenced code blocks
     ),
     Extractor("docx", (DOCX_MIME,), _docx),
+    Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),
+    Extractor("rtf", ("application/rtf", "text/rtf"), _rtf, "striprtf"),
     Extractor(
         "office",
-        (
-            "application/msword",
-            "application/rtf",
-            "text/rtf",
-            "application/vnd.oasis.opendocument.text",
-        ),
+        ("application/msword",),
         _office,
         hints=True,
         check=lambda: soffice_path() is not None,

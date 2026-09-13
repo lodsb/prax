@@ -557,7 +557,10 @@ fraction):
       LibreOffice when a machine has it and is simply not offered when
       it does not (`Extractor.check`). `prax.parsers.guess_mime` names
       the office types Python's table misses. The one `.doc` capture in
-      the store parses now.
+      the store parses now. 2026-09-13: `.odt` read here like `.docx`,
+      `.rtf` through striprtf; LibreOffice only for the binary `.doc`,
+      its output to a file rather than a pipe (the pipe outlived the
+      conversion and hung the test)
 - [x] Models fetched on demand (2026-09-12, `scripts/fetch_model.py`,
       `repo` and `file` on a models entry, the example config shows
       it). The original note: a `models` entry may name `repo` and

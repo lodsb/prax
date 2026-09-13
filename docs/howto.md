@@ -156,12 +156,13 @@ layout analysis, which a scanned book rarely has to give.
     # Docling on a hand-picked set
     python scripts/parse_pending.py --ids 12 34 --extractor docling --force
 
-Word documents need nothing installed for `.docx`: it is a zip of XML and
-`prax.parsers` reads it here (headings by outline level or style name in
-any language, numbered and bulleted paragraphs as list items, tables as
-Markdown tables). The older `.doc`, `.rtf` and OpenDocument `.odt` go
-through LibreOffice, which converts them to `.docx` in a scratch
-directory with a profile of its own: install it
+Office documents need nothing installed for `.docx` and `.odt`: both
+are a zip of XML and `prax.parsers` reads them here (headings by outline
+level or style name in any language, numbered and bulleted paragraphs
+as list items, tables as Markdown tables), and `.rtf` is read by
+`striprtf` (an 8 KB package in the `ingest` extra) as plain text. Only
+the old binary `.doc` goes through LibreOffice, which converts it to
+`.docx` in a scratch directory with a profile of its own: install it
 ([libreoffice.org](https://www.libreoffice.org), or `soffice` on PATH)
 and the `office` extractor appears; without it those documents stay
 pending and say why. Python's MIME table misses `.docx` on some machines,
