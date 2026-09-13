@@ -604,8 +604,10 @@ Qwen2.5-7B on an 8 GB card, `docs/eval/local-llm-2026-09-08.md`).
     # the server (Windows; other hosts run llama-server with the same flags):
     scripts/llama_server.ps1 -Model <data dir>/models/<file>.gguf -Slots 3 -NoThinking
     # a vision-language model also describes images when its projector is loaded
-    # (the mmproj-*.gguf in the model's repository, ~1 GB; Qwen3.6 has one):
-    scripts/llama_server.ps1 -Model <file>.gguf -Mmproj mmproj-F16.gguf -Slots 3 -NoThinking
+    # (the mmproj-*.gguf in the model's repository, ~1 GB; Qwen3.6 has one); on
+    # a card that also drives the display, leave it 3-4 GB (the script's header
+    # has the measurements: -CpuMoe 2 frees 0.7 GB for a tenth of the speed)
+    scripts/llama_server.ps1 -Model <file>.gguf -Mmproj mmproj-F16.gguf -Slots 2 -CpuMoe 2 -UBatch 256 -ImageMaxTokens 1024 -NoThinking
 
 Then in `prax.yaml`:
 
