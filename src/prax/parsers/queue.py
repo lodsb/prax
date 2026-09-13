@@ -155,8 +155,9 @@ def apply_parse(
     """Take in what an extractor produced for a document, here or on a
     worker: record the attempt in ``meta.parse_history`` and index the
     text unless it is suspiciously short next to the old one (``force``
-    overrides). Returns the action: ``created``, ``upgraded``, ``kept``,
-    ``empty`` or ``error``."""
+    overrides) or the same as the current text (``same``: the stamp moves,
+    nothing is rebuilt). Returns the action: ``created``, ``upgraded``,
+    ``same``, ``kept``, ``empty`` or ``error``."""
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
         raise KeyError(f"no such document: {doc_id}")
@@ -166,6 +167,12 @@ def apply_parse(
     text = text.strip()
     old_len = doc["text_len"]
     entry = {"extractor": stamp, "chars": len(text), "seconds": seconds}
+    if old_len and store.text_unchanged(con, doc_id, text):
+        # a re-read that found nothing new (an upgrade pass over the
+        # library): the stamp moves on, chunks and vectors stay
+        _record(con, doc_id, {**entry, "outcome": "same"})
+        store.set_text_source(con, doc_id, stamp)
+        return "same"
     if not force and _too_short(len(text), old_len):
         action = "kept" if old_len else "empty"
         _record(con, doc_id, {**entry, "outcome": action})

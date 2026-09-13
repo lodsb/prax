@@ -97,16 +97,71 @@ def index_text(
     return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": n_chunks}
 
 
+def text_unchanged(con: sqlite3.Connection, doc_id: int, text: str) -> bool:
+    """Whether ``text`` is byte for byte the document's current artifact
+    (after the same cleaning ``index_text`` applies)."""
+    row = con.execute(
+        "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None or not row["text_hash"]:
+        return False
+    cleaned = _SURROGATE.sub("�", text.replace("\x00", "")).encode("utf-8")
+    return hashlib.sha256(cleaned).hexdigest() == row["text_hash"]
+
+
+@_serialized
+def set_text_source(con: sqlite3.Connection, doc_id: int, stamp: str) -> None:
+    """Record which extractor the current text is from, text untouched."""
+    con.execute(
+        "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+        " '$.text_source', ?) WHERE id = ?",
+        (stamp, doc_id),
+    )
+    con.commit()
+
+
 def _write_chunks(con: sqlite3.Connection, doc_id: int, text: str) -> int:
-    """Replace a document's chunks with structure-aware ones (prax.chunking)."""
+    """Replace a document's chunks with structure-aware ones (prax.chunking).
+
+    A chunk whose text is unchanged keeps its id, and with it its vector
+    (``chunk_embeddings`` is keyed by the id): a re-read that adds a figure
+    or fixes a page re-embeds the chunks that changed, not the document.
+    The others are deleted — their embedding rows cascade away; the index
+    keeps stale keys that queries filter out and ``compact_vectors()``
+    removes — and the new ones inserted."""
     rows = chunking.rows(chunking.chunk(text))
-    # chunk ids change: their chunk_embeddings rows cascade away, the index
-    # keeps stale keys that queries filter out and compact_vectors() removes
-    con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+    old: dict[str, int] = {}
+    for r in con.execute("SELECT id, text FROM chunks WHERE doc_id = ?", (doc_id,)):
+        old.setdefault(r["text"], r["id"])
+    kept: dict[int, int] = {}  # new seq -> old id
+    used: set[int] = set()
+    for i, r in enumerate(rows):
+        oid = old.get(r[0])
+        if oid is not None and oid not in used:
+            kept[i] = oid
+            used.add(oid)
+    if used:
+        marks = ",".join("?" * len(used))
+        con.execute(
+            f"DELETE FROM chunks WHERE doc_id = ? AND id NOT IN ({marks})",
+            (doc_id, *used),
+        )
+        # seq is unique per document: park the kept rows below zero first
+        con.executemany(
+            "UPDATE chunks SET seq = ? WHERE id = ?",
+            [(-(i + 1), oid) for i, oid in kept.items()],
+        )
+    else:
+        con.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
     con.executemany(
         "INSERT INTO chunks (doc_id, seq, text, kind, locator, heading, data)"
         " VALUES (?,?,?,?,?,?,?)",
-        [(doc_id, i, *r) for i, r in enumerate(rows)],
+        [(doc_id, i, *r) for i, r in enumerate(rows) if i not in kept],
+    )
+    con.executemany(
+        "UPDATE chunks SET seq = ?, kind = ?, locator = ?, heading = ?, data = ?"
+        " WHERE id = ?",
+        [(i, *rows[i][1:], oid) for i, oid in kept.items()],
     )
     return len(rows)
 
@@ -699,7 +754,15 @@ def unpromote(con: sqlite3.Connection, doc_id: int) -> bool:
 # back, then records the outcome, so the document page can say what
 # happened and the Jobs page what is waiting.
 
-READINGS = ("vision-pages", "vision", "pymupdf4llm-ocr", "docling")
+READINGS = (
+    "vision-pages",
+    "vision",
+    "figures",
+    "pymupdf4llm-ocr",
+    "docling",
+    "trafilatura",
+    "pymupdf4llm",
+)
 
 
 @_serialized

@@ -252,6 +252,10 @@ main.stage { max-width: 1400px; }
   .turn-q { max-width: 100%; }
 }
 .servers { margin: .2rem 0 .8rem; padding-left: 1.2rem; font-size: .9rem; }
+.doc-figure { margin: .4rem 0 .8rem; padding: .6rem; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.doc-figure img { display: block; max-width: 100%; max-height: 32rem; margin: 0 auto; }
+.doc-figure figcaption { margin: .5rem 0 .2rem; font-size: .9rem; color: var(--muted); }
+.figure-reading { margin: .3rem 0 0; font-size: .92rem; }
 .reading-form { display: flex; gap: .7rem; flex-wrap: wrap; align-items: center; font-size: .9rem; margin: 0 0 .8rem; }
 .reading-line { font-size: .88rem; margin: -.4rem 0 .8rem; }
 .servers li { margin: .15rem 0; }

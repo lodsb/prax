@@ -206,7 +206,7 @@ async function viewSearch(p) {
           <span class="muted">${sides.map(esc).join(" · ")}</span>
           <a href="${originalHref(h.doc_id, h.page)}" target="_blank" rel="noopener">original ↗</a>
         </div>
-        <p class="snippet">${snippetHtml(h.snippet)}</p>
+        <p class="snippet">${snippetHtml(plainFigures(h.snippet))}</p>
       </article>`;
     }).join("");
   } catch (err) {
@@ -226,9 +226,15 @@ function snippetHtml(s) {
 // of this type, and what became of the last request (meta.reading).
 const READINGS = {
   "application/pdf": [
+    ["figures", "the vision model reads every figure the text references, and writes what it shows under each"],
     ["vision-pages", "the vision model over the scanned pages (handwriting, scores, what OCR cannot read)"],
+    ["pymupdf4llm", "read the PDF again (finds the figures)"],
     ["pymupdf4llm-ocr", "OCR (RapidOCR) on the pages without a text layer"],
     ["docling", "Docling's layout model (code, tables); slow"],
+  ],
+  "text/html": [
+    ["figures", "the vision model reads every figure the text references, and writes what it shows under each"],
+    ["trafilatura", "read the page again (finds the figures)"],
   ],
   "image/": [["vision", "the vision model describes the image; a second model's reading joins the first"]],
 };
@@ -296,12 +302,32 @@ function renderTable(data) {
   return `<div class="table-wrap"><table>${head}${rows}</table></div>`;
 }
 
-function renderChunk(c, highlight) {
+// A figure chunk: the image out of the original (by the hash its text
+// references), its caption, and what the vision model made of it.
+function renderFigure(c, docId) {
+  const d = c.data;
+  const readings = (d.readings || []).map((r) => `<p class="figure-reading"><span class="muted" title="${esc(r.model)}">read by ${esc(r.model.split("@")[0])}:</span> ${esc(r.text)}</p>`).join("");
+  const rest = c.text.split("\n").filter((l) => !l.startsWith("![") && !l.startsWith("*Figure, as read by")).join("\n").trim();
+  return `<figure class="doc-figure">
+    <a href="/doc/${docId}/figure/${d.ref}" target="_blank" rel="noopener"><img src="/doc/${docId}/figure/${d.ref}" alt="${esc(d.caption || "")}" loading="lazy"></a>
+    ${d.caption ? `<figcaption>${esc(d.caption)}</figcaption>` : ""}
+    ${rest ? md(rest) : ""}${readings}
+  </figure>`;
+}
+
+// Snippets: an image reference is noise to a reader; its caption is not.
+function plainFigures(text) {
+  return String(text || "").replace(/!\[([^\]\n]*)\]\(figure:[0-9a-f]+\)/g, "[figure: $1]");
+}
+
+function renderChunk(c, highlight, docId) {
   const cls = "chunk kind-" + (c.kind || "text") + (c.chunk_id === highlight ? " highlight" : "");
   let body;
   if (c.kind === "table" && c.data && c.data.header && c.data.header.length) {
     const caption = c.text.split("\n").filter((l) => !l.trim().startsWith("|")).join("\n").trim();
     body = (caption ? md(caption) : "") + renderTable(c.data);
+  } else if (c.kind === "figure" && c.data && c.data.ref) {
+    body = renderFigure(c, docId);
   } else if (c.kind === "code") {
     body = md(c.text);
   } else {
@@ -368,7 +394,7 @@ async function viewDoc(id, p) {
   </header>
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
-    <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? chunks.map((c) => renderChunk(c, highlight)).join("") : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}</div>
+    <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? chunks.map((c) => renderChunk(c, highlight, doc.id)).join("") : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}</div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
   const loadContext = async (domain) => {
@@ -1363,7 +1389,7 @@ function renderSources(t, i) {
       <div class="source-body">
         <a class="source-title" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}">${esc(p.title || "(untitled)")}</a>
         <div class="hit-meta">${badge(p.kind)} <span>${headingPath(p.heading)}</span> <span>${p.page ? `p. ${p.page}` : ""}</span></div>
-        <p class="snippet source-short">${esc(p.text.slice(0, 300))}${cut ? `… <button type="button" class="linkish source-more">more</button>` : ""}</p>
+        <p class="snippet source-short">${esc(plainFigures(p.text).slice(0, 300))}${cut ? `… <button type="button" class="linkish source-more">more</button>` : ""}</p>
         ${cut ? `<p class="snippet source-full" hidden>${esc(p.text)} <button type="button" class="linkish source-more">less</button></p>` : ""}
         ${f.length ? `<div class="chips">${f.map((x) => `<a class="chip" style="--c:${typeColor(x.type)}" href="#graph?entity=${encodeURIComponent(x.name)}" title="${esc(x.rel)}">${esc(x.rel)}: ${esc(x.name)}</a>`).join("")}</div>` : ""}
       </div>

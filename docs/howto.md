@@ -181,6 +181,42 @@ with the outcome shown on the page and the queue on Jobs. A worker
 refuses a reading whose model would cost money (the vision step set to
 Claude) and says so; those stay a command you run yourself.
 
+**Figures.** The pictures that belong to a document's content — a
+photograph with its caption, a plot, a schematic, a panel — are found
+at parse time (`prax.parsers.figures`) and written into the Markdown
+where they sit, as `![caption](figure:<sha256 of the image bytes>)`:
+for a captured page, the images inside `<figure>` (with their
+`<figcaption>`), with a real `alt` text, or big enough to be a
+photograph, among those the snapshot carries inline — the site's
+chrome has none of that; for a PDF, the placed raster images at least
+90 pt on each side that are not on many pages (a logo), with the
+nearest "Figure N" block below as caption, put right above that
+caption. Nothing new is stored: the door serves a figure out of the
+original by its hash (`GET /doc/{id}/figure/{sha}`), and the document
+view shows it with its caption. The chunker makes the image line, its
+caption and any reading one `figure` chunk (`data`: ref, caption,
+readings), so a figure is a search hit of its own. Then the second
+half, the reading:
+
+    # what the vision model makes of every figure, written under each
+    python scripts/parse_pending.py --ids 9706 --extractor figures --force
+
+or "read again… → figures" on the page. The reading goes under the
+image line as `*Figure, as read by <model>:* …` (a model reads a figure
+once; another model's reading joins it), and the figure chunk carries
+it — findable, and read by the extraction. The retroactive pass over
+the library is the re-read with the parse extractors, which now find
+figures (`trafilatura` r3, `pymupdf4llm` r2):
+
+    python scripts/parse_pending.py --upgrade trafilatura/2.2.0-r2 --mime text/html
+    python scripts/parse_pending.py --upgrade pymupdf4llm/1.28.2 --mime application/pdf
+
+A document whose text comes out the same is `same` — the stamp moves,
+nothing is rebuilt — and one that gained a figure keeps every chunk
+whose text did not change, with its vector; only the changed chunks
+are re-embedded. Vector drawings in a PDF are not found this way (they
+are not images); `vision-pages` over the page covers those.
+
 Measured on an orchestral score (Cowell, doc 8605, 2026-09-14): where
 OCR produced table-shaped garbage, the local model gave "a page of
 orchestral sheet music showing staves for Percussion, Trumpet, Horns

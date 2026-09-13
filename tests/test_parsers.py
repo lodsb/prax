@@ -437,7 +437,7 @@ def test_trafilatura_fences_code_blocks() -> None:
     )
     text = parsers.by_name("trafilatura")(html)
     assert "```\ndef fdn(x, delays):" in text and "# Reverb tricks" in text
-    assert parsers.by_name("trafilatura").stamp.endswith("-r2")
+    assert parsers.by_name("trafilatura").stamp.endswith("-r3")
 
 
 @needs_trafilatura

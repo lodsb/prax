@@ -21,6 +21,7 @@ from fastapi.responses import (
     JSONResponse,
     PlainTextResponse,
     RedirectResponse,
+    Response,
 )
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -800,6 +801,28 @@ def original(doc_id: int, request: Request) -> FileResponse:
             "sandbox; default-src data: 'unsafe-inline'"
         )
     return FileResponse(info["path"], media_type=info["mime"], headers=headers)
+
+
+@app.get("/doc/{doc_id}/figure/{ref}")
+def figure(doc_id: int, ref: str, request: Request) -> Response:
+    """A figure's bytes out of the document's original, by the hash the
+    text references (``![caption](figure:<sha256>)``); immutable, so
+    cached for good."""
+    from prax.parsers import figures
+
+    con = _con(request)
+    info = store.original_info(con, doc_id)
+    if info is None or not info["path"].exists():
+        raise HTTPException(404, "no such document")
+    found = figures.find(info["path"].read_bytes(), ref)
+    if found is None:
+        raise HTTPException(404, "no such figure in the original")
+    data, media = found
+    return Response(
+        data,
+        media_type=media,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
 
 
 @app.get("/doc/{doc_id}/text")

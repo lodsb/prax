@@ -132,7 +132,9 @@ from .documents import (  # noqa: F401
     select_documents,
     set_domains,
     set_meta,
+    set_text_source,
     similarity,
+    text_unchanged,
     unpromote,
     unretire_document,
 )

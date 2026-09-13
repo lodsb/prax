@@ -222,3 +222,40 @@ def test_real_pdf_yields_pages_tables_and_figures() -> None:
     assert max(c.page for c in cs) == 8
     table = next(c for c in cs if c.kind == "table")
     assert table.data["rows"] and table.heading
+
+
+def test_a_re_read_keeps_the_unchanged_chunks_and_their_vectors(
+    con: sqlite3.Connection,
+) -> None:
+    """A chunk whose text did not change keeps its id (and so its embedding
+    row); the changed and new ones are re-embedded, the gone ones deleted."""
+    doc_id = store.ingest_text(con, DOC, title="kept")["doc_id"]
+    before = {c["text"]: c["chunk_id"] for c in store.list_chunks(con, doc_id)}
+    con.executemany(
+        "INSERT INTO chunk_embeddings (chunk_id, model) VALUES (?, 'm')",
+        [(i,) for i in before.values()],
+    )
+    con.commit()
+    # a figure line added after the introduction: one chunk changes, one appears
+    text = DOC.replace(
+        "## 1.1 Data", "![A plot](figure:" + "ab" * 32 + ")\n\n## 1.1 Data", 1
+    )
+    assert text != DOC
+    store.index_text(con, doc_id, text)
+    after = {c["text"]: c["chunk_id"] for c in store.list_chunks(con, doc_id)}
+    same = [t for t in after if t in before]
+    assert same and all(after[t] == before[t] for t in same)
+    embedded = {
+        r[0] for r in con.execute("SELECT chunk_id FROM chunk_embeddings").fetchall()
+    }
+    assert {before[t] for t in same} <= embedded
+    changed = [after[t] for t in after if t not in before]
+    assert changed and not (set(changed) & embedded)  # the new chunks wait for a vector
+    gone = [before[t] for t in before if t not in after]
+    assert not (set(gone) & embedded)  # deleted chunks took their rows along
+    seqs = [c["seq"] for c in store.list_chunks(con, doc_id)]
+    assert seqs == list(range(len(seqs)))
+    # the same text again changes nothing at all
+    ids = [c["chunk_id"] for c in store.list_chunks(con, doc_id)]
+    store.index_text(con, doc_id, text)
+    assert [c["chunk_id"] for c in store.list_chunks(con, doc_id)] == ids

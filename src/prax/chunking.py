@@ -42,7 +42,15 @@ KINDS = ("text", "table", "figure", "code")
 _PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
 _TABLE_SEP = re.compile(r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
-_FIGURE = re.compile(r"^\**(Fig\.?|Figure)\s*\d+", re.IGNORECASE)
+_FIGURE = re.compile(
+    r"^(\**(Fig\.?|Figure)\s*\d+|!\[[^\]\n]*\]\(figure:)", re.IGNORECASE
+)
+_FIGURE_REF = re.compile(
+    r"^!\[(?P<alt>[^\]\n]*)\]\(figure:(?P<ref>[0-9a-f]{16,64})\)", re.MULTILINE
+)
+_READ_BY = re.compile(
+    r"^\*Figure, as read by (?P<model>.+?):\* ?(?P<text>.*)$", re.MULTILINE
+)
 _TABLE_CAPTION = re.compile(r"^\**(Table|TABLE)\s*\d+")
 _EMPHASIS = re.compile(r"[*_`]+")
 _FENCE = "```"
@@ -171,6 +179,22 @@ def _assign_pages(els: list[_Element]) -> None:
             current = (e.page or 0) + 1
         else:
             e.page = current
+
+
+def parse_figure(text: str) -> dict[str, Any] | None:
+    """A figure chunk's reference, caption and readings, when it has an
+    image line: ``{"ref", "caption", "readings": [{"model", "text"}]}``."""
+    m = _FIGURE_REF.search(text)
+    if not m:
+        return None
+    return {
+        "ref": m.group("ref"),
+        "caption": m.group("alt"),
+        "readings": [
+            {"model": r.group("model").strip(), "text": r.group("text").strip()}
+            for r in _READ_BY.finditer(text)
+        ],
+    }
 
 
 def parse_table(markdown: str) -> dict[str, Any]:
@@ -329,7 +353,13 @@ def chunk(text: str) -> list[Chunk]:
             flush()
             chunks.append(
                 Chunk(
-                    el.kind, text[el.start : el.end], el.start, el.end, el.page, path()
+                    el.kind,
+                    text[el.start : el.end],
+                    el.start,
+                    el.end,
+                    el.page,
+                    path(),
+                    parse_figure(el.text) if el.kind == "figure" else None,
                 )
             )
             continue

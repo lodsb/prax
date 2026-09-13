@@ -150,7 +150,11 @@ v5 adds organizations (affiliation, funding, who built a tool) and the weak
   page; `chunk.text == artifact[start:end]` always), `heading` path, table
   `data`. Chunking lives in `prax.chunking` and chunks are disposable:
   change the chunker, run `scripts/rechunk.py`. New media add a kind and a
-  locator shape, never a new table for chunks (rationale R13).
+  locator shape, never a new table for chunks (rationale R13). A figure
+  is a line in the text, `![caption](figure:<sha256>)`, and a `figure`
+  chunk with the reference, caption and readings in `data`; its bytes
+  are served out of the original by hash, never stored again. A re-index
+  keeps the chunks whose text did not change, and their vectors.
 - Embeddings: 384-dim (bge-small-class ONNX). Vectors are keyed by chunk
   id in the usearch file; changing the model means re-embedding into a new
   file, another dimension means a new file and `VEC_DIM`.

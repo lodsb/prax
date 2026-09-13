@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Any
 
 from prax import config
+from prax.parsers import figures
 
 
 @dataclass(frozen=True)
@@ -170,7 +171,8 @@ def _pymupdf4llm(data: bytes) -> str:
                 f"{doc.page_count} pages exceeds PRAX_MAX_LAYOUT_PAGES={max_pages};"
                 " plain extraction instead"
             )
-        return pymupdf4llm.to_markdown(doc, use_ocr=False, page_separators=True)
+        text = pymupdf4llm.to_markdown(doc, use_ocr=False, page_separators=True)
+        return figures.place(text, figures.pdf_figures(doc))
 
 
 OCR_DEFAULT_LANGUAGE = "ch"  # RapidOCR's own default: Chinese and English
@@ -415,7 +417,24 @@ def _trafilatura(data: bytes) -> str:
         raise ExtractionError("trafilatura found no main content")
     meta = trafilatura.extract_metadata(data)
     title = getattr(meta, "title", None) if meta else None
-    return f"# {title}\n\n{text}" if title and title not in text[:200] else text
+    text = f"# {title}\n\n{text}" if title and title not in text[:200] else text
+    return figures.place(text, figures.html_figures(data))
+
+
+def _figures(
+    data: bytes, *, filename: str | None = None, previous: str | None = None
+) -> str:
+    """The vision model's reading of every figure the text references,
+    written under each; needs the document parsed first."""
+    if not previous:
+        raise ExtractionError("no text to put readings in: parse the document first")
+    return figures.describe(data, previous)
+
+
+def _figures_model() -> str:
+    from prax.parsers import vision
+
+    return vision.model_name()
 
 
 def _vision(
@@ -959,7 +978,13 @@ EXTRA_MIME_TYPES = {
 
 
 REGISTRY: list[Extractor] = [
-    Extractor("pymupdf4llm", ("application/pdf",), _pymupdf4llm, "pymupdf4llm"),
+    Extractor(
+        "pymupdf4llm",
+        ("application/pdf",),
+        _pymupdf4llm,
+        "pymupdf4llm",
+        revision=2,  # figure references
+    ),
     Extractor("pymupdf", ("application/pdf",), _pymupdf, "pymupdf"),
     Extractor(
         "pymupdf4llm-ocr",
@@ -983,7 +1008,16 @@ REGISTRY: list[Extractor] = [
         ("text/html", "application/xhtml+xml"),
         _trafilatura,
         "trafilatura",
-        revision=2,  # Markdown output with fenced code blocks
+        revision=3,  # r2 Markdown with fenced code; r3 figure references
+    ),
+    Extractor(
+        "figures",
+        ("text/html", "application/xhtml+xml", "application/pdf"),
+        _figures,
+        explicit_only=True,
+        hints=True,
+        variant=_figures_model,
+        previous=True,  # writes into the current text
     ),
     Extractor("docx", (DOCX_MIME,), _docx),
     Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),
