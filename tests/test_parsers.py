@@ -500,3 +500,20 @@ def test_select_documents_by_title(con: sqlite3.Connection) -> None:
     assert store.select_documents(con, title="harmony") == [a, b]
     assert store.select_documents(con, title="in arabic") == [a]
     assert store.select_documents(con, title="100%") == []  # a literal, not a wildcard
+
+
+def test_ocr_rows_follow_the_page_and_the_script() -> None:
+    """Recognized boxes become lines: grouped by height, left to right for
+    Latin, right to left for Arabic; empty boxes are dropped."""
+    box = lambda x, y, w=40, h=10: [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+    boxes = [box(100, 10), box(10, 12), box(10, 40), box(60, 41), box(5, 80)]
+    texts = ["second", "first", "third", "fourth", "  "]
+    assert parsers._ocr_rows(boxes, texts, right_to_left=False) == [
+        "first second",
+        "third fourth",
+    ]
+    assert parsers._ocr_rows(boxes, texts, right_to_left=True) == [
+        "second first",
+        "fourth third",
+    ]
+    assert parsers._ocr_rows([], [], right_to_left=False) == []

@@ -146,6 +146,13 @@ the new one is suspiciously short (login walls, scans without OCR) unless
     # japan, korean, el, th...) and part of the stamp, so a book read with the
     # wrong one has not been read with the right one; --title picks them out
     PRAX_OCR_LANGUAGE=arabic python scripts/parse_pending.py --title "In Arabic"         --extractor pymupdf4llm-ocr --force
+
+For a script the OCR font cannot write back into the page (Arabic,
+Devanagari, Tamil, Telugu, Thai, Georgian — pymupdf4llm writes what it
+recognized with Droid Sans Fallback, which has Latin, Greek, Cyrillic and
+CJK), prax runs the recognizer itself and writes the lines as text in
+reading order (right to left for Arabic), page markers included; no
+layout analysis, which a scanned book rarely has to give.
     # Docling on a hand-picked set
     python scripts/parse_pending.py --ids 12 34 --extractor docling --force
 

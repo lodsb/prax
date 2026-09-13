@@ -188,8 +188,16 @@ def _ocr_gpu() -> bool:
     return flag in ("1", "true", "yes", "on")
 
 
-def _ocr_engine() -> None:
-    """Point pymupdf4llm's RapidOCR backend at the configured recognizer.
+# scripts the font pymupdf4llm writes OCR text with (Droid Sans Fallback:
+# Latin, Greek, Cyrillic, CJK) cannot encode: for these prax runs the
+# recognizer itself and writes the lines as text
+_OWN_OCR_SCRIPTS = frozenset({"arabic", "devanagari", "ta", "te", "th", "ka"})
+_RIGHT_TO_LEFT = frozenset({"arabic"})
+
+
+def _ocr_engine() -> Any:
+    """Point pymupdf4llm's RapidOCR backend at the configured recognizer,
+    and return that engine.
 
     pymupdf4llm builds one ``RapidOCR()`` with the defaults and keeps it in
     its backend module; the language and the execution provider can only
@@ -201,7 +209,7 @@ def _ocr_engine() -> None:
     choice = (_ocr_language(), _ocr_gpu())
     backend = importlib.import_module("pymupdf4llm.ocr.rapidocr_391_backend")
     if getattr(backend, "_prax_choice", None) == choice:
-        return
+        return backend.ENGINE or backend.init_engine()
     lang, gpu = choice
     params: dict[str, Any] = {}
     if lang != OCR_DEFAULT_LANGUAGE:
@@ -220,6 +228,60 @@ def _ocr_engine() -> None:
     rapidocr = importlib.import_module("rapidocr")
     backend.ENGINE = rapidocr.RapidOCR(params=params) if params else None
     backend._prax_choice = choice
+    return backend.ENGINE or backend.init_engine()
+
+
+def _ocr_pages(doc: Any, engine: Any, *, right_to_left: bool) -> str:
+    """The document as text, page by page: a page with a text layer as
+    MuPDF reads it, a scanned page as the recognizer's lines in reading
+    order, and pymupdf4llm's page markers between pages so the chunker
+    knows the page of every line. For scripts the OCR font cannot write;
+    no layout analysis, which a scanned book rarely has to give."""
+    import numpy as np
+
+    out: list[str] = []
+    for page in doc:
+        text = page.get_text().strip()
+        if len(text) < 20:  # no text layer worth the name: read the picture
+            pix = page.get_pixmap(dpi=150)
+            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
+                pix.h, pix.w, pix.n
+            )[:, :, :3]
+            result = engine(img)
+            boxes = [] if result.boxes is None else list(result.boxes)
+            texts = [] if result.txts is None else list(result.txts)
+            text = "\n".join(_ocr_rows(boxes, texts, right_to_left=right_to_left))
+        out.append(text)
+        out.append(f"\n\n--- end of page.page_number={page.number} ---\n\n")
+    return "".join(out)
+
+
+def _ocr_rows(boxes: list[Any], texts: list[str], *, right_to_left: bool) -> list[str]:
+    """Recognized boxes grouped into rows by their vertical position and
+    ordered along the row in the script's direction."""
+    items = []
+    for box, text in zip(boxes, texts, strict=False):
+        if not text or not str(text).strip():
+            continue
+        ys = [float(p[1]) for p in box]
+        xs = [float(p[0]) for p in box]
+        items.append(((min(ys) + max(ys)) / 2, max(ys) - min(ys), min(xs), str(text)))
+    if not items:
+        return []
+    items.sort(key=lambda t: t[0])
+    heights = sorted(t[1] for t in items)
+    slack = max(4.0, heights[len(heights) // 2] * 0.6)
+    rows: list[list[tuple[float, float, float, str]]] = []
+    for it in items:
+        if rows and abs(rows[-1][-1][0] - it[0]) <= slack:
+            rows[-1].append(it)
+        else:
+            rows.append([it])
+    lines = []
+    for row in rows:
+        row.sort(key=lambda t: t[2], reverse=right_to_left)
+        lines.append(" ".join(t[3] for t in row))
+    return lines
 
 
 def _ocr_model_version(lang: str) -> str:
@@ -254,7 +316,10 @@ def _pymupdf4llm_ocr(data: bytes) -> str:
                 f"{doc.page_count} pages exceeds the OCR budget of {budget}"
                 " (PRAX_OCR_MAX_PAGES)"
             )
-        _ocr_engine()
+        engine = _ocr_engine()
+        lang = _ocr_language()
+        if lang in _OWN_OCR_SCRIPTS:
+            return _ocr_pages(doc, engine, right_to_left=lang in _RIGHT_TO_LEFT)
         return pymupdf4llm.to_markdown(doc, use_ocr=True, page_separators=True)
 
 
