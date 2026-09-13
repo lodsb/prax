@@ -228,6 +228,54 @@ def test_a_server_with_a_projector_describes_images(
     assert "image description" in store.document_field(con, doc_id)
 
 
+def test_a_promoted_image_is_described_again_by_the_promote_model(
+    con: sqlite3.Connection, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """extract_graph.py --promoted: before the extraction, a flagged image
+    goes through the vision extractor with the promote step's model, so the
+    expensive pass reads the picture as well as the triples."""
+    from types import SimpleNamespace
+
+    from prax import models
+    from prax.parsers import vision
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / models.CONFIG_NAME).write_text(
+        "models:\n  sonnet: {kind: claude, model: claude-sonnet-5}\n"
+        "  server: {kind: openai, base_url: http://127.0.0.1:1/v1, model: vl}\n"
+        "steps:\n  vision: {model: server}\n  promote: {model: sonnet}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("PRAX_VISION", raising=False)
+    monkeypatch.delenv("PRAX_VISION_MODEL", raising=False)
+    models.reset()
+    asked: list[str] = []
+
+    class FakeMessages:
+        def create(self, **kw):
+            asked.append(kw["model"])
+            text = "## What it shows\nA compressor. " + "Detail. " * 60
+            return SimpleNamespace(content=[SimpleNamespace(type="text", text=text)])
+
+    monkeypatch.setattr(
+        vision, "CLIENT_FACTORY", lambda: SimpleNamespace(messages=FakeMessages())
+    )
+    png = b"\x89PNG\r\n\x1a\n" + bytes(40)
+    doc_id = store.register(con, png, mime="image/png", title="panel.png")["doc_id"]
+    text_id = store.ingest_text(con, "words " * 50, title="a paper")["doc_id"]
+
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "extract_graph.py"
+    spec = importlib.util.spec_from_file_location("extract_graph", script_path)
+    assert spec and spec.loader
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+    script.describe_images(con, [doc_id, text_id], quiet=True)
+    assert asked == ["claude-sonnet-5"]  # the promote model, not the vision step's
+    assert store.get_meta(con, doc_id)["text_source"] == "vision/1+claude-sonnet-5"
+    assert os.environ.get("PRAX_VISION") is None  # the override was for that run only
+    assert models.resolve("vision").name == "server"
+
+
 def test_registry_dispatch() -> None:
     assert parsers.for_mime("text/plain").name == "plain"
     assert parsers.for_mime("text/markdown").name == "plain"

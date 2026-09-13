@@ -15,6 +15,9 @@ not the current one, oldest first. Model and effort come from
 PRAX_EXTRACT_MODEL / PRAX_EXTRACT_EFFORT (defaults claude-opus-5, medium).
 Every applied document is stamped, so reruns continue where they stopped.
 Batch runs write ``<data dir>/batches/<id>.json`` with the document map.
+A promoted *image* is first described again by the promote step's model
+(the ``vision`` extractor, when that model can see) and then extracted
+from the new description.
 """
 
 from __future__ import annotations
@@ -130,6 +133,8 @@ def main() -> int:
     if not ids:
         print("nothing to extract")
         return 0
+    if a.promoted:
+        describe_images(con, ids, quiet=a.quiet)
     if a.submit_batch:
         return submit(con, ext, ids)
 
@@ -160,6 +165,51 @@ def main() -> int:
         print(rep.stopped, file=sys.stderr)
     print(f"extracted with {ext.name}: {rep}")
     return 0
+
+
+def describe_images(
+    con: store.sqlite3.Connection, ids: list[int], *, quiet: bool
+) -> None:
+    """The promoted images described again by the promote step's model: what
+    the expensive pass means for a picture is a better reading of it, and
+    the extraction that follows reads that. The ``vision`` step is pointed at
+    the promote model for this run only; a promote model that cannot see
+    (a text-only server) leaves the descriptions as they are."""
+    import os
+
+    from prax import models
+    from prax.parsers import queue
+
+    marks = ",".join("?" * len(ids))
+    images = [
+        r[0]
+        for r in con.execute(
+            f"SELECT id FROM documents WHERE id IN ({marks}) AND mime LIKE 'image/%'",
+            tuple(ids),
+        )
+    ]
+    if not images:
+        return
+    spec = models.resolve("promote")
+    if spec is None:
+        return
+    before = os.environ.get("PRAX_VISION")
+    os.environ["PRAX_VISION"] = spec.name
+    try:
+        def say(n: int, i: int, t: str) -> None:
+            if not quiet:
+                print(f"[{n}/{len(images)}] doc {i}: {t}", file=sys.stderr)
+
+        rep = queue.run(con, images, extractor="vision", force=True, log=say)
+        print(
+            f"described {len(images)} images with {spec.runtime_name}: {rep}",
+            file=sys.stderr,
+        )
+    finally:
+        if before is None:
+            os.environ.pop("PRAX_VISION", None)
+        else:
+            os.environ["PRAX_VISION"] = before
 
 
 def submit(

@@ -228,7 +228,10 @@ document's text artifact like any parser's output. Explicit only. The
 
 The stamp records the model (`vision/1+<model>`); `claude-vision` is the
 same extractor pinned to Claude, the name the first descriptions carry.
-The document view shows an image inline above its description.
+The document view shows an image inline above its description. An image
+that matters gets the expensive reading the way a paper does: promote it
+(section 3e), and `extract_graph.py --promoted` describes it again with
+the promote step's model (Sonnet here) before extracting from that.
 
 ## 3c. Chunks
 
