@@ -108,8 +108,9 @@ flowchart TD
    PDFs with a text layer, plain MuPDF as fallback, RapidOCR for scans when
    asked, Docling when named, trafilatura for HTML with `<pre>` blocks
    fenced, plain decode for text with source files fenced as code (by
-   extension, else Magika), and `claude-vision` for images (Claude
-   describes the picture and transcribes its text, handwriting included).
+   extension, else Magika), and `vision` for images (the vision step's
+   model — Claude, or llama-server with the model's projector — describes
+   the picture and transcribes its text, handwriting included).
    The Markdown is its own content-addressed artifact (`documents.text_hash`),
    stamped in `meta.text_source` as `name/version[-rN]`; every attempt is
    appended to `meta.parse_history`. A better extractor later is a queue
@@ -219,7 +220,7 @@ what is needed.
 | `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub), citation resolution, saving an answer to a page | via store |
 | `prax.review` | replay of the review queue against a newer ontology; the typing rules that recover what a model meant from its systematic misfits | via store |
 | `prax.resolution` | entity merge candidates (normalized names, initials, concept/method twins, name embeddings), adjudicators, apply through `merge_entities` | via store |
-| `prax.rerank` | optional cross-encoder over the top hits; off by default (measured no gain) | no |
+| `prax.rerank` | optional cross-encoder over the top hits, ONNX in-process or a llama-server `/rerank`; off by default (measured no gain, 2026-09-08 and -13) | no |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
 | `prax.pipeline` | the batch passes as functions (extract, retitle, embed) and `process_captures`, the pipeline the inbox watcher runs over new captures without spending money; jobs bookkeeping around each | via store |
 | `prax.work` | the door's side of the work protocol: hand out leased batches (parse, titles, extract, embed) and take the results in | via store |
@@ -318,7 +319,7 @@ loop); the queue makes each batch do real work.
 | `PRAX_EXTRACT`, `PRAX_PROMOTE`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE`, `PRAX_TYPING` | a model name or `none`: overrides the step for one run |
 | `PRAX_EXTRACT_MODEL`, `PRAX_ASK_MODEL`, `PRAX_VISION_MODEL`, `PRAX_EXTRACT_EFFORT` | the Claude model id (and effort) for a step that resolves to Claude |
 | `citations.mailto` [`PRAX_CITATIONS_MAILTO`] | polite-pool contact for Crossref and OpenAlex |
-| `rerank.model` [`PRAX_RERANK`] | cross-encoder name, `stub`, or `0` (default off) |
+| `rerank.model` [`PRAX_RERANK`], `rerank.url` [`PRAX_RERANK_URL`], `rerank.depth` [`PRAX_RERANK_DEPTH`] | cross-encoder name, `server` (a llama-server with `--reranking` at `url`), `stub`, or `0` (default off); how many top hits are rescored (30) |
 | `ontology.dir` [`PRAX_ONTOLOGY`] | another ontology directory (or a single legacy file) |
 | `embeddings.model` [`PRAX_EMBED`] | model name, `hash` (tests), `0` (off) |
 | `embeddings.variant`, `.providers`, `.threads` | onnxruntime precision, providers, threads |
@@ -340,7 +341,7 @@ loop); the queue makes each batch do real work.
 | add a source | a reader under `prax.importers` that yields `feed.Item`s and a line in `clients/cli/prax_cli/importing.py` (`sources.md` 6); only a source that must open something on the door's host calls `store.register` / `index_text` itself and stamps `meta.source`; a fixture and tests |
 | add an extractor | a `bytes -> str` function (`filename=` when `hints=True`) and an `Extractor` entry in `prax.parsers.REGISTRY`; bump `revision` when its output changes; run `parse_pending.py --upgrade <old stamp>` |
 | change chunking | `prax.chunking`; run `rechunk.py --all`; the locator invariant is asserted |
-| add a media kind (audio) | a chunk `kind` and locator shape in `prax.chunking`; an analyzer that produces the searchable rendering (images already go through `claude-vision`) |
+| add a media kind (audio) | a chunk `kind` and locator shape in `prax.chunking`; an analyzer that produces the searchable rendering (images already go through `vision`) |
 | change what a document *is* for search | `store.document_field`; run `refresh_document_fields.py`, then `embed_pending.py` |
 | change the embedding model | an entry in `prax.embeddings.MODELS`; `embed_pending.py` re-embeds into new index files; another dimension also needs `VEC_DIM` |
 | add entity or relation types | the module file under `ontology/` plus that module's version bump (a new domain is a new file that requires `core`); `replay_review.py`; old edges keep their version; the bump re-selects documents for extraction |

@@ -1669,14 +1669,36 @@ function hostLine(h) {
     (h.commit_limit_mb != null ? `, commit headroom <span class="${tight ? "error" : ""}" title="RAM plus page file, minus what every process has charged; a GPU model server on Windows charges its VRAM here">${gb(h.commit_free_mb)} of ${gb(h.commit_limit_mb)} GB</span>${tight ? " (tight: close something or enlarge the page file)" : ""}` : "") + `.</p>`;
 }
 
+// The model servers prax.yaml names, with their load when started with
+// --metrics: which model, slots, whether it sees images, tokens per second
+// and the KV cache in use, so a slow pass can be told from an idle one.
+function serverLines(servers) {
+  if (!servers || !servers.length) return "";
+  const rows = servers.map((s) => {
+    const head = `<b>${esc(s.name)}</b> <span class="muted">${esc(s.url)}</span>`;
+    if (!s.reachable) return `<li>${head} — <span class="error">not reachable</span> <span class="muted">(${esc(s.error || "")})</span></li>`;
+    const m = s.metrics;
+    const load = m
+      ? ` · ${m.processing || 0} running, ${m.deferred || 0} waiting · KV cache ${Math.round((m.kv_cache_usage || 0) * 100)}%` +
+        (m.prompt_tps ? ` · reading ${Math.round(m.prompt_tps)} tok/s` : "") +
+        (m.predicted_tps ? ` · writing ${Math.round(m.predicted_tps)} tok/s` : "") +
+        (m.predicted_tokens_total ? ` · ${(m.predicted_tokens_total / 1000).toFixed(0)}k tokens written since start` : "")
+      : ` · <span class="muted">no load figures (start it with --metrics)</span>`;
+    return `<li>${head}: ${esc(s.file || s.alias || s.model)} · ${s.slots} slot${s.slots === 1 ? "" : "s"}${s.vision ? " · sees images" : ""}${load}</li>`;
+  });
+  return `<ul class="servers">${rows.join("")}</ul>`;
+}
+
 async function viewJobs(p) {
   view.innerHTML = `<p class="muted">Loading…</p>`;
-  let d;
+  let d, servers = [];
   try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { servers = (await api("/models/servers")).servers; } catch (_) { /* the list is a nicety */ }
   const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
   view.innerHTML = `
     <p class="muted">The passes announce themselves here: the worker's session, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale; one gone for half an hour is closed.</p>
     ${hostLine(d.host)}
+    ${serverLines(servers)}
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Running (${d.running.length})</h2>
     ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the machine with the models: <code>scripts/work.py --watch</code> keeps captures moving.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>

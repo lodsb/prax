@@ -900,7 +900,7 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     if row["first_kind"] == "code":
         words.append("source code")
     source = str(meta.get("text_source") or "")
-    if source.startswith("claude-vision"):
+    if source.startswith(("claude-vision", "vision/")):
         words.append("image description")
     parts = [row["title"] or "", " ".join(words)]
     creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
@@ -913,7 +913,7 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
         parts.append(" ".join(bits))
     if meta.get("summary"):
         parts.append(str(meta["summary"]))
-    if source.startswith("claude-vision"):
+    if source.startswith(("claude-vision", "vision/")):
         shows = con.execute(
             "SELECT text FROM chunks WHERE doc_id = ?"
             " AND heading LIKE '%What it shows%' ORDER BY seq LIMIT 1",

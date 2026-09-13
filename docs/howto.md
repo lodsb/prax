@@ -207,16 +207,27 @@ proportional font; Docling's layout model has an explicit code label and
 is the better extractor for a hand-picked set of code-heavy papers
 (`--ids ... --extractor docling --force`).
 
-Images (schematics, plots, photos, whiteboards) get text through Claude's
-vision: `claude-vision` describes the image and transcribes its printed
-and handwritten text into Markdown, which becomes the document's text
-artifact like any parser's output. Explicit only, a few cents per image
-(`PRAX_VISION_MODEL`, default `claude-sonnet-5`; Haiku 4.5 misread a
-compressor schematic's identity where Sonnet transcribed the whole
-revision table):
+Images (schematics, plots, photos, whiteboards) get text through a
+vision model: the `vision` extractor describes the image and transcribes
+its printed and handwritten text into Markdown, which becomes the
+document's text artifact like any parser's output. Explicit only. The
+`vision` step of `prax.yaml` names the model:
 
-    python scripts/parse_pending.py --pending --mime image/ --extractor claude-vision
+* a Claude model — a few cents per image (`PRAX_VISION_MODEL`, default
+  `claude-sonnet-5`; Haiku 4.5 misread a compressor schematic's identity
+  where Sonnet transcribed the whole revision table);
+* the local llama-server, when its model is a vision-language model and
+  the server was started with the model's projector (section 3h,
+  `-Mmproj`): free, about 15 s per image on the 24 GB card with
+  Qwen3.6-35B-A3B, which transcribed the 1176 schematic's component
+  values more completely than Sonnet and named the device slightly less
+  well (measured 2026-09-13, one image; Claude's descriptions carry
+  more interpretation, the local ones more verbatim text).
 
+    python scripts/parse_pending.py --pending --mime image/ --extractor vision
+
+The stamp records the model (`vision/1+<model>`); `claude-vision` is the
+same extractor pinned to Claude, the name the first descriptions carry.
 The document view shows an image inline above its description.
 
 ## 3c. Chunks
@@ -548,6 +559,9 @@ Qwen2.5-7B on an 8 GB card, `docs/eval/local-llm-2026-09-08.md`).
     python scripts/fetch_model.py server-35b       # repo and file from prax.yaml
     # the server (Windows; other hosts run llama-server with the same flags):
     scripts/llama_server.ps1 -Model <data dir>/models/<file>.gguf -Slots 3 -NoThinking
+    # a vision-language model also describes images when its projector is loaded
+    # (the mmproj-*.gguf in the model's repository, ~1 GB; Qwen3.6 has one):
+    scripts/llama_server.ps1 -Model <file>.gguf -Mmproj mmproj-F16.gguf -Slots 3 -NoThinking
 
 Then in `prax.yaml`:
 
@@ -565,6 +579,42 @@ that honours the `grammar` field: llama-server does, vLLM does not.
 howto 3l, "Jobs". An 8 GB card fits a 7-8B model at Q4 with an 8 K
 context; a board without a usable GPU leaves the steps at `none` or
 points them at a server elsewhere on the private network.
+
+**One card, several jobs.** The same loaded model serves extraction,
+titles, ask and — with its projector — images, so one server is the
+whole local side; two *different* models on one card are sequential:
+llama-server's router mode (`--models-dir` or `--models-preset`, with
+`--models-max 1`) loads the model a request names and unloads the other,
+at the cost of a reload (10–30 s for 22 GB) each time the job changes.
+A small second model fits beside the big one: the reranker below (0.6
+GB) ran next to the 35B (23.9 of 24.5 GB).
+
+**Context per slot.** `-c` is split evenly over the slots, so the 3 × 8 K
+default gives a document 8 K; a text whose script tokenizes densely
+(Arabic at about a token per character) overruns it at prax's 16 K-char
+budget. For those, a run with `-Slots 1 -CtxPerSlot 24576` and
+`extract_graph.py --ids …` is the way (three books, 2026-09-13).
+
+**Load figures.** `--metrics` (on by default in the script) exposes
+Prometheus text at `/metrics`; the door's `GET /models/servers` reads it
+with `/props` for every `openai` model in `prax.yaml`, and the Jobs page
+shows each server: model file, slots, whether it sees images, requests
+running and waiting, KV cache use, tokens per second.
+
+**A reranker in llama-server.** `-Reranker` starts the same binary with
+a cross-encoder GGUF (`--reranking`, one slot, its own port) and
+`rerank: {model: server, url: http://127.0.0.1:8081}` in `prax.yaml`
+(or `PRAX_RERANK=server`) rescores the top hits through it, 92 ms for
+ten candidates on the GPU:
+
+    scripts/llama_server.ps1 -Model bge-reranker-v2-m3-Q8_0.gguf -Reranker -Port 8081
+
+Measured 2026-09-13 on the library's 62 queries (`docs/eval/rerank-server-2026-09-13.md`):
+bge-reranker-v2-m3 at depth 10 scores hit@1 0.74 / MRR 0.83 against
+0.85 / 0.90 for the fused list alone — paraphrase and structure queries
+gain a little, keyword queries lose a lot, as with the ONNX rerankers in
+2026-09-08. Reranking stays off; the route is there for a
+document-aware candidate (title, heading path, chunk) later.
 
 ## 3i. Ask: questions answered from the library
 

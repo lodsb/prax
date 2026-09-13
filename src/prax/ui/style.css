@@ -251,4 +251,6 @@ main.stage { max-width: 1400px; }
   .ask-side { position: static; max-height: none; overflow: visible; border-top: 1px solid var(--line); padding-top: 1rem; }
   .turn-q { max-width: 100%; }
 }
+.servers { margin: .2rem 0 .8rem; padding-left: 1.2rem; font-size: .9rem; }
+.servers li { margin: .15rem 0; }
 .ctx-domain select { font-size: .75rem; text-transform: none; letter-spacing: 0; margin-left: .4rem; padding: 0 .2rem; }

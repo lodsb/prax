@@ -100,3 +100,33 @@ def test_real_cross_encoder_prefers_the_relevant_passage() -> None:
         ["Feedback delay networks build artificial reverberation.", "Invoice due."],
     )
     assert s[0] > s[1]
+
+
+def test_server_reranker_posts_the_candidates_and_keeps_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_post(url: str, body: dict, timeout: float) -> dict:
+        seen.update(url=url, body=body)
+        return {
+            "model": "bge-reranker-v2-m3",
+            "results": [  # the server sorts by score; we want them back in order
+                {"index": 2, "relevance_score": 0.9},
+                {"index": 0, "relevance_score": 0.4},
+                {"index": 1, "relevance_score": -1.2},
+            ],
+        }
+
+    monkeypatch.setattr(rerank, "post_json", fake_post)
+    monkeypatch.setenv("PRAX_RERANK", "server")
+    monkeypatch.setenv("PRAX_RERANK_URL", "http://gpu-box:8081/")
+    rerank._build.cache_clear()
+    r = rerank.current()
+    assert isinstance(r, rerank.ServerReranker)
+    scores = r.score("kalman", ["a", "b", "c"])
+    assert scores.tolist() == pytest.approx([0.4, -1.2, 0.9])
+    assert seen["url"] == "http://gpu-box:8081/rerank"
+    assert seen["body"] == {"query": "kalman", "documents": ["a", "b", "c"], "top_n": 3}
+    assert r.name == "server:bge-reranker-v2-m3"
+    assert r.score("q", []).shape == (0,)

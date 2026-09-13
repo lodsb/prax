@@ -14,7 +14,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from prax import chunking, embeddings, ontology
+from prax import chunking, config, embeddings, ontology
 from prax import rerank as rerank_mod
 
 from .base import (
@@ -36,7 +36,7 @@ from .base import (
 )
 from .documents import DOCTYPES, _chunk_shape
 
-RERANK_DEPTH = 30  # hits rescored by the cross-encoder when reranking is on
+RERANK_DEPTH = 30  # hits rescored when reranking is on (rerank.depth)
 
 
 RRF_K = 60  # reciprocal rank fusion constant
@@ -525,7 +525,8 @@ def search(
         raise ValueError("rerank requested but PRAX_RERANK names no model")
     if domain is not None and domain not in ontology.current().modules:
         raise ValueError(f"unknown domain {domain!r}")
-    fetch = max(limit, RERANK_DEPTH) if reranker else limit
+    depth = config.number("rerank.depth", "PRAX_RERANK_DEPTH", RERANK_DEPTH)
+    fetch = max(limit, int(depth)) if reranker else limit
     if domain:
         fetch *= 3
     hits = _search_hits(con, query, fetch, kind, mode, doctype)

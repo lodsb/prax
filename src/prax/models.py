@@ -35,6 +35,7 @@ so the registry hands out a ``ModelSpec`` and, for chat-shaped work, a
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import urllib.error
@@ -297,13 +298,23 @@ class OpenAIRuntime:
         temperature: float = 0.0,
         repeat_penalty: float = 1.0,
         stop: list[str] | None = None,
+        images: list[tuple[bytes, str]] | None = None,
     ) -> tuple[str, dict[str, int]]:
+        """``images`` are ``(bytes, media type)`` pairs sent before the
+        user text as data URLs; the server needs a multimodal projector
+        (llama-server ``--mmproj``) or answers about text alone."""
+        content: Any = user
+        if images:
+            content = [
+                {"type": "image_url", "image_url": {"url": _data_url(data, mt)}}
+                for data, mt in images
+            ] + [{"type": "text", "text": user}]
+        messages = [{"role": "user", "content": content}]
+        if system:
+            messages.insert(0, {"role": "system", "content": system})
         body: dict[str, Any] = {
             "model": self.model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
@@ -327,6 +338,10 @@ class OpenAIRuntime:
         return os.environ.get(self.api_key_env) if self.api_key_env else None
 
 
+def _data_url(data: bytes, media_type: str) -> str:
+    return f"data:{media_type};base64,{base64.b64encode(data).decode('ascii')}"
+
+
 def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
     """One POST; replaced in tests."""
     headers = {"Content-Type": "application/json"}
@@ -341,6 +356,105 @@ def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:300]
         raise RuntimeError(f"{url}: HTTP {exc.code}: {detail}") from exc
+
+
+# ------------------------------------------------------- server status
+
+STATUS_TIMEOUT = 1.5  # a status call must not hold the door's request thread
+
+
+def servers() -> list[ModelSpec]:
+    """The ``openai`` models of the file, one per server (the same base
+    URL under two names is one server)."""
+    out: list[ModelSpec] = []
+    seen: set[str] = set()
+    for name in names():
+        s = spec(name)
+        if s is None or s.kind != "openai" or not s.base_url:
+            continue
+        root = _server_root(s.base_url)
+        if root in seen:
+            continue
+        seen.add(root)
+        out.append(s)
+    return out
+
+
+def _server_root(base_url: str) -> str:
+    """``http://host:port`` from an OpenAI base URL (``…/v1`` stripped)."""
+    root = base_url.rstrip("/")
+    return root.removesuffix("/v1")
+
+
+def get_text(url: str, timeout: float = STATUS_TIMEOUT) -> str:
+    """One GET; replaced in tests."""
+    with urllib.request.urlopen(url, timeout=timeout) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
+def parse_metrics(text: str) -> dict[str, float]:
+    """Prometheus text as ``{name: value}``; the ``llamacpp:`` prefix
+    dropped so the names read as the server documents them."""
+    out: dict[str, float] = {}
+    for line in text.splitlines():
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) < 2:
+            continue
+        name = parts[0].split("{", 1)[0]
+        name = name.removeprefix("llamacpp:")
+        try:
+            out[name] = float(parts[1])
+        except ValueError:
+            continue
+    return out
+
+
+def server_status(s: ModelSpec) -> dict[str, Any]:
+    """What a llama-server (or another OpenAI-shaped server) says about
+    itself: its model and slots from ``/props``, and when it was started
+    with ``--metrics``, the load from ``/metrics`` — tokens per second,
+    KV cache use, requests running and waiting. Unreachable is a state,
+    not an error."""
+    root = _server_root(s.base_url or "")
+    out: dict[str, Any] = {
+        "name": s.name,
+        "model": s.model,
+        "url": root,
+        "reachable": False,
+    }
+    try:
+        props = json.loads(get_text(root + "/props"))
+    except Exception as exc:  # noqa: BLE001 — any failure is "not reachable"
+        out["error"] = str(exc)[:120]
+        return out
+    out["reachable"] = True
+    out["alias"] = props.get("model_alias")
+    out["slots"] = props.get("total_slots")
+    modalities = props.get("modalities") or {}
+    out["vision"] = bool(modalities.get("vision"))
+    path = str(props.get("model_path") or "")
+    out["file"] = path.replace("\\", "/").rsplit("/", 1)[-1] or None
+    if not props.get("endpoint_metrics"):
+        out["metrics"] = None  # the server was started without --metrics
+        return out
+    try:
+        m = parse_metrics(get_text(root + "/metrics"))
+    except Exception as exc:  # noqa: BLE001
+        out["metrics"] = None
+        out["error"] = str(exc)[:120]
+        return out
+    out["metrics"] = {
+        "prompt_tps": m.get("prompt_tokens_seconds"),
+        "predicted_tps": m.get("predicted_tokens_seconds"),
+        "kv_cache_usage": m.get("kv_cache_usage_ratio"),
+        "processing": m.get("requests_processing"),
+        "deferred": m.get("requests_deferred"),
+        "prompt_tokens_total": m.get("prompt_tokens_total"),
+        "predicted_tokens_total": m.get("tokens_predicted_total"),
+    }
+    return out
 
 
 @dataclass

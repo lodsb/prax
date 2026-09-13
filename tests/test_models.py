@@ -165,3 +165,76 @@ def test_describe(cfg: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert d["config"] == str(cfg) and d["error"] is None
     monkeypatch.setenv("PRAX_ASK", "ghost")
     assert "ghost" in models.describe("ask")["error"]
+
+
+def test_an_image_rides_along_as_a_data_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, Any] = {}
+
+    def fake_post(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
+        seen.update(body=body)
+        return {"choices": [{"message": {"content": "a photo"}}], "usage": {}}
+
+    monkeypatch.setattr(models, "post_json", fake_post)
+    rt = models.OpenAIRuntime("http://gpu-box:8080/v1", "qwen-vl")
+    text, _ = rt.chat("", "describe", images=[(b"\x89PNG....", "image/png")])
+    assert text == "a photo"
+    messages = seen["body"]["messages"]
+    assert [m["role"] for m in messages] == ["user"]  # no empty system turn
+    image, prompt = messages[0]["content"]
+    assert image["type"] == "image_url"
+    assert image["image_url"]["url"] == "data:image/png;base64,iVBORy4uLi4="
+    assert prompt == {"type": "text", "text": "describe"}
+
+
+METRICS = """\
+# HELP llamacpp:prompt_tokens_total Number of prompt tokens processed.
+# TYPE llamacpp:prompt_tokens_total counter
+llamacpp:prompt_tokens_total 12345
+llamacpp:tokens_predicted_total 678
+llamacpp:prompt_tokens_seconds 1500.5
+llamacpp:predicted_tokens_seconds 92.25
+llamacpp:kv_cache_usage_ratio 0.31
+llamacpp:requests_processing 2
+llamacpp:requests_deferred 0
+"""
+
+
+def test_server_status_reads_props_and_metrics(
+    cfg: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pages = {
+        "http://gpu-box:8080/props": (
+            '{"model_alias": "local-server", "total_slots": 3,'
+            ' "endpoint_metrics": true, "modalities": {"vision": true},'
+            ' "model_path": "C:\\\\models\\\\q.gguf"}'
+        ),
+        "http://gpu-box:8080/metrics": METRICS,
+    }
+
+    def fake_get(url: str, timeout: float = 1.0) -> str:
+        if url not in pages:
+            raise OSError("connection refused")
+        return pages[url]
+
+    monkeypatch.setattr(models, "get_text", fake_get)
+    servers = models.servers()
+    assert [s.name for s in servers] == ["tiny", "server"]  # one per base URL
+    up = models.server_status(models.spec("server"))
+    assert up["reachable"] and up["slots"] == 3 and up["vision"] is True
+    assert up["file"] == "q.gguf" and up["alias"] == "local-server"
+    assert up["metrics"]["prompt_tps"] == 1500.5
+    assert up["metrics"]["kv_cache_usage"] == 0.31
+    assert up["metrics"]["processing"] == 2 and up["metrics"]["deferred"] == 0
+    assert up["metrics"]["predicted_tokens_total"] == 678
+    down = models.server_status(models.spec("tiny"))
+    assert down == {
+        "name": "tiny",
+        "model": "tiny",
+        "url": "http://127.0.0.1:1",
+        "reachable": False,
+        "error": "connection refused",
+    }
+    # started without --metrics: reachable, no load figures
+    pages["http://gpu-box:8080/props"] = '{"total_slots": 1, "endpoint_metrics": false}'
+    quiet = models.server_status(models.spec("server"))
+    assert quiet["reachable"] and quiet["metrics"] is None and quiet["vision"] is False

@@ -9,7 +9,11 @@ the index. The same ONNX + ``tokenizers`` route as ``prax.embeddings``.
 Settings (``rerank:`` in prax.yaml, the variable in brackets overrides
 it for one run):
 * ``model`` [``PRAX_RERANK``]: ``0`` (default, off), ``stub`` (a
-  token-overlap scorer for tests), or a model name from ``MODELS``;
+  token-overlap scorer for tests), a model name from ``MODELS`` (ONNX in
+  this process), or ``server`` (a llama-server started with
+  ``--reranking`` and a reranker GGUF, ``POST /rerank``);
+* ``url`` [``PRAX_RERANK_URL``]: the server for ``server`` (default
+  ``http://127.0.0.1:8081``);
 * ``variant`` [``PRAX_RERANK_VARIANT``]: ``fp32`` or ``int8`` (default
   int8 on CPU);
 * ``providers`` [``PRAX_RERANK_PROVIDERS``]: onnxruntime providers.
@@ -19,14 +23,20 @@ from __future__ import annotations
 
 import functools
 import importlib
+import json
 import os
 import re
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 import numpy as np
 
 from prax import config, fetch
+
+SERVER_URL = "http://127.0.0.1:8081"
+SERVER_TIMEOUT = 30.0
+SERVER_CHARS = 3000  # of a candidate; the server reads a pair in one batch
 
 
 @dataclass(frozen=True)
@@ -145,6 +155,48 @@ class OnnxReranker:
         return out
 
 
+@dataclass
+class ServerReranker:
+    """A reranker model behind llama-server (``--reranking``): one POST
+    with the query and the candidates, one relevance score each. The model
+    is whatever the server was started with; its name is reported by the
+    response and kept for the record."""
+
+    url: str = SERVER_URL
+    name: str = "server"
+    timeout: float = SERVER_TIMEOUT
+
+    def score(self, query: str, texts: list[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros(0, dtype=np.float32)
+        body = {
+            "query": query,
+            "documents": [t[:SERVER_CHARS] for t in texts],
+            "top_n": len(texts),
+        }
+        data = post_json(self.url.rstrip("/") + "/rerank", body, self.timeout)
+        if data.get("model"):
+            self.name = f"server:{data['model']}"
+        out = np.full(len(texts), -1e9, dtype=np.float32)
+        for r in data.get("results", []):
+            i = int(r["index"])
+            if 0 <= i < len(texts):
+                out[i] = float(r["relevance_score"])
+        return out
+
+
+def post_json(url: str, body: dict[str, Any], timeout: float) -> dict[str, Any]:
+    """One POST; replaced in tests."""
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
 _WORD = re.compile(r"\w+")
 
 
@@ -175,8 +227,13 @@ def _build(setting: str) -> Reranker | None:
         return None
     if setting == "stub":
         return StubReranker()
+    if setting == "server":
+        url = str(config.setting("rerank.url", "PRAX_RERANK_URL", SERVER_URL))
+        return ServerReranker(url=url)
     if setting not in MODELS:
-        raise ValueError(f"unknown reranker {setting!r}; known: {sorted(MODELS)}")
+        raise ValueError(
+            f"unknown reranker {setting!r}; known: {sorted(MODELS)}, server, stub"
+        )
     return OnnxReranker(MODELS[setting])
 
 

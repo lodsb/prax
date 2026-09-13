@@ -181,6 +181,53 @@ def test_claude_vision_describes_an_image(
     assert queue.run(con, [doc_id]).actions == {"skipped": 1}  # never by default
 
 
+def test_a_server_with_a_projector_describes_images(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The `vision` extractor takes the vision step's model whichever kind
+    it is: an openai model gets the image as a data URL, and the stamp
+    carries the model."""
+    from prax import models
+    from prax.parsers import vision
+
+    seen: dict[str, object] = {}
+
+    class FakeRuntime:
+        def chat(self, system, user, **kw):
+            seen.update(kw, system=system, user=user)
+            shows = "## What it shows\nA front panel photo. " + "Detail. " * 60
+            return shows + "\n\n## Text in the image\nINPUT (handwritten)", {}
+
+    spec = models.ModelSpec(
+        name="server-vl",
+        kind="openai",
+        base_url="http://127.0.0.1:8080/v1",
+        model="qwen-vl",
+    )
+    monkeypatch.setattr(
+        models, "resolve", lambda step: spec if step == "vision" else None
+    )
+    monkeypatch.setattr(models, "runtime", lambda s: FakeRuntime())
+    png = b"\x89PNG\r\n\x1a\n" + bytes(40)
+    ext = parsers.by_name("vision")
+    assert ext.explicit_only and ext.stamp == "vision/1+qwen-vl@127.0.0.1:8080"
+    out = ext(png, filename="panel.png")
+    assert out.startswith("# panel.png\n\n*Image described by qwen-vl@127.0.0.1:8080.*")
+    assert "INPUT (handwritten)" in out
+    image = seen["images"][0]
+    assert image[1] == "image/png" and image[0] == png
+    assert seen["user"] == vision.PROMPT
+    # the Claude-pinned name refuses a server model rather than quietly using it
+    with pytest.raises(RuntimeError, match="claude-vision wants a Claude model"):
+        parsers.by_name("claude-vision")(png, filename="panel.png")
+    # through the queue the image is an image description for the document field
+    doc_id = store.register(con, png, mime="image/png", title="panel.png")["doc_id"]
+    assert queue.run(con, [doc_id], extractor="vision").actions == {"created": 1}
+    stamp = store.get_meta(con, doc_id)["text_source"]
+    assert stamp == "vision/1+qwen-vl@127.0.0.1:8080"
+    assert "image description" in store.document_field(con, doc_id)
+
+
 def test_registry_dispatch() -> None:
     assert parsers.for_mime("text/plain").name == "plain"
     assert parsers.for_mime("text/markdown").name == "plain"

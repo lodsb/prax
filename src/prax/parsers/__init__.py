@@ -26,8 +26,12 @@ time, so the serving path never loads them):
 | plain           | text/*          | decode as UTF-8; a source file (by extension, |
 |                 |                 | else Magika) becomes one fenced code block;   |
 |                 |                 | code regions inside prose are fenced          |
-| claude-vision   | image/*         | Claude describes the image and transcribes    |
-|                 |                 | its text, handwriting included; explicit only |
+| vision          | image/*         | the vision step's model (Claude, or llama-    |
+|                 |                 | server with a projector) describes the image  |
+|                 |                 | and transcribes its text, handwriting         |
+|                 |                 | included; explicit only; stamped with the     |
+|                 |                 | model                                         |
+| claude-vision   | image/*         | the same, pinned to Claude (the earlier name) |
 
 Adding one: write a function ``bytes -> str``, wrap it in ``Extractor`` and
 append it to ``REGISTRY``. Order within a MIME type is the preference and
@@ -354,10 +358,22 @@ def _trafilatura(data: bytes) -> str:
     return f"# {title}\n\n{text}" if title and title not in text[:200] else text
 
 
-def _claude_vision(data: bytes, *, filename: str | None = None) -> str:
+def _vision(data: bytes, *, filename: str | None = None) -> str:
     from prax.parsers import vision
 
     return vision.describe(data, filename=filename)
+
+
+def _claude_vision(data: bytes, *, filename: str | None = None) -> str:
+    from prax.parsers import vision
+
+    return vision.describe(data, filename=filename, claude_only=True)
+
+
+def _vision_model() -> str:
+    from prax.parsers import vision
+
+    return vision.model_name()
 
 
 def _plain(data: bytes, *, filename: str | None = None) -> str:
@@ -910,6 +926,14 @@ REGISTRY: list[Extractor] = [
         check=lambda: soffice_path() is not None,
     ),
     Extractor("plain", ("text/",), _plain, revision=3, hints=True),
+    Extractor(
+        "vision",
+        ("image/",),
+        _vision,
+        explicit_only=True,
+        hints=True,
+        variant=_vision_model,
+    ),
     Extractor(
         "claude-vision",
         ("image/",),

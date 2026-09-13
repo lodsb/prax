@@ -535,6 +535,14 @@ def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
     return out
 
 
+@app.get("/models/servers")
+def model_servers() -> dict[str, Any]:
+    """The model servers ``prax.yaml`` names (``openai`` models) and what
+    each says about itself: reachable, model, slots, vision, and its load
+    when it was started with ``--metrics`` (the Jobs page shows this)."""
+    return {"servers": [models.server_status(s) for s in models.servers()]}
+
+
 @app.get("/jobs/{job_id}")
 def job(job_id: int, request: Request) -> dict[str, Any]:
     row = store.get_job(_con(request), job_id)
