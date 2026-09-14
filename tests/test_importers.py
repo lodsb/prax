@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import sys
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
@@ -800,7 +801,15 @@ def test_a_claude_session_keeps_the_words_and_drops_the_machinery(
     assert "##### Tuning\n" in item.text  # the answer's own heading, demoted
     assert item.text.rstrip().endswith("## Links\n\n- https://example.org/manual")
     assert item.meta["turns"] == 3 and item.meta["links"] == 1
-    assert claude.transcripts_for(Path("I:/proj/prax")).name == "I--proj-prax"
+    # the transcripts' directory name is the project's absolute path with
+    # every non-alphanumeric character a dash, as Claude Code mangles it:
+    # a Windows path on Windows, a POSIX one elsewhere
+    if sys.platform == "win32":
+        assert claude.transcripts_for(Path("I:/proj/prax")).name == "I--proj-prax"
+    else:
+        assert claude.transcripts_for(Path("/home/me/proj/prax")).name == (
+            "-home-me-proj-prax"
+        )
 
 
 def test_claude_sessions_are_found_by_project_and_land_once(
