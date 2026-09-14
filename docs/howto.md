@@ -647,8 +647,10 @@ Qwen2.5-7B on an 8 GB card, `docs/eval/local-llm-2026-09-08.md`).
     #   https://github.com/ggml-org/llama.cpp/releases
     # a GGUF model into the data directory (or anywhere):
     python scripts/fetch_model.py server-35b       # repo and file from prax.yaml
-    # the server (Windows; other hosts run llama-server with the same flags):
+    # the server (Windows; Linux and macOS: scripts/llama_server.sh, the same
+    # options in --lower-case — Homebrew's llama.cpp puts llama-server on the PATH):
     scripts/llama_server.ps1 -Model <data dir>/models/<file>.gguf -Slots 3 -NoThinking
+    scripts/llama_server.sh --model <data dir>/models/<file>.gguf --slots 3 --no-thinking
     # a vision-language model also describes images when its projector is loaded
     # (the mmproj-*.gguf in the model's repository, ~1 GB; Qwen3.6 has one); on
     # a card that also drives the display, leave it 3-4 GB (the script's header
@@ -1298,44 +1300,56 @@ is the uvicorn line. The one-off maintenance scripts (import, backfill,
 resolution, typing rules, rechunk, replay) stay scripts: they open the
 database directly and are the known deviation of invariant 4.
 
-## 4b. Always on: the desktop as the server (Windows)
+## 4b. Always on: the desktop as the server
 
 Until the store moves to a board (6), the desktop is the server, and a
-server survives a reboot. `deploy\desktop.ps1` makes the three
-processes and the two nightly passes Task Scheduler tasks under your
-own account — no service, no password stored, nothing system-wide:
+server survives a reboot. Two scripts make the three processes and the
+two nightly passes services under your own account — nothing
+system-wide, no password stored: `deploy\desktop.ps1` on Windows (Task
+Scheduler), `deploy/desktop.sh` on Linux (systemd user units) and macOS
+(launchd agents). Same commands, same five services, same logs:
 
+    # Windows
     deploy\desktop.ps1 -Install -DataDir C:\prax-data -Backup I:\prax-backup `
         -LlamaModel <the .gguf> `
         -LlamaArgs "-Mmproj mmproj-F16.gguf -Slots 2 -CpuMoe 2 -UBatch 256 -ImageMaxTokens 1024 -NoThinking"
     deploy\desktop.ps1 -Start        # now; a logon starts them anyway
     deploy\desktop.ps1 -Status
+    # Linux, macOS
+    deploy/desktop.sh install --data-dir ~/prax-data --backup /mnt/backup/prax \
+        --llama-model <the .gguf> \
+        --llama-args "--mmproj mmproj-F16.gguf --slots 2 --cpu-moe 2 --ubatch 256 --image-max-tokens 1024 --no-thinking"
+    deploy/desktop.sh start
+    deploy/desktop.sh status
 
 | task | when | what |
 |---|---|---|
-| `prax llama-server` | logon + 5 s | `scripts\llama_server.ps1` with the model and arguments given (3h) |
-| `prax door` | logon + 15 s | `prax serve --host 0.0.0.0 --port 8000` (`-BindHost`, `-Port`) |
-| `prax worker` | logon + 45 s | `prax work --watch` — the model work, through the door |
-| `prax nightly` | 03:00 | `prax work --scope all --limit 100` — the backlog and the stale texts (3l¾) |
-| `prax backup` | 04:30 | `prax backup <dir> --no-archive` (7); `-BackupArchive` for the whole store |
+| service | when | what |
+|---|---|---|
+| `llama-server` | login | `scripts/llama_server.ps1` / `.sh` with the model and arguments given (3h); left out without a model |
+| `door` | login | `prax serve --host 0.0.0.0 --port 8000` (`-BindHost`/`--bind`, `-Port`/`--port`) |
+| `worker` | login, once the door answers | `prax work --watch` — the model work, through the door |
+| `nightly` | 03:00 | `prax work --scope all --limit 100` — the backlog and the stale texts (3l¾) |
+| `backup` | 04:30 | `prax backup <dir> --no-archive` (7); `-BackupArchive`/`--backup-archive` for the whole store; left out without a directory |
 
-Each task runs the script again with `-Run <name>`, which sets the
-environment, rotates the logs — `<data dir>\logs\<name>.log` and
-`.err.log`, ten kept, `<name>.runs.log` with every start and exit — and
-runs the process in the foreground, so the task shows *Running* while it
-lives and restarts it (three times, a minute apart) when it dies. The
-tasks run while you are logged on; a locked screen is fine, logged off
-is not — that is what "no password stored" costs. `-Stop` ends the
-tasks and any process started by hand that would be in their way;
-`-Uninstall` removes the tasks and touches nothing else.
+Each service runs the script again with `-Run <name>` / `run <name>`,
+which sets the environment, rotates the logs — `<data dir>/logs/<name>.log`
+and `.err.log`, ten kept, `<name>.runs.log` with every start — and runs
+the process so the service manager watches it and restarts it when it
+dies (Windows: three times, a minute apart; systemd and launchd: after a
+minute, as often as needed). `-Stop`/`stop` ends the services (on Windows
+also any process started by hand that would be in their way),
+`-Status`/`status` shows them with the processes, whether the door
+answers and whether a token is set; `-Uninstall`/`uninstall` removes the
+services and touches nothing else. Secrets never go into a service:
 
-Secrets never go into a task. The door's token comes from the
-`PRAX_TOKEN` *user* environment variable, or from one line in `<data
-dir>\door.token`; without either the door answers this machine only
-(the status says so). The Anthropic key comes from the
-`ANTHROPIC_API_KEY` user variable. The card's power cap (`nvidia-smi
--pl`, 3h) needs an administrator and is not registered here; a task of
-your own with the highest privileges, at logon, is the place for it.
+| | Windows | Linux, macOS |
+|---|---|---|
+| the token | the `PRAX_TOKEN` *user* environment variable, or one line in `<data dir>\door.token` | one line in `<data dir>/door.token`, or `PRAX_TOKEN=` in `<data dir>/desktop.env` |
+| the Anthropic key | the `ANTHROPIC_API_KEY` user variable | `ANTHROPIC_API_KEY=` in `desktop.env` (a service has no shell profile) |
+| without a token | the door answers this machine only, and the status says so | the same |
+| when they run | while you are logged on (a locked screen is fine, logged off is not — the price of no stored password) | Linux: from login to logout, or always after `loginctl enable-linger $USER` (the install says so); macOS: from login, until `stop` |
+| the card's power cap | `nvidia-smi -pl` needs an administrator: a task of your own with the highest privileges, at logon | root: a system unit of your own, or `--power-limit` on the launcher under sudo |
 
 ## 5. MCP server in Claude Code
 
