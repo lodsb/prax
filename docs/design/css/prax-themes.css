@@ -1,0 +1,92 @@
+/* prax — theme tokens.
+   Four values are the whole theme AND the whole mark:
+     ground  the paper
+     tone    pass 1, the block
+     key     pass 2, the line — and the text colour
+     colour  pass 3, the one facet
+   Switching these switches the page and the logo together.
+   Night flips two things: the key pulls light, and the colour stops
+   multiplying (multiply over a dark ground turns neon to mud). */
+
+:root,
+[data-prax-theme='bindery'] {
+  --prax-ground: #f3ead6;
+  --prax-panel: #faf5e9;
+  --prax-key: #241d17;
+  --prax-dim: #5f564a;
+  --prax-faint: #93897a;
+  --prax-rule: #cfc2a8;
+  --prax-tone: #d9bf92;
+  --prax-colour: #8e2f24;
+  --prax-blend: multiply;
+}
+
+[data-prax-theme='dessau'] {
+  --prax-ground: #e9e3d4;
+  --prax-panel: #f4f0e4;
+  --prax-key: #16161a;
+  --prax-dim: #55524a;
+  --prax-faint: #8c887c;
+  --prax-rule: #c8c0ac;
+  --prax-tone: #f2b705;
+  --prax-colour: #d1362f;
+  --prax-blend: multiply;
+}
+
+[data-prax-theme='riso'] {
+  --prax-ground: #efeade;
+  --prax-panel: #faf7ee;
+  --prax-key: #1b1b1c;
+  --prax-dim: #55514a;
+  --prax-faint: #8d8779;
+  --prax-rule: #cec7b4;
+  --prax-tone: #7fa8d8;
+  --prax-colour: #ff4f9a;
+  --prax-blend: multiply;
+}
+
+[data-prax-theme='cyanotype'] {
+  --prax-ground: #dde2e4;
+  --prax-panel: #eef2f3;
+  --prax-key: #12304f;
+  --prax-dim: #4a5a63;
+  --prax-faint: #86959d;
+  --prax-rule: #bcc8ce;
+  --prax-tone: #a9bcc9;
+  --prax-colour: #4a7fb5;
+  --prax-blend: multiply;
+}
+
+[data-prax-theme='night'] {
+  --prax-ground: #16161a;
+  --prax-panel: #1e1e24;
+  --prax-key: #efeade;
+  --prax-dim: #a09c93;
+  --prax-faint: #6e6b64;
+  --prax-rule: #33333c;
+  --prax-tone: #2b2b33;
+  --prax-colour: #ff4f9a;
+  --prax-blend: normal;
+}
+
+[data-prax-theme='funk'] {
+  --prax-ground: #f6e7c8;
+  --prax-panel: #fdf4dd;
+  --prax-key: #3a2215;
+  --prax-dim: #5d4a35;
+  --prax-faint: #9a8461;
+  --prax-rule: #d8c39a;
+  --prax-tone: #e8b33a;
+  --prax-colour: #ee6c2b;
+  --prax-blend: multiply;
+}
+
+/* The mark, inlined. Inline the SVG in the DOM — custom properties do not
+   resolve through <img src>. For <img>, og:image or e-mail use the static
+   files in assets/logo/themes/. */
+.prax-mark { width: 2.5rem; height: 2.5rem; display: block; }
+
+/* Reduction ladder. Swap the file, do not scale one down:
+     >= 56px   prax-mark.svg          three passes, hatching
+     24–56px   prax-mark-medium.svg   two passes, five slits, no hatching
+     <= 24px   prax-mark-solid.svg    one pull and a colour           */

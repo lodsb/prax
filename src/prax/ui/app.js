@@ -12,18 +12,26 @@ const statusEl = document.getElementById("status");
 // index.html before the first paint, so a reload does not flash.
 const SETTINGS_KEY = "prax.settings";
 const SETTINGS_DEFAULTS = { theme: "system", ask_limit: 8, search_limit: 20 };
+const THEMES = ["bindery", "dessau", "riso", "cyanotype", "night", "funk"];  // docs/design/BRIEF.md
+const OLD_THEMES = { light: "bindery", dark: "night", paper: "bindery" };
 
 function settings() {
-  try { return { ...SETTINGS_DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; }
-  catch (_) { return { ...SETTINGS_DEFAULTS }; }
+  let s;
+  try { s = { ...SETTINGS_DEFAULTS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") }; }
+  catch (_) { s = { ...SETTINGS_DEFAULTS }; }
+  s.theme = OLD_THEMES[s.theme] || s.theme;
+  return s;
 }
 function saveSettings(s) {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); } catch (_) { /* private mode */ }
   applyTheme(s.theme);
 }
 function applyTheme(theme) {
-  if (!theme || theme === "system") delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = theme;
+  // the four values switch the page and the inlined mark together
+  if (!THEMES.includes(theme)) {
+    theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "night" : "bindery";
+  }
+  document.documentElement.dataset.praxTheme = theme;
   // the canvas reads its colours when it draws; a settled graph must be told
   const live = ForceGraph.live;
   if (live && document.contains(live.canvas)) live.draw();
@@ -81,7 +89,7 @@ async function api(path, params) {
 function askForToken() {
   if (document.getElementById("token-form")) return;
   const box = document.createElement("div");
-  box.className = "token-box";
+  box.className = "token-box plate";
   box.innerHTML = `
     <form id="token-form" class="search-form" autocomplete="off">
       <label for="token-input">Access token</label>
@@ -118,6 +126,12 @@ function go(name, arg, params) {
 
 function md(text) {
   return marked.parse(text || "", { gfm: true, breaks: false });
+}
+
+// A rule that ends in a mark: a hairline, the lozenge, a hairline. Says a
+// section ended; does nothing.
+function rule() {
+  return `<div class="rule" aria-hidden="true"><svg viewBox="-7 -7 14 14"><path d="M0 -5.4 C 0.8 -1.8 1.9 -0.7 5.3 0.2 C 1.8 0.9 0.7 2 -0.2 5.4 C -0.9 1.9 -2 0.8 -5.4 -0.2 C -1.9 -0.9 -0.8 -2 0 -5.4 Z" fill="var(--prax-colour)"/></svg></div>`;
 }
 
 function badge(kind) {
@@ -308,7 +322,7 @@ function renderFigure(c, docId) {
   const d = c.data;
   const readings = (d.readings || []).map((r) => `<p class="figure-reading"><span class="muted" title="${esc(r.model)}">read by ${esc(r.model.split("@")[0])}:</span> ${esc(r.text)}</p>`).join("");
   const rest = c.text.split("\n").filter((l) => !l.startsWith("![") && !l.startsWith("*Figure, as read by")).join("\n").trim();
-  return `<figure class="doc-figure">
+  return `<figure class="doc-figure plate">
     <a href="/doc/${docId}/figure/${d.ref}" target="_blank" rel="noopener"><img src="/doc/${docId}/figure/${d.ref}" alt="${esc(d.caption || "")}" loading="lazy"></a>
     ${d.caption ? `<figcaption>${esc(d.caption)}</figcaption>` : ""}
     ${rest ? md(rest) : ""}${readings}
@@ -392,6 +406,7 @@ async function viewDoc(id, p) {
     <div id="reading-form" hidden></div>
     <div id="page-editor"></div>
   </header>
+  ${rule()}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
     <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? chunks.map((c) => renderChunk(c, highlight, doc.id)).join("") : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}</div>
@@ -1087,7 +1102,7 @@ async function viewGraph(arg, p) {
         </div>
         <div class="legend">${legend}</div>
         <div class="graph-layout">
-          <div class="graph-canvas"><canvas></canvas></div>
+          <div class="graph-canvas plate"><canvas></canvas></div>
           <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
         </div>`;
       const panel = document.getElementById("graph-panel");
@@ -1113,7 +1128,7 @@ async function viewGraph(arg, p) {
       </div>
       <div class="legend">${legend}</div>
       <div class="graph-layout">
-        <div class="graph-canvas"><canvas></canvas></div>
+        <div class="graph-canvas plate"><canvas></canvas></div>
         <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
       </div>`;
     const panel = document.getElementById("graph-panel");
@@ -1384,7 +1399,7 @@ function renderSources(t, i) {
     const f = facts[p.doc_id] || [];
     const cut = p.text.length > 300;
     return `
-    <article class="source ${cited.has(p.n) ? "cited" : ""}" id="source-${p.n}">
+    <article class="source plate ${cited.has(p.n) ? "cited" : ""}" id="source-${p.n}">
       <div class="source-n">[${p.n}]</div>
       <div class="source-body">
         <a class="source-title" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}">${esc(p.title || "(untitled)")}</a>
@@ -1396,6 +1411,7 @@ function renderSources(t, i) {
     </article>`;
   }).join("");
   return `<div class="side-head"><span>Sources</span><span>turn ${i + 1} · ${passages.length}${cited.size ? `, ${cited.size} cited` : ""}</span></div>
+    ${rule()}
     <div class="sources ${t.answer ? "with-answer" : ""}">${cards || `<p class="muted side-empty">No passages found for this turn.</p>`}</div>`;
 }
 

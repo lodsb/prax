@@ -1,0 +1,61 @@
+/* prax — the furniture.
+   Ornament may cost you space. It must never cost you a click.
+   Everything here lives in margins and between sections; nothing is a
+   control, nothing hides one. That is the line between cared-for and twee. */
+
+/* A panel held by four drawn brackets instead of a border or a shadow. */
+.prax-plate {
+  position: relative;
+  background: var(--prax-panel);
+  padding: 1.25rem 1.125rem;
+}
+.prax-plate::before,
+.prax-plate::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2014%2014%22%3E%3Cpath%20d%3D%22M1.4%201.2%20C%201.2%204.5%201.5%208.4%201.3%2011.6%22%20fill%3D%22none%22%20stroke%3D%22%23cfc2a8%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M1.2%201.4%20C%204.5%201.2%208.4%201.5%2011.6%201.3%22%20fill%3D%22none%22%20stroke%3D%22%23cfc2a8%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E"), url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2014%2014%22%3E%3Cpath%20d%3D%22M1.4%201.2%20C%201.2%204.5%201.5%208.4%201.3%2011.6%22%20fill%3D%22none%22%20stroke%3D%22%23cfc2a8%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%2F%3E%3Cpath%20d%3D%22M1.2%201.4%20C%204.5%201.2%208.4%201.5%2011.6%201.3%22%20fill%3D%22none%22%20stroke%3D%22%23cfc2a8%22%20stroke-width%3D%221.4%22%20stroke-linecap%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat, no-repeat;
+  background-size: 11px 11px, 11px 11px;
+}
+.prax-plate::before { background-position: left top, right top; }
+.prax-plate::after  { background-position: left bottom, right bottom; }
+.prax-plate::before { transform: none; }
+/* the right-hand and bottom ticks are mirrored by their own elements when you
+   need them perfect; at 11px the un-mirrored bracket reads fine. */
+
+/* A rule that ends in a mark. Does nothing. Says a section ended. */
+.prax-rule {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+}
+.prax-rule::before,
+.prax-rule::after {
+  content: "";
+  flex: 1 1 auto;
+  height: 1px;
+  background: var(--prax-rule);
+}
+.prax-rule > svg { flex: 0 0 auto; }   /* the lozenge, 11px, fill var(--prax-colour) */
+
+/* The masthead's double rule — two weights and a gap. */
+.prax-doublerule { border-top: 2px solid var(--prax-key); }
+.prax-doublerule + .prax-doublerule { margin-top: 3px; border-top-width: 1px; }
+
+/* Small caps, wide. The label's voice in the grotesk's uppercase. */
+.prax-sc {
+  font-family: var(--prax-font-ui);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--prax-faint);
+}
+
+/* Type. Chrome in the grotesk, anything you read in the serif. */
+:root {
+  --prax-font-ui: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --prax-font-read: "Literata", Georgia, "Times New Roman", serif;
+}

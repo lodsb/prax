@@ -1,0 +1,43 @@
+<!-- prax masthead. Inline the mark so the theme reaches it. -->
+<header class="prax-masthead">
+  <a class="prax-brand" href="/ui/">
+    <!-- paste the contents of assets/logo/prax-mark.svg here -->
+    <span class="prax-wordmark">prax</span>
+  </a>
+
+  <label class="prax-search">
+    <svg viewBox="-7 -7 14 14" width="11" height="11" aria-hidden="true"><path d="M0 -5.4 C 0.8 -1.8 1.9 -0.7 5.3 0.2 C 1.8 0.9 0.7 2 -0.2 5.4 C -0.9 1.9 -2 0.8 -5.4 -0.2 C -1.9 -0.9 -0.8 -2 0 -5.4 Z" fill="var(--prax-colour)"/></svg>
+    <input type="search" placeholder="search or ask" />
+    <span class="prax-sc">search&nbsp;or&nbsp;ask</span>
+  </label>
+
+  <nav class="prax-nav">
+    <a class="prax-sc is-current" href="/ui/search">search</a>
+    <a class="prax-sc" href="/ui/graph">graph</a>
+    <a class="prax-sc" href="/ui/review">review</a>
+    <a class="prax-sc" href="/ui/pages">pages</a>
+    <a class="prax-sc" href="/ui/jobs">jobs</a>
+  </nav>
+</header>
+<div class="prax-doublerule"></div>
+<div class="prax-doublerule"></div>
+
+<style>
+.prax-masthead { display: flex; align-items: center; gap: 2rem; padding: 1.25rem 2.75rem 1rem; }
+.prax-brand { display: flex; align-items: center; gap: 0.75rem; text-decoration: none; }
+.prax-wordmark {
+  font-family: var(--prax-font-ui); font-size: 1.75rem; font-weight: 600;
+  letter-spacing: -0.035em; line-height: 1; color: var(--prax-key);
+}
+.prax-search {
+  flex: 1 1 auto; display: flex; align-items: center; gap: 0.75rem;
+  border-bottom: 1.5px solid var(--prax-key); padding: 0.4rem 0.125rem;
+}
+.prax-search input {
+  flex: 1 1 auto; border: 0; background: none; outline: none;
+  font-family: var(--prax-font-read); font-size: 1rem; color: var(--prax-key);
+}
+.prax-nav { display: flex; gap: 1.25rem; }
+.prax-nav a { text-decoration: none; }
+.prax-nav .is-current { color: var(--prax-colour); }
+</style>

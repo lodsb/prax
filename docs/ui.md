@@ -54,18 +54,50 @@ Added for browsing (read-only, thin wrappers over store functions):
 | `#doc/<id>?edit=1` | a page's document view with the editor open: textarea, title, change note, revision list; "add a note" on a non-page document creates an addendum linked to it; the context column shows notes on a document, a project's members, and "add to project" |
 | `#review?rel=&unmapped=&offset=` | the review queue, filtered by relation and unmapped/typed: each misfit triple with its reason, evidence and source document, and a row form to drop it, mark it an ontology gap, or fix its types or relation from the current ontology and link it as an edge; "drop all matching" and "replay against ontology" act on the whole filter |
 
+## Look
+
+The identity is `docs/design/BRIEF.md`: a praxinoscope in elevation,
+printed in three passes, as the mark; four values — ground, tone, key,
+colour — as the whole theme; the furniture of a Victorian label without
+its costume as the page. What the UI does with it:
+
+- **The mark** is inlined in the masthead (`index.html`, the *medium*
+  reduction at 40 px — the ladder says swap the file, never scale the
+  full one) so the theme's custom properties reach its fills; the tab's
+  favicon is the static Bindery `favicon.svg` (a favicon cannot read a
+  custom property). The wordmark is live text in the grotesk.
+- **Themes** are `[data-prax-theme]` blocks in `style.css` — Bindery
+  (default), Dessau, Riso, Cyanotype, Night, Funk — each setting the four
+  values plus the derived `--prax-panel/-dim/-faint/-rule` and
+  `--prax-blend` (Night stops the colour pass multiplying). The names
+  the views use (`--bg`, `--fg`, `--muted`, `--line`, `--accent`,
+  `--highlight`, `--mark`, the kind colours) are drawn from them, so a
+  theme is those eight lines and nothing else; the graph canvas reads
+  the same names when it draws. "Follow the system" is Bindery by day
+  and Night when the system prefers dark. `?theme=night` in the address
+  tries one for that load without saving it.
+- **Type**: Bricolage Grotesque for the chrome and every label, Literata
+  for anything read — chunks, answers, snippets, captions — vendored
+  under `vendor/fonts/` (OFL, latin and latin-ext subsets, loaded by
+  `unicode-range`), with the brief's fallbacks.
+- **Ornament**, three pieces and no more: the double rule under the
+  masthead; the rule that ends in a lozenge (`rule()` in `app.js`,
+  between a document's head and its body, under the sources' head);
+  plates — panels held by four drawn corner ticks instead of a border,
+  a shadow or a radius (`.plate`, a mask so the tick takes the theme's
+  rule colour): the source cards (their ticks in the colour when cited),
+  a figure, the graph canvas, the token prompt. Labels are small caps
+  with wide tracking. Nothing decorative is a control.
+
 ## Settings
 
-The gear in the header opens a small dialog: the theme (follow the
-system, light, dark, or paper — a warm sepia), the passages per ask and
-the hits per search. It is kept in `localStorage` (`prax.settings`) in
-this browser only and never sent to the door; an inline script in
-`index.html` applies the theme before the first paint, so a reload does
-not flash. Themes are `data-theme` on `<html>` over the same CSS
-variables: no attribute follows `prefers-color-scheme`, an explicit
-choice wins over it, and the graph canvas reads the variables when it
-draws, so it follows too. Other browser-side preferences go into the
-same dialog and the same key.
+The gear in the header opens a small dialog: the theme (the six above,
+or follow the system), the passages per ask and the hits per search. It
+is kept in `localStorage` (`prax.settings`) in this browser only and
+never sent to the door; `theme.js` in the head applies the theme before
+the first paint, so a reload does not flash (older saved values —
+light, dark, paper — map onto Bindery and Night). Other browser-side
+preferences go into the same dialog and the same key.
 
 ## Files
 
@@ -73,8 +105,10 @@ same dialog and the same key.
       index.html        the page: nav, a view container, script tags
       lib.js            the pure helpers (escaping, hash parsing, chunk locating, citation links); also loaded by the node tests
       app.js            API client, one render function per view, the error reporter
-      style.css         layout, badges, highlight; the themes as CSS variables (system, light, dark, paper)
+      style.css         the six themes as custom properties, the type, the ornament, the views
       theme.js          applies the chosen theme before the first paint (loaded in <head>)
+      favicon.svg       the mark, one pull and a colour, Bindery (static)
+      vendor/fonts/     Bricolage Grotesque and Literata, woff2 subsets, with their OFL texts
       vendor/marked.min.js   Markdown renderer (MIT), pinned version noted in vendor/VERSIONS
 
 ## Tests and errors

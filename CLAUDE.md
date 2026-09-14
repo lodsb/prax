@@ -172,6 +172,19 @@ v5 adds organizations (affiliation, funding, who built a tool) and the weak
   `PRAX_DATA_DIR` before importing `prax.api`.
 - Commit at the end of each green stage; do not commit failing tests.
 
+## Visual design
+
+The mark, the theme tokens and the UI's ornament rules: `docs/design/BRIEF.md`
+(the brief), `docs/design/assets/` (the mark in three reductions, the
+static per-theme files), `snippets/` and `css/` (the shapes the UI copies).
+Themes are four custom properties — ground, tone, key, colour — that switch
+the page and the inlined logo together; do not add a per-theme logo asset.
+Ornament may cost space, never a click: nothing decorative is a control.
+The UI keeps the mark inline in `src/prax/ui/index.html` (the medium file at
+masthead size, the solid one as favicon), the six themes in `style.css` as
+`[data-prax-theme]` blocks, and the two faces vendored under
+`src/prax/ui/vendor/fonts/` (OFL).
+
 ## Roadmap
 
 See `docs/PLAN.md`. Work one stage per session; write tests before wiring
