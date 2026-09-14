@@ -269,7 +269,9 @@ if ($Stop) {
         $t = Get-PraxTask $name
         if ($t -and $t.State -eq "Running") { Stop-ScheduledTask -TaskPath $TaskPath -TaskName "prax $name"; "stopped  prax $name" }
     }
-    # a process outside the tasks (started by hand) is in the way of -Start
+    # what is still running: a task's child that outlived the task (Task
+    # Scheduler ends the wrapper, not always its tree) or a process started
+    # by hand, either in the way of -Start
     Start-Sleep -Seconds 2
     $stray = Get-PraxProcesses | Where-Object {
         $n = $_.Name; $c = $_.CommandLine
@@ -280,7 +282,7 @@ if ($Stop) {
     }
     foreach ($p in $stray) {
         Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
-        "ended    pid $($p.ProcessId) $($p.Name) (was not a task's)"
+        "ended    pid $($p.ProcessId) $($p.Name) (still running)"
     }
     if (-not $Start) { return }
 }
@@ -298,7 +300,9 @@ if ($Start) {
             $up = $false
             foreach ($i in 1..30) {
                 Start-Sleep -Seconds 2
-                try { Invoke-WebRequest -Uri "http://127.0.0.1:$Port/changes" -UseBasicParsing -TimeoutSec 3 | Out-Null; $up = $true; break } catch { }
+                # any answer counts, a 401 included: the door is up, the token is its business
+                try { Invoke-WebRequest -Uri "http://127.0.0.1:$Port/changes" -UseBasicParsing -TimeoutSec 3 | Out-Null; $up = $true; break }
+                catch { if ($_.Exception.Response) { $up = $true; break } }
             }
             if (-not $up) { "         (the door is not answering yet; see logs\door.err.log)" }
         } else { Start-Sleep -Seconds 3 }
@@ -347,7 +351,8 @@ try {
     $j = $r.Content | ConvertFrom-Json
     "door:  answering on :$Port, $($j.jobs) job(s) running"
 } catch {
-    "door:  not answering on :$Port ($($_.Exception.Message))"
+    if ($_.Exception.Response) { "door:  answering on :$Port, but not to this token (HTTP $([int]$_.Exception.Response.StatusCode))" }
+    else { "door:  not answering on :$Port ($($_.Exception.Message))" }
 }
 if (-not $env:PRAX_TOKEN) { "token: none (the door answers this machine only)" } else { "token: set" }
 "logs:  $(Join-Path $DataDir 'logs')"
