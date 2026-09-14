@@ -990,8 +990,20 @@ come back with every pass, so they have names and a place:
 | `self-edges` | an edge from a thing to itself, left after two names were merged | ends them |
 | `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
 | `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
+| `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
+
+What the cleaning does not do: a glyph the PDF's font gave no name at
+all comes out of MuPDF as U+FFFD, and a symbol font other than Adobe's
+(the F1xx, F2xx private-use ranges) as a code point nobody can read
+back — both are lost at extraction, and the UI shows the first as a
+small box rather than a question mark. Only OCR or Docling can recover
+those, and only sometimes. What the fonts do: the UI's Literata covers
+Latin; Greek, Cyrillic, maths and CJK fall through to the reading
+stack's next faces (STIX Two Text, Georgia, Cambria) and the system's
+own, so a symbol that is a real character renders; a box that survives
+the heal is one of the two lost kinds above.
 
 Nothing is deleted. An edge is invalidated, so it keeps its provenance
 and its place in history (invariant 8) and a later pass can write the

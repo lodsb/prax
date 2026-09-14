@@ -125,7 +125,9 @@ function go(name, arg, params) {
 }
 
 function md(text) {
-  return marked.parse(text || "", { gfm: true, breaks: false });
+  // U+FFFD is a glyph the PDF's font gave no name: a box, not a question
+  const html = marked.parse(text || "", { gfm: true, breaks: false });
+  return html.replace(/\uFFFD/g, '<span class="lost" title="a glyph the document\u2019s font did not name">\u25AB</span>');
 }
 
 // A rule that ends in a mark: a hairline, the lozenge, a hairline. Says a

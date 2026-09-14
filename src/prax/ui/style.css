@@ -96,7 +96,7 @@
   --figure: color-mix(in srgb, var(--prax-tone) 60%, var(--prax-key));
   --code: var(--prax-dim);
   --font-ui: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
-  --font-read: "Literata", Georgia, "Times New Roman", serif;
+  --font-read: "Literata", "STIX Two Text", Georgia, Cambria, "Times New Roman", serif;
   --font-mono: ui-monospace, Consolas, "SF Mono", Menlo, monospace;
 }
 [data-prax-theme="night"] {
@@ -234,6 +234,7 @@ button.secondary:hover, .composer-new:hover { background: none; color: var(--acc
 .search-form input[type="number"] { width: 4.5rem; }
 label { color: var(--muted); }
 mark { background: var(--mark); color: inherit; padding: 0 .1rem; }
+.lost { color: var(--faint); font-size: .8em; vertical-align: .1em; }
 
 /* settings */
 dialog#settings { border: 0; background: var(--panel); color: var(--fg); padding: 1.2rem 1.5rem 1rem; min-width: 19rem; }

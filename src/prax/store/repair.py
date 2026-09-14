@@ -31,6 +31,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from prax import glyphs
+
 from .base import _NOW, _serialized
 from .graph import invalidate_edge, rename_entity, resolve_review
 from .jobs import Job, job_finish
@@ -278,6 +280,42 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return [dict(r) for r in rows if not parsers.candidates((r["mime"] or "").strip())]
 
 
+def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents whose text still holds ligature or Symbol-font code
+    points: indexed before ``prax.glyphs`` cleaned every text."""
+    out = []
+    rows = con.execute(
+        "SELECT DISTINCT c.doc_id AS id, d.title FROM chunks c"
+        " JOIN documents d ON d.id = c.doc_id"
+        " WHERE c.text GLOB '*[\ufb00-\ufb06\uf020-\uf0fe]*' ORDER BY c.doc_id"
+    ).fetchall()
+    for r in rows:
+        out.append({"id": r["id"], "title": r["title"]})
+    return out
+
+
+def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Re-index the document from its own artifact, cleaned: chunks whose
+    text did not change keep their vectors."""
+    from prax.store import documents as docs
+
+    done = 0
+    for r in rows:
+        row = con.execute(
+            "SELECT text_hash, json_extract(meta, '$.text_source') AS src"
+            " FROM documents WHERE id = ?",
+            (r["id"],),
+        ).fetchone()
+        if row is None or not row["text_hash"]:
+            continue
+        text = docs._read_archive(row["text_hash"]).decode("utf-8")
+        if not glyphs.damaged(text):
+            continue
+        docs.index_text(con, r["id"], text, text_source=row["src"])
+        done += 1
+    return done
+
+
 def _unembedded_chunks(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Chunks with no vector from any model. Asked of the bookkeeping table
     alone: a check must never load an embedder to answer a question about
@@ -469,6 +507,20 @@ AILMENTS: tuple[Ailment, ...] = (
             " repair in the store"
         ),
         find=_unparsable_documents,
+    ),
+    Ailment(
+        name="unmapped-glyphs",
+        what=(
+            "documents whose text holds ligature glyphs (ﬁ, ﬂ) or Symbol-font"
+            " code points (=, ∈, α as private-use characters) from before"
+            " every text was cleaned: boxes on screen, words search cannot match"
+        ),
+        fix=(
+            "re-index each from its own text, cleaned (prax.glyphs); unchanged"
+            " chunks keep their vectors"
+        ),
+        find=_glyph_documents,
+        repair=_repair_glyphs,
     ),
     Ailment(
         name="chunks-without-vectors",

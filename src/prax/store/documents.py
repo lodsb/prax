@@ -15,7 +15,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import Any
 
-from prax import chunking, ontology
+from prax import chunking, glyphs, ontology
 
 from .base import (
     _NOW,
@@ -75,10 +75,7 @@ def index_text(
     exists = con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if exists is None:
         raise KeyError(f"no such document: {doc_id}")
-    # NUL bytes (pdftotext emits them for some page numbers) truncate SQLite's
-    # text functions and the FTS tokenizer; lone surrogates (MuPDF, broken
-    # fonts) cannot be encoded at all. Neither carries content.
-    text = _SURROGATE.sub("�", text.replace("\x00", ""))
+    text = _cleaned(text)
     data = text.encode("utf-8")
     text_hash = _archive_bytes(data)
     n_chunks = _write_chunks(con, doc_id, text)
@@ -97,6 +94,16 @@ def index_text(
     return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": n_chunks}
 
 
+def _cleaned(text: str) -> str:
+    """What every text goes through before it is stored: NUL bytes
+    (pdftotext emits them for some page numbers) truncate SQLite's text
+    functions and the FTS tokenizer; lone surrogates (MuPDF, broken fonts)
+    cannot be encoded at all — neither carries content; ligature and
+    Symbol-font code points become the letters they stand for
+    (``prax.glyphs``)."""
+    return glyphs.clean(_SURROGATE.sub("�", text.replace("\x00", "")))
+
+
 def text_unchanged(con: sqlite3.Connection, doc_id: int, text: str) -> bool:
     """Whether ``text`` is byte for byte the document's current artifact
     (after the same cleaning ``index_text`` applies)."""
@@ -105,8 +112,8 @@ def text_unchanged(con: sqlite3.Connection, doc_id: int, text: str) -> bool:
     ).fetchone()
     if row is None or not row["text_hash"]:
         return False
-    cleaned = _SURROGATE.sub("�", text.replace("\x00", "")).encode("utf-8")
-    return hashlib.sha256(cleaned).hexdigest() == row["text_hash"]
+    digest = hashlib.sha256(_cleaned(text).encode("utf-8")).hexdigest()
+    return digest == row["text_hash"]
 
 
 @_serialized
