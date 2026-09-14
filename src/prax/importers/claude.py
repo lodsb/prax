@@ -25,7 +25,7 @@ import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 
 from .chats import Conversation, Message, links, render_conversation
@@ -43,6 +43,14 @@ _INJECTED = (
 )
 _CONTINUED = "This session is being continued"
 _MANGLE = re.compile(r"[^A-Za-z0-9]")
+
+
+def _last_part(cwd: str) -> str:
+    r"""The directory's name from a transcript's ``cwd`` — written by the
+    machine the session ran on, so a Windows path is read as one wherever
+    this runs (``I:\work\gadget`` is ``gadget`` on Linux too)."""
+    windows = "\\" in cwd or re.match(r"^[A-Za-z]:", cwd) is not None
+    return (PureWindowsPath(cwd) if windows else PurePosixPath(cwd)).name
 
 
 def projects_dir() -> Path:
@@ -143,7 +151,7 @@ def read(path: Path) -> Session:
             else:
                 messages.append(Message(at, ASSISTANT, text))
             last_request = request
-    project = Path(cwd).name if cwd else path.parent.name
+    project = _last_part(cwd) if cwd else path.parent.name
     return Session(
         id=session_id,
         path=path,
