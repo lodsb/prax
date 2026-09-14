@@ -3,6 +3,19 @@
 "use strict";
 
 const view = document.getElementById("view");
+// A view shows "Loading…" while its first requests are out — but not on a
+// live refresh (the poll below re-rendering the same route in place), where
+// the page it already shows stays until the new one is ready.
+let quiet = false;
+function loading(text) {
+  if (!quiet) view.innerHTML = `<p class="muted">${text || "Loading…"}</p>`;
+}
+// The list part of a view that draws its form first and fills the list
+// after: on a live refresh the list it already shows, otherwise "Loading…".
+function listPlaceholder(id) {
+  const el = quiet && document.getElementById(id);
+  return el ? el.innerHTML : `<p class="muted">Loading…</p>`;
+}
 const statusEl = document.getElementById("status");
 
 // ---------------------------------------------------------------- settings
@@ -376,7 +389,7 @@ function outline(chunks) {
 }
 
 async function viewDoc(id, p) {
-  view.innerHTML = `<p class="muted">Loading document ${esc(id)}…</p>`;
+  loading(`Loading document ${esc(id)}…`);
   let doc, chunks;
   try {
     [doc, chunks] = await Promise.all([api(`/get/${id}`, { max_chars: 0 }), api(`/doc/${id}/chunks`)]);
@@ -1165,7 +1178,7 @@ async function viewPages(p) {
     <button>Create</button>
     <span id="page-create-msg" class="error"></span>
   </form>
-  <div id="pages-list"><p class="muted">Loading…</p></div>`;
+  <div id="pages-list">${listPlaceholder("pages-list")}</div>`;
   document.getElementById("new-page").addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(e.target));
@@ -1258,7 +1271,7 @@ async function viewReview(p) {
     <button type="button" id="replay" class="secondary" title="link typed items the current ontology now accepts">replay against ontology</button>
     <span id="review-msg" class="muted"></span>
   </form>
-  <div id="review-list"><p class="muted">Loading…</p></div>`;
+  <div id="review-list">${listPlaceholder("review-list")}</div>`;
   const form = document.getElementById("review-filter");
   const query = () => ({ rel: filter.rel || undefined, unmapped: filter.unmapped || undefined });
   form.addEventListener("submit", (e) => {
@@ -1615,7 +1628,7 @@ async function viewAsk(p) {
 // The queue for the expensive model: what is flagged (and whether that
 // model has read it), and what the library keeps coming back to.
 async function viewPromote(p) {
-  view.innerHTML = `<p class="muted">Loading…</p>`;
+  loading();
   let d;
   try { d = await api("/promote", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   const pending = d.promoted.filter((x) => !x.done).length;
@@ -1659,7 +1672,7 @@ const PROMOTE_W = { project: 5, synthesis: 4, page: 3, cited: 1 };
 // its domains; the rules in prax.yaml apply when none is chosen.
 
 async function viewInbox(p) {
-  view.innerHTML = `<p class="muted">Loading…</p>`;
+  loading();
   let d;
   try { d = await api("/inbox", { limit: p.limit || 50 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   const domainOpts = d.modules.map((m) => `<label class="chip"><input type="checkbox" name="domain" value="${esc(m)}"> ${esc(m)}</label>`).join(" ");
@@ -1855,21 +1868,49 @@ function readingLines(r) {
 // that repairs all of them together — each a job. Nothing is deleted
 // by a repair: edges are ended, items resolved, texts re-indexed from
 // their own artifact, stamps moved.
+//
+// The check reads every chunk (ten seconds on a large store), so the
+// page is drawn first and the panel filled in after; the result is kept
+// for the live refreshes of the page and asked for again after a repair,
+// on "check again", or when it is older than a few minutes.
+let health = null, healthAt = 0;
+const HEALTH_FRESH = 5 * 60 * 1000;
+
 function healthLines(h) {
-  if (!h) return "";
+  if (!h) return `<p class="muted">checking the store's health…</p>`;
   const rows = h.ailments.map((a) => `<li class="${a.count ? "" : "muted"}">
       <b>${a.count.toLocaleString()}${a.capped ? "+" : ""}</b> ${esc(a.name)}${a.count ? ` <span class="muted">— ${esc(a.what)}</span>` : ""}${a.count && !a.repairable ? ` <span class="muted">(${esc(a.fix)})</span>` : ""}${a.count && a.repairable ? ` <button type="button" class="linkish heal-one" data-check="${esc(a.name)}" title="${esc(a.fix)}">repair</button>` : ""}</li>`);
   const repairable = h.ailments.filter((a) => a.count && a.repairable).length;
   return `
-    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Health <span class="muted" style="font-weight:400;font-size:.85rem">${h.found ? `${h.found} thing${h.found > 1 ? "s" : ""} to look at` : "nothing to repair"} · checked ${esc((h.checked_at || "").replace("T", " ").slice(0, 16))}</span></h2>
+    <p class="muted" style="margin:0 0 .3rem">${h.found ? `${h.found} thing${h.found > 1 ? "s" : ""} to look at` : "nothing to repair"} · checked ${esc((h.checked_at || "").replace("T", " ").slice(0, 16))} · <button type="button" class="linkish" id="heal-check">check again</button></p>
     <ul class="servers">${rows.join("")}</ul>
     ${repairable > 1 ? `<p><button type="button" id="heal-now" class="secondary">Repair all ${repairable} together</button></p>` : ""}
     <p id="heal-msg" class="muted"></p>`;
 }
 
+function fillHealth() {
+  const box = document.getElementById("health");
+  if (!box) return;  // the page moved on
+  box.innerHTML = healthLines(health);
+  const heal = document.getElementById("heal-now");
+  if (heal) heal.addEventListener("click", () => healNow(heal, null));
+  const again = document.getElementById("heal-check");
+  if (again) again.addEventListener("click", () => { health = null; fillHealth(); checkHealth(); });
+  box.querySelectorAll(".heal-one").forEach((b) => b.addEventListener("click", () => healNow(b, [b.dataset.check])));
+}
+
+async function checkHealth() {
+  if (health && Date.now() - healthAt < HEALTH_FRESH) return;
+  let h;
+  try { h = await api("/heal", { examples: 0 }); } catch (_) { return; /* the panel keeps saying it is checking */ }
+  health = h;
+  healthAt = Date.now();
+  fillHealth();
+}
+
 // One heal request (every repairable ailment, or the one named) and its
 // outcome in the panel's message line; the page follows once the job is
-// through.
+// through, with the health checked again.
 async function healNow(button, checks) {
   const msg = document.getElementById("heal-msg");
   button.disabled = true;
@@ -1877,17 +1918,17 @@ async function healNow(button, checks) {
   try {
     const r = await post("/heal", checks ? { checks } : {});
     msg.textContent = Object.entries(r).map(([k, v]) => `${k}: ${typeof v === "string" ? v : `${v.repaired} of ${v.found}${v["left alone"] ? ` (${v["left alone"]} left alone)` : ""}`}`).join(" · ") || "nothing to repair";
+    health = null;
     setTimeout(() => render({ keepScroll: true }), 1500);
   } catch (err) { msg.textContent = err.message; button.disabled = false; }
 }
 
 async function viewJobs(p) {
-  view.innerHTML = `<p class="muted">Loading…</p>`;
-  let d, servers = [], readings = null, health = null;
+  loading();
+  let d, servers = [], readings = null;
   try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   try { servers = (await api("/models/servers")).servers; } catch (_) { /* the list is a nicety */ }
   try { readings = await api("/readings", { limit: 20 }); } catch (_) { /* so is this one */ }
-  try { health = await api("/heal", { examples: 0 }); } catch (_) { /* and this */ }
   const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
   view.innerHTML = `
     <p class="muted">The passes announce themselves here: the worker's session, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale; one gone for half an hour is closed.</p>
@@ -1898,10 +1939,10 @@ async function viewJobs(p) {
     ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the machine with the models: <code>scripts/work.py --watch</code> keeps captures moving.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>
     ${d.recent.length ? table(d.recent) : `<p class="muted">No finished jobs yet.</p>`}
-    ${healthLines(health)}`;
-  const heal = document.getElementById("heal-now");
-  if (heal) heal.addEventListener("click", () => healNow(heal, null));
-  view.querySelectorAll(".heal-one").forEach((b) => b.addEventListener("click", () => healNow(b, [b.dataset.check])));
+    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Health</h2>
+    <div id="health"></div>`;
+  fillHealth();
+  checkHealth();
 }
 
 // --------------------------------------------------------------- changes
@@ -1959,9 +2000,14 @@ async function render(opts) {
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === r.name));
   view.classList.remove("stage");  // the ask view widens the page; others get the default
   if (!(opts && opts.keepScroll)) window.scrollTo(0, 0);
-  if (r.name === "doc") return viewDoc(r.arg, r.params);
-  if (r.name === "graph") return viewGraph(r.arg, r.params);
-  return (views[r.name] || viewSearch)(r.params);
+  const key = `${r.name}/${r.arg || ""}`;
+  quiet = !!(opts && opts.keepScroll) && view.dataset.route === key;  // the same page, refreshed in place
+  view.dataset.route = key;
+  try {
+    if (r.name === "doc") return await viewDoc(r.arg, r.params);
+    if (r.name === "graph") return await viewGraph(r.arg, r.params);
+    return await (views[r.name] || viewSearch)(r.params);
+  } finally { quiet = false; }
 }
 
 document.getElementById("quick").addEventListener("submit", (e) => {
