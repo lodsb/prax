@@ -1912,9 +1912,25 @@ async function checkHealth() {
   fillHealth();
 }
 
+// After a repair only the repaired ailments are looked at again (GET
+// /heal?check=a,b) and put in place of their old rows: the others did not
+// change, and the glyph scan among them costs ten seconds.
+async function recheckHealth(names) {
+  if (!health || !names.length) return;
+  let h;
+  try { h = await api("/heal", { check: names.join(","), examples: 0 }); } catch (_) { return; }
+  const fresh = new Map(h.ailments.map((a) => [a.name, a]));
+  health = {
+    ...health,
+    ailments: health.ailments.map((a) => fresh.get(a.name) || a),
+    checked_at: h.checked_at,
+  };
+  health.found = health.ailments.filter((a) => a.count).length;
+}
+
 // One heal request (every repairable ailment, or the one named) and its
 // outcome in the panel's message line; the page follows once the job is
-// through, with the health checked again.
+// through, with the repaired ailments checked again.
 async function healNow(button, checks) {
   const msg = document.getElementById("heal-msg");
   button.disabled = true;
@@ -1922,7 +1938,7 @@ async function healNow(button, checks) {
   try {
     const r = await post("/heal", checks ? { checks } : {});
     msg.textContent = Object.entries(r).map(([k, v]) => `${k}: ${typeof v === "string" ? v : `${v.repaired} of ${v.found}${v["left alone"] ? ` (${v["left alone"]} left alone)` : ""}`}`).join(" · ") || "nothing to repair";
-    health = null;
+    await recheckHealth(checks || Object.keys(r));
     setTimeout(() => render({ keepScroll: true }), 1500);
   } catch (err) { msg.textContent = err.message; button.disabled = false; }
 }
