@@ -1681,7 +1681,7 @@ async function viewInbox(p) {
       <td class="muted">${esc(x.source)}${x.capture.by && x.capture.by !== x.source ? ` (${esc(x.capture.by)})` : ""}${x.capture.mode ? ` · ${esc(x.capture.mode)}` : ""}${x.capture.note && x.capture.mode !== "snapshot" ? `<br><small title="${esc(x.capture.note)}">${esc(x.capture.note.slice(0, 60))}</small>` : ""}</td>
       <td class="muted">${esc((x.domains || []).join(", ") || "all")}${x.recaptured ? ` <span title="sent again with the same text">·${x.recaptured + 1}×</span>` : ""}</td>
       <td class="muted">${esc((x.capture.at || "").slice(0, 16).replace("T", " "))}</td>
-      <td>${x.indexed ? (x.extracted ? "extracted" : "indexed") : `<span class="muted" title="registered; the inbox watcher on the batch host (scripts/inbox.py --watch --parse) extracts its text">pending</span>`}</td>
+      <td>${x.indexed ? (x.extracted ? "extracted" : "indexed") : x.tried ? `<span class="muted" title="every extractor tried it and found no text — a scan? OCR or the vision model can be asked for on its page (read again…)">no text found</span>` : `<span class="muted" title="registered; the worker (prax work --watch) extracts its text">pending</span>`}</td>
     </tr>`;
   view.innerHTML = `
     <form id="upload" class="search-form" autocomplete="off">

@@ -95,6 +95,15 @@ def do_parse(
                     ).strip()
             except Exception as exc:  # noqa: BLE001
                 last = (ext.stamp, f"{type(exc).__name__}: {exc}")
+                if ext is not exts[-1]:
+                    # the chain goes on; the door records this attempt too,
+                    # so it can see the chain was run and not hand the
+                    # document out again (a scan refused by the first
+                    # extractor, empty for the fallback, came back every
+                    # cycle otherwise)
+                    results.append(
+                        {"doc_id": doc_id, "extractor": ext.stamp, "error": last[1]}
+                    )
                 continue
             results.append(
                 {

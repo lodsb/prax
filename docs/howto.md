@@ -986,6 +986,7 @@ extension, a file in the drop folder — goes all the way on its own:
 | a title where the file name was one; the graph extraction under the current ontology; the typing rules over what it queued; the vectors | the worker's steps (titles, extract, embed) |
 | an image described, and a parsed document's figures read by the vision model | reading requests the door places itself, when the vision step is a local server — nothing is spent unasked; with Claude as the vision model these stay yours to ask for |
 | a request placed on a document's page ("read again…") | the worker, before the pending captures |
+| a capture nothing here could read — a scan without a text layer: the first extractor refuses it, the fallback finds nothing — is tried once and then left; the inbox says "no text found" and the Health panel lists it (`unreadable-documents`); OCR or the vision model over its pages is yours to ask for on its page | the door, which does not hand a run chain out again |
 | jobs whose process is gone closed; the drop folder consumed | the door |
 
 What stays a command or a click, because it costs money, time or a
@@ -1102,6 +1103,7 @@ you still want to look at) stays alone.
 | `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |
 | `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time, or `--upgrade` at once (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
+| `unreadable-documents` | documents every extractor here has tried and found no text in (scans without a text layer); they wait and are not tried again | a report: ask for OCR or the vision model on the document's page ("read again…") or retire it |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
 
 What the cleaning does not do: a glyph the PDF's font gave no name at

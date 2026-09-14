@@ -381,3 +381,47 @@ def test_a_backlog_pass_re_reads_what_a_revised_extractor_would_read_differently
     assert hist[-1]["outcome"] == "upgraded" and len(hist[-1]["text_hash"]) == 64
     old_text = store.documents._read_archive(hist[-1]["text_hash"])
     assert old_text.decode("utf-8").startswith("Second words.")
+
+
+def _blank_pdf() -> bytes:
+    fitz = pytest.importorskip("pymupdf")
+    doc = fitz.open()
+    doc.new_page()
+    return doc.tobytes()
+
+
+def test_a_capture_nothing_could_read_is_tried_once_and_then_left_alone(
+    client: TestClient,
+) -> None:
+    """A scan without a text layer: the first extractor refuses it, the
+    fallback finds nothing. The worker reports both attempts, so the door
+    sees the chain was run, stops handing the document out (it used to
+    come back every cycle, and ten of them filled every batch) and the
+    inbox and the health panel say what happened."""
+    from prax.parsers import queue
+
+    con = client.app.state.con
+    scan = inbox.ingest_upload(con, _blank_pdf(), filename="scan.pdf")
+    items = client.get("/work/parse").json()["items"]
+    assert [i["doc_id"] for i in items] == [scan.doc_id]
+    work._leases.clear()
+    out = worker.run_once(_door(client), steps=("parse",), log_=lambda t: None)
+    assert "empty" in out["parse"]
+    hist = store.get_meta(con, scan.doc_id)["parse_history"]
+    assert [h["extractor"].split("/")[0] for h in hist] == ["pymupdf4llm", "pymupdf"]
+    assert "error" in hist[0] and hist[1]["outcome"] == "empty"
+    assert queue._seen(store.get_meta(con, scan.doc_id), hist[0]["extractor"])
+    work._leases.clear()
+    assert client.get("/work/parse").json()["items"] == []
+    # the inbox says so, and a reading asked for on its page goes out
+    row = next(r for r in inbox.recent(con) if r["doc_id"] == scan.doc_id)
+    assert row["indexed"] is False and row["tried"] == "empty"
+    store.request_reading(con, scan.doc_id, "vision-pages", by="human")
+    work._leases.clear()
+    items = client.get("/work/parse").json()["items"]
+    assert [i["extractor"] for i in items] == ["vision-pages"]
+    store.cancel_reading(con, scan.doc_id)
+    found = client.get("/heal", params={"check": "unreadable-documents"}).json()
+    ailment = found["ailments"][0]
+    assert ailment["count"] == 1 and not ailment["repairable"]
+    assert ailment["examples"][0]["id"] == scan.doc_id

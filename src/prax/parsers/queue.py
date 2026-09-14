@@ -69,12 +69,16 @@ def _seen(meta: dict[str, Any], stamp: str) -> bool:
     ``upgraded``/``created`` entry changes ``text_source``, so such documents
     leave the selection by themselves. A refusal for the OCR page budget is
     not an attempt — nothing was read — so a run with a bigger budget gets
-    another go."""
+    another go; nor is a worker that could not fetch the original."""
     return any(
         h.get("extractor") == stamp
         and (
             h.get("outcome") in ("kept", "empty")
-            or ("error" in h and "OCR budget" not in str(h.get("error") or ""))
+            or (
+                "error" in h
+                and "OCR budget" not in str(h.get("error") or "")
+                and not str(h.get("error") or "").startswith("fetch:")
+            )
         )
         for h in meta.get("parse_history", [])
     )

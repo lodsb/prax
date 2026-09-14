@@ -282,6 +282,37 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return [dict(r) for r in rows if not parsers.candidates((r["mime"] or "").strip())]
 
 
+def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents without text whose every extractor has tried and found
+    none (kept, empty or an error under its current stamp): scans without
+    a text layer, mostly. The door does not hand them out again."""
+    from prax import parsers
+    from prax.parsers import queue
+
+    out = []
+    rows = con.execute(
+        "SELECT id, title, mime, meta FROM documents WHERE text_hash IS NULL"
+        "   AND json_extract(meta, '$.retired') IS NULL"
+        "   AND json_extract(meta, '$.parse_history') IS NOT NULL"
+        " ORDER BY id LIMIT ?",
+        (CAP,),
+    ).fetchall()
+    for r in rows:
+        exts = parsers.candidates((r["mime"] or "").strip())
+        meta = json.loads(r["meta"] or "{}")
+        if exts and any(queue._seen(meta, e.stamp) for e in exts):
+            last = (meta.get("parse_history") or [])[-1]
+            out.append(
+                {
+                    "id": r["id"],
+                    "title": r["title"],
+                    "mime": r["mime"],
+                    "last": last.get("outcome") or last.get("error"),
+                }
+            )
+    return out
+
+
 def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents whose text still holds ligature or Symbol-font code
     points: indexed before ``prax.glyphs`` cleaned every text."""
@@ -556,6 +587,18 @@ AILMENTS: tuple[Ailment, ...] = (
             " repair in the store"
         ),
         find=_unparsable_documents,
+    ),
+    Ailment(
+        name="unreadable-documents",
+        what=(
+            "documents every extractor here has tried and found no text in"
+            " (scans without a text layer): they wait, and are not tried again"
+        ),
+        fix=(
+            "ask for OCR or the vision model on the document's page ('read"
+            " again…', howto 3b) or retire it; nothing to repair in the store"
+        ),
+        find=_unreadable_documents,
     ),
     Ailment(
         name="unmapped-glyphs",

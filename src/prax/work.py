@@ -229,7 +229,10 @@ def hand_out(
                 if (doc["mime"] or "").startswith("image/") and _vision_is_free():
                     _ask_reading(con, doc_id, "vision")
                 continue
-            if queue._seen(doc["meta"], exts[0].stamp):
+            if any(queue._seen(doc["meta"], e.stamp) for e in exts):
+                # the chain was run and found nothing (a scan without a
+                # text layer): a reading asked for on its page — OCR, the
+                # vision model — is the way on, not another round
                 continue
             path = doc.get("original_path")
             items.append(

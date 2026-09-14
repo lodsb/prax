@@ -597,6 +597,14 @@ def pending_captures(con: sqlite3.Connection) -> list[int]:
 # ------------------------------------------------------------- the list
 
 
+def _tried(meta: dict[str, Any]) -> str | None:
+    history = meta.get("parse_history") or []
+    if not history:
+        return None
+    last = history[-1]
+    return str(last.get("outcome") or ("error" if "error" in last else "")) or None
+
+
 def recent(con: sqlite3.Connection, *, limit: int = 50) -> list[dict[str, Any]]:
     """The latest captures with their state: indexed, extracted, domains."""
     rows = con.execute(
@@ -621,6 +629,9 @@ def recent(con: sqlite3.Connection, *, limit: int = 50) -> list[dict[str, Any]]:
                 "tags": meta.get("tags") or [],
                 "indexed": bool(r["text_hash"]),
                 "extracted": bool(meta.get("extraction")),
+                # what the last parse attempt said when there is no text yet
+                # ("empty": every extractor was tried; a scan, most likely)
+                "tried": _tried(meta) if not r["text_hash"] else None,
                 "previous_capture": meta.get("previous_capture"),
                 "recaptured": len(meta.get("recaptured") or []),
             }
