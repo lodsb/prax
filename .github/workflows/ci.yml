@@ -1,7 +1,7 @@
 # What a stranger's machine would find: the suite on Linux and Windows,
 # and the README's quick start in a fresh venv (scripts/smoke.sh). No
-# model runs, no money; the smoke fetches the embedder once (a small ONNX
-# file from the Hugging Face hub).
+# model runs, no money, nothing fetched but the packages from PyPI (a
+# fresh store has no vectors, so a search never loads the embedder).
 name: ci
 
 on:

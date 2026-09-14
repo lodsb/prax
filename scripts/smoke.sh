@@ -12,10 +12,11 @@
 # What it checks, in the README's order: pip install -e ".[serve,work,dev]"
 # into a new venv; `prax --version`; `prax serve` on an empty data
 # directory answers /health; `prax status`, `prax` alone; `prax add` of a
-# Markdown note is searchable at once (`prax search`, hybrid — the first
-# search fetches the embedder's model, so the network is needed once);
-# `prax models`; `prax doctor`; the door stops cleanly. The worker's steps
-# and the models are not run: those are the tests' and the howto's.
+# Markdown note is searchable at once (`prax search`: keywords, since a
+# fresh store has no vectors and the embedder is never loaded — nothing is
+# fetched but the packages); `prax models`; `prax doctor`; the door stops
+# cleanly. The worker's steps and the models are not run: those are the
+# tests' and the howto's.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -75,7 +76,7 @@ orthogonal matrix, so energy is preserved and the response is dense.
 EOF
 "$PRAX" add "$(native "$TMP/note.md")" --title "A feedback delay network"
 
-step "prax search finds it (hybrid: the first search fetches the embedder)"
+step "prax search finds it (keywords: a fresh store has no vectors to search)"
 "$PRAX" search feedback delay network | tee "$TMP/search.txt"
 grep -qi "feedback delay network" "$TMP/search.txt" || fail "the note is not in the hits"
 
