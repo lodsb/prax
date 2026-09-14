@@ -146,26 +146,32 @@ Nothing is spent unasked, and private material never has to leave the
 house: a whole library was read by a local model on one card, and the
 measurements comparing it with the hosted one are in [`docs/eval/`](docs/eval/).
 
-## What it holds today
+## One library, as an example
 
-One library, September 2026 (`prax status` prints this from the live
-store):
+What the passes leave behind, on one real instance: a researcher's
+library on 15 September 2026, as `prax status` prints it. The numbers
+are here for scale — what a personal library looks like after a Zotero
+import, a year of browser captures and a few weeks of passes — not as
+targets.
 
 | | |
 |---|---|
-| Documents | 9,690 (9,229 PDFs, 278 web pages, 103 text files, 73 notes, 3 images, one wiki page); 8,947 with text; 385 came in through the drop folder, the UI or the browser extension |
-| Chunks and vectors | 895,000 chunks (808,000 text, 45,000 figure captions, 36,000 tables, 6,900 code blocks), all with vectors; 9,620 document vectors; 5,887 acronyms |
-| Graph | 124,300 live edges: 61,000 by a local model, 19,300 by Sonnet 5, 25,600 citations, 10,600 by typing rules, 6,800 from Zotero |
-| Entities | 39,400 papers, 27,000 concepts, 15,900 methods, 8,900 authors, 7,900 tools, 4,000 claims, 2,500 organizations, 1,300 venues; 6,900 merged aliases |
-| Ontology | six modules — core, research, studio, and craft with kitchen and workshop on top of it; 9,586 documents in the research domain, 20 in studio, 12 in workshop, 3 in kitchen |
+| Documents | 9,950: 9,447 PDFs, 318 web pages, 103 text files, 73 notes, 3 images, one wiki page. 9,233 came from Zotero, 428 were uploaded, 283 sent from the browser, 3 dropped in the folder; 72 are retired duplicates of a page sent twice |
+| Text | 9,227 documents with text. 360 scans read by OCR, 68 of them Arabic in reading order; 715 documents nothing here could read yet (scans without a text layer, waiting for an OCR or vision request); every text cleaned of ligature and Symbol-font glyphs on the way in |
+| Chunks and vectors | 995,000 chunks — 859,000 text, 92,000 figures, 37,000 tables, 6,950 code blocks — every one with a vector (a 1.0 GB index), plus 9,878 document vectors; 5,887 acronyms the library defines |
+| Figures and images | 92,000 figure references found in 3,968 PDFs and 162 web pages, each served out of the original; 10,982 of them, in 1,444 documents, read by the local vision model, the reading under the image and searchable; a schematic read by two vision models, each reading kept |
+| Graph | 146,800 live edges: 65,000 by the local Qwen3.6-35B-A3B, 25,600 Crossref citations, 19,300 by Sonnet 5, 19,100 by the typing rules, 6,600 by the local typing pass, 6,800 from Zotero, 4,100 by replay after an ontology change |
+| Entities | 133,000: 42,600 papers, 29,600 concepts, 17,100 methods, 9,500 authors, 8,900 tools, 5,400 organizations, 4,100 claims, 2,700 people, 1,900 venues, 823 datasets; 6,900 merged aliases |
+| Ontology | six modules — core, research, studio, and craft with kitchen and workshop on top of it; 9,844 documents read against research, 20 studio, 12 workshop, 3 kitchen |
+| Extraction | 8,674 documents summarised and read into the graph, by the local model or Sonnet 5; 6 promoted to Sonnet's closer read |
+| Review queue | 4,093 open items — down from 25,700 once the typing rules and the local typing pass had been over it — the evidence the next ontology change is drawn from |
 | Retrieval, 62 queries over the library | MRR 0.905 hybrid (0.82 keyword, 0.79 vector); hit@1 0.85 |
-| Extraction | every document with text read by a local Qwen3.6-35B-A3B on an RTX 4090 or by Sonnet 5; 71 scanned books (17,000 pages) being read by OCR as this is written |
-| Review queue | 25,700 open items: the evidence the next ontology change is drawn from |
+| Running | on one Windows desktop: the door, the worker and llama-server as logon tasks; a backlog pass and the maintenance pass at 03:00, a backup at 04:30; a 2.0 GB database and a 20 GB archive of originals |
 
 Not built: the move of the service onto the serving board (the code is
 in place, [`deploy/`](deploy/); the move is not made). The browser extension is
-hand-tested in Firefox and Waterfox. Checklists with dates and the
-planned passes: [`docs/PLAN.md`](docs/PLAN.md).
+hand-tested in Firefox, Waterfox and Chrome. Checklists with dates and
+the planned passes: [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Where it sits among the others
 
