@@ -1666,36 +1666,65 @@ async function viewInbox(p) {
       <button>Fetch</button>
     </form>
     <p class="muted">Drop folder on the server: <code>${esc(d.inbox_dir)}</code> (a file in <code>inbox/&lt;domain&gt;/</code> lands in that domain; <code>scripts/inbox.py --watch --parse</code> consumes it).</p>
-    <p id="inbox-msg"></p>
+    <p id="inbox-msg">${inboxReport}</p>
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Recent captures (${d.recent.length})</h2>
     ${d.recent.length ? `<table class="doc-list"><thead><tr><th>document</th><th>source</th><th>domains</th><th>when</th><th>state</th></tr></thead><tbody>${d.recent.map(row).join("")}</tbody></table>` : `<p class="muted">Nothing captured yet.</p>`}`;
-  const msg = document.getElementById("inbox-msg");
   const chosenDomains = () => [...view.querySelectorAll("#up-domains input:checked")].map((i) => i.value);
-  const report = (results) => {
-    msg.innerHTML = results.map((r) => r.error ? `<span class="error">${esc(r.name)}: ${esc(r.error)}</span>` : `${esc(r.name)} → <a href="#doc/${r.doc_id}">doc ${r.doc_id}</a>${r.duplicate_of ? " (the same page again)" : r.created ? "" : " (already in the store)"}${r.replaced ? `, replaces doc ${r.replaced}` : ""}${r.indexed ? ", searchable" : ", waiting for the parse queue"}`).join("<br>");
+  // The message box is looked up at report time: the view may have been
+  // re-rendered meanwhile (the change poll), and a captured element would
+  // then be a detached one that nobody sees.
+  const msgBox = () => document.getElementById("inbox-msg");
+  const line = (r) => r.error
+    ? `<span class="error">${esc(r.name)}: ${esc(r.error)}</span>`
+    : `${esc(r.name)} → <a href="#doc/${r.doc_id}">doc ${r.doc_id}</a>${r.duplicate_of ? " (the same page again)" : r.created ? "" : " (already in the store)"}${r.replaced ? `, replaces doc ${r.replaced}` : ""}${r.indexed ? ", searchable" : ", waiting for the parse queue"}`;
+  const report = (results, done, total) => {
+    const box = msgBox();
+    if (!box) return;
+    const n = results.length;
+    const failed = results.filter((r) => r.error);
+    const fresh = results.filter((r) => !r.error && r.created).length;
+    const known = results.filter((r) => !r.error && !r.created).length;
+    const summary = n > 1
+      ? `<b>${done ? "Done:" : "Uploading:"}</b> ${n} of ${total} file${total === 1 ? "" : "s"} — ${fresh} new, ${known} already in the store${failed.length ? `, <span class="error">${failed.length} failed</span>` : ""}. ${done ? "The parse queue reads the new ones; the list below follows." : ""}`
+      : "";
+    // every failure in full; successes in full up to a screen, then folded
+    const shown = n <= 40 ? results : [...failed, ...results.filter((r) => !r.error).slice(0, 12)];
+    const rest = n - shown.length;
+    inboxReport = summary + (summary && shown.length ? "<br>" : "") + shown.map(line).join("<br>")
+      + (rest > 0 ? `<br><span class="muted">… and ${rest} more (all in the list below once parsed)</span>` : "");
+    box.innerHTML = inboxReport;  // and kept across the view's re-renders (inboxReport)
   };
   async function upload(files) {
     if (!files.length) return;
-    setStatus("uploading…");
+    // what the form says, read once: the view may re-render during a long batch
+    const title = files.length === 1 ? (document.getElementById("up-title").value || "").trim() : "";
+    const doms = chosenDomains();
+    const tags = (document.getElementById("up-tags").value || "").trim();
+    uploading = true;
     const results = [];
-    for (const f of files) {
-      const fd = new FormData();
-      fd.append("file", f, f.name);
-      if (files.length === 1 && document.getElementById("up-title").value.trim()) fd.append("title", document.getElementById("up-title").value.trim());
-      const doms = chosenDomains();
-      if (doms.length) fd.append("domains", doms.join(","));
-      const tags = document.getElementById("up-tags").value.trim();
-      if (tags) fd.append("tags", tags);
-      try {
-        const res = await fetch("/ingest/file", { method: "POST", body: fd });
-        if (res.status === 401) { askForToken(); throw new Error("access token required"); }
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.detail || res.statusText);
-        results.push({ name: f.name, ...data });
-      } catch (err) { results.push({ name: f.name, error: err.message }); }
+    const total = files.length;
+    try {
+      for (const [i, f] of files.entries()) {
+        setStatus(`uploading ${i + 1} of ${total}…`);
+        const fd = new FormData();
+        fd.append("file", f, f.name);
+        if (title) fd.append("title", title);
+        if (doms.length) fd.append("domains", doms.join(","));
+        if (tags) fd.append("tags", tags);
+        try {
+          const res = await fetch("/ingest/file", { method: "POST", body: fd });
+          if (res.status === 401) { askForToken(); throw new Error("access token required"); }
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.detail || res.statusText);
+          results.push({ name: f.name, ...data });
+        } catch (err) { results.push({ name: f.name, error: err.message }); }
+        if (i % 10 === 9) report(results, false, total);
+      }
+    } finally {
+      uploading = false;
     }
-    setStatus("");
-    report(results);
+    setStatus(`uploaded ${total} file${total === 1 ? "" : "s"}`);
+    report(results, true, total);
     refreshList();
   }
   let pendingTimer = null;
@@ -1728,9 +1757,9 @@ async function viewInbox(p) {
     const body = { url, title: document.getElementById("fetch-title").value.trim() || null, domains: chosenDomains().length ? chosenDomains() : null };
     try {
       const data = await post("/ingest/url", body);
-      report([{ name: url, ...data }]);
+      report([{ name: url, ...data }], true, 1);
       refreshList();
-    } catch (err) { report([{ name: url, error: err.message }]); }
+    } catch (err) { report([{ name: url, error: err.message }], true, 1); }
   });
 }
 
@@ -1823,9 +1852,11 @@ async function viewJobs(p) {
 
 const LIVE_VIEWS = new Set(["inbox", "browse", "doc", "review", "promote", "jobs", "pages"]);
 let lastStamp = null;
+let uploading = false;  // an upload batch in flight: the inbox view must not be re-rendered under it
+let inboxReport = "";  // the last upload's summary, shown until the next one
 function typing() {
   const el = document.activeElement;
-  return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") || !!route().params.edit;
+  return uploading || !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") || !!route().params.edit;
 }
 function setJobsBadge(n) {
   const b = document.getElementById("jobs-badge");
