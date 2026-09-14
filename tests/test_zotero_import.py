@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -279,3 +280,57 @@ def test_missing_file_is_reported_not_fatal(
     doc = store.get_document(con, _docs_by_key(con)["GMY9D9QD"])
     assert doc["mime"] == "text/plain" and doc["meta"]["zotero"]["kind"] == "metadata"
     assert "POLYNOMIAL TRANSITION REGIONS" in doc["text"]
+
+
+# ------------------------------------------------------------ the door
+
+
+def test_the_library_goes_through_the_door_as_the_command_sends_it(
+    tmp_path: Path, lib: zotero.Library, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``prax import zotero``: the plan is made here over the copy, each
+    document travels as a form — the planned item, the file, Zotero's
+    cached text — and the door applies it as the importer would; a second
+    run is skipped by the door, a changed record refreshed."""
+    import json
+
+    from fastapi.testclient import TestClient
+
+    from prax.api import app
+
+    def send(door: TestClient, p: zotero.Planned) -> dict[str, Any]:
+        data, text = zotero.load(p) if not p.missing else (None, None)
+        files = {"file": (p.path.name, data, p.mime)} if data is not None else None
+        fields: dict[str, Any] = {"item": json.dumps(p.to_wire())}
+        if text is not None:
+            fields["cache_text"] = text
+        return door.post("/import/zotero/item", data=fields, files=files).json()
+
+    with TestClient(app) as door:
+        con = door.app.state.con
+        planned = list(zotero.plan(lib))
+        actions = [send(door, p)["action"] for p in planned]
+        assert sorted(actions) == sorted(["created"] * 12 + ["merged"] * 3)
+        assert _n_docs(con) == N_DOCS
+        by_key = _docs_by_key(con)
+        assert {by_key[k] for k in RUTZ_ATTACHMENTS} == {by_key["FBT2AP8S"]}
+        # the cache text was indexed, not parsed
+        hits = store.search(con, "polynomial transition regions")
+        assert hits and store.get_meta(con, hits[0]["doc_id"])["text_source"] == (
+            "zotero-ft-cache"
+        )
+        assert _n_edges(con) > 0
+        # again: the door knows what it has
+        again = [send(door, p)["action"] for p in planned]
+        assert set(again) == {"skipped"} and _n_docs(con) == N_DOCS
+        # a changed record: refreshed
+        doc_id = by_key[AMBRITS]
+        old = store.get_meta(con, doc_id)
+        old["zotero"]["modified"][AMBRITS] = "1999-01-01 00:00:00"
+        store.set_meta(con, doc_id, old)
+        one = next(p for p in planned if p.key == AMBRITS)
+        assert send(door, one)["action"] == "refreshed"
+        # what is not a planned item, and an attachment without its file
+        assert door.post("/import/zotero/item", data={"item": "{}"}).status_code == 400
+        bare = {"item": json.dumps({**one.to_wire(), "key": "NEWKEY01"})}
+        assert door.post("/import/zotero/item", data=bare).status_code == 400

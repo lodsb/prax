@@ -157,6 +157,63 @@ class Planned:
     text: str | None = None  # inline text for url / metadata / note documents
     missing: bool = False  # file referenced but absent
 
+    def to_wire(self) -> dict[str, Any]:
+        """What the door needs to apply this item, without the file: the
+        bytes and the cache text travel beside it (``prax import zotero``)."""
+        return {
+            "kind": self.kind,
+            "key": self.key,
+            "title": self.title,
+            "mime": self.mime,
+            "source_url": self.source_url,
+            "meta": self.meta,
+            "date_modified": self.date_modified,
+            "text": self.text,
+            "missing": self.missing,
+            "original_path": str(self.path) if self.path else None,
+            "creators": list(self.item.creators) if self.item else [],
+        }
+
+    @classmethod
+    def from_wire(cls, data: dict[str, Any]) -> Planned:
+        """The door's side of ``to_wire``; the creators come back as a
+        minimal item, enough for the edges."""
+        creators = list(data.get("creators") or [])
+        item = None
+        if creators:
+            item = Item(
+                id=0,
+                key=str(data["key"]),
+                type="",
+                date_added="",
+                date_modified=str(data.get("date_modified") or ""),
+                fields={"title": str(data.get("title") or "")},
+                creators=creators,
+                tags=[],
+                collections=[],
+            )
+        return cls(
+            kind=str(data["kind"]),
+            key=str(data["key"]),
+            title=str(data.get("title") or ""),
+            mime=str(data.get("mime") or "application/octet-stream"),
+            source_url=data.get("source_url"),
+            meta=dict(data.get("meta") or {}),
+            date_modified=str(data.get("date_modified") or ""),
+            item=item,
+            path=Path(data["original_path"]) if data.get("original_path") else None,
+            text=data.get("text"),
+            missing=bool(data.get("missing")),
+        )
+
+
+def load(p: Planned) -> tuple[bytes | None, str | None]:
+    """The attachment's bytes and Zotero's cached text for it, read from
+    the library on disk; nothing for the inline kinds."""
+    if p.path is None:
+        return None, None
+    return p.path.read_bytes(), _read_cache_text(p.path)
+
 
 # ----------------------------------------------------------------- reading
 
@@ -663,18 +720,51 @@ def _seed_edges(con: sqlite3.Connection, p: Planned, doc_id: int, version: str) 
     return n
 
 
+class KnownKeys:
+    """``{zotero key: doc id}`` answered by the store as asked, for the
+    door, which cannot hold the whole index across requests."""
+
+    def __init__(self, con: sqlite3.Connection) -> None:
+        self.con = con
+
+    def __contains__(self, key: object) -> bool:
+        return self.get(str(key)) is not None
+
+    def __getitem__(self, key: str) -> int:
+        doc_id = self.get(key)
+        if doc_id is None:
+            raise KeyError(key)
+        return doc_id
+
+    def __setitem__(self, key: str, doc_id: int) -> None:
+        pass  # the store has it now
+
+    def get(self, key: str) -> int | None:
+        row = self.con.execute(
+            "SELECT id FROM documents WHERE EXISTS"
+            " (SELECT 1 FROM json_each(meta, '$.zotero.keys') WHERE value = ?)"
+            " ORDER BY id LIMIT 1",
+            (key,),
+        ).fetchone()
+        return int(row[0]) if row else None
+
+
 def apply(
     con: sqlite3.Connection,
     p: Planned,
-    known: dict[str, int],
+    known: Any,
     *,
     version: str,
     report: Report,
+    data: bytes | None = None,
+    text: str | None = None,
 ) -> str:
     """Write one planned document; return the action taken.
 
     ``known`` maps already-imported Zotero keys to document ids and is
-    updated in place.
+    updated in place (a dict for a run over the library, ``KnownKeys``
+    on the door). An attachment's ``data`` and cache ``text`` are read
+    from ``p.path`` when not given (the door gets them from the client).
     """
     if p.missing:
         report.actions["missing"] += 1
@@ -698,14 +788,15 @@ def apply(
         return "refreshed"
 
     if p.path is not None:
-        data = p.path.read_bytes()
-        text = _read_cache_text(p.path)
+        if data is None:
+            data, text = load(p)
         original_path = str(p.path)
     else:
         assert p.text is not None
         data = p.text.encode("utf-8")
         text = p.text
         original_path = None
+    assert data is not None
     if p.kind == "attachment" and text is None:
         meta["text_source"] = None
     r = store.register(

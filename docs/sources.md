@@ -193,12 +193,14 @@ attachment, `original_path` the file's path under `storage/`.
 
 1. Copy `zotero.sqlite` and the `storage/` tree (or mount the disk
    read-only).
-2. `python scripts/import_zotero.py <copy-dir> --dry-run` prints the
-   inventory: items by type, attachments by link mode, files referenced but
-   missing, and duplicate hashes across items. Nothing is written.
-3. `python scripts/import_zotero.py <copy-dir> --commit` registers
-   documents through the store. Safe to interrupt and re-run.
-4. Run the parse queue on the batch host.
+2. `prax import zotero <copy-dir> --dry-run` prints the inventory:
+   items by type, attachments by link mode, files referenced but
+   missing, and duplicate hashes across items. Nothing is sent.
+3. `prax import zotero <copy-dir>` sends each planned document to the
+   door, which registers it through the store. Safe to interrupt and
+   re-run.
+4. A worker parses what came without Zotero's cached text
+   (`prax work --scope all`).
 
 ### Test fixture
 

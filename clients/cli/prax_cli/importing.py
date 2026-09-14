@@ -17,7 +17,7 @@ from . import out
 if TYPE_CHECKING:
     from prax.importers import feed
 
-WHAT = ("github", "chat", "links", "project", "claude", "citations")
+WHAT = ("github", "chat", "links", "project", "claude", "citations", "zotero")
 
 
 def import_(door: Door, a: Any) -> int:
@@ -33,8 +33,69 @@ def import_(door: Door, a: Any) -> int:
         return _claude(door, a)
     if a.what == "citations":
         return _citations(door, a)
+    if a.what == "zotero":
+        return _zotero(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
+
+
+def _zotero(door: Door, a: Any) -> int:
+    """A Zotero library into the door: planned here over a copy of its
+    database, applied there one document at a time (POST
+    /import/zotero/item). Safe to interrupt and run again: what the
+    door has is skipped, a changed record is refreshed."""
+    from collections import Counter
+
+    from prax.importers import zotero
+
+    if len(a.files) != 1:
+        out.fail("prax import zotero <the Zotero data directory>")
+        return 2
+    zotero_dir = Path(a.files[0]).expanduser()
+    if not (zotero_dir / "zotero.sqlite").is_file():
+        out.fail(f"no zotero.sqlite in {zotero_dir}")
+        return 2
+    lib = zotero.open_library(zotero_dir)  # a copy, opened read-only
+    try:
+        if a.dry_run:  # the census: nothing sent, nothing written
+            print(zotero.inventory(lib, limit=a.limit).report(), flush=True)
+            return 0
+        planned = list(zotero.plan(lib))
+        if a.limit:
+            planned = planned[: a.limit]
+        out.say(
+            out.bold("Zotero") + out.dim(f"   {len(planned)} planned · {door.base_url}")
+        )
+        actions: Counter[str] = Counter()
+        edges = 0
+        errors: list[str] = []
+        for n, p in enumerate(planned, 1):
+            data, text = zotero.load(p) if not p.missing else (None, None)
+            files = None
+            if data is not None:
+                files = {"file": (p.path.name if p.path else "file", data, p.mime)}
+            fields: dict[str, Any] = {"item": json.dumps(p.to_wire())}
+            if text is not None:
+                fields["cache_text"] = text
+            try:
+                r = door.post_form("/import/zotero/item", fields, files=files)
+                actions[r["action"]] += 1
+                edges += int(r.get("edges") or 0)
+            except Exception as exc:  # noqa: BLE001 - keep going; listed at the end
+                errors.append(f"{p.key}: {exc}")
+                actions["error"] += 1
+            if n % 50 == 0 and not a.quiet:
+                out.hint(f"  {n}/{len(planned)}: {dict(actions)}")
+        out.say(
+            "  "
+            + ", ".join(f"{v} {k}" for k, v in sorted(actions.items()))
+            + f"; {edges} authored_by edges"
+        )
+        for e in errors[:20]:
+            out.hint("  " + e)
+        return 1 if errors else 0
+    finally:
+        lib.close()
 
 
 def _citations(door: Door, a: Any) -> int:

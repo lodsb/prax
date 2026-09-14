@@ -111,16 +111,21 @@ a set.
 
 ## 3a. Importing the Zotero library
 
-The importer never opens the live `zotero.sqlite`; it copies the file into
-`<data dir>/zotero-import/` and opens the copy read-only. Everything goes
-through `prax.store`. Details of the mapping: `docs/sources.md` §1.
+The importer never opens the live `zotero.sqlite`; it copies the file
+into a work directory and opens the copy read-only. The plan is made on
+the machine with the library, each document travels to the door as one
+request (the record, the file, Zotero's cached text), and the door
+writes it through `prax.store` (`POST /import/zotero/item`) — so the
+library may live on another machine than the store. Details of the
+mapping: `docs/sources.md` §1.
 
-    # read-only census; nothing is written. --hash adds sha256 dedupe (reads every file)
-    python scripts/import_zotero.py /path/to/Zotero --dry-run
-    # trial run, then the whole library. Re-runs skip what is already imported.
-    $env:PRAX_DATA_DIR = "C:\prax-data"
-    python scripts/import_zotero.py /path/to/Zotero --commit --limit 500
-    python scripts/import_zotero.py /path/to/Zotero --commit --quiet
+    prax import zotero /path/to/Zotero --dry-run     # the census; nothing is sent
+    prax import zotero /path/to/Zotero -n 500        # a trial run, then
+    prax import zotero /path/to/Zotero               # the whole library
+
+Re-runs skip what the door already has and refresh a record that
+changed, so an interrupted run is simply started again. The worker
+parses what came without cached text (`prax work --scope all`).
 
 The test fixture in `tests/fixtures/zotero/` is regenerated with
 `scripts/make_zotero_fixture.py` (the exact command is in its docstring).

@@ -168,7 +168,9 @@ def build_parser() -> argparse.ArgumentParser:
             " said, not what was run: tool calls and results are left out), one"
             " document each. citations: the citation network from OpenAlex or"
             " Crossref, fetched by the door for the documents not looked up yet."
-            " Every run skips what the library already has."
+            " zotero: a Zotero data directory, planned here over a copy of its"
+            " database, each document sent to the door. Every run skips what the"
+            " library already has."
         ),
         epilog=(
             "examples:\n"
@@ -179,7 +181,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  prax import links reading.txt --dry-run\n"
             "  prax import project . --domain workshop --refresh\n"
             "  prax import claude . --since 2026-09-01 --dry-run\n"
-            "  prax import citations --source crossref -n 50"
+            "  prax import citations --source crossref -n 50\n"
+            "  prax import zotero ~/Zotero --dry-run"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

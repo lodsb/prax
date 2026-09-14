@@ -73,6 +73,18 @@ class Door:
     def get_bytes(self, path: str) -> bytes:
         return self._check(self.client.get(path, headers=self.headers)).content
 
+    def post_form(
+        self,
+        path: str,
+        fields: dict[str, Any],
+        files: dict[str, tuple[str, bytes, str]] | None = None,
+    ) -> Any:
+        """A multipart POST: form fields and, when given, files as
+        ``{field: (name, bytes, media type)}``."""
+        return self._check(
+            self.client.post(path, data=fields, files=files, headers=self.headers)
+        ).json()
+
     def upload(self, path: Path, fields: dict[str, str]) -> Any:
         with path.open("rb") as fh:
             files = {

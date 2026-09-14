@@ -6,6 +6,7 @@ handlers; prax.store serializes access.
 
 from __future__ import annotations
 
+import json
 import logging
 import socket
 import threading
@@ -597,6 +598,43 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
 
     threading.Thread(target=run, name="resolve", daemon=True).start()
     return {"plan": tiers, "applied": True, "job": job.id}
+
+
+@app.post("/import/zotero/item")
+async def import_zotero_item(
+    request: Request,
+    item: Annotated[str, Form()],
+    file: Annotated[UploadFile | None, File()] = None,
+    cache_text: Annotated[str | None, Form()] = None,
+) -> dict[str, Any]:
+    """One planned Zotero document (``importers.zotero.Planned.to_wire``)
+    with its attachment's bytes and Zotero's cached text for it: the
+    door writes it as the importer would — created, merged into the
+    document that already holds the bytes, refreshed when the record
+    changed, skipped when it did not, or missing. The client plans over
+    a copy of ``zotero.sqlite`` (``prax import zotero``); the door never
+    sees the library."""
+    from prax.importers import zotero
+
+    try:
+        planned = zotero.Planned.from_wire(json.loads(item))
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(400, f"not a planned item: {exc}") from exc
+    data = await file.read() if file is not None else None
+    if planned.path is not None and data is None and not planned.missing:
+        raise HTTPException(400, "an attachment needs its file")
+    con = _con(request)
+    report = zotero.Report()
+    action = zotero.apply(
+        con,
+        planned,
+        zotero.KnownKeys(con),
+        version=ontology.current().version,
+        report=report,
+        data=data,
+        text=cache_text,
+    )
+    return {"action": action, "edges": report.edges, "key": planned.key}
 
 
 class CitationsReq(BaseModel):
