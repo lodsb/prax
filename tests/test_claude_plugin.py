@@ -99,9 +99,10 @@ def test_the_session_end_hook_syncs_only_projects_that_opted_in(
 def test_the_hook_archives_transcripts_and_memory_when_asked(
     data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from test_importers import _transcript  # tests/ is on sys.path under pytest
+
     from prax.api import app
     from prax.importers import claude
-    from tests.test_importers import _transcript
 
     sync = _sync_module()
     home = tmp_path / "home"
