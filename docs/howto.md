@@ -70,6 +70,18 @@ must parse, and `tests/ui/lib.test.js` (node's own test runner, no npm)
 covers the pure helpers in `src/prax/ui/lib.js`. Without node those
 tests are skipped.
 
+What a stranger's machine would find, `.github/workflows/ci.yml` runs
+on every push: the suite on Linux (3.12, 3.13) and Windows, `ruff`, and
+the README's quick start in a fresh venv — `scripts/smoke.sh`, which
+installs `prax[serve,work,dev]` into a throwaway venv, starts a door on
+an empty store, adds a note, searches for it, runs `prax status`,
+`show`, `models` and `doctor`, and stops the door. Run it yourself after
+touching the install path (`bash scripts/smoke.sh`, three minutes,
+mostly pip; on Windows from Git Bash). Two bugs it found on its first
+run, for the record: a closed pipe (`prax show 12 | head`) was reported
+as "no door", and non-Latin output crashed under a Windows pipe's
+codepage — the command now writes UTF-8 whatever the console.
+
 ## 3. Data directory
 
 Layout, all under one directory:

@@ -362,7 +362,10 @@ shaped by one library and one set of machines (a Windows desktop with
 an RTX 4090 for batch work, an 8 GB Arm board as the serving target). It
 is published so the design and the measurements can be read and reused,
 not as a packaged product: there is no installer, no multi-user story,
-and the defaults reflect that library. Issues and pull requests are
+and the defaults reflect that library. What a stranger's machine would
+find is checked on every push — the suite on Linux and Windows, and the
+quick start above in a fresh venv ([`ci.yml`](.github/workflows/ci.yml),
+[`scripts/smoke.sh`](scripts/smoke.sh)). Issues and pull requests are
 welcome but may wait.
 
 ## License

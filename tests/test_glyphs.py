@@ -13,9 +13,7 @@ def test_ligatures_and_symbol_font_code_points_become_letters() -> None:
         "This study finds the flow of effort in office fine"
     )
     # a Word-era formula set in Adobe Symbol: byte b at U+F000+b
-    assert glyphs.clean("P  {p1  pN}  ,   ") == (
-        "P = {p1 … pN} ∈ ℜ, α ≤ ∑"
-    )
+    assert glyphs.clean("P  {p1  pN}  ,   ") == ("P = {p1 … pN} ∈ ℜ, α ≤ ∑")
     # a Wingdings bullet at the start of a line is a bullet; the same code
     # point inside a formula is the Greek letter the Symbol font puts there
     assert glyphs.clean("list:\n one\n   two\nrate  here") == (

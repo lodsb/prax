@@ -554,6 +554,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # a title in Arabic, a symbol in a snippet: never a crash for the codepage
+    # a pipe or a redirect on Windows would give the output
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     args = list(sys.argv[1:] if argv is None else argv)
     parser = build_parser()
     if not args:  # `prax` alone: the same door every command would use
@@ -605,7 +610,24 @@ def main(argv: list[str] | None = None) -> int:
         else:
             out.fail(f"the door answered {exc.status}: {exc.detail}")
         return 1
-    except (httpx.HTTPError, OSError) as exc:
+    except BrokenPipeError:
+        # `prax show 12 | head`: the reader went away, which is not news
+        try:
+            sys.stdout.close()
+        except OSError:
+            pass
+        os._exit(0)
+    except OSError as exc:
+        if getattr(exc, "errno", None) == 22 and sys.platform == "win32":
+            # a closed pipe on Windows comes back as EINVAL on the write
+            os._exit(0)
+        out.fail(
+            f"no door at {a.door} ({type(exc).__name__})",
+            "start one here with `prax serve`, or name another with"
+            " --door http://<host>:8000 (or PRAX_DOOR)",
+        )
+        return 2
+    except httpx.HTTPError as exc:
         out.fail(
             f"no door at {a.door} ({type(exc).__name__})",
             "start one here with `prax serve`, or name another with"
