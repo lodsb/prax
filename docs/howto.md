@@ -1102,6 +1102,17 @@ its LAN address instead — proves the bind and the token together:
     curl -s -o /dev/null -w "%{http_code}\n" http://<address>:8000/search?q=x                       # 401
     curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer <token>" http://<address>:8000/search?q=x   # 200
 
+What the door's log says (`logs/door.err.log` on the batch host): a
+refused request is one line, `refused GET /search from 192.168.178.23:
+missing or invalid token` — the client and the reason; and uvicorn's
+`Invalid HTTP request received` is a client speaking TLS to the plain
+HTTP port — a URL typed with `https://`, or Firefox's HTTPS-Only Mode
+upgrading an extension's fetch (the page itself falls back with a
+warning; a `fetch` from the extension does not, it fails with
+"NetworkError when attempting to fetch resource"). The fix is on the
+browser: an exception for the door's address under HTTPS-Only Mode, or
+the mode off for the private network.
+
 Anything that talked to the door without a token before — a local
 script, this session's `curl` — needs the header from then on;
 `/health` and the UI's files stay open. Plain HTTP inside the private

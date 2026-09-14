@@ -17,6 +17,7 @@ process talking to the store directly.
 from __future__ import annotations
 
 import hmac
+import logging
 import os
 from collections.abc import Awaitable, Callable
 
@@ -27,6 +28,8 @@ COOKIE = "prax_session"
 OPEN_PREFIXES = ("/ui/", "/health")
 OPEN_PATHS = ("/", "/ui", "/session")  # /session validates the token itself
 LOOPBACK = ("127.0.0.1", "::1", "localhost", "testclient")
+
+log = logging.getLogger("prax.auth")
 
 
 def token() -> str | None:
@@ -72,6 +75,12 @@ async def middleware(
         "no token configured; only loopback clients are admitted"
         if token() is None
         else "missing or invalid token"
+    )
+    # a line in the door's log: who was turned away and why, which is what
+    # a client's "network error" from another machine comes down to
+    client = request.client.host if request.client else "?"
+    log.warning(
+        "refused %s %s from %s: %s", request.method, request.url.path, client, reason
     )
     return JSONResponse(
         {"detail": reason},
