@@ -1666,9 +1666,11 @@ async function viewInbox(p) {
       <button>Fetch</button>
     </form>
     <p class="muted">Drop folder on the server: <code>${esc(d.inbox_dir)}</code> (a file in <code>inbox/&lt;domain&gt;/</code> lands in that domain; <code>scripts/inbox.py --watch --parse</code> consumes it).</p>
-    <p id="inbox-msg">${inboxReport}</p>
+    <p id="inbox-msg">${inboxReport()}</p>
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Recent captures (${d.recent.length})</h2>
     ${d.recent.length ? `<table class="doc-list"><thead><tr><th>document</th><th>source</th><th>domains</th><th>when</th><th>state</th></tr></thead><tbody>${d.recent.map(row).join("")}</tbody></table>` : `<p class="muted">Nothing captured yet.</p>`}`;
+  const clearKept = document.getElementById("inbox-msg-clear");
+  if (clearKept) clearKept.addEventListener("click", () => { keepInboxReport(""); document.getElementById("inbox-msg").innerHTML = ""; });
   const chosenDomains = () => [...view.querySelectorAll("#up-domains input:checked")].map((i) => i.value);
   // The message box is looked up at report time: the view may have been
   // re-rendered meanwhile (the change poll), and a captured element would
@@ -1690,9 +1692,13 @@ async function viewInbox(p) {
     // every failure in full; successes in full up to a screen, then folded
     const shown = n <= 40 ? results : [...failed, ...results.filter((r) => !r.error).slice(0, 12)];
     const rest = n - shown.length;
-    inboxReport = summary + (summary && shown.length ? "<br>" : "") + shown.map(line).join("<br>")
-      + (rest > 0 ? `<br><span class="muted">… and ${rest} more (all in the list below once parsed)</span>` : "");
-    box.innerHTML = inboxReport;  // and kept across the view's re-renders (inboxReport)
+    const html = summary + (summary && shown.length ? "<br>" : "") + shown.map(line).join("<br>")
+      + (rest > 0 ? `<br><span class="muted">… and ${rest} more (all in the list below once parsed)</span>` : "")
+      + (done && n > 1 ? ` <button type="button" class="linkish" id="inbox-msg-clear">dismiss</button>` : "");
+    keepInboxReport(html);  // shown again after a re-render or a reload of the page
+    box.innerHTML = html;
+    const clear = document.getElementById("inbox-msg-clear");
+    if (clear) clear.addEventListener("click", () => { keepInboxReport(""); box.innerHTML = ""; });
   };
   async function upload(files) {
     if (!files.length) return;
@@ -1853,7 +1859,14 @@ async function viewJobs(p) {
 const LIVE_VIEWS = new Set(["inbox", "browse", "doc", "review", "promote", "jobs", "pages"]);
 let lastStamp = null;
 let uploading = false;  // an upload batch in flight: the inbox view must not be re-rendered under it
-let inboxReport = "";  // the last upload's summary, shown until the next one
+// The last upload's summary, shown until dismissed or the next one: in
+// sessionStorage, so the view's re-renders and a reload of the tab keep it.
+function inboxReport() {
+  try { return sessionStorage.getItem("prax.inbox-report") || ""; } catch (_) { return ""; }
+}
+function keepInboxReport(html) {
+  try { html ? sessionStorage.setItem("prax.inbox-report", html) : sessionStorage.removeItem("prax.inbox-report"); } catch (_) { /* no storage */ }
+}
 function typing() {
   const el = document.activeElement;
   return uploading || !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT") || !!route().params.edit;
