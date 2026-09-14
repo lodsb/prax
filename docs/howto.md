@@ -1059,6 +1059,56 @@ A first smoke run from PowerShell:
       -Body '{"text": "Granular synthesis smears transients.", "title": "note"}'
     Invoke-RestMethod "http://127.0.0.1:8000/search?q=granular"
 
+### From another machine on the private network
+
+A door started with the defaults is invisible from the next room, by
+design twice over: `prax serve` binds `127.0.0.1`, so the LAN gets no
+listener at all (a browser on another machine waits and times out), and
+without `PRAX_TOKEN` the door admits loopback clients only, so it would
+answer 401 even if it heard them. Opening it takes three things, on the
+machine that runs the door:
+
+1. A token in the door's environment, and the same one in the worker's,
+   since the worker is a client too:
+
+        $env:PRAX_TOKEN = "<the token>"        # PowerShell; generate one as above
+        prax serve --host 0.0.0.0 --port 8000  # or --host <this machine's private address>
+        prax work --watch --interval 20        # in another shell, same variable
+
+   `0.0.0.0` means every interface of the machine; a home LAN behind
+   the router is fine, and the token is what gates it. On a machine
+   with a public interface, bind the private address instead.
+
+2. A firewall rule for the port. Windows asks on the first bind when
+   the door runs in a console; started hidden it does not, and the rule
+   needs an administrator's PowerShell:
+
+        New-NetFirewallRule -DisplayName "prax door" -Direction Inbound `
+          -Action Allow -Protocol TCP -LocalPort 8000 -Profile Private
+
+   (`-Profile Private` keeps it to networks marked private; check the
+   current network's profile with `Get-NetConnectionProfile`.)
+
+3. The token on the other machine: the web UI at
+   `http://<address>:8000/ui/` asks for it once and keeps a session
+   cookie; the `prax` command takes `--door http://<address>:8000` and
+   `PRAX_TOKEN`; the MCP server and the Claude Code plugin read
+   `PRAX_DOOR` and `PRAX_TOKEN` (`docs/claude-workflow.md`); the browser
+   extension has both in its options (`docs/extension.md`).
+
+A check from the door's own machine that does not go through loopback —
+its LAN address instead — proves the bind and the token together:
+
+    curl -s -o /dev/null -w "%{http_code}\n" http://<address>:8000/search?q=x                       # 401
+    curl -s -o /dev/null -w "%{http_code}\n" -H "Authorization: Bearer <token>" http://<address>:8000/search?q=x   # 200
+
+Anything that talked to the door without a token before — a local
+script, this session's `curl` — needs the header from then on;
+`/health` and the UI's files stay open. Plain HTTP inside the private
+network is the design; a VPN address (Tailscale's `100.x.y.z`) is the
+same recipe with that address, and TLS through a reverse proxy only if
+the door were ever exposed beyond it.
+
 ## 4a. The `prax` command
 
 One command for the everyday work, and the same one wherever the door is:
