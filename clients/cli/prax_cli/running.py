@@ -649,7 +649,9 @@ def print_version() -> int:
 def backup(door: Door, a: Any) -> int:
     """Ask the door to copy its store to a directory on its host, and
     follow the job until it is done."""
-    started = door.post_json("/backup", {"dest": a.dest})
+    started = door.post_json(
+        "/backup", {"dest": a.dest, "archive": not getattr(a, "no_archive", False)}
+    )
     job_id = started["job"]
     if not a.json:
         out.say(out.bold("Backup") + out.dim(f"   to {started['dest']} · job {job_id}"))

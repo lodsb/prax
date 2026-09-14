@@ -96,3 +96,21 @@ def test_the_door_runs_it_as_a_job(tmp_path: Path) -> None:
         assert row["note"].startswith("done:")
         assert (tmp_path / "copy" / "prax.db").is_file()
         assert door.get("/jobs/999999").status_code == 404
+
+
+def test_without_the_archive_the_copy_is_what_cannot_be_rebuilt(
+    con: Any, tmp_path: Path
+) -> None:
+    """A disk too small for the originals still gets the database, the
+    indexes and the config every night; the manifest says the archive
+    was left out, and a later full run adds it."""
+    _fill(con)
+    dest = tmp_path / "small"
+    report = store.backup(con, dest, archive=False)
+    assert report["archive"] == {"files": 0, "copied": 0, "bytes": 0, "skipped": True}
+    assert (dest / "prax.db").is_file() and not (dest / "archive").exists()
+    manifest = json.loads((dest / store.MANIFEST).read_text(encoding="utf-8"))
+    assert manifest["archive"]["skipped"] is True
+    full = store.backup(con, dest)
+    assert full["archive"]["copied"] == full["archive"]["files"] > 0
+    assert (dest / "archive").is_dir()

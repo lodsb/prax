@@ -1044,13 +1044,10 @@ stale documents oldest first, a batch at a time; the worker re-reads
 each with the current extractor and the door keeps or upgrades the text
 by the usual rule (a suspiciously short new text keeps the old). A
 re-read that comes out the same moves the stamp and touches nothing
-else. As a nightly task on the machine with the models:
+else. As a nightly task on the machine with the models — on Windows
+the `prax nightly` task `deploy\desktop.ps1 -Install` registers (4b),
+at 03:00; elsewhere, cron:
 
-    # Windows: Task Scheduler, daily at 03:00, run whether the user is logged on or not
-    schtasks /Create /SC DAILY /ST 03:00 /TN "prax nightly" ^
-      /TR "cmd /c set PRAX_TOKEN=<token>&& I:\proj\prax\.venv\Scripts\prax.exe work --scope all --limit 100 --door http://127.0.0.1:8000 >> C:\prax-data\logs\nightly.log 2>&1"
-
-    # Linux, cron
     0 3 * * * PRAX_TOKEN=<token> /srv/prax/.venv/bin/prax work --scope all --limit 100 --door http://127.0.0.1:8000 >> /srv/prax-data/logs/nightly.log 2>&1
 
 The token is better read from the environment or a file than written
@@ -1301,6 +1298,45 @@ is the uvicorn line. The one-off maintenance scripts (import, backfill,
 resolution, typing rules, rechunk, replay) stay scripts: they open the
 database directly and are the known deviation of invariant 4.
 
+## 4b. Always on: the desktop as the server (Windows)
+
+Until the store moves to a board (6), the desktop is the server, and a
+server survives a reboot. `deploy\desktop.ps1` makes the three
+processes and the two nightly passes Task Scheduler tasks under your
+own account — no service, no password stored, nothing system-wide:
+
+    deploy\desktop.ps1 -Install -DataDir C:\prax-data -Backup I:\prax-backup `
+        -LlamaModel <the .gguf> `
+        -LlamaArgs "-Mmproj mmproj-F16.gguf -Slots 2 -CpuMoe 2 -UBatch 256 -ImageMaxTokens 1024 -NoThinking"
+    deploy\desktop.ps1 -Start        # now; a logon starts them anyway
+    deploy\desktop.ps1 -Status
+
+| task | when | what |
+|---|---|---|
+| `prax llama-server` | logon + 5 s | `scripts\llama_server.ps1` with the model and arguments given (3h) |
+| `prax door` | logon + 15 s | `prax serve --host 0.0.0.0 --port 8000` (`-BindHost`, `-Port`) |
+| `prax worker` | logon + 45 s | `prax work --watch` — the model work, through the door |
+| `prax nightly` | 03:00 | `prax work --scope all --limit 100` — the backlog and the stale texts (3l¾) |
+| `prax backup` | 04:30 | `prax backup <dir> --no-archive` (7); `-BackupArchive` for the whole store |
+
+Each task runs the script again with `-Run <name>`, which sets the
+environment, rotates the logs — `<data dir>\logs\<name>.log` and
+`.err.log`, ten kept, `<name>.runs.log` with every start and exit — and
+runs the process in the foreground, so the task shows *Running* while it
+lives and restarts it (three times, a minute apart) when it dies. The
+tasks run while you are logged on; a locked screen is fine, logged off
+is not — that is what "no password stored" costs. `-Stop` ends the
+tasks and any process started by hand that would be in their way;
+`-Uninstall` removes the tasks and touches nothing else.
+
+Secrets never go into a task. The door's token comes from the
+`PRAX_TOKEN` *user* environment variable, or from one line in `<data
+dir>\door.token`; without either the door answers this machine only
+(the status says so). The Anthropic key comes from the
+`ANTHROPIC_API_KEY` user variable. The card's power cap (`nvidia-smi
+-pl`, 3h) needs an administrator and is not registered here; a task of
+your own with the highest privileges, at logon, is the place for it.
+
 ## 5. MCP server in Claude Code
 
 `.mcp.json` in the repo root registers the server. Claude Code runs the
@@ -1391,6 +1427,7 @@ directory of content-addressed files. `prax backup` copies them:
 
     prax backup D:/prax-backup       # a directory on the door's machine
     prax backup                      # paths.backup in prax.yaml [PRAX_BACKUP]
+    prax backup I:/prax-db --no-archive   # the database, indexes and config only
 
 The door does the copying (`POST /backup`, a job you can watch in `prax
 jobs` and the Jobs view): the database through SQLite's online backup —
@@ -1407,7 +1444,16 @@ vector written between the snapshot and the file copy may be missing
 there; `prax heal` finds those (`chunks-without-vectors`) and a worker
 re-embeds them. Model files are not copied (`prax models fetch`).
 
-A nightly copy is one scheduled task running `prax backup`; Litestream
+`--no-archive` copies what cannot be rebuilt — the database, the
+indexes, the config, a few gigabytes — and leaves the originals out:
+for a disk too small for them. The manifest says so, and a full run to
+the same directory later adds the archive. (The originals of a Zotero
+library are also in Zotero; captured pages and uploads are not
+anywhere else, so the full copy is the real backup once there is a disk
+for it.)
+
+A nightly copy is one scheduled task running `prax backup` — the `prax
+backup` task of `deploy\desktop.ps1` on Windows (4b); Litestream
 replication is on the later list.
 
 ## 8. Adding a source

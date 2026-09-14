@@ -340,9 +340,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
     s.add_argument("--reload", action="store_true", help="restart on code changes")
-    s.add_argument(
-        "--ssl-certfile", help="serve HTTPS with this certificate (PEM) …"
-    )
+    s.add_argument("--ssl-certfile", help="serve HTTPS with this certificate (PEM) …")
     s.add_argument("--ssl-keyfile", help="… and this private key (PEM)")
     s.set_defaults(func=running.serve, needs_door=False)
 
@@ -388,7 +386,8 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  prax backup D:/prax-backup\n"
-            "  prax backup                 # the door's paths.backup setting"
+            "  prax backup                 # the door's paths.backup setting\n"
+            "  prax backup E:/prax-db --no-archive   # what cannot be rebuilt, a few GB"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -397,6 +396,11 @@ def build_parser() -> argparse.ArgumentParser:
         nargs="?",
         metavar="DIR",
         help="where; default: paths.backup in prax.yaml",
+    )
+    s.add_argument(
+        "--no-archive",
+        action="store_true",
+        help="the database, the indexes and the config only — not the originals",
     )
     s.set_defaults(func=running.backup, needs_door=True)
 

@@ -499,15 +499,18 @@ def heal_apply(req: HealReq, request: Request) -> dict[str, Any]:
 
 class BackupReq(BaseModel):
     dest: str | None = None  # None: the paths.backup setting
+    archive: bool = True  # False: the database, indexes and config only
 
 
 @app.post("/backup")
 def backup_start(req: BackupReq, request: Request) -> dict[str, Any]:
     """Copy the store to a directory on this host (``dest``, or the
     ``paths.backup`` setting): the database as a consistent snapshot, the
-    vector indexes, the config, and the archive files the copy lacks. The
-    copy runs on a thread of its own and is a job; poll ``GET /jobs/{id}``
-    for its progress and its last note."""
+    vector indexes, the config, and the archive files the copy lacks
+    (``archive: false`` leaves the originals out: what cannot be rebuilt,
+    for a disk too small for them). The copy runs on a thread of its own
+    and is a job; poll ``GET /jobs/{id}`` for its progress and its last
+    note."""
     try:
         dest = store.backup_target(req.dest)
     except ValueError as exc:
@@ -518,7 +521,7 @@ def backup_start(req: BackupReq, request: Request) -> dict[str, Any]:
         con = store.connect()
         try:
             with store.Job.existing(con, job.id) as mine:
-                store.backup(con, dest, job=mine)
+                store.backup(con, dest, archive=req.archive, job=mine)
         except Exception:  # the job row carries the error
             logging.getLogger("prax.backup").exception("backup to %s failed", dest)
         finally:

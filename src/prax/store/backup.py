@@ -14,6 +14,12 @@ seconds between the database snapshot and the file copy can be missing
 from the copy; ``chunks-without-vectors`` in ``prax heal`` finds those
 and the worker re-embeds them. Model files are not copied (``prax models
 fetch`` gets them again).
+
+Without the archive (``archive=False``) the copy is the database, the
+indexes and the config — the few gigabytes that cannot be rebuilt — for
+a nightly run to a disk too small for the originals; the archive can
+follow to a bigger one whenever, since the copy's ``backup.json`` says
+what it holds.
 """
 
 from __future__ import annotations
@@ -60,21 +66,29 @@ def backup(
     con: sqlite3.Connection,
     dest: str | Path | None = None,
     *,
+    archive: bool = True,
     job: Job | None = None,
     log: Log | None = None,
 ) -> dict[str, Any]:
     """Copy the store to ``dest`` (``backup_target``; created when missing)
     and write a manifest there. Returns what was copied; a job (given, or
-    started here) shows the progress in the Jobs view."""
+    started here) shows the progress in the Jobs view. ``archive=False``
+    leaves the originals out: the database, the indexes and the config
+    only."""
     target = backup_target(dest)
     if job is not None:
-        return _run(con, target, job, log)
+        return _run(con, target, job, log, archive=archive)
     with Job(con, "backup", note=str(target)) as own:
-        return _run(con, target, own, log)
+        return _run(con, target, own, log, archive=archive)
 
 
 def _run(
-    con: sqlite3.Connection, dest: Path, job: Job, log: Log | None
+    con: sqlite3.Connection,
+    dest: Path,
+    job: Job,
+    log: Log | None,
+    *,
+    archive: bool = True,
 ) -> dict[str, Any]:
     started = time.time()
     src = config.data_dir()
@@ -89,23 +103,28 @@ def _run(
     for name in CONFIG_FILES:
         if (src / name).is_file():
             shutil.copyfile(src / name, dest / name)
-    archive = _copy_archive(
-        config.archive_dir(), dest / config.archive_dir().name, job=job, log=log
-    )
-    say(f"archive: {archive['copied']} of {archive['files']} files copied")
+    if archive:
+        copied = _copy_archive(
+            config.archive_dir(), dest / config.archive_dir().name, job=job, log=log
+        )
+        say(f"archive: {copied['copied']} of {copied['files']} files copied")
+    else:
+        copied = {"files": 0, "copied": 0, "bytes": 0, "skipped": True}
+        say("archive: left out")
     report = {
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
         "source": str(src),
         "dest": str(dest),
         "database_bytes": db_bytes,
         "indexes": indexes,
-        "archive": archive,
+        "archive": copied,
         "seconds": round(time.time() - started, 1),
     }
     (dest / MANIFEST).write_text(json.dumps(report, indent=2), encoding="utf-8")
+    what = f"{copied['copied']} new archive files" if archive else "without the archive"
     job.update(
-        note=f"done: {archive['copied']} new archive files,"
-        f" {(db_bytes + archive['bytes']) / 1e6:.0f} MB, {report['seconds']} s"
+        note=f"done: {what},"
+        f" {(db_bytes + copied['bytes']) / 1e6:.0f} MB, {report['seconds']} s"
     )
     return report
 

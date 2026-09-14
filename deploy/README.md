@@ -11,6 +11,7 @@ needs, in the order it needs it (the reasoning: `docs/howto.md` 6).
 | `door.env.example` | the two secrets-and-addresses the unit reads: `PRAX_BIND`, `PRAX_TOKEN` |
 | `prax.board.yaml` | the board's `prax.yaml`: an int8 index, no model steps of its own |
 | `worker.ps1` | on the Windows desktop: start or stop the worker that drains the board's queue, as a detached process |
+| `desktop.ps1` | the desktop as the server, until the move: the door, llama-server and the worker as logon tasks that come back after a crash, the nightly backlog pass and the nightly backup as tasks (`docs/howto.md` 4b) |
 
 ## The move, step by step
 
