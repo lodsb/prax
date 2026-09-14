@@ -497,6 +497,36 @@ def heal_apply(req: HealReq, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+class MaintainReq(BaseModel):
+    only: list[str] | None = None  # store.PASSES; None: every pass
+
+
+@app.post("/maintain")
+def maintain_start(req: MaintainReq, request: Request) -> dict[str, Any]:
+    """The maintenance pass: the acronyms table, the document retrieval
+    fields, the domain rules over documents without a set, the duplicate
+    captures — what the store does to itself without a model or a
+    decision. A job on a thread of its own; poll ``GET /jobs/{id}``."""
+    chosen = [p for p in (req.only or []) if p] or list(store.PASSES)
+    unknown = [p for p in chosen if p not in store.PASSES]
+    if unknown:
+        raise HTTPException(400, f"no such pass: {unknown}; passes are {store.PASSES}")
+    job = store.Job(_con(request), "maintain", note=", ".join(chosen))
+
+    def run() -> None:
+        con = store.connect()
+        try:
+            with store.Job.existing(con, job.id) as mine:
+                store.maintain(con, only=chosen, job=mine)
+        except Exception:  # the job row carries the error
+            logging.getLogger("prax.maintain").exception("maintenance failed")
+        finally:
+            con.close()
+
+    threading.Thread(target=run, name="maintain", daemon=True).start()
+    return {"job": job.id, "passes": chosen}
+
+
 class BackupReq(BaseModel):
     dest: str | None = None  # None: the paths.backup setting
     archive: bool = True  # False: the database, indexes and config only

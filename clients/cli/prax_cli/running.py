@@ -676,6 +676,39 @@ def print_version() -> int:
     return 0
 
 
+# ---------------------------------------------------------------- maintain
+
+
+def maintain(door: Door, a: Any) -> int:
+    """Ask the door for the maintenance pass and follow the job."""
+    only = [p.strip() for p in (a.only or "").split(",") if p.strip()] or None
+    started = door.post_json("/maintain", {"only": only})
+    job_id = started["job"]
+    if not a.json:
+        out.say(
+            out.bold("Maintenance")
+            + out.dim(f"   {', '.join(started['passes'])} · job {job_id}")
+        )
+    last = ""
+    while True:
+        row = door.get_json(f"/jobs/{job_id}")
+        note = row.get("note") or ""
+        if row["status"] != "running":
+            break
+        if note != last and not a.json:
+            out.hint("  " + note)
+            last = note
+        time.sleep(2)
+    if a.json:
+        print(json.dumps(row, indent=2))
+        return 0 if row["status"] == "done" else 1
+    if row["status"] == "done":
+        out.say("  " + note.removeprefix("done: "))
+        return 0
+    out.fail(f"the pass {row['status']}: {note}")
+    return 1
+
+
 # ------------------------------------------------------------------ backup
 
 

@@ -33,7 +33,7 @@ examples
 
 commands
   everyday     search, ask, add, import, show, open, graph, pages
-  running it   status, jobs, inbox, work, heal, backup, serve, doctor, models
+  running it   status, jobs, inbox, work, heal, maintain, backup, serve, doctor, models
 """
 
 
@@ -416,6 +416,24 @@ def build_parser() -> argparse.ArgumentParser:
         "--apply", action="store_true", help="repair, instead of only looking"
     )
     s.set_defaults(func=running.heal, needs_door=True)
+
+    s = sub.add_parser(
+        "maintain",
+        parents=[door_opts, as_json],
+        help="what the store does to itself: acronyms, fields, domains, duplicates",
+        description=(
+            "The maintenance pass, a job on the door: the acronyms table rebuilt"
+            " from every text, the document retrieval fields, the domain rules"
+            " over documents without a set, duplicate captures retired. No"
+            " model, no decision; the nightly task runs it after the worker's."
+        ),
+        epilog=("examples:\n  prax maintain\n  prax maintain --only acronyms"),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument(
+        "--only", help="a comma-separated subset of: acronyms, fields, domains, dedupe"
+    )
+    s.set_defaults(func=running.maintain, needs_door=True)
 
     s = sub.add_parser(
         "backup",

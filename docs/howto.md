@@ -1136,6 +1136,28 @@ thrown away 27 real claims and 94 real citations; the dry run against the
 library is what caught it, which is why the dry run is the default.
 
 
+## 3n. Maintenance: what the store does to itself
+
+A few tables are derived from the rest and drift unless they are
+rebuilt; none of that needs a model or a decision, so it is one pass,
+a job on the door, run by the nightly task after the worker's pass and
+by `prax maintain` on request:
+
+    prax maintain                      # every pass
+    prax maintain --only acronyms      # one
+
+| pass | what it rebuilds |
+|---|---|
+| `acronyms` | the acronyms table from every text's "phrase (ACRONYM)" definitions (3d): what a query token expands to; minutes over a large library |
+| `fields` | the document retrieval field (title, kind, summary) of every document — after titles were fixed or summaries written |
+| `domains` | the domain set of every document nobody assigned by hand, from the `domains:` rules in `prax.yaml` (3e); nothing without rules |
+| `dedupe` | the duplicate captures of one page retired, the keeper named in `meta.retired` (3l); row and file kept |
+
+What stays out on purpose: the repairs (`prax heal`, 3m — a person picks
+the ailment), the readings and extractions (the worker, with a model),
+entity resolution (the likely merges are a decision). `POST /maintain
+{only}` starts the job; the Jobs view shows which pass it is on.
+
 ## 4. Running the HTTP door
 
     uvicorn prax.api:app --reload --port 8000
@@ -1282,6 +1304,7 @@ One command for the everyday work, and the same one wherever the door is:
     prax inbox                        what came in, what still waits
     prax jobs                         passes running now and lately
     prax heal                         what recurring damage is in the store
+    prax maintain                     what the store does to itself: acronyms, fields, domains, duplicates
     prax reread --extractor X ...     a reading on a selection: --unreadable, --mime, --text-source, --ids
     prax backup D:/prax-backup        copy the store (only what is new)
     prax work --watch                 be the worker for a door
@@ -1334,7 +1357,7 @@ Scheduler), `deploy/desktop.sh` on Linux (systemd user units) and macOS
 | `llama-server` | login | `scripts/llama_server.ps1` / `.sh` with the model and arguments given (3h); left out without a model |
 | `door` | login | `prax serve --host 0.0.0.0 --port 8000` (`-BindHost`/`--bind`, `-Port`/`--port`) |
 | `worker` | login, once the door answers | `prax work --watch` — the model work, through the door |
-| `nightly` | 03:00 | `prax work --scope all --limit 100` — the backlog and the stale texts (3l¾) |
+| `nightly` | 03:00 | `prax work --scope all --limit 100` — the backlog and the stale texts (3l¾) — then `prax maintain` (3n) |
 | `backup` | 04:30 | `prax backup <dir> --no-archive` (7); `-BackupArchive`/`--backup-archive` for the whole store; left out without a directory |
 
 Each service runs the script again with `-Run <name>` / `run <name>`,

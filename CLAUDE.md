@@ -35,7 +35,7 @@ drop folder (`docs/sources.md`).
    insert the row) and `index_text` (store the text artifact, chunk, FTS).
    Parsers call `index_text`; `ingest_text` composes both for plain text.
    The store is a package (`base`, `documents`, `retrieval`, `graph`,
-   `pages`, `jobs`, `summary`, `repair`, `backup`) whose `__init__`
+   `pages`, `jobs`, `summary`, `repair`, `maintain`, `backup`) whose `__init__`
    re-exports every name, so
    a caller writes `store.<name>` and never imports a submodule; inside it,
    a module imports only from the ones before it in that order.

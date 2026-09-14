@@ -11,7 +11,7 @@ no service, no password stored, nothing system-wide.
   prax llama-server   at logon   scripts\llama_server.ps1 with -LlamaModel and -LlamaArgs
   prax door           at logon   prax serve --host <BindHost> --port <Port>
   prax worker         at logon   prax work --watch (the model work, through the door)
-  prax nightly        03:00      prax work --scope all --limit <NightlyLimit> (howto 3l¾)
+  prax nightly        03:00      prax work --scope all --limit <NightlyLimit>, then prax maintain (howto 3l¾)
   prax backup         04:30      prax backup <Backup> [--no-archive]   (only with -Backup)
 
 Each task runs this script again with -Run <name>, which sets the
@@ -112,16 +112,25 @@ function Rotate-Logs([string]$name) {
 }
 
 # Run one process in the foreground with its output in the logs; the
-# exit code is the task's, so Task Scheduler restarts a crash.
-function Invoke-Logged([string]$name, [string]$exe, [string[]]$arguments) {
+# exit code is the task's, so Task Scheduler restarts a crash. Several
+# commands (the nightly: the worker's pass, then the maintenance pass)
+# run one after the other in the same logs; the worst exit code is the task's.
+function Invoke-Logged([string]$name, [string]$exe, [string[]]$arguments, [string[][]]$then = @()) {
     $l = Rotate-Logs $name
-    $quoted = $arguments | ForEach-Object { if ($_ -match "\s") { '"' + $_ + '"' } else { $_ } }
-    "$(Get-Date -Format s) start: $exe $($quoted -join ' ')" | Add-Content $l.runs -Encoding utf8
-    $p = Start-Process -FilePath $exe -ArgumentList $quoted -WorkingDirectory $repo `
-        -NoNewWindow -PassThru -Wait `
-        -RedirectStandardOutput $l.out -RedirectStandardError $l.err
-    "$(Get-Date -Format s) exit $($p.ExitCode)" | Add-Content $l.runs -Encoding utf8
-    exit $p.ExitCode
+    $worst = 0
+    foreach ($command in @(, $arguments) + $then) {
+        $quoted = $command | ForEach-Object { if ($_ -match "\s") { '"' + $_ + '"' } else { $_ } }
+        "$(Get-Date -Format s) start: $exe $($quoted -join ' ')" | Add-Content $l.runs -Encoding utf8
+        $p = Start-Process -FilePath $exe -ArgumentList $quoted -WorkingDirectory $repo `
+            -NoNewWindow -PassThru -Wait `
+            -RedirectStandardOutput "$($l.out).part" -RedirectStandardError "$($l.err).part"
+        Get-Content "$($l.out).part" -ErrorAction SilentlyContinue | Add-Content $l.out -Encoding utf8
+        Get-Content "$($l.err).part" -ErrorAction SilentlyContinue | Add-Content $l.err -Encoding utf8
+        Remove-Item "$($l.out).part", "$($l.err).part" -ErrorAction SilentlyContinue
+        "$(Get-Date -Format s) exit $($p.ExitCode)" | Add-Content $l.runs -Encoding utf8
+        if ($p.ExitCode -ne 0) { $worst = $p.ExitCode }
+    }
+    exit $worst
 }
 
 # ------------------------------------------------------------------ -Run
@@ -136,7 +145,8 @@ if ($Run) {
             Invoke-Logged "worker" $prax @("work", "--watch", "--interval", "$Interval")
         }
         "nightly" {
-            Invoke-Logged "nightly" $prax @("work", "--scope", "all", "--limit", "$NightlyLimit", "--steps", $NightlySteps)
+            # the worker's backlog pass, then what the store does to itself
+            Invoke-Logged "nightly" $prax @("work", "--scope", "all", "--limit", "$NightlyLimit", "--steps", $NightlySteps) @(, @("maintain"))
         }
         "backup" {
             if (-not $Backup) { throw "no backup directory: -Install with -Backup" }
@@ -214,7 +224,7 @@ if ($Install) {
         what = "the worker at logon: prax work --watch --interval $Interval" }
     $tasks += @{ name = "nightly"; trigger = (New-ScheduledTaskTrigger -Daily -At 03:00); settings = $bounded
         args = "$common -Run nightly -NightlyLimit $NightlyLimit -NightlySteps $(Quote $NightlySteps)"
-        what = "nightly at 03:00: prax work --scope all --limit $NightlyLimit --steps $NightlySteps" }
+        what = "nightly at 03:00: prax work --scope all --limit $NightlyLimit --steps $NightlySteps, then prax maintain" }
     if ($Backup) {
         $bargs = "$common -Run backup -Backup $(Quote $Backup)"
         if ($BackupArchive) { $bargs += " -BackupArchive" }

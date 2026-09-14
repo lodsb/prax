@@ -191,6 +191,10 @@ from .jobs import (  # noqa: F401
     release_vector_views,
     running_jobs,
 )
+from .maintain import (  # noqa: F401
+    PASSES,
+    maintain,
+)
 from .pages import (  # noqa: F401
     _SLUG_CHARS,
     PAGE_AUTHORS,

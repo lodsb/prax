@@ -19,7 +19,7 @@
 #   llama-server   at login   scripts/llama_server.sh --model … + --llama-args
 #   door           at login   prax serve --host <bind> --port <port>
 #   worker         at login   prax work --watch, after the door answers
-#   nightly        03:00      prax work --scope all --limit <n>   (--nightly-at)
+#   nightly        03:00      prax work --scope all --limit <n>, then prax maintain   (--nightly-at)
 #   backup         04:30      prax backup <dir> [--no-archive]     (--backup-at)
 #
 # Each service runs this script again with `run <name>`, which sets the
@@ -134,7 +134,10 @@ if [ "$cmd" = run ]; then
   case "$ONLY" in
     door) run_service door "$PRAX" serve --host "$BIND" --port "$PORT" ;;
     worker) run_service worker "$PRAX" work --watch --interval "$INTERVAL" ;;
-    nightly) run_service nightly "$PRAX" work --scope all --limit "$NIGHTLY_LIMIT" --steps "$NIGHTLY_STEPS" ;;
+    nightly)  # the worker's backlog pass, then what the store does to itself
+      run_service nightly bash -c \
+        '"$0" work --scope all --limit "$1" --steps "$2"; w=$?; "$0" maintain; m=$?; [ "$w" = 0 ] && exit "$m" || exit "$w"' \
+        "$PRAX" "$NIGHTLY_LIMIT" "$NIGHTLY_STEPS" ;;
     backup)
       [ -n "$BACKUP" ] || { echo "no backup directory: install with --backup" >&2; exit 2; }
       if [ "$BACKUP_ARCHIVE" = 1 ]; then run_service backup "$PRAX" backup "$BACKUP"
