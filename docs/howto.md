@@ -1037,7 +1037,7 @@ text up to date, from cheapest to dearest:
 |---|---|---|
 | the ailment's repair — "repair" next to `stale-parses` on the Jobs page, or `prax heal --check stale-parses --apply` (a run takes up to 5,000; press again for the rest) | an annotation in the history already made the revision's change (the figure-refs pass over the library ran before stamps moved) | moves the stamp, writes a `stamped` history entry; nothing is read |
 | the backlog pass, below | the revision changed what the extractor produces | a re-read per document, a batch a night; `same` when nothing came of it |
-| `parse_pending.py --upgrade <old stamp> [--force]` (3b) | you want the whole library at the new revision now, not over nights | every document at once, on the desktop |
+| `prax reread --extractor <name> --text-source <old stamp>` — a reading request on every document the old stamp matches, drained by the worker | you want the whole library at the new revision now, not over nights | every document, forced, as the worker gets to them |
 | "read again…" on a document's page | one document, now, with the extractor of your choice | that one read |
 
 The backlog pass:
@@ -1085,6 +1085,7 @@ come back with every pass, so they have names and a place:
 
     prax heal                              what is wrong (changes nothing)
     prax heal --apply                      repair all of it
+    prax reread --extractor pymupdf4llm-ocr --unreadable     what an ailment offers, from the shell
     prax heal --check self-edges --apply   one kind
     prax heal --json                       for a script
 
@@ -1106,7 +1107,7 @@ you still want to look at) stays alone.
 | `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |
 | `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time, or `--upgrade` at once (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
-| `unreadable-documents` | documents every extractor here has tried and found no text in (scans without a text layer); they wait and are not tried again | a report: ask for OCR or the vision model on the document's page ("read again…") or retire it |
+| `unreadable-documents` | documents every extractor here has tried and found no text in (scans without a text layer); they wait and are not tried again | a report, with two offers on the panel: OCR over all of them, or the vision model over their scanned pages (`prax reread --unreadable --extractor …`); or retire them |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
 
 What the cleaning does not do: a glyph the PDF's font gave no name at
@@ -1281,6 +1282,7 @@ One command for the everyday work, and the same one wherever the door is:
     prax inbox                        what came in, what still waits
     prax jobs                         passes running now and lately
     prax heal                         what recurring damage is in the store
+    prax reread --extractor X ...     a reading on a selection: --unreadable, --mime, --text-source, --ids
     prax backup D:/prax-backup        copy the store (only what is new)
     prax work --watch                 be the worker for a door
     prax serve                        run the door here

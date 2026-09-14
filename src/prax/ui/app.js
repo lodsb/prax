@@ -1889,7 +1889,7 @@ const HEALTH_FRESH = 5 * 60 * 1000;
 function healthLines(h) {
   if (!h) return `<p class="muted">checking the store's health…</p>`;
   const rows = h.ailments.map((a) => `<li class="${a.count ? "" : "muted"}">
-      <b>${a.count.toLocaleString()}${a.capped ? "+" : ""}</b> ${esc(a.name)}${a.count ? ` <span class="muted">— ${esc(a.what)}</span>` : ""}${a.count && !a.repairable ? ` <span class="muted">(${esc(a.fix)})</span>` : ""}${a.count && a.repairable ? ` <button type="button" class="linkish heal-one" data-check="${esc(a.name)}" title="${esc(a.fix)}">repair</button>` : ""}</li>`);
+      <b>${a.count.toLocaleString()}${a.capped ? "+" : ""}</b> ${esc(a.name)}${a.count ? ` <span class="muted">— ${esc(a.what)}</span>` : ""}${a.count && !a.repairable ? ` <span class="muted">(${esc(a.fix)})</span>` : ""}${a.count && a.repairable ? ` <button type="button" class="linkish heal-one" data-check="${esc(a.name)}" title="${esc(a.fix)}">repair</button>` : ""}${a.count && a.offers && a.offers.length ? a.offers.map((o, i) => ` <button type="button" class="linkish heal-offer" data-check="${esc(a.name)}" data-offer="${i}">${esc(o.label)}</button>`).join(" ·") : ""}</li>`);
   const repairable = h.ailments.filter((a) => a.count && a.repairable).length;
   return `
     <p class="muted" style="margin:0 0 .3rem">${h.found ? `${h.found} thing${h.found > 1 ? "s" : ""} to look at` : "nothing to repair"} · checked ${esc((h.checked_at || "").replace("T", " ").slice(0, 16))} · <button type="button" class="linkish" id="heal-check">check again</button></p>
@@ -1907,6 +1907,23 @@ function fillHealth() {
   const again = document.getElementById("heal-check");
   if (again) again.addEventListener("click", () => { health = null; fillHealth(); checkHealth(); });
   box.querySelectorAll(".heal-one").forEach((b) => b.addEventListener("click", () => healNow(b, [b.dataset.check])));
+  box.querySelectorAll(".heal-offer").forEach((b) => b.addEventListener("click", () => offerNow(b)));
+}
+
+// An ailment's offer: a reading over everything it found (POST
+// /readings/bulk); the worker drains the requests, Jobs shows them waiting.
+async function offerNow(button) {
+  const ailment = (health ? health.ailments : []).find((a) => a.name === button.dataset.check);
+  const offer = ailment && ailment.offers[Number(button.dataset.offer)];
+  if (!offer) return;
+  const msg = document.getElementById("heal-msg");
+  button.disabled = true;
+  msg.textContent = "asking…";
+  try {
+    const { label, ...body } = offer;
+    const r = await post("/readings/bulk", body);
+    msg.textContent = `${label}: asked on ${r.requested} of ${r.selected}${r.skipped ? ` (${r.skipped} skipped)` : ""} — a worker takes them from here`;
+  } catch (err) { msg.textContent = err.message; button.disabled = false; }
 }
 
 async function checkHealth() {

@@ -398,6 +398,38 @@ def _example_line(name: str, row: dict[str, Any]) -> str:
     return str(row)
 
 
+def reread(door: Door, a: Any) -> int:
+    """A reading request over a selection, through the door."""
+    body = {
+        "extractor": a.extractor,
+        "mode": a.mode,
+        "ids": a.ids,
+        "mime": a.mime,
+        "text_source": a.text_source,
+        "unreadable": a.unreadable,
+        "limit": a.limit,
+        "dry_run": a.dry_run,
+    }
+    r = door.post_json("/readings/bulk", body)
+    if a.json:
+        print(json.dumps(r, indent=2))
+        return 0
+    what = a.extractor + (f" ({a.mode})" if a.mode else "")
+    if r["dry_run"]:
+        out.say(f"{out.num(r['selected'])} documents would be asked for {what}")
+        return 0
+    out.say(
+        f"asked for {what} on {out.num(r['requested'])} of {r['selected']} documents"
+        + (
+            f"; {r['skipped']} skipped (the extractor does not read them)"
+            if r["skipped"]
+            else ""
+        )
+    )
+    out.hint("  a worker takes them before the pending captures; Jobs shows what waits")
+    return 0
+
+
 def heal(door: Door, a: Any) -> int:
     """What is wrong with the store, and (with --apply) the repair."""
     params: dict[str, Any] = {}

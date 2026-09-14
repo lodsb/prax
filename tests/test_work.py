@@ -517,3 +517,71 @@ def test_the_promote_step_reads_flagged_documents_and_spends_only_when_told(
     assert store.promoted_documents(con, producer="stub")[0]["done"] is True
     assert client.get("/work/promote").json()["items"] == []
     assert client.get("/promote").json()["promoted"][0]["done"] is True
+
+
+def test_readings_asked_for_a_selection_at_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A named extractor over a selection — every scan nothing could read,
+    every PDF still stamped by an old extractor, a list of ids — is one
+    request that places a reading on each; the worker drains them like
+    any other. What the extractor does not read is skipped and counted;
+    a dry run only counts."""
+    con = client.app.state.con
+    scan = inbox.ingest_upload(con, _blank_pdf(), filename="scan.pdf")
+    work._leases.clear()
+    worker.run_once(
+        _door(client), steps=("parse",), log_=lambda t: None
+    )  # tried, empty
+    html = b"<html><body>x</body></html>"
+    page = inbox.ingest_upload(con, html, filename="p.html", mime="text/html")
+    store.index_text(con, page.doc_id, "Prose. " * 60, text_source="trafilatura/2.2.0")
+    paper = store.register(con, b"%PDF-1.4 fake", mime="application/pdf", title="paper")
+    store.index_text(
+        con, paper["doc_id"], "Words. " * 60, text_source="pymupdf4llm/1.28.2"
+    )
+    assert store.unreadable_documents(con) == [scan.doc_id]
+    # the unreadable ones, OCR: the page is not among them, the scan is
+    dry = client.post(
+        "/readings/bulk",
+        json={"extractor": "pymupdf4llm-ocr", "unreadable": True, "dry_run": True},
+    ).json()
+    assert dry == {"selected": 1, "requested": 0, "skipped": 0, "dry_run": True}
+    assert "reading" not in store.get_meta(con, scan.doc_id)
+    done = client.post(
+        "/readings/bulk", json={"extractor": "pymupdf4llm-ocr", "unreadable": True}
+    ).json()
+    assert done["requested"] == 1
+    assert store.get_meta(con, scan.doc_id)["reading"]["extractor"] == "pymupdf4llm-ocr"
+    # by stamp prefix, with a mode; a document the extractor cannot read is skipped
+    r = client.post(
+        "/readings/bulk",
+        json={
+            "extractor": "figures",
+            "mode": "all",
+            "ids": [page.doc_id, paper["doc_id"], scan.doc_id],
+            "text_source": "pymupdf4llm/",
+        },
+    ).json()
+    assert (
+        r["selected"] == 1 and r["requested"] == 1
+    )  # only the paper matches the prefix
+    assert store.get_meta(con, paper["doc_id"])["reading"]["mode"] == "all"
+    r = client.post(
+        "/readings/bulk",
+        json={"extractor": "trafilatura", "ids": [page.doc_id, paper["doc_id"]]},
+    ).json()
+    assert r == {"selected": 2, "requested": 1, "skipped": 1, "dry_run": False}
+    # an unknown extractor is refused; the requests are what the worker sees
+    assert (
+        client.post(
+            "/readings/bulk", json={"extractor": "nope", "unreadable": True}
+        ).status_code
+        == 400
+    )
+    waiting = {r["doc_id"] for r in client.get("/readings").json()["requested"]}
+    assert waiting == {scan.doc_id, paper["doc_id"], page.doc_id}
+    # the health panel offers the two readings for the unreadable ones
+    found = client.get("/heal", params={"check": "unreadable-documents"}).json()
+    offers = found["ailments"][0]["offers"]
+    assert [o["extractor"] for o in offers] == ["pymupdf4llm-ocr", "vision-pages"]

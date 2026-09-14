@@ -819,6 +819,104 @@ def request_reading(
     return meta["reading"]
 
 
+def unreadable_documents(
+    con: sqlite3.Connection, *, limit: int | None = None
+) -> list[int]:
+    """Documents without text whose every extractor has tried and found
+    none (kept, empty or an error under its current stamp): scans without
+    a text layer, mostly. The door does not hand them out again; a
+    reading asked for — OCR, the vision model — is the way on."""
+    from prax import parsers
+    from prax.parsers import queue
+
+    out: list[int] = []
+    rows = con.execute(
+        "SELECT id, mime, meta FROM documents WHERE text_hash IS NULL"
+        "   AND json_extract(meta, '$.retired') IS NULL"
+        "   AND json_extract(meta, '$.parse_history') IS NOT NULL"
+        " ORDER BY id"
+    )
+    for r in rows:
+        exts = parsers.candidates((r["mime"] or "").strip())
+        meta = json.loads(r["meta"] or "{}")
+        if exts and any(queue._seen(meta, e.stamp) for e in exts):
+            out.append(r["id"])
+            if limit and len(out) >= limit:
+                break
+    return out
+
+
+def select_for_reading(
+    con: sqlite3.Connection,
+    *,
+    ids: list[int] | None = None,
+    mime: str | None = None,
+    text_source: str | None = None,
+    unreadable: bool = False,
+    limit: int | None = None,
+) -> list[int]:
+    """The documents a reading is asked for at once: the ``ids`` given,
+    narrowed by a MIME type or prefix (``application/pdf``, ``image/``),
+    by the prefix of the text-source stamp (``pymupdf4llm/1.28.2``: what
+    an old extractor read), and to the unreadable ones; every filter
+    given must hold. Retired documents are never selected."""
+    sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
+    args: list[Any] = []
+    if ids:
+        sql += f" AND id IN ({','.join('?' * len(ids))})"
+        args.extend(int(i) for i in ids)
+    if mime:
+        sql += " AND coalesce(mime, '') LIKE ? ESCAPE '!'"
+        args.append(_like_prefix(mime))
+    if text_source:
+        sql += (
+            " AND coalesce(json_extract(meta, '$.text_source'), '') LIKE ? ESCAPE '!'"
+        )
+        args.append(_like_prefix(text_source))
+    sql += " ORDER BY id"
+    chosen = [r[0] for r in con.execute(sql, args)]
+    if unreadable:
+        keep = set(unreadable_documents(con))
+        chosen = [i for i in chosen if i in keep]
+    return chosen[:limit] if limit else chosen
+
+
+def request_readings(
+    con: sqlite3.Connection,
+    ids: list[int],
+    extractor: str,
+    *,
+    mode: str | None = None,
+    by: str = "human",
+) -> dict[str, int]:
+    """A reading request on each of ``ids`` (``request_reading``); a
+    document the extractor does not read is skipped and counted."""
+    from prax import parsers
+
+    if extractor not in READINGS:
+        raise ValueError(f"extractor must be one of {READINGS}")
+    if mode is not None and mode not in MODES.get(extractor, ()):
+        allowed = MODES.get(extractor)
+        raise ValueError(
+            f"mode must be one of {allowed} for {extractor}"
+            if allowed
+            else f"{extractor} takes no mode"
+        )
+    requested = skipped = 0
+    for doc_id in ids:
+        row = con.execute(
+            "SELECT mime FROM documents WHERE id = ?", (doc_id,)
+        ).fetchone()
+        if row is None or not parsers.candidates(
+            row["mime"] or "", preferred=extractor
+        ):
+            skipped += 1
+            continue
+        request_reading(con, doc_id, extractor, mode=mode, by=by)
+        requested += 1
+    return {"selected": len(ids), "requested": requested, "skipped": skipped}
+
+
 @_serialized
 def cancel_reading(con: sqlite3.Connection, doc_id: int) -> bool:
     """Withdraw a request (or forget a finished one)."""

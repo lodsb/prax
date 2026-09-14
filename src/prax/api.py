@@ -1146,6 +1146,53 @@ def request_reading(doc_id: int, req: ReadingReq, request: Request) -> dict[str,
         raise HTTPException(400, str(exc)) from exc
 
 
+class BulkReadingReq(BaseModel):
+    extractor: str  # one of store.READINGS
+    mode: str | None = None  # store.MODES
+    ids: list[int] | None = None
+    mime: str | None = None  # a type or a prefix: application/pdf, image/
+    text_source: str | None = None  # a stamp prefix: what an old extractor read
+    unreadable: bool = False  # the documents nothing here could read
+    limit: int | None = None
+    dry_run: bool = False  # count, place nothing
+    by: str = "human"
+
+
+@app.post("/readings/bulk")
+def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
+    """Ask for a named extractor over a selection at once — OCR over every
+    scan nothing could read, the vision model over their pages, a re-read
+    of what an old extractor produced (``text_source`` prefix), a list of
+    ids — one reading request per document (``POST /doc/{id}/reading``);
+    what the extractor does not read is skipped and counted. The worker
+    drains them like any request, and refuses a paid model. ``dry_run``
+    only counts."""
+    con = _con(request)
+    if req.extractor not in store.READINGS:
+        raise HTTPException(400, f"extractor must be one of {store.READINGS}")
+    if req.mode is not None and req.mode not in store.MODES.get(req.extractor, ()):
+        raise HTTPException(400, f"mode {req.mode!r} is not one {req.extractor} takes")
+    if not (req.ids or req.mime or req.text_source or req.unreadable):
+        raise HTTPException(400, "a selection: ids, mime, text_source or unreadable")
+    ids = store.select_for_reading(
+        con,
+        ids=req.ids,
+        mime=req.mime,
+        text_source=req.text_source,
+        unreadable=req.unreadable,
+        limit=req.limit,
+    )
+    if req.dry_run:
+        return {"selected": len(ids), "requested": 0, "skipped": 0, "dry_run": True}
+    try:
+        counts = store.request_readings(
+            con, ids, req.extractor, mode=req.mode, by=req.by
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {**counts, "dry_run": False}
+
+
 @app.delete("/doc/{doc_id}/reading")
 def cancel_reading(doc_id: int, request: Request) -> dict[str, bool]:
     return {"removed": store.cancel_reading(_con(request), doc_id)}

@@ -355,6 +355,41 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=running.serve, needs_door=False)
 
     s = sub.add_parser(
+        "reread",
+        parents=[door_opts, as_json],
+        help="ask for a named extractor over a selection of documents",
+        description=(
+            "A reading request on every document selected — the same as"
+            " 'read again…' on a page, for many at once. A worker drains them"
+            " (a paid model is refused). --dry-run counts."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax reread --extractor pymupdf4llm-ocr --unreadable   OCR, the scans\n"
+            "  prax reread --extractor vision-pages --mode scans --unreadable\n"
+            "  prax reread --extractor figures --mode all --mime application/pdf\n"
+            "  prax reread --extractor pymupdf4llm --text-source pymupdf4llm/1.28.2\n"
+            "  prax reread --extractor trafilatura --ids 9706 9712"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("--extractor", required=True, help="one of the readings")
+    s.add_argument("--mode", help="vision-pages: scans|all; figures: captioned|all")
+    s.add_argument("--ids", nargs="+", type=int, metavar="ID")
+    s.add_argument("--mime", help="a type or a prefix: application/pdf, image/")
+    s.add_argument(
+        "--text-source", help="a stamp prefix: the documents an old extractor read"
+    )
+    s.add_argument(
+        "--unreadable",
+        action="store_true",
+        help="the documents nothing here could read (scans without a text layer)",
+    )
+    s.add_argument("-n", "--limit", type=int, help="at most this many")
+    s.add_argument("--dry-run", action="store_true", help="count, ask for nothing")
+    s.set_defaults(func=running.reread, needs_door=True)
+
+    s = sub.add_parser(
         "heal",
         parents=[door_opts, as_json],
         help="find what goes wrong often, and repair it",

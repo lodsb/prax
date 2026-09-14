@@ -115,6 +115,9 @@ class Ailment:
     fix: str  # what repairing does, or what to do about it by hand
     find: Callable[[sqlite3.Connection], list[dict[str, Any]]]
     repair: Callable[[sqlite3.Connection, list[dict[str, Any]]], int] | None = None
+    # readings a person may ask for over everything found (a report-only
+    # ailment's way on): each a label and the body of POST /readings/bulk
+    offers: tuple[dict[str, Any], ...] = ()
 
     @property
     def repairable(self) -> bool:
@@ -283,33 +286,29 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Documents without text whose every extractor has tried and found
-    none (kept, empty or an error under its current stamp): scans without
-    a text layer, mostly. The door does not hand them out again."""
-    from prax import parsers
-    from prax.parsers import queue
+    """Documents every extractor has tried and found no text in
+    (``documents.unreadable_documents``), with what the last attempt said."""
+    from prax.store import documents as docs
 
+    ids = docs.unreadable_documents(con, limit=CAP)
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
     out = []
-    rows = con.execute(
-        "SELECT id, title, mime, meta FROM documents WHERE text_hash IS NULL"
-        "   AND json_extract(meta, '$.retired') IS NULL"
-        "   AND json_extract(meta, '$.parse_history') IS NOT NULL"
-        " ORDER BY id LIMIT ?",
-        (CAP,),
-    ).fetchall()
-    for r in rows:
-        exts = parsers.candidates((r["mime"] or "").strip())
-        meta = json.loads(r["meta"] or "{}")
-        if exts and any(queue._seen(meta, e.stamp) for e in exts):
-            last = (meta.get("parse_history") or [])[-1]
-            out.append(
-                {
-                    "id": r["id"],
-                    "title": r["title"],
-                    "mime": r["mime"],
-                    "last": last.get("outcome") or last.get("error"),
-                }
-            )
+    for r in con.execute(
+        f"SELECT id, title, mime, meta FROM documents WHERE id IN ({marks})"
+        " ORDER BY id",
+        tuple(ids),
+    ):
+        last = (json.loads(r["meta"] or "{}").get("parse_history") or [{}])[-1]
+        out.append(
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "mime": r["mime"],
+                "last": last.get("outcome") or last.get("error"),
+            }
+        )
     return out
 
 
@@ -596,9 +595,23 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         fix=(
             "ask for OCR or the vision model on the document's page ('read"
-            " again…', howto 3b) or retire it; nothing to repair in the store"
+            " again…', howto 3b) or over all of them at once (`prax reread"
+            " --unreadable`), or retire it; nothing to repair in the store"
         ),
         find=_unreadable_documents,
+        offers=(
+            {
+                "label": "ask OCR for all of them",
+                "extractor": "pymupdf4llm-ocr",
+                "unreadable": True,
+            },
+            {
+                "label": "ask the vision model for their scanned pages",
+                "extractor": "vision-pages",
+                "mode": "scans",
+                "unreadable": True,
+            },
+        ),
     ),
     Ailment(
         name="unmapped-glyphs",
@@ -667,6 +680,7 @@ def health(
                 "what": ailment.what,
                 "fix": ailment.fix,
                 "repairable": ailment.repairable,
+                "offers": list(ailment.offers),
                 "count": len(rows),
                 "capped": len(rows) >= CAP,
                 "examples": rows[:examples],
