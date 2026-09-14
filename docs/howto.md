@@ -970,6 +970,31 @@ rendered again in place, keeping the scroll position and never while
 something is being typed. One small query per ten seconds per open tab
 is the whole cost.
 
+## 3l½. What runs on its own, and what you run
+
+With the door up and a worker watching (`prax work --watch`, on the
+machine with the models), a capture — an upload, a page from the
+extension, a file in the drop folder — goes all the way on its own:
+
+| on its own, for every new document | where |
+|---|---|
+| parse, with the figures found and referenced, ligatures and Symbol-font glyphs turned into letters, page markers, the text cleaned | the parsers, `store.index_text` |
+| a title where the file name was one; the graph extraction under the current ontology; the typing rules over what it queued; the vectors | the worker's steps (titles, extract, embed) |
+| an image described, and a parsed document's figures read by the vision model | reading requests the door places itself, when the vision step is a local server — nothing is spent unasked; with Claude as the vision model these stay yours to ask for |
+| a request placed on a document's page ("read again…") | the worker, before the pending captures |
+| jobs whose process is gone closed; the drop folder consumed | the door |
+
+What stays a command or a click, because it costs money, time or a
+decision: the promote pass (Claude over the flagged documents), the
+model typing pass over the review queue, OCR of scans and the vision
+model over whole pages (`vision-pages`), a re-read of the whole library
+after a parser changes (the `--upgrade` runs above), the ontology
+migrations, and the repairs — `prax heal`, or the Health panel at the
+foot of the Jobs page, which shows what every ailment finds right now
+and repairs the repairable ones with one button (a job; nothing is
+deleted). The curated imports' own backlog (Zotero, GitHub, chats) is
+`parse_pending.py --pending` and a worker with `--scope all`.
+
 ## 3m. Healing what recurs
 
 Extraction at scale leaves the same few kinds of damage behind, and they

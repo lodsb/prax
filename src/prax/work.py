@@ -14,6 +14,11 @@ Four steps, each a selection the door already knows how to make:
     embed    chunks and document fields without a vector; the worker
              posts the vectors, the door puts them in its delta index
 
+The readings a person asks for on a document (``meta.reading``) go out
+with the parse step, first. The door asks for two kinds itself, for
+captures, when the vision model is a local server (nothing spent): an
+image to describe, and the figures of a freshly parsed document to read.
+
 A handed-out item carries a lease (``LEASE_SECONDS``): until it expires
 no other worker gets it. Leases live in this process; a door restart
 forgets them, which costs nothing because every result is idempotent
@@ -29,11 +34,32 @@ import time
 from dataclasses import asdict
 from typing import Any
 
-from prax import embeddings, extraction, inbox, ontology, pipeline, store
-from prax.parsers import queue
+from prax import embeddings, extraction, inbox, models, ontology, pipeline, store
+from prax.parsers import figures, queue
 
 LEASE_SECONDS = 900
 STEPS = ("parse", "titles", "extract", "embed")
+
+
+def _vision_is_free() -> bool:
+    """Whether a reading by the vision model costs nothing (a local
+    server): the readings the door asks for on its own are only those."""
+    try:
+        spec = models.resolve("vision")
+    except Exception:  # noqa: BLE001 - a broken prax.yaml is not this step's problem
+        return False
+    return spec is not None and spec.kind == "openai"
+
+
+def _ask_reading(con: sqlite3.Connection, doc_id: int, extractor: str) -> bool:
+    """A reading request the door places for a capture — an image to
+    describe, figures to read — when the model is free and nobody asked
+    for one yet."""
+    meta = store.get_meta(con, doc_id)
+    if meta.get("reading"):
+        return False
+    store.request_reading(con, doc_id, extractor, by="door")
+    return True
 SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
@@ -184,7 +210,13 @@ def hand_out(
             if doc is None:
                 continue
             exts = parsers.candidates(doc["mime"] or "")
-            if not exts or queue._seen(doc["meta"], exts[0].stamp):
+            if not exts:
+                # an image has no parser of its own: the vision model reads
+                # it, as a reading the door asks for when that is free
+                if (doc["mime"] or "").startswith("image/") and _vision_is_free():
+                    _ask_reading(con, doc_id, "vision")
+                continue
+            if queue._seen(doc["meta"], exts[0].stamp):
                 continue
             path = doc.get("original_path")
             items.append(
@@ -354,6 +386,13 @@ def take_in(
                 store.finish_reading(
                     con, doc_id, outcome=action, stamp=stamp, error=r.get("error")
                 )
+            elif action in ("created", "upgraded") and _vision_is_free():
+                # a freshly parsed capture with figures: the vision model reads
+                # them next, as a reading the door asks for
+                doc = store.get_document(con, doc_id)
+                source = (doc or {}).get("meta", {}).get("source")
+                if source in pipeline.CAPTURE_SOURCES and figures.refs(doc["text"]):
+                    _ask_reading(con, doc_id, "figures")
             actions[action] = actions.get(action, 0) + 1
             out["applied"] += 1
         out["actions"] = actions

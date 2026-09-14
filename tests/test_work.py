@@ -264,3 +264,47 @@ def test_a_requested_reading_goes_out_first_and_comes_back_with_its_outcome(
     reading = store.get_meta(con, scan)["reading"]
     assert reading["state"] == "error" and "(paid)" in reading["error"]
     assert client.delete(f"/doc/{scan}/reading").json()["removed"] is True
+
+
+def test_the_door_asks_for_readings_of_captures_when_the_vision_model_is_free(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An uploaded image, and a captured page whose parse found figures,
+    get a reading request from the door itself — only when the vision
+    model is a local server; with Claude set, nothing is asked."""
+    from prax import models
+
+    con = client.app.state.con
+    png = b"\x89PNG\r\n\x1a\n" + bytes(40)
+    image = inbox.ingest_upload(con, png, filename="panel.png", mime="image/png")
+    # Claude as the vision model: the door leaves the image alone
+    paid = models.ModelSpec(name="sonnet", kind="claude", model="claude-sonnet-5")
+    monkeypatch.setattr(models, "resolve", lambda s: paid if s == "vision" else None)
+    client.get("/work/parse")
+    assert "reading" not in store.get_meta(con, image.doc_id)
+    # a local server: the image is asked for, once, and handed out next
+    free = models.ModelSpec(
+        name="server-vl", kind="openai", base_url="http://127.0.0.1:1/v1", model="vl"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: free if s == "vision" else None)
+    client.get("/work/parse")
+    reading = store.get_meta(con, image.doc_id)["reading"]
+    assert reading["extractor"] == "vision" and reading["by"] == "door"
+    work._leases.clear()
+    items = client.get("/work/parse").json()["items"]
+    assert [i["extractor"] for i in items if i["doc_id"] == image.doc_id] == ["vision"]
+    # a captured page whose parse found a figure: its figures are asked for
+    html = b"<html><body>x</body></html>"
+    page = inbox.ingest_upload(con, html, filename="p.html", mime="text/html")
+    text = "# A page\n\nProse.\n\n![A plot](figure:" + "ab" * 32 + ")\n"
+    result = {"doc_id": page.doc_id, "extractor": "trafilatura/9", "text": text * 20}
+    rep = client.post("/work/parse", json={"results": [result]}).json()
+    assert rep["applied"] == 1
+    reading = store.get_meta(con, page.doc_id)["reading"]
+    assert reading["extractor"] == "figures" and reading["by"] == "door"
+    # a parse without figures asks for nothing
+    plain = inbox.ingest_upload(con, html + b" ", filename="q.html", mime="text/html")
+    prose = "Prose. " * 60
+    result = {"doc_id": plain.doc_id, "extractor": "trafilatura/9", "text": prose}
+    client.post("/work/parse", json={"results": [result]})
+    assert "reading" not in store.get_meta(con, plain.doc_id)
