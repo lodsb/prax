@@ -444,11 +444,18 @@ def describe(data: bytes, previous: str) -> str:
         return previous
     lines = previous.split("\n")
     done = 0
+    broken: list[str] = []
     for r in wanted:
         found = find(data, r["ref"])
         if found is None:
             continue
-        image, _media = readable(*found)
+        try:
+            image, _media = readable(*found)
+        except (OSError, ValueError) as exc:
+            # a picture Pillow cannot decode (a truncated stream, an odd
+            # colour space): the others in the document still get read
+            broken.append(f"{r['ref'][:12]}: {exc}")
+            continue
         text, who = vision.read(image, FIGURE_PROMPT, max_tokens=600)
         text = " ".join(text.split())
         if not text:
@@ -460,5 +467,6 @@ def describe(data: bytes, previous: str) -> str:
                 done += 1
                 break
     if not done:
-        raise ExtractionError("no figure could be read")
+        why = f" ({'; '.join(broken[:3])})" if broken else ""
+        raise ExtractionError("no figure could be read" + why)
     return "\n".join(lines)

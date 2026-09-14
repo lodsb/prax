@@ -200,6 +200,13 @@ def test_describe_writes_the_reading_under_each_figure(
     assert figures.refs(out)[0]["described_by"] == ["vl@127.0.0.1:1"]
     # the same model again reads nothing; a chunk carries the reading
     assert figures.describe(PAGE.encode(), out) == out
+    # a picture Pillow cannot decode is skipped, the others still read
+    junk = b"\x89PNG\r\n\x1a\n" + b"junk" * 2000
+    bad = PAGE.replace(_data_url(PLOT), _data_url(junk))
+    figs2 = figures.html_figures(bad.encode())
+    assert len(figs2) == 2
+    out2 = figures.describe(bad.encode(), figures.place("Prose.\n", figs2))
+    assert out2.count("*Figure, as read by") == 1
     fig_chunks = [c for c in chunking.chunk(out) if c.kind == "figure"]
     assert fig_chunks[0].data["readings"][0]["model"] == "vl@127.0.0.1:1"
 
