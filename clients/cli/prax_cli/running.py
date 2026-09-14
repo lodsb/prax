@@ -284,12 +284,23 @@ def serve(a: Any) -> int:
         return 2
     from prax import config
 
-    out.say(f"prax is listening on http://{a.host}:{a.port}")
-    out.hint(f"  the web UI:   http://{a.host}:{a.port}/ui/")
+    tls = bool(a.ssl_certfile or a.ssl_keyfile)
+    if tls and not (a.ssl_certfile and a.ssl_keyfile):
+        out.fail("HTTPS needs both --ssl-certfile and --ssl-keyfile")
+        return 2
+    scheme = "https" if tls else "http"
+    out.say(f"prax is listening on {scheme}://{a.host}:{a.port}")
+    out.hint(f"  the web UI:   {scheme}://{a.host}:{a.port}/ui/")
     out.hint(f"  the store:    {config.data_dir()}")
     out.hint("  stop it with ctrl-c")
     uvicorn.run(
-        "prax.api:app", host=a.host, port=a.port, reload=a.reload, log_level="warning"
+        "prax.api:app",
+        host=a.host,
+        port=a.port,
+        reload=a.reload,
+        log_level="warning",
+        ssl_certfile=a.ssl_certfile,
+        ssl_keyfile=a.ssl_keyfile,
     )
     return 0
 

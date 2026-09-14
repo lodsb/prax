@@ -1114,10 +1114,29 @@ manifest lets Firefox's default MV3 policy upgrade its fetches
 
 Anything that talked to the door without a token before — a local
 script, this session's `curl` — needs the header from then on;
-`/health` and the UI's files stay open. Plain HTTP inside the private
-network is the design; a VPN address (Tailscale's `100.x.y.z`) is the
-same recipe with that address, and TLS through a reverse proxy only if
-the door were ever exposed beyond it.
+`/health` and the UI's files stay open.
+
+**HTTP or HTTPS.** Plain HTTP inside the private network is the design:
+what travels is the token and the documents, and the private network
+is what keeps them private — a home LAN behind the router, or a VPN
+(Tailscale encrypts the wire itself, so plain HTTP over a `100.x.y.z`
+address is already private). HTTPS on the door is a certificate
+problem, not a code one: the door serves it with
+
+    prax serve --host 0.0.0.0 --ssl-certfile cert.pem --ssl-keyfile key.pem
+
+(the session cookie becomes `Secure`), but a certificate for a bare
+LAN address has to be one every client trusts — a self-signed one
+means a warning in the browser and, worse, a silent failure in the
+extension, which cannot click through. The two ways that work: a
+private CA whose root is installed on every client (mkcert, or Caddy
+in front of the door with `tls internal`; Firefox needs
+`security.enterprise_roots.enabled` or the root in its own store), or
+a real certificate for a real name — `tailscale cert <name>.ts.net`
+issues one for the machine's Tailscale name, which is the clean
+answer when the board is reached that way. Neither is worth doing for
+a LAN with only your own devices on it; either is, the day the door is
+reachable from a network you do not run.
 
 ## 4a. The `prax` command
 

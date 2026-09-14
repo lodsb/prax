@@ -340,6 +340,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--port", type=int, default=8000)
     s.add_argument("--reload", action="store_true", help="restart on code changes")
+    s.add_argument(
+        "--ssl-certfile", help="serve HTTPS with this certificate (PEM) …"
+    )
+    s.add_argument("--ssl-keyfile", help="… and this private key (PEM)")
     s.set_defaults(func=running.serve, needs_door=False)
 
     s = sub.add_parser(
