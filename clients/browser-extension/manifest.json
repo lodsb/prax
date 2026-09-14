@@ -16,6 +16,9 @@
   },
   "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus", "downloads"],
   "host_permissions": ["http://*/*", "https://*/*"],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self';"
+  },
   "browser_specific_settings": {
     "gecko": { "id": "prax-capture@lodsb.org", "strict_min_version": "115.0" }
   }

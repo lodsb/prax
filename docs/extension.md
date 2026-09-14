@@ -39,7 +39,7 @@ domains it offers.
 
 | File | Role |
 |---|---|
-| `manifest.json` | MV3; `background.scripts` for Firefox's event page and `background.service_worker` for Chrome side by side; `activeTab`, `scripting`, `storage`, `tabs`; host permissions for http and https (optional in Firefox, requested when needed) |
+| `manifest.json` | MV3; `background.scripts` for Firefox's event page and `background.service_worker` for Chrome side by side; `activeTab`, `scripting`, `storage`, `tabs`; host permissions for http and https (optional in Firefox, requested when needed); an explicit `content_security_policy.extension_pages` without `upgrade-insecure-requests` — Firefox's MV3 default includes that directive, which rewrites the extension's `http://` fetches to `https://` (loopback is exempt, a LAN address is not), so a door on the private network would only ever see TLS handshakes |
 | `lib.js` | the pure helpers: session id, what is capturable, PDF detection, the plan (DOM, URL or skip), server normalization; node tests in `tests/ui/extension.test.js` |
 | `background.js`, `background-sw.js` | the sending: reads each tab through `scripting.executeScript`, posts to the door, fetches a PDF with the browser's session and uploads it, keeps progress in `storage.session`, closes tabs when asked; also the two services SingleFile's content scripts expect from a background (timers for the lazy-image loader, relaying frame answers to the top frame) and the fetch bridge for cross-origin resources; the service-worker file just imports the other two |
 | `popup.html/js` | the two buttons, domain checkboxes (from `GET /inbox`), tags, close-after-send, progress and results with links into the UI |
