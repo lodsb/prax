@@ -1023,10 +1023,17 @@ extractor whose addition *is* what a revision added says so
 (`Extractor.covers`: `figure-refs` covers `pymupdf4llm` r2 and
 `trafilatura` r3), and after it the stamp moves to that revision — the
 document is not read again for what it already has. The Health panel
-counts the stale ones (`stale-parses`); its repair moves the stamp where
-an annotation in the history already made the change (the figure-refs
-pass over the library ran before stamps moved), and the backlog pass
-reads the rest:
+counts the stale ones (`stale-parses`). Four ways to bring a stale
+text up to date, from cheapest to dearest:
+
+| way | when | what it costs |
+|---|---|---|
+| the ailment's repair — "repair" next to `stale-parses` on the Jobs page, or `prax heal --check stale-parses --apply` (a run takes up to 5,000; press again for the rest) | an annotation in the history already made the revision's change (the figure-refs pass over the library ran before stamps moved) | moves the stamp, writes a `stamped` history entry; nothing is read |
+| the backlog pass, below | the revision changed what the extractor produces | a re-read per document, a batch a night; `same` when nothing came of it |
+| `parse_pending.py --upgrade <old stamp> [--force]` (3b) | you want the whole library at the new revision now, not over nights | every document at once, on the desktop |
+| "read again…" on a document's page | one document, now, with the extractor of your choice | that one read |
+
+The backlog pass:
 
     prax work --scope all --limit 100      # captures first, then a hundred stale ones
 
@@ -1077,6 +1084,12 @@ come back with every pass, so they have names and a place:
     prax heal --check self-edges --apply   one kind
     prax heal --json                       for a script
 
+The Health panel at the foot of the Jobs page is the same thing with
+buttons: "repair" next to each ailment that can be repaired (one kind,
+like `--check`), and one for all of them together. One kind at a time
+is the usual way: what you meant to leave alone (a few unnamed entities
+you still want to look at) stays alone.
+
 | ailment | what it is | what repairing does |
 |---|---|---|
 | `placeholder-entities` | a model copied a word out of its own prompt: "source name", "target name", "unknown", "n/a" | ends every edge they carry; the entity stays as the record of what happened |
@@ -1087,7 +1100,7 @@ come back with every pass, so they have names and a place:
 | `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
 | `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
 | `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |
-| `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time (3l¾) |
+| `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time, or `--upgrade` at once (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
 

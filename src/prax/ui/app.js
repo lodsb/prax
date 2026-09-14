@@ -1851,18 +1851,34 @@ function readingLines(r) {
 }
 
 // The store's health: what the recurring ailments find right now
-// (GET /heal), and one button that repairs the repairable ones as a job.
-// Nothing is deleted by a repair: edges are ended, items resolved, texts
-// re-indexed from their own artifact.
+// (GET /heal), a "repair" on each ailment that can be, and one button
+// that repairs all of them together — each a job. Nothing is deleted
+// by a repair: edges are ended, items resolved, texts re-indexed from
+// their own artifact, stamps moved.
 function healthLines(h) {
   if (!h) return "";
   const rows = h.ailments.map((a) => `<li class="${a.count ? "" : "muted"}">
-      <b>${a.count.toLocaleString()}${a.capped ? "+" : ""}</b> ${esc(a.name)}${a.count ? ` <span class="muted">— ${esc(a.what)}</span>` : ""}${a.count && !a.repairable ? ` <span class="muted">(${esc(a.fix)})</span>` : ""}</li>`);
-  const repairable = h.ailments.some((a) => a.count && a.repairable);
+      <b>${a.count.toLocaleString()}${a.capped ? "+" : ""}</b> ${esc(a.name)}${a.count ? ` <span class="muted">— ${esc(a.what)}</span>` : ""}${a.count && !a.repairable ? ` <span class="muted">(${esc(a.fix)})</span>` : ""}${a.count && a.repairable ? ` <button type="button" class="linkish heal-one" data-check="${esc(a.name)}" title="${esc(a.fix)}">repair</button>` : ""}</li>`);
+  const repairable = h.ailments.filter((a) => a.count && a.repairable).length;
   return `
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Health <span class="muted" style="font-weight:400;font-size:.85rem">${h.found ? `${h.found} thing${h.found > 1 ? "s" : ""} to look at` : "nothing to repair"} · checked ${esc((h.checked_at || "").replace("T", " ").slice(0, 16))}</span></h2>
     <ul class="servers">${rows.join("")}</ul>
-    ${repairable ? `<p><button type="button" id="heal-now" class="secondary">Repair what can be repaired</button> <span id="heal-msg" class="muted"></span></p>` : ""}`;
+    ${repairable > 1 ? `<p><button type="button" id="heal-now" class="secondary">Repair all ${repairable} together</button></p>` : ""}
+    <p id="heal-msg" class="muted"></p>`;
+}
+
+// One heal request (every repairable ailment, or the one named) and its
+// outcome in the panel's message line; the page follows once the job is
+// through.
+async function healNow(button, checks) {
+  const msg = document.getElementById("heal-msg");
+  button.disabled = true;
+  msg.textContent = "repairing… (a job; the page follows)";
+  try {
+    const r = await post("/heal", checks ? { checks } : {});
+    msg.textContent = Object.entries(r).map(([k, v]) => `${k}: ${typeof v === "string" ? v : `${v.repaired} of ${v.found}${v["left alone"] ? ` (${v["left alone"]} left alone)` : ""}`}`).join(" · ") || "nothing to repair";
+    setTimeout(() => render({ keepScroll: true }), 1500);
+  } catch (err) { msg.textContent = err.message; button.disabled = false; }
 }
 
 async function viewJobs(p) {
@@ -1884,16 +1900,8 @@ async function viewJobs(p) {
     ${d.recent.length ? table(d.recent) : `<p class="muted">No finished jobs yet.</p>`}
     ${healthLines(health)}`;
   const heal = document.getElementById("heal-now");
-  if (heal) heal.addEventListener("click", async () => {
-    heal.disabled = true;
-    const msg = document.getElementById("heal-msg");
-    msg.textContent = "repairing… (a job; the page follows)";
-    try {
-      const r = await post("/heal", {});
-      msg.textContent = Object.entries(r).map(([k, v]) => `${k}: ${typeof v === "string" ? v : `${v.repaired} of ${v.found}`}`).join(" · ") || "nothing to repair";
-      setTimeout(() => render({ keepScroll: true }), 1500);
-    } catch (err) { msg.textContent = err.message; heal.disabled = false; }
-  });
+  if (heal) heal.addEventListener("click", () => healNow(heal, null));
+  view.querySelectorAll(".heal-one").forEach((b) => b.addEventListener("click", () => healNow(b, [b.dataset.check])));
 }
 
 // --------------------------------------------------------------- changes
