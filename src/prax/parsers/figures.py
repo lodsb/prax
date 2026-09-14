@@ -50,6 +50,7 @@ REF = re.compile(
 )
 READ_BY = re.compile(r"^\*Figure, as read by (?P<model>.+?):\*", re.MULTILINE)
 FIGURES_HEADING = "## Figures"
+UNCAPTIONED = "Figure on page "  # a PDF image no caption claims
 
 
 @dataclass
@@ -183,7 +184,7 @@ def pdf_figures(doc: Any) -> list[Figure]:
         media = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "jpx": "image/jp2"}.get(
             ext, f"image/{ext}"
         )
-        caption = caption or f"Figure on page {page_no + 1}"
+        caption = caption or f"{UNCAPTIONED}{page_no + 1}"
         out.append(Figure(ref, data, media, caption, page=page_no + 1))
         if len(out) >= MAX_FIGURES:
             break
@@ -422,12 +423,23 @@ def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
 
 def describe(data: bytes, previous: str) -> str:
     """The text with every figure reference followed by the vision model's
-    reading of it (a figure that model has read already is left alone).
-    ``data`` is the original the figures come from."""
+    reading of it (a figure that model has read already is left alone;
+    a PDF image no caption claims only with ``parse.figures: all``, since
+    many of those are decoration). ``data`` is the original the figures
+    come from."""
+    from prax import config
     from prax.parsers import ExtractionError, vision
 
     model = vision.model_name()
-    wanted = [r for r in refs(previous) if model not in r["described_by"]]
+    which = str(config.setting("parse.figures", "PRAX_FIGURES", "captioned"))
+    if which not in ("captioned", "all"):
+        raise ExtractionError(f"parse.figures must be captioned or all, not {which!r}")
+    wanted = [
+        r
+        for r in refs(previous)
+        if model not in r["described_by"]
+        and (which == "all" or not r["caption"].startswith(UNCAPTIONED))
+    ]
     if not wanted:
         return previous
     lines = previous.split("\n")

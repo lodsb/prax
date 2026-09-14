@@ -201,7 +201,9 @@ half, the reading:
     # what the vision model makes of every figure, written under each
     python scripts/parse_pending.py --ids 9706 --extractor figures --force
 
-or "read again… → figures" on the page. The reading goes under the
+or "read again… → figures" on the page. A PDF image no caption claims
+(`Figure on page N`) is read only with `parse.figures: all`
+(`PRAX_FIGURES=all`): many of those are decoration. The reading goes under the
 image line as `*Figure, as read by <model>:* …` (a model reads a figure
 once; another model's reading joins it), and the figure chunk carries
 it — findable, and read by the extraction. The parsers find
