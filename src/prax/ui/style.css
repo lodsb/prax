@@ -183,7 +183,7 @@ a:hover { text-decoration: underline; }
 /* ---------------------------------------------------------- masthead */
 .top {
   display: flex; align-items: center; gap: 1.6rem;
-  padding: .9rem 2rem .55rem; background: var(--bg);
+  padding: .8rem 2rem 1rem; background: var(--bg);
   position: sticky; top: 0; z-index: 2;
 }
 .top::after { /* the double rule: two weights and a gap */
@@ -192,13 +192,14 @@ a:hover { text-decoration: underline; }
 }
 .brand { display: flex; align-items: center; gap: .7rem; color: var(--fg); text-decoration: none; }
 .brand:hover { text-decoration: none; }
-.brand svg { width: 2.5rem; height: 2.5rem; display: block; }
+.brand svg { width: 2.5rem; height: 2.5rem; display: block; margin-top: -.15rem; }
 .wordmark { font-family: var(--font-ui); font-size: 1.75rem; font-weight: 600; letter-spacing: -.035em; line-height: 1; }
 nav { display: flex; gap: 1.1rem; flex-wrap: wrap; }
 nav a { color: var(--faint); }
 nav a:hover { color: var(--fg); text-decoration: none; }
 nav a.active { color: var(--accent); }
-.quick { margin-left: auto; display: flex; align-items: center; gap: .6rem; border-bottom: 1.5px solid var(--fg); padding: .3rem .1rem; }
+.quick { margin-left: auto; display: flex; align-items: center; gap: .6rem; border-bottom: 1px solid var(--line); padding: .2rem .1rem; }
+.quick:focus-within { border-bottom-color: var(--fg); }
 .quick svg { width: 11px; height: 11px; flex: 0 0 auto; }
 .quick input { width: 18rem; max-width: 30vw; border: 0; background: none; outline: none; padding: .1rem 0; font-family: var(--font-read); font-size: 1rem; color: var(--fg); }
 .quick input::placeholder { color: var(--faint); font-family: var(--font-ui); font-size: .9rem; }
