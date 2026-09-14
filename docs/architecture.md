@@ -345,7 +345,7 @@ loop); the queue makes each batch do real work.
 | I want to… | Touch |
 |---|---|
 | add a source | a reader under `prax.importers` that yields `feed.Item`s and a line in `clients/cli/prax_cli/importing.py` (`sources.md` 6); only a source that must open something on the door's host calls `store.register` / `index_text` itself and stamps `meta.source`; a fixture and tests |
-| add an extractor | a `bytes -> str` function (`filename=` when `hints=True`) and an `Extractor` entry in `prax.parsers.REGISTRY`; bump `revision` when its output changes; run `parse_pending.py --upgrade <old stamp>` |
+| add an extractor | a `bytes -> str` function (`filename=` when `hints=True`) and an `Extractor` entry in `prax.parsers.REGISTRY`; bump `revision` when its output changes and the backlog pass re-reads the library a batch at a time (howto 3l¾; `parse_pending.py --upgrade <old stamp>` does it at once); an annotating extractor whose addition is what a revision added names it in `covers`, so the stamp moves without a re-read |
 | change chunking | `prax.chunking`; run `rechunk.py --all`; the locator invariant is asserted |
 | add a media kind (audio) | a chunk `kind` and locator shape in `prax.chunking`; an analyzer that produces the searchable rendering (images already go through `vision`) |
 | change what a document *is* for search | `store.document_field`; run `refresh_document_fields.py`, then `embed_pending.py` |

@@ -1018,8 +1018,15 @@ result stays addressable:
 
 A document is **stale** when its stamp names an extractor whose revision
 prax has moved on since (`parsers.behind`): a re-read would produce
-something new, or say `same` and cost only the parse. The Health panel
-counts them (`stale-parses`, a report), and the backlog pass reads them:
+something new, or say `same` and cost only the parse. An annotating
+extractor whose addition *is* what a revision added says so
+(`Extractor.covers`: `figure-refs` covers `pymupdf4llm` r2 and
+`trafilatura` r3), and after it the stamp moves to that revision — the
+document is not read again for what it already has. The Health panel
+counts the stale ones (`stale-parses`); its repair moves the stamp where
+an annotation in the history already made the change (the figure-refs
+pass over the library ran before stamps moved), and the backlog pass
+reads the rest:
 
     prax work --scope all --limit 100      # captures first, then a hundred stale ones
 
@@ -1080,7 +1087,7 @@ come back with every pass, so they have names and a place:
 | `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
 | `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
 | `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |
-| `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | a report: the backlog pass reads them a few at a time (3l¾) |
+| `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
 

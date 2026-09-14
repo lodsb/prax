@@ -143,6 +143,30 @@ def parse_one(
     raise last_error
 
 
+def covered_by_history(meta: dict[str, Any]) -> str | None:
+    """The stamp the text is at, when an annotation in ``parse_history``
+    amounts to a later revision of its extractor than ``text_source``
+    says (the figure-refs pass over the library, before annotations moved
+    the stamp): None when nothing in the history covers it."""
+    current = meta.get("text_source") or ""
+    own = parsers.stamp_parts(current)
+    if own is None:
+        return None
+    moved = None
+    for entry in meta.get("parse_history", []):
+        if entry.get("outcome") not in ("created", "upgraded", "same"):
+            continue
+        parts = parsers.stamp_parts(str(entry.get("extractor", "")))
+        if parts is None or parts[0] == own[0]:
+            continue
+        try:
+            by = parsers.by_name(parts[0])
+        except KeyError:
+            continue
+        moved = parsers.covered(moved or current, by) or moved
+    return moved
+
+
 def stale(con: sqlite3.Connection, *, limit: int | None = None) -> list[int]:
     """Documents whose text came from an extractor prax has revised since
     (``parsers.behind``): a re-read would produce something new, or say
@@ -193,8 +217,7 @@ def apply_parse(
         # a re-read that found nothing new (an upgrade pass over the
         # library): the stamp moves on, chunks and vectors stay
         _record(con, doc_id, {**entry, "outcome": "same"})
-        if not keep_source:
-            store.set_text_source(con, doc_id, stamp)
+        _restamp(con, doc_id, stamp, keep_source)
         return "same"
     if not force and _too_short(len(text), old_len):
         action = "kept" if old_len else "empty"
@@ -206,7 +229,28 @@ def apply_parse(
     # the artifact's hash in the record: every earlier text stays in the
     # archive, content-addressed, and this is how it is found again
     _record(con, doc_id, {**entry, "outcome": action, "text_hash": result["text_hash"]})
+    if keep_source:
+        _restamp(con, doc_id, stamp, keep_source)
     return action
+
+
+def _restamp(
+    con: sqlite3.Connection, doc_id: int, stamp: str, keep_source: bool
+) -> None:
+    """After a read or an annotation, where ``meta.text_source`` goes: the
+    reader's own stamp; or, for an annotation that is what a revision of
+    the parser added (``Extractor.covers``), the parser's stamp at that
+    revision, so the document is not read again for it."""
+    if not keep_source:
+        store.set_text_source(con, doc_id, stamp)
+        return
+    parts = parsers.stamp_parts(stamp)
+    if parts is None:
+        return
+    current = store.get_meta(con, doc_id).get("text_source") or ""
+    moved = parsers.covered(current, parsers.by_name(parts[0]))
+    if moved:
+        store.set_text_source(con, doc_id, moved)
 
 
 def run(

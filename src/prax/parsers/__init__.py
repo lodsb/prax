@@ -79,6 +79,10 @@ class Extractor:
     variant: Callable[[], str] | None = None  # a setting that changes the output
     previous: bool = False  # takes previous= (the current text) and may keep it
     annotates: bool = False  # adds to the current text: its source stamp stays
+    # what the annotation amounts to: after it, the named extractor's text
+    # is at that revision (figure refs placed = pymupdf4llm r2), so the
+    # source stamp moves there and the document is not read again for it
+    covers: tuple[tuple[str, int], ...] = ()
 
     def accepts(self, mime: str) -> bool:
         return any(
@@ -1045,6 +1049,7 @@ REGISTRY: list[Extractor] = [
         hints=True,
         previous=True,
         annotates=True,
+        covers=(("pymupdf4llm", 2), ("trafilatura", 3)),  # the figure references
     ),
     Extractor("docx", (DOCX_MIME,), _docx),
     Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),
@@ -1090,6 +1095,22 @@ def stamp_parts(stamp: str) -> tuple[str, int] | None:
     if not m:
         return None
     return m.group("name"), int(m.group("rev") or 1)
+
+
+def covered(stamp: str, by: Extractor) -> str | None:
+    """The stamp a text is at after ``by`` annotated it: the same name,
+    package version and variant, the revision raised to what ``by``
+    covers for that extractor. None when ``by`` covers nothing of it or
+    the stamp is already there."""
+    m = _STAMP.match(stamp or "")
+    if not m:
+        return None
+    revision = int(m.group("rev") or 1)
+    to = dict(by.covers).get(m.group("name"))
+    if to is None or to <= revision:
+        return None
+    variant = f"+{m.group('variant')}" if m.group("variant") else ""
+    return f"{m.group('name')}/{m.group('pkg')}-r{to}{variant}"
 
 
 def behind(stamp: str) -> Extractor | None:

@@ -25,10 +25,12 @@ to do rather than doing it.
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from prax import glyphs
@@ -317,21 +319,50 @@ def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
 
 
 def _stale_parses(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Documents read by an extractor prax has revised since."""
+    """Documents read by an extractor prax has revised since; ``covered``
+    names the stamp an annotation in the history already brought the
+    text to, when one did."""
     from prax.parsers import queue
 
     ids = queue.stale(con, limit=CAP)
     if not ids:
         return []
     marks = ",".join("?" * len(ids))
-    return [
-        {"id": r["id"], "title": r["title"], "text_source": r["src"]}
-        for r in con.execute(
-            "SELECT id, title, json_extract(meta, '$.text_source') AS src"
-            f" FROM documents WHERE id IN ({marks}) ORDER BY id",
-            tuple(ids),
+    out = []
+    for r in con.execute(
+        f"SELECT id, title, meta FROM documents WHERE id IN ({marks}) ORDER BY id",
+        tuple(ids),
+    ):
+        meta = json.loads(r["meta"] or "{}")
+        out.append(
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "text_source": meta.get("text_source"),
+                "covered": queue.covered_by_history(meta),
+            }
         )
-    ]
+    return out
+
+
+def _repair_stale_parses(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Move the stamp where an annotation already made the revision's
+    change; the others wait for the backlog pass."""
+    from prax.store import documents as docs
+
+    done = 0
+    for r in rows:
+        if not r.get("covered"):
+            continue
+        meta = docs.get_meta(con, r["id"])
+        history = list(meta.get("parse_history", []))
+        at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        history.append({"at": at, "extractor": r["covered"], "outcome": "stamped"})
+        meta["parse_history"] = history
+        meta["text_source"] = r["covered"]
+        docs.set_meta(con, r["id"], meta)
+        done += 1
+    return done
 
 
 def _unembedded_chunks(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -548,10 +579,13 @@ AILMENTS: tuple[Ailment, ...] = (
             " would produce something new, or say 'same'"
         ),
         fix=(
-            "a backlog pass reads them a few at a time (`prax work --scope"
-            " all`, nightly); nothing to repair in the store"
+            "moves the stamp where an annotation in the history already"
+            " made the revision's change (figure references placed); the"
+            " rest a backlog pass reads a few at a time (`prax work --scope"
+            " all`, nightly)"
         ),
         find=_stale_parses,
+        repair=_repair_stale_parses,
     ),
     Ailment(
         name="chunks-without-vectors",
