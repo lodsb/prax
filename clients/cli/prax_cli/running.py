@@ -676,37 +676,88 @@ def print_version() -> int:
     return 0
 
 
-# ---------------------------------------------------------------- maintain
+# -------------------------------------------------------------- job runs
 
 
-def maintain(door: Door, a: Any) -> int:
-    """Ask the door for the maintenance pass and follow the job."""
-    only = [p.strip() for p in (a.only or "").split(",") if p.strip()] or None
-    started = door.post_json("/maintain", {"only": only})
-    job_id = started["job"]
-    if not a.json:
-        out.say(
-            out.bold("Maintenance")
-            + out.dim(f"   {', '.join(started['passes'])} · job {job_id}")
-        )
+def follow_job(door: Door, job_id: int, *, quiet: bool, what: str = "the job") -> int:
+    """Poll a job the door started until it is over, printing each new
+    note; the exit code says how it ended."""
     last = ""
     while True:
         row = door.get_json(f"/jobs/{job_id}")
         note = row.get("note") or ""
         if row["status"] != "running":
             break
-        if note != last and not a.json:
+        if note != last and not quiet:
             out.hint("  " + note)
             last = note
         time.sleep(2)
-    if a.json:
+    if quiet:
         print(json.dumps(row, indent=2))
         return 0 if row["status"] == "done" else 1
     if row["status"] == "done":
         out.say("  " + note.removeprefix("done: "))
         return 0
-    out.fail(f"the pass {row['status']}: {note}")
+    out.fail(f"{what} {row['status']}: {note}")
     return 1
+
+
+# ---------------------------------------------------------------- maintain
+
+
+def maintain(door: Door, a: Any) -> int:
+    """Ask the door for the maintenance pass and follow the job."""
+    only = [p.strip() for p in (a.only or "").split(",") if p.strip()] or None
+    if getattr(a, "rechunk", False):
+        only = (only or []) + ["rechunk"]
+    started = door.post_json("/maintain", {"only": only})
+    if not a.json:
+        out.say(
+            out.bold("Maintenance")
+            + out.dim(f"   {', '.join(started['passes'])} · job {started['job']}")
+        )
+    return follow_job(door, started["job"], quiet=a.json, what="the pass")
+
+
+# ----------------------------------------------------------------- resolve
+
+
+def resolve(door: Door, a: Any) -> int:
+    """Entity resolution: the plan, and with --apply the sure merges."""
+    body = {
+        "apply": a.apply,
+        "type": a.type,
+        "twins": a.twins,
+        "embed": not a.no_embed,
+        "show": a.show,
+    }
+    r = door.post_json("/graph/resolve", body)
+    if a.json and not a.apply:
+        print(json.dumps(r, indent=2))
+        return 0
+    plan = r["plan"]
+    if not a.json:
+        out.say(
+            out.bold("Entity resolution")
+            + out.dim(
+                f"   {plan['sure']['count']} sure, {plan['twins']['count']} twins,"
+                f" {plan['likely']['count']} likely"
+            )
+        )
+        for tier in ("sure", "twins", "likely"):
+            for c in plan[tier]["examples"]:
+                pair = f"{c['drop']!r} -> {c['keep']!r}"
+                out.hint(f"  {tier:6} {c['score']:.2f} [{c['type']}] {pair}")
+            more = plan[tier]["count"] - len(plan[tier]["examples"])
+            if more > 0:
+                out.hint(f"  … {more} more {tier}")
+    if not a.apply:
+        if not a.json:
+            out.hint(
+                "  --apply merges the sure ones" + (" and the twins" if a.twins else "")
+            )
+        return 0
+    return follow_job(door, r["job"], quiet=a.json, what="the resolution")
 
 
 # ------------------------------------------------------------------ backup

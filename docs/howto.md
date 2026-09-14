@@ -330,10 +330,10 @@ and a locator (character range and page). Search hits carry `kind`,
 `heading` and `page`; `kind="table"` narrows to tables. After changing the
 chunker, or after a migration that added chunk columns:
 
-    python scripts/rechunk.py --all       # every indexed document
-    python scripts/rechunk.py --legacy    # only rows that have no kind yet
+    prax maintain --rechunk               # every indexed document, a job on the door
 
-Chunks are disposable; nothing else is touched.
+Chunks are disposable; nothing else is touched, and a chunk whose text
+did not change keeps its id and its vector.
 
 ## 3d. Embeddings and hybrid search
 
@@ -460,10 +460,15 @@ Run it again after any job that was started before the migration ends.
 
 ### Entity resolution
 
-    python scripts/resolve_entities.py --dry-run               # both tiers listed
-    python scripts/resolve_entities.py --commit --no-embed     # sure merges only
-    python scripts/resolve_entities.py --commit --twins --no-embed  # concept+method twins
-    python scripts/resolve_entities.py --commit --adjudicate   # Claude decides the rest
+    prax resolve                        # the plan: sure, twins, likely — nothing merged
+    prax resolve --apply                # the sure merges, a job on the door
+    prax resolve --apply --twins        # concept+method twins as well
+    prax resolve --type author          # one entity type
+
+The likely tier is listed for you; an adjudicator (Claude over the
+likely pairs, `scripts/resolve_entities.py --commit --adjudicate` until
+it becomes a `--spend` step of the worker) is the only thing that
+merges it.
 
 Sure merges are equal names after normalization (case, accents,
 punctuation, plural, suffixes) and author initials forms that abbreviate
@@ -550,11 +555,13 @@ A model's misfits are systematic: the document typed as what it is about
 on both ends, `cites` for a tool or method the paper uses, `about` for a
 claim it makes or a paper it discusses, and in the studio domain the
 document put where its device belongs ("the manual has this feature":
-moved onto the device the document describes). `scripts/type_review.py` applies
-the rules in `prax.review.apply_typing_rules` to every open typed item:
+moved onto the device the document describes). The door applies the
+rules in `prax.review.apply_typing_rules` to a document's items right
+after its extraction; over the whole queue they are the `review` pass of
+`prax maintain` (3n) — a replay against the current ontology first,
+then the rules — which the nightly task runs:
 
-    python scripts/type_review.py --dry-run    # counts per rule, nothing written
-    python scripts/type_review.py --commit
+    prax maintain --only review
 
 A rule retypes, flips, renames the relation, or drops what no relation can
 hold; it never invents. What it links is written as INFERRED edges with the
@@ -600,9 +607,14 @@ joins the polite pools. Crossref answers in half a second per request;
 OpenAlex needs fewer requests but was unreachable for hours on
 2026-09-10, hence two sources behind one flag.
 
-    python scripts/import_citations.py --dry-run
-    python scripts/import_citations.py --commit --source crossref
-    python scripts/import_citations.py --commit --source crossref --resolve-titles
+    prax import citations --dry-run                        # the selection's size
+    prax import citations --source crossref                # a job on the door
+    prax import citations --source crossref --resolve-titles   # DOI-less ones too, by title
+    prax import citations --refresh -n 50                  # fetched ones again
+
+The door fetches (it has the DOIs, and `citations.mailto` in prax.yaml
+for Crossref's polite pool); the job's note counts resolved documents,
+edges and requests as it goes.
 
 ### Review queue and ontology growth
 
@@ -1152,6 +1164,8 @@ by `prax maintain` on request:
 | `fields` | the document retrieval field (title, kind, summary) of every document — after titles were fixed or summaries written |
 | `domains` | the domain set of every document nobody assigned by hand, from the `domains:` rules in `prax.yaml` (3e); nothing without rules |
 | `dedupe` | the duplicate captures of one page retired, the keeper named in `meta.retired` (3l); row and file kept |
+| `review` | the review queue: a replay against the current ontology (a typed item it accepts now becomes an edge), then the typing rules over every open item (3e) — what the door does for one document after its extraction, for the whole queue |
+| `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c); the nightly has no reason to |
 
 What stays out on purpose: the repairs (`prax heal`, 3m — a person picks
 the ailment), the readings and extractions (the worker, with a model),

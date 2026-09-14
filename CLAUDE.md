@@ -149,7 +149,7 @@ v5 adds organizations (affiliation, funding, who built a tool) and the weak
 - Chunks are addressable regions: `kind`, `locator` (character range plus
   page; `chunk.text == artifact[start:end]` always), `heading` path, table
   `data`. Chunking lives in `prax.chunking` and chunks are disposable:
-  change the chunker, run `scripts/rechunk.py`. New media add a kind and a
+  change the chunker, run `prax maintain --rechunk`. New media add a kind and a
   locator shape, never a new table for chunks (rationale R13). A figure
   is a line in the text, `![caption](figure:<sha256>)`, and a `figure`
   chunk with the reference, caption and readings in `data`; its bytes

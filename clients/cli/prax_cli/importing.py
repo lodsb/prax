@@ -17,7 +17,7 @@ from . import out
 if TYPE_CHECKING:
     from prax.importers import feed
 
-WHAT = ("github", "chat", "links", "project", "claude")
+WHAT = ("github", "chat", "links", "project", "claude", "citations")
 
 
 def import_(door: Door, a: Any) -> int:
@@ -31,8 +31,38 @@ def import_(door: Door, a: Any) -> int:
         return _project(door, a)
     if a.what == "claude":
         return _claude(door, a)
+    if a.what == "citations":
+        return _citations(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
+
+
+def _citations(door: Door, a: Any) -> int:
+    """The citation network, fetched by the door: a job to follow."""
+    from . import running
+
+    body = {
+        "source": getattr(a, "source", None) or "openalex",
+        "limit": getattr(a, "limit", None),
+        "ids": getattr(a, "ids", None),
+        "resolve_titles": bool(getattr(a, "resolve_titles", False)),
+        "refresh": bool(getattr(a, "refresh", False)),
+        "dry_run": bool(getattr(a, "dry_run", False)),
+    }
+    r = door.post_json("/import/citations", body)
+    if r["dry_run"]:
+        if a.json:
+            print(json.dumps(r, indent=2))
+        else:
+            n = out.num(r["selected"])
+            out.say(f"{n} documents would be looked up at {r['source']}")
+        return 0
+    if not a.json:
+        out.say(
+            out.bold("Citations")
+            + out.dim(f"   {r['selected']} documents at {r['source']} · job {r['job']}")
+        )
+    return running.follow_job(door, r["job"], quiet=a.json, what="the import")
 
 
 def _github(door: Door, a: Any) -> int:

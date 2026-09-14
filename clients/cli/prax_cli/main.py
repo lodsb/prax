@@ -33,7 +33,8 @@ examples
 
 commands
   everyday     search, ask, add, import, show, open, graph, pages
-  running it   status, jobs, inbox, work, heal, maintain, backup, serve, doctor, models
+  running it   status, jobs, inbox, work, heal, maintain, resolve, backup, serve,
+               doctor, models
 """
 
 
@@ -165,7 +166,9 @@ def build_parser() -> argparse.ArgumentParser:
             " project and its modules), keyed by path so --refresh replaces a"
             " rewritten note. claude: Claude Code sessions of a project (what was"
             " said, not what was run: tool calls and results are left out), one"
-            " document each. Every run skips what the library already has."
+            " document each. citations: the citation network from OpenAlex or"
+            " Crossref, fetched by the door for the documents not looked up yet."
+            " Every run skips what the library already has."
         ),
         epilog=(
             "examples:\n"
@@ -175,7 +178,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  prax import links bookmarks.html pocket.csv medium-export.zip\n"
             "  prax import links reading.txt --dry-run\n"
             "  prax import project . --domain workshop --refresh\n"
-            "  prax import claude . --since 2026-09-01 --dry-run"
+            "  prax import claude . --since 2026-09-01 --dry-run\n"
+            "  prax import citations --source crossref -n 50"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -204,7 +208,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--refresh",
         action="store_true",
         help="re-read what changed at the source (a repository pushed to, a month"
-        " that grew)",
+        " that grew; citations: the fetched ones again)",
     )
     s.add_argument(
         "--links", action="store_true", help="chat: capture the links sent, too"
@@ -213,6 +217,17 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--dry-run", action="store_true", help="list what would be added")
     s.add_argument("--quiet", action="store_true", help="only failures are printed")
     s.add_argument("--token-github", metavar="TOKEN", help=argparse.SUPPRESS)
+    s.add_argument(
+        "--source",
+        choices=("openalex", "crossref"),
+        help="citations: where to look (default openalex)",
+    )
+    s.add_argument("--ids", nargs="+", type=int, metavar="ID", help="citations: these")
+    s.add_argument(
+        "--resolve-titles",
+        action="store_true",
+        help="citations: documents without a DOI too, by exact title",
+    )
     s.set_defaults(func=importing.import_, needs_door=True)
 
     s = sub.add_parser(
@@ -431,9 +446,45 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     s.add_argument(
-        "--only", help="a comma-separated subset of: acronyms, fields, domains, dedupe"
+        "--only",
+        help="a comma-separated subset of: acronyms, fields, domains, dedupe, review",
+    )
+    s.add_argument(
+        "--rechunk",
+        action="store_true",
+        help="also rebuild every chunk from its text (after a chunker change)",
     )
     s.set_defaults(func=running.maintain, needs_door=True)
+
+    s = sub.add_parser(
+        "resolve",
+        parents=[door_opts, as_json],
+        help="merge entities that name the same thing",
+        description=(
+            "Entity resolution: sure candidates (the same name after"
+            " normalization, an initials form of one author) and concept/method"
+            " twins are merged with --apply; likely ones (close by name"
+            " embedding) are listed for you. Merges are pointers, nothing is"
+            " deleted, and traverse follows them."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax resolve                      the plan\n"
+            "  prax resolve --type author\n"
+            "  prax resolve --apply --twins"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("--apply", action="store_true", help="merge the sure ones")
+    s.add_argument("--type", help="one entity type")
+    s.add_argument(
+        "--twins",
+        action="store_true",
+        help="a concept into the method of the same name",
+    )
+    s.add_argument("--no-embed", action="store_true", help="skip the likely tier")
+    s.add_argument("--show", type=int, default=40, help="candidates per tier")
+    s.set_defaults(func=running.resolve, needs_door=True)
 
     s = sub.add_parser(
         "backup",

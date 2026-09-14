@@ -7,9 +7,14 @@ they are rebuilt — the acronyms the library defines (what the keyword
 search expands a query token to), the document retrieval field (title,
 kind, summary as one searchable row), the domain set a document is read
 against (the rules in ``prax.yaml``, for documents nobody assigned by
-hand), and the duplicate captures of one page. None of that needs a
-model, none of it needs anyone to look first: it is what a nightly pass
-runs after the worker's, and what ``prax maintain`` runs on request.
+hand), the duplicate captures of one page, and the review queue's two
+rule passes (a replay against the current ontology, then the typing
+rules — what the door does for one document right after its extraction,
+here for the whole queue). None of that needs a model, none of it needs
+anyone to look first: it is what a nightly pass runs after the worker's,
+and what ``prax maintain`` runs on request. ``rechunk`` — every chunk
+rebuilt from its text artifact after a change to the chunker — is a
+pass too, but only when named: the nightly has no reason to.
 
 What stays out on purpose: the repairs (``store.repair``: a person picks
 the ailment), the readings and extractions (the worker, with a model),
@@ -28,13 +33,19 @@ from typing import Any
 
 from prax import acronyms, config
 
-from .documents import assign_domains, dedupe_captures, refresh_document_fields
+from .documents import (
+    assign_domains,
+    dedupe_captures,
+    rechunk,
+    refresh_document_fields,
+)
 from .jobs import Job
 from .retrieval import replace_acronyms
 
 Log = Callable[[str], None]
 
-PASSES = ("acronyms", "fields", "domains", "dedupe")
+PASSES = ("acronyms", "fields", "domains", "dedupe", "review")
+ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
 
 
 def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
@@ -101,11 +112,60 @@ def _dedupe(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     }
 
 
+def _review(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The review queue against the current ontology (``review.replay``:
+    a typed item the ontology accepts now becomes an edge), then the
+    typing rules over every open item (``review.apply_typing_rules``)."""
+    from prax import review
+
+    job.update(note="review: replay against the ontology")
+    replayed = review.replay(con)
+    job.update(note="review: the typing rules")
+    typed = review.apply_typing_rules(con, commit=True)
+    return {
+        "ontology": replayed.ontology_version,
+        "replay": {
+            "checked": replayed.checked,
+            "linked": replayed.linked,
+            "existing": replayed.existing,
+        },
+        "rules": {
+            "checked": typed.checked,
+            "linked": typed.linked,
+            "dropped": typed.dropped,
+            "existing": typed.existing,
+            "still_open": typed.still_open,
+            "run": typed.run,
+        },
+    }
+
+
+def _rechunk(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """Every indexed document's chunks rebuilt from its text artifact
+    (``documents.rechunk``); chunks whose text did not change keep their
+    ids and vectors."""
+    ids = [
+        r[0]
+        for r in con.execute(
+            "SELECT id FROM documents WHERE text_hash IS NOT NULL"
+            " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        )
+    ]
+    chunks = 0
+    for n, doc_id in enumerate(ids, 1):
+        chunks += rechunk(con, doc_id)
+        if n % 100 == 0:
+            job.update(done=n, total=len(ids), note=f"rechunk: {n} of {len(ids)}")
+    return {"documents": len(ids), "chunks": chunks}
+
+
 _RUN = {
     "acronyms": _acronyms,
     "fields": _fields,
     "domains": _domains,
     "dedupe": _dedupe,
+    "review": _review,
+    "rechunk": _rechunk,
 }
 
 
@@ -116,12 +176,15 @@ def maintain(
     job: Job | None = None,
     log: Log | None = None,
 ) -> dict[str, Any]:
-    """Run the maintenance passes (``PASSES``, or ``only`` those named) as
-    one job; returns what each did and how long it took."""
+    """Run the maintenance passes (``PASSES``, or ``only`` those named —
+    ``ON_REQUEST`` ones only that way) as one job; returns what each did
+    and how long it took."""
     chosen = list(only) if only else list(PASSES)
     unknown = [p for p in chosen if p not in _RUN]
     if unknown:
-        raise ValueError(f"no such pass: {unknown}; passes are {PASSES}")
+        raise ValueError(
+            f"no such pass: {unknown}; passes are {PASSES} and {ON_REQUEST}"
+        )
     if job is not None:
         return _run(con, chosen, job, log)
     with Job(con, "maintain", note=", ".join(chosen)) as own:

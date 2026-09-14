@@ -192,6 +192,7 @@ from .jobs import (  # noqa: F401
     running_jobs,
 )
 from .maintain import (  # noqa: F401
+    ON_REQUEST,
     PASSES,
     maintain,
 )

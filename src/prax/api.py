@@ -508,9 +508,13 @@ def maintain_start(req: MaintainReq, request: Request) -> dict[str, Any]:
     captures — what the store does to itself without a model or a
     decision. A job on a thread of its own; poll ``GET /jobs/{id}``."""
     chosen = [p for p in (req.only or []) if p] or list(store.PASSES)
-    unknown = [p for p in chosen if p not in store.PASSES]
+    unknown = [p for p in chosen if p not in store.PASSES + store.ON_REQUEST]
     if unknown:
-        raise HTTPException(400, f"no such pass: {unknown}; passes are {store.PASSES}")
+        raise HTTPException(
+            400,
+            f"no such pass: {unknown}; passes are {store.PASSES},"
+            f" on request {store.ON_REQUEST}",
+        )
     job = store.Job(_con(request), "maintain", note=", ".join(chosen))
 
     def run() -> None:
@@ -525,6 +529,138 @@ def maintain_start(req: MaintainReq, request: Request) -> dict[str, Any]:
 
     threading.Thread(target=run, name="maintain", daemon=True).start()
     return {"job": job.id, "passes": chosen}
+
+
+class ResolveReq(BaseModel):
+    apply: bool = False  # False: the plan only
+    type: str | None = None  # one entity type
+    twins: bool = False  # merge a concept into the method of the same name
+    embed: bool = True  # the likely tier, by name embedding
+    show: int = 40  # candidates per tier in the plan
+
+
+@app.post("/graph/resolve")
+def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
+    """Entity resolution (``prax.resolution``): the plan — sure candidates
+    (equal after normalization, an initials form of one author name),
+    concept/method twins, likely ones (close by name embedding) — and,
+    with ``apply``, a job that merges the sure ones (and the twins when
+    asked); the likely ones are a person's decision, or an adjudicator's,
+    and stay in the plan. Merges are pointers (``entities.canonical_id``):
+    nothing is deleted."""
+    from prax import resolution
+
+    con = _con(request)
+    plan = resolution.plan(con, etype=req.type, embed=req.embed)
+    tiers = {
+        tier: {
+            "count": len(items),
+            "examples": [
+                {
+                    "type": c.type,
+                    "score": round(c.score, 2),
+                    "drop": c.drop_name,
+                    "keep": c.keep_name,
+                }
+                for c in items[: req.show]
+            ],
+        }
+        for tier, items in (
+            ("sure", plan.sure),
+            ("twins", plan.twins),
+            ("likely", plan.likely),
+        )
+    }
+    if not req.apply:
+        return {"plan": tiers, "applied": False}
+    job = store.Job(
+        con,
+        "resolve",
+        total=len(plan.sure) + (len(plan.twins) if req.twins else 0),
+        note=f"{len(plan.sure)} sure"
+        + (f", {len(plan.twins)} twins" if req.twins else ""),
+    )
+
+    def run() -> None:
+        own = store.connect()
+        try:
+            with store.Job.existing(own, job.id) as mine:
+                rep = resolution.apply(own, plan, twins=req.twins)
+                mine.note(
+                    f"done: merged {rep.merged_sure} sure, {rep.merged_twins} twins;"
+                    f" {len(plan.likely)} likely left for a person"
+                )
+        except Exception:
+            logging.getLogger("prax.resolve").exception("resolution failed")
+        finally:
+            own.close()
+
+    threading.Thread(target=run, name="resolve", daemon=True).start()
+    return {"plan": tiers, "applied": True, "job": job.id}
+
+
+class CitationsReq(BaseModel):
+    source: str = "openalex"  # or crossref
+    ids: list[int] | None = None
+    limit: int | None = None
+    resolve_titles: bool = False  # documents without a DOI too, by exact title
+    refresh: bool = False  # fetched ones again
+    dry_run: bool = False  # the selection's size only
+
+
+@app.post("/import/citations")
+def import_citations(req: CitationsReq, request: Request) -> dict[str, Any]:
+    """The citation network from OpenAlex or Crossref (``prax.importers
+    .citations``): ``cites`` edges and citation counts for the documents
+    not looked up yet, those with a DOI first. The door fetches — it has
+    the DOIs and, with ``citations.mailto`` in prax.yaml, the polite pool.
+    A job; ``dry_run`` only counts."""
+    from prax.importers import citations
+
+    if req.source not in ("openalex", "crossref"):
+        raise HTTPException(400, "source must be openalex or crossref")
+    con = _con(request)
+    ids = req.ids or citations.candidates(
+        con, limit=req.limit, refresh=req.refresh, doi_only=not req.resolve_titles
+    )
+    if req.dry_run:
+        return {"selected": len(ids), "source": req.source, "dry_run": True}
+    job = store.Job(con, "citations", total=len(ids), note=req.source)
+
+    def run() -> None:
+        own = store.connect()
+        try:
+            with store.Job.existing(own, job.id) as mine:
+                fetch = citations.HttpFetcher()
+                source = citations.source_named(req.source, fetch)
+                rep = citations.Report()
+                step = 25
+                for start in range(0, len(ids), step):
+                    citations.import_citations(
+                        own,
+                        ids[start : start + step],
+                        source=source,
+                        resolve_titles=req.resolve_titles,
+                        report=rep,
+                    )
+                    mine.update(
+                        done=min(start + step, len(ids)),
+                        note=f"{rep.documents} resolved, {rep.linked} edges,"
+                        f" {len(rep.errors)} errors, {fetch.calls} requests",
+                    )
+                mine.note(
+                    f"done: {rep.documents} resolved, {rep.unresolved} unresolved,"
+                    f" {rep.linked} cites edges, {rep.existing} existing,"
+                    f" {rep.library_refs} to library documents,"
+                    f" {len(rep.errors)} errors, {fetch.calls} requests"
+                )
+        except Exception:
+            logging.getLogger("prax.citations").exception("citations failed")
+        finally:
+            own.close()
+
+    threading.Thread(target=run, name="citations", daemon=True).start()
+    return {"selected": len(ids), "source": req.source, "dry_run": False, "job": job.id}
 
 
 class BackupReq(BaseModel):
