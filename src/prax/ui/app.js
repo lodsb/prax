@@ -392,6 +392,7 @@ function outline(chunks) {
 }
 
 async function viewDoc(id, p) {
+  view.classList.add("wide");
   loading(`Loading document ${esc(id)}…`);
   let doc, chunks;
   try {
@@ -2023,7 +2024,7 @@ const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: vi
 async function render(opts) {
   const r = route();
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === r.name));
-  view.classList.remove("stage");  // the ask view widens the page; others get the default
+  view.classList.remove("stage", "wide");  // the ask view widens the page, the document view takes all of it; others get the default
   if (!(opts && opts.keepScroll)) window.scrollTo(0, 0);
   const key = `${r.name}/${r.arg || ""}`;
   quiet = !!(opts && opts.keepScroll) && view.dataset.route === key;  // the same page, refreshed in place

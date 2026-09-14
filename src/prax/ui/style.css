@@ -264,7 +264,12 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .tags { margin: .3rem 0; }
 .tag { display: inline-block; padding: 0 .4rem; margin: 0 .3rem .3rem 0; border-bottom: 1px solid var(--line); color: var(--muted); }
 
-.doc-layout { display: grid; grid-template-columns: 15rem 1fr 21rem; gap: 2rem; margin-top: .6rem; }
+/* the document view takes the whole page: the outline and the context
+   column grow a little with it, the text gets the rest; prose keeps a
+   readable measure, tables, code and figures may use the full column */
+main.wide { max-width: none; }
+.doc-layout { display: grid; grid-template-columns: minmax(15rem, 19rem) minmax(0, 1fr) minmax(21rem, 27rem); gap: 2.4rem; margin-top: .6rem; }
+.chunk-body p, .chunk-body ul, .chunk-body ol, .chunk-body blockquote, .chunk-body h1, .chunk-body h2, .chunk-body h3, .chunk-body h4 { max-width: 80ch; }
 @media (max-width: 1100px) { .doc-layout { grid-template-columns: 1fr 21rem; } .doc-outline { display: none; } }
 @media (max-width: 800px) { .doc-layout { grid-template-columns: 1fr; } }
 .doc-context { position: sticky; top: 4.8rem; align-self: start; max-height: calc(100vh - 5.6rem); overflow: auto; font-size: .86rem; }
