@@ -1,2 +1,29 @@
-<!-- Start of picture text -->
-1 2 3 4 5 6 7 8<br>JP4 JP5<br>3 SIG _ I N 2J _FILTER_I N SIG_OUT R301 K _ OUT 10 1112 ED 10 12<br>A 50① ED G<br>ED<br>G LED<br>100 K EDED<br>R6 J _WAUEFOR M 8037<br>LE D3M M M 12PTH M12PTH<br>R 2 1 1 0K LED_A 330<br>R16<br>④ GND LED_B 330 EXPD 0<br>R1 EXP1EXP3 EXPEXP42<br>330 EXP5 C1<br>V 1 00 K LED _ C R18 EXP6 100n<br>B B<br>J _ C V _R INGS YN C R3 LED_D 330 +5 v<br>R19 +12 U GND<br>V LED_E 330 L ED3M M DCB A C8<br>100 K R20 100n<br>J_C V K R2 LED_F 330 GND NN VDD<br>100 K 2J _MOD_TYPE<br>R22 LED _ G 330 7 +5 v<br>D G40 6<br>RI<br>C<br>LED _ H 330ED RING 82243 28<br>3 10 K M 0<br>330ED R28<br>LED_I D<br>LED _ M ID 1 E XP4 E XP2 d<br>RB R<br>GND<br>D<br>2 2.2 K FILT10E K R 20 PW M_ 10OF K F<br>①<br>R29 R14<br>2U<br>+<br>100 K 100 K 47 K 1 00 K 1 00 K 47 K<br>R23 R25 R26 R4 R9 R10<br>100 K TL072P 100 K TL072p RES 100 K TL072P 100 K TL072<br>R24 R5 R12<br>IC3A I C3B 10 K I C1A IC1B<br>RES<br>2 J_FILTER PW M<br>E G I FILTER10 K _ ATT +5 U GND PW 1 0 MK _ATTR GND<br>SID GUTS<br>CC-BY-SA sid-guts-controls<br>( C)  A LMCO 04/04/2014 15:34<br>Sheet: 1 / 1<br>1 2 3 4 5 6 7 8<br><!-- End of picture text -->
+OUT
+-  +
+-  +
+Wave
+Shape
+HP
+LP BP
+>Shape
+>Res
+>Filter
+>V/Oct
+>Chord
+>Inv
+>Ext In
+>Type
+>V/Oct
+>Type
+Mod
+Sync
+FREQUENCY
+PWM
+FILTER
+>PWM
+Mod Osc
+Pulse
+Saw
+Tri
+Noise
+SGD

@@ -240,13 +240,13 @@ def test_refresh_keeps_a_repaired_title(
 ) -> None:
     zotero.run(lib, con)
     doc_id = _docs_by_key(con)[STANDALONE]
-    store.retitle(con, doc_id, "SID GUTS controls schematic", source="human")
+    store.retitle(con, doc_id, "SGD panel drawing", source="human")
     old = store.get_meta(con, doc_id)
     old["zotero"]["modified"][STANDALONE] = "1999-01-01 00:00:00"
     store.set_meta(con, doc_id, old)
     zotero.run(lib, con)
     assert store.get_document(con, doc_id, max_chars=0)["title"] == (
-        "SID GUTS controls schematic"
+        "SGD panel drawing"
     )
 
 

@@ -223,7 +223,7 @@ imported into the private store but never into the fixture.
 | Item with an HTML snapshot, 2 MB | `HR6SU62N` | Stack Exchange question, trafilatura path |
 | Item with a linked URL, no file | `ZRWHFMBJ` (attachment) | Das et al., URL-only document |
 | Metadata-only item, no attachment | `IIJ9PSTU` | a GitHub repository saved as a computer program |
-| One standalone PDF, no parent | `UW29C5GP` | a schematic sheet; title-from-filename path |
+| One standalone PDF, no parent | `UW29C5GP` | a front-panel drawing; title-from-filename path |
 
 Rebuilt (2026-09-11) with `scripts/make_zotero_fixture.py` from those
 keys. The library drive was not mounted, so the source was a
