@@ -88,7 +88,7 @@ def do_parse(
         for ext in exts:
             t0 = time.monotonic()
             try:
-                with _mode(it.get("mode")):
+                with _mode(ext.name, it.get("mode")):
                     stamp = ext.stamp
                     text = ext(
                         data, filename=it.get("filename"), previous=it.get("previous")
@@ -130,22 +130,27 @@ def do_parse(
     return results
 
 
+_MODE_SETTINGS = {"vision-pages": "PRAX_VISION_PAGES", "figures": "PRAX_FIGURES"}
+
+
 @contextlib.contextmanager
-def _mode(mode: str | None) -> Iterator[None]:
+def _mode(extractor: str, mode: str | None) -> Iterator[None]:
     """The requested mode as the extractor's setting for one call
-    (``vision-pages``: every page or the scans)."""
-    if not mode:
+    (``vision-pages``: every page or the scans; ``figures``: every image
+    or the captioned ones)."""
+    variable = _MODE_SETTINGS.get(extractor)
+    if not mode or variable is None:
         yield
         return
-    before = os.environ.get("PRAX_VISION_PAGES")
-    os.environ["PRAX_VISION_PAGES"] = mode
+    before = os.environ.get(variable)
+    os.environ[variable] = mode
     try:
         yield
     finally:
         if before is None:
-            os.environ.pop("PRAX_VISION_PAGES", None)
+            os.environ.pop(variable, None)
         else:
-            os.environ["PRAX_VISION_PAGES"] = before
+            os.environ[variable] = before
 
 
 def do_titles(

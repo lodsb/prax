@@ -425,3 +425,52 @@ def test_a_capture_nothing_could_read_is_tried_once_and_then_left_alone(
     ailment = found["ailments"][0]
     assert ailment["count"] == 1 and not ailment["repairable"]
     assert ailment["examples"][0]["id"] == scan.doc_id
+
+
+def test_a_figures_request_may_ask_for_every_image(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The figures reading takes a mode like vision-pages does: the
+    captioned figures (the default) or every image the text references;
+    the worker runs the extractor with that setting for the one call, and
+    a mode an extractor does not take is refused."""
+    from prax import models
+    from prax.parsers import figures
+
+    con = client.app.state.con
+    html = b"<html><body><p>Prose.</p></body></html>"
+    page = inbox.ingest_upload(con, html, filename="p.html", mime="text/html")
+    text = "# A page\n\nProse.\n\n![A plot](figure:" + "ab" * 32 + ")\n"
+    store.index_text(con, page.doc_id, text * 5, text_source="trafilatura/2.2.0-r3")
+    r = client.post(
+        f"/doc/{page.doc_id}/reading", json={"extractor": "figures", "mode": "scans"}
+    )
+    assert r.status_code == 400 and "mode" in r.json()["detail"]
+    r = client.post(
+        f"/doc/{page.doc_id}/reading", json={"extractor": "trafilatura", "mode": "all"}
+    )
+    assert r.status_code == 400 and "takes no mode" in r.json()["detail"]
+    r = client.post(
+        f"/doc/{page.doc_id}/reading", json={"extractor": "figures", "mode": "all"}
+    )
+    assert r.status_code == 200
+    item = client.get("/work/parse").json()["items"][0]
+    assert item["extractor"] == "figures" and item["mode"] == "all"
+    assert item["previous"].startswith("# A page")  # the text the readings go into
+    work._leases.clear()
+    # the worker: what the extractor sees as its setting during the call
+    seen: list[str | None] = []
+    spec = models.ModelSpec(
+        name="server-vl", kind="openai", base_url="http://127.0.0.1:1/v1", model="vl"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: spec if s == "vision" else None)
+
+    def fake_describe(data: bytes, previous: str) -> str:
+        seen.append(os.environ.get("PRAX_FIGURES"))
+        return previous
+
+    monkeypatch.setattr(figures, "describe", fake_describe)
+    worker.run_once(_door(client), steps=("parse",), log_=lambda t: None)
+    assert seen == ["all"] and "PRAX_FIGURES" not in os.environ
+    reading = store.get_meta(con, page.doc_id)["reading"]
+    assert reading["state"] == "done" and reading["error"] is None

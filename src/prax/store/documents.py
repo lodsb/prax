@@ -771,6 +771,11 @@ READINGS = (
     "trafilatura",
     "pymupdf4llm",
 )
+# the setting a request may choose for one run, per extractor
+MODES = {
+    "vision-pages": ("scans", "all"),  # the pages without a text layer, or every page
+    "figures": ("captioned", "all"),  # the figures a caption claims, or every image
+}
 
 
 @_serialized
@@ -783,12 +788,18 @@ def request_reading(
     by: str = "human",
 ) -> dict[str, Any]:
     """Ask for ``extractor`` (one of ``READINGS``) on a document; ``mode``
-    is the extractor's setting for this run (``vision-pages``: ``scans``
-    or ``all``). A request replaces an earlier one."""
+    is the extractor's setting for this run (``MODES``: ``vision-pages``
+    reads the scans or every page, ``figures`` the captioned ones or every
+    image). A request replaces an earlier one."""
     if extractor not in READINGS:
         raise ValueError(f"extractor must be one of {READINGS}")
-    if mode is not None and mode not in ("scans", "all"):
-        raise ValueError("mode must be scans or all")
+    if mode is not None and mode not in MODES.get(extractor, ()):
+        allowed = MODES.get(extractor)
+        raise ValueError(
+            f"mode must be one of {allowed} for {extractor}"
+            if allowed
+            else f"{extractor} takes no mode"
+        )
     row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
         raise KeyError(f"no such document: {doc_id}")

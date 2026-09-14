@@ -1114,7 +1114,9 @@ def unpromote_doc(doc_id: int, request: Request) -> dict[str, bool]:
 
 class ReadingReq(BaseModel):
     extractor: str  # one of store.READINGS
-    mode: str | None = None  # vision-pages: scans (default) or all
+    mode: str | None = (
+        None  # store.MODES: vision-pages scans|all, figures captioned|all
+    )
     by: str = "human"
 
 

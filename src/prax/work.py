@@ -100,6 +100,15 @@ def leases() -> dict[str, int]:
     return out
 
 
+def _takes_previous(extractor: str) -> bool:
+    from prax import parsers
+
+    try:
+        return parsers.by_name(extractor).previous
+    except KeyError:
+        return False
+
+
 def _in_scope(con: sqlite3.Connection, doc_id: int, scope: str) -> bool:
     if scope == "all":
         return True
@@ -205,8 +214,10 @@ def hand_out(
                 "mode": req.get("mode"),
                 "force": True,
             }
-            if req["extractor"] == "vision" and doc["text_len"]:
-                # a second reading of an image joins the first (vision.merge_readings)
+            if doc["text_len"] and _takes_previous(req["extractor"]):
+                # the extractor works on the current text: a second reading
+                # of an image joins the first (vision.merge_readings), the
+                # figures' readings and references go into the parsed text
                 item["previous"] = store.get_document(con, doc_id)["text"]
             items.append(item)
         waiting = list(inbox.pending_captures(con))

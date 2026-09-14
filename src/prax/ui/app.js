@@ -255,7 +255,7 @@ function snippetHtml(s) {
 // of this type, and what became of the last request (meta.reading).
 const READINGS = {
   "application/pdf": [
-    ["figures", "the vision model reads every figure the text references, and writes what it shows under each"],
+    ["figures", "the vision model reads the figures the text references (the captioned ones, or every image), and writes what it shows under each"],
     ["vision-pages", "the vision model over the scanned pages (handwriting, scores, what OCR cannot read)"],
     ["pymupdf4llm", "read the PDF again (finds the figures)"],
     ["pymupdf4llm-ocr", "OCR (RapidOCR) on the pages without a text layer"],
@@ -281,8 +281,11 @@ function readingForm(doc) {
     <label>Read with
       <select name="extractor">${choices.map(([v, l]) => `<option value="${v}">${esc(v)} — ${esc(l)}</option>`).join("")}</select>
     </label>
-    <label class="reading-mode">pages
+    <label class="reading-mode" data-for="vision-pages">pages
       <select name="mode"><option value="scans">the scanned ones (no text layer)</option><option value="all">every page (printed pages with notes in the margin)</option></select>
+    </label>
+    <label class="reading-mode" data-for="figures">figures
+      <select name="mode"><option value="captioned">the ones a caption claims</option><option value="all">every image the text references, the uncaptioned ones too (decoration included)</option></select>
     </label>
     <button>Request</button>
     <span class="muted">A worker picks it up (Jobs shows what is waiting); the result replaces the text, except an image's readings, which add up.</span>
@@ -467,13 +470,14 @@ async function viewDoc(id, p) {
     box.hidden = false;
     const form = box.querySelector("form");
     const pick = form.extractor;
-    const modeLabel = form.querySelector(".reading-mode");
-    const showMode = () => { modeLabel.hidden = pick.value !== "vision-pages"; };
+    const modes = [...form.querySelectorAll(".reading-mode")];
+    const showMode = () => { modes.forEach((m) => { m.hidden = m.dataset.for !== pick.value; }); };
     pick.addEventListener("change", showMode);
     showMode();
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const body = { extractor: pick.value, mode: pick.value === "vision-pages" ? form.mode.value : null };
+      const chosen = modes.find((m) => m.dataset.for === pick.value);
+      const body = { extractor: pick.value, mode: chosen ? chosen.querySelector("select").value : null };
       try { await post(`/doc/${doc.id}/reading`, body); render({ keepScroll: true }); } catch (err) { setStatus(err.message); }
     });
   });
