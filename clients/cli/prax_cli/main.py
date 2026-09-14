@@ -304,7 +304,8 @@ def build_parser() -> argparse.ArgumentParser:
             "examples:\n"
             "  prax work                       one pass, then stop\n"
             "  prax work --watch               keep going (the usual way)\n"
-            "  prax work --scope all --steps extract -n 20   a backlog pass"
+            "  prax work --scope all --steps extract -n 20   a backlog pass\n"
+            "  prax work --steps promote --spend   the paid pass over flagged documents"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -316,11 +317,20 @@ def build_parser() -> argparse.ArgumentParser:
         default="captures",
         help="captures (default) or the whole library",
     )
-    s.add_argument("--steps", default="parse,titles,extract,embed")
-    for step in ("parse", "titles", "extract", "embed"):
+    s.add_argument(
+        "--steps",
+        default="parse,titles,extract,embed",
+        help="promote (the paid pass over flagged documents) only when named",
+    )
+    for step in ("parse", "titles", "extract", "promote", "embed"):
         s.add_argument(
             f"--no-{step}", action="store_true", help=f"skip the {step} step"
         )
+    s.add_argument(
+        "--spend",
+        action="store_true",
+        help="let the promote step run its paid model: money is spent",
+    )
     s.add_argument("-n", "--limit", type=int, default=10, help="documents per batch")
     s.add_argument("--workers", type=int, default=3, help="parallel model calls")
     s.add_argument(

@@ -1103,7 +1103,7 @@ class PromoteReq(BaseModel):
 
 @app.post("/doc/{doc_id}/promote")
 def promote_doc(doc_id: int, req: PromoteReq, request: Request) -> dict[str, Any]:
-    """Flag a document for the expensive pass (``extract_graph.py --promoted``)."""
+    """Flag a document for the expensive pass (the ``promote`` work step)."""
     try:
         return store.promote(_con(request), doc_id, by=req.by, reason=req.reason)
     except KeyError as exc:

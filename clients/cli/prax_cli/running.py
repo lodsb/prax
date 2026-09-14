@@ -264,6 +264,7 @@ def work(a: Any) -> int:
             workers=a.workers,
             folders=folders,
             domains=domains,
+            spend=bool(getattr(a, "spend", False)),
             log_=say,
             once=not a.watch,
         )

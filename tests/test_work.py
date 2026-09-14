@@ -474,3 +474,46 @@ def test_a_figures_request_may_ask_for_every_image(
     assert seen == ["all"] and "PRAX_FIGURES" not in os.environ
     reading = store.get_meta(con, page.doc_id)["reading"]
     assert reading["state"] == "done" and reading["error"] is None
+
+
+def test_the_promote_step_reads_flagged_documents_and_spends_only_when_told(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The expensive pass as a work step: the door hands out the flagged
+    documents the promote model has not read; the worker refuses the
+    step while the model is paid and --spend was not given, and does it
+    otherwise; the stamp says the promote model read it."""
+    from prax import models
+
+    con = client.app.state.con
+    doc_id = client.post(
+        "/ingest",
+        json={"text": "a paper on wave digital filters " * 40, "title": "P"},
+    ).json()["doc_id"]
+    assert client.get("/work/promote").json()["items"] == []  # nothing flagged
+    store.promote(con, doc_id, by="test", reason="a test")
+    monkeypatch.setenv("PRAX_PROMOTE", "stub")
+    items = client.get("/work/promote").json()["items"]
+    assert [i["doc_id"] for i in items] == [doc_id] and "header" in items[0]
+    work._leases.clear()
+    # a paid promote model and no --spend: refused before anything is fetched
+    paid = models.ModelSpec(name="sonnet", kind="claude", model="claude-sonnet-5")
+    real = models.resolve
+    monkeypatch.setattr(
+        models, "resolve", lambda s: paid if s == "promote" else real(s)
+    )
+    out = worker.run_once(_door(client), steps=("promote",), log_=lambda t: None)
+    assert out["promote"].startswith("skipped") and "--spend" in out["promote"]
+    assert client.get("/work/promote").json()["items"], "still waiting, not leased"
+    work._leases.clear()
+    # the stub is free: the step runs, with or without --spend
+    monkeypatch.setattr(models, "resolve", real)
+    out = worker.run_once(
+        _door(client), steps=("promote",), spend=True, log_=lambda t: None
+    )
+    assert out["promote"].startswith("1 documents")
+    stamp = store.get_meta(con, doc_id)["extraction"]
+    assert stamp["extractor"] == "stub" and stamp["run"].startswith("promote-")
+    assert store.promoted_documents(con, producer="stub")[0]["done"] is True
+    assert client.get("/work/promote").json()["items"] == []
+    assert client.get("/promote").json()["promoted"][0]["done"] is True

@@ -362,7 +362,7 @@ loop); the queue makes each batch do real work.
 | name a new kind of recurring damage | a `find` (and a `repair` when it is safe) in `store.repair`, an entry in `AILMENTS`; look at what it finds in the library before giving it a repair |
 | add a command to `prax` | a handler in `prax.api` first (the contract), then a subcommand in `clients/cli/prax_cli/` that calls it and prints for a person; never a database call |
 | take in a file, a page or a URL | `prax.inbox` (`ingest_upload`, `ingest_html`, `ingest_url`, `scan`); the Inbox view, `POST /ingest/file|html|url`, the `capture_url` MCP tool, `scripts/inbox.py --watch --parse` on the batch host for the drop folder and the pending parses |
-| send a document to the expensive model | flag it (`store.promote`, the page's "promote", the Promote view, the MCP tool); `extract_graph.py --promoted` runs the `promote` step's model over flagged documents it has not read |
+| send a document to the expensive model | flag it (`store.promote`, the page's "promote", the Promote view, the MCP tool); the `promote` work step (`prax work --steps promote --spend`) runs the `promote` step's model over flagged documents it has not read; the worker refuses it without `--spend` |
 | add an agent tool | a store function first, a handler in `prax.api`, then the tool in `prax.mcp_server` that calls it; keep responses compact |
 | add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
 | add a page kind | `store.PAGE_KINDS` and the `pages` view; relationships stay edges |

@@ -698,8 +698,9 @@ def assign_domains(
 # A document worth the expensive model: flagged by a person, by Claude Code
 # over MCP, or by the store itself when the document joins a project or
 # becomes a synthesis source. The flag lives in ``meta.promote``; the pass
-# is ``extract_graph.py --promoted`` with the ``promote`` step's model, and
-# a document counts as done when that producer's stamp is in its history.
+# is the ``promote`` work step (``prax work --steps promote --spend``) with
+# the ``promote`` step's model, and a document counts as done when that
+# producer's stamp is in its history.
 
 PROMOTE_WEIGHTS = {"project": 5, "synthesis": 4, "page": 3, "cited": 1}
 

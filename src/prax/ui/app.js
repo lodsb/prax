@@ -1658,7 +1658,7 @@ async function viewPromote(p) {
     </tr>`;
   view.innerHTML = `
     <p class="muted">The expensive pass runs with <b>${esc(d.step.model)}</b>${d.step.runtime ? ` (${esc(d.step.runtime)})` : ""}${d.step.error ? ` · <span class="error">${esc(d.step.error)}</span>` : ""}.
-      Flagged documents are read by it when <code>extract_graph.py --promoted</code> runs; ${pending} pending.</p>
+      Flagged documents are read by it when a worker runs the step with the asking: <code>prax work --steps promote --spend</code>; ${pending} pending.</p>
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Promoted (${d.promoted.length})</h2>
     ${d.promoted.length ? `<table class="doc-list"><thead><tr><th>document</th><th>by</th><th>reason</th><th>when</th><th>status</th><th></th></tr></thead><tbody>${d.promoted.map(row).join("")}</tbody></table>` : `<p class="muted">Nothing flagged yet. Promote from a document page, from the candidates below, or with the MCP tool.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Candidates</h2>

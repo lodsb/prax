@@ -311,8 +311,9 @@ The stamp records the model (`vision/1+<model>`); `claude-vision` is the
 same extractor pinned to Claude, the name the first descriptions carry.
 The document view shows an image inline above its description. An image
 that matters gets the expensive reading the way a paper does: promote it
-(section 3e), and `extract_graph.py --promoted` describes it again with
-the promote step's model (Sonnet here) before extracting from that.
+(section 3e), and the promote step (`prax work --steps promote --spend`)
+describes it again with its model (Sonnet here) before extracting from
+that.
 Readings add up rather than replace each other: the second model's
 reading goes first in the artifact, the earlier ones follow, every
 section headed with its model (`## Text in the image (qwen…)`), so the
@@ -481,13 +482,15 @@ view's candidates (scored by project membership, synthesis sources,
 notes on the document and citations from other library documents), by
 Claude Code through the `promote` MCP tool, or by the store itself when
 the document joins a project or becomes a synthesis source. The flag
-queues; nothing is spent until the pass runs:
+queues; nothing is spent until the pass runs — a work step the worker
+takes only when named, and only with `--spend`, which is the asking:
 
-    python scripts/extract_graph.py --promoted --dry-run
-    python scripts/extract_graph.py --promoted                  # the promote step's model
-    python scripts/extract_graph.py --promoted --submit-batch   # Claude at half price
+    prax work --steps promote --spend          # the flagged documents, once each
+    prax work --steps promote --spend -n 5     # five of them
 
-The model is the `promote` step in `prax.yaml` (section 3k; default
+Without `--spend` the worker says the step is paid and touches nothing;
+a promoted image is first described again by the promote model, and the
+extraction reads that. The model is the `promote` step in `prax.yaml` (section 3k; default
 Sonnet 5, `max_triples: 30`). A flagged document counts as done once
 that producer's stamp is in its extraction history, so the pass is
 idempotent and a later local pass does not undo it; both producers'
@@ -532,7 +535,6 @@ it that are not yet stamped with their subset's version:
 
     python scripts/extract_graph.py --domain family --dry-run
     python scripts/extract_graph.py --domain family
-    python scripts/extract_graph.py --promoted --domain research
 
 `search(..., domain="family")` (API and MCP `domain=`) keeps the hits
 from that domain; documents without a set are in every domain. When a
@@ -993,7 +995,8 @@ extension, a file in the drop folder — goes all the way on its own:
 | jobs whose process is gone closed; the drop folder consumed | the door |
 
 What stays a command or a click, because it costs money, time or a
-decision: the promote pass (Claude over the flagged documents), the
+decision: the promote pass (`prax work --steps promote --spend`, Claude
+over the flagged documents), the
 model typing pass over the review queue, OCR of scans and the vision
 model over whole pages (`vision-pages`), a re-read of the whole library
 at once after a parser changes (the `--upgrade` runs above; the nightly

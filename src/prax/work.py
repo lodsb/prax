@@ -44,7 +44,7 @@ from prax import embeddings, extraction, inbox, models, ontology, pipeline, stor
 from prax.parsers import figures, queue
 
 LEASE_SECONDS = 900
-STEPS = ("parse", "titles", "extract", "embed")
+STEPS = ("parse", "titles", "extract", "promote", "embed")
 
 
 def _vision_is_free() -> bool:
@@ -140,31 +140,57 @@ def hand_out(
     """A batch of work for ``step``, leased to ``worker``."""
     limit = _check(step, scope, limit)
     now = time.monotonic()
-    if step == "extract":
+    if step in ("extract", "promote"):
         onto = ontology.current()
-        due = store.select_for_extraction(
-            con,
-            ontology_version=onto.version,
-            min_chars=pipeline.MIN_CHARS,
-            onto=onto,
-            sources=tuple(pipeline.CAPTURE_SOURCES) if scope == "captures" else None,
-            skip_mime_prefix="image/",
-        )
+        if step == "promote":
+            # the flagged documents the promote step's model has not read
+            # (whatever the scope: a flag is explicit); images included,
+            # since the expensive pass reads the picture again first
+            try:
+                producer = extraction.current("promote").name
+            except RuntimeError:  # the step is off on this host
+                return {"step": step, "items": [], "lease_seconds": 0}
+            due = [
+                d["doc_id"]
+                for d in store.promoted_documents(con, producer=producer)
+                if not d["done"]
+            ]
+        else:
+            due = store.select_for_extraction(
+                con,
+                ontology_version=onto.version,
+                min_chars=pipeline.MIN_CHARS,
+                onto=onto,
+                sources=tuple(pipeline.CAPTURE_SOURCES)
+                if scope == "captures"
+                else None,
+                skip_mime_prefix="image/",
+            )
         items = []
         for doc_id in due:
             if len(items) >= limit or not _free(step, doc_id, now):
                 continue
             doc = extraction.build_input(con, doc_id)
-            items.append(
-                {
-                    "doc_id": doc_id,
-                    "title": doc.title,
-                    "header": doc.header,
-                    "text": doc.text,
-                    "domains": doc.domains,
-                    "ontology_version": doc.ontology().version,
-                }
-            )
+            item = {
+                "doc_id": doc_id,
+                "title": doc.title,
+                "header": doc.header,
+                "text": doc.text,
+                "domains": doc.domains,
+                "ontology_version": doc.ontology().version,
+            }
+            if step == "promote":
+                row = store.get_document(con, doc_id)
+                if row and (row["mime"] or "").startswith("image/"):
+                    path = row.get("original_path")
+                    item["image"] = {
+                        "original": f"/doc/{doc_id}/original",
+                        "filename": path.replace("\\", "/").rsplit("/", 1)[-1]
+                        if path
+                        else None,
+                        "previous": row["text"],
+                    }
+            items.append(item)
         _lease(step, [i["doc_id"] for i in items], worker)
         return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
     if step == "titles":
@@ -328,9 +354,10 @@ def take_in(
         raise ValueError(f"unknown step {step!r}; steps are {STEPS}")
     results = payload.get("results") or []
     out: dict[str, Any] = {"applied": 0, "errors": [], "skipped": 0}
-    if step == "extract":
+    if step in ("extract", "promote"):
         extractor = str(payload.get("extractor") or worker)
-        run = payload.get("run") or f"work-{time.strftime('%Y%m%dT%H%M%S')}"
+        prefix = "promote" if step == "promote" else "work"
+        run = payload.get("run") or f"{prefix}-{time.strftime('%Y%m%dT%H%M%S')}"
         totals = extraction.ApplyReport()
         for r in results:
             doc_id = int(r["doc_id"])

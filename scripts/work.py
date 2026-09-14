@@ -39,6 +39,9 @@ def main() -> int:
     ap.add_argument("--interval", type=float, default=20.0)
     ap.add_argument("--scope", choices=("captures", "all"), default="captures")
     ap.add_argument("--steps", default="parse,titles,extract,embed")
+    ap.add_argument(
+        "--spend", action="store_true", help="let the promote step spend money"
+    )
     for step in worker.STEPS:
         ap.add_argument(
             f"--no-{step}", action="store_true", help=f"skip the {step} step"
@@ -87,6 +90,7 @@ def main() -> int:
             workers=a.workers,
             folders=folders,
             domains=doms,
+            spend=a.spend,
             log_=say,
             once=not a.watch,
         )

@@ -31,7 +31,7 @@ from prax.client import Door
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
-STEPS = ("parse", "titles", "extract", "embed")
+STEPS = ("parse", "titles", "extract", "promote", "embed")
 
 
 # ------------------------------------------------------------------ steps
@@ -231,6 +231,54 @@ def do_extract(
     return [one(it) for it in items]
 
 
+def do_promote(
+    door: Door,
+    items: list[dict[str, Any]],
+    ext: extraction.Extractor,
+    spec: models.ModelSpec,
+    *,
+    log_: Log | None = None,
+) -> list[dict[str, Any]]:
+    """The expensive pass over flagged documents: a promoted image is
+    first described again by the promote model (a Claude one; a server
+    that cannot see leaves the reading as it is), the reading posted as a
+    parse result so the document carries it, and the extraction reads
+    that; then the extraction, as for the extract step."""
+    from prax.parsers import vision
+
+    for it in items:
+        image = it.get("image")
+        if not image or spec.kind != "claude":
+            continue
+        try:
+            data = door.get_bytes(image["original"])
+            text = vision.describe(
+                data,
+                filename=image.get("filename"),
+                model=spec.model,
+                previous=image.get("previous"),
+            )
+        except Exception as exc:  # noqa: BLE001 - the extraction still runs
+            _say(log_, f"promote doc {it['doc_id']}: reading failed: {exc}")
+            continue
+        door.post_json(
+            "/work/parse",
+            {
+                "results": [
+                    {
+                        "doc_id": it["doc_id"],
+                        "extractor": f"vision/1+{spec.runtime_name}",
+                        "text": text,
+                        "force": True,
+                    }
+                ]
+            },
+        )
+        it["text"] = text
+        _say(log_, f"promote doc {it['doc_id']}: read again by {spec.runtime_name}")
+    return do_extract(items, ext, workers=1, log_=log_)
+
+
 def do_embed(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
     chunks = batch.get("chunks") or []
     fields = batch.get("fields") or []
@@ -272,10 +320,13 @@ def run_once(
     limit: int = 10,
     workers: int = 3,
     session: int | None = None,
+    spend: bool = False,
     log_: Log | None = None,
 ) -> dict[str, Any]:
     """One pass over the steps: fetch a batch, do it, post it. Returns what
-    each step did; a step with nothing to do is absent."""
+    each step did; a step with nothing to do is absent. ``spend`` lets the
+    promote step run its paid model; without it a paid step is refused
+    before anything is fetched."""
     out: dict[str, Any] = {}
     for step in steps:
         if step == "embed":
@@ -300,6 +351,16 @@ def run_once(
             out["embed"] = f"{rep.get('applied', 0)} vectors"
             _say(log_, f"embed: {out['embed']}")
             continue
+        if step == "promote":
+            spec = models.resolve("promote")
+            if spec is None:
+                out["promote"] = "skipped: the promote step is not configured"
+                continue
+            if _paid(spec) and not spend:
+                out["promote"] = (
+                    f"skipped: the promote step is {spec.name} (paid); --spend runs it"
+                )
+                continue
         batch = door.get_json(f"/work/{step}", {"limit": limit, "scope": scope})
         items = batch.get("items") or []
         if not items:
@@ -347,6 +408,20 @@ def run_once(
                 },
             )
             out["extract"] = f"{rep.get('applied', 0)} documents: {rep.get('report')}"
+        elif step == "promote":
+            spec = models.resolve("promote")
+            assert spec is not None
+            ext = extraction.current("promote")
+            results = do_promote(door, items, ext, spec, log_=log_)
+            rep = door.post_json(
+                "/work/promote",
+                {
+                    "results": results,
+                    "extractor": ext.name,
+                    "run": f"promote-{time.strftime('%Y%m%dT%H%M%S')}",
+                },
+            )
+            out["promote"] = f"{rep.get('applied', 0)} documents: {rep.get('report')}"
         _say(log_, f"{step}: {out.get(step)}")
     return out
 
@@ -426,6 +501,7 @@ def watch(
     workers: int = 3,
     folders: list[Path] | None = None,
     domains: list[str] | None = None,
+    spend: bool = False,
     log_: Log | None = None,
     once: bool = False,
 ) -> None:
@@ -458,6 +534,7 @@ def watch(
                     limit=limit,
                     workers=workers,
                     session=session,
+                    spend=spend,
                     log_=log_,
                 )
                 if session:
