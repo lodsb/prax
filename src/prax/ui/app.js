@@ -287,6 +287,9 @@ function readingForm(doc) {
     <label class="reading-mode" data-for="figures">figures
       <select name="mode"><option value="captioned">the ones a caption claims</option><option value="all">every image the text references, the uncaptioned ones too (decoration included)</option></select>
     </label>
+    <label class="reading-mode" data-for="pymupdf4llm-ocr">language
+      <input name="mode" type="text" placeholder="the host's setting (ch, en, latin, arabic, cyrillic…)" size="28">
+    </label>
     <button>Request</button>
     <span class="muted">A worker picks it up (Jobs shows what is waiting); the result replaces the text, except an image's readings, which add up.</span>
   </form>`;
@@ -478,7 +481,8 @@ async function viewDoc(id, p) {
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const chosen = modes.find((m) => m.dataset.for === pick.value);
-      const body = { extractor: pick.value, mode: chosen ? chosen.querySelector("select").value : null };
+      const field = chosen && chosen.querySelector("select, input");
+      const body = { extractor: pick.value, mode: field && field.value.trim() ? field.value.trim() : null };
       try { await post(`/doc/${doc.id}/reading`, body); render({ keepScroll: true }); } catch (err) { setStatus(err.message); }
     });
   });

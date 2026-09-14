@@ -20,7 +20,7 @@ Page numbers come from the ``--- end of page.page_number=N ---`` markers
 pymupdf4llm emits; the markers themselves belong to no chunk.
 
 Chunks are disposable (rationale R3): change this module, run
-``scripts/rechunk.py``, nothing else moves.
+``prax maintain --rechunk``, nothing else moves.
 """
 
 from __future__ import annotations

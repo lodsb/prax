@@ -231,9 +231,11 @@ def test_a_server_with_a_projector_describes_images(
 def test_a_promoted_image_is_described_again_by_the_promote_model(
     con: sqlite3.Connection, data_dir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """extract_graph.py --promoted: before the extraction, a flagged image
-    goes through the vision extractor with the promote step's model, so the
-    expensive pass reads the picture as well as the triples."""
+    """The promote work step: before the extraction, a flagged image is
+    read again with the promote step's model (``vision.describe`` with
+    that model, the reading posted as a parse result), so the expensive
+    pass reads the picture as well as the triples — and the second
+    reading joins the first."""
     from types import SimpleNamespace
 
     from prax import models
@@ -273,16 +275,23 @@ def test_a_promoted_image_is_described_again_by_the_promote_model(
     assert queue.run(con, [doc_id], extractor="vision").actions == {"created": 1}
     assert store.get_meta(con, doc_id)["text_source"] == "vision/1+vl@127.0.0.1:1"
 
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "extract_graph.py"
-    spec = importlib.util.spec_from_file_location("extract_graph", script_path)
-    assert spec and spec.loader
-    script = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(script)
-    script.describe_images(con, [doc_id, text_id], quiet=True)
+    # what the worker's promote step does: the promote model reads the
+    # image with the current text as previous, the door takes the result
+    spec = models.resolve("promote")
+    assert spec is not None and spec.model == "claude-sonnet-5"
+    again = vision.describe(
+        png,
+        filename="panel.png",
+        model=spec.model,
+        previous=store.get_document(con, doc_id)["text"],
+    )
+    queue.apply_parse(
+        con, doc_id, stamp=f"vision/1+{spec.runtime_name}", text=again, force=True
+    )
     assert asked == ["claude-sonnet-5"]  # the promote model, not the vision step's
     assert store.get_meta(con, doc_id)["text_source"] == "vision/1+claude-sonnet-5"
-    assert os.environ.get("PRAX_VISION") is None  # the override was for that run only
-    assert models.resolve("vision").name == "server"
+    assert models.resolve("vision").name == "server"  # the vision step untouched
+    assert text_id  # a text document beside it is no image and is left alone
     # the second reading joined the first: both models' sections, the new one first
     text = store.get_document(con, doc_id)["text"]
     assert "*Image described by claude-sonnet-5; read again by vl@127.0.0.1:1.*" in text

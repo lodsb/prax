@@ -428,4 +428,4 @@ disposable (R3).
 plain-text artifact (the Zotero cache) yields paragraph chunks without
 headings or tables, which is why the upgrade pass over cache-derived
 documents is worth running. Legacy rows keep NULL structure until
-`scripts/rechunk.py` runs.
+`prax maintain --rechunk` runs.

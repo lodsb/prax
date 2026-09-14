@@ -5,7 +5,7 @@ arrive as ``<md5>-slides.pdf``, items without metadata as ``Unknown - 2002
 - No Title.pdf``, and conference papers as the ALL CAPS line their PDF
 prints. A title is what a search hit, a citation in an answer and a
 ``paper`` entity are called, so these are repaired in a batch pass
-(``scripts/repair_titles.py``) that goes through ``store.retitle``, which
+(the worker's titles step) that goes through ``store.retitle``, which
 keeps the old title in ``meta.title_history`` and moves the paper entity
 along.
 

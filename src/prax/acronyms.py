@@ -5,8 +5,8 @@ in parentheses ("antiderivative antialiasing (ADAA)", "hidden Markov model
 (HMM)"). ``find`` collects those from a text and keeps only the ones whose
 letters are the initials of the phrase's last words, so "for Computer
 Supported Collaborative Music (CSCM)" yields ``cscm -> computer supported
-collaborative music`` and not the leading "for". ``scripts/build_acronyms.py``
-runs it over every text artifact and writes the ``acronyms`` table
+collaborative music`` and not the leading "for". The ``acronyms`` pass of
+``prax maintain`` runs it over every text artifact and writes the ``acronyms`` table
 (migration 0008), counting the documents behind each pairing; the store's
 search expands a query token that is a known acronym on both the keyword
 and the vector side (``store.expand_query``). This is why "adaa" finds the

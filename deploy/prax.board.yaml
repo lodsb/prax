@@ -24,7 +24,7 @@ door:
                      # [moz-extension://<id>] — the extension's options page
                      # shows it
 
-# which modules a document is read against (scripts/assign_domains.py or the
+# which modules a document is read against (the domains pass of prax maintain, or the
 # worker's uploads); a person's choice on the document page wins
 domains:
   - match: {source: capture}

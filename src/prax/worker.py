@@ -31,7 +31,7 @@ from prax.client import Door
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
-STEPS = ("parse", "titles", "extract", "promote", "embed")
+STEPS = ("parse", "titles", "extract", "promote", "typing", "embed")
 
 
 # ------------------------------------------------------------------ steps
@@ -53,7 +53,7 @@ def _requested(it: dict[str, Any]) -> tuple[list[Any], str | None]:
         spec = models.resolve("vision")
         return [], (
             f"the vision step is {spec.name if spec else 'none'} (paid): run"
-            " parse_pending.py yourself, or point the step at a local server"
+            " it with --spend as the promote step, or point the step at a local server"
         )
     if not ext.available():
         return [], f"{name} is not installed on this worker"
@@ -130,14 +130,18 @@ def do_parse(
     return results
 
 
-_MODE_SETTINGS = {"vision-pages": "PRAX_VISION_PAGES", "figures": "PRAX_FIGURES"}
+_MODE_SETTINGS = {
+    "vision-pages": "PRAX_VISION_PAGES",
+    "figures": "PRAX_FIGURES",
+    "pymupdf4llm-ocr": "PRAX_OCR_LANGUAGE",
+}
 
 
 @contextlib.contextmanager
 def _mode(extractor: str, mode: str | None) -> Iterator[None]:
     """The requested mode as the extractor's setting for one call
     (``vision-pages``: every page or the scans; ``figures``: every image
-    or the captioned ones)."""
+    or the captioned ones; OCR: the recognizer's language)."""
     variable = _MODE_SETTINGS.get(extractor)
     if not mode or variable is None:
         yield
@@ -279,6 +283,29 @@ def do_promote(
     return do_extract(items, ext, workers=1, log_=log_)
 
 
+def do_typing(
+    items: list[dict[str, Any]], runtime: Any, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each handed-out batch to the typing model: the prompt rebuilt from
+    the items and their documents, the answer posted as it came."""
+    from prax import typing_pass
+
+    results = []
+    for it in items:
+        b = typing_pass.batch_of(it)
+        try:
+            text, usage = runtime.chat(
+                typing_pass.system_prompt(b.onto),
+                typing_pass.user_prompt(b),
+                max_tokens=40 * len(b.items) + 50,
+            )
+            results.append({**it, "text": text, "usage": usage})
+            _say(log_, f"typing: {len(b.items)} items answered")
+        except Exception as exc:  # noqa: BLE001
+            results.append({**it, "error": f"{type(exc).__name__}: {exc}"})
+    return results
+
+
 def do_embed(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
     chunks = batch.get("chunks") or []
     fields = batch.get("fields") or []
@@ -361,6 +388,13 @@ def run_once(
                     f"skipped: the promote step is {spec.name} (paid); --spend runs it"
                 )
                 continue
+        if step == "typing":
+            spec = models.resolve("typing")
+            if spec is None:
+                continue  # the step is off on this host: nothing to say
+            if _paid(spec):
+                out["typing"] = f"skipped: the typing step is {spec.name} (paid)"
+                continue
         batch = door.get_json(f"/work/{step}", {"limit": limit, "scope": scope})
         items = batch.get("items") or []
         if not items:
@@ -408,6 +442,24 @@ def run_once(
                 },
             )
             out["extract"] = f"{rep.get('applied', 0)} documents: {rep.get('report')}"
+        elif step == "typing":
+            spec = models.resolve("typing")
+            assert spec is not None
+            results = do_typing(items, models.runtime(spec), log_=log_)
+            rep = door.post_json(
+                "/work/typing",
+                {
+                    "results": results,
+                    "model": spec.runtime_name,
+                    "run": f"typing-model-{time.strftime('%Y%m%dT%H%M%S')}",
+                },
+            )
+            r = rep.get("report") or {}
+            out["typing"] = (
+                f"{rep.get('applied', 0)} requests: linked {r.get('linked', 0)},"
+                f" dropped {r.get('dropped', 0)}, misfit {r.get('misfit', 0)},"
+                f" unanswered {r.get('unanswered', 0)}"
+            )
         elif step == "promote":
             spec = models.resolve("promote")
             assert spec is not None

@@ -44,7 +44,7 @@ from prax import embeddings, extraction, inbox, models, ontology, pipeline, stor
 from prax.parsers import figures, queue
 
 LEASE_SECONDS = 900
-STEPS = ("parse", "titles", "extract", "promote", "embed")
+STEPS = ("parse", "titles", "extract", "promote", "typing", "embed")
 
 
 def _vision_is_free() -> bool:
@@ -215,6 +215,20 @@ def hand_out(
             )
         _lease(step, [i["doc_id"] for i in items], worker)
         return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
+    if step == "typing":
+        # untyped review items to the typing model, a batch of items each;
+        # nothing without a model for the step
+        from prax import typing_pass
+
+        if models.resolve("typing") is None:
+            return {"step": step, "items": [], "lease_seconds": 0}
+        items = [
+            b
+            for b in typing_pass.hand_out(con, limit=limit * 2)
+            if all(_free(step, it["id"], now) for it in b["items"])
+        ][:limit]
+        _lease(step, [it["id"] for b in items for it in b["items"]], worker)
+        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
     if step == "parse":
         from prax import parsers
 
@@ -384,6 +398,24 @@ def take_in(
         out["report"] = {
             k: getattr(totals, k)
             for k in ("linked", "existing", "queued", "rejected", "retired")
+        }
+        return out
+    if step == "typing":
+        from prax import typing_pass
+
+        model = str(payload.get("model") or worker)
+        run = payload.get("run") or f"typing-model-{time.strftime('%Y%m%dT%H%M%S')}"
+        for r in results:
+            _release(step, [it["id"] for it in r.get("items") or []])
+        rep = typing_pass.take_in(con, results, model=model, run=run)
+        out["applied"] = rep.requests
+        out["report"] = {
+            "checked": rep.checked,
+            "linked": rep.linked,
+            "existing": rep.existing,
+            "dropped": rep.dropped,
+            "misfit": rep.misfit,
+            "unanswered": rep.unanswered,
         }
         return out
     if step == "titles":

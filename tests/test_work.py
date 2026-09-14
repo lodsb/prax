@@ -585,3 +585,85 @@ def test_readings_asked_for_a_selection_at_once(
     found = client.get("/heal", params={"check": "unreadable-documents"}).json()
     offers = found["ailments"][0]["offers"]
     assert [o["extractor"] for o in offers] == ["pymupdf4llm-ocr", "vision-pages"]
+
+
+def test_the_typing_step_puts_untyped_review_items_to_the_model_through_the_door(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The model typing pass as a work step: the door hands out batches of
+    untyped review items with their documents' titles and domains, the
+    worker asks the typing model, the door applies the answers — an edge
+    for a fit, dropped for 'none', open for a misfit. A paid model is
+    refused; no model, nothing handed out."""
+    from prax import models
+
+    con = client.app.state.con
+    doc = client.post(
+        "/ingest",
+        json={"text": "a paper at a symposium " * 30, "title": "Cuckoo Hashing"},
+    ).json()["doc_id"]
+    for dst, rel in (
+        ("European Symposium on Algorithms", "published_in"),
+        ("nothing", "about"),
+        ("a claim", "cites"),
+    ):
+        store.queue_review(
+            con,
+            src="Cuckoo Hashing",
+            src_type=None,
+            rel=rel,
+            dst=dst,
+            dst_type=None,
+            source_doc=doc,
+            reason="untyped",
+            evidence="…",
+        )
+    assert store.count_review(con) == 3
+    # no typing model: nothing to hand out, the worker says nothing
+    monkeypatch.setattr(models, "resolve", lambda s: None)
+    assert client.get("/work/typing").json()["items"] == []
+    out = worker.run_once(_door(client), steps=("typing",), log_=lambda t: None)
+    assert "typing" not in out
+    # a paid model: refused before anything is fetched
+    paid = models.ModelSpec(name="sonnet", kind="claude", model="claude-sonnet-5")
+    monkeypatch.setattr(models, "resolve", lambda s: paid if s == "typing" else None)
+    out = worker.run_once(_door(client), steps=("typing",), log_=lambda t: None)
+    assert out["typing"].startswith("skipped") and "paid" in out["typing"]
+    # a local server: one batch of three, answered
+    local = models.ModelSpec(
+        name="server", kind="openai", base_url="http://127.0.0.1:1/v1", model="m"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: local if s == "typing" else None)
+    items = client.get("/work/typing").json()["items"]
+    assert len(items) == 1 and len(items[0]["items"]) == 3
+    assert items[0]["docs"][str(doc)][0] == "Cuckoo Hashing"
+    work._leases.clear()
+    prompts: list[str] = []
+
+    class FakeRuntime:
+        name = "m"
+
+        def chat(self, system, user, **kw):
+            prompts.append(user)
+            return "1: paper, venue\n2: paper, none\n3: venue, author\n", {
+                "input_tokens": 5
+            }
+
+    monkeypatch.setattr(models, "runtime", lambda s: FakeRuntime())
+    out = worker.run_once(_door(client), steps=("typing",), log_=lambda t: None)
+    assert "1 requests" in out["typing"] and "linked 1" in out["typing"]
+    assert "misfit 1" in out["typing"]
+    assert (
+        "European Symposium" in prompts[0] and "Document: Cuckoo Hashing" in prompts[0]
+    )
+    # the misfit (a venue cites an author) stays open, typed as the model
+    # said: the rules' and a later ontology's business, not asked again
+    left = store.list_review(con, limit=10)
+    assert [(it["src_type"], it["dst_type"]) for it in left] == [("venue", "author")]
+    edges = store.traverse(con, "European Symposium on Algorithms", hops=1)
+    assert (
+        edges
+        and edges[0]["producer"] == "typing:m@127.0.0.1:1"  # the runtime's name
+        and edges[0]["confidence"] == "INFERRED"
+    )
+    assert client.get("/work/typing").json()["items"] == []  # nothing untyped left

@@ -100,7 +100,7 @@ VEC_EXPAND = False  # embed the query as typed; expansions only on the keyword s
 
 @_serialized
 def replace_acronyms(con: sqlite3.Connection, rows: list[tuple[str, str, int]]) -> int:
-    """Replace the acronyms table (``scripts/build_acronyms.py``):
+    """Replace the acronyms table (the ``acronyms`` pass of ``store.maintain``):
     ``(acronym, expansion, documents)`` rows, lowercased."""
     con.execute("DELETE FROM acronyms")
     con.executemany(

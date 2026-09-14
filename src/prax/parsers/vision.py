@@ -10,7 +10,7 @@ artifact like any parser's output, so the image gets chunks, embeddings
 and a context column. Explicit-only in the registry — a model call per
 image, money when the model is Claude — so it runs when named:
 
-    python scripts/parse_pending.py --pending --mime image/ --extractor vision
+    prax reread --extractor vision --mime image/
 
 The ``vision`` step of ``prax.yaml`` picks the model: a Claude model
 (``PRAX_VISION`` or ``PRAX_VISION_MODEL`` override it; Haiku 4.5 misread a

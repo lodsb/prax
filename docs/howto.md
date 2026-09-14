@@ -101,7 +101,7 @@ module per domain (`core.yaml`, `research.yaml`, `studio.yaml`,
 `version`. `store.link` rejects anything else. Add types and bump the
 version; edges keep the version they were written under. `PRAX_ONTOLOGY`
 points at a different file (tests use it). After a bump, replay the review
-queue (`scripts/replay_review.py`, section 3f) before extracting anything
+queue (`prax maintain --only review`, section 3f) before extracting anything
 new; the bump also re-selects every document for extraction. The reasoning
 behind v2 is in `docs/ontology-v2.md`; the studio module (gear, manuals,
 datasheets, magazine articles) in `docs/ontology-studio.md`. A document
@@ -139,17 +139,19 @@ history entry carries the hash of the text it produced, so the earlier
 artifact stays in the archive. Runs on the desktop, never on the serving
 host.
 
-    # documents never indexed (registered by an importer or the inbox)
-    python scripts/parse_pending.py --pending
-    # re-extract everything Zotero's cache produced, HTML first
-    python scripts/parse_pending.py --upgrade zotero-ft-cache --mime text/html
+    # documents never indexed (registered by an importer): the backlog pass
+    prax work --scope all --steps parse
+    # re-extract everything Zotero's cache produced, HTML first: a reading
+    # request on each, drained by the worker (3l¾)
+    prax reread --extractor trafilatura --text-source zotero-ft-cache --mime text/html
     # scans: OCR is explicit and bounded (PRAX_OCR_MAX_PAGES, default 60)
-    python scripts/parse_pending.py --pending --extractor pymupdf4llm-ocr
+    prax reread --extractor pymupdf4llm-ocr --unreadable
     # scans in another script: the recognizer is a setting (parse.ocr_language:
     # ch reads Chinese and English; en, latin, arabic, cyrillic, devanagari,
     # japan, korean, el, th...) and part of the stamp, so a book read with the
-    # wrong one has not been read with the right one; --title picks them out
-    PRAX_OCR_LANGUAGE=arabic python scripts/parse_pending.py --title "In Arabic"         --extractor pymupdf4llm-ocr --force
+    # wrong one has not been read with the right one; the mode names it for
+    # the request, --title picks the books out
+    prax reread --extractor pymupdf4llm-ocr --mode arabic --title "In Arabic"
 
 For a script the OCR font cannot write back into the page (Arabic,
 Devanagari, Tamil, Telugu, Thai, Georgian — pymupdf4llm writes what it
@@ -159,7 +161,7 @@ reading order (right to left for Arabic), page markers included; no
 layout analysis, which a scanned book rarely has to give.
 
     # Docling on a hand-picked set
-    python scripts/parse_pending.py --ids 12 34 --extractor docling --force
+    prax reread --extractor docling --ids 12 34
 
 **Pages OCR cannot read** — handwriting, scores, photographed notebooks —
 go through the vision model page by page: `vision-pages` keeps a page
@@ -174,9 +176,9 @@ bounded (`parse.vision_max_pages`, default 200), since a page takes
 page after the server starts took two minutes once) and a cent or two
 with Sonnet.
 
-    python scripts/parse_pending.py --ids 8605 --extractor vision-pages --force
+    prax reread --extractor vision-pages --ids 8605
     # every page, for printed pages with notes in the margin
-    PRAX_VISION_PAGES=all python scripts/parse_pending.py --ids 8605 --extractor vision-pages --force
+    prax reread --extractor vision-pages --mode all --ids 8605
 
 Or from the document's page in the web UI: "read again…" asks for the
 extractor (and the pages) and a running worker (`scripts/work.py
@@ -203,7 +205,7 @@ readings), so a figure is a search hit of its own. Then the second
 half, the reading:
 
     # what the vision model makes of every figure, written under each
-    python scripts/parse_pending.py --ids 9706 --extractor figures --force
+    prax reread --extractor figures --ids 9706
 
 or "read again… → figures" on the page. A PDF image no caption claims
 (`Figure on page N`) is read only with `parse.figures: all`
@@ -218,8 +220,8 @@ which puts the original's figures into the current text without
 re-reading the pages (pymupdf4llm's layout analysis takes 10–30 s a
 document; this takes a fraction of a second):
 
-    python scripts/parse_pending.py --upgrade trafilatura/2.2.0-r2 --mime text/html   # 284 pages: 2 min
-    python scripts/parse_pending.py --upgrade pymupdf4llm/1.28.2 --extractor figure-refs --force
+    prax reread --extractor trafilatura --text-source trafilatura/2.2.0-r2   # 284 pages: 2 min
+    prax reread --extractor figure-refs --text-source pymupdf4llm/1.28.2
 
 A document whose text comes out the same is `same` — the stamp moves,
 nothing is rebuilt — and one that gained a figure keeps every chunk
@@ -253,14 +255,16 @@ Before switching the default extractor for a document class, run
 `scripts/compare_extractors.py` over a sample and read the texts, not only
 the metrics table it writes.
 
-Long passes over thousands of PDFs should run as a loop of short-lived
-processes: MuPDF's layout analysis grows the process over time, and one
-run over 5,000 documents was killed for memory. Every invocation
-re-selects what is left, so batching costs nothing:
+Long passes over thousands of PDFs are better as a loop of short-lived
+processes than as one: MuPDF's layout analysis grows the process over
+time, and one run over 5,000 documents was killed for memory. A worker
+re-selects what is left on every pass, so batching costs nothing:
 
-    for ($i = 0; $i -lt 40; $i++) {
-      python scripts/parse_pending.py --upgrade zotero-ft-cache --limit 250 --quiet
-    }
+    for ($i = 0; $i -lt 40; $i++) { prax work --scope all --steps parse -n 250 --quiet }
+
+(the watching worker is the same process for as long as it runs; the
+service that keeps it alive restarts it when it dies, and the nightly
+pass takes a hundred at a time — 4b).
 
 Originals above `PRAX_MAX_LAYOUT_MB` (default 40) skip layout analysis and
 get plain text through the fallback.
@@ -279,9 +283,12 @@ always code), so each function is one chunk and the prose around it stays
 prose. Extractors carry a `revision` in their stamp (`plain/1-r3`) so
 such changes re-select what they wrote:
 
-    python scripts/parse_pending.py --upgrade trafilatura --mime text/html
-    python scripts/parse_pending.py --upgrade plain --mime text/plain
-    python scripts/embed_pending.py --compact      # vectors for the new chunks
+    prax reread --extractor trafilatura --text-source trafilatura --mime text/html
+    prax reread --extractor plain --text-source plain --mime text/plain
+    # the vectors for the new chunks follow: the worker's embed step
+
+(the backlog pass finds these by itself once the revision is bumped — 3l¾;
+the request is for doing it now).
 
 For PDFs, pymupdf4llm fences monospace runs, which misses code set in a
 proportional font; Docling's layout model has an explicit code label and
@@ -305,7 +312,8 @@ document's text artifact like any parser's output. Explicit only. The
   well (measured 2026-09-13, one image; Claude's descriptions carry
   more interpretation, the local ones more verbatim text).
 
-    python scripts/parse_pending.py --pending --mime image/ --extractor vision
+    prax reread --extractor vision --mime image/     # every image again; the door
+                                                     # asks for new ones by itself (3l½)
 
 The stamp records the model (`vision/1+<model>`); `claude-vision` is the
 same extractor pinned to Claude, the name the first descriptions carry.
@@ -354,19 +362,17 @@ default and falls back to FTS when there is no index file, no usearch or
     # installed wins, silently (the desktop ran on the CPU for days so).
     pip uninstall -y onnxruntime onnxruntime-directml; pip install onnxruntime-directml
 
-    python scripts/embed_pending.py --dry-run     # counts
-    python scripts/embed_pending.py --batch 64    # everything pending; idempotent
-    python scripts/embed_pending.py --compact     # reconcile only, no embedding
+    prax work --steps embed --scope all       # everything pending; idempotent
+    prax status                                # the counts
 
-Stop the HTTP door before an embedding run on Windows: the door keeps the
-index file memory-mapped and the save (an atomic rename) is refused while
-it is open (`PermissionError` on the `.tmp` file). Re-parsing documents
-(a new extractor revision, Docling on a few) creates new chunks that need
-a run afterwards; `--compact` alone drops stale keys without embedding.
-
-The job saves the index every 50,000 chunks and reconciles index and
-bookkeeping on start, so an interrupted run is simply started again. Copy
-both `.usearch` files together with `prax.db` when moving the store.
+The worker embeds what has no vector yet and posts the vectors; the door
+writes them into the small delta index beside the main file and folds
+the delta in when it grows (`POST /vectors/merge` does it now). Nothing
+is stopped for it. Re-parsing documents (a new extractor revision,
+Docling on a few) creates new chunks that a following pass embeds; the
+`chunks-without-vectors` ailment (3m) counts what waits. Copy every
+`.usearch` file together with `prax.db` when moving the store, or let
+`prax backup` do it (7).
 
 Settings: `PRAX_EMBED` (model name, `hash` for tests, `0` off),
 `PRAX_EMBED_VARIANT` (`int8` by default everywhere: measured 2026-09-12
@@ -377,7 +383,7 @@ first when the runtime offers it), `PRAX_EMBED_THREADS`; `PRAX_VEC_DTYPE` (`f16`
 default, `i8` for half the file at recall 0.93) and `PRAX_VEC_EF` (search
 expansion, 64) for the index. Changing the model means re-embedding into
 a new file: `chunk_embeddings.model` records what each vector came from
-and `embed_pending.py` picks up the difference.
+and the worker's embed step picks up the difference.
 
 Query: `search(q, mode="hybrid"|"fts"|"vec", kind=..., doctype=...)` in
 the store, the API (`/search?mode=&doctype=`) and the MCP tool. Hybrid
@@ -391,8 +397,8 @@ the document's best-matching chunk. `doctype` keeps one type: `pdf`,
 metadata on its own; after migration 0005 or a change to
 `store.document_field` rebuild it and embed:
 
-    python scripts/refresh_document_fields.py
-    python scripts/embed_pending.py            # chunks, then document fields
+    prax maintain --only fields        # the field of every document (3n)
+    prax work --steps embed --scope all  # then the vectors, chunks and fields
 
 Why: chunk scoring finds documents *about* a term, not the document that
 *is* the thing; "schematic" put a CAD manual first and the one schematic
@@ -401,13 +407,12 @@ nowhere (`docs/eval/retrieval-field-2026-09-10.md`).
 ### Acronyms
 
 Papers define their acronyms in the text ("antiderivative antialiasing
-(ADAA)"). `scripts/build_acronyms.py` collects those definitions from
-every text artifact into the `acronyms` table (migration 0008; 5,887
-pairings from the library, 1,826 defined by two or more documents), and
-the search expands a query token that is a known acronym to its phrase
-on the keyword side as a phrase match (the embedder sees the query as
-typed: expanding it measured worse). Re-run the
-script after a large import; `--dry-run` shows the top pairings.
+(ADAA)"). The `acronyms` pass of `prax maintain` (3n; nightly) collects
+those definitions from every text artifact into the `acronyms` table
+(migration 0008; 5,887 pairings from the library, 1,826 defined by two
+or more documents), and the search expands a query token that is a
+known acronym to its phrase on the keyword side as a phrase match (the
+embedder sees the query as typed: expanding it measured worse).
 
 One more rank list in the same change: chunks that contain the query's
 rare acronym-shaped terms (at most six letters, digits, or a known
@@ -427,12 +432,12 @@ a confidence and a quoted evidence string. Triples that do not fit the
 ontology go to `review_queue`; the summary goes to `meta.summary`; the
 document is stamped with the ontology version so reruns are incremental.
 
-    # credentials: ANTHROPIC_API_KEY, or `ant auth login`
-    python scripts/extract_graph.py --dry-run             # selection and cost estimate
-    # --min-chars 500 (default) skips notes and empty scans; --mime narrows the type
-    python scripts/extract_graph.py --limit 20            # trial, synchronous
-    python scripts/extract_graph.py --submit-batch        # whole selection at half price
-    python scripts/extract_graph.py --collect-batch <id>  # apply when the batch has ended
+    prax work --steps extract --scope all -n 20       # a trial, then the rest
+    prax work --steps extract --scope all --workers 3   # the backlog, a served model's slots
+
+The extract step never spends money: a Claude model in `steps.extract` is
+refused by the worker (the promote step, below, is the paid pass). Notes
+and empty scans are skipped (`pipeline.MIN_CHARS`, 500 characters).
 
 Settings: `PRAX_EXTRACT_MODEL` (default `claude-opus-5`),
 `PRAX_EXTRACT_EFFORT` (default `medium`), `PRAX_EXTRACT=stub` for tests,
@@ -452,11 +457,8 @@ Every edge records its `producer` (a model name, `zotero`, `crossref`,
 a page revision). `store.provenance_summary` lists live and retired edges
 per producer and run; `store.retire_run(producer=..., run=...)` ends a
 run's edges when a better pass has replaced them (history stays). Edges
-written before migration 0007 are tagged once with
-
-    python scripts/backfill_provenance.py
-
-Run it again after any job that was started before the migration ends.
+written before migration 0007 were tagged once (`store.backfill_provenance`,
+2026-09-11); every edge since carries both.
 
 ### Entity resolution
 
@@ -527,9 +529,11 @@ Sets come from rules in `prax.yaml` (first match wins; a rule without
         domains: [research]
       - domains: [research]
 
-    python scripts/assign_domains.py --dry-run        # counts per rule
-    python scripts/assign_domains.py --commit         # documents without a set
-    python scripts/assign_domains.py --commit --force # re-assign rule-set ones too
+    prax maintain --only domains        # documents without a set (3n; nightly)
+
+A capture gets its set from the rules as it arrives; the pass is for what
+came before the rules, or after a rule changed (`store.assign_domains(...,
+force=True)` re-assigns rule-set documents too).
 
 A set written by hand ("domains…" in the document page's action row,
 `PUT /doc/{id}/domains`, `POST`/`DELETE /doc/{id}/domains/{name}`, the
@@ -538,8 +542,9 @@ domain keeps the others; removing the last one puts the document back in
 every module. A re-run for one domain reads the documents assigned to
 it that are not yet stamped with their subset's version:
 
-    python scripts/extract_graph.py --domain family --dry-run
-    python scripts/extract_graph.py --domain family
+    prax work --steps extract --scope all      # the backlog pass takes them: a
+                                               # document is re-selected when its
+                                               # subset's version moved
 
 `search(..., domain="family")` (API and MCP `domain=`) keeps the hits
 from that domain; documents without a set are in every domain. When a
@@ -589,8 +594,14 @@ An answer that fits the ontology (after the same remaps the rules use: a
 edge, producer `typing:<model>`; `none` drops; a misfit stays open. The
 model is the `typing` step (`prax.yaml` or `PRAX_TYPING=…` for one run):
 
-    PRAX_TYPING=server-35b python scripts/type_review.py --model --dry-run --limit 240
-    PRAX_TYPING=server-35b python scripts/type_review.py --model --commit --workers 3
+    prax work --steps typing -n 10           # ten requests of up to 40 items
+    prax work --steps typing --watch          # until the queue is typed
+
+A work step (3l): the door hands out batches of untyped items with their
+documents' titles and domains, the worker asks the typing model, the
+door applies the answers — and a misfit keeps the types the model gave
+it, so it is not asked again and the rules or a later ontology can take
+it. The step runs only when named; a paid typing model is refused.
 
 On 480 items of the live queue the local 35B linked 263, dropped 21 and
 left 48 misfits, at about 30 s a request of 24 items on the 4090.
@@ -620,8 +631,8 @@ edges and requests as it goes.
 
 The review view (`#review`) filters by relation and by unmapped versus
 typed items, drops all matching items in bulk, and replays typed items
-against the current ontology; the same is available as
-`scripts/replay_review.py`. The proposal for ontology v2, built from the
+against the current ontology; the same is the `review` pass of
+`prax maintain` (3n), nightly. The proposal for ontology v2, built from the
 queue's numbers, is `docs/ontology-v2.md`.
 
 ## 3g. Pages: notes, projects, topics
@@ -700,8 +711,9 @@ GB) ran next to the 35B (23.9 of 24.5 GB).
 **Context per slot.** `-c` is split evenly over the slots, so the 3 × 8 K
 default gives a document 8 K; a text whose script tokenizes densely
 (Arabic at about a token per character) overruns it at prax's 16 K-char
-budget. For those, a run with `-Slots 1 -CtxPerSlot 24576` and
-`extract_graph.py --ids …` is the way (three books, 2026-09-13).
+budget. For those, a server run with `-Slots 1 -CtxPerSlot 24576` and
+`prax work --steps extract --scope all` while it is up is the way (three
+books, 2026-09-13).
 
 **Load figures.** `--metrics` (on by default in the script) exposes
 Prometheus text at `/metrics`; the door's `GET /models/servers` reads it
@@ -767,13 +779,10 @@ Half the imported titles were file names (standalone Zotero
 attachments come as `<md5>-slides.pdf`, items without metadata as
 `Unknown - 2002 - No Title.pdf`) and conference papers arrive in ALL
 CAPS. A title is what a search hit, a citation in an answer and a
-`paper` entity are called, so `scripts/repair_titles.py` repairs them:
+`paper` entity are called, so the titles step repairs them — for a
+capture as it arrives, for the library with
 
-    python scripts/repair_titles.py --dry-run        # who needs one, and why
-    python scripts/repair_titles.py --sample 20      # the model's guesses, nothing applied
-    python scripts/repair_titles.py --reason caps    # the recase rule only, no model
-    python scripts/repair_titles.py                  # everything, applied
-    python scripts/embed_pending.py                  # afterwards, door stopped
+    prax work --steps titles --scope all       # then embed, for the document field
 
 ALL CAPS titles are recased by rule (`titles.recase`: stopwords,
 known acronyms). File names go to the titles step's model (`prax.yaml`
@@ -792,9 +801,9 @@ wrote the current one (the Zotero importer leaves such a title alone
 on refresh), the `paper` entity carrying the old title is renamed or
 merged into the entity of the new one so its edges follow, and the
 document field is refreshed, which queues the document vector for
-`embed_pending.py`. The document page shows the former title. A
-wrong repair is fixed with `--ids <id>` after editing, or by calling
-`store.retitle` with the right title and `source="human"`.
+the embed step. The document page shows the former title. A wrong
+repair is fixed by calling `store.retitle` with the right title and
+`source="human"`.
 
 ## 3k. What this host does: `prax.yaml`
 
@@ -808,7 +817,7 @@ only what differs.
 
 Each setting can still be given as an environment variable for one run,
 and the variable wins: `PRAX_EMBED=hash pytest`,
-`PRAX_VEC_DTYPE=i8 python scripts/embed_pending.py`. The names are in
+`PRAX_VEC_DTYPE=i8 prax serve`. The names are in
 `prax.example.yaml` beside each setting, and `prax.config` is where they
 are read. What lives in the environment and nowhere else: `PRAX_DATA_DIR`
 (it is what finds the file), `PRAX_CONFIG`, `PRAX_TOKEN` (a secret),
@@ -852,7 +861,7 @@ start the server (`scripts/llama_server.ps1 -Model <gguf> -Slots 3
 default and would break the grammar), measured choices in
 `docs/eval/extractors-local-2026-09-11.md`,
 add an `openai` model with its address, point `steps.extract.model`
-at it, and `extract_graph.py --workers <slots> --never-extracted` runs the
+at it, and `prax work --steps extract --scope all --workers <slots>` runs the
 same prompt and grammar against the server (llama-server honours the `grammar` field; vLLM does not,
 so use a Claude-kind model or llama-server for extraction). The door
 stays lean: the model lives in the server's process, not the door's
@@ -880,7 +889,7 @@ anything. The same page is noted on the earlier document
 (`meta.recaptured`); a snapshot arriving for a page held only as a bare
 DOM replaces it. A page that changed in between is a new document with
 `meta.previous_capture`. What came in before that check existed is
-handled by `scripts/dedupe_captures.py --dry-run | --commit`, which
+handled by the `dedupe` pass of `prax maintain` (3n; nightly), which
 keeps one capture per URL (a snapshot, then an extracted one, then the
 oldest) and retires the rest.
 
@@ -948,16 +957,12 @@ Four ways in:
   seconds, or `.part`/`.crdownload`) wait for the next scan. Consumed
   files are removed, the archive holds their bytes; what the store
   refused goes to `inbox/failed/`. A folder that is not prax's own (a
-  download folder, a project's PDFs) is read with `--from <folder>
-  [--domains research]`: every file under it is registered, nothing is
-  moved or removed, and a second run finds them already known by hash.
-  An uploaded PDF shows "pending" in the Inbox view until a worker has
-  been over it, and the view refreshes itself while something is
-  pending. `scripts/inbox.py` (one pass, straight through the store) is
-  for a machine without a door and for `--from`; the by-hand passes
-  (`repair_titles.py --ids`, `extract_graph.py --ids`,
-  `embed_pending.py`) still exist for a store host with the door
-  stopped.
+  download folder, a project's PDFs) is `prax add <folder> -r --domain
+  research`: every file under it is uploaded, nothing is moved or
+  removed, and a second run finds them already known by hash. An
+  uploaded PDF shows "pending" in the Inbox view until a worker has
+  been over it ("no text found" when every extractor tried and found
+  none), and the view refreshes itself while something is pending.
 
 ### Jobs, and a UI that follows
 
@@ -977,8 +982,8 @@ with `--load-mode mmap`, 30 GB without), so with IDEs and a browser open
 a 32 GB machine reaches its commit limit before its RAM runs out, and
 processes then fail to start. Give such a machine a fixed page file of
 at least twice its RAM, or close the big programs during a long pass.
-Side by side on one GPU: the worker's steps and one by-hand pass
-(`extract_graph.py`, `repair_titles.py`) share the model server's slots
+Side by side on one GPU: a watching worker and a second one-off worker
+(`prax work --steps extract --scope all`) share the model server's slots
 (three on the desktop), which is the limit; a second GPU model or a
 second model server does not fit next to a 22 GB one on a 24 GB card.
 
@@ -1016,8 +1021,8 @@ pass below does it a few at a time instead), the ontology migrations,
 and the repairs — `prax heal`, or the Health panel at the foot of the
 Jobs page, which shows what every ailment finds right now and repairs
 the repairable ones with one button (a job; nothing is deleted). The
-curated imports' own backlog (Zotero, GitHub, chats) is
-`parse_pending.py --pending` and a worker with `--scope all`.
+curated imports' own backlog (Zotero, GitHub, chats) is a worker with
+`--scope all` — the nightly one, or `prax work --scope all` now.
 
 ## 3l¾. Keeping the library current: what is versioned, and the nightly pass
 
@@ -1081,8 +1086,8 @@ version of their ontology subset (never extracted, or extracted before
 a module grew) — in scope `all` that is the library's whole extraction
 backlog, oldest first, a hundred a night with the local model; `embed`
 the chunks without a vector from the current model. `--steps parse,embed`
-keeps only the texts and their vectors current and leaves the graph to
-`extract_graph.py`.
+keeps only the texts and their vectors current and leaves the graph for
+a pass you name.
 
 What the pass does not do: it does not re-run extractors that are
 explicit only (OCR, `vision-pages`, Docling) — what was asked for once
@@ -1456,9 +1461,9 @@ board's `prax.yaml`:
       extract: {model: none}
 
 An index written as `f16` stays `f16`: the setting takes effect when the
-vectors are written, so re-embed into a fresh file
-(`python scripts/embed_pending.py --compact` after removing the old
-`vectors-*.usearch`) or copy the desktop's file and accept its precision.
+vectors are written, so re-embed into a fresh file (remove the old
+`vectors-*.usearch` with the door stopped, start it with the setting, and
+let a worker embed) or copy the desktop's file and accept its precision.
 
 **On the machine with the models**, pointing at the board:
 

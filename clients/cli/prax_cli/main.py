@@ -335,9 +335,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument(
         "--steps",
         default="parse,titles,extract,embed",
-        help="promote (the paid pass over flagged documents) only when named",
+        help="promote (the paid pass over flagged documents) and typing (untyped"
+        " review items to the typing model) only when named",
     )
-    for step in ("parse", "titles", "extract", "promote", "embed"):
+    for step in ("parse", "titles", "extract", "promote", "typing", "embed"):
         s.add_argument(
             f"--no-{step}", action="store_true", help=f"skip the {step} step"
         )
@@ -389,12 +390,17 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     s.add_argument("--extractor", required=True, help="one of the readings")
-    s.add_argument("--mode", help="vision-pages: scans|all; figures: captioned|all")
+    s.add_argument(
+        "--mode",
+        help="vision-pages: scans|all; figures: captioned|all; OCR: a language"
+        " (ch, en, latin, arabic, cyrillic…)",
+    )
     s.add_argument("--ids", nargs="+", type=int, metavar="ID")
     s.add_argument("--mime", help="a type or a prefix: application/pdf, image/")
     s.add_argument(
         "--text-source", help="a stamp prefix: the documents an old extractor read"
     )
+    s.add_argument("--title", help="words the title contains")
     s.add_argument(
         "--unreadable",
         action="store_true",

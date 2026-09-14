@@ -582,7 +582,7 @@ def scan(
 def pending_captures(con: sqlite3.Connection) -> list[int]:
     """Captures the door only registered (PDFs, images): what the batch
     host's watcher parses. The curated imports' own backlog is not
-    included; ``parse_pending.py --pending`` is for that."""
+    included; a worker with ``--scope all`` is for that."""
     return [
         r[0]
         for r in con.execute(

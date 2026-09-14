@@ -29,13 +29,13 @@ flowchart LR
     W[Pages<br/>UI, MCP]
     B[Browser extension, inbox<br/>planned]
   end
-  subgraph batch [Batch jobs, desktop]
-    IMP[import_zotero.py]
-    PQ[parse_pending.py<br/>extractors, vision]
-    EMB[embed_pending.py<br/>chunks + document fields]
-    EXT[extract_graph.py<br/>Claude, batch API]
-    CIT[import_citations.py]
-    RES[resolve_entities.py]
+  subgraph batch [The worker, on the machine with the models]
+    IMP[prax import<br/>zotero, github, chats, links, citations]
+    PQ[parse step<br/>extractors, readings, vision]
+    EMB[embed step<br/>chunks + document fields]
+    EXT[extract and promote steps<br/>the local model; Claude with --spend]
+    TYP[titles and typing steps]
+    MNT[prax maintain, prax resolve<br/>jobs on the door]
   end
   subgraph store [prax.store, the one door]
     DB[(prax.db<br/>SQLite, WAL)]
@@ -92,10 +92,10 @@ flowchart TD
   D -->|extractor by MIME<br/>meta.text_source = name/version| T[text artifact<br/>Markdown, archived, documents.text_hash]
   T -->|prax.chunking| CH[chunks<br/>kind, locator, heading, data]
   CH --> F[chunks_fts<br/>FTS5 BM25]
-  CH -->|embed_pending.py| V[vectors-model.usearch<br/>HNSW 384-d cosine]
+  CH -->|the embed step| V[vectors-model.usearch<br/>HNSW 384-d cosine]
   D -->|title, kind, summary| DF[documents_fts + vectors-doc<br/>the document field]
-  D -->|extract_graph.py, import_citations.py| G[entities + edges<br/>ontology-typed, bi-temporal, evidence]
-  G -->|resolve_entities.py| G
+  D -->|the extract step, prax import citations| G[entities + edges<br/>ontology-typed, bi-temporal, evidence]
+  G -->|prax resolve| G
 ```
 
 1. **Register** (`store.register`). The original bytes are hashed
@@ -103,7 +103,7 @@ flowchart TD
    with MIME type, title, source URL and a `meta` JSON blob. The same bytes
    under two Zotero records are one document. Nothing is parsed here. (R2,
    R4)
-2. **Extract** (`prax.parsers`, `scripts/parse_pending.py`). An extractor
+2. **Extract** (`prax.parsers`, the worker's parse step). An extractor
    chosen by MIME type turns the original into Markdown: pymupdf4llm for
    PDFs with a text layer, plain MuPDF as fallback, RapidOCR for scans when
    asked, Docling when named, trafilatura for HTML with `<pre>` blocks
@@ -125,9 +125,9 @@ flowchart TD
    (character range into the artifact plus page, with the invariant
    `chunk.text == artifact[start:end]`), the heading path it sits under,
    and for tables a JSON grid in `data`. Chunks are disposable:
-   `scripts/rechunk.py` rebuilds them from the artifacts. (R13)
+   `prax maintain --rechunk` rebuilds them from the artifacts. (R13)
 4. **Index**. FTS5 rows follow chunk inserts through triggers.
-   `scripts/embed_pending.py` embeds chunks that have no vector from the
+   The worker's embed step embeds chunks that have no vector from the
    current model into a usearch HNSW file, then embeds the document field.
    The document field (title, kind words, creators, venue, extraction
    summary, an image description's opening paragraph) is rebuilt by the
@@ -290,27 +290,29 @@ has no column yet. Conventions in use:
 | `citations` | source, work id, citation count, reference count, fetch time |
 | `page` | slug, kind, current revision and author of a page |
 
-## 7. Batch jobs and their stamps
+## 7. The passes and their stamps
 
-Every batch job is idempotent because it selects by a stamp and writes a
-stamp. Interrupt any of them and rerun the same command.
+Every pass is idempotent because it selects by a stamp and writes a
+stamp. Interrupt any of them and run the same command again. The
+worker's steps (`prax work`, `prax.work` hands out and takes in) do the
+model work through the door; the jobs run on the door itself; nothing
+here opens the database file.
 
-| Job | Selects | Writes | Guards |
+| Pass | Selects | Writes | Guards |
 |---|---|---|---|
-| `import_zotero.py` | Zotero keys not in `meta.zotero.keys`, or changed `dateModified` | documents, text from Zotero's cache, `authored_by` edges | copies `zotero.sqlite`, opens read-only |
-| `parse_pending.py` | `parsed_at IS NULL`, or `meta.text_source` prefix, or `--ids` | text artifact, chunks, `text_source`, `parse_history` | fallback chain; scans refused without OCR; 40 MB / 400 page caps; "seen" skip; short new text keeps the old; vision and Docling explicit only |
-| `rechunk.py` | indexed documents (or legacy rows) | chunks only | none needed |
-| `embed_pending.py` | chunks without a vector from the current model, then document fields without one | the two `.usearch` files, `chunk_embeddings`, `document_embeddings` | dimension check; batch 64; saves every 50 K; reconciles on start; the door must be stopped on Windows |
-| `refresh_document_fields.py` | every document (or `--ids`) | `documents_fts`; drops the vector of a changed field | backfill after migration 0005 or a change to `store.document_field` |
-| `extract_graph.py` | indexed documents whose `meta.extraction.ontology_version` is not current, with at least 500 characters of text | edges, `review_queue`, `meta.summary`, `meta.extraction` | sync with a budget, or Batch API (`--submit-batch` / `--collect-batch`, idempotent per document); reference-number names rejected; page/project names must be pages |
-| `import_citations.py` | documents without `meta.citations`, DOIs first (`--resolve-titles` for the rest) | `cites` edges, `meta.citations` | two sources behind one flag; polite-pool contact; retries |
-| `resolve_entities.py` | unmerged entities | `entities.canonical_id` | sure tier automatic; `--twins` and `--adjudicate` opt in |
-| `replay_review.py` | open typed review items | edges, `review_queue.resolution` | links only what the current ontology accepts |
-| `backfill_provenance.py` | edges without a producer | `edges.producer`, `edges.run` | from evidence prefixes and document stamps; idempotent |
-| `eval_retrieval.py` | the query set | a report | throwaway or existing store |
-
-Long passes run as batches of short-lived processes (`--limit N` in a
-loop); the queue makes each batch do real work.
+| `prax import zotero` (`import_zotero.py` still) | Zotero keys not in `meta.zotero.keys`, or changed `dateModified` | documents, text from Zotero's cache, `authored_by` edges | copies `zotero.sqlite`, opens read-only |
+| parse step | pending captures (scope `all`: every unparsed document, then the stale ones — `parsers.behind`); reading requests first | text artifact, chunks, `text_source`, `parse_history` | fallback chain; scans refused without OCR; 40 MB / 400 page caps; a run chain is not run again; short new text keeps the old; vision, OCR and Docling only when asked (`prax reread`, "read again…", the door's own free readings) |
+| titles step | titles that are file names or ALL CAPS, untried | `title`, `meta.title_history`, the document field | the recase rule needs no model; a paid model is refused |
+| extract step | indexed documents whose `meta.extraction.ontology_version` is not their subset's current one, with at least 500 characters of text | edges, `review_queue`, `meta.summary`, `meta.extraction` | a paid model is refused; reference-number names rejected; page/project names must be pages; the typing rules run over the document's items right after |
+| promote step | flagged documents (`meta.promote`) the promote model has not read; a promoted image is read again first | the same, run `promote-<time>` | only when named, `--spend` for a paid model |
+| typing step | untyped review items, a batch of 40 to a request | edges (`typing:<model>`), `review_queue` (dropped, or the model's types on a misfit) | only when named; a paid model is refused |
+| embed step | chunks without a vector from the current model, then document fields without one | the delta `.usearch` files, `chunk_embeddings`, `document_embeddings`; the door folds the delta in | dimension check; the door is never stopped |
+| `prax maintain` | derived tables: acronyms, document fields, domain rules, duplicate captures, the review queue's rule passes; `--rechunk` every chunk | those tables; `meta.retired` on a duplicate | no model, no decision; nightly after the worker's pass |
+| `prax resolve` | unmerged entities | `entities.canonical_id` | the sure tier and, when asked, the twins; the likely tier is listed (`resolve_entities.py --adjudicate` asks Claude about it) |
+| `prax import citations` | documents without `meta.citations`, DOIs first (`--resolve-titles` for the rest) | `cites` edges, `meta.citations` | two sources behind one flag; polite-pool contact; retries |
+| `prax heal --apply` | the ailments' rows | edges ended, items resolved, jobs closed, texts re-indexed, stamps moved | one ailment at a time; nothing deleted |
+| `prax backup` | the database, the indexes, the config, the archive files the copy lacks | a copy that is a store | `--no-archive` for a small disk |
+| `eval_retrieval.py` | the query set | a report | throwaway or existing store; opens the file, read-only in spirit |
 
 ## 8. Configuration
 
@@ -319,7 +321,7 @@ loop); the queue makes each batch do real work.
 | `PRAX_DATA_DIR` | the store directory (default `<repo>/data`) |
 | `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
 | `ANTHROPIC_API_KEY` | the Claude API for extraction, vision and adjudication |
-| `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `openai`, `stub`) and the `extract`, `promote`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k); `domains:` rules that give documents their domain set (`scripts/assign_domains.py`) |
+| `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `openai`, `stub`) and the `extract`, `promote`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k); `domains:` rules that give documents their domain set (the `domains` pass of `prax maintain`) |
 | `PRAX_EXTRACT`, `PRAX_PROMOTE`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE`, `PRAX_TYPING` | a model name or `none`: overrides the step for one run |
 | `PRAX_EXTRACT_MODEL`, `PRAX_ASK_MODEL`, `PRAX_VISION_MODEL`, `PRAX_EXTRACT_EFFORT` | the Claude model id (and effort) for a step that resolves to Claude |
 | `citations.mailto` [`PRAX_CITATIONS_MAILTO`] | polite-pool contact for Crossref and OpenAlex |
@@ -345,28 +347,28 @@ loop); the queue makes each batch do real work.
 | I want to… | Touch |
 |---|---|
 | add a source | a reader under `prax.importers` that yields `feed.Item`s and a line in `clients/cli/prax_cli/importing.py` (`sources.md` 6); only a source that must open something on the door's host calls `store.register` / `index_text` itself and stamps `meta.source`; a fixture and tests |
-| add an extractor | a `bytes -> str` function (`filename=` when `hints=True`) and an `Extractor` entry in `prax.parsers.REGISTRY`; bump `revision` when its output changes and the backlog pass re-reads the library a batch at a time (howto 3l¾; `parse_pending.py --upgrade <old stamp>` does it at once); an annotating extractor whose addition is what a revision added names it in `covers`, so the stamp moves without a re-read |
-| change chunking | `prax.chunking`; run `rechunk.py --all`; the locator invariant is asserted |
+| add an extractor | a `bytes -> str` function (`filename=` when `hints=True`) and an `Extractor` entry in `prax.parsers.REGISTRY`; bump `revision` when its output changes and the backlog pass re-reads the library a batch at a time (howto 3l¾; `prax reread --extractor <name> --text-source <old stamp>` does it now); an annotating extractor whose addition is what a revision added names it in `covers`, so the stamp moves without a re-read |
+| change chunking | `prax.chunking`; run `prax maintain --rechunk`; the locator invariant is asserted |
 | add a media kind (audio) | a chunk `kind` and locator shape in `prax.chunking`; an analyzer that produces the searchable rendering (images already go through `vision`) |
-| change what a document *is* for search | `store.document_field`; run `refresh_document_fields.py`, then `embed_pending.py` |
-| change the embedding model | an entry in `prax.embeddings.MODELS`; `embed_pending.py` re-embeds into new index files; another dimension also needs `VEC_DIM` |
-| add entity or relation types | the module file under `ontology/` plus that module's version bump (a new domain is a new file that requires `core`); `replay_review.py`; old edges keep their version; the bump re-selects documents for extraction |
+| change what a document *is* for search | `store.document_field`; run `prax maintain --only fields`, then a worker's embed step |
+| change the embedding model | an entry in `prax.embeddings.MODELS`; the embed step re-embeds into new index files; another dimension also needs `VEC_DIM` |
+| add entity or relation types | the module file under `ontology/` plus that module's version bump (a new domain is a new file that requires `core`); `prax maintain --only review` replays the queue; old edges keep their version; the bump re-selects documents for extraction |
 | replace one producer's work | re-extract (a new `run`), then `store.retire_run(producer=, run=)` on the old one; history stays |
 | change the extraction prompt | `extraction.system_prompt` (the JSON text is cached across calls) and `docs/eval/` for a before/after on the three benchmark papers |
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |
 | retire a producer's earlier reading of one document | happens in `extraction.apply()` through `store.retire_reading` when the same producer re-reads it under another ontology subset or version; `retire_run` for a whole producer or pass |
-| put a document in a domain (which ontology modules it is read against) | `store.set_domains` / `add_domain` / `remove_domain` (`meta.domains`; the document page's "domains…", `PUT /doc/{id}/domains`, the `set_domains` MCP tool) or the `domains:` rules in prax.yaml through `scripts/assign_domains.py`; extraction builds prompt, grammar and schema for `ontology.for_domains(doc.domains)` and stamps the subset's version; `extract_graph.py --domain <name>` re-runs one domain |
-| retire a document, or find the duplicate captures | `store.retire_document` / `unretire_document` ("retire…" on the document page, `POST /doc/{id}/retire`); `store.dedupe_captures` (`scripts/dedupe_captures.py`) by chunk fingerprint per URL; a new capture is compared with the earlier ones before it is registered (`prax.inbox`) |
+| put a document in a domain (which ontology modules it is read against) | `store.set_domains` / `add_domain` / `remove_domain` (`meta.domains`; the document page's "domains…", `PUT /doc/{id}/domains`, the `set_domains` MCP tool) or the `domains:` rules in prax.yaml through the `domains` pass of `prax maintain`; extraction builds prompt, grammar and schema for `ontology.for_domains(doc.domains)` and stamps the subset's version; a document whose subset's version moved is re-selected by the extract step in scope `all` |
+| retire a document, or find the duplicate captures | `store.retire_document` / `unretire_document` ("retire…" on the document page, `POST /doc/{id}/retire`); `store.dedupe_captures` (the `dedupe` pass of `prax maintain`) by chunk fingerprint per URL; a new capture is compared with the earlier ones before it is registered (`prax.inbox`) |
 | see what runs on the batch host | `GET /jobs`, the Jobs view; a pass wraps itself in `store.Job` (`jobs` table, migration 0009) |
 | do the model passes over new captures | run `prax work --watch` on the machine with the models, against the door (`prax.worker`); the door hands out and applies (`prax.work`) and stays the only writer |
 | name a new kind of recurring damage | a `find` (and a `repair` when it is safe) in `store.repair`, an entry in `AILMENTS`; look at what it finds in the library before giving it a repair |
 | add a command to `prax` | a handler in `prax.api` first (the contract), then a subcommand in `clients/cli/prax_cli/` that calls it and prints for a person; never a database call |
-| take in a file, a page or a URL | `prax.inbox` (`ingest_upload`, `ingest_html`, `ingest_url`, `scan`); the Inbox view, `POST /ingest/file|html|url`, the `capture_url` MCP tool, `scripts/inbox.py --watch --parse` on the batch host for the drop folder and the pending parses |
+| take in a file, a page or a URL | `prax.inbox` (`ingest_upload`, `ingest_html`, `ingest_url`, `scan`); the Inbox view, `POST /ingest/file|html|url`, the `capture_url` MCP tool, the door's own scan of the drop folder, `prax work --watch` for the pending parses |
 | send a document to the expensive model | flag it (`store.promote`, the page's "promote", the Promote view, the MCP tool); the `promote` work step (`prax work --steps promote --spend`) runs the `promote` step's model over flagged documents it has not read; the worker refuses it without `--spend` |
 | add an agent tool | a store function first, a handler in `prax.api`, then the tool in `prax.mcp_server` that calls it; keep responses compact |
 | add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
 | add a page kind | `store.PAGE_KINDS` and the `pages` view; relationships stay edges |
-| fix a document's title | `store.retitle(con, id, title, source="human")`; the old one stays in `meta.title_history`, the paper entity follows; `repair_titles.py --ids` reruns the model for named documents |
+| fix a document's title | `store.retitle(con, id, title, source="human")`; the old one stays in `meta.title_history`, the paper entity follows; the titles step reruns the model for what still has a file name |
 | move a step to another model (a GPU box, a cheaper API) | a `models` entry and the step's `model` in `prax.yaml`; nothing in code; `PRAX_<STEP>` for one run |
 | change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name` and `answer(bundle)` |
 

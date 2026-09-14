@@ -47,11 +47,16 @@ drop folder (`docs/sources.md`).
    consumes its own drop folder and holds the vector delta indexes.
    Inside the door, reads use a connection per request thread and
    writes go one at a time behind the store's lock. The MCP server is
-   a proxy of the door too (invariant 5). *Known deviation:* the one-off
-   maintenance scripts (import, backfill, acronyms, resolution, typing
-   rules, replay, dedupe) still open the file; WAL, a 30 s busy timeout
-   and a retry with rollback in `store._serialized` are the safety net
-   for those, not a mechanism to rely on.
+   a proxy of the door too (invariant 5). The maintenance passes are
+   jobs on the door (`prax maintain`, `prax resolve`, `prax import
+   citations`, `prax heal`, `prax backup`). *Known deviation:* the Zotero
+   importer (`scripts/import_zotero.py`), the adjudicated tier of entity
+   resolution (`resolve_entities.py --adjudicate`) and the measurement
+   scripts (`eval_retrieval.py`, `compare_extractors.py`,
+   `bench_extractor.py`, `make_zotero_fixture.py`) still open the file;
+   WAL, a 30 s busy timeout and a retry with rollback in
+   `store._serialized` are the safety net for those, not a mechanism
+   to rely on.
 5. **The MCP server is a thin proxy.** `prax.mcp_server` exposes tools
    that each make one HTTP call to the door (`prax.client`, `PRAX_DOOR`,
    `PRAX_TOKEN`); it imports no store module, opens no database and

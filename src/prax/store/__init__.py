@@ -94,6 +94,7 @@ from .documents import (  # noqa: F401
     assign_domains,
     cancel_reading,
     capture_rank,
+    check_mode,
     chunk_fingerprint,
     dedupe_captures,
     document_domains,
@@ -172,6 +173,7 @@ from .graph import (  # noqa: F401
     resolve_review_many,
     retire_reading,
     retire_run,
+    retype_review,
     select_for_extraction,
     traverse,
 )

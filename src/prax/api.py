@@ -1284,7 +1284,7 @@ def unpromote_doc(doc_id: int, request: Request) -> dict[str, bool]:
 class ReadingReq(BaseModel):
     extractor: str  # one of store.READINGS
     mode: str | None = (
-        None  # store.MODES: vision-pages scans|all, figures captioned|all
+        None  # store.MODES: vision-pages scans|all, figures captioned|all, OCR a word
     )
     by: str = "human"
 
@@ -1318,6 +1318,7 @@ class BulkReadingReq(BaseModel):
     ids: list[int] | None = None
     mime: str | None = None  # a type or a prefix: application/pdf, image/
     text_source: str | None = None  # a stamp prefix: what an old extractor read
+    title: str | None = None  # words the title contains
     unreadable: bool = False  # the documents nothing here could read
     limit: int | None = None
     dry_run: bool = False  # count, place nothing
@@ -1336,15 +1337,20 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
     con = _con(request)
     if req.extractor not in store.READINGS:
         raise HTTPException(400, f"extractor must be one of {store.READINGS}")
-    if req.mode is not None and req.mode not in store.MODES.get(req.extractor, ()):
-        raise HTTPException(400, f"mode {req.mode!r} is not one {req.extractor} takes")
-    if not (req.ids or req.mime or req.text_source or req.unreadable):
-        raise HTTPException(400, "a selection: ids, mime, text_source or unreadable")
+    try:
+        store.check_mode(req.extractor, req.mode)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    if not (req.ids or req.mime or req.text_source or req.title or req.unreadable):
+        raise HTTPException(
+            400, "a selection: ids, mime, text_source, title or unreadable"
+        )
     ids = store.select_for_reading(
         con,
         ids=req.ids,
         mime=req.mime,
         text_source=req.text_source,
+        title=req.title,
         unreadable=req.unreadable,
         limit=req.limit,
     )

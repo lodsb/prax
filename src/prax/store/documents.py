@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from datetime import UTC, datetime
 from typing import Any
@@ -773,10 +774,29 @@ READINGS = (
     "pymupdf4llm",
 )
 # the setting a request may choose for one run, per extractor
-MODES = {
+MODES: dict[str, tuple[str, ...] | None] = {
     "vision-pages": ("scans", "all"),  # the pages without a text layer, or every page
     "figures": ("captioned", "all"),  # the figures a caption claims, or every image
+    "pymupdf4llm-ocr": None,  # the recognizer's script: ch, en, latin, arabic…
 }
+_MODE_WORD = re.compile(r"[a-z][a-z0-9_]*")
+
+
+def check_mode(extractor: str, mode: str | None) -> None:
+    """``mode`` is one the extractor takes (``MODES``): a fixed choice, or
+    for OCR any language word the recognizer knows."""
+    if extractor not in READINGS:
+        raise ValueError(f"extractor must be one of {READINGS}")
+    if mode is None:
+        return
+    if extractor not in MODES:
+        raise ValueError(f"{extractor} takes no mode")
+    allowed = MODES[extractor]
+    if allowed is None:
+        if not _MODE_WORD.fullmatch(mode):
+            raise ValueError(f"a language word, not {mode!r}")
+    elif mode not in allowed:
+        raise ValueError(f"mode must be one of {allowed} for {extractor}")
 
 
 @_serialized
@@ -792,15 +812,7 @@ def request_reading(
     is the extractor's setting for this run (``MODES``: ``vision-pages``
     reads the scans or every page, ``figures`` the captioned ones or every
     image). A request replaces an earlier one."""
-    if extractor not in READINGS:
-        raise ValueError(f"extractor must be one of {READINGS}")
-    if mode is not None and mode not in MODES.get(extractor, ()):
-        allowed = MODES.get(extractor)
-        raise ValueError(
-            f"mode must be one of {allowed} for {extractor}"
-            if allowed
-            else f"{extractor} takes no mode"
-        )
+    check_mode(extractor, mode)
     row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
         raise KeyError(f"no such document: {doc_id}")
@@ -852,14 +864,16 @@ def select_for_reading(
     ids: list[int] | None = None,
     mime: str | None = None,
     text_source: str | None = None,
+    title: str | None = None,
     unreadable: bool = False,
     limit: int | None = None,
 ) -> list[int]:
     """The documents a reading is asked for at once: the ``ids`` given,
     narrowed by a MIME type or prefix (``application/pdf``, ``image/``),
     by the prefix of the text-source stamp (``pymupdf4llm/1.28.2``: what
-    an old extractor read), and to the unreadable ones; every filter
-    given must hold. Retired documents are never selected."""
+    an old extractor read), by words the title contains, and to the
+    unreadable ones; every filter given must hold. Retired documents are
+    never selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
     if ids:
@@ -868,6 +882,9 @@ def select_for_reading(
     if mime:
         sql += " AND coalesce(mime, '') LIKE ? ESCAPE '!'"
         args.append(_like_prefix(mime))
+    if title:
+        sql += " AND lower(coalesce(title, '')) LIKE ? ESCAPE '!'"
+        args.append("%" + _like_prefix(title.lower())[:-1] + "%")
     if text_source:
         sql += (
             " AND coalesce(json_extract(meta, '$.text_source'), '') LIKE ? ESCAPE '!'"
@@ -893,15 +910,7 @@ def request_readings(
     document the extractor does not read is skipped and counted."""
     from prax import parsers
 
-    if extractor not in READINGS:
-        raise ValueError(f"extractor must be one of {READINGS}")
-    if mode is not None and mode not in MODES.get(extractor, ()):
-        allowed = MODES.get(extractor)
-        raise ValueError(
-            f"mode must be one of {allowed} for {extractor}"
-            if allowed
-            else f"{extractor} takes no mode"
-        )
+    check_mode(extractor, mode)
     requested = skipped = 0
     for doc_id in ids:
         row = con.execute(

@@ -185,6 +185,78 @@ def batches(
             )
 
 
+# ---------------------------------------------------------- through the door
+
+
+def hand_out(con: Any, *, limit: int) -> list[dict[str, Any]]:
+    """Up to ``limit`` batches for a worker: the items, their documents'
+    titles and own types, and the domains the batch's ontology subset is
+    made of (the worker rebuilds the prompt from those)."""
+    out = []
+    for b in batches(con):
+        if len(out) >= limit:
+            break
+        domains = sorted(store.document_domains(con, d) or [] for d in b.docs)
+        out.append(
+            {
+                "items": [
+                    {
+                        "id": it["id"],
+                        "src": it["src"],
+                        "rel": it["rel"],
+                        "dst": it["dst"],
+                        "source_doc": it["source_doc"],
+                        "evidence": it.get("evidence"),
+                    }
+                    for it in b.items
+                ],
+                "docs": {str(d): list(v) for d, v in b.docs.items()},
+                "domains": domains[0] if domains else [],
+            }
+        )
+    return out
+
+
+def batch_of(item: dict[str, Any]) -> Batch:
+    """A worker's or the door's Batch from a handed-out item."""
+    whole = ontology.current()
+    domains = list(item.get("domains") or [])
+    onto = whole.for_domains(domains) if domains else whole
+    docs = {int(k): (v[0], v[1]) for k, v in (item.get("docs") or {}).items()}
+    return Batch(list(item["items"]), docs, onto)
+
+
+def take_in(
+    con: Any,
+    results: list[dict[str, Any]],
+    *,
+    model: str,
+    run: str,
+) -> ModelTypingReport:
+    """Apply a worker's answers: each result is a handed-out item with the
+    model's ``text`` (or an ``error``), the items re-read from the queue
+    so a resolved one is left alone."""
+    rep = ModelTypingReport(run=run, model=model)
+    producer = f"{PRODUCER_PREFIX}:{model}"
+    for r in results:
+        if r.get("error") or not r.get("text"):
+            rep.unanswered += len(r.get("items") or [])
+            continue
+        b = batch_of(r)
+        rep.requests += 1
+        usage = r.get("usage") or {}
+        rep.input_tokens += usage.get("input_tokens", 0)
+        rep.output_tokens += usage.get("output_tokens", 0)
+        answers = parse_answer(r["text"], len(b.items))
+        for n, it in enumerate(b.items, 1):
+            live = store.get_review(con, it["id"])
+            if live is None or live.get("resolved_at"):
+                continue
+            rep.checked += 1
+            _apply(con, rep, b, live, answers.get(n), producer, True, 0)
+    return rep
+
+
 # ------------------------------------------------------------------ the pass
 
 
@@ -269,6 +341,10 @@ def _apply(
     except ValueError:
         rep.misfit += 1
         rep.hit(f"misfit {st} -{rel}-> {dt}")
+        if commit:
+            # the item keeps the types the model gave it: a typed misfit
+            # for the rules and a later ontology, not asked again
+            store.retype_review(con, it["id"], st, dt)
         return
     edge = store.Edge(it["src"], st, rel, it["dst"], dt)
     rep.hit(f"{st} -{rel}-> {dt}")

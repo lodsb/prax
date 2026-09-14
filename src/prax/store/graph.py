@@ -845,6 +845,22 @@ def get_review(con: sqlite3.Connection, review_id: int) -> dict[str, Any] | None
 
 
 @_serialized
+@_serialized
+def retype_review(
+    con: sqlite3.Connection, review_id: int, src_type: str, dst_type: str
+) -> None:
+    """Write the types a model (or a person) gave an untyped item onto
+    it, the item staying open: a typed misfit now, which the rules and a
+    replay against a later ontology work on, and which the typing pass
+    does not put to the model again."""
+    con.execute(
+        "UPDATE review_queue SET src_type = ?, dst_type = ?"
+        " WHERE id = ? AND resolved_at IS NULL",
+        (src_type, dst_type, review_id),
+    )
+    con.commit()
+
+
 def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> None:
     """Close a review item: ``linked`` (written as an edge by hand),
     ``dropped`` or ``ontology`` (the ontology grew to fit it)."""

@@ -1,10 +1,10 @@
 """The batch passes as library functions, and the pipeline that runs them
 over new captures without anyone asking.
 
-The scripts (``extract_graph.py``, ``repair_titles.py``,
-``embed_pending.py``) are thin fronts for ``extract_documents``,
-``retitle_documents`` and ``embed_pending``; the inbox watcher
-(``scripts/inbox.py --watch``) runs ``process_captures``, which takes a
+The worker's steps (``prax.worker``, through ``prax.work``) are the
+fronts for ``extract_documents``, ``retitle_documents`` and
+``embed_pending``; the door's own capture handling runs
+``process_captures``, which takes a
 capture from registered to searchable in the graph: parse, title,
 extract, embed. Every pass announces itself as a job (``store.Job``) so
 the UI can show it.
@@ -210,7 +210,7 @@ def titles_needed(
 
 def _mark_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> None:
     """Remember that a guess was made and not applied, so the pipeline does
-    not ask the model again every pass (a later ``repair_titles.py --ids``
+    not ask the model again every pass (a later titles pass over the document
     or ``--apply-low`` still can)."""
     meta = store.get_meta(con, doc_id)
     meta["titles_tried"] = {"run": run, "why": why}

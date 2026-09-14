@@ -406,6 +406,7 @@ def reread(door: Door, a: Any) -> int:
         "ids": a.ids,
         "mime": a.mime,
         "text_source": a.text_source,
+        "title": a.title,
         "unreadable": a.unreadable,
         "limit": a.limit,
         "dry_run": a.dry_run,

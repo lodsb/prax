@@ -235,7 +235,7 @@ the repository went public.
 
 ## 1b. Citation sources (OpenAlex, Crossref)
 
-Not documents but edges: `scripts/import_citations.py` looks each
+Not documents but edges: `prax import citations` (a job on the door) looks each
 document up by DOI (or exact title) and writes `cites` edges from the
 source's reference list, with the citation count in `meta.citations`.
 Read-only, no key, idempotent per document. Details in
@@ -285,9 +285,9 @@ set per capture, CORS for the extension's origin through
 
 ## 3. Inbox folder
 
-`data/inbox/` (howto 3l). `scripts/inbox.py` registers any file dropped
-there, indexes text at once and leaves the rest for the parse queue
-(`--parse` runs it on the batch host); a subfolder names the domain, a
+`data/inbox/` (howto 3l). The door registers any file dropped there,
+indexes text at once and leaves the rest for the worker's parse step; a
+subfolder names the domain, a
 JSON sidecar carries title, URL, domains and tags; consumed files are
 removed because the archive holds their bytes, refused ones go to
 `inbox/failed/`. Useful for PDFs that arrive by mail or download and for

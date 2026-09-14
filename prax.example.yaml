@@ -39,7 +39,7 @@ models:
   #   api_key_env: DEEPSEEK_API_KEY
   #   price: [0.27, 1.10]
 
-# which ontology modules a document is read against (scripts/assign_domains.py;
+# which ontology modules a document is read against (the domains pass of prax maintain;
 # first match wins; a rule without match is the default; a person's choice on
 # the document page is never overwritten)
 domains:
@@ -59,7 +59,7 @@ steps:
   extract:
     model: local-server   # the pass over everything: local, free; sonnet for quality
     max_triples: 20
-  promote:            # the expensive pass over flagged documents (extract_graph.py --promoted)
+  promote:            # the expensive pass over flagged documents (prax work --steps promote --spend)
     model: sonnet
     max_triples: 30
   ask:
@@ -68,7 +68,7 @@ steps:
     model: local-server
   vision:
     model: sonnet
-  typing:               # the review queue's untyped items (scripts/type_review.py --model)
+  typing:               # the review queue's untyped items (prax work --steps typing)
     model: local-server
   adjudicate:
     model: opus

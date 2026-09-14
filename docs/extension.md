@@ -104,7 +104,7 @@ the tab shows, with a small popup for the few choices that matter.
   which is a navigation: the file lands in `Downloads/prax-inbox/` with
   a sidecar (`<file>.json`: URL, title, domains, tags, session), and the
   inbox watcher on the batch host consumes that folder like the drop
-  folder (howto 3l; `scripts/inbox.py --also` names other folders). The
+  folder (howto 3l; `prax work --also <folder>` names other folders). The
   popup says "downloaded for the watcher"; the document appears in the
   Inbox view once the watcher has been over it.
 - **The context menu.** "Send this page to prax" on any page, the
