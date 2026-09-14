@@ -143,6 +143,24 @@ def parse_one(
     raise last_error
 
 
+def stale(con: sqlite3.Connection, *, limit: int | None = None) -> list[int]:
+    """Documents whose text came from an extractor prax has revised since
+    (``parsers.behind``): a re-read would produce something new, or say
+    ``same`` and cost only the parse. Oldest first, retired ones left out."""
+    out: list[int] = []
+    rows = con.execute(
+        "SELECT id, json_extract(meta, '$.text_source') AS src FROM documents"
+        " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+        " ORDER BY id"
+    )
+    for r in rows:
+        if parsers.behind(r["src"] or "") is not None:
+            out.append(r["id"])
+            if limit and len(out) >= limit:
+                break
+    return out
+
+
 def apply_parse(
     con: sqlite3.Connection,
     doc_id: int,
@@ -183,8 +201,11 @@ def apply_parse(
         _record(con, doc_id, {**entry, "outcome": action})
         return action
     action = "upgraded" if old_len else "created"
-    _record(con, doc_id, {**entry, "outcome": action})
-    store.index_text(con, doc_id, text, text_source=None if keep_source else stamp)
+    source = None if keep_source else stamp
+    result = store.index_text(con, doc_id, text, text_source=source)
+    # the artifact's hash in the record: every earlier text stays in the
+    # archive, content-addressed, and this is how it is found again
+    _record(con, doc_id, {**entry, "outcome": action, "text_hash": result["text_hash"]})
     return action
 
 

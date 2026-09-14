@@ -316,6 +316,24 @@ def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     return done
 
 
+def _stale_parses(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents read by an extractor prax has revised since."""
+    from prax.parsers import queue
+
+    ids = queue.stale(con, limit=CAP)
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
+    return [
+        {"id": r["id"], "title": r["title"], "text_source": r["src"]}
+        for r in con.execute(
+            "SELECT id, title, json_extract(meta, '$.text_source') AS src"
+            f" FROM documents WHERE id IN ({marks}) ORDER BY id",
+            tuple(ids),
+        )
+    ]
+
+
 def _unembedded_chunks(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Chunks with no vector from any model. Asked of the bookkeeping table
     alone: a check must never load an embedder to answer a question about
@@ -521,6 +539,19 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_glyph_documents,
         repair=_repair_glyphs,
+    ),
+    Ailment(
+        name="stale-parses",
+        what=(
+            "documents whose text came from an extractor prax has revised"
+            " since (the figures it finds now, a cleaner reading): a re-read"
+            " would produce something new, or say 'same'"
+        ),
+        fix=(
+            "a backlog pass reads them a few at a time (`prax work --scope"
+            " all`, nightly); nothing to repair in the store"
+        ),
+        find=_stale_parses,
     ),
     Ailment(
         name="chunks-without-vectors",

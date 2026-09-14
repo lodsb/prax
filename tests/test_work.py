@@ -308,3 +308,48 @@ def test_the_door_asks_for_readings_of_captures_when_the_vision_model_is_free(
     result = {"doc_id": plain.doc_id, "extractor": "trafilatura/9", "text": prose}
     client.post("/work/parse", json={"results": [result]})
     assert "reading" not in store.get_meta(con, plain.doc_id)
+
+
+def test_a_backlog_pass_re_reads_what_a_revised_extractor_would_read_differently(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A document whose text came from an earlier revision of its extractor
+    is stale; scope 'all' hands it out after the captures, the re-read moves
+    the stamp (and costs only the parse when the words are the words), and
+    the record keeps every artifact's hash."""
+    from prax import parsers
+    from prax.parsers import queue
+
+    con = client.app.state.con
+    doc_id = store.ingest_text(con, "Plain words. " * 40, title="old")["doc_id"]
+    # as if read by revision 1 of the plain extractor (the current one is later)
+    store.set_text_source(con, doc_id, "plain/1")
+    assert parsers.behind("plain/1") is not None
+    assert queue.stale(con) == [doc_id]
+    assert client.get("/work/parse").json()["items"] == []  # captures only
+    work._leases.clear()
+    items = client.get("/work/parse", params={"scope": "all"}).json()["items"]
+    assert [i["doc_id"] for i in items] == [doc_id]
+    assert "extractor" not in items[0]
+    work._leases.clear()
+    out = worker.run_once(
+        _door(client), steps=("parse",), scope="all", log_=lambda t: None
+    )
+    assert "same" in out["parse"] or "upgraded" in out["parse"]
+    meta = store.get_meta(con, doc_id)
+    assert meta["text_source"] == parsers.by_name("plain").stamp
+    assert queue.stale(con) == []
+    # the health panel lists what a nightly pass would still have to do
+    store.set_text_source(con, doc_id, "plain/1")
+    found = client.get("/heal", params={"check": "stale-parses"}).json()
+    ailment = found["ailments"][0]
+    assert ailment["count"] == 1 and not ailment["repairable"]
+    # a text that did change keeps the earlier artifact addressable
+    other = store.ingest_text(con, "First words. " * 40, title="changed")["doc_id"]
+    queue.apply_parse(
+        con, other, stamp="plain/1-r3", text="Second words. " * 40, force=True
+    )
+    hist = store.get_meta(con, other)["parse_history"]
+    assert hist[-1]["outcome"] == "upgraded" and len(hist[-1]["text_hash"]) == 64
+    old_text = store.documents._read_archive(hist[-1]["text_hash"])
+    assert old_text.decode("utf-8").startswith("Second words.")

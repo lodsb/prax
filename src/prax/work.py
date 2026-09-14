@@ -14,6 +14,12 @@ Four steps, each a selection the door already knows how to make:
     embed    chunks and document fields without a vector; the worker
              posts the vectors, the door puts them in its delta index
 
+In scope ``all`` the parse step also hands out the documents whose text
+an extractor prax has since revised would read differently
+(``parsers.behind``), so a backlog pass, run nightly, brings the library
+up to date with the code a few documents at a time; a re-read that comes
+out the same costs the parse and nothing else.
+
 The readings a person asks for on a document (``meta.reading``) go out
 with the parse step, first. The door asks for two kinds itself, for
 captures, when the vision model is a local server (nothing spent): an
@@ -60,6 +66,8 @@ def _ask_reading(con: sqlite3.Connection, doc_id: int, extractor: str) -> bool:
         return False
     store.request_reading(con, doc_id, extractor, by="door")
     return True
+
+
 SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
@@ -201,7 +209,12 @@ def hand_out(
                 # a second reading of an image joins the first (vision.merge_readings)
                 item["previous"] = store.get_document(con, doc_id)["text"]
             items.append(item)
-        for doc_id in inbox.pending_captures(con):
+        waiting = list(inbox.pending_captures(con))
+        if scope == "all":
+            # the backlog pass also brings texts up to date: documents read
+            # by an extractor prax has revised since, a few per pass
+            waiting += [i for i in queue.stale(con, limit=limit) if i not in waiting]
+        for doc_id in waiting:
             if len(items) >= limit or not _free(step, doc_id, now):
                 continue
             if not _in_scope(con, doc_id, scope):

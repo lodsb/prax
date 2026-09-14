@@ -1077,6 +1077,37 @@ REGISTRY: list[Extractor] = [
 ]
 
 
+_STAMP = re.compile(
+    r"^(?P<name>[^/]+)/(?P<pkg>[^+\-]*)(?:-r(?P<rev>\d+))?(?:\+(?P<variant>.*))?$"
+)
+
+
+def stamp_parts(stamp: str) -> tuple[str, int] | None:
+    """``(extractor name, revision)`` of a text-source stamp such as
+    ``pymupdf4llm/1.28.2-r2+arabic``; None for a source that is no
+    extractor's (``zotero-ft-cache``)."""
+    m = _STAMP.match(stamp or "")
+    if not m:
+        return None
+    return m.group("name"), int(m.group("rev") or 1)
+
+
+def behind(stamp: str) -> Extractor | None:
+    """The extractor that would read this document again differently: the
+    one the stamp names, when prax's own revision of it has moved on since
+    (the package's version is not the question — a pip upgrade changes
+    nothing prax decided). Explicit-only extractors are never behind: what
+    was asked for once is not asked for again by itself."""
+    parts = stamp_parts(stamp)
+    if parts is None:
+        return None
+    name, revision = parts
+    for e in REGISTRY:
+        if e.name == name:
+            return e if (not e.explicit_only and e.revision != revision) else None
+    return None
+
+
 def by_name(name: str) -> Extractor:
     for e in REGISTRY:
         if e.name == name:

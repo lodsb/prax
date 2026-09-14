@@ -131,9 +131,13 @@ Extractors live in `prax.parsers` (see its docstring for the table) and are
 picked by MIME type in registry order, falling back to the next one when
 one raises. The queue records every attempt in `meta.parse_history` and the
 winner in `meta.text_source` as `<name>/<version>`, so any pass can be
-redone later with `--upgrade <prefix>`. An upgrade keeps the old text when
-the new one is suspiciously short (login walls, scans without OCR) unless
-`--force` is given. Runs on the desktop, never on the serving host.
+redone later with `--upgrade <prefix>` — or left to the nightly pass,
+which finds the documents whose extractor prax has revised since (3l¾).
+An upgrade keeps the old text when the new one is suspiciously short
+(login walls, scans without OCR) unless `--force` is given; every
+history entry carries the hash of the text it produced, so the earlier
+artifact stays in the archive. Runs on the desktop, never on the serving
+host.
 
     # documents never indexed (registered by an importer or the inbox)
     python scripts/parse_pending.py --pending
@@ -988,12 +992,72 @@ What stays a command or a click, because it costs money, time or a
 decision: the promote pass (Claude over the flagged documents), the
 model typing pass over the review queue, OCR of scans and the vision
 model over whole pages (`vision-pages`), a re-read of the whole library
-after a parser changes (the `--upgrade` runs above), the ontology
-migrations, and the repairs — `prax heal`, or the Health panel at the
-foot of the Jobs page, which shows what every ailment finds right now
-and repairs the repairable ones with one button (a job; nothing is
-deleted). The curated imports' own backlog (Zotero, GitHub, chats) is
+at once after a parser changes (the `--upgrade` runs above; the nightly
+pass below does it a few at a time instead), the ontology migrations,
+and the repairs — `prax heal`, or the Health panel at the foot of the
+Jobs page, which shows what every ailment finds right now and repairs
+the repairable ones with one button (a job; nothing is deleted). The
+curated imports' own backlog (Zotero, GitHub, chats) is
 `parse_pending.py --pending` and a worker with `--scope all`.
+
+## 3l¾. Keeping the library current: what is versioned, and the nightly pass
+
+The code moves and the data has to follow, so everything a pass
+produces carries the version of what produced it, and every earlier
+result stays addressable:
+
+| what | versioned by | where the history is |
+|---|---|---|
+| the original | its sha256; it never changes | the archive |
+| the text | the extractor's stamp `name/version[-rN][+variant]` in `meta.text_source`; `-rN` is prax's own revision of that extractor, bumped whenever its output changes (the figures it finds, a cleaner reading, page markers) | `meta.parse_history`: every attempt with its extractor, outcome, size, seconds — and the artifact's `text_hash`, so an earlier text is still in the archive under its own hash, never overwritten |
+| the readings (an image, a page's figures, whole pages) | the reading model's name in the stamp (`vision/…+server-35b`); readings are additive, a second model's is kept beside the first | the reading itself carries each model's name |
+| chunks and vectors | disposable, derived from the text (`chunk_embeddings` says which chunk has a vector from which model); chunks whose text did not change keep their ids and vectors across a re-index | none needed |
+| the graph | `ontology_version`, `producer` and `run` on every edge; bi-temporal (`valid_from`, `valid_to`, `ingested_at`) — a better pass ends the old edges and writes new ones, nothing is deleted | the `edges` table is its own history |
+| the extraction | `meta.extraction` (extractor, ontology version, run, counts) and `meta.extraction_history` | the same |
+| a page | numbered revisions with their author | `page_revisions` |
+
+A document is **stale** when its stamp names an extractor whose revision
+prax has moved on since (`parsers.behind`): a re-read would produce
+something new, or say `same` and cost only the parse. The Health panel
+counts them (`stale-parses`, a report), and the backlog pass reads them:
+
+    prax work --scope all --limit 100      # captures first, then a hundred stale ones
+
+In scope `all` the parse step hands out, after the pending captures, the
+stale documents oldest first, a batch at a time; the worker re-reads
+each with the current extractor and the door keeps or upgrades the text
+by the usual rule (a suspiciously short new text keeps the old). A
+re-read that comes out the same moves the stamp and touches nothing
+else. As a nightly task on the machine with the models:
+
+    # Windows: Task Scheduler, daily at 03:00, run whether the user is logged on or not
+    schtasks /Create /SC DAILY /ST 03:00 /TN "prax nightly" ^
+      /TR "cmd /c set PRAX_TOKEN=<token>&& I:\proj\prax\.venv\Scripts\prax.exe work --scope all --limit 100 --door http://127.0.0.1:8000 >> C:\prax-data\logs\nightly.log 2>&1"
+
+    # Linux, cron
+    0 3 * * * PRAX_TOKEN=<token> /srv/prax/.venv/bin/prax work --scope all --limit 100 --door http://127.0.0.1:8000 >> /srv/prax-data/logs/nightly.log 2>&1
+
+The token is better read from the environment or a file than written
+into the task; `--limit` is how much of the night it may take (a
+hundred PDFs is a few minutes; readings by the vision model, when the
+door asks for them after a re-read found figures, follow in the next
+watch cycle). A worker already running `--watch --scope all` needs no
+task: the same pass is what it does when the captures are done.
+
+The other steps have their own notion of stale, and the same pass
+applies it: `titles` reads the documents whose title is still a file
+name; `extract` the documents not yet extracted under the current
+version of their ontology subset (never extracted, or extracted before
+a module grew) — in scope `all` that is the library's whole extraction
+backlog, oldest first, a hundred a night with the local model; `embed`
+the chunks without a vector from the current model. `--steps parse,embed`
+keeps only the texts and their vectors current and leaves the graph to
+`extract_graph.py`.
+
+What the pass does not do: it does not re-run extractors that are
+explicit only (OCR, `vision-pages`, Docling) — what was asked for once
+is not asked for again by itself — and it does not spend money: a paid
+model in any step is refused by the worker, whatever the scope.
 
 ## 3m. Healing what recurs
 
@@ -1016,6 +1080,7 @@ come back with every pass, so they have names and a place:
 | `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
 | `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
 | `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |
+| `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | a report: the backlog pass reads them a few at a time (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
 

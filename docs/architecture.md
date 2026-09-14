@@ -113,8 +113,12 @@ flowchart TD
    the picture and transcribes its text, handwriting included).
    The Markdown is its own content-addressed artifact (`documents.text_hash`),
    stamped in `meta.text_source` as `name/version[-rN]`; every attempt is
-   appended to `meta.parse_history`. A better extractor later is a queue
-   selection (`--upgrade <prefix>`), never a migration. (R3, R8)
+   appended to `meta.parse_history` with the hash of the text it
+   produced, so an earlier text stays addressable. A better extractor
+   later is a queue selection (`--upgrade <prefix>`, or the backlog pass
+   in scope `all`, which hands out the documents whose stamp is behind
+   the extractor's revision, `parsers.behind`), never a migration.
+   (R3, R8)
 3. **Chunk** (`prax.chunking`, inside `index_text`). The Markdown is parsed
    into sections of paragraphs, whole tables with caption and parsed grid,
    figure captions and code listings. Each chunk has a `kind`, a `locator`
@@ -280,7 +284,7 @@ has no column yet. Conventions in use:
 | `zotero.kind`, `zotero.keys`, `zotero.items`, `zotero.parent`, `zotero.modified`, … | provenance and change detection for the importer |
 | `creators`, `date`, `doi`, `abstract`, `tags`, `collections`, `fields` | lifted metadata |
 | `text_source` | extractor stamp of the current text artifact |
-| `parse_history` | every extraction attempt: extractor, chars, seconds, outcome or error |
+| `parse_history` | every extraction attempt: extractor, chars, seconds, outcome or error, and the `text_hash` of what it produced |
 | `summary` | the extraction's two-sentence summary |
 | `extraction`, `extraction_history` | stamp of the last extraction (extractor, ontology version, run, counts, token usage) and every earlier stamp |
 | `citations` | source, work id, citation count, reference count, fetch time |

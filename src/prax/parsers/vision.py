@@ -124,9 +124,7 @@ def describe(
     it, each section headed with its model, so a second model adds to
     the picture instead of replacing it (a re-run of the same model does
     replace its own reading)."""
-    fresh = _describe(
-        data, filename=filename, model=model, claude_only=claude_only
-    )
+    fresh = _describe(data, filename=filename, model=model, claude_only=claude_only)
     return merge_readings(fresh, previous) if previous else fresh
 
 
