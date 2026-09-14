@@ -109,19 +109,27 @@ async def _count_writes(request: Request, call_next: Any) -> Any:
 
 
 # A browser extension calls the door from its own origin
-# (chrome-extension://…, moz-extension://…): door.cors_origins in prax.yaml
-# (or PRAX_CORS_ORIGINS, comma-separated) lists the origins allowed. Unset,
-# no cross-origin request is answered (the UI is same-origin).
-_cors = [o for o in config.words("door.cors_origins", "PRAX_CORS_ORIGINS")]
-if _cors:
-    from fastapi.middleware.cors import CORSMiddleware
+# (chrome-extension://…, moz-extension://…). Every extension origin is
+# answered: the token is what gates the door, not the origin, and a
+# browser that withholds its host permission (Firefox until granted,
+# Chrome in some contexts) then runs the request through CORS.
+# door.cors_origins in prax.yaml (or PRAX_CORS_ORIGINS, comma-separated)
+# adds web origins; the UI itself is same-origin.
+from fastapi.middleware.cors import CORSMiddleware
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=_cors,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
-        allow_headers=["Authorization", "Content-Type"],
-    )
+EXTENSION_ORIGINS = r"^(chrome|moz|safari-web)-extension://.+$"
+_cors = [o for o in config.words("door.cors_origins", "PRAX_CORS_ORIGINS")]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors,
+    allow_origin_regex=EXTENSION_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+    # Chrome's private network access: a request from an extension (or a
+    # public page) into a private address asks in its preflight whether
+    # the target consents; a door on the private network does
+    allow_private_network=True,
+)
 
 
 class SessionReq(BaseModel):

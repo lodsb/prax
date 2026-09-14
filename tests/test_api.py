@@ -555,3 +555,32 @@ def test_ui_error_is_logged(client: TestClient, caplog) -> None:
         )
     assert r.status_code == 200 and r.json() == {"logged": True}
     assert "boom" in caplog.text and "#doc/1" in caplog.text
+
+
+def test_extension_origins_get_cors_and_private_network_consent(
+    client: TestClient,
+) -> None:
+    """An extension's preflight is answered without a token, for any
+    extension origin, and with Chrome's private-network consent."""
+    r = client.options(
+        "/inbox",
+        headers={
+            "Origin": "moz-extension://1234-abcd",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+            "Access-Control-Request-Private-Network": "true",
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "moz-extension://1234-abcd"
+    assert "authorization" in r.headers["access-control-allow-headers"].lower()
+    assert r.headers["access-control-allow-private-network"] == "true"
+    # a web origin is not answered unless configured
+    r = client.options(
+        "/inbox",
+        headers={
+            "Origin": "https://evil.example",
+            "Access-Control-Request-Method": "GET",
+        },
+    )
+    assert "access-control-allow-origin" not in r.headers

@@ -134,12 +134,14 @@ The popup checks `GET /health` on open and shows the server's state
 - The extension sends `Authorization: Bearer <token>` on every request,
   the same shared secret scripts use (howto 4). Without a token the door
   admits loopback only, which is enough for the desktop.
-- The door must list the extension's origin in `PRAX_CORS_ORIGINS`
-  (`chrome-extension://<id>`, `moz-extension://<uuid>`); Firefox gives
-  each install a different UUID, so the manifest pins one through
-  `browser_specific_settings.gecko.id`, and the door can also take a
-  wildcard for development. Preflight (OPTIONS) is answered by the CORS
-  middleware without the token.
+- The door answers every extension origin (`chrome-extension://…`,
+  `moz-extension://…`) over CORS: the token gates it, not the origin,
+  so a browser that withholds the host permission and runs the request
+  through CORS still gets through. Preflight (OPTIONS) is answered by
+  the CORS middleware without the token, and with
+  `Access-Control-Allow-Private-Network: true` for Chrome's private
+  network access check. Web origins (a page of your own calling the
+  door) go into `door.cors_origins` / `PRAX_CORS_ORIGINS`.
 - Transport: the door is reached over your private network (the LAN
   or a VPN; Tailscale is one example), so plain HTTP is private there;
   the extension asks for `host_permissions` on the server URL only,
