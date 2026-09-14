@@ -1,3 +1,5 @@
+<p align="center"><a href="docs/design/BRIEF.md"><img src="docs/design/assets/logo/themes/prax-mark-bindery.svg" width="128" alt="The prax mark: a praxinoscope in elevation, printed in three passes — block, key and one colour facet"></a></p>
+
 # prax
 
 A library for what you read, collect and write, that you run yourself —
@@ -21,12 +23,18 @@ Claude Code.
 <td><sub>Ask: an answer with numbered citations, the cited passages beside it, and a follow-up that knows the turns before.</sub></td>
 </tr>
 <tr>
-<td><a href="docs/images/graph.png"><img src="docs/images/graph.png" alt="Graph: the most connected concepts, a paper's neighbourhood with its evidence"></a></td>
-<td><a href="docs/images/image-recognition.png"><img src="docs/images/image-recognition.png" alt="An image described and transcribed by the vision model, in the document view with its context"></a></td>
+<td><a href="docs/images/graph.png"><img src="docs/images/graph.png" alt="Graph: a method's neighbourhood, every edge with its evidence and its source"></a></td>
+<td><a href="docs/images/image-recognition.png"><img src="docs/images/image-recognition.png" alt="An image described and transcribed by two vision models, in the document view with its context"></a></td>
 </tr>
 <tr>
-<td><sub>Graph: the most connected concepts, methods and tools; a paper's neighbourhood, every edge with its evidence and its source.</sub></td>
-<td><sub>A schematic as a document: described and transcribed by the vision model, with its entities, similar documents and projects beside it.</sub></td>
+<td><sub>Graph: a method's neighbourhood — papers, concepts, the methods that extend it — every edge with its confidence, the model that wrote it, its source document and the sentence it was read from.</sub></td>
+<td><sub>A schematic as a document: described and transcribed by two vision models (each reading kept, one after the other), with its summary, entities and similar documents beside it.</sub></td>
+</tr>
+<tr>
+<td colspan="2"><a href="docs/images/themes.png"><img src="docs/images/themes.png" alt="The six themes: Bindery, Dessau, Riso, Cyanotype, Night, Funk — the same page in each"></a></td>
+</tr>
+<tr>
+<td colspan="2"><sub>The six themes — Bindery, Dessau, Riso, Cyanotype, Night, Funk. Each is four values (ground, tone, key, colour) that switch the page and the mark together.</sub></td>
 </tr>
 </table>
 
@@ -303,7 +311,21 @@ a gigabyte of memory.
 
 ## Design
 
-Ten invariants in [`CLAUDE.md`](CLAUDE.md) hold the shape: SQLite is the canonical
+**The look.** The mark is the praxinoscope itself, in elevation, printed
+the way an 1877 colour label was: three blocks pulled in sequence — the
+silhouette, the key drawing, one colour facet on the mirror prism — with
+two deliberate misregistrations. A theme is four values, ground, tone,
+key and colour, and those four are the whole page and the whole mark;
+Bindery is the default, Night the dark one. The page takes the
+*furniture* of a Victorian label without its costume: rules that end in a
+mark, corner brackets instead of card borders, small caps with wide
+tracking, a double rule under the masthead, room — and two contemporary
+faces, Bricolage Grotesque for the chrome and Literata for anything you
+read. The one rule that keeps it from going twee: ornament may cost
+space, never a click. The brief, with what was tried and dropped:
+[`docs/design/BRIEF.md`](docs/design/BRIEF.md).
+
+**The shape.** Ten invariants in [`CLAUDE.md`](CLAUDE.md) hold it: SQLite is the canonical
 store and the only database; files are content-addressed; every mutation
 goes through one module; one writer; a thin MCP proxy; agent-shaped
 endpoints that return snippets and ids, never whole documents; nothing in
@@ -323,6 +345,7 @@ built, module by module, with a "where to touch what" table:
 | [`docs/howto.md`](docs/howto.md) | Setting up, every batch job, `prax.yaml`, the doors, the UI, the board, backup. |
 | [`docs/rationale.md`](docs/rationale.md) | Decision records R1 to R16: what was chosen, why, what was measured, when to revisit. |
 | [`docs/ui.md`](docs/ui.md) | The web UI: endpoints it uses, routes, rules. |
+| [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The visual design: the mark and its three passes, the six themes as four values, the type, the page's furniture, what was tried and dropped, what is open. The assets beside it. |
 | [`docs/ontology-v2.md`](docs/ontology-v2.md), [`-v4`](docs/ontology-v4.md), [`-v5`](docs/ontology-v5.md), [`-v6`](docs/ontology-v6.md), [`-v7`](docs/ontology-v7.md), [`docs/ontology-studio.md`](docs/ontology-studio.md), [`docs/ontology-craft.md`](docs/ontology-craft.md) | How the ontology grew: from the review queue's evidence, for syntheses, for organizations and mentions, for where a document was written and the weak relation widened, and to a first stable shape with authorship, publishing, place and part-of in core; the studio module for gear; craft with kitchen and workshop on top of it. |
 | [`docs/PLAN.md`](docs/PLAN.md) | Staged build plan with checklists and dates. |
 | [`docs/sources.md`](docs/sources.md) | Data sources: the Zotero import, citation sources, captures, the drop folder, `prax import` and what else would fit. |

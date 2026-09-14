@@ -727,9 +727,12 @@ class ForceGraph {
     this.frame = null;
     this.fitPending = false;
     this.cap = 40;  // neighbours drawn per expansion; the rest wait in the panel
+    this.held = false;  // the person panned or zoomed: a resize keeps their view
     this.resize();
     this.bind();
-    this.observer = new ResizeObserver(() => { this.resize(); this.draw(); });
+    // a resize before anyone touched the view fits again (the canvas may
+    // have had no size yet when the layout first fitted)
+    this.observer = new ResizeObserver(() => { this.resize(); if (this.held) this.draw(); else this.fit(); });
     this.observer.observe(canvas);
   }
 
@@ -1018,6 +1021,7 @@ class ForceGraph {
         this.kick(0.3);
       } else if (drag && drag.pan) {
         moved = true;
+        this.held = true;
         this.view.x = drag.pan[2] + (px - drag.pan[0]); this.view.y = drag.pan[3] + (py - drag.pan[1]);
         this.draw();
       } else if (e.target === c) {
@@ -1051,6 +1055,7 @@ class ForceGraph {
       const z = e.deltaY > 0 ? 1 / 1.15 : 1.15;
       const k = Math.min(6, Math.max(0.03, this.view.k * z));
       this.view = { k, x: px - (px - this.view.x) * (k / this.view.k), y: py - (py - this.view.y) * (k / this.view.k) };
+      this.held = true;
       this.draw();
     }, { passive: false });
   }
