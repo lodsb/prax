@@ -35,6 +35,7 @@ arrives on its own) or ``all`` (the whole library, a backlog pass).
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import time
 from dataclasses import asdict
@@ -378,6 +379,10 @@ def take_in(
             _release(step, [doc_id])
             if r.get("error"):
                 out["errors"].append({"doc_id": doc_id, "error": r["error"]})
+                with contextlib.suppress(Exception):  # the note is a nicety
+                    extraction.note_failure(
+                        con, doc_id, str(r["error"]), extractor=extractor
+                    )
                 continue
             try:
                 rep = extraction.apply(

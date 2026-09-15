@@ -39,7 +39,8 @@ UNMAPPED_KEYS = ("src", "rel", "dst", "reason")
 MAX_TRIPLES = 20  # same cap as the Claude prompt; small models over-generate
 MAX_UNMAPPED = 3  # a 32B model fills five with guesses; three keeps the real misfits
 NAME_CHARS = 200
-TEXT_CHARS = 300
+TEXT_CHARS = 300  # an evidence quote, a reason
+SUMMARY_CHARS = 700  # the summary: two or three sentences, whole ones
 
 
 def _alternatives(names: Any) -> str:
@@ -58,7 +59,7 @@ def grammar(
     return "\n".join(
         [
             f"root ::= summary triple{{1,{max_triples}}} unmapped{{0,{max_unmapped}}}",
-            'summary ::= "summary\\t" text "\\n"',
+            'summary ::= "summary\\t" stext "\\n"',
             (
                 'triple ::= "triple\\tsrc=" name "\\tsrc_type=" etype "\\trel=" rel'
                 ' "\\tdst=" name "\\tdst_type=" etype "\\tconfidence=" conf'
@@ -73,6 +74,7 @@ def grammar(
             f"conf ::= {_alternatives(CONFIDENCES)}",
             f"name ::= char{{1,{NAME_CHARS}}}",
             f"text ::= char{{1,{TEXT_CHARS}}}",
+            f"stext ::= char{{1,{SUMMARY_CHARS}}}",
             "char ::= [^\\t\\n\\r]",
         ]
     )
@@ -89,7 +91,7 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
                 f" {max_triples} triple lines, then 0 to {MAX_UNMAPPED} unmapped"
                 " lines:"
             ),
-            f"summary{t}two or three sentences",
+            f"summary{t}two or three sentences, under {SUMMARY_CHARS} characters",
             (
                 f"triple{t}src=<name>{t}src_type=<type>{t}rel=<relation>"
                 f"{t}dst=<name>{t}dst_type=<type>{t}confidence=<EXTRACTED or"
@@ -118,6 +120,20 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
     )
 
 
+def whole_sentences(text: str, limit: int) -> str:
+    """``text`` cut to ``limit`` characters at the last sentence end past
+    the halfway mark, so a summary that ran long loses a sentence rather
+    than its last word; a text within the limit is returned as it is."""
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    for mark in (". ", "! ", "? "):
+        cut = head.rfind(mark)
+        if cut >= limit // 2:
+            return head[: cut + 1]
+    return head.rstrip()
+
+
 def parse(text: str) -> Extraction:
     """Lines to an ``Extraction``. Malformed lines are dropped and counted in
     ``usage['dropped_lines']``; repeats of a triple or an unmapped item
@@ -129,7 +145,9 @@ def parse(text: str) -> Extraction:
         fields = [_unkey(f) for f in raw.split(SEP)]
         kind = fields[0]
         if kind == "summary" and len(fields) >= 2 and not ex.summary:
-            ex.summary = " ".join(f for f in fields[1:] if f)[:TEXT_CHARS]
+            ex.summary = whole_sentences(
+                " ".join(f for f in fields[1:] if f), SUMMARY_CHARS
+            )
         elif kind == "triple" and len(fields) == 8 and all(fields[1:7]):
             key = tuple(f.lower() for f in fields[1:6])
             if key in seen:

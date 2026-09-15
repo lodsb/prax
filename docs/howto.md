@@ -458,6 +458,17 @@ The extract step never spends money: a Claude model in `steps.extract` is
 refused by the worker (the promote step, below, is the paid pass). Notes
 and empty scans are skipped (`pipeline.MIN_CHARS`, 500 characters).
 
+A prompt the server's slot cannot hold (a schematic's symbols, a dense
+script: more tokens per character than the 12 K-character budget
+assumes) is cut to the share the server states and asked once more,
+`cut: 1` in the stamp; a document that still fails is remembered
+(`meta.extraction_error`, the `extraction-failed` ailment) and not
+tried again every pass — until the ontology moves or a bigger slot is
+up. The summary a local model writes is bounded at 700 characters and
+cut at a sentence; before 2026-09-15 the bound was 300 and the grammar
+stopped it mid-word, which is what the summaries extracted earlier look
+like until a pass reads those documents again.
+
 Settings: `PRAX_EXTRACT_MODEL` (default `claude-opus-5`),
 `PRAX_EXTRACT_EFFORT` (default `medium`), `PRAX_EXTRACT=stub` for tests,
 `PRAX_EXTRACT=<name>` for an `openai` model of `prax.yaml` (section
@@ -1141,6 +1152,7 @@ you still want to look at) stays alone.
 | `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
 | `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
 | `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |
+| `extraction-failed` | documents the extract step could not read under the current ontology — a prompt the model's slot cannot hold even after the cut, a server error; the error is kept in `meta.extraction_error` and the passes leave them out until the ontology moves or a reading succeeds | a report: a bigger slot on the model server (3h), or the promote step for the few that matter |
 | `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time, or `--upgrade` at once (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
 | `unreadable-documents` | documents every extractor here has tried and found no text in (scans without a text layer); they wait and are not tried again | a report, with two offers on the panel: OCR over all of them, or the vision model over their scanned pages (`prax reread --unreadable --extractor …`); or retire them |

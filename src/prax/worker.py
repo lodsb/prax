@@ -442,6 +442,8 @@ def run_once(
                 },
             )
             out["extract"] = f"{rep.get('applied', 0)} documents: {rep.get('report')}"
+            for e in rep.get("errors") or []:
+                out["extract"] += f"; doc {e['doc_id']} failed: {str(e['error'])[:160]}"
         elif step == "typing":
             spec = models.resolve("typing")
             assert spec is not None
@@ -474,6 +476,8 @@ def run_once(
                 },
             )
             out["promote"] = f"{rep.get('applied', 0)} documents: {rep.get('report')}"
+            for e in rep.get("errors") or []:
+                out["promote"] += f"; doc {e['doc_id']} failed: {str(e['error'])[:160]}"
         _say(log_, f"{step}: {out.get(step)}")
     return out
 

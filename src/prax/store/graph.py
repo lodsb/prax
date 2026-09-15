@@ -912,6 +912,11 @@ def select_for_extraction(
     want, want_args = _subset_version_case(con, onto, ontology_version)
     sql += f" AND ({stamp} IS NULL OR {stamp} != {want})"
     args.extend(want_args)
+    # a reading that failed under this version is not tried every pass
+    # (extraction.note_failure); the version moving on re-selects it
+    failed = "json_extract(meta, '$.extraction_error.ontology_version')"
+    sql += f" AND ({failed} IS NULL OR {failed} != {want})"
+    args.extend(want_args)
     if skip_mime_prefix:
         sql += " AND coalesce(mime, '') NOT LIKE ? ESCAPE '!'"
         args.append(_like_prefix(skip_mime_prefix))

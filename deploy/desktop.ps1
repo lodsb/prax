@@ -118,15 +118,26 @@ function Rotate-Logs([string]$name) {
 function Invoke-Logged([string]$name, [string]$exe, [string[]]$arguments, [string[][]]$then = @()) {
     $l = Rotate-Logs $name
     $worst = 0
+    $first = $true
     foreach ($command in @(, $arguments) + $then) {
         $quoted = $command | ForEach-Object { if ($_ -match "\s") { '"' + $_ + '"' } else { $_ } }
         "$(Get-Date -Format s) start: $exe $($quoted -join ' ')" | Add-Content $l.runs -Encoding utf8
-        $p = Start-Process -FilePath $exe -ArgumentList $quoted -WorkingDirectory $repo `
-            -NoNewWindow -PassThru -Wait `
-            -RedirectStandardOutput "$($l.out).part" -RedirectStandardError "$($l.err).part"
-        Get-Content "$($l.out).part" -ErrorAction SilentlyContinue | Add-Content $l.out -Encoding utf8
-        Get-Content "$($l.err).part" -ErrorAction SilentlyContinue | Add-Content $l.err -Encoding utf8
-        Remove-Item "$($l.out).part", "$($l.err).part" -ErrorAction SilentlyContinue
+        if ($first) {
+            # the first (usually only) command writes the logs directly, so
+            # they can be followed while it runs — a door lives for days
+            $p = Start-Process -FilePath $exe -ArgumentList $quoted -WorkingDirectory $repo `
+                -NoNewWindow -PassThru -Wait `
+                -RedirectStandardOutput $l.out -RedirectStandardError $l.err
+        } else {
+            # a command after it appends: its output is staged, then added
+            $p = Start-Process -FilePath $exe -ArgumentList $quoted -WorkingDirectory $repo `
+                -NoNewWindow -PassThru -Wait `
+                -RedirectStandardOutput "$($l.out).part" -RedirectStandardError "$($l.err).part"
+            Get-Content "$($l.out).part" -ErrorAction SilentlyContinue | Add-Content $l.out -Encoding utf8
+            Get-Content "$($l.err).part" -ErrorAction SilentlyContinue | Add-Content $l.err -Encoding utf8
+            Remove-Item "$($l.out).part", "$($l.err).part" -ErrorAction SilentlyContinue
+        }
+        $first = $false
         "$(Get-Date -Format s) exit $($p.ExitCode)" | Add-Content $l.runs -Encoding utf8
         if ($p.ExitCode -ne 0) { $worst = $p.ExitCode }
     }

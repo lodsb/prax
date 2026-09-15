@@ -609,15 +609,29 @@ class LocalExtractor:
         from prax import lineformat
 
         onto, system, grammar = self._prompt(doc)
-        text, usage = self.runtime.chat(
-            system,
-            doc.as_message(),
-            grammar=grammar,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            repeat_penalty=self.repeat_penalty,
-        )
+        cut = 0
+        try:
+            text, usage = self._chat(system, doc, grammar)
+        except RuntimeError as exc:
+            # the server's slot is smaller than this prompt (a schematic's
+            # symbols, a dense script tokenize far past four chars a
+            # token): cut the text to the ratio the server states and ask
+            # once more, rather than fail every pass
+            fit = _fits_after(str(exc))
+            if fit is None:
+                raise
+            doc = DocumentInput(
+                doc.doc_id,
+                doc.title,
+                doc.header,
+                doc.text[: max(500, int(len(doc.text) * fit))],
+                doc.domains,
+            )
+            cut = 1
+            text, usage = self._chat(system, doc, grammar)
         result = lineformat.parse(text)
+        if cut:
+            result.usage["cut"] = cut
         me = set(self_types(onto))
         for t in result.triples:  # the document is named by its title
             if t.src.lower() in _SELF_NAMES and t.src_type in me:
@@ -626,6 +640,52 @@ class LocalExtractor:
                 t.dst = doc.title
         result.usage.update(usage)
         return result
+
+    def _chat(
+        self, system: str, doc: DocumentInput, grammar: str
+    ) -> tuple[str, dict[str, Any]]:
+        return self.runtime.chat(
+            system,
+            doc.as_message(),
+            grammar=grammar,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            repeat_penalty=self.repeat_penalty,
+        )
+
+
+_EXCEEDS = re.compile(
+    r"request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)"
+)
+
+
+def _fits_after(error: str) -> float | None:
+    """The share of the text to keep after llama-server refused a prompt as
+    too long (its message carries both numbers), with room for the answer;
+    None when the error is another kind."""
+    m = _EXCEEDS.search(error)
+    if not m:
+        return None
+    asked, ctx = int(m.group(1)), int(m.group(2))
+    return max(0.1, min(0.9, (ctx * 0.85) / asked))
+
+
+def note_failure(
+    con: sqlite3.Connection, doc_id: int, error: str, *, extractor: str
+) -> None:
+    """Remember that ``extractor`` could not read this document under the
+    current ontology (``meta.extraction_error``), so the selection leaves
+    it out until the ontology moves or a reading succeeds; the
+    ``extraction-failed`` ailment lists them."""
+    onto = ontology.current().for_domains(store.document_domains(con, doc_id))
+    meta = store.get_meta(con, doc_id)
+    meta["extraction_error"] = {
+        "extractor": extractor,
+        "ontology_version": onto.version,
+        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "error": error[:500],
+    }
+    store.set_meta(con, doc_id, meta)
 
 
 def current(step: str = "extract") -> Extractor:
@@ -775,6 +835,7 @@ def apply(
         )
         report.queued += 1
     meta = store.get_meta(con, doc_id)
+    meta.pop("extraction_error", None)  # a reading that worked
     if extraction.summary:
         meta["summary"] = extraction.summary
     if meta.get("extraction"):  # every model that has read the document

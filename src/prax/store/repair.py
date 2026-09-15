@@ -285,6 +285,25 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return [dict(r) for r in rows if not parsers.candidates((r["mime"] or "").strip())]
 
 
+def _extraction_failed(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents the extract step could not read under the current
+    ontology (``meta.extraction_error``): a prompt the model's slot cannot
+    hold even cut, a server error; left out of the selection until the
+    ontology moves or a reading succeeds."""
+    return [
+        dict(r)
+        for r in con.execute(
+            "SELECT id, title,"
+            " json_extract(meta, '$.extraction_error.extractor') AS extractor,"
+            " json_extract(meta, '$.extraction_error.error') AS error,"
+            " json_extract(meta, '$.extraction_error.at') AS at"
+            " FROM documents WHERE json_extract(meta, '$.extraction_error') IS NOT NULL"
+            " AND json_extract(meta, '$.retired') IS NULL ORDER BY id LIMIT ?",
+            (CAP,),
+        )
+    ]
+
+
 def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents every extractor has tried and found no text in
     (``documents.unreadable_documents``), with what the last attempt said."""
@@ -586,6 +605,19 @@ AILMENTS: tuple[Ailment, ...] = (
             " repair in the store"
         ),
         find=_unparsable_documents,
+    ),
+    Ailment(
+        name="extraction-failed",
+        what=(
+            "documents the extract step could not read under the current"
+            " ontology (the error is kept): left out of the passes until the"
+            " ontology moves or a reading succeeds"
+        ),
+        fix=(
+            "a bigger slot on the model server, or the promote step for the"
+            " few that matter; nothing to repair in the store"
+        ),
+        find=_extraction_failed,
     ),
     Ailment(
         name="unreadable-documents",

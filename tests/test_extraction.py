@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -277,3 +278,69 @@ def test_unmapped_noise_rules() -> None:
     assert not noise(
         {"rel": "cites", "dst": "A Dictionary of Musical Themes", "reason": "r"}
     )
+
+
+class _TooBig:
+    """A served model whose slot is too small for the first prompt: the
+    server's own refusal, with the numbers, then an answer once the text
+    is cut to fit."""
+
+    name = "fake@test"
+
+    def __init__(self) -> None:
+        self.calls: list[int] = []
+
+    def chat(self, system: str, user: str, **kw: Any) -> tuple[str, dict[str, int]]:
+        self.calls.append(len(user))
+        if len(self.calls) == 1:
+            raise RuntimeError(
+                "http://127.0.0.1:8080/v1/chat/completions: HTTP 400:"
+                ' {"error":{"code":400,"message":"request (9816 tokens) exceeds the'
+                ' available context size (8192 tokens), try increasing it",'
+                '"type":"exceed_context_size_error","n_prompt_tokens":9816,'
+                '"n_ctx":8192}}'
+            )
+        reply = (
+            "summary\tA short one.\n"
+            "triple\tPaper X\tpaper\tabout\tgrains\tconcept\tEXTRACTED\tgrains\n"
+        )
+        return reply, {"input_tokens": 7000, "output_tokens": 20}
+
+
+def test_a_prompt_the_slot_cannot_hold_is_cut_to_fit_and_asked_again(
+    con: sqlite3.Connection,
+) -> None:
+    doc_id = store.ingest_text(con, "we study grains " * 800, title="Paper X")["doc_id"]
+    runtime = _TooBig()
+    ext = extraction.LocalExtractor(runtime)
+    result = ext.extract(extraction.build_input(con, doc_id))
+    assert [t.dst for t in result.triples] == ["grains"]
+    first, second = runtime.calls
+    # 9816 tokens did not fit 8192: the second prompt is shorter by at least
+    # that ratio, with room to spare
+    assert second < first * (8192 / 9816)
+    assert result.usage.get("cut") == 1
+
+
+def test_a_failed_extraction_is_remembered_and_not_retried_every_pass(
+    con: sqlite3.Connection,
+) -> None:
+    """The door stamps an error result (meta.extraction_error) and the
+    selection skips the document under that ontology version; a bump
+    re-selects it, and the ailment lists it."""
+    doc_id = store.ingest_text(con, "a long text " * 200, title="Stuck")["doc_id"]
+    version = ontology.current().version
+    assert store.select_for_extraction(con, ontology_version=version) == [doc_id]
+    extraction.note_failure(
+        con, doc_id, "RuntimeError: HTTP 400: exceeds", extractor="fake"
+    )
+    assert store.select_for_extraction(con, ontology_version=version) == []
+    assert store.select_for_extraction(con, ontology_version="v-next") == [doc_id]
+    failed = store.get_meta(con, doc_id)["extraction_error"]
+    assert failed["extractor"] == "fake" and failed["ontology_version"] == version
+    found = store.health(con, only=["extraction-failed"])["ailments"][0]
+    assert found["count"] == 1 and found["examples"][0]["id"] == doc_id
+    # a success clears the note
+    extraction.apply(con, doc_id, extraction.Extraction(summary="s"), extractor="fake")
+    assert "extraction_error" not in store.get_meta(con, doc_id)
+    assert store.health(con, only=["extraction-failed"])["ailments"][0]["count"] == 0
