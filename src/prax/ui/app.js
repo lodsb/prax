@@ -355,6 +355,19 @@ function plainFigures(text) {
   return String(text || "").replace(/!\[([^\]\n]*)\]\(figure:[0-9a-f]+\)/g, "[figure: $1]");
 }
 
+// A display equation: its LaTeX as the paper wrote it, the number the
+// prose refers to it by, and what a model made of it underneath. No maths
+// typesetting here — the LaTeX is the content, and a reading is what makes
+// it findable in words.
+function renderFormula(c) {
+  const readings = (c.data.readings || []).map((r) =>
+    `<p class="figure-reading"><span class="muted">read by ${esc(r.model)}:</span> ${esc(r.text)}</p>`).join("");
+  return `<div class="formula">
+    ${c.data.number ? `<span class="formula-number">(${esc(c.data.number)})</span>` : ""}
+    <pre class="formula-latex">${esc(c.data.latex)}</pre>
+  </div>${readings}`;
+}
+
 function renderChunk(c, highlight, docId) {
   const cls = "chunk kind-" + (c.kind || "text") + (c.chunk_id === highlight ? " highlight" : "");
   let body;
@@ -363,6 +376,8 @@ function renderChunk(c, highlight, docId) {
     body = (caption ? md(caption) : "") + renderTable(c.data);
   } else if (c.kind === "figure" && c.data && c.data.ref) {
     body = renderFigure(c, docId);
+  } else if (c.kind === "formula" && c.data && c.data.latex) {
+    body = renderFormula(c);
   } else if (c.kind === "code") {
     body = md(c.text);
   } else {

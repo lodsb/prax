@@ -163,10 +163,15 @@ loop writes. What that model may and may not do, as a reference:
   page; `chunk.text == artifact[start:end]` always), `heading` path, table
   `data`. Chunking lives in `prax.chunking` and chunks are disposable:
   change the chunker, run `prax maintain --rechunk`. New media add a kind and a
-  locator shape, never a new table for chunks (rationale R13). A figure
+  locator shape, never a new table for chunks (rationale R13), and only
+  when the region is stored or located differently — what a figure is
+  *of* belongs in `data`, not in a kind of its own. A figure
   is a line in the text, `![caption](figure:<sha256>)`, and a `figure`
   chunk with the reference, caption and readings in `data`; its bytes
-  are served out of the original by hash, never stored again. A re-index
+  are served out of the original by hash, never stored again. A display
+  equation alone on its line is a `formula` chunk with its LaTeX, the
+  number the prose refers to it by and any readings in `data`; inline
+  maths stays in the text chunk around it. A re-index
   keeps the chunks whose text did not change, and their vectors.
 - Embeddings: 384-dim (bge-small-class ONNX). Vectors are keyed by chunk
   id in the usearch file; changing the model means re-embedding into a new

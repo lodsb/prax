@@ -95,6 +95,7 @@
   --table: var(--prax-colour);
   --figure: color-mix(in srgb, var(--prax-tone) 60%, var(--prax-key));
   --code: var(--prax-dim);
+  --formula: color-mix(in srgb, var(--prax-colour) 70%, var(--prax-key));
   --font-ui: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
   --font-read: "Literata", "STIX Two Text", Georgia, Cambria, "Times New Roman", serif;
   --font-mono: ui-monospace, Consolas, "SF Mono", Menlo, monospace;
@@ -151,6 +152,9 @@ a:hover { text-decoration: underline; }
 .error { color: var(--accent); }
 .num { text-align: right; }
 /* what you read, in the serif */
+.formula { display: flex; gap: .8rem; align-items: baseline; margin: .6rem 0; }
+.formula-latex { flex: 1; margin: 0; padding: .5rem .7rem; background: var(--panel); border-left: 2px solid var(--line); overflow-x: auto; font-size: .92rem; }
+.formula-number { color: var(--faint); font-family: var(--font-ui); font-size: .85rem; }
 .chunk-body, .answer, .snippet, .turn-q, .figure-reading, .doc-figure figcaption, .review-triple, .summary, .graph-panel .ev { font-family: var(--font-read); }
 .chunk-body { font-size: 1rem; line-height: 1.55; }
 .chunk-body code, .chunk-body pre, .page-editor textarea { font-family: var(--font-mono); font-size: .86em; }
@@ -250,6 +254,7 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .badge-table { color: var(--table); }
 .badge-figure { color: var(--figure); }
 .badge-code { color: var(--code); }
+.badge-formula { color: var(--formula); }
 
 /* ------------------------------------------------------------ search */
 .hit { padding: .8rem 0; border-bottom: 1px solid var(--line); }

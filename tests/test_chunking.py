@@ -259,3 +259,78 @@ def test_a_re_read_keeps_the_unchanged_chunks_and_their_vectors(
     ids = [c["chunk_id"] for c in store.list_chunks(con, doc_id)]
     store.index_text(con, doc_id, text)
     assert [c["chunk_id"] for c in store.list_chunks(con, doc_id)] == ids
+
+
+def test_a_display_equation_is_a_chunk_of_its_own() -> None:
+    """A parser that reads mathematics writes a display equation as its own
+    line; it becomes a formula chunk with the LaTeX and the number the prose
+    refers to it by. Inline maths stays in the sentence it belongs to: a
+    chunk is a region of the artifact and cannot tear one."""
+    wave = (
+        "$$\\frac{a-b}{2R} = I_s \\left( e^{\\frac{a+b}{2V_T}} - 1"
+        " \\right). \\quad (4)$$"
+    )
+    parts = [
+        "# A paper with equations",
+        "## 2. The model",
+        "The diode current follows Shockley's law,",
+        "$$i = I_s \\left( e^{v/V_T} - 1 \\right), \\quad (1)$$",
+        "where $i$ is the current and $v$ the voltage across it.",
+        "Rearranging (1) in the wave domain gives",
+        wave,
+        "$$\\rightarrow$$",
+        "which is solved with the Lambert W function.",
+    ]
+    text = "\n\n".join(parts)
+    chunks = chunking.chunk(text)
+    for c in chunks:  # the invariant every chunk keeps
+        assert c.text == text[c.char_start : c.char_end]
+    formulas = [c for c in chunks if c.kind == "formula"]
+    assert len(formulas) == 2  # the arrow states no relation: not a formula
+    first = formulas[0]
+    assert first.data["latex"] == "i = I_s \\left( e^{v/V_T} - 1 \\right)"
+    assert first.data["number"] == "1" and first.data["readings"] == []
+    assert first.heading == ["A paper with equations", "2. The model"]
+    assert formulas[1].data["number"] == "4"
+    # the sentence with inline maths is text, and keeps it
+    inline = next(c for c in chunks if c.kind == "text" and "$i$" in c.text)
+    assert "where $i$ is the current" in inline.text
+    # and the fragment stayed in the prose rather than becoming a chunk
+    assert any("\\rightarrow" in c.text for c in chunks if c.kind == "text")
+
+
+def test_a_formula_carries_what_a_model_read_in_it() -> None:
+    """The reading is written under the equation the way a figure's is, and
+    the chunk is the two together."""
+    text = (
+        "# Notes\n\n"
+        "$$H(s) = \\frac{1}{1 + sRC}, \\quad (2)$$\n"
+        "*Formula, as read by a-model:* the transfer function of a first-order"
+        " lowpass, with the cutoff at one over RC.\n\n"
+        "The pole is real and negative.\n"
+    )
+    chunks = chunking.chunk(text)
+    formula = next(c for c in chunks if c.kind == "formula")
+    assert formula.data["latex"] == "H(s) = \\frac{1}{1 + sRC}"
+    assert formula.data["number"] == "2"
+    assert formula.data["readings"] == [
+        {
+            "model": "a-model",
+            "text": (
+                "the transfer function of a first-order lowpass, with the"
+                " cutoff at one over RC."
+            ),
+        }
+    ]
+    assert "*Formula, as read by" in formula.text
+    assert chunking.KINDS[-1] == "formula"
+
+
+def test_what_counts_as_a_formula() -> None:
+    """A relation, or an expression long enough to stand on its own; a
+    symbol a parser lifted out of a diagram is neither."""
+    assert chunking._is_formula("$$E = mc^2$$")  # short, but it states one
+    assert chunking._is_formula(r"$$\sum_{n=0}^{N-1} x[n] e^{-j 2 \pi k n / N}$$")
+    assert not chunking._is_formula("$$\rightarrow K$$")
+    assert not chunking._is_formula("$$x$$")
+    assert not chunking._is_formula("text $$x = 1$$ more")  # not alone on its line

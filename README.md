@@ -162,7 +162,8 @@ has not moved onto the serving board, though the code for it is in
 database keeps metadata and the hash, so the same file sent twice is one
 document. A parser writes a text artifact, stored by its own hash and
 stamped with what produced it. The text is chunked into addressable
-regions — text under a heading path, tables, figures, code — each with a
+regions — text under a heading path, tables, figures, display equations,
+code — each with a
 locator back into the artifact; the chunks go into FTS5 and a usearch
 vector index, and the document gets a field of its own. A model reads it
 against the ontology modules it belongs to; each triple becomes an edge

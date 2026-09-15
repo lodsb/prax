@@ -8,6 +8,14 @@ chunks:
 * one chunk per **table**, with an adjacent "Table N" caption folded in and
   the parsed grid in ``data``;
 * one chunk per **figure** caption ("Figure N …", "Fig. N …");
+* one chunk per **formula**: a display equation alone on its line, with the
+  LaTeX and the number the prose refers to it by in ``data``. Inline maths
+  stays in the sentence it belongs to — a chunk is a region of the artifact
+  and cannot tear one;
+* one chunk per **formula**: a display equation alone on its line, with the
+  LaTeX and the number the prose refers to it by in ``data``. Inline maths
+  stays in the sentence it belongs to — a chunk is a region of the artifact
+  and cannot tear one;
 * one chunk per fenced **code** block;
 * **text** chunks of consecutive paragraphs under the same heading path, up
   to ``TARGET_CHARS``; a paragraph longer than ``MAX_CHARS`` falls back to
@@ -37,7 +45,7 @@ MIN_CODE_CHARS = 200  # smaller fenced blocks are inline snippets: part of the t
 WINDOW = 1000
 OVERLAP = 150
 
-KINDS = ("text", "table", "figure", "code")
+KINDS = ("text", "table", "figure", "code", "formula")
 
 _PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
@@ -49,8 +57,25 @@ _FIGURE_REF = re.compile(
     r"^!\[(?P<alt>[^\]\n]*)\]\(figure:(?P<ref>[0-9a-f]{16,64})\)", re.MULTILINE
 )
 _READ_BY = re.compile(
-    r"^\*Figure, as read by (?P<model>.+?):\* ?(?P<text>.*)$", re.MULTILINE
+    r"^\*(?:Figure|Formula), as read by (?P<model>.+?):\* ?(?P<text>.*)$",
+    re.MULTILINE,
 )
+# A display equation on a line of its own, as a parser that reads maths
+# writes it: `$$ x = \frac{a}{b}, \quad (4) $$`. Inline maths stays in the
+# sentence it belongs to — a chunk is a region of the artifact, and an
+# inline formula cannot be one without tearing the text around it.
+_FORMULA = re.compile(r"^\$\$(?P<latex>.+)\$\$$", re.DOTALL)
+# the equation number a paper refers to it by, at the end: "\quad (4)"
+_EQ_NUMBER = re.compile(r"\\(?:quad|qquad|hfill|tag)\s*\{?\(?(\d{1,3}[a-z]?)\)?\}?\s*$")
+# What makes a line of maths a formula rather than a stray symbol a parser
+# lifted out of a diagram (`$$\rightarrow K$$`): it states a relation, or it
+# is long enough to be an expression in its own right. "E = mc^2" passes on
+# the first, a displayed integral with no relation on the second.
+_RELATION = re.compile(
+    r"=|\\le\b|\\ge\b|\\leq\b|\\geq\b|<|>|\\approx|\\equiv|\\sim\b|\\propto"
+)
+FORMULA_CHARS = 40  # a relationless expression this long is still a formula
+
 _TABLE_CAPTION = re.compile(r"^\**(Table|TABLE)\s*\d+")
 _EMPHASIS = re.compile(r"[*_`]+")
 _FENCE = "```"
@@ -126,6 +151,17 @@ def _elements(text: str) -> list[_Element]:
             els.append(_Element("heading", start, end, title, level=len(m.group(1))))
             i += 1
             continue
+        if _is_formula(stripped):
+            j = i + 1
+            while j < n and _READ_BY.match(lines[j][2].strip()):
+                j += 1
+            els.append(
+                _Element(
+                    "formula", start, lines[j - 1][1], text[start : lines[j - 1][1]]
+                )
+            )
+            i = j
+            continue
         if (
             stripped.startswith("|")
             and i + 1 < n
@@ -156,6 +192,8 @@ def _elements(text: str) -> list[_Element]:
                 and _TABLE_SEP.match(lines[j + 1][2].strip())
             ):
                 break
+            if j > i and _is_formula(s):
+                break
             j += 1
         pend = lines[j - 1][1]
         ptext = text[start:pend]
@@ -179,6 +217,45 @@ def _assign_pages(els: list[_Element]) -> None:
             current = (e.page or 0) + 1
         else:
             e.page = current
+
+
+def _is_formula(stripped: str) -> bool:
+    """A line that is one display equation and nothing else."""
+    if not (
+        stripped.startswith("$$")
+        and stripped.endswith("$$")
+        and stripped.count("$$") == 2
+    ):
+        return False
+    latex = stripped[2:-2].strip()
+    return bool(_RELATION.search(latex)) or len(latex) >= FORMULA_CHARS
+
+
+def parse_formula(text: str) -> dict[str, Any] | None:
+    """A formula chunk's LaTeX, the number the paper refers to it by and
+    any readings: ``{"latex", "number", "readings": [{"model", "text"}]}``.
+    The reading is a model's plain-language account of the equation,
+    written under it the way a figure's is, because the LaTeX itself
+    embeds to noise and a person searching says "Shockley's diode
+    equation", not ``\\frac{a-b}{2R}``."""
+    lines = text.split("\n")
+    m = _FORMULA.match(lines[0].strip())
+    if not m:
+        return None
+    latex = m.group("latex").strip()
+    number = None
+    found = _EQ_NUMBER.search(latex)
+    if found:
+        number = found.group(1)
+        latex = latex[: found.start()].rstrip().rstrip(",.").rstrip()
+    return {
+        "latex": latex,
+        "number": number,
+        "readings": [
+            {"model": r.group("model").strip(), "text": r.group("text").strip()}
+            for r in _READ_BY.finditer(text)
+        ],
+    }
 
 
 def parse_figure(text: str) -> dict[str, Any] | None:
@@ -349,8 +426,13 @@ def chunk(text: str) -> list[Chunk]:
                 )
             )
             continue
-        if el.kind in ("figure", "code"):
+        if el.kind in ("figure", "code", "formula"):
             flush()
+            data = None
+            if el.kind == "figure":
+                data = parse_figure(el.text)
+            elif el.kind == "formula":
+                data = parse_formula(el.text)
             chunks.append(
                 Chunk(
                     el.kind,
@@ -359,7 +441,7 @@ def chunk(text: str) -> list[Chunk]:
                     el.end,
                     el.page,
                     path(),
-                    parse_figure(el.text) if el.kind == "figure" else None,
+                    data,
                 )
             )
             continue
