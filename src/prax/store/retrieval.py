@@ -360,34 +360,32 @@ def _fill_chunks(
     expr: str | None = None,
 ) -> None:
     """A hit that came from the document field alone gets the document's
-    chunk that matches the query best, else its first chunk, so every hit
-    opens somewhere; the field snippet stays, it says why the document
-    matched."""
-    expr = expr or _fts_query(query)
+    chunk that holds most of the query's terms (longer terms counting for
+    more: "what", "is" and "a" carry no question), else its first chunk,
+    so every hit opens somewhere; the field snippet stays, it says why
+    the document matched. The chunk is chosen over the document's own
+    rows: a MATCH over the whole index filtered to one document walks
+    the posting lists of every common word in the question (seconds per
+    hit on a million chunks; ``expr`` is kept for the signature)."""
+    terms = {t.lower() for t in _TOKEN.findall(query)}
     for h in hits:
         if h.get("chunk_id") is not None:
             continue
-        row = None
-        if expr is not None:
-            row = con.execute(
-                """
-                SELECT c.id, c.kind, c.locator, c.heading
-                FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
-                WHERE chunks_fts MATCH ? AND c.doc_id = ?
-                ORDER BY bm25(chunks_fts) LIMIT 1
-                """,
-                (expr, h["doc_id"]),
-            ).fetchone()
-        if row is None:
-            row = con.execute(
-                "SELECT id, kind, locator, heading FROM chunks WHERE doc_id = ?"
-                " ORDER BY seq LIMIT 1",
-                (h["doc_id"],),
-            ).fetchone()
-        if row is None:
+        rows = con.execute(
+            "SELECT id, kind, locator, heading, text FROM chunks WHERE doc_id = ?"
+            " ORDER BY seq",
+            (h["doc_id"],),
+        ).fetchall()
+        if not rows:
             continue
-        h["chunk_id"] = row["id"]
-        h.update(_chunk_shape(row))
+        best, score = rows[0], 0
+        for r in rows:
+            found = terms & set(_TOKEN.findall(r["text"].lower()))
+            sc = sum(len(t) for t in found)
+            if sc > score:
+                best, score = r, sc
+        h["chunk_id"] = best["id"]
+        h.update(_chunk_shape(best))
 
 
 def _filter_doctype(

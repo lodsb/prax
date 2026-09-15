@@ -18,6 +18,12 @@ back to chunk and document ids, so the UI links them, and ``save``
 appends the answer to a page as the agent, with the sources listed and
 ``annotates`` edges to the documents it rests on: an answer worth keeping
 becomes part of a topic page, and the graph knows what it drew on.
+
+With ``steps`` the model surfs before it answers (``prax.surf``): it
+searches again, reads on, walks the graph and drops what is beside the
+point, for as many steps and as much reading as asked, and the answer is
+written from what it kept; the trail of steps comes back with the
+answer and is kept with it on the page.
 """
 
 from __future__ import annotations
@@ -111,7 +117,9 @@ class Bundle:
                 a = " ".join(str(turn.get("answer", "")).split())[:HISTORY_CHARS]
                 parts += ["", f"Q: {q}", f"A: {a}"]
             parts.append("")
-        parts += [f"Question: {self.question.strip()}", "", f"Passages (1 to {n}):"]
+        contiguous = [p.n for p in self.passages] == list(range(1, n + 1))
+        numbered = f"Passages (1 to {n}):" if contiguous else "Passages:"
+        parts += [f"Question: {self.question.strip()}", "", numbered]
         for p in self.passages:
             parts += ["", f"[{p.n}] {p.label()}", p.text]
         lines = []
@@ -221,10 +229,22 @@ def gather(
 # ---------------------------------------------------------------- backends
 
 
+STEP_TOKENS = 160  # a surfing step's two lines
+
+
 class Answerer(Protocol):
+    """A model that answers from a bundle and, surfing, takes a step: two
+    lines under a grammar for a local model (``prax.surf``). ``reading``
+    is its default and largest reading budget in tokens."""
+
     name: str
+    reading: tuple[int, int]
 
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]: ...
+
+    def step(
+        self, system: str, user: str, *, grammar: str | None = None
+    ) -> tuple[str, dict[str, int]]: ...
 
 
 @dataclass
@@ -237,6 +257,7 @@ class LocalAnswerer:
     max_tokens: int = ANSWER_TOKENS
     temperature: float = 0.2
     repeat_penalty: float = 1.05
+    reading: tuple[int, int] = (4000, 4000)
 
     @property
     def name(self) -> str:
@@ -251,18 +272,33 @@ class LocalAnswerer:
             repeat_penalty=self.repeat_penalty,
         )
 
+    def step(
+        self, system: str, user: str, *, grammar: str | None = None
+    ) -> tuple[str, dict[str, int]]:
+        return self.runtime.chat(
+            system,
+            user,
+            grammar=grammar,
+            max_tokens=STEP_TOKENS,
+            temperature=self.temperature,
+            repeat_penalty=self.repeat_penalty,
+        )
+
 
 @dataclass
 class ClaudeAnswerer:
     model: str = DEFAULT_CLAUDE_MODEL
     effort: str = "low"
     client: Any = None
+    reading: tuple[int, int] = (16_000, 60_000)
 
     @property
     def name(self) -> str:
         return self.model
 
-    def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
+    def _chat(
+        self, system: str, user: str, max_tokens: int
+    ) -> tuple[str, dict[str, int]]:
         if self.client is None:
             import anthropic
 
@@ -271,9 +307,9 @@ class ClaudeAnswerer:
             )
         params: dict[str, Any] = {
             "model": self.model,
-            "max_tokens": 2 * ANSWER_TOKENS,
-            "system": SYSTEM,
-            "messages": [{"role": "user", "content": bundle.as_message()}],
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
         }
         if extraction.supports_effort(self.model):
             params["output_config"] = {"effort": self.effort}
@@ -286,11 +322,27 @@ class ClaudeAnswerer:
         }
         return text, usage
 
+    def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
+        return self._chat(SYSTEM, bundle.as_message(), 2 * ANSWER_TOKENS)
+
+    def step(
+        self, system: str, user: str, *, grammar: str | None = None
+    ) -> tuple[str, dict[str, int]]:
+        # Claude keeps to the two lines without a grammar; the reply is
+        # parsed leniently and free text counts as being done
+        return self._chat(system, user, STEP_TOKENS)
+
 
 class StubAnswerer:
-    """Tests: cites the first passage, names the question."""
+    """Tests: cites the first passage, names the question; surfing, plays
+    the ``script`` of step replies given (an empty one answers at once)."""
 
     name = "stub"
+    reading = (4000, 6000)
+
+    def __init__(self, script: list[str] | None = None) -> None:
+        self.script = list(script or [])
+        self.steps: list[dict[str, Any]] = []
 
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
         cite = "[1]" if bundle.passages else ""
@@ -299,17 +351,35 @@ class StubAnswerer:
             {"input_tokens": len(bundle.as_message()) // 4, "output_tokens": 12},
         )
 
+    def step(
+        self, system: str, user: str, *, grammar: str | None = None
+    ) -> tuple[str, dict[str, int]]:
+        self.steps.append({"system": system, "user": user, "grammar": grammar})
+        reply = self.script.pop(0) if self.script else "note: enough\nanswer"
+        return reply, {"input_tokens": len(user) // 4, "output_tokens": 20}
+
 
 def answerer_for(spec: models.ModelSpec | None) -> Answerer | None:
-    """The answerer for a model spec; None for none."""
+    """The answerer for a model spec, with the reading budget its context
+    holds (``prax.surf.reading_bounds``); None for none."""
+    from prax import surf
+
     if spec is None:
         return None
     if spec.kind == "stub":
-        return StubAnswerer()
+        stub = StubAnswerer()
+        stub.reading = surf.reading_bounds("stub", spec.n_ctx)
+        return stub
     if spec.kind == "claude":
         assert spec.model is not None
-        return ClaudeAnswerer(model=spec.model, effort=spec.effort or "low")
-    return LocalAnswerer(models.runtime(spec))
+        return ClaudeAnswerer(
+            model=spec.model,
+            effort=spec.effort or "low",
+            reading=surf.reading_bounds("claude", spec.n_ctx),
+        )
+    return LocalAnswerer(
+        models.runtime(spec), reading=surf.reading_bounds(spec.kind, spec.n_ctx)
+    )
 
 
 def answerer_named(name: str) -> Answerer | None:
@@ -328,14 +398,38 @@ def current() -> Answerer | None:
     return answerer_for(models.resolve("ask"))
 
 
+def default_steps() -> int:
+    """How many surfing steps an ask takes when the request does not say:
+    the host's ``steps.ask.steps`` (``prax.surf.STEPS`` otherwise)."""
+    from prax import surf
+
+    return max(
+        0, min(int(models.settings("ask").get("steps", surf.STEPS)), surf.MAX_STEPS)
+    )
+
+
 def describe() -> dict[str, Any]:
-    """What the door answers with and what it could use, for the UI."""
+    """What the door answers with and what it could use, for the UI, with
+    the surfing budgets: the default number of steps and, per model, the
+    default and largest reading budget in tokens."""
+    from prax import surf
+
     d = models.describe("ask")
+    opts = models.settings("ask")
+    reading: dict[str, dict[str, int]] = {}
+    for name in dict.fromkeys([*d["models"], d["model"]]):
+        s = models.spec(name)
+        if s is None:
+            continue
+        lo, hi = surf.reading_bounds(s.kind, s.n_ctx)
+        reading[name] = {"default": min(hi, int(opts.get("tokens", lo))), "max": hi}
     return {
         "default": d["model"],
         "runtime": d["runtime"],
         "models": d["models"],
         "error": d["error"],
+        "steps": {"default": default_steps(), "max": surf.MAX_STEPS},
+        "reading": reading,
     }
 
 
@@ -375,13 +469,36 @@ def ask(
     doctype: str | None = None,
     answerer: Answerer | None = None,
     history: list[dict[str, Any]] | None = None,
+    steps: int = 0,
+    tokens: int | None = None,
+    on_event: Any = None,
+    stop: Any = None,
 ) -> dict[str, Any]:
     """Gather, then answer with ``answerer`` (None: the bundle alone, the
     caller's model answers). ``history`` is the conversation so far, as
     the client kept it: the model sees the earlier turns, the search
     widens for a follow-up, and the answer cites only this turn's
-    passages. The store is only held while gathering; the model runs
-    outside the lock."""
+    passages. With ``steps`` and an answerer the model surfs first
+    (``prax.surf.run``: that many steps, ``tokens`` of reading, each step
+    an ``on_event``, ``stop`` an event that ends the surf early). The
+    store is only held while gathering; the model runs outside the
+    lock."""
+    if steps > 0 and answerer is not None:
+        from prax import surf
+
+        steps, tokens = surf.clamp(answerer, steps, tokens)
+        return surf.run(
+            con,
+            question,
+            answerer=answerer,
+            steps=steps,
+            tokens=tokens,
+            limit=limit,
+            doctype=doctype,
+            history=clean_history(history),
+            on_event=on_event,
+            stop=stop,
+        )
     bundle = gather(
         con, question, limit=limit, doctype=doctype, history=clean_history(history)
     )
@@ -399,6 +516,23 @@ def ask(
         seconds=round(time.monotonic() - t0, 1),
         cost_usd=round(extraction.cost_usd(answerer.name, usage), 5),
     )
+    return out
+
+
+def trail_lines(result: dict[str, Any]) -> list[str]:
+    """A surfing result's steps as short lines, for the page an answer is
+    kept on (the door's own first search left out)."""
+    out = []
+    for st in result.get("trail") or []:
+        if not isinstance(st, dict) or not st.get("n"):
+            continue
+        action = str(st.get("action") or "")
+        line = f"{action} {st.get('arg') or ''}".strip()
+        if action == "answer":
+            line = "enough read"
+        if st.get("note"):
+            line += f" — {st['note']}"
+        out.append(line)
     return out
 
 
@@ -439,6 +573,9 @@ def save(
             + (f" — {where}" if where else "")
         )
     section = answer + "\n\nSources:\n\n" + "\n".join(lines) if lines else answer
+    trail = trail_lines(result)
+    if trail:
+        section += "\n\nHow it was found:\n\n" + "\n".join(f"- {t}" for t in trail)
     model = result.get("model") or "?"
     docs = list(dict.fromkeys(c["doc_id"] for c in cited if c.get("title")))
     if create and store.get_page(con, store.slugify(slug)) is None:

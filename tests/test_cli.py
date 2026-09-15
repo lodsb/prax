@@ -70,6 +70,28 @@ def test_search_json_is_machine_readable(
     assert hits and hits[0]["title"] == "WDF"
 
 
+def test_ask_shows_the_trail_then_the_answer(
+    door: TestClient,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With --answer the trail streams line by line before the answer;
+    --steps 0 asks in one shot and prints no trail."""
+    monkeypatch.setenv("PRAX_ASK", "stub")
+    door.post(
+        "/ingest", json={"text": "granular synthesis of clouds " * 40, "title": "G"}
+    )
+    assert run("ask", "--answer", "--steps", "3", "granular", "synthesis") == 0
+    printed = capsys.readouterr().out
+    assert "0. searched granular synthesis" in printed
+    assert "1. enough read" in printed and "writing the answer from" in printed
+    assert "Stub answer to 'granular synthesis' [1]." in printed
+    assert "1 steps" in printed or "1 step" in printed
+    assert run("ask", "--answer", "--steps", "0", "granular", "synthesis") == 0
+    printed = capsys.readouterr().out
+    assert "searched" not in printed and "Stub answer" in printed
+
+
 def test_add_a_file_a_url_and_a_pipe(
     door: TestClient,
     tmp_path: Path,

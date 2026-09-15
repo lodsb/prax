@@ -1601,6 +1601,51 @@ def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
 
 
 @_serialized
+def read_chunks(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    after_seq: int = -1,
+    max_chars: int = 1500,
+) -> list[dict[str, Any]]:
+    """The text chunks that follow a point in a document, in order, as many
+    as fit ``max_chars`` (the first always; figures left out): what "read
+    on" means for a passage, and the start of a document for
+    ``after_seq=-1``. Each carries ``chunk_id``, ``seq``, ``text``,
+    ``kind``, ``heading`` and ``page``."""
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE doc_id = ? AND seq > ? AND kind != 'figure'"
+        " ORDER BY seq LIMIT 40",
+        (doc_id, after_seq),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    used = 0
+    for r in rows:
+        if out and used + len(r["text"]) > max_chars:
+            break
+        c = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+        c.update(_chunk_shape(r))
+        out.append(c)
+        used += len(r["text"])
+    return out
+
+
+@_serialized
+def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
+    """Titles by id, for naming documents in a result (unknown ids left
+    out; an untitled document is an empty string)."""
+    ids = list(dict.fromkeys(int(i) for i in doc_ids))
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    rows = con.execute(
+        f"SELECT id, title FROM documents WHERE id IN ({marks})", ids
+    ).fetchall()
+    return {r["id"]: r["title"] or "" for r in rows}
+
+
+@_serialized
 def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
     """MIME type, title and archive path of a document's original, for
     serving it; None when the document does not exist."""

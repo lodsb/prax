@@ -171,6 +171,8 @@ flowchart LR
   H -->|doc/id/context| X[summary, entities, similar, citations,<br/>shared entities, authors, notes, Zotero]
   H -->|traverse entity| G[1-2 hop neighbourhood, with provenance]
   H -->|ask| B[bundle: one passage per document,<br/>graph facts per document] --> M[a local model server, Claude,<br/>or the MCP client itself] --> A[answer citing n] -->|ask/save| P[page section with sources,<br/>annotates edges]
+  B -->|steps > 0| S[surf: search again, read on,<br/>facts, walk, similar, drop] --> S
+  S -->|answer| M
 ```
 
 `search` first expands the query: a token the library defines as an
@@ -190,6 +192,8 @@ host works before embeddings do. Responses stay small by design (invariant
 what is needed.
 
 `ask` is retrieval plus generation on top of the same search (`prax.ask`). The bundle is one passage per document (the matched chunk, 1,200 characters) for the top eight documents plus what the graph records about each of them (its extracted relations, canonical names, `cites` left out), about 3,000 tokens, so it fits a 7B model with an 8 K window. Which model answers is a per-host setting (`PRAX_ASK`): `local` runs a GGUF model in the door's process on the desktop (Qwen2.5-7B answers in about 20 s on the GTX 1070), `claude` calls the API, `none` returns the bundle alone, which is what the MCP tool gives Claude Code by default and what the serving board does, since it loads no model (invariant 7). The answer cites passages as `[n]`; the numbers are resolved to chunk and document ids, the UI links them, and an answer worth keeping is appended to a page as the agent with its sources listed and `annotates` edges to the documents it rests on.
+
+With `steps` the model surfs before it answers (`prax.surf`). The one-shot bundle is what the model gets when it cannot choose; surfing gives it the library for a bounded number of steps, each two lines — a note and one action: `search` again, `read` on where a passage stopped or the start of a document a result named, `facts` of a document, `walk` the graph from an entity (its relations and the documents behind them), `similar` documents, `drop` what is beside the point, or `answer`. Every step is one of the door's own reads; nothing is written. A local model is held to the two lines by a grammar whose passage numbers and document ids are the ones it has seen, so it can only point at what exists; Claude follows the same lines without one. The prompt is one growing message — the question, then every step and its result in order — so a llama-server's prefix cache makes a step cost its own tokens (two to four seconds on the 35B-A3B). Two budgets bound the loop, the steps and the tokens of reading, both clamped to the model's context; the answer is a separate call with the ask prompt over the passages kept, under their loop numbers, so a citation points at what was read. The trail (each step's note, action, what it brought) streams to the client as it happens and comes back with the answer; a kept answer carries it on the page.
 
 ## 5. Module map
 
@@ -221,7 +225,8 @@ what is needed.
 | `prax.models` | `prax.yaml`: named models and the step that uses each; the registry that resolves a step to a spec and a runtime (OpenAI-compatible server such as llama-server, Claude, stub), once per process | no |
 | `prax.titles` | titles worth the name: the classifier (file names, Zotero's auto names, ALL CAPS), the recase rule, the local-model guess with hints, confidence from the text | via store (`retitle`) |
 | `prax.acronyms` | "phrase (ACRONYM)" definitions from a text, letters checked against the phrase's initials; the batch script writes the `acronyms` table the search expands from | no |
-| `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub), citation resolution, saving an answer to a page | via store |
+| `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub) with their step protocol and reading bounds, citation resolution, saving an answer (and its trail) to a page | via store |
+| `prax.surf` | ask as a loop: the tools (search, read, facts, walk, similar, drop) over the store's reads, the per-step grammar, the budgets, the event trail, the answer from what was kept | via store |
 | `prax.review` | replay of the review queue against a newer ontology; the typing rules that recover what a model meant from its systematic misfits | via store |
 | `prax.resolution` | entity merge candidates (normalized names, initials, concept/method twins, name embeddings), adjudicators, apply through `merge_entities` | via store |
 | `prax.rerank` | optional cross-encoder over the top hits, ONNX in-process or a llama-server `/rerank`; off by default (measured no gain, 2026-09-08 and -13) | no |
@@ -370,7 +375,8 @@ here opens the database file.
 | add a page kind | `store.PAGE_KINDS` and the `pages` view; relationships stay edges |
 | fix a document's title | `store.retitle(con, id, title, source="human")`; the old one stays in `meta.title_history`, the paper entity follows; the titles step reruns the model for what still has a file name |
 | move a step to another model (a GPU box, a cheaper API) | a `models` entry and the step's `model` in `prax.yaml`; nothing in code; `PRAX_<STEP>` for one run |
-| change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name` and `answer(bundle)` |
+| change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name`, `reading`, `answer(bundle)` and `step(system, user, grammar)` |
+| give the surfing model another move | a `do_<action>` in `prax.surf` over a store read, the action in `SYSTEM` and `grammar`, a word for it in the UI's `STEP_WORDS` and the CLI's `_STEP_WORDS` |
 
 ## 10. Numbers as of 2026-09-12
 

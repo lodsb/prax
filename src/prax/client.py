@@ -6,6 +6,7 @@ httpx client or a test client of the same shape."""
 
 from __future__ import annotations
 
+import json
 import mimetypes
 import socket
 from pathlib import Path
@@ -61,6 +62,19 @@ class Door:
         return self._check(
             self.client.post(path, json=body or {}, headers=self.headers)
         ).json()
+
+    def post_lines(self, path: str, body: dict[str, Any] | None = None) -> Any:
+        """A POST whose answer is one JSON object per line, yielded as it
+        arrives (``/ask`` with ``stream``)."""
+        with self.client.stream(
+            "POST", path, json=body or {}, headers=self.headers
+        ) as res:
+            if res.status_code >= 400:
+                res.read()
+                self._check(res)
+            for line in res.iter_lines():
+                if line.strip():
+                    yield json.loads(line)
 
     def put_json(self, path: str, body: dict[str, Any]) -> Any:
         return self._check(

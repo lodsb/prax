@@ -106,16 +106,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="gather passages for a question (and answer it)",
         description=(
             "Gather the passages that speak to a question. With --answer the"
-            " door's own model answers from them and cites what it used."
+            " door's own model surfs the library first — searches again,"
+            " reads on, walks the graph, drops what is beside the point — for"
+            " as many steps as --steps allows (0: one shot from the first"
+            " search), then answers from what it kept and cites it. The"
+            " trail of steps is printed as it happens."
         ),
-        epilog="example: prax ask --answer how does a feedback delay network work",
+        epilog=(
+            "examples:\n"
+            "  prax ask --answer how does a feedback delay network work\n"
+            "  prax ask --answer --steps 12 --tokens 6000 what does ADAA do"
+            " to a stateful nonlinearity\n"
+            "  prax ask --answer --steps 0 quick question   # no surfing"
+        ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     s.add_argument("question", nargs="+")
     s.add_argument(
         "-a", "--answer", action="store_true", help="let the door's model answer"
     )
-    s.add_argument("-n", "--limit", type=int, default=8, help="how many passages")
+    s.add_argument(
+        "-n", "--limit", type=int, default=8, help="how many passages per search"
+    )
+    s.add_argument(
+        "--steps",
+        type=int,
+        help="surfing steps before the answer (the host's default; 0: none)",
+    )
+    s.add_argument(
+        "--tokens",
+        type=int,
+        help="the reading budget of the steps in tokens (the model's default)",
+    )
     s.add_argument("--doctype", help="pdf, web, image, text, note or page")
     s.add_argument("--save", metavar="PAGE", help="keep the answer on a page")
     s.set_defaults(func=library.ask, needs_door=True)

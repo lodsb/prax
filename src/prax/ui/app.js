@@ -1244,6 +1244,32 @@ async function post(path, body) {
   return data;
 }
 
+// A POST answered line by line (/ask with stream): each JSON line goes
+// to onEvent as it arrives; the promise settles when the door is done.
+async function postLines(path, body, onEvent) {
+  setStatus("…");
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.status === 401) { setStatus(""); askForToken(); throw new Error("access token required"); }
+  if (!res.ok) {
+    setStatus("");
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.detail || res.statusText);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let rest = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    rest += decoder.decode(value, { stream: true });
+    const lines = rest.split("\n");
+    rest = lines.pop();
+    for (const line of lines) if (line.trim()) onEvent(JSON.parse(line));
+  }
+  if (rest.trim()) onEvent(JSON.parse(rest));
+  setStatus("");
+}
+
 function options(list, current) {
   return [`<option value="">–</option>`, ...list.map((x) => `<option ${x === current ? "selected" : ""}>${esc(x)}</option>`)].join("");
 }
@@ -1373,10 +1399,21 @@ function clearAskSession() {
   try { sessionStorage.removeItem(ASK_KEY); } catch (_) { /* nothing to clear */ }
 }
 
+// The surfing budgets a question may set: how many steps the model takes
+// before it answers (0: one shot from the first search) and how much it
+// may read, in tokens, within what the chosen model's context holds.
+function readingBounds(backend) {
+  const reading = (askConfig && askConfig.reading) || {};
+  const name = backend || (askConfig && askConfig.default) || "";
+  return reading[name] || { default: 4000, max: 6000 };
+}
+
 function renderComposer(p) {
   const backend = p.backend || "";
   const dflt = askConfig ? askConfig.default : "none";
   const names = (askConfig && askConfig.models) || [];
+  const steps = (askConfig && askConfig.steps) || { default: 8, max: 20 };
+  const reading = readingBounds(backend);
   return `
   <form id="ask-form" class="composer" autocomplete="off">
     <textarea name="question" rows="1" placeholder="ask the library…" aria-label="question" autofocus>${esc(p.question || "")}</textarea>
@@ -1391,11 +1428,38 @@ function renderComposer(p) {
         <option value="" ${!p.doctype ? "selected" : ""}>any type</option>
         ${[["pdf", "PDFs"], ["web", "web pages"], ["image", "images"], ["text", "text files"], ["note", "notes"], ["page", "pages"]].map(([v, l]) => `<option value="${v}" ${p.doctype === v ? "selected" : ""}>${l}</option>`).join("")}
       </select>
-      <label>passages <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || settings().ask_limit)}" title="passages per turn"></label>
+      <label>passages <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || settings().ask_limit)}" title="passages per search"></label>
+      <label>steps <input name="steps" type="number" min="0" max="${steps.max}" value="${esc(p.steps != null ? p.steps : steps.default)}" title="how many steps the model surfs before answering (search again, read on, walk the graph, drop); 0 answers from the first search alone"></label>
+      <label>reading <input name="tokens" type="number" min="1000" max="${reading.max}" step="500" value="${esc(p.tokens || reading.default)}" title="how much the steps may read, in tokens (at most ${reading.max} for this model)"></label>
       <span id="ask-count"></span>
       <button type="button" id="ask-new" class="composer-new" hidden title="forget this conversation">New ask</button>
     </div>
   </form>`;
+}
+
+// The trail of a surf: what the model did at each step, with what the step
+// brought. Shown as it happens under the pending line, then folded under
+// the answer; a [n] in it opens the source like one in the answer.
+const STEP_WORDS = { search: "searched", read: "read", facts: "facts of", walk: "walked", similar: "like", drop: "set aside", answer: "enough read", error: "failed" };
+
+function renderTrail(t) {
+  const trail = t.trail || [];
+  if (!trail.length) return "";
+  const passages = t.passages || [];
+  const items = trail.map((s) => {
+    const verb = STEP_WORDS[s.action] || s.action;
+    let head = esc(`${verb} ${s.arg || ""}`.trim());
+    let result = s.action === "answer" ? "" : esc(s.result || "");
+    if (s.action === "error") { head = esc(verb); result = esc(s.result || ""); }
+    if (s.action === "read") head = citeLinks(head, passages);
+    return `<li class="trail-step">
+      <span class="trail-head">${head}${result ? `<span class="trail-result"> → ${citeLinks(result, passages)}</span>` : ""}</span>
+      ${s.note ? `<span class="trail-note">${esc(s.note)}</span>` : ""}
+    </li>`;
+  }).join("");
+  if (t.pending) return `<ol class="trail live" start="0">${items}</ol>`;
+  const n = trail.filter((s) => s.n > 0).length;
+  return `<details class="trail-fold"><summary>${n} step${n === 1 ? "" : "s"}${t.dropped && t.dropped.length ? `, ${t.dropped.length} set aside` : ""}</summary><ol class="trail" start="0">${items}</ol></details>`;
 }
 
 function renderTurn(t, i) {
@@ -1403,12 +1467,12 @@ function renderTurn(t, i) {
   const cited = new Set((t.citations || []).map((c) => c.n));
   let body;
   if (t.error) body = `<p class="error">${esc(t.error)}</p>`;
-  else if (t.pending) body = `<p class="turn-pending muted">${esc(t.pending)}</p>`;
-  else if (t.answer) body = `<div class="answer">${citeLinks(md(t.answer), passages)}</div>`;
-  else body = `<p class="muted">${passages.length ? "No model answered; the sources beside are what a model would have been given." : "No passages found."}</p>`;
+  else if (t.pending) body = `${renderTrail(t)}<p class="turn-pending muted">${esc(t.pending)}</p>`;
+  else if (t.answer) body = `<div class="answer">${citeLinks(md(t.answer), passages)}</div>${renderTrail(t)}`;
+  else body = `<p class="muted">${passages.length ? "No model answered; the sources beside are what a model would have been given." : "No passages found."}</p>${renderTrail(t)}`;
   const meta = (t.pending || t.error) ? "" : `
     <div class="turn-meta muted">
-      ${t.model ? `<span>${esc(t.model)} · ${t.seconds} s${t.cost_usd ? ` · $${t.cost_usd.toFixed(4)}` : ""} · ${(t.usage || {}).input_tokens || 0} in / ${(t.usage || {}).output_tokens || 0} out</span>` : ""}
+      ${t.model ? `<span>${esc(t.model)}${t.steps ? ` · ${t.steps} step${t.steps === 1 ? "" : "s"}` : ""} · ${t.seconds} s${t.cost_usd ? ` · $${t.cost_usd.toFixed(4)}` : ""} · ${(t.usage || {}).input_tokens || 0} in / ${(t.usage || {}).output_tokens || 0} out</span>` : ""}
       <button type="button" class="linkish turn-sources-link">${passages.length} source${passages.length === 1 ? "" : "s"}${cited.size ? `, ${cited.size} cited` : ""}</button>
       ${t.answer ? `<button type="button" class="linkish turn-keep-link">keep on page…</button>` : ""}
     </div>
@@ -1511,7 +1575,7 @@ async function viewAsk(p) {
   function paint() {
     turnsEl.innerHTML = turns.length ? turns.map(renderTurn).join("") : `
       <div class="ask-empty muted">
-        <p>Ask the library a question. The answer cites passages, one per document, shown beside it; a follow-up may refer to the earlier turns ("and the second one?").</p>
+        <p>Ask the library a question. The model surfs before it answers — searches again, reads on, walks the graph, sets aside what is beside the point — for as many steps as you allow, and the answer cites the passages it kept, shown beside it. A follow-up may refer to the earlier turns ("and the second one?").</p>
       </div>`;
     const done = turns.filter((t) => !t.pending && !t.error).length;
     document.getElementById("ask-new").hidden = !turns.length;
@@ -1536,19 +1600,46 @@ async function viewAsk(p) {
   async function ask(question, opts) {
     const backend = opts.backend || askConfig.default;
     const earlier = turns.filter((t) => t.answer).map((t) => ({ question: t.question, answer: t.answer }));
-    const turn = { question, pending: backend === "none" ? "gathering passages…" : `asking ${backend}… (a local model takes tens of seconds)` };
+    const steps = opts.steps == null || opts.steps === "" ? null : Math.max(0, Number(opts.steps) || 0);
+    const surfing = backend !== "none" && steps !== 0;
+    const turn = { question, pending: backend === "none" ? "gathering passages…" : surfing ? `${backend} is searching…` : `asking ${backend}… (a local model takes tens of seconds)` };
     turns.push(turn);
     paint();
     toEnd();
+    const body = {
+      question,
+      backend: opts.backend || null,
+      doctype: opts.doctype || null,
+      limit: Number(opts.limit || settings().ask_limit),
+      history: earlier,
+    };
+    if (steps !== null) body.steps = steps;
+    if (opts.tokens) body.tokens = Number(opts.tokens);
     let r;
     try {
-      r = await post("/ask", {
-        question,
-        backend: opts.backend || null,
-        doctype: opts.doctype || null,
-        limit: Number(opts.limit || settings().ask_limit),
-        history: earlier,
-      });
+      if (!surfing) {
+        r = await post("/ask", body);
+      } else {
+        // the trail arrives step by step and is painted as it does
+        turn.trail = [];
+        const repaint = () => { if (onScreen()) { paint(); toEnd(); } };
+        await postLines("/ask", { ...body, stream: true }, (e) => {
+          if (e.event === "step") {
+            turn.trail.push(e.step);
+            const s = e.step;
+            turn.pending = s.action === "answer" ? `${backend} has read enough…` : `${backend} is looking…`;
+            repaint();
+          } else if (e.event === "answering") {
+            turn.pending = `${backend} is writing the answer from ${e.passages} passage${e.passages === 1 ? "" : "s"}…`;
+            repaint();
+          } else if (e.event === "answer") {
+            r = e.result;
+          } else if (e.event === "error") {
+            throw new Error(e.detail || "the ask failed");
+          }
+        });
+        if (!r) throw new Error("the door closed the stream without an answer");
+      }
     } catch (err) {
       delete turn.pending;
       turn.error = err.message;
@@ -1571,7 +1662,14 @@ async function viewAsk(p) {
     box.value = "";
     autosize();
     if (location.hash !== "#ask") history.replaceState(null, "", "#ask");  // a reload shows the conversation, not a re-ask
-    ask(question, { backend: form.backend.value, doctype: form.doctype.value, limit: form.limit.value });
+    ask(question, { backend: form.backend.value, doctype: form.doctype.value, limit: form.limit.value, steps: form.steps.value, tokens: form.tokens.value });
+  });
+  form.backend.addEventListener("change", () => {
+    // the reading budget's ceiling is the chosen model's
+    const bounds = readingBounds(form.backend.value === "none" ? "" : form.backend.value);
+    form.tokens.max = bounds.max;
+    form.tokens.title = `how much the steps may read, in tokens (at most ${bounds.max} for this model)`;
+    if (Number(form.tokens.value) > bounds.max) form.tokens.value = bounds.default;
   });
   box.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }

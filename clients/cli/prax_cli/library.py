@@ -63,14 +63,67 @@ def search(door: Door, a: Any) -> int:
 # --------------------------------------------------------------------- ask
 
 
+_STEP_WORDS = {
+    "search": "searched",
+    "read": "read",
+    "facts": "facts of",
+    "walk": "walked",
+    "similar": "like",
+    "drop": "set aside",
+    "answer": "enough read",
+    "error": "failed",
+}
+
+
+def trail_line(step: dict[str, Any]) -> str:
+    """One printed line for a surfing step: what it did and what it brought."""
+    verb = _STEP_WORDS.get(step.get("action") or "", step.get("action") or "?")
+    arg = step.get("arg") or ""
+    head = f"{verb} {arg}".strip()
+    result = step.get("result") or ""
+    if step.get("action") in ("answer", "error"):
+        head = f"{verb}: {result}" if step.get("action") == "error" else verb
+        result = ""
+    line = f"  {step.get('n', '?')}. {head}"
+    if result:
+        line += f" → {result[:90]}"
+    if step.get("note"):
+        line += f"\n     {step['note']}"
+    return line
+
+
 def ask(door: Door, a: Any) -> int:
     question = " ".join(a.question)
     body: dict[str, Any] = {"question": question, "limit": a.limit}
     if a.doctype:
         body["doctype"] = a.doctype
+    if a.steps is not None:
+        body["steps"] = a.steps
+    if a.tokens is not None:
+        body["tokens"] = a.tokens
     if not a.answer:
         body["backend"] = "none"
-    result = door.post_json("/ask", body)
+        result = door.post_json("/ask", body)
+    elif a.json or a.steps == 0:
+        result = door.post_json("/ask", body)
+    else:
+        # the trail as it happens, then the answer
+        result = None
+        for event in door.post_lines("/ask", {**body, "stream": True}):
+            kind = event.get("event")
+            if kind == "step":
+                out.hint(trail_line(event["step"]))
+            elif kind == "answering":
+                out.hint(f"  writing the answer from {event.get('passages')} passages…")
+            elif kind == "answer":
+                result = event["result"]
+            elif kind == "error":
+                out.fail(event.get("detail") or "the ask failed")
+                return 1
+        if result is None:
+            out.fail("the door closed the stream without an answer")
+            return 1
+        out.say()
     if a.json:
         print(json.dumps(result, indent=2))
         return 0
@@ -91,6 +144,16 @@ def ask(door: Door, a: Any) -> int:
                 f" (doc {c.get('doc_id')}, chunk {c.get('chunk_id')})"
             )
         told = [f"answered by {result.get('model')}"]
+        if result.get("steps"):
+            dropped = len(result.get("dropped") or [])
+            told.append(
+                f"{result['steps']} steps"
+                + (
+                    f", {dropped} passage{'s' if dropped > 1 else ''} set aside"
+                    if dropped
+                    else ""
+                )
+            )
         if result.get("seconds"):
             told.append(f"{result['seconds']} s")
         if result.get("cost_usd"):

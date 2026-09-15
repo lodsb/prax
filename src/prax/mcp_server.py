@@ -171,22 +171,28 @@ def ask(
     doctype: str | None = None,
     answer: bool = False,
     history: list[dict[str, str]] | None = None,
+    steps: int | None = None,
 ) -> dict[str, Any]:
     """The context for answering a question from the library: one numbered
     passage per document from the hybrid search (best chunk, with chunk
     and document ids) and what the graph records about those documents.
     Answer from it and cite passages as [n]; ``append_page`` keeps an
     answer worth keeping. ``answer=True`` also runs the door host's
-    configured model (a local model takes seconds to tens of seconds) and
-    returns its answer with resolved citations. ``doctype`` keeps pdf,
-    web, image, text, note or page documents. ``history`` is the
-    conversation so far as ``[{question, answer}, …]``: a follow-up
+    configured model and returns its answer with resolved citations: it
+    surfs first — searches again, reads on, walks the graph, drops what
+    is beside the point — for ``steps`` steps (the host's default; 0 is
+    one shot, a local model then takes tens of seconds instead of a
+    minute or two) and the result carries the ``trail``. ``doctype``
+    keeps pdf, web, image, text, note or page documents. ``history`` is
+    the conversation so far as ``[{question, answer}, …]``: a follow-up
     ("and the second method?") searches in the earlier question's
     neighbourhood and the model sees the earlier turns.
     """
     body: dict[str, Any] = {"question": question, "limit": limit, "doctype": doctype}
     if history:
         body["history"] = history
+    if steps is not None:
+        body["steps"] = steps
     if not answer:
         body["backend"] = "none"
     return _guard(lambda: door().post_json("/ask", body))

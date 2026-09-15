@@ -363,6 +363,16 @@ main.stage { max-width: 1400px; }
 .answer a.cite:hover { background: var(--accent); color: var(--bg); }
 .turn-meta { display: flex; gap: .9rem; flex-wrap: wrap; font-size: .8rem; margin-top: .55rem; color: var(--faint); }
 .turn-pending { animation: pulse 1.4s ease-in-out infinite; }
+.trail { margin: .3rem 0 .6rem; padding-left: 1.6rem; font-size: .84rem; line-height: 1.4; color: var(--faint); }
+.trail li { margin: .15rem 0; }
+.trail-head { color: var(--fg); }
+.trail-result { color: var(--faint); }
+.trail-note { display: block; font-family: var(--font-read); font-style: italic; }
+.trail a.cite { color: var(--accent); text-decoration: none; font-weight: 600; }
+.trail-fold { margin-top: .6rem; font-size: .8rem; }
+.trail-fold summary { cursor: pointer; color: var(--faint); font-family: var(--font-ui); }
+.trail-fold summary:hover { color: var(--accent); }
+.trail.live li:last-child .trail-head { animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35; } }
 .turn-keep { margin-top: .5rem; }
 .ask-save { display: flex; gap: .6rem; flex-wrap: wrap; align-items: flex-end; font-size: .9rem; margin: .4rem 0 .8rem; }
@@ -390,6 +400,7 @@ main.stage { max-width: 1400px; }
 .source .snippet { font-size: .86rem; margin: .3rem 0 0; }
 .source .chips { margin-top: .4rem; }
 .source.flash { animation: flash 1.3s ease-out; }
+@media (prefers-reduced-motion: reduce) { .turn-pending, .trail.live li:last-child .trail-head, .source.flash { animation: none; } }
 @keyframes flash { 0% { background: var(--mark); } 100% { background: var(--panel); } }
 @media (max-width: 900px) {
   .ask { grid-template-columns: 1fr; }

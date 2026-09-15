@@ -809,6 +809,38 @@ text on the page is never touched. Over MCP the `ask` tool returns the
 bundle by default (Claude Code answers itself) and runs the host's
 model with `answer=True`.
 
+**Surfing.** A model that answers does not have to take the first
+search's eight passages as they come. With `steps` (the composer's
+"steps", `prax ask --steps`, the request's `steps`; the host's default
+is `steps.ask.steps` in `prax.yaml`, 8 out of the box, 0 is the
+one-shot answer) the model works the library first (`prax.surf`): each
+step it writes a note and one action — `search` again with better
+words, `read` on where a passage stopped or the start of a document a
+result named, `facts` of a passage's document, `walk` the graph from an
+entity (its relations, the documents behind them), `similar` documents,
+`drop` passages that are beside the point — or `answer` when the
+passages kept say enough; a grammar holds a local model to the two
+lines and to passage numbers and document ids it has actually seen. The
+door's own search of the question is step 0; the answer is then
+written from the passages kept, under their loop numbers, with the ask
+prompt above. Two budgets bound it: the steps, and `tokens` of reading
+(the composer's "reading", `--tokens`; `steps.ask.tokens`; the default
+is 4,000 for a local model and the ceiling is what its context holds
+beyond the prompt's overhead — 5,992 for an 8 K slot — 16,000 and
+60,000 for Claude). The prompt grows by appending, so a llama-server's
+prefix cache makes a step cost its own tokens only: on the 4090 the
+35B-A3B takes two to four seconds a step and a whole surf twenty to
+forty seconds. The result carries the `trail` (each step's note,
+action, what it brought, seconds), `steps`, `dropped` and
+`reading_left`; `save` keeps the trail on the page under "How it was
+found". With `stream: true` the door answers one JSON object per line
+as it goes — `step` events, `answering`, then `answer` with the result
+(or `error`) — which is what the UI and the CLI show while the model
+works; a client that goes away stops the surf at its next step.
+
+    prax ask --answer --steps 12 --tokens 6000 what does ADAA do to a stateful nonlinearity
+    prax ask --answer --steps 0 quick question        # no surfing: the first search alone
+
 ## 3j. Titles worth the name
 
 Half the imported titles were file names (standalone Zotero
@@ -1358,6 +1390,7 @@ One command for the everyday work, and the same one wherever the door is:
     prax                              where things stand, and what to type
     prax search granular synthesis    find documents
     prax ask --answer how does a feedback delay network work
+    prax ask --answer --steps 12 which methods extend ADAA, and who proposed them
     prax add ~/Downloads/paper.pdf --domain research
     prax add https://example.org/article
     prax import links bookmarks.html  what a service or an app exported
