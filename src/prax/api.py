@@ -1423,6 +1423,7 @@ class BulkReadingReq(BaseModel):
     text_source: str | None = None  # a stamp prefix: what an old extractor read
     title: str | None = None  # words the title contains
     unreadable: bool = False  # the documents nothing here could read
+    read_figures: bool = False  # the documents whose figures a model has read
     limit: int | None = None
     dry_run: bool = False  # count, place nothing
     by: str = "human"
@@ -1432,8 +1433,10 @@ class BulkReadingReq(BaseModel):
 def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
     """Ask for a named extractor over a selection at once — OCR over every
     scan nothing could read, the vision model over their pages, a re-read
-    of what an old extractor produced (``text_source`` prefix), a list of
-    ids — one reading request per document (``POST /doc/{id}/reading``);
+    of what an old extractor produced (``text_source`` prefix), the
+    figures a model has read before under a better prompt
+    (``read_figures`` with ``mode=again``), a list of ids — one reading
+    request per document (``POST /doc/{id}/reading``);
     what the extractor does not read is skipped and counted. The worker
     drains them like any request, and refuses a paid model. ``dry_run``
     only counts."""
@@ -1444,9 +1447,17 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         store.check_mode(req.extractor, req.mode)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    if not (req.ids or req.mime or req.text_source or req.title or req.unreadable):
+    if not (
+        req.ids
+        or req.mime
+        or req.text_source
+        or req.title
+        or req.unreadable
+        or req.read_figures
+    ):
         raise HTTPException(
-            400, "a selection: ids, mime, text_source, title or unreadable"
+            400,
+            "a selection: ids, mime, text_source, title, unreadable or read_figures",
         )
     ids = store.select_for_reading(
         con,
@@ -1455,6 +1466,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         text_source=req.text_source,
         title=req.title,
         unreadable=req.unreadable,
+        read_figures=req.read_figures,
         limit=req.limit,
     )
     if req.dry_run:

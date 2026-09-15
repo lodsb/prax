@@ -432,6 +432,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="the documents nothing here could read (scans without a text layer)",
     )
     s.add_argument("-n", "--limit", type=int, help="at most this many")
+    s.add_argument(
+        "--read-figures",
+        action="store_true",
+        help="documents whose figures a model has read (with --mode again)",
+    )
     s.add_argument("--dry-run", action="store_true", help="count, ask for nothing")
     s.set_defaults(func=running.reread, needs_door=True)
 
