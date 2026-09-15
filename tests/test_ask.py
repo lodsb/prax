@@ -125,6 +125,36 @@ def test_local_answer_and_citations(con: sqlite3.Connection) -> None:
     assert r["usage"]["output_tokens"] == 20
 
 
+def test_an_answer_too_long_for_the_slot_is_cut_to_fit(
+    con: sqlite3.Connection,
+) -> None:
+    """The reading budget is an estimate in characters; when the passages
+    kept overrun the server's slot, they are cut to the share it states
+    and asked once more, with every passage still numbered."""
+    _library(con)
+
+    class Tight(FakeRuntime):
+        def __init__(self) -> None:
+            super().__init__()
+            self.lengths: list[int] = []
+
+        def chat(self, system: str, user: str, **kw: object):  # type: ignore[override]
+            self.lengths.append(len(user))
+            if len(self.lengths) == 1:
+                raise RuntimeError(
+                    "http://127.0.0.1:8080/v1/chat/completions: HTTP 400:"
+                    " request (9000 tokens) exceeds the available context"
+                    " size (8192 tokens)"
+                )
+            return super().chat(system, user, **kw)
+
+    rt = Tight()
+    r = ask.ask(con, "reverb methods", answerer=ask.LocalAnswerer(rt))
+    assert r["usage"]["cut"] == 1 and len(rt.lengths) == 2
+    assert rt.lengths[1] < rt.lengths[0]
+    assert [c["n"] for c in r["citations"]] == [1, 2]  # still numbered
+
+
 def test_bundle_only_without_backend(con: sqlite3.Connection) -> None:
     _library(con)
     r = ask.ask(con, "reverb", answerer=None)

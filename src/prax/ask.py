@@ -31,7 +31,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
 from prax import extraction, models, store
@@ -264,6 +264,29 @@ class LocalAnswerer:
         return self.runtime.name
 
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
+        try:
+            return self._answer(bundle)
+        except RuntimeError as exc:
+            # the slot cannot hold what was read: a token is nearer three
+            # characters than four in dense text, so a surf that spent its
+            # whole reading budget can overrun the context the budget was
+            # derived from. Every passage keeps its number and its head,
+            # shorter, so the answer still cites what it rests on.
+            fit = extraction._fits_after(str(exc))
+            if fit is None:
+                raise
+            shorter = replace(
+                bundle,
+                passages=[
+                    replace(p, text=p.text[: max(200, int(len(p.text) * fit))])
+                    for p in bundle.passages
+                ],
+            )
+            text, usage = self._answer(shorter)
+            usage["cut"] = 1
+            return text, usage
+
+    def _answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
         return self.runtime.chat(
             SYSTEM,
             bundle.as_message(),
