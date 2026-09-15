@@ -198,24 +198,6 @@ application's agents, where prax is a tool for a person that agents also
 use; Paperless files paperwork. The comparison by family and by product,
 with sources: [`docs/research.md`](docs/research.md#where-prax-sits).
 
-## Design
-
-The mark is the praxinoscope itself, printed the way an 1877 colour
-label was: three blocks in sequence, with two deliberate
-misregistrations. A theme is four values — ground, tone, key, colour —
-and those four are the whole page and the whole mark. The page borrows
-the *furniture* of a Victorian label without its costume, and one rule
-keeps it from going twee: ornament may cost space, never a click.
-[`docs/design/BRIEF.md`](docs/design/BRIEF.md).
-
-Ten invariants hold the shape: SQLite is the canonical store, files are
-content-addressed, one module writes, one process writes, the MCP server
-is a thin proxy, endpoints return snippets and ids, the serving path
-stays under a gigabyte, edges are evidence with provenance, the ontology
-is small and versioned, importers never write to their source. They are
-in [`CLAUDE.md`](CLAUDE.md), with the reasoning in
-[`docs/rationale.md`](docs/rationale.md).
-
 ## Documentation
 
 | | |
@@ -227,7 +209,7 @@ in [`CLAUDE.md`](CLAUDE.md), with the reasoning in
 | [`CLAUDE.md`](CLAUDE.md) | Invariants and conventions — the file an agent session loads. |
 | [`docs/rationale.md`](docs/rationale.md) | Decision records: what was chosen, what was measured, when to revisit. |
 | [`docs/ui.md`](docs/ui.md) | The web UI: the endpoints it uses, its routes and rules. |
-| [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The mark, the six themes, the type, what was tried and dropped. |
+| [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The look: the mark printed the way an 1877 label was, the six themes as four values, the type, the one rule that keeps it from going twee. |
 | [`docs/sources.md`](docs/sources.md), [`docs/extension.md`](docs/extension.md) | Where documents come from; the browser extension. |
 | [`docs/claude-workflow.md`](docs/claude-workflow.md) | One agent workflow in full, as an example: the Claude Code plugin. |
 | [`docs/eval/`](docs/eval/) | Measurements: extractors, retrieval, the local models. |

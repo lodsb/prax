@@ -21,6 +21,15 @@ server that gives Claude search, get, traverse, link, ingest and page
 tools. The desktop runs the batch jobs; a Pi-class board is meant to
 serve.
 
+Ten invariants hold that shape, and everything below follows from them:
+SQLite is the canonical store; files are content-addressed; one module
+writes; one process writes; the MCP server is a thin proxy; endpoints
+return snippets and ids; nothing in the serving path needs more than a
+gigabyte; edges are evidence with provenance, never truth; the ontology
+is small, versioned and modular; importers never write to their source.
+They are stated in [`CLAUDE.md`](../CLAUDE.md), with the measurements and
+the revisit conditions in [`rationale.md`](rationale.md).
+
 ```mermaid
 flowchart LR
   subgraph sources [Sources]
