@@ -1969,7 +1969,7 @@ function readingLines(r) {
   const row = (x) => `<li><a href="#doc/${x.doc_id}">${esc(x.title || "doc " + x.doc_id)}</a> · ${esc(x.extractor)}${x.mode && x.mode !== "scans" ? ` (${esc(x.mode)})` : ""} · ${esc(x.by || "?")} ${esc((x.finished_at || x.at || "").replace("T", " ").slice(0, 16))}${x.state === "requested" ? "" : ` → <span class="${x.state === "error" ? "error" : ""}">${esc(x.outcome || x.state)}${x.error ? ": " + esc(x.error) : ""}</span>`}</li>`;
   const vision = r.vision && r.vision.model ? `the vision step is <b>${esc(r.vision.model)}</b>${r.vision.kind === "claude" ? " (paid: a worker will not run it; run parse_pending.py yourself)" : ""}` : "no vision model is set";
   return `
-    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Readings asked for (${r.requested.length} waiting)</h2>
+    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Readings asked for (${r.waiting != null ? r.waiting : r.requested.length} waiting${r.waiting > r.requested.length ? `, ${r.requested.length} shown` : ""})</h2>
     <p class="muted">A reading is an extractor a person asked for on one document (its page's "read again…"); the worker takes these before the pending captures. ${vision.charAt(0).toUpperCase() + vision.slice(1)}.</p>
     ${r.requested.length ? `<ul class="servers">${r.requested.map(row).join("")}</ul>` : ""}
     ${r.recent.length ? `<p class="muted" style="margin:.4rem 0 .1rem">Came back:</p><ul class="servers">${r.recent.map(row).join("")}</ul>` : ""}`;

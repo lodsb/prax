@@ -97,6 +97,7 @@ from .documents import (  # noqa: F401
     capture_rank,
     check_mode,
     chunk_fingerprint,
+    count_reading_requests,
     dedupe_captures,
     document_domains,
     document_field,

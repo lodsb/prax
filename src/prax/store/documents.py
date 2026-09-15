@@ -1090,6 +1090,24 @@ def reading_requests(
     ]
 
 
+@_serialized
+def count_reading_requests(
+    con: sqlite3.Connection, *, state: str | None = "requested"
+) -> int:
+    """How many documents have a reading request in that state — the list
+    is a page (``reading_requests``), and a bulk re-read places thousands.
+    """
+    sql = (
+        "SELECT count(*) FROM documents"
+        " WHERE json_extract(meta, '$.reading') IS NOT NULL"
+    )
+    args: tuple[Any, ...] = ()
+    if state:
+        sql += " AND json_extract(meta, '$.reading.state') = ?"
+        args = (state,)
+    return int(con.execute(sql, args).fetchone()[0])
+
+
 def expected_version(
     meta: dict[str, Any], onto: ontology.Ontology | None = None
 ) -> str:

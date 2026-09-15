@@ -1487,9 +1487,12 @@ def cancel_reading(doc_id: int, request: Request) -> dict[str, bool]:
 
 @app.get("/readings")
 def readings(request: Request, limit: int = 50) -> dict[str, Any]:
-    """Reading requests: the waiting ones and the recently finished."""
+    """Reading requests: the waiting ones (a page of them, with how many
+    wait in all: a bulk re-read places thousands) and the recently
+    finished."""
     con = _con(request)
     return {
+        "waiting": store.count_reading_requests(con),
         "requested": store.reading_requests(con, state="requested", limit=limit),
         "recent": [
             r
