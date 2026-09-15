@@ -224,6 +224,23 @@ def test_describe_writes_the_reading_under_each_figure(
     assert "must be visible in it" not in bare
     assert bare.startswith("This is a figure from a document")
 
+    # "again" reads what this model read before, replacing its own line
+    # and leaving another model's alone
+    older = "*Figure, as read by an-older-model:* older."
+    mine = "*Figure, as read by vl@127.0.0.1:1:*"
+    was = out.replace(mine, older + "\n" + mine, 1)
+    monkeypatch.setenv("PRAX_FIGURES", "again")
+    prompts.clear()
+    again = figures.describe(PAGE.encode(), was)
+    assert len(prompts) == 2  # both figures read again
+    assert again.count("*Figure, as read by vl@127.0.0.1:1:*") == 2  # not doubled
+    assert "*Figure, as read by an-older-model:* older." in again  # kept
+    assert figures.refs(again)[0]["described_by"] == [
+        "an-older-model",
+        "vl@127.0.0.1:1",
+    ]
+    monkeypatch.delenv("PRAX_FIGURES")
+
     fig_chunks = [c for c in chunking.chunk(out) if c.kind == "figure"]
     assert fig_chunks[0].data["readings"][0]["model"] == "vl@127.0.0.1:1"
 

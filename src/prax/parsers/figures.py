@@ -467,6 +467,12 @@ def figure_prompt(title: str, caption: str, near: str) -> str:
     )
 
 
+def _read_by(line: str, who: str) -> bool:
+    """Is this line ``who``'s reading of a figure?"""
+    m = READ_BY.match(line)
+    return bool(m and m.group("model").strip() == who)
+
+
 def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
     """The image as PNG or JPEG under ``MAX_SIDE`` pixels: what both the
     local server (stb_image: no AVIF, no WebP) and the Claude API read."""
@@ -490,24 +496,32 @@ def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
         return buf.getvalue(), "image/png"
 
 
+WHICH = ("captioned", "all", "again", "all-again")
+
+
 def describe(data: bytes, previous: str) -> str:
     """The text with every figure reference followed by the vision model's
-    reading of it (a figure that model has read already is left alone;
-    a PDF image no caption claims only with ``parse.figures: all``, since
-    many of those are decoration). ``data`` is the original the figures
-    come from."""
+    reading of it. ``parse.figures`` says which figures: ``captioned``
+    (the default; a PDF image no caption claims is usually decoration),
+    ``all``, or either of them with ``-again`` — ``again`` and
+    ``all-again`` read the figures this model has read before too, its
+    earlier reading replaced, which is how a library takes up a better
+    prompt or a better model of the same name. ``data`` is the original
+    the figures come from."""
     from prax import config
     from prax.parsers import ExtractionError, vision
 
     model = vision.model_name()
     which = str(config.setting("parse.figures", "PRAX_FIGURES", "captioned"))
-    if which not in ("captioned", "all"):
-        raise ExtractionError(f"parse.figures must be captioned or all, not {which!r}")
+    if which not in WHICH:
+        raise ExtractionError(f"parse.figures must be one of {WHICH}, not {which!r}")
+    again = which.endswith("again")
+    every = which.startswith("all")
     wanted = [
         r
         for r in refs(previous)
-        if model not in r["described_by"]
-        and (which == "all" or not r["caption"].startswith(UNCAPTIONED))
+        if (again or model not in r["described_by"])
+        and (every or not r["caption"].startswith(UNCAPTIONED))
     ]
     if not wanted:
         return previous
@@ -541,10 +555,21 @@ def describe(data: bytes, previous: str) -> str:
         text = " ".join(text.split())
         if not text:
             continue
-        # the reading goes right under the image line, inside its paragraph
+        # the reading goes right under the image line, inside its
+        # paragraph; reading again replaces this model's earlier one and
+        # leaves another model's where it is
         for i, line in enumerate(lines):
             if line.rstrip().endswith(f"(figure:{r['ref']})"):
-                lines.insert(i + 1, f"*Figure, as read by {who}:* {text}")
+                at = i + 1
+                if again:
+                    # through the readings under this image line: this
+                    # model's earlier one goes, another model's stays
+                    while at < len(lines) and READ_BY.match(lines[at]):
+                        if _read_by(lines[at], who):
+                            del lines[at]
+                        else:
+                            at += 1
+                lines.insert(at, f"*Figure, as read by {who}:* {text}")
                 done += 1
                 break
     if not done:

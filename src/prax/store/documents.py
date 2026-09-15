@@ -863,7 +863,9 @@ READINGS = (
 # the setting a request may choose for one run, per extractor
 MODES: dict[str, tuple[str, ...] | None] = {
     "vision-pages": ("scans", "all"),  # the pages without a text layer, or every page
-    "figures": ("captioned", "all"),  # the figures a caption claims, or every image
+    # the figures a caption claims or every image; "-again" reads the ones
+    # this model has read before too, replacing its earlier reading
+    "figures": ("captioned", "all", "again", "all-again"),
     "pymupdf4llm-ocr": None,  # the recognizer's script: ch, en, latin, arabic…
 }
 _MODE_WORD = re.compile(r"[a-z][a-z0-9_]*")
@@ -953,14 +955,17 @@ def select_for_reading(
     text_source: str | None = None,
     title: str | None = None,
     unreadable: bool = False,
+    read_figures: bool = False,
     limit: int | None = None,
 ) -> list[int]:
     """The documents a reading is asked for at once: the ``ids`` given,
     narrowed by a MIME type or prefix (``application/pdf``, ``image/``),
     by the prefix of the text-source stamp (``pymupdf4llm/1.28.2``: what
-    an old extractor read), by words the title contains, and to the
-    unreadable ones; every filter given must hold. Retired documents are
-    never selected."""
+    an old extractor read), by words the title contains, to the
+    unreadable ones, and to the ones holding a figure a model has read
+    (``read_figures``: what a better prompt or a better model goes over
+    again); every filter given must hold. Retired documents are never
+    selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
     if ids:
@@ -982,6 +987,13 @@ def select_for_reading(
     if unreadable:
         keep = set(unreadable_documents(con))
         chosen = [i for i in chosen if i in keep]
+    if read_figures:
+        rows = con.execute(
+            "SELECT DISTINCT doc_id FROM chunks WHERE kind = 'figure'"
+            " AND json_array_length(json_extract(data, '$.readings')) > 0"
+        )
+        read = {r[0] for r in rows}
+        chosen = [i for i in chosen if i in read]
     return chosen[:limit] if limit else chosen
 
 
