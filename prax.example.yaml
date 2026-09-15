@@ -106,6 +106,9 @@ steps:
 #   ocr_gpu: false             # [PRAX_OCR_GPU] DirectML (onnxruntime-directml)
 #   max_layout_mb: 40          # [PRAX_MAX_LAYOUT_MB] above this, no layout analysis
 #   max_layout_pages: 400      # [PRAX_MAX_LAYOUT_PAGES]
+#   figures: captioned         # [PRAX_FIGURES] which figures the vision model
+#                              #   reads: captioned | all, either with -again to
+#                              #   read what it has read before, once more
 #   comments: true             # [PRAX_COMMENTS] a page's comment section under
 #                              #   its own heading (the corrections, the jokes)
 

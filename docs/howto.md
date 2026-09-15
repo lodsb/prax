@@ -242,7 +242,22 @@ CNN kernels against the ground truth filter". It is told to name things
 in the document's terms but to state only what is visible, so the
 surrounding text names the subject without being described in the
 figure's place (extractor revision r2; readings written before it stand
-until a figure is read again). The parsers find
+until a figure is read again).
+
+A model reads a figure once, so a better prompt — or a better model of
+the same name — reaches the library only on request:
+
+    # the figures this model has read, read again under the current prompt
+    prax reread --extractor figures --mode again --read-figures --dry-run
+
+`--mode again` (`all-again` for the uncaptioned images too) reads the
+figures this model has read before and replaces its own earlier reading,
+leaving another model's where it is; `--read-figures` selects the
+documents that hold such a figure. Drop `--dry-run` to place the
+requests: one per document, the worker drains them before the pending
+captures, and a figure costs about four seconds on a local server — a
+library-wide pass is an overnight job, so `--limit` it or name `--ids`
+when only some documents matter. The parsers find
 figures as they read (`trafilatura` r3, `pymupdf4llm` r2); the
 retroactive pass over a library parsed before that is `figure-refs`,
 which puts the original's figures into the current text without
