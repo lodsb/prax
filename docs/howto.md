@@ -829,8 +829,17 @@ written from the passages kept, under their loop numbers, with the ask
 prompt above. Two budgets bound it: the steps, and `tokens` of reading
 (the composer's "reading", `--tokens`; `steps.ask.tokens`; the default
 is 4,000 for a local model and the ceiling is what its context holds
-beyond the prompt's overhead — 5,992 for an 8 K slot — 16,000 and
-60,000 for Claude). The prompt grows by appending, so a llama-server's
+beyond the prompt's overhead — 14,184 for a 16 K slot — 16,000 and
+60,000 for Claude). The ceiling comes from `n_ctx` under the model in
+`prax.yaml`, not from what the server actually serves: a slot raised
+with `llama_server.ps1 -CtxPerSlot` buys nothing until `n_ctx` says so
+(and `n_ctx` above the true slot only means the server refuses the
+answer, which is then cut to fit and asked again). What a card can hold
+is arithmetic: the KV cache of a model costs
+`layers × kv_heads × (key_length + value_length)` values a token, which
+for Qwen3.6-35B-A3B (40 × 2 × 512) is 42.5 KiB at `q8_0`, so two 16 K
+slots are 1.33 GB of the 4090's 24 — measured, with the rest of that
+card's budget, in `deploy/README.md`. The prompt grows by appending, so a llama-server's
 prefix cache makes a step cost its own tokens only: on the 4090 the
 35B-A3B takes two to four seconds a step and a whole surf twenty to
 forty seconds. The result carries the `trail` (each step's note,

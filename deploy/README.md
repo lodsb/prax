@@ -56,6 +56,31 @@ worker embed everything into a fresh `i8` index (878,000 chunks at 80
 per second on the desktop's GPU is about three hours, sent to the board
 in batches of 200).
 
+## The card on the desktop, while it is the server
+
+llama-server's share of a 24 GB 4090, measured 2026-09-15 with
+Qwen3.6-35B-A3B UD-Q4_K_S, its projector, `-CpuMoe 2 -UBatch 256
+-ImageMaxTokens 1024`: **20.1 GB at 8 K a slot**, of which the KV cache
+is 0.66 GB, with about 0.9 GB left for the desktop's own windows and
+2.5 GB free. The cache is the part that grows with what `ask` may read,
+and its cost is arithmetic: `layers × kv_heads × (key_length +
+value_length)` values a token, 42.5 KiB here at `q8_0` (f16 doubles it).
+
+| `-CtxPerSlot` × slots | KV cache | the card | what `ask` may read |
+|---|---|---|---|
+| 8 K × 2 | 0.66 GB | 20.1 GB | 5,992 |
+| **16 K × 2** (in use) | 1.33 GB | 20.8 GB | 14,184 |
+| 24 K × 2 | 2.0 GB | 21.5 GB | 21,992 |
+| 32 K × 2 | 2.66 GB | 22.1 GB | 30,568 |
+| 32 K × 1 | 1.33 GB | 20.8 GB | 30,568 |
+
+The display shares the card: it froze once at 23.7 GB, so a configuration
+that leaves under 2 GB is one to test while nothing else is open. One
+slot is enough only if the worker's passes may queue behind a question.
+`n_ctx` under the model in `prax.yaml` is what the reading budget is
+derived from, so it moves with `-CtxPerSlot`, and the model's own trained
+context (262,144 here) is nowhere near the limit — the card is.
+
 ## What to measure once it runs there
 
 The door's resident memory after a day (`prax status` shows the host's

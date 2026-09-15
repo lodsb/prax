@@ -66,6 +66,7 @@ steps:
     model: local-server   # or `none`: the bundle alone, the caller's model answers
     # steps: 8            # surfing steps before the answer (0: the first search alone)
     # tokens: 4000        # their reading budget; clamped to the model's context
+    #                     #   (n_ctx of the model above, less ~2,200 of prompt)
   titles:
     model: local-server
   vision:
