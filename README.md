@@ -39,7 +39,7 @@ and the browser extension: [`docs/howto.md`](docs/howto.md).
 </tr>
 <tr>
 <td><sub>Graph: a method's neighbourhood. Every edge carries its confidence, the model that wrote it, the document and the sentence.</sub></td>
-<td><sub>A schematic as a document, described and transcribed by two vision models — each reading kept.</sub></td>
+<td><sub>A schematic as a document, read and transcribed by two vision models — each reading kept, both named.</sub></td>
 </tr>
 <tr>
 <td colspan="2"><a href="docs/images/themes.png"><img src="docs/images/themes.png" alt="The six themes: Bindery, Dessau, Riso, Cyanotype, Night, Funk — the same page in each"></a></td>
@@ -60,8 +60,12 @@ docs.
 
 **Reads them.** PDFs through MuPDF, with OCR when you ask; HTML through
 trafilatura, comments included; Word documents; code kept as code.
-Figures are pulled out and described by a vision model, so a plot is
-searchable by what it shows. Titles that were file names get repaired.
+Figures are pulled out and read by a vision model that is shown what the
+document says around them — its title, the caption, the text on either
+side — so a plot comes back as "the frequency responses of the five
+learned CNN kernels against the ground truth filter" rather than "six
+stacked curves", and is searchable by what it shows. Titles that were
+file names get repaired.
 
 **Finds them.** Keyword and vector search over chunks *and* over what a
 document is, fused per document, filtered by kind or by subject. The
@@ -146,7 +150,7 @@ Here for scale, not as targets.
 |---|---|
 | Documents | 9,950 — 9,447 PDFs, 317 web pages, 103 text files, 73 notes; 9,233 from Zotero, the rest uploaded, sent from the browser or dropped in the folder |
 | Text and chunks | 995,000 chunks (859,000 text, 92,000 figures, 37,000 tables, 7,000 code), every one with a vector; 6,781 acronyms the library defines |
-| Figures | 92,078 references across 5,107 documents, served out of the originals; 10,901 of them read by the local vision model, the reading searchable like any paragraph |
+| Figures | 92,078 references across 5,107 documents, served out of the originals; 11,212 read by the local vision model with the document's own words around them, each reading searchable like any paragraph |
 | Graph | 147,000 live edges over 126,600 entities — 42,700 papers, 29,600 concepts, 17,200 methods, 9,500 authors — against six ontology modules |
 | Retrieval | MRR 0.905 hybrid over 62 real queries (0.82 keyword, 0.79 vector), hit@1 0.85 |
 | Running | one Windows desktop: service, worker and llama-server as logon tasks, a backlog pass at 03:00, a backup at 04:30; a 2.0 GB database and a 20 GB archive |

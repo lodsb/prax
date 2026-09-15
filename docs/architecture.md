@@ -119,7 +119,13 @@ flowchart TD
    fenced, plain decode for text with source files fenced as code (by
    extension, else Magika), and `vision` for images (the vision step's
    model — Claude, or llama-server with the model's projector — describes
-   the picture and transcribes its text, handwriting included).
+   the picture and transcribes its text, handwriting included). A figure
+   inside a document is read with what the document says around it: its
+   title, the figure's caption and the text on either side of the image
+   line, because what a plot is *of* is written there and not in the
+   picture. The model is told to name things in the document's terms but
+   to state only what is visible, so the text names the subject without
+   being described in the figure's place.
    The Markdown is its own content-addressed artifact (`documents.text_hash`),
    stamped in `meta.text_source` as `name/version[-rN]`; every attempt is
    appended to `meta.parse_history` with the hash of the text it
