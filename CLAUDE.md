@@ -146,7 +146,8 @@ the door's own reads — search again, read on or into a document (by
 words), facts, walk, similar, drop — under a per-step grammar for local
 models, two budgets (steps, tokens of reading) clamped to the model's
 context, the trail streamed and kept with the answer; nothing in the
-loop writes.
+loop writes. What that model may and may not do, as a reference:
+`docs/ask.md`.
 
 ## Conventions
 

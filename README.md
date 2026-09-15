@@ -252,7 +252,8 @@ the best passage per document and the graph's facts about it to the
 configured model and resolves the answer's citations to chunk ids —
 and, given steps, lets the model surf first: search again, read on,
 walk the graph, drop what is beside the point, the trail shown as it
-happens and kept with the answer. The graph is walked one or two hops
+happens and kept with the answer ([what it can do and what it
+cannot](docs/ask.md)). The graph is walked one or two hops
 from an entity; complement queries and weighted paths are SQL, not
 retrieval.
 

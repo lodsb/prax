@@ -828,6 +828,10 @@ document-aware candidate (title, heading path, chunk) later.
 
 ## 3i. Ask: questions answered from the library
 
+What the asking model may do, what it may not, what each move costs and
+how to steer it: [`docs/ask.md`](ask.md). This section is how to set it
+up.
+
 `prax.ask` turns a question into a bundle (one passage per document from
 the hybrid search, plus what the graph records about those documents)
 and hands it to a model that answers with `[n]` citations. Which model
