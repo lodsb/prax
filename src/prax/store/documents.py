@@ -956,16 +956,18 @@ def select_for_reading(
     title: str | None = None,
     unreadable: bool = False,
     read_figures: bool = False,
+    unread_figures: bool = False,
     limit: int | None = None,
 ) -> list[int]:
     """The documents a reading is asked for at once: the ``ids`` given,
     narrowed by a MIME type or prefix (``application/pdf``, ``image/``),
     by the prefix of the text-source stamp (``pymupdf4llm/1.28.2``: what
     an old extractor read), by words the title contains, to the
-    unreadable ones, and to the ones holding a figure a model has read
+    unreadable ones, to the ones holding a figure a model has read
     (``read_figures``: what a better prompt or a better model goes over
-    again); every filter given must hold. Retired documents are never
-    selected."""
+    again) and to the ones holding a figure nobody has read
+    (``unread_figures``); every filter given must hold. Retired documents
+    are never selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
     if ids:
@@ -987,13 +989,21 @@ def select_for_reading(
     if unreadable:
         keep = set(unreadable_documents(con))
         chosen = [i for i in chosen if i in keep]
-    if read_figures:
+    for wanted, read in ((read_figures, True), (unread_figures, False)):
+        if not wanted:
+            continue
         rows = con.execute(
             "SELECT DISTINCT doc_id FROM chunks WHERE kind = 'figure'"
-            " AND json_array_length(json_extract(data, '$.readings')) > 0"
+            " AND json_array_length(json_extract(data, '$.readings'))"
+            + (
+                " > 0"
+                if read
+                else " IS NULL OR json_array_length("
+                "json_extract(data, '$.readings')) = 0"
+            )
         )
-        read = {r[0] for r in rows}
-        chosen = [i for i in chosen if i in read]
+        keep = {r[0] for r in rows}
+        chosen = [i for i in chosen if i in keep]
     return chosen[:limit] if limit else chosen
 
 

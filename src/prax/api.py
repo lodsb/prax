@@ -1424,6 +1424,7 @@ class BulkReadingReq(BaseModel):
     title: str | None = None  # words the title contains
     unreadable: bool = False  # the documents nothing here could read
     read_figures: bool = False  # the documents whose figures a model has read
+    unread_figures: bool = False  # the documents holding a figure nobody read
     limit: int | None = None
     dry_run: bool = False  # count, place nothing
     by: str = "human"
@@ -1454,10 +1455,12 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         or req.title
         or req.unreadable
         or req.read_figures
+        or req.unread_figures
     ):
         raise HTTPException(
             400,
-            "a selection: ids, mime, text_source, title, unreadable or read_figures",
+            "a selection: ids, mime, text_source, title, unreadable,"
+            " read_figures or unread_figures",
         )
     ids = store.select_for_reading(
         con,
@@ -1467,6 +1470,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         title=req.title,
         unreadable=req.unreadable,
         read_figures=req.read_figures,
+        unread_figures=req.unread_figures,
         limit=req.limit,
     )
     if req.dry_run:

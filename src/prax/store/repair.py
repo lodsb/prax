@@ -304,6 +304,32 @@ def _extraction_failed(con: sqlite3.Connection) -> list[dict[str, Any]]:
     ]
 
 
+def _unread_figures(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents holding a figure no model has read: the picture is in
+    the text as a reference and a caption, and nothing says what it
+    shows, so a search cannot find it and a reading cannot use it."""
+    rows = con.execute(
+        "SELECT c.doc_id AS id, d.title, count(*) AS unread,"
+        "       json_extract(d.meta, '$.source') AS source"
+        " FROM chunks c JOIN documents d ON d.id = c.doc_id"
+        " WHERE c.kind = 'figure'"
+        "   AND json_extract(d.meta, '$.retired') IS NULL"
+        "   AND coalesce("
+        "         json_array_length(json_extract(c.data, '$.readings')), 0) = 0"
+        " GROUP BY c.doc_id ORDER BY unread DESC, c.doc_id LIMIT ?",
+        (CAP,),
+    ).fetchall()
+    return [
+        {
+            "id": r["id"],
+            "title": r["title"],
+            "unread": r["unread"],
+            "source": r["source"],
+        }
+        for r in rows
+    ]
+
+
 def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents every extractor has tried and found no text in
     (``documents.unreadable_documents``), with what the last attempt said."""
@@ -642,6 +668,35 @@ AILMENTS: tuple[Ailment, ...] = (
                 "extractor": "vision-pages",
                 "mode": "scans",
                 "unreadable": True,
+            },
+        ),
+    ),
+    Ailment(
+        name="unread-figures",
+        what=(
+            "documents holding a figure no model has read: the text has the"
+            " picture and its caption, but nothing that says what it shows,"
+            " so a search cannot find it and an answer cannot use it"
+        ),
+        fix=(
+            "ask the vision model for them — on one document's page ('read"
+            " again… → figures'), or over all of them at once (`prax reread"
+            " --extractor figures --unread-figures`, howto 3b). A local"
+            " model costs only time, about four seconds a figure; nothing"
+            " is wrong in the store"
+        ),
+        find=_unread_figures,
+        offers=(
+            {
+                "label": "read the captioned ones",
+                "extractor": "figures",
+                "unread_figures": True,
+            },
+            {
+                "label": "read every image",
+                "extractor": "figures",
+                "mode": "all",
+                "unread_figures": True,
             },
         ),
     ),

@@ -156,6 +156,52 @@ def test_the_reports_say_what_to_do_and_change_nothing(
     assert "look at" in done["documents-without-an-extractor"]
 
 
+def _with_figures(con: sqlite3.Connection) -> tuple[int, int]:
+    """One document whose figure a model has read, one whose figure
+    nobody has read."""
+    ref, other = "a" * 64, "b" * 64
+    read = store.ingest_text(
+        con,
+        "# A paper that was read\n\nProse about the plot below.\n\n"
+        f"![Figure 1. The plot.](figure:{ref})\n"
+        "*Figure, as read by a-vision-model:* a plot of two curves.\n",
+        title="A paper that was read",
+    )["doc_id"]
+    unread = store.ingest_text(
+        con,
+        "# A paper nobody read\n\nProse about the plot below.\n\n"
+        f"![Figure 1. The other plot.](figure:{other})\n",
+        title="A paper nobody read",
+    )["doc_id"]
+    return read, unread
+
+
+def test_a_figure_nobody_has_read_is_named_with_the_way_on(
+    con: sqlite3.Connection,
+) -> None:
+    """A report: the picture is in the text and nothing says what it
+    shows, so a search cannot find it — the offer asks the vision model."""
+    read, unread = _with_figures(con)
+    found = store.health(con, only=["unread-figures"])["ailments"][0]
+    assert found["count"] == 1 and not found["repairable"]
+    assert found["examples"][0]["id"] == unread
+    assert found["examples"][0]["unread"] == 1
+    assert [o["label"] for o in found["offers"]] == [
+        "read the captioned ones",
+        "read every image",
+    ]
+    assert found["offers"][0] == {
+        "label": "read the captioned ones",
+        "extractor": "figures",
+        "unread_figures": True,
+    }
+    # and the two selections are the two halves of the library's figures
+    assert store.select_for_reading(con, unread_figures=True) == [unread]
+    assert store.select_for_reading(con, read_figures=True) == [read]
+    done = store.heal(con, only=["unread-figures"])
+    assert "ask" in done["unread-figures"]
+
+
 def test_an_unknown_ailment_is_refused(con: sqlite3.Connection) -> None:
     with pytest.raises(ValueError, match="no such ailment"):
         store.health(con, only=["hypochondria"])

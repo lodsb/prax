@@ -297,6 +297,39 @@ has no column yet. Conventions in use:
 
 ## 7. The passes and their stamps
 
+**What a model makes is kept, not repeated.** Reading a figure, parsing
+a PDF, writing a summary, extracting triples, embedding a chunk: each is
+a model's work on one thing, done once and written into the store beside
+what it was made from — the figure's description in the text under its
+image line, the summary in `meta`, the triples as edges, the vector in
+the index. Everything after that reads it for nothing. A search over
+figures is a search over descriptions a vision model wrote months ago; a
+surfing answer that quotes a plot is quoting that same sentence, not
+looking at the picture. The library is, in that sense, a cache of model
+work over a set of originals that do not change — with three properties
+a cache needs:
+
+- **A key that says who made it and how.** Not a hash of the input: the
+  producer's stamp — `pymupdf4llm/1.28.2-r2`, `figures/1-r2+<model>`,
+  an edge's `producer` and `ontology_version`, `chunk_embeddings.model`.
+  Two models' readings of one figure sit side by side, each under its
+  own name.
+- **Invalidation as a version, not a timestamp.** A better prompt is a
+  revision (`-r2`), a better model is a new name, a grown ontology is a
+  new version. The work already stored stays valid under the stamp it
+  carries; what is behind the current stamp is *found* (`parsers.behind`,
+  the `stale-parses` and `unread-figures` ailments) and re-done on
+  request. Nothing re-runs because a file changed on disk.
+- **A miss that is visible and priced.** What has never been done shows
+  up as an ailment on the Jobs page with the count and the way on, and
+  the way on says what it costs — about four seconds a figure on a local
+  model. A cache miss here is not a slow request; it is a job to run
+  tonight.
+
+The originals are the one thing that is never derived (invariant 2), so
+the whole of the rest can be thrown away and made again: that is what
+makes it safe to re-read 10,901 figures under a better prompt.
+
 Every pass is idempotent because it selects by a stamp and writes a
 stamp. Interrupt any of them and run the same command again. The
 worker's steps (`prax work`, `prax.work` hands out and takes in) do the
@@ -315,6 +348,7 @@ here opens the database file.
 | `prax maintain` | derived tables: acronyms, document fields, domain rules, duplicate captures, the review queue's rule passes; `--rechunk` every chunk | those tables; `meta.retired` on a duplicate | no model, no decision; nightly after the worker's pass |
 | `prax resolve` | unmerged entities | `entities.canonical_id` | the sure tier and, when asked, the twins; the likely tier is listed (`resolve_entities.py --adjudicate` asks Claude about it) |
 | `prax import citations` | documents without `meta.citations`, DOIs first (`--resolve-titles` for the rest) | `cites` edges, `meta.citations` | two sources behind one flag; polite-pool contact; retries |
+| `prax reread` | a selection: ids, a MIME prefix, a text-source stamp, the unreadable, the documents with read or unread figures | one reading request per document; the worker does the model work | the extractor is named, never guessed; a paid model is refused by the worker; `--dry-run` counts |
 | `prax heal --apply` | the ailments' rows | edges ended, items resolved, jobs closed, texts re-indexed, stamps moved | one ailment at a time; nothing deleted |
 | `prax backup` | the database, the indexes, the config, the archive files the copy lacks | a copy that is a store | `--no-archive` for a small disk |
 | `eval_retrieval.py` | the query set | a report | throwaway or existing store; opens the file, read-only in spirit |

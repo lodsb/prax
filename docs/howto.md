@@ -244,6 +244,34 @@ surrounding text names the subject without being described in the
 figure's place (extractor revision r2; readings written before it stand
 until a figure is read again).
 
+**The life of a figure**, then, is four steps, and only the third costs
+anything:
+
+1. *Found.* The parser writes `![caption](figure:<sha>)` where the image
+   sits (`trafilatura` r3, `pymupdf4llm` r2; `figure-refs` for a library
+   parsed before that). The bytes stay in the original.
+2. *Asked for.* A reading request, from "read again… → figures", from
+   `prax reread`, or placed by the door itself when a capture is parsed
+   and the vision model is local — the door never asks for a reading
+   that costs money.
+3. *Read.* A worker takes the request, the vision model describes the
+   figure with the text around it, and the description is written under
+   the image line. About four seconds a figure locally.
+4. *Used.* The chunker makes the image line, its caption and the
+   description one `figure` chunk, which is embedded and searched like
+   any other, read by the extraction, and read by a surfing ask.
+
+Step 2 is the one that does not happen by itself for everything: the
+door asks only for captures (the extension, an upload, the drop folder),
+only at the moment their parse finds figures, and only if the document
+has never had a reading request. A Zotero library never gets one that
+way. What is left over has a name on the Jobs page — the
+`unread-figures` ailment counts the documents holding a figure nobody
+has read, and its offers ask the vision model for them (the captioned
+ones, or every image) — and the same selection is on the command line:
+
+    prax reread --extractor figures --unread-figures --dry-run
+
 A model reads a figure once, so a better prompt — or a better model of
 the same name — reaches the library only on request:
 

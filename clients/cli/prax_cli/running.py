@@ -409,6 +409,7 @@ def reread(door: Door, a: Any) -> int:
         "title": a.title,
         "unreadable": a.unreadable,
         "read_figures": a.read_figures,
+        "unread_figures": a.unread_figures,
         "limit": a.limit,
         "dry_run": a.dry_run,
     }

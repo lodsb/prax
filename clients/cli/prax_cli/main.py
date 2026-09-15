@@ -437,6 +437,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="documents whose figures a model has read (with --mode again)",
     )
+    s.add_argument(
+        "--unread-figures",
+        action="store_true",
+        help="documents holding a figure nobody has read",
+    )
     s.add_argument("--dry-run", action="store_true", help="count, ask for nothing")
     s.set_defaults(func=running.reread, needs_door=True)
 
