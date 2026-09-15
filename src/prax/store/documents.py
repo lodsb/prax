@@ -1610,17 +1610,18 @@ def read_chunks(
     max_chars: int = 1500,
     skip: set[int] | None = None,
 ) -> list[dict[str, Any]]:
-    """The text chunks that follow a point in a document, in order, as many
-    as fit ``max_chars`` (the first always; figures left out): what "read
-    on" means for a passage, and the start of a document for
-    ``after_seq=-1``. ``skip`` leaves out chunk ids the caller has read
-    already, so a reader that comes back to a document keeps making
-    progress instead of meeting what it has seen. Each chunk carries
-    ``chunk_id``, ``seq``, ``text``, ``kind``, ``heading`` and ``page``."""
+    """The chunks that follow a point in a document, in order, as many as
+    fit ``max_chars`` (the first always): what "read on" means for a
+    passage, and the start of a document for ``after_seq=-1``. A figure a
+    model has read comes along, its description being its text; an unread
+    one does not (``READABLE``). ``skip`` leaves out chunk ids the caller
+    has read already, so a reader that comes back to a document keeps
+    making progress instead of meeting what it has seen. Each chunk
+    carries ``chunk_id``, ``seq``, ``text``, ``kind``, ``heading`` and
+    ``page``."""
     rows = con.execute(
         "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
-        " FROM chunks WHERE doc_id = ? AND seq > ? AND kind != 'figure'"
-        " ORDER BY seq",
+        f" FROM chunks WHERE doc_id = ? AND seq > ? AND {READABLE} ORDER BY seq",
         (doc_id, after_seq),
     )
     out: list[dict[str, Any]] = []
@@ -1637,13 +1638,19 @@ def read_chunks(
     return out
 
 
+# A figure a model has read carries its description in its own text, so
+# it reads like any other chunk; one nobody has read is an image line and
+# a caption, which is noise in a reading and a useless snippet in a hit.
+READABLE = (
+    "(kind != 'figure' OR json_array_length(json_extract(data, '$.readings')) > 0)"
+)
+
+
 @_serialized
 def find_chunk(
     con: sqlite3.Connection,
     doc_id: int,
     words: str,
-    *,
-    figures: bool = True,
 ) -> dict[str, Any] | None:
     """The chunk of one document that holds most of the words, a longer
     word counting for more ("what", "is" and "a" carry no question); the
@@ -1652,14 +1659,11 @@ def find_chunk(
     is opened somewhere, and how a reading lands on the part of a long
     document that was asked for, without a MATCH over the whole index
     filtered to one document (seconds per hit for a question full of
-    common words). ``figures=False`` leaves the figure chunks out, for a
-    reading that wants text.
+    common words). An unread figure is never the answer (``READABLE``).
     """
     rows = con.execute(
         "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
-        " FROM chunks WHERE doc_id = ?"
-        + ("" if figures else " AND kind != 'figure'")
-        + " ORDER BY seq",
+        f" FROM chunks WHERE doc_id = ? AND {READABLE} ORDER BY seq",
         (doc_id,),
     ).fetchall()
     if not rows:
@@ -1684,8 +1688,7 @@ def document_outline(
     at most ``limit``: what to name when a reading of it found nothing."""
     rows = con.execute(
         "SELECT heading, MIN(seq) AS seq FROM chunks"
-        " WHERE doc_id = ? AND kind != 'figure' AND heading IS NOT NULL"
-        "   AND heading != '[]'"
+        " WHERE doc_id = ? AND heading IS NOT NULL AND heading != '[]'"
         " GROUP BY heading ORDER BY seq LIMIT ?",
         (doc_id, max(1, limit)),
     ).fetchall()

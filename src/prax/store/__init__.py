@@ -82,6 +82,7 @@ from .documents import (  # noqa: F401
     DUPLICATE_THRESHOLD,
     MODES,
     PROMOTE_WEIGHTS,
+    READABLE,
     READINGS,
     _check_domains,
     _chunk_shape,

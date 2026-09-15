@@ -135,6 +135,48 @@ def _long_paper(con: sqlite3.Connection) -> int:
     return int(store.ingest_text(con, text, title="A long paper")["doc_id"])
 
 
+def test_a_figure_a_model_has_read_is_read_like_a_paragraph(
+    con: sqlite3.Connection,
+) -> None:
+    """A figure's description is its chunk's text, so a reading through a
+    document meets it; one nobody has read is an image line and a caption,
+    and stays out of the reading."""
+    text = "\n\n".join(
+        [
+            "# A paper with figures",
+            "## Results",
+            "The tail decays through the absorption filters. " * 14,
+            "![Fig. 1. SNR improvements.](figure:" + "a" * 64 + ")",
+            (
+                "*Figure, as read by a-vision-model:* A bar chart comparing"
+                " six methods, the proposed one highest at 9.4 decibels."
+            ),
+            "![Fig. 2. The rig.](figure:" + "b" * 64 + ")",
+            "## Conclusion",
+            "The method holds for stateful systems. " * 14,
+        ]
+    )
+    doc = store.ingest_text(con, text, title="A paper with figures")["doc_id"]
+    kinds = {c["kind"] for c in store.list_chunks(con, doc)}
+    assert "figure" in kinds  # the fixture really has figure chunks
+
+    s = surf.Surf("q", "q", [], None, 6, 4, 4000)
+    seen = []
+    while True:
+        said, added = surf.do_read(con, s, f"doc {doc}" if not seen else "[1]")
+        if not added:
+            break
+        seen.append(said)
+    whole = "\n".join(seen)
+    assert "A bar chart comparing six methods" in whole  # the figure that was read
+    assert "Fig. 2. The rig." not in whole  # the one nobody read
+
+    # and a reading may be aimed at what a figure shows
+    fresh = surf.Surf("q", "q", [], None, 6, 4, 4000)
+    said, added = surf.do_read(con, fresh, f"doc {doc} bar chart decibels")
+    assert added == [1] and "9.4 decibels" in said
+
+
 def test_a_read_with_words_lands_on_that_part_of_the_document(
     con: sqlite3.Connection,
 ) -> None:

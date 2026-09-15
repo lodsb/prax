@@ -12,7 +12,10 @@ entity to the documents behind it, sets aside a hit that is beside the
 point, and then the answer is written from what it kept. The steps are
 the door's own reads (``store.search``, ``read_chunks``,
 ``document_facts``, ``traverse``, ``similar_documents``); nothing is
-written.
+written. A figure the vision model has read is text like any other — its
+description is its chunk's text — so it is searched, read and cited like
+a paragraph; a figure nobody has read is an image line and a caption,
+and stays out of the way.
 
 A step is two lines, a note and an action, and a grammar holds a local
 model to them (``grammar``): the passage numbers and document ids a step
@@ -343,7 +346,7 @@ def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]
             s.docs[doc_id] = titles[doc_id]
         title, after, tag = s.docs[doc_id], -1, "start"
     if words:
-        found = store.find_chunk(con, doc_id, words[:LOOK_CHARS], figures=False)
+        found = store.find_chunk(con, doc_id, words[:LOOK_CHARS])
         if found is None:
             return f"doc {doc_id} has no text to read", []
         # land on that part, or go on from it when it has been read already
