@@ -70,6 +70,28 @@ neighbour, not its star count.
 | document archives | Paperless-ngx (+ paperless-ai, PaperCortex, paperless-mcp) | OCR and file administrative documents; AI tagging and semantic search bolted on | research and making rather than administration; OCR explicit, bounded and language-aware; the graph as the organising structure instead of tags and correspondents |
 | literature agents | PaperQA2 | an agent that reviews a folder of PDFs with citations | `ask` is the modest cousin: a bounded bundle, citations resolved to chunks, the answer kept on a page; the store, not the agent, is the product |
 
+### The closest one per family, feature by feature
+
+● yes, ◐ partly or through an add-on, – no. September 2026, from the
+projects' own pages.
+
+| | originals kept, by hash | reads PDFs and papers | words + meaning search | typed graph | an ontology you write | who wrote each edge, from what | local models | no server database | apps, extension |
+|---|---|---|---|---|---|---|---|---|---|
+| **prax** | ● | ● | ● | ● | ● | ● | ● | ● | ◐ extension, no mobile |
+| Karakeep (bookmarks) | ◐ page archives | ◐ stored, text searched | ● | – | – | – | ● | ◐ SQLite + Meilisearch | ● |
+| Zotero + an MCP server | ● Zotero's own | ● | ◐ meaning | – | – | – | ● | ◐ Zotero's SQLite + an index | ● |
+| SwarmVault (LLM wiki) | ● `raw/` | ● | ● | ● | ◐ a schema file | ◐ extracted / inferred / ambiguous | ● | ● | ◐ clipper |
+| Cognee (agent memory) | – | ● | ● | ● | ● RDF | ◐ | ● | ◐ three embedded engines | – |
+| Paperless-ngx (documents) | ● | ● OCR | ◐ add-on | – | – | – | ◐ add-on | – | ◐ third-party apps |
+
+Read the columns, not the dots. The bookmark manager is the one to keep
+links in, and it has the mobile app. The Zotero servers are the way to
+give an agent a curated library and nothing else. The LLM-wiki family
+makes the generated pages the index, where prax keeps the originals
+canonical and the pages as one layer among several. Cognee is a
+framework for an application's agents; prax is a finished tool for a
+person that agents also use. Paperless files paperwork.
+
 What is genuinely prax's own, as far as this survey can see: the
 combination of a **content-addressed store of the originals** under a
 single-writer door, a **small modular ontology written by hand and
