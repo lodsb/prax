@@ -349,27 +349,27 @@ def test_a_backlog_pass_re_reads_what_a_revised_extractor_would_read_differently
         "stale-parses"
     ] == {"found": 1, "repaired": 0, "left alone": 1}
     # an annotation that is what a revision added moves the stamp itself
-    html = b"<html><body>x</body></html>"
-    page = inbox.ingest_upload(con, html, filename="p.html", mime="text/html")
-    queue.apply_parse(con, page.doc_id, stamp="trafilatura/2.2.0", text="Prose. " * 60)
+    pdf = b"%PDF-1.4 fake"  # figure-refs covers pymupdf4llm r2, the current one
+    page = inbox.ingest_upload(con, pdf, filename="p.pdf", mime="application/pdf")
+    queue.apply_parse(con, page.doc_id, stamp="pymupdf4llm/1.28.2", text="Prose. " * 60)
     assert queue.stale(con) == [doc_id, page.doc_id]
     refs = "Prose. " * 60 + "\n\n![A plot](figure:" + "ab" * 32 + ")\n"
     queue.apply_parse(
         con, page.doc_id, stamp="figure-refs/1", text=refs, keep_source=True
     )
-    assert store.get_meta(con, page.doc_id)["text_source"] == "trafilatura/2.2.0-r3"
+    assert store.get_meta(con, page.doc_id)["text_source"] == "pymupdf4llm/1.28.2-r2"
     assert queue.stale(con) == [doc_id]
     # ...and where it did so before stamps moved, the history says so and
     # the repair moves the stamp instead of reading the document again
-    store.set_text_source(con, page.doc_id, "trafilatura/2.2.0")
+    store.set_text_source(con, page.doc_id, "pymupdf4llm/1.28.2")
     assert queue.covered_by_history(store.get_meta(con, page.doc_id)) == (
-        "trafilatura/2.2.0-r3"
+        "pymupdf4llm/1.28.2-r2"
     )
     assert client.post("/heal", json={"checks": ["stale-parses"]}).json()[
         "stale-parses"
     ] == {"found": 2, "repaired": 1, "left alone": 1}
     meta = store.get_meta(con, page.doc_id)
-    assert meta["text_source"] == "trafilatura/2.2.0-r3"
+    assert meta["text_source"] == "pymupdf4llm/1.28.2-r2"
     assert meta["parse_history"][-1]["outcome"] == "stamped"
     assert queue.stale(con) == [doc_id]
     # a text that did change keeps the earlier artifact addressable

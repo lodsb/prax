@@ -3,6 +3,7 @@ recent list, and the door's endpoints."""
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import sqlite3
@@ -493,3 +494,117 @@ def test_api_captures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
     assert client.delete(f"/doc/{a}/retire").json()["doc_id"] == a
     assert client.get("/documents").json()["total"] == before
     assert client.post("/inbox/dedupe").json()["retired"] == 0
+
+
+FIGURED = PAGE.replace(
+    "</article>",
+    '<figure><img src="data:image/png;base64,'
+    + base64.b64encode(b"\x89PNG\r\n\x1a\n" + bytes(5000)).decode()  # not an icon
+    + '" alt="a plot of the impulse response over time"><figcaption>The impulse'
+    " response of the network, decaying evenly.</figcaption></figure></article>",
+)
+
+
+def test_a_page_with_figures_sent_twice_is_one_document(
+    con: sqlite3.Connection, modules: None
+) -> None:
+    """The text fingerprint left figure chunks in while the chunk
+    fingerprint left them out, so a page with figures compared short of
+    the threshold against itself and was registered twice (9949/9950)."""
+    first = inbox.ingest_html(
+        con, FIGURED, url="https://example.org/figured", mode="snapshot", session="a"
+    )
+    assert any(c["kind"] == "figure" for c in store.list_chunks(con, first.doc_id))
+    again = inbox.ingest_html(
+        con,
+        FIGURED.replace("<body>", "<body data-visit='2'>"),
+        url="https://example.org/figured",
+        mode="snapshot",
+        session="b",
+    )
+    assert again.doc_id == first.doc_id and again.duplicate_of == first.doc_id
+    text = store.get_document(con, first.doc_id)["text"]
+    assert (
+        store.similarity(
+            store.fingerprint_text(text), store.chunk_fingerprint(con, first.doc_id)
+        )
+        == 1.0
+    )
+
+
+def test_retiring_a_duplicate_joins_its_facts_to_the_keeper(
+    con: sqlite3.Connection,
+) -> None:
+    """What the duplicate holds and the keeper lacks moves over — edges
+    (with their evidence and producer), open review items, tags, domains,
+    the summary and the extraction stamp — and what both hold is ended on
+    the duplicate; nothing is deleted."""
+    keeper = store.ingest_text(con, "the article " * 40, title="Article")["doc_id"]
+    dup = store.ingest_text(con, "the article again " * 40, title="Article")["doc_id"]
+    E = store.Edge
+    # the keeper knows one fact; the duplicate knows that one and another
+    store.link(
+        con,
+        E("Article", "paper", "about", "reverb", "concept"),
+        source_doc=keeper,
+        producer="m",
+        run="r1",
+    )
+    store.link(
+        con,
+        E("Article", "paper", "about", "reverb", "concept"),
+        source_doc=dup,
+        producer="m",
+        run="r2",
+    )
+    store.link(
+        con,
+        E("Article", "paper", "uses", "feedback delay network", "method"),
+        source_doc=dup,
+        producer="m",
+        run="r2",
+        evidence="we use an FDN",
+    )
+    store.queue_review(
+        con,
+        src="Article",
+        src_type=None,
+        rel="about",
+        dst="something",
+        dst_type=None,
+        source_doc=dup,
+        reason="untyped",
+    )
+    meta = store.get_meta(con, dup)
+    meta.update(
+        tags=["synth", "dsp"],
+        summary="What the article says.",
+        extraction={"extractor": "m", "ontology_version": "v", "run": "r2"},
+    )
+    store.set_meta(con, dup, meta)
+    store.set_domains(con, dup, ["research"], by="rule")
+    km = store.get_meta(con, keeper)
+    km["tags"] = ["dsp"]
+    store.set_meta(con, keeper, km)
+    gone = store.retire_document(
+        con, dup, reason="duplicate capture", duplicate_of=keeper
+    )
+    assert gone["moved_edges"] == 1 and gone["edges"] == 1 and gone["moved_items"] == 1
+    live = [e for e in store.traverse(con, "Article", hops=1)]
+    assert {(e["rel"], e["dst"], e["source_doc"]) for e in live} == {
+        ("about", "reverb", keeper),
+        ("uses", "feedback delay network", keeper),
+    }
+    moved = next(e for e in live if e["rel"] == "uses")
+    assert moved["evidence"] == "we use an FDN" and moved["producer"] == "m"
+    assert [it["source_doc"] for it in store.list_review(con)] == [keeper]
+    km = store.get_meta(con, keeper)
+    assert km["tags"] == ["dsp", "synth"] and km["summary"] == "What the article says."
+    assert km["extraction"]["run"] == "r2" and km["domains"] == ["research"]
+    assert store.get_meta(con, dup)["retired"]["of"] == keeper
+    # the duplicate's ended edge is history, not gone
+    ended = con.execute(
+        "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NOT NULL",
+        (dup,),
+    ).fetchone()[0]
+    assert ended == 1

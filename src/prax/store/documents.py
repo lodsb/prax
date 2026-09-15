@@ -350,10 +350,22 @@ def retire_document(
     by: str = "human",
 ) -> dict[str, Any]:
     """Take a document out of the index and the graph, keeping row, bytes
-    and text artifact. Returns what went: chunks, edges, review items."""
+    and text artifact. Returns what went: chunks, edges, review items.
+
+    With ``duplicate_of`` the document is a second copy of ``duplicate_of``
+    (a page sent twice, two Zotero snapshots): what it holds and the
+    keeper lacks moves over first — edges with their evidence and
+    producer, open review items, tags, domains, the summary, the
+    extraction stamp — and only what both hold is ended here. Nothing is
+    deleted; the union is what a person would have wanted from one
+    document."""
     meta = get_meta(con, doc_id)
     if duplicate_of is not None and get_meta(con, duplicate_of) is None:
         raise KeyError(f"no such document: {duplicate_of}")
+    moved: dict[str, int] = {"moved_edges": 0, "moved_items": 0}
+    if duplicate_of is not None and duplicate_of != doc_id:
+        moved = _join_duplicate(con, doc_id, duplicate_of)
+        meta = get_meta(con, doc_id)
     meta["retired"] = {
         "at": datetime.now(UTC).isoformat(timespec="seconds"),
         "reason": reason,
@@ -379,7 +391,78 @@ def retire_document(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
     )
     con.commit()
-    return {"doc_id": doc_id, "chunks": chunks, "edges": edges, "review_items": items}
+    return {
+        "doc_id": doc_id,
+        "chunks": chunks,
+        "edges": edges,
+        "review_items": items,
+        **moved,
+    }
+
+
+def _join_duplicate(
+    con: sqlite3.Connection, doc_id: int, keeper: int
+) -> dict[str, int]:
+    """The union: what ``doc_id`` holds and ``keeper`` lacks becomes the
+    keeper's (see ``retire_document``); returns what moved."""
+    moved_edges = 0
+    for e in con.execute(
+        "SELECT e.id, e.src, e.rel, e.dst FROM edges e"
+        " WHERE e.source_doc = ? AND e.valid_to IS NULL",
+        (doc_id,),
+    ).fetchall():
+        held = con.execute(
+            "SELECT 1 FROM edges WHERE source_doc = ? AND src = ? AND rel = ?"
+            " AND dst = ? AND valid_to IS NULL LIMIT 1",
+            (keeper, e["src"], e["rel"], e["dst"]),
+        ).fetchone()
+        if held is None:
+            con.execute(
+                "UPDATE edges SET source_doc = ? WHERE id = ?", (keeper, e["id"])
+            )
+            moved_edges += 1
+    moved_items = 0
+    for it in con.execute(
+        "SELECT id, src, rel, dst FROM review_queue"
+        " WHERE source_doc = ? AND resolved_at IS NULL",
+        (doc_id,),
+    ).fetchall():
+        held = con.execute(
+            "SELECT 1 FROM review_queue WHERE source_doc = ? AND src = ? AND rel = ?"
+            " AND dst = ? AND resolved_at IS NULL LIMIT 1",
+            (keeper, it["src"], it["rel"], it["dst"]),
+        ).fetchone()
+        if held is None:
+            con.execute(
+                "UPDATE review_queue SET source_doc = ? WHERE id = ?",
+                (keeper, it["id"]),
+            )
+            moved_items += 1
+    mine, theirs = get_meta(con, doc_id), get_meta(con, keeper)
+    tags = list(theirs.get("tags") or [])
+    for t in mine.get("tags") or []:
+        if t not in tags:
+            tags.append(t)
+    if tags:
+        theirs["tags"] = tags
+    if mine.get("domains") and not theirs.get("domains"):
+        theirs["domains"] = list(mine["domains"])
+        theirs["domains_by"] = mine.get("domains_by", "rule")
+    for key in ("summary", "extraction", "promote"):
+        if mine.get(key) and not theirs.get(key):
+            theirs[key] = mine[key]
+    theirs.setdefault("recaptured", []).append(
+        {
+            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "session": (mine.get("capture") or {}).get("session"),
+            "by": (mine.get("capture") or {}).get("by"),
+            "was": doc_id,
+        }
+    )
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(theirs), keeper)
+    )
+    return {"moved_edges": moved_edges, "moved_items": moved_items}
 
 
 @_serialized
@@ -410,10 +493,13 @@ def fingerprint_text(text: str) -> frozenset[str]:
     their bytes (a page's markup changes between two visits, its text
     seldom does)."""
     rows = chunking.rows(chunking.chunk(text))
+    # figure chunks are left out on both sides (``chunk_fingerprint``): a
+    # page with ten figures compared at 35/45 before, and identical
+    # captures of it counted as different pages
     return frozenset(
         hashlib.sha1(" ".join(str(r[0]).split()).encode("utf-8")).hexdigest()
         for r in rows
-        if str(r[0]).strip()
+        if str(r[0]).strip() and r[1] != "figure"
     )
 
 

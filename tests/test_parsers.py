@@ -446,7 +446,39 @@ def test_trafilatura_fences_code_blocks() -> None:
     )
     text = parsers.by_name("trafilatura")(html)
     assert "```\ndef fdn(x, delays):" in text and "# Reverb tricks" in text
-    assert parsers.by_name("trafilatura").stamp.endswith("-r3")
+    assert parsers.by_name("trafilatura").stamp.endswith("-r4")
+
+
+@needs_trafilatura
+def test_trafilatura_keeps_the_comments_under_their_own_heading(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A thread under an article is part of what the page says; it goes
+    under "## Comments" so each comment is a chunk with that heading and
+    the article's own text comes first; parse.comments turns it off."""
+    para = (
+        b"<p>" + b"Some prose about feedback delay networks that is long enough to be"
+        b" kept by the extractor as the main content. " * 3 + b"</p>"
+    )
+    html = (
+        b"<html><head><title>Reverb tricks</title></head><body><nav>Home</nav>"
+        b"<main><article><h1>Reverb tricks</h1>" + para * 4 + b"</article></main>"
+        b'<section id="comments" class="comments"><h2>Comments</h2>'
+        b'<div class="comment"><p class="comment-body">Nice writeup, but the'
+        b" matrix must be orthogonal for the energy claim to hold, otherwise the"
+        b" tail explodes over time.</p></div>"
+        b'<div class="comment"><p class="comment-body">Came for the reverb, stayed'
+        b" for the jokes about allpass filters, which are all pass and no fail,"
+        b" as they say.</p></div></section><footer>foot</footer></body></html>"
+    )
+    text = parsers.by_name("trafilatura")(html)
+    assert "# Reverb tricks" in text and "## Comments" in text
+    assert text.index("must be orthogonal") > text.index("## Comments")
+    assert text.index("## Comments") > text.index("main content")
+    assert "## Comments\n\nComments" not in text  # the section's own heading, once
+    monkeypatch.setenv("PRAX_COMMENTS", "false")
+    assert parsers.by_name("trafilatura").stamp.endswith("-r4+nocomments")
+    assert "## Comments" not in parsers.by_name("trafilatura")(html)
 
 
 @needs_trafilatura

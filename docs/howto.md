@@ -289,7 +289,13 @@ Originals above `PRAX_MAX_LAYOUT_MB` (default 40) skip layout analysis and
 get plain text through the fallback.
 
 Code is kept as code. HTML pages come out as Markdown with `<pre>` blocks
-fenced (trafilatura's Markdown output). Text attachments that are source
+fenced (trafilatura's Markdown output), and a page's comment section —
+when the snapshot has one: a thread under a blog post, a forum page —
+follows the article under its own `## Comments` heading (trafilatura
+r4), so every comment is a chunk under that heading, searchable, and
+the article's own text stays what a search hit or an extraction reads
+first; `parse.comments: false` (`PRAX_COMMENTS`) leaves them out, with
+`+nocomments` in the stamp. Text attachments that are source
 files become one fenced block with a language: the filename's extension
 decides when it is telling (`.m`, `.py`, `.scd`, `.h`, ...), otherwise
 Magika, a small content-type model in the `ingest` extra, classifies the
@@ -918,16 +924,23 @@ earlier live captures of the same canonical URL before it registers
 anything. The same page is noted on the earlier document
 (`meta.recaptured`); a snapshot arriving for a page held only as a bare
 DOM replaces it. A page that changed in between is a new document with
-`meta.previous_capture`. What came in before that check existed is
-handled by the `dedupe` pass of `prax maintain` (3n; nightly), which
-keeps one capture per URL (a snapshot, then an extracted one, then the
-oldest) and retires the rest.
+`meta.previous_capture`. What that check missed (until 2026-09-15 a
+page with figures compared short of the threshold against itself, so
+a page sent twice became two documents) is handled by the `dedupe`
+pass of `prax maintain` (3n; nightly), which keeps one capture per URL
+(a snapshot, then an extracted one, then the oldest) and retires the
+rest as duplicates of the keeper.
 
 Retiring (`store.retire_document`, "retire…" on a document page, `POST
 /doc/{id}/retire`) takes a document out of search and the graph: chunks
 and retrieval field go, its edges end, open review items close; the
 row, the archived bytes and the text artifact stay, `meta.retired` says
-why and of which document it was a duplicate. Batch jobs and the browse
+why and of which document it was a duplicate. **Retiring as a duplicate
+is a union**: what the duplicate holds and the keeper lacks moves to the
+keeper first — edges with their evidence and producer, open review
+items, tags, domains, the summary, the extraction stamp — and only what
+both hold is ended on the duplicate; two extractions of one page become
+one document with every fact either found. Batch jobs and the browse
 list pass retired documents by (`GET /documents?retired=1` lists them);
 "un-retire" re-chunks the text and brings it back.
 
@@ -1199,7 +1212,7 @@ by `prax maintain` on request:
 | `acronyms` | the acronyms table from every text's "phrase (ACRONYM)" definitions (3d): what a query token expands to; minutes over a large library |
 | `fields` | the document retrieval field (title, kind, summary) of every document — after titles were fixed or summaries written |
 | `domains` | the domain set of every document nobody assigned by hand, from the `domains:` rules in `prax.yaml` (3e); nothing without rules |
-| `dedupe` | the duplicate captures of one page retired, the keeper named in `meta.retired` (3l); row and file kept |
+| `dedupe` | the duplicate captures of one page retired as duplicates of the keeper — a union: their facts, tags, domains and stamps join the keeper's first (3l); row and file kept |
 | `review` | the review queue: a replay against the current ontology (a typed item it accepts now becomes an edge), then the typing rules over every open item (3e) — what the door does for one document after its extraction, for the whole queue |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c); the nightly has no reason to |
 

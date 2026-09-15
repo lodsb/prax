@@ -103,6 +103,8 @@ steps:
 #   ocr_gpu: false             # [PRAX_OCR_GPU] DirectML (onnxruntime-directml)
 #   max_layout_mb: 40          # [PRAX_MAX_LAYOUT_MB] above this, no layout analysis
 #   max_layout_pages: 400      # [PRAX_MAX_LAYOUT_PAGES]
+#   comments: true             # [PRAX_COMMENTS] a page's comment section under
+#                              #   its own heading (the corrections, the jokes)
 
 # citations:
 #   mailto: you@example.org    # [PRAX_CITATIONS_MAILTO] Crossref's polite pool
