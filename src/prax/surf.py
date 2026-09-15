@@ -47,6 +47,7 @@ READ_CHARS = 1500  # what one "read" step returns
 FACTS = 20  # graph facts per "facts" step
 HIT_FACTS = 4  # graph facts shown with a search hit
 WALK_EDGES = 25
+SECTIONS = 12  # sections named when a reading found nothing
 SIMILAR = 6
 NOTE_CHARS = 200
 QUERY_CHARS = 100
@@ -77,12 +78,14 @@ similar: [n]        documents like passage n's
 drop: [n] [m]       set aside passages that do not bear on the question
 answer              stop looking; the answer is written from the passages kept
 
-Every passage is numbered [n] and stays in the log; the answer is written
-from the ones you keep. Read on when a passage stops short of the point,
-search again when the hits miss the question, walk the graph when the
-question is about how things relate, and drop hits that are about
-something else. A document a walk or a similar named is long and starts
-with a title page: read it with the words you are after. Say "answer" as
+Angle brackets above mark what you replace: never write a line that
+still contains them. Every passage is numbered [n] and stays in the log;
+the answer is written from the ones you keep. Read on when a passage
+stops short of the point, search again when the hits miss the question,
+walk the graph when the question is about how things relate, and drop
+hits that are about something else. A document a walk or a similar
+named is long and starts with a title page: read it with the words you
+are after. Say "answer" as
 soon as the passages kept answer the question; the steps and the reading
 left are shown after each result.
 Write nothing but the two lines."""
@@ -157,6 +160,7 @@ class Surf:
     dropped: set[int] = field(default_factory=set)  # passage numbers
     docs: dict[int, str] = field(default_factory=dict)  # id -> title, named so far
     chunks: set[int] = field(default_factory=set)  # chunk ids shown already
+    barren: dict[tuple[str, str], int] = field(default_factory=dict)  # what led nowhere
     log: list[str] = field(default_factory=list)
     steps: list[Step] = field(default_factory=list)
     usage: dict[str, int] = field(
@@ -338,7 +342,6 @@ def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]
                 return f"no document {doc_id}", []
             s.docs[doc_id] = titles[doc_id]
         title, after, tag = s.docs[doc_id], -1, "start"
-    covered = None
     if words:
         found = store.find_chunk(con, doc_id, words[:LOOK_CHARS], figures=False)
         if found is None:
@@ -347,26 +350,30 @@ def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]
         seen = found["chunk_id"] in s.chunks
         after = found["seq"] if seen else found["seq"] - 1
         tag = f"{'after' if seen else 'on'} {words!r}"
-        if seen:
-            covered = next(
-                (p for p in s.passages if p.chunk_id == found["chunk_id"]), None
-            )
-    chunks = [
-        c
-        for c in store.read_chunks(con, doc_id, after_seq=after, max_chars=READ_CHARS)
-        if c["chunk_id"] not in s.chunks
-    ]
+    chunks = store.read_chunks(
+        con, doc_id, after_seq=after, max_chars=READ_CHARS, skip=s.chunks
+    )
+    if not chunks and after > -1:
+        # the end of the document, or a part read already: go back for
+        # whatever of it is still unread, so a reading always moves on
+        # (a small model asked the same spent read five times running)
+        chunks = store.read_chunks(
+            con, doc_id, after_seq=-1, max_chars=READ_CHARS, skip=s.chunks
+        )
+        tag = "the next part unread"
     if not chunks:
-        if words:
-            already = f"passage [{covered.n}]" if covered else "in the log already"
-            said = (
-                f"the part of doc {doc_id} about {words!r} is {already},"
-                " and nothing follows it"
-            )
-            return said, []
         where = f"[{m.group(1)}]" if m.group(1) else f"doc {doc_id}"
-        return f"nothing more to read in {where}", []
+        return f"all of {where} has been read{_sections(con, doc_id)}", []
     return _read(s, doc_id, title, chunks, tag)
+
+
+def _sections(con: sqlite3.Connection, doc_id: int) -> str:
+    """What a document is made of, for a reading that found nothing: what
+    was in it, rather than another guess at the same page."""
+    heads = store.document_outline(con, doc_id, limit=SECTIONS)
+    if not heads:
+        return ""
+    return f". Its sections: {'; '.join(heads)}"
 
 
 def _read(
@@ -587,7 +594,15 @@ def run(
             record(step, "enough read", [], t)
             break
         added = []
-        if action == "search":
+        key = (action, " ".join(arg.split()).lower())
+        if key in s.barren:
+            # the same move, the same nothing: a small model asked the same
+            # dead end five times in a row on a twelve-step budget
+            result = (
+                f"step {s.barren[key]} asked that and it brought nothing;"
+                " ask something else"
+            )
+        elif action == "search":
             result, added = do_search(con, s, arg)
         elif action == "read":
             result, added = do_read(con, s, arg)
@@ -599,6 +614,8 @@ def run(
             result = do_similar(con, s, arg)
         else:
             result = do_drop(s, arg)
+        if not added:
+            s.barren.setdefault(key, step.n)
         line = f"{action}: {arg}" if arg else action
         s.log += [f"Step {step.n} · note: {note}", line, s.spend(result), ""]
         record(step, result, added, t)

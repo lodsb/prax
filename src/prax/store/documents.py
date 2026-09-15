@@ -1608,21 +1608,26 @@ def read_chunks(
     *,
     after_seq: int = -1,
     max_chars: int = 1500,
+    skip: set[int] | None = None,
 ) -> list[dict[str, Any]]:
     """The text chunks that follow a point in a document, in order, as many
     as fit ``max_chars`` (the first always; figures left out): what "read
     on" means for a passage, and the start of a document for
-    ``after_seq=-1``. Each carries ``chunk_id``, ``seq``, ``text``,
-    ``kind``, ``heading`` and ``page``."""
+    ``after_seq=-1``. ``skip`` leaves out chunk ids the caller has read
+    already, so a reader that comes back to a document keeps making
+    progress instead of meeting what it has seen. Each chunk carries
+    ``chunk_id``, ``seq``, ``text``, ``kind``, ``heading`` and ``page``."""
     rows = con.execute(
         "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
         " FROM chunks WHERE doc_id = ? AND seq > ? AND kind != 'figure'"
-        " ORDER BY seq LIMIT 40",
+        " ORDER BY seq",
         (doc_id, after_seq),
-    ).fetchall()
+    )
     out: list[dict[str, Any]] = []
     used = 0
     for r in rows:
+        if skip and r["chunk_id"] in skip:
+            continue
         if out and used + len(r["text"]) > max_chars:
             break
         c = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
@@ -1668,6 +1673,27 @@ def find_chunk(
             best, score = r, weight
     out = {k: best[k] for k in ("chunk_id", "doc_id", "seq", "text")}
     out.update(_chunk_shape(best))
+    return out
+
+
+@_serialized
+def document_outline(
+    con: sqlite3.Connection, doc_id: int, *, limit: int = 20
+) -> list[str]:
+    """The document's sections in order, as heading paths (" › " joined),
+    at most ``limit``: what to name when a reading of it found nothing."""
+    rows = con.execute(
+        "SELECT heading, MIN(seq) AS seq FROM chunks"
+        " WHERE doc_id = ? AND kind != 'figure' AND heading IS NOT NULL"
+        "   AND heading != '[]'"
+        " GROUP BY heading ORDER BY seq LIMIT ?",
+        (doc_id, max(1, limit)),
+    ).fetchall()
+    out = []
+    for r in rows:
+        path = json.loads(r["heading"])
+        if path:
+            out.append(" › ".join(path))
     return out
 
 

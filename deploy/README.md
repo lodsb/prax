@@ -60,26 +60,35 @@ in batches of 200).
 
 llama-server's share of a 24 GB 4090, measured 2026-09-15 with
 Qwen3.6-35B-A3B UD-Q4_K_S, its projector, `-CpuMoe 2 -UBatch 256
--ImageMaxTokens 1024`: **20.1 GB at 8 K a slot**, of which the KV cache
-is 0.66 GB, with about 0.9 GB left for the desktop's own windows and
-2.5 GB free. The cache is the part that grows with what `ask` may read,
-and its cost is arithmetic: `layers × kv_heads × (key_length +
-value_length)` values a token, 42.5 KiB here at `q8_0` (f16 doubles it).
+-ImageMaxTokens 1024`: **20.14 GB at 8 K a slot, 20.23 GB at 16 K**,
+with about 0.9 GB for the desktop's own windows and 2.5 GB free.
 
-| `-CtxPerSlot` × slots | KV cache | the card | what `ask` may read |
-|---|---|---|---|
-| 8 K × 2 | 0.66 GB | 20.1 GB | 5,992 |
-| **16 K × 2** (in use) | 1.33 GB | 20.8 GB | 14,184 |
-| 24 K × 2 | 2.0 GB | 21.5 GB | 21,992 |
-| 32 K × 2 | 2.66 GB | 22.1 GB | 30,568 |
-| 32 K × 1 | 1.33 GB | 20.8 GB | 30,568 |
+Doubling the context cost 0.09 GB, not the 0.66 GB the obvious
+arithmetic gives, and the model's metadata says why:
+`full_attention_interval = 4`, with SSM parameters beside it. Only every
+fourth layer keeps a cache that grows with the context — 10 of 40 — and
+the other 30 hold a state of fixed size per slot. So the growing part is
+`full_attention_layers × kv_heads × (key_length + value_length)` values
+a token: 10 × 2 × 512 here, **10.6 KiB a token** at `q8_0` (f16 doubles
+it), a quarter of what a model with attention in every layer would want.
 
-The display shares the card: it froze once at 23.7 GB, so a configuration
-that leaves under 2 GB is one to test while nothing else is open. One
-slot is enough only if the worker's passes may queue behind a question.
-`n_ctx` under the model in `prax.yaml` is what the reading budget is
-derived from, so it moves with `-CtxPerSlot`, and the model's own trained
-context (262,144 here) is nowhere near the limit — the card is.
+| `-CtxPerSlot` × slots | KV cache | what `ask` may read |
+|---|---|---|
+| 8 K × 2 | 0.17 GB | 5,992 |
+| **16 K × 2** (in use) | 0.33 GB | 14,184 |
+| 32 K × 2 | 0.66 GB | 30,568 |
+| 64 K × 2 | 1.33 GB | 63,336 |
+
+Context is therefore cheap on this model and the limits are elsewhere:
+prompt reading time (373 tokens a second cold, 1,207 warm — the answer
+call reads everything kept, once) and how well a model with 3B active
+parameters uses 30,000 tokens of assorted passages. The display shares
+the card and froze once at 23.7 GB, so anything that leaves under 2 GB
+free is worth testing while nothing else is open; two slots keep the
+worker's passes from queueing behind a question. `n_ctx` under the model
+in `prax.yaml` is what the reading budget is derived from, so it moves
+with `-CtxPerSlot`; the model's own trained context (262,144) is nowhere
+near any of this.
 
 ## What to measure once it runs there
 

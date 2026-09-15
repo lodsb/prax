@@ -156,13 +156,18 @@ def test_a_read_with_words_lands_on_that_part_of_the_document(
     text, added = surf.do_read(con, s, "[2] mutually prime delay lengths")
     assert added == [3] and "(after 'mutually prime delay lengths')" in text
     assert "tabulated below" in text  # the section after Tuning
-    # and when nothing follows it either, the passage that holds it is named
+    # nothing follows it either: the reading falls back to what of that
+    # document is still unread, rather than stopping at a spent request
+    text, added = surf.do_read(con, s, "[3] tabulated coefficients")
+    assert added == [4] and "(the next part unread)" in text
+    assert "Submitted to the convention" in text  # the front matter, skipped before
+    # and when the whole document has been read, what it held is named
     said = surf.do_read(con, s, "[3] tabulated coefficients")[0]
-    assert said == (
-        f"the part of doc {doc} about 'tabulated coefficients' is passage [3],"
-        " and nothing follows it"
+    assert said.startswith("all of [3] has been read. Its sections: ")
+    assert "A long paper › Losslessness" in said and "Appendix" in said
+    assert surf.do_read(con, s, f"doc {doc}")[0].startswith(
+        f"all of doc {doc} has been read."
     )
-    assert surf.do_read(con, s, "[3]")[0] == "nothing more to read in [3]"
     # words that occur nowhere: the document from its start
     fresh = surf.Surf("q", "q", [], None, 6, 4, 4000)
     text, added = surf.do_read(con, fresh, f"doc {doc} sponge cake icing")
@@ -170,6 +175,27 @@ def test_a_read_with_words_lands_on_that_part_of_the_document(
     # the grammar offers the words
     assert 'read ::= "read: " ( pn | "doc " did ) look?' in surf.grammar(s)
     assert f'look ::= " " char{{2,{surf.LOOK_CHARS}}}' in surf.grammar(s)
+
+
+def test_a_move_that_led_nowhere_is_not_repeated(con: sqlite3.Connection) -> None:
+    """A small model asked the same dead end five times on a twelve-step
+    budget: the second time, the loop says so instead of asking the store
+    again."""
+    _library(con)
+    answerer = ask.StubAnswerer(
+        [
+            "note: anything about icing\nsearch: sponge cake icing sugar",
+            "note: let me try that again\nsearch: sponge cake icing sugar",
+            "note: enough\nanswer",
+        ]
+    )
+    r = ask.ask(con, "reverb", answerer=answerer, steps=6, tokens=4000, limit=3)
+    first, again = r["trail"][1], r["trail"][2]
+    assert first["added"] == [] and first["result"] == "no new hits"
+    assert again["result"] == (
+        f"step {first['n']} asked that and it brought nothing; ask something else"
+    )
+    assert r["steps"] == 3 and r["answer"]
 
 
 def test_the_message_grows_by_appending(con: sqlite3.Connection) -> None:
