@@ -16,7 +16,7 @@ Claude Code.
 <table>
 <tr>
 <td width="50%"><a href="docs/images/search.png"><img src="docs/images/search.png" alt="Search results: hybrid hits with the side that found each"></a></td>
-<td width="50%"><a href="docs/images/ask.png"><img src="docs/images/ask.png" alt="Ask: an answer citing passages, the sources beside it, a follow-up"></a></td>
+<td width="50%"><a href="docs/images/ask.png"><img src="docs/images/ask.png" alt="Ask: the model surfed four steps, searching again and reading on; the answer cites the passages it kept, the sources beside it, the trail under it"></a></td>
 </tr>
 <tr>
 <td><sub>Search: hybrid hits, each saying which side found it — keywords, vectors, the document field.</sub></td>
