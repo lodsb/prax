@@ -34,7 +34,7 @@ from .base import (
     _serialized,
     vectors_available,
 )
-from .documents import DOCTYPES, _chunk_shape
+from .documents import DOCTYPES, _chunk_shape, find_chunk
 
 RERANK_DEPTH = 30  # hits rescored when reranking is on (rerank.depth)
 
@@ -357,35 +357,20 @@ def _fill_chunks(
     con: sqlite3.Connection,
     hits: list[dict[str, Any]],
     query: str,
-    expr: str | None = None,
 ) -> None:
     """A hit that came from the document field alone gets the document's
-    chunk that holds most of the query's terms (longer terms counting for
-    more: "what", "is" and "a" carry no question), else its first chunk,
-    so every hit opens somewhere; the field snippet stays, it says why
-    the document matched. The chunk is chosen over the document's own
-    rows: a MATCH over the whole index filtered to one document walks
-    the posting lists of every common word in the question (seconds per
-    hit on a million chunks; ``expr`` is kept for the signature)."""
-    terms = {t.lower() for t in _TOKEN.findall(query)}
+    chunk that speaks to the query (``documents.find_chunk``), so every
+    hit opens somewhere; the field snippet stays, it says why the
+    document matched."""
     for h in hits:
         if h.get("chunk_id") is not None:
             continue
-        rows = con.execute(
-            "SELECT id, kind, locator, heading, text FROM chunks WHERE doc_id = ?"
-            " ORDER BY seq",
-            (h["doc_id"],),
-        ).fetchall()
-        if not rows:
+        found = find_chunk(con, h["doc_id"], query)
+        if found is None:
             continue
-        best, score = rows[0], 0
-        for r in rows:
-            found = terms & set(_TOKEN.findall(r["text"].lower()))
-            sc = sum(len(t) for t in found)
-            if sc > score:
-                best, score = r, sc
-        h["chunk_id"] = best["id"]
-        h.update(_chunk_shape(best))
+        h["chunk_id"] = found["chunk_id"]
+        for k in ("kind", "heading", "page"):
+            h[k] = found[k]
 
 
 def _filter_doctype(
@@ -674,7 +659,7 @@ def _finish(
         hits = _filter_doctype(con, hits, doctype)
     hits = hits[:limit]
     field_only = {h["doc_id"] for h in hits if h.get("chunk_id") is None}
-    _fill_chunks(con, hits, query, expr=expr)
+    _fill_chunks(con, hits, query)
     chunk_ids = [
         h["chunk_id"]
         for h in hits

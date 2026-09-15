@@ -815,8 +815,11 @@ search's eight passages as they come. With `steps` (the composer's
 is `steps.ask.steps` in `prax.yaml`, 8 out of the box, 0 is the
 one-shot answer) the model works the library first (`prax.surf`): each
 step it writes a note and one action — `search` again with better
-words, `read` on where a passage stopped or the start of a document a
-result named, `facts` of a passage's document, `walk` the graph from an
+words, `read` on where a passage stopped (`read: [3]`), a document a
+result named (`read: doc 4080`) or, with words after either, the part
+of that document which holds them (`read: doc 4080 delay-free loops`:
+the only way into a long paper the graph pointed at, whose start is a
+title page), `facts` of a passage's document, `walk` the graph from an
 entity (its relations, the documents behind them), `similar` documents,
 `drop` passages that are beside the point — or `answer` when the
 passages kept say enough; a grammar holds a local model to the two

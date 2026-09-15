@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -13,7 +14,16 @@ from prax import store
 
 @pytest.fixture(autouse=True)
 def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    """Point PRAX_DATA_DIR at tmp_path before any store, API or MCP call."""
+    """Point PRAX_DATA_DIR at tmp_path before any store, API or MCP call.
+
+    Every other ``PRAX_*`` variable is cleared first: a developer's own
+    machine has a token, a door address and a model choice in its
+    environment, and a test that inherited them would run against
+    another host's settings (a door asking for a token, a step pointed
+    at a model server). A test that wants one sets it itself.
+    """
+    for name in [k for k in os.environ if k.startswith("PRAX_")]:
+        monkeypatch.delenv(name, raising=False)
     d = tmp_path / "data"
     monkeypatch.setenv("PRAX_DATA_DIR", str(d))
     # the process-wide cache of opened vector indexes is keyed by path: views

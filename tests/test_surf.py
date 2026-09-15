@@ -121,6 +121,57 @@ def test_a_scripted_surf_reads_walks_drops_and_answers(con: sqlite3.Connection) 
     assert '"doc " did' in g and 'did ::= "1" | "2" | "3"' in g  # documents named
 
 
+def _long_paper(con: sqlite3.Connection) -> int:
+    """A paper whose sections are a chunk each, so a read returns one."""
+    sections = [
+        ("Front matter", "Submitted to the convention, in the city of the year. "),
+        ("Losslessness", "The Householder matrix keeps the loop lossless. "),
+        ("Tuning", "Delay lengths are chosen mutually prime. "),
+        ("Appendix", "The coefficients are tabulated below for each order. "),
+    ]
+    text = "# A long paper\n\n" + "\n\n".join(
+        f"## {head}\n\n{body * 22}" for head, body in sections
+    )
+    return int(store.ingest_text(con, text, title="A long paper")["doc_id"])
+
+
+def test_a_read_with_words_lands_on_that_part_of_the_document(
+    con: sqlite3.Connection,
+) -> None:
+    """A document the graph pointed at is long and starts with a title
+    page: read it with the words wanted and the reading begins there,
+    whether the document is named by its id or by one of its passages."""
+    doc = _long_paper(con)
+    s = surf.Surf("q", "q", [], None, 6, 4, 4000)
+    # by id: the part about the words, not the start
+    text, added = surf.do_read(con, s, f"doc {doc} lossless Householder")
+    assert added == [1] and "(on 'lossless Householder')" in text
+    assert "Losslessness" in text and "keeps the loop lossless" in text
+    assert "Submitted to the convention" not in text
+    # by passage, elsewhere in the same document
+    text, added = surf.do_read(con, s, "[1] mutually prime delay lengths")
+    assert added == [2] and "(on 'mutually prime delay lengths')" in text
+    assert "mutually prime" in text
+    # that part read already: the reading goes on from it
+    text, added = surf.do_read(con, s, "[2] mutually prime delay lengths")
+    assert added == [3] and "(after 'mutually prime delay lengths')" in text
+    assert "tabulated below" in text  # the section after Tuning
+    # and when nothing follows it either, the passage that holds it is named
+    said = surf.do_read(con, s, "[3] tabulated coefficients")[0]
+    assert said == (
+        f"the part of doc {doc} about 'tabulated coefficients' is passage [3],"
+        " and nothing follows it"
+    )
+    assert surf.do_read(con, s, "[3]")[0] == "nothing more to read in [3]"
+    # words that occur nowhere: the document from its start
+    fresh = surf.Surf("q", "q", [], None, 6, 4, 4000)
+    text, added = surf.do_read(con, fresh, f"doc {doc} sponge cake icing")
+    assert added == [1] and "Submitted to the convention" in text
+    # the grammar offers the words
+    assert 'read ::= "read: " ( pn | "doc " did ) look?' in surf.grammar(s)
+    assert f'look ::= " " char{{2,{surf.LOOK_CHARS}}}' in surf.grammar(s)
+
+
 def test_the_message_grows_by_appending(con: sqlite3.Connection) -> None:
     """Every step's prompt starts with the previous one (the server's
     prefix cache is what keeps a step cheap)."""
@@ -225,7 +276,8 @@ def test_reading_bounds_and_clamp(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_tools_answer_bad_arguments(con: sqlite3.Connection) -> None:
     fdn, _, _ = _library(con)
     s = surf.Surf("q", "q", [], None, 6, 3, 4000)
-    assert surf.do_read(con, s, "[7]") == ("read takes [n] or doc <id>", [])
+    assert surf.do_read(con, s, "[7]") == ("there is no passage [7]", [])
+    assert surf.do_read(con, s, "chapter two")[0].startswith("read takes [n]")
     assert surf.do_read(con, s, "doc 999999") == ("no document 999999", [])
     assert surf.do_facts(con, s, "x").startswith("facts takes")
     assert surf.do_drop(s, "[1]").startswith("drop takes")

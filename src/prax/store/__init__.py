@@ -103,6 +103,7 @@ from .documents import (  # noqa: F401
     documents_in_domain,
     expected_version,
     extracted_by,
+    find_chunk,
     fingerprint_text,
     finish_reading,
     get_chunk,

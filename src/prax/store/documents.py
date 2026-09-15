@@ -21,6 +21,7 @@ from prax import chunking, glyphs, ontology
 from .base import (
     _NOW,
     _SURROGATE,
+    _TOKEN,
     _archive_bytes,
     _archive_path,
     _like_prefix,
@@ -1628,6 +1629,45 @@ def read_chunks(
         c.update(_chunk_shape(r))
         out.append(c)
         used += len(r["text"])
+    return out
+
+
+@_serialized
+def find_chunk(
+    con: sqlite3.Connection,
+    doc_id: int,
+    words: str,
+    *,
+    figures: bool = True,
+) -> dict[str, Any] | None:
+    """The chunk of one document that holds most of the words, a longer
+    word counting for more ("what", "is" and "a" carry no question); the
+    document's first chunk when none of them occurs in it, None when it
+    has no chunks. This is how a hit that matched on the document field
+    is opened somewhere, and how a reading lands on the part of a long
+    document that was asked for, without a MATCH over the whole index
+    filtered to one document (seconds per hit for a question full of
+    common words). ``figures=False`` leaves the figure chunks out, for a
+    reading that wants text.
+    """
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE doc_id = ?"
+        + ("" if figures else " AND kind != 'figure'")
+        + " ORDER BY seq",
+        (doc_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    terms = {t.lower() for t in _TOKEN.findall(words)}
+    best, score = rows[0], 0
+    for r in rows:
+        found = terms & set(_TOKEN.findall(r["text"].lower()))
+        weight = sum(len(t) for t in found)
+        if weight > score:
+            best, score = r, weight
+    out = {k: best[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+    out.update(_chunk_shape(best))
     return out
 
 

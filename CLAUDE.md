@@ -142,10 +142,11 @@ synthesis page `synthesizes` its sources and may argue claims (ontology v4);
 v5 adds organizations (affiliation, funding, who built a tool) and the weak
 `mentions` relation, both grown from the review queue's evidence. With
 steps the model surfs before it answers (`prax.surf`): a bounded loop of
-the door's own reads — search again, read on, facts, walk, similar,
-drop — under a per-step grammar for local models, two budgets (steps,
-tokens of reading) clamped to the model's context, the trail streamed
-and kept with the answer; nothing in the loop writes.
+the door's own reads — search again, read on or into a document (by
+words), facts, walk, similar, drop — under a per-step grammar for local
+models, two budgets (steps, tokens of reading) clamped to the model's
+context, the trail streamed and kept with the answer; nothing in the
+loop writes.
 
 ## Conventions
 

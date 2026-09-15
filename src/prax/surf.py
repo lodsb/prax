@@ -50,6 +50,7 @@ WALK_EDGES = 25
 SIMILAR = 6
 NOTE_CHARS = 200
 QUERY_CHARS = 100
+LOOK_CHARS = 60  # the words a read looks for inside a document
 STEP_TOKENS = 160  # what a step's two lines may take
 OVERHEAD_TOKENS = 2200  # the system prompt, the question, the step lines, the answer
 MIN_TOKENS = 1000
@@ -67,7 +68,9 @@ one action from this list:
 
 search: <words>     search the library again with better words
 read: [n]           read on where passage n stopped
-read: doc <id>      read the start of a document named in a result
+read: [n] <words>   the part of that passage's document about those words
+read: doc <id>      read a document a result named, from its start
+read: doc <id> <words>   the part of that document about those words
 facts: [n]          what the graph records about passage n's document
 walk: <entity>      the graph around an entity: its relations, the documents behind
 similar: [n]        documents like passage n's
@@ -78,8 +81,10 @@ Every passage is numbered [n] and stays in the log; the answer is written
 from the ones you keep. Read on when a passage stops short of the point,
 search again when the hits miss the question, walk the graph when the
 question is about how things relate, and drop hits that are about
-something else. Say "answer" as soon as the passages kept answer the
-question; the steps and the reading left are shown after each result.
+something else. A document a walk or a similar named is long and starts
+with a title page: read it with the words you are after. Say "answer" as
+soon as the passages kept answer the question; the steps and the reading
+left are shown after each result.
 Write nothing but the two lines."""
 
 
@@ -299,34 +304,69 @@ def _facts_line(facts: list[dict[str, Any]]) -> str:
     return "; ".join(f"{r}: {', '.join(names)}" for r, names in by_rel.items())
 
 
+_READ_ARG = re.compile(r"(?:\[(\d+)\]|doc\s+(\d+))(?:\s+(\S.*))?")
+
+
 def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]:
-    """More of a document: what follows passage n, or the start of a
-    document a result named. The chunks read become one passage placed
-    at the first of them, so a citation points at where the reading
-    began, and reading on again continues after the last."""
-    p = s.by_n(arg)
-    if p is not None:
-        # a document-field hit has no chunk: reading it starts at the top
-        after = s.seq.get(p.n, -1)
-        chunks = store.read_chunks(con, p.doc_id, after_seq=after, max_chars=READ_CHARS)
-        chunks = [c for c in chunks if c["chunk_id"] not in s.chunks]
-        if not chunks:
-            return f"nothing follows [{p.n}] in that document", []
-        return _read(s, p.doc_id, p.title, chunks, f"after [{p.n}]")
-    m = re.fullmatch(r"doc\s+(\d+)", arg.strip())
+    """More of a document: what follows passage n, a document a result
+    named, from its start — or, with words after either, the part of that
+    document which holds them (``store.find_chunk``), which is the only
+    way into a long paper the graph pointed at: its start is a title
+    page. The chunks read become one passage placed at the first of them,
+    so a citation points at where the reading began, and reading on
+    continues after the last."""
+    m = _READ_ARG.fullmatch(" ".join(arg.split()))
     if not m:
-        return "read takes [n] or doc <id>", []
-    did = int(m.group(1))
-    if did not in s.docs:
-        titles = store.document_titles(con, [did])
-        if did not in titles:
-            return f"no document {did}", []
-        s.docs[did] = titles[did]
-    chunks = store.read_chunks(con, did, after_seq=-1, max_chars=READ_CHARS)
-    chunks = [c for c in chunks if c["chunk_id"] not in s.chunks]
+        return "read takes [n] or doc <id>, either with words to look for", []
+    words = m.group(3) or ""
+    if m.group(1):
+        p = next((x for x in s.passages if x.n == int(m.group(1))), None)
+        if p is None:
+            return f"there is no passage [{m.group(1)}]", []
+        # a document-field hit has no chunk: reading it starts at the top
+        doc_id, title, after, tag = (
+            p.doc_id,
+            p.title,
+            s.seq.get(p.n, -1),
+            f"after [{p.n}]",
+        )
+    else:
+        doc_id = int(m.group(2))
+        if doc_id not in s.docs:
+            titles = store.document_titles(con, [doc_id])
+            if doc_id not in titles:
+                return f"no document {doc_id}", []
+            s.docs[doc_id] = titles[doc_id]
+        title, after, tag = s.docs[doc_id], -1, "start"
+    covered = None
+    if words:
+        found = store.find_chunk(con, doc_id, words[:LOOK_CHARS], figures=False)
+        if found is None:
+            return f"doc {doc_id} has no text to read", []
+        # land on that part, or go on from it when it has been read already
+        seen = found["chunk_id"] in s.chunks
+        after = found["seq"] if seen else found["seq"] - 1
+        tag = f"{'after' if seen else 'on'} {words!r}"
+        if seen:
+            covered = next(
+                (p for p in s.passages if p.chunk_id == found["chunk_id"]), None
+            )
+    chunks = [
+        c
+        for c in store.read_chunks(con, doc_id, after_seq=after, max_chars=READ_CHARS)
+        if c["chunk_id"] not in s.chunks
+    ]
     if not chunks:
-        return f"doc {did} has no text to read", []
-    return _read(s, did, s.docs[did], chunks, "start")
+        if words:
+            already = f"passage [{covered.n}]" if covered else "in the log already"
+            said = (
+                f"the part of doc {doc_id} about {words!r} is {already},"
+                " and nothing follows it"
+            )
+            return said, []
+        where = f"[{m.group(1)}]" if m.group(1) else f"doc {doc_id}"
+        return f"nothing more to read in {where}", []
+    return _read(s, doc_id, title, chunks, tag)
 
 
 def _read(
@@ -432,14 +472,15 @@ def grammar(s: Surf) -> str:
         actions += ["read", "facts", "similar", "drop"]
     elif s.docs:
         actions.append("read")
-    read = '"read: " ( pn | "doc " did ) "\\n"' if live else '"read: doc " did "\\n"'
+    where = '( pn | "doc " did )' if live else '"doc " did'
     return "\n".join(
         [
             "root ::= note action",
             f'note ::= "note: " char{{1,{NOTE_CHARS}}} "\\n"',
             "action ::= " + " | ".join(actions),
             f'search ::= "search: " char{{2,{QUERY_CHARS}}} "\\n"',
-            f"read ::= {read}",
+            f'read ::= "read: " {where} look? "\\n"',
+            f'look ::= " " char{{2,{LOOK_CHARS}}}',
             'facts ::= "facts: " pn "\\n"',
             'walk ::= "walk: " char{1,80} "\\n"',
             'similar ::= "similar: " pn "\\n"',
