@@ -73,8 +73,9 @@ through what it needs.
 
 ## From an agent
 
-`prax.mcp_server` puts the same door in front of any MCP client as
-tools: `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`,
+Everything above is what an agent gets too — there is no second API and
+no privileged path. `prax.mcp_server` puts the same door in front of any
+MCP client as tools: `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`,
 `link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`,
 `ingest_file`, `capture_url`, `promote`, `set_domains`. It is a proxy —
 one HTTP call per tool, no logic of its own — so the door's handlers are
@@ -99,11 +100,10 @@ recipe `calls_for` its ingredients, every build is `made_with` its
 parts, so a shopping list for three recipes is a traversal rather than a
 prompt.
 
-For Claude Code specifically there is a plugin in
-`clients/claude-plugin/` that packages the MCP server with a skill and a
-few commands (`docs/claude-workflow.md`). It is one packaging of the
-same tools, not a requirement: any MCP client, or plain HTTP, reaches
-the same library.
+A worked example: `clients/claude-plugin/` packages the MCP server for
+Claude Code with a skill and a few commands
+(`docs/claude-workflow.md`). Nothing in the library depends on it — any
+MCP client, or plain HTTP, reaches the same tools.
 
 ## Adding a source
 

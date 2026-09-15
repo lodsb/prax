@@ -95,17 +95,31 @@ its history.
 **The web UI** at `/ui/`: search and ask, a document with its context
 column, the graph, the review queue, pages, the inbox, the jobs.
 
-**The `prax` command** is the same library from a shell. `--json` makes
-any of it a script's input, `--door` points it at another machine.
+**The `prax` command** is the whole library from a shell, and the way
+most of it gets used:
+
+    prax                              where things stand, what to type next
+    prax search granular synthesis    find documents
+    prax ask --answer how does a feedback delay network work
+    prax add ~/Downloads/paper.pdf    a file, a folder, a URL, or piped text
+    prax import links bookmarks.html  what a service exported
+    prax show 4312 | less             read one in the terminal
+    prax graph "wave digital filter"  what the graph knows around a name
+    prax status · jobs · heal · backup · doctor
+    prax serve · work --watch         run it
+
+Each command is one HTTP call. `--json` turns any of them into a
+script's input, and `--door` points the same command at another machine
+— the board in the cupboard, from the laptop.
 
 **The browser extension** sends what you are reading, including pages
 that need your session.
 
-**HTTP, and MCP for agents.** One service is the only writer and the
-only API; the UI, the command, the extension and the MCP server are all
-clients of it. A shell script with `curl` and `jq` reaches exactly what
-an agent does, and whatever either writes carries its own name, so it
-can be inspected — or retired — as a unit. Recipes and the contract:
+**HTTP, for anything else.** One service is the only writer and the only
+API, so a shell script with `curl` and `jq` reaches exactly what the UI
+does; an MCP server ships with it for tool-using agents, and whatever
+any of them writes carries its own name, so it can be inspected — or
+retired — as a unit. Recipes and the contract:
 [`docs/integrating.md`](docs/integrating.md).
 
 ## Whose models, and where it runs
@@ -209,12 +223,12 @@ in [`CLAUDE.md`](CLAUDE.md), with the reasoning in
 | [`docs/integrating.md`](docs/integrating.md) | Using the library from scripts, agents and other tools. |
 | [`docs/ask.md`](docs/ask.md) | What the asking model can and cannot do, what it costs, how to steer it. |
 | [`docs/architecture.md`](docs/architecture.md) | The system as built: hosts, life of a document and of a query, module map, where to touch what. |
-| [`CLAUDE.md`](CLAUDE.md) | Invariants and conventions. Loaded into every Claude Code session. |
+| [`CLAUDE.md`](CLAUDE.md) | Invariants and conventions — the file an agent session loads. |
 | [`docs/rationale.md`](docs/rationale.md) | Decision records: what was chosen, what was measured, when to revisit. |
 | [`docs/ui.md`](docs/ui.md) | The web UI: the endpoints it uses, its routes and rules. |
 | [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The mark, the six themes, the type, what was tried and dropped. |
 | [`docs/sources.md`](docs/sources.md), [`docs/extension.md`](docs/extension.md) | Where documents come from; the browser extension. |
-| [`docs/claude-workflow.md`](docs/claude-workflow.md) | One agent workflow in full: the Claude Code plugin. |
+| [`docs/claude-workflow.md`](docs/claude-workflow.md) | One agent workflow in full, as an example: the Claude Code plugin. |
 | [`docs/eval/`](docs/eval/) | Measurements: extractors, retrieval, the local models. |
 | ontology [`v2`](docs/ontology-v2.md) [`v4`](docs/ontology-v4.md) [`v5`](docs/ontology-v5.md) [`v6`](docs/ontology-v6.md) [`v7`](docs/ontology-v7.md), [`studio`](docs/ontology-studio.md), [`craft`](docs/ontology-craft.md) | How the vocabulary grew, one version at a time, and why. |
 | [`docs/PLAN.md`](docs/PLAN.md), [`docs/research.md`](docs/research.md) | The staged plan; the landscape survey. |
