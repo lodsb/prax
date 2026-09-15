@@ -232,7 +232,17 @@ or "read again… → figures" on the page. A PDF image no caption claims
 are decoration. The reading goes under the
 image line as `*Figure, as read by <model>:* …` (a model reads a figure
 once; another model's reading joins it), and the figure chunk carries
-it — findable, and read by the extraction. The parsers find
+it — findable, read by the extraction, and read by a surfing ask like
+any paragraph. The model is shown what the document says around the
+figure — its title, the caption, the text on either side of the image
+line — because what a plot is *of* is written there and not in the
+picture: without it, "six stacked curves that likely illustrate spectral
+characteristics"; with it, "the frequency responses of the five learned
+CNN kernels against the ground truth filter". It is told to name things
+in the document's terms but to state only what is visible, so the
+surrounding text names the subject without being described in the
+figure's place (extractor revision r2; readings written before it stand
+until a figure is read again). The parsers find
 figures as they read (`trafilatura` r3, `pymupdf4llm` r2); the
 retroactive pass over a library parsed before that is `figure-refs`,
 which puts the original's figures into the current text without

@@ -9,9 +9,12 @@ or a running logo), writes each into the Markdown where it sits as
 
 and serves the bytes back out of the original on request, so nothing new
 is stored (the original already holds them; the reference is a hash,
-invariant 2). The chunker makes such a line, its caption and any
-description one ``figure`` chunk. A second pass (``describe``) asks the
-vision model what each figure shows and writes that under the image line:
+invariant 2). A reading is asked for with what the document says around
+the figure — its title, the caption, the text on either side — because
+what a plot is *of* is written there and not in the picture. The chunker
+makes such a line, its caption and any description one ``figure`` chunk.
+A second pass (``describe``) asks the vision model what each figure shows
+and writes that under the image line:
 
     *Figure, as read by <model>:* what the picture shows …
 
@@ -384,18 +387,84 @@ def refs(text: str) -> list[dict[str, Any]]:
 
 # ------------------------------------------------------------ describing
 
+# The model is shown the figure and, when the document has them, the
+# things around it: what the document is called, the figure's caption and
+# the text on either side of the image line. Without them a plot is "six
+# stacked curves that likely illustrate spectral characteristics"; with
+# them it is "the frequency responses of the five learned CNN kernels
+# against the ground truth filter" — the names are in the document, not
+# in the picture, and they are what a search later looks for. The
+# instruction not to state what is not visible is what keeps the context
+# from being described instead of the figure.
 FIGURE_PROMPT = """\
 This is a figure from a document in a personal research library (a paper,
-a manual, an article, a note). In three to six sentences, say what it
-shows so that someone searching the library would find it and someone who
-cannot see it would understand it: the kind of figure (photograph, plot,
-schematic, block diagram, screenshot, table as image, drawing), its
-subject, and the specific content — axes and what the curves do, the
-blocks and the signal path, the components and their values, the device
-and its controls, the people or things in a photograph. Transcribe short
-labels and numbers where they carry the meaning. No preamble, no
+a manual, an article, a note).{context}
+In three to six sentences, say what the figure shows so that someone
+searching the library would find it and someone who cannot see it would
+understand it.{naming} Describe the specific content: the kind of figure
+(photograph, plot, schematic, block diagram, screenshot, table as image,
+drawing), its subject, axes and what the curves do, the blocks and the
+signal path, the components and their values, the device and its
+controls, the people or things in a photograph. Transcribe short labels
+and numbers where they carry the meaning.{honesty} No preamble, no
 "the image shows".
 """
+
+NAMING = """\
+ Begin by naming what it is of, in the document's own terms — the caption
+and the text around it tell you what the thing is called."""
+
+HONESTY = """\
+ Everything you say about the picture must be visible in it: use the text
+to name things, never to add what the image does not show, and where the
+two disagree, the image is what you describe. Do not summarise the
+surrounding text and do not guess at what the figure "likely" means.
+Never mention the caption or the text: write about the picture only."""
+
+AROUND_CHARS = 700  # of the text on each side of the image line
+TITLE_CHARS = 120
+
+
+def document_title(text: str) -> str:
+    """What the document calls itself: its first Markdown heading."""
+    for line in text[:4000].split("\n"):
+        if line.startswith("#"):
+            return line.lstrip("#").strip()[:TITLE_CHARS]
+    return ""
+
+
+def around(lines: list[str], at: int) -> str:
+    """The text on either side of the image line at ``at``, without the
+    readings of any figure (a model must not be shown its own earlier
+    work, or another figure's)."""
+    keep = [
+        ln
+        for ln in lines[: max(0, at)][-40:] + ["…"] + lines[at + 1 :][:40]
+        if not READ_BY.match(ln) and not REF.match(ln)
+    ]
+    text = " ".join(" ".join(keep).split())
+    if len(text) > 2 * AROUND_CHARS:
+        half = AROUND_CHARS
+        text = text[:half] + " … " + text[-half:]
+    return text
+
+
+def figure_prompt(title: str, caption: str, near: str) -> str:
+    """The prompt for one figure, with what the document says around it."""
+    told = []
+    if title:
+        told.append(f'It is from "{title}".')
+    if caption:
+        told.append(f"Its caption: {caption}")
+    if near:
+        told.append(f"The text around it: {near}")
+    if not told:
+        return FIGURE_PROMPT.format(context="", naming="", honesty="")
+    return FIGURE_PROMPT.format(
+        context="\n\n" + "\n".join(told) + "\n",
+        naming=NAMING.rstrip("\n").replace("\n", " "),
+        honesty=HONESTY.rstrip("\n").replace("\n", " "),
+    )
 
 
 def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
@@ -443,6 +512,7 @@ def describe(data: bytes, previous: str) -> str:
     if not wanted:
         return previous
     lines = previous.split("\n")
+    title = document_title(previous)
     done = 0
     broken: list[str] = []
     for r in wanted:
@@ -456,7 +526,18 @@ def describe(data: bytes, previous: str) -> str:
             # colour space): the others in the document still get read
             broken.append(f"{r['ref'][:12]}: {exc}")
             continue
-        text, who = vision.read(image, FIGURE_PROMPT, max_tokens=600)
+        at = next(
+            (
+                i
+                for i, line in enumerate(lines)
+                if line.rstrip().endswith(f"(figure:{r['ref']})")
+            ),
+            -1,
+        )
+        prompt = figure_prompt(
+            title, r["caption"], around(lines, at) if at >= 0 else ""
+        )
+        text, who = vision.read(image, prompt, max_tokens=600)
         text = " ".join(text.split())
         if not text:
             continue

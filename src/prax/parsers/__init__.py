@@ -1069,6 +1069,7 @@ REGISTRY: list[Extractor] = [
         _figures,
         explicit_only=True,
         hints=True,
+        revision=2,  # r2 the reading is asked for with the text around the figure
         variant=_figures_model,
         previous=True,  # writes into the current text
         annotates=True,

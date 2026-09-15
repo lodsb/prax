@@ -185,16 +185,25 @@ def test_describe_writes_the_reading_under_each_figure(
     monkeypatch.setattr(models, "resolve", lambda s: spec if s == "vision" else None)
     seen: list[bytes] = []
 
+    prompts: list[str] = []
+
     class FakeRuntime:
         def chat(self, system, user, **kw):
             seen.append(kw["images"][0][0])
-            assert user == figures.FIGURE_PROMPT
+            prompts.append(user)
             return "A photograph of a woman in a dark jacket, facing the camera.", {}
 
     monkeypatch.setattr(models, "runtime", lambda s: FakeRuntime())
     figs = figures.html_figures(PAGE.encode())
-    text = figures.place("Prose.\n", figs)
+    text = figures.place("# A page about a woman\n\nProse.\n", figs)
     out = figures.describe(PAGE.encode(), text)
+    # the model is told what the document says around the figure
+    assert 'It is from "A page about a woman".' in prompts[0]
+    assert f"Its caption: {figs[0].caption}" in prompts[0]
+    assert "The text around it: # A page about a woman Prose." in prompts[0]
+    assert "Begin by naming what it is of" in prompts[0]
+    assert "must be visible in it" in prompts[0]
+    assert f"(figure:{figs[0].ref})" not in prompts[0]  # no image lines
     assert out.count("*Figure, as read by vl@127.0.0.1:1:* A photograph") == 2
     assert seen == [PHOTO, PLOT]
     assert figures.refs(out)[0]["described_by"] == ["vl@127.0.0.1:1"]
@@ -207,6 +216,14 @@ def test_describe_writes_the_reading_under_each_figure(
     assert len(figs2) == 2
     out2 = figures.describe(bad.encode(), figures.place("Prose.\n", figs2))
     assert out2.count("*Figure, as read by") == 1
+    # a second figure is not shown the first one's reading
+    assert "A photograph of a woman" not in prompts[1]
+    # a figure with nothing to say about it gets the prompt without context
+    bare = figures.figure_prompt("", "", "")
+    assert "Begin by naming what it is of" not in bare
+    assert "must be visible in it" not in bare
+    assert bare.startswith("This is a figure from a document")
+
     fig_chunks = [c for c in chunking.chunk(out) if c.kind == "figure"]
     assert fig_chunks[0].data["readings"][0]["model"] == "vl@127.0.0.1:1"
 
