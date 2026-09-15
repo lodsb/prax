@@ -634,6 +634,63 @@ since a batch pass opens the SQLite file directly today.
       script, measure the door's memory there, decide `i8` or the
       desktop's `f16`.
 
+## Reading the mathematics, and what prax runs (planned, 2026-09-16)
+
+Two threads that met on 2026-09-15. The measurement first
+(`docs/eval/marker-equations-2026-09-15.md`): the eight most
+equation-heavy PDFs here refer to 347 numbered equations and hold nine
+characters of maths between them, because a display equation in a
+two-column paper is a vector drawing that `pymupdf4llm` drops and the
+figure finder does not collect. marker reads them as LaTeX. Separately,
+closing a terminal that evening took the door, the worker and
+llama-server with it, which is a wrapper handing its children a shared
+console rather than anything about Windows.
+
+- [ ] **The console fix.** `Invoke-Logged` in `deploy/desktop.ps1` starts
+      each service with `Start-Process -NoNewWindow`, so a console event
+      reaches every child. Give each its own console. One line, do it
+      first, it makes an evening safe.
+- [ ] **`prax up`.** prax owns its process model instead of deriving it
+      twice in shell (`deploy/desktop.ps1` 379 lines, `deploy/desktop.sh`
+      381, doing the same job): a `run:` section in `prax.yaml` naming the
+      door, the worker and optionally the model server; children in their
+      own process groups; the log rotation that lives in shell today;
+      restart with backoff, and patience with llama-server, which takes
+      four minutes to load and answers 503 while it does. Then Task
+      Scheduler, systemd and launchd each run one command and the
+      platform scripts shrink to registration and status. The nightly
+      pass and the backup stay in the OS scheduler: they are cron-shaped,
+      not services. Nothing in the data path changes.
+- [ ] **marker as a named extractor.** Explicit-only beside `docling`,
+      `prax reread --extractor marker --ids …`, stamped, reversible
+      through `parse_history`. Wants the GPU number first (the card was
+      full during the measurement, so only the CPU's 33 s a page is
+      known) and the six remaining sample papers converted. An optional
+      extra, never a dependency: the weights are RAIL-M, the code
+      Apache 2.0, prax stays MIT.
+- [x] **A display equation is a chunk** (2026-09-15, `formula` in
+      `chunking.KINDS`): the LaTeX, the number the prose refers to it by
+      and any readings in `data`, on the figure's pattern. What counts is
+      structural — a relation, or an expression long enough to stand
+      alone — which keeps 99 of 100 of marker's display equations and
+      leaves the diagram fragment in the prose. Inline maths stays in its
+      sentence, because a chunk is a region of the artifact.
+- [ ] **A reading for a formula**, as a figure has one: a model says in
+      words what the equation is ("Shockley's diode equation…"), written
+      under it, so it is findable by meaning — `\frac{a-b}{2R}` embeds to
+      noise. Same machinery as the figure readings, including `-again`
+      and an `unread-formulas` ailment.
+- [ ] **Then look at the review queue again.** Today it says no: of 4,181
+      open items 193 look mathematical and almost all are bibliographic
+      misfits carrying a maths-flavoured word. That is an artefact — the
+      extractor has never seen an equation — so the question reopens once
+      a few dozen papers have been read with their mathematics in place.
+      Only then, and only what the evidence asks for: `claim` already
+      covers a theorem, `method` a transform, `concept` the objects, and
+      `defines`/`extends`/`contradicts` already exist. An `equation`
+      entity type is the trap to avoid — 9,447 papers of nameless
+      "(5)" entities.
+
 ## Later / maybe
 
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the
