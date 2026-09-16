@@ -466,6 +466,58 @@ def _repair_stale_parses(con: sqlite3.Connection, rows: list[dict[str, Any]]) ->
     return done
 
 
+def _stale_extractions(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents whose extraction is stamped on a text a replacing read
+    has since replaced (``parse_history``: an ``upgraded`` entry by a
+    reader that is not an annotator, after ``extraction.at``): the graph
+    speaks of a text that is gone, and the extract step does not know.
+    From before the rule (2026-09-17) that unstamps on the way in."""
+    from prax.store import documents as docs
+
+    not_annotator = " AND ".join(
+        f"json_extract(h.value, '$.extractor') NOT LIKE '{a}/%'"
+        for a in docs.ANNOTATORS
+    )
+    rows = con.execute(
+        "SELECT DISTINCT d.id, d.title,"
+        "       json_extract(d.meta, '$.extraction.at') AS extracted_at,"
+        "       json_extract(d.meta, '$.extraction.extractor') AS extractor,"
+        "       json_extract(h.value, '$.extractor') AS read_by,"
+        "       json_extract(h.value, '$.at') AS read_at"
+        " FROM documents d, json_each(d.meta, '$.parse_history') h"
+        " WHERE json_extract(d.meta, '$.extraction') IS NOT NULL"
+        "   AND json_extract(d.meta, '$.retired') IS NULL"
+        "   AND json_extract(h.value, '$.outcome') = 'upgraded'"
+        "   AND json_extract(h.value, '$.at') > json_extract(d.meta, '$.extraction.at')"
+        f"  AND {not_annotator}"
+        " ORDER BY d.id LIMIT ?",
+        (CAP,),
+    ).fetchall()
+    seen: dict[int, dict[str, Any]] = {}
+    for r in rows:
+        seen[r["id"]] = {
+            "id": r["id"],
+            "title": r["title"],
+            "extractor": r["extractor"],
+            "extracted_at": r["extracted_at"],
+            "read_by": r["read_by"],
+            "read_at": r["read_at"],
+        }
+    return list(seen.values())
+
+
+def _repair_stale_extractions(
+    con: sqlite3.Connection, rows: list[dict[str, Any]]
+) -> int:
+    """Move the stamp aside so the extract step reads the new text; the
+    old reading's edges go when the new one is applied."""
+    from prax.store import documents as docs
+
+    return sum(
+        1 for r in rows if docs.unstamp_extraction(con, r["id"], str(r["read_by"]))
+    )
+
+
 def _unembedded_chunks(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Chunks with no vector from any model. Asked of the bookkeeping table
     alone: a check must never load an embedder to answer a question about
@@ -696,6 +748,24 @@ AILMENTS: tuple[Ailment, ...] = (
                 "unreadable": True,
             },
         ),
+    ),
+    Ailment(
+        name="stale-extractions",
+        what=(
+            "documents whose extraction was made from a text a later read has"
+            " replaced (marker over a pymupdf4llm text, OCR over a scan): the"
+            " graph speaks of a text that is gone, and the extract step does"
+            " not select them again"
+        ),
+        fix=(
+            "move the stamp to the history so the extract step reads the new"
+            " text (`prax work --steps extract --scope all`, or the nightly"
+            " pass); the old reading's edges are retired when the new one is"
+            " applied. A read that replaces the text does this on the way in"
+            " now; these are from before"
+        ),
+        find=_stale_extractions,
+        repair=_repair_stale_extractions,
     ),
     Ailment(
         name="unread-formulas",

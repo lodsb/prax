@@ -753,6 +753,15 @@ def apply(
     report.retired = store.retire_reading(
         con, doc_id, producer=extractor, except_version=onto.version
     )
+    stale = store.get_meta(con, doc_id).get("extraction_stale")
+    if stale and stale.get("extractor") == extractor:
+        # the text this producer read has been replaced since (a parser
+        # that reads the mathematics, OCR over a scan): its whole earlier
+        # reading of the document goes, whatever version it was under,
+        # and this one is written afresh — history kept (invariant 8)
+        report.retired += store.retire_reading(
+            con, doc_id, producer=extractor, except_version=""
+        )
     page_titles = store.page_titles(con)
     for t in extraction.triples:
         edge = store.Edge(t.src, t.src_type, t.rel, t.dst, t.dst_type)
@@ -836,6 +845,8 @@ def apply(
         report.queued += 1
     meta = store.get_meta(con, doc_id)
     meta.pop("extraction_error", None)  # a reading that worked
+    if (meta.get("extraction_stale") or {}).get("extractor") == extractor:
+        meta.pop("extraction_stale")
     if extraction.summary:
         meta["summary"] = extraction.summary
     if meta.get("extraction"):  # every model that has read the document

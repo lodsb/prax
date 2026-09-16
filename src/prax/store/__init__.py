@@ -78,6 +78,7 @@ from .base import (  # noqa: F401
 )
 from .documents import (  # noqa: F401
     _KIND_WORDS,
+    ANNOTATORS,
     DOCTYPES,
     DUPLICATE_THRESHOLD,
     MODES,
@@ -148,6 +149,7 @@ from .documents import (  # noqa: F401
     unpromote,
     unreadable_documents,
     unretire_document,
+    unstamp_extraction,
 )
 from .graph import (  # noqa: F401
     ASK_FACT_RELS_SKIPPED,

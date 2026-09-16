@@ -344,3 +344,90 @@ def test_a_failed_extraction_is_remembered_and_not_retried_every_pass(
     extraction.apply(con, doc_id, extraction.Extraction(summary="s"), extractor="fake")
     assert "extraction_error" not in store.get_meta(con, doc_id)
     assert store.health(con, only=["extraction-failed"])["ailments"][0]["count"] == 0
+
+
+def test_a_replacing_reread_unstamps_the_extraction_and_the_next_one_supersedes_it(
+    con: sqlite3.Connection,
+) -> None:
+    """A parser that reads the mathematics replaces the text an extraction
+    was made from: the stamp goes to the history, the extract step selects
+    the document again, and the new reading retires the old one's edges.
+    An annotating read (a figure's reading) adds to the text and leaves
+    the stamp: every figure pass would re-extract the library otherwise."""
+    from prax.parsers import queue
+
+    doc_id = _doc(con)
+    result = extraction.StubExtractor().extract(extraction.build_input(con, doc_id))
+    extraction.apply(con, doc_id, result, extractor="stub", run="first")
+    version = ontology.current().version
+    assert doc_id not in store.select_for_extraction(con, ontology_version=version)
+    old_edges = [
+        e
+        for e in store.traverse(con, result.triples[0].src, hops=1)
+        if e["source_doc"] == doc_id
+    ]
+    assert old_edges and all(e["run"] == "first" for e in old_edges)
+
+    def live(run: str) -> int:
+        return con.execute(
+            "SELECT count(*) FROM edges WHERE source_doc = ? AND run = ?"
+            " AND valid_to IS NULL",
+            (doc_id, run),
+        ).fetchone()[0]
+
+    assert live("first") == len(old_edges)
+
+    # an annotating read: the stamp stays
+    text = store.get_document(con, doc_id, max_chars=0)
+    grown = (
+        store.get_document(con, doc_id)["text"]
+        + "\n\n*Figure, as read by m:* a chart.\n"
+    )
+    assert (
+        queue.apply_parse(con, doc_id, stamp="figures/2", text=grown, keep_source=True)
+        == "upgraded"
+    )
+    assert store.get_meta(con, doc_id).get("extraction")
+    assert doc_id not in store.select_for_extraction(con, ontology_version=version)
+
+    # a replacing read: the stamp goes, the document is selected again
+    rewritten = (
+        store.get_document(con, doc_id)["text"].replace("paper", "papyrus")
+        + "\n\n$$E = mc^2 \\quad (1)$$\n"
+    )
+    assert (
+        queue.apply_parse(con, doc_id, stamp="marker/2.0.0", text=rewritten)
+        == "upgraded"
+    )
+    meta = store.get_meta(con, doc_id)
+    assert "extraction" not in meta
+    assert meta["extraction_history"][-1]["superseded_by"] == "marker/2.0.0"
+    assert meta["extraction_history"][-1]["run"] == "first"
+    assert meta["extraction_stale"] == {
+        "extractor": "stub",
+        "run": "first",
+        "ontology_version": version,
+        "text_read_by": "marker/2.0.0",
+    }
+    assert doc_id in store.select_for_extraction(con, ontology_version=version)
+    assert text is not None
+
+    # the next extraction by the same producer supersedes the old reading
+    again = extraction.StubExtractor().extract(extraction.build_input(con, doc_id))
+    report = extraction.apply(con, doc_id, again, extractor="stub", run="second")
+    assert report.retired >= len(old_edges)
+    assert report.linked == len(again.triples) and report.existing == 0
+    now = [
+        e
+        for e in store.traverse(con, again.triples[0].src, hops=1)
+        if e["source_doc"] == doc_id
+    ]
+    assert now and all(e["run"] == "second" for e in now)
+    assert live("first") == 0 and live("second") == len(again.triples)
+    meta = store.get_meta(con, doc_id)
+    assert meta["extraction"]["run"] == "second" and "extraction_stale" not in meta
+    assert doc_id not in store.select_for_extraction(con, ontology_version=version)
+    # another producer's reading is not what a text upgrade supersedes
+    assert (
+        extraction.apply(con, doc_id, again, extractor="other", run="o1").retired == 0
+    )

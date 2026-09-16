@@ -235,6 +235,13 @@ def apply_parse(
     _record(con, doc_id, {**entry, "outcome": action, "text_hash": result["text_hash"]})
     if keep_source:
         _restamp(con, doc_id, stamp, keep_source)
+    elif action == "upgraded":
+        # a replacing read (marker over a pymupdf4llm text, OCR over a
+        # scan) leaves an extraction stamped on a text that no longer
+        # exists: the extract step selects the document again. An
+        # annotating read adds to the text and leaves the stamp: every
+        # figure pass would re-extract the library otherwise
+        store.unstamp_extraction(con, doc_id, stamp)
     return action
 
 

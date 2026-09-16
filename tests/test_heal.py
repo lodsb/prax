@@ -269,3 +269,55 @@ def test_a_long_claim_is_left_alone(con: sqlite3.Connection) -> None:
         )
     found = store.health(con, only=["unnamed-entities"])["ailments"][0]
     assert found["count"] == 1 and found["examples"][0]["type"] == "paper"
+
+
+def test_an_extraction_of_a_replaced_text_is_found_and_unstamped(
+    con: sqlite3.Connection,
+) -> None:
+    """A text replaced after its extraction (a reader from before the rule
+    that unstamps on the way in): the ailment names the document, the
+    repair moves the stamp aside so the extract step selects it again; an
+    annotating read after the extraction is not damage."""
+    from prax import extraction, ontology
+    from prax.parsers import queue
+
+    body = "# A paper on reverb\n\n" + "Feedback delay networks make reverb. " * 40
+    replaced = store.ingest_text(con, body, title="Replaced")["doc_id"]
+    annotated = store.ingest_text(con, body + " Twice.", title="Annotated")["doc_id"]
+    for doc_id in (replaced, annotated):
+        result = extraction.StubExtractor().extract(extraction.build_input(con, doc_id))
+        extraction.apply(con, doc_id, result, extractor="stub", run="r1")
+    # the history entries are what the ailment reads: written as the queue
+    # writes them, but around the rule, as a reader from before it did
+    queue._record(
+        con,
+        replaced,
+        {
+            "extractor": "marker/2.0.0",
+            "outcome": "upgraded",
+            "at": "2099-01-01T00:00:00Z",
+        },
+    )
+    queue._record(
+        con,
+        annotated,
+        {
+            "extractor": "figures/2+m",
+            "outcome": "upgraded",
+            "at": "2099-01-01T00:00:00Z",
+        },
+    )
+    ailment = next(a for a in store.AILMENTS if a.name == "stale-extractions")
+    found = ailment.find(con)
+    assert [f["id"] for f in found] == [replaced]
+    assert found[0]["read_by"] == "marker/2.0.0" and found[0]["extractor"] == "stub"
+    version = ontology.current().version
+    assert replaced not in store.select_for_extraction(con, ontology_version=version)
+    assert ailment.repair is not None
+    assert ailment.repair(con, found) == 1
+    assert replaced in store.select_for_extraction(con, ontology_version=version)
+    meta = store.get_meta(con, replaced)
+    assert meta["extraction_stale"]["run"] == "r1"
+    assert meta["extraction_history"][-1]["superseded_by"] == "marker/2.0.0"
+    assert ailment.find(con) == []  # repaired: nothing left to find
+    assert store.get_meta(con, annotated).get("extraction")

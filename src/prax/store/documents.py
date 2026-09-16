@@ -1555,6 +1555,36 @@ def get_document(
     return out
 
 
+@_serialized
+def unstamp_extraction(con: sqlite3.Connection, doc_id: int, stamp: str) -> bool:
+    """The text an extraction was made from has been replaced (by the
+    reader ``stamp``): the extraction stamp goes to the history, so the
+    extract step selects the document again, and ``meta.extraction_stale``
+    names the reading the next extraction supersedes (``extraction.apply``
+    retires its edges, history kept). A failed extraction on the old text
+    is forgotten too. True when there was a stamp to move."""
+    meta = get_meta(con, doc_id)
+    gone = meta.pop("extraction", None)
+    failed = meta.pop("extraction_error", None)
+    if not gone and not failed:
+        return False
+    if gone:
+        meta.setdefault("extraction_history", []).append(
+            {**gone, "superseded_by": stamp}
+        )
+        meta["extraction_stale"] = {
+            "extractor": gone.get("extractor"),
+            "run": gone.get("run"),
+            "ontology_version": gone.get("ontology_version"),
+            "text_read_by": stamp,
+        }
+    set_meta(con, doc_id, meta)
+    return True
+
+
+ANNOTATORS = ("figures", "figure-refs", "formulas")  # readers that add to the text
+
+
 def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     """The structural fields of a chunk row, decoded (None for legacy
     rows), and for a figure chunk the ``figure`` reference, so a hit or a
