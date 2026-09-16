@@ -287,3 +287,39 @@ def test_one_role_can_be_stopped_and_started_while_the_rest_run(
     assert cli.main(["up", "--start", "nope"]) == 1
     assert up.stop(data_dir, wait=20)
     thread.join(timeout=10)
+
+
+def test_stopping_a_role_ends_what_it_started_too(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    """marker's server starts a llama-server of its own and cannot stop it
+    on Windows; ending the role must end the whole tree — the job object
+    there, the session elsewhere."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    script = tmp_path / "parent.py"
+    script.write_text(
+        textwrap.dedent(
+            f"""
+            import subprocess, sys, time
+            nap = "import time; time.sleep(120)"
+            kid = subprocess.Popen([sys.executable, "-c", nap])
+            open({str(tmp_path / "tree.ran")!r}, "a").write(f"{{kid.pid}}\\n")
+            time.sleep(120)
+            """
+        ),
+        encoding="utf-8",
+    )
+    mark = tmp_path / "tree.ran"
+    sup = up.Supervisor(
+        [up.Role("tree", [PY, str(script)])], data_dir=data_dir, tick=0.05
+    )
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    wait_for(lambda: mark.exists() and mark.read_text().strip())
+    grandchild = int(mark.read_text().split()[0])
+    parent = sup.procs["tree"].pid
+    assert up._alive(parent) and up._alive(grandchild)
+    assert up.stop(data_dir, name="tree", wait=20)
+    wait_for(lambda: not up._alive(parent) and not up._alive(grandchild), seconds=15)
+    assert up.stop(data_dir, wait=20)
+    thread.join(timeout=10)

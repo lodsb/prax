@@ -103,10 +103,8 @@ document.
 
 ## What is not measured yet
 
-- **The GPU number.** marker's card-bound path needs either Docker with
-  the NVIDIA toolkit or `LLAMA_CPP_NGL > 0`, and the 4090 here is held
-  by llama-server (20.3 of 24 GB) for the ask and vision steps. The
-  measurement wants the server stopped for a few minutes.
+- **The GPU number.** Measured the next day, below: 2 s a page through
+  marker's server with the card free.
 - **Whether the answers improve.** The honest test is downstream: the
   same equation question asked of the library before and after a
   document is re-read this way — does `ask` cite the equation, does the
@@ -126,3 +124,74 @@ mathematics is absent from the library's current text and present in
 marker's. The suggestion is right, and on this evidence the way to use
 it is as a named extractor over the documents whose formulas matter —
 not as a new default chain.
+
+## 2026-09-16: the GPU, marker's server, and the extractor
+
+With `prax up` able to pause llama-server (`prax up --stop llama-server`),
+the card was free for the measurement. marker's recognition model goes
+through llama.cpp's server on the GPU (`LLAMA_CPP_NGL=99`, about 5 GB of
+the card); its layout model stays on the CPU (the venv's torch is the
+CPU build, and layout is the smaller part). A different sample from the
+15th — eight paper-sized PDFs picked by the density of numbered-equation
+references in their prose, 125 pages, two of them the same as before:
+
+| | pages | library chars | refs | marker chars | `$$` | `$…$` | tables |
+|---|---|---|---|---|---|---|---|
+| 9549 Loopback FM with a time-varying delay | 8 | 35,225 | 98 | 43,294 | 50 | 17 | 38 |
+| 9813 Diode clipper model for WDFs | 11 | 38,678 | 82 | 45,151 | 50 | 14 | 27 |
+| 2309 Physical modeling of drums | 4 | 18,309 | 66 | 17,489 | 27 | 65 | 0 |
+| 266 Recursive time-frequency reassignment | 6 | 22,540 | 60 | 27,422 | 27 | 38 | 6 |
+| 2420 Notes on GMRES organization | 10 | 18,815 | 53 | 21,991 | 16 | 30 | 13 |
+| 90 A new fractional wavelet transform | 18 | 39,838 | 84 | 69,553 | 93 | 38 | 114 |
+| 9812 Attack and release in RMS compressors | 35 | 63,285 | 151 | 66,870 | 107 | 68 | 56 |
+| 84 Adaptive STFT synchrosqueezing | 33 | 36,061 | 78 | 94,621 | 186 | 575 | 4 |
+| | 125 | 272,751 | 672 | 386,391 | 556 | 845 | 258 |
+
+The library's text for these eight holds 18 `$` characters in total; marker's
+holds 556 display equations and 845 inline ones.
+
+**Speed.**
+
+| path | | per page |
+|---|---|---|
+| batch, 8 processes, GPU recognition (`marker pdf/ --mode fast`) | 125 pages in 485 s wall, model start included | 3.9 s |
+| marker's own server (`marker_server`), one request at a time, steady | 8–35 page papers in 15–70 s | **1.6–2.6 s** |
+| the first request to a fresh server | starts its llama-server on the way | +30 s |
+| the server itself | models loaded, answering `/` | 10 s |
+| CPU, single process (the 15th) | | 33 s |
+
+Fifteen times the CPU rate. The whole library (about 250,000 pages) would
+still be six days of the card, so it stays a tool to point at documents.
+
+**How it runs in prax now.** marker's server is a role of `prax up`
+(`run: marker: {venv: …, on_demand: true}` — declared, started by
+`prax up --start marker`), and `marker` is an explicit extractor
+(`prax reread --extractor marker --ids …`) that is a client of it: the
+PDF goes up, Markdown comes back, marker's page rules become the
+chunker's page markers, its image references (files it did not write
+here) are dropped and prax's own figure references are placed by hash
+as for every PDF. The stamp is `marker/2.0.0` (the version read from
+the role's venv; `+balanced` when the vision model lays out too). A
+`--stop marker` ends its llama-server with it: roles are ended as a
+tree now (a job object on Windows, the session elsewhere), which the
+15th's "leaves its server behind" needed.
+
+The eight papers re-read this way through the door, in one pass of the
+worker with the server on the card: all eight upgraded, **537 formula
+chunks** between them (50, 49, 27, 27, 16, 92, 101, 175 — a display
+equation short of a relation, such as `$$\rightarrow K$$`, stays in its
+paragraph), the tables as tables, 52 figures placed. The document page
+shows each equation with its number; the paragraph after it says
+"where i is the current…" as the paper does.
+
+**Quirks seen.** A two-part definition set side by side in the paper —
+`K → w: a = v + iR, b = v − iR (2)` — came back as a one-row table with
+the maths inline in its cells; marker read the layout as a table, and
+prax keeps what marker said. The characters are 40% more than the
+library's, partly real (the equations, the tables) and partly OCR of
+figure captions repeated as text. Both are reasons for an explicit
+extractor rather than a default one.
+
+**Still not measured.** Whether answers improve — the same equation
+question before and after — which belongs with the ask evaluation, and
+now has its material: eight papers whose formulas are chunks.

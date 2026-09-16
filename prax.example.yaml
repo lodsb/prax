@@ -122,6 +122,8 @@ steps:
 #                              #   read what it has read before, once more
 #   comments: true             # [PRAX_COMMENTS] a page's comment section under
 #                              #   its own heading (the corrections, the jokes)
+#   marker_url: http://127.0.0.1:8765   # [PRAX_MARKER_URL] marker's server (run: marker)
+#   marker_mode: fast          # [PRAX_MARKER_MODE] fast | balanced (the vision model lays out too)
 
 # citations:
 #   mailto: you@example.org    # [PRAX_CITATIONS_MAILTO] Crossref's polite pool
@@ -151,6 +153,8 @@ steps:
 # run:
 #   llama-server: {model: local-server}     # a models: entry with a serve: block
 #   # reranker: {model: ranker}             # a second server, serve: {reranker: true}
+#   # marker: {venv: /path/to/marker-venv, on_demand: true}   # PDF to LaTeX (howto 3h);
+#   #                                       #   ngl: 99 layers on the card; on demand: --start marker
 #   door: {host: 0.0.0.0, port: 8000}       # ssl_certfile and ssl_keyfile for HTTPS
 #   worker:
 #     interval: 20                          # seconds between passes

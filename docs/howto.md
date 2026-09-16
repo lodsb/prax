@@ -834,6 +834,52 @@ twice the RAM is the setting that matters. Extraction prompts are about
 slot costs at 16 K and beyond: `deploy/README.md`, "The card on the
 desktop".
 
+**The mathematics, as LaTeX: marker.** `pymupdf4llm` drops a display
+equation — in a two-column paper it is usually a vector drawing — and
+the library's text for its most equation-heavy papers held 672
+references to numbered equations and 18 `$` characters
+(`docs/eval/marker-equations-2026-09-15.md`).
+[marker](https://github.com/datalab-to/marker) reads them back as the
+paper's own LaTeX, `$$…$$` on a line of its own, which the chunker makes
+a `formula` chunk of (3l), and its tables come out as tables. It is a
+heavy install (1.3 GB of torch and surya; the weights are RAIL-M, the
+code Apache 2.0) and never one of prax's dependencies: it lives in a
+venv of its own, and its server is a role of `prax up`:
+
+    python -m venv %LOCALAPPDATA%\prax\marker-venv        # ~/.local/share/prax/marker-venv elsewhere
+    %LOCALAPPDATA%\prax\marker-venv\Scripts\pip install marker-pdf fastapi "uvicorn[standard]" python-multipart
+
+    run:
+      marker: {venv: C:/Users/you/AppData/Local/prax/marker-venv, on_demand: true}
+    # parse:
+    #   marker_url: http://127.0.0.1:8765   # [PRAX_MARKER_URL] the server the extractor sends PDFs to
+    #   marker_mode: fast                   # [PRAX_MARKER_MODE] balanced: the vision model lays out too
+
+The server reads through llama.cpp's server with `ngl` layers on the
+card (99, all, by default; `ngl: 0` for the CPU) and wants about 5 GB of
+it, which beside a 20 GB model does not fit a 24 GB card — hence
+`on_demand`: declared, started when wanted. Measured 2026-09-16 on the
+4090: **2 s a page** through the server against 33 on the CPU, so the
+library's 250,000 pages are still days, but the papers whose formulas
+matter are an evening:
+
+    prax up --stop llama-server          # the card free
+    prax up --start marker               # ten seconds, then a minute for its first request
+    prax reread --extractor marker --ids 9549 9813 …   # or --mime, --text-source…
+    prax jobs                            # the worker takes them before the pending captures
+    prax up --stop marker                # its llama-server ends with it
+    prax up --start llama-server
+
+`marker` is an explicit extractor, never a default or a fallback: asked
+for per document, stamped `marker/2.0.0` (the version read from the
+role's venv, `+balanced` for the other mode), reversible through
+`parse_history`. What comes back: the mathematics, the tables, headings;
+marker's own image references are dropped (they name files it did not
+write here) and prax's figure references are placed by hash as for
+every PDF, so the figures keep their readings. A two-part definition set
+side by side may come back as a small table — marker's reading of the
+layout, kept as it said it.
+
 **One card, several jobs.** The same loaded model serves extraction,
 titles, ask and — with its projector — images, so one server is the
 whole local side; two *different* models on one card are sequential:
@@ -1571,6 +1617,7 @@ Windows, Linux and macOS, and the same tests cover it there.
     prax up --status
     prax up --restart door   # after a code change; --restart all
     prax up --stop llama-server   # that one stays stopped: the card free for a while
+    prax up --start marker        # a role declared on_demand starts only when asked
     prax up --start llama-server  # and back (a --restart of a stopped role starts it too)
     prax up --stop           # everything, in order
     prax up --install        # start at login; --uninstall removes the entry
@@ -1579,6 +1626,7 @@ Windows, Linux and macOS, and the same tests cover it there.
 |---|---|---|
 | `llama-server` | llama-server for the model named, from its `serve:` block (3h) | — |
 | `reranker` | a second llama-server with a cross-encoder (`serve: {reranker: true}`) | — |
+| `marker` | marker's server from its own venv, the PDF-to-LaTeX reading (3h); `on_demand: true` declares it without starting it | — |
 | `door` | `prax serve --host … --port …` (`ssl_certfile`, `ssl_keyfile` for HTTPS) | — |
 | `worker` | `prax work --watch`, with `--nightly` for one bounded pass over everything a day | the door, unless `door:` names one elsewhere |
 

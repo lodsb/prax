@@ -684,13 +684,23 @@ console rather than anything about Windows.
       it since 19:28. Later, if wanted: a graceful stop for the door on
       Windows (`POST /shutdown` on loopback, since a process without a
       console cannot receive Ctrl-Break).
-- [ ] **marker as a named extractor.** Explicit-only beside `docling`,
-      `prax reread --extractor marker --ids …`, stamped, reversible
-      through `parse_history`. Wants the GPU number first (the card was
-      full during the measurement, so only the CPU's 33 s a page is
-      known) and the six remaining sample papers converted. An optional
-      extra, never a dependency: the weights are RAIL-M, the code
-      Apache 2.0, prax stays MIT.
+- [x] **marker as a named extractor** (2026-09-16). The GPU number:
+      2 s a page through marker's own server (`marker_server`, models
+      loaded) against 33 on the CPU; eight equation-heavy papers, 125
+      pages, 556 display equations where the library held 18 `$`
+      characters. Built as prax builds such things: marker's server is
+      a role of `prax up` from a venv of its own (`run: marker: {venv,
+      on_demand: true}` — it wants 5 GB of a card the 35B fills, so it
+      is started for an evening with `--stop llama-server`, `--start
+      marker`), and `marker` is an explicit extractor that is its
+      client: page rules become the chunker's page markers, marker's
+      image references are dropped and prax's figures placed by hash,
+      stamped `marker/2.0.0` from the venv. Roles are ended as a tree
+      now (a job object per role on Windows, the session elsewhere),
+      which marker's stray llama-server needed. The eight papers were
+      re-read through the door: 537 formula chunks, the figures kept.
+      Not a dependency: marker-pdf is never installed into prax's venv.
+      `docs/eval/marker-equations-2026-09-15.md` has the numbers.
 - [x] **A display equation is a chunk** (2026-09-15, `formula` in
       `chunking.KINDS`): the LaTeX, the number the prose refers to it by
       and any readings in `data`, on the figure's pattern. What counts is

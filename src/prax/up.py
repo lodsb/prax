@@ -52,8 +52,10 @@ from urllib.parse import urlparse
 from prax import config, models
 
 # the start order; the stop order is the reverse. A reranker is a second
-# llama-server with a cross-encoder (serve: {reranker: true} on its model)
-ROLES = ("llama-server", "reranker", "door", "worker")
+# llama-server with a cross-encoder (serve: {reranker: true} on its model);
+# marker is marker's own server, the PDF-to-LaTeX reading (howto 3h)
+ROLES = ("llama-server", "reranker", "marker", "door", "worker")
+MARKER_PORT = 8765
 KEEP_LOGS = 10
 BACKOFF = (1, 2, 4, 8, 16, 32, 60)  # seconds before a restart, per failure in a row
 STABLE_SECONDS = 300  # a process that lived this long starts the backoff over
@@ -81,6 +83,7 @@ SERVE_KEYS = (
 ROLE_KEYS = {
     "llama-server": ("model",),
     "reranker": ("model",),
+    "marker": ("venv", "port", "ngl", "on_demand"),
     "door": ("host", "port", "ssl_certfile", "ssl_keyfile"),
     "worker": (
         "door",
@@ -111,6 +114,7 @@ class Role:
     after: str | None = None  # the role that must be up first
     patience: float = DOOR_PATIENCE  # how long to wait for it
     env: dict[str, str] = field(default_factory=dict)
+    on_demand: bool = False  # declared, started only by `prax up --start`
 
 
 # ------------------------------------------------------------- the model
@@ -232,6 +236,41 @@ def llama_argv(spec: models.ModelSpec, *, binary: str | None = None) -> list[str
     ]  # fmt: skip
 
 
+def marker_role(opts: dict[str, Any]) -> Role:
+    """marker's server (``marker_server``) from its own venv (``venv``: it
+    is a heavy install and never one of prax's dependencies), reading
+    through llama.cpp's server with ``ngl`` layers on the card (99: all;
+    0: the CPU, 33 s a page against 2). It wants about 5 GB of the card,
+    which beside a 20 GB model does not fit a 24 GB one: ``on_demand``
+    declares it without starting it, for a `--stop llama-server`,
+    `--start marker` evening."""
+    venv = opts.get("venv")
+    if not venv:
+        raise UpError("run.marker: which venv? (where marker-pdf is installed)")
+    root = Path(str(venv)).expanduser()
+    exe = root / ("Scripts" if sys.platform == "win32" else "bin")
+    exe = exe / ("marker_server.exe" if sys.platform == "win32" else "marker_server")
+    if not exe.is_file():
+        raise UpError(
+            f"run.marker: no marker_server at {exe} (pip install marker-pdf fastapi"
+            " uvicorn python-multipart there)"
+        )
+    port = int(opts.get("port", MARKER_PORT))
+    env = {
+        "SURYA_INFERENCE_BACKEND": "llamacpp",
+        "LLAMA_CPP_BINARY": llama_binary(),
+        "LLAMA_CPP_NGL": str(int(opts.get("ngl", 99))),
+    }
+    return Role(
+        "marker",
+        [str(exe), "--host", "127.0.0.1", "--port", str(port)],
+        health=f"http://127.0.0.1:{port}/",
+        patience=SERVER_PATIENCE,
+        env=env,
+        on_demand=bool(opts.get("on_demand", False)),
+    )
+
+
 def _health_of(base_url: str) -> str:
     url = urlparse(base_url)
     host, port = url.hostname or "127.0.0.1", url.port or 8080
@@ -294,6 +333,8 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
                     patience=SERVER_PATIENCE,
                 )
             )
+        elif name == "marker":
+            out.append(marker_role(opts))
         elif name == "door":
             argv = prax_command(
                 "serve",
@@ -586,6 +627,7 @@ class _JobObject:
             wintypes.DWORD,
         ]
         k32.AssignProcessToJobObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+        k32.TerminateJobObject.argtypes = [ctypes.c_void_p, wintypes.UINT]
         k32.CloseHandle.argtypes = [ctypes.c_void_p]
         handle = k32.CreateJobObjectW(None, None)
         if not handle:
@@ -606,6 +648,13 @@ class _JobObject:
         if self.handle is None:
             return False
         return bool(self._k32.AssignProcessToJobObject(self.handle, int(proc._handle)))  # type: ignore[attr-defined]
+
+    def terminate(self) -> bool:
+        """End every process in the job: the role's tree, not just its root
+        (marker leaves a llama-server behind otherwise)."""
+        if self.handle is None:
+            return False
+        return bool(self._k32.TerminateJobObject(self.handle, 1))
 
 
 def healthy(url: str, timeout: float = 3.0) -> bool:
@@ -664,7 +713,8 @@ class Supervisor:
         self.restart_now: set[str] = set()
         self.paused: set[str] = set()  # roles told to stop until told to start
         self.started = _now()
-        self.job = _JobObject()
+        self.jobs: dict[str, _JobObject] = {}  # Windows: one per role, its tree
+        self.paused.update(r.name for r in roles_ if r.on_demand)
         self.log = logging.getLogger("prax.up")
         self._threads: list[threading.Thread] = []
 
@@ -742,7 +792,9 @@ class Supervisor:
             return None
         finally:
             log.close()
-        if not self.job.assign(proc) and sys.platform == "win32":
+        job = self.jobs.get(role.name) or _JobObject()
+        self.jobs[role.name] = job
+        if not job.assign(proc) and sys.platform == "win32":
             self._say(
                 f"{role.name}: not in the job object (survives a killed supervisor)"
             )
@@ -867,6 +919,15 @@ class Supervisor:
                     self._end(name, proc)
 
     def _end(self, name: str, proc: subprocess.Popen[bytes]) -> None:
+        """End a role's process and whatever it started: the job on
+        Windows, the session elsewhere (children were started in one of
+        their own), then the process itself for good measure."""
+        job = self.jobs.get(name)
+        if job is not None and job.terminate():
+            pass
+        elif sys.platform != "win32":
+            with contextlib.suppress(OSError, ProcessLookupError):
+                os.killpg(proc.pid, signal.SIGTERM)
         with contextlib.suppress(OSError):
             proc.terminate()
         try:

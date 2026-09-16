@@ -134,6 +134,7 @@ _MODE_SETTINGS = {
     "vision-pages": "PRAX_VISION_PAGES",
     "figures": "PRAX_FIGURES",
     "pymupdf4llm-ocr": "PRAX_OCR_LANGUAGE",
+    "marker": "PRAX_MARKER_MODE",
 }
 
 
