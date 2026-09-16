@@ -535,6 +535,11 @@ def test_browsing_endpoints_and_ui(client: TestClient) -> None:
     assert page.status_code == 200 and "<title>prax</title>" in page.text
     assert client.get("/ui/app.js").status_code == 200
     assert client.get("/ui/vendor/marked.min.js").status_code == 200
+    # the maths: KaTeX and one of its fonts, served by the door itself (the
+    # policy allows no other origin for scripts, styles or fonts)
+    assert client.get("/ui/vendor/katex/katex.min.js").status_code == 200
+    assert client.get("/ui/vendor/katex/katex.min.css").status_code == 200
+    assert client.get("/ui/vendor/katex/fonts/KaTeX_Main-Regular.woff2").status_code == 200
     # the rendered Markdown of strangers (captured pages, a model's answer)
     # cannot run script in the UI: no inline script, only the UI's own files
     policy = page.headers["content-security-policy"]

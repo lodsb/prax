@@ -371,9 +371,11 @@ function figureThumb(h) {
   return `<a class="hit-figure" href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="" loading="lazy"></a>`;
 }
 
-// Snippets: an image reference is noise to a reader; its caption is not.
+// Snippets: an image reference is noise to a reader; its caption is not, and
+// a reading's emphasis markers are for Markdown, not for a card of plain text.
 function plainFigures(text) {
-  return String(text || "").replace(/!\[([^\]\n]*)\]\(figure:[0-9a-f]+\)/g, "[figure: $1]");
+  return String(text || "").replace(/!\[([^\]\n]*)\]\(figure:[0-9a-f]+\)/g, "[figure: $1]")
+    .replace(/\*(Figure|Formula), as read by ([^*:]+?):\*/g, "$1, read by $2:");
 }
 
 // A display equation: its LaTeX as the paper wrote it, the number the
@@ -383,10 +385,60 @@ function plainFigures(text) {
 function renderFormula(c) {
   const readings = (c.data.readings || []).map((r) =>
     `<p class="figure-reading"><span class="muted">read by ${esc(r.model)}:</span> ${esc(r.text)}</p>`).join("");
+  const html = tex(c.data.latex, true);
   return `<div class="formula">
     ${c.data.number ? `<span class="formula-number">(${esc(c.data.number)})</span>` : ""}
-    <pre class="formula-latex">${esc(c.data.latex)}</pre>
+    ${html ? `<div class="formula-tex">${html}</div>` : ""}
+    <pre class="formula-latex"${html ? " hidden" : ""}>${esc(c.data.latex)}</pre>
+    ${html ? `<button type="button" class="linkish formula-source" title="the LaTeX as the parser wrote it">LaTeX</button>` : ""}
   </div>${readings}`;
+}
+
+// Maths is typeset by KaTeX (vendored) from what a parser wrote as LaTeX. A
+// formula chunk always, with the LaTeX a click away; the $…$ inside prose
+// only where a document carries real maths (a formula chunk, or marker's
+// text) and in an answer; never a search snippet, which is cut and marked.
+// What KaTeX cannot parse stays as written, in the text's own colour.
+function tex(latex, display) {
+  if (typeof katex === "undefined") return null;
+  try {
+    return katex.renderToString(latex, { displayMode: display, throwOnError: true });
+  } catch (err) {
+    return null;
+  }
+}
+function typesetMaths(root) {
+  if (typeof katex === "undefined" || !root) return;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => {
+      const p = n.parentElement;
+      if (!p || p.closest("pre, code, a, .katex, .formula-reading")) return NodeFilter.FILTER_REJECT;
+      return /\$|\\[([]/.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const text = node.nodeValue;
+    const frag = document.createDocumentFragment();
+    let at = 0;
+    for (const s of mathSpans(text)) {
+      const html = tex(s.latex, s.display);
+      if (html === null) continue;
+      if (s.start > at) frag.appendChild(document.createTextNode(text.slice(at, s.start)));
+      const span = document.createElement("span");
+      span.className = s.display ? "tex tex-display" : "tex";
+      span.innerHTML = html;
+      frag.appendChild(span);
+      at = s.end;
+    }
+    if (at === 0) continue;
+    if (at < text.length) frag.appendChild(document.createTextNode(text.slice(at)));
+    node.parentNode.replaceChild(frag, node);
+  }
+}
+function hasMaths(doc, chunks) {
+  return (chunks || []).some((c) => c.kind === "formula") || String((doc.meta || {}).text_source || "").startsWith("marker");
 }
 
 function renderChunk(c, highlight, docId) {
@@ -470,6 +522,7 @@ async function viewDoc(id, p) {
     <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? chunks.map((c) => renderChunk(c, highlight, doc.id)).join("") : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}</div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
+  if (hasMaths(doc, chunks)) typesetMaths(view.querySelector(".doc-body"));
   const loadContext = async (domain) => {
     try {
       await modules();
@@ -1619,11 +1672,13 @@ async function viewAsk(p) {
     document.getElementById("ask-count").textContent = done ? `${done} turn${done > 1 ? "s" : ""} in this tab; a follow-up may refer to them` : "";
     box.placeholder = done ? "ask a follow-up…" : "ask the library…";
     if (selected >= 0) turnsEl.querySelectorAll(".turn").forEach((el) => el.classList.toggle("selected", Number(el.dataset.turn) === selected));
+    turnsEl.querySelectorAll(".answer").forEach(typesetMaths);
   }
   function select(i) {
     selected = i;
     turnsEl.querySelectorAll(".turn").forEach((el) => el.classList.toggle("selected", Number(el.dataset.turn) === i));
     side.innerHTML = renderSources(turns[i], i);
+    side.querySelectorAll(".source-short, .source-full").forEach(typesetMaths);
   }
   function showSource(n) {
     const card = document.getElementById(`source-${n}`);
@@ -2206,6 +2261,16 @@ function reportError(kind, err) {
 }
 window.addEventListener("error", (e) => reportError("error", e.error || e.message));
 window.addEventListener("unhandledrejection", (e) => reportError("rejection", e.reason));
+
+// a formula's LaTeX, shown and hidden beside its typeset form
+document.addEventListener("click", (e) => {
+  const b = e.target.closest(".formula-source");
+  if (!b) return;
+  const pre = b.parentElement.querySelector(".formula-latex");
+  if (!pre) return;
+  pre.hidden = !pre.hidden;
+  b.textContent = pre.hidden ? "LaTeX" : "hide";
+});
 
 window.addEventListener("hashchange", render);
 render();

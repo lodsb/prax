@@ -899,7 +899,10 @@ holding an unread equation, which the `unread-formulas` ailment counts:
 
 The 35B reads about one equation a second; the eight marker papers'
 537 equations took ten minutes, and "Shockley diode equation" then
-brings the formula itself. The stamp is `formulas/1+<model>`; the
+brings the formula itself. The web UI typesets the LaTeX with KaTeX
+(vendored, nothing fetched): every formula chunk, with its number and
+the source a click away, the inline maths of a document that carries
+any, and an answer's — a `$` before a digit is left as the price it is. The stamp is `formulas/1+<model>`; the
 `parse.formula_readings` setting [`PRAX_FORMULA_READINGS`] is the mode
 (`new` or `again`) for one run. A model is only ever shown the equation
 and the prose around it, never another equation or an earlier reading.

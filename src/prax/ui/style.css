@@ -152,9 +152,16 @@ a:hover { text-decoration: underline; }
 .error { color: var(--accent); }
 .num { text-align: right; }
 /* what you read, in the serif */
-.formula { display: flex; gap: .8rem; align-items: baseline; margin: .6rem 0; }
-.formula-latex { flex: 1; margin: 0; padding: .5rem .7rem; background: var(--panel); border-left: 2px solid var(--line); overflow-x: auto; font-size: .92rem; }
+.formula { display: flex; gap: .8rem; align-items: baseline; margin: .6rem 0; flex-wrap: wrap; }
+.formula-tex { flex: 1; min-width: 0; overflow-x: auto; padding: .1rem .3rem; }
+.formula-tex .katex-display { margin: .3rem 0; }
+.formula-latex { flex: 1 1 100%; margin: 0; padding: .5rem .7rem; background: var(--panel); border-left: 2px solid var(--line); overflow-x: auto; font-size: .92rem; }
 .formula-number { color: var(--faint); font-family: var(--font-ui); font-size: .85rem; }
+.formula .formula-source { font-family: var(--font-ui); font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--faint); align-self: center; }
+.formula .formula-source:hover { color: var(--prax-colour); }
+/* maths inline in prose and answers: KaTeX's own fonts, the text's size */
+.tex .katex { font-size: 1.04em; }
+.tex-display { display: block; overflow-x: auto; }
 .chunk-body, .answer, .snippet, .turn-q, .figure-reading, .doc-figure figcaption, .review-triple, .summary, .graph-panel .ev { font-family: var(--font-read); }
 .chunk-body { font-size: 1rem; line-height: 1.55; }
 .chunk-body code, .chunk-body pre, .page-editor textarea { font-family: var(--font-mono); font-size: .86em; }

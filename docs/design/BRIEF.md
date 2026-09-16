@@ -117,9 +117,16 @@ goes out by e-mail.
 |---|---|---|
 | Chrome, labels, wordmark | **Bricolage Grotesque** | `"Helvetica Neue", Arial, sans-serif` |
 | Anything you read | **Literata** | `Georgia, "Times New Roman", serif` |
+| Mathematics | **KaTeX's** (Computer Modern's descendants) | — |
 
 Contemporary faces, doing no period work at all — the object carries the
-old on its own. Wordmark is Bricolage 600 at `-0.035em`.
+old on its own. Wordmark is Bricolage 600 at `-0.035em`. The third row
+is the one exception and it is not a choice: an equation set in
+anything but the maths faces reads as a mistake, so KaTeX (vendored,
+`vendor/katex/`) sets a formula chunk and the `$…$` in a paper's prose
+or an answer, and nothing else — never a search snippet, which is cut
+and marked. The LaTeX stays a click away ("LaTeX" beside the number):
+the source is the content, the typesetting is the courtesy.
 
 Rejected: Rye and Abril Fatface (period wood type — costume), Inter and
 Roboto (invisible in the wrong way).

@@ -1,3 +1,4 @@
 marked 15.0.12  https://github.com/markedjs/marked  MIT
 Bricolage Grotesque  v9 (Google Fonts static woff2, latin and latin-ext subsets)  https://github.com/ateliertriay/bricolage  OFL 1.1 (fonts/OFL-BricolageGrotesque.txt)
 Literata             v40 (Google Fonts static woff2, latin and latin-ext, roman and italic)  https://github.com/googlefonts/literata  OFL 1.1 (fonts/OFL-Literata.txt)
+KaTeX 0.18.7  https://github.com/KaTeX/KaTeX  MIT (katex/LICENSE-KaTeX.txt); katex.min.js, katex.min.css and the woff2 fonts only (the CSS names woff and ttf too; a browser that reads woff2 never asks for them)

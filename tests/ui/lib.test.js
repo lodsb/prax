@@ -47,3 +47,28 @@ test("citeLinks links known passage numbers only", () => {
   assert.ok(out.includes('title="A &quot;paper&quot;"'));
   assert.ok(out.includes("not [9]."));
 });
+
+
+test("mathSpans finds maths and leaves prices alone", () => {
+  const spans = (t) => lib.mathSpans(t).map((s) => [s.latex, s.display]);
+  // a display equation as marker writes it, and the \[ \] form
+  assert.deepEqual(spans("so $$i = I_s (e^{v/V_T} - 1)$$ holds"), [["i = I_s (e^{v/V_T} - 1)", true]]);
+  assert.deepEqual(spans("and \\[x = \\frac{a}{b}\\] there"), [["x = \\frac{a}{b}", true]]);
+  // inline: $…$ and \( \)
+  assert.deepEqual(spans("$a$ and $b$, $\\frac{a}{b}$"), [["a", false], ["b", false], ["\\frac{a}{b}", false]]);
+  assert.deepEqual(spans("with \\(a = v + iR\\) here"), [["a = v + iR", false]]);
+  assert.deepEqual(spans("a $K \\rightarrow w$ step"), [["K \\rightarrow w", false]]);
+  // a dollar sign is also a currency sign
+  assert.deepEqual(spans("the current $i$ through it costs $5 and $10 today"), [["i", false]]);
+  assert.deepEqual(spans("prices: $5 or $ 6, and $x$"), [["x", false]]);
+  assert.deepEqual(spans("between $5 and $10"), []);
+  assert.deepEqual(spans("a $-2$ dB step"), []);  // no letter, no backslash
+  // stays on its line, stays short
+  assert.deepEqual(spans("two lines $x\ny$ no"), []);
+  assert.deepEqual(spans("$" + "x".repeat(201) + "$"), []);
+  // positions are text offsets, in order
+  const found = lib.mathSpans("see $a$ then $$b$$.");
+  assert.deepEqual(found.map((s) => [s.start, s.end]), [[4, 7], [13, 18]]);
+  assert.deepEqual(lib.mathSpans(""), []);
+  assert.deepEqual(lib.mathSpans(null), []);
+});

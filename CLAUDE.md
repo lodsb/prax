@@ -208,7 +208,8 @@ the page and the inlined logo together; do not add a per-theme logo asset.
 Ornament may cost space, never a click: nothing decorative is a control.
 The UI keeps the mark inline in `src/prax/ui/index.html` (the medium file at
 masthead size, the solid one as favicon), the six themes in `style.css` as
-`[data-prax-theme]` blocks, and the two faces vendored under
+`[data-prax-theme]` blocks, KaTeX vendored under `src/prax/ui/vendor/katex/`
+(MIT) for the mathematics and nothing else, and the two faces vendored under
 `src/prax/ui/vendor/fonts/` (OFL).
 
 ## Roadmap

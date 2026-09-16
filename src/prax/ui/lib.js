@@ -55,6 +55,31 @@ function citeLinks(html, passages) {
   });
 }
 
+// The maths in a run of text: $$…$$ and \[…\] display spans, $…$ and \(…\)
+// inline ones, as a parser (marker) or a model writes them. A dollar sign is
+// also a currency sign, so an inline span must not start with a digit or
+// a space, must hold a letter or a backslash, must stay on its line and
+// under 200 characters, and its closing $ must not be followed by a digit.
+// Returns [{start, end, latex, display}] in text order.
+const MATH = /\$\$([^$]+?)\$\$|\\\[([\s\S]+?)\\\]|\\\(([^\n]+?)\\\)|\$([^$\n]{1,200}?)\$(?!\d)/g;
+function mathSpans(text) {
+  const out = [];
+  const s = String(text || "");
+  let m;
+  MATH.lastIndex = 0;
+  while ((m = MATH.exec(s)) !== null) {
+    const display = m[1] !== undefined || m[2] !== undefined;
+    const latex = (m[1] ?? m[2] ?? m[3] ?? m[4]).trim();
+    if (!latex) continue;
+    if (m[4] !== undefined) {
+      const inner = m[4];
+      if (/^[\s\d]/.test(inner) || /\s$/.test(inner) || !/[A-Za-z\\]/.test(inner)) continue;
+    }
+    out.push({ start: m.index, end: m.index + m[0].length, latex, display });
+  }
+  return out;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans };
 }
