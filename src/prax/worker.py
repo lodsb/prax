@@ -55,9 +55,9 @@ def _requested(it: dict[str, Any]) -> tuple[list[Any], str | None]:
             f"the vision step is {spec.name if spec else 'none'} (paid): run"
             " it with --spend as the promote step, or point the step at a local server"
         )
-    if not ext.available():
+    if ext.check is None and not ext.available():
         return [], f"{name} is not installed on this worker"
-    return [ext], None
+    return [ext], None  # a server that is not up says so itself: NotYet
 
 
 def do_parse(
@@ -93,6 +93,12 @@ def do_parse(
                     text = ext(
                         data, filename=it.get("filename"), previous=it.get("previous")
                     ).strip()
+            except (parsers.NotYet, models.ServerNotReady) as exc:
+                # the server it reads through is loading or down: not the
+                # document's fault; no result, the lease runs out, the
+                # request is handed out again on a later pass
+                _say(log_, f"parse doc {doc_id}: not yet — {exc}")
+                break
             except Exception as exc:  # noqa: BLE001
                 last = (ext.stamp, f"{type(exc).__name__}: {exc}")
                 if ext is not exts[-1]:

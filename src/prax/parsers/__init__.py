@@ -140,6 +140,13 @@ class ExtractionError(RuntimeError):
     """The extractor ran but produced nothing usable."""
 
 
+class NotYet(ExtractionError):
+    """The extractor cannot run right now — the server it reads through is
+    loading its model, or is not up — and the document is not at fault:
+    the worker leaves the request waiting and says so, instead of
+    recording an error against the document."""
+
+
 # ---------------------------------------------------------------- backends
 
 
@@ -493,6 +500,11 @@ def _marker(data: bytes) -> str:
     (``docs/eval/marker-equations-2026-09-15.md``)."""
     import httpx
 
+    if not _marker_up():  # before any work: the request waits for the server
+        raise NotYet(
+            f"marker's server at {_marker_url()} is not answering"
+            " (prax up --start marker); the request waits"
+        )
     max_pages = config.whole("parse.max_layout_pages", "PRAX_MAX_LAYOUT_PAGES", 400)
     with _pymupdf_open(data) as doc:
         count = doc.page_count

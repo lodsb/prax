@@ -1035,9 +1035,10 @@ def request_readings(
         row = con.execute(
             "SELECT mime FROM documents WHERE id = ?", (doc_id,)
         ).fetchone()
-        if row is None or not parsers.candidates(
-            row["mime"] or "", preferred=extractor
-        ):
+        # the type only: whether the extractor's server is up is the
+        # worker's business when it runs the reading (a busy marker server
+        # answered a probe late once, and four papers were "skipped")
+        if row is None or not parsers.by_name(extractor).accepts(row["mime"] or ""):
             skipped += 1
             continue
         request_reading(con, doc_id, extractor, mode=mode, by=by)

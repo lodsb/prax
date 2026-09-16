@@ -667,3 +667,58 @@ def test_the_typing_step_puts_untyped_review_items_to_the_model_through_the_door
         and edges[0]["confidence"] == "INFERRED"
     )
     assert client.get("/work/typing").json()["items"] == []  # nothing untyped left
+
+
+def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model server answers 503 for a minute or three after a start (or
+    marker's server is not up): the reading is not the document's fault,
+    so the worker posts nothing, the lease runs out and the request is
+    handed out again; the outcome the person sees is still 'requested'."""
+    from prax import models, parsers
+
+    con = client.app.state.con
+    doc = store.ingest_text(
+        con, "# Maths\n\nSee\n\n$$E = mc^2 \\quad (1)$$\n\nwhich holds. " * 3, title="M"
+    )["doc_id"]
+    r = client.post(f"/doc/{doc}/reading", json={"extractor": "formulas"})
+    assert r.status_code == 200
+    spec = models.ModelSpec(
+        name="srv", kind="openai", base_url="http://127.0.0.1:1/v1", model="q"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: spec if s == "formulas" else None)
+
+    class Loading:
+        name = "q@127.0.0.1:1"
+
+        def chat(self, system, user, **kw):
+            raise models.ServerNotReady("HTTP 503: Loading model")
+
+    monkeypatch.setattr(models, "runtime", lambda s: Loading())
+    said: list[str] = []
+    out = worker.run_once(_door(client), steps=("parse",), log_=said.append)
+    assert out.get("parse", "0 parsed").startswith("0 parsed")
+    assert any("not yet" in line and "Loading model" in line for line in said)
+    reading = store.get_meta(con, doc)["reading"]
+    assert reading["state"] == "requested"  # still waiting, no error recorded
+    assert "parse_history" not in store.get_meta(con, doc)
+    # once the lease runs out it goes out again; marker's absent server is the same
+    work._leases.clear()
+    client.post(f"/doc/{doc}/reading", json={"extractor": "marker"})
+    monkeypatch.setenv("PRAX_MARKER_URL", "http://127.0.0.1:9")
+    # a text document is not marker's type, so use a fake PDF-typed one
+    pdf = store.register(con, b"%PDF-1.4 fake", mime="application/pdf", title="p")[
+        "doc_id"
+    ]
+    store.index_text(con, pdf, "old text " * 40, text_source="pymupdf4llm/1")
+    assert (
+        client.post(f"/doc/{pdf}/reading", json={"extractor": "marker"}).status_code
+        == 200
+    )
+    work._leases.clear()
+    said.clear()
+    worker.run_once(_door(client), steps=("parse",), log_=said.append)
+    assert any("marker's server" in line and "not yet" in line for line in said)
+    assert store.get_meta(con, pdf)["reading"]["state"] == "requested"
+    assert isinstance(parsers.NotYet("x"), parsers.ExtractionError)

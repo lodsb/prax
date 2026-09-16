@@ -104,6 +104,13 @@ class ModelSpec:
 ConfigError = config.ConfigError  # the file says something we cannot follow
 
 
+class ServerNotReady(RuntimeError):
+    """The model server is loading its model (llama-server answers 503
+    "Loading model" for a minute or three after a start) or is not
+    answering at all: the call was not wrong, it was early. A worker leaves
+    the request waiting and tries later."""
+
+
 # ------------------------------------------------------------------ file
 
 
@@ -376,7 +383,11 @@ def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]
             return json.loads(resp.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:300]
+        if exc.code == 503:  # llama-server for a minute or three after a start
+            raise ServerNotReady(f"{url}: HTTP 503: {detail}") from exc
         raise RuntimeError(f"{url}: HTTP {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise ServerNotReady(f"{url}: not answering ({exc.reason})") from exc
 
 
 # ------------------------------------------------------- server status

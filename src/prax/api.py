@@ -1446,7 +1446,9 @@ def request_reading(doc_id: int, req: ReadingReq, request: Request) -> dict[str,
         raise HTTPException(404, "no such document")
     if req.extractor not in store.READINGS:
         raise HTTPException(400, f"extractor must be one of {store.READINGS}")
-    if not parsers.candidates(doc["mime"] or "", preferred=req.extractor):
+    # the type only: whether the extractor's server is up is the worker's
+    # business when it runs the reading (the request waits otherwise)
+    if not parsers.by_name(req.extractor).accepts(doc["mime"] or ""):
         raise HTTPException(400, f"{req.extractor} does not read {doc['mime']}")
     try:
         return store.request_reading(
