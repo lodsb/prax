@@ -78,6 +78,9 @@ class ModelSpec:
     effort: str | None = None
     price: tuple[float, float] | None = None  # USD per million in, out
     params: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
+    # how `prax up` starts the server for this model (openai kind, on this
+    # machine): the slots, the projector, what stays in RAM (prax.up)
+    serve: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
 
     @property
     def runtime_name(self) -> str:
@@ -124,6 +127,7 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
         "n_ctx",
         "effort",
         "price",
+        "serve",
     }
     if kind == "openai" and not (raw.get("base_url") and raw.get("model")):
         raise ConfigError(
@@ -132,6 +136,11 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
     if kind == "claude" and not raw.get("model"):
         raise ConfigError(f"model {name!r}: a claude model needs 'model'")
     price = raw.get("price")
+    serve = raw.get("serve") or {}
+    if not isinstance(serve, dict):
+        raise ConfigError(f"model {name!r}: 'serve' must be a mapping")
+    if serve and kind != "openai":
+        raise ConfigError(f"model {name!r}: only an openai model has a server to serve")
     return ModelSpec(
         name=name,
         kind=kind,
@@ -144,6 +153,7 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
         effort=raw.get("effort"),
         price=(float(price[0]), float(price[1])) if price else None,
         params=tuple(sorted((k, v) for k, v in raw.items() if k not in known)),
+        serve=tuple(sorted(serve.items())),
     )
 
 

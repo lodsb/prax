@@ -38,10 +38,12 @@ SECTIONS = (
     "rerank",  # model, variant, providers
     "parse",  # ocr_max_pages, max_layout_mb, max_layout_pages
     "citations",  # mailto
-    "door",  # cors_origins, inbox_scan_seconds
+    "door",  # cors_origins, inbox_scan_seconds, clock_seconds
     "ontology",  # dir
-    "paths",  # models (where fetched model files go), backup
+    "paths",  # models (where fetched model files go), backup, llama_server
     "sources",  # what the importers need: github user and token
+    "run",  # what `prax up` keeps alive on this host (prax.up)
+    "schedule",  # the door's clock: maintain and backup at their hours (prax.schedule)
 )
 
 

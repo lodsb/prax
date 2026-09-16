@@ -1,0 +1,117 @@
+"""``prax up``: keep this host's processes running (``prax.up``)."""
+
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+from . import out
+
+
+def _data_dir(a: Any) -> Path:
+    """``--data-dir`` sets the store for this command and every child."""
+    from prax import config
+
+    if a.data_dir:
+        os.environ["PRAX_DATA_DIR"] = str(Path(a.data_dir).resolve())
+    return config.data_dir()
+
+
+def _since(stamp: str | None) -> str:
+    return out.when(stamp, "%m-%d %H:%M") if stamp else ""
+
+
+def show_status(data_dir: Path) -> int:
+    from prax import up
+
+    snap = up.status(data_dir)
+    if snap is None:
+        out.say("prax up is not running")
+        out.hint("  prax up -d starts it; prax up --install makes it start at login")
+        return 1
+    since = _since(snap.get("started"))
+    out.say(f"prax up (pid {snap['pid']}) since {since} · {snap['data_dir']}")
+    rows = []
+    for name, r in snap.get("roles", {}).items():
+        state = r.get("state", "?")
+        colour = {
+            "up": "green",
+            "starting": "yellow",
+            "down": "red",
+            "waiting": "yellow",
+        }.get(state)
+        shown = out.paint(state, colour) if colour else state
+        note = ""
+        if state == "down":
+            note = f"exit {r.get('exit')}"
+        elif r.get("since"):
+            note = f"since {_since(r['since'])}"
+        if r.get("restarts"):
+            note += f" · {out.plural(r['restarts'], 'restart')}"
+        rows.append([name, shown, str(r.get("pid") or ""), note.strip(" ·")])
+    out.table(rows, headers=["role", "state", "pid", ""])
+    out.hint(f"  logs: {up.logs_dir(data_dir)}")
+    return 0
+
+
+def up(a: Any) -> int:
+    from prax import config, up
+
+    data_dir = _data_dir(a)
+    try:
+        if a.status:
+            return show_status(data_dir)
+        if a.stop:
+            if up.running_pid(data_dir) is None:
+                out.say("prax up is not running")
+                return 0
+            out.say("stopping…")
+            if up.stop(data_dir):
+                out.say("stopped")
+                return 0
+            out.fail(
+                "prax up did not stop in time",
+                f"see {up.logs_dir(data_dir) / 'up.log'}",
+            )
+            return 1
+        if a.restart:
+            if not up.restart(data_dir, a.restart):
+                out.fail("prax up is not running", "prax up -d starts it")
+                return 1
+            out.say(f"asked prax up to restart {a.restart}")
+            return 0
+        if a.install or a.uninstall:
+            from prax import autostart
+
+            if a.uninstall:
+                lines = autostart.uninstall()
+            else:
+                up.roles()  # a bad run: section is found here, not at login
+                lines = autostart.install(data_dir)
+            for line in lines:
+                out.say(line)
+            return 0
+        roles = up.roles()
+        pid = up.running_pid(data_dir)
+        if pid is not None:
+            out.fail(
+                f"prax up is already running (pid {pid})", "prax up --status shows it"
+            )
+            return 1
+        if a.detach:
+            pid = up.detach(data_dir, [])
+            out.say(f"prax up started (pid {pid}): {', '.join(r.name for r in roles)}")
+            out.hint(
+                f"  prax up --status · prax up --stop · logs in {up.logs_dir(data_dir)}"
+            )
+            return 0
+        up.attach_log(data_dir)
+        say = out.say if sys.stdout is not None else None
+        if say:
+            out.hint(f"store {data_dir} · ctrl-c stops everything in order")
+        return up.Supervisor(roles, data_dir=data_dir, say=say).run()
+    except (up.UpError, config.ConfigError) as exc:
+        out.fail(str(exc))
+        return 2

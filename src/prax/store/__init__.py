@@ -195,6 +195,7 @@ from .jobs import (  # noqa: F401
     job_reap,
     job_start,
     job_update,
+    last_job,
     list_jobs,
     release_vector_views,
     running_jobs,

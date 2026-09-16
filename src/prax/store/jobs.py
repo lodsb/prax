@@ -157,6 +157,16 @@ def get_job(con: sqlite3.Connection, job_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def last_job(con: sqlite3.Connection, name: str) -> dict[str, Any] | None:
+    """The newest job of that name, running or not: the clock's memory
+    (``prax.schedule``)."""
+    row = con.execute(
+        "SELECT * FROM jobs WHERE name = ? ORDER BY started_at DESC, id DESC LIMIT 1",
+        (name,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> dict[str, Any]:
     """``running`` (with ``stale`` when the heartbeat is old) and the last
     ``limit`` finished jobs, newest first."""

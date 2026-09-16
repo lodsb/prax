@@ -19,6 +19,7 @@ import httpx
 from prax.client import Door, DoorError
 
 from . import importing, library, out, running
+from . import up as up_cmd
 
 DEFAULT_DOOR = "http://127.0.0.1:8000"
 EPILOG = """\
@@ -33,8 +34,8 @@ examples
 
 commands
   everyday     search, ask, add, import, show, open, graph, pages
-  running it   status, jobs, inbox, work, heal, maintain, resolve, backup, serve,
-               doctor, models
+  running it   up, status, jobs, inbox, work, heal, maintain, resolve, backup,
+               serve, doctor, models
 """
 
 
@@ -378,6 +379,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--also", action="append", metavar="FOLDER", help="another drop folder to send"
     )
     s.add_argument("--domains", help="domains for files that name none")
+    s.add_argument(
+        "--nightly",
+        metavar="HH:MM",
+        help="with --watch: once past this hour each day, one bounded pass over"
+        " the whole library (the backlog and the stale texts)",
+    )
+    s.add_argument(
+        "--nightly-limit", type=int, default=100, help="documents a step, that pass"
+    )
     s.add_argument("--quiet", action="store_true")
     s.set_defaults(func=running.work, needs_door=False)
 
@@ -394,6 +404,42 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--ssl-certfile", help="serve HTTPS with this certificate (PEM) …")
     s.add_argument("--ssl-keyfile", help="… and this private key (PEM)")
     s.set_defaults(func=running.serve, needs_door=False)
+
+    s = sub.add_parser(
+        "up",
+        help="keep this host's door, worker and model server running",
+        description=(
+            "What run: in prax.yaml names — the door, the worker, llama-server —"
+            " started in order, watched, restarted when they die, stopped in"
+            " order. In the foreground here, or detached with -d; --install"
+            " makes it start when you log in. Nothing here needs a terminal"
+            " to stay open."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax up                  here, in this terminal (ctrl-c stops all)\n"
+            "  prax up -d               detached: survives this terminal\n"
+            "  prax up --status\n"
+            "  prax up --restart door   after a code change\n"
+            "  prax up --stop\n"
+            "  prax up --install        start at login (Task Scheduler, systemd,"
+            " launchd)"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("-d", "--detach", action="store_true", help="run in the background")
+    s.add_argument(
+        "--data-dir", metavar="DIR", help="the store (default: $PRAX_DATA_DIR)"
+    )
+    what = s.add_mutually_exclusive_group()
+    what.add_argument("--status", action="store_true", help="what is running")
+    what.add_argument("--stop", action="store_true", help="stop everything, in order")
+    what.add_argument("--restart", metavar="ROLE", help="restart one role, or all")
+    what.add_argument(
+        "--install", action="store_true", help="start prax up when you log in"
+    )
+    what.add_argument("--uninstall", action="store_true", help="remove that entry")
+    s.set_defaults(func=up_cmd.up, needs_door=False)
 
     s = sub.add_parser(
         "reread",

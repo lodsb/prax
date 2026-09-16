@@ -560,9 +560,20 @@ def watch(
     spend: bool = False,
     log_: Log | None = None,
     once: bool = False,
+    nightly: str | None = None,
+    nightly_limit: int = 100,
 ) -> None:
     """Keep passing; announce a session job so the door's Jobs view shows
-    this worker."""
+    this worker. With ``nightly`` (``"03:00"``) one bounded pass over the
+    whole library follows the regular one once that hour has passed each
+    day: the backlog and the stale texts, ``nightly_limit`` documents a
+    step, the same steps."""
+    from datetime import datetime
+
+    from prax import schedule
+
+    night = schedule.parse_hour(nightly) if nightly else None
+    last_night: datetime | None = None
     session = None
     try:
         session = door.post_json(
@@ -593,6 +604,23 @@ def watch(
                     spend=spend,
                     log_=log_,
                 )
+                now = datetime.now().astimezone()
+                if night and schedule.due(night, now, last_night):
+                    last_night = now
+                    _say(
+                        log_,
+                        f"the nightly pass: {nightly_limit} a step over everything",
+                    )
+                    done = run_once(
+                        door,
+                        steps=steps,
+                        scope="all",
+                        limit=nightly_limit,
+                        workers=workers,
+                        session=session,
+                        spend=spend,
+                        log_=log_,
+                    )
                 if session:
                     door.post_json(
                         f"/work/session/{session}",

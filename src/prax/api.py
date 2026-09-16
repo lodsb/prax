@@ -40,6 +40,7 @@ from . import (
     models,
     ontology,
     review,
+    schedule,
     store,
     work,
 )
@@ -74,6 +75,29 @@ def _scan_inbox(app: FastAPI, stop: threading.Event, every: float) -> None:
         con.close()
 
 
+def _clock(stop: threading.Event, every: float) -> None:
+    """The door's clock (``schedule:``): maintain and backup at their
+    hours, as the jobs their endpoints start; the jobs table remembers
+    what ran, so a restart does not run the night again."""
+    con = store.connect()
+    try:
+        while not stop.wait(every):
+            try:
+                schedule.tick(
+                    con,
+                    {
+                        "maintain": lambda o: _start_maintain(con, o.get("only")),
+                        "backup": lambda o: _start_backup(
+                            con, o.get("dest"), archive=o.get("archive", True)
+                        ),
+                    },
+                )
+            except Exception:
+                logging.getLogger("prax.schedule").exception("the clock failed")
+    finally:
+        con.close()
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     con = store.connect()
@@ -88,12 +112,20 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             target=_scan_inbox, args=(app, stop, every), name="prax-inbox", daemon=True
         )
         scanner.start()
+    clock = None
+    if schedule.entries():
+        tick = config.number("door.clock_seconds", "PRAX_CLOCK", schedule.TICK)
+        clock = threading.Thread(
+            target=_clock, args=(stop, tick), name="prax-clock", daemon=True
+        )
+        clock.start()
     try:
         yield
     finally:
         stop.set()
-        if scanner is not None:
-            scanner.join(timeout=5)
+        for thread in (scanner, clock):
+            if thread is not None:
+                thread.join(timeout=5)
         con.close()
 
 
@@ -519,7 +551,12 @@ def maintain_start(req: MaintainReq, request: Request) -> dict[str, Any]:
             f"no such pass: {unknown}; passes are {store.PASSES},"
             f" on request {store.ON_REQUEST}",
         )
-    job = store.Job(_con(request), "maintain", note=", ".join(chosen))
+    return _start_maintain(_con(request), chosen)
+
+
+def _start_maintain(con: Any, only: list[str] | None) -> dict[str, Any]:
+    chosen = [p for p in (only or []) if p] or list(store.PASSES)
+    job = store.Job(con, "maintain", note=", ".join(chosen))
 
     def run() -> None:
         con = store.connect()
@@ -719,16 +756,20 @@ def backup_start(req: BackupReq, request: Request) -> dict[str, Any]:
     and is a job; poll ``GET /jobs/{id}`` for its progress and its last
     note."""
     try:
-        dest = store.backup_target(req.dest)
+        return _start_backup(_con(request), req.dest, archive=req.archive)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    job = store.Job(_con(request), "backup", note=str(dest))
+
+
+def _start_backup(con: Any, dest: str | None, *, archive: bool) -> dict[str, Any]:
+    dest = store.backup_target(dest)
+    job = store.Job(con, "backup", note=str(dest))
 
     def run() -> None:
         con = store.connect()
         try:
             with store.Job.existing(con, job.id) as mine:
-                store.backup(con, dest, archive=req.archive, job=mine)
+                store.backup(con, dest, archive=archive, job=mine)
         except Exception:  # the job row carries the error
             logging.getLogger("prax.backup").exception("backup to %s failed", dest)
         finally:

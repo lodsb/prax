@@ -267,6 +267,8 @@ def work(a: Any) -> int:
             spend=bool(getattr(a, "spend", False)),
             log_=say,
             once=not a.watch,
+            nightly=a.nightly if a.watch else None,
+            nightly_limit=a.nightly_limit,
         )
     except KeyboardInterrupt:
         out.say("stopped")
