@@ -42,6 +42,12 @@ and the browser extension: [`docs/howto.md`](docs/howto.md).
 <td><sub>A schematic as a document, read and transcribed by two vision models — each reading kept, both named.</sub></td>
 </tr>
 <tr>
+<td colspan="2"><a href="docs/images/vision-with-context.png"><img src="docs/images/vision-with-context.png" alt="A figure in the document view: the image, its caption, and the vision model's reading of it naming each step of the process"></a></td>
+</tr>
+<tr>
+<td colspan="2"><sub>A figure is read with the document's own words around it — title, caption, the text on either side — so the reading names the process and its four steps rather than the grey rectangles. It is a chunk of the document: searchable, citable, read by an answer.</sub></td>
+</tr>
+<tr>
 <td colspan="2"><a href="docs/images/themes.png"><img src="docs/images/themes.png" alt="The six themes: Bindery, Dessau, Riso, Cyanotype, Night, Funk — the same page in each"></a></td>
 </tr>
 <tr>
