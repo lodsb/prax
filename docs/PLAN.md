@@ -680,6 +680,16 @@ console rather than anything about Windows.
       under it, so it is findable by meaning — `\frac{a-b}{2R}` embeds to
       noise. Same machinery as the figure readings, including `-again`
       and an `unread-formulas` ailment.
+- [ ] **Show the figure where it is cited.** A figure is a chunk like any
+      other now, so an answer cites one and a search returns one — and
+      both show only its words. The UI has `renderFigure` and the door
+      serves `GET /doc/{id}/figure/{ref}`; what is missing is the ref
+      itself in the payloads, since a search hit and an ask passage carry
+      chunk_id, kind, heading and text but not `data`. Add it for figure
+      chunks, then the ask sources column and the search hits can show
+      the picture beside the reading. Noticed 2026-09-16 while reading
+      answers that quoted figures nobody could see.
+
 - [ ] **Then look at the review queue again.** Today it says no: of 4,181
       open items 193 look mathematical and almost all are bibliographic
       misfits carrying a maths-flavoured word. That is an artefact — the
