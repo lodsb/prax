@@ -135,6 +135,7 @@ _MODE_SETTINGS = {
     "figures": "PRAX_FIGURES",
     "pymupdf4llm-ocr": "PRAX_OCR_LANGUAGE",
     "marker": "PRAX_MARKER_MODE",
+    "formulas": "PRAX_FORMULA_READINGS",
 }
 
 

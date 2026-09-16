@@ -708,11 +708,21 @@ console rather than anything about Windows.
       alone — which keeps 99 of 100 of marker's display equations and
       leaves the diagram fragment in the prose. Inline maths stays in its
       sentence, because a chunk is a region of the artifact.
-- [ ] **A reading for a formula**, as a figure has one: a model says in
-      words what the equation is ("Shockley's diode equation…"), written
-      under it, so it is findable by meaning — `\frac{a-b}{2R}` embeds to
-      noise. Same machinery as the figure readings, including `-again`
-      and an `unread-formulas` ailment.
+- [x] **A reading for a formula** (2026-09-17, `prax.parsers.formulas`),
+      as a figure has one: the `formulas` step names a text model, the
+      `formulas` extractor (explicit, annotating) writes one to three
+      sentences under each display equation — the equation and the prose
+      around it are all the model sees — with `parse.formula_readings:
+      again` to replace this model's earlier readings and keep another's,
+      `--read-formulas`/`--unread-formulas` selections and the
+      `unread-formulas` ailment. The eight marker papers' 537 equations
+      were read by the 35B in ten minutes ("Shockley's diode equation…",
+      "the Shockley diode model in the wave domain, relating the incident
+      and reflected waves…"), and "Shockley diode equation" brings the
+      formula itself. Found on the way: the read/unread selection query
+      had an `OR` outside its `kind` clause, so `--unread-formulas`
+      selected every document with an unread figure (3,210 requests,
+      withdrawn); fixed and pinned with a test.
 - [x] **Show the figure where it is cited** (2026-09-16). A search hit
       and an ask passage (the surf's too) carry `figure`, the reference
       of a figure chunk's image, and the UI shows the picture in the hit
@@ -721,7 +731,13 @@ console rather than anything about Windows.
       eight figures in twenty hits, each with its picture; an answer
       about which figures compare methods shows them in its sources.
 
-- [ ] **Then look at the review queue again.** Today it says no: of 4,181
+- [ ] **Then look at the review queue again.** What it needs first: the
+      extract step over the eight marker papers (their text changed under
+      an extraction stamped on the old one; the extract step re-selects by
+      ontology version, not by text, so a text upgrade should probably
+      clear `meta.extraction` — or `prax work --steps extract` over their
+      ids by hand), then the queue's mathematical misfits counted again
+      with equations in the input. Today it says no: of 4,181
       open items 193 look mathematical and almost all are bibliographic
       misfits carrying a maths-flavoured word. That is an artefact — the
       extractor has never seen an equation — so the question reopens once

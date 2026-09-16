@@ -330,6 +330,32 @@ def _unread_figures(con: sqlite3.Connection) -> list[dict[str, Any]]:
     ]
 
 
+def _unread_formulas(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents holding a display equation no model has read: the LaTeX
+    is there and embeds to noise, and nothing says in words what the
+    equation is, so a search for it by meaning finds nothing."""
+    rows = con.execute(
+        "SELECT c.doc_id AS id, d.title, count(*) AS unread,"
+        "       json_extract(d.meta, '$.source') AS source"
+        " FROM chunks c JOIN documents d ON d.id = c.doc_id"
+        " WHERE c.kind = 'formula'"
+        "   AND json_extract(d.meta, '$.retired') IS NULL"
+        "   AND coalesce("
+        "         json_array_length(json_extract(c.data, '$.readings')), 0) = 0"
+        " GROUP BY c.doc_id ORDER BY unread DESC, c.doc_id LIMIT ?",
+        (CAP,),
+    ).fetchall()
+    return [
+        {
+            "id": r["id"],
+            "title": r["title"],
+            "unread": r["unread"],
+            "source": r["source"],
+        }
+        for r in rows
+    ]
+
+
 def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents every extractor has tried and found no text in
     (``documents.unreadable_documents``), with what the last attempt said."""
@@ -668,6 +694,28 @@ AILMENTS: tuple[Ailment, ...] = (
                 "extractor": "vision-pages",
                 "mode": "scans",
                 "unreadable": True,
+            },
+        ),
+    ),
+    Ailment(
+        name="unread-formulas",
+        what=(
+            "documents holding a display equation no model has read: the LaTeX"
+            " is there and embeds to noise, and nothing says in words what the"
+            " equation is, so a search for it by meaning finds nothing"
+        ),
+        fix=(
+            "ask the formulas model for them — on one document's page ('read"
+            " again… → formulas'), or over all of them at once (`prax reread"
+            " --extractor formulas --unread-formulas`, howto 3h). steps.formulas"
+            " in prax.yaml names the model; a local one costs only time"
+        ),
+        find=_unread_formulas,
+        offers=(
+            {
+                "label": "read the formulas",
+                "extractor": "formulas",
+                "unread_formulas": True,
             },
         ),
     ),

@@ -855,6 +855,7 @@ READINGS = (
     "vision",
     "figures",
     "figure-refs",
+    "formulas",
     "pymupdf4llm-ocr",
     "docling",
     "marker",
@@ -868,6 +869,7 @@ MODES: dict[str, tuple[str, ...] | None] = {
     # the figures a caption claims or every image; "-again" reads the ones
     # this model has read before too, replacing its earlier reading
     "figures": ("captioned", "all", "again", "all-again"),
+    "formulas": ("new", "again"),  # the unread ones, or every one read again
     "pymupdf4llm-ocr": None,  # the recognizer's script: ch, en, latin, arabic…
 }
 _MODE_WORD = re.compile(r"[a-z][a-z0-9_]*")
@@ -959,6 +961,8 @@ def select_for_reading(
     unreadable: bool = False,
     read_figures: bool = False,
     unread_figures: bool = False,
+    read_formulas: bool = False,
+    unread_formulas: bool = False,
     limit: int | None = None,
 ) -> list[int]:
     """The documents a reading is asked for at once: the ``ids`` given,
@@ -968,8 +972,9 @@ def select_for_reading(
     unreadable ones, to the ones holding a figure a model has read
     (``read_figures``: what a better prompt or a better model goes over
     again) and to the ones holding a figure nobody has read
-    (``unread_figures``); every filter given must hold. Retired documents
-    are never selected."""
+    (``unread_figures``), and the same for formulas (``read_formulas``,
+    ``unread_formulas``); every filter given must hold. Retired
+    documents are never selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
     if ids:
@@ -991,18 +996,21 @@ def select_for_reading(
     if unreadable:
         keep = set(unreadable_documents(con))
         chosen = [i for i in chosen if i in keep]
-    for wanted, read in ((read_figures, True), (unread_figures, False)):
+    for wanted, kind, read in (
+        (read_figures, "figure", True),
+        (unread_figures, "figure", False),
+        (read_formulas, "formula", True),
+        (unread_formulas, "formula", False),
+    ):
         if not wanted:
             continue
         rows = con.execute(
-            "SELECT DISTINCT doc_id FROM chunks WHERE kind = 'figure'"
-            " AND json_array_length(json_extract(data, '$.readings'))"
-            + (
-                " > 0"
-                if read
-                else " IS NULL OR json_array_length("
-                "json_extract(data, '$.readings')) = 0"
-            )
+            # the kind first, then the readings: an OR left loose here once
+            # selected every document with an unread figure as one with an
+            # unread formula (3,210 requests, withdrawn)
+            f"SELECT DISTINCT doc_id FROM chunks WHERE kind = '{kind}' AND"
+            " coalesce(json_array_length(json_extract(data, '$.readings')), 0)"
+            + (" > 0" if read else " = 0")
         )
         keep = {r[0] for r in rows}
         chosen = [i for i in chosen if i in keep]

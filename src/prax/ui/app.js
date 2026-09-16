@@ -260,11 +260,17 @@ const READINGS = {
     ["vision-pages", "the vision model over the scanned pages (handwriting, scores, what OCR cannot read)"],
     ["pymupdf4llm", "read the PDF again (finds the figures)"],
     ["pymupdf4llm-ocr", "OCR (RapidOCR) on the pages without a text layer"],
+    ["marker", "marker: the mathematics as LaTeX (formula chunks), tables as tables; needs its server (prax up --start marker)"],
+    ["formulas", "the formulas model says in words what each display equation is, under it (needs LaTeX in the text: marker first)"],
     ["docling", "Docling's layout model (code, tables); slow"],
   ],
   "text/html": [
     ["figures", "the vision model reads every figure the text references, and writes what it shows under each"],
+    ["formulas", "the formulas model says in words what each display equation is, under it"],
     ["trafilatura", "read the page again (finds the figures)"],
+  ],
+  "text/": [
+    ["formulas", "the formulas model says in words what each display equation ($$…$$) is, under it"],
   ],
   "image/": [["vision", "the vision model describes the image; a second model's reading joins the first"]],
 };
@@ -290,6 +296,12 @@ function readingForm(doc) {
     </label>
     <label class="reading-mode" data-for="pymupdf4llm-ocr">language
       <input name="mode" type="text" placeholder="the host's setting (ch, en, latin, arabic, cyrillic…)" size="28">
+    </label>
+    <label class="reading-mode" data-for="formulas">which
+      <select name="mode"><option value="new">the ones this model has not read</option><option value="again">every one, this model's earlier reading replaced</option></select>
+    </label>
+    <label class="reading-mode" data-for="marker">layout
+      <select name="mode"><option value="fast">fast: the layout by rules, the maths by the model</option><option value="balanced">balanced: the vision model lays out too (slower)</option></select>
     </label>
     <button>Request</button>
     <span class="muted">A worker picks it up (Jobs shows what is waiting); the result replaces the text, except an image's readings, which add up.</span>

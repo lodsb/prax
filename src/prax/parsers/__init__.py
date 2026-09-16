@@ -582,6 +582,24 @@ def _figures(
     return figures.describe(data, previous)
 
 
+def _formulas(
+    data: bytes, *, filename: str | None = None, previous: str | None = None
+) -> str:
+    """A reading in words under every display equation of the current
+    text (``prax.parsers.formulas``); the original is not needed."""
+    from prax.parsers import formulas
+
+    if not previous:
+        raise ExtractionError("no text to read the formulas of")
+    return formulas.describe(previous)
+
+
+def _formulas_model() -> str:
+    from prax.parsers import formulas
+
+    return formulas.model_name()
+
+
 def _figures_model() -> str:
     from prax.parsers import vision
 
@@ -1190,6 +1208,16 @@ REGISTRY: list[Extractor] = [
         hints=True,
         revision=2,  # r2 the reading is asked for with the text around the figure
         variant=_figures_model,
+        previous=True,  # writes into the current text
+        annotates=True,
+    ),
+    Extractor(
+        "formulas",
+        ("text/", "application/xhtml+xml", "application/pdf"),  # a note too
+        _formulas,
+        explicit_only=True,
+        hints=True,
+        variant=_formulas_model,
         previous=True,  # writes into the current text
         annotates=True,
     ),

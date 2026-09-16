@@ -366,7 +366,7 @@ here opens the database file.
 | `prax maintain` | derived tables: acronyms, document fields, domain rules, duplicate captures, the review queue's rule passes; `--rechunk` every chunk | those tables; `meta.retired` on a duplicate | no model, no decision; nightly after the worker's pass |
 | `prax resolve` | unmerged entities | `entities.canonical_id` | the sure tier and, when asked, the twins; the likely tier is listed (`resolve_entities.py --adjudicate` asks Claude about it) |
 | `prax import citations` | documents without `meta.citations`, DOIs first (`--resolve-titles` for the rest) | `cites` edges, `meta.citations` | two sources behind one flag; polite-pool contact; retries |
-| `prax reread` | a selection: ids, a MIME prefix, a text-source stamp, the unreadable, the documents with read or unread figures | one reading request per document; the worker does the model work | the extractor is named, never guessed; a paid model is refused by the worker; `--dry-run` counts |
+| `prax reread` | a selection: ids, a MIME prefix, a text-source stamp, the unreadable, the documents with read or unread figures or formulas | one reading request per document; the worker does the model work | the extractor is named, never guessed; a paid model is refused by the worker; `--dry-run` counts |
 | `prax heal --apply` | the ailments' rows | edges ended, items resolved, jobs closed, texts re-indexed, stamps moved | one ailment at a time; nothing deleted |
 | `prax backup` | the database, the indexes, the config, the archive files the copy lacks | a copy that is a store | `--no-archive` for a small disk |
 | `eval_retrieval.py` | the query set | a report | throwaway or existing store; opens the file, read-only in spirit |
@@ -392,6 +392,7 @@ here opens the database file.
 | `parse.ocr_language`, `.ocr_gpu` | the OCR recognizer's script (`ch`, `en`, `latin`, `arabic`, `cyrillic`…; part of the text-source stamp) and whether it runs on DirectML |
 | `parse.figures` [`PRAX_FIGURES`] | which figures the `figures` extractor reads: `captioned` (default; a PDF image no caption claims is often decoration) or `all` |
 | `parse.marker_url` [`PRAX_MARKER_URL`], `parse.marker_mode` [`PRAX_MARKER_MODE`] | marker's server for the `marker` extractor (the `marker` role of `prax up`); `fast` or `balanced` |
+| `parse.formula_readings` [`PRAX_FORMULA_READINGS`] | the `formulas` extractor reads the unread display equations (`new`) or every one again (`again`); `steps.formulas` names its model |
 | `parse.vision_pages`, `.vision_max_pages`, `.vision_dpi` | the `vision-pages` extractor: `scans` (pages without a text layer, default) or `all`; its page budget (200); the rendering resolution (150) |
 | `door.cors_origins`, `door.inbox_scan_seconds`, `door.clock_seconds` | the extension's origin; how often the door reads its drop folder; how often it looks at its schedule |
 | `run.<role>` | what `prax up` keeps alive on this host: `llama-server` and `reranker` (a `models:` entry with a `serve:` block: slots, projector, `cpu_moe`…), `marker` (its venv, port, `ngl`; `on_demand` declares without starting), `door` (host, port, TLS files), `worker` (interval, steps, the `nightly` hour and limit, another host's `door`) (howto 4b) |

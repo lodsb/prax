@@ -51,7 +51,16 @@ from prax import config
 
 CONFIG_NAME = "prax.yaml"
 KINDS = ("claude", "openai", "stub")
-STEPS = ("extract", "promote", "ask", "titles", "vision", "adjudicate", "typing")
+STEPS = (
+    "extract",
+    "promote",
+    "ask",
+    "titles",
+    "vision",
+    "adjudicate",
+    "typing",
+    "formulas",
+)
 STEP_DEFAULTS = {
     "extract": "claude-opus-5",
     "promote": "claude-sonnet-5",  # the expensive pass over flagged documents
@@ -60,6 +69,7 @@ STEP_DEFAULTS = {
     "vision": "claude-sonnet-5",
     "adjudicate": "none",
     "typing": "none",  # the model typing pass over the review queue
+    "formulas": "none",  # a reading in words under each display equation
 }
 DEFAULT_CTX = 8192  # what a step may assume of a server's context per slot
 OPENAI_TIMEOUT = 600.0

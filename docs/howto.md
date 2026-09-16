@@ -880,6 +880,30 @@ every PDF, so the figures keep their readings. A two-part definition set
 side by side may come back as a small table — marker's reading of the
 layout, kept as it said it.
 
+**A reading for a formula.** A display equation is a `formula` chunk
+with its LaTeX and its number (3l), and the LaTeX embeds to noise: a
+person searching says "Shockley's diode equation", not
+`\frac{a-b}{2R}`. So, as a figure gets a reading from the vision model,
+a formula gets one from a text model — one to three sentences under the
+equation, in the document's own terms, with the name the equation goes
+by when it has one. `steps.formulas` names the model (`none` by default);
+the `formulas` extractor writes the readings into the text, asked for on
+a document's page ("read again… → formulas") or over every document
+holding an unread equation, which the `unread-formulas` ailment counts:
+
+    steps:
+      formulas: {model: server-35b}
+
+    prax reread --extractor formulas --unread-formulas
+    prax reread --extractor formulas --read-formulas --mode again   # a better prompt or model: this model's earlier readings replaced, another's kept
+
+The 35B reads about one equation a second; the eight marker papers'
+537 equations took ten minutes, and "Shockley diode equation" then
+brings the formula itself. The stamp is `formulas/1+<model>`; the
+`parse.formula_readings` setting [`PRAX_FORMULA_READINGS`] is the mode
+(`new` or `again`) for one run. A model is only ever shown the equation
+and the prose around it, never another equation or an earlier reading.
+
 **One card, several jobs.** The same loaded model serves extraction,
 titles, ask and — with its projector — images, so one server is the
 whole local side; two *different* models on one card are sequential:

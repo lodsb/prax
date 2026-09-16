@@ -86,6 +86,8 @@ steps:
     model: local-server
   adjudicate:
     model: opus
+  # formulas:           # a reading in words under each display equation
+  #   model: local-server   #   (marker's LaTeX, howto 3h); none by default
 
 # ---------------------------------------------------------------------------
 # What this host does, as opposed to which model it asks. Every setting below
@@ -123,6 +125,8 @@ steps:
 #   comments: true             # [PRAX_COMMENTS] a page's comment section under
 #                              #   its own heading (the corrections, the jokes)
 #   marker_url: http://127.0.0.1:8765   # [PRAX_MARKER_URL] marker's server (run: marker)
+#   formula_readings: new      # [PRAX_FORMULA_READINGS] the formulas extractor reads
+#                              #   the unread equations, or `again` every one
 #   marker_mode: fast          # [PRAX_MARKER_MODE] fast | balanced (the vision model lays out too)
 
 # citations:
