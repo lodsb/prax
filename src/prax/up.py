@@ -852,9 +852,12 @@ class Supervisor:
         for t in self._threads:
             t.start()
         try:
+            ticks = 0
             while not self.stopping.is_set():
                 self._control()
-                self._write_status()
+                ticks += 1
+                if ticks % 10 == 0:  # a heartbeat; every change writes it anyway
+                    self._write_status()
                 self.stopping.wait(self.tick)
         except KeyboardInterrupt:
             self.stopping.set()
