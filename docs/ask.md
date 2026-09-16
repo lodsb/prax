@@ -111,6 +111,12 @@ on a page keeps the trail with it under "How it was found".
 A client that goes away stops the loop at its next step: nothing is
 written, and the model is not asked to answer for nobody.
 
+A passage that is a figure carries the figure's reference (`figure`)
+beside its words, which are what a vision model saw in it; the web
+UI shows the picture in the sources column, and a search hit that is
+a figure shows it in the hit list — the reading is what found it,
+the picture is what it is about.
+
 ## When it goes wrong
 
 - **The model repeats a move that brought nothing.** It is told which

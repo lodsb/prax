@@ -409,3 +409,42 @@ def test_api_streams_the_trail(client: TestClient) -> None:
     # a bad backend fails before any streaming starts
     r = client.post("/ask", json={"question": "x", "backend": "gpt", "stream": True})
     assert r.status_code == 400
+
+
+def test_a_figure_hit_or_passage_carries_its_reference(
+    con: sqlite3.Connection,
+) -> None:
+    """The reading is what finds a figure; the reference beside it is what
+    lets a hit list or the sources column show the picture."""
+    ref = "c" * 64
+    text = "\n\n".join(
+        [
+            "# Measurements",
+            "The bandgap reference drifts with temperature. " * 12,
+            (
+                f"![Fig. 3. Drift over temperature.](figure:{ref})\n"
+                "*Figure, as read by a-vision-model:* A line plot of the bandgap"
+                " voltage against temperature: flat from ten to seventy degrees,"
+                " then a knee."
+            ),
+            "## Discussion",
+            "The knee is the second-order term. " * 12,
+        ]
+    )
+    doc = store.ingest_text(con, text, title="Measurements")["doc_id"]
+    hits = store.search(con, "line plot flat seventy degrees", limit=5)
+    figure_hits = [h for h in hits if h["kind"] == "figure"]
+    assert figure_hits and figure_hits[0]["figure"] == ref
+    assert all("figure" in h for h in hits)  # the key is always there
+    assert all(h["figure"] is None for h in hits if h["kind"] != "figure")
+
+    bundle = ask.gather(con, "line plot flat seventy degrees")
+    passage = next(p for p in bundle.passages if p.doc_id == doc)
+    assert passage.kind == "figure" and passage.figure == ref
+    assert passage.to_dict()["figure"] == ref
+
+    # the surfing read of a document meets the figure with its reference
+    s = surf.Surf("q", "q", [], None, 6, 4, 4000)
+    surf.do_read(con, s, f"doc {doc} line plot seventy degrees")
+    assert any(p.figure == ref for p in s.passages)
+    assert all(p.figure is None for p in s.passages if p.kind != "figure")

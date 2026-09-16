@@ -214,7 +214,7 @@ def _fts_search(
         SELECT c.id AS chunk_id, c.doc_id, d.title,
                {snippet_col} AS snippet,
                bm25(chunks_fts) AS score,
-               c.kind, c.locator, c.heading
+               c.kind, c.locator, c.heading, c.data
         FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
                         JOIN documents d ON d.id = c.doc_id
         WHERE chunks_fts MATCH ? {kind_clause}
@@ -275,7 +275,7 @@ def _vec_search(
         rows = con.execute(
             f"""
             SELECT c.id AS chunk_id, c.doc_id, d.title, c.kind, c.locator,
-                   c.heading, substr(c.text, 1, 160) AS head
+                   c.heading, c.data, substr(c.text, 1, 160) AS head
             FROM chunks c JOIN documents d ON d.id = c.doc_id
             WHERE c.id IN ({marks}) {kind_clause}
             """,
@@ -350,6 +350,7 @@ def _field_hit(doc_id: int, title: str, snippet: str, score: float) -> dict[str,
         "kind": None,
         "heading": [],
         "page": None,
+        "figure": None,
     }
 
 
@@ -369,7 +370,7 @@ def _fill_chunks(
         if found is None:
             continue
         h["chunk_id"] = found["chunk_id"]
-        for k in ("kind", "heading", "page"):
+        for k in ("kind", "heading", "page", "figure"):
             h[k] = found[k]
 
 
@@ -424,8 +425,8 @@ def _rrf(
                 fused[doc] = entry
             elif entry.get("chunk_id") is None and hit.get("chunk_id") is not None:
                 # a field-only entry adopts the first chunk another side found
-                for k in ("chunk_id", "kind", "heading", "page"):
-                    entry[k] = hit[k]
+                for k in ("chunk_id", "kind", "heading", "page", "figure"):
+                    entry[k] = hit.get(k)
             entry["score"] += weight / (RRF_K + rank)
             entry[f"{name}_rank"] = rank
     out = sorted(fused.values(), key=lambda h: -h["score"])
@@ -491,7 +492,8 @@ def search(
     It degrades to FTS-only when embeddings are disabled, no index exists
     or no vectors exist yet. ``fts`` and ``vec`` force one side.
     Every hit carries the chunk's ``kind``, section ``heading`` path and
-    ``page``; ``kind`` filters to one kind.
+    ``page``, and a figure chunk's ``figure`` reference (the image is
+    ``GET /doc/{doc_id}/figure/{figure}``); ``kind`` filters to one kind.
 
     ``rerank`` rescores the top ``RERANK_DEPTH`` hits with the configured
     cross-encoder (``prax.rerank``; None follows ``PRAX_RERANK``, which is

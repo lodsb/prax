@@ -235,6 +235,7 @@ async function viewSearch(p) {
           <span class="muted">${sides.map(esc).join(" · ")}</span>
           <a href="${originalHref(h.doc_id, h.page)}" target="_blank" rel="noopener">original ↗</a>
         </div>
+        ${figureThumb(h)}
         <p class="snippet">${snippetHtml(plainFigures(h.snippet))}</p>
       </article>`;
     }).join("");
@@ -348,6 +349,14 @@ function renderFigure(c, docId) {
     ${d.caption ? `<figcaption>${esc(d.caption)}</figcaption>` : ""}
     ${rest ? md(rest) : ""}${readings}
   </figure>`;
+}
+
+// A hit or a passage that is a figure shows the figure: the reading is what
+// found it, the picture is what it is about.
+function figureThumb(h) {
+  if (!h.figure) return "";
+  const src = `/doc/${h.doc_id}/figure/${h.figure}`;
+  return `<a class="hit-figure" href="${src}" target="_blank" rel="noopener"><img src="${src}" alt="" loading="lazy"></a>`;
 }
 
 // Snippets: an image reference is noise to a reader; its caption is not.
@@ -1512,6 +1521,7 @@ function renderSources(t, i) {
       <div class="source-body">
         <a class="source-title" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}">${esc(p.title || "(untitled)")}</a>
         <div class="hit-meta">${badge(p.kind)} <span>${headingPath(p.heading)}</span> <span>${p.page ? `p. ${p.page}` : ""}</span></div>
+        ${figureThumb(p)}
         <p class="snippet source-short">${esc(plainFigures(p.text).slice(0, 300))}${cut ? `… <button type="button" class="linkish source-more">more</button>` : ""}</p>
         ${cut ? `<p class="snippet source-full" hidden>${esc(p.text)} <button type="button" class="linkish source-more">less</button></p>` : ""}
         ${f.length ? `<div class="chips">${f.map((x) => `<a class="chip" style="--c:${typeColor(x.type)}" href="#graph?entity=${encodeURIComponent(x.name)}" title="${esc(x.rel)}">${esc(x.rel)}: ${esc(x.name)}</a>`).join("")}</div>` : ""}

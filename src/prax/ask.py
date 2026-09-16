@@ -75,6 +75,7 @@ class Passage:
     page: int | None
     kind: str | None
     text: str
+    figure: str | None = None  # a figure chunk's reference: the image beside it
 
     def label(self) -> str:
         bits = [self.title or "(untitled)"]
@@ -97,6 +98,7 @@ class Passage:
             "page": self.page,
             "kind": self.kind,
             "text": self.text,
+            "figure": self.figure,
         }
 
 
@@ -219,6 +221,7 @@ def gather(
                 page=h.get("page"),
                 kind=h.get("kind"),
                 text=text[:passage_chars],
+                figure=h.get("figure"),
             )
         )
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))

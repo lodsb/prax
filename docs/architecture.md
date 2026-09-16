@@ -180,7 +180,7 @@ flowchart LR
   KNN --> RRF
   DF --> RRF
   DK --> RRF
-  RRF --> H[hits: chunk_id, doc_id, title, snippet, kind,<br/>heading, page, score, fts/vec/field/dvec ranks]
+  RRF --> H[hits: chunk_id, doc_id, title, snippet, kind,<br/>heading, page, figure, score, fts/vec/field/dvec ranks]
   H -->|get_chunk| C[one chunk: text, locator, table grid]
   H -->|get offset/max_chars| T[text window of the artifact]
   H -->|doc/id/context| X[summary, entities, similar, citations,<br/>shared entities, authors, notes, Zotero]

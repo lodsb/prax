@@ -221,6 +221,7 @@ class Surf:
             page=chunk.get("page"),
             kind=chunk.get("kind"),
             text=text,
+            figure=chunk.get("figure"),
         )
         self.passages.append(p)
         if chunk.get("seq") is not None:
@@ -279,6 +280,7 @@ def do_search(con: sqlite3.Connection, s: Surf, query: str) -> tuple[str, list[i
             "heading": h.get("heading"),
             "page": h.get("page"),
             "kind": h.get("kind"),
+            "figure": h.get("figure"),
         }
         if chunk_id is not None:
             c = store.get_chunk(con, chunk_id)

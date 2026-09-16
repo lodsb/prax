@@ -1546,13 +1546,23 @@ def get_document(
 
 
 def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
-    """The structural fields of a chunk row, decoded (None for legacy rows)."""
+    """The structural fields of a chunk row, decoded (None for legacy
+    rows), and for a figure chunk the ``figure`` reference, so a hit or a
+    passage can show the image (``GET /doc/{id}/figure/{ref}``) beside
+    its reading."""
     loc = json.loads(row["locator"]) if row["locator"] else {}
-    return {
+    out = {
         "kind": row["kind"],
         "heading": json.loads(row["heading"]) if row["heading"] else [],
         "page": loc.get("page"),
+        "figure": None,
     }
+    if row["kind"] == "figure" and "data" in row.keys() and row["data"]:  # noqa: SIM118 - a Row iterates values, not keys
+        try:
+            out["figure"] = json.loads(row["data"]).get("ref")
+        except (ValueError, AttributeError):
+            pass
+    return out
 
 
 @_serialized

@@ -81,8 +81,10 @@ def search(
     ``hybrid`` (default) fuses BM25 keyword search with vector similarity;
     ``fts`` or ``vec`` force one side. Each hit names its chunk ``kind``
     (text, table, figure, code), section ``heading`` path and ``page``;
-    ``kind`` restricts to one kind, e.g. ``kind="table"`` for documents
-    with a table about the query. ``rerank=True`` rescores the top hits
+    a figure hit's ``figure`` is the reference of its image (the
+    snippet is what a vision model saw in it). ``kind`` restricts to
+    one kind, e.g. ``kind="table"`` for documents with a table about
+    the query, ``kind="figure"`` for pictures. ``rerank=True`` rescores the top hits
     with a cross-encoder when one is configured. ``domain`` keeps the
     documents of one ontology module (``research``, ``studio``; documents
     without a domain set are in every module); ``doctype`` keeps pdf,

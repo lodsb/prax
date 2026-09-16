@@ -703,15 +703,13 @@ console rather than anything about Windows.
       under it, so it is findable by meaning — `\frac{a-b}{2R}` embeds to
       noise. Same machinery as the figure readings, including `-again`
       and an `unread-formulas` ailment.
-- [ ] **Show the figure where it is cited.** A figure is a chunk like any
-      other now, so an answer cites one and a search returns one — and
-      both show only its words. The UI has `renderFigure` and the door
-      serves `GET /doc/{id}/figure/{ref}`; what is missing is the ref
-      itself in the payloads, since a search hit and an ask passage carry
-      chunk_id, kind, heading and text but not `data`. Add it for figure
-      chunks, then the ask sources column and the search hits can show
-      the picture beside the reading. Noticed 2026-09-16 while reading
-      answers that quoted figures nobody could see.
+- [x] **Show the figure where it is cited** (2026-09-16). A search hit
+      and an ask passage (the surf's too) carry `figure`, the reference
+      of a figure chunk's image, and the UI shows the picture in the hit
+      list and the sources column beside the reading that found it.
+      Checked on the library: "bar chart comparing methods" brings
+      eight figures in twenty hits, each with its picture; an answer
+      about which figures compare methods shows them in its sources.
 
 - [ ] **Then look at the review queue again.** Today it says no: of 4,181
       open items 193 look mathematical and almost all are bibliographic

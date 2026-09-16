@@ -1412,7 +1412,7 @@ Endpoints:
 | POST | `/ingest` | JSON `{text, title?, source_url?}` | `{doc_id, hash, created}` |
 | POST | `/ingest/file` | multipart `file`, form `title?`, `source_url?` | `{doc_id, hash, created}` |
 | GET | `/get/{doc_id}` | `offset?`, `max_chars?` | document row plus text |
-| GET | `/search` | `q`, `limit?`, `kind?`, `mode?` | list of `{chunk_id, doc_id, title, snippet, score, kind, heading, page}` |
+| GET | `/search` | `q`, `limit?`, `kind?`, `mode?` | list of `{chunk_id, doc_id, title, snippet, score, kind, heading, page, figure}` (`figure`: a figure chunk's image reference, served by `/doc/{id}/figure/{ref}`) |
 | GET | `/chunk/{chunk_id}` | | one chunk: text, kind, heading, locator, table `data` |
 | POST | `/link` | JSON `{src, src_type, rel, dst, dst_type, confidence?, source_doc?}` | `{edge_id}` |
 | GET | `/traverse` | `entity`, `hops?` (max 2) | list of edges with types and hop distance |
