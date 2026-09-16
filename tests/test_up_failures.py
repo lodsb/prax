@@ -235,3 +235,55 @@ def test_a_child_that_ignores_sigterm_is_killed_after_the_grace(
     thread.join(timeout=10)
     assert any("stubborn: still running after 0.5 s, killed" in line for line in said)
     assert not up._alive(pid)
+
+
+def test_one_role_can_be_stopped_and_started_while_the_rest_run(
+    data_dir: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`prax up --stop llama-server` frees the card without touching the
+    door; `--start` brings it back; a stopped role in its backoff wait
+    stays stopped; a restart of a stopped role starts it."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "prax.yaml").write_text("run: {door: {port: 8009}}\n")
+    mark_s, argv_s = child(tmp_path, "server", 60)
+    mark_d, argv_d = child(tmp_path, "door", 60)
+    mark_f, argv_f = child(tmp_path, "flaky", 0.05, 1)
+    said: list[str] = []
+    sup = up.Supervisor(
+        [up.Role("server", argv_s), up.Role("door", argv_d), up.Role("flaky", argv_f)],
+        data_dir=data_dir,
+        say=said.append,
+        tick=0.05,
+        backoff=(0.3, 0.3),
+    )
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    wait_for(lambda: runs_of(mark_s) == 1 and runs_of(mark_d) == 1)
+    server = pids_of(mark_s)[0]
+    from prax_cli import main as cli
+
+    assert cli.main(["up", "--stop", "server"]) == 0
+    assert "server stopped" in capsys.readouterr().out
+    assert sup.state["server"]["state"] == "paused"
+    assert not up._alive(server)
+    assert sup.state["door"]["state"] == "up" and runs_of(mark_d) == 1
+    time.sleep(0.5)
+    assert runs_of(mark_s) == 1  # not restarted while paused
+    # a role that keeps dying can be stopped in its backoff wait
+    assert up.stop(data_dir, name="flaky", wait=10)
+    before = runs_of(mark_f)
+    time.sleep(0.8)
+    assert runs_of(mark_f) == before
+    # and started again
+    assert cli.main(["up", "--start", "server"]) == 0
+    assert "server started" in capsys.readouterr().out
+    wait_for(lambda: runs_of(mark_s) == 2)
+    assert pids_of(mark_s)[1] != server
+    # a restart of a stopped role starts it
+    assert up.restart(data_dir, "flaky")
+    wait_for(lambda: runs_of(mark_f) > before)
+    # unknown names are refused, not obeyed
+    assert cli.main(["up", "--stop", "nope"]) == 1
+    assert cli.main(["up", "--start", "nope"]) == 1
+    assert up.stop(data_dir, wait=20)
+    thread.join(timeout=10)

@@ -421,6 +421,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  prax up -d               detached: survives this terminal\n"
             "  prax up --status\n"
             "  prax up --restart door   after a code change\n"
+            "  prax up --stop llama-server   the card free for a while;"
+            " --start brings it back\n"
             "  prax up --stop\n"
             "  prax up --install        start at login (Task Scheduler, systemd,"
             " launchd)"
@@ -433,7 +435,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     what = s.add_mutually_exclusive_group()
     what.add_argument("--status", action="store_true", help="what is running")
-    what.add_argument("--stop", action="store_true", help="stop everything, in order")
+    what.add_argument(
+        "--stop",
+        nargs="?",
+        const="all",
+        metavar="ROLE",
+        help="stop everything, in order; with a role, that one until --start",
+    )
+    what.add_argument(
+        "--start", metavar="ROLE", help="start a stopped role again (or all)"
+    )
     what.add_argument("--restart", metavar="ROLE", help="restart one role, or all")
     what.add_argument(
         "--install", action="store_true", help="start prax up when you log in"

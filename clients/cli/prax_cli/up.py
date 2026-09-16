@@ -41,11 +41,14 @@ def show_status(data_dir: Path) -> int:
             "starting": "yellow",
             "down": "red",
             "waiting": "yellow",
+            "paused": "yellow",
         }.get(state)
         shown = out.paint(state, colour) if colour else state
         note = ""
         if state == "down":
             note = f"exit {r.get('exit')}"
+        elif state == "paused":
+            note = f"until prax up --start {name}"
         elif r.get("since"):
             note = f"since {_since(r['since'])}"
         if r.get("restarts"):
@@ -67,6 +70,15 @@ def up(a: Any) -> int:
             if up.running_pid(data_dir) is None:
                 out.say("prax up is not running")
                 return 0
+            if a.stop != "all":
+                out.say(f"stopping {a.stop}…")
+                if up.stop(data_dir, name=a.stop):
+                    out.say(
+                        f"{a.stop} stopped; prax up --start {a.stop} brings it back"
+                    )
+                    return 0
+                out.fail(f"{a.stop} did not stop", "is that a role of run:?")
+                return 1
             out.say("stopping…")
             if up.stop(data_dir):
                 out.say("stopped")
@@ -74,6 +86,17 @@ def up(a: Any) -> int:
             out.fail(
                 "prax up did not stop in time",
                 f"see {up.logs_dir(data_dir) / 'up.log'}",
+            )
+            return 1
+        if a.start:
+            if up.running_pid(data_dir) is None:
+                out.fail("prax up is not running", "prax up -d starts everything")
+                return 1
+            if up.start(data_dir, a.start):
+                out.say(f"{a.start} started")
+                return 0
+            out.fail(
+                f"{a.start} did not start", "prax up --status; is it a role of run:?"
             )
             return 1
         if a.restart:

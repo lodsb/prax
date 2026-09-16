@@ -455,11 +455,16 @@ def command(data_dir: Path, what: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
-def stop(data_dir: Path, *, wait: float = 45.0) -> bool:
-    """Ask the running supervisor to stop; True once it is gone."""
+def stop(data_dir: Path, *, wait: float = 45.0, name: str | None = None) -> bool:
+    """Ask the running supervisor to stop — everything, or with ``name``
+    one role, which stays paused until ``start`` (the card free for an
+    hour, the door and the worker untouched); True once it is so."""
     pid = running_pid(data_dir)
     if pid is None:
         return True
+    if name and name != "all":
+        command(data_dir, {"cmd": "stop", "name": name})
+        return _await_state(data_dir, name, {"paused"}, wait)
     command(data_dir, {"cmd": "stop"})
     deadline = time.monotonic() + wait
     pidfile = run_dir(data_dir) / PIDFILE
@@ -479,6 +484,35 @@ def restart(data_dir: Path, name: str) -> bool:
         return False
     command(data_dir, {"cmd": "restart", "name": name})
     return True
+
+
+def start(data_dir: Path, name: str, *, wait: float = 45.0) -> bool:
+    """Start a paused role again (``all``: every paused one); True once
+    it is running or on its way."""
+    if running_pid(data_dir) is None:
+        return False
+    command(data_dir, {"cmd": "start", "name": name})
+    if name == "all":
+        return True
+    return _await_state(data_dir, name, {"starting", "up", "down"}, wait)
+
+
+def _await_state(data_dir: Path, name: str, states: set[str], wait: float) -> bool:
+    deadline = time.monotonic() + wait
+    while time.monotonic() < deadline:
+        snap = status(data_dir)
+        if snap is None:  # the file mid-replace, or the supervisor gone
+            if running_pid(data_dir) is None:
+                return False
+            time.sleep(0.1)
+            continue
+        role = snap.get("roles", {}).get(name)
+        if role is None:
+            return False  # no such role
+        if role.get("state") in states:
+            return True
+        time.sleep(0.2)
+    return False
 
 
 # ------------------------------------------------------ the process tree
@@ -628,6 +662,7 @@ class Supervisor:
             for r in roles_
         }
         self.restart_now: set[str] = set()
+        self.paused: set[str] = set()  # roles told to stop until told to start
         self.started = _now()
         self.job = _JobObject()
         self.log = logging.getLogger("prax.up")
@@ -726,6 +761,12 @@ class Supervisor:
     def _keep(self, role: Role) -> None:
         failures = 0
         while not self.stopping.is_set():
+            if role.name in self.paused:
+                self._set(role.name, state="paused", pid=None, next=None)
+                while role.name in self.paused and not self.stopping.wait(self.tick):
+                    pass
+                failures = 0
+                continue
             self._gate(role)
             if self.stopping.is_set():
                 break
@@ -786,9 +827,29 @@ class Supervisor:
         with contextlib.suppress(OSError):
             path.unlink()
         cmd = what.get("cmd")
-        if cmd == "stop":
+        name = what.get("name")
+        if cmd == "stop" and name not in (None, "", "all"):
+            if name not in self.state:
+                self._say(f"no role named {name}")
+                return
+            self._say(f"{name}: asked to stop until started again")
+            self.paused.add(str(name))
+            proc = self.procs.get(str(name))
+            if proc is not None and proc.poll() is None:
+                self._end(str(name), proc)
+        elif cmd == "stop":
             self._say("asked to stop")
             self.stopping.set()
+        elif cmd == "start":
+            names = list(self.paused) if name in (None, "", "all") else [str(name)]
+            for one in names:
+                if one not in self.state:
+                    self._say(f"no role named {one}")
+                elif one in self.paused:
+                    self._say(f"{one}: asked to start")
+                    self.paused.discard(one)
+                else:
+                    self._say(f"{one}: not stopped")
         elif cmd == "restart":
             names = (
                 [r.name for r in self.roles]
@@ -800,6 +861,7 @@ class Supervisor:
                     self._say(f"no role named {name}")
                     continue
                 self.restart_now.add(name)
+                self.paused.discard(name)  # a restart of a paused role starts it
                 proc = self.procs.get(name)
                 if proc is not None and proc.poll() is None:
                     self._end(name, proc)

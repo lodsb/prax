@@ -1570,7 +1570,9 @@ Windows, Linux and macOS, and the same tests cover it there.
     prax up -d               # detached: survives this terminal
     prax up --status
     prax up --restart door   # after a code change; --restart all
-    prax up --stop
+    prax up --stop llama-server   # that one stays stopped: the card free for a while
+    prax up --start llama-server  # and back (a --restart of a stopped role starts it too)
+    prax up --stop           # everything, in order
     prax up --install        # start at login; --uninstall removes the entry
 
 | role | what | waits for |
