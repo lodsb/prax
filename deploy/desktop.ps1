@@ -1,7 +1,7 @@
 <#
 .SYNOPSIS
 The desktop as prax's server: the door, llama-server and the worker as
-tasks that start when you log on and come back after a crash, a nightly
+tasks that start when you log on, with no window to close, a nightly
 backlog pass, a nightly backup. Task Scheduler under your own account —
 no service, no password stored, nothing system-wide.
 
@@ -18,7 +18,9 @@ Each task runs this script again with -Run <name>, which sets the
 environment, rotates the logs (<DataDir>\logs\<name>.log and .err.log,
 ten rotations kept; <name>.runs.log lists every start and exit) and
 runs the process in the foreground, so the task shows Running while it
-lives and restarts it when it dies. The tasks
+lives. The task's process is a headless console host (conhost.exe
+--headless) around PowerShell: no window appears at logon, and no
+terminal window can be closed on the services. The tasks
 run while you are logged on (a locked screen is fine; logged off is
 not), which is what "no password stored" costs.
 
@@ -203,8 +205,18 @@ if ($Install) {
     if ($LlamaModel -and -not (Test-Path $LlamaModel)) { throw "model not found: $LlamaModel" }
     if ($Backup -and -not [System.IO.Path]::IsPathRooted($Backup)) { throw "-Backup must be an absolute path" }
 
+    # The task's process is a headless console host with PowerShell as its
+    # client. A console program started by Task Scheduler gets a console
+    # with a window, which -WindowStyle Hidden can only hide once the
+    # program is running, and on Windows 11 a console that appears with a
+    # window is handed to Windows Terminal: one tab per service, in a
+    # window whose closing ends them all with 0xC000013A. Headless, the
+    # console has no window at all: nothing appears, nothing can be closed.
+    # The cost: the host reports exit 0 whatever the client's code, so the
+    # exit codes live in <name>.runs.log, and -Status reads them there.
     $ps = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
-    $common = "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File $(Quote $self) -DataDir $(Quote $DataDir) -Port $Port"
+    $conhost = "$env:SystemRoot\System32\conhost.exe"
+    $common = "--headless $ps -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $(Quote $self) -DataDir $(Quote $DataDir) -Port $Port"
     $user = "$env:USERDOMAIN\$env:USERNAME"
     $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
     $forever = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero) `
@@ -247,7 +259,7 @@ if ($Install) {
     }
 
     foreach ($task in $tasks) {
-        $action = New-ScheduledTaskAction -Execute $ps -Argument $task.args -WorkingDirectory $repo
+        $action = New-ScheduledTaskAction -Execute $conhost -Argument $task.args -WorkingDirectory $repo
         Register-ScheduledTask -TaskPath $TaskPath -TaskName "prax $($task.name)" `
             -Action $action -Trigger $task.trigger -Principal $principal -Settings $task.settings `
             -Description $task.what -Force | Out-Null
@@ -290,9 +302,11 @@ if ($Stop) {
         $t = Get-PraxTask $name
         if ($t -and $t.State -eq "Running") { Stop-ScheduledTask -TaskPath $TaskPath -TaskName "prax $name"; "stopped  prax $name" }
     }
-    # what is still running: a task's child that outlived the task (Task
-    # Scheduler ends the wrapper, not always its tree) or a process started
-    # by hand, either in the way of -Start
+    # what is still running: a task's processes that outlived the task
+    # (Task Scheduler ends the console host; the PowerShell wrapper and
+    # the process under it live on, and the wrapper leaves by itself once
+    # its process is ended here) or a process started by hand, either in
+    # the way of -Start
     Start-Sleep -Seconds 2
     $stray = Get-PraxProcesses | Where-Object {
         $n = $_.Name; $c = $_.CommandLine
@@ -341,9 +355,16 @@ foreach ($name in $Names) {
     $i = Get-ScheduledTaskInfo -TaskPath $TaskPath -TaskName "prax $name"
     $last = ""
     if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) {
-        $result = "exit $($i.LastTaskResult)"
-        if ($i.LastTaskResult -eq 0) { $result = "ok" }
-        if ($i.LastTaskResult -eq 267009) { $result = "" }  # 0x41301: still running
+        $result = ""
+        if ($i.LastTaskResult -ne 267009) {  # 0x41301: still running
+            # the task's own result is the console host's, always 0; the
+            # process's exit code is the last line of its runs log
+            $line = Get-Content (Join-Path $DataDir "logs\$name.runs.log") -Tail 1 -ErrorAction SilentlyContinue
+            if ("$line" -match " exit (-?\d+)$") { $result = "exit $($Matches[1])"; if ($Matches[1] -eq "0") { $result = "ok" } }
+            elseif ("$line" -match " start: ") { $result = "ended with its task" }
+            elseif ($i.LastTaskResult -ne 0) { $result = "exit $($i.LastTaskResult)" }
+            else { $result = "ok" }
+        }
         $last = "last $($i.LastRunTime.ToString('yyyy-MM-dd HH:mm')) $result"
     }
     $next = ""

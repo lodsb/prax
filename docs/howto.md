@@ -334,9 +334,9 @@ re-selects what is left on every pass, so batching costs nothing:
 
     for ($i = 0; $i -lt 40; $i++) { prax work --scope all --steps parse -n 250 --quiet }
 
-(the watching worker is the same process for as long as it runs; the
-service that keeps it alive restarts it when it dies, and the nightly
-pass takes a hundred at a time — 4b).
+(the watching worker is the same process for as long as it runs, as
+a service from logon on, and the nightly pass takes a hundred at a
+time — 4b).
 
 Originals above `PRAX_MAX_LAYOUT_MB` (default 40) skip layout analysis and
 get plain text through the fallback.
@@ -1528,10 +1528,21 @@ Scheduler), `deploy/desktop.sh` on Linux (systemd user units) and macOS
 
 Each service runs the script again with `-Run <name>` / `run <name>`,
 which sets the environment, rotates the logs — `<data dir>/logs/<name>.log`
-and `.err.log`, ten kept, `<name>.runs.log` with every start — and runs
-the process so the service manager watches it and restarts it when it
-dies (Windows: three times, a minute apart; systemd and launchd: after a
-minute, as often as needed). `-Stop`/`stop` ends the services (on Windows
+and `.err.log`, ten kept, `<name>.runs.log` with every start and exit —
+and runs the process in the foreground, so the service manager sees it
+live. On Linux and macOS a process that dies is started again after a
+minute, as often as needed. On Windows it is not: Task Scheduler's
+"restart on failure" is about a task it could not launch, not one that
+ended (measured: a task exiting 1 with three restarts a minute apart
+was never run again), so a crash waits for the next logon or `-Start`
+until `prax up` supervises the processes itself (PLAN). What Windows
+does get right now is the console: the task's process is a headless
+console host (`conhost.exe --headless`) around PowerShell, so no
+window appears at logon and no terminal window can be closed on the
+services. Before that, Task Scheduler gave each service a visible
+console, Windows 11 handed it to Windows Terminal, and closing that
+window — three blank tabs, one per service — ended all three with
+`0xC000013A`. `-Stop`/`stop` ends the services (on Windows
 also any process started by hand that would be in their way),
 `-Status`/`status` shows them with the processes, whether the door
 answers and whether a token is set; `-Uninstall`/`uninstall` removes the

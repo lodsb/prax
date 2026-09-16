@@ -646,10 +646,20 @@ closing a terminal that evening took the door, the worker and
 llama-server with it, which is a wrapper handing its children a shared
 console rather than anything about Windows.
 
-- [ ] **The console fix.** `Invoke-Logged` in `deploy/desktop.ps1` starts
-      each service with `Start-Process -NoNewWindow`, so a console event
-      reaches every child. Give each its own console. One line, do it
-      first, it makes an evening safe.
+- [x] **The console fix** (2026-09-16). The cause was one layer up from
+      `-NoNewWindow`: Task Scheduler starts `powershell.exe` with a
+      visible console (`-WindowStyle Hidden` is parsed after the console
+      exists), Windows 11 hands a visible console to Windows Terminal,
+      so every logon opened a Windows Terminal window with three blank
+      tabs, and closing it ended the three services with `0xC000013A`.
+      The task's process is now `conhost.exe --headless` around
+      PowerShell: no window, nothing to close (probed: the child of a
+      headless host has no console window at all). Found on the way:
+      Task Scheduler's restart-on-failure never restarted a task that
+      exited non-zero (a probe with three restarts a minute apart was
+      not run again), so "comes back after a crash" was never true on
+      Windows — one more reason for `prax up`. The host also swallows
+      the exit code; `-Status` reads it from `<name>.runs.log` instead.
 - [ ] **`prax up`.** prax owns its process model instead of deriving it
       twice in shell (`deploy/desktop.ps1` 379 lines, `deploy/desktop.sh`
       381, doing the same job): a `run:` section in `prax.yaml` naming the
