@@ -759,34 +759,80 @@ Qwen2.5-7B on an 8 GB card, `docs/eval/local-llm-2026-09-08.md`).
 
     # llama.cpp release binaries (CUDA, Vulkan, Metal or CPU builds):
     #   https://github.com/ggml-org/llama.cpp/releases
-    # a GGUF model into the data directory (or anywhere):
-    python scripts/fetch_model.py server-35b       # repo and file from prax.yaml
-    # the server (Windows; Linux and macOS: scripts/llama_server.sh, the same
-    # options in --lower-case — Homebrew's llama.cpp puts llama-server on the PATH):
-    scripts/llama_server.ps1 -Model <data dir>/models/<file>.gguf -Slots 3 -NoThinking
-    scripts/llama_server.sh --model <data dir>/models/<file>.gguf --slots 3 --no-thinking
-    # a vision-language model also describes images when its projector is loaded
-    # (the mmproj-*.gguf in the model's repository, ~1 GB; Qwen3.6 has one); on
-    # a card that also drives the display, leave it 3-4 GB (the script's header
-    # has the measurements: -CpuMoe 2 frees 0.7 GB for a tenth of the speed)
-    scripts/llama_server.ps1 -Model <file>.gguf -Mmproj mmproj-F16.gguf -Slots 2 -CpuMoe 2 -UBatch 256 -ImageMaxTokens 1024 -NoThinking
+    # unpacked to %LOCALAPPDATA%\prax\llama.cpp on Windows, ~/.local/share/prax/llama.cpp
+    # or the PATH elsewhere (Homebrew's llama.cpp puts llama-server there);
+    # paths.llama_server in prax.yaml names any other place
+    prax models fetch server-35b       # repo and file from prax.yaml, once
 
-Then in `prax.yaml`:
+Then the server is a `serve:` block on the model's entry in `prax.yaml`
+and a line under `run:`, and `prax up` starts it (4b) — the port from
+`base_url`, the context per slot from `n_ctx`, the file from `repo` and
+`file` (or `serve.path`):
 
     models:
-      server-35b: {kind: openai, base_url: http://127.0.0.1:8080/v1, model: <name the server reports>}
+      server-35b:
+        kind: openai
+        base_url: http://127.0.0.1:8080/v1
+        model: <name the server reports>    # the producer name on edges
+        repo: unsloth/Qwen3.6-35B-A3B-GGUF
+        file: Qwen3.6-35B-A3B-UD-Q4_K_S.gguf
+        n_ctx: 16384
+        serve:
+          slots: 2
+          mmproj: mmproj-F16.gguf   # the projector beside it: the same server describes images
+          cpu_moe: 2                # a card that also drives the display: see below
+          ubatch: 256
+          image_max_tokens: 1024
     steps:
       extract: {model: server-35b}
       titles:  {model: server-35b}
       ask:     {model: server-35b}
+    run:
+      llama-server: {model: server-35b}
+
+`prax up --status` shows it *starting* until the model is loaded (three
+minutes for the 35B, cold) and *up* once its `/health` says so; its
+output is in `<data dir>/logs/llama-server.log`. The command line that
+comes out (`--flash-attn on`, the KV cache at `q8_0`, `--n-gpu-layers
+999`, `--load-mode mmap`, thinking off, `--metrics`, no web UI) is
+`prax.up.llama_argv`; `serve.extra` appends arguments of your own.
 
 The grammar-constrained line format (`prax.lineformat`) needs a server
 that honours the `grammar` field: llama-server does, vLLM does not.
-`-NoThinking` matters for models that think by default (Qwen3.x, Gemma
-4): thinking tokens would break the grammar. Memory on a Windows host:
-howto 3l, "Jobs". An 8 GB card fits a 7-8B model at Q4 with an 8 K
-context; a board without a usable GPU leaves the steps at `none` or
-points them at a server elsewhere on the private network.
+Thinking is off unless `serve.thinking: true`; it matters for models
+that think by default (Qwen3.x, Gemma 4): thinking tokens would break
+the grammar. Memory on a Windows host: howto 3l, "Jobs". An 8 GB card
+fits a 7-8B model at Q4 with an 8 K context; a board without a usable
+GPU leaves the steps at `none` or points them at a server elsewhere on
+the private network.
+
+**A card that also drives the display.** The 35B-A3B at Q4 with three
+8 K slots took 22.1 GB of a 4090's 24.5, and the projector with its
+compute buffers pushed that to 23.7 — the desktop's own programs were
+starved and the display froze (2026-09-14). Measured by the server's own
+dedicated memory (`Get-Counter '\GPU Process Memory'`):
+
+| `serve:` | dedicated | speed |
+|---|---|---|
+| 3 slots, projector, `ubatch: 256, image_max_tokens: 1024` | 21.1 GB | 167 tok/s |
+| 2 slots, the same | 20.8 GB | |
+| 2 slots, the same, `cpu_moe: 2` (in use) | 20.1 GB | 148 tok/s |
+| `cpu_moe: 8` | | 23 tok/s |
+| `projector_on_cpu: true` | an image took minutes to encode; do not | |
+
+The slot count changes little (a `q8_0` 8 K slot is ~0.3 GB) and
+`cpu_moe` is the dial that matters: it keeps the expert weights of the
+first N layers in RAM, a MoE model's bulk — 2 costs a tenth of the
+speed, 8 most of it. The desktop wants 3-4 GB. Memory on Windows
+(2026-09-12, a 22 GB model on a 32 GB machine): the driver backs every
+VRAM allocation with system commit, so the server charges 20-30 GB of
+commit whatever the load mode; `mmap` keeps that at about 22 GB (the
+model's pages are file-backed and evictable). With IDEs and a browser
+open the commit limit is what runs out first, so a page file of at least
+twice the RAM is the setting that matters. Extraction prompts are about
+3,500 tokens in and 1,100 out, so 8 K per slot is the floor; what a
+slot costs at 16 K and beyond: `deploy/README.md`, "The card on the
+desktop".
 
 **One card, several jobs.** The same loaded model serves extraction,
 titles, ask and — with its projector — images, so one server is the
@@ -797,11 +843,12 @@ at the cost of a reload (10–30 s for 22 GB) each time the job changes.
 A small second model fits beside the big one: the reranker below (0.6
 GB) ran next to the 35B (23.9 of 24.5 GB).
 
-**Context per slot.** `-c` is split evenly over the slots, so the 3 × 8 K
-default gives a document 8 K; a text whose script tokenizes densely
-(Arabic at about a token per character) overruns it at prax's 16 K-char
-budget. For those, a server run with `-Slots 1 -CtxPerSlot 24576` and
-`prax work --steps extract --scope all` while it is up is the way (three
+**Context per slot.** Every slot gets `n_ctx` tokens (the server's `-c`
+is `slots × n_ctx`, split evenly), so 2 × 16 K gives a document 16 K; a
+text whose script tokenizes densely (Arabic at about a token per
+character) can overrun prax's 16 K-char budget. For those, `n_ctx: 24576`
+with `slots: 1` for a while, `prax up --restart llama-server`, and `prax
+work --steps extract --scope all` while it is up is the way (three
 books, 2026-09-13).
 
 **Load figures.** `--metrics` (on by default in the script) exposes
@@ -811,13 +858,17 @@ shows each server: model file, slots, whether it sees images, requests
 running and waiting, tokens per second, tokens read since the start and
 how many of them came from the prompt cache.
 
-**A reranker in llama-server.** `-Reranker` starts the same binary with
-a cross-encoder GGUF (`--reranking`, one slot, its own port) and
+**A reranker in llama-server.** A second server role starts the same
+binary with a cross-encoder GGUF (`--reranking`, one slot, its own port) and
 `rerank: {model: server, url: http://127.0.0.1:8081}` in `prax.yaml`
 (or `PRAX_RERANK=server`) rescores the top hits through it, 92 ms for
 ten candidates on the GPU:
 
-    scripts/llama_server.ps1 -Model bge-reranker-v2-m3-Q8_0.gguf -Reranker -Port 8081
+    models:
+      ranker: {kind: openai, base_url: http://127.0.0.1:8081/v1, model: bge-reranker-v2-m3,
+               repo: …, file: bge-reranker-v2-m3-Q8_0.gguf, serve: {reranker: true}}
+    run:
+      reranker: {model: ranker}
 
 Measured 2026-09-13 on the library's 62 queries (`docs/eval/rerank-server-2026-09-13.md`):
 bge-reranker-v2-m3 at depth 10 scores hit@1 0.74 / MRR 0.83 against
@@ -888,10 +939,11 @@ prompt above. Two budgets bound it: the steps, and `tokens` of reading
 is 4,000 for a local model and the ceiling is what its context holds
 beyond the prompt's overhead — 14,184 for a 16 K slot — 16,000 and
 60,000 for Claude). The ceiling comes from `n_ctx` under the model in
-`prax.yaml`, not from what the server actually serves: a slot raised
-with `llama_server.ps1 -CtxPerSlot` buys nothing until `n_ctx` says so
-(and `n_ctx` above the true slot only means the server refuses the
-answer, which is then cut to fit and asked again). What a card can hold
+`prax.yaml`, which is also the slot `prax up` gives the server, so the
+two cannot disagree (a server started by hand with a larger slot buys
+nothing until `n_ctx` says so, and `n_ctx` above the true slot only
+means the server refuses the answer, which is then cut to fit and asked
+again). What a card can hold
 is arithmetic: the cache costs
 `full_attention_layers × kv_heads × (key_length + value_length)` values
 a token, which for Qwen3.6-35B-A3B (10 of its 40 layers, the rest being
@@ -994,11 +1046,11 @@ to Claude, as before. A runtime is built once per process however many
 steps name it; the model itself lives in its server.
 
 The extraction step is the one to move when a GPU box is around:
-start the server (`scripts/llama_server.ps1 -Model <gguf> -Slots 3
--NoThinking`; the switch matters for Qwen3.x and Gemma 4, which think by
-default and would break the grammar), measured choices in
-`docs/eval/extractors-local-2026-09-11.md`,
-add an `openai` model with its address, point `steps.extract.model`
+add an `openai` model with its address and a `serve:` block, name it
+under `run:` so `prax up` starts the server (3h; thinking is off there,
+which matters for Qwen3.x and Gemma 4: they think by default and would
+break the grammar), measured choices in
+`docs/eval/extractors-local-2026-09-11.md`, point `steps.extract.model`
 at it, and `prax work --steps extract --scope all --workers <slots>` runs the
 same prompt and grammar against the server (llama-server honours the `grammar` field; vLLM does not,
 so use a Claude-kind model or llama-server for extraction). The door
@@ -1211,9 +1263,11 @@ stale documents oldest first, a batch at a time; the worker re-reads
 each with the current extractor and the door keeps or upgrades the text
 by the usual rule (a suspiciously short new text keeps the old). A
 re-read that comes out the same moves the stamp and touches nothing
-else. As a nightly task on the machine with the models — on Windows
-the `prax nightly` task `deploy\desktop.ps1 -Install` registers (4b),
-at 03:00; elsewhere, cron:
+else. As the worker's nightly pass on the machine with the models —
+`nightly: "03:00"` under `run.worker` (4b), or `prax work --watch
+--nightly 03:00` by hand: once past that hour each day the watching
+worker does one pass over everything, `nightly_limit` documents a step,
+then goes back to watching. A worker not under `prax up` can use cron:
 
     0 3 * * * PRAX_TOKEN=<token> /srv/prax/.venv/bin/prax work --scope all --limit 100 --door http://127.0.0.1:8000 >> /srv/prax-data/logs/nightly.log 2>&1
 
@@ -1494,67 +1548,93 @@ is the uvicorn line. The one-off maintenance scripts (import, backfill,
 resolution, typing rules, rechunk, replay) stay scripts: they open the
 database directly and are the known deviation of invariant 4.
 
-## 4b. Always on: the desktop as the server
+## 4b. Always on: `prax up`
 
 Until the store moves to a board (6), the desktop is the server, and a
-server survives a reboot. Two scripts make the three processes and the
-two nightly passes services under your own account — nothing
-system-wide, no password stored: `deploy\desktop.ps1` on Windows (Task
-Scheduler), `deploy/desktop.sh` on Linux (systemd user units) and macOS
-(launchd agents). Same commands, same five services, same logs:
+server survives a reboot — and, as it turned out, a closed terminal.
+prax owns its process model: `run:` in `prax.yaml` names which of prax's
+roles this host runs and with what, and `prax up` keeps them running.
+The operating system's only job is to start `prax up` when you log in
+and start it again if it vanishes; the same code does the same thing on
+Windows, Linux and macOS, and the same tests cover it there.
 
-    # Windows
-    deploy\desktop.ps1 -Install -DataDir C:\prax-data -Backup I:\prax-backup `
-        -LlamaModel <the .gguf> `
-        -LlamaArgs "-Mmproj mmproj-F16.gguf -Slots 2 -CpuMoe 2 -UBatch 256 -ImageMaxTokens 1024 -NoThinking"
-    deploy\desktop.ps1 -Start        # now; a logon starts them anyway
-    deploy\desktop.ps1 -Status
-    # Linux, macOS
-    deploy/desktop.sh install --data-dir ~/prax-data --backup /mnt/backup/prax \
-        --llama-model <the .gguf> \
-        --llama-args "--mmproj mmproj-F16.gguf --slots 2 --cpu-moe 2 --ubatch 256 --image-max-tokens 1024 --no-thinking"
-    deploy/desktop.sh start
-    deploy/desktop.sh status
+    run:
+      llama-server: {model: server-35b}      # a models: entry with a serve: block (3h)
+      door:         {host: 0.0.0.0, port: 8000}
+      worker:       {interval: 20, nightly: "03:00", nightly_limit: 100}
+    schedule:
+      maintain: "03:30"
+      backup: {at: "04:30", archive: false}  # to paths.backup
 
-| task | when | what |
+    prax up                  # here, in this terminal; ctrl-c stops everything in order
+    prax up -d               # detached: survives this terminal
+    prax up --status
+    prax up --restart door   # after a code change; --restart all
+    prax up --stop
+    prax up --install        # start at login; --uninstall removes the entry
+
+| role | what | waits for |
 |---|---|---|
-| service | when | what |
-|---|---|---|
-| `llama-server` | login | `scripts/llama_server.ps1` / `.sh` with the model and arguments given (3h); left out without a model |
-| `door` | login | `prax serve --host 0.0.0.0 --port 8000` (`-BindHost`/`--bind`, `-Port`/`--port`) |
-| `worker` | login, once the door answers | `prax work --watch` — the model work, through the door |
-| `nightly` | 03:00 | `prax work --scope all --limit 100` — the backlog and the stale texts (3l¾) — then `prax maintain` (3n) |
-| `backup` | 04:30 | `prax backup <dir> --no-archive` (7); `-BackupArchive`/`--backup-archive` for the whole store; left out without a directory |
+| `llama-server` | llama-server for the model named, from its `serve:` block (3h) | — |
+| `reranker` | a second llama-server with a cross-encoder (`serve: {reranker: true}`) | — |
+| `door` | `prax serve --host … --port …` (`ssl_certfile`, `ssl_keyfile` for HTTPS) | — |
+| `worker` | `prax work --watch`, with `--nightly` for one bounded pass over everything a day | the door, unless `door:` names one elsewhere |
 
-Each service runs the script again with `-Run <name>` / `run <name>`,
-which sets the environment, rotates the logs — `<data dir>/logs/<name>.log`
-and `.err.log`, ten kept, `<name>.runs.log` with every start and exit —
-and runs the process in the foreground, so the service manager sees it
-live. On Linux and macOS a process that dies is started again after a
-minute, as often as needed. On Windows it is not: Task Scheduler's
-"restart on failure" is about a task it could not launch, not one that
-ended (measured: a task exiting 1 with three restarts a minute apart
-was never run again), so a crash waits for the next logon or `-Start`
-until `prax up` supervises the processes itself (PLAN). What Windows
-does get right now is the console: the task's process is a headless
-console host (`conhost.exe --headless`) around PowerShell, so no
-window appears at logon and no terminal window can be closed on the
-services. Before that, Task Scheduler gave each service a visible
-console, Windows 11 handed it to Windows Terminal, and closing that
-window — three blank tabs, one per service — ended all three with
-`0xC000013A`. `-Stop`/`stop` ends the services (on Windows
-also any process started by hand that would be in their way),
-`-Status`/`status` shows them with the processes, whether the door
-answers and whether a token is set; `-Uninstall`/`uninstall` removes the
-services and touches nothing else. Secrets never go into a service:
+What `prax up` does: starts the roles in that order behind real health
+gates — the worker once the door answers `/health`; a model server shows
+*starting* until its own `/health` says loaded, three minutes cold for
+the 35B — restarts what dies after 1, 2, 4 … 60 seconds (a run of five
+minutes starts the count over), stops them in reverse order (`SIGTERM`
+elsewhere; on Windows a process without a console can only be ended,
+which is safe for prax: the database is in WAL mode, the archive is
+content-addressed, every job is re-selectable), and writes each role's
+output to `<data dir>/logs/<name>.log` — rotated on every start, ten
+kept — and its own lines to `up.log`. It has no port and no state: a pid
+file and a status file under `<data dir>/run/`, and a command file that
+`--stop` and `--restart` write, which is what works the same everywhere.
+Children get no console on Windows (and sit in a job object that ends
+them if the supervisor itself is killed) and a session of their own
+elsewhere, so nothing a terminal does reaches them.
 
-| | Windows | Linux, macOS |
-|---|---|---|
-| the token | the `PRAX_TOKEN` *user* environment variable, or one line in `<data dir>\door.token` | one line in `<data dir>/door.token`, or `PRAX_TOKEN=` in `<data dir>/desktop.env` |
-| the Anthropic key | the `ANTHROPIC_API_KEY` user variable | `ANTHROPIC_API_KEY=` in `desktop.env` (a service has no shell profile) |
-| without a token | the door answers this machine only, and the status says so | the same |
-| when they run | while you are logged on (a locked screen is fine, logged off is not — the price of no stored password) | Linux: from login to logout, or always after `loginctl enable-linger $USER` (the install says so); macOS: from login, until `stop` |
-| the card's power cap | `nvidia-smi -pl` needs an administrator: a task of your own with the highest privileges, at logon | root: a system unit of your own, or `--power-limit` on the launcher under sudo |
+The timed passes are not the supervisor's. `maintain` and `backup` run
+on the door's own clock — `schedule:` — as the jobs their endpoints
+start, visible on the Jobs page (`door.clock_seconds` says how often the
+clock looks, 30 by default); the jobs table is the memory, so a door
+restarted at noon does not run the night again, one that was down at the
+hour catches up once, and a pass still running is left alone. The
+worker's nightly backlog pass (3l¾) is its own: `nightly:` under
+`run.worker`, or `prax work --watch --nightly 03:00` by hand. Give the
+worker's pass a head start on the maintenance.
+
+The login entry: `prax up --install` writes one — a Task Scheduler task
+on Windows (`\prax\prax up`, run by `pythonw.exe`, which never has a
+console: a console program started by Task Scheduler gets a window for a
+moment, Windows 11 hands a windowed console to Windows Terminal, and
+closing that window is how three services once ended together with
+`0xC000013A`), a systemd user unit on Linux
+(`~/.config/systemd/user/prax.service`, `Restart=always`; `loginctl
+enable-linger $USER` keeps it running without a session), a launchd agent
+on macOS (`~/Library/LaunchAgents/io.github.lodsb.prax.plist`, `KeepAlive`).
+Under your own account, nothing system-wide, no password stored: the
+services run while you are logged on. Secrets never go into the entry:
+
+| | where it comes from |
+|---|---|
+| the token | `PRAX_TOKEN` in the environment (on Windows the *user* variable), or one line in `<data dir>/door.token`; without one the door answers this machine only |
+| the Anthropic key | `ANTHROPIC_API_KEY` in the environment; where the login entry has no user environment (systemd, launchd), `KEY=value` lines in `<data dir>/up.env`, which every child gets |
+| the card's power cap | `nvidia-smi -pl` needs an administrator: a task of your own |
+
+Before 2026-09-16 two shell scripts did this per platform, five services
+each; if they installed anything, remove it first — Windows:
+`Get-ScheduledTask -TaskPath \prax\ | Unregister-ScheduledTask`, Linux:
+`systemctl --user disable --now prax-{door,worker,llama-server}.service
+prax-{nightly,backup}.timer`, macOS: `launchctl bootout
+gui/$UID/io.github.lodsb.prax.<name>` for each — then `prax up --install`.
+Found on the way and worth knowing: Task Scheduler's "restart on failure"
+is about a task it could not launch, not one that ended (a task exiting 1
+with three restarts a minute apart was never run again), so the old
+"comes back after a crash" was never true on Windows; `prax up` is where
+restarts live now, and they are tested.
 
 ## 5. MCP server in Claude Code
 
@@ -1598,8 +1678,8 @@ sessions and memory files):
 The board holds the store and runs the door; the machine with the GPU
 does the model work through it (howto 3l). Nothing else has to move.
 `deploy/` holds the pieces — an install script, the systemd unit, the
-board's `prax.yaml`, the worker launcher for the desktop — and its README
-is the step-by-step; this section is the reasoning.
+board's `prax.yaml` — and its README is the step-by-step; this section
+is the reasoning. The desktop's side is `run:` and `prax up` (4b).
 
 **On the board.** Copy the data directory over (section 7), then:
 
@@ -1608,8 +1688,9 @@ is the step-by-step; this section is the reasoning.
     export PRAX_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
     prax serve --host <its address on your private network> --port 8000
 
-as a systemd unit with those two variables in its environment. In the
-board's `prax.yaml`:
+as a systemd unit with those two variables in its environment (the
+board runs one process, so systemd keeps `prax serve` itself alive;
+`prax up` is for a host with more than one). In the board's `prax.yaml`:
 
     vectors:
       dtype: i8        # half the file, recall 0.93: the memory a board has
@@ -1617,6 +1698,8 @@ board's `prax.yaml`:
       ask: {model: none}
       titles: {model: none}
       extract: {model: none}
+    schedule:          # the door's own clock: maintenance nightly, a backup when there is a disk
+      maintain: "03:30"
 
 An index written as `f16` stays `f16`: the setting takes effect when the
 vectors are written, so re-embed into a fresh file (remove the old
@@ -1627,6 +1710,10 @@ let a worker embed) or copy the desktop's file and accept its precision.
 
     prax --door http://<board>:8000 --token <the token> status
     prax work --watch --door http://<board>:8000 --token <the token>
+
+or, kept running: `run: {llama-server: {model: …}, worker: {door:
+http://<board>:8000}}` in the desktop's `prax.yaml` and `prax up
+--install` (4b).
 
 **In Claude Code**, `PRAX_DOOR=http://<board>:8000` and `PRAX_TOKEN` in
 the shell that launches it; the MCP server is a proxy and needs nothing
@@ -1671,9 +1758,9 @@ library are also in Zotero; captured pages and uploads are not
 anywhere else, so the full copy is the real backup once there is a disk
 for it.)
 
-A nightly copy is one scheduled task running `prax backup` — the `prax
-backup` task of `deploy\desktop.ps1` on Windows (4b); Litestream
-replication is on the later list.
+A nightly copy is `backup:` under `schedule:` in `prax.yaml` — the
+door's own clock runs it as a job (4b); Litestream replication is on
+the later list.
 
 ## 8. Adding a source
 

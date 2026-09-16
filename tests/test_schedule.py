@@ -116,7 +116,7 @@ def test_the_door_runs_its_clock(
         while clock.monotonic() < deadline:
             jobs = client.get("/jobs").json()
             names = [
-                j["name"] for j in jobs.get("running", []) + jobs.get("finished", [])
+                j["name"] for j in jobs.get("running", []) + jobs.get("recent", [])
             ]
             if "maintain" in names:
                 break

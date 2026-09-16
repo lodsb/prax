@@ -660,17 +660,30 @@ console rather than anything about Windows.
       not run again), so "comes back after a crash" was never true on
       Windows — one more reason for `prax up`. The host also swallows
       the exit code; `-Status` reads it from `<name>.runs.log` instead.
-- [ ] **`prax up`.** prax owns its process model instead of deriving it
-      twice in shell (`deploy/desktop.ps1` 379 lines, `deploy/desktop.sh`
-      381, doing the same job): a `run:` section in `prax.yaml` naming the
-      door, the worker and optionally the model server; children in their
-      own process groups; the log rotation that lives in shell today;
-      restart with backoff, and patience with llama-server, which takes
-      four minutes to load and answers 503 while it does. Then Task
-      Scheduler, systemd and launchd each run one command and the
-      platform scripts shrink to registration and status. The nightly
-      pass and the backup stay in the OS scheduler: they are cron-shaped,
-      not services. Nothing in the data path changes.
+- [x] **`prax up`** (2026-09-16, `prax.up`, `prax.autostart`,
+      `prax.schedule`). prax owns its process model: `run:` in
+      `prax.yaml` names which roles this host keeps alive, `prax up`
+      starts them in order behind real health gates, restarts with a
+      capped backoff, stops in reverse, rotates a log each; a pid, a
+      status and a command file under `<data dir>/run/` are the whole
+      interface, so `--stop` and `--restart` work the same everywhere.
+      Children get no console on Windows (and a job object ends them
+      with the supervisor) and their own session elsewhere. One login
+      entry per platform (`--install`: a Task Scheduler task under
+      `pythonw.exe`, a systemd user unit, a launchd agent). The
+      llama-server command line comes from a `serve:` block on the
+      model's own entry, the context per slot from its `n_ctx`. Against
+      the plan as written: the nightly pass and the backup did *not*
+      stay in the OS scheduler — `maintain` and `backup` are jobs on the
+      door already, so they run on the door's own clock (`schedule:`)
+      with the jobs table as memory, and the worker's backlog pass is
+      its `nightly` hour; nothing outside prax schedules anything.
+      `deploy/desktop.ps1`, `deploy/desktop.sh`, `deploy/worker.ps1`,
+      `scripts/llama_server.ps1` and `.sh` are gone (their measurements
+      moved to howto 3h and `deploy/README.md`). This machine runs under
+      it since 19:28. Later, if wanted: a graceful stop for the door on
+      Windows (`POST /shutdown` on loopback, since a process without a
+      console cannot receive Ctrl-Break).
 - [ ] **marker as a named extractor.** Explicit-only beside `docling`,
       `prax reread --extractor marker --ids …`, stamped, reversible
       through `parse_history`. Wants the GPU number first (the card was

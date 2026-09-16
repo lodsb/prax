@@ -2,17 +2,17 @@
 
 The board holds the store and runs the door; the machine with the GPU
 does the model work through it. This folder is everything the board
-needs, in the order it needs it (the reasoning: `docs/howto.md` 6).
+needs, in the order it needs it (the reasoning: `docs/howto.md` 6). The
+desktop — on Windows, Linux or macOS — needs nothing from here: `prax
+up` runs its processes and `prax up --install` starts them at login
+(`docs/howto.md` 4b).
 
 | file | what |
 |---|---|
 | `install.sh` | on the board, as root: a `prax` user, a venv with `prax[serve]`, the data directory, the service |
 | `prax-door.service` | the systemd unit: the door on the private address, restarted on failure, capped at 1.5 GB (invariant 7 says under 1) |
 | `door.env.example` | the two secrets-and-addresses the unit reads: `PRAX_BIND`, `PRAX_TOKEN` |
-| `prax.board.yaml` | the board's `prax.yaml`: an int8 index, no model steps of its own |
-| `worker.ps1` | on the Windows desktop: start or stop the worker that drains the board's queue, as a detached process |
-| `desktop.ps1` | the Windows desktop as the server, until the move: the door, llama-server and the worker as logon tasks under a headless console (nothing to close), the nightly backlog and maintenance passes and the nightly backup as tasks (`docs/howto.md` 4b) |
-| `desktop.sh` | the same on Linux (systemd user units and timers) and macOS (launchd agents): `install`, `start`, `stop`, `status`, `uninstall`; `scripts/llama_server.sh` is the launcher it uses |
+| `prax.board.yaml` | the board's `prax.yaml`: an int8 index, no model steps of its own, the nightly maintenance on the door's own clock |
 
 ## The move, step by step
 
@@ -33,12 +33,17 @@ needs, in the order it needs it (the reasoning: `docs/howto.md` 6).
 
        prax --door http://<board>:8000 --token <token> doctor
 
-4. **The worker** on the desktop, pointed at the board:
+4. **The worker** on the desktop, pointed at the board — in the
+   desktop's `prax.yaml`:
 
-       deploy\worker.ps1 -Door http://<board>:8000 -Token <token>
+       run:
+         llama-server: {model: server-35b}          # the desktop's model, if any
+         worker: {door: http://<board>:8000, nightly: "03:00"}
 
-   It parses, titles, extracts and embeds whatever the board took in,
-   with the desktop's models, and uploads the desktop's `Downloads/prax-inbox`.
+   with the token in `PRAX_TOKEN` (or one line in `<data dir>/door.token`),
+   then `prax up --install`. It parses, titles, extracts and embeds
+   whatever the board took in, with the desktop's models, and uploads
+   the desktop's `Downloads/prax-inbox`.
 5. **Claude Code** on the desktop: `PRAX_DOOR` and `PRAX_TOKEN` in the
    shell that launches it (`.mcp.json` passes them through).
 6. **The browser extension**: the board's address as the server and the
@@ -59,8 +64,9 @@ in batches of 200).
 ## The card on the desktop, while it is the server
 
 llama-server's share of a 24 GB 4090, measured 2026-09-15 with
-Qwen3.6-35B-A3B UD-Q4_K_S, its projector, `-CpuMoe 2 -UBatch 256
--ImageMaxTokens 1024`: **20.14 GB at 8 K a slot, 20.23 GB at 16 K**,
+Qwen3.6-35B-A3B UD-Q4_K_S, its projector, `cpu_moe: 2, ubatch: 256,
+image_max_tokens: 1024` in its `serve:` block: **20.14 GB at 8 K a
+slot, 20.23 GB at 16 K**,
 with about 0.9 GB for the desktop's own windows and 2.5 GB free.
 
 Doubling the context cost 0.09 GB, not the 0.66 GB the obvious
@@ -72,7 +78,7 @@ the other 30 hold a state of fixed size per slot. So the growing part is
 a token: 10 × 2 × 512 here, **10.6 KiB a token** at `q8_0` (f16 doubles
 it), a quarter of what a model with attention in every layer would want.
 
-| `-CtxPerSlot` × slots | KV cache | what `ask` may read |
+| `n_ctx` × slots | KV cache | what `ask` may read |
 |---|---|---|
 | 8 K × 2 | 0.17 GB | 5,992 |
 | **16 K × 2** (in use) | 0.33 GB | 14,184 |
@@ -86,9 +92,9 @@ parameters uses 30,000 tokens of assorted passages. The display shares
 the card and froze once at 23.7 GB, so anything that leaves under 2 GB
 free is worth testing while nothing else is open; two slots keep the
 worker's passes from queueing behind a question. `n_ctx` under the model
-in `prax.yaml` is what the reading budget is derived from, so it moves
-with `-CtxPerSlot`; the model's own trained context (262,144) is nowhere
-near any of this.
+in `prax.yaml` is both the slot `prax up` gives the server and what the
+reading budget is derived from, so the two cannot disagree; the model's
+own trained context (262,144) is nowhere near any of this.
 
 ## What to measure once it runs there
 

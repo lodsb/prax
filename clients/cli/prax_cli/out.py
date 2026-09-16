@@ -15,7 +15,7 @@ from typing import Any
 def _colour_ready() -> bool:
     if os.environ.get("NO_COLOR") or os.environ.get("TERM") == "dumb":
         return False
-    if not sys.stdout.isatty():
+    if sys.stdout is None or not sys.stdout.isatty():  # pythonw has no stdout
         return False
     if sys.platform == "win32":  # ask the console for ANSI, old consoles refuse
         try:

@@ -16,7 +16,7 @@ The ``vision`` step of ``prax.yaml`` picks the model: a Claude model
 (``PRAX_VISION`` or ``PRAX_VISION_MODEL`` override it; Haiku 4.5 misread a
 compressor schematic's identity where Sonnet got everything), or an
 ``openai`` model — llama-server started with the model's multimodal
-projector (``scripts/llama_server.ps1 -Mmproj``), which costs nothing per
+projector (``serve: {mmproj: …}`` on its model), which costs nothing per
 image. The model's name is in the artifact's first line and in the
 extractor's stamp for provenance. ``claude-vision`` is the same extractor
 pinned to Claude, the name the earlier descriptions carry.

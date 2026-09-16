@@ -7,7 +7,7 @@
 
 Files land in <data dir>/models/<repo>/<file> (PRAX_MODELS_DIR elsewhere)
 and an interrupted download resumes. The printed path is what
-scripts/llama_server.ps1 -Model takes.
+`serve.path` under the model takes (or leave it out: `prax up` looks here).
 """
 
 from __future__ import annotations

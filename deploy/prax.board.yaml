@@ -18,6 +18,11 @@ embeddings:
   model: bge-small-en-v1.5   # a query needs the embedder; the int8 ONNX runs on
   variant: int8              # the board's CPU in tens of milliseconds
 
+# the door's own clock: the maintenance pass nightly; a backup too, once
+# there is a disk for it (paths.backup, then `backup: "04:30"` here)
+schedule:
+  maintain: "03:30"
+
 door:
   inbox_scan_seconds: 20
   cors_origins: []   # the browser extension's origin goes here, e.g.

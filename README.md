@@ -21,8 +21,11 @@ agent as easily as from the browser.
 
 An empty store answers on the first request. On the machine with the
 models, `prax work --watch` takes new documents the rest of the way —
-text, title, graph, vectors. The longer version, with the Zotero import
-and the browser extension: [`docs/howto.md`](docs/howto.md).
+text, title, graph, vectors. To keep all of it running — the door, the
+worker, a local model server — name them under `run:` in `prax.yaml`
+and `prax up --install` starts them at login, on Windows, Linux or
+macOS alike. The longer version, with the Zotero import and the browser
+extension: [`docs/howto.md`](docs/howto.md).
 
 <table>
 <tr>
@@ -116,7 +119,7 @@ most of it gets used:
     prax show 4312 | less             read one in the terminal
     prax graph "wave digital filter"  what the graph knows around a name
     prax status · jobs · heal · backup · doctor
-    prax serve · work --watch         run it
+    prax up · serve · work --watch    run it
 
 Each command is one HTTP call. `--json` turns any of them into a
 script's input, and `--door` points the same command at another machine

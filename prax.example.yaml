@@ -17,10 +17,10 @@ models:
   # A local model served by llama.cpp's llama-server (the usual way; any
   # OpenAI-compatible server works the same: vLLM, Ollama with its
   # /v1 endpoint). `repo` and `file` say where the GGUF comes from:
-  #   python scripts/fetch_model.py local-server
+  #   prax models fetch local-server
   # puts it under <data dir>/models/<repo>/<file> (a 24 GB card; a 7B Q4
-  # file fits 8 GB), then start the server with the printed path:
-  #   scripts/llama_server.ps1 -Model <that path> -Slots 3 -NoThinking
+  # file fits 8 GB). `serve:` is how `prax up` starts llama-server for it
+  # (run: below): the port from base_url, the context per slot from n_ctx.
   # `model` is the name edges carry as their producer, so name the file.
   local-server:
     kind: openai
@@ -28,6 +28,17 @@ models:
     model: qwen3.6-35b-a3b-ud-q4ks
     repo: unsloth/Qwen3.6-35B-A3B-GGUF
     file: Qwen3.6-35B-A3B-UD-Q4_K_S.gguf
+    n_ctx: 8192              # the context of each slot
+    serve:
+      slots: 3
+      # path: /elsewhere/model.gguf   # instead of the fetched file
+      # mmproj: mmproj-F16.gguf       # the projector beside it: images too
+      # cpu_moe: 2           # a MoE model's expert weights of the first N
+      #                      #   layers in RAM: VRAM for the display (howto 3h)
+      # ubatch: 256          # smaller compute buffers
+      # image_max_tokens: 1024
+      # thinking: false      # off: extraction under a grammar must not think
+      # reranker: true       # a cross-encoder server instead (run: reranker)
 
   # A hosted OpenAI-compatible API (api_key_env names the variable holding
   # its key; price is USD per million input and output tokens, for the
@@ -118,6 +129,7 @@ steps:
 # door:
 #   cors_origins: []           # [PRAX_CORS_ORIGINS] the browser extension's origin
 #   inbox_scan_seconds: 20     # [PRAX_INBOX_SCAN] the drop folder; 0 turns it off
+#   clock_seconds: 30          # [PRAX_CLOCK] how often the schedule below is checked
 
 # ontology:
 #   dir: /path/to/ontology     # [PRAX_ONTOLOGY] another set of module files
@@ -131,3 +143,25 @@ steps:
 # paths:
 #   models: /path/to/models    # [PRAX_MODELS_DIR] where fetched model files go
 #   backup: /path/to/copy      # [PRAX_BACKUP] where `prax backup` copies the store
+#   llama_server: /path/to/llama-server   # [PRAX_LLAMA_SERVER] the binary (howto 3h)
+
+# What this host runs, kept running by `prax up` (howto 4b): started in
+# this order, the worker once the door answers; `prax up --install` starts
+# them at login. Leave out what this host does not run.
+# run:
+#   llama-server: {model: local-server}     # a models: entry with a serve: block
+#   # reranker: {model: ranker}             # a second server, serve: {reranker: true}
+#   door: {host: 0.0.0.0, port: 8000}       # ssl_certfile and ssl_keyfile for HTTPS
+#   worker:
+#     interval: 20                          # seconds between passes
+#     nightly: "03:00"                      # one pass over the whole library a day
+#     nightly_limit: 100                    #   (the backlog, the stale texts)
+#     # door: http://board:8000             # a door elsewhere (else this host's)
+
+# The door's clock: what it runs on itself at that hour, as jobs on the
+# Jobs page. The jobs table remembers, so a door restarted at noon does
+# not run the night again, and one that was down at the hour catches up.
+# schedule:
+#   maintain: "03:30"                       # every pass; or {at: …, only: [acronyms]}
+#   backup: {at: "04:30", archive: false}   # to paths.backup; archive: false
+#                                           #   leaves the originals out

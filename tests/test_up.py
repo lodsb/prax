@@ -138,6 +138,8 @@ def test_a_served_model_needs_its_file_and_the_binary(gpu_host: Path) -> None:
     )
     ranked = up.llama_argv(ranker)
     assert "--reranking" in ranked and "--parallel" in ranked
+    with pytest.raises(up.UpError, match="not a reranker"):
+        up.roles({"reranker": {"model": "big"}})
 
 
 def test_the_serve_block_is_only_for_a_server(data_dir: Path) -> None:

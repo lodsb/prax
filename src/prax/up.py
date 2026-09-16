@@ -6,6 +6,7 @@ one process at login and start it again if it vanishes. ``run:`` in
 
     run:
       llama-server: {model: server-35b}    # the models: entry, with its serve: block
+      reranker:     {model: ranker}        # optional: a second server, a cross-encoder
       door:         {host: 0.0.0.0, port: 8000}
       worker:       {interval: 20, nightly: "03:00"}
 
@@ -50,7 +51,9 @@ from urllib.parse import urlparse
 
 from prax import config, models
 
-ROLES = ("llama-server", "door", "worker")  # the start order; the stop order reversed
+# the start order; the stop order is the reverse. A reranker is a second
+# llama-server with a cross-encoder (serve: {reranker: true} on its model)
+ROLES = ("llama-server", "reranker", "door", "worker")
 KEEP_LOGS = 10
 BACKOFF = (1, 2, 4, 8, 16, 32, 60)  # seconds before a restart, per failure in a row
 STABLE_SECONDS = 300  # a process that lived this long starts the backoff over
@@ -77,6 +80,7 @@ SERVE_KEYS = (
 )
 ROLE_KEYS = {
     "llama-server": ("model",),
+    "reranker": ("model",),
     "door": ("host", "port", "ssl_certfile", "ssl_keyfile"),
     "worker": (
         "door",
@@ -269,17 +273,18 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
         if name not in raw:
             continue
         opts = raw[name] or {}
-        if name == "llama-server":
+        if name in ("llama-server", "reranker"):
             model = opts.get("model")
             if not model:
                 raise UpError(
-                    "run.llama-server: which model? (a models: entry with a"
-                    " serve: block)"
+                    f"run.{name}: which model? (a models: entry with a serve: block)"
                 )
             spec = models.spec(str(model))
             if spec is None:
+                raise UpError(f"run.{name}: no model named {model!r} in prax.yaml")
+            if name == "reranker" and not dict(spec.serve).get("reranker"):
                 raise UpError(
-                    f"run.llama-server: no model named {model!r} in prax.yaml"
+                    f"run.reranker: {model!r} is not a reranker (serve: reranker: true)"
                 )
             out.append(
                 Role(
@@ -700,7 +705,10 @@ class Supervisor:
             return None
         finally:
             log.close()
-        self.job.assign(proc)
+        if not self.job.assign(proc) and sys.platform == "win32":
+            self._say(
+                f"{role.name}: not in the job object (survives a killed supervisor)"
+            )
         with self.lock:
             self.procs[role.name] = proc
         self._set(

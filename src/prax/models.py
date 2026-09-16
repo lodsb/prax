@@ -19,7 +19,8 @@ Three kinds: ``claude`` (the API), ``openai`` (any OpenAI-compatible
 server: llama-server or vLLM on this or another machine, or a hosted
 API; ``api_key_env`` names the variable holding its key), ``stub``
 (tests). A local model always lives in its own server process
-(``scripts/llama_server.ps1``), never in the process that runs the step:
+(``prax up`` starts it from the model's ``serve:`` block), never in the
+process that runs the step:
 the door stays lean and the worker stays small. Some names need no file:
 any ``claude-*`` id, ``stub``, ``none``. Precedence for a step:
 ``PRAX_<STEP>`` in the environment (a model name or ``none``), then the

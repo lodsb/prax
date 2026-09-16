@@ -184,7 +184,15 @@ loop writes. What that model may and may not do, as a reference:
   `paths`). A module never invents an environment variable of its own;
   it names a setting, and the matching `PRAX_*` variable overrides it
   for one run. Environment-only: the data directory, the config path,
-  the token, the door's address, and the per-run switches.
+  the token, the door's address, and the per-run switches. What a host
+  *runs* is configuration too: `run:` names which of prax's roles
+  (llama-server, a reranker, the door, the worker) this host keeps
+  alive and `prax up` (`prax.up`) keeps them so — the operating
+  system's only job is one login entry that starts `prax up`
+  (`prax.autostart`); the timed passes are the door's own clock
+  (`schedule:`, `prax.schedule`) and the worker's `nightly` hour, never
+  a cron or scheduler entry per pass. No shell script derives the
+  process model a second time.
 - Timestamps are UTC ISO-8601 strings.
 - Tests must not touch `data/`; use tmp_path fixtures and set
   `PRAX_DATA_DIR` before importing `prax.api`.

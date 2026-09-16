@@ -346,7 +346,10 @@ def models(a: Any) -> int:
 
         path = fetch.model_file(spec.repo, spec.file, progress=progress)
         out.say(f"\n{path}")
-        out.hint(f"Serve it: scripts/llama_server.ps1 -Model {path} -Slots 3")
+        out.hint(
+            f"Serve it: run: {{llama-server: {{model: {a.fetch}}}}} in prax.yaml,"
+            " then prax up (docs/howto.md 3h)"
+        )
         return 0
     rows = []
     for step in models_mod.STEPS:
