@@ -147,3 +147,29 @@ def test_the_worker_does_its_nightly_pass_once_past_the_hour(
     passes.clear()
     worker.watch(Door(), once=True)  # type: ignore[arg-type]
     assert [p["scope"] for p in passes] == ["captures"]
+
+
+def test_the_nightly_pass_happens_once_a_day_not_once_a_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A watching worker passes every few seconds; the hour having passed
+    must not make every one of them a pass over everything."""
+    passes: list[str] = []
+
+    def fake_run_once(door: Any, **kw: Any) -> dict[str, Any]:
+        passes.append(kw["scope"])
+        if len(passes) == 6:
+            raise KeyboardInterrupt  # the person stops the worker
+        return {}
+
+    monkeypatch.setattr(worker, "run_once", fake_run_once)
+
+    class Door:
+        name = "test"
+
+        def post_json(self, *_: Any, **__: Any) -> dict[str, Any]:
+            return {"job_id": 1}
+
+    with pytest.raises(KeyboardInterrupt):
+        worker.watch(Door(), interval=0.01, nightly="00:00")  # type: ignore[arg-type]
+    assert passes == ["captures", "all", "captures", "captures", "captures", "captures"]

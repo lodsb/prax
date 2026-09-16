@@ -600,6 +600,7 @@ class Supervisor:
         tick: float = TICK,
         backoff: tuple[int, ...] = BACKOFF,
         stable: float = STABLE_SECONDS,
+        grace: float = STOP_GRACE,
         cwd: Path | None = None,
     ) -> None:
         self.roles = roles_
@@ -610,6 +611,7 @@ class Supervisor:
         self.tick = tick
         self.backoff = backoff
         self.stable = stable
+        self.grace = grace
         self.cwd = cwd or config.REPO_ROOT
         self.stopping = threading.Event()
         self.lock = threading.Lock()
@@ -806,9 +808,9 @@ class Supervisor:
         with contextlib.suppress(OSError):
             proc.terminate()
         try:
-            proc.wait(timeout=STOP_GRACE)
+            proc.wait(timeout=self.grace)
         except subprocess.TimeoutExpired:
-            self._say(f"{name}: still running after {STOP_GRACE:.0f} s, killed")
+            self._say(f"{name}: still running after {self.grace:g} s, killed")
             with contextlib.suppress(OSError):
                 proc.kill()
             with contextlib.suppress(subprocess.TimeoutExpired):
