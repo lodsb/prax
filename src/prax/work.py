@@ -45,6 +45,11 @@ from prax import embeddings, extraction, inbox, models, ontology, pipeline, stor
 from prax.parsers import figures, queue
 
 LEASE_SECONDS = 900
+# a worker's "not yet" (the server it needs is loading or down) keeps the
+# item leased this long, so the next batches hold other work instead of
+# the same ten items again — the follow-ups of the first papers marker
+# read once starved the 228 behind them
+DEFER_SECONDS = 600
 STEPS = ("parse", "titles", "extract", "promote", "typing", "embed")
 
 
@@ -102,8 +107,10 @@ def _free(step: str, item: int, now: float) -> bool:
     return held is None or held[1] < now
 
 
-def _lease(step: str, items: list[int], worker: str) -> None:
-    until = time.monotonic() + LEASE_SECONDS
+def _lease(
+    step: str, items: list[int], worker: str, seconds: float = LEASE_SECONDS
+) -> None:
+    until = time.monotonic() + seconds
     for i in items:
         _leases[(step, i)] = (worker, until)
 
@@ -391,6 +398,12 @@ def take_in(
         raise ValueError(f"unknown step {step!r}; steps are {STEPS}")
     results = payload.get("results") or []
     out: dict[str, Any] = {"applied": 0, "errors": [], "skipped": 0}
+    # "not yet": the item stays leased a while, the queue moves on
+    deferred = [int(r["doc_id"]) for r in results if r.get("defer")]
+    if deferred:
+        _lease(step, deferred, worker, seconds=DEFER_SECONDS)
+        out["deferred"] = len(deferred)
+        results = [r for r in results if not r.get("defer")]
     if step in ("extract", "promote"):
         extractor = str(payload.get("extractor") or worker)
         prefix = "promote" if step == "promote" else "work"

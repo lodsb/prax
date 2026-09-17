@@ -95,9 +95,10 @@ def do_parse(
                     ).strip()
             except (parsers.NotYet, models.ServerNotReady) as exc:
                 # the server it reads through is loading or down: not the
-                # document's fault; no result, the lease runs out, the
-                # request is handed out again on a later pass
+                # document's fault; deferred, so the door leaves it leased a
+                # while and hands out other work meanwhile
                 _say(log_, f"parse doc {doc_id}: not yet — {exc}")
+                results.append({"doc_id": doc_id, "defer": True})
                 break
             except Exception as exc:  # noqa: BLE001
                 last = (ext.stamp, f"{type(exc).__name__}: {exc}")
@@ -236,10 +237,10 @@ def do_extract(
             }
         except models.ServerNotReady as exc:
             # the model server is loading or down: not the document's
-            # fault, no error recorded against it; the lease runs out and
-            # it is handed out again on a later pass
+            # fault, no error recorded against it; deferred, so the door
+            # leaves it leased a while and hands out other work meanwhile
             _say(log_, f"extract doc {it['doc_id']}: not yet — {exc}")
-            return {}
+            return {"doc_id": it["doc_id"], "defer": True}
         except Exception as exc:  # noqa: BLE001
             return {"doc_id": it["doc_id"], "error": f"{type(exc).__name__}: {exc}"}
 

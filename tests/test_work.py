@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -703,10 +704,11 @@ def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
     reading = store.get_meta(con, doc)["reading"]
     assert reading["state"] == "requested"  # still waiting, no error recorded
     assert "parse_history" not in store.get_meta(con, doc)
-    # once the lease runs out it goes out again; marker's absent server is the same
-    work._leases.clear()
-    client.post(f"/doc/{doc}/reading", json={"extractor": "marker"})
-    monkeypatch.setenv("PRAX_MARKER_URL", "http://127.0.0.1:9")
+    # and deferred: leased well past a batch, so the next hand-outs hold
+    # other work — the follow-ups of the first papers marker read filled
+    # every batch of ten with "not yet" and starved the 228 requests behind
+    held = work._leases[("parse", doc)]
+    assert held[1] > time.monotonic() + work.DEFER_SECONDS - 60
     # a text document is not marker's type, so use a fake PDF-typed one
     pdf = store.register(con, b"%PDF-1.4 fake", mime="application/pdf", title="p")[
         "doc_id"
@@ -716,7 +718,11 @@ def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
         client.post(f"/doc/{pdf}/reading", json={"extractor": "marker"}).status_code
         == 200
     )
+    handed = client.get("/work/parse").json()["items"]
+    assert [i["doc_id"] for i in handed] == [pdf]  # the deferred one waits
+    # once the lease runs out it goes out again; marker's absent server is the same
     work._leases.clear()
+    monkeypatch.setenv("PRAX_MARKER_URL", "http://127.0.0.1:9")
     said.clear()
     worker.run_once(_door(client), steps=("parse",), log_=said.append)
     assert any("marker's server" in line and "not yet" in line for line in said)
@@ -753,6 +759,7 @@ def test_an_extraction_whose_server_is_down_is_not_a_failure_of_the_document(
     assert "extraction_error" not in store.get_meta(con, a)
     assert "extraction" not in store.get_meta(con, a)
     assert out.get("extract", "").startswith("0 ") or "extract" not in out
+    assert work._leases[("extract", a)][1] > time.monotonic() + work.DEFER_SECONDS - 60
     # what an earlier pass wrote is the ailment's business
     extraction.note_failure(con, a, "URLError: actively refused it", extractor="x")
     b = client.post(
