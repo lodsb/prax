@@ -530,33 +530,45 @@ def _marker(data: bytes) -> str:
             f"marker's server at {_marker_url()} is not answering"
             " (prax up --start marker); the request waits"
         )
-    max_pages = config.whole("parse.max_layout_pages", "PRAX_MAX_LAYOUT_PAGES", 400)
+    window = max(1, config.whole("parse.layout_window", "PRAX_LAYOUT_WINDOW", 100))
     with _pymupdf_open(data) as doc:
         count = doc.page_count
-        if count > max_pages:
-            raise ExtractionError(
-                f"{count} pages exceeds PRAX_MAX_LAYOUT_PAGES={max_pages}"
-            )
         figs = figures.pdf_figures(doc)
-    try:
-        r = httpx.post(
-            f"{_marker_url()}/marker/upload",
-            files={"file": ("document.pdf", data, "application/pdf")},
-            data={
-                "output_format": "markdown",
-                "mode": _marker_mode(),
-                "paginate_output": "true",
-            },
-            timeout=httpx.Timeout(30.0, read=max(600.0, 20.0 * count)),
-        )
-    except httpx.HTTPError as exc:
-        raise ExtractionError(f"marker's server at {_marker_url()}: {exc}") from exc
-    if r.status_code != 200:
-        raise ExtractionError(f"marker's server answered {r.status_code}")
-    body = r.json()
-    if not body.get("success"):
-        raise ExtractionError(f"marker failed: {str(body.get('error', ''))[:200]}")
-    text = _MARKER_IMAGE.sub("", str(body.get("output") or ""))
+    # a long document a window of pages at a time, as pymupdf4llm reads
+    # it: marker's server converts the range asked for and numbers the
+    # pages as the document does, so the parts join as one
+    ranges = (
+        [None]
+        if count <= window
+        else [(a, min(a + window, count) - 1) for a in range(0, count, window)]
+    )
+    parts = []
+    for span in ranges:
+        form = {
+            "output_format": "markdown",
+            "mode": _marker_mode(),
+            "paginate_output": "true",
+        }
+        pages = count
+        if span is not None:
+            form["page_range"] = f"{span[0]}-{span[1]}"
+            pages = span[1] - span[0] + 1
+        try:
+            r = httpx.post(
+                f"{_marker_url()}/marker/upload",
+                files={"file": ("document.pdf", data, "application/pdf")},
+                data=form,
+                timeout=httpx.Timeout(30.0, read=max(600.0, 20.0 * pages)),
+            )
+        except httpx.HTTPError as exc:
+            raise ExtractionError(f"marker's server at {_marker_url()}: {exc}") from exc
+        if r.status_code != 200:
+            raise ExtractionError(f"marker's server answered {r.status_code}")
+        body = r.json()
+        if not body.get("success"):
+            raise ExtractionError(f"marker failed: {str(body.get('error', ''))[:200]}")
+        parts.append(str(body.get("output") or ""))
+    text = _MARKER_IMAGE.sub("", "\n\n".join(parts))
     text = _marker_pages(text, count)
     return figures.place(text, figs)
 

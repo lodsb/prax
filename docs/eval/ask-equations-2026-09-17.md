@@ -208,7 +208,8 @@ references per 10,000 characters), the card swapped to marker with
 `prax up --stop llama-server; prax up --start marker`, a detached
 watcher to swap it back, a second to run extraction and this evaluation
 after. Marker read 280 of them (2 s a page on the card; two 530-page
-books over the layout cap were refused, rightly); the door's follow-up
+books over marker's page cap of the day were refused — since then a
+long document goes to its server a window of pages at a time); the door's follow-up
 edge asked for the formula readings itself, 1 s an equation on the 35B
 once the card was back; the stale-extraction rule sent the re-read
 papers to the extract step first.

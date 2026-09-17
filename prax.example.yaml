@@ -118,8 +118,7 @@ steps:
 #                              #   cyrillic, devanagari, japan, korean, el, th…
 #   ocr_gpu: false             # [PRAX_OCR_GPU] DirectML (onnxruntime-directml)
 #   max_layout_mb: 200         # [PRAX_MAX_LAYOUT_MB] above this, no layout analysis
-#   layout_window: 100         # [PRAX_LAYOUT_WINDOW] pages per pass of layout analysis
-#   max_layout_pages: 400      # [PRAX_MAX_LAYOUT_PAGES] marker's cap (a server conversion)
+#   layout_window: 100         # [PRAX_LAYOUT_WINDOW] pages per pass of layout analysis (marker too)
 #   figures: captioned         # [PRAX_FIGURES] which figures the vision model
 #                              #   reads: captioned | all, either with -again to
 #                              #   read what it has read before, once more

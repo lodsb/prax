@@ -36,7 +36,7 @@ SECTIONS = (
     "embeddings",  # model, variant, providers, threads
     "vectors",  # dtype, ef
     "rerank",  # model, variant, providers
-    "parse",  # ocr_max_pages, max_layout_mb, layout_window, max_layout_pages
+    "parse",  # ocr_max_pages, max_layout_mb, layout_window
     "citations",  # mailto
     "door",  # cors_origins, inbox_scan_seconds, clock_seconds
     "ontology",  # dir

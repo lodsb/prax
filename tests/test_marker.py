@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import re
 import textwrap
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -59,16 +60,28 @@ class FakeMarker(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         length = int(self.headers.get("content-length", 0))
         body = self.rfile.read(length)
+        span = re.search(rb'name="page_range"\r\n\r\n(\d+)-(\d+)', body)
         FakeMarker.seen.append(
             {
                 "path": self.path,
                 "pdf": b"%PDF" in body,
                 "paginate": b'name="paginate_output"\r\n\r\ntrue' in body,
                 "mode": b'name="mode"\r\n\r\nfast' in body,
+                "page_range": (int(span.group(1)), int(span.group(2)))
+                if span
+                else None,
             }
         )
+        output = MARKED
+        if span:
+            # the pages asked for, numbered as the document numbers them
+            a, b = int(span.group(1)), int(span.group(2))
+            output = "\n\n".join(
+                f"{{{n}}}" + "-" * 48 + f"\n\nPage {n + 1} of the book."
+                for n in range(a, b + 1)
+            )
         out = json.dumps(
-            {"format": "markdown", "output": MARKED, "images": {}, "success": True}
+            {"format": "markdown", "output": output, "images": {}, "success": True}
         ).encode()
         self.send_response(200)
         self.send_header("content-type", "application/json")
@@ -151,6 +164,31 @@ def test_the_extractor_turns_the_servers_answer_into_an_artifact(
         parsers._pymupdf_open(AMBRITS_PDF.read_bytes()).__enter__()
     )
     assert len(refs) == len(real)
+
+
+@needs_pymupdf
+def test_a_long_document_goes_to_marker_a_window_of_pages_at_a_time(
+    data_dir: Path, marker_server: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two 530-page books were over marker's page cap and kept their
+    plain text. marker's server takes a page range and numbers the pages
+    as the document does, so a long document goes up a window at a time
+    and the parts join as one — the page markers in order, one to the
+    end, as the chunker wants them."""
+    monkeypatch.setenv("PRAX_LAYOUT_WINDOW", "3")  # the 8-page fixture, three uploads
+    text = parsers.by_name("marker")(AMBRITS_PDF.read_bytes())
+    assert [s["page_range"] for s in FakeMarker.seen] == [(0, 2), (3, 5), (6, 7)]
+    assert all(s["paginate"] and s["pdf"] for s in FakeMarker.seen)
+    pages = re.findall(r"--- end of page\.page_number=(\d+) ---", text)
+    assert pages == [str(n) for n in range(1, 9)]
+    assert "Page 1 of the book." in text and "Page 8 of the book." in text
+    assert text.index("Page 4 of the book.") > text.index("page_number=3 ---")
+    assert text.index("Page 4 of the book.") < text.index("page_number=4 ---")
+    # a short document still goes up whole
+    FakeMarker.seen.clear()
+    monkeypatch.setenv("PRAX_LAYOUT_WINDOW", "50")
+    parsers.by_name("marker")(AMBRITS_PDF.read_bytes())
+    assert [s["page_range"] for s in FakeMarker.seen] == [None]
 
 
 @needs_pymupdf

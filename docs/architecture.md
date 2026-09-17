@@ -387,7 +387,7 @@ here opens the database file.
 | `embeddings.model` [`PRAX_EMBED`] | model name, `hash` (tests), `0` (off) |
 | `embeddings.variant`, `.providers`, `.threads` | onnxruntime precision, providers, threads |
 | `vectors.dtype`, `vectors.ef` | index precision (`f16`, `i8`) and search expansion |
-| `parse.max_layout_mb`, `.layout_window`, `.max_layout_pages` | MuPDF layout analysis: the file size above which the plain extractor reads instead, the pages per pass (a long document window by window), and marker's page cap |
+| `parse.max_layout_mb`, `.layout_window` | layout analysis: the file size above which the plain extractor reads instead, and the pages per pass — a long document window by window, through pymupdf4llm and through marker's server alike |
 | `parse.ocr_max_pages` | page budget of the OCR extractor |
 | `parse.ocr_language`, `.ocr_gpu` | the OCR recognizer's script (`ch`, `en`, `latin`, `arabic`, `cyrillic`…; part of the text-source stamp) and whether it runs on DirectML |
 | `parse.figures` [`PRAX_FIGURES`] | which figures the `figures` extractor reads: `captioned` (default; a PDF image no caption claims is often decoration) or `all` |
