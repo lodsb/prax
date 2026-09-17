@@ -234,13 +234,19 @@ def do_extract(
                 "doc_id": it["doc_id"],
                 "extraction": work.extraction_to_dict(result),
             }
+        except models.ServerNotReady as exc:
+            # the model server is loading or down: not the document's
+            # fault, no error recorded against it; the lease runs out and
+            # it is handed out again on a later pass
+            _say(log_, f"extract doc {it['doc_id']}: not yet — {exc}")
+            return {}
         except Exception as exc:  # noqa: BLE001
             return {"doc_id": it["doc_id"], "error": f"{type(exc).__name__}: {exc}"}
 
     if workers > 1 and isinstance(ext, extraction.LocalExtractor):
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            return list(pool.map(one, items))
-    return [one(it) for it in items]
+            return [r for r in pool.map(one, items) if r]
+    return [r for r in (one(it) for it in items) if r]
 
 
 def do_promote(

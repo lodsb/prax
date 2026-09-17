@@ -722,3 +722,48 @@ def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
     assert any("marker's server" in line and "not yet" in line for line in said)
     assert store.get_meta(con, pdf)["reading"]["state"] == "requested"
     assert isinstance(parsers.NotYet("x"), parsers.ExtractionError)
+
+
+def test_an_extraction_whose_server_is_down_is_not_a_failure_of_the_document(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A pass that ran while llama-server was paused recorded 'connection
+    refused' as the document's extraction error, which kept it out of the
+    selection under this ontology. The worker posts nothing for a server
+    that is not ready; and the errors already recorded that way are
+    forgotten by the extraction-failed repair — the others kept."""
+    from prax import extraction, models
+
+    con = client.app.state.con
+    a = client.post(
+        "/ingest",
+        json={"text": "reverb design by feedback delay networks " * 30, "title": "A"},
+    ).json()["doc_id"]
+
+    class Down(extraction.StubExtractor):
+        def extract(self, doc):  # type: ignore[override]
+            raise models.ServerNotReady("http://127.0.0.1:1/v1: not answering")
+
+    monkeypatch.setattr(extraction, "current", lambda step="extract": Down())
+    said: list[str] = []
+    out = worker.run_once(
+        _door(client), steps=("extract",), scope="all", log_=said.append
+    )
+    assert any("not yet" in line for line in said)
+    assert "extraction_error" not in store.get_meta(con, a)
+    assert "extraction" not in store.get_meta(con, a)
+    assert out.get("extract", "").startswith("0 ") or "extract" not in out
+    # what an earlier pass wrote is the ailment's business
+    extraction.note_failure(con, a, "URLError: actively refused it", extractor="x")
+    b = client.post(
+        "/ingest", json={"text": "a second paper " * 60, "title": "B"}
+    ).json()["doc_id"]
+    extraction.note_failure(
+        con, b, "prompt of 40,000 tokens exceeds the slot", extractor="x"
+    )
+    ailment = next(x for x in store.AILMENTS if x.name == "extraction-failed")
+    found = ailment.find(con)
+    assert {f["id"] for f in found} == {a, b}
+    assert ailment.repair is not None and ailment.repair(con, found) == 1
+    assert "extraction_error" not in store.get_meta(con, a)
+    assert store.get_meta(con, b)["extraction_error"]["error"].startswith("prompt")

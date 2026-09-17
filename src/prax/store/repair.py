@@ -304,6 +304,33 @@ def _extraction_failed(con: sqlite3.Connection) -> list[dict[str, Any]]:
     ]
 
 
+SERVER_FAULT = re.compile(
+    r"ServerNotReady|Loading model|HTTP 503|URLError|ConnectionError|"
+    r"actively refused|Connection refused|timed out",
+    re.IGNORECASE,
+)
+
+
+def _repair_extraction_failed(
+    con: sqlite3.Connection, rows: list[dict[str, Any]]
+) -> int:
+    """Forget the errors that were the model server's (loading, down,
+    refused), so the extract step selects those documents again; an
+    error the document caused (a prompt no slot holds) stays, as the
+    ailment says."""
+    from prax.store import documents as docs
+
+    done = 0
+    for r in rows:
+        if not SERVER_FAULT.search(str(r.get("error") or "")):
+            continue
+        meta = docs.get_meta(con, r["id"])
+        if meta.pop("extraction_error", None) is not None:
+            docs.set_meta(con, r["id"], meta)
+            done += 1
+    return done
+
+
 def _unread_figures(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents holding a figure no model has read: the picture is in
     the text as a reference and a caption, and nothing says what it
@@ -719,9 +746,12 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         fix=(
             "a bigger slot on the model server, or the promote step for the"
-            " few that matter; nothing to repair in the store"
+            " few that matter. Repairing forgets only the errors that were the"
+            " server's (loading its model, down, refused: a pass ran while"
+            " llama-server was paused), so those are selected again"
         ),
         find=_extraction_failed,
+        repair=_repair_extraction_failed,
     ),
     Ailment(
         name="unreadable-documents",
