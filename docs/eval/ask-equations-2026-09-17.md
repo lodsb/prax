@@ -113,6 +113,37 @@ store).
   equation it did not have. The evaluation was not run on the old
   texts before they were replaced; the 09-15 note is the "before".
 
+## The prompt line (the same afternoon)
+
+The judge's "no"s were descriptions with the equation cited beside
+them, and the answer prompt asked for citations, never for the
+equation. One sentence added to `ask.SYSTEM` — *when the question asks
+for an equation, a formula or a definition and a passage shows it,
+write it out as that passage has it (LaTeX between `$$` on a line of
+its own) before you explain it; a passage that shows the equation
+answers the question even when it does not name it* — and the same 22
+questions again, same model, same judge:
+
+| steps | sources | cited | formula cited | match | maths quoted | stated (partly) | s/question |
+|---|---|---|---|---|---|---|---|
+| 0, before | 100% (22) | 95% (21) | 91% (20) | 95% (21) | 77% (17) | 50% (11, +1) | 10 |
+| 0, after | 100% (22) | 91% (20) | 95% (21) | 91% (20) | 91% (20) | **73% (16, +2)** | 10 |
+| 8, before | 100% (22) | 95% (21) | 95% (21) | 95% (21) | 91% (20) | 73% (16, +1) | 16 |
+| 8, after | 100% (22) | 95% (21) | 95% (21) | 95% (21) | 100% (22) | **86% (19, +1)** | 17 |
+
+The one-shot answer now states the equation as often as the surf did
+before, and the surf reaches 19 of 22, at no cost in time. What is left:
+the citighana series (11) and the complex-ICA set-up (14) at 0 steps —
+the formula chunk is cited but the answer keeps to prose; the Markov
+chain's transition probability (20), where the answer says the
+passages do not define it, at both settings; and the FrFT kernel (21),
+where the answer writes the transform's integral and says the kernel's
+own formula is cut off in the passage it has — which it is: the
+formula chunk holds the integral, the kernel is the next equation.
+The questions where the regex columns dipped (cited 21→20 at 0 steps)
+are the answer citing the formula chunk alone and not the prose
+passage the regex expected; the judge is unmoved by that.
+
 ## How the material came to be (the night of 2026-09-16/17)
 
 The mathematical part of the library through marker in one evening:
@@ -143,11 +174,10 @@ counts: `docs/PLAN.md`, "After the mathematics".
 ## What follows
 
 - The judge is the measure now (`--judge`, `--rejudge` over saved
-  answers); the regex columns are its floor. The next question for
-  `ask` is why a model with the equation in front of it describes it
-  instead of stating it — the answer prompt asks for citations, not for
-  the equation; a line ("when the question asks for an equation, write
-  it") is the cheap experiment, and this set with the judge measures it.
+  answers); the regex columns are its floor. The prompt line above was
+  its first use; the next is the surfer's own prompt (`surf.SYSTEM`),
+  which could prefer the formula chunk's neighbours when the question
+  asks for an equation the passage it holds only introduces (21).
 - `prax resolve --apply --twins` after the extraction pass over the 280
   re-read papers: Lambert W function was five entity rows before it.
 - The set is bound to this store's ids; a portable one would name
