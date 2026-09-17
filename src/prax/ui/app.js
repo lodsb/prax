@@ -528,12 +528,15 @@ async function viewDoc(id, p) {
       await modules();
       const ctx = await api(`/doc/${id}/context`, domain ? { domain } : {});
       ctx.domain = domain || "";
-      document.getElementById("doc-context").innerHTML = renderContext(ctx);
+      const aside = document.getElementById("doc-context");
+      if (!aside) return; // the view moved on while the context loaded
+      aside.innerHTML = renderContext(ctx);
       bindProjectForm(doc.id);
       const sel = document.querySelector("#doc-context select[name=similar-domain]");
       if (sel) sel.addEventListener("change", () => loadContext(sel.value));
     } catch (err) {
-      document.getElementById("doc-context").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+      const aside = document.getElementById("doc-context");
+      if (aside) aside.innerHTML = `<p class="error">${esc(err.message)}</p>`;
     }
   };
   loadContext(p.domain || "");

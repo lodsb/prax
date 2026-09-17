@@ -6,11 +6,13 @@ handlers; prax.store serializes access.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import queue
 import socket
 import threading
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -134,13 +136,42 @@ app.middleware("http")(auth.middleware)
 app.state.writes = 0
 
 
+SLOW_SECONDS = 2.0  # a request slower than this is logged with what else was on
+app.state.in_flight = 0
+
+
 @app.middleware("http")
 async def _count_writes(request: Request, call_next: Any) -> Any:
     """Every mutating request bumps a counter: with SQLite's data_version
-    (other writers) it makes the change stamp the UI polls."""
-    response = await call_next(request)
+    (other writers) it makes the change stamp the UI polls. A slow
+    request is logged with how many others were in flight and which jobs
+    ran, so "loading takes ages" leaves a trace of what the door was
+    doing at the time (a GET of one document took 77 s once, on
+    2026-09-17, with three book-sized readings being taken in)."""
+    state = request.app.state
+    state.in_flight += 1
+    others = state.in_flight - 1
+    started = time.monotonic()
+    try:
+        response = await call_next(request)
+    finally:
+        state.in_flight -= 1
+    seconds = time.monotonic() - started
     if request.method not in ("GET", "HEAD", "OPTIONS") and response.status_code < 400:
-        request.app.state.writes += 1
+        state.writes += 1
+    if seconds >= SLOW_SECONDS and not request.url.path.startswith("/ask"):
+        jobs = ""
+        with contextlib.suppress(Exception):
+            running = store.list_jobs(store.thread_connection(), limit=1)["running"]
+            jobs = ", ".join(j["name"] for j in running)
+        logging.getLogger("prax.door").warning(
+            "slow: %s %s took %.1f s (%d other requests in flight%s)",
+            request.method,
+            request.url.path,
+            seconds,
+            others,
+            f"; jobs: {jobs}" if jobs else "",
+        )
     return response
 
 
