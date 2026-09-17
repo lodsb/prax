@@ -98,6 +98,13 @@ Measured on the 4090 with Qwen3.6-35B-A3B (2 slots of 16 K):
 A one-shot ask on the same host is about four seconds. Claude answers in
 about the same time and costs about a cent a question.
 
+What the steps buy, measured on questions whose answer is an equation
+(`docs/eval/ask-equations-2026-09-17.md`, 22 questions over papers read
+with marker): the paper is found and its formula chunk cited either
+way; the one-shot answer often stops at "the passages do not state the
+equation" with the equation among them, the surf reads on and quotes
+it — 10 s a question against 16.
+
 ## The trail
 
 Every step is an event: the note, the action, what it brought, how long

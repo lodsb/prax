@@ -797,8 +797,10 @@ What the marker evenings taught, kept for the day:
       of reload each way). Not a DAG scheduler: five steps and one
       exclusive resource do not want Airflow, and the process model was
       just made smaller.
-- [x] **The ask evaluation with equations** (set and script 2026-09-17;
-      the run follows the evening) — the honest test the marker
+- [x] **The ask evaluation with equations** (2026-09-17,
+      `docs/eval/ask-equations-2026-09-17.md`: the paper found 22 of 22,
+      the formula chunk cited 20–21 of 22, the equation itself quoted
+      with steps; the scores saturate, a judge is the next step) — the honest test the marker
       note left open: the same equation questions asked before and after
       a document is read with its mathematics (does `ask` cite the
       formula, does the answer quote it right). The material exists now:
