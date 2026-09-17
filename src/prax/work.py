@@ -263,8 +263,10 @@ def hand_out(
         from prax import parsers
 
         items = []
-        # requested readings first: a person asked, whatever the scope
-        for req in store.reading_requests(con):
+        # requested readings first: a person asked, whatever the scope; the
+        # whole queue, oldest first — the status view's newest fifty hid
+        # the 228 marker requests behind the follow-ups placed after them
+        for req in store.reading_requests(con, limit=None, oldest_first=True):
             doc_id = req["doc_id"]
             if len(items) >= limit or not _free(step, doc_id, now):
                 continue

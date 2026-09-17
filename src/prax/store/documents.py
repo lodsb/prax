@@ -1144,17 +1144,28 @@ def finish_reading(
 
 
 def reading_requests(
-    con: sqlite3.Connection, *, state: str | None = "requested", limit: int = 50
+    con: sqlite3.Connection,
+    *,
+    state: str | None = "requested",
+    limit: int | None = 50,
+    oldest_first: bool = False,
 ) -> list[dict[str, Any]]:
     """Documents with a reading request: the waiting ones (``state``
-    ``requested``), or every state (None), newest first."""
-    rows = con.execute(
+    ``requested``), or every state (None), newest first for the status
+    view; the hand-out asks for the whole queue oldest first (``limit``
+    None), so a burst of newer requests never hides the older ones."""
+    params: list[Any] = [state] if state else []
+    sql = (
         "SELECT id, title, mime, meta FROM documents"
         " WHERE json_extract(meta, '$.reading') IS NOT NULL"
         + (" AND json_extract(meta, '$.reading.state') = ?" if state else "")
-        + " ORDER BY json_extract(meta, '$.reading.at') DESC LIMIT ?",
-        ((state, limit) if state else (limit,)),
-    ).fetchall()
+        + " ORDER BY json_extract(meta, '$.reading.at')"
+        + (" ASC, id ASC" if oldest_first else " DESC, id DESC")
+    )
+    if limit is not None:
+        sql += " LIMIT ?"
+        params.append(limit)
+    rows = con.execute(sql, params).fetchall()
     return [
         {
             "doc_id": r["id"],

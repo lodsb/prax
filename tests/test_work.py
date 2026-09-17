@@ -730,6 +730,47 @@ def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
     assert isinstance(parsers.NotYet("x"), parsers.ExtractionError)
 
 
+def test_the_hand_out_sees_the_whole_reading_queue_oldest_first(
+    client: TestClient,
+) -> None:
+    """The status view lists the newest fifty requests; the hand-out used
+    the same list, so sixty older marker requests behind ten newer
+    follow-ups were never handed out once those ten were leased. The
+    hand-out reads the whole queue, oldest first."""
+    con = client.app.state.con
+    older = []
+    for i in range(60):
+        pdf = store.register(
+            con, b"%PDF-1.4 " + str(i).encode(), mime="application/pdf", title=f"p{i}"
+        )["doc_id"]
+        store.index_text(con, pdf, f"old text {i} " * 40, text_source="pymupdf4llm/1")
+        assert (
+            client.post(f"/doc/{pdf}/reading", json={"extractor": "marker"}).status_code
+            == 200
+        )
+        older.append(pdf)
+    newer = []
+    for i in range(10):
+        maths = f"# M{i}\n\n$$x_{i} = 1 \\quad (1)$$\n\ntext " * 3
+        doc = store.ingest_text(con, maths)["doc_id"]
+        assert (
+            client.post(
+                f"/doc/{doc}/reading", json={"extractor": "formulas"}
+            ).status_code
+            == 200
+        )
+        newer.append(doc)
+    # the newest ten are leased (say deferred: their server is down)
+    work._lease("parse", newer, "w", seconds=work.DEFER_SECONDS)
+    handed = [i["doc_id"] for i in client.get("/work/parse").json()["items"]]
+    assert handed == older[:10]  # oldest first, none of the leased ones
+    handed = [i["doc_id"] for i in client.get("/work/parse").json()["items"]]
+    assert handed == older[10:20]
+    # the status view keeps its newest-first window
+    listed = client.get("/readings").json()["requested"]
+    assert len(listed) == 50 and set(newer) <= {r["doc_id"] for r in listed}
+
+
 def test_an_extraction_whose_server_is_down_is_not_a_failure_of_the_document(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
