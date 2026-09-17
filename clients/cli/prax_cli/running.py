@@ -482,7 +482,7 @@ def readings(door: Door, a: Any) -> int:
         out.say(out.bold("Lately"))
         rows = [
             [
-                out.when(r.get("finished") or r.get("at")),
+                out.when(r.get("finished_at") or r.get("at")),
                 str(r.get("doc_id")),
                 r.get("extractor") or "",
                 out.paint(r.get("state", ""), "red")
