@@ -12,7 +12,12 @@ nothing deleted; ``traverse`` follows the pointers):
   (``bge-small`` on short strings) but not equal after normalization. These
   go to an adjudicator, which by default merges nothing; ``ClaudeAdjudicator``
   asks the model, ``StubAdjudicator`` accepts above a similarity threshold
-  in tests.
+  in tests. The embedding is never the door's: a worker takes a type's
+  names through the work protocol (``prax.work``, step ``resolve``), finds
+  the close pairs (``likely_pairs``) and posts them; the door keeps them
+  (``store.entity_candidates``) and the plan reads them from there.
+  Embedding 138,000 names inside the serving process, and the N² of
+  similarities after, crashed the door on 2026-09-17 (invariant 7).
 
 The survivor of a merge is the entity with more currently valid edges,
 then the longer name (usually the fuller one).
@@ -30,10 +35,12 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from prax import embeddings, extraction, store
+from prax import extraction, store
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "phd", "dr", "prof"}
 LIKELY_THRESHOLD = 0.92  # cosine of name embeddings to become a candidate
+LIKELY_BLOCK = 2048  # names per block of the similarity computation (a worker)
+LIKELY_DAYS = 7  # a type's pairs are computed again after this long
 # Types whose names are descriptive enough for embedding similarity to mean
 # "the same thing". Author names embed poorly (initials handle them); paper
 # titles and claims that differ by a part number or a qualifier embed almost
@@ -119,14 +126,44 @@ def _survivor(
     return (a, b) if _rank(a) >= _rank(b) else (b, a)
 
 
+def likely_pairs(
+    names: list[tuple[int, str]],
+    emb: Any,
+    *,
+    threshold: float = LIKELY_THRESHOLD,
+    block: int = LIKELY_BLOCK,
+) -> list[tuple[int, int, float]]:
+    """The pairs of names close by embedding: ``(id, id, cosine)`` with
+    the smaller id first, highest first. Done a block of rows at a time
+    against all the columns, so thirty thousand names cost a few hundred
+    megabytes and not the square; the work step of a worker, never the
+    door's."""
+    if len(names) < 2:
+        return []
+    vectors = np.asarray(emb.embed([n for _, n in names]), dtype=np.float32)
+    ids = [i for i, _ in names]
+    found: dict[tuple[int, int], float] = {}
+    for start in range(0, len(names), block):
+        sims = vectors[start : start + block] @ vectors.T
+        for r, c in zip(*np.where(sims >= threshold), strict=True):
+            i, j = int(start + r), int(c)
+            if i == j:
+                continue
+            a, b = (ids[i], ids[j]) if ids[i] < ids[j] else (ids[j], ids[i])
+            found[(a, b)] = max(found.get((a, b), 0.0), float(sims[r, c]))
+    return sorted(((a, b, s) for (a, b), s in found.items()), key=lambda t: -t[2])
+
+
 def plan(
     con: sqlite3.Connection,
     *,
     etype: str | None = None,
-    embed: bool = True,
-    likely_threshold: float = LIKELY_THRESHOLD,
+    likely: bool = True,
 ) -> Plan:
-    """Candidate merges among unmerged entities, without writing anything."""
+    """Candidate merges among unmerged entities, without writing anything:
+    the sure ones and the twins from the names, the likely ones from the
+    pairs a worker left (``store.entity_candidates``; the threshold was
+    the worker's, handed out with the names)."""
     ents = _entities(con, etype)
     out = Plan()
     taken: set[int] = set()
@@ -203,37 +240,28 @@ def plan(
                 )
                 taken.add(drop["id"])
 
-    # tier 2: close by name embedding, same type, not already taken
-    if embed and (emb := embeddings.current()) is not None:
-        rest = [e for e in ents if e["id"] not in taken]
-        by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
-        for e in rest:
-            by_type[e["type"]].append(e)
-        for t, members in by_type.items():
-            if len(members) < 2 or t not in LIKELY_TYPES:
+    # tier 2: close by name embedding — the pairs a worker computed and
+    # posted, read back with both entities still unmerged and not taken
+    if likely:
+        by_id = {e["id"]: e for e in ents}
+        for row in store.entity_candidates(con, etype):
+            if row["type"] not in LIKELY_TYPES:
                 continue
-            vectors = emb.embed([m["name"] for m in members])
-            sims = vectors @ vectors.T
-            np.fill_diagonal(sims, 0.0)
-            seen: set[tuple[int, int]] = set()
-            for i, j in zip(*np.where(sims >= likely_threshold), strict=True):
-                a, b = members[int(i)], members[int(j)]
-                pair = (min(a["id"], b["id"]), max(a["id"], b["id"]))
-                if pair in seen:
-                    continue
-                seen.add(pair)
-                keep, drop = _survivor(a, b)
-                out.likely.append(
-                    Candidate(
-                        keep["id"],
-                        drop["id"],
-                        keep["name"],
-                        drop["name"],
-                        t,
-                        "likely",
-                        float(sims[i, j]),
-                    )
+            a, b = by_id.get(row["a"]), by_id.get(row["b"])
+            if a is None or b is None or a["id"] in taken or b["id"] in taken:
+                continue
+            keep, drop = _survivor(a, b)
+            out.likely.append(
+                Candidate(
+                    keep["id"],
+                    drop["id"],
+                    keep["name"],
+                    drop["name"],
+                    row["type"],
+                    "likely",
+                    float(row["score"]),
                 )
+            )
     out.likely.sort(key=lambda c: -c.score)
     return out
 

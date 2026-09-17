@@ -47,7 +47,7 @@ def _graph(con: sqlite3.Connection) -> None:
 
 def test_sure_tier_merges_and_traverse_follows(con: sqlite3.Connection) -> None:
     _graph(con)
-    plan = resolution.plan(con, embed=False)
+    plan = resolution.plan(con, likely=False)
     pairs = {(c.drop_name, c.keep_name) for c in plan.sure}
     # normalized equality: the two wave-digital-filter spellings, the iii author
     assert ("Wave Digital Filter", "wave digital filters") in pairs or (
@@ -76,7 +76,7 @@ def test_sure_tier_merges_and_traverse_follows(con: sqlite3.Connection) -> None:
     assert [e["name"] for e in store.find_entities(con, "smith")] == ["Julius O. Smith"]
     assert con.execute("SELECT count(*) FROM edges").fetchone()[0] == 7
     # idempotent
-    assert resolution.plan(con, embed=False).sure == []
+    assert resolution.plan(con, likely=False).sure == []
 
 
 def test_merge_rules(con: sqlite3.Connection) -> None:
@@ -109,7 +109,7 @@ def test_concept_method_twins_merge_into_the_method(con: sqlite3.Connection) -> 
     store.link(con, E("P", "paper", "about", "empirical mode decomposition", "concept"))
     store.link(con, E("Q", "paper", "uses", "Empirical Mode Decomposition", "method"))
     store.link(con, E("Q", "paper", "about", "timbre", "concept"))
-    plan = resolution.plan(con, embed=False)
+    plan = resolution.plan(con, likely=False)
     assert plan.sure == []
     assert [(c.drop_name, c.keep_name) for c in plan.twins] == [
         ("empirical mode decomposition", "Empirical Mode Decomposition")
@@ -124,15 +124,29 @@ def test_concept_method_twins_merge_into_the_method(con: sqlite3.Connection) -> 
     assert [e["name"] for e in store.find_entities(con, "mode decomposition")] == [
         "Empirical Mode Decomposition"
     ]
-    assert resolution.plan(con, embed=False).twins == []
+    assert resolution.plan(con, likely=False).twins == []
+
+
+def _likely_computed(con: sqlite3.Connection, etype: str, threshold: float) -> int:
+    """What a worker's resolve step does for one type, without the door:
+    embed the names, find the close pairs, leave them in the store."""
+    emb = embeddings.current()
+    assert emb is not None
+    pairs = resolution.likely_pairs(
+        store.entity_names(con, etype), emb, threshold=threshold
+    )
+    return store.replace_entity_candidates(con, etype, pairs, producer="test")
 
 
 def test_likely_tier_needs_an_adjudicator(con: sqlite3.Connection) -> None:
     store.link(con, E("P", "paper", "about", "granular synthesis", "concept"))
     store.link(con, E("Q", "paper", "about", "granular synthesis method", "concept"))
     store.link(con, E("R", "paper", "about", "room acoustics", "concept"))
+    # nothing likely until a worker has computed the pairs
+    assert resolution.plan(con).likely == []
     # the hash embedder scores shared words; 0.8 stands in for bge's 0.92
-    plan = resolution.plan(con, embed=True, likely_threshold=0.8)
+    assert _likely_computed(con, "concept", 0.8) >= 1
+    plan = resolution.plan(con)
     assert plan.sure == []
     assert [c.drop_name for c in plan.likely] and all(
         c.type == "concept" for c in plan.likely
@@ -141,7 +155,31 @@ def test_likely_tier_needs_an_adjudicator(con: sqlite3.Connection) -> None:
     accept_all = resolution.StubAdjudicator(threshold=0.0)
     report = resolution.apply(con, plan, adjudicator=accept_all)
     assert report.merged_likely >= 1
-    assert resolution.plan(con, embed=True, likely_threshold=0.8).likely == []
+    # merged: the pair is moot and leaves the plan without being recomputed
+    assert resolution.plan(con).likely == []
+
+
+def test_likely_pairs_are_the_close_names_a_block_at_a_time() -> None:
+    """The worker's computation: every pair at or above the threshold,
+    the smaller id first, highest first, the same whatever the block —
+    thirty thousand names must not want the square."""
+    emb = embeddings.current()
+    assert emb is not None
+    names = [
+        (10, "granular synthesis"),
+        (7, "granular synthesis method"),
+        (3, "room acoustics"),
+        (12, "room acoustic"),
+        (5, "wave digital filters"),
+    ]
+    whole = resolution.likely_pairs(names, emb, threshold=0.8)
+    blocked = resolution.likely_pairs(names, emb, threshold=0.8, block=2)
+    assert whole == blocked and whole
+    assert all(a < b for a, b, _ in whole)
+    assert [s for _, _, s in whole] == sorted((s for _, _, s in whole), reverse=True)
+    assert (7, 10) in {(a, b) for a, b, _ in whole}
+    assert (5, 10) not in {(a, b) for a, b, _ in whole}
+    assert resolution.likely_pairs(names[:1], emb) == []
 
 
 def test_invalidate_edge_with_successor(con: sqlite3.Connection) -> None:
@@ -176,7 +214,7 @@ def test_shared_initials_between_two_full_names_is_not_merged(
     store.link(con, E("A", "paper", "authored_by", "Julius O. Smith", "author"))
     store.link(con, E("B", "paper", "authored_by", "Jane O. Smith", "author"))
     store.link(con, E("C", "paper", "authored_by", "J. O. Smith", "author"))
-    plan = resolution.plan(con, embed=False)
+    plan = resolution.plan(con, likely=False)
     assert plan.sure == []  # J. O. Smith could be either: left for a person
 
 
@@ -189,5 +227,12 @@ def test_papers_and_claims_are_never_likely_candidates(
     store.link(
         con, E("Lecture 5 Neural Networks Part 2", "paper", "about", "nn", "concept")
     )
-    plan = resolution.plan(con, embed=True, likely_threshold=0.5)
+    # even computed, a paper is never a likely candidate: the type is refused
+    emb = embeddings.current()
+    pairs = resolution.likely_pairs(
+        store.entity_names(con, "paper"), emb, threshold=0.5
+    )
+    assert pairs  # the names are close
+    store.replace_entity_candidates(con, "paper", pairs, producer="test")
+    plan = resolution.plan(con)
     assert plan.sure == [] and plan.likely == []

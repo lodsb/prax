@@ -29,7 +29,9 @@ def main() -> int:
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--commit", action="store_true")
     ap.add_argument("--type", help="only this entity type")
-    ap.add_argument("--no-embed", action="store_true", help="skip the likely tier")
+    ap.add_argument(
+        "--no-likely", action="store_true", help="leave out the likely tier"
+    )
     ap.add_argument(
         "--adjudicate", action="store_true", help="ask Claude about likely pairs"
     )
@@ -47,7 +49,7 @@ def main() -> int:
 
     con = store.connect()
     store.init_db(con)
-    plan = resolution.plan(con, etype=a.type, embed=not a.no_embed)
+    plan = resolution.plan(con, etype=a.type, likely=not a.no_likely)
     print(
         f"store: {config.db_path()}; {len(plan.sure)} sure, {len(plan.likely)} likely"
         f" candidates{' (' + a.type + ')' if a.type else ''}",

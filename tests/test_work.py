@@ -199,6 +199,68 @@ def test_leases_expire(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> N
     assert len(client.get("/work/extract").json()["items"]) == 1
 
 
+def test_the_resolve_step_computes_the_likely_pairs_off_the_door(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The likely tier used to embed every entity name inside the door
+    (and crashed it at 138,000 of them): now the door hands a type's
+    names to a worker, the worker embeds them and posts the close pairs,
+    and the plan reads those. A type is due once a week."""
+    from prax import resolution
+
+    con = client.app.state.con
+    for paper, concept in (
+        ("P", "granular synthesis"),
+        ("Q", "granular synthesis method"),
+        ("R", "room acoustics"),
+    ):
+        store.link(
+            con,
+            store.Edge(paper, "paper", "about", concept, "concept"),
+            source_doc=None,
+            producer="test",
+        )
+    monkeypatch.setattr(resolution, "LIKELY_THRESHOLD", 0.8)  # the hash embedder
+    batch = client.get("/work/resolve").json()
+    assert batch["type"] == "concept" and len(batch["names"]) == 3
+    assert batch["threshold"] == 0.8 and batch["model"] == "hash-test"
+    # leased: nothing else of that type goes out; the next type may
+    again = client.get("/work/resolve").json()
+    assert again["type"] != "concept"
+    work._leases.clear()
+    said: list[str] = []
+    out = worker.run_once(_door(client), steps=("resolve",), log_=said.append)
+    assert out["resolve"].startswith("concept: 1 likely pairs among 3 names")
+    rows = store.entity_candidates(con, "concept")
+    assert len(rows) == 1 and rows[0]["producer"] == "hash-test via test-worker"
+    assert {rows[0]["a_name"], rows[0]["b_name"]} == {
+        "granular synthesis",
+        "granular synthesis method",
+    }
+    plan = client.post("/graph/resolve", json={}).json()["plan"]
+    assert plan["likely"]["count"] == 1
+    assert plan["likely"]["computed"].keys() == {"concept"}
+    # computed this week: the type is not handed out again, the others are
+    work._leases.clear()
+    types = set()
+    for _ in range(6):
+        b = client.get("/work/resolve").json()
+        if b["type"]:
+            types.add(b["type"])
+    assert "concept" not in types
+    # a wrong model is refused, as for embed
+    r = client.post(
+        "/work/resolve", json={"type": "concept", "model": "other", "pairs": []}
+    )
+    assert r.status_code == 400
+    assert (
+        client.post(
+            "/work/resolve", json={"type": "paper", "model": "hash"}
+        ).status_code
+        == 400
+    )
+
+
 def test_a_title_whose_server_is_down_is_deferred_not_the_whole_pass(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

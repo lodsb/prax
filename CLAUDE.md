@@ -40,7 +40,8 @@ drop folder (`docs/sources.md`).
    a caller writes `store.<name>` and never imports a submodule; inside it,
    a module imports only from the ones before it in that order.
 4. **Single writer.** The service process (the door) is the only writer.
-   The recurring passes (parse, titles, extract, embed) are done by
+   The recurring passes (parse, titles, extract, embed, and the likely
+   tier of entity resolution) are done by
    workers that fetch work and post results through the door
    (`prax.work` hands out and takes in, `prax.worker` does the work,
    `scripts/work.py` runs it) and never open the database; the door

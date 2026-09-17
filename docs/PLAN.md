@@ -815,7 +815,10 @@ What the marker evenings taught, kept for the day:
       material such a graph learns from — once there are enough failed
       trails to learn from. Not the batch passes: those have a fixed graph.
 
-- [ ] **`prax resolve`'s likely tier out of the door.** The plan's third
+- [x] **`prax resolve`'s likely tier out of the door.** (2026-09-17 evening:
+      the `resolve` work step — a type's names out, the close pairs in,
+      kept in `entity_candidates`, a type a week; the door embeds nothing.)
+      The plan's third
       tier embeds the names of ~130,000 entities inside the door process
       (onnxruntime through the embedder) and on 2026-09-17 that crashed the
       door with an access violation after ten minutes — `prax up` had it

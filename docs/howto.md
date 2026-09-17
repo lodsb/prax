@@ -575,9 +575,19 @@ Sure merges are equal names after normalization (case, accents,
 punctuation, plural, suffixes) and author initials forms that abbreviate
 exactly one full name; they need no model. Likely merges are close by
 name embedding, for concepts, methods, tools, datasets and venues only,
-and merge nothing unless an adjudicator says yes. A merge sets
-`entities.canonical_id`; nothing is deleted, `traverse` and the UI follow
-the pointer, and undoing one is clearing that column.
+and merge nothing unless an adjudicator says yes. The embedding is a
+worker's, never the door's: the `resolve` step of `prax work` takes one
+type's names from the door, embeds them, finds the pairs at or above
+the threshold (0.92, a block of rows at a time — 30,000 names cost a
+few hundred megabytes, not the square) and posts them; the door keeps
+them (`entity_candidates`, replaced whole per type) and the plan reads
+them from there, skipping any pair an entity of which has since been
+merged. A type is computed again after a week; `prax resolve` says when
+each was. Embedding 138,000 names inside the door, and the square of
+similarities after, crashed it once (2026-09-17) — it does not embed
+anything now. A merge sets `entities.canonical_id`; nothing is deleted,
+`traverse` and the UI follow the pointer, and undoing one is clearing
+that column.
 
 ### Promoting documents to the expensive model
 
@@ -1234,16 +1244,18 @@ Four ways in:
       python scripts/work.py --door http://board:8000 --watch   # from another machine
       python scripts/work.py --scope all --steps extract --limit 20   # a backlog pass
 
-  Four steps, each a batch the door hands out with a lease: parse (the
+  Five steps, each a batch the door hands out with a lease: parse (the
   worker fetches the original and posts the text), titles, extract (the
   door sends the prepared prompt input, the worker posts the triples),
   embed (chunk and field texts out, vectors in, into the door's delta
-  index). The worker never spends money (a step whose model is the Claude
+  index), resolve (one entity type's names out, the pairs close by name
+  embedding in, a type a week — the likely tier of `prax resolve`). The
+  worker never spends money (a step whose model is the Claude
   API is skipped with a note; the promote pass is the way to that model),
   never opens the database, and never touches the curated imports unless
   `--scope all` says so. It announces itself as a job with heartbeats, so
   the Jobs view shows it wherever it runs. `--no-titles`, `--no-extract`,
-  `--no-embed`, `--no-parse` switch steps off. A reading or extraction
+  `--no-embed`, `--no-parse`, `--no-resolve` switch steps off. A reading or extraction
   whose server is loading or paused (a 503, a refused connection, marker's
   server not up) is not the document's fault: the worker reports it as
   "not yet", the door keeps it leased ten minutes and hands out the rest

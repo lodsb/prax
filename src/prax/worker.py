@@ -32,7 +32,7 @@ from prax.client import Door
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
-STEPS = ("parse", "titles", "extract", "promote", "typing", "embed")
+STEPS = ("parse", "titles", "extract", "promote", "typing", "embed", "resolve")
 
 
 # ------------------------------------------------------------------ steps
@@ -329,6 +329,24 @@ def do_typing(
     return results
 
 
+def do_resolve(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
+    """The likely tier of entity resolution for one type: embed the names
+    the door handed out, find the close pairs, and post them."""
+    from prax import resolution
+
+    names = [(int(i), str(n)) for i, n in (batch.get("names") or [])]
+    pairs = resolution.likely_pairs(
+        names,
+        emb,
+        threshold=float(batch.get("threshold") or resolution.LIKELY_THRESHOLD),
+    )
+    return {
+        "type": batch["type"],
+        "model": emb.name,
+        "pairs": [[a, b, round(s, 4)] for a, b, s in pairs],
+    }
+
+
 def do_embed(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
     chunks = batch.get("chunks") or []
     fields = batch.get("fields") or []
@@ -400,6 +418,31 @@ def run_once(
             rep = door.post_json("/work/embed", do_embed(batch, emb))
             out["embed"] = f"{rep.get('applied', 0)} vectors"
             _say(log_, f"embed: {out['embed']}")
+            continue
+        if step == "resolve":
+            emb = embeddings.current()
+            if emb is None:
+                continue
+            batch = door.get_json("/work/resolve", {"limit": 1, "scope": scope})
+            if not batch.get("type"):
+                continue
+            if batch.get("model") != emb.name:
+                out["resolve"] = (
+                    f"skipped: the door's names embed with {batch.get('model')},"
+                    f" this worker with {emb.name}"
+                )
+                continue
+            if session:
+                door.post_json(
+                    f"/work/session/{session}",
+                    {"note": f"resolving {len(batch['names'])} {batch['type']} names"},
+                )
+            rep = door.post_json("/work/resolve", do_resolve(batch, emb))
+            out["resolve"] = (
+                f"{batch['type']}: {rep.get('applied', 0)} likely pairs"
+                f" among {len(batch['names'])} names"
+            )
+            _say(log_, f"resolve: {out['resolve']}")
             continue
         if step == "promote":
             spec = models.resolve("promote")

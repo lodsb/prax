@@ -450,7 +450,8 @@ def work_beat(job_id: int, req: SessionBeat, request: Request) -> dict[str, Any]
 def work_out(
     step: str, request: Request, limit: int = 10, scope: str = "captures"
 ) -> dict[str, Any]:
-    """A leased batch of work: parse, titles, extract or embed."""
+    """A leased batch of work: parse, titles, extract, embed, or the
+    names of an entity type to resolve."""
     try:
         return work.hand_out(
             _con(request),
@@ -470,6 +471,8 @@ class WorkIn(BaseModel):
     model: str | None = None
     chunks: list[list[Any]] | None = None
     fields: list[list[Any]] | None = None
+    type: str | None = None  # resolve: the entity type the pairs are of
+    pairs: list[list[Any]] | None = None  # resolve: [a, b, cosine]
 
 
 @app.post("/work/{step}")
@@ -576,7 +579,7 @@ class ResolveReq(BaseModel):
     apply: bool = False  # False: the plan only
     type: str | None = None  # one entity type
     twins: bool = False  # merge a concept into the method of the same name
-    embed: bool = True  # the likely tier, by name embedding
+    likely: bool = True  # the likely tier: the pairs a worker left
     show: int = 40  # candidates per tier in the plan
 
 
@@ -584,7 +587,8 @@ class ResolveReq(BaseModel):
 def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     """Entity resolution (``prax.resolution``): the plan — sure candidates
     (equal after normalization, an initials form of one author name),
-    concept/method twins, likely ones (close by name embedding) — and,
+    concept/method twins, likely ones (close by name embedding, computed
+    by a worker through the resolve step and kept until decided) — and,
     with ``apply``, a job that merges the sure ones (and the twins when
     asked); the likely ones are a person's decision, or an adjudicator's,
     and stay in the plan. Merges are pointers (``entities.canonical_id``):
@@ -592,7 +596,7 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     from prax import resolution
 
     con = _con(request)
-    plan = resolution.plan(con, etype=req.type, embed=req.embed)
+    plan = resolution.plan(con, etype=req.type, likely=req.likely)
     tiers = {
         tier: {
             "count": len(items),
@@ -612,6 +616,7 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
             ("likely", plan.likely),
         )
     }
+    tiers["likely"]["computed"] = store.candidate_runs(con)
     if not req.apply:
         return {"plan": tiers, "applied": False}
     job = store.Job(

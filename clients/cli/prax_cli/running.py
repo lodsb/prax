@@ -829,7 +829,7 @@ def resolve(door: Door, a: Any) -> int:
         "apply": a.apply,
         "type": a.type,
         "twins": a.twins,
-        "embed": not a.no_embed,
+        "likely": not a.no_likely,
         "show": a.show,
     }
     r = door.post_json("/graph/resolve", body)
@@ -852,6 +852,17 @@ def resolve(door: Door, a: Any) -> int:
             more = plan[tier]["count"] - len(plan[tier]["examples"])
             if more > 0:
                 out.hint(f"  … {more} more {tier}")
+        computed = plan["likely"].get("computed") or {}
+        if computed:
+            when = ", ".join(
+                f"{t} {out.when(at)}" for t, at in sorted(computed.items())
+            )
+            out.hint(f"  likely pairs computed by a worker: {when}")
+        elif not a.no_likely:
+            out.hint(
+                "  no likely pairs yet: a worker's resolve step computes them"
+                " (prax work --steps resolve)"
+            )
     if not a.apply:
         if not a.json:
             out.hint(

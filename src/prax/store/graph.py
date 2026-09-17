@@ -575,6 +575,78 @@ def rename_entity(con: sqlite3.Connection, entity_id: int, name: str) -> str:
     return "renamed"
 
 
+def entity_names(con: sqlite3.Connection, etype: str) -> list[tuple[int, str]]:
+    """The unmerged entities of one type, id and name, by id: what a
+    worker embeds for the likely tier of resolution (``prax.work``)."""
+    rows = con.execute(
+        "SELECT id, name FROM entities WHERE type = ? AND canonical_id IS NULL"
+        " ORDER BY id",
+        (etype,),
+    ).fetchall()
+    return [(int(r["id"]), str(r["name"])) for r in rows]
+
+
+@_serialized
+def replace_entity_candidates(
+    con: sqlite3.Connection,
+    etype: str,
+    pairs: list[tuple[int, int, float]],
+    *,
+    producer: str,
+) -> int:
+    """A worker's likely pairs for one type replace the type's earlier
+    ones: an unordered pair each (``a < b``) with the cosine of the two
+    names. Pairs naming an entity that is not of that type, or no longer
+    unmerged, are left out."""
+    ids = {
+        int(r["id"])
+        for r in con.execute(
+            "SELECT id FROM entities WHERE type = ? AND canonical_id IS NULL", (etype,)
+        )
+    }
+    rows = []
+    for x, y, score in pairs:
+        a, b = (int(x), int(y)) if int(x) < int(y) else (int(y), int(x))
+        if a != b and a in ids and b in ids:
+            rows.append((a, b, etype, float(score), producer))
+    con.execute("DELETE FROM entity_candidates WHERE type = ?", (etype,))
+    con.executemany(
+        "INSERT OR REPLACE INTO entity_candidates (a, b, type, score, producer, at)"
+        f" VALUES (?, ?, ?, ?, ?, {_NOW})",
+        rows,
+    )
+    con.commit()
+    return len(rows)
+
+
+def entity_candidates(
+    con: sqlite3.Connection, etype: str | None = None
+) -> list[dict[str, Any]]:
+    """The likely pairs a worker left, highest cosine first, with both
+    names; a pair one of whose entities has been merged since is skipped
+    (it was decided, or is moot)."""
+    rows = con.execute(
+        "SELECT c.a, c.b, c.type, c.score, c.producer, c.at,"
+        " ea.name AS a_name, eb.name AS b_name"
+        " FROM entity_candidates c"
+        " JOIN entities ea ON ea.id = c.a JOIN entities eb ON eb.id = c.b"
+        " WHERE ea.canonical_id IS NULL AND eb.canonical_id IS NULL"
+        + (" AND c.type = ?" if etype else "")
+        + " ORDER BY c.score DESC, c.a, c.b",
+        (etype,) if etype else (),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def candidate_runs(con: sqlite3.Connection) -> dict[str, str]:
+    """When each type's likely pairs were last computed (its newest row's
+    stamp); a type with no pairs left has no entry."""
+    rows = con.execute(
+        "SELECT type, max(at) AS at FROM entity_candidates GROUP BY type"
+    ).fetchall()
+    return {str(r["type"]): str(r["at"]) for r in rows}
+
+
 @_serialized
 def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
     row = con.execute(

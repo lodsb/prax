@@ -372,11 +372,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--steps",
-        default="parse,titles,extract,embed",
+        default="parse,titles,extract,embed,resolve",
         help="promote (the paid pass over flagged documents) and typing (untyped"
-        " review items to the typing model) only when named",
+        " review items to the typing model) only when named; resolve is the"
+        " likely tier of entity resolution, a type's names a week",
     )
-    for step in ("parse", "titles", "extract", "promote", "typing", "embed"):
+    for step in ("parse", "titles", "extract", "promote", "typing", "embed", "resolve"):
         s.add_argument(
             f"--no-{step}", action="store_true", help=f"skip the {step} step"
         )
@@ -635,7 +636,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="a concept into the method of the same name",
     )
-    s.add_argument("--no-embed", action="store_true", help="skip the likely tier")
+    s.add_argument(
+        "--no-likely",
+        action="store_true",
+        help="leave out the likely tier (the pairs a worker's resolve step left)",
+    )
     s.add_argument("--show", type=int, default=40, help="candidates per tier")
     s.set_defaults(func=running.resolve, needs_door=True)
 

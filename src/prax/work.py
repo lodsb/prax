@@ -50,7 +50,7 @@ LEASE_SECONDS = 900
 # the same ten items again — the follow-ups of the first papers marker
 # read once starved the 228 behind them
 DEFER_SECONDS = 600
-STEPS = ("parse", "titles", "extract", "promote", "typing", "embed")
+STEPS = ("parse", "titles", "extract", "promote", "typing", "embed", "resolve")
 
 
 def _vision_is_free() -> bool:
@@ -331,6 +331,37 @@ def hand_out(
             )
         _lease(step, [i["doc_id"] for i in items], worker)
         return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
+    if step == "resolve":
+        # the likely tier of entity resolution: one type's names to a
+        # worker, which embeds them and posts the close pairs; a type is
+        # due when its pairs are older than LIKELY_DAYS or were never
+        # computed (the door never embeds: invariant 7)
+        from prax import resolution
+
+        emb = embeddings.current()
+        if emb is None:
+            return {"step": step, "type": None, "names": [], "lease_seconds": 0}
+        runs = store.candidate_runs(con)
+        cutoff = time.strftime(
+            "%Y-%m-%dT%H:%M:%SZ",
+            time.gmtime(time.time() - resolution.LIKELY_DAYS * 86400),
+        )
+        for i, t in enumerate(sorted(resolution.LIKELY_TYPES)):
+            if runs.get(t, "") >= cutoff or not _free(step, i, now):
+                continue
+            names = store.entity_names(con, t)
+            if len(names) < 2:
+                continue
+            _lease(step, [i], worker)
+            return {
+                "step": step,
+                "type": t,
+                "names": names,
+                "model": emb.name,
+                "threshold": resolution.LIKELY_THRESHOLD,
+                "lease_seconds": LEASE_SECONDS,
+            }
+        return {"step": step, "type": None, "names": [], "lease_seconds": 0}
     # embed
     emb = embeddings.current()
     if emb is None or not store.vectors_available():
@@ -441,6 +472,26 @@ def take_in(
             k: getattr(totals, k)
             for k in ("linked", "existing", "queued", "rejected", "retired")
         }
+        return out
+    if step == "resolve":
+        from prax import resolution
+
+        etype = str(payload.get("type") or "")
+        if etype not in resolution.LIKELY_TYPES:
+            raise ValueError(
+                f"resolve takes a type among {sorted(resolution.LIKELY_TYPES)}"
+            )
+        emb = embeddings.current()
+        model = str(payload.get("model") or "")
+        if emb is None or model != emb.name:
+            theirs = emb.name if emb else None
+            raise ValueError(f"the door's names embed with {theirs}, not {model!r}")
+        pairs = [(int(a), int(b), float(s)) for a, b, s in (payload.get("pairs") or [])]
+        _release(step, [sorted(resolution.LIKELY_TYPES).index(etype)])
+        out["applied"] = store.replace_entity_candidates(
+            con, etype, pairs, producer=f"{model} via {worker}"
+        )
+        out["type"] = etype
         return out
     if step == "typing":
         from prax import typing_pass
