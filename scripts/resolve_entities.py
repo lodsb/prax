@@ -86,6 +86,12 @@ def main() -> int:
         f"merged {report.merged_sure} sure, {report.merged_twins} twins and"
         f" {report.merged_likely} likely; {report.declined} declined"
     )
+    if adjudicator is not None:
+        u = adjudicator.usage
+        print(
+            f"the adjudicator ({adjudicator.model}): {u.get('input_tokens', 0):,} in,"
+            f" {u.get('output_tokens', 0):,} out, about ${adjudicator.cost:.2f}"
+        )
     con.close()
     return 0
 

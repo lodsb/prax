@@ -307,10 +307,16 @@ class ClaudeAdjudicator:
     model: str = "claude-opus-5"
     client: Any = None
     batch: int = 40
+    usage: dict[str, int] = field(default_factory=dict)  # summed over the calls
 
     @property
     def name(self) -> str:
         return self.model
+
+    @property
+    def cost(self) -> float:
+        """What the calls so far cost, in USD, by the price table."""
+        return extraction.cost_usd(self.model, self.usage)
 
     def decide(self, candidates: list[Candidate]) -> list[bool]:
         if self.client is None:
@@ -357,6 +363,9 @@ class ClaudeAdjudicator:
                     }
                 ],
             )
+            for key in ("input_tokens", "output_tokens", "cache_read_input_tokens"):
+                got = getattr(response.usage, key, None) or 0
+                self.usage[key] = self.usage.get(key, 0) + int(got)
             text = next(b.text for b in response.content if b.type == "text")
             same = json.loads(text)["same"]
             same = list(same)[: len(part)] + [False] * (len(part) - len(same))
