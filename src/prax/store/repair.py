@@ -104,6 +104,14 @@ MANGLED = re.compile("<[^>]{1,40}>|[" + chr(10) + chr(13) + chr(9) + "]|  ")
 # A name longer than this is a whole citation or a paragraph rather than a
 # name — except for a claim, which the ontology defines as a sentence.
 NAME_TOO_LONG = 300
+# an extractor's own wire syntax glued to a name: a line the model wrote in
+# the triple format and the parser took whole — "chord dst_type=concept
+# (confidence=EXTRACTED evidence=…", "no_correspondence(dst=Sundberg)"
+WIRE = re.compile(
+    r"\s*\(?\b(?:dst_type|src_type|triple_src|confidence|evidence|evedence|src|dst"
+    r"|rel|type)\s*=.*$",
+    re.IGNORECASE | re.DOTALL,
+)
 SENTENCE_TYPES = ("claim",)
 STALE_JOB_SECONDS = 86_400  # a day: the door reaps its own host in minutes
 
@@ -218,6 +226,24 @@ def _mangled_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
     for row in found:
         row["edges"] = counts.get(row["id"], 0)
     return found[:CAP]
+
+
+def _wire_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Unmerged entities whose name holds the wire syntax, with the name
+    cut at it (``cleaned``; empty when nothing but syntax was there)."""
+    found = []
+    for row in con.execute(
+        "SELECT id, name, type FROM entities WHERE canonical_id IS NULL"
+    ):
+        if not WIRE.search(row["name"] or ""):
+            continue
+        cleaned = clean_name(WIRE.sub("", row["name"]).strip(" (,;:"))
+        found.append({**dict(row), "cleaned": cleaned})
+    counts = _live_edge_counts(con, [r["id"] for r in found])
+    for row in found:
+        row["edges"] = counts.get(row["id"], 0)
+    # nothing but syntax and no live edge: already dealt with, invisible
+    return [r for r in found if r["cleaned"] or r["edges"]][:CAP]
 
 
 def _self_edges(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -626,6 +652,14 @@ def _repair_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     return done
 
 
+def _repair_wire_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Mend the name where one is left after the cut (the edge under it
+    is real); end the edges of the few that were nothing but syntax."""
+    named = [r for r in rows if r["cleaned"]]
+    junk = [r for r in rows if not r["cleaned"]]
+    return _repair_names(con, named) + (_repair_entities(con, junk) if junk else 0)
+
+
 def _repair_review(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     done = 0
     for row in rows:
@@ -683,6 +717,22 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_mangled_names,
         repair=_repair_names,
+    ),
+    Ailment(
+        name="wire-names",
+        what=(
+            "entity names an extractor's own wire syntax got glued to"
+            " ('chord dst_type=concept(confidence=EXTRACTED evidence=…',"
+            " 'no_correspondence(dst=Sundberg)'): a line the model wrote"
+            " in the triple format and the parser took whole"
+        ),
+        fix=(
+            "cut the name at the syntax and clean it, or merge into the"
+            " entity that already carries it; a name that was nothing but"
+            " syntax has its edges ended"
+        ),
+        find=_wire_names,
+        repair=_repair_wire_names,
     ),
     Ailment(
         name="unnamed-entities",

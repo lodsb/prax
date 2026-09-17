@@ -246,6 +246,35 @@ def test_a_name_with_markup_is_cleaned_rather_than_thrown_away(
     assert store.health(con, only=["mangled-names"])["ailments"][0]["count"] == 0
 
 
+def test_a_name_with_the_wire_syntax_glued_on_is_cut_back_to_the_name(
+    con: sqlite3.Connection,
+) -> None:
+    """An early pass wrote its triples in the wire format and the parser
+    took whole lines as names: 1,612 entities in the library, two of
+    them at the top of the likely tier at 0.99. The name before the
+    syntax is the name; nothing but syntax has its edges ended."""
+    _link(
+        con,
+        "chord dst_type=concept(confidence=EXTRACTED evidence=The common",
+        "harmony",
+    )
+    _link(con, "no_correspondence(dst=Sundberg_rule_system)", "harmony")
+    _link(con, "chord", "voice leading")  # the clean one already there
+    _link(con, "evidence=Internal symmetries would collapse these", "harmony")
+    found = store.health(con, only=["wire-names"])["ailments"][0]
+    assert found["count"] == 3
+    assert {e["cleaned"] for e in found["examples"]} == {
+        "chord",
+        "no_correspondence",
+        "",
+    }
+    assert store.heal(con, only=["wire-names"])["wire-names"]["repaired"] == 3
+    srcs = {e["src"] for e in store.traverse(con, "harmony")}
+    assert srcs == {"chord", "no_correspondence"}  # cut, merged; the junk ended
+    assert {e["src"] for e in store.traverse(con, "voice leading")} == {"chord"}
+    assert store.health(con, only=["wire-names"])["ailments"][0]["count"] == 0
+
+
 def test_cleaning_a_name_merges_into_the_one_already_clean(
     con: sqlite3.Connection,
 ) -> None:
