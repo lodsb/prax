@@ -21,6 +21,10 @@ answering. Scored per question:
 The first five are what a regex can see, and they saturate: an answer
 that cites the equation and says "the passages do not state it" scores
 as one that quotes it. The judge is the measure; the others its floor.
+Its noise floor is a verdict or two per twenty-two asked once: --repeat
+N asks each question N times and reports the mean over the runs, with
+the spread between them (the lowest and highest run), so a change to
+ask is judged against what the same ask does twice.
 
 The set names documents by id, so it is bound to one store (the full one
 here); the retrieval sets in tests/eval name titles instead.
@@ -129,9 +133,16 @@ def run(
     steps: int,
     judge_rt: Any | None = None,
     equations: dict[int, str] | None = None,
+    repeat: int = 1,
 ) -> list[dict[str, Any]]:
+    """Every question once per run, ``repeat`` runs, the rows in run
+    order (run 1's twenty-two, then run 2's); each row says which."""
     out = []
-    for i, q in enumerate(questions, 1):
+    for r, (i, q) in (
+        (r, iq) for r in range(1, repeat + 1) for iq in enumerate(questions, 1)
+    ):
+        if i == 1 and repeat > 1:
+            print(f"-- run {r} of {repeat}", flush=True)
         t0 = time.monotonic()
         try:
             result = door.post_json(
@@ -143,6 +154,7 @@ def run(
         row.update(
             {"q": q["q"], "expect_doc": q["expect_doc"], "style": q.get("style")}
         )
+        row["run"] = r
         row["wall"] = round(time.monotonic() - t0, 1)
         if judge_rt is not None and "error" not in row:
             row["stated"] = judge(
@@ -159,6 +171,76 @@ def run(
     return out
 
 
+def _runs(rows: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """The rows of one steps setting split by run (rows carry ``run``;
+    an older save without it is one run)."""
+    by_run: dict[int, list[dict[str, Any]]] = {}
+    for r in rows:
+        by_run.setdefault(int(r.get("run") or 1), []).append(r)
+    return [by_run[k] for k in sorted(by_run)]
+
+
+def _count(rows: list[dict[str, Any]], key: str, value: Any = True) -> int:
+    return sum(1 for r in rows if "error" not in r and r.get(key) == value)
+
+
+def _mean_cell(runs: list[list[dict[str, Any]]], key: str, value: Any = True) -> str:
+    """The mean count over the runs as a share, the count, and the spread
+    between the lowest and the highest run when there is more than one."""
+    n = len(runs[0])
+    counts = [_count(run, key, value) for run in runs]
+    mean = sum(counts) / len(counts)
+    cell = (
+        f"{mean / n:.0%} ({mean:.1f})"
+        if len(runs) > 1
+        else f"{mean / n:.0%} ({counts[0]})"
+    )
+    if len(runs) > 1 and min(counts) != max(counts):
+        cell += f" {min(counts)}–{max(counts)}"
+    return cell
+
+
+def _marks(r: dict[str, Any]) -> str:
+    return (
+        ("✓" if r["match"] else ("src" if r["sources"] else "—"))
+        + (" f" if r["formula"] else "")
+        + (" $" if r["quoted"] else "")
+    )
+
+
+def _question_cell(rows: list[dict[str, Any]]) -> str:
+    """One question at one setting over its runs: the regex marks of the
+    majority of runs, then the judge's yes count (and partly) over them."""
+    ok = [r for r in rows if "error" not in r]
+    if not ok:
+        return "error"
+    if len(rows) == 1:
+        r = ok[0]
+        cell = _marks(r)
+        if r.get("stated") == "yes":
+            cell += f" **{r['stated']}**"
+        elif r.get("stated") in ("partly", "no"):
+            cell += f" {r['stated']}"
+        elif str(r.get("stated", "")).startswith("?"):
+            cell += " ?"
+        return cell
+    half = len(ok) / 2
+    majority = {
+        "match": sum(1 for r in ok if r["match"]) > half,
+        "sources": sum(1 for r in ok if r["sources"]) > half,
+        "formula": sum(1 for r in ok if r["formula"]) > half,
+        "quoted": sum(1 for r in ok if r["quoted"]) > half,
+    }
+    cell = _marks(majority)
+    if any("stated" in r for r in ok):
+        yes = sum(1 for r in ok if r.get("stated") == "yes")
+        partly = sum(1 for r in ok if r.get("stated") == "partly")
+        cell += f" **{yes}/{len(rows)}**" if yes > half else f" {yes}/{len(rows)}"
+        if partly:
+            cell += f" (+{partly})"
+    return cell
+
+
 def report(
     rows_by_steps: dict[int, list[dict[str, Any]]], model: str, judge_name: str = ""
 ) -> str:
@@ -170,22 +252,29 @@ def report(
         head + " | s/question |",
         "|---|---|---|---|---|---|" + "---|" * (2 if judged else 1),
     ]
+    repeats = 1
     for steps, rows in rows_by_steps.items():
-        n = len(rows)
-        counts = {
-            key: sum(1 for r in rows if "error" not in r and r.get(key))
+        runs = _runs(rows)
+        repeats = max(repeats, len(runs))
+        cells = " | ".join(
+            _mean_cell(runs, key)
             for key in ("sources", "cited", "formula", "match", "quoted")
-        }
-        cells = " | ".join(f"{c / n:.0%} ({c})" for c in counts.values())
+        )
         if judged:
-            yes = sum(1 for r in rows if r.get("stated") == "yes")
-            partly = sum(1 for r in rows if r.get("stated") == "partly")
-            cells += f" | {yes / n:.0%} ({yes}, +{partly})"
-        secs = sum(r["wall"] for r in rows) / n
+            partly = sum(_count(run, "stated", "partly") for run in runs) / len(runs)
+            cells += f" | {_mean_cell(runs, 'stated', 'yes')}, +{partly:.1f}"
+        secs = sum(r["wall"] for r in rows) / len(rows)
         lines.append(f"| {steps} | {cells} | {secs:.0f} |")
     lines.append("")
+    n_questions = len(_runs(next(iter(rows_by_steps.values())))[0])
     lines.append(
-        f"Model: {model}. n = {len(next(iter(rows_by_steps.values())))} questions."
+        f"Model: {model}. n = {n_questions} questions"
+        + (
+            f", each asked {repeats} times: the counts are means over the runs,"
+            " the range the lowest and highest run."
+            if repeats > 1
+            else "."
+        )
         + (f" Judge: {judge_name}." if judged else "")
     )
     lines.append("")
@@ -195,22 +284,12 @@ def report(
         + " |"
     )
     lines.append("|---|---|---|" + "---|" * len(rows_by_steps))
-    first = next(iter(rows_by_steps.values()))
+    first = _runs(next(iter(rows_by_steps.values())))[0]
     for i, q in enumerate(first):
         cells = []
         for rows in rows_by_steps.values():
-            r = rows[i]
-            if "error" in r:
-                cells.append("error")
-                continue
-            cells.append(
-                ("✓" if r["match"] else ("src" if r["sources"] else "—"))
-                + (" f" if r["formula"] else "")
-                + (" $" if r["quoted"] else "")
-                + (f" **{r['stated']}**" if r.get("stated") == "yes" else "")
-                + (f" {r['stated']}" if r.get("stated") in ("partly", "no") else "")
-                + (" ?" if str(r.get("stated", "")).startswith("?") else "")
-            )
+            runs = _runs(rows)
+            cells.append(_question_cell([run[i] for run in runs if i < len(run)]))
         lines.append(
             f"| {i + 1} | {q['q'][:80]} | {q.get('style')} | "
             + " | ".join(cells)
@@ -222,8 +301,13 @@ def report(
         " was among the sources but not cited so; f: a formula chunk cited;"
         " $: the answer quotes maths"
         + (
-            "; **yes**/partly/no: the judge, does the answer state the equation."
+            "; **yes**/partly/no: the judge, does the answer state the equation"
             if judged
+            else ""
+        )
+        + (
+            "; k/N: the runs the judge said yes to, the marks those of most runs."
+            if repeats > 1
             else "."
         )
     )
@@ -258,6 +342,14 @@ def main() -> int:
         metavar="JSON",
         help="judge the answers saved by an earlier --json instead of asking again",
     )
+    ap.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        metavar="N",
+        help="ask each question N times; the report averages the runs and"
+        " shows their spread (the noise floor of a change)",
+    )
     a = ap.parse_args()
     judge_rt = None
     if a.judge:
@@ -282,7 +374,9 @@ def main() -> int:
         saved = json.loads(a.rejudge.read_text(encoding="utf-8"))
         for steps_key, rows in saved.items():
             print(f"== {steps_key} steps (saved answers)", flush=True)
-            for i, (q, row) in enumerate(zip(questions, rows, strict=True)):
+            for k, row in enumerate(rows):
+                i = k % len(questions)  # the rows are runs of the questions
+                q = questions[i]
                 if "error" not in row:
                     row["stated"] = judge(
                         judge_rt, q, (equations or {}).get(i, ""), row["answer"]
@@ -291,7 +385,9 @@ def main() -> int:
             rows_by_steps[int(steps_key)] = rows
     for steps in [] if a.rejudge else steps_list:
         print(f"== {steps} steps", flush=True)
-        rows_by_steps[steps] = run(door, questions, steps, judge_rt, equations)
+        rows_by_steps[steps] = run(
+            door, questions, steps, judge_rt, equations, repeat=max(1, a.repeat)
+        )
     text = report(rows_by_steps, model, a.judge or "")
     print("\n" + text)
     if a.json:

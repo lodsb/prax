@@ -185,6 +185,20 @@ Kept: it costs a line per formula passage and makes the next equation
 a thing the model can see and open, which is right whether or not
 this set can measure it.
 
+**The baseline with its spread** (`--repeat 3`, the same afternoon: each
+question asked three times per setting, the counts means over the runs
+and the range the lowest and highest run):
+
+| steps | sources | cited | formula cited | match | maths quoted | stated (partly) | s/question |
+|---|---|---|---|---|---|---|---|
+| 0 | 100% (22.0) | 94% (20.7) 20–21 | 95% (21.0) | 94% (20.7) 20–21 | 94% (20.7) 20–21 | 68% (15.0) 14–16, +1.7 | 8 |
+| 8 | 100% (22.0) | 89% (19.7) 19–20 | 95% (21.0) 20–22 | 89% (19.7) 19–20 | 98% (21.7) 21–22 | 85% (18.7) 18–20, +0.3 | 14 |
+
+So the spread of one ask is ±1 verdict at either setting, the single
+runs above all fall inside it, and a change to `ask` from here is
+measured against 15.0 and 18.7 with the three-run mean, not against
+one ask.
+
 ## How the material came to be (the night of 2026-09-16/17)
 
 The mathematical part of the library through marker in one evening:
@@ -215,10 +229,9 @@ counts: `docs/PLAN.md`, "After the mathematics".
 ## What follows
 
 - The judge is the measure now (`--judge`, `--rejudge` over saved
-  answers); the regex columns are its floor, and its noise floor is a
-  verdict or two per 22: `eval_ask.py` wants a `--repeat N` that asks
-  each question N times and reports the mean, before the next change
-  to `ask` is judged by it.
+  answers, `--repeat N` for the mean and the spread); the regex columns
+  are its floor. The set is 22 questions; a change worth a verdict at
+  one setting wants a larger set before it wants a smaller spread.
 - `prax resolve --apply --twins` after the extraction pass over the 280
   re-read papers: Lambert W function was five entity rows before it.
 - The set is bound to this store's ids; a portable one would name
