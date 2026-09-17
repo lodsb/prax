@@ -411,6 +411,10 @@ def test_a_replacing_reread_unstamps_the_extraction_and_the_next_one_supersedes_
     }
     assert doc_id in store.select_for_extraction(con, ontology_version=version)
     assert text is not None
+    # and before the never-extracted backlog, whatever its id
+    fresh = store.ingest_text(con, "# Fresh\n\n" + "Never extracted. " * 40, title="F")
+    order = store.select_for_extraction(con, ontology_version=version)
+    assert order.index(doc_id) < order.index(fresh["doc_id"])
 
     # the next extraction by the same producer supersedes the old reading
     again = extraction.StubExtractor().extract(extraction.build_input(con, doc_id))

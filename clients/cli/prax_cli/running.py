@@ -380,6 +380,12 @@ def _example_line(name: str, row: dict[str, Any]) -> str:
         if row.get("cleaned"):
             said += f" → {row['cleaned']!r}"
         return said
+    if "read_by" in row:  # an extraction the text was read out from under
+        title = (row.get("title") or f"doc {row.get('id')}")[:60]
+        return (
+            f"{title!r} · extracted {str(row.get('extracted_at') or '')[:10]},"
+            f" read again by {row.get('read_by')} {str(row.get('read_at') or '')[:10]}"
+        )
     if "rel" in row:  # an edge or a review item
         parts = [str(row.get("rel"))]
         if row.get("name"):

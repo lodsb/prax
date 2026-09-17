@@ -889,7 +889,8 @@ def select_for_extraction(
     skip_mime_prefix: str | None = None,
 ) -> list[int]:
     """Indexed documents not yet extracted under ``ontology_version``
-    (``meta.extraction.ontology_version``), oldest first. ``min_chars``
+    (``meta.extraction.ontology_version``): the ones whose text was read
+    again out from under an extraction first, then oldest first. ``min_chars``
     skips documents whose chunks hold less text than that (Zotero notes,
     scans without a text layer): nothing to extract, a call wasted.
     ``domain`` keeps the documents assigned to that module; with ``onto``
@@ -935,7 +936,11 @@ def select_for_extraction(
     if mime_prefix:
         sql += " AND mime LIKE ? ESCAPE '!'"
         args.append(_like_prefix(mime_prefix))
-    sql += " ORDER BY id"
+    # a document whose text was read again out from under its extraction
+    # (meta.extraction_stale) goes before the never-extracted backlog:
+    # someone cared enough to re-read it, and the graph speaks of a text
+    # that is gone until it is read again
+    sql += " ORDER BY json_extract(meta, '$.extraction_stale') IS NULL, id"
     if limit is not None:
         sql += " LIMIT ?"
         args.append(limit)
