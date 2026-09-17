@@ -490,13 +490,28 @@ def _marker_version() -> str:
     return str(config.setting("parse.marker_version", "PRAX_MARKER_VERSION", "?"))
 
 
+_MARKER_PROBE_SECONDS = 5.0  # one probe of marker's server serves this long
+_marker_probes: dict[str, tuple[float, bool]] = {}  # by url: (when, up)
+
+
 def _marker_up() -> bool:
+    """Whether marker's server answers; one probe per few seconds, since
+    a refused connection costs two seconds on Windows and the extractor
+    is asked several times a pass."""
+    import time
+
     import httpx
 
+    url = _marker_url()
+    at, up = _marker_probes.get(url, (0.0, False))
+    if time.monotonic() - at < _MARKER_PROBE_SECONDS:
+        return up
     try:
-        return httpx.get(f"{_marker_url()}/", timeout=3).status_code == 200
+        up = httpx.get(f"{url}/", timeout=3).status_code == 200
     except httpx.HTTPError:
-        return False
+        up = False
+    _marker_probes[url] = (time.monotonic(), up)
+    return up
 
 
 def _marker_pages(text: str, count: int) -> str:
@@ -1374,8 +1389,12 @@ def candidates(mime: str, preferred: str | None = None) -> list[Extractor]:
     if preferred is not None:
         e = by_name(preferred)
         return [e] if e.accepts(mime) and e.available() else []
+    # the cheap tests first: an explicit-only extractor's availability may
+    # be a probe of its server (marker), and the door's hand-out asks for
+    # the chain of every waiting document — six probes of a paused server
+    # made GET /work/parse a thirteen-second request, every twenty seconds
     return [
-        e for e in REGISTRY if e.accepts(mime) and e.available() and not e.explicit_only
+        e for e in REGISTRY if e.accepts(mime) and not e.explicit_only and e.available()
     ]
 
 

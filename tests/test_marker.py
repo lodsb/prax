@@ -166,6 +166,35 @@ def test_the_extractor_turns_the_servers_answer_into_an_artifact(
     assert len(refs) == len(real)
 
 
+def test_the_default_chain_never_probes_markers_server(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """candidates() for a PDF builds the default chain; marker is explicit
+    only, and its availability is a probe of its server (two seconds a
+    refused connection on Windows): the door's hand-out asked it for every
+    waiting document and GET /work/parse took thirteen seconds. The cheap
+    tests come first, and a probe's answer serves a few seconds."""
+    probes = []
+    monkeypatch.setattr(parsers, "_marker_up", lambda: probes.append(1) or False)
+    chain = [e.name for e in parsers.candidates("application/pdf")]
+    assert "marker" not in chain and probes == []
+    # asked for by name it is probed, once per few seconds
+    monkeypatch.setattr(parsers, "_marker_up", parsers.__dict__["_marker_up"])
+    parsers._marker_probes.clear()
+    monkeypatch.setenv("PRAX_MARKER_URL", "http://127.0.0.1:9")
+    calls = []
+    real_get = __import__("httpx").get
+
+    def counting_get(*a, **kw):
+        calls.append(a[0])
+        return real_get(*a, **kw)
+
+    monkeypatch.setattr(__import__("httpx"), "get", counting_get)
+    assert parsers.candidates("application/pdf", preferred="marker") == []
+    assert parsers.candidates("application/pdf", preferred="marker") == []
+    assert len(calls) == 1
+
+
 @needs_pymupdf
 def test_a_long_document_goes_to_marker_a_window_of_pages_at_a_time(
     data_dir: Path, marker_server: Any, monkeypatch: pytest.MonkeyPatch

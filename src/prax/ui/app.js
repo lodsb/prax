@@ -519,10 +519,10 @@ async function viewDoc(id, p) {
   ${rule()}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
-    <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? chunks.map((c) => renderChunk(c, highlight, doc.id)).join("") : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}</div>
+    <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? "" : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
-  if (hasMaths(doc, chunks)) typesetMaths(view.querySelector(".doc-body"));
+  const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks));
   const loadContext = async (domain) => {
     try {
       await modules();
@@ -625,6 +625,7 @@ async function viewDoc(id, p) {
   }
   document.querySelectorAll("[data-scroll]").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault();
+    pages.ensure(Number(a.dataset.scroll));
     const el = document.getElementById("chunk-" + a.dataset.scroll);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }));
@@ -632,6 +633,49 @@ async function viewDoc(id, p) {
     const el = document.getElementById("chunk-" + highlight);
     if (el) el.scrollIntoView({ block: "center" });
   }
+}
+
+// A document's body a page of chunks at a time: a paper is one page, a
+// 500-page book (2,900 chunks, 650 equations for KaTeX) would otherwise
+// take seconds to parse and typeset before anything showed. The rest
+// renders as the reader nears the end, or all at once on request (the
+// browser's own find wants the whole text on the page); an outline link
+// or a highlighted chunk renders up to itself first.
+const DOC_PAGE = 120;
+
+function pagedBody(body, chunks, highlight, doc, maths) {
+  const more = body.querySelector(".doc-more");
+  let rendered = 0;
+  const renderTo = (n) => {
+    n = Math.min(n, chunks.length);
+    if (n <= rendered) return;
+    const box = document.createElement("div");
+    box.innerHTML = chunks.slice(rendered, n).map((c) => renderChunk(c, highlight, doc.id)).join("");
+    if (maths) typesetMaths(box);
+    while (box.firstChild) more.before(box.firstChild);
+    rendered = n;
+    const left = chunks.length - rendered;
+    more.hidden = left <= 0;
+    if (left > 0) more.innerHTML = `<span class="muted">${left.toLocaleString()} more chunks below</span> <button type="button" class="linkish doc-all">show all</button>`;
+  };
+  const ensure = (chunkId) => {
+    const at = chunks.findIndex((c) => c.chunk_id === chunkId);
+    if (at >= rendered) renderTo(at + Math.floor(DOC_PAGE / 2));
+  };
+  const first = highlight ? chunks.findIndex((c) => c.chunk_id === highlight) : -1;
+  renderTo(Math.max(DOC_PAGE, first + Math.floor(DOC_PAGE / 2)));
+  more.addEventListener("click", (e) => {
+    if (e.target.classList.contains("doc-all")) renderTo(chunks.length);
+  });
+  if ("IntersectionObserver" in window) {
+    const watch = new IntersectionObserver((entries) => {
+      if (entries.some((en) => en.isIntersecting) && !more.hidden) renderTo(rendered + DOC_PAGE);
+    }, { rootMargin: "800px 0px" });
+    watch.observe(more);
+  } else {
+    renderTo(chunks.length);
+  }
+  return { ensure, renderTo };
 }
 
 async function put(path, body) {
