@@ -26,39 +26,44 @@ below).
 
 ## Results
 
-| steps | sources | cited | formula cited | match | maths quoted | s/question |
-|---|---|---|---|---|---|---|
-| 0 | 100% (22) | 95% (21) | 91% (20) | 95% (21) | 77% (17) | 10 |
-| 8 | 100% (22) | 95% (21) | 95% (21) | 95% (21) | 91% (20) | 16 |
+| steps | sources | cited | formula cited | match | maths quoted | stated (partly) | s/question |
+|---|---|---|---|---|---|---|---|
+| 0 | 100% (22) | 95% (21) | 91% (20) | 95% (21) | 77% (17) | 50% (11, +1) | 10 |
+| 8 | 100% (22) | 95% (21) | 95% (21) | 95% (21) | 91% (20) | 73% (16, +1) | 16 |
+
+*stated* is a judge's word (`--judge server-35b`, the same 35B, shown the
+question, the paper's matching formula chunks and the answer: yes,
+partly, no — added the same day, over the saved answers; two runs of the
+judge differed by one verdict at 0 steps).
 
 | # | question | style | 0 steps | 8 steps |
 |---|---|---|---|---|
-| 1 | what is the Shockley diode equation as the diode clipper WDF paper writes it | named | ✓ f $ | ✓ f $ |
-| 2 | how is the diode current written in the wave domain, in terms of the incident and reflected waves | meaning | ✓ f $ | ✓ f $ |
-| 3 | how does the diode clipper model solve its implicit equation with the Lambert W function | named | ✓ f $ | ✓ f $ |
-| 4 | how is the instantaneous phase of a loopback frequency modulated signal defined | named | ✓ f $ | ✓ f $ |
-| 5 | which PDE models the two-dimensional vibration of a drum membrane, and its boundary conditions | named | ✓ f $ | ✓ f $ |
-| 6 | how is the STFT computed by a recursive filter, what is the impulse response | meaning | ✓ f $ | ✓ f $ |
-| 7 | how are Givens rotations applied to the upper Hessenberg matrix from Arnoldi in GMRES | named | ✓ f $ | ✓ f $ |
-| 8 | how is the fractional wavelet transform defined, and the signal reconstructed from it | named | ✓ f $ | ✓ f $ |
-| 9 | the definition of the RMS voltage in the RMS compressor paper | named | ✓ f $ | ✓ f $ |
-| 10 | how is a multicomponent signal written as a sum of amplitude and phase components before synchrosqueezing | meaning | ✓ f $ | src $ |
-| 11 | the Hindu series for the solid content of a pyramid with a triangular base, the citighana | named | ✓ f | ✓ f |
-| 12 | how are the entries of the kernel matrix defined in the proximal SVM | named | ✓ f $ | ✓ f $ |
-| 13 | what classification rule assigns a point to a class in the proximal SVM | meaning | ✓ f $ | ✓ f $ |
-| 14 | how is negentropy maximization set up for complex ICA, the augmented vectors | named | ✓ f | ✓ f $ |
-| 15 | which condition on the number of steps approximating a fifth do good equal temperaments satisfy | meaning | ✓ f $ | ✓ f $ |
-| 16 | the equation of motion of the geometrically exact nonlinear string, and its strain energy density | named | ✓ f $ | ✓ f $ |
-| 17 | the Van der Pol oscillator as a first-order system in the harmonic balance paper | named | ✓ f $ | ✓ f $ |
-| 18 | the friction characteristic of the bowed string as a function of relative velocity | meaning | ✓ f | ✓ f |
-| 19 | the squared exponential covariance function for Gaussian process regression | named | ✓ f $ | ✓ f $ |
-| 20 | the transition probability of the Markov chain in the musical dice game, and its entropy | named | ✓ | ✓ f $ |
-| 21 | the kernel of the fractional Fourier transform | named | src f $ | ✓ f $ |
-| 22 | how continuous-time convolution reduces aliasing in waveshaping, the interpolated input | meaning | ✓ | ✓ f $ |
+| 1 | what is the Shockley diode equation as the diode clipper WDF paper writes it | named | ✓ f $ no | ✓ f $ **yes** |
+| 2 | how is the diode current written in the wave domain, in terms of the incident and reflected waves | meaning | ✓ f $ **yes** | ✓ f $ **yes** |
+| 3 | how does the diode clipper model solve its implicit equation with the Lambert W function | named | ✓ f $ **yes** | ✓ f $ **yes** |
+| 4 | how is the instantaneous phase of a loopback frequency modulated signal defined | named | ✓ f $ **yes** | ✓ f $ **yes** |
+| 5 | which PDE models the two-dimensional vibration of a drum membrane, and its boundary conditions | named | ✓ f $ **yes** | ✓ f $ **yes** |
+| 6 | how is the STFT computed by a recursive filter, what is the impulse response | meaning | ✓ f $ **yes** | ✓ f $ **yes** |
+| 7 | how are Givens rotations applied to the upper Hessenberg matrix from Arnoldi in GMRES | named | ✓ f $ no | ✓ f $ **yes** |
+| 8 | how is the fractional wavelet transform defined, and the signal reconstructed from it | named | ✓ f $ **yes** | ✓ f $ **yes** |
+| 9 | the definition of the RMS voltage in the RMS compressor paper | named | ✓ f $ **yes** | ✓ f $ **yes** |
+| 10 | how is a multicomponent signal written as a sum of amplitude and phase components before synchrosqueezing | meaning | ✓ f $ no | src $ partly |
+| 11 | the Hindu series for the solid content of a pyramid with a triangular base, the citighana | named | ✓ f no | ✓ f no |
+| 12 | how are the entries of the kernel matrix defined in the proximal SVM | named | ✓ f $ **yes** | ✓ f $ **yes** |
+| 13 | what classification rule assigns a point to a class in the proximal SVM | meaning | ✓ f $ **yes** | ✓ f $ **yes** |
+| 14 | how is negentropy maximization set up for complex ICA, the augmented vectors | named | ✓ f no | ✓ f $ **yes** |
+| 15 | which condition on the number of steps approximating a fifth do good equal temperaments satisfy | meaning | ✓ f $ no | ✓ f $ no |
+| 16 | the equation of motion of the geometrically exact nonlinear string, and its strain energy density | named | ✓ f $ partly | ✓ f $ **yes** |
+| 17 | the Van der Pol oscillator as a first-order system in the harmonic balance paper | named | ✓ f $ **yes** | ✓ f $ **yes** |
+| 18 | the friction characteristic of the bowed string as a function of relative velocity | meaning | ✓ f no | ✓ f no |
+| 19 | the squared exponential covariance function for Gaussian process regression | named | ✓ f $ **yes** | ✓ f $ no |
+| 20 | the transition probability of the Markov chain in the musical dice game, and its entropy | named | ✓ no | ✓ f $ no |
+| 21 | the kernel of the fractional Fourier transform | named | src f $ no | ✓ f $ **yes** |
+| 22 | how continuous-time convolution reduces aliasing in waveshaping, the interpolated input | meaning | ✓ no | ✓ f $ **yes** |
 
 ✓ a cited passage of the expected paper matches; src: the paper was
 among the sources but not cited so; f: a formula chunk cited; $: the
-answer quotes maths. The full answers: `C:\prax-data\logs\ask-equations.json`
+answer quotes maths; **yes**/partly/no: the judge. The full answers: `C:\prax-data\logs\ask-equations.json`
 (local; the questions name documents by id, so the set is bound to this
 store).
 
@@ -70,9 +75,10 @@ store).
   a passage the fusion ranks well for a question about it. The
   "meaning" questions — in other words than the paper's — do as well as
   the named ones.
-- **The numbers saturate; the answers differ.** The automatic scores
-  are nearly the same with and without steps, and they flatter the
-  no-steps run. Question 1 at 0 steps cites the formula chunk that
+- **The regex numbers saturate; the judge does not.** The automatic
+  scores are nearly the same with and without steps, and they flatter
+  the no-steps run: the judge finds the equation *stated* in 11 of 22
+  one-shot answers and 16 of 22 surfed ones. Question 1 at 0 steps cites the formula chunk that
   matches (`I_s`) and still begins "the provided passages do not
   explicitly state the Shockley diode equation in its standard form";
   with 8 steps the surfer opened the paper, read on to its equations
@@ -93,7 +99,13 @@ store).
   for a single-mode form from another paper; question 21 at 0 steps
   had two passages naming the kernel and none defining it, and said so.
   Both are the honest failure — "the passages do not define it" — not
-  an invented equation.
+  an invented equation. The judge's "no"s are of the same kind: the
+  citighana answer names the series and Narayana's formula without
+  writing it (11), the Givens answer describes the rotations' effect
+  without the rotation (7 at 0 steps), the covariance answer names the
+  signal variance and the length scale without the exponential (19 at
+  8 steps) — descriptions where an equation was asked for, with the
+  equation cited beside them.
 - **Before**: the same papers as `pymupdf4llm` read them had no formula
   chunks at all (the 09-15 note: 347 equations referred to, none
   present, the inline maths a glyph soup), so `formula cited` was 0 by
@@ -130,10 +142,12 @@ counts: `docs/PLAN.md`, "After the mathematics".
 
 ## What follows
 
-- The evaluation needs a judge for what the scores cannot see — did the
-  answer *state* the equation the question asked for — before the
-  no-steps and the steps settings can be compared on it honestly; the
-  regex `match` is a floor, not the measure.
+- The judge is the measure now (`--judge`, `--rejudge` over saved
+  answers); the regex columns are its floor. The next question for
+  `ask` is why a model with the equation in front of it describes it
+  instead of stating it — the answer prompt asks for citations, not for
+  the equation; a line ("when the question asks for an equation, write
+  it") is the cheap experiment, and this set with the judge measures it.
 - `prax resolve --apply --twins` after the extraction pass over the 280
   re-read papers: Lambert W function was five entity rows before it.
 - The set is bound to this store's ids; a portable one would name

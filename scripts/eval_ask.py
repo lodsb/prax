@@ -3,7 +3,7 @@
 
     python scripts/eval_ask.py --questions tests/eval/questions-equations.yaml
     python scripts/eval_ask.py --questions … --steps 0 --steps 8 \
-        --out docs/eval/ask-equations-2026-09-17.md
+        --judge server-35b --out docs/eval/ask-equations-2026-09-17.md
 
 A client of the door (``PRAX_DOOR``, ``PRAX_TOKEN``): every question goes
 through ``POST /ask`` once per steps setting, with the host's ask model
@@ -14,6 +14,13 @@ answering. Scored per question:
     formula   the answer cites a formula chunk (an equation, not prose about it)
     match     a cited passage of the expected document matches the expectation
     quoted    the answer text holds maths of its own ($…$)
+    stated    a judge read the answer beside the paper's equation: does the
+              answer state it (yes, partly, no)? --judge names a models:
+              entry of the host's prax.yaml; a paid one is your choice
+
+The first five are what a regex can see, and they saturate: an answer
+that cites the equation and says "the passages do not state it" scores
+as one that quotes it. The judge is the measure; the others its floor.
 
 The set names documents by id, so it is bound to one store (the full one
 here); the retrieval sets in tests/eval name titles instead.
@@ -34,9 +41,58 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from prax import models
 from prax.client import Door
 
 MATHS = re.compile(r"\$[^$\n]+\$")
+
+JUDGE = """You judge whether an answer states an equation. You are shown a question,
+the equation(s) the paper gives for it (LaTeX, with a reading in words), and
+an answer. Reply with one word:
+  yes     the answer states the equation (the same relation, in LaTeX or in
+          words precise enough to write it down; notation may differ)
+  partly  the answer gives part of it, or a variant, or names its terms
+          without the relation
+  no      the answer does not state it (it describes, hedges, or states
+          something else)
+One word, nothing else."""
+
+VERDICTS = ("yes", "partly", "no")
+
+
+def expected_equations(door: Door, q: dict[str, Any], limit: int = 3) -> str:
+    """The formula chunks of the expected document(s) that match the
+    question's expectation, LaTeX and reading; the first few otherwise."""
+    docs = q["expect_doc"] if isinstance(q["expect_doc"], list) else [q["expect_doc"]]
+    expect = re.compile(q.get("expect") or ".", re.IGNORECASE)
+    found: list[str] = []
+    fallback: list[str] = []
+    for doc_id in docs:
+        try:
+            chunks = door.get_json(f"/doc/{doc_id}/chunks")
+        except Exception as exc:  # noqa: BLE001 - a missing document is no equation
+            print(f"  doc {doc_id}: {exc}", flush=True)
+            chunks = []
+        for c in chunks:
+            if c.get("kind") != "formula":
+                continue
+            text = c.get("text") or ""
+            (found if expect.search(text) else fallback).append(text.strip())
+    return "\n\n".join((found or fallback)[:limit])
+
+
+def judge(runtime: Any, q: dict[str, Any], equations: str, answer: str) -> str:
+    """One word from the judge, or ``?`` when it says something else."""
+    user = (
+        f"Question: {q['q']}\n\nThe paper's equation(s):\n{equations or '(none found)'}"
+        f"\n\nThe answer:\n{answer}\n\nDoes the answer state the equation?"
+    )
+    try:
+        text, _ = runtime.chat(JUDGE, user, max_tokens=8, temperature=0.0)
+    except Exception as exc:  # noqa: BLE001 - the judge's failure is a row, not the end
+        return f"?{type(exc).__name__}"
+    word = (text or "").strip().strip(".").lower().split()
+    return word[0] if word and word[0] in VERDICTS else "?"
 
 
 def score(q: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
@@ -68,7 +124,11 @@ def score(q: dict[str, Any], result: dict[str, Any]) -> dict[str, Any]:
 
 
 def run(
-    door: Door, questions: list[dict[str, Any]], steps: int
+    door: Door,
+    questions: list[dict[str, Any]],
+    steps: int,
+    judge_rt: Any | None = None,
+    equations: dict[int, str] | None = None,
 ) -> list[dict[str, Any]]:
     out = []
     for i, q in enumerate(questions, 1):
@@ -84,18 +144,32 @@ def run(
             {"q": q["q"], "expect_doc": q["expect_doc"], "style": q.get("style")}
         )
         row["wall"] = round(time.monotonic() - t0, 1)
+        if judge_rt is not None and "error" not in row:
+            row["stated"] = judge(
+                judge_rt, q, (equations or {}).get(i - 1, ""), row["answer"]
+            )
         out.append(row)
         flag = "ok " if row.get("match") else ("src" if row.get("sources") else "-- ")
+        verdict = f" {row['stated']:<6}" if "stated" in row else ""
         print(
-            f"  [{steps} steps] {i:>2} {flag} {row['wall']:>6}s  {q['q'][:70]}",
+            f"  [{steps} steps] {i:>2} {flag}{verdict} {row['wall']:>6}s"
+            f"  {q['q'][:70]}",
             flush=True,
         )
     return out
 
 
-def report(rows_by_steps: dict[int, list[dict[str, Any]]], model: str) -> str:
+def report(
+    rows_by_steps: dict[int, list[dict[str, Any]]], model: str, judge_name: str = ""
+) -> str:
+    judged = bool(judge_name)
     head = "| steps | sources | cited | formula cited | match | maths quoted"
-    lines = [head + " | s/question |", "|---|---|---|---|---|---|---|"]
+    if judged:
+        head += " | stated (partly)"
+    lines = [
+        head + " | s/question |",
+        "|---|---|---|---|---|---|" + "---|" * (2 if judged else 1),
+    ]
     for steps, rows in rows_by_steps.items():
         n = len(rows)
         counts = {
@@ -103,11 +177,16 @@ def report(rows_by_steps: dict[int, list[dict[str, Any]]], model: str) -> str:
             for key in ("sources", "cited", "formula", "match", "quoted")
         }
         cells = " | ".join(f"{c / n:.0%} ({c})" for c in counts.values())
+        if judged:
+            yes = sum(1 for r in rows if r.get("stated") == "yes")
+            partly = sum(1 for r in rows if r.get("stated") == "partly")
+            cells += f" | {yes / n:.0%} ({yes}, +{partly})"
         secs = sum(r["wall"] for r in rows) / n
         lines.append(f"| {steps} | {cells} | {secs:.0f} |")
     lines.append("")
     lines.append(
         f"Model: {model}. n = {len(next(iter(rows_by_steps.values())))} questions."
+        + (f" Judge: {judge_name}." if judged else "")
     )
     lines.append("")
     lines.append(
@@ -128,6 +207,9 @@ def report(rows_by_steps: dict[int, list[dict[str, Any]]], model: str) -> str:
                 ("✓" if r["match"] else ("src" if r["sources"] else "—"))
                 + (" f" if r["formula"] else "")
                 + (" $" if r["quoted"] else "")
+                + (f" **{r['stated']}**" if r.get("stated") == "yes" else "")
+                + (f" {r['stated']}" if r.get("stated") in ("partly", "no") else "")
+                + (" ?" if str(r.get("stated", "")).startswith("?") else "")
             )
         lines.append(
             f"| {i + 1} | {q['q'][:80]} | {q.get('style')} | "
@@ -138,7 +220,12 @@ def report(rows_by_steps: dict[int, list[dict[str, Any]]], model: str) -> str:
     lines.append(
         "✓ a cited passage of the expected document matches; src: the document"
         " was among the sources but not cited so; f: a formula chunk cited;"
-        " $: the answer quotes maths."
+        " $: the answer quotes maths"
+        + (
+            "; **yes**/partly/no: the judge, does the answer state the equation."
+            if judged
+            else "."
+        )
     )
     return "\n".join(lines)
 
@@ -159,17 +246,53 @@ def main() -> int:
         "--out", type=Path, help="write the Markdown report here (appended)"
     )
     ap.add_argument("--json", type=Path, help="write every answer here")
+    ap.add_argument(
+        "--judge",
+        metavar="MODEL",
+        help="a models: entry of the host's prax.yaml that judges whether each"
+        " answer states the equation (a paid one is your choice)",
+    )
+    ap.add_argument(
+        "--rejudge",
+        type=Path,
+        metavar="JSON",
+        help="judge the answers saved by an earlier --json instead of asking again",
+    )
     a = ap.parse_args()
+    judge_rt = None
+    if a.judge:
+        spec = models.spec(a.judge)
+        if spec is None:
+            ap.error(f"no model named {a.judge!r} in {models.config_path()}")
+        judge_rt = models.runtime(spec)
     door = Door(a.door, token=os.environ.get("PRAX_TOKEN") or None, name="eval-ask")
     questions = yaml.safe_load(a.questions.read_text(encoding="utf-8"))["questions"]
     described = door.get_json("/ask/config")
     model = str(described.get("runtime") or described.get("default") or "?")
     steps_list = a.steps or [0, int(described.get("steps", {}).get("default", 8))]
+    equations = (
+        {i: expected_equations(door, q) for i, q in enumerate(questions)}
+        if judge_rt is not None
+        else None
+    )
     rows_by_steps: dict[int, list[dict[str, Any]]] = {}
-    for steps in steps_list:
+    if a.rejudge:
+        if judge_rt is None:
+            ap.error("--rejudge needs --judge")
+        saved = json.loads(a.rejudge.read_text(encoding="utf-8"))
+        for steps_key, rows in saved.items():
+            print(f"== {steps_key} steps (saved answers)", flush=True)
+            for i, (q, row) in enumerate(zip(questions, rows, strict=True)):
+                if "error" not in row:
+                    row["stated"] = judge(
+                        judge_rt, q, (equations or {}).get(i, ""), row["answer"]
+                    )
+                print(f"  {i + 1:>2} {row.get('stated', '-'):<6} {q['q'][:70]}")
+            rows_by_steps[int(steps_key)] = rows
+    for steps in [] if a.rejudge else steps_list:
         print(f"== {steps} steps", flush=True)
-        rows_by_steps[steps] = run(door, questions, steps)
-    text = report(rows_by_steps, model)
+        rows_by_steps[steps] = run(door, questions, steps, judge_rt, equations)
+    text = report(rows_by_steps, model, a.judge or "")
     print("\n" + text)
     if a.json:
         a.json.write_text(

@@ -103,7 +103,8 @@ What the steps buy, measured on questions whose answer is an equation
 with marker): the paper is found and its formula chunk cited either
 way; the one-shot answer often stops at "the passages do not state the
 equation" with the equation among them, the surf reads on and quotes
-it — 10 s a question against 16.
+it — a judge finds the equation stated in 11 of 22 one-shot answers
+and 16 of 22 surfed ones, at 10 s a question against 16.
 
 ## The trail
 
