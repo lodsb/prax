@@ -144,6 +144,47 @@ The questions where the regex columns dipped (cited 21→20 at 0 steps)
 are the answer citing the formula chunk alone and not the prose
 passage the regex expected; the judge is unmoved by that.
 
+## The neighbourhood (the same afternoon)
+
+The FrFT kernel (21) was the case the prompt line could not reach: the
+passage held equation (1), the transform as an integral with a kernel,
+and the kernel is (2), the next formula chunk; the surfer read on
+blind and did not find it. So a formula passage now names the
+equations around it by number — `equations nearby: (1) Defines the
+fractional Fourier transform… ‹this one›; (2) The kernel K_α of the
+transform…; (3) …` (two before, three after, the reading's first
+sentence for each; `store.equations_near`) — and the surfer has `read:
+[n] (2)`, the equation by the number the paper calls it
+(`store.formula_by_number`). The same 22 questions, model and judge:
+
+| steps | sources | cited | formula cited | match | maths quoted | stated (partly) | s/question |
+|---|---|---|---|---|---|---|---|
+| 0, prompt line | 100% (22) | 91% (20) | 95% (21) | 91% (20) | 91% (20) | 73% (16, +2) | 10 |
+| 0, + neighbourhood | 100% (22) | 95% (21) | 95% (21) | 95% (21) | 95% (21) | 68% (15, +2) | 9 |
+| 8, prompt line | 100% (22) | 95% (21) | 95% (21) | 95% (21) | 100% (22) | 86% (19, +1) | 17 |
+| 8, + neighbourhood | 100% (22) | 91% (20) | 100% (22) | 91% (20) | 100% (22) | 77% (17, +2) | 16 |
+
+What it was built for, it does: the kernel question went from four
+steps and "the formula is cut off" to two steps and the kernel written
+out exactly, `K_α(t,u) = √((1 − j cot α)/2π) e^{…}` with its δ cases;
+the Markov chain's transition probability (20) went from "the passages
+do not define it" to stated. The aggregate did not move: three
+questions went the other way (7 yes → partly, 15 and 22 yes → no), and
+reading them, that is the run's noise, not the line's doing — 22 asks
+of the same question at the same setting differ by one or two verdicts
+between runs (the 0-step row, which cannot read the neighbourhood, lost
+one too), and the "no"s are answers that state a *different* equation
+of the right paper (15: the enharmonicity condition (6) instead of the
+GCD condition (23); the question admits both). One thing to watch: with
+the equations named, the model answered 15 after two steps instead of
+five, satisfied with the first equation it held. The set is too small
+to see a one-question effect through that noise; a change here wants
+either a larger set or each question asked three times.
+
+Kept: it costs a line per formula passage and makes the next equation
+a thing the model can see and open, which is right whether or not
+this set can measure it.
+
 ## How the material came to be (the night of 2026-09-16/17)
 
 The mathematical part of the library through marker in one evening:
@@ -174,10 +215,10 @@ counts: `docs/PLAN.md`, "After the mathematics".
 ## What follows
 
 - The judge is the measure now (`--judge`, `--rejudge` over saved
-  answers); the regex columns are its floor. The prompt line above was
-  its first use; the next is the surfer's own prompt (`surf.SYSTEM`),
-  which could prefer the formula chunk's neighbours when the question
-  asks for an equation the passage it holds only introduces (21).
+  answers); the regex columns are its floor, and its noise floor is a
+  verdict or two per 22: `eval_ask.py` wants a `--repeat N` that asks
+  each question N times and reports the mean, before the next change
+  to `ask` is judged by it.
 - `prax resolve --apply --twins` after the extraction pass over the 280
   re-read papers: Lambert W function was five entity rows before it.
 - The set is bound to this store's ids; a portable one would name

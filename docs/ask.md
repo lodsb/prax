@@ -35,6 +35,7 @@ not exist. Claude follows the same lines without a grammar.
 | `search: <words>` | the library's hybrid search again, in the model's own words | up to `passages` hits, one per document, 500 characters each, each with what the graph records about its document; documents already set aside and chunks already shown are skipped |
 | `read: [n]` | read on where passage n stopped | the next ~1,500 characters of that document |
 | `read: [n] <words>` | the part of that passage's document which holds those words | the chunk that holds most of them (a longer word counts for more), and what follows it |
+| `read: [n] (2)` | equation (2) of that passage's document, by the number the paper calls it | that formula chunk and what follows it; a number the paper has not got answers with the numbers it has |
 | `read: doc <id>` | a document a result named, from its start | the same, from the top |
 | `read: doc <id> <words>` | the part of that document about those words | the only way into a long paper a walk pointed at, whose start is a title page |
 | `facts: [n]` | what the graph records about that passage's document | its relations and the entities they name, `cites` left out |
@@ -47,7 +48,14 @@ Every one of these is a read the door already performs for a person
 (`store.search`, `read_chunks`, `find_chunk`, `document_facts`,
 `traverse`, `similar_documents`). A figure a vision model has read is
 text like any other and comes back from a search or a reading with its
-description; a figure nobody has read stays out of the way.
+description; a figure nobody has read stays out of the way. A formula
+passage — a display equation with its LaTeX and reading — comes with
+one line naming the equations around it in the paper by number (two
+before, three after, the reading's first words for each): the
+neighbourhood, so "the kernel is the next equation" is something the
+model can see and read, rather than reading on blind
+(`store.equations_near`; the sources column shows the same line with
+each number a link).
 
 ## What it cannot do
 

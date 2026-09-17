@@ -80,6 +80,7 @@ class Passage:
     kind: str | None
     text: str
     figure: str | None = None  # a figure chunk's reference: the image beside it
+    nearby: list[dict[str, Any]] | None = None  # a formula's neighbouring equations
 
     def label(self) -> str:
         bits = [self.title or "(untitled)"]
@@ -103,7 +104,27 @@ class Passage:
             "kind": self.kind,
             "text": self.text,
             "figure": self.figure,
+            "nearby": self.nearby,
         }
+
+    def nearby_line(self) -> str:
+        """The equations around a formula passage, by number: what the
+        paper has next door, so "the kernel is equation (2)" is a thing
+        the model can say, or read."""
+        if not self.nearby:
+            return ""
+        bits = []
+        for e in self.nearby:
+            num = f"({e['number']})" if e.get("number") else "(unnumbered)"
+            bits.append(f"{num} {e['head']}" + (" ‹this one›" if e.get("here") else ""))
+        return "equations nearby: " + "; ".join(bits)
+
+
+def nearby_of(con: sqlite3.Connection, kind: str | None, chunk_id: int | None):
+    """The neighbourhood for a formula chunk, None for anything else."""
+    if kind != "formula" or chunk_id is None:
+        return None
+    return store.equations_near(con, chunk_id) or None
 
 
 @dataclass
@@ -128,6 +149,8 @@ class Bundle:
         parts += [f"Question: {self.question.strip()}", "", numbered]
         for p in self.passages:
             parts += ["", f"[{p.n}] {p.label()}", p.text]
+            if p.nearby:
+                parts.append(p.nearby_line())
         lines = []
         for p in self.passages:
             facts = self.facts.get(p.doc_id) or []
@@ -226,6 +249,7 @@ def gather(
                 kind=h.get("kind"),
                 text=text[:passage_chars],
                 figure=h.get("figure"),
+                nearby=nearby_of(con, h.get("kind"), chunk_id),
             )
         )
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))

@@ -1848,6 +1848,105 @@ def find_chunk(
     return out
 
 
+NEARBY_BEFORE = 2  # equations named around a formula hit
+NEARBY_AFTER = 3
+HEAD_CHARS = 72
+
+
+def _equation_head(data: str | None, text: str) -> str:
+    """A few words naming an equation: its reading's first sentence, else
+    its LaTeX cut short."""
+    latex, reading = "", ""
+    if data:
+        try:
+            d = json.loads(data)
+            latex = str(d.get("latex") or "")
+            readings = d.get("readings") or []
+            reading = str(readings[0].get("text") or "") if readings else ""
+        except (ValueError, AttributeError):
+            pass
+    head = reading.split(". ")[0] if reading else latex or text.split("\n")[0]
+    head = " ".join(head.split())
+    return head if len(head) <= HEAD_CHARS else head[: HEAD_CHARS - 1].rstrip() + "…"
+
+
+def equations_near(
+    con: sqlite3.Connection,
+    chunk_id: int,
+    *,
+    before: int = NEARBY_BEFORE,
+    after: int = NEARBY_AFTER,
+) -> list[dict[str, Any]]:
+    """The numbered equations around a chunk in its document — the
+    neighbourhood a formula hit sits in, so a reader knows that the
+    kernel is the next equation after the integral it holds. Each has
+    its ``number`` (None when the paper gave it none), ``chunk_id``,
+    ``seq``, a ``head`` naming it, and ``here`` for the chunk itself."""
+    row = con.execute(
+        "SELECT doc_id, seq FROM chunks WHERE id = ?", (chunk_id,)
+    ).fetchone()
+    if row is None:
+        return []
+    rows = con.execute(
+        "SELECT id, seq, data, text FROM chunks WHERE doc_id = ? AND kind = 'formula'"
+        " ORDER BY seq",
+        (row["doc_id"],),
+    ).fetchall()
+    if len(rows) < 2:
+        return []
+    seqs = [r["seq"] for r in rows]
+    # the chunk itself when it is an equation, else the equations around its place
+    at = next((i for i, r in enumerate(rows) if r["id"] == chunk_id), None)
+    if at is None:
+        at = sum(1 for s_ in seqs if s_ < row["seq"])
+        lo, hi = max(0, at - before), min(len(rows), at + after)
+    else:
+        lo, hi = max(0, at - before), min(len(rows), at + after + 1)
+    out = []
+    for r in rows[lo:hi]:
+        number = None
+        if r["data"]:
+            try:
+                number = json.loads(r["data"]).get("number")
+            except (ValueError, AttributeError):
+                pass
+        out.append(
+            {
+                "chunk_id": r["id"],
+                "seq": r["seq"],
+                "number": number,
+                "head": _equation_head(r["data"], r["text"]),
+                "here": r["id"] == chunk_id,
+            }
+        )
+    return out
+
+
+def formula_by_number(
+    con: sqlite3.Connection, doc_id: int, number: str
+) -> dict[str, Any] | None:
+    """The formula chunk a paper calls ``(number)`` — how a reader opens
+    "equation (2)" the way the prose refers to it."""
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE doc_id = ? AND kind = 'formula' ORDER BY seq",
+        (doc_id,),
+    ).fetchall()
+    want = number.strip("() ").lower()
+    for r in rows:
+        if not r["data"]:
+            continue
+        try:
+            got = json.loads(r["data"]).get("number")
+        except (ValueError, AttributeError):
+            continue
+        if got is not None and str(got).lower() == want:
+            out = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+            out.update(_chunk_shape(r))
+            return out
+    return None
+
+
 @_serialized
 def document_outline(
     con: sqlite3.Connection, doc_id: int, *, limit: int = 20

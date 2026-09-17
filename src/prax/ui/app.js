@@ -1589,6 +1589,7 @@ function renderSources(t, i) {
         ${figureThumb(p)}
         <p class="snippet source-short">${esc(plainFigures(p.text).slice(0, 300))}${cut ? `… <button type="button" class="linkish source-more">more</button>` : ""}</p>
         ${cut ? `<p class="snippet source-full" hidden>${esc(p.text)} <button type="button" class="linkish source-more">less</button></p>` : ""}
+        ${nearbyLine(p)}
         ${f.length ? `<div class="chips">${f.map((x) => `<a class="chip" style="--c:${typeColor(x.type)}" href="#graph?entity=${encodeURIComponent(x.name)}" title="${esc(x.rel)}">${esc(x.rel)}: ${esc(x.name)}</a>`).join("")}</div>` : ""}
       </div>
     </article>`;
@@ -1596,6 +1597,19 @@ function renderSources(t, i) {
   return `<div class="side-head"><span>Sources</span><span>turn ${i + 1} · ${passages.length}${cited.size ? `, ${cited.size} cited` : ""}</span></div>
     ${rule()}
     <div class="sources ${t.answer ? "with-answer" : ""}">${cards || `<p class="muted side-empty">No passages found for this turn.</p>`}</div>`;
+}
+
+// a formula passage's neighbours: the equations around it, by number, each
+// a link into the document (what the model was shown as "equations nearby")
+function nearbyLine(p) {
+  if (!p.nearby || !p.nearby.length) return "";
+  const items = p.nearby.map((e) => {
+    const num = e.number ? `(${e.number})` : "(·)";
+    const head = e.head.length > 44 ? `${e.head.slice(0, 43)}…` : e.head;
+    if (e.here) return `<b title="this passage">${esc(num)}</b>`;
+    return `<a href="#doc/${p.doc_id}?chunk=${e.chunk_id}" title="${esc(e.head)}">${esc(num)}</a> ${esc(head)}`;
+  });
+  return `<p class="nearby muted">equations nearby: ${items.join(" · ")}</p>`;
 }
 
 function renderKeepForm(t) {

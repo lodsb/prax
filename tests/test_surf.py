@@ -448,3 +448,104 @@ def test_a_figure_hit_or_passage_carries_its_reference(
     surf.do_read(con, s, f"doc {doc} line plot seventy degrees")
     assert any(p.figure == ref for p in s.passages)
     assert all(p.figure is None for p in s.passages if p.kind != "figure")
+
+
+def test_a_formula_passage_names_the_equations_around_it_and_reads_by_number(
+    con: sqlite3.Connection,
+) -> None:
+    """The FrFT question: the hit was equation (1), the transform as an
+    integral with a kernel, and the kernel is (2), the next equation.
+    A formula passage names its neighbours by number in the bundle and
+    in the surf, and ``read: [n] (2)`` opens that one."""
+    text = "\n\n".join(
+        [
+            "# The fractional Fourier transform",
+            "The transform of a signal x is defined through a kernel. " * 6,
+            (
+                "$$X_\\alpha(u) = \\int x(t) K_\\alpha(t, u) \\, dt \\quad (1)$$\n"
+                "*Formula, as read by m:* Defines the fractional Fourier transform"
+                " of x(t) as an integral against the kernel K_alpha. The order is"
+                " alpha."
+            ),
+            "where the kernel is " * 20,
+            (
+                "$$K_\\alpha(t, u) = \\sqrt{\\tfrac{1 - j \\cot\\alpha}{2\\pi}}"
+                " e^{j (t^2 + u^2) \\cot\\alpha / 2 - j t u \\csc\\alpha}"
+                " \\quad (2)$$\n"
+                "*Formula, as read by m:* The kernel K_alpha of the transform, a"
+                " chirp in t and u whose rate is set by the order alpha."
+            ),
+            "and its inverse follows by " * 70,  # more than one read holds
+            (
+                "$$x(t) = \\int X_\\alpha(u) K_{-\\alpha}(t, u) \\, du \\quad (3)$$\n"
+                "*Formula, as read by m:* The inverse transform, the same kernel"
+                " with the order negated."
+            ),
+            "## Discretisation",
+            "A discrete version samples the chirps. " * 20,
+            "$$c_k = e^{j \\pi k^2 / N}$$",
+        ]
+    )
+    doc = store.ingest_text(con, text, title="FrFT overview")["doc_id"]
+    formulas = [c for c in store.list_chunks(con, doc) if c["kind"] == "formula"]
+    assert [c["data"]["number"] for c in formulas] == ["1", "2", "3", None]
+    near = store.equations_near(con, formulas[0]["chunk_id"])
+    assert [(e["number"], e["here"]) for e in near] == [
+        ("1", True),
+        ("2", False),
+        ("3", False),
+        (None, False),
+    ]
+    assert near[1]["head"].startswith("The kernel K_alpha of the transform")
+    # an unread one has no reading: the LaTeX, cut short, names it
+    assert near[3]["head"].startswith("c_k = e^{j")
+    # a text chunk between equations: the equations around its place
+    between = next(
+        c for c in store.list_chunks(con, doc) if "where the kernel" in c["text"]
+    )
+    assert [e["number"] for e in store.equations_near(con, between["chunk_id"])] == [
+        "1",
+        "2",
+        "3",
+        None,
+    ]
+    assert not any(e["here"] for e in store.equations_near(con, between["chunk_id"]))
+    by_number = store.formula_by_number(con, doc, "(2)")
+    assert by_number and by_number["chunk_id"] == formulas[1]["chunk_id"]
+    assert store.formula_by_number(con, doc, "9") is None
+
+    # the one-shot bundle: the line under the formula passage
+    bundle = ask.gather(con, "fractional Fourier transform integral kernel K_alpha")
+    passage = next(p for p in bundle.passages if p.doc_id == doc)
+    assert passage.kind == "formula" and passage.nearby
+    line = passage.nearby_line()
+    assert line.startswith("equations nearby: (1) ") and "‹this one›" in line
+    assert "(2) The kernel K_alpha" in line and "(unnumbered) c_k" in line
+    assert line in bundle.as_message()
+    assert passage.to_dict()["nearby"][1]["number"] == "2"
+    text_passage = next((p for p in bundle.passages if p.kind == "text"), None)
+    assert text_passage is None or text_passage.nearby is None
+
+    # the surf: the hit carries the line, and (2) opens by number
+    s = surf.Surf("q", "q", [], None, 6, 5, 4000)
+    shown, added = surf.do_search(
+        con, s, "fractional Fourier transform integral kernel"
+    )
+    assert added and "equations nearby: (1)" in shown
+    n = next(p.n for p in s.passages if p.doc_id == doc)
+    shown, added = surf.do_read(con, s, f"[{n}] (2)")
+    assert added == [n + 1] and "(on '(2)')" in shown
+    assert "K_\\alpha(t, u) = \\sqrt" in shown and "chirp in t and u" in shown
+    assert "equations nearby: (1)" in shown  # the reading is a formula passage too
+    # "eq. 3" and "equation (3)" are the same ask; a number it lacks says which it has
+    shown, added = surf.do_read(con, s, f"doc {doc} equation (3)")
+    assert added == [n + 2] and "The inverse transform" in shown
+    said = surf.do_read(con, s, f"doc {doc} eq. 9")[0]
+    assert (
+        said == f"doc {doc} has no equation (9). Its numbered equations: (1), (2), (3)"
+    )
+    # words that are not a number still find their part
+    fresh = surf.Surf("q", "q", [], None, 6, 5, 4000)
+    shown, _ = surf.do_read(con, fresh, f"doc {doc} discrete version samples")
+    assert "(on 'discrete version samples')" in shown
+    assert "read: [n] (2)" in surf.SYSTEM

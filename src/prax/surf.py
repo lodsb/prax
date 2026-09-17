@@ -73,6 +73,7 @@ one action from this list:
 search: <words>     search the library again with better words
 read: [n]           read on where passage n stopped
 read: [n] <words>   the part of that passage's document about those words
+read: [n] (2)       equation (2) of that passage's document, by its number
 read: doc <id>      read a document a result named, from its start
 read: doc <id> <words>   the part of that document about those words
 facts: [n]          what the graph records about passage n's document
@@ -88,7 +89,9 @@ stops short of the point, search again when the hits miss the question,
 walk the graph when the question is about how things relate, and drop
 hits that are about something else. A document a walk or a similar
 named is long and starts with a title page: read it with the words you
-are after. Say "answer" as
+are after. A formula passage names the equations next to it by number;
+when the question asks for an equation the passage only introduces,
+read the one it names. Say "answer" as
 soon as the passages kept answer the question; the steps and the reading
 left are shown after each result.
 Write nothing but the two lines."""
@@ -222,6 +225,7 @@ class Surf:
             kind=chunk.get("kind"),
             text=text,
             figure=chunk.get("figure"),
+            nearby=chunk.get("nearby"),
         )
         self.passages.append(p)
         if chunk.get("seq") is not None:
@@ -243,7 +247,10 @@ def _block(p: ask.Passage, tag: str = "") -> str:
         head += f" [{p.kind}]"
     if tag:
         head += f" ({tag})"
-    return f"{head}\n{p.text}"
+    block = f"{head}\n{p.text}"
+    if p.nearby:
+        block += "\n" + p.nearby_line()
+    return block
 
 
 def _flat(text: str, kind: str | None) -> str:
@@ -287,6 +294,7 @@ def do_search(con: sqlite3.Connection, s: Surf, query: str) -> tuple[str, list[i
             if c:
                 text = c["text"]
                 chunk["seq"] = c["seq"]
+                chunk["nearby"] = ask.nearby_of(con, c["kind"], chunk_id)
         if not text:
             text = store.document_field(con, did) or h.get("snippet") or ""
         text = _flat(text, h.get("kind"))[:HIT_CHARS]
@@ -314,6 +322,8 @@ def _facts_line(facts: list[dict[str, Any]]) -> str:
 
 
 _READ_ARG = re.compile(r"(?:\[(\d+)\]|doc\s+(\d+))(?:\s+(\S.*))?")
+# "(2)", "eq. 2", "equation (2b)": the number a paper calls an equation by
+_EQ_REF = re.compile(r"(?:eq(?:uation)?\.?\s*)?\(?(\d+[a-z]?)\)?", re.IGNORECASE)
 
 
 def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]:
@@ -348,7 +358,17 @@ def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]
             s.docs[doc_id] = titles[doc_id]
         title, after, tag = s.docs[doc_id], -1, "start"
     if words:
-        found = store.find_chunk(con, doc_id, words[:LOOK_CHARS])
+        by_number = _EQ_REF.fullmatch(words.strip())
+        found = (
+            store.formula_by_number(con, doc_id, by_number.group(1))
+            if by_number
+            else None
+        )
+        if by_number and found is None:
+            missing = f"doc {doc_id} has no equation ({by_number.group(1)})"
+            return missing + _equations(con, doc_id), []
+        if found is None:
+            found = store.find_chunk(con, doc_id, words[:LOOK_CHARS])
         if found is None:
             return f"doc {doc_id} has no text to read", []
         # land on that part, or go on from it when it has been read already
@@ -369,7 +389,23 @@ def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]
     if not chunks:
         where = f"[{m.group(1)}]" if m.group(1) else f"doc {doc_id}"
         return f"all of {where} has been read{_sections(con, doc_id)}", []
-    return _read(s, doc_id, title, chunks, tag)
+    return _read(s, doc_id, title, chunks, tag, con)
+
+
+def _equations(con: sqlite3.Connection, doc_id: int) -> str:
+    """The numbers a document's equations go by, for a read that asked
+    for one it has not got."""
+    numbers = [
+        str(c["data"].get("number"))
+        for c in store.list_chunks(con, doc_id)
+        if c.get("kind") == "formula" and c.get("data") and c["data"].get("number")
+    ]
+    if not numbers:
+        return ""
+    shown = ", ".join(f"({n})" for n in numbers[:SECTIONS])
+    return f". Its numbered equations: {shown}" + (
+        " …" if len(numbers) > SECTIONS else ""
+    )
 
 
 def _sections(con: sqlite3.Connection, doc_id: int) -> str:
@@ -382,11 +418,18 @@ def _sections(con: sqlite3.Connection, doc_id: int) -> str:
 
 
 def _read(
-    s: Surf, doc_id: int, title: str, chunks: list[dict[str, Any]], tag: str
+    s: Surf,
+    doc_id: int,
+    title: str,
+    chunks: list[dict[str, Any]],
+    tag: str,
+    con: sqlite3.Connection | None = None,
 ) -> tuple[str, list[int]]:
     text = "\n\n".join(_flat(c["text"], c["kind"]) for c in chunks)
     first = dict(chunks[0])
     first["seq"] = chunks[-1]["seq"]
+    if con is not None:
+        first["nearby"] = ask.nearby_of(con, first.get("kind"), first.get("chunk_id"))
     for c in chunks:
         s.chunks.add(c["chunk_id"])
     p = s.add(doc_id, first, text[: READ_CHARS + 200], title)

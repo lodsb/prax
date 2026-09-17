@@ -428,6 +428,10 @@ main.stage { max-width: 1400px; }
 .doc-figure figcaption { margin: .6rem 0 .2rem; font-size: .9rem; color: var(--muted); font-style: italic; }
 .figure-reading { margin: .35rem 0 0; font-size: .95rem; }
 /* a figure hit or source shows its picture, small, above the reading */
+.nearby { font-size: 0.82em; margin: 0.2em 0 0; line-height: 1.5; }
+.nearby a { text-decoration: none; border-bottom: 1px dotted currentColor; }
+.nearby b { font-weight: 600; }
+
 .hit-figure { display: block; margin: .4rem 0 .2rem; }
 .hit-figure img { display: block; max-width: 100%; max-height: 9rem; border-radius: 2px; }
 .reading-form { display: flex; gap: .8rem; flex-wrap: wrap; align-items: flex-end; font-size: .9rem; margin: 0 0 .8rem; }
