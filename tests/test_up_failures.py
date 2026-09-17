@@ -194,8 +194,11 @@ def test_restart_all_and_an_unknown_name(data_dir: Path, tmp_path: Path) -> None
     thread = threading.Thread(target=sup.run, daemon=True)
     thread.start()
     wait_for(lambda: runs_of(mark_a) == 1 and runs_of(mark_b) == 1)
-    assert up.restart(data_dir, "all")
+    # two commands within one tick both arrive: the file is a queue
+    assert up.restart(data_dir, "a") and up.restart(data_dir, "b")
     wait_for(lambda: runs_of(mark_a) == 2 and runs_of(mark_b) == 2)
+    assert up.restart(data_dir, "all")
+    wait_for(lambda: runs_of(mark_a) == 3 and runs_of(mark_b) == 3)
     assert all(
         "asked to restart; restart in 0 s" in line
         for line in said
@@ -203,7 +206,7 @@ def test_restart_all_and_an_unknown_name(data_dir: Path, tmp_path: Path) -> None
     )
     assert up.restart(data_dir, "nope")
     wait_for(lambda: any("no role named nope" in line for line in said))
-    assert runs_of(mark_a) == 2  # nothing else was touched
+    assert runs_of(mark_a) == 3  # nothing else was touched
     assert up.stop(data_dir, wait=20)
     thread.join(timeout=10)
 

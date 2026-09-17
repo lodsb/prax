@@ -489,11 +489,14 @@ def status(data_dir: Path) -> dict[str, Any] | None:
 
 
 def command(data_dir: Path, what: dict[str, Any]) -> None:
+    """Queue a command for the running supervisor: one JSON line appended
+    to the command file, which the supervisor reads whole and removes on
+    its next tick — two commands a second apart both arrive (a `--restart
+    door` followed at once by a `--restart worker` lost the first once)."""
     path = run_dir(data_dir) / COMMAND
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(what), encoding="utf-8")
-    tmp.replace(path)
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(what) + "\n")
 
 
 def stop(data_dir: Path, *, wait: float = 45.0, name: str | None = None) -> bool:
@@ -869,15 +872,24 @@ class Supervisor:
     # -- all of them
 
     def _control(self) -> None:
+        """Every command queued since the last tick, in order."""
         path = self.run_dir / COMMAND
         if not path.exists():
             return
         try:
-            what = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            what = {}
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            lines = []
         with contextlib.suppress(OSError):
             path.unlink()
+        for line in lines:
+            try:
+                what = json.loads(line)
+            except ValueError:
+                continue
+            self._command(what)
+
+    def _command(self, what: dict[str, Any]) -> None:
         cmd = what.get("cmd")
         name = what.get("name")
         if cmd == "stop" and name not in (None, "", "all"):
