@@ -275,6 +275,44 @@ def test_a_name_with_the_wire_syntax_glued_on_is_cut_back_to_the_name(
     assert store.health(con, only=["wire-names"])["ailments"][0]["count"] == 0
 
 
+def test_twin_documents_retire_into_the_keeper(con: sqlite3.Connection) -> None:
+    """A book kept in two prints (4690 and 4366 on 2026-09-17): one title,
+    the same text, different bytes. The twin retires into the one with
+    more edges; what only the twin held moves over."""
+    text = "# Music: A Mathematical Offering\n\n" + "\n\n".join(
+        f"Chapter {i}. " + f"The harmonic series and the scale, part {i}. " * 12
+        for i in range(80)
+    )
+    a = store.ingest_text(con, text, title="Music: A Mathematical Offering")["doc_id"]
+    b = store.ingest_text(
+        con, text + "\n\nSecond printing.", title="Music: A Mathematical Offering"
+    )["doc_id"]
+    other = store.ingest_text(
+        con, "A different book. " * 80, title="Music: A Mathematical Offering"
+    )["doc_id"]
+    store.link(  # only one of the two has an edge: that one keeps
+        con,
+        store.Edge(
+            "Music: A Mathematical Offering",
+            "paper",
+            "about",
+            "harmonic series",
+            "concept",
+        ),
+        source_doc=b,
+        producer="test",
+    )
+    found = store.health(con, only=["twin-documents"])["ailments"][0]
+    assert found["count"] == 1
+    twin = found["examples"][0]
+    assert twin["id"] == a and twin["duplicate_of"] == b  # b has the edge: keeper
+    assert twin["similarity"] >= 0.9
+    assert store.heal(con, only=["twin-documents"])["twin-documents"]["repaired"] == 1
+    assert store.get_meta(con, a)["retired"]["of"] == b
+    assert "retired" not in store.get_meta(con, other)  # a different text keeps
+    assert store.health(con, only=["twin-documents"])["ailments"][0]["count"] == 0
+
+
 def test_cleaning_a_name_merges_into_the_one_already_clean(
     con: sqlite3.Connection,
 ) -> None:

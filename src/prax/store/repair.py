@@ -36,6 +36,12 @@ from typing import Any
 from prax import glyphs
 
 from .base import _NOW, _serialized
+from .documents import (
+    DUPLICATE_THRESHOLD,
+    chunk_fingerprint,
+    retire_document,
+    similarity,
+)
 from .graph import invalidate_edge, rename_entity, resolve_review
 from .jobs import Job, job_finish
 
@@ -244,6 +250,90 @@ def _wire_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
         row["edges"] = counts.get(row["id"], 0)
     # nothing but syntax and no live edge: already dealt with, invisible
     return [r for r in found if r["cleaned"] or r["edges"]][:CAP]
+
+
+_TITLE_KEY = re.compile(r"[^\w]+")
+TWIN_TITLE_MIN = 9  # shorter titles pair by accident ("Untitled", "Notes")
+
+
+def _twin_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Two live documents with one title and the same text (the chunk
+    fingerprints at or above ``DUPLICATE_THRESHOLD``): a PDF downloaded
+    twice, a book kept in two prints — different bytes, so the hash did
+    not fold them. Each pair names the keeper (more live edges, then the
+    older id) and the twin to retire into it."""
+    groups: dict[tuple[str, str], list[sqlite3.Row]] = {}
+    for r in con.execute(
+        "SELECT id, title, mime FROM documents WHERE text_hash IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ):
+        key = _TITLE_KEY.sub(" ", (r["title"] or "").lower()).strip()
+        if len(key) < TWIN_TITLE_MIN:
+            continue
+        groups.setdefault((key, (r["mime"] or "").split("/")[0]), []).append(r)
+    found: list[dict[str, Any]] = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        ids = [m["id"] for m in members]
+        edges = _document_edge_counts(con, ids)
+        prints = {i: chunk_fingerprint(con, i) for i in ids}
+        taken: set[int] = set()
+        ranked = sorted(ids, key=lambda i: (-edges.get(i, 0), i))
+        for keeper in ranked:
+            if keeper in taken:
+                continue
+            for other in ranked:
+                if other == keeper or other in taken:
+                    continue
+                score = similarity(prints[keeper], prints[other])
+                if score >= DUPLICATE_THRESHOLD:
+                    taken.add(other)
+                    found.append(
+                        {
+                            "id": other,
+                            "title": members[0]["title"],
+                            "duplicate_of": keeper,
+                            "similarity": round(score, 3),
+                            "edges": edges.get(other, 0),
+                            "keeper_edges": edges.get(keeper, 0),
+                        }
+                    )
+            taken.add(keeper)
+        if len(found) >= CAP:
+            break
+    return found[:CAP]
+
+
+def _document_edge_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
+    marks = ",".join("?" * len(ids))
+    return {
+        int(r["source_doc"]): int(r["n"])
+        for r in con.execute(
+            f"SELECT source_doc, count(*) AS n FROM edges WHERE valid_to IS NULL"
+            f" AND source_doc IN ({marks}) GROUP BY source_doc",
+            ids,
+        )
+    }
+
+
+def _repair_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Retire each twin into its keeper: what it holds and the keeper
+    lacks moves over first (``retire_document`` with ``duplicate_of``)."""
+    done = 0
+    for row in rows:
+        try:
+            retire_document(
+                con,
+                row["id"],
+                reason=f"twin of {row['duplicate_of']} (heal: same title, same text)",
+                duplicate_of=row["duplicate_of"],
+                by="heal",
+            )
+        except KeyError:
+            continue
+        done += 1
+    return done
 
 
 def _self_edges(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -743,6 +833,20 @@ AILMENTS: tuple[Ailment, ...] = (
         fix="end every edge they carry",
         find=_unnamed_entities,
         repair=_repair_entities,
+    ),
+    Ailment(
+        name="twin-documents",
+        what=(
+            "two live documents with one title and the same text — a PDF"
+            " downloaded twice, a book kept in two prints; different bytes,"
+            " so the hash did not fold them"
+        ),
+        fix=(
+            "retire the twin into the keeper (more live edges, then the older"
+            " one): what it holds and the keeper lacks moves over first"
+        ),
+        find=_twin_documents,
+        repair=_repair_twins,
     ),
     Ailment(
         name="self-edges",
