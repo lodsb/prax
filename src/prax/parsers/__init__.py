@@ -172,9 +172,18 @@ def _has_text_layer(doc: Any) -> bool:
 def _pymupdf4llm(data: bytes) -> str:
     """Markdown via MuPDF's layout analysis, for born-digital PDFs.
 
-    Layout analysis holds page renderings in memory; originals above
-    ``PRAX_MAX_LAYOUT_MB`` (default 40) are refused so the plain extractor
-    handles them instead of the process being killed.
+    Layout analysis holds page renderings in memory, so a long document
+    is read a window of pages at a time (``parse.layout_window``, 100:
+    a 532-page book in two minutes with the process flat at ~570 MB,
+    where one pass over it all used to be refused and the plain
+    extractor left it as one line per line of print, no headings, the
+    equations in pieces). The page numbers in the separators are the
+    document's own either way; a heading's level is ranked among the
+    heading sizes of its own window, so a window without a chapter
+    title may rank its sections one level up — the price of the window,
+    small at a hundred pages. Originals above ``PRAX_MAX_LAYOUT_MB``
+    (default 40) are still refused so the plain extractor handles them
+    instead of the process being killed.
     """
     limit_mb = config.number("parse.max_layout_mb", "PRAX_MAX_LAYOUT_MB", 40)
     if len(data) > limit_mb * 1e6:
@@ -183,16 +192,22 @@ def _pymupdf4llm(data: bytes) -> str:
             " plain extraction instead"
         )
     pymupdf4llm = importlib.import_module("pymupdf4llm")
-    max_pages = config.whole("parse.max_layout_pages", "PRAX_MAX_LAYOUT_PAGES", 400)
+    window = max(1, config.whole("parse.layout_window", "PRAX_LAYOUT_WINDOW", 100))
     with _pymupdf_open(data) as doc:
         if not _has_text_layer(doc):
             raise ExtractionError("no text layer in the first pages; needs OCR")
-        if doc.page_count > max_pages:
-            raise ExtractionError(
-                f"{doc.page_count} pages exceeds PRAX_MAX_LAYOUT_PAGES={max_pages};"
-                " plain extraction instead"
-            )
-        text = pymupdf4llm.to_markdown(doc, use_ocr=False, page_separators=True)
+        if doc.page_count <= window:
+            text = pymupdf4llm.to_markdown(doc, use_ocr=False, page_separators=True)
+        else:
+            parts = []
+            for start in range(0, doc.page_count, window):
+                pages = list(range(start, min(start + window, doc.page_count)))
+                parts.append(
+                    pymupdf4llm.to_markdown(
+                        doc, pages=pages, use_ocr=False, page_separators=True
+                    )
+                )
+            text = "".join(parts)
         return figures.place(text, figures.pdf_figures(doc))
 
 

@@ -418,14 +418,36 @@ def test_scanned_pdf_is_refused_by_markdown_and_left_empty(
 
 
 @needs_pymupdf
+def test_a_long_pdf_is_laid_out_a_window_of_pages_at_a_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 532-page book was over the page cap and got the plain extractor:
+    one line per line of print, no headings. Layout analysis now goes
+    window by window, and the text is the same as in one pass — the
+    page numbers the document's own, the headings kept (their level is
+    ranked within the window, so it may differ by one)."""
+    import re
+
+    data = AMBRITS_PDF.read_bytes()
+    whole = parsers.by_name("pymupdf4llm")(data)
+    monkeypatch.setenv("PRAX_LAYOUT_WINDOW", "3")  # the 8-page fixture, in three passes
+    windowed = parsers.by_name("pymupdf4llm")(data)
+    pages = re.findall(r"--- end of page\.page_number=(\d+) ---", windowed)
+    assert pages == [str(n) for n in range(1, 9)]
+    level = re.compile(r"^#+ ", re.MULTILINE)
+    assert len(level.findall(windowed)) == len(level.findall(whole)) > 0
+
+    def flat(text: str) -> str:
+        return " ".join(level.sub("# ", text).split())
+
+    assert flat(windowed) == flat(whole)
+
+
+@needs_pymupdf
 def test_oversized_pdf_falls_back_to_plain_extraction(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     data = AMBRITS_PDF.read_bytes()
-    monkeypatch.setenv("PRAX_MAX_LAYOUT_PAGES", "2")  # the 8-page fixture is "too long"
-    with pytest.raises(parsers.ExtractionError, match="PRAX_MAX_LAYOUT_PAGES"):
-        parsers.by_name("pymupdf4llm")(data)
-    monkeypatch.delenv("PRAX_MAX_LAYOUT_PAGES")
     monkeypatch.setenv("PRAX_MAX_LAYOUT_MB", "0.001")  # the 278 KB fixture is "too big"
     with pytest.raises(parsers.ExtractionError, match="PRAX_MAX_LAYOUT_MB"):
         parsers.by_name("pymupdf4llm")(data)
