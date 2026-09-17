@@ -1,0 +1,101 @@
+# Ask eval set: questions whose answer is an equation in one of the 21
+# papers read with marker on 2026-09-16/17 (every display equation a
+# `formula` chunk with a reading in words). Written from the readings.
+#
+#   expect_doc   the document the equation is in (its id in the full store)
+#   expect       a regex the cited formula's LaTeX or reading should match
+#   style        named     the question names the equation or the thing
+#                meaning   the question says what the equation does, in other words
+#
+# Run: python scripts/eval_ask.py --questions tests/eval/questions-equations.yaml
+#      (against the door, PRAX_DOOR / PRAX_TOKEN; the ask step's model answers)
+
+questions:
+  - q: what is the Shockley diode equation as the diode clipper WDF paper writes it
+    expect_doc: 9813
+    expect: "Shockley|I_s"
+    style: named
+  - q: how is the diode current written in the wave domain, in terms of the incident and reflected waves a and b
+    expect_doc: 9813
+    expect: "wave domain|incident and reflected|a\\+b|a-b"
+    style: meaning
+  - q: how does the diode clipper model solve its implicit equation with the Lambert W function
+    expect_doc: 9813
+    expect: "Lambert|mathcal\\{W\\}"
+    style: named
+  - q: how is the instantaneous phase of a loopback frequency modulated signal defined
+    expect_doc: 9549
+    expect: "instantaneous phase|theta_i|omega_i"
+    style: named
+  - q: which partial differential equation models the two-dimensional vibration of a drum membrane, and what are its boundary conditions
+    expect_doc: 2309
+    expect: "membrane|drumhead|boundary"
+    style: named
+  - q: how is the short-time Fourier transform computed by a recursive filter, what is the impulse response
+    expect_doc: 266
+    expect: "impulse response|recursive|window"
+    style: meaning
+  - q: how are Givens rotations applied to the upper Hessenberg matrix from the Arnoldi process in GMRES
+    expect_doc: 2420
+    expect: "Givens|Hessenberg|Arnoldi"
+    style: named
+  - q: how is the fractional wavelet transform of a signal defined, and how is the signal reconstructed from it
+    expect_doc: [90, 197]
+    expect: "fractional wavelet|X_alpha|alpha"
+    style: named
+  - q: what is the definition of the root mean square voltage in the RMS compressor paper
+    expect_doc: 9812
+    expect: "root mean square|RMS|sqrt"
+    style: named
+  - q: how is a multicomponent signal written as a sum of amplitude and phase components before synchrosqueezing
+    expect_doc: 84
+    expect: "components|A_k|amplitude"
+    style: meaning
+  - q: what is the Hindu series for the solid content of a pyramid with a triangular base, the citighana
+    expect_doc: 4388
+    expect: "citighana|pyramid|triangular"
+    style: named
+  - q: how are the entries of the kernel matrix defined in the proximal support vector machine classifier
+    expect_doc: 1409
+    expect: "kernel matrix|Euclidean|exp"
+    style: named
+  - q: what classification rule assigns a point to a class in the proximal SVM
+    expect_doc: 1409
+    expect: "classif|x'w|gamma"
+    style: meaning
+  - q: how is negentropy maximization set up for complex ICA, what are the augmented vector representations of the complex signal
+    expect_doc: 630
+    expect: "augmented|complex|negentropy"
+    style: named
+  - q: which condition on the number of steps approximating a perfect fifth do good equal-tempered divisions of the octave satisfy
+    expect_doc: 479
+    expect: "fifth|m_|steps"
+    style: meaning
+  - q: what is the equation of motion of the geometrically exact nonlinear string, and its strain energy density
+    expect_doc: 9247
+    expect: "strain energy|nonlinear string|tension"
+    style: named
+  - q: how is the Van der Pol oscillator written as a first-order system in the harmonic balance paper
+    expect_doc: 9761
+    expect: "Van der Pol|first-order"
+    style: named
+  - q: how is the friction characteristic of the bowed string modelled as a function of relative velocity
+    expect_doc: 4016
+    expect: "friction|phi|velocity"
+    style: meaning
+  - q: what is the squared exponential covariance function used for Gaussian process regression
+    expect_doc: 1307
+    expect: "squared exponential|covariance|radial basis"
+    style: named
+  - q: how is the transition probability of the Markov chain in the musical dice game defined, and its entropy
+    expect_doc: 506
+    expect: "transition probability|entropy|stationary"
+    style: named
+  - q: what is the kernel of the fractional Fourier transform
+    expect_doc: 52
+    expect: "kernel|K_alpha|fractional Fourier"
+    style: named
+  - q: how does continuous-time convolution reduce aliasing in nonlinear waveshaping, what is the interpolated input
+    expect_doc: 9250
+    expect: "interpolat|continuous-time|tilde"
+    style: meaning
