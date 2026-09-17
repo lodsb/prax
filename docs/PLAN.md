@@ -768,9 +768,11 @@ What the marker evenings taught, kept for the day:
       `work._follow_up`; and the edge's first night found a hole in the
       work protocol: the follow-ups (low ids, waiting for a paused
       llama-server) filled every hand-out of ten with "not yet" and
-      starved the 228 marker requests behind them. A "not yet" now
-      defers the item — leased ten minutes, the queue moves on
-      (`work.DEFER_SECONDS`).*
+      starved the 228 marker requests behind them — twice over: the
+      hand-out also took its requests from the status view's newest-fifty
+      window, so the older ones behind it were never seen at all. A "not
+      yet" now defers the item (leased ten minutes, `work.DEFER_SECONDS`)
+      and the hand-out reads the whole queue oldest first.*
 - [x] **A typing rule for `located_in` from a document** (2026-09-17; 74 open items,
       `docs/eval/maths-ontology-2026-09-17.md`): a document's
       `located_in organization` is `written_at`; `located_in place` from a
