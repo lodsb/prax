@@ -731,22 +731,26 @@ console rather than anything about Windows.
       eight figures in twenty hits, each with its picture; an answer
       about which figures compare methods shows them in its sources.
 
-- [ ] **Then look at the review queue again.** What it needs first: the
-      extract step over the eight marker papers (their text changed under
-      an extraction stamped on the old one; the extract step re-selects by
-      ontology version, not by text, so a text upgrade should probably
-      clear `meta.extraction` — or `prax work --steps extract` over their
-      ids by hand), then the queue's mathematical misfits counted again
-      with equations in the input. Today it says no: of 4,181
-      open items 193 look mathematical and almost all are bibliographic
-      misfits carrying a maths-flavoured word. That is an artefact — the
-      extractor has never seen an equation — so the question reopens once
-      a few dozen papers have been read with their mathematics in place.
-      Only then, and only what the evidence asks for: `claim` already
-      covers a theorem, `method` a transform, `concept` the objects, and
-      `defines`/`extends`/`contradicts` already exist. An `equation`
-      entity type is the trap to avoid — 9,447 papers of nameless
-      "(5)" entities.
+- [x] **Then look at the review queue again** (2026-09-17,
+      `docs/eval/maths-ontology-2026-09-17.md`). Twenty-one equation-heavy
+      papers read with marker (1,222 display equations, each with a
+      reading), then extracted against the current ontology — which took
+      the rule that a text replaced after its extraction is extracted
+      again (`meta.extraction_stale`, the `stale-extractions` ailment for
+      what came before; a re-read document goes first in the extract
+      order). The answer: **no mathematics module.** The mathematics
+      landed as concepts (ambiguity function, Port-Hamiltonian system,
+      negentropy…), methods, claims ("the valid n-tone divisions … are 5,
+      7, 12, 19, …") and `extends`/`contrasts`/`implements`/`defines`
+      between them; the queue's 25 open items from the 21 are affiliations
+      read as `located_in` and a method cited as if a paper — not one
+      asks for an equation as a thing in the graph. The equations are
+      best where they are, formula chunks with readings, which is what
+      finds them. Two follow-ups the evidence does ask for: a typing rule
+      that takes a document's `located_in organization` to `written_at`
+      and drops `located_in place` (74 open items); and `solves` and
+      `models` as candidate relations for research v8 when the queue
+      shows them in numbers (one instance each tonight).
 
 ## Later / maybe
 
