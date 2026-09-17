@@ -112,6 +112,7 @@ from .documents import (  # noqa: F401
     find_chunk,
     fingerprint_text,
     finish_reading,
+    finished_readings,
     formula_by_number,
     get_chunk,
     get_document,

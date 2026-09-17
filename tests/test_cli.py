@@ -336,6 +336,10 @@ def test_readings_shows_the_queue_and_wait_blocks_until_it_drains(
     printed = capsys.readouterr().out
     assert "3 marker waiting" in printed and "marker: nothing waiting" in printed
     assert looks["n"] == 3
+    # the finished ones show under Lately although the waiting one is newer
+    assert run("readings", "-n", "1") == 0
+    printed = capsys.readouterr().out
+    assert "Lately" in printed and "marker" in printed.split("Lately")[1]
     # the formulas request still waits: a wait on everything times out
     monkeypatch.setattr(running.time, "sleep", lambda s: None)
     clock = iter(range(0, 10_000, 100))

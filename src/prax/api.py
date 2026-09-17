@@ -1551,11 +1551,7 @@ def readings(request: Request, limit: int = 50) -> dict[str, Any]:
         "waiting": store.count_reading_requests(con),
         "by_extractor": store.waiting_readings(con),
         "requested": store.reading_requests(con, state="requested", limit=limit),
-        "recent": [
-            r
-            for r in store.reading_requests(con, state=None, limit=limit)
-            if r.get("state") != "requested"
-        ],
+        "recent": store.finished_readings(con, limit=limit),
         "vision": models.describe("vision"),
     }
 

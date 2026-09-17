@@ -1195,6 +1195,29 @@ def count_reading_requests(
     return int(con.execute(sql, args).fetchone()[0])
 
 
+def finished_readings(
+    con: sqlite3.Connection, *, limit: int = 50
+) -> list[dict[str, Any]]:
+    """The reading requests lately finished, newest finish first — its own
+    query, because a bulk request places hundreds at one time and the
+    newest-requested window then holds nothing but waiting ones."""
+    rows = con.execute(
+        "SELECT id, title, mime, meta FROM documents"
+        " WHERE json_extract(meta, '$.reading.state') IN ('done', 'error')"
+        " ORDER BY json_extract(meta, '$.reading.finished_at') DESC, id DESC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    return [
+        {
+            "doc_id": r["id"],
+            "title": r["title"],
+            "mime": r["mime"],
+            **json.loads(r["meta"])["reading"],
+        }
+        for r in rows
+    ]
+
+
 def waiting_readings(con: sqlite3.Connection) -> dict[str, int]:
     """How many requests wait per extractor: what a script that swaps
     the card to marker and back watches (``prax readings --wait``)."""
