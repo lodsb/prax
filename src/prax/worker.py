@@ -185,13 +185,20 @@ def do_titles(
                 }
             )
             continue
-        guess = titles.guess_title(
-            runtime,
-            it["text"],
-            filename=it.get("filename"),
-            heading=titles.first_heading(it["text"]),
-            pdf_title=None,
-        )
+        try:
+            guess = titles.guess_title(
+                runtime,
+                it["text"],
+                filename=it.get("filename"),
+                heading=titles.first_heading(it["text"]),
+                pdf_title=None,
+            )
+        except models.ServerNotReady as exc:
+            # the titles model's server is loading or down: deferred, like
+            # a reading; the pass goes on with the rest and posts them
+            _say(log_, f"title doc {doc_id}: not yet — {exc}")
+            results.append({"doc_id": doc_id, "defer": True})
+            continue
         if guess is None:
             results.append({"doc_id": doc_id, "tried": "no usable guess"})
         elif guess.confidence == "low":

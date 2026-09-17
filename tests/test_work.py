@@ -199,6 +199,41 @@ def test_leases_expire(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> N
     assert len(client.get("/work/extract").json()["items"]) == 1
 
 
+def test_a_title_whose_server_is_down_is_deferred_not_the_whole_pass(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The titles model's server paused for marker failed the whole titles
+    pass ("pass failed: ServerNotReady") every cycle; now the item is
+    deferred like a reading, no try recorded against it."""
+    from prax import models
+
+    con = client.app.state.con
+    cap = inbox.ingest_upload(
+        con, ("a paper on granular synthesis " * 40).encode(), filename="scan_01.txt"
+    )
+    spec = models.ModelSpec(
+        name="srv", kind="openai", base_url="http://127.0.0.1:1/v1", model="q"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: spec if s == "titles" else None)
+
+    class Down:
+        name = "q@127.0.0.1:1"
+
+        def chat(self, system, user, **kw):
+            raise models.ServerNotReady("http://127.0.0.1:1/v1: not answering")
+
+    monkeypatch.setattr(models, "runtime", lambda s: Down())
+    said: list[str] = []
+    out = worker.run_once(_door(client), steps=("titles",), log_=said.append)
+    assert "pass failed" not in " ".join(said)
+    assert any("not yet" in line for line in said)
+    assert "titles" in out
+    assert "titles_tried" not in store.get_meta(con, cap.doc_id)
+    held = work._leases[("titles", cap.doc_id)]
+    assert held[1] > time.monotonic() + work.DEFER_SECONDS - 60
+    assert client.get("/work/titles").json()["items"] == []  # deferred, not out again
+
+
 def test_a_requested_reading_goes_out_first_and_comes_back_with_its_outcome(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

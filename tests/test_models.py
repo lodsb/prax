@@ -240,3 +240,40 @@ def test_server_status_reads_props_and_metrics(
     pages["http://gpu-box:8080/props"] = '{"total_slots": 1, "endpoint_metrics": false}'
     quiet = models.server_status(models.spec("server"))
     assert quiet["reachable"] and quiet["metrics"] is None and quiet["vision"] is False
+
+
+def test_post_json_tells_a_server_not_ready_from_a_bad_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A 503 (llama-server loading), a refused connection and a reset while
+    the answer is read (the server stopped under the request) are
+    ServerNotReady — the worker defers those; any other HTTP error is the
+    request's own and stays a RuntimeError."""
+    import io
+    import urllib.error
+    import urllib.request
+
+    def urlopen_raising(exc: BaseException):  # type: ignore[no-untyped-def]
+        def fake(req, timeout=None):  # type: ignore[no-untyped-def]
+            raise exc
+
+        return fake
+
+    cases = [
+        urllib.error.HTTPError("u", 503, "Loading", {}, io.BytesIO(b"Loading model")),
+        urllib.error.URLError(ConnectionRefusedError("refused")),
+        ConnectionResetError("forcibly closed"),
+    ]
+    for exc in cases:
+        monkeypatch.setattr(urllib.request, "urlopen", urlopen_raising(exc))
+        with pytest.raises(models.ServerNotReady):
+            models.post_json("http://127.0.0.1:1/v1/chat/completions", {}, None)
+    monkeypatch.setattr(
+        urllib.request,
+        "urlopen",
+        urlopen_raising(
+            urllib.error.HTTPError("u", 400, "Bad", {}, io.BytesIO(b"bad grammar"))
+        ),
+    )
+    with pytest.raises(RuntimeError, match="HTTP 400"):
+        models.post_json("http://127.0.0.1:1/v1/chat/completions", {}, None)

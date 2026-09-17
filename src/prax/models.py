@@ -388,6 +388,11 @@ def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]
         raise RuntimeError(f"{url}: HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise ServerNotReady(f"{url}: not answering ({exc.reason})") from exc
+    except ConnectionError as exc:
+        # a reset or a remote disconnect while reading the answer: the
+        # server went down under the request (stopped, restarted); not
+        # the prompt's fault, so not the document's error either
+        raise ServerNotReady(f"{url}: connection lost ({exc})") from exc
 
 
 # ------------------------------------------------------- server status
