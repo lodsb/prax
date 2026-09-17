@@ -444,7 +444,91 @@ def reread(door: Door, a: Any) -> int:
         )
     )
     out.hint("  a worker takes them before the pending captures; Jobs shows what waits")
+    if a.wait:
+        return wait_for_readings(
+            door, extractor=a.extractor, timeout=a.timeout, every=a.every
+        )
     return 0
+
+
+def readings(door: Door, a: Any) -> int:
+    """The reading queue: what waits, per extractor, and the recent
+    outcomes; ``--wait`` blocks until it has drained."""
+    if a.wait:
+        return wait_for_readings(
+            door, extractor=a.extractor, timeout=a.timeout, every=a.every
+        )
+    view = door.get_json("/readings", {"limit": a.limit})
+    if a.json:
+        print(json.dumps(view, indent=2))
+        return 0
+    by = view.get("by_extractor") or {}
+    if a.extractor:
+        by = {k: v for k, v in by.items() if k == a.extractor}
+    if by:
+        out.say(out.bold(f"Waiting ({out.num(sum(by.values()))})"))
+        for name, n in by.items():
+            out.say(f"  {out.num(n):>7}  {name}")
+        out.hint("  a worker takes them before the pending captures; --wait blocks")
+    else:
+        out.say("Nothing waiting.")
+    recent = [
+        r
+        for r in view.get("recent") or []
+        if not a.extractor or r.get("extractor") == a.extractor
+    ]
+    if recent:
+        out.say()
+        out.say(out.bold("Lately"))
+        rows = [
+            [
+                out.when(r.get("finished") or r.get("at")),
+                str(r.get("doc_id")),
+                r.get("extractor") or "",
+                out.paint(r.get("state", ""), "red")
+                if r.get("state") == "error"
+                else r.get("state", ""),
+                (r.get("error") or r.get("outcome") or r.get("title") or "")[
+                    : max(20, out.width() - 48)
+                ],
+            ]
+            for r in recent
+        ]
+        out.table(rows, headers=["when", "doc", "reading", "how", "what"])
+    return 0
+
+
+def wait_for_readings(
+    door: Door,
+    *,
+    extractor: str | None = None,
+    timeout: float | None = None,
+    every: float = 30,
+) -> int:
+    """Block until no reading request waits (for ``extractor``, or at
+    all), a line whenever the count moves; 0 when drained, 2 on the
+    timeout (minutes). What a script that swaps the card to marker and
+    back does between its steps — the same line on every platform."""
+    started = time.monotonic()
+    last: int | None = None
+    what = extractor or "readings"
+    while True:
+        view = door.get_json("/readings", {"limit": 1})
+        by = view.get("by_extractor") or {}
+        n = int(by.get(extractor, 0)) if extractor else int(view.get("waiting") or 0)
+        if n == 0:
+            out.say(f"{what}: nothing waiting")
+            return 0
+        if n != last:
+            out.say(
+                f"{time.strftime('%H:%M')} {out.num(n)} {what} waiting"
+                + (f" ({int((time.monotonic() - started) / 60)} min)" if last else "")
+            )
+            last = n
+        if timeout and time.monotonic() - started > timeout * 60:
+            out.fail(f"{what}: {out.num(n)} still waiting after {timeout:g} min")
+            return 2
+        time.sleep(every)
 
 
 def heal(door: Door, a: Any) -> int:

@@ -152,6 +152,7 @@ from .documents import (  # noqa: F401
     unreadable_documents,
     unretire_document,
     unstamp_extraction,
+    waiting_readings,
 )
 from .graph import (  # noqa: F401
     ASK_FACT_RELS_SKIPPED,

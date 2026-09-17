@@ -34,13 +34,25 @@ examples
 
 commands
   everyday     search, ask, add, import, show, open, graph, pages
-  running it   up, status, jobs, inbox, work, heal, maintain, resolve, backup,
-               serve, doctor, models
+  running it   up, status, jobs, readings, inbox, work, heal, maintain, resolve,
+               backup, serve, doctor, models
 """
 
 
 def _door_of(a: Any) -> Door:
     return Door(a.door, token=a.token, name="cli")
+
+
+def _wait_opts(s: argparse.ArgumentParser) -> None:
+    s.add_argument(
+        "--wait",
+        action="store_true",
+        help="block until no request waits (exit 2 on --timeout)",
+    )
+    s.add_argument("--timeout", type=float, metavar="MIN", help="give up waiting after")
+    s.add_argument(
+        "--every", type=float, default=30, metavar="SEC", help="how often to look"
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -518,8 +530,32 @@ def build_parser() -> argparse.ArgumentParser:
         " equations, 10 a mathematical one); with --mime application/pdf"
         " and --extractor marker, the evening that reads the mathematics",
     )
+    _wait_opts(s)
     s.add_argument("--dry-run", action="store_true", help="count, ask for nothing")
     s.set_defaults(func=running.reread, needs_door=True)
+
+    s = sub.add_parser(
+        "readings",
+        parents=[door_opts, as_json],
+        help="the reading queue: what waits, per extractor; --wait blocks",
+        description=(
+            "What the door has been asked to read again and has not yet"
+            " (per extractor), and how the recent requests ended. --wait"
+            " blocks until nothing waits — the line between the steps of an"
+            " evening that swaps the card to marker and back."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax readings\n"
+            "  prax readings --wait --extractor marker --timeout 420\n"
+            "  prax readings --wait                         the follow-ups too"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("--extractor", help="one reading only")
+    s.add_argument("-n", "--limit", type=int, default=25, help="recent rows")
+    _wait_opts(s)
+    s.set_defaults(func=running.readings, needs_door=True)
 
     s = sub.add_parser(
         "heal",

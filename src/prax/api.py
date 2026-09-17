@@ -1549,6 +1549,7 @@ def readings(request: Request, limit: int = 50) -> dict[str, Any]:
     con = _con(request)
     return {
         "waiting": store.count_reading_requests(con),
+        "by_extractor": store.waiting_readings(con),
         "requested": store.reading_requests(con, state="requested", limit=limit),
         "recent": [
             r

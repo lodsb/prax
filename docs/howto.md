@@ -863,23 +863,31 @@ it, which beside a 20 GB model does not fit a 24 GB card — hence
 library's 250,000 pages are still days, but the papers whose formulas
 matter are an evening:
 
+    prax reread --extractor marker --maths 6 --mime application/pdf --dry-run   # the mathematical papers: how many
     prax up --stop llama-server          # the card free
     prax up --start marker               # ten seconds, then a minute for its first request
-    prax reread --extractor marker --maths 6 --mime application/pdf --dry-run   # the mathematical papers: how many
-    prax reread --extractor marker --maths 6 --mime application/pdf             # or --ids 9549 9813 …
-    prax jobs                            # the worker takes them before the pending captures
+    prax reread --extractor marker --maths 6 --mime application/pdf --wait --timeout 420   # or --ids 9549 9813 …
     prax up --stop marker                # its llama-server ends with it
     prax up --start llama-server         # the formula readings the door asked for run once it is up
+    prax readings --wait                 # until those are read too; then the extraction follows
 
-`--maths` is the density of references to numbered equations in the
-prose — "(4)" between words — per 10,000 characters, with at least 15 of
-them: 10 is a mathematical paper, 6 a paper with equations, 3 anything
-that numbers a few; this library has 111, 281 and 606 PDFs at those
-marks, 40 minutes, two hours and four and a half of the card. A marker
-read that produced display equations asks the door for their readings
-itself (the `formulas` step named, a local model), so an evening is the
-two swaps and the one request; the extraction follows, since the text
-changed under it.
+Six lines, the same in bash, zsh and PowerShell (`;` between them for one
+line), and nothing else: `reread --wait` prints the count as it moves and
+returns when no marker request waits (2 on the timeout, minutes), `prax
+readings` shows the queue per extractor whenever you look, and `prax up`
+is the same swap on every platform. The night of 2026-09-16 did this with
+two hand-written watcher scripts that guessed at "stuck" and "nothing
+moved in an hour", and both guessed wrong; the queue itself is the
+signal. `--maths` is the density of references to numbered equations in
+the prose — "(4)" between words — per 10,000 characters, with at least
+15 of them: 10 is a mathematical paper, 6 a paper with equations, 3
+anything that numbers a few; this library has 111, 281 and 606 PDFs at
+those marks, 40 minutes, two hours and four and a half of the card. A
+marker read that produced display equations asks the door for their
+readings itself (the `formulas` step named, a local model), so an
+evening is the two swaps and the one request; the extraction follows,
+since the text changed under it. A reading whose server is the one
+paused waits, deferred, and comes round once the card is back (7).
 
 `marker` is an explicit extractor, never a default or a fallback: asked
 for per document, stamped `marker/2.0.0` (the version read from the
@@ -1618,7 +1626,8 @@ One command for the everyday work, and the same one wherever the door is:
     prax jobs                         passes running now and lately
     prax heal                         what recurring damage is in the store
     prax maintain                     what the store does to itself: acronyms, fields, domains, duplicates
-    prax reread --extractor X ...     a reading on a selection: --unreadable, --mime, --text-source, --ids
+    prax reread --extractor X ...     a reading on a selection: --unreadable, --mime, --text-source, --ids; --wait
+    prax readings                     the reading queue per extractor; --wait blocks until it drains
     prax backup D:/prax-backup        copy the store (only what is new)
     prax work --watch                 be the worker for a door
     prax serve                        run the door here

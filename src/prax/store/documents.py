@@ -1195,6 +1195,17 @@ def count_reading_requests(
     return int(con.execute(sql, args).fetchone()[0])
 
 
+def waiting_readings(con: sqlite3.Connection) -> dict[str, int]:
+    """How many requests wait per extractor: what a script that swaps
+    the card to marker and back watches (``prax readings --wait``)."""
+    rows = con.execute(
+        "SELECT json_extract(meta, '$.reading.extractor'), count(*) FROM documents"
+        " WHERE json_extract(meta, '$.reading.state') = 'requested'"
+        " GROUP BY 1 ORDER BY 2 DESC, 1"
+    ).fetchall()
+    return {str(name or "?"): int(n) for name, n in rows}
+
+
 def expected_version(
     meta: dict[str, Any], onto: ontology.Ontology | None = None
 ) -> str:

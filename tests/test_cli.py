@@ -286,3 +286,59 @@ def test_import_project_reads_the_directory_quietly(
         "workshop"
     ]
     assert run("import", "project", str(tmp_path / "missing")) == 2
+
+
+def test_readings_shows_the_queue_and_wait_blocks_until_it_drains(
+    door: TestClient,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The line between the steps of a marker evening — swap the card,
+    ask, wait until nothing waits, swap back — on any platform: the
+    counts per extractor, and --wait polling until they are gone."""
+    from prax_cli import running
+
+    from prax import store
+
+    con = door.app.state.con
+    assert run("readings") == 0
+    assert "Nothing waiting" in capsys.readouterr().out
+    pdfs = []
+    for i in range(3):
+        pdf = store.register(
+            con, b"%PDF-1.4 " + str(i).encode(), mime="application/pdf", title=f"p{i}"
+        )["doc_id"]
+        store.index_text(con, pdf, f"old text {i} " * 40, text_source="pymupdf4llm/1")
+        pdfs.append(pdf)
+    assert run("reread", "--extractor", "marker", "--ids", *map(str, pdfs)) == 0
+    text = store.ingest_text(con, "# M\n\n$$x = 1 \\quad (1)$$\n\ntext " * 3)["doc_id"]
+    assert (
+        door.post(f"/doc/{text}/reading", json={"extractor": "formulas"}).status_code
+        == 200
+    )
+    assert run("readings") == 0
+    printed = capsys.readouterr().out
+    assert (
+        "Waiting (4)" in printed and "3  marker" in printed and "1  formulas" in printed
+    )
+    assert run("readings", "--extractor", "marker") == 0
+    assert "Waiting (3)" in capsys.readouterr().out
+    # --wait: the marker requests finish one a look; the formulas one stays
+    looks = {"n": 0}
+
+    def a_look(seconds: float) -> None:
+        looks["n"] += 1
+        if pdfs:
+            store.finish_reading(con, pdfs.pop(), outcome="done", stamp="marker/2")
+
+    monkeypatch.setattr(running.time, "sleep", a_look)
+    assert run("readings", "--wait", "--extractor", "marker", "--every", "0") == 0
+    printed = capsys.readouterr().out
+    assert "3 marker waiting" in printed and "marker: nothing waiting" in printed
+    assert looks["n"] == 3
+    # the formulas request still waits: a wait on everything times out
+    monkeypatch.setattr(running.time, "sleep", lambda s: None)
+    clock = iter(range(0, 10_000, 100))
+    monkeypatch.setattr(running.time, "monotonic", lambda: float(next(clock)))
+    assert run("readings", "--wait", "--timeout", "1") == 2
+    assert "still waiting after 1 min" in capsys.readouterr().err
