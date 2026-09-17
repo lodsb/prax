@@ -247,7 +247,7 @@ With `steps` the model surfs before it answers (`prax.surf`; the moves, the budg
 | `prax.rerank` | optional cross-encoder over the top hits, ONNX in-process or a llama-server `/rerank`; off by default (measured no gain, 2026-09-08 and -13) | no |
 | `prax.evaluation` | fixture store builder, query set runner, report | via store (throwaway) |
 | `prax.pipeline` | the batch passes as functions (extract, retitle, embed) and `process_captures`, the pipeline the inbox watcher runs over new captures without spending money; jobs bookkeeping around each | via store |
-| `prax.work` | the door's side of the work protocol: hand out leased batches (parse, titles, extract, embed) and take the results in | via store |
+| `prax.work` | the door's side of the work protocol: hand out leased batches (parse, titles, extract, embed) and take the results in; a worker's "not yet" (its server loading or paused) keeps the item leased a while so the queue moves on | via store |
 | `prax.worker` | the worker: fetches work from a door, does it with this machine's models, posts results; uploads local drop folders; a session job with heartbeats; one bounded pass over everything once past its `nightly` hour; never opens the database | no (HTTP only) |
 | `prax.up` | the supervisor: the roles `run:` names (llama-server, a reranker, the door, the worker) started in order behind health gates, restarted with backoff, stopped in reverse, a log each; a pid, a status and a command file under `<data dir>/run/`; children without a console (Windows) or in their own session | no |
 | `prax.autostart` | the one login entry per platform that starts `prax up`: a Task Scheduler task under `pythonw.exe`, a systemd user unit, a launchd agent | no |

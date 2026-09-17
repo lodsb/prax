@@ -1225,7 +1225,13 @@ Four ways in:
   never opens the database, and never touches the curated imports unless
   `--scope all` says so. It announces itself as a job with heartbeats, so
   the Jobs view shows it wherever it runs. `--no-titles`, `--no-extract`,
-  `--no-embed`, `--no-parse` switch steps off.
+  `--no-embed`, `--no-parse` switch steps off. A reading or extraction
+  whose server is loading or paused (a 503, a refused connection, marker's
+  server not up) is not the document's fault: the worker reports it as
+  "not yet", the door keeps it leased ten minutes and hands out the rest
+  of the queue meanwhile, and it comes round again once that lease runs
+  out — so a queue of formula readings waiting for llama-server does not
+  hold back the marker readings behind it while the card is marker's.
 
   The worker also uploads this machine's `Downloads/prax-inbox/` when
   that folder exists (`--also` names others), sidecars included: the
