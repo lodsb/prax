@@ -1355,9 +1355,11 @@ by the usual rule (a suspiciously short new text keeps the old). A
 re-read that comes out the same moves the stamp and touches nothing
 else. As the worker's nightly pass on the machine with the models —
 `nightly: "03:00"` under `run.worker` (4b), or `prax work --watch
---nightly 03:00` by hand: once past that hour each day the watching
-worker does one pass over everything, `nightly_limit` documents a step,
-then goes back to watching. A worker not under `prax up` can use cron:
+--nightly 03:00` by hand: when that hour comes round each day the
+watching worker does one pass over everything, `nightly_limit`
+documents a step, then goes back to watching (a worker started after
+the hour waits for the next night's; it does not run a pass over
+everything at noon). A worker not under `prax up` can use cron:
 
     0 3 * * * PRAX_TOKEN=<token> /srv/prax/.venv/bin/prax work --scope all --limit 100 --door http://127.0.0.1:8000 >> /srv/prax-data/logs/nightly.log 2>&1
 

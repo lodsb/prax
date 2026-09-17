@@ -23,6 +23,7 @@ import shutil
 import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -590,12 +591,13 @@ def watch(
     whole library follows the regular one once that hour has passed each
     day: the backlog and the stale texts, ``nightly_limit`` documents a
     step, the same steps."""
-    from datetime import datetime
-
     from prax import schedule
 
     night = schedule.parse_hour(nightly) if nightly else None
-    last_night: datetime | None = None
+    # the nightly pass is at its hour: a worker (re)started after it — prax
+    # up brings one back after a crash, a person after a change — waits
+    # for tomorrow's rather than running a pass over everything at noon
+    last_night: datetime | None = datetime.now().astimezone() if night else None
     session = None
     try:
         session = door.post_json(
