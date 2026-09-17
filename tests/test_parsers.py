@@ -399,6 +399,29 @@ def test_pymupdf_extractors_read_the_fixture_pdf() -> None:
 
 
 @needs_pymupdf
+def test_a_scanned_front_matter_does_not_hide_the_text_behind_it() -> None:
+    """A journal issue whose cover and front matter are scans has its text
+    from page seven on; probing the first five pages alone refused it and
+    the plain extractor left it as lines. The probe samples the rest too."""
+    import pymupdf
+
+    with pymupdf.open() as doc:
+        for _ in range(6):
+            doc.new_page()  # the scanned front
+        for i in range(30):
+            page = doc.new_page()
+            page.insert_text((72, 72), f"Section {i}. The text of the issue. " * 3)
+        data = doc.tobytes()
+    text = parsers.by_name("pymupdf4llm")(data)
+    assert "The text of the issue" in text
+    with pymupdf.open() as doc:  # and a scan is still a scan
+        for _ in range(40):
+            doc.new_page()
+        with pytest.raises(parsers.ExtractionError, match="needs OCR"):
+            parsers.by_name("pymupdf4llm")(doc.tobytes())
+
+
+@needs_pymupdf
 def test_scanned_pdf_is_refused_by_markdown_and_left_empty(
     con: sqlite3.Connection,
 ) -> None:

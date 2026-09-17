@@ -155,18 +155,26 @@ def _pymupdf_open(data: bytes) -> Any:  # a pymupdf.Document, imported lazily
     return pymupdf.open(stream=data, filetype="pdf")
 
 
-PROBE_PAGES = 5  # pages sampled to decide whether a PDF has a text layer
+PROBE_PAGES = 5  # the first pages sampled to decide whether a PDF has a text layer
+PROBE_SPREAD = 10  # and as many more, spread over the rest of it
 
 
 def _has_text_layer(doc: Any) -> bool:
-    """True if any of the first ``PROBE_PAGES`` pages carries extractable text.
-
-    A scan without OCR has none; running layout analysis over hundreds of
-    image-only pages takes minutes and yields nothing, so such documents are
-    refused up front and left for the explicit OCR extractor.
+    """True if a sampled page carries extractable text: the first
+    ``PROBE_PAGES`` and ``PROBE_SPREAD`` more spread evenly over the rest,
+    because a journal issue with a scanned cover and front matter has
+    its text from page seven on (231 pages, refused on the first five,
+    left to the plain extractor). A scan without OCR has none anywhere;
+    running layout analysis over hundreds of image-only pages takes
+    minutes and yields nothing, so those are refused up front and left
+    for the explicit OCR extractor.
     """
-    n = min(doc.page_count, PROBE_PAGES)
-    return any(doc[i].get_text().strip() for i in range(n))
+    n = doc.page_count
+    probe = list(range(min(n, PROBE_PAGES)))
+    if n > PROBE_PAGES:
+        step = max(1, (n - PROBE_PAGES) // PROBE_SPREAD)
+        probe += list(range(PROBE_PAGES, n, step))[:PROBE_SPREAD]
+    return any(doc[i].get_text().strip() for i in probe)
 
 
 def _pymupdf4llm(data: bytes) -> str:
