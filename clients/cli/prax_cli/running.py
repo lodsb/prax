@@ -374,6 +374,14 @@ def models(a: Any) -> int:
 
 def _example_line(name: str, row: dict[str, Any]) -> str:
     """One finding in a few words, whatever kind of row it is."""
+    if "duplicate_of" in row:  # a twin document and its keeper
+        title = (row.get("title") or f"doc {row.get('id')}")[:50]
+        twin = out.plural(row.get("edges", 0), "edge")
+        keeper = out.plural(row.get("keeper_edges", 0), "edge")
+        return (
+            f"{title!r} · doc {row.get('id')} ({twin}) → doc {row.get('duplicate_of')}"
+            f" ({keeper}), {row.get('similarity', 0):.2f} alike"
+        )
     if "edges" in row:  # an entity and what it carries
         carries = out.plural(row["edges"], "edge")
         said = f"{row.get('name')!r} ({row.get('type')}) · {carries}"
