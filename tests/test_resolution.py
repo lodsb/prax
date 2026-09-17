@@ -159,6 +159,44 @@ def test_likely_tier_needs_an_adjudicator(con: sqlite3.Connection) -> None:
     assert resolution.plan(con).likely == []
 
 
+def test_a_decline_is_recorded_and_survives_the_next_computation(
+    con: sqlite3.Connection,
+) -> None:
+    """The adjudicator's no cost money: the pair is marked decided, leaves
+    the plan, and the next week's computation of its type keeps the
+    mark instead of asking again. The default adjudicator's no is only
+    'nobody asked' and marks nothing."""
+    store.link(con, E("P", "paper", "about", "spatial audio", "concept"))
+    store.link(con, E("Q", "paper", "about", "spatial audio coding", "concept"))
+    store.link(con, E("R", "paper", "about", "musical sound synthesis", "concept"))
+    store.link(con, E("S", "paper", "about", "musical sound", "concept"))
+    assert _likely_computed(con, "concept", 0.7) >= 2
+    plan = resolution.plan(con)
+    assert len(plan.likely) >= 2
+    resolution.apply(con, plan)  # nobody asked: nothing recorded
+    assert len(resolution.plan(con).likely) == len(plan.likely)
+
+    class Judge:  # says yes to the plural, no to the coding
+        name = "judge"
+
+        def decide(self, cands):
+            return ["musical" in c.keep_name for c in cands]
+
+    report = resolution.apply(con, plan, adjudicator=Judge())
+    assert report.merged_likely == 1 and report.declined >= 1
+    assert resolution.plan(con).likely == []  # decided either way
+    decided = con.execute(
+        "SELECT decided, decided_by FROM entity_candidates WHERE decided IS NOT NULL"
+    ).fetchall()
+    assert decided and all(r["decided_by"] == "judge" for r in decided)
+    # the type computed again: the decided pair keeps its mark
+    assert _likely_computed(con, "concept", 0.7) >= 1
+    assert resolution.plan(con).likely == []
+    assert con.execute(
+        "SELECT count(*) FROM entity_candidates WHERE decided = 'different'"
+    ).fetchone()[0] == len(decided)
+
+
 def test_likely_pairs_are_the_close_names_a_block_at_a_time() -> None:
     """The worker's computation: every pair at or above the threshold,
     the smaller id first, highest first, the same whatever the block —

@@ -566,10 +566,21 @@ written before migration 0007 were tagged once (`store.backfill_provenance`,
     prax resolve --apply --twins        # concept+method twins as well
     prax resolve --type author          # one entity type
 
-The likely tier is listed for you; an adjudicator (Claude over the
-likely pairs, `scripts/resolve_entities.py --commit --adjudicate` until
-it becomes a `--spend` step of the worker) is the only thing that
-merges it.
+The likely tier is listed for you; an adjudicator is the only thing
+that merges it — the `adjudicate` step of the worker, whose model is
+`steps.adjudicate` in `prax.yaml` (a Claude model: paid, so the step
+runs only with `--spend`, or `spend: true` under `run.worker`, and only
+when named in `--steps`):
+
+    prax work --steps adjudicate --spend     # the likely pairs to the adjudicate model, once
+
+Each pair is one line of a forty-line question; a yes is a merge, a no
+is recorded on the pair (`entity_candidates.decided`) so the next
+week's computation of its type does not ask again. The worker says
+what a pass cost. Measured 2026-09-17: 8,242 pairs, 3,683 merged, 4,559
+kept apart, $2.59 with Opus 5 — a tenth of a cent a decision.
+`scripts/resolve_entities.py --commit --adjudicate` does the same from a
+process that opens the database file, for a host without a worker.
 
 Sure merges are equal names after normalization (case, accents,
 punctuation, plural, suffixes) and author initials forms that abbreviate
@@ -1255,7 +1266,8 @@ Four ways in:
   never opens the database, and never touches the curated imports unless
   `--scope all` says so. It announces itself as a job with heartbeats, so
   the Jobs view shows it wherever it runs. `--no-titles`, `--no-extract`,
-  `--no-embed`, `--no-parse`, `--no-resolve` switch steps off. A reading or extraction
+  `--no-embed`, `--no-parse`, `--no-resolve` switch steps off; `promote`,
+  `typing` and `adjudicate` run only when named. A reading or extraction
   whose server is loading or paused (a 503, a refused connection, marker's
   server not up) is not the document's fault: the worker reports it as
   "not yet", the door keeps it leased ten minutes and hands out the rest

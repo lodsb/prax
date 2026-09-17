@@ -504,6 +504,8 @@ class WorkIn(BaseModel):
     fields: list[list[Any]] | None = None
     type: str | None = None  # resolve: the entity type the pairs are of
     pairs: list[list[Any]] | None = None  # resolve: [a, b, cosine]
+    items: list[dict[str, Any]] | None = None  # adjudicate: the pairs handed out
+    same: list[bool] | None = None  # adjudicate: one decision per item
 
 
 @app.post("/work/{step}")

@@ -50,7 +50,16 @@ LEASE_SECONDS = 900
 # the same ten items again — the follow-ups of the first papers marker
 # read once starved the 228 behind them
 DEFER_SECONDS = 600
-STEPS = ("parse", "titles", "extract", "promote", "typing", "embed", "resolve")
+STEPS = (
+    "parse",
+    "titles",
+    "extract",
+    "promote",
+    "typing",
+    "embed",
+    "resolve",
+    "adjudicate",
+)
 
 
 def _vision_is_free() -> bool:
@@ -362,6 +371,30 @@ def hand_out(
                 "lease_seconds": LEASE_SECONDS,
             }
         return {"step": step, "type": None, "names": [], "lease_seconds": 0}
+    if step == "adjudicate":
+        # the likely pairs nobody has decided, to a worker with the
+        # adjudicate step's model (a paid one: the worker spends only when
+        # told to); leased by the entity that would be dropped
+        from prax import resolution
+
+        if models.resolve("adjudicate") is None:
+            return {"step": step, "items": [], "lease_seconds": 0}
+        items = []
+        for c in resolution.plan(con).likely:
+            if len(items) >= limit or not _free(step, c.drop, now):
+                continue
+            items.append(
+                {
+                    "keep": c.keep,
+                    "drop": c.drop,
+                    "keep_name": c.keep_name,
+                    "drop_name": c.drop_name,
+                    "type": c.type,
+                    "score": round(c.score, 4),
+                }
+            )
+        _lease(step, [i["drop"] for i in items], worker)
+        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
     # embed
     emb = embeddings.current()
     if emb is None or not store.vectors_available():
@@ -492,6 +525,19 @@ def take_in(
             con, etype, pairs, producer=f"{model} via {worker}"
         )
         out["type"] = etype
+        return out
+    if step == "adjudicate":
+        from prax import resolution
+
+        model = str(payload.get("model") or worker)
+        items = list(payload.get("items") or [])
+        same = [bool(x) for x in (payload.get("same") or [])]
+        if len(same) != len(items):
+            raise ValueError("adjudicate takes one decision per item")
+        _release(step, [int(it["drop"]) for it in items])
+        rep = resolution.decide(con, items, resolution.DecidedAdjudicator(model, same))
+        out["applied"] = rep.merged_likely
+        out["declined"] = rep.declined
         return out
     if step == "typing":
         from prax import typing_pass

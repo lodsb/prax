@@ -261,6 +261,76 @@ def test_the_resolve_step_computes_the_likely_pairs_off_the_door(
     )
 
 
+def test_the_adjudicate_step_spends_only_when_told_and_records_its_decisions(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The likely pairs go to the adjudicate step's model through the
+    worker (paid: --spend), the decisions come back as merges and
+    recorded declines, and the script that opened the database file for
+    this is no longer the way."""
+    from prax import models, resolution
+
+    con = client.app.state.con
+    for paper, concept in (
+        ("P", "granular synthesis"),
+        ("Q", "granular synthesis method"),
+        ("R", "spatial audio"),
+        ("S", "spatial audio coding"),
+    ):
+        store.link(
+            con,
+            store.Edge(paper, "paper", "about", concept, "concept"),
+            source_doc=None,
+            producer="test",
+        )
+    monkeypatch.setattr(resolution, "LIKELY_THRESHOLD", 0.7)
+    work._leases.clear()
+    worker.run_once(_door(client), steps=("resolve",), log_=lambda t: None)
+    assert len(resolution.plan(con).likely) == 2
+    # no adjudicate model: the step is silent
+    monkeypatch.setattr(models, "resolve", lambda s: None)
+    out = worker.run_once(_door(client), steps=("adjudicate",), log_=lambda t: None)
+    assert "adjudicate" not in out
+    assert client.get("/work/adjudicate").json()["items"] == []
+    # a paid model without --spend: skipped, nothing fetched
+    spec = models.ModelSpec(name="opus", kind="claude", model="claude-opus-5")
+    monkeypatch.setattr(
+        models, "resolve", lambda s: spec if s == "adjudicate" else None
+    )
+    out = worker.run_once(_door(client), steps=("adjudicate",), log_=lambda t: None)
+    assert out["adjudicate"].startswith("skipped: the adjudicate step is opus (paid)")
+
+    # with --spend the model decides: the granular pair merges, the audio pair is a no
+    class Judge:
+        name = "claude-opus-5"
+        cost = 0.0055
+
+        def __init__(self, model=""):
+            self.usage = {"input_tokens": 900, "output_tokens": 40}
+
+        def decide(self, cands):
+            return ["granular" in c.keep_name for c in cands]
+
+    monkeypatch.setattr(resolution, "ClaudeAdjudicator", Judge)
+    said: list[str] = []
+    out = worker.run_once(
+        _door(client), steps=("adjudicate",), spend=True, log_=said.append
+    )
+    assert out["adjudicate"] == "1 merged, 1 kept apart of 2 pairs"
+    assert resolution.plan(con).likely == []
+    merged = con.execute(
+        "SELECT count(*) FROM entities WHERE canonical_id IS NOT NULL"
+    ).fetchone()[0]
+    assert merged == 1
+    assert (
+        con.execute(
+            "SELECT decided_by FROM entity_candidates WHERE decided = 'different'"
+        ).fetchone()["decided_by"]
+        == "claude-opus-5"
+    )
+    assert client.get("/work/adjudicate").json()["items"] == []  # nothing left
+
+
 def test_a_title_whose_server_is_down_is_deferred_not_the_whole_pass(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

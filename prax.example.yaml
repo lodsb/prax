@@ -164,6 +164,8 @@ steps:
 #     interval: 20                          # seconds between passes
 #     nightly: "03:00"                      # one pass over the whole library a day
 #     nightly_limit: 100                    #   (the backlog, the stale texts)
+#     # spend: true                         # the paid steps run (promote, adjudicate)
+#     # steps: [parse, titles, extract, embed, resolve, adjudicate]
 #     # door: http://board:8000             # a door elsewhere (else this host's)
 
 # The door's clock: what it runs on itself at that hour, as jobs on the

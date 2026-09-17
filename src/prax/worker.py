@@ -32,7 +32,16 @@ from prax.client import Door
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
-STEPS = ("parse", "titles", "extract", "promote", "typing", "embed", "resolve")
+STEPS = (
+    "parse",
+    "titles",
+    "extract",
+    "promote",
+    "typing",
+    "embed",
+    "resolve",
+    "adjudicate",
+)
 
 
 # ------------------------------------------------------------------ steps
@@ -329,6 +338,38 @@ def do_typing(
     return results
 
 
+def do_adjudicate(
+    items: list[dict[str, Any]], spec: models.ModelSpec
+) -> dict[str, Any]:
+    """Ask the adjudicate step's model about the likely pairs the door
+    handed out; the decisions go back with what they cost."""
+    from prax import resolution
+
+    if spec.kind == "claude":
+        judge: Any = resolution.ClaudeAdjudicator(model=spec.model)
+    else:
+        judge = resolution.StubAdjudicator(threshold=1.0)  # a local model: later
+    candidates = [
+        resolution.Candidate(
+            int(it["keep"]),
+            int(it["drop"]),
+            str(it.get("keep_name") or ""),
+            str(it.get("drop_name") or ""),
+            str(it.get("type") or ""),
+            "likely",
+            float(it.get("score") or 0.0),
+        )
+        for it in items
+    ]
+    same = judge.decide(candidates)
+    out: dict[str, Any] = {"items": items, "same": same, "model": judge.name}
+    usage = getattr(judge, "usage", None)
+    if usage:
+        out["usage"] = dict(usage)
+        out["cost"] = round(judge.cost, 4)
+    return out
+
+
 def do_resolve(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
     """The likely tier of entity resolution for one type: embed the names
     the door handed out, find the close pairs, and post them."""
@@ -454,6 +495,32 @@ def run_once(
                     f"skipped: the promote step is {spec.name} (paid); --spend runs it"
                 )
                 continue
+        if step == "adjudicate":
+            spec = models.resolve("adjudicate")
+            if spec is None:
+                continue  # the step is off on this host: nothing to say
+            if _paid(spec) and not spend:
+                out["adjudicate"] = (
+                    f"skipped: the adjudicate step is {spec.name} (paid);"
+                    " --spend runs it"
+                )
+                continue
+            batch = door.get_json("/work/adjudicate", {"limit": limit * 20})
+            items = batch.get("items") or []
+            if not items:
+                continue
+            if session:
+                door.post_json(
+                    f"/work/session/{session}",
+                    {"note": f"adjudicating {len(items)} likely pairs"},
+                )
+            rep = door.post_json("/work/adjudicate", do_adjudicate(items, spec))
+            out["adjudicate"] = (
+                f"{rep.get('applied', 0)} merged, {rep.get('declined', 0)} kept apart"
+                f" of {len(items)} pairs"
+            )
+            _say(log_, f"adjudicate: {out['adjudicate']}")
+            continue
         if step == "typing":
             spec = models.resolve("typing")
             if spec is None:

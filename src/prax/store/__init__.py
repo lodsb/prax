@@ -172,6 +172,7 @@ from .graph import (  # noqa: F401
     candidate_runs,
     canonical_entity,
     count_review,
+    decide_candidates,
     document_context,
     document_facts,
     entity_candidates,

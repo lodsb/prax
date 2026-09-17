@@ -94,6 +94,7 @@ ROLE_KEYS = {
         "workers",
         "nightly",
         "nightly_limit",
+        "spend",
     ),
 }
 
@@ -377,6 +378,8 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
                 argv += ["--nightly", str(opts["nightly"])]
                 if opts.get("nightly_limit"):
                     argv += ["--nightly-limit", str(int(opts["nightly_limit"]))]
+            if opts.get("spend"):
+                argv.append("--spend")  # the paid steps run: money is spent
             after = "door" if ("door" in raw and not opts.get("door")) else None
             out.append(Role(name, argv, after=after, env={"PRAX_DOOR": target}))
     return out

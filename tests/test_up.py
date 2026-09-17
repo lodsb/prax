@@ -97,6 +97,15 @@ def test_a_worker_for_another_door_waits_for_nothing(data_dir: Path) -> None:
     assert roles[0].env["PRAX_DOOR"] == "http://board:8000"
 
 
+def test_the_worker_role_spends_only_when_the_config_says(data_dir: Path) -> None:
+    roles = up.roles({"door": {"port": 8000}, "worker": {"interval": 20}})
+    worker_ = next(r for r in roles if r.name == "worker")
+    assert "--spend" not in worker_.argv
+    roles = up.roles({"door": {"port": 8000}, "worker": {"spend": True}})
+    worker_ = next(r for r in roles if r.name == "worker")
+    assert "--spend" in worker_.argv
+
+
 def test_what_run_cannot_say(data_dir: Path) -> None:
     with pytest.raises(up.UpError, match="no run: section"):
         up.roles({})

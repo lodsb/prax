@@ -404,6 +404,7 @@ def apply(
             report.merged_twins += 1
     if p.likely:
         decisions = (adjudicator or NoAdjudicator()).decide(p.likely)
+        declined: list[tuple[int, int]] = []
         for c, yes in zip(p.likely, decisions, strict=True):
             if yes:
                 try:
@@ -413,4 +414,50 @@ def apply(
                 report.merged_likely += 1
             else:
                 report.declined += 1
+                declined.append((c.keep, c.drop))
+        if (
+            declined
+            and adjudicator is not None
+            and not isinstance(adjudicator, NoAdjudicator)
+        ):
+            # a real no is recorded, so the pair is not asked about again;
+            # the default adjudicator's no is only "nobody asked"
+            store.decide_candidates(con, declined, by=adjudicator.name)
     return report
+
+
+def decide(
+    con: sqlite3.Connection,
+    items: list[dict[str, Any]],
+    adjudicator: Adjudicator,
+) -> Report:
+    """The adjudicate work step's batch: pairs the door handed out
+    (``keep``, ``drop``, names, type, score), decided and applied — a
+    merge for a yes, a recorded no otherwise."""
+    candidates = [
+        Candidate(
+            int(it["keep"]),
+            int(it["drop"]),
+            str(it.get("keep_name") or ""),
+            str(it.get("drop_name") or ""),
+            str(it.get("type") or ""),
+            "likely",
+            float(it.get("score") or 0.0),
+        )
+        for it in items
+    ]
+    return apply(con, Plan(likely=candidates), adjudicator=adjudicator)
+
+
+class DecidedAdjudicator:
+    """Decisions a worker already took, replayed on the door: the take-in
+    of the adjudicate step."""
+
+    def __init__(self, name: str, same: list[bool]) -> None:
+        self.name = name
+        self.same = list(same)
+
+    def decide(self, candidates: list[Candidate]) -> list[bool]:
+        return self.same[: len(candidates)] + [False] * (
+            len(candidates) - len(self.same)
+        )
