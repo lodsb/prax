@@ -752,6 +752,58 @@ console rather than anything about Windows.
       `models` as candidate relations for research v8 when the queue
       shows them in numbers (one instance each tonight).
 
+## After the mathematics (noted 2026-09-17, night)
+
+What the marker evenings taught, kept for the day:
+
+- [ ] **The follow-up edge.** prax's process graph is implicit and mostly
+      there — parse → figure readings (when the text has image refs, once
+      the vision model is free) → extract → embed, and since tonight a
+      replacing re-read → extract first. One edge is missing: after a
+      marker read that produced `formula` chunks, the door should request
+      the `formulas` reading itself, as it requests `figures` after a
+      parse; then `prax reread --extractor marker --ids …` is the whole
+      evening and the rest follows. The same door-side follow-up pattern
+      (`work._ask_reading`), a test, a line in howto 3h.
+- [ ] **A typing rule for `located_in` from a document** (74 open items,
+      `docs/eval/maths-ontology-2026-09-17.md`): a document's
+      `located_in organization` is `written_at`; `located_in place` from a
+      document is dropped (a paper is not in a city). `prax.review` rules,
+      replayed by `prax maintain --only review`.
+- [ ] **The mathematical part of the library through marker, in one
+      evening.** By the density of numbered-equation references the
+      candidates are few: 111 PDFs at ≥ 10 references per 10,000
+      characters and ≥ 20 references (~1,300 pages, 40 minutes of the
+      card), 281 at ≥ 6/10k (2 h), 606 at ≥ 3/10k (4½ h). One `--stop
+      llama-server`, `--start marker`, a `prax reread --extractor marker`
+      over a selection (a `--maths <density>` selector, or ids from the
+      same count), and back — not weeks of nights. So the card-swapping
+      policy below is not needed for this; it stays a note.
+- [ ] **Resource-aware swapping in `prax up`** (only if marker re-reads
+      become routine): the card holds the 35B or marker, not both, and
+      nothing in the system knows it. The honest expression is a window
+      on the clock we have — `run: marker: {…, window: "01:00-06:00",
+      yields: llama-server}`: at the hour, if marker readings wait, pause
+      llama-server and start marker; when the queue is empty or the
+      window closes, swap back. Hysteresis matters (a swap is 3 minutes
+      of reload each way). Not a DAG scheduler: five steps and one
+      exclusive resource do not want Airflow, and the process model was
+      just made smaller.
+- [ ] **The ask evaluation with equations** — the honest test the marker
+      note left open: the same equation questions asked before and after
+      a document is read with its mathematics (does `ask` cite the
+      formula, does the answer quote it right). The material exists now:
+      21 papers, 1,222 formula chunks with readings. Belongs with
+      `docs/ask.md` and `docs/eval/`.
+- [ ] **A procedural graph for the surfer** (later; the reference is doc
+      9985, "Procedural Graphs: Self-Evolving Execution Structures for LLM
+      Agents", arXiv 2609.09153): procedural knowledge as (procedure,
+      relation, procedure) triples that bias an agent's next move, refined
+      from failed against successful trajectories. prax's surf has the
+      moves and keeps every trail with its answer, which is exactly the
+      material such a graph learns from — once there are enough failed
+      trails to learn from. Not the batch passes: those have a fixed graph.
+
 ## Later / maybe
 
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the
