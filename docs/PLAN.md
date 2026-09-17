@@ -756,7 +756,7 @@ console rather than anything about Windows.
 
 What the marker evenings taught, kept for the day:
 
-- [ ] **The follow-up edge.** prax's process graph is implicit and mostly
+- [x] **The follow-up edge.** (2026-09-17) prax's process graph is implicit and mostly
       there — parse → figure readings (when the text has image refs, once
       the vision model is free) → extract → embed, and since tonight a
       replacing re-read → extract first. One edge is missing: after a
@@ -764,14 +764,20 @@ What the marker evenings taught, kept for the day:
       the `formulas` reading itself, as it requests `figures` after a
       parse; then `prax reread --extractor marker --ids …` is the whole
       evening and the rest follows. The same door-side follow-up pattern
-      (`work._ask_reading`), a test, a line in howto 3h.
-- [ ] **A typing rule for `located_in` from a document** (74 open items,
+      (`work._ask_reading`), a test, a line in howto 3h. *Done as
+      `work._follow_up`; and the edge's first night found a hole in the
+      work protocol: the follow-ups (low ids, waiting for a paused
+      llama-server) filled every hand-out of ten with "not yet" and
+      starved the 228 marker requests behind them. A "not yet" now
+      defers the item — leased ten minutes, the queue moves on
+      (`work.DEFER_SECONDS`).*
+- [x] **A typing rule for `located_in` from a document** (2026-09-17; 74 open items,
       `docs/eval/maths-ontology-2026-09-17.md`): a document's
       `located_in organization` is `written_at`; `located_in place` from a
       document is dropped (a paper is not in a city). `prax.review` rules,
       replayed by `prax maintain --only review`.
-- [ ] **The mathematical part of the library through marker, in one
-      evening.** By the density of numbered-equation references the
+- [x] **The mathematical part of the library through marker, in one
+      evening.** (`--maths` 2026-09-17; the evening itself ran twice, see the edge above.) By the density of numbered-equation references the
       candidates are few: 111 PDFs at ≥ 10 references per 10,000
       characters and ≥ 20 references (~1,300 pages, 40 minutes of the
       card), 281 at ≥ 6/10k (2 h), 606 at ≥ 3/10k (4½ h). One `--stop
@@ -789,7 +795,8 @@ What the marker evenings taught, kept for the day:
       of reload each way). Not a DAG scheduler: five steps and one
       exclusive resource do not want Airflow, and the process model was
       just made smaller.
-- [ ] **The ask evaluation with equations** — the honest test the marker
+- [x] **The ask evaluation with equations** (set and script 2026-09-17;
+      the run follows the evening) — the honest test the marker
       note left open: the same equation questions asked before and after
       a document is read with its mathematics (does `ask` cite the
       formula, does the answer quote it right). The material exists now:
