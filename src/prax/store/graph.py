@@ -632,9 +632,10 @@ def decide_candidates(
         ((min(a, b), max(a, b)), by) for a, b in ((int(x), int(y)) for x, y in pairs)
     ]
     before = con.total_changes
+    # ``at`` stays the computation's time: it is what says a type is due
     con.executemany(
-        "UPDATE entity_candidates SET decided = 'different', decided_by = ?,"
-        f" at = {_NOW} WHERE a = ? AND b = ? AND decided IS NULL",
+        "UPDATE entity_candidates SET decided = 'different', decided_by = ?"
+        " WHERE a = ? AND b = ? AND decided IS NULL",
         [(who, a, b) for (a, b), who in rows],
     )
     n = con.total_changes - before
