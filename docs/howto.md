@@ -338,8 +338,18 @@ re-selects what is left on every pass, so batching costs nothing:
 a service from logon on, and the nightly pass takes a hundred at a
 time — 4b).
 
-Originals above `PRAX_MAX_LAYOUT_MB` (default 40) skip layout analysis and
-get plain text through the fallback.
+Layout analysis reads a long PDF a window of pages at a time
+(`parse.layout_window` [`PRAX_LAYOUT_WINDOW`], 100: a 532-page book in
+two minutes, the process flat at ~570 MB; a heading's level is ranked
+within its window, so a window without a chapter title may rank its
+sections one up). Originals above `PRAX_MAX_LAYOUT_MB` (default 200)
+skip layout analysis and get plain text through the fallback: one line
+per line of print, no headings — what 98 documents had before the
+window, when the cap was 400 pages and 40 MB (`prax reread --extractor
+pymupdf4llm --text-source pymupdf/ --mime application/pdf` reads them
+again). A scan is refused for OCR by a probe of the first five pages and
+ten more spread over the document — a journal issue with a scanned
+cover has its text from page seven on.
 
 Code is kept as code. HTML pages come out as Markdown with `<pre>` blocks
 fenced (trafilatura's Markdown output), and a page's comment section —

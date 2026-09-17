@@ -190,10 +190,12 @@ def _pymupdf4llm(data: bytes) -> str:
     heading sizes of its own window, so a window without a chapter
     title may rank its sections one level up — the price of the window,
     small at a hundred pages. Originals above ``PRAX_MAX_LAYOUT_MB``
-    (default 40) are still refused so the plain extractor handles them
-    instead of the process being killed.
+    (default 200; it was 40 before the window bounded the memory — a
+    71 MB manual of 52 pages takes 43 s and 514 MB) are still refused
+    so the plain extractor handles them instead of the process being
+    killed.
     """
-    limit_mb = config.number("parse.max_layout_mb", "PRAX_MAX_LAYOUT_MB", 40)
+    limit_mb = config.number("parse.max_layout_mb", "PRAX_MAX_LAYOUT_MB", 200)
     if len(data) > limit_mb * 1e6:
         raise ExtractionError(
             f"{len(data) / 1e6:.0f} MB exceeds PRAX_MAX_LAYOUT_MB={limit_mb:g};"
