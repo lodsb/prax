@@ -963,6 +963,7 @@ def select_for_reading(
     unread_figures: bool = False,
     read_formulas: bool = False,
     unread_formulas: bool = False,
+    maths: float | None = None,
     limit: int | None = None,
 ) -> list[int]:
     """The documents a reading is asked for at once: the ``ids`` given,
@@ -972,9 +973,12 @@ def select_for_reading(
     unreadable ones, to the ones holding a figure a model has read
     (``read_figures``: what a better prompt or a better model goes over
     again) and to the ones holding a figure nobody has read
-    (``unread_figures``), and the same for formulas (``read_formulas``,
-    ``unread_formulas``); every filter given must hold. Retired
-    documents are never selected."""
+    (``unread_figures``), the same for formulas (``read_formulas``,
+    ``unread_formulas``), and to the mathematical ones (``maths``: at
+    least that many references to numbered equations per 10,000
+    characters of prose, and at least :data:`MATHS_MIN_REFS` of them —
+    what a parser that reads the mathematics is for); every filter
+    given must hold. Retired documents are never selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
     if ids:
@@ -1014,7 +1018,58 @@ def select_for_reading(
         )
         keep = {r[0] for r in rows}
         chosen = [i for i in chosen if i in keep]
+    if maths is not None:
+        dense = equation_density(con, chosen)
+        chosen = [i for i in chosen if dense.get(i, 0.0) >= maths]
     return chosen[:limit] if limit else chosen
+
+
+MATHS_MIN_REFS = 15  # fewer references to numbered equations is not a maths paper
+_EQ_REF = re.compile(r"(?<![\w.])\((\d{1,3})\)(?![\w])")
+
+
+def equation_density(
+    con: sqlite3.Connection, ids: list[int] | None = None
+) -> dict[int, float]:
+    """How mathematical a document's prose is: references to numbered
+    equations — "(4)" between words — per 10,000 characters of its text
+    chunks; 0 under :data:`MATHS_MIN_REFS` references. The 21 papers read
+    with marker on 2026-09-17 scored 14 to 39; a user guide with numbered
+    steps scores too, which the reference floor mostly keeps out. A scan
+    of every chunk of the documents asked about: seconds for a library,
+    which a bulk request may spend."""
+    if ids is not None and not ids:
+        return {}
+    sql = "SELECT doc_id, text FROM chunks WHERE kind = 'text'"
+    args: list[Any] = []
+    if ids is not None:
+        sql += f" AND doc_id IN ({','.join('?' * len(ids))})"
+        args = [int(i) for i in ids]
+    refs: dict[int, int] = {}
+    chars: dict[int, int] = {}
+    for r in con.execute(sql, args):
+        d = r["doc_id"]
+        refs[d] = refs.get(d, 0) + len(_EQ_REF.findall(r["text"]))
+        chars[d] = chars.get(d, 0) + len(r["text"])
+    return {
+        d: (
+            refs[d] / chars[d] * 10000
+            if refs[d] >= MATHS_MIN_REFS and chars[d]
+            else 0.0
+        )
+        for d in chars
+    }
+
+
+def has_unread_formulas(con: sqlite3.Connection, doc_id: int) -> bool:
+    """Does the document hold a display equation nobody has read?"""
+    row = con.execute(
+        "SELECT 1 FROM chunks WHERE doc_id = ? AND kind = 'formula'"
+        " AND coalesce(json_array_length(json_extract(data, '$.readings')), 0) = 0"
+        " LIMIT 1",
+        (doc_id,),
+    ).fetchone()
+    return row is not None
 
 
 def request_readings(

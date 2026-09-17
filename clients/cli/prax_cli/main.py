@@ -509,6 +509,15 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="documents holding a display equation nobody has read",
     )
+    s.add_argument(
+        "--maths",
+        type=float,
+        metavar="DENSITY",
+        help="the mathematical documents: at least this many references to"
+        " numbered equations per 10,000 characters (6 is a paper with"
+        " equations, 10 a mathematical one); with --mime application/pdf"
+        " and --extractor marker, the evening that reads the mathematics",
+    )
     s.add_argument("--dry-run", action="store_true", help="count, ask for nothing")
     s.set_defaults(func=running.reread, needs_door=True)
 

@@ -423,6 +423,7 @@ def reread(door: Door, a: Any) -> int:
         "unread_figures": a.unread_figures,
         "read_formulas": a.read_formulas,
         "unread_formulas": a.unread_formulas,
+        "maths": a.maths,
         "limit": a.limit,
         "dry_run": a.dry_run,
     }

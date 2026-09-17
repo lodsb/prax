@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import pytest
+from fastapi.testclient import TestClient
 from test_parsers import AMBRITS_PDF
 
 from prax import chunking, config, parsers, up
@@ -201,3 +202,69 @@ def test_the_marker_role_of_prax_up(data_dir: Path, tmp_path: Path) -> None:
     # declared on demand: the supervisor starts it paused
     sup = up.Supervisor([role], data_dir=data_dir)
     assert "marker" in sup.paused
+
+
+@needs_pymupdf
+def test_a_marker_read_asks_for_the_formula_readings_next(
+    data_dir: Path, marker_server: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The edge of the process graph a marker read adds: when its text holds
+    display equations and the formulas step names a free model, the door
+    places the `formulas` reading itself, in the finished request's stead;
+    with the step off, nothing is asked for."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / config.CONFIG_NAME).write_text(
+        "models:\n"
+        "  srv: {kind: openai, base_url: http://127.0.0.1:1/v1, model: q}\n"
+        "steps: {formulas: {model: srv}}\n",
+        encoding="utf-8",
+    )
+    from prax import models, store, worker
+    from prax.api import app
+
+    models.reset()
+    with TestClient(app) as client:
+        con = client.app.state.con
+        pdf = store.register(
+            con, AMBRITS_PDF.read_bytes(), mime="application/pdf", title="Ambrits"
+        )["doc_id"]
+        store.index_text(con, pdf, "old text " * 40, text_source="pymupdf4llm/1")
+        assert (
+            client.post(f"/doc/{pdf}/reading", json={"extractor": "marker"}).status_code
+            == 200
+        )
+
+        class Door:
+            name = "test"
+
+            def get_json(self, path: str, params: Any = None) -> Any:
+                return client.get(path, params=params).json()
+
+            def post_json(self, path: str, body: Any = None) -> Any:
+                return client.post(path, json=body).json()
+
+            def get_bytes(self, path: str) -> bytes:
+                return client.get(path).content
+
+        worker.run_once(Door(), steps=("parse",))  # type: ignore[arg-type]
+        meta = store.get_meta(con, pdf)
+        assert meta["text_source"] == "marker/?"
+        assert meta["parse_history"][-1]["outcome"] == "upgraded"
+        # the follow-up: a formulas request, placed by the door
+        assert meta["reading"]["extractor"] == "formulas"
+        assert (
+            meta["reading"]["state"] == "requested" and meta["reading"]["by"] == "door"
+        )
+        assert client.get("/readings").json()["waiting"] == 1
+        # the formulas step off: a second marker read asks for nothing
+        (data_dir / config.CONFIG_NAME).write_text("steps: {formulas: {model: none}}\n")
+        models.reset()
+        client.delete(f"/doc/{pdf}/reading")
+        store.index_text(con, pdf, "other old text " * 40, text_source="pymupdf4llm/1")
+        client.post(f"/doc/{pdf}/reading", json={"extractor": "marker"})
+        worker.run_once(Door(), steps=("parse",))  # type: ignore[arg-type]
+        meta = store.get_meta(con, pdf)
+        assert (
+            meta["reading"]["extractor"] == "marker"
+            and meta["reading"]["state"] == "done"
+        )

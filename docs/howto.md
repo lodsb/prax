@@ -865,10 +865,21 @@ matter are an evening:
 
     prax up --stop llama-server          # the card free
     prax up --start marker               # ten seconds, then a minute for its first request
-    prax reread --extractor marker --ids 9549 9813 …   # or --mime, --text-source…
+    prax reread --extractor marker --maths 6 --mime application/pdf --dry-run   # the mathematical papers: how many
+    prax reread --extractor marker --maths 6 --mime application/pdf             # or --ids 9549 9813 …
     prax jobs                            # the worker takes them before the pending captures
     prax up --stop marker                # its llama-server ends with it
-    prax up --start llama-server
+    prax up --start llama-server         # the formula readings the door asked for run once it is up
+
+`--maths` is the density of references to numbered equations in the
+prose — "(4)" between words — per 10,000 characters, with at least 15 of
+them: 10 is a mathematical paper, 6 a paper with equations, 3 anything
+that numbers a few; this library has 111, 281 and 606 PDFs at those
+marks, 40 minutes, two hours and four and a half of the card. A marker
+read that produced display equations asks the door for their readings
+itself (the `formulas` step named, a local model), so an evening is the
+two swaps and the one request; the extraction follows, since the text
+changed under it.
 
 `marker` is an explicit extractor, never a default or a fallback: asked
 for per document, stamped `marker/2.0.0` (the version read from the

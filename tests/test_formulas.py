@@ -149,6 +149,16 @@ def test_the_unread_ones_are_found_and_selected(con: sqlite3.Connection) -> None
     assert figured not in store.select_for_reading(con, unread_formulas=True)
     assert store.select_for_reading(con, unread_figures=True) == [figured]
     assert unread not in store.select_for_reading(con, unread_figures=True)
+    # the mathematical ones, by the density of numbered-equation references
+    sentences = " ".join(
+        f"Equation ({n}) follows from ({n - 1}) as shown." for n in range(2, 40)
+    )
+    mathy = _paper(con, "# Maths\n\n" + sentences, "Mathy")
+    dense = store.equation_density(con, [mathy, prose, unread])
+    assert dense[mathy] > 10 and dense[prose] == 0.0
+    assert dense[unread] == 0.0  # two references: under the floor
+    assert store.select_for_reading(con, maths=10) == [mathy]
+    assert store.select_for_reading(con, maths=1000) == []
     ailment = next(a for a in store.AILMENTS if a.name == "unread-formulas")
     found = ailment.find(con)
     assert [f["id"] for f in found] == [unread] and found[0]["unread"] == 2

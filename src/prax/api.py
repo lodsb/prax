@@ -1470,6 +1470,7 @@ class BulkReadingReq(BaseModel):
     unread_figures: bool = False  # the documents holding a figure nobody read
     read_formulas: bool = False  # the same for display equations
     unread_formulas: bool = False
+    maths: float | None = None  # references to numbered equations per 10k characters
     limit: int | None = None
     dry_run: bool = False  # count, place nothing
     by: str = "human"
@@ -1503,11 +1504,12 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         or req.unread_figures
         or req.read_formulas
         or req.unread_formulas
+        or req.maths is not None
     ):
         raise HTTPException(
             400,
             "a selection: ids, mime, text_source, title, unreadable,"
-            " read_figures, unread_figures, read_formulas or unread_formulas",
+            " read_figures, unread_figures, read_formulas, unread_formulas or maths",
         )
     ids = store.select_for_reading(
         con,
@@ -1520,6 +1522,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         unread_figures=req.unread_figures,
         read_formulas=req.read_formulas,
         unread_formulas=req.unread_formulas,
+        maths=req.maths,
         limit=req.limit,
     )
     if req.dry_run:

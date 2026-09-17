@@ -804,6 +804,19 @@ What the marker evenings taught, kept for the day:
       material such a graph learns from — once there are enough failed
       trails to learn from. Not the batch passes: those have a fixed graph.
 
+- [ ] **`prax resolve`'s likely tier out of the door.** The plan's third
+      tier embeds the names of ~130,000 entities inside the door process
+      (onnxruntime through the embedder) and on 2026-09-17 that crashed the
+      door with an access violation after ten minutes — `prax up` had it
+      back in a second, its first real crash, but invariant 7 says the
+      serving process does no such work. The sure and twins tiers are
+      cheap and stay; the likely tier belongs on the worker through the
+      work protocol (hand out names, take in pairs), or behind a bound.
+      Until then: `prax resolve --apply --twins` after an extraction pass
+      folds the twins (Lambert W function is five entity rows tonight,
+      concept and method, hyphen and case) without touching the likely
+      tier.
+
 ## Later / maybe
 
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the

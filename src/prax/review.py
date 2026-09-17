@@ -398,6 +398,10 @@ REMAP: dict[tuple[str, str, str], str] = {
     ("affiliated_with", "document", "organization"): "written_at",
     ("affiliated_with", "page", "organization"): "written_at",
     ("affiliated_with", "project", "organization"): "written_at",
+    # the affiliation on the first page, read as a location: the document
+    # came out of the institution (74 open items, 2026-09-17)
+    ("located_in", "paper", "organization"): "written_at",
+    ("located_in", "document", "organization"): "written_at",
     ("cites", "paper", "tool"): "uses",
     ("cites", "paper", "method"): "uses",
     ("cites", "paper", "dataset"): "uses",
@@ -450,6 +454,12 @@ DROP: set[tuple[str, str, str]] = {
     ("about", "venue", "*"),
     ("uses", "author", "*"),
     ("authored_by", "paper", "paper"),
+    # a document is not in a city: the institution's place, read off the
+    # first page, is the institution's business (located_in organization
+    # is remapped above)
+    ("located_in", "paper", "place"),
+    ("located_in", "document", "place"),
+    ("located_in", "page", "*"),
 }
 
 

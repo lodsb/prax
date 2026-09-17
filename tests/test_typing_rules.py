@@ -54,6 +54,24 @@ def test_decide_rules() -> None:
         item("Ann Author", "author", "authored_by", "Ann Author", "author"), doc
     )
     assert len(edges) == 1
+    # the affiliation on the first page read as a location: written there;
+    # the institution's city is not where a document is
+    a, edges, rule = review.decide(
+        item(
+            "A Manual",
+            "paper",
+            "located_in",
+            "Harbin Institute of Technology",
+            "organization",
+        ),
+        doc,
+    )
+    assert a == "link" and rule == "located_in->written_at"
+    assert edges[0].rel == "written_at" and edges[0].dst_type == "organization"
+    a, edges, rule = review.decide(
+        item("A Manual", "paper", "located_in", "Harbin", "place"), doc
+    )
+    assert a == "drop" and rule == "drop-located_in-paper-place"
     # cites for a tool the paper uses; about for a claim it makes
     a, edges, rule = review.decide(
         item("A Manual", "paper", "cites", "Matlab", "tool"), doc
