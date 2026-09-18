@@ -681,14 +681,31 @@ def _vec_count(con: sqlite3.Connection) -> int:
 
 
 @_serialized
+def _all_chunks_embedded(con: sqlite3.Connection, model: str) -> bool:
+    """Two counts before the scan: when every chunk has its vector from
+    ``model`` there is nothing to look for. The scan below walks a
+    million chunks probing the embeddings table for each — seventeen
+    seconds with nothing pending, under the store's lock, every worker
+    cycle: the door's searches stood in that queue (2026-09-18)."""
+    chunks = con.execute("SELECT count(*) FROM chunks").fetchone()[0]
+    done = con.execute(
+        "SELECT count(*) FROM chunk_embeddings WHERE model = ?", (model,)
+    ).fetchone()[0]
+    return done >= chunks
+
+
 def pending_embeddings(
     con: sqlite3.Connection, model: str, *, limit: int | None = None
 ) -> list[dict[str, Any]]:
-    """Chunks without a vector from ``model``: ``{chunk_id, kind, text}``."""
+    """Chunks without a vector from ``model``: ``{chunk_id, kind, text}``,
+    the newest first — new chunks are where the work is, and the scan
+    stops at ``limit`` as soon as it has them."""
+    if _all_chunks_embedded(con, model):
+        return []
     sql = (
         "SELECT c.id AS chunk_id, c.kind, c.text FROM chunks c"
         " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
-        " WHERE e.chunk_id IS NULL OR e.model != ? ORDER BY c.id"
+        " WHERE e.chunk_id IS NULL OR e.model != ? ORDER BY c.id DESC"
     )
     args: tuple[Any, ...] = (model,)
     if limit is not None:
@@ -700,6 +717,8 @@ def pending_embeddings(
 @_serialized
 def count_pending_embeddings(con: sqlite3.Connection, model: str) -> int:
     """How many chunks ``pending_embeddings`` would return, without the text."""
+    if _all_chunks_embedded(con, model):
+        return 0
     return con.execute(
         "SELECT count(*) FROM chunks c"
         " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
@@ -740,11 +759,12 @@ def store_embeddings(
 def pending_document_embeddings(
     con: sqlite3.Connection, model: str, *, limit: int | None = None
 ) -> list[dict[str, Any]]:
-    """Document fields without a vector from ``model``: ``{doc_id, text}``."""
+    """Document fields without a vector from ``model``: ``{doc_id, text}``,
+    the newest first."""
     sql = (
         "SELECT f.rowid AS doc_id, f.field AS text FROM documents_fts f"
         " LEFT JOIN document_embeddings e ON e.doc_id = f.rowid"
-        " WHERE e.doc_id IS NULL OR e.model != ? ORDER BY f.rowid"
+        " WHERE e.doc_id IS NULL OR e.model != ? ORDER BY f.rowid DESC"
     )
     args: tuple[Any, ...] = (model,)
     if limit is not None:
