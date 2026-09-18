@@ -12,15 +12,15 @@
 
 questions:
   - q: what is the Shockley diode equation as the diode clipper WDF paper writes it
-    expect_doc: 9813
+    expect_doc: 9272
     expect: "Shockley|I_s"
     style: named
   - q: how is the diode current written in the wave domain, in terms of the incident and reflected waves a and b
-    expect_doc: 9813
+    expect_doc: 9272
     expect: "wave domain|incident and reflected|a\\+b|a-b"
     style: meaning
   - q: how does the diode clipper model solve its implicit equation with the Lambert W function
-    expect_doc: 9813
+    expect_doc: 9272
     expect: "Lambert|mathcal\\{W\\}"
     style: named
   - q: how is the instantaneous phase of a loopback frequency modulated signal defined
@@ -99,3 +99,127 @@ questions:
     expect_doc: 9250
     expect: "interpolat|continuous-time|tilde"
     style: meaning
+  # --- added 2026-09-18: the books (Strogatz, Benson, Bishop) and 20 more
+  # marker-read papers, so a one-question effect can be seen through the
+  # judge's noise; an expect_doc list names twins the store keeps apart.
+  # Single-quoted: a backslash is a backslash.
+  - q: what is the normal form of the supercritical pitchfork bifurcation in Strogatz
+    expect_doc: 9990
+    expect: 'pitchfork|rx - x\^3|x\^3'
+    style: named
+  - q: write out the Lorenz equations as the nonlinear dynamics textbook gives them
+    expect_doc: 9990
+    expect: 'Lorenz|sigma\(y - x\)|rx - y - xz'
+    style: named
+  - q: how is the index of a closed curve with respect to a planar vector field computed as a contour integral
+    expect_doc: 9990
+    expect: 'Poincar|index|\\oint|winding'
+    style: meaning
+  - q: how large is the Pythagorean comma, as a ratio of powers of two and three
+    expect_doc: [4366, 4690]
+    expect: 'Pythagorean comma|2\^\{19\}|3\^\{12\}|531441|2\^\{16\}'
+    style: named
+  - q: how do the tension and the linear density of a string give the equation for its transverse vibration
+    expect_doc: [4366, 4690]
+    expect: 'wave equation|tension|\\rho|linear density'
+    style: meaning
+  - q: which integral representation gives the Bessel functions that appear in the spectrum of frequency modulation
+    expect_doc: [4366, 4690]
+    expect: 'Bessel|J_\{2n\+1\}|J_n'
+    style: named
+  - q: how is the posterior over the mean of a Gaussian written in terms of the prior and the likelihood of each point, in Bishop
+    expect_doc: 3932
+    expect: 'posterior|prior|\\prod_\{n=1\}'
+    style: named
+  - q: how does the logistic sigmoid relate to the hyperbolic tangent
+    expect_doc: 3932
+    expect: 'tanh|sigma\(2a\)|hyperbolic tangent'
+    style: meaning
+  - q: how is the collector current of the differential pair in the Moog transistor ladder written with a hyperbolic tangent
+    expect_doc: 3995
+    expect: 'tanh|differential pair|I_1'
+    style: named
+  - q: what is the transfer function of the OTA filter stage of the Korg MS20 in terms of the feedback gains k1 and k2
+    expect_doc: 3994
+    expect: 'k_1 k_2|transfer function|V_o'
+    style: named
+  - q: what is the transfer function of the Buchla lowpass gate, with its alpha coefficients
+    expect_doc: [9826, 3992]
+    expect: 'LPG|alpha|Lowpass'
+    style: named
+  - q: what is the defining identity of the Lambert W function as the wave digital elements paper gives it
+    expect_doc: 9793
+    expect: 'Lambert|W\(z\)e\^\{W\(z\)\}|inverse of'
+    style: named
+  - q: how is the antialiased output of a waveshaper computed from the first antiderivative when consecutive inputs differ
+    expect_doc: 9483
+    expect: 'F\^\{\(1\)\}|antiderivative|average slope'
+    style: meaning
+  - q: how is the resampling ratio between the leading and following oscillators defined in the alias-free synchronization paper
+    expect_doc: 9552
+    expect: 'lead|follow|resampling ratio'
+    style: named
+  - q: what ordinary differential equation governs the k-th vibrational mode of the piano string in the modal synthesizer
+    expect_doc: 9925
+    expect: 'a_\{1,k\}|mode|d\^2 y_k|second-order'
+    style: named
+  - q: which partial differential equation models the transverse motion of a stiff lossy piano string
+    expect_doc: 9925
+    expect: 'string equation|kappa|stiffness|T_0'
+    style: meaning
+  - q: how is the longitudinal magnetic field of the record head gap written in the tape machine model
+    expect_doc: 4018
+    expect: 'H_x|tan\^\{-1\}|gap'
+    style: named
+  - q: what is the output voltage of the diode-based VCA in terms of the Wright omega function
+    expect_doc: 9653
+    expect: 'omega|Wright|W_0|Lambert'
+    style: named
+  - q: what is the transfer function of the second-order notch filter in the reverberator and filters lecture
+    expect_doc: 2272
+    expect: 'notch|H_n\(z\)|beta'
+    style: named
+  - q: how is a signal estimated from a modified short-time Fourier transform by least squares, the closed form with the window
+    expect_doc: 4102
+    expect: 'w\(mS-n\)|weighted average|y_w|least'
+    style: meaning
+  - q: what is the synthesis equation of WSOLA, the overlap-add with the waveform similarity offsets
+    expect_doc: 948
+    expect: 'WSOLA|v\(n|Delta_k|overlap'
+    style: named
+  - q: how is the discrete sinc kernel sincd defined in the fast sinc-interpolation algorithm
+    expect_doc: 3980
+    expect: 'sincd|sin\(\\pi Mx/N\)|discrete sinc'
+    style: named
+  - q: what is the Krylov space generated by a matrix and a vector
+    expect_doc: 1630
+    expect: 'Krylov|span'
+    style: named
+  - q: how does matching pursuit split a signal into its projection on one atom and a residual
+    expect_doc: 309
+    expect: 'residual|Rf|g_\{\\gamma_0\}|projection'
+    style: meaning
+  - q: what is the refinement relation of the scaling function in the introduction to wavelets
+    expect_doc: 4519
+    expect: 'refinement|phi\(2x|scaling function'
+    style: named
+  - q: how does FastICA approximate negentropy with a contrast function G
+    expect_doc: 366
+    expect: 'negentropy|G\(|contrast'
+    style: named
+  - q: how is the probability of a label sequence obtained from the probabilities of all the output paths that collapse to it
+    expect_doc: 1722
+    expect: 'B\}\^\{-1\}|alignment|paths|collapse|sum'
+    style: meaning
+  - q: how is the shear stress in a fluid related to the velocity gradient
+    expect_doc: 10012
+    expect: 'shear stress|tau = \\mu|viscosity'
+    style: meaning
+  - q: how is the quantum mechanical transition amplitude written as a path integral in Zee's nutshell
+    expect_doc: 10030
+    expect: 'path integral|Dq|e\^\{-iHT\}'
+    style: named
+  - q: how are the Christoffel symbols of the Levi-Civita connection written in terms of the metric
+    expect_doc: 10023
+    expect: 'Christoffel|Gamma|Levi-Civita'
+    style: named

@@ -199,6 +199,57 @@ runs above all fall inside it, and a change to `ask` from here is
 measured against 15.0 and 18.7 with the three-run mean, not against
 one ask.
 
+## The larger set (2026-09-19)
+
+Fifty-two questions instead of twenty-two: the original set (with 9813
+renamed to its keeper 9272, the twin-documents heal having retired it)
+and thirty more over the three books read with marker on the 17th
+(Strogatz, Benson, Bishop) and twenty more papers — the Moog ladder's
+tanh, the MS20's OTA transfer function, the Buchla lowpass gate, the
+Lambert W identity, antiderivative antialiasing, WSOLA, Griffin–Lim's
+least-squares estimate, the Krylov space, matching pursuit's residual,
+the wavelet refinement relation, FastICA's negentropy, CTC's sum over
+alignments, Newtonian shear stress, Zee's path integral, the Christoffel
+symbols. Sixteen of the fifty-two are "meaning" questions. Every
+`expect` was checked to match a formula chunk of a live expected
+document before the run. Three runs per setting, the same model and
+judge, the ask of the day (the prompt line, the neighbourhood, the
+embed hand-out no longer holding the store's lock for seventeen seconds
+a cycle — the first attempt at this run crawled at 40–70 s an ask on
+that, which is how the bug was found):
+
+| steps | sources | cited | formula cited | match | maths quoted | stated (partly) | s/question |
+|---|---|---|---|---|---|---|---|
+| 0 | 98% (51.0) | 90% (47.0) 46–48 | 93% (48.3) 47–49 | 90% (47.0) 46–48 | 97% (50.7) 50–51 | **62% (32.0) 31–33**, +3.0 | 10 |
+| 8 | 98% (51.0) | 88% (46.0) 44–47 | 91% (47.3) 46–48 | 87% (45.3) 44–46 | 99% (51.3) 51–52 | **87% (45.0) 44–47**, +1.7 | 15 |
+
+What the larger set shows that the small one could not:
+
+- **The steps are worth thirteen questions of fifty-two**, six times
+  the spread (±2). On the small set the difference was three or four,
+  inside its noise. The surf reads on to what the first search brought
+  only the neighbour of: the pitchfork normal form, the Lorenz
+  equations, the Bessel integral, the Lambert W identity, the piano
+  string's PDE, the FrFT kernel — 0/3 one-shot, 3/3 surfed, every run.
+- **The verdicts are stable.** Forty of the fifty-two questions score
+  3/3 or 0/3 at a setting: the model and the judge are consistent on
+  the same question; the spread is in the dozen that sit on an edge.
+- **Retrieval is not the limit.** The expected paper is among the
+  sources 51 of 52 times (the one miss, the string's wave equation in
+  Benson, is answered from the piano paper's string equation instead —
+  the same equation — and the judge says yes). The regex columns are
+  flat between settings; the judge column is not.
+- **What stays wrong** is consistent too: the citighana series (11)
+  and the Markov chain's transition probability (20) are 0/3 at both
+  settings — the passage names the thing and the model describes it;
+  the tape head's field (39) and WSOLA's synthesis (43) come back
+  "partly" — the equation is long and the answer gives part of it.
+  Those four are the set's hard cases, and a change to `ask` is
+  measured on them first.
+
+The baseline from here: **32.0 (31–33) of 52 one-shot, 45.0 (44–47)
+with eight steps.**
+
 ## How the material came to be (the night of 2026-09-16/17)
 
 The mathematical part of the library through marker in one evening:
@@ -231,8 +282,9 @@ counts: `docs/PLAN.md`, "After the mathematics".
 
 - The judge is the measure now (`--judge`, `--rejudge` over saved
   answers, `--repeat N` for the mean and the spread); the regex columns
-  are its floor. The set is 22 questions; a change worth a verdict at
-  one setting wants a larger set before it wants a smaller spread.
+  are its floor. The set is 52 questions since the 19th; its spread is
+  ±2, and the four hard cases above are where a change to `ask` shows
+  first.
 - `prax resolve --apply --twins` after the extraction pass over the 280
   re-read papers: Lambert W function was five entity rows before it.
 - The set is bound to this store's ids; a portable one would name

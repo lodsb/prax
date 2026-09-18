@@ -113,9 +113,10 @@ way; the one-shot answer used to stop at "the passages do not state
 the equation" with the equation among them — a judge found it stated
 in 11 of 22 one-shot answers and 16 of 22 surfed ones. One line in the
 answer prompt (write the equation out as the passage has it, before
-explaining it) made that 16 and 19: the surf still reads on to the
-equations the first search did not bring, at 10 s a question against
-16.
+explaining it) made that 16 and 19. On fifty-two questions asked three
+times each (2026-09-19): 32 one-shot, 45 surfed, ±2 — the surf reads
+on to the equations the first search brought only the neighbour of, at
+10 s a question against 15.
 
 ## The trail
 
