@@ -303,6 +303,25 @@ async function exercise(b) {
   await sleep(300);
   check((await b.evaluate(opts, `(${api}.action || ${api}.browserAction).getBadgeText({})`)) === "", "which the popup's opening clears");
 
+  // a door that is not there: the send fails in so many words, the badge
+  // says so, and "retry failed" after the door is back updates the entry
+  const dead = `http://127.0.0.1:${9 + Math.floor(Math.random() * 1000)}`;
+  await b.evaluate(opts, `${api}.storage.local.set({ server: ${JSON.stringify(dead)} })`);
+  await b.evaluate(opts, `${area}.set({ progress: { state: "running", total: 1, done: 0, results: [] } })`);
+  await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "capture", tabIds: [${JSON.stringify(tabId)}], domains: ["research"], tags: ["dead"], close: false, session: ${JSON.stringify(session + "d")} })`);
+  for (let i = 0; i < 60; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
+  const failed = progress?.results?.[0] || {};
+  check(progress?.state === "done" && /did not answer/.test(failed.error || ""), "a door that is not there fails the send in so many words", (failed.error || JSON.stringify(failed)).slice(0, 160));
+  check((await b.evaluate(opts, `(${api}.action || ${api}.browserAction).getBadgeText({})`)) === "!", "and the badge shows it");
+  let history = (await b.evaluate(opts, `${area}.get("history")`)).history || [];
+  const entry = history.find((h) => h.state === "failed" && h.url === `${FIXTURE}/article`);
+  check(!!entry, "the popup's history holds the failed entry", JSON.stringify(history.map((h) => [h.state, h.url])).slice(0, 160));
+  await b.evaluate(opts, `${api}.storage.local.set({ server: ${JSON.stringify(door)} })`);
+  await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "retry-failed" })`);
+  for (let i = 0; i < 60; i++) { await sleep(500); history = (await b.evaluate(opts, `${area}.get("history")`)).history || []; if (entry && history.some((h) => h.id === entry.id && h.state !== "failed" && h.state !== "sending")) break; }
+  const retried = entry ? history.find((h) => h.id === entry.id) : null;
+  check(retried?.state === "done" && retried.doc_id, "retry failed sends it again once the door is back, the entry updated in place", JSON.stringify(retried).slice(0, 160));
+
   // without the host permission (Firefox grants it only when asked — a
   // release install starts without it): the popup offers the grant, a
   // background tab cannot be read and the result says so, the active

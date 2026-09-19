@@ -32,8 +32,15 @@ async function settings() {
 async function door(path, body, cfg) {
   const headers = { "Content-Type": "application/json" };
   if (cfg.token) headers.Authorization = `Bearer ${cfg.token}`;
-  const res = await fetch(`${cfg.server}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  let res;
+  try {
+    res = await fetch(`${cfg.server}${path}`, { method: "POST", headers, body: JSON.stringify(body) });
+  } catch (err) {
+    // the browser's word for "nothing there" is a TypeError: say whose door
+    throw new Error(`the door at ${cfg.server} did not answer (${err.message}); is prax up?`);
+  }
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) throw new Error(`the door at ${cfg.server} refused the token (options)`);
   if (!res.ok) throw new Error(data.detail || `${res.status} ${res.statusText}`);
   return data;
 }

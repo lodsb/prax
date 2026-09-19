@@ -204,7 +204,9 @@ background writes), then asks the door what arrived — a snapshot with
 the image, the stylesheet and the frame's text inlined, the domain and
 the tag on it, no second document when sent again, a PDF tab uploaded
 as a file, a whole window sent, the options page's test refusing a
-wrong token, and (Firefox, where the host permission
+wrong token, the keyboard send and its badge, a door that is not
+there (the send fails naming the door, "retry failed" sends it again
+once the door is back), and (Firefox, where the host permission
 is removable) the send without the permission: the popup offers the
 grant and every tab still goes by URL with a note naming the missing
 permission. Each check prints a line; one failed check fails the run.
