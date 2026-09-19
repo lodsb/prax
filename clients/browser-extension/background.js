@@ -400,11 +400,31 @@ function remember(entry) {
   return historyChain;
 }
 
+/* The toolbar icon's badge: the one piece of feedback a send from the
+   keyboard or the context menu has, the popup being closed. "…" while it
+   runs, "✓" for a few seconds when every tab went, "!" (kept) when one
+   did not; the popup clears it when opened. */
+const BADGE_MS = 4000;
+let badgeTimer = null;
+async function badge(text, color, keep) {
+  const action = api.action || api.browserAction;
+  if (!action || !action.setBadgeText) return;
+  clearTimeout(badgeTimer);
+  try {
+    await action.setBadgeBackgroundColor({ color });
+    if (action.setBadgeTextColor) await action.setBadgeTextColor({ color: "#fff" });
+    await action.setBadgeText({ text });
+  } catch (_) { /* no badge in this browser */ }
+  if (text && !keep) badgeTimer = setTimeout(() => badge("", color, true), BADGE_MS);
+}
+
 async function capture(msg) {
   log("info", "capture", msg.tabIds);
+  await badge("…", "#2f5d8a", true);
   const cfg = await settings();
   if (!cfg.server) {
     await setProgress({ state: "error", error: "no server configured (options)", results: [] });
+    await badge("!", "#b3261e", true);
     return;
   }
   const opts = { domains: msg.domains || [], tags: msg.tags || [], session: msg.session || lib.sessionId(), close: !!msg.close };
@@ -414,6 +434,7 @@ async function capture(msg) {
   }
   if (!tabs.length) {
     await setProgress({ state: "error", error: "that tab is gone", results: [] });
+    await badge("!", "#b3261e", true);
     return;
   }
   await setProgress({ state: "running", session: opts.session, total: tabs.length, done: 0, results: [], error: null });
@@ -433,6 +454,8 @@ async function capture(msg) {
     }
   }
   await setProgress({ state: "done", done: results.length, results });
+  const failed = results.some((r) => r.error);
+  await badge(failed ? "!" : "✓", failed ? "#b3261e" : "#2e7d32", failed);
 }
 
 /* A retry of a failed entry: the same tab if it is still open, else the
@@ -553,8 +576,24 @@ if (api.contextMenus || api.menus) {
   });
 }
 
+/* The tab in front, with the default domains: the keyboard command, and
+   the same by message (what the test bed presses). */
+async function sendActive() {
+  const cfg = await settings();
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+  await capture({ tabIds: [tab.id], domains: cfg.domains, tags: [], close: false });
+}
+if (api.commands && api.commands.onCommand) {
+  api.commands.onCommand.addListener((name) => {
+    if (name === "send-tab") sendActive().catch((err) => log("warn", "capture failed", err));
+  });
+}
+
 api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return false;
+  if (msg.type === "badge-seen") { badge("", "#2f5d8a", true); sendResponse({ ok: true }); return false; }
+  if (msg.type === "send-active") { sendActive().catch((err) => log("warn", "capture failed", err)); sendResponse({ ok: true }); return false; }
   if (msg.type === "capture") {
     capture(msg).catch((err) => setProgress({ state: "error", error: err.message }));
     sendResponse({ ok: true });

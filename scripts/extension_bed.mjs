@@ -281,6 +281,28 @@ async function exercise(b) {
   const after = await (await get("/inbox?limit=10")).json();
   check((after.recent || []).some((r) => r.title === "The Second Page"), "the second page is in the inbox");
 
+  // the keyboard: Alt+Shift+P sends the tab in front with the default
+  // domains and no popup; the badge is what it shows. The bed cannot press
+  // a key, so it sends the message the command handler shares its work with
+  const manifest = await b.evaluate(opts, `${api}.runtime.getManifest()`);
+  check(manifest.commands?.["send-tab"]?.suggested_key?.default === "Alt+Shift+P", "the manifest binds Alt+Shift+P to send this tab");
+  await b.evaluate(opts, `${area}.set({ progress: { state: "running", total: 1, done: 0, results: [] } })`);
+  // armed from the options page, fired once the fixture tab is in front:
+  // Firefox's WebDriver re-selects the tab it runs a script in, so the
+  // message must go off while the bed is looking at the fixture tab
+  await b.evaluate(opts, `(setTimeout(() => ${api}.runtime.sendMessage({ type: "send-active" }), 1500), "armed")`);
+  await b.evaluate(opts, `${api}.tabs.update(${JSON.stringify(tabId)}, { active: true })`);
+  await b.pageEval("document.title");
+  await sleep(2500);
+  for (let i = 0; i < 60; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
+  const pressed = progress?.results?.[0] || {};
+  check(progress?.state === "done" && pressed.url === `${FIXTURE}/article` && (pressed.domains || []).includes("research"), "the keyboard send takes the tab in front with the default domains", JSON.stringify(pressed).slice(0, 160));
+  const badgeText = await b.evaluate(opts, `(${api}.action || ${api}.browserAction).getBadgeText({})`);
+  check(badgeText === "✓", "and the toolbar badge shows the tick", JSON.stringify(badgeText));
+  await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "badge-seen" })`);
+  await sleep(300);
+  check((await b.evaluate(opts, `(${api}.action || ${api}.browserAction).getBadgeText({})`)) === "", "which the popup's opening clears");
+
   // without the host permission (Firefox grants it only when asked — a
   // release install starts without it): the popup offers the grant, a
   // background tab cannot be read and the result says so, the active

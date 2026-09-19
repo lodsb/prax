@@ -97,6 +97,7 @@ function renderHistory(list) {
 }
 
 async function main() {
+  try { api.runtime.sendMessage({ type: "badge-seen" }); } catch (_) { /* no background yet */ }
   await loadSettings();
   checkServer();
   const stored = await progressArea().get(["progress", "history"]);

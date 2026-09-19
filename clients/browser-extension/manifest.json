@@ -14,6 +14,12 @@
     "scripts": ["lib.js", "background.js"],
     "service_worker": "background-sw.js"
   },
+  "commands": {
+    "send-tab": {
+      "suggested_key": { "default": "Alt+Shift+P" },
+      "description": "Send this tab to prax"
+    }
+  },
   "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus", "downloads"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "content_security_policy": {

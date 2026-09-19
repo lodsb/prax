@@ -113,6 +113,12 @@ the tab shows, with a small popup for the few choices that matter.
   browser's session and uploads it without opening a tab, or lets the
   door fetch it. Both use the options page's default domains; the
   result lands in the popup's history.
+- **The keyboard.** `Alt+Shift+P` sends the tab in front, with the
+  options page's default domains, popup or no popup (the browser's
+  extension-shortcut page changes the key). What a send without the
+  popup shows is the toolbar icon's badge: "…" while it runs, "✓" for
+  a few seconds when every tab went, "!" until the popup is next opened
+  when one did not — the popup's history has the details.
 - **Bookmarklet and share target** as fallbacks post a URL only; the
   door fetches. The mobile share target is a tiny page under `/ui/`
   that takes `?url=` and calls `/ingest/url`.
