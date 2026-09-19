@@ -25,8 +25,14 @@ function log(level, ...parts) {
 }
 
 async function settings() {
-  const s = await api.storage.local.get(["server", "token", "domains", "close"]);
-  return { server: lib.normalizeServer(s.server), token: s.token || "", domains: s.domains || [], close: !!s.close };
+  const s = await api.storage.local.get(["server", "token", "domains", "close", "site_rules"]);
+  return { server: lib.normalizeServer(s.server), token: s.token || "", domains: s.domains || [], close: !!s.close, siteRules: lib.parseSiteRules(s.site_rules) };
+}
+
+/* The domains a send without the popup uses: the site's rule when the
+   options page has one for it, else the defaults. */
+function domainsForTab(cfg, tab) {
+  return lib.domainsFor(cfg.siteRules, tab && tab.url, cfg.domains);
 }
 
 async function door(path, body, cfg) {
@@ -910,8 +916,9 @@ async function captureExcerpt(tab, fallbackText) {
   } else {
     try {
       const session = lib.sessionId();
+      const forTab = domainsForTab(cfg, tab);
       const data = await door("/ingest", {
-        text: excerpt.text, title: excerpt.title, source_url: tab.url, domains: cfg.domains.length ? cfg.domains : null,
+        text: excerpt.text, title: excerpt.title, source_url: tab.url, domains: forTab.length ? forTab : null,
         meta: { source: "capture", capture: { at: new Date().toISOString(), session, by: "extension", mode: "excerpt" }, kind: "excerpt", excerpt: { url: tab.url, title: tab.title || null, words: excerpt.words } },
       }, cfg);
       r = { url: tab.url, title: excerpt.title, mode: "excerpt", note: `an excerpt of ${excerpt.words} words`, ...data };
@@ -1013,7 +1020,7 @@ if (api.contextMenus || api.menus) {
     } else if (info.menuItemId === "prax-link" && info.linkUrl) {
       captureLink(info.linkUrl, tab).catch((err) => log("warn", "link capture failed", err));
     } else if (info.menuItemId === "prax-page" && tab) {
-      capture({ tabIds: [tab.id], domains: cfg.domains, tags: [], close: false }).catch((err) => log("warn", "capture failed", err));
+      capture({ tabIds: [tab.id], domains: domainsForTab(cfg, tab), tags: [], close: false }).catch((err) => log("warn", "capture failed", err));
     }
   });
 }
@@ -1024,7 +1031,7 @@ async function sendActive() {
   const cfg = await settings();
   const [tab] = await api.tabs.query({ active: true, currentWindow: true });
   if (!tab) return;
-  await capture({ tabIds: [tab.id], domains: cfg.domains, tags: [], close: false });
+  await capture({ tabIds: [tab.id], domains: domainsForTab(cfg, tab), tags: [], close: false });
 }
 if (api.commands && api.commands.onCommand) {
   api.commands.onCommand.addListener((name) => {

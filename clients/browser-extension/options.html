@@ -19,6 +19,10 @@
       <div id="domains" class="chips"><span class="muted">save the server first, then the door's modules appear here</span></div>
     </label>
     <label class="row"><input id="close" type="checkbox"> close tabs after "send all tabs in window"</label>
+    <label>Domains by site
+      <textarea id="site_rules" rows="3" placeholder="youtube.com studio&#10;arxiv.org research" spellcheck="false"></textarea>
+      <small class="muted">One line per site: the host, then the domains (comma or space separated). A page of that site — or a subdomain of it — is sent with those instead of the defaults; the popup preselects them.</small>
+    </label>
     <label>Video frames
       <span class="row">a frame every <input id="frame_interval" type="number" min="5" max="600" step="5" value="30" style="width:5em"> seconds of a video (at most 150; a frame like the one before is dropped)</span>
     </label>

@@ -186,6 +186,7 @@ the tab shows, with a small popup for the few choices that matter.
 | Token | `PRAX_TOKEN`, stored in `chrome.storage.local` (never `sync`) | empty |
 | Default domains | preselected in the popup | none |
 | Close tabs after sending | for "send all tabs" | off |
+| Domains by site | one line per site, `host domain[, domain]`: a page of that site or a subdomain of it is sent with those domains instead of the defaults — from the keyboard, the context menu and the popup, which preselects them | none |
 | Video frames | a frame every N seconds of a video (5 to 600; at most 150 frames, the interval stretches for a long recording) | 30 |
 
 The popup checks `GET /health` on open and shows the server's state
@@ -262,7 +263,8 @@ the tag on it, no second document when sent again, a PDF tab uploaded
 as a file, a whole window sent, the options page's test refusing a
 wrong token, the keyboard send and its badge, a door that is not
 there (the send fails naming the door, "retry failed" sends it again
-once the door is back), a selection sent as an excerpt (and nothing
+once the door is back), a rule for the site sending with the site's
+domains, a selection sent as an excerpt (and nothing
 selected said so) and added to a page of yours as a new revision, an
 abstract page whose citation tags send the
 paper's PDF with its ids (and fill them in on the document the PDF

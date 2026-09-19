@@ -458,6 +458,18 @@ async function exercise(b) {
   for (let i = 0; i < 60; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
   const pressed = progress?.results?.[0] || {};
   check(progress?.state === "done" && pressed.url === `${FIXTURE}/article` && (pressed.domains || []).includes("research"), "the keyboard send takes the tab in front with the default domains", JSON.stringify(pressed).slice(0, 160));
+  // a rule for the site: the same send goes with the site's domains instead
+  await b.evaluate(opts, `${api}.storage.local.set({ site_rules: "127.0.0.1 studio, workshop" })`);
+  await b.evaluate(opts, `${area}.set({ progress: { state: "running", total: 1, done: 0, results: [] } })`);
+  await b.evaluate(opts, `(setTimeout(() => ${api}.runtime.sendMessage({ type: "send-active" }), 1500), "armed")`);
+  await b.evaluate(opts, `${api}.tabs.update(${JSON.stringify(tabId)}, { active: true })`);
+  await b.pageEval("document.title");
+  await sleep(2500);
+  for (let i = 0; i < 60; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
+  const ruled = progress?.results?.[0] || {};
+  const sentWith = ((await b.evaluate(opts, `${area}.get("history")`)).history || []).find((h) => h.url === `${FIXTURE}/article` && h.state === "done");
+  check(progress?.state === "done" && (sentWith?.domains || []).join(",") === "studio,workshop" && (ruled.domains || []).includes("workshop"), "a rule for the site sends with the site's domains instead", `sent with ${JSON.stringify(sentWith?.domains)}; the document now ${JSON.stringify(ruled.domains)}`);
+  await b.evaluate(opts, `${api}.storage.local.remove("site_rules")`);
   const badgeText = await b.evaluate(opts, `(${api}.action || ${api}.browserAction).getBadgeText({})`);
   check(badgeText === "✓", "and the toolbar badge shows the tick", JSON.stringify(badgeText));
   await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "badge-seen" })`);

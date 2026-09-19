@@ -40,7 +40,14 @@ async function checkServer() {
     el.title = "the door answers";
     if (Array.isArray(data.modules)) {
       await api.storage.local.set({ modules: data.modules });
-      renderDomains(data.modules, chosenDomains().length ? chosenDomains() : cfg.domains);
+      // preselected: the site's rule for the tab in front, else the defaults
+      let preset = cfg.domains;
+      try {
+        const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+        const rules = lib.parseSiteRules((await api.storage.local.get("site_rules")).site_rules);
+        preset = lib.domainsFor(rules, tab && tab.url, cfg.domains);
+      } catch (_) { /* the defaults */ }
+      renderDomains(data.modules, chosenDomains().length ? chosenDomains() : preset);
     }
   } catch (err) {
     el.className = "error";

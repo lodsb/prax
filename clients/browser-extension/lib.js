@@ -95,6 +95,33 @@
     return String(text || "").split(",").map((s) => s.trim()).filter(Boolean);
   }
 
+  // --------------------------------------------------------- site rules
+  /** "host domain[, domain]" per line (a # starts a comment) → [{host, domains}]. */
+  function parseSiteRules(text) {
+    const out = [];
+    for (const raw of String(text || "").split(/\r?\n/)) {
+      const line = raw.replace(/#.*$/, "").trim();
+      if (!line) continue;
+      const m = line.match(/^(\S+)\s+(.+)$/);
+      if (!m) continue;
+      const host = m[1].toLowerCase().replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/.*$/, "");
+      const domains = splitList(m[2].replace(/\s+/g, ","));
+      if (host && domains.length) out.push({ host, domains });
+    }
+    return out;
+  }
+
+  /** The domains for a URL: the first rule whose host is the URL's host or
+      a parent of it, else the fallback. */
+  function domainsFor(rules, url, fallback) {
+    let host = "";
+    try { host = new URL(url).hostname.toLowerCase().replace(/^www\./, ""); } catch (_) { return fallback || []; }
+    for (const r of rules || []) {
+      if (host === r.host || host.endsWith("." + r.host)) return r.domains.slice();
+    }
+    return fallback || [];
+  }
+
   // ------------------------------------------------------------ excerpt
   /** A selection as a small document: the words as selected (paragraphs
       kept), headed by where they are from. {text, title} or null when there
@@ -336,5 +363,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection, parseWebVtt };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection, parseWebVtt, parseSiteRules, domainsFor };
 });

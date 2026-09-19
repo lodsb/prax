@@ -183,3 +183,12 @@ test("parseWebVtt: cues to events, settings and tags dropped", () => {
   ]);
   assert.deepEqual(lib.parseWebVtt("not a track"), []);
 });
+
+test("parseSiteRules and domainsFor: a host, its subdomains, the defaults otherwise", () => {
+  const rules = lib.parseSiteRules("youtube.com studio, craft\n# a comment\nhttps://www.arxiv.org/abs research\n\nbad\n");
+  assert.deepEqual(rules, [{ host: "youtube.com", domains: ["studio", "craft"] }, { host: "arxiv.org", domains: ["research"] }]);
+  assert.deepEqual(lib.domainsFor(rules, "https://m.youtube.com/watch?v=1", ["research"]), ["studio", "craft"]);
+  assert.deepEqual(lib.domainsFor(rules, "https://example.org/", ["research"]), ["research"]);
+  assert.deepEqual(lib.domainsFor(rules, "nope", ["x"]), ["x"]);
+  assert.deepEqual(lib.parseSiteRules(""), []);
+});
