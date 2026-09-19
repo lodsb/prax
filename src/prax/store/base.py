@@ -29,6 +29,10 @@ _indexes: dict[tuple[str, bool], vectors.VectorIndex] = {}  # (path, writable)
 
 
 _LOCK = threading.RLock()
+# the process-wide cache of index views and deltas: a read searches a
+# view no lock guards, so opening, closing and adding to them, and the
+# search of the writable delta, go behind this one (short, milliseconds)
+_INDEX_LOCK = threading.RLock()
 
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
@@ -58,17 +62,24 @@ _depth = threading.local()
 LOCK_RETRIES = 6
 
 
-def _serialized(fn: Callable[P, R]) -> Callable[P, R]:
-    """One writer at a time in this process; across processes (the door,
-    the watcher, a backlog pass on one database) SQLite's busy handler
-    waits ``BUSY_TIMEOUT`` and then says "database is locked". The
-    outermost store call rolls back and tries again a few times, so a
-    capture arriving while a batch pass holds a long transaction is not
-    lost."""
+class _NoLock:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+
+def _guarded(fn: Callable[P, R], *, lock: bool) -> Callable[P, R]:
+    """The retry that both guards share: across processes (the door, a
+    backlog pass on one database) SQLite's busy handler waits
+    ``BUSY_TIMEOUT`` and then says "database is locked"; the outermost
+    store call rolls back and tries again a few times, so a capture
+    arriving while a batch pass holds a long transaction is not lost."""
 
     @functools.wraps(fn)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
-        with _LOCK:
+        with _LOCK if lock else _NoLock():
             depth = getattr(_depth, "n", 0)
             _depth.n = depth + 1
             try:
@@ -93,6 +104,22 @@ def _serialized(fn: Callable[P, R]) -> Callable[P, R]:
                 _depth.n = depth
 
     return wrapper
+
+
+def _serialized(fn: Callable[P, R]) -> Callable[P, R]:
+    """One writer at a time in this process: every store function that
+    writes takes ``_LOCK`` for its duration."""
+    return _guarded(fn, lock=True)
+
+
+def _reading(fn: Callable[P, R]) -> Callable[P, R]:
+    """A read: no lock, only the retry. A request thread reads on its own
+    connection and WAL gives it a consistent snapshot, so a search never
+    waits for a book being indexed or a heal retiring documents — it did
+    until 2026-09-19, when every read was serialized too, and a
+    seventeen-second scan under the lock each worker cycle was what
+    "loading takes ages" was."""
+    return _guarded(fn, lock=False)
 
 
 _local = threading.local()
@@ -136,13 +163,14 @@ def _doc_index_path(model: str) -> Path:
 
 def _open_index(path: Path, *, writable: bool) -> vectors.VectorIndex | None:
     key = (str(path), writable)
-    idx = _indexes.get(key)
-    if idx is None:
-        if not writable and not path.exists():
-            return None
-        idx = vectors.VectorIndex(path, VEC_DIM, writable=writable)
-        _indexes[key] = idx
-    return idx
+    with _INDEX_LOCK:
+        idx = _indexes.get(key)
+        if idx is None:
+            if not writable and not path.exists():
+                return None
+            idx = vectors.VectorIndex(path, VEC_DIM, writable=writable)
+            _indexes[key] = idx
+        return idx
 
 
 def _index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
@@ -158,10 +186,11 @@ def _doc_index(model: str, *, writable: bool) -> vectors.VectorIndex | None:
 
 def _drop_index_views(model: str) -> None:
     """Forget the read-only views so the next read reopens the saved files."""
-    for path in (_index_path(model), _doc_index_path(model)):
-        idx = _indexes.pop((str(path), False), None)
-        if idx is not None:
-            idx.close()
+    with _INDEX_LOCK:
+        for path in (_index_path(model), _doc_index_path(model)):
+            idx = _indexes.pop((str(path), False), None)
+            if idx is not None:
+                idx.close()
 
 
 # The delta index: new vectors go into a small writable index of their own
@@ -187,17 +216,18 @@ def _knn(path: Path, vector: Any, k: int) -> list[tuple[int, float]]:
     """Nearest keys from the main view and the delta, merged by distance;
     a key in both takes the delta's (newer) place."""
     out: dict[int, float] = {}
-    main = _open_index(path, writable=False)
-    if main is not None:
-        for key, d in main.search(vector, k):
-            out[key] = d
-    dpath = _delta_path(path)
-    delta = _indexes.get((str(dpath), True))
-    if delta is None and dpath.exists():
-        delta = _delta(path)
-    if delta is not None and len(delta):
-        for key, d in delta.search(vector, k):
-            out[key] = d
+    with _INDEX_LOCK:
+        main = _open_index(path, writable=False)
+        if main is not None:
+            for key, d in main.search(vector, k):
+                out[key] = d
+        dpath = _delta_path(path)
+        delta = _indexes.get((str(dpath), True))
+        if delta is None and dpath.exists():
+            delta = _delta(path)
+        if delta is not None and len(delta):
+            for key, d in delta.search(vector, k):
+                out[key] = d
     return sorted(out.items(), key=lambda kv: kv[1])[:k]
 
 

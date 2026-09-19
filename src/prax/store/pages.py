@@ -13,7 +13,7 @@ import re
 import sqlite3
 from typing import Any
 
-from .base import _read_archive, _serialized
+from .base import _read_archive, _reading, _serialized
 from .documents import _set_promote, get_meta, index_text, register, set_meta
 from .graph import Edge, find_edges, link
 
@@ -45,7 +45,7 @@ def _page_original(slug: str, text: str) -> bytes:
     return f"<!-- prax page: {slug} -->\n{text}".encode()
 
 
-@_serialized
+@_reading
 def page_titles(con: sqlite3.Connection) -> set[str]:
     """Titles of the documents that are pages: the only names a page or
     project entity may carry."""
@@ -58,7 +58,7 @@ def page_titles(con: sqlite3.Connection) -> set[str]:
     }
 
 
-@_serialized
+@_reading
 def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
     """A page with its current text and revision list, or None."""
     row = con.execute(
@@ -91,7 +91,7 @@ def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
     }
 
 
-@_serialized
+@_reading
 def page_revision_text(con: sqlite3.Connection, slug: str, revision: int) -> str:
     row = con.execute(
         "SELECT r.text_hash FROM page_revisions r JOIN pages p ON p.doc_id = r.doc_id"
@@ -103,7 +103,7 @@ def page_revision_text(con: sqlite3.Connection, slug: str, revision: int) -> str
     return _read_archive(row["text_hash"]).decode("utf-8")
 
 
-@_serialized
+@_reading
 def list_pages(
     con: sqlite3.Connection, *, kind: str | None = None, limit: int = 200
 ) -> list[dict[str, Any]]:

@@ -42,6 +42,57 @@ def test_store_usable_from_worker_thread(con: sqlite3.Connection) -> None:
     assert ingested["created"]
 
 
+def test_a_read_does_not_wait_for_the_writer(con: sqlite3.Connection) -> None:
+    """The door's reads run on their own connections and WAL gives them a
+    snapshot, so a search must not queue behind a write in progress —
+    every read took the writers' lock until 2026-09-19, and "loading
+    takes ages" was a seventeen-second scan holding it each worker cycle.
+    Here a writer holds the lock for a second: the reads return at once,
+    the next write waits its turn."""
+    import threading
+    import time
+
+    from prax.store import base
+
+    store.ingest_text(con, "granular synthesis of clouds " * 20, title="G")
+    doc = store.ingest_text(con, "a second note about reverb " * 20, title="R")
+    other = store.connect()  # a reader's own connection, as a request thread has
+    held = threading.Event()
+    release = threading.Event()
+
+    def slow_write() -> None:
+        with base._LOCK:
+            held.set()
+            release.wait(5)
+
+    t = threading.Thread(target=slow_write)
+    t.start()
+    assert held.wait(2)
+    t0 = time.monotonic()
+    hits = store.search(other, "granular synthesis", 5)
+    meta = store.get_meta(other, doc["doc_id"])
+    chunks = store.list_chunks(other, doc["doc_id"])
+    read_seconds = time.monotonic() - t0
+    assert hits and hits[0]["title"] == "G" and meta is not None and chunks
+    assert read_seconds < 0.5, f"reads waited {read_seconds:.2f} s for the writer"
+    # a write does wait for the lock
+    done = threading.Event()
+
+    def write() -> None:
+        store.retitle(con, doc["doc_id"], "Renamed", source="test")
+        done.set()
+
+    w = threading.Thread(target=write)
+    w.start()
+    assert not done.wait(0.3)  # still waiting for the writer
+    release.set()
+    t.join()
+    assert done.wait(5)
+    w.join()
+    assert store.get_document(other, doc["doc_id"], max_chars=0)["title"] == "Renamed"
+    other.close()
+
+
 # ----------------------------------------------------------------- ingest
 
 

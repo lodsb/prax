@@ -12,13 +12,13 @@ from typing import Any
 
 from prax import config, ontology
 
-from .base import _serialized
+from .base import _reading
 from .documents import DOCTYPES
 from .jobs import running_jobs
 from .retrieval import vec_status
 
 
-@_serialized
+@_reading
 def stats(con: sqlite3.Connection) -> dict[str, Any]:
     """What the store holds, in one place: documents by type and source,
     chunks and vectors, the graph by producer, entities by type, the review

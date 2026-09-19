@@ -18,6 +18,7 @@ from prax import chunking, config, embeddings, ontology
 from prax import rerank as rerank_mod
 
 from .base import (
+    _INDEX_LOCK,
     _NOW,
     _TOKEN,
     _delta,
@@ -31,6 +32,7 @@ from .base import (
     _indexes,
     _knn,
     _open_index,
+    _reading,
     _serialized,
     vectors_available,
 )
@@ -433,7 +435,7 @@ def _rrf(
     return out[:limit]
 
 
-@_serialized
+@_reading
 def vec_status(con: sqlite3.Connection) -> dict[str, Any]:
     """Whether vectors are usable and how many exist, per model, plus the
     state of the current model's index file."""
@@ -466,7 +468,7 @@ def vec_status(con: sqlite3.Connection) -> dict[str, Any]:
     return status
 
 
-@_serialized
+@_reading
 def search(
     con: sqlite3.Connection,
     query: str,
@@ -680,7 +682,6 @@ def _vec_count(con: sqlite3.Connection) -> int:
     return con.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0]
 
 
-@_serialized
 def _all_chunks_embedded(con: sqlite3.Connection, model: str) -> bool:
     """Two counts before the scan: when every chunk has its vector from
     ``model`` there is nothing to look for. The scan below walks a
@@ -694,6 +695,7 @@ def _all_chunks_embedded(con: sqlite3.Connection, model: str) -> bool:
     return done >= chunks
 
 
+@_reading
 def pending_embeddings(
     con: sqlite3.Connection, model: str, *, limit: int | None = None
 ) -> list[dict[str, Any]]:
@@ -714,7 +716,7 @@ def pending_embeddings(
     return [dict(r) for r in con.execute(sql, args)]
 
 
-@_serialized
+@_reading
 def count_pending_embeddings(con: sqlite3.Connection, model: str) -> int:
     """How many chunks ``pending_embeddings`` would return, without the text."""
     if _all_chunks_embedded(con, model):
@@ -744,7 +746,8 @@ def store_embeddings(
     ids = [cid for cid, _, _ in items]
     import numpy as np
 
-    idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, _, v in items]))
+    with _INDEX_LOCK:
+        idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, _, v in items]))
     con.executemany(
         "INSERT INTO chunk_embeddings (chunk_id, model) VALUES (?, ?)"
         " ON CONFLICT(chunk_id) DO UPDATE SET model = excluded.model,"
@@ -755,7 +758,7 @@ def store_embeddings(
     return len(items)
 
 
-@_serialized
+@_reading
 def pending_document_embeddings(
     con: sqlite3.Connection, model: str, *, limit: int | None = None
 ) -> list[dict[str, Any]]:
@@ -773,7 +776,7 @@ def pending_document_embeddings(
     return [dict(r) for r in con.execute(sql, args)]
 
 
-@_serialized
+@_reading
 def count_pending_document_embeddings(con: sqlite3.Connection, model: str) -> int:
     return con.execute(
         "SELECT count(*) FROM documents_fts f"
@@ -797,7 +800,8 @@ def store_document_embeddings(
     import numpy as np
 
     ids = [d for d, _ in items]
-    idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, v in items]))
+    with _INDEX_LOCK:
+        idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, v in items]))
     con.executemany(
         "INSERT INTO document_embeddings (doc_id, model) VALUES (?, ?)"
         " ON CONFLICT(doc_id) DO UPDATE SET model = excluded.model,"
@@ -814,49 +818,51 @@ DELTA_MERGE_AT = 50_000  # vectors in the delta before a merge is due
 def _save_delta(path: Path) -> dict[str, Any]:
     """Write the delta beside ``path`` (small, nobody maps it) and merge it
     into the main file when it has grown past ``DELTA_MERGE_AT``."""
-    delta = _delta(path)
-    delta.save()
-    if len(delta) >= DELTA_MERGE_AT or not path.exists():
-        return _merge(path)  # a large delta, or no main file yet
-    main = _open_index(path, writable=False)
-    return {
-        "count": (len(main) if main is not None else 0) + len(delta),
-        "delta": len(delta),
-        "bytes": path.stat().st_size if path.exists() else 0,
-    }
+    with _INDEX_LOCK:
+        delta = _delta(path)
+        delta.save()
+        if len(delta) >= DELTA_MERGE_AT or not path.exists():
+            return _merge(path)  # a large delta, or no main file yet
+        main = _open_index(path, writable=False)
+        return {
+            "count": (len(main) if main is not None else 0) + len(delta),
+            "delta": len(delta),
+            "bytes": path.stat().st_size if path.exists() else 0,
+        }
 
 
 def _merge(path: Path) -> dict[str, Any]:
     """Fold the delta into the main file: load the main index writable, add
     the delta's vectors, save, drop this process's views, start an empty
     delta. Needs the main index in memory for the duration."""
-    delta = _delta(path)
-    main = _open_index(path, writable=True)
-    assert main is not None
-    n = len(delta)
-    if n:
-        import numpy as np
+    with _INDEX_LOCK:
+        delta = _delta(path)
+        main = _open_index(path, writable=True)
+        assert main is not None
+        n = len(delta)
+        if n:
+            import numpy as np
 
-        keys = [int(k) for k in delta.all_keys()]
-        vecs = np.vstack([delta.get(k) for k in keys])
-        main.add(keys, vecs)
-    for key in [(str(path), False), (str(_delta_path(path)), True)]:
-        idx = _indexes.pop(key, None)
-        if idx is not None:
-            idx.close()
-    main.save()
-    _indexes.pop((str(path), True), None)
-    main.close()
-    dpath = _delta_path(path)
-    if dpath.exists():
-        dpath.unlink()
-    reopened = _open_index(path, writable=False)
-    return {
-        "count": len(reopened) if reopened is not None else 0,
-        "merged": n,
-        "delta": 0,
-        "bytes": path.stat().st_size,
-    }
+            keys = [int(k) for k in delta.all_keys()]
+            vecs = np.vstack([delta.get(k) for k in keys])
+            main.add(keys, vecs)
+        for key in [(str(path), False), (str(_delta_path(path)), True)]:
+            idx = _indexes.pop(key, None)
+            if idx is not None:
+                idx.close()
+        main.save()
+        _indexes.pop((str(path), True), None)
+        main.close()
+        dpath = _delta_path(path)
+        if dpath.exists():
+            dpath.unlink()
+        reopened = _open_index(path, writable=False)
+        return {
+            "count": len(reopened) if reopened is not None else 0,
+            "merged": n,
+            "delta": 0,
+            "bytes": path.stat().st_size,
+        }
 
 
 @_serialized
@@ -883,16 +889,17 @@ def merge_vectors(model: str) -> dict[str, Any]:
     }
 
 
-@_serialized
+@_reading
 def delta_counts(model: str) -> dict[str, int]:
     out = {}
     paths = (("chunks", _index_path(model)), ("documents", _doc_index_path(model)))
-    for name, path in paths:
-        dpath = _delta_path(path)
-        idx = _indexes.get((str(dpath), True))
-        if idx is None and dpath.exists():
-            idx = _delta(path)
-        out[name] = len(idx) if idx is not None else 0
+    with _INDEX_LOCK:
+        for name, path in paths:
+            dpath = _delta_path(path)
+            idx = _indexes.get((str(dpath), True))
+            if idx is None and dpath.exists():
+                idx = _delta(path)
+            out[name] = len(idx) if idx is not None else 0
     return out
 
 
@@ -941,7 +948,7 @@ CENTROID_CHUNKS = 64  # chunk vectors averaged for a document's similarity query
 CENTROID_MIN_CHARS = 120  # shorter chunks are headers and template lines
 
 
-@_serialized
+@_reading
 def similar_documents(
     con: sqlite3.Connection,
     doc_id: int,

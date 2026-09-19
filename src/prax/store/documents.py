@@ -26,6 +26,7 @@ from .base import (
     _archive_path,
     _like_prefix,
     _read_archive,
+    _reading,
     _serialized,
 )
 
@@ -203,13 +204,13 @@ def _is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
     return bool(row and row["text_hash"])
 
 
-@_serialized
+@_reading
 def is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
     """True once ``index_text`` has stored a text artifact for the document."""
     return _is_indexed(con, doc_id)
 
 
-@_serialized
+@_reading
 def get_meta(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """The document's ``meta`` JSON without touching the text artifact."""
     row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
@@ -1177,7 +1178,7 @@ def reading_requests(
     ]
 
 
-@_serialized
+@_reading
 def count_reading_requests(
     con: sqlite3.Connection, *, state: str | None = "requested"
 ) -> int:
@@ -1253,7 +1254,7 @@ def extracted_by(
     )
 
 
-@_serialized
+@_reading
 def promoted_documents(
     con: sqlite3.Connection, *, producer: str | None = None
 ) -> list[dict[str, Any]]:
@@ -1282,7 +1283,7 @@ def promoted_documents(
     return out
 
 
-@_serialized
+@_reading
 def promotion_candidates(
     con: sqlite3.Connection, *, limit: int = 30
 ) -> list[dict[str, Any]]:
@@ -1500,7 +1501,7 @@ def refresh_document_fields(
     return changed
 
 
-@_serialized
+@_reading
 def get_original(con: sqlite3.Connection, doc_id: int) -> bytes:
     """The archived original bytes of a document (what its hash names)."""
     row = con.execute("SELECT hash FROM documents WHERE id = ?", (doc_id,)).fetchone()
@@ -1509,7 +1510,7 @@ def get_original(con: sqlite3.Connection, doc_id: int) -> bytes:
     return _read_archive(row["hash"])
 
 
-@_serialized
+@_reading
 def select_documents(
     con: sqlite3.Connection,
     *,
@@ -1553,7 +1554,7 @@ def select_documents(
     return [r["id"] for r in con.execute(sql, args)]
 
 
-@_serialized
+@_reading
 def meta_index(con: sqlite3.Connection, json_path: str) -> dict[str, int]:
     """Map every value found at ``json_path`` in any document's meta to its id.
 
@@ -1626,7 +1627,7 @@ def ingest_text(
     )
 
 
-@_serialized
+@_reading
 def get_document(
     con: sqlite3.Connection,
     doc_id: int,
@@ -1706,7 +1707,7 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     return out
 
 
-@_serialized
+@_reading
 def list_documents(
     con: sqlite3.Connection,
     *,
@@ -1773,7 +1774,7 @@ def list_documents(
     return {"total": total, "items": items}
 
 
-@_serialized
+@_reading
 def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     """A document as its chunks in order, with text and structure (the
     document view renders from this)."""
@@ -1792,7 +1793,7 @@ def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     return out
 
 
-@_serialized
+@_reading
 def read_chunks(
     con: sqlite3.Connection,
     doc_id: int,
@@ -1837,7 +1838,7 @@ READABLE = (
 )
 
 
-@_serialized
+@_reading
 def find_chunk(
     con: sqlite3.Connection,
     doc_id: int,
@@ -1970,7 +1971,7 @@ def formula_by_number(
     return None
 
 
-@_serialized
+@_reading
 def document_outline(
     con: sqlite3.Connection, doc_id: int, *, limit: int = 20
 ) -> list[str]:
@@ -1990,7 +1991,7 @@ def document_outline(
     return out
 
 
-@_serialized
+@_reading
 def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
     """Titles by id, for naming documents in a result (unknown ids left
     out; an untitled document is an empty string)."""
@@ -2004,7 +2005,7 @@ def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, st
     return {r["id"]: r["title"] or "" for r in rows}
 
 
-@_serialized
+@_reading
 def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
     """MIME type, title and archive path of a document's original, for
     serving it; None when the document does not exist."""
@@ -2022,7 +2023,7 @@ def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None
     }
 
 
-@_serialized
+@_reading
 def get_chunk(con: sqlite3.Connection, chunk_id: int) -> dict[str, Any] | None:
     """One chunk in full: text, kind, heading, locator and table ``data``."""
     r = con.execute(

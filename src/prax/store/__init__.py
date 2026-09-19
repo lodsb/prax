@@ -39,6 +39,7 @@ from .backup import (  # noqa: F401
     backup_target,
 )
 from .base import (  # noqa: F401
+    _INDEX_LOCK,
     _LOCK,
     _NOW,
     _SURROGATE,
@@ -67,6 +68,7 @@ from .base import (  # noqa: F401
     _local,
     _open_index,
     _read_archive,
+    _reading,
     _serialized,
     connect,
     init_db,

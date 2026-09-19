@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
 
-from .base import _NOW, _indexes, _serialized
+from .base import _INDEX_LOCK, _NOW, _indexes, _reading, _serialized
 
 # What runs on the batch host, for the door and the UI to show: each pass
 # is a row with a heartbeat; one that stops beating without finishing is
@@ -151,7 +151,7 @@ def job_reap(con: sqlite3.Connection) -> int:
     return n
 
 
-@_serialized
+@_reading
 def get_job(con: sqlite3.Connection, job_id: int) -> dict[str, Any] | None:
     row = con.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
     return dict(row) if row else None
@@ -259,15 +259,16 @@ def release_vector_views() -> int:
     on this machine can replace them (Windows refuses otherwise); the next
     query reopens them. Returns how many views were closed."""
     n = 0
-    for key in [k for k in _indexes if not k[1]]:
-        idx = _indexes.pop(key, None)
-        if idx is not None:
-            idx.close()
-            n += 1
+    with _INDEX_LOCK:
+        for key in [k for k in _indexes if not k[1]]:
+            idx = _indexes.pop(key, None)
+            if idx is not None:
+                idx.close()
+                n += 1
     return n
 
 
-@_serialized
+@_reading
 def data_version(con: sqlite3.Connection) -> int:
     """Changes whenever another connection commits (``PRAGMA data_version``):
     the cheap "did anything change" signal the UI polls. Serialized like
@@ -276,7 +277,7 @@ def data_version(con: sqlite3.Connection) -> int:
     return int(con.execute("PRAGMA data_version").fetchone()[0])
 
 
-@_serialized
+@_reading
 def running_jobs(con: sqlite3.Connection) -> int:
     return int(
         con.execute("SELECT count(*) FROM jobs WHERE status = 'running'").fetchone()[0]

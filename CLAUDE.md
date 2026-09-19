@@ -47,7 +47,11 @@ drop folder (`docs/sources.md`).
    `scripts/work.py` runs it) and never open the database; the door
    consumes its own drop folder and holds the vector delta indexes.
    Inside the door, reads use a connection per request thread and
-   writes go one at a time behind the store's lock. The MCP server is
+   never take the store's lock (`store._reading`: a WAL snapshot and
+   the busy-retry only); writes go one at a time behind it
+   (`store._serialized`). The one shared connection (the change stamp)
+   has a lock of its own; the index views and deltas are behind
+   `_INDEX_LOCK` for the milliseconds a search or an add takes. The MCP server is
    a proxy of the door too (invariant 5). The maintenance passes are
    jobs on the door (`prax maintain`, `prax resolve`, `prax import
    citations`, `prax heal`, `prax backup`); the importers are clients

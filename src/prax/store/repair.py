@@ -35,7 +35,7 @@ from typing import Any
 
 from prax import glyphs
 
-from .base import _NOW, _serialized
+from .base import _NOW, _reading
 from .documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
@@ -1054,7 +1054,7 @@ def _chosen(only: list[str] | None) -> list[Ailment]:
     return [BY_NAME[n] for n in only]
 
 
-@_serialized
+@_reading
 def health(
     con: sqlite3.Connection, *, only: list[str] | None = None, examples: int = EXAMPLES
 ) -> dict[str, Any]:

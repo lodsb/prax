@@ -105,6 +105,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     con = store.connect()
     store.init_db(con)
     app.state.con = con  # the main connection: migrations, the change stamp
+    app.state.con_lock = threading.Lock()  # one thread on it at a time
     store.job_reap(con)  # sessions left behind by a killed door or worker
     stop = threading.Event()
     every = config.number("door.inbox_scan_seconds", "PRAX_INBOX_SCAN", 20.0)
@@ -537,10 +538,14 @@ def changes(request: Request) -> dict[str, Any]:
     another process's commits) and how many jobs are running: the UI polls
     it and re-renders a listing when the stamp moved."""
     con = request.app.state.con  # one fixed connection: its data_version moves
-    return {  # when any other connection commits, this door's threads included
-        "stamp": f"{store.data_version(con)}-{request.app.state.writes}",
-        "jobs": store.running_jobs(con),
-    }
+    # when any other connection commits, this door's threads included; a
+    # connection is one thread's at a time (reads no longer take the
+    # store's lock, which used to serialize these two by the way)
+    with request.app.state.con_lock:
+        return {
+            "stamp": f"{store.data_version(con)}-{request.app.state.writes}",
+            "jobs": store.running_jobs(con),
+        }
 
 
 class HealReq(BaseModel):

@@ -15,7 +15,7 @@ from typing import Any
 
 from prax import ontology
 
-from .base import _NOW, _like_prefix, _serialized
+from .base import _NOW, _like_prefix, _reading, _serialized
 from .retrieval import CONTEXT_LIMIT, _similar_documents
 
 MAX_HOPS = 2
@@ -57,7 +57,7 @@ def _docs_by_zotero_key(con: sqlite3.Connection, key: str) -> list[dict[str, Any
 ASK_FACT_RELS_SKIPPED = ("cites",)  # dozens per paper; the passages carry them
 
 
-@_serialized
+@_reading
 def document_facts(
     con: sqlite3.Connection, doc_ids: list[int], *, limit: int = 8
 ) -> dict[int, list[dict[str, Any]]]:
@@ -93,7 +93,7 @@ def document_facts(
     return out
 
 
-@_serialized
+@_reading
 def document_context(
     con: sqlite3.Connection,
     doc_id: int,
@@ -302,7 +302,7 @@ def document_context(
     }
 
 
-@_serialized
+@_reading
 def hub_graph(
     con: sqlite3.Connection,
     *,
@@ -407,7 +407,7 @@ def hub_graph(
     }
 
 
-@_serialized
+@_reading
 def find_entities(
     con: sqlite3.Connection, q: str, *, limit: int = 20
 ) -> list[dict[str, Any]]:
@@ -492,7 +492,7 @@ def link(
     return cur.lastrowid
 
 
-@_serialized
+@_reading
 def find_edges(con: sqlite3.Connection, edge: Edge) -> list[int]:
     """Ids of currently-valid edges with exactly this src, rel and dst.
 
@@ -672,7 +672,7 @@ def candidate_runs(con: sqlite3.Connection) -> dict[str, str]:
     return {str(r["type"]): str(r["at"]) for r in rows}
 
 
-@_serialized
+@_reading
 def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
     row = con.execute(
         "SELECT canonical_id FROM entities WHERE id = ?", (entity_id,)
@@ -776,7 +776,7 @@ def retire_run(
     return cur.rowcount
 
 
-@_serialized
+@_reading
 def provenance_summary(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Live and retired edge counts per producer and run."""
     rows = con.execute(
@@ -882,7 +882,7 @@ def _review_where(
     return (" WHERE " + " AND ".join(clauses)) if clauses else "", args
 
 
-@_serialized
+@_reading
 def list_review(
     con: sqlite3.Connection,
     *,
@@ -900,7 +900,7 @@ def list_review(
     return [dict(r) for r in rows]
 
 
-@_serialized
+@_reading
 def count_review(
     con: sqlite3.Connection,
     *,
@@ -933,7 +933,7 @@ def resolve_review_many(
     return cur.rowcount
 
 
-@_serialized
+@_reading
 def get_review(con: sqlite3.Connection, review_id: int) -> dict[str, Any] | None:
     row = con.execute(
         "SELECT * FROM review_queue WHERE id = ?", (review_id,)
@@ -972,7 +972,7 @@ def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> 
     con.commit()
 
 
-@_serialized
+@_reading
 def select_for_extraction(
     con: sqlite3.Connection,
     *,
@@ -1073,7 +1073,7 @@ def _subset_version_case(
     return f"CASE json_extract(meta, '$.domains') {' '.join(whens)} ELSE ? END", args
 
 
-@_serialized
+@_reading
 def traverse(
     con: sqlite3.Connection, entity_name: str, hops: int = 1
 ) -> list[dict[str, Any]]:
