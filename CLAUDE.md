@@ -176,7 +176,10 @@ loop writes. What that model may and may not do, as a reference:
   are served out of the original by hash, never stored again. A display
   equation alone on its line is a `formula` chunk with its LaTeX, the
   number the prose refers to it by and any readings in `data`; inline
-  maths stays in the text chunk around it. A re-index
+  maths stays in the text chunk around it. A video is a capture like a
+  page (`prax.parsers.video`: the extension's transcript-with-frames HTML,
+  `meta.video` for the player the UI shows, `meta.parser` naming the
+  parser; the frames are figures, read by the vision pass like any). A re-index
   keeps the chunks whose text did not change, and their vectors.
 - Embeddings: 384-dim (bge-small-class ONNX). Vectors are keyed by chunk
   id in the usearch file; changing the model means re-embedding into a new

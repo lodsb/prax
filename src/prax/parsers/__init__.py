@@ -18,6 +18,9 @@ time, so the serving path never loads them):
 | docling         | application/pdf | IBM Docling layout + table models; explicit   |
 |                 |                 | only, seconds per page                        |
 | trafilatura     | text/html       | article Markdown, boilerplate stripped, code  |
+| video           | text/html       | a video capture of the extension's: transcript|
+|                 |                 | with time marks, frames as figures, chapters  |
+|                 |                 | as headings (named by the document, meta.parser)|
 |                 |                 | blocks fenced                                 |
 | docx            | .docx           | Word: zip of XML read here, headings, lists,  |
 |                 |                 | tables; no dependency                         |
@@ -596,6 +599,15 @@ def _comments_wanted() -> bool:
 
     value = str(config.setting("parse.comments", "PRAX_COMMENTS", "true")).lower()
     return value not in ("0", "false", "no", "off")
+
+
+def _video(data: bytes) -> str:
+    from prax.parsers import video
+
+    try:
+        return video.parse(data)
+    except video.NotATranscript as exc:
+        raise ExtractionError(str(exc)) from exc
 
 
 def _trafilatura_variant() -> str:
@@ -1255,6 +1267,13 @@ REGISTRY: list[Extractor] = [
         "pymupdf",
         explicit_only=True,
         variant=_vision_pages_variant,  # the model, and "all" when every page is read
+    ),
+    Extractor(
+        "video",
+        ("text/html", "application/xhtml+xml"),
+        _video,
+        "lxml",
+        explicit_only=True,  # chosen by the document that names it (meta.parser)
     ),
     Extractor(
         "trafilatura",

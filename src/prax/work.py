@@ -329,7 +329,8 @@ def hand_out(
             doc = store.get_document(con, doc_id, max_chars=0)
             if doc is None:
                 continue
-            exts = parsers.candidates(doc["mime"] or "")
+            named = doc["meta"].get("parser")  # a document may name its parser
+            exts = parsers.candidates(doc["mime"] or "", named)
             if not exts:
                 # an image has no parser of its own: the vision model reads
                 # it, as a reading the door asks for when that is free
@@ -351,6 +352,7 @@ def hand_out(
                     else None,
                     "original": f"/doc/{doc_id}/original",
                     "old_len": doc["text_len"],
+                    **({"extractor": named} if named else {}),
                 }
             )
         _lease(step, [i["doc_id"] for i in items], worker)

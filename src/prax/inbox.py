@@ -357,15 +357,25 @@ def ingest_html(
     by: str | None = "extension",
     mode: str | None = None,
     note: str | None = None,
+    video: dict[str, Any] | None = None,
 ) -> Capture:
     """A page as the browser rendered it (the extension's path). ``mode``
     says what the page is (``snapshot``: self-contained, ``dom``: the bare
-    document) and ``note`` why, both kept under ``meta.capture``."""
+    document, ``video``: a transcript with frames in the shape
+    ``prax.parsers.video`` reads) and ``note`` why, both kept under
+    ``meta.capture``. ``video`` is what the sender knows about the
+    recording (provider, id, url, channel, duration, chapters…): kept as
+    ``meta.video``, which is what makes the document a video to the
+    ``doctype`` filter and puts the player on its page; such a document
+    names its parser (``meta.parser = "video"``)."""
     data = html.encode("utf-8") if isinstance(html, str) else html
     extra: dict[str, Any] = {}
     if mode or note:
         extra["capture_mode"] = mode
         extra["capture_note"] = note
+    if mode == "video" or video:
+        extra["video"] = dict(video or {})
+        extra["parser"] = "video"
     return ingest_bytes(
         con,
         data,

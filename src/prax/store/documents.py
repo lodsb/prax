@@ -1465,7 +1465,9 @@ def restamp_ontology(
 
 DOCTYPES: dict[str, str] = {
     "pdf": "d.mime = 'application/pdf'",
-    "web": "d.mime IN ('text/html', 'application/xhtml+xml')",
+    "web": "d.mime IN ('text/html', 'application/xhtml+xml')"
+    " AND json_extract(d.meta, '$.video') IS NULL",
+    "video": "json_extract(d.meta, '$.video') IS NOT NULL",
     "image": "d.mime LIKE 'image/%'",
     "text": "d.mime = 'text/plain'",
     "note": "json_extract(d.meta, '$.zotero.kind') = 'note'",

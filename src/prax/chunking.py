@@ -21,11 +21,16 @@ chunks:
   to ``TARGET_CHARS``; a paragraph longer than ``MAX_CHARS`` falls back to
   overlapping fixed windows.
 
-Every chunk carries a locator ``{"char_start", "char_end", "page"?}`` into
+Every chunk carries a locator ``{"char_start", "char_end", "page"?,
+"time"?, "time_end"?}`` into
 the artifact, and the invariant ``chunk.text == text[char_start:char_end]``
 holds for every chunk, so ``get`` can return exactly what search matched.
 Page numbers come from the ``--- end of page.page_number=N ---`` markers
-pymupdf4llm emits; the markers themselves belong to no chunk.
+pymupdf4llm emits; the markers themselves belong to no chunk. Times come
+from a transcript's own markers — a paragraph that opens ``[12:34]``, a
+frame whose caption opens ``12:34 —`` — and stay in the text: ``time`` is
+where the chunk starts in the recording, ``time_end`` where the next
+timed chunk does, so a cited passage can link to the moment.
 
 Chunks are disposable (rationale R3): change this module, run
 ``prax maintain --rechunk``, nothing else moves.
@@ -77,6 +82,36 @@ _RELATION = re.compile(
 FORMULA_CHARS = 40  # a relationless expression this long is still a formula
 
 _TABLE_CAPTION = re.compile(r"^\**(Table|TABLE)\s*\d+")
+# a transcript's time marks: "[12:34] the words", "[1:02:34] ...", and a
+# frame's caption "12:34 — the words" (the brackets keep a paragraph that
+# happens to open with a clock time out of it)
+_TIME_PARA = re.compile(r"^\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\]\s")
+_TIME_FIGURE = re.compile(r"^!\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\s*[—–-]\s")
+
+
+def parse_time(mark: str) -> int:
+    """``"12:34"`` → 754, ``"1:02:34"`` → 3754."""
+    parts = [int(p) for p in mark.split(":")]
+    total = 0
+    for p in parts:
+        total = total * 60 + p
+    return total
+
+
+def format_time(seconds: int) -> str:
+    """754 → ``"12:34"``, 3754 → ``"1:02:34"``: the marks as the text has them."""
+    seconds = max(0, int(seconds))
+    h, rest = divmod(seconds, 3600)
+    m, s = divmod(rest, 60)
+    return f"{h}:{m:02d}:{s:02d}" if h else f"{m}:{s:02d}"
+
+
+def _time_of(kind: str, text: str) -> int | None:
+    s = text.lstrip()
+    m = _TIME_PARA.match(s) if kind == "para" else _TIME_FIGURE.match(s)
+    return parse_time(m.group("t")) if m else None
+
+
 _EMPHASIS = re.compile(r"[*_`]+")
 _FENCE = "```"
 
@@ -90,11 +125,17 @@ class Chunk:
     page: int | None = None
     heading: list[str] = field(default_factory=list)
     data: dict[str, Any] | None = None
+    time: int | None = None  # seconds into a recording (a transcript's mark)
+    time_end: int | None = None  # where the next timed chunk starts
 
     def locator(self) -> dict[str, Any]:
         loc: dict[str, Any] = {"char_start": self.char_start, "char_end": self.char_end}
         if self.page is not None:
             loc["page"] = self.page
+        if self.time is not None:
+            loc["time"] = self.time
+            if self.time_end is not None:
+                loc["time_end"] = self.time_end
         return loc
 
 
@@ -106,6 +147,7 @@ class _Element:
     text: str
     level: int = 0
     page: int | None = None
+    time: int | None = None
 
 
 # ---------------------------------------------------------------- parsing
@@ -198,7 +240,7 @@ def _elements(text: str) -> list[_Element]:
         pend = lines[j - 1][1]
         ptext = text[start:pend]
         kind = "figure" if _FIGURE.match(stripped) else "para"
-        els.append(_Element(kind, start, pend, ptext))
+        els.append(_Element(kind, start, pend, ptext, time=_time_of(kind, ptext)))
         i = j
     _assign_pages(els)
     return els
@@ -326,14 +368,24 @@ def chunk(text: str) -> list[Chunk]:
             return
         start, end = pending[0].start, pending[-1].end
         page = pending[0].page  # a chunk may span pages; it is filed under its first
+        # and under its first time mark, when its paragraphs carry any
+        time = next((e.time for e in pending if e.time is not None), None)
         body = text[start:end]
         if len(body) > MAX_CHARS and len(pending) == 1:
             for ws, we in windows(body):
                 chunks.append(
-                    Chunk("text", body[ws:we], start + ws, start + we, page, path())
+                    Chunk(
+                        "text",
+                        body[ws:we],
+                        start + ws,
+                        start + we,
+                        page,
+                        path(),
+                        time=time,
+                    )
                 )
         else:
-            chunks.append(Chunk("text", body, start, end, page, path()))
+            chunks.append(Chunk("text", body, start, end, page, path(), time=time))
         pending = []
 
     def maybe_merge_small_tail() -> None:
@@ -354,6 +406,7 @@ def chunk(text: str) -> list[Chunk]:
                     b.char_end,
                     a.page,
                     a.heading,
+                    time=a.time if a.time is not None else b.time,
                 )
                 chunks.pop()
 
@@ -368,6 +421,7 @@ def chunk(text: str) -> list[Chunk]:
             continue
         if el.kind == "code" and len(el.text) < MIN_CODE_CHARS:
             el = _Element("para", el.start, el.end, el.text, page=el.page)
+            el.time = _time_of("para", el.text)
         if el.kind == "heading":
             flush()
             maybe_merge_small_tail()
@@ -442,15 +496,27 @@ def chunk(text: str) -> list[Chunk]:
                     el.page,
                     path(),
                     data,
+                    time=el.time,
                 )
             )
             continue
         # blank (consumed caption): nothing
     flush()
     maybe_merge_small_tail()
+    _assign_time_ends(chunks)
     for c in chunks:
         assert c.text == text[c.char_start : c.char_end]
     return chunks
+
+
+def _assign_time_ends(chunks: list[Chunk]) -> None:
+    """A timed chunk ends where the next timed one begins (a frame at the
+    same moment as its paragraph does not end it: the next later mark does)."""
+    timed = [c for c in chunks if c.time is not None]
+    for i, c in enumerate(timed):
+        later = next((d.time for d in timed[i + 1 :] if d.time > c.time), None)
+        if later is not None:
+            c.time_end = later
 
 
 def rows(chunks: list[Chunk]) -> list[tuple[str, str, str, str, str | None]]:

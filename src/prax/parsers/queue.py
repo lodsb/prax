@@ -118,6 +118,9 @@ def parse_one(
     doc = store.get_document(con, doc_id, max_chars=0)
     if doc is None:
         raise KeyError(f"no such document: {doc_id}")
+    # a document may name its parser (a video capture: meta.parser), and
+    # then only that one is tried: a wrong parse is worse than none
+    extractor = extractor or doc["meta"].get("parser")
     exts = parsers.candidates(doc["mime"] or "", extractor)
     if not exts:
         return "skipped"
