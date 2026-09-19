@@ -108,11 +108,16 @@ the tab shows, with a small popup for the few choices that matter.
   popup says "downloaded for the watcher"; the document appears in the
   Inbox view once the watcher has been over it.
 - **The context menu.** "Send this page to prax" on any page, the
-  browser's PDF viewer included (the popup works there too), and "Send
-  link to prax" on a link, which fetches the linked file with the
-  browser's session and uploads it without opening a tab, or lets the
-  door fetch it. Both use the options page's default domains; the
-  result lands in the popup's history.
+  browser's PDF viewer included (the popup works there too); "Send
+  selection to prax as an excerpt" on selected text, which makes a small
+  document of its own — the words as selected, paragraphs kept, headed
+  by the page they are from (title, URL, date; `meta.kind = "excerpt"`,
+  `meta.excerpt` naming the page) — so a passage worth keeping is kept
+  without the page around it, and the ask cites it like anything else;
+  and "Send link to prax" on a link, which fetches the linked file with
+  the browser's session and uploads it without opening a tab, or lets
+  the door fetch it. All three use the options page's default domains;
+  the result lands in the popup's history.
 - **A paper.** A scholarly page names its paper in the Highwire tags
   every publisher, arXiv and the preprint servers write
   (`citation_pdf_url`, `citation_doi`, `citation_arxiv_id`,
@@ -246,7 +251,8 @@ the tag on it, no second document when sent again, a PDF tab uploaded
 as a file, a whole window sent, the options page's test refusing a
 wrong token, the keyboard send and its badge, a door that is not
 there (the send fails naming the door, "retry failed" sends it again
-once the door is back), an abstract page whose citation tags send the
+once the door is back), a selection sent as an excerpt (and nothing
+selected said so), an abstract page whose citation tags send the
 paper's PDF with its ids (and fill them in on the document the PDF
 already is), a watch page sent as a video (a fixture page
 with a player of YouTube's shape and a six-second clip of three

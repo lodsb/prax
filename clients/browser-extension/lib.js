@@ -81,7 +81,7 @@
   /** A one-line result for the popup. */
   function describeResult(res) {
     if (res.error) return `failed: ${res.error}`;
-    if (res.mode === "video" && res.note) return `${res.created ? "new" : "already in the store"}: ${res.note}`;
+    if ((res.mode === "video" || res.mode === "excerpt") && res.note) return `${res.created ? "new" : "already in the store"}: ${res.note}`;
     if (res.downloaded) return "downloaded for the watcher";
     if (res.manual) return "waiting for you";
     const bits = [res.created ? "new" : "already in the store"];
@@ -92,6 +92,21 @@
 
   function splitList(text) {
     return String(text || "").split(",").map((s) => s.trim()).filter(Boolean);
+  }
+
+  // ------------------------------------------------------------ excerpt
+  /** A selection as a small document: the words as selected (paragraphs
+      kept), headed by where they are from. {text, title} or null when there
+      is nothing worth keeping. */
+  function excerptOf(selection, page) {
+    const paras = String(selection || "").replace(/\r\n?/g, "\n").split(/\n\s*\n|\n/).map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+    const words = paras.join(" ").split(" ").filter(Boolean).length;
+    if (!words) return null;
+    const pageTitle = String((page && page.title) || "").trim();
+    const url = String((page && page.url) || "").trim();
+    const title = pageTitle ? `${pageTitle} (excerpt)` : "Excerpt";
+    const head = [`# ${title}`, "", `From ${pageTitle ? `*${pageTitle}*` : "a page"}${url ? `, ${url}` : ""}${page && page.at ? `, ${page.at}` : ""}.`, ""];
+    return { text: head.concat(paras.map((p) => p + "\n")).join("\n").replace(/\n+$/, "\n"), title, words };
   }
 
   // ------------------------------------------------------------- papers
@@ -289,5 +304,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf };
 });

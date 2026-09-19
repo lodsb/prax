@@ -875,6 +875,41 @@ function lazyClearTimeout(msg, sender) {
    session, as from the popup), and "Send link to prax" on a link, which
    fetches the linked file the same way without opening it. Domains and
    tags are the options page's defaults. */
+/* A selection as an excerpt: a small document of its own — the words as
+   selected, headed by the page they are from — rather than the whole
+   page; the ask cites it like anything else. The selection is read from
+   the tab (paragraphs kept), the menu's flattened copy as the fallback. */
+async function captureExcerpt(tab, fallbackText) {
+  const cfg = await settings();
+  if (!cfg.server) { await setProgress({ state: "error", error: "no server configured (options)", results: [] }); return; }
+  let selection = fallbackText || "";
+  try {
+    const r = await api.scripting.executeScript({ target: { tabId: tab.id }, func: () => String(window.getSelection ? window.getSelection().toString() : "") });
+    if (r && r[0] && r[0].result && r[0].result.trim()) selection = r[0].result;
+  } catch (_) { /* the menu's copy will do */ }
+  const excerpt = lib.excerptOf(selection, { title: tab.title, url: tab.url, at: new Date().toISOString().slice(0, 10) });
+  const id = `${Date.now()}-excerpt`;
+  await remember({ id, at: Date.now(), tabId: tab.id, url: tab.url, title: tab.title, state: "sending", domains: cfg.domains, tags: [] });
+  let r;
+  if (!excerpt) {
+    r = { url: tab.url, title: tab.title, error: "nothing is selected" };
+  } else {
+    try {
+      const session = lib.sessionId();
+      const data = await door("/ingest", {
+        text: excerpt.text, title: excerpt.title, source_url: tab.url, domains: cfg.domains.length ? cfg.domains : null,
+        meta: { source: "capture", capture: { at: new Date().toISOString(), session, by: "extension", mode: "excerpt" }, kind: "excerpt", excerpt: { url: tab.url, title: tab.title || null, words: excerpt.words } },
+      }, cfg);
+      r = { url: tab.url, title: excerpt.title, mode: "excerpt", note: `an excerpt of ${excerpt.words} words`, ...data };
+    } catch (err) {
+      r = { url: tab.url, title: tab.title, error: err.message };
+    }
+  }
+  await remember({ id, at: Date.now(), tabId: tab.id, ...r, state: r.error ? "failed" : "done", domains: cfg.domains, tags: [] });
+  await badge(r.error ? "!" : "✓", r.error ? "#b3261e" : "#2e7d32", !!r.error);
+  return r;
+}
+
 async function captureLink(linkUrl, tab) {
   const cfg = await settings();
   if (!cfg.server) { await setProgress({ state: "error", error: "no server configured (options)", results: [] }); return; }
@@ -915,6 +950,7 @@ function installMenus() {
   try {
     menus.removeAll(() => {
       menus.create({ id: "prax-page", title: "Send this page to prax", contexts: ["page", "frame", "selection", "image"] });
+      menus.create({ id: "prax-excerpt", title: "Send selection to prax as an excerpt", contexts: ["selection"] });
       menus.create({ id: "prax-link", title: "Send link to prax", contexts: ["link"] });
     });
   } catch (_) { /* no menus in this browser */ }
@@ -925,7 +961,9 @@ installMenus();
 if (api.contextMenus || api.menus) {
   (api.contextMenus || api.menus).onClicked.addListener(async (info, tab) => {
     const cfg = await settings();
-    if (info.menuItemId === "prax-link" && info.linkUrl) {
+    if (info.menuItemId === "prax-excerpt" && tab) {
+      captureExcerpt(tab, info.selectionText || "").catch((err) => log("warn", "excerpt failed", err));
+    } else if (info.menuItemId === "prax-link" && info.linkUrl) {
       captureLink(info.linkUrl, tab).catch((err) => log("warn", "link capture failed", err));
     } else if (info.menuItemId === "prax-page" && tab) {
       capture({ tabIds: [tab.id], domains: cfg.domains, tags: [], close: false }).catch((err) => log("warn", "capture failed", err));
@@ -951,6 +989,11 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return false;
   if (msg.type === "badge-seen") { badge("", "#2f5d8a", true); sendResponse({ ok: true }); return false; }
   if (msg.type === "send-active") { sendActive().catch((err) => log("warn", "capture failed", err)); sendResponse({ ok: true }); return false; }
+  if (msg.type === "excerpt") {
+    // the selection of a tab as an excerpt (the menu's way, by message: the popup and the test bed)
+    api.tabs.get(msg.tabId).then((tab) => captureExcerpt(tab, msg.text || "")).then(sendResponse, (err) => sendResponse({ error: err.message }));
+    return true;
+  }
   if (msg.type === "capture") {
     capture(msg).catch((err) => setProgress({ state: "error", error: err.message }));
     sendResponse({ ok: true });

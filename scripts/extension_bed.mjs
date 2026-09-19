@@ -285,7 +285,7 @@ async function exercise(b) {
   check(!result.error && result.doc_id, "the tab was sent as a snapshot", result.error || `doc ${result.doc_id} · ${result.note || result.mode || ""}`);
 
   const inbox = await (await get("/inbox?limit=5")).json();
-  const item = (inbox.recent || []).find((r) => r.source_url === `${FIXTURE}/article` || r.title === "The Bed Article");
+  const item = (inbox.recent || []).find((r) => r.title === "The Bed Article" && (!r.mime || /html/.test(r.mime)));
   check(!!item, "the door lists the capture in its inbox", item ? `${item.title} · domains ${JSON.stringify(item.domains)} · tags ${JSON.stringify(item.tags)}` : JSON.stringify(inbox).slice(0, 200));
   if (item) {
     check((item.domains || []).includes("research") && (item.tags || []).includes("bed"), "with the domain and the tag");
@@ -375,6 +375,22 @@ async function exercise(b) {
   } else {
     console.log("  (no clip at tests/fixtures/video/bars.webm: the video capture is not exercised)");
   }
+
+  // a selection as an excerpt: a small document of the selected words,
+  // headed by the page they are from (the menu's way, by message)
+  await b.evaluate(opts, `${api}.scripting.executeScript({ target: { tabId: ${JSON.stringify(tabId)} }, func: () => { const p = document.querySelector("p.lede"); window.getSelection().selectAllChildren(p); } })`);
+  const ex = await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "excerpt", tabId: ${JSON.stringify(tabId)} })`);
+  check(ex && !ex.error && ex.mode === "excerpt" && ex.doc_id, "a selection goes as an excerpt of its own", ex ? (ex.error || `${ex.mode} · ${ex.note} · doc ${ex.doc_id}`) : "no answer");
+  if (ex && ex.doc_id) {
+    const edoc = await (await get(`/get/${ex.doc_id}?max_chars=600`)).json();
+    const headed = (edoc.text || "").startsWith("# The Bed Article (excerpt)\n\nFrom *The Bed Article*, http") && (edoc.text || "").includes("A page the extension must carry over whole");
+    check(edoc.title === "The Bed Article (excerpt)" && headed, "headed by the page it is from, the words as selected", (edoc.text || "").slice(0, 160));
+    check(edoc.meta?.kind === "excerpt" && edoc.meta?.capture?.mode === "excerpt" && edoc.meta?.excerpt?.url === `${FIXTURE}/article` && edoc.source_url === `${FIXTURE}/article`, "and known as an excerpt of that page", JSON.stringify(edoc.meta?.excerpt));
+    const ehits = await (await get(`/search?q=${encodeURIComponent("carry over whole")}`)).json();
+    check(ehits.some((h) => h.doc_id === ex.doc_id), "which a search finds", JSON.stringify(ehits.map((h) => h.doc_id)));
+  }
+  const none = await b.evaluate(opts, `(async () => { await ${api}.scripting.executeScript({ target: { tabId: ${JSON.stringify(tabId)} }, func: () => window.getSelection().removeAllRanges() }); return ${api}.runtime.sendMessage({ type: "excerpt", tabId: ${JSON.stringify(tabId)} }); })()`);
+  check(none && /nothing is selected/.test(none.error || ""), "with nothing selected it says so", JSON.stringify(none).slice(0, 120));
 
   // a scholarly page: its citation tags name the paper and its PDF; the PDF
   // goes, with the ids, the authors and the page's own title

@@ -158,3 +158,13 @@ test("paperOf: the Highwire tags of a scholarly page, the DOI bare", () => {
   assert.equal(lib.paperOf(null), null);
   assert.deepEqual(lib.paperOf({ citation_doi: ["doi:10.1/x"] }), { doi: "10.1/x", arxiv: null, pdf_url: null, title: null });
 });
+
+test("excerptOf: the selected words as paragraphs, headed by where they are from", () => {
+  const e = lib.excerptOf("Granular synthesis scatters grains.\n\n  The envelope   shapes each burst.\r\nA third line.", { title: "The Bed Article", url: "http://x/article", at: "2026-09-19" });
+  assert.equal(e.title, "The Bed Article (excerpt)");
+  assert.equal(e.words, 12);
+  assert.equal(e.text, "# The Bed Article (excerpt)\n\nFrom *The Bed Article*, http://x/article, 2026-09-19.\n\nGranular synthesis scatters grains.\n\nThe envelope shapes each burst.\n\nA third line.\n");
+  assert.equal(lib.excerptOf("   \n ", {}), null);
+  assert.equal(lib.excerptOf("words", {}).title, "Excerpt");
+  assert.equal(lib.describeResult({ mode: "excerpt", created: true, note: "an excerpt of 12 words" }), "new: an excerpt of 12 words");
+});
