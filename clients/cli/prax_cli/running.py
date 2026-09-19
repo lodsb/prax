@@ -394,6 +394,15 @@ def _example_line(name: str, row: dict[str, Any]) -> str:
             f"{title!r} · extracted {str(row.get('extracted_at') or '')[:10]},"
             f" read again by {row.get('read_by')} {str(row.get('read_at') or '')[:10]}"
         )
+    if "why" in row:  # an original that is not a document, and why
+        title = (row.get("title") or f"doc {row.get('id')}")[:50]
+        return f"{title!r} · doc {row.get('id')} · {row['why']}"
+    if "pages" in row and "per_page" in row:  # a thin text
+        title = (row.get("title") or f"doc {row.get('id')}")[:50]
+        return (
+            f"{title!r} · doc {row.get('id')} · {out.num(row['pages'])} pages,"
+            f" {row['per_page']} bytes of text a page"
+        )
     if "rel" in row:  # an edge or a review item
         parts = [str(row.get("rel"))]
         if row.get("name"):

@@ -487,7 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  prax reread --extractor pymupdf4llm-ocr --unreadable   OCR, the scans\n"
-            "  prax reread --extractor pymupdf4llm-ocr --thin   OCR, scans read as covers\n"
+            "  prax reread --extractor marker --thin       scans read as their cover\n"
             "  prax reread --extractor vision-pages --mode scans --unreadable\n"
             "  prax reread --extractor figures --mode all --mime application/pdf\n"
             "  prax reread --extractor pymupdf4llm --text-source pymupdf4llm/1.28.2\n"
