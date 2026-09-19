@@ -148,7 +148,11 @@ the tab shows, with a small popup for the few choices that matter.
   unless the page's own player asks (a session token it adds), so the
   tracks are taken from YouTube's player service as the iOS client,
   whose answer plainly, from inside the tab; the page's own are the
-  last resort. Nothing is downloaded. The document is HTML of prax's own shape
+  last resort. A page that is not YouTube but has a `<video>` of its
+  own with `<track>`s of captions (a course platform, a media site) goes
+  the same way, the WebVTT read as the transcript, the frames drawn
+  from the element; the document's page then shows the first frame as
+  a link to the recording rather than a player. Nothing is downloaded. The document is HTML of prax's own shape
   (`src/prax/parsers/video.py` reads it exactly): the chapters a
   description lists become headings, each paragraph and frame carries
   `data-t`, the frames are inlined. The door keeps what the page knew
@@ -265,7 +269,8 @@ paper's PDF with its ids (and fill them in on the document the PDF
 already is), a watch page sent as a video (a fixture page
 with a player of YouTube's shape and a six-second clip of three
 colours, `tests/fixtures/video/bars.webm`: two paragraphs, three frames
-of six moments, the chapters, the moment on a search hit), and (Firefox, where the host permission
+of six moments, the chapters, the moment on a search hit; and a page
+with a `<video>` and a WebVTT track of its own), and (Firefox, where the host permission
 is removable) the send without the permission: the popup offers the
 grant and every tab still goes by URL with a note naming the missing
 permission. Each check prints a line; one failed check fails the run.

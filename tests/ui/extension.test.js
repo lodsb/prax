@@ -174,3 +174,12 @@ test("pageSection: the selection quoted, paragraphs kept, then where it is from"
   assert.equal(lib.pageSection("  ", {}), null);
   assert.equal(lib.describeResult({ mode: "page", note: "added to the page “Notes” (revision 2)" }), "added to the page “Notes” (revision 2)");
 });
+
+test("parseWebVtt: cues to events, settings and tags dropped", () => {
+  const vtt = "WEBVTT\n\n1\n00:00:00.000 --> 00:00:01.800 align:start\nwelcome to the <v Ann>bed's</v> talk\nabout <b>granular</b> synthesis.\n\n00:04.600 --> 00:05.400\nthe grain envelope\n";
+  assert.deepEqual(lib.parseWebVtt(vtt), [
+    { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: "welcome to the bed's talk about granular synthesis." }] },
+    { tStartMs: 4600, dDurationMs: 800, segs: [{ utf8: "the grain envelope" }] },
+  ]);
+  assert.deepEqual(lib.parseWebVtt("not a track"), []);
+});

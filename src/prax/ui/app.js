@@ -509,8 +509,11 @@ function playerHtml(doc, chunks, meta) {
   const first = chunks.find((c) => c.kind === "figure" && c.data && c.data.ref);
   const poster = first ? `<img src="/doc/${doc.id}/figure/${first.data.ref}" alt="">` : "";
   const where = [v.channel, v.duration ? fmtTime(v.duration) : null].filter(Boolean).map(esc).join(" · ");
+  const embeddable = v.provider === "youtube" && v.id;
   return `<div class="doc-player" id="doc-player" data-provider="${esc(v.provider || "")}" data-video="${esc(v.id || "")}">
-    <button type="button" class="player-poster" id="player-play" title="load the player (from ${esc(v.provider || "the provider")})">${poster}<span class="player-badge">▶ play</span></button>
+    ${embeddable
+      ? `<button type="button" class="player-poster" id="player-play" title="load the player (from ${esc(v.provider || "the provider")})">${poster}<span class="player-badge">▶ play</span></button>`
+      : `<a class="player-poster" href="${esc(v.url || "#")}" target="_blank" rel="noopener" title="the recording, where it is">${poster}<span class="player-badge">▶ watch there</span></a>`}
     <div class="player-meta muted">${where}${v.url ? ` · <a href="${esc(v.url)}" target="_blank" rel="noopener">watch there ↗</a>` : ""}</div>
   </div>`;
 }
@@ -531,7 +534,14 @@ function playerLoad(box, startAt) {
 }
 function playerSeek(box, t) {
   const frame = box.querySelector("iframe");
-  if (!frame) { playerLoad(box, t); return; }
+  if (!frame) {
+    if (!playerLoad(box, t)) {
+      // no embed for this provider: the moment opens where the recording is
+      const a = box.querySelector("a.player-poster");
+      if (a) window.open(`${a.href}${a.href.includes("?") ? "&" : "?"}t=${Math.floor(t)}s`, "_blank", "noopener");
+    }
+    return;
+  }
   const post = (func, args) => frame.contentWindow.postMessage(JSON.stringify({ event: "command", func, args: args || [] }), "https://www.youtube-nocookie.com");
   post("seekTo", [Math.floor(t), true]);
   post("playVideo");

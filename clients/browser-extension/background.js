@@ -346,7 +346,19 @@ function readPlayerMain() {
   let r = null;
   try { r = player && typeof player.getPlayerResponse === "function" ? player.getPlayerResponse() : null; } catch (_) { r = null; }
   if (!r && typeof ytInitialPlayerResponse !== "undefined") r = ytInitialPlayerResponse;
-  if (!r) return null;
+  if (!r) {
+    // not YouTube: a page's own <video> with <track>s of captions is a
+    // recording all the same (the tracks are WebVTT, fetched as they are)
+    const v = document.querySelector("video");
+    if (!v) return null;
+    const tracks = [...v.querySelectorAll("track")].filter((t) => /^(subtitles|captions)$/i.test(t.kind || "subtitles") && t.src).map((t) => ({ baseUrl: t.src, languageCode: t.srclang || "", kind: "", name: t.label || "" }));
+    const h1 = document.querySelector("h1");
+    return {
+      videoId: null, title: (h1 && h1.textContent.trim()) || document.title || "", author: "",
+      lengthSeconds: 0, description: "", publishDate: "", tracks,
+      duration: isFinite(v.duration) ? v.duration : 0, hasVideo: true, storyboard: null, generic: true,
+    };
+  }
   const d = r.videoDetails || {};
   const tracks = ((((r.captions || {}).playerCaptionsTracklistRenderer || {}).captionTracks) || []).map((t) => ({
     baseUrl: t.baseUrl, languageCode: t.languageCode || "", kind: t.kind || "",
@@ -398,6 +410,7 @@ async function fetchCaptions(url) {
   if (!r.ok) return { error: `captions: ${r.status}` };
   const text = await r.text();
   if (!text.trim()) return { error: "captions: an empty answer (the URL wants the page's own player)" };
+  if (/^\s*WEBVTT/.test(text)) return { vtt: text };  // parsed by the background (lib.parseWebVtt)
   try { return { events: JSON.parse(text).events || [] }; } catch (_) { /* not json3 */ }
   if (/^\s*<\?xml|^\s*<timedtext|^\s*<transcript/.test(text)) {
     const doc = new DOMParser().parseFromString(text, "text/xml");
@@ -558,9 +571,9 @@ async function readPaper(tabId) {
 
 async function probeVideo(tabId) {
   // whether the page has a player (the fixture of the test bed has one
-  // without being on youtube.com)
+  // without being on youtube.com), or a <video> with captions of its own
   try {
-    const r = await api.scripting.executeScript({ target: { tabId }, func: () => !!document.getElementById("movie_player") });
+    const r = await api.scripting.executeScript({ target: { tabId }, func: () => !!document.getElementById("movie_player") || !!document.querySelector("video track[kind=subtitles], video track[kind=captions], video track:not([kind])") });
     return !!(r && r[0] && r[0].result);
   } catch (_) { return false; }
 }
@@ -577,7 +590,7 @@ async function captureVideo(tab, opts, cfg, common) {
   const url = known.id ? `https://www.youtube.com/watch?v=${known.id}` : tab.url;
   const duration = Math.floor(info.duration || info.lengthSeconds || 0);
   const video = {
-    provider: known.provider || "youtube", id: info.videoId || known.id || null, url,
+    provider: info.generic ? "html5" : (known.provider || "youtube"), id: info.videoId || known.id || null, url,
     channel: info.author || "", duration, published: info.publishDate || "",
     captions: null, language: null, chapters: lib.chaptersFrom(info.description),
   };
@@ -598,6 +611,7 @@ async function captureVideo(tab, opts, cfg, common) {
     const sep = track.baseUrl.includes("?") ? "&" : "?";
     const r = await api.scripting.executeScript({ target: { tabId: tab.id }, func: fetchCaptions, args: [`${track.baseUrl}${sep}fmt=json3`] });
     const got = r && r[0] ? r[0].result : null;
+    if (got && got.vtt) got.events = lib.parseWebVtt(got.vtt);
     if (got && got.events) {
       paragraphs = lib.groupCaptions(got.events);
       video.captions = track.kind === "asr" ? "asr" : "uploaded";

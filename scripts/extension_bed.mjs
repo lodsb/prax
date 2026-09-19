@@ -150,6 +150,16 @@ const fixture = createServer((req, res) => {
     ] } },
   });
 </script></body></html>`);
+  } else if (url.pathname === "/clip") {
+    // a page with a <video> of its own and a WebVTT track: not YouTube,
+    // a recording all the same
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(`<!doctype html><html><head><title>The Bed Clip</title></head><body><h1>The Bed Clip</h1>
+<video src="/bars.webm" preload="auto" controls muted playsinline width="320" height="180"><track kind="subtitles" src="/bars.vtt" srclang="en" label="English" default></video>
+<p>A clip with captions of its own.</p></body></html>`);
+  } else if (url.pathname === "/bars.vtt") {
+    res.writeHead(200, { "content-type": "text/vtt" });
+    res.end(["WEBVTT", "", "00:00.000 --> 00:01.800", "welcome to the bed's clip", "", "00:01.800 --> 00:03.000", "with captions of its own.", "", "00:04.600 --> 00:05.400", "the grain envelope shapes each burst", "", "00:05.400 --> 00:06.000", "of sound.", ""].join(String.fromCharCode(10)));
   } else if (url.pathname === "/bars.webm") {
     if (!CLIP) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, { "content-type": "video/webm", "content-length": CLIP.length, "accept-ranges": "bytes" });
@@ -284,7 +294,7 @@ async function exercise(b) {
   const result = progress?.results?.[0] || {};
   check(!result.error && result.doc_id, "the tab was sent as a snapshot", result.error || `doc ${result.doc_id} · ${result.note || result.mode || ""}`);
 
-  const inbox = await (await get("/inbox?limit=5")).json();
+  const inbox = await (await get("/inbox?limit=40")).json();
   const item = (inbox.recent || []).find((r) => r.title === "The Bed Article" && (!r.mime || /html/.test(r.mime)));
   check(!!item, "the door lists the capture in its inbox", item ? `${item.title} · domains ${JSON.stringify(item.domains)} · tags ${JSON.stringify(item.tags)}` : JSON.stringify(inbox).slice(0, 200));
   if (item) {
@@ -371,6 +381,18 @@ async function exercise(b) {
       check(vhits.some((h) => h.doc_id === vr.doc_id && h.time != null), "a search for what was said finds the video, with the moment", JSON.stringify(vhits.map((h) => [h.doc_id, h.time])).slice(0, 120));
     }
     await b.evaluate(opts, `${api}.tabs.remove(${JSON.stringify(watchId)}).catch(() => null)`);
+    // a page's own <video> with a WebVTT track: the same document, from the track
+    const clipId = await b.evaluate(opts, `(async () => { const t = await ${api}.tabs.create({ url: ${JSON.stringify(`${FIXTURE}/clip`)}, active: true }); await new Promise(r => setTimeout(r, 2500)); return t.id; })()`);
+    await b.evaluate(opts, `${area}.set({ progress: { state: "running", total: 1, done: 0, results: [] } })`);
+    await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "capture", tabIds: [${JSON.stringify(clipId)}], domains: ["research"], tags: ["bed", "clip"], close: false, session: ${JSON.stringify(session + "c")} })`);
+    for (let i = 0; i < 120; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
+    const cr = progress?.results?.[0] || {};
+    check(progress?.state === "done" && cr.mode === "video" && /transcript \(en, 2 paragraphs\)/.test(cr.note || "") && /3 frames/.test(cr.note || ""), "a page's own video with a WebVTT track goes the same way", cr.error || `${cr.mode} · ${cr.note || ""}`);
+    if (cr.doc_id) {
+      const cdoc = await (await get(`/get/${cr.doc_id}?max_chars=2000`)).json();
+      check(cdoc.meta?.video?.provider === "html5" && cdoc.meta?.video?.url === `${FIXTURE}/clip` && cdoc.title === "The Bed Clip" && /\[0:04\] the grain envelope shapes each burst of sound\./.test(cdoc.text || ""), "known as a recording of that page, its captions in paragraphs", JSON.stringify(cdoc.meta?.video).slice(0, 120));
+    }
+    await b.evaluate(opts, `${api}.tabs.remove(${JSON.stringify(clipId)}).catch(() => null)`);
     await b.evaluate(opts, `${api}.storage.local.remove("frame_interval")`);
   } else {
     console.log("  (no clip at tests/fixtures/video/bars.webm: the video capture is not exercised)");

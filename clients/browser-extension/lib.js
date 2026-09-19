@@ -216,6 +216,26 @@
     return out.map((p) => ({ t: Math.floor(p.t), text: p.text }));
   }
 
+  /** WebVTT (a page's own <track>) → the events groupCaptions takes:
+      cues "hh:mm:ss.mmm --> hh:mm:ss.mmm" followed by their lines; the
+      cue settings after the times and the voice/class tags are dropped. */
+  function parseWebVtt(text) {
+    const lines = String(text || "").replace(/\r\n?/g, "\n").split("\n");
+    const stamp = (s) => { const m = String(s).trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})[.,](\d{1,3})$/); if (!m) return null; return ((Number(m[1] || 0) * 60 + Number(m[2])) * 60 + Number(m[3])) * 1000 + Number(String(m[4]).padEnd(3, "0")); };
+    const events = [];
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/^\s*(\S+)\s+-->\s+(\S+)/);
+      if (!m) continue;
+      const t0 = stamp(m[1]), t1 = stamp(m[2]);
+      if (t0 == null || t1 == null) continue;
+      const body = [];
+      for (i += 1; i < lines.length && lines[i].trim(); i++) body.push(lines[i].replace(/<[^>]*>/g, ""));
+      const words = body.join(" ").replace(/\s+/g, " ").trim();
+      if (words) events.push({ tStartMs: t0, dDurationMs: Math.max(0, t1 - t0), segs: [{ utf8: words }] });
+    }
+    return events;
+  }
+
   /** Chapters as a description lists them ("0:00 Intro" lines): [{t, title}],
       empty unless there are at least three and the first is 0:00. */
   function chaptersFrom(description) {
@@ -316,5 +336,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection, parseWebVtt };
 });
