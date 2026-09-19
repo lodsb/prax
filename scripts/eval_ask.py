@@ -64,7 +64,7 @@ One word, nothing else."""
 VERDICTS = ("yes", "partly", "no")
 
 
-def expected_equations(door: Door, q: dict[str, Any], limit: int = 3) -> str:
+def expected_equations(door: Door, q: dict[str, Any], limit: int = 5) -> str:
     """The formula chunks of the expected document(s) that match the
     question's expectation, LaTeX and reading; the first few otherwise."""
     docs = q["expect_doc"] if isinstance(q["expect_doc"], list) else [q["expect_doc"]]

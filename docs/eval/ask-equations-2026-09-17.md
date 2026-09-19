@@ -250,6 +250,52 @@ What the larger set shows that the small one could not:
 The baseline from here: **32.0 (31–33) of 52 one-shot, 45.0 (44–47)
 with eight steps.**
 
+### The hard cases, looked at (the same day)
+
+Two of the four were the set's fault, not the model's. The citighana
+answer (11) *had* written the equation — Nārāyaṇa's formula for the
+sum of figurate numbers, which the paper calls citighana — and the
+regex had handed the judge the sum-of-cubes identity from elsewhere in
+the paper; the WSOLA answer (43) gave equation (8), the paper's "basic
+synthesis equation", and the judge had been shown (4)–(6). Both
+expectations now name the paper's own forms, and the judge sees up to
+five matching chunks instead of three. The saved answers re-judged
+that way: **33.0 (32–34) one-shot, 44.3 (44–45) surfed** — the
+corrected baseline, and 11 and 43 at 3/3 both ways.
+
+Of the two real ones, the Markov chain's transition probability (20)
+is a surfer's miss: the passages the model held were prose of the
+right paper, the formula chunk was never opened, and a prose passage
+carries no line about the equations next door (only a formula passage
+does). The tape head's field (39) is the model citing the passage that
+holds the equation and not reproducing it.
+
+### "In full" (the same day)
+
+For 39, one more clause in the answer prompt: *write it out as that
+passage has it — in full, every term and condition, the whole display,
+not a part of it or a paraphrase.* The 52 three times, against the
+corrected baseline:
+
+| steps | cited | formula cited | match | stated (partly) | s/question |
+|---|---|---|---|---|---|
+| 0, before | 90% (47.0) 46–48 | 93% (48.3) | 90% (47.0) | 63% (33.0) 32–34, +3.0 | 10 |
+| 0, in full | 86% (44.7) 44–46 | 90% (46.7) | 86% (44.7) | 67% (34.7) 32–38, +2.3 | 12 |
+| 8, before | 88% (46.0) 44–47 | 91% (47.3) | 87% (45.3) | 85% (44.3) 44–45, +2.3 | 15 |
+| 8, in full | 85% (44.3) 44–45 | 92% (47.7) | 84% (43.7) | 87% (45.0) 43–48, +1.7 | 14 |
+
+It does what it was for — the tape head's field goes from 0/3 to 3/3
+one-shot and 1/3 to 3/3 surfed, written out from the prose passage
+that holds it — and the aggregate moves +1.7 and +0.7, inside the
+spread. Eighteen questions changed a verdict at a setting; reading
+them, the moves are the judge's: the path integral (51) went 3/3 → 0/3
+surfed on two answers that set the same equation word for word, one
+calling it "(19)" and the other "(unnumbered)"; the Shockley question
+(1) lost a run by answering from the *other* WDF paper's Shockley
+equation — the same equation, the wrong paper. Kept, for the class of
+answer it fixes; the honest result is "no harm, one fix", and the
+instrument's floor is a verdict or two per question, not per set.
+
 ## How the material came to be (the night of 2026-09-16/17)
 
 The mathematical part of the library through marker in one evening:

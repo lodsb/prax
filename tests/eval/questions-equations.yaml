@@ -53,7 +53,7 @@ questions:
     style: meaning
   - q: what is the Hindu series for the solid content of a pyramid with a triangular base, the citighana
     expect_doc: 4388
-    expect: "citighana|pyramid|triangular"
+    expect: "citighana"  # the paper's own definitions and Narayana's formula, not the sum of cubes
     style: named
   - q: how are the entries of the kernel matrix defined in the proximal support vector machine classifier
     expect_doc: 1409
@@ -185,7 +185,7 @@ questions:
     style: meaning
   - q: what is the synthesis equation of WSOLA, the overlap-add with the waveform similarity offsets
     expect_doc: 948
-    expect: 'WSOLA|v\(n|Delta_k|overlap'
+    expect: 'synthesis equation|weighted sum of input'  # (5), (6) and the basic (8), not the first (4)
     style: named
   - q: how is the discrete sinc kernel sincd defined in the fast sinc-interpolation algorithm
     expect_doc: 3980

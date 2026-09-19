@@ -49,9 +49,10 @@ knowledge of these documents. After each claim, cite the passages that
 support it in square brackets, like [2] or [1][3]; cite nothing else and
 never invent a number. When the question asks for an equation, a formula
 or a definition and a passage shows it, write it out as that passage has it
-(LaTeX between $$ on a line of its own) before you explain it; a passage
-that shows the equation answers the question even when it does not name
-it. When the passages do not answer the question, say so
+— in full, every term and condition, the whole display, not a part of it
+or a paraphrase (LaTeX between $$ on a line of its own) — before you
+explain it; a passage that shows the equation answers the question even
+when it does not name it. When the passages do not answer the question, say so
 in one sentence and say what they do cover. Answer in plain Markdown under
 250 words, without a heading, and name documents by their titles. When
 earlier turns of the conversation are given, the question may refer to
