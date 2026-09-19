@@ -336,6 +336,76 @@ def _repair_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     return done
 
 
+# What an original that is not what its type says looks like in its first
+# bytes: the AppleDouble fork macOS keeps beside a file (`._name.pdf`), a
+# Windows shortcut, a program, a run of zeros a broken download leaves.
+_FORKS = {
+    b"\x00\x05\x16\x07": "a macOS resource fork (._file), not the file",
+    b"IntxLNK": "a Windows shortcut, not the file",
+    b"MZ": "a program, not a document",
+}
+
+
+def _not_a_document(mime: str, head: bytes) -> str | None:
+    """Why the first bytes of an original cannot be a document of that
+    type, or None when they may. Only the types whose head is fixed by
+    their standard are judged (a PDF opens with ``%PDF-`` in its first
+    kilobyte); everything else passes."""
+    if not head:
+        return "an empty file"
+    for magic, why in _FORKS.items():
+        if head.startswith(magic):
+            return why
+    if head[:64].count(0) == len(head[:64]):
+        return "zeros where the file should be"
+    if mime == "application/pdf" and b"%PDF-" not in head:
+        return "no PDF header in the first kilobyte"
+    return None
+
+
+def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Live documents whose original cannot be what its type says (a
+    resource fork, a shortcut, an empty file, a PDF without a header):
+    registered from a folder that held them beside the real files; no
+    extractor will ever read them."""
+    from .base import _archive_path
+
+    out = []
+    for r in con.execute(
+        "SELECT id, hash, mime, title FROM documents"
+        " WHERE json_extract(meta, '$.retired') IS NULL AND text_hash IS NULL"
+        "   AND mime IN ('application/pdf') ORDER BY id"
+    ):
+        try:
+            with open(_archive_path(r["hash"]), "rb") as f:
+                head = f.read(1024)
+        except OSError:
+            continue
+        why = _not_a_document(r["mime"] or "", head)
+        if why:
+            out.append(
+                {"id": r["id"], "title": r["title"], "mime": r["mime"], "why": why}
+            )
+            if len(out) >= CAP:
+                break
+    return out
+
+
+def _repair_not_documents(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Retire them: the row and the bytes stay, the index and the graph
+    forget them, ``unreadable-documents`` stops offering OCR for them."""
+    done = 0
+    for row in rows:
+        try:
+            retire_document(
+                con, row["id"], reason=f"not a document: {row['why']} (heal)", by="heal"
+            )
+        except KeyError:
+            continue
+        done += 1
+    return done
+
+
 def _self_edges(con: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = con.execute(
         """
@@ -926,6 +996,21 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_extraction_failed,
         repair=_repair_extraction_failed,
+    ),
+    Ailment(
+        name="not-documents",
+        what=(
+            "originals that cannot be what their type says — a macOS resource"
+            " fork (._file), a Windows shortcut, a program, an empty file, a"
+            " PDF without its header — registered from a folder that held"
+            " them beside the real files; nothing will ever read them"
+        ),
+        fix=(
+            "retire them: row and bytes stay, index and graph forget them,"
+            " and the unreadable list is the scans again"
+        ),
+        find=_not_documents,
+        repair=_repair_not_documents,
     ),
     Ailment(
         name="thin-texts",

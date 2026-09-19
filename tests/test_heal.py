@@ -203,6 +203,36 @@ def test_a_scan_read_as_its_cover_is_thin(con: sqlite3.Connection) -> None:
     assert ailment["offers"][0]["thin"] == 100
 
 
+def test_what_cannot_be_a_document_is_named_and_retired(
+    con: sqlite3.Connection,
+) -> None:
+    fork = store.register(
+        con, b"\x00\x05\x16\x07\x00\x02\x00\x00" + b"\x00" * 40, mime="application/pdf"
+    )["doc_id"]
+    zeros = store.register(con, b"\x00" * 200, mime="application/pdf")["doc_id"]
+    link = store.register(con, b"IntxLNK\x01" + b"x" * 30, mime="application/pdf")[
+        "doc_id"
+    ]
+    page = store.register(con, b"<br />\n<html>...", mime="application/pdf")["doc_id"]
+    # a real PDF, unread so far, is not judged by its emptiness
+    real = store.register(
+        con, b"%PDF-1.4\n" + b"1 0 obj << >> endobj\n" * 5, mime="application/pdf"
+    )["doc_id"]
+    found = {
+        a["name"]: a for a in store.health(con, only=["not-documents"])["ailments"]
+    }
+    rows = found["not-documents"]["examples"]
+    assert [r["id"] for r in rows] == [fork, zeros, link, page]
+    assert rows[0]["why"].startswith("a macOS resource fork")
+    assert rows[1]["why"] == "zeros where the file should be"
+    assert rows[3]["why"] == "no PDF header in the first kilobyte"
+    done = store.heal(con, only=["not-documents"])
+    assert done["not-documents"] == {"found": 4, "repaired": 4}
+    assert store.get_meta(con, fork)["retired"]["reason"].startswith("not a document")
+    assert store.get_meta(con, real).get("retired") is None
+    assert store.health(con, only=["not-documents"])["ailments"][0]["count"] == 0
+
+
 def _with_figures(con: sqlite3.Connection) -> tuple[int, int]:
     """One document whose figure a model has read, one whose figure
     nobody has read."""
