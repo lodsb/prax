@@ -526,6 +526,26 @@ def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return out
 
 
+def _thin_texts(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """PDFs read as if their cover were the book
+    (``documents.thin_documents``): the longest first."""
+    from prax.store import documents as docs
+
+    rows = docs.thin_documents(con, limit=CAP)
+    if not rows:
+        return []
+    titles = {}
+    ids = [o["id"] for o in rows]
+    for start in range(0, len(ids), 500):
+        part = ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT id, title FROM documents WHERE id IN ({marks})", tuple(part)
+        ):
+            titles[r["id"]] = r["title"]
+    return [{**o, "title": titles.get(o["id"])} for o in rows]
+
+
 def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents whose text still holds ligature or Symbol-font code
     points: indexed before ``prax.glyphs`` cleaned every text."""
@@ -906,6 +926,28 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_extraction_failed,
         repair=_repair_extraction_failed,
+    ),
+    Ailment(
+        name="thin-texts",
+        what=(
+            "PDFs of five pages or more with under 100 bytes of text a page:"
+            " scans whose text layer is the cover's, read as if it were the"
+            " book (the front matter of a Google Books scan, say)"
+        ),
+        fix=(
+            "ask for OCR over all of them (`prax reread --extractor"
+            " pymupdf4llm-ocr --thin`; the OCR page budget, parse.ocr_max_pages,"
+            " must cover the longest) or the vision model; nothing to repair"
+            " in the store"
+        ),
+        find=_thin_texts,
+        offers=(
+            {
+                "label": "ask OCR for all of them",
+                "extractor": "pymupdf4llm-ocr",
+                "thin": 100,
+            },
+        ),
     ),
     Ailment(
         name="unreadable-documents",

@@ -952,6 +952,79 @@ def unreadable_documents(
     return out
 
 
+THIN_BYTES_PER_PAGE = 100  # under this much text a page, the layer is the cover's
+THIN_MIN_PAGES = 5  # a leaflet is not a scanned book
+
+
+def page_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
+    """How many pages each of those PDFs has: ``meta.pages`` where a parse
+    recorded it, else counted from the original when pymupdf is here (the
+    worker's library; a door without it knows what the parses told it and
+    leaves the rest out)."""
+    out: dict[int, int] = {}
+    todo: list[tuple[int, str]] = []
+    for start in range(0, len(ids), 500):
+        part = ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            "SELECT id, hash, json_extract(meta, '$.pages') AS pages FROM documents"
+            f" WHERE id IN ({marks})",
+            tuple(part),
+        ):
+            if r["pages"]:
+                out[r["id"]] = int(r["pages"])
+            else:
+                todo.append((r["id"], r["hash"]))
+    if not todo:
+        return out
+    try:
+        import pymupdf
+    except ImportError:
+        return out
+    for doc_id, digest in todo:
+        try:
+            with pymupdf.open(_archive_path(digest)) as doc:
+                out[doc_id] = int(doc.page_count)
+        except Exception:  # noqa: BLE001, S112 — not a PDF after all: left out
+            continue
+    return out
+
+
+def thin_documents(
+    con: sqlite3.Connection,
+    *,
+    per_page: int = THIN_BYTES_PER_PAGE,
+    min_pages: int = THIN_MIN_PAGES,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """PDFs of ``min_pages`` pages or more whose text comes to under
+    ``per_page`` bytes a page: a scan whose text layer is the cover's or
+    the front matter's, taken for the book — what ``unreadable_documents``
+    cannot see, since something was read. Rows of ``id``, ``pages``,
+    ``bytes`` and ``per_page``, the longest first; OCR is the way on."""
+    rows = con.execute(
+        "SELECT id, text_hash FROM documents WHERE mime = 'application/pdf'"
+        "   AND text_hash IS NOT NULL"
+        "   AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ).fetchall()
+    pages = page_counts(con, [r["id"] for r in rows])
+    out = []
+    for r in rows:
+        n = pages.get(r["id"])
+        if not n or n < min_pages:
+            continue
+        try:
+            size = _archive_path(r["text_hash"]).stat().st_size
+        except OSError:
+            continue
+        if size / n < per_page:
+            out.append(
+                {"id": r["id"], "pages": n, "bytes": size, "per_page": size // n}
+            )
+    out.sort(key=lambda o: -o["pages"])
+    return out[:limit] if limit else out
+
+
 def select_for_reading(
     con: sqlite3.Connection,
     *,
@@ -960,6 +1033,7 @@ def select_for_reading(
     text_source: str | None = None,
     title: str | None = None,
     unreadable: bool = False,
+    thin: int | None = None,
     read_figures: bool = False,
     unread_figures: bool = False,
     read_formulas: bool = False,
@@ -971,7 +1045,9 @@ def select_for_reading(
     narrowed by a MIME type or prefix (``application/pdf``, ``image/``),
     by the prefix of the text-source stamp (``pymupdf4llm/1.28.2``: what
     an old extractor read), by words the title contains, to the
-    unreadable ones, to the ones holding a figure a model has read
+    unreadable ones, to the thin ones (``thin``: PDFs with under that
+    many bytes of text a page, ``thin_documents``), to the ones holding
+    a figure a model has read
     (``read_figures``: what a better prompt or a better model goes over
     again) and to the ones holding a figure nobody has read
     (``unread_figures``), the same for formulas (``read_formulas``,
@@ -1000,6 +1076,9 @@ def select_for_reading(
     chosen = [r[0] for r in con.execute(sql, args)]
     if unreadable:
         keep = set(unreadable_documents(con))
+        chosen = [i for i in chosen if i in keep]
+    if thin is not None:
+        keep = {o["id"] for o in thin_documents(con, per_page=thin)}
         chosen = [i for i in chosen if i in keep]
     for wanted, kind, read in (
         (read_figures, "figure", True),

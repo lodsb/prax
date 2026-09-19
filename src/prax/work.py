@@ -601,6 +601,7 @@ def take_in(
                     seconds=float(r.get("seconds") or 0.0),
                     force=bool(r.get("force")),
                     keep_source=bool(r.get("keep_source")),
+                    pages=int(r["pages"]) if r.get("pages") else None,
                 )
             except Exception as exc:  # noqa: BLE001
                 out["errors"].append(

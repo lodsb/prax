@@ -53,12 +53,18 @@ def _now() -> str:
 
 
 def _record(
-    con: sqlite3.Connection, doc_id: int, entry: dict[str, Any]
+    con: sqlite3.Connection,
+    doc_id: int,
+    entry: dict[str, Any],
+    *,
+    pages: int | None = None,
 ) -> dict[str, Any]:
     meta = store.get_meta(con, doc_id)
     history = list(meta.get("parse_history", []))
     history.append({"at": _now(), **entry})
     meta["parse_history"] = history
+    if pages:  # a fact of the original the worker counted on the way
+        meta["pages"] = int(pages)
     store.set_meta(con, doc_id, meta)
     return meta
 
@@ -199,9 +205,11 @@ def apply_parse(
     seconds: float = 0.0,
     force: bool = False,
     keep_source: bool = False,
+    pages: int | None = None,
 ) -> str:
     """Take in what an extractor produced for a document, here or on a
-    worker: record the attempt in ``meta.parse_history`` and index the
+    worker: record the attempt in ``meta.parse_history`` (and the page
+    count of a PDF as ``meta.pages``, when the worker counted it) and index the
     text unless it is suspiciously short next to the old one (``force``
     overrides) or the same as the current text (``same``: the stamp moves,
     nothing is rebuilt). Returns the action: ``created``, ``upgraded``,
@@ -212,7 +220,9 @@ def apply_parse(
     if doc is None:
         raise KeyError(f"no such document: {doc_id}")
     if error or text is None:
-        _record(con, doc_id, {"extractor": stamp, "error": error or "no text"})
+        _record(
+            con, doc_id, {"extractor": stamp, "error": error or "no text"}, pages=pages
+        )
         return "error"
     text = text.strip()
     old_len = doc["text_len"]
@@ -220,19 +230,24 @@ def apply_parse(
     if old_len and store.text_unchanged(con, doc_id, text):
         # a re-read that found nothing new (an upgrade pass over the
         # library): the stamp moves on, chunks and vectors stay
-        _record(con, doc_id, {**entry, "outcome": "same"})
+        _record(con, doc_id, {**entry, "outcome": "same"}, pages=pages)
         _restamp(con, doc_id, stamp, keep_source)
         return "same"
     if not force and _too_short(len(text), old_len):
         action = "kept" if old_len else "empty"
-        _record(con, doc_id, {**entry, "outcome": action})
+        _record(con, doc_id, {**entry, "outcome": action}, pages=pages)
         return action
     action = "upgraded" if old_len else "created"
     source = None if keep_source else stamp
     result = store.index_text(con, doc_id, text, text_source=source)
     # the artifact's hash in the record: every earlier text stays in the
     # archive, content-addressed, and this is how it is found again
-    _record(con, doc_id, {**entry, "outcome": action, "text_hash": result["text_hash"]})
+    _record(
+        con,
+        doc_id,
+        {**entry, "outcome": action, "text_hash": result["text_hash"]},
+        pages=pages,
+    )
     if keep_source:
         _restamp(con, doc_id, stamp, keep_source)
     elif action == "upgraded":

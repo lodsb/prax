@@ -94,6 +94,7 @@ def do_parse(
                 {"doc_id": doc_id, "extractor": exts[0].stamp, "error": f"fetch: {exc}"}
             )
             continue
+        pages = _page_count(data)  # a fact of the original, for the door's record
         last = None
         for ext in exts:
             t0 = time.monotonic()
@@ -119,7 +120,12 @@ def do_parse(
                     # extractor, empty for the fallback, came back every
                     # cycle otherwise)
                     results.append(
-                        {"doc_id": doc_id, "extractor": ext.stamp, "error": last[1]}
+                        {
+                            "doc_id": doc_id,
+                            "extractor": ext.stamp,
+                            "error": last[1],
+                            "pages": pages,
+                        }
                     )
                 continue
             results.append(
@@ -131,6 +137,7 @@ def do_parse(
                     "force": bool(it.get("force")),
                     "requested": it.get("extractor"),
                     "keep_source": ext.annotates,
+                    "pages": pages,
                 }
             )
             _say(log_, f"parse doc {doc_id}: {len(text)} chars ({stamp})")
@@ -142,9 +149,24 @@ def do_parse(
                     "extractor": last[0] if last else exts[0].stamp,
                     "error": last[1] if last else "failed",
                     "requested": it.get("extractor"),
+                    "pages": pages,
                 }
             )
     return results
+
+
+def _page_count(data: bytes) -> int | None:
+    """How many pages a PDF has, or None for anything else (and for a PDF
+    pymupdf cannot open: the extractor will say so in its own words)."""
+    if data[:5] != b"%PDF-":
+        return None
+    try:
+        import pymupdf
+
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            return int(doc.page_count)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 _MODE_SETTINGS = {

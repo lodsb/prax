@@ -1509,6 +1509,7 @@ class BulkReadingReq(BaseModel):
     text_source: str | None = None  # a stamp prefix: what an old extractor read
     title: str | None = None  # words the title contains
     unreadable: bool = False  # the documents nothing here could read
+    thin: int | None = None  # PDFs with under this many bytes of text a page
     read_figures: bool = False  # the documents whose figures a model has read
     unread_figures: bool = False  # the documents holding a figure nobody read
     read_formulas: bool = False  # the same for display equations
@@ -1543,6 +1544,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         or req.text_source
         or req.title
         or req.unreadable
+        or req.thin is not None
         or req.read_figures
         or req.unread_figures
         or req.read_formulas
@@ -1551,7 +1553,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
     ):
         raise HTTPException(
             400,
-            "a selection: ids, mime, text_source, title, unreadable,"
+            "a selection: ids, mime, text_source, title, unreadable, thin,"
             " read_figures, unread_figures, read_formulas, unread_formulas or maths",
         )
     ids = store.select_for_reading(
@@ -1561,6 +1563,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         text_source=req.text_source,
         title=req.title,
         unreadable=req.unreadable,
+        thin=req.thin,
         read_figures=req.read_figures,
         unread_figures=req.unread_figures,
         read_formulas=req.read_formulas,

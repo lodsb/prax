@@ -95,6 +95,8 @@ def test_parse_and_titles_through_the_door(
     assert out["parse"].startswith("1 parsed")
     assert store.get_document(con, cap.doc_id, max_chars=0)["text_len"] > 0
     assert client.get("/work/parse").json()["items"] == []
+    # the worker counted the pages on the way and the door kept the count
+    assert store.get_meta(con, cap.doc_id)["pages"] >= 1
     # titles: the file name is not a title; with no titles model the worker
     # says so and the door remembers the try
     batch = client.get("/work/titles").json()

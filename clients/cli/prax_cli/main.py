@@ -487,6 +487,7 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=(
             "examples:\n"
             "  prax reread --extractor pymupdf4llm-ocr --unreadable   OCR, the scans\n"
+            "  prax reread --extractor pymupdf4llm-ocr --thin   OCR, scans read as covers\n"
             "  prax reread --extractor vision-pages --mode scans --unreadable\n"
             "  prax reread --extractor figures --mode all --mime application/pdf\n"
             "  prax reread --extractor pymupdf4llm --text-source pymupdf4llm/1.28.2\n"
@@ -510,6 +511,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--unreadable",
         action="store_true",
         help="the documents nothing here could read (scans without a text layer)",
+    )
+    s.add_argument(
+        "--thin",
+        nargs="?",
+        const=100,
+        type=int,
+        metavar="BYTES",
+        help="PDFs of five pages or more with under BYTES of text a page"
+        " (100: a scan whose text layer is its cover's)",
     )
     s.add_argument("-n", "--limit", type=int, help="at most this many")
     s.add_argument(

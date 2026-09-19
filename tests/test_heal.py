@@ -156,6 +156,53 @@ def test_the_reports_say_what_to_do_and_change_nothing(
     assert "look at" in done["documents-without-an-extractor"]
 
 
+def _pdf(pages: int, text: str = "") -> bytes:
+    """A PDF of that many pages, the text on the first one only (a scan
+    whose text layer is the cover's), or blank."""
+    pymupdf = pytest.importorskip("pymupdf")
+    doc = pymupdf.open()
+    for i in range(pages):
+        page = doc.new_page()
+        if i == 0 and text:
+            page.insert_text((72, 72), text)
+    return doc.tobytes()
+
+
+def test_a_scan_read_as_its_cover_is_thin(con: sqlite3.Connection) -> None:
+    # a six-page scan whose only text is its cover, taken for the book
+    scan = store.register(con, _pdf(6, "A Cover"), mime="application/pdf")["doc_id"]
+    store.index_text(con, scan, "A Cover", text_source="pymupdf4llm/1")
+    # a six-page paper with a page of text on every page: not thin
+    paper = store.register(con, _pdf(6, "A Paper"), mime="application/pdf")["doc_id"]
+    store.index_text(con, paper, "words " * 200, text_source="pymupdf4llm/1")
+    # a leaflet of one page with a line of text: too short to be a scanned book
+    leaf = store.register(con, _pdf(1, "A Leaflet"), mime="application/pdf")["doc_id"]
+    store.index_text(con, leaf, "A Leaflet", text_source="pymupdf4llm/1")
+    thin = store.thin_documents(con)
+    assert [o["id"] for o in thin] == [scan]
+    assert thin[0]["pages"] == 6 and thin[0]["per_page"] < 100
+    # the selector reaches it, with the bytes-a-page bar of its own
+    assert store.select_for_reading(con, mime="application/pdf", thin=100) == [scan]
+    assert store.select_for_reading(con, mime="application/pdf", thin=1) == []
+    # the page count is counted from the original when no parse recorded it,
+    # and taken from meta.pages when one did — a paper of 1,200 bytes said to
+    # have forty pages is thin after all
+    assert store.page_counts(con, [scan, paper]) == {scan: 6, paper: 6}
+    meta = store.get_meta(con, paper)
+    meta["pages"] = 40
+    store.set_meta(con, paper, meta)
+    assert store.page_counts(con, [paper]) == {paper: 40}
+    assert [o["id"] for o in store.thin_documents(con)] == [paper, scan]
+    # and the heal names it, the way on being OCR over all of them
+    found = {a["name"]: a for a in store.health(con)["ailments"]}
+    ailment = found["thin-texts"]
+    assert ailment["count"] == 2 and ailment["examples"][0]["id"] == paper
+    assert (
+        ailment["examples"][0]["title"] is None and ailment["examples"][1]["id"] == scan
+    )
+    assert ailment["offers"][0]["thin"] == 100
+
+
 def _with_figures(con: sqlite3.Connection) -> tuple[int, int]:
     """One document whose figure a model has read, one whose figure
     nobody has read."""

@@ -165,6 +165,11 @@ host.
     prax reread --extractor trafilatura --text-source zotero-ft-cache --mime text/html
     # scans: OCR is explicit and bounded (PRAX_OCR_MAX_PAGES, default 60)
     prax reread --extractor pymupdf4llm-ocr --unreadable
+    # scans read as their cover — a text layer on the front matter only, under
+    # 100 bytes a page over five pages or more (the `thin-texts` ailment; the
+    # worker records a PDF's page count as meta.pages, the door counts the
+    # older ones from the originals); --thin 40 for a stricter bar
+    prax reread --extractor pymupdf4llm-ocr --thin
     # scans in another script: the recognizer is a setting (parse.ocr_language:
     # ch reads Chinese and English; en, latin, arabic, cyrillic, devanagari,
     # japan, korean, el, th...) and part of the stamp, so a book read with the
@@ -1462,6 +1467,7 @@ you still want to look at) stays alone.
 | `extraction-failed` | documents the extract step could not read under the current ontology — a prompt the model's slot cannot hold even after the cut, a server error; the error is kept in `meta.extraction_error` and the passes leave them out until the ontology moves or a reading succeeds | forgets the errors that were the model server's (loading, down, refused) so those are selected again; a prompt no slot holds stays |
 | `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time, or `--upgrade` at once (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
+| `thin-texts` | PDFs of five pages or more with under 100 bytes of text a page: scans whose text layer is the cover's, read as if it were the book (a Google Books scan whose only text is its usage page) | a report, with an offer on the panel: OCR over all of them (`prax reread --extractor pymupdf4llm-ocr --thin`; `parse.ocr_max_pages` must cover the longest) |
 | `unreadable-documents` | documents every extractor here has tried and found no text in (scans without a text layer); they wait and are not tried again | a report, with two offers on the panel: OCR over all of them, or the vision model over their scanned pages (`prax reread --unreadable --extractor …`); or retire them |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
 
@@ -1663,7 +1669,7 @@ One command for the everyday work, and the same one wherever the door is:
     prax jobs                         passes running now and lately
     prax heal                         what recurring damage is in the store
     prax maintain                     what the store does to itself: acronyms, fields, domains, duplicates
-    prax reread --extractor X ...     a reading on a selection: --unreadable, --mime, --text-source, --ids; --wait
+    prax reread --extractor X ...     a reading on a selection: --unreadable, --thin, --mime, --text-source, --ids; --wait
     prax readings                     the reading queue per extractor; --wait blocks until it drains
     prax backup D:/prax-backup        copy the store (only what is new)
     prax work --watch                 be the worker for a door
