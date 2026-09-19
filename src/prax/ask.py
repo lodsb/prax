@@ -82,6 +82,7 @@ class Passage:
     text: str
     figure: str | None = None  # a figure chunk's reference: the image beside it
     nearby: list[dict[str, Any]] | None = None  # a formula's neighbouring equations
+    time: int | None = None  # seconds into a recording (a transcript's passage)
 
     def label(self) -> str:
         bits = [self.title or "(untitled)"]
@@ -89,6 +90,10 @@ class Passage:
             bits.append(" › ".join(self.heading))
         if self.page:
             bits.append(f"p. {self.page}")
+        if self.time is not None:
+            from prax.chunking import format_time
+
+            bits.append(f"at {format_time(self.time)}")
         s = " — ".join(bits)
         if self.kind and self.kind != "text":
             s += f" [{self.kind}]"
@@ -106,6 +111,7 @@ class Passage:
             "text": self.text,
             "figure": self.figure,
             "nearby": self.nearby,
+            "time": self.time,
         }
 
     def nearby_line(self) -> str:
@@ -251,6 +257,7 @@ def gather(
                 text=text[:passage_chars],
                 figure=h.get("figure"),
                 nearby=nearby_of(con, h.get("kind"), chunk_id),
+                time=h.get("time"),
             )
         )
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))
@@ -511,6 +518,7 @@ def citations(text: str, bundle: Bundle) -> list[dict[str, Any]]:
                     "title": p.title,
                     "heading": p.heading,
                     "page": p.page,
+                    "time": p.time,
                 }
             )
     return out

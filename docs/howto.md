@@ -1252,7 +1252,10 @@ Four ways in:
   the parser the document names (`meta.parser`), the passages carry
   their moment (`locator.time`), the frames are figures the vision pass
   reads, `doctype=video` finds them, and the document's page shows the
-  player.
+  player: the first frame as a poster until you press play (nothing is
+  fetched from the provider before that), then the provider's embed;
+  every passage's moment is a link that seeks it, and a search hit or
+  an ask's source says "at 12:34" where a paper's would say "p. 7".
 - **Claude Code**: the `capture_url` MCP tool.
 - **The drop folder** `data/inbox/`: the door consumes it by itself
   while it runs (every `PRAX_INBOX_SCAN` seconds, 20 by default, 0 to

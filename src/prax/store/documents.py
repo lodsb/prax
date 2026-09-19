@@ -1778,6 +1778,7 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
         "kind": row["kind"],
         "heading": json.loads(row["heading"]) if row["heading"] else [],
         "page": loc.get("page"),
+        "time": loc.get("time"),  # seconds into a recording, a transcript's passage
         "figure": None,
     }
     if row["kind"] == "figure" and "data" in row.keys() and row["data"]:  # noqa: SIM118 - a Row iterates values, not keys

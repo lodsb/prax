@@ -57,6 +57,7 @@ from __future__ import annotations
 import functools
 import importlib
 import importlib.metadata
+import importlib.util
 import mimetypes
 import re
 import shutil
@@ -1272,8 +1273,8 @@ REGISTRY: list[Extractor] = [
         "video",
         ("text/html", "application/xhtml+xml"),
         _video,
-        "lxml",
         explicit_only=True,  # chosen by the document that names it (meta.parser)
+        check=lambda: importlib.util.find_spec("lxml") is not None,
     ),
     Extractor(
         "trafilatura",

@@ -428,6 +428,15 @@ main.stage { max-width: 1400px; }
 .doc-figure figcaption { margin: .6rem 0 .2rem; font-size: .9rem; color: var(--muted); font-style: italic; }
 .figure-reading { margin: .35rem 0 0; font-size: .95rem; }
 /* a figure hit or source shows its picture, small, above the reading */
+/* a video document's player: the first frame as a poster, the embed once
+   played; the frame keeps the picture's proportion */
+.doc-player { margin: 0 0 1.2rem; max-width: 56rem; }
+.doc-player .player-poster { position: relative; display: block; width: 100%; aspect-ratio: 16 / 9; padding: 0; border: 1px solid var(--prax-rule); background: var(--prax-key); cursor: pointer; overflow: hidden; }
+.doc-player .player-poster img { width: 100%; height: 100%; object-fit: contain; display: block; opacity: .9; }
+.doc-player .player-badge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: .4rem .9rem; border: 1px solid var(--prax-ground); color: var(--prax-ground); background: rgba(0, 0, 0, .45); font: inherit; letter-spacing: .04em; }
+.doc-player iframe { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--prax-rule); display: block; }
+.doc-player .player-meta { margin-top: .3rem; font-size: .9em; }
+a.moment { font-variant-numeric: tabular-nums; }
 .doc-more { padding: 1.2em 0 2em; text-align: center; font-size: 0.9em; }
 .doc-more .linkish { margin-left: 0.6em; }
 

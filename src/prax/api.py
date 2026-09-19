@@ -1671,6 +1671,8 @@ def root() -> RedirectResponse:
 UI_POLICY = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
+    # a video document's player, loaded only when the reader presses play
+    "frame-src https://www.youtube-nocookie.com; "
     "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 )
 

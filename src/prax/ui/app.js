@@ -158,6 +158,20 @@ function originalHref(docId, page) {
   return `/doc/${docId}/original` + (page ? `#page=${page}` : "");
 }
 
+// A moment in a recording: 754 → "12:34", 3754 → "1:02:34".
+function fmtTime(t) {
+  t = Math.max(0, Math.floor(Number(t) || 0));
+  const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// The link to a moment of a video document: seeks the player on its page
+// when one is there, else opens the recording at that second.
+function momentLink(docId, t, video) {
+  const url = video && video.url ? `${video.url}${video.url.includes("?") ? "&" : "?"}t=${t}s` : null;
+  return `<a class="moment" href="${url ? esc(url) : `#doc/${docId}`}" data-t="${t}" data-doc="${docId}" title="at ${fmtTime(t)}"${url ? ` target="_blank" rel="noopener"` : ""}>${fmtTime(t)}</a>`;
+}
+
 // ---------------------------------------------------------------- search
 
 // The ontology's modules, once per page load, for the domain selectors:
@@ -217,7 +231,7 @@ async function viewSearch(p) {
     const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, domain: p.domain || undefined, limit: p.limit || settings().search_limit });
     if (!hits.length) { results.innerHTML = `<p class="muted">No hits.</p>`; return; }
     results.innerHTML = hits.map((h) => {
-      const page = h.page ? `p. ${h.page}` : "";
+      const page = h.page ? `p. ${h.page}` : (h.time != null ? `at ${fmtTime(h.time)}` : "");
       const sides = [];
       if (h.fts_rank !== undefined) {
         if (h.fts_rank) sides.push(`fts #${h.fts_rank}`);
@@ -462,6 +476,7 @@ function renderChunk(c, highlight, docId) {
       ${badge(c.kind)}
       <span class="muted">${headingPath(c.heading)}</span>
       ${c.page ? `<span class="muted">p. ${c.page}</span>` : ""}
+      ${c.time != null ? momentLink(docId, c.time, VIDEO_OF[docId]) : ""}
       <span class="muted">#${c.chunk_id}</span>
     </div>
     <div class="chunk-body">${body}</div>
@@ -482,6 +497,47 @@ function outline(chunks) {
   return items.length ? `<ol class="outline">${items.join("")}</ol>` : "";
 }
 
+// The video a document is of, by id, for the moment links rendered
+// inside it (renderChunk has no document in hand).
+const VIDEO_OF = {};
+
+// A video document's player: the first frame as a poster until the
+// reader presses play (nothing is fetched from the provider before), then
+// the provider's embed with its API on, so a moment link seeks it.
+function playerHtml(doc, chunks, meta) {
+  const v = meta.video || {};
+  const first = chunks.find((c) => c.kind === "figure" && c.data && c.data.ref);
+  const poster = first ? `<img src="/doc/${doc.id}/figure/${first.data.ref}" alt="">` : "";
+  const where = [v.channel, v.duration ? fmtTime(v.duration) : null].filter(Boolean).map(esc).join(" · ");
+  return `<div class="doc-player" id="doc-player" data-provider="${esc(v.provider || "")}" data-video="${esc(v.id || "")}">
+    <button type="button" class="player-poster" id="player-play" title="load the player (from ${esc(v.provider || "the provider")})">${poster}<span class="player-badge">▶ play</span></button>
+    <div class="player-meta muted">${where}${v.url ? ` · <a href="${esc(v.url)}" target="_blank" rel="noopener">watch there ↗</a>` : ""}</div>
+  </div>`;
+}
+function playerLoad(box, startAt) {
+  const provider = box.dataset.provider, vid = box.dataset.video;
+  if (provider !== "youtube" || !vid) return null;
+  let frame = box.querySelector("iframe");
+  if (frame) return frame;
+  const poster = box.querySelector(".player-poster");
+  frame = document.createElement("iframe");
+  frame.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid)}?enablejsapi=1&start=${Math.floor(startAt || 0)}&autoplay=1&origin=${encodeURIComponent(location.origin)}`;
+  frame.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen";
+  frame.referrerPolicy = "strict-origin-when-cross-origin";
+  frame.title = "the video";
+  if (poster) poster.replaceWith(frame); else box.prepend(frame);
+  frame.addEventListener("load", () => frame.contentWindow.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), "https://www.youtube-nocookie.com"));
+  return frame;
+}
+function playerSeek(box, t) {
+  const frame = box.querySelector("iframe");
+  if (!frame) { playerLoad(box, t); return; }
+  const post = (func, args) => frame.contentWindow.postMessage(JSON.stringify({ event: "command", func, args: args || [] }), "https://www.youtube-nocookie.com");
+  post("seekTo", [Math.floor(t), true]);
+  post("playVideo");
+  box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+
 async function viewDoc(id, p) {
   view.classList.add("wide");
   loading(`Loading document ${esc(id)}…`);
@@ -493,6 +549,7 @@ async function viewDoc(id, p) {
     return;
   }
   const meta = doc.meta || {};
+  if (meta.video) VIDEO_OF[doc.id] = meta.video;
   let highlight = p.chunk ? Number(p.chunk) : null;
   if (!highlight && p.find) highlight = locateChunk(chunks, p.find);
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
@@ -517,12 +574,25 @@ async function viewDoc(id, p) {
     <div id="page-editor"></div>
   </header>
   ${rule()}
+  ${meta.video ? playerHtml(doc, chunks, meta) : ""}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
     <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? "" : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
   const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks));
+  const player = view.querySelector("#doc-player");
+  if (player) {
+    const play = player.querySelector("#player-play");
+    if (play) play.addEventListener("click", () => playerLoad(player, p.t ? Number(p.t) : 0));
+    // a moment link seeks the player instead of leaving the page
+    view.addEventListener("click", (e) => {
+      const a = e.target.closest("a.moment");
+      if (!a) return;
+      e.preventDefault();
+      playerSeek(player, Number(a.dataset.t));
+    });
+  }
   const loadContext = async (domain) => {
     try {
       await modules();
@@ -1632,7 +1702,7 @@ function renderSources(t, i) {
       <div class="source-n">[${p.n}]</div>
       <div class="source-body">
         <a class="source-title" href="#doc/${p.doc_id}${p.chunk_id ? `?chunk=${p.chunk_id}` : ""}">${esc(p.title || "(untitled)")}</a>
-        <div class="hit-meta">${badge(p.kind)} <span>${headingPath(p.heading)}</span> <span>${p.page ? `p. ${p.page}` : ""}</span></div>
+        <div class="hit-meta">${badge(p.kind)} <span>${headingPath(p.heading)}</span> <span>${p.page ? `p. ${p.page}` : (p.time != null ? `at ${fmtTime(p.time)}` : "")}</span></div>
         ${figureThumb(p)}
         <p class="snippet source-short">${esc(plainFigures(p.text).slice(0, 300))}${cut ? `… <button type="button" class="linkish source-more">more</button>` : ""}</p>
         ${cut ? `<p class="snippet source-full" hidden>${esc(p.text)} <button type="button" class="linkish source-more">less</button></p>` : ""}
