@@ -296,6 +296,41 @@ equation — the same equation, the wrong paper. Kept, for the class of
 answer it fixes; the honest result is "no harm, one fix", and the
 instrument's floor is a verdict or two per question, not per set.
 
+### The neighbourhood on prose passages (the night of 2026-09-18/19, reverted)
+
+For 20, the surfer's miss: a text chunk of a paper with equations
+carried the neighbourhood line too (the two equations each way, as a
+formula chunk does), so that a paragraph brought by the first search
+could say "equation (1) is next door" and the surfer open it. The 52
+three times, against "in full" (the run shared llama-server with the
+nightly extraction pass for its first hour, hence the seconds):
+
+| steps | cited | formula cited | match | stated (partly) | s/question |
+|---|---|---|---|---|---|
+| 0, in full | 86% (44.7) 44–46 | 90% (46.7) | 86% (44.7) | 67% (34.7) 32–38, +2.3 | 12 |
+| 0, prose too | 86% (44.7) 43–46 | 88% (46.0) | 86% (44.7) | 65% (34.0), +2.3 | 20 |
+| 8, in full | 85% (44.3) 44–45 | 92% (47.7) | 84% (43.7) | 87% (45.0) 43–48, +1.7 | 14 |
+| 8, prose too | 88% (45.7) 45–46 | 93% (48.3) | 87% (45.3) | 81% (42.0) 39–45, +1.0 | 29 |
+
+It fixed its target — the Markov chain went 1/3 → 3/3 surfed, and 18,
+21 and 48 gained a run or two — and cost more than it fixed: −3.0
+surfed, the ranges barely touching (43–48 against 39–45), sixteen runs
+lost against seven gained; one-shot unmoved. The answers say why. A
+prose passage is often a table of contents or a preface, and the
+equations next to *that* are whatever the chapter opens with: the
+Lorenz question (24, 3/3 → 1/3) has the model report that "the text
+provided only includes the TOC and nearby unrelated equations (damped
+harmonic oscillator, heat equation)" — it opened the neighbours the
+line offered, found them unrelated, and never made the second search
+that had found the formula chunk before. The tape head's field (39,
+3/3 → 1/3) spent seven steps the same way and ended with the passage
+that "cuts off before the formula" instead of reading on. On a formula
+passage the line names the equation's own siblings; on a prose passage
+it names whatever is near, and the surfer takes an offer over a
+search. Reverted (`d324541`); the formula-passage line stays. If the
+case of 20 is worth another try, the honest variant is narrower: only
+the equations the prose itself refers to by number.
+
 ## How the material came to be (the night of 2026-09-16/17)
 
 The mathematical part of the library through marker in one evening:
