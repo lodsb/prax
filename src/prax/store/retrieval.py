@@ -10,6 +10,7 @@ vector from which model.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -821,62 +822,81 @@ def _save_delta(path: Path) -> dict[str, Any]:
     with _INDEX_LOCK:
         delta = _delta(path)
         delta.save()
-        if len(delta) >= DELTA_MERGE_AT or not path.exists():
-            return _merge(path)  # a large delta, or no main file yet
-        main = _open_index(path, writable=False)
-        return {
-            "count": (len(main) if main is not None else 0) + len(delta),
-            "delta": len(delta),
-            "bytes": path.stat().st_size if path.exists() else 0,
-        }
+        due = len(delta) >= DELTA_MERGE_AT or not path.exists()
+        if not due:
+            main = _open_index(path, writable=False)
+            return {
+                "count": (len(main) if main is not None else 0) + len(delta),
+                "delta": len(delta),
+                "bytes": path.stat().st_size if path.exists() else 0,
+            }
+    return _merge(path)  # a large delta, or no main file yet: outside the lock
 
 
 def _merge(path: Path) -> dict[str, Any]:
-    """Fold the delta into the main file: load the main index writable, add
-    the delta's vectors, save, drop this process's views, start an empty
-    delta. Needs the main index in memory for the duration."""
+    """Fold the delta into the main file. The building — the main index
+    loaded into memory, the delta's vectors added, the result written to a
+    file beside it — happens outside the index lock: a 1.2 GB file with
+    fifty thousand new vectors takes half a minute, and every search of
+    the evening waited on it. The lock is held twice, briefly: to take the
+    delta's vectors, and to swap the new file in — this process's views
+    dropped first (Windows will not replace a mapped file) — with what
+    arrived during the build kept in a fresh delta."""
+    import numpy as np
+
+    from prax import vectors as vectors_mod
+
+    from .base import VEC_DIM
+
+    dpath = _delta_path(path)
     with _INDEX_LOCK:
         delta = _delta(path)
-        main = _open_index(path, writable=True)
-        assert main is not None
-        n = len(delta)
-        if n:
-            import numpy as np
-
-            keys = [int(k) for k in delta.all_keys()]
-            vecs = np.vstack([delta.get(k) for k in keys])
-            main.add(keys, vecs)
-        for key in [(str(path), False), (str(_delta_path(path)), True)]:
+        keys = [int(k) for k in delta.all_keys()]
+        vecs = np.vstack([delta.get(k) for k in keys]) if keys else None
+    taken = set(keys)
+    # the build: a private in-memory copy of the main file, nobody's view
+    main = vectors_mod.VectorIndex(path, VEC_DIM, writable=True)
+    if keys:
+        main.add(keys, vecs)
+    tmp = path.with_suffix(path.suffix + ".merging")
+    main.save_to(tmp)
+    main.close()
+    with _INDEX_LOCK:
+        delta = _delta(path)
+        later = [int(k) for k in delta.all_keys() if int(k) not in taken]
+        later_vecs = np.vstack([delta.get(k) for k in later]) if later else None
+        for key in [(str(path), False), (str(path), True), (str(dpath), True)]:
             idx = _indexes.pop(key, None)
             if idx is not None:
                 idx.close()
-        main.save()
-        _indexes.pop((str(path), True), None)
-        main.close()
-        dpath = _delta_path(path)
+        os.replace(tmp, path)
         if dpath.exists():
             dpath.unlink()
+        if later:
+            fresh = _delta(path)  # a new, empty one
+            fresh.add(later, later_vecs)
+            fresh.save()
         reopened = _open_index(path, writable=False)
         return {
-            "count": len(reopened) if reopened is not None else 0,
-            "merged": n,
-            "delta": 0,
+            "count": (len(reopened) if reopened is not None else 0) + len(later),
+            "merged": len(keys),
+            "delta": len(later),
             "bytes": path.stat().st_size,
         }
 
 
-@_serialized
 def save_document_vectors(model: str) -> dict[str, Any]:
-    return _save_delta(_doc_index_path(model))
+    return _save_delta(_doc_index_path(model))  # index files only, as save_vectors
 
 
-@_serialized
 def save_vectors(model: str) -> dict[str, Any]:
     """Write ``model``'s new vectors (the delta) to disk; the main file is
     rewritten only when the delta is large (``merge_vectors``). The
     bookkeeping rows are committed as they are written, so a crash between
     two saves leaves rows that the next ``pending_embeddings`` run will not
-    repeat; ``compact_vectors`` reconciles the two."""
+    repeat; ``compact_vectors`` reconciles the two. Not behind the store's
+    write lock: it touches the index files only, which have a lock of
+    their own — a merge inside it once held every write for half a minute."""
     return _save_delta(_index_path(model))
 
 

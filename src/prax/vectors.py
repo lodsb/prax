@@ -128,6 +128,14 @@ class VectorIndex:
         self._index.save(str(tmp))
         os.replace(tmp, self.path)
 
+    def save_to(self, path: Path) -> None:
+        """Write the index to another file (a merge builds the new main file
+        beside the old one and swaps them later, under the lock)."""
+        if not self.writable:
+            raise RuntimeError("index opened read-only")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        self._index.save(str(path))
+
     def close(self) -> None:
         idx: Any = self._index
         self._index = None

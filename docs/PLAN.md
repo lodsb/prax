@@ -843,3 +843,8 @@ What the marker evenings taught, kept for the day:
 - Kùzu migration script (only if the entity threshold is crossed)
 - Complement / "blast-radius" SQL tools exposed via MCP
 - Karakeep or Linkwarden as an additional capture front-end feeding the inbox
+- [ ] The door exited once with `STATUS_BAD_STACK` (0xC0000028, a native
+      unwind, 2026-09-19 23:38) while an embed post merged the 1.2 GB
+      index and a search read it; `prax up` restarted it in a second.
+      usearch suspected; the merge no longer holds the index lock for
+      its build. Watch `logs/up.log` for another.

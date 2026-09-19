@@ -20,7 +20,8 @@ drop folder (`docs/sources.md`).
    `data/vectors-doc-<model>.usearch` keyed by document id), memory-mapped
    by the serving path, each with a small writable delta file beside it
    (`…delta.usearch`) that takes new vectors and is folded into the main
-   file by a merge; nothing else lives outside SQLite. No Postgres, no
+   file by a merge (built beside it outside the index lock, swapped in
+   under it); nothing else lives outside SQLite. No Postgres, no
    Neo4j, no server databases.
 2. **Files are content-addressed.** Originals (PDFs, HTML snapshots) live at
    `data/archive/<sha256[:2]>/<sha256>`. The DB stores metadata + hash only.

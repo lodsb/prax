@@ -86,3 +86,63 @@ def test_delta_then_merge(
     store.ingest_text(con, "wave digital filter diode clipper " * 20, title="C")
     _embed_all(con)
     assert not delta.exists()
+
+
+@needs_usearch
+def test_a_vector_that_arrives_during_a_merge_is_kept(
+    con: sqlite3.Connection, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The merge builds the new main file outside the index lock; a vector
+    added to the delta meanwhile lands in a fresh delta, searchable."""
+    from prax import vectors
+    from prax.store import retrieval
+
+    monkeypatch.setenv("PRAX_EMBED", "hash")
+    a = store.ingest_text(con, "feedback delay network reverberation " * 20, title="A")[
+        "doc_id"
+    ]
+    _embed_all(con)
+    b = store.ingest_text(con, "granular cloud synthesis of textures " * 20, title="B")[
+        "doc_id"
+    ]
+    _embed_all(con)
+    delta = data_dir / "vectors-hash-test.delta.usearch"
+    assert delta.exists()
+    # while the build runs, a third document's vectors arrive in the delta
+    real_save_to = vectors.VectorIndex.save_to
+    arrived: list[int] = []
+
+    def save_to_and_more(self: vectors.VectorIndex, path: Path) -> None:
+        real_save_to(self, path)
+        if not arrived:
+            c = store.ingest_text(
+                con, "wave digital filter diode clipper " * 20, title="C"
+            )["doc_id"]
+            arrived.append(c)
+            _embed_all_no_save(con)
+
+    monkeypatch.setattr(vectors.VectorIndex, "save_to", save_to_and_more)
+    rep = retrieval._merge(data_dir / "vectors-hash-test.usearch")
+    assert rep["merged"] >= 1 and rep["delta"] >= 1  # the latecomer, kept aside
+    assert delta.exists()
+    for q, doc in (
+        ("granular cloud textures", b),
+        ("feedback delay reverberation", a),
+        ("wave digital diode clipper", arrived[0]),
+    ):
+        hits = store.search(con, q, mode="vec")
+        assert hits and hits[0]["doc_id"] == doc, q
+
+
+def _embed_all_no_save(con: sqlite3.Connection) -> None:
+    emb = embeddings.current()
+    assert emb is not None
+    rows = store.pending_embeddings(con, emb.name)
+    store.store_embeddings(
+        con,
+        [
+            (r["chunk_id"], r["kind"], v)
+            for r, v in zip(rows, emb.embed([r["text"] for r in rows]), strict=True)
+        ],
+        emb.name,
+    )
