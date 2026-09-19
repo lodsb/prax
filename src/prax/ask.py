@@ -122,16 +122,9 @@ class Passage:
 
 
 def nearby_of(con: sqlite3.Connection, kind: str | None, chunk_id: int | None):
-    """The neighbourhood of a formula chunk, and of a text chunk with
-    equations around it (two each way): a paragraph of the right paper
-    is what the first search brings for a question about an equation
-    it only refers to, and the line is what lets the answer say "it is
-    equation (1) of that paper" and the surfer open it. None for the
-    other kinds, and for a paper without equations."""
-    if chunk_id is None or kind not in ("formula", "text"):
+    """The neighbourhood for a formula chunk, None for anything else."""
+    if kind != "formula" or chunk_id is None:
         return None
-    if kind == "text":
-        return store.equations_near(con, chunk_id, before=2, after=2) or None
     return store.equations_near(con, chunk_id) or None
 
 

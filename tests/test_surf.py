@@ -526,13 +526,7 @@ def test_a_formula_passage_names_the_equations_around_it_and_reads_by_number(
     text_passage = next((p for p in bundle.passages if p.kind == "text"), None)
     assert text_passage is None or text_passage.nearby is None
 
-    # the surf: the hit carries the line, and (2) opens by number — from a
-    # prose passage of the paper as well as from an equation
-    s = surf.Surf("q", "q", [], None, 6, 5, 4000)
-    shown, added = surf.do_search(con, s, "where the kernel is")
-    n = next(p.n for p in s.passages if p.doc_id == doc)
-    assert next(p for p in s.passages if p.n == n).kind == "text"
-    assert "equations nearby:" in shown and "(2) The kernel K_alpha" in shown
+    # the surf: the hit carries the line, and (2) opens by number
     s = surf.Surf("q", "q", [], None, 6, 5, 4000)
     shown, added = surf.do_search(
         con, s, "fractional Fourier transform integral kernel"
