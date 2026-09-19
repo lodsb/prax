@@ -1251,7 +1251,9 @@ Four ways in:
   extension knows of the recording as `video`); the door parses it with
   the parser the document names (`meta.parser`), the passages carry
   their moment (`locator.time`), the frames are figures the vision pass
-  reads, `doctype=video` finds them, and the document's page shows the
+  reads with a prompt of their own (the moment, the words spoken around
+  it, and "transcribe the slide's text as written" — a talk's slides
+  become searchable text), `doctype=video` finds them, and the document's page shows the
   player: the first frame as a poster until you press play (nothing is
   fetched from the provider before that), then the provider's embed;
   every passage's moment is a link that seeks it, and a search hit or

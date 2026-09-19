@@ -421,6 +421,31 @@ two disagree, the image is what you describe. Do not summarise the
 surrounding text and do not guess at what the figure "likely" means.
 Never mention the caption or the text: write about the picture only."""
 
+# A frame of a recording (the extension's video capture): the picture is a
+# moment of a talk, and what is on screen is most often a slide whose text
+# is what a search should find — so the reading transcribes it.
+FRAME_PROMPT = """\
+This is a frame of a recorded talk or video at {moment}, taken as a
+screenshot and kept in a personal research library beside the
+transcript.{context}
+Say what is on screen so that someone searching the library would find it
+and someone who cannot see it would understand it. If it is a slide,
+transcribe its text as written — title, bullet points, labels, equations,
+code — and then say what its diagram, plot or picture shows. If it is a
+demonstration, an instrument, a screen recording or a person, say what is
+shown and what is being done. Two to eight sentences; a slide's text in
+full.{honesty} No preamble, no "the frame shows".
+"""
+
+FRAME_HONESTY = """\
+ Everything you say must be visible in the frame: the words spoken around
+it tell you what things are called, never what the picture must contain,
+and where the two disagree, the picture is what you describe. Do not
+summarise the talk and do not guess at what the frame "likely" means.
+Never mention the transcript: write about the picture only."""
+
+TIME_CAPTION = re.compile(r"^(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\s*[—–-]\s*")
+
 AROUND_CHARS = 700  # of the text on each side of the image line
 TITLE_CHARS = 120
 
@@ -465,6 +490,28 @@ def figure_prompt(title: str, caption: str, near: str) -> str:
         naming=NAMING.rstrip("\n").replace("\n", " "),
         honesty=HONESTY.rstrip("\n").replace("\n", " "),
     )
+
+
+def frame_prompt(title: str, caption: str, near: str) -> str:
+    """The prompt for a frame of a recording: its moment (the caption's
+    time mark), the title, the words spoken around it."""
+    m = TIME_CAPTION.match(caption or "")
+    moment = m.group("t") if m else "an unknown moment"
+    told = []
+    if title:
+        told.append(f'It is from "{title}".')
+    if near:
+        told.append(f"The words spoken around this moment: {near}")
+    return FRAME_PROMPT.format(
+        moment=moment,
+        context=("\n\n" + "\n".join(told) + "\n") if told else "",
+        honesty=FRAME_HONESTY.rstrip("\n").replace("\n", " "),
+    )
+
+
+def is_frame(caption: str) -> bool:
+    """A figure captioned with its moment: a frame of a recording."""
+    return bool(TIME_CAPTION.match(caption or ""))
 
 
 def _read_by(line: str, who: str) -> bool:
@@ -527,6 +574,9 @@ def describe(data: bytes, previous: str) -> str:
         return previous
     lines = previous.split("\n")
     title = document_title(previous)
+    from prax.parsers import video
+
+    recording = video.is_transcript(data)  # its figures are frames of a talk
     done = 0
     broken: list[str] = []
     for r in wanted:
@@ -548,9 +598,11 @@ def describe(data: bytes, previous: str) -> str:
             ),
             -1,
         )
-        prompt = figure_prompt(
-            title, r["caption"], around(lines, at) if at >= 0 else ""
-        )
+        near = around(lines, at) if at >= 0 else ""
+        if recording and is_frame(r["caption"]):
+            prompt = frame_prompt(title, r["caption"], near)
+        else:
+            prompt = figure_prompt(title, r["caption"], near)
         text, who = vision.read(image, prompt, max_tokens=600)
         text = " ".join(text.split())
         if not text:

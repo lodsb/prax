@@ -118,6 +118,45 @@ def test_timed_chunks_carry_their_moment() -> None:
     )
 
 
+def test_a_frame_is_read_as_a_moment_of_the_talk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from prax import models
+    from prax.parsers import figures
+
+    spec = models.ModelSpec(
+        name="server-vl", kind="openai", base_url="http://127.0.0.1:1/v1", model="vl"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: spec if s == "vision" else None)
+    prompts: list[str] = []
+
+    class FakeRuntime:
+        def chat(self, system, user, **kw):
+            prompts.append(user)
+            return "A slide titled Grain Envelope with a Hann window plotted.", {}
+
+    monkeypatch.setattr(models, "runtime", lambda s: FakeRuntime())
+    text = video.parse(PAGE.encode())
+    out = figures.describe(PAGE.encode(), text)
+    assert len(prompts) == 2
+    # the second frame: its moment, the talk's title, the words around it,
+    # and the ask to transcribe a slide — not the figure prompt
+    p = prompts[1]
+    assert p.startswith("This is a frame of a recorded talk or video at 1:05,")
+    assert 'It is from "A Talk on Grains".' in p
+    assert "The words spoken around this moment:" in p and "Hann window" in p
+    assert "transcribe its text as written" in p
+    assert "Its caption:" not in p and "This is a figure from a document" not in p
+    assert "*Figure, as read by vl@127.0.0.1:1:* A slide titled Grain Envelope" in out
+    # an ordinary page's figure still gets the figure prompt
+    assert figures.is_frame("1:05 — the slide") and not figures.is_frame(
+        "Figure 3: a plot"
+    )
+    assert figures.figure_prompt("T", "Figure 3", "").startswith(
+        "This is a figure from"
+    )
+
+
 def test_a_video_capture_through_the_door(client: TestClient) -> None:
     con: sqlite3.Connection = client.app.state.con
     r = client.post(
