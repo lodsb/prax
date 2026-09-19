@@ -910,6 +910,39 @@ async function captureExcerpt(tab, fallbackText) {
   return r;
 }
 
+/* A selection onto one of your pages: quoted, with where it is from, as
+   a new revision of that page (the door's append: what a person wrote
+   stays as it was). The page is chosen in the popup. */
+async function appendSelection(tab, slug, fallbackText, pageTitle) {
+  const cfg = await settings();
+  if (!cfg.server) { await setProgress({ state: "error", error: "no server configured (options)", results: [] }); return { error: "no server configured (options)" }; }
+  let selection = fallbackText || "";
+  try {
+    const r = await api.scripting.executeScript({ target: { tabId: tab.id }, func: () => String(window.getSelection ? window.getSelection().toString() : "") });
+    if (r && r[0] && r[0].result && r[0].result.trim()) selection = r[0].result;
+  } catch (_) { /* the given text will do */ }
+  const section = lib.pageSection(selection, { title: tab.title, url: tab.url, at: new Date().toISOString().slice(0, 10) });
+  const id = `${Date.now()}-page`;
+  await remember({ id, at: Date.now(), tabId: tab.id, url: tab.url, title: tab.title, state: "sending", domains: [], tags: [] });
+  let r;
+  if (!section) {
+    r = { url: tab.url, title: tab.title, error: "nothing is selected" };
+  } else if (!slug) {
+    r = { url: tab.url, title: tab.title, error: "no page chosen" };
+  } else {
+    try {
+      // the person chose the page and the words: a human revision
+      const data = await door(`/page/${encodeURIComponent(slug)}/append`, { section, author: "human", note: `from ${tab.url}, through the browser` }, cfg);
+      r = { url: tab.url, title: tab.title, mode: "page", note: `added to the page “${pageTitle || slug}” (revision ${data.revision})`, slug, revision: data.revision, doc_id: data.doc_id };
+    } catch (err) {
+      r = { url: tab.url, title: tab.title, error: err.message };
+    }
+  }
+  await remember({ id, at: Date.now(), tabId: tab.id, ...r, state: r.error ? "failed" : "done", domains: [], tags: [] });
+  await badge(r.error ? "!" : "✓", r.error ? "#b3261e" : "#2e7d32", !!r.error);
+  return r;
+}
+
 async function captureLink(linkUrl, tab) {
   const cfg = await settings();
   if (!cfg.server) { await setProgress({ state: "error", error: "no server configured (options)", results: [] }); return; }
@@ -989,6 +1022,18 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (!msg) return false;
   if (msg.type === "badge-seen") { badge("", "#2f5d8a", true); sendResponse({ ok: true }); return false; }
   if (msg.type === "send-active") { sendActive().catch((err) => log("warn", "capture failed", err)); sendResponse({ ok: true }); return false; }
+  if (msg.type === "append") {
+    // the selection of a tab onto a page (the popup's picker; the test bed)
+    api.tabs.get(msg.tabId).then((tab) => appendSelection(tab, msg.slug, msg.text || "", msg.title || "")).then(sendResponse, (err) => sendResponse({ error: err.message }));
+    return true;
+  }
+  if (msg.type === "selection") {
+    // whether the tab has a selection, and how long (the popup shows its
+    // selection section only then)
+    api.scripting.executeScript({ target: { tabId: msg.tabId }, func: () => String(window.getSelection ? window.getSelection().toString() : "").trim().split(/\s+/).filter(Boolean).length })
+      .then((r) => sendResponse({ words: (r && r[0] && r[0].result) || 0 }), () => sendResponse({ words: 0 }));
+    return true;
+  }
   if (msg.type === "excerpt") {
     // the selection of a tab as an excerpt (the menu's way, by message: the popup and the test bed)
     api.tabs.get(msg.tabId).then((tab) => captureExcerpt(tab, msg.text || "")).then(sendResponse, (err) => sendResponse({ error: err.message }));

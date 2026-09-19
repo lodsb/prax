@@ -168,3 +168,9 @@ test("excerptOf: the selected words as paragraphs, headed by where they are from
   assert.equal(lib.excerptOf("words", {}).title, "Excerpt");
   assert.equal(lib.describeResult({ mode: "excerpt", created: true, note: "an excerpt of 12 words" }), "new: an excerpt of 12 words");
 });
+
+test("pageSection: the selection quoted, paragraphs kept, then where it is from", () => {
+  assert.equal(lib.pageSection("first para.\n\nsecond  para.", { title: "T", url: "http://x", at: "2026-09-19" }), "> first para.\n>\n> second para.\n\n— from *T*, http://x, 2026-09-19\n");
+  assert.equal(lib.pageSection("  ", {}), null);
+  assert.equal(lib.describeResult({ mode: "page", note: "added to the page “Notes” (revision 2)" }), "added to the page “Notes” (revision 2)");
+});

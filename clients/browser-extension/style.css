@@ -29,6 +29,7 @@ small { display: block; color: var(--muted); }
 .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .2rem; }
 .chip { display: inline-flex; align-items: center; gap: .25rem; padding: 0 .5rem; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: .85rem; cursor: pointer; margin: 0; }
 .actions { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+#selection select { max-width: 11rem; padding: .3rem; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--fg); font: inherit; }
 button { padding: .35rem .7rem; border: 1px solid var(--accent); border-radius: 4px; background: var(--accent); color: #fff; font: inherit; cursor: pointer; }
 button.secondary { background: transparent; color: var(--accent); }
 #bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin: .4rem 0; }

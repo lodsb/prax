@@ -157,6 +157,13 @@ the tab shows, with a small popup for the few choices that matter.
   text), and the document's page in the UI shows the player, every
   moment a seek. A recording without captions still goes, frames only;
   one whose frames cannot be drawn (DRM) goes with its transcript.
+- **A selection, in the popup.** When the tab in front has text
+  selected, the popup shows it ("12 words selected") with two ways to
+  keep it: "send as excerpt" (the same small document the context menu
+  makes) or "add to page…" — a picker of your prax pages, most recently
+  revised first, and the words go onto the chosen page quoted, with the
+  page they are from, as a new human revision (the door's append: what
+  was there stays as it was). Reading notes without leaving the browser.
 - **The keyboard.** `Alt+Shift+P` sends the tab in front, with the
   options page's default domains, popup or no popup (the browser's
   extension-shortcut page changes the key). What a send without the
@@ -252,7 +259,8 @@ as a file, a whole window sent, the options page's test refusing a
 wrong token, the keyboard send and its badge, a door that is not
 there (the send fails naming the door, "retry failed" sends it again
 once the door is back), a selection sent as an excerpt (and nothing
-selected said so), an abstract page whose citation tags send the
+selected said so) and added to a page of yours as a new revision, an
+abstract page whose citation tags send the
 paper's PDF with its ids (and fill them in on the document the PDF
 already is), a watch page sent as a video (a fixture page
 with a player of YouTube's shape and a six-second clip of three

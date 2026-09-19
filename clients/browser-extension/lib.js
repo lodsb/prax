@@ -82,6 +82,7 @@
   function describeResult(res) {
     if (res.error) return `failed: ${res.error}`;
     if ((res.mode === "video" || res.mode === "excerpt") && res.note) return `${res.created ? "new" : "already in the store"}: ${res.note}`;
+    if (res.mode === "page" && res.note) return res.note;
     if (res.downloaded) return "downloaded for the watcher";
     if (res.manual) return "waiting for you";
     const bits = [res.created ? "new" : "already in the store"];
@@ -107,6 +108,17 @@
     const title = pageTitle ? `${pageTitle} (excerpt)` : "Excerpt";
     const head = [`# ${title}`, "", `From ${pageTitle ? `*${pageTitle}*` : "a page"}${url ? `, ${url}` : ""}${page && page.at ? `, ${page.at}` : ""}.`, ""];
     return { text: head.concat(paras.map((p) => p + "\n")).join("\n").replace(/\n+$/, "\n"), title, words };
+  }
+
+  /** A selection as a section for a page: the words quoted, paragraphs
+      kept, then where they are from. null when there is nothing. */
+  function pageSection(selection, page) {
+    const paras = String(selection || "").replace(/\r\n?/g, "\n").split(/\n\s*\n|\n/).map((s) => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (!paras.length) return null;
+    const pageTitle = String((page && page.title) || "").trim();
+    const url = String((page && page.url) || "").trim();
+    const from = `— from ${pageTitle ? `*${pageTitle}*` : "a page"}${url ? `, ${url}` : ""}${page && page.at ? `, ${page.at}` : ""}`;
+    return paras.map((p) => `> ${p}`).join("\n>\n") + "\n\n" + from + "\n";
   }
 
   // ------------------------------------------------------------- papers
@@ -304,5 +316,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection };
 });

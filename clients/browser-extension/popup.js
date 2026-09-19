@@ -120,6 +120,7 @@ async function main() {
   // it the active tab is still read (activeTab), but the snapshot cannot
   // fetch a page's images cross-origin and a background tab cannot be read.
   await showSitesButton();
+  try { const s = await api.storage.local.get(["server", "token"]); await showSelection(lib.normalizeServer(s.server), s.token || ""); } catch (_) { /* no selection section */ }
   $("send-tab").addEventListener("click", async () => {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
     await send(tab ? [tab.id] : []);
@@ -141,6 +142,42 @@ function renderNote(progress) {
 
 function renderLog(lines) {
   $("log").textContent = (lines || []).join("\n");
+}
+
+/* The active tab's selection: shown with two ways to keep it — as an
+   excerpt of its own, or quoted onto one of your pages (the pages come
+   from the door, most recently revised first). */
+async function showSelection(server, token) {
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+  if (!tab || !lib.capturable(tab.url)) return;
+  let words = 0;
+  try { words = (await api.runtime.sendMessage({ type: "selection", tabId: tab.id })).words || 0; } catch (_) { words = 0; }
+  if (!words) return;
+  $("sel-words").textContent = String(words);
+  $("selection").hidden = false;
+  $("send-excerpt").addEventListener("click", async () => {
+    $("msg").textContent = "";
+    const r = await api.runtime.sendMessage({ type: "excerpt", tabId: tab.id });
+    $("msg").textContent = r && r.error ? r.error : lib.describeResult(r || {});
+  });
+  const pick = $("page-pick");
+  try {
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const res = await fetch(`${server}/pages`, { headers });
+    const pages = res.ok ? await res.json() : [];
+    for (const p of pages.slice(0, 60)) {
+      const o = document.createElement("option");
+      o.value = p.slug; o.textContent = `${p.title || p.slug}${p.kind ? ` (${p.kind})` : ""}`;
+      pick.appendChild(o);
+    }
+  } catch (_) { /* no pages to offer */ }
+  pick.addEventListener("change", () => { $("append-page").hidden = !pick.value; });
+  $("append-page").addEventListener("click", async () => {
+    if (!pick.value) return;
+    $("msg").textContent = "";
+    const r = await api.runtime.sendMessage({ type: "append", tabId: tab.id, slug: pick.value, title: pick.options[pick.selectedIndex].textContent.replace(/ \([a-z]+\)$/, "") });
+    $("msg").textContent = r && r.error ? r.error : lib.describeResult(r || {});
+  });
 }
 
 async function showSitesButton() {

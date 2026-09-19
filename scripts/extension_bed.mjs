@@ -389,6 +389,13 @@ async function exercise(b) {
     const ehits = await (await get(`/search?q=${encodeURIComponent("carry over whole")}`)).json();
     check(ehits.some((h) => h.doc_id === ex.doc_id), "which a search finds", JSON.stringify(ehits.map((h) => h.doc_id)));
   }
+  // the same selection quoted onto one of your pages, as a new revision
+  const made = await (await get(`/page/bed-notes`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ text: "# Bed notes" + String.fromCharCode(10) + String.fromCharCode(10) + "A page of the bed.", title: "Bed notes", kind: "topic", author: "human" }) })).json();
+  check(made.slug === "bed-notes" && made.revision >= 1, "a page of yours is there to add to", JSON.stringify(made).slice(0, 120));
+  const ap = await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "append", tabId: ${JSON.stringify(tabId)}, slug: "bed-notes", title: "Bed notes" })`);
+  check(ap && !ap.error && ap.mode === "page" && ap.revision === made.revision + 1, "the selection is added to the page as a new revision", ap ? (ap.error || ap.note) : "no answer");
+  const pg = await (await get(`/page/bed-notes`)).json();
+  check(pg.revision === made.revision + 1 && /^> A page the extension must carry over whole/m.test(pg.text || "") && /— from \*The Bed Article\*, http/.test(pg.text || "") && /A page of the bed\./.test(pg.text || ""), "quoted, with where it is from, what was there kept", (pg.text || "").slice(-200));
   const none = await b.evaluate(opts, `(async () => { await ${api}.scripting.executeScript({ target: { tabId: ${JSON.stringify(tabId)} }, func: () => window.getSelection().removeAllRanges() }); return ${api}.runtime.sendMessage({ type: "excerpt", tabId: ${JSON.stringify(tabId)} }); })()`);
   check(none && /nothing is selected/.test(none.error || ""), "with nothing selected it says so", JSON.stringify(none).slice(0, 120));
 

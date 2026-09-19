@@ -22,6 +22,12 @@
     <button id="send-tab">Send this tab</button>
     <button id="send-window" class="secondary">Send all tabs in window</button>
   </section>
+  <section id="selection" class="actions" hidden>
+    <span class="muted"><span id="sel-words">0</span> words selected:</span>
+    <button id="send-excerpt" class="secondary" title="a small document of the selected words, headed by this page">send as excerpt</button>
+    <select id="page-pick" title="one of your prax pages"><option value="">add to page…</option></select>
+    <button id="append-page" class="secondary" title="quoted onto that page, as a new revision" hidden>add</button>
+  </section>
   <section id="progress" hidden>
     <div id="bar"><div id="fill"></div></div>
     <p id="note" class="muted"></p>
