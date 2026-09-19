@@ -3,11 +3,11 @@
   "name": "prax capture",
   "version": "0.1.0",
   "description": "Send this tab, or every tab in the window, to your prax knowledge base.",
-  "icons": { "48": "icon48.png", "128": "icon128.png" },
+  "icons": { "16": "icon16.png", "32": "icon32.png", "48": "icon48.png", "128": "icon128.png" },
   "action": {
     "default_title": "Send to prax",
     "default_popup": "popup.html",
-    "default_icon": { "48": "icon48.png" }
+    "default_icon": { "16": "icon16.png", "32": "icon32.png", "48": "icon48.png" }
   },
   "options_ui": { "page": "options.html", "open_in_tab": false },
   "background": {

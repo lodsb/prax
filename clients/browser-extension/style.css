@@ -12,6 +12,7 @@ body.popup { width: 24rem; }
 body.options { max-width: 34rem; }
 header { display: flex; align-items: baseline; gap: .6rem; margin-bottom: .6rem; }
 header strong { font-size: 1.05rem; }
+header img { align-self: center; margin-right: -.2rem; }
 header a { margin-left: auto; color: var(--accent); }
 .muted { color: var(--muted); }
 .ok { color: var(--ok); }

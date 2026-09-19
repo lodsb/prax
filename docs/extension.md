@@ -44,7 +44,7 @@ domains it offers.
 | `background.js`, `background-sw.js` | the sending: reads each tab through `scripting.executeScript`, posts to the door, fetches a PDF with the browser's session and uploads it, keeps progress in `storage.session`, closes tabs when asked; also the two services SingleFile's content scripts expect from a background (timers for the lazy-image loader, relaying frame answers to the top frame) and the fetch bridge for cross-origin resources; the service-worker file just imports the other two |
 | `popup.html/js` | the two buttons, domain checkboxes (from `GET /inbox`), tags, close-after-send, progress and results with links into the UI |
 | `options.html/js` | server, token, default domains, close-after-send; permission request and connection test |
-| `style.css`, `icon48.png`, `icon128.png` | the look; the icons are generated squares |
+| `style.css`, `icon.svg`, `icon{16,32,48,128}.png` | the look; the icons are the mark (`docs/design/assets/logo/favicon.svg`) on a tile of the Bindery ground, so a toolbar of either colour shows it — `icon.svg` is the source, the PNGs its renders (MuPDF: `pymupdf.open(stream=svg, filetype="svg")`) |
 | `vendor/single-file/` | SingleFile's built core and frame scripts, unchanged, with its licence and a `NOTICE.md` naming the commit; AGPL, which makes the extension AGPL (`LICENSE`, `README.md` in `extension/`) while the server stays MIT |
 
 ## What it does
@@ -160,10 +160,11 @@ The popup checks `GET /health` on open and shows the server's state
   `browser_specific_settings.gecko` for Firefox.
 - `popup.html/js`: the two buttons, the domain checkboxes, tags, the
   result list.
-- `content.js` injected with `chrome.scripting.executeScript` returning
-  `{url, title, html}`; no persistent content script.
-- `background.js` (service worker) only for "send all tabs" so the popup
-  closing does not abort the loop.
+- No persistent content script: the background injects what a capture
+  needs with `scripting.executeScript` (a function for the bare DOM,
+  SingleFile's files for a snapshot) and nothing stays in the page.
+- `background.js` does every send, so the popup closing never aborts a
+  loop; the popup only asks and shows progress.
 - Size guard: a snapshot above 32 MB is sent as URL only.
 
 ## Testing it (`scripts/extension_bed.mjs`)
