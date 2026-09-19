@@ -340,10 +340,19 @@ def ingest_file(
     tags: Annotated[str | None, Form()] = None,
     session: Annotated[str | None, Form()] = None,
     by: Annotated[str | None, Form()] = None,
+    paper: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
     """Upload a file: archived at once, text and HTML indexed at once,
     anything else parsed by the batch host. ``domains`` and ``tags`` are
-    comma-separated; ``by`` says what sent it (the extension, a script)."""
+    comma-separated; ``by`` says what sent it (the extension, a script);
+    ``paper`` is JSON — what the sender read off the page the file came
+    from (doi, arxiv, authors, journal, date, pdf_url)."""
+    paper_info = None
+    if paper:
+        try:
+            paper_info = json.loads(paper)
+        except ValueError as exc:
+            raise HTTPException(400, f"paper must be JSON: {exc}") from exc
     try:
         cap = inbox.ingest_upload(
             _con(request),
@@ -356,6 +365,7 @@ def ingest_file(
             tags=_split(tags),
             session=session,
             by=by or "upload",
+            paper=paper_info if isinstance(paper_info, dict) else None,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -372,6 +382,9 @@ class IngestHtml(BaseModel):
     mode: str | None = None  # "snapshot" (self-contained), "dom", or "video"
     note: str | None = None
     video: dict[str, Any] | None = None  # a video capture: provider, id, url, chapters…
+    paper: dict[str, Any] | None = (
+        None  # what the page says of a paper: doi, arxiv, authors…
+    )
 
 
 class IngestUrl(BaseModel):
@@ -400,6 +413,7 @@ def ingest_html(req: IngestHtml, request: Request) -> dict[str, Any]:
             mode=req.mode,
             note=req.note,
             video=req.video,
+            paper=req.paper,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

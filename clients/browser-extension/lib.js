@@ -94,6 +94,28 @@
     return String(text || "").split(",").map((s) => s.trim()).filter(Boolean);
   }
 
+  // ------------------------------------------------------------- papers
+  /** What a scholarly page says of itself in its Highwire tags (citation_*),
+      as arXiv, the publishers and the preprint servers write them, given
+      {name: [values]}: {doi, arxiv, pdf_url, title, authors, journal, date},
+      or null when the page has no such tags. A DOI is bare (no doi.org). */
+  function paperOf(tags) {
+    const one = (k) => (tags && tags[k] && tags[k][0]) || "";
+    const doi = one("citation_doi").replace(/^(?:https?:\/\/)?(?:dx\.)?doi\.org\//i, "").replace(/^doi:/i, "").trim();
+    const arxiv = one("citation_arxiv_id").replace(/^arxiv:/i, "").trim();
+    const pdf = one("citation_pdf_url").trim();
+    const title = one("citation_title").trim();
+    if (!doi && !arxiv && !pdf && !title) return null;
+    const out = { doi: doi || null, arxiv: arxiv || null, pdf_url: pdf || null, title: title || null };
+    const authors = (tags.citation_author || []).map((a) => String(a).trim()).filter(Boolean);
+    if (authors.length) out.authors = authors;
+    const journal = one("citation_journal_title") || one("citation_conference_title") || one("citation_publisher");
+    if (journal) out.journal = journal.trim();
+    const date = one("citation_publication_date") || one("citation_date") || one("citation_online_date");
+    if (date) out.date = date.trim().replace(/\//g, "-");
+    return out;
+  }
+
   // ------------------------------------------------------------- video
   // A watch page becomes one document: the transcript as timed paragraphs,
   // a frame every so often, in the HTML shape the door's video parser
@@ -267,5 +289,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf };
 });

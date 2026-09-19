@@ -150,3 +150,11 @@ test("parseStoryboard and storyboardPlan: the best level, the sheet and the tile
   assert.equal(lib.parseStoryboard(""), null);
   assert.equal(lib.parseStoryboard("https://x/$L/$N|0#0#0#0#0#0#a#b"), null);
 });
+
+test("paperOf: the Highwire tags of a scholarly page, the DOI bare", () => {
+  const p = lib.paperOf({ citation_doi: ["https://doi.org/10.1000/ABC.1"], citation_arxiv_id: ["arXiv:2101.00001"], citation_pdf_url: ["https://arxiv.org/pdf/2101.00001"], citation_title: ["A Paper"], citation_author: ["A. One", "B. Two"], citation_publication_date: ["2021/01/02"], citation_journal_title: ["J. Things"] });
+  assert.deepEqual(p, { doi: "10.1000/ABC.1", arxiv: "2101.00001", pdf_url: "https://arxiv.org/pdf/2101.00001", title: "A Paper", authors: ["A. One", "B. Two"], journal: "J. Things", date: "2021-01-02" });
+  assert.equal(lib.paperOf({ og_title: ["x"] }), null);
+  assert.equal(lib.paperOf(null), null);
+  assert.deepEqual(lib.paperOf({ citation_doi: ["doi:10.1/x"] }), { doi: "10.1/x", arxiv: null, pdf_url: null, title: null });
+});

@@ -309,6 +309,11 @@ def ingest_bytes(
             m = store.get_meta(con, doc_id)
             m["previous_capture"] = previous
             store.set_meta(con, doc_id, m)
+    elif extra_meta:
+        # the same bytes again, sent by someone who knows more about them
+        # (a paper's ids and authors read off its abstract page): what the
+        # document lacks is filled in, what it has is left alone
+        _fill_in(con, doc_id, extra_meta)
     indexed = _index_now(con, doc_id, mime)
     got = _give_domains(con, doc_id, domains, by=by or source)
     replaced = None
@@ -328,6 +333,17 @@ def ingest_bytes(
     return Capture(
         doc_id, result["created"], indexed, got, previous, mime, replaced=replaced
     )
+
+
+FILL_IN_KEYS = ("doi", "arxiv", "creators", "paper", "video")
+
+
+def _fill_in(con: sqlite3.Connection, doc_id: int, extra: dict[str, Any]) -> None:
+    m = store.get_meta(con, doc_id)
+    added = {k: v for k, v in extra.items() if k in FILL_IN_KEYS and v and not m.get(k)}
+    if added:
+        m.update(added)
+        store.set_meta(con, doc_id, m)
 
 
 _TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
@@ -358,6 +374,7 @@ def ingest_html(
     mode: str | None = None,
     note: str | None = None,
     video: dict[str, Any] | None = None,
+    paper: dict[str, Any] | None = None,
 ) -> Capture:
     """A page as the browser rendered it (the extension's path). ``mode``
     says what the page is (``snapshot``: self-contained, ``dom``: the bare
@@ -376,6 +393,7 @@ def ingest_html(
     if mode == "video" or video:
         extra["video"] = dict(video or {})
         extra["parser"] = "video"
+    extra.update(paper_meta(paper))
     return ingest_bytes(
         con,
         data,
@@ -430,6 +448,39 @@ def ingest_url(
     )
 
 
+def paper_meta(paper: dict[str, Any] | None) -> dict[str, Any]:
+    """What a sender knows of a paper, as the keys the library already
+    keys on: ``doi`` (as Zotero's import writes it, what the citations
+    importer joins on), ``arxiv``, and ``creators`` as ``[{"name"}]``;
+    the rest (journal, date, the PDF's URL) under ``paper``. Empty
+    values are left out."""
+    if not paper:
+        return {}
+    out: dict[str, Any] = {}
+    doi = str(paper.get("doi") or "").strip()
+    if doi:
+        doi = re.sub(
+            r"^(?:https?://)?(?:dx\.)?doi\.org/", "", doi, flags=re.IGNORECASE
+        ).strip()
+        if doi.lower().startswith("doi:"):
+            doi = doi[4:].strip()
+        out["doi"] = doi
+    arxiv = str(paper.get("arxiv") or "").strip()
+    if arxiv:
+        out["arxiv"] = re.sub(r"^(?:arxiv:)?", "", arxiv, flags=re.IGNORECASE).strip()
+    authors = [str(a).strip() for a in (paper.get("authors") or []) if str(a).strip()]
+    if authors:
+        out["creators"] = [{"name": a} for a in authors]
+    rest = {
+        k: str(paper[k]).strip()
+        for k in ("journal", "date", "pdf_url", "publisher")
+        if paper.get(k) and str(paper[k]).strip()
+    }
+    if rest:
+        out["paper"] = rest
+    return out
+
+
 def ingest_upload(
     con: sqlite3.Connection,
     data: bytes,
@@ -442,8 +493,11 @@ def ingest_upload(
     tags: list[str] | None = None,
     session: str | None = None,
     by: str | None = "upload",
+    paper: dict[str, Any] | None = None,
 ) -> Capture:
-    """A file handed over the door (the UI's upload, a script)."""
+    """A file handed over the door (the UI's upload, a script). ``paper``
+    is what the sender read off the page it came from (its DOI, arXiv
+    id, authors: ``paper_meta``)."""
     name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1] or None
     if not mime or mime == "application/octet-stream":
         mime = parsers.guess_mime(name)
@@ -459,6 +513,7 @@ def ingest_upload(
         tags=tags,
         session=session,
         by=by,
+        extra_meta=paper_meta(paper) or None,
     )
 
 

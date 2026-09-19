@@ -113,6 +113,19 @@ the tab shows, with a small popup for the few choices that matter.
   browser's session and uploads it without opening a tab, or lets the
   door fetch it. Both use the options page's default domains; the
   result lands in the popup's history.
+- **A paper.** A scholarly page names its paper in the Highwire tags
+  every publisher, arXiv and the preprint servers write
+  (`citation_pdf_url`, `citation_doi`, `citation_arxiv_id`,
+  `citation_title`, `citation_author`, the venue and date): "send this
+  tab" on an abstract page fetches the PDF those tags point at, with
+  this browser's session, and uploads it under the paper's title with
+  its DOI, arXiv id and authors (`meta.doi`, `meta.arxiv`,
+  `meta.creators`, `meta.paper`) — the ids the citations importer joins
+  on, as Zotero's import writes them. A PDF the library already holds
+  is not held twice: the ids and authors fill in what that document
+  lacks. When the PDF cannot be fetched (a paywall you are not through),
+  the page goes as a snapshot carrying the ids; a page with ids and no
+  PDF link goes the same way.
 - **A video.** On a YouTube watch page (or any page with a player of
   that shape) "send this tab" sends the recording as a document rather
   than the page: the transcript from a caption track — a person's in
@@ -233,7 +246,9 @@ the tag on it, no second document when sent again, a PDF tab uploaded
 as a file, a whole window sent, the options page's test refusing a
 wrong token, the keyboard send and its badge, a door that is not
 there (the send fails naming the door, "retry failed" sends it again
-once the door is back), a watch page sent as a video (a fixture page
+once the door is back), an abstract page whose citation tags send the
+paper's PDF with its ids (and fill them in on the document the PDF
+already is), a watch page sent as a video (a fixture page
 with a player of YouTube's shape and a six-second clip of three
 colours, `tests/fixtures/video/bars.webm`: two paragraphs, three frames
 of six moments, the chapters, the moment on a search hit), and (Firefox, where the host permission

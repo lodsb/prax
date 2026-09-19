@@ -120,6 +120,17 @@ const fixture = createServer((req, res) => {
   } else if (url.pathname === "/paper.pdf") {
     res.writeHead(200, { "content-type": "application/pdf" });
     res.end(PDF);
+  } else if (url.pathname === "/abstract") {
+    // a scholarly page the way arXiv and the publishers write one: the
+    // paper named in citation_* tags, the PDF a tag away
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(`<!doctype html><html><head><title>[2101.00001] The Bed Paper</title>
+<meta name="citation_title" content="The Bed Paper: Alias-Suppressed Signal Synthesis">
+<meta name="citation_author" content="One, A."><meta name="citation_author" content="Two, B.">
+<meta name="citation_doi" content="10.48550/arXiv.2101.00001"><meta name="citation_arxiv_id" content="2101.00001">
+<meta name="citation_publication_date" content="2021/01/02"><meta name="citation_journal_title" content="Proc. Bed">
+<meta name="citation_pdf_url" content="/paper.pdf"></head>
+<body><h1>The Bed Paper</h1><p>Abstract: ${"a polynomial transition region. ".repeat(20)}</p></body></html>`);
   } else if (url.pathname === "/watch") {
     // a watch page the way the extension sees YouTube's: a #movie_player
     // whose getPlayerResponse() gives the recording and its caption
@@ -298,11 +309,13 @@ async function exercise(b) {
 
   // a PDF open in a tab: fetched with the browser's own session and uploaded
   if (PDF) {
+    var progressPdfDoc = null;
     const pdfTab = await b.evaluate(opts, `(async () => { const t = await ${api}.tabs.create({ url: ${JSON.stringify(`${FIXTURE}/paper.pdf`)}, active: false }); await new Promise(r => setTimeout(r, 2500)); return t.id; })()`);
     await b.evaluate(opts, `${area}.set({ progress: { state: "running", total: 1, done: 0, results: [] } })`);
     await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "capture", tabIds: [${pdfTab}], domains: ["research"], tags: ["bed"], close: false, session: ${JSON.stringify(session + "pdf")} })`);
     for (let i = 0; i < 80; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
     const r = progress?.results?.[0] || {};
+    progressPdfDoc = r.doc_id || null;
     check(progress?.state === "done" && !r.error && r.mode === "file", "a PDF tab is fetched and uploaded as a file", r.error || `${r.mode} · ${r.note} · doc ${r.doc_id}`);
     if (r.doc_id) {
       const d = await (await get(`/get/${r.doc_id}?max_chars=0`)).json();
@@ -361,6 +374,27 @@ async function exercise(b) {
     await b.evaluate(opts, `${api}.storage.local.remove("frame_interval")`);
   } else {
     console.log("  (no clip at tests/fixtures/video/bars.webm: the video capture is not exercised)");
+  }
+
+  // a scholarly page: its citation tags name the paper and its PDF; the PDF
+  // goes, with the ids, the authors and the page's own title
+  if (PDF) {
+    const absId = await b.evaluate(opts, `(async () => { const t = await ${api}.tabs.create({ url: ${JSON.stringify(`${FIXTURE}/abstract`)}, active: false }); await new Promise(r => setTimeout(r, 1500)); return t.id; })()`);
+    await b.evaluate(opts, `${area}.set({ progress: { state: "running", total: 1, done: 0, results: [] } })`);
+    await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "capture", tabIds: [${JSON.stringify(absId)}], domains: ["research"], tags: ["bed", "paper"], close: false, session: ${JSON.stringify(session + "p")} })`);
+    for (let i = 0; i < 60; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
+    const pr = progress?.results?.[0] || {};
+    check(progress?.state === "done" && pr.mode === "file" && /citation tags/.test(pr.note || ""), "an abstract page sends the paper's PDF named in its citation tags", pr.error || `${pr.mode} · ${pr.note || ""}`);
+    check(/doi 10\.48550\/arXiv\.2101\.00001, arXiv 2101\.00001/.test(pr.note || ""), "with its ids", pr.note || "");
+    if (pr.doc_id) {
+      const pdoc = await (await get(`/get/${pr.doc_id}?max_chars=0`)).json();
+      // the same bytes went earlier as a PDF tab: one document, which now
+      // knows its ids and authors from the abstract page, its title kept
+      check(pdoc.mime === "application/pdf" && !pr.created && pr.doc_id === progressPdfDoc, "the same PDF sent from its abstract page is the one document", `${pdoc.mime} · doc ${pr.doc_id} (the PDF tab's was ${progressPdfDoc}) · ${pdoc.title}`);
+      check(pdoc.meta?.doi === "10.48550/arXiv.2101.00001" && pdoc.meta?.arxiv === "2101.00001" && (pdoc.meta?.creators || []).map((c) => c.name).join("; ") === "One, A.; Two, B.", "which now carries the DOI, the arXiv id and the authors", JSON.stringify({ doi: pdoc.meta?.doi, arxiv: pdoc.meta?.arxiv, creators: pdoc.meta?.creators }).slice(0, 160));
+      check(pdoc.meta?.paper?.journal === "Proc. Bed" && pdoc.meta?.paper?.date === "2021-01-02", "and the venue and the date", JSON.stringify(pdoc.meta?.paper));
+    }
+    await b.evaluate(opts, `${api}.tabs.remove(${JSON.stringify(absId)}).catch(() => null)`);
   }
 
   // the keyboard: Alt+Shift+P sends the tab in front with the default

@@ -608,3 +608,61 @@ def test_retiring_a_duplicate_joins_its_facts_to_the_keeper(
         (dup,),
     ).fetchone()[0]
     assert ended == 1
+
+
+def test_a_paper_s_ids_travel_with_its_file_and_fill_in_a_document_that_lacks_them(
+    client: TestClient,
+) -> None:
+    from prax import inbox
+
+    assert inbox.paper_meta(
+        {
+            "doi": "https://doi.org/10.1000/ABC.1",
+            "arxiv": "arXiv:2101.00001",
+            "authors": ["A. One", " ", "B. Two"],
+            "journal": "J. Things",
+            "date": "2021-01-02",
+            "pdf_url": "https://x/p.pdf",
+            "nonsense": "no",
+        }
+    ) == {
+        "doi": "10.1000/ABC.1",
+        "arxiv": "2101.00001",
+        "creators": [{"name": "A. One"}, {"name": "B. Two"}],
+        "paper": {
+            "journal": "J. Things",
+            "date": "2021-01-02",
+            "pdf_url": "https://x/p.pdf",
+        },
+    }
+    assert inbox.paper_meta(None) == {} and inbox.paper_meta({"doi": " "}) == {}
+    # the file first, without ids; then the same bytes from its abstract page
+    pdf = b"%PDF-1.4 the same bytes " * 40
+    first = client.post(
+        "/ingest/file", files={"file": ("p.pdf", pdf, "application/pdf")}
+    ).json()
+    again = client.post(
+        "/ingest/file",
+        files={"file": ("p.pdf", pdf, "application/pdf")},
+        data={"paper": json.dumps({"doi": "10.1000/ABC.1", "authors": ["A. One"]})},
+    ).json()
+    assert again["doc_id"] == first["doc_id"] and not again["created"]
+    meta = client.get(f"/get/{first['doc_id']}").json()["meta"]
+    assert meta["doi"] == "10.1000/ABC.1" and meta["creators"] == [{"name": "A. One"}]
+    # what a document has is left alone
+    client.post(
+        "/ingest/file",
+        files={"file": ("p.pdf", pdf, "application/pdf")},
+        data={"paper": json.dumps({"doi": "10.9999/OTHER"})},
+    )
+    assert (
+        client.get(f"/get/{first['doc_id']}").json()["meta"]["doi"] == "10.1000/ABC.1"
+    )
+    assert (
+        client.post(
+            "/ingest/file",
+            files={"file": ("q.pdf", b"%PDF-1.4 other", "application/pdf")},
+            data={"paper": "not json"},
+        ).status_code
+        == 400
+    )

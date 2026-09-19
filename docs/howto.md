@@ -1245,6 +1245,10 @@ Four ways in:
   Chrome: chrome://extensions) and set the server and token in its
   options. `node scripts/extension_bed.mjs --browser both` exercises it
   end to end in headless Chrome and Firefox against a throwaway door.
+- **A paper from its abstract page** (the extension, `docs/extension.md`):
+  the citation tags name the PDF and the ids; the PDF is uploaded with
+  `meta.doi`, `meta.arxiv`, `meta.creators` — what `prax import
+  citations` joins on — and a PDF already held gets the ids filled in.
 - **A video** (the extension on a YouTube watch page, `docs/extension.md`):
   the transcript with a frame every so often, as one HTML document of
   prax's own shape (`POST /ingest/html` with `mode: video` and what the

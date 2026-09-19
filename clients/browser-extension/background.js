@@ -320,6 +320,7 @@ async function uploadFile(blob, name, common, cfg) {
   if (common.domains) fd.append("domains", common.domains.join(","));
   if (common.tags) fd.append("tags", common.tags.join(","));
   if (common.session) fd.append("session", common.session);
+  if (common.paper) fd.append("paper", JSON.stringify(common.paper));
   fd.append("by", "extension");
   const headers = cfg.token ? { Authorization: `Bearer ${cfg.token}` } : {};
   const res = await fetch(`${cfg.server}/ingest/file`, { method: "POST", headers, body: fd });
@@ -540,6 +541,21 @@ async function storyboardFrames(plan, opt) {
   return { frames, missing };
 }
 
+async function readPaper(tabId) {
+  // the page's citation_* tags alone (no DOM copy): what paper this is
+  try {
+    const r = await api.scripting.executeScript({ target: { tabId }, func: () => {
+      const tags = {};
+      for (const m of document.querySelectorAll('meta[name^="citation_"]')) {
+        const name = m.getAttribute("name"), value = m.getAttribute("content");
+        if (name && value) (tags[name] = tags[name] || []).push(value);
+      }
+      return tags;
+    } });
+    return r && r[0] && r[0].result ? lib.paperOf(r[0].result) : null;
+  } catch (_) { return null; }
+}
+
 async function probeVideo(tabId) {
   // whether the page has a player (the fixture of the test bed has one
   // without being on youtube.com)
@@ -651,14 +667,29 @@ async function captureTab(tab, opts, cfg) {
     const v = await captureVideo(tab, opts, cfg, common);
     if (v) return v;
   }
+  // a scholarly page names its paper in its citation_* tags (arXiv, the
+  // publishers, the preprint servers): the PDF it points at is fetched
+  // with this browser's session and uploaded with the ids and authors,
+  // the page's own snapshot only when that fails; a page with ids and
+  // no PDF goes as a snapshot carrying the ids
+  const paper = lib.capturable(tab.url) ? await readPaper(tab.id) : null;
+  if (paper && paper.pdf_url && !lib.looksLikePdf(tab.url, null)) {
+    const commonP = { url: tab.url, title: paper.title || tab.title || null, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session, paper };
+    try {
+      const blob = await fetchPdf(new URL(paper.pdf_url, tab.url).href);
+      const data = await uploadFile(blob, lib.pdfFileName(paper.pdf_url), commonP, cfg);
+      const ids = [paper.doi ? `doi ${paper.doi}` : null, paper.arxiv ? `arXiv ${paper.arxiv}` : null].filter(Boolean).join(", ");
+      return { tabId: tab.id, url: tab.url, title: commonP.title, mode: "file", note: `the paper's PDF from the page's citation tags${ids ? ` (${ids})` : ""}`, ...data };
+    } catch (err) { log("warn", "the page's PDF could not be fetched; the page goes instead", paper.pdf_url, err); }
+  }
   const read = await readTab(tab.id);
   const url = (read && read.url) || tab.url;
-  const title = (read && read.title) || tab.title || null;
+  const title = (paper && paper.title) || (read && read.title) || tab.title || null;
   const p = lib.plan(url, read && read.html);
   if (p.mode === "skip") return { tabId: tab.id, url, title, error: p.reason };
-  const common = { url, title, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session };
+  const common = { url, title, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session, ...(paper ? { paper } : {}) };
   if (p.mode === "html") {
-    const note = read.snapshot ? "snapshot with images and styles" : (read.note || "plain DOM");
+    const note = (read.snapshot ? "snapshot with images and styles" : (read.note || "plain DOM")) + (paper && (paper.doi || paper.arxiv) ? ` (${[paper.doi ? `doi ${paper.doi}` : null, paper.arxiv ? `arXiv ${paper.arxiv}` : null].filter(Boolean).join(", ")})` : "");
     const data = await door("/ingest/html", { ...common, html: read.html, mode: read.snapshot ? "snapshot" : "dom", note }, cfg);
     return { tabId: tab.id, url, title, mode: "html", note, ...data };
   }
