@@ -4,8 +4,9 @@
      node scripts/extension_bed.mjs                       # Chrome, a throwaway door
      node scripts/extension_bed.mjs --browser firefox     # Firefox or Waterfox, through geckodriver
      node scripts/extension_bed.mjs --browser both
-     node scripts/extension_bed.mjs --keep                # leave the door and the browser up
-     node scripts/extension_bed.mjs --door http://127.0.0.1:8000 --token …   # a door of yours
+     node scripts/extension_bed.mjs --keep [--token …]    # leave the door and the browser up
+     node scripts/extension_bed.mjs --door http://127.0.0.1:8000 --token …   # a door of yours: its
+                                                          # inbox takes the fixture captures
 
    What it does: serves a fixture page (text, a stylesheet, an image, a
    frame) on a port of its own; starts a door on a temporary data
@@ -34,6 +35,7 @@
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import zlib from "node:zlib";
+import { randomBytes } from "node:crypto";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve, dirname } from "node:path";
@@ -128,8 +130,12 @@ if (!door) {
   dataDir = mkdtempSync(join(tmpdir(), "prax-bed-"));
   const port = 8000 + Math.floor(Math.random() * 1000) + 100;
   door = `http://127.0.0.1:${port}`;
-  const env = { ...process.env, PRAX_DATA_DIR: dataDir, PRAX_EMBED: "hash", PRAX_EXTRACT: "stub", PRAX_TITLES: "none", PRAX_INBOX_SCAN: "0", PYTHONIOENCODING: "utf-8" };
-  delete env.PRAX_TOKEN;
+  // the door wants a token, as a door of yours does (never the one in this
+  // environment: --token, else a random one forgotten with the door), so
+  // the checks cover the extension's Authorization header and the refusal
+  // of a wrong one
+  token = token || randomBytes(16).toString("hex");
+  const env = { ...process.env, PRAX_DATA_DIR: dataDir, PRAX_TOKEN: token, PRAX_EMBED: "hash", PRAX_EXTRACT: "stub", PRAX_TITLES: "none", PRAX_INBOX_SCAN: "0", PYTHONIOENCODING: "utf-8" };
   doorProc = spawn(PY, ["-m", "uvicorn", "prax.api:app", "--host", "127.0.0.1", "--port", String(port), "--log-level", "warning"], { env, cwd: repo, stdio: ["ignore", "pipe", "pipe"] });
   doorProc.stderr.on("data", (d) => { if (KEEP) process.stderr.write(d); });
   let up = false;
@@ -138,6 +144,11 @@ if (!door) {
     try { up = (await fetch(`${door}/health`)).ok; } catch (_) { /* not yet */ }
   }
   check(up, "a throwaway door is up", `${door} on ${dataDir}`);
+  const health = up ? await (await fetch(`${door}/health`)).json() : {};
+  check(health.auth === "token", "and it wants a token", JSON.stringify(health));
+  const bare = up ? (await fetch(`${door}/inbox?limit=1`)).status : 0;
+  const wrong = up ? (await fetch(`${door}/inbox?limit=1`, { headers: { Authorization: "Bearer not-the-token" } })).status : 0;
+  check(bare === 401 && wrong === 401, "it refuses a request without the token, and one with a wrong token", `${bare} / ${wrong}`);
   if (!up) process.exit(2);
 } else {
   const r = await get("/health").catch(() => null);
@@ -157,6 +168,8 @@ for (const which of runs) {
   console.log(failed > before ? `${which}: ${failed - before} check(s) failed` : `${which}: all checks passed`);
 }
 if (doorProc && !KEEP) doorProc.kill();
+if (doorProc && KEEP) console.log(`
+the door stays up at ${door} (token ${token}; data in ${dataDir})`);
 fixture.close();
 if (!KEEP && dataDir) setTimeout(() => rmSync(dataDir, { recursive: true, force: true }), 1500).unref();
 console.log(failed ? `\n${failed} check(s) failed` : "\nall checks passed");
@@ -171,15 +184,23 @@ async function exercise(b) {
   const opts = await b.openPage(`${b.origin}/options.html`);
   await b.evaluate(opts, `${api}.storage.local.set(${JSON.stringify({ server: door, token, domains: ["research"], close: false })})`);
   const stored = await b.evaluate(opts, `${api}.storage.local.get(["server","token","domains"])`);
-  check(stored.server === door && stored.domains?.[0] === "research", "the settings are stored", JSON.stringify(stored));
+  check(stored.server === door && stored.token === token && stored.domains?.[0] === "research", "the settings are stored, the token with them", JSON.stringify({ ...stored, token: stored.token ? `(${stored.token.length} chars)` : "" }));
   await b.evaluate(opts, "location.reload()"); await sleep(1000);
   const shownServer = await b.evaluate(opts, `document.querySelector('#server') ? document.querySelector('#server').value : null`);
   check(shownServer === door, "the options page shows the server", String(shownServer));
-  let tested = null;
-  try {
-    await b.evaluate(opts, `(async () => { const b = document.querySelector('#test'); if (b) b.click(); await new Promise(r => setTimeout(r, 2500)); })()`);
-    tested = await b.evaluate(opts, `document.querySelector("#msg") ? document.querySelector("#msg").textContent : document.body.innerText.slice(0, 300)`);
-  } catch (e) { tested = `error: ${e.message}`; }
+  // "test connection" with the token as typed on the page: a wrong one is
+  // refused in so many words, the stored one answers
+  const testWith = async (value) => {
+    try {
+      await b.evaluate(opts, `(async () => { const t = document.querySelector('#token'); if (t && ${JSON.stringify(value)} !== null) t.value = ${JSON.stringify(value)}; const b = document.querySelector('#test'); if (b) b.click(); await new Promise(r => setTimeout(r, 2500)); })()`);
+      return await b.evaluate(opts, `document.querySelector("#msg") ? document.querySelector("#msg").textContent : document.body.innerText.slice(0, 300)`);
+    } catch (e) { return `error: ${e.message}`; }
+  };
+  if (token) {
+    const refused = await testWith("not-the-token");
+    check(/refused|token|401/i.test(refused || ""), "the options page's test with a wrong token says the door refused it", (refused || "").trim().slice(0, 120));
+  }
+  const tested = await testWith(token || null);
   check(/answers|reachable|ok|domain/i.test(tested || ""), "the options page's test connection says the door answers", (tested || "").trim().slice(0, 120));
 
   const pop = await b.openPage(`${b.origin}/popup.html`);

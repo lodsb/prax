@@ -176,6 +176,14 @@ door — no hand on the mouse, nothing of yours touched:
     node scripts/extension_bed.mjs --browser both
     node scripts/extension_bed.mjs --keep              # leave door and browser up to look
     node scripts/extension_bed.mjs --trace             # log what the fixture served
+    node scripts/extension_bed.mjs --door http://127.0.0.1:8000 --token …   # a door of yours
+
+The throwaway door wants a token like a real one — a random one made
+for the run (`--token` to choose it, say with `--keep`), never the
+`PRAX_TOKEN` of this environment — so the extension's bearer header is
+what gets it in, a wrong token is seen refused, and nothing of yours
+is touched. Against a door of yours (`--door`), the fixture captures
+land in that door's inbox.
 
 The bed serves a fixture site on a port of its own (an article with a
 stylesheet, an image, a frame; a second page; a PDF from the test
@@ -188,7 +196,8 @@ page: the door reachable, its domains listed, the default preselected),
 background writes), then asks the door what arrived — a snapshot with
 the image, the stylesheet and the frame's text inlined, the domain and
 the tag on it, no second document when sent again, a PDF tab uploaded
-as a file, a whole window sent, and (Firefox, where the host permission
+as a file, a whole window sent, the options page's test refusing a
+wrong token, and (Firefox, where the host permission
 is removable) the send without the permission: the popup offers the
 grant and every tab still goes by URL with a note naming the missing
 permission. Each check prints a line; one failed check fails the run.
