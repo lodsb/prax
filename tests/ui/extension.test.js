@@ -137,3 +137,16 @@ test("videoHtml: the shape the door's video parser reads, frames before their pa
   assert.ok(html.includes('<a href="https://www.youtube.com/watch?v=abc&amp;t=40s">0:40</a> later'));
   assert.equal(lib.describeResult({ mode: "video", created: true, note: "transcript, 3 frames" }), "new: transcript, 3 frames");
 });
+
+test("parseStoryboard and storyboardPlan: the best level, the sheet and the tile of a moment", () => {
+  const spec = "https://i.ytimg.com/sb/abc/storyboard3_L$L/$N.jpg?sqp=SIG|48#27#100#10#10#0#default#rs$A|80#45#113#10#10#10000#M$M#rs$B|320#180#113#3#3#10000#M$M#rs$C";
+  const lv = lib.parseStoryboard(spec);
+  assert.equal(lv.w, 320); assert.equal(lv.h, 180); assert.equal(lv.cols, 3); assert.equal(lv.intervalMs, 10000); assert.equal(lv.level, 2);
+  assert.equal(lv.sheetUrl(4), "https://i.ytimg.com/sb/abc/storyboard3_L2/M4.jpg?sqp=SIG&sigh=rs$C");
+  const plan = lib.storyboardPlan(lv, [0, 30, 95, 100000]);
+  assert.deepEqual(plan.map((p) => [p.t, p.url.endsWith("/M0.jpg?sqp=SIG&sigh=rs$C") ? 0 : p.url.endsWith("/M1.jpg?sqp=SIG&sigh=rs$C") ? 1 : "other", p.x, p.y]), [
+    [0, 0, 0, 0], [30, 0, 0, 180], [95, 1, 0, 0], [100000, "other", 320, 180],  // the last moment clamps to picture 112: sheet 12, tile 4
+  ]);
+  assert.equal(lib.parseStoryboard(""), null);
+  assert.equal(lib.parseStoryboard("https://x/$L/$N|0#0#0#0#0#0#a#b"), null);
+});

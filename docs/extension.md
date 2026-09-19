@@ -115,15 +115,22 @@ the tab shows, with a small popup for the few choices that matter.
   result lands in the popup's history.
 - **A video.** On a YouTube watch page (or any page with a player of
   that shape) "send this tab" sends the recording as a document rather
-  than the page: the transcript from the page's own caption track — a
-  person's in your language, else any person's, else the automatic one,
-  fetched from inside the tab with its session — grouped into paragraphs
-  at pauses and sentence ends, each headed by its moment; and a frame
-  every thirty seconds (the options page sets the interval; at most
-  150), drawn from the tab's own `<video>` after seeking it, muted, the
-  playback put back after — a frame that looks like the one before is
-  dropped, so a talking head gives one and a slide change a new one.
-  Nothing is downloaded. The document is HTML of prax's own shape
+  than the page: the transcript from a caption track — a person's in
+  your language, else any person's, else the automatic one — grouped
+  into paragraphs at pauses and sentence ends, each headed by its
+  moment; and a frame every thirty seconds (the options page sets the
+  interval; at most 150), drawn from the tab's own player after asking
+  it to seek, muted, the playback put back after — a frame that looks
+  like the one before is dropped, so a talking head gives one and a
+  slide change a new one. Where the player does not deliver a moment
+  (it is not playing and will not buffer, the stream is protected),
+  the seek bar's own preview picture stands in — small, 320×180 at
+  best, but there for any video — and the result says how many were
+  those. The caption tracks the watch page hands out answer empty
+  unless the page's own player asks (a session token it adds), so the
+  tracks are taken from YouTube's player service as the iOS client,
+  whose answer plainly, from inside the tab; the page's own are the
+  last resort. Nothing is downloaded. The document is HTML of prax's own shape
   (`src/prax/parsers/video.py` reads it exactly): the chapters a
   description lists become headings, each paragraph and frame carries
   `data-t`, the frames are inlined. The door keeps what the page knew

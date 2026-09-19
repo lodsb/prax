@@ -196,6 +196,35 @@
     return out;
   }
 
+  /** YouTube's storyboard spec — the seek bar's preview pictures: a URL
+      template, then one level per "|": width#height#count#cols#rows#interval_ms#name#sigh.
+      The best level (the last) as {w, h, count, cols, rows, intervalMs, sheetUrl(i)}, or null. */
+  function parseStoryboard(spec) {
+    const parts = String(spec || "").split("|");
+    if (parts.length < 2) return null;
+    const template = parts[0];
+    const levels = parts.slice(1).map((s, i) => {
+      const f = s.split("#");
+      return { level: i, w: Number(f[0]), h: Number(f[1]), count: Number(f[2]), cols: Number(f[3]), rows: Number(f[4]), intervalMs: Number(f[5]), name: f[6], sigh: f[7] };
+    }).filter((l) => l.w > 0 && l.cols > 0 && l.rows > 0 && l.intervalMs > 0);
+    if (!levels.length) return null;
+    const best = levels[levels.length - 1];
+    best.sheetUrl = (i) => `${template.replace("$L", String(best.level)).replace("$N", best.name).replace("$M", String(i))}&sigh=${best.sigh}`;
+    return best;
+  }
+
+  /** Where each moment's picture is: [{t, url, x, y, w, h}] on the level's sheets. */
+  function storyboardPlan(level, times) {
+    if (!level) return [];
+    const perSheet = level.cols * level.rows;
+    return (times || []).map((t) => {
+      const index = Math.min(Math.max(0, level.count - 1), Math.floor((t * 1000) / level.intervalMs));
+      const sheet = Math.floor(index / perSheet);
+      const within = index % perSheet;
+      return { t, url: level.sheetUrl(sheet), x: (within % level.cols) * level.w, y: Math.floor(within / level.cols) * level.h, w: level.w, h: level.h };
+    });
+  }
+
   function escapeHtml(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
@@ -238,5 +267,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan };
 });
