@@ -121,7 +121,11 @@ Parsing is a batch job; the serving path never parses.
       self-contained snapshots through vendored SingleFile (AGPL, so
       `clients/browser-extension/` carries its own licence); a PDF tab is fetched with
       the browser's session and uploaded; HTML originals are served
-      with a sandboxing header
+      with a sandboxing header. Test bed (2026-09-19,
+      `scripts/extension_bed.mjs`): headless Chrome (DevTools,
+      `Extensions.loadUnpacked`) and Firefox (geckodriver, the add-on
+      installed temporarily) against a throwaway door, every surface
+      of the extension exercised, `--browser both`
 - [x] Inbox folder (2026-09-12): `scripts/inbox.py [--watch] [--parse]`
       registers what lands in `data/inbox/` (subfolder = domain, JSON
       sidecar, settle time, `failed/`), consumed files removed
