@@ -1238,7 +1238,8 @@ Four ways in:
   same under one session id; a PDF tab is fetched again inside the
   browser, with its session, and uploaded, so paywalled PDFs arrive too. Load the folder unpacked (Waterfox and Firefox: about:debugging;
   Chrome: chrome://extensions) and set the server and token in its
-  options.
+  options. `node scripts/extension_bed.mjs --browser both` exercises it
+  end to end in headless Chrome and Firefox against a throwaway door.
 - **Claude Code**: the `capture_url` MCP tool.
 - **The drop folder** `data/inbox/`: the door consumes it by itself
   while it runs (every `PRAX_INBOX_SCAN` seconds, 20 by default, 0 to

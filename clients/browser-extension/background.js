@@ -342,7 +342,11 @@ async function captureTab(tab, opts, cfg) {
   // this browser has, and upload the bytes when they are a PDF. Only then
   // does the door fetch the URL itself, without any session.
   let why = p.reason || null;
-  if (!read || lib.looksLikePdf(url, read.html)) {
+  if (!read && !(await mayRead(url))) {
+    // the browser would not let us into the tab, and would refuse our own
+    // fetch of it just the same: say which permission is missing
+    why = "no permission to read this site (grant access to all sites in the popup); the door fetched the URL instead";
+  } else if (!read || lib.looksLikePdf(url, read.html)) {
     let blob = null;
     let refused = null;
     try { blob = await fetchPdf(url); } catch (err) { log("warn", "own fetch failed", url, err); refused = err.message; why = `own fetch failed: ${err.message}; the door fetched instead`; blob = null; }
@@ -367,6 +371,14 @@ async function captureTab(tab, opts, cfg) {
   }
   const data = await door("/ingest/url", common, cfg);
   return { tabId: tab.id, url, title, mode: "url", note: why, ...data };
+}
+
+/* Whether this extension may read pages of that site: the host permission
+   is optional, asked for once from the popup. */
+async function mayRead(url) {
+  let origin;
+  try { const u = new URL(url); origin = `${u.protocol}//${u.host}/*`; } catch (_) { return false; }
+  try { return await api.permissions.contains({ origins: [origin] }); } catch (_) { return true; }
 }
 
 async function setProgress(patch) {

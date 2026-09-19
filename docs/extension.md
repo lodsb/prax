@@ -166,6 +166,53 @@ The popup checks `GET /health` on open and shows the server's state
   closing does not abort the loop.
 - Size guard: a snapshot above 32 MB is sent as URL only.
 
+## Testing it (`scripts/extension_bed.mjs`)
+
+The extension end to end, in a headless browser, against a throwaway
+door — no hand on the mouse, nothing of yours touched:
+
+    node scripts/extension_bed.mjs                     # Chrome
+    node scripts/extension_bed.mjs --browser firefox   # Firefox or Waterfox
+    node scripts/extension_bed.mjs --browser both
+    node scripts/extension_bed.mjs --keep              # leave door and browser up to look
+    node scripts/extension_bed.mjs --trace             # log what the fixture served
+
+The bed serves a fixture site on a port of its own (an article with a
+stylesheet, an image, a frame; a second page; a PDF from the test
+fixtures), starts a door on a temporary data directory (`uvicorn
+prax.api:app`, hash embeddings, no extraction, no title pass) and drives
+the browser through the extension's own surfaces: the settings the
+options page stores, its "test connection", the popup (opened as a
+page: the door reachable, its domains listed, the default preselected),
+"send this tab" (the message the popup sends, the progress the
+background writes), then asks the door what arrived — a snapshot with
+the image, the stylesheet and the frame's text inlined, the domain and
+the tag on it, no second document when sent again, a PDF tab uploaded
+as a file, a whole window sent, and (Firefox, where the host permission
+is removable) the send without the permission: the popup offers the
+grant and every tab still goes by URL with a note naming the missing
+permission. Each check prints a line; one failed check fails the run.
+
+How the browsers are driven, since neither loads an unpacked extension
+the obvious way any more: **Chrome** over the DevTools protocol
+(`--remote-debugging-port`, `--enable-unsafe-extension-debugging`,
+`Extensions.loadUnpacked` — branded Chrome ignores `--load-extension`;
+set `CHROME=` to the binary if it is not found). **Firefox** over
+geckodriver's WebDriver (`--allow-system-access`): the add-on is
+installed temporarily with its UUID pinned through the
+`extensions.webextensions.uuids` pref so its pages have a known
+address, and those pages are opened from the browser's chrome context
+(`gBrowser.addTab`), since WebDriver refuses to navigate to
+`moz-extension://`. Needs geckodriver (`GECKODRIVER=`, else
+`%LOCALAPPDATA%\prax	ools\geckodriver.exe` or
+`~/.local/share/prax/tools/geckodriver`) and Firefox or Waterfox
+(`FIREFOX=`). Node 22+ and the repo's `.venv` for the door.
+
+The fixture image is built in the script, not pasted: Firefox refuses
+an image whose CRC or zlib check is off (Chrome shrugs), and SingleFile
+never fetches a broken image — a corrupt fixture looks exactly like an
+extension bug.
+
 ## Not in scope
 
 No reading list, no annotation, no sync: prax's pages are where notes
