@@ -68,3 +68,72 @@ test("describeResult and splitList", () => {
   assert.deepEqual(lib.splitList(" a, b ,,c "), ["a", "b", "c"]);
   assert.deepEqual(lib.splitList(""), []);
 });
+
+test("videoOfUrl: YouTube's watch pages in their forms, nothing else", () => {
+  assert.deepEqual(lib.videoOfUrl("https://www.youtube.com/watch?v=abc123&t=5s"), { provider: "youtube", id: "abc123" });
+  assert.deepEqual(lib.videoOfUrl("https://m.youtube.com/watch?v=abc123"), { provider: "youtube", id: "abc123" });
+  assert.deepEqual(lib.videoOfUrl("https://youtu.be/xyz789?si=1"), { provider: "youtube", id: "xyz789" });
+  assert.deepEqual(lib.videoOfUrl("https://www.youtube.com/shorts/short1234"), { provider: "youtube", id: "short1234" });
+  assert.equal(lib.videoOfUrl("https://www.youtube.com/"), null);
+  assert.equal(lib.videoOfUrl("https://example.org/watch?v=1"), null);
+  assert.equal(lib.videoOfUrl("nope"), null);
+});
+
+test("fmtTime and frameTimes", () => {
+  assert.equal(lib.fmtTime(0), "0:00");
+  assert.equal(lib.fmtTime(754), "12:34");
+  assert.equal(lib.fmtTime(3754), "1:02:34");
+  assert.deepEqual(lib.frameTimes(125, 30, 150), [0, 30, 60, 90, 120]);
+  assert.deepEqual(lib.frameTimes(0, 30, 150), [0]);
+  const long = lib.frameTimes(36000, 30, 150); // ten hours: the interval stretches to the cap
+  assert.ok(long.length <= 150 && long.length >= 140 && long[1] - long[0] > 30);
+});
+
+test("chooseTrack: a person's in the reader's language, then any person's, then the automatic", () => {
+  const tracks = [
+    { baseUrl: "a", languageCode: "de", kind: "asr" },
+    { baseUrl: "b", languageCode: "en", kind: "" },
+    { baseUrl: "c", languageCode: "de", kind: "" },
+  ];
+  assert.equal(lib.chooseTrack(tracks, "de-DE").baseUrl, "c");
+  assert.equal(lib.chooseTrack(tracks, "fr").baseUrl, "b");
+  assert.equal(lib.chooseTrack([tracks[0]], "en").baseUrl, "a");
+  assert.equal(lib.chooseTrack([], "en"), null);
+});
+
+test("groupCaptions: segments run together until a pause, a sentence end past the target, or the cap", () => {
+  const ev = (t, d, s) => ({ tStartMs: t, dDurationMs: d, segs: [{ utf8: s }] });
+  const paras = lib.groupCaptions([
+    ev(0, 1000, "welcome everyone"), ev(1000, 1000, "to the talk."), ev(1100, 100, "\n"),
+    ev(4000, 1000, "after a pause"), ev(4000, 1000, "after a pause"), // a rolling repeat
+  ]);
+  assert.deepEqual(paras, [{ t: 0, text: "welcome everyone to the talk." }, { t: 4, text: "after a pause" }]);
+  const long = lib.groupCaptions(Array.from({ length: 40 }, (_, i) => ev(i * 1000, 1000, `twelve letter words number ${i}.`)));
+  assert.ok(long.length > 1 && long.every((p) => p.text.length <= 420));
+});
+
+test("chaptersFrom: a description's timestamp list, three or more from 0:00, in order", () => {
+  assert.deepEqual(lib.chaptersFrom("Slides: x\n0:00 Intro\n1:05 - The envelope\n(12:34) Density\nthanks"), [
+    { t: 0, title: "Intro" }, { t: 65, title: "The envelope" }, { t: 754, title: "Density" },
+  ]);
+  assert.deepEqual(lib.chaptersFrom("1:00 late\n2:00 b\n3:00 c"), []);
+  assert.deepEqual(lib.chaptersFrom("0:00 a\n2:00 b"), []);
+  assert.deepEqual(lib.chaptersFrom("0:00 a\n3:00 b\n2:00 c"), []);
+});
+
+test("videoHtml: the shape the door's video parser reads, frames before their paragraphs", () => {
+  const html = lib.videoHtml({
+    video: { provider: "youtube", id: "abc", url: "https://www.youtube.com/watch?v=abc", channel: "C", duration: 100 },
+    title: "T <1>", description: "line one\n\nline two",
+    paragraphs: [{ t: 0, text: "hello <world>" }, { t: 40, text: "later" }],
+    frames: [{ t: 0, dataUrl: "data:image/jpeg;base64,AAA" }, { t: 30, dataUrl: "data:image/jpeg;base64,BBB" }, { t: 90, dataUrl: "data:image/jpeg;base64,CCC" }],
+  });
+  assert.ok(html.includes('<meta name="prax-video" content="{&quot;provider&quot;:&quot;youtube&quot;'));
+  assert.ok(html.includes("<h1>T &lt;1&gt;</h1>"));
+  assert.ok(html.includes("<p>line one</p>\n<p>line two</p>"));
+  const order = [...html.matchAll(/<(figure|p) data-t="(\d+)"/g)].map((m) => `${m[1]}${m[2]}`);
+  assert.deepEqual(order, ["figure0", "p0", "figure30", "p40", "figure90"]);
+  assert.ok(html.includes('<figcaption>0:30 — later</figcaption>'));
+  assert.ok(html.includes('<a href="https://www.youtube.com/watch?v=abc&amp;t=40s">0:40</a> later'));
+  assert.equal(lib.describeResult({ mode: "video", created: true, note: "transcript, 3 frames" }), "new: transcript, 3 frames");
+});

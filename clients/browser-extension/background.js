@@ -328,10 +328,179 @@ async function uploadFile(blob, name, common, cfg) {
   return data;
 }
 
+/* A video page: the transcript and a frame every so often, as one
+   document (lib.videoHtml, the shape the door's video parser reads). The
+   page's own player gives the recording's details and its caption
+   tracks (a function run in the page's world: the player object is not
+   visible from the extension's); the captions are fetched from inside the
+   tab, with its session; the frames are drawn from the tab's <video>
+   after seeking it, muted, the playback restored after; a frame that
+   looks like the one before is dropped. Nothing is downloaded. */
+const FRAME_DEFAULTS = { interval: 30, cap: 150, width: 1280, quality: 0.8, minChange: 6 };
+
+function readPlayerMain() {
+  // runs in the page's world (world: MAIN): YouTube's player, or the
+  // initial player response the page came with
+  const player = document.getElementById("movie_player");
+  let r = null;
+  try { r = player && typeof player.getPlayerResponse === "function" ? player.getPlayerResponse() : null; } catch (_) { r = null; }
+  if (!r && typeof ytInitialPlayerResponse !== "undefined") r = ytInitialPlayerResponse;
+  if (!r) return null;
+  const d = r.videoDetails || {};
+  const tracks = ((((r.captions || {}).playerCaptionsTracklistRenderer || {}).captionTracks) || []).map((t) => ({
+    baseUrl: t.baseUrl, languageCode: t.languageCode || "", kind: t.kind || "",
+    name: t.name ? (t.name.simpleText || (t.name.runs || []).map((x) => x.text).join("")) : "",
+  }));
+  const mf = (r.microformat || {}).playerMicroformatRenderer || {};
+  const v = document.querySelector("video");
+  return {
+    videoId: d.videoId || null, title: d.title || document.title || "", author: d.author || "",
+    lengthSeconds: Number(d.lengthSeconds) || 0, description: d.shortDescription || "",
+    publishDate: (mf.publishDate || mf.uploadDate || "").slice(0, 10), tracks,
+    duration: v && isFinite(v.duration) ? v.duration : 0, hasVideo: !!v,
+  };
+}
+
+async function fetchCaptions(url) {
+  // runs in the tab (the extension's world, the page's cookies)
+  const r = await fetch(url, { credentials: "include" });
+  if (!r.ok) return { error: `captions: ${r.status}` };
+  const text = await r.text();
+  try { return { events: JSON.parse(text).events || [] }; } catch (_) { return { error: "captions: not json3" }; }
+}
+
+async function grabFrames(times, opt, prev) {
+  // runs in the tab: seeks the page's <video> to each moment and draws it
+  const v = document.querySelector("video");
+  if (!v) return { frames: [], prev: null, error: "no video element" };
+  const state = { t: v.currentTime, paused: v.paused, muted: v.muted };
+  v.muted = true;
+  if (!v.paused) v.pause();
+  const vw = v.videoWidth || 1280, vh = v.videoHeight || 720;
+  const w = Math.min(opt.width, vw), h = Math.max(1, Math.round(w * vh / vw));
+  const canvas = document.createElement("canvas"); canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  const small = document.createElement("canvas"); small.width = 32; small.height = 18;
+  const sctx = small.getContext("2d", { willReadFrequently: true });
+  const seek = (t) => new Promise((resolve) => {
+    let done = false;
+    const fin = () => { if (!done) { done = true; v.removeEventListener("seeked", fin); resolve(); } };
+    v.addEventListener("seeked", fin);
+    v.currentTime = t;
+    setTimeout(fin, opt.seekTimeout || 4000);
+  });
+  const frames = [];
+  let last = prev || null;
+  let error = null;
+  for (const t of times) {
+    await seek(t);
+    await new Promise((r) => setTimeout(r, 60)); // the frame after the seek
+    try {
+      ctx.drawImage(v, 0, 0, w, h);
+      sctx.drawImage(v, 0, 0, 32, 18);
+    } catch (e) { error = `cannot draw the video: ${e.message}`; break; }
+    const px = sctx.getImageData(0, 0, 32, 18).data;
+    const rgb = [];  // the colour, not a grey: two slides can share a luminance
+    for (let i = 0; i < px.length; i += 4) rgb.push(px[i], px[i + 1], px[i + 2]);
+    if (last && last.length === rgb.length) {
+      let diff = 0;
+      for (let i = 0; i < rgb.length; i++) diff += Math.abs(rgb[i] - last[i]);
+      if (diff / rgb.length < opt.minChange) continue; // the same picture as before
+    }
+    last = rgb;
+    let dataUrl;
+    try { dataUrl = canvas.toDataURL("image/jpeg", opt.quality); } catch (e) { error = `cannot read the frame: ${e.message}`; break; }
+    frames.push({ t, dataUrl });
+  }
+  if (opt.restore) {
+    try { v.currentTime = state.t; v.muted = state.muted; if (!state.paused) v.play().catch(() => {}); } catch (_) { /* the page's business */ }
+  }
+  return { frames, prev: last, error };
+}
+
+async function probeVideo(tabId) {
+  // whether the page has a player (the fixture of the test bed has one
+  // without being on youtube.com)
+  try {
+    const r = await api.scripting.executeScript({ target: { tabId }, func: () => !!document.getElementById("movie_player") });
+    return !!(r && r[0] && r[0].result);
+  } catch (_) { return false; }
+}
+
+async function captureVideo(tab, opts, cfg, common) {
+  let info = null;
+  try {
+    const r = await api.scripting.executeScript({ target: { tabId: tab.id }, func: readPlayerMain, world: "MAIN" });
+    info = r && r[0] ? r[0].result : null;
+  } catch (err) { log("warn", "no player response", err); }
+  log("info", "player", info ? `${info.videoId || "?"} ${info.duration}s video=${info.hasVideo} tracks=${(info.tracks || []).length}` : "none");
+  if (!info || !info.hasVideo) return null; // not a video page after all: the usual capture
+  const known = lib.videoOfUrl(tab.url) || {};
+  const url = known.id ? `https://www.youtube.com/watch?v=${known.id}` : tab.url;
+  const duration = Math.floor(info.duration || info.lengthSeconds || 0);
+  const video = {
+    provider: known.provider || "youtube", id: info.videoId || known.id || null, url,
+    channel: info.author || "", duration, published: info.publishDate || "",
+    captions: null, language: null, chapters: lib.chaptersFrom(info.description),
+  };
+  const notes = [];
+  // the transcript
+  let paragraphs = [];
+  const track = lib.chooseTrack(info.tracks, navigator.language);
+  if (track) {
+    const sep = track.baseUrl.includes("?") ? "&" : "?";
+    const r = await api.scripting.executeScript({ target: { tabId: tab.id }, func: fetchCaptions, args: [`${track.baseUrl}${sep}fmt=json3`] });
+    const got = r && r[0] ? r[0].result : null;
+    if (got && got.events) {
+      paragraphs = lib.groupCaptions(got.events);
+      video.captions = track.kind === "asr" ? "asr" : "uploaded";
+      video.language = track.languageCode || null;
+      notes.push(`transcript (${track.languageCode || "?"}${track.kind === "asr" ? ", automatic" : ""}, ${paragraphs.length} paragraphs)`);
+    } else {
+      notes.push(`no transcript (${(got && got.error) || "the captions did not load"})`);
+    }
+  } else {
+    notes.push("no captions");
+  }
+  // the frames
+  const settings_ = await api.storage.local.get(["frame_interval", "frame_cap", "frame_width"]);
+  const fopt = { ...FRAME_DEFAULTS, interval: Number(settings_.frame_interval) || FRAME_DEFAULTS.interval, cap: Number(settings_.frame_cap) || FRAME_DEFAULTS.cap, width: Number(settings_.frame_width) || FRAME_DEFAULTS.width };
+  const times = lib.frameTimes(duration, fopt.interval, fopt.cap);
+  const frames = [];
+  let prev = null;
+  let frameError = null;
+  const batch = 12;
+  for (let i = 0; i < times.length; i += batch) {
+    const part = times.slice(i, i + batch);
+    const restore = i + batch >= times.length;
+    let got = null;
+    try {
+      const r = await api.scripting.executeScript({ target: { tabId: tab.id }, func: grabFrames, args: [part, { ...fopt, restore }, prev] });
+      got = r && r[0] ? r[0].result : null;
+    } catch (err) { frameError = err.message; break; }
+    if (!got) { frameError = "the tab answered nothing"; break; }
+    frames.push(...(got.frames || []));
+    prev = got.prev;
+    await setProgress({ note: `${frames.length} frames of ${times.length} moments…` });
+    if (got.error) { frameError = got.error; break; }
+  }
+  notes.push(frames.length ? `${frames.length} frames` : `no frames${frameError ? ` (${frameError})` : ""}`);
+  if (!paragraphs.length && !frames.length) return { ...common, tabId: tab.id, mode: "video", error: `nothing to keep of the video: ${notes.join(", ")}` };
+  const html = lib.videoHtml({ video, title: info.title || tab.title || "", description: info.description || "", paragraphs, frames });
+  const note = notes.join(", ");
+  const data = await door("/ingest/html", { ...common, url, title: info.title || common.title, html, mode: "video", note, video }, cfg);
+  return { tabId: tab.id, url, title: info.title || common.title, mode: "video", note, ...data };
+}
+
 async function captureTab(tab, opts, cfg) {
   // an internal page (the Add-ons Manager, about:…, a file) cannot be read
   // by an extension: say so before trying
   if (!lib.capturable(tab.url)) return { tabId: tab.id, url: tab.url, title: tab.title || null, error: "this kind of page cannot be read" };
+  if (lib.videoOfUrl(tab.url) || await probeVideo(tab.id)) {
+    const common = { url: tab.url, title: tab.title || null, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session };
+    const v = await captureVideo(tab, opts, cfg, common);
+    if (v) return v;
+  }
   const read = await readTab(tab.id);
   const url = (read && read.url) || tab.url;
   const title = (read && read.title) || tab.title || null;

@@ -19,6 +19,9 @@
       <div id="domains" class="chips"><span class="muted">save the server first, then the door's modules appear here</span></div>
     </label>
     <label class="row"><input id="close" type="checkbox"> close tabs after "send all tabs in window"</label>
+    <label>Video frames
+      <span class="row">a frame every <input id="frame_interval" type="number" min="5" max="600" step="5" value="30" style="width:5em"> seconds of a video (at most 150; a frame like the one before is dropped)</span>
+    </label>
     <div class="actions">
       <button>Save</button>
       <button type="button" id="test" class="secondary">Test connection</button>

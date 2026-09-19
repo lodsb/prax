@@ -65,6 +65,7 @@ function renderProgress(p) {
   const pct = p.total ? Math.round((100 * (p.done || 0)) / p.total) : 0;
   $("fill").style.width = `${pct}%`;
   $("fill").className = p.state === "error" ? "error-fill" : "";
+  renderNote(p);
   if (p.state === "error" && p.error) $("msg").textContent = p.error;
   if (p.state === "done") $("msg").textContent = `${(p.results || []).filter((r) => !r.error).length} of ${p.total} sent`;
 }
@@ -130,6 +131,12 @@ async function main() {
     await send(ids);
   });
   $("close").addEventListener("change", () => api.storage.local.set({ close: $("close").checked }));
+}
+
+function renderNote(progress) {
+  const el = $("note");
+  if (!el) return;
+  el.textContent = progress && progress.state === "running" && progress.note ? progress.note : "";
 }
 
 function renderLog(lines) {

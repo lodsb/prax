@@ -113,6 +113,25 @@ the tab shows, with a small popup for the few choices that matter.
   browser's session and uploads it without opening a tab, or lets the
   door fetch it. Both use the options page's default domains; the
   result lands in the popup's history.
+- **A video.** On a YouTube watch page (or any page with a player of
+  that shape) "send this tab" sends the recording as a document rather
+  than the page: the transcript from the page's own caption track — a
+  person's in your language, else any person's, else the automatic one,
+  fetched from inside the tab with its session — grouped into paragraphs
+  at pauses and sentence ends, each headed by its moment; and a frame
+  every thirty seconds (the options page sets the interval; at most
+  150), drawn from the tab's own `<video>` after seeking it, muted, the
+  playback put back after — a frame that looks like the one before is
+  dropped, so a talking head gives one and a slide change a new one.
+  Nothing is downloaded. The document is HTML of prax's own shape
+  (`src/prax/parsers/video.py` reads it exactly): the chapters a
+  description lists become headings, each paragraph and frame carries
+  `data-t`, the frames are inlined. The door keeps what the page knew
+  of the recording (`meta.video`), the passages carry their moment,
+  the frames are figures the vision pass reads (a talk's slides become
+  text), and the document's page in the UI shows the player, every
+  moment a seek. A recording without captions still goes, frames only;
+  one whose frames cannot be drawn (DRM) goes with its transcript.
 - **The keyboard.** `Alt+Shift+P` sends the tab in front, with the
   options page's default domains, popup or no popup (the browser's
   extension-shortcut page changes the key). What a send without the
@@ -131,6 +150,7 @@ the tab shows, with a small popup for the few choices that matter.
 | Token | `PRAX_TOKEN`, stored in `chrome.storage.local` (never `sync`) | empty |
 | Default domains | preselected in the popup | none |
 | Close tabs after sending | for "send all tabs" | off |
+| Video frames | a frame every N seconds of a video (5 to 600; at most 150 frames, the interval stretches for a long recording) | 30 |
 
 The popup checks `GET /health` on open and shows the server's state
 (reachable, token accepted or refused).
@@ -206,7 +226,10 @@ the tag on it, no second document when sent again, a PDF tab uploaded
 as a file, a whole window sent, the options page's test refusing a
 wrong token, the keyboard send and its badge, a door that is not
 there (the send fails naming the door, "retry failed" sends it again
-once the door is back), and (Firefox, where the host permission
+once the door is back), a watch page sent as a video (a fixture page
+with a player of YouTube's shape and a six-second clip of three
+colours, `tests/fixtures/video/bars.webm`: two paragraphs, three frames
+of six moments, the chapters, the moment on a search hit), and (Firefox, where the host permission
 is removable) the send without the permission: the popup offers the
 grant and every tab still goes by URL with a note naming the missing
 permission. Each check prints a line; one failed check fails the run.

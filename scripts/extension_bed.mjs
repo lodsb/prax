@@ -82,6 +82,22 @@ const PNG = (() => {
   const raw = Buffer.alloc(8 * (1 + 8 * 3)); for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) raw[y * 25 + 1 + x * 3] = 0xff;
   return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk("IHDR", ihdr), chunk("IDAT", zlib.deflateSync(raw)), chunk("IEND", Buffer.alloc(0))]);
 })();
+// a six-second clip of three colours (tests/fixtures/video/bars.webm,
+// ffmpeg's colour source): frames a second apart give six moments, three
+// pictures — what the dedupe is for
+const CLIP = (() => {
+  const f = join(repo, "tests", "fixtures", "video", "bars.webm");
+  return existsSync(f) ? readFileSync(f) : null;
+})();
+const CAPTIONS = {
+  events: [
+    { tStartMs: 0, dDurationMs: 1800, segs: [{ utf8: "welcome to the bed's talk" }] },
+    { tStartMs: 1800, dDurationMs: 1200, segs: [{ utf8: "about granular synthesis." }] },
+    // a pause of 1.6 s before the next: a second paragraph
+    { tStartMs: 4600, dDurationMs: 800, segs: [{ utf8: "the grain envelope shapes each burst" }] },
+    { tStartMs: 5400, dDurationMs: 600, segs: [{ utf8: "of sound, a Hann window." }] },
+  ],
+};
 const TRACE = args.includes("--trace");
 const fixture = createServer((req, res) => {
   const url = new URL(req.url, "http://x");
@@ -104,6 +120,32 @@ const fixture = createServer((req, res) => {
   } else if (url.pathname === "/paper.pdf") {
     res.writeHead(200, { "content-type": "application/pdf" });
     res.end(PDF);
+  } else if (url.pathname === "/watch") {
+    // a watch page the way the extension sees YouTube's: a #movie_player
+    // whose getPlayerResponse() gives the recording and its caption
+    // tracks, and a <video> the frames are drawn from
+    const base = `http://127.0.0.1:${fixture.address().port}`;
+    res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+    res.end(`<!doctype html><html><head><title>The Bed Talk</title></head>
+<body><h1>The Bed Talk</h1>
+<div id="movie_player"><video id="v" src="/bars.webm" preload="auto" controls muted playsinline width="320" height="180"></video></div>
+<script>
+  document.getElementById("movie_player").getPlayerResponse = () => ({
+    videoDetails: { videoId: "bed1", title: "The Bed Talk", author: "The Bed Channel", lengthSeconds: "6",
+      shortDescription: ["A talk for the bed.", "", "0:00 Intro", "0:02 The envelope", "0:04 The window"].join(String.fromCharCode(10)) },
+    microformat: { playerMicroformatRenderer: { publishDate: "2026-09-19" } },
+    captions: { playerCaptionsTracklistRenderer: { captionTracks: [
+      { baseUrl: "${base}/api/timedtext?v=bed1&lang=en", languageCode: "en", kind: "asr", name: { simpleText: "English (auto-generated)" } },
+    ] } },
+  });
+</script></body></html>`);
+  } else if (url.pathname === "/bars.webm") {
+    if (!CLIP) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { "content-type": "video/webm", "content-length": CLIP.length, "accept-ranges": "bytes" });
+    res.end(CLIP);
+  } else if (url.pathname === "/api/timedtext") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(CAPTIONS));
   } else if (url.pathname === "/second") {
     res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
     res.end(`<!doctype html><html><head><title>The Second Page</title></head><body><p>${"A second page for the whole-window send. ".repeat(20)}</p></body></html>`);
@@ -280,6 +322,46 @@ async function exercise(b) {
   check(progress?.state === "done" && results.length === readable.length && results.every((r) => !r.error), "every readable tab of the window is sent", results.map((r) => r.error || `${r.title || r.url} → doc ${r.doc_id}`).join(" · ").slice(0, 200));
   const after = await (await get("/inbox?limit=10")).json();
   check((after.recent || []).some((r) => r.title === "The Second Page"), "the second page is in the inbox");
+
+  // a video page: the transcript with frames, as one document the door
+  // parses with its video parser; a frame a second here, so the six-second
+  // clip gives moments enough for the dedupe to drop the repeats
+  if (CLIP) {
+    await b.evaluate(opts, `${api}.storage.local.set({ frame_interval: 1 })`);
+    const watchId = await b.evaluate(opts, `(async () => { const t = await ${api}.tabs.create({ url: ${JSON.stringify(`${FIXTURE}/watch`)}, active: true }); await new Promise(r => setTimeout(r, 2500)); return t.id; })()`);
+    check(!!watchId, "the watch page is open in a tab");
+    await b.evaluate(opts, `${area}.set({ progress: { state: "running", total: 1, done: 0, results: [] } })`);
+    await b.evaluate(opts, `${api}.runtime.sendMessage({ type: "capture", tabIds: [${JSON.stringify(watchId)}], domains: ["research"], tags: ["bed", "video"], close: false, session: ${JSON.stringify(session + "v")} })`);
+    for (let i = 0; i < 120; i++) { await sleep(500); progress = (await b.evaluate(opts, `${area}.get("progress")`)).progress; if (progress && progress.state !== "running") break; }
+    const vr = progress?.results?.[0] || {};
+    check(progress?.state === "done" && vr.mode === "video" && vr.doc_id, "the watch page is sent as a video", vr.error || `doc ${vr.doc_id} · ${vr.note || ""}`);
+    if (vr.mode !== "video") {
+      const log = (await b.evaluate(opts, `${area}.get("log")`)).log || [];
+      console.log("  (extension log:", JSON.stringify(log.slice(-8)).slice(0, 1200), ")");
+    }
+    check(/transcript \(en, automatic, 2 paragraphs\)/.test(vr.note || ""), "with its transcript, grouped into paragraphs", vr.note || "");
+    const nFrames = Number((vr.note || "").match(/(\d+) frames/)?.[1] || 0);
+    check(nFrames === 3, "and the frames, the repeats dropped (three pictures in six moments)", vr.note || "");
+    if (vr.doc_id) {
+      const vdoc = await (await get(`/get/${vr.doc_id}?max_chars=4000`)).json();
+      check(vdoc.meta?.video?.id === "bed1" && vdoc.meta?.video?.channel === "The Bed Channel" && vdoc.meta?.parser === "video", "the door kept what the page knew of the recording", JSON.stringify(vdoc.meta?.video).slice(0, 160));
+      check(/\[0:04\] the grain envelope shapes each burst of sound, a Hann window\./.test(vdoc.text || ""), "the transcript's paragraphs carry their moment", (vdoc.text || "").slice(-200));
+      check((vdoc.meta?.video?.chapters || []).map((c) => c.title).join("|") === "Intro|The envelope|The window", "the chapters read off the description", JSON.stringify(vdoc.meta?.video?.chapters));
+      const vchunks = await (await get(`/doc/${vr.doc_id}/chunks`)).json();
+      const figs = vchunks.filter((c) => c.kind === "figure");
+      check(figs.length === nFrames && figs.every((c) => c.locator && c.locator.time != null), "each frame is a figure chunk located in time", JSON.stringify(figs.map((c) => c.locator?.time)));
+      if (figs.length) {
+        const img = await get(`/doc/${vr.doc_id}/figure/${figs[0].data.ref}`);
+        check(img.status === 200 && (img.headers.get("content-type") || "").startsWith("image/jpeg"), "and the door serves the frame out of the original", `${img.status} ${img.headers.get("content-type")}`);
+      }
+      const vhits = await (await get(`/search?q=${encodeURIComponent("grain envelope")}&doctype=video`)).json();
+      check(vhits.some((h) => h.doc_id === vr.doc_id && h.time != null), "a search for what was said finds the video, with the moment", JSON.stringify(vhits.map((h) => [h.doc_id, h.time])).slice(0, 120));
+    }
+    await b.evaluate(opts, `${api}.tabs.remove(${JSON.stringify(watchId)}).catch(() => null)`);
+    await b.evaluate(opts, `${api}.storage.local.remove("frame_interval")`);
+  } else {
+    console.log("  (no clip at tests/fixtures/video/bars.webm: the video capture is not exercised)");
+  }
 
   // the keyboard: Alt+Shift+P sends the tab in front with the default
   // domains and no popup; the badge is what it shows. The bed cannot press
