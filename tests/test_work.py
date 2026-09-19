@@ -161,6 +161,76 @@ def test_embed_through_the_door(client: TestClient) -> None:
     )
 
 
+def test_a_beat_renews_the_leases_its_worker_holds(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    con = client.app.state.con
+    inbox.ingest_upload(con, ("a note " * 60).encode(), filename="n.txt")
+    work._leases.clear()
+    items = client.get("/work/extract", headers={"X-Prax-Worker": "w1"}).json()["items"]
+    doc = items[0]["doc_id"]
+    held_until = work._leases[("extract", doc)][1]
+    job = client.post("/work/session", json={"name": "worker"}).json()["job_id"]
+    # another worker's beat does not touch w1's lease
+    r = client.post(
+        f"/work/session/{job}",
+        json={"renew": {"step": "extract", "items": [doc]}},
+        headers={"X-Prax-Worker": "w2"},
+    ).json()
+    assert r["renewed"] == 0 and work._leases[("extract", doc)][1] == held_until
+    # the holder's does, for a whole lease again
+    monkeypatch.setattr(work, "LEASE_SECONDS", 5000)
+    r = client.post(
+        f"/work/session/{job}",
+        json={"done": 0, "renew": {"step": "extract", "items": [doc]}},
+        headers={"X-Prax-Worker": "w1"},
+    ).json()
+    assert r["renewed"] == 1 and work._leases[("extract", doc)][1] > held_until + 4000
+    # a free item is not leased by a renewal
+    assert work.renew("extract", [doc + 1], "w1") == 0
+    assert ("extract", doc + 1) not in work._leases
+
+
+def test_parse_results_land_one_document_at_a_time(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A batch of two: the first is posted (and its lease released) before
+    the second is read, and the session is beaten with the count."""
+    con = client.app.state.con
+    a = inbox.ingest_upload(
+        con, b"first note " * 50, filename="a.txt", mime="text/plain"
+    )
+    b = inbox.ingest_upload(
+        con, b"second note " * 50, filename="b.txt", mime="text/plain"
+    )
+    for cap in (a, b):  # unindexed, so the parse step wants them
+        con.execute(
+            "UPDATE documents SET text_hash = NULL, parsed_at = NULL WHERE id = ?",
+            (cap.doc_id,),
+        )
+    con.commit()
+    work._leases.clear()
+    d = _door(client)
+    seen: list[tuple[int, int]] = []  # (doc posted, how many were still leased)
+    real_post = d.post_json
+
+    def spying_post(path: str, body: dict | None = None):  # type: ignore[no-untyped-def]
+        if path == "/work/parse":
+            leased = sum(1 for (step, _), _v in work._leases.items() if step == "parse")
+            seen.append((int(body["results"][0]["doc_id"]), leased))
+        return real_post(path, body)
+
+    monkeypatch.setattr(d, "post_json", spying_post)
+    out = worker.run_once(d, steps=("parse",), log_=lambda t: None, scope="all")
+    assert out["parse"].startswith("2 parsed")
+    # two posts, one per document; the second document was still leased
+    # when the first landed, nothing was when the second did
+    assert [doc for doc, _ in seen] == [a.doc_id, b.doc_id]
+    assert [leased for _, leased in seen] == [2, 1]
+    assert store.get_document(con, a.doc_id, max_chars=0)["text_len"] > 0
+    assert store.get_document(con, b.doc_id, max_chars=0)["text_len"] > 0
+
+
 def test_session_job_and_watch_once(client: TestClient, tmp_path: Path) -> None:
     con = client.app.state.con
     drop = tmp_path / "prax-inbox"

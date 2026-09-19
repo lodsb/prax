@@ -1280,6 +1280,12 @@ Four ways in:
   of the queue meanwhile, and it comes round again once that lease runs
   out — so a queue of formula readings waiting for llama-server does not
   hold back the marker readings behind it while the card is marker's.
+  A parse batch lands one document at a time — each text is posted the
+  moment its extractor is done, not when the last of the batch is — and
+  the worker beats the session every five minutes while it reads,
+  renewing the leases of what it still holds: a book that takes marker
+  an hour is neither handed out again at the lease's fifteen minutes nor
+  its session reaped for silence at thirty.
 
   The worker also uploads this machine's `Downloads/prax-inbox/` when
   that folder exists (`--also` names others), sidecars included: the

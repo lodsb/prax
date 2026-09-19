@@ -20,12 +20,13 @@ import json
 import logging
 import os
 import shutil
+import threading
 import time
 from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Self
 
 from prax import embeddings, extraction, hostinfo, inbox, models, parsers, titles, work
 from prax.client import Door
@@ -71,14 +72,28 @@ def _requested(it: dict[str, Any]) -> tuple[list[Any], str | None]:
 
 
 def do_parse(
-    door: Door, items: list[dict[str, Any]], *, log_: Log | None = None
+    door: Door,
+    items: list[dict[str, Any]],
+    *,
+    log_: Log | None = None,
+    landed: Callable[[list[dict[str, Any]]], None] | None = None,
 ) -> list[dict[str, Any]]:
-    results = []
+    """Every item through its extractor chain. ``landed`` is called with
+    each document's results as soon as it is done — the caller posts them
+    then, so a batch of books lands one book at a time and not when the
+    last one is read."""
+    results: list[dict[str, Any]] = []
+
+    def done(*rs: dict[str, Any]) -> None:
+        results.extend(rs)
+        if landed is not None:
+            landed(list(rs))
+
     for it in items:
         doc_id = it["doc_id"]
         exts, refused = _requested(it)
         if not exts:
-            results.append(
+            done(
                 {
                     "doc_id": doc_id,
                     "extractor": it.get("extractor") or "none",
@@ -90,12 +105,15 @@ def do_parse(
         try:
             data = door.get_bytes(it["original"])
         except Exception as exc:  # noqa: BLE001
-            results.append(
+            done(
                 {"doc_id": doc_id, "extractor": exts[0].stamp, "error": f"fetch: {exc}"}
             )
             continue
         pages = _page_count(data)  # a fact of the original, for the door's record
         last = None
+        tried: list[
+            dict[str, Any]
+        ] = []  # the chain's earlier attempts, posted with the outcome
         for ext in exts:
             t0 = time.monotonic()
             try:
@@ -109,7 +127,7 @@ def do_parse(
                 # document's fault; deferred, so the door leaves it leased a
                 # while and hands out other work meanwhile
                 _say(log_, f"parse doc {doc_id}: not yet — {exc}")
-                results.append({"doc_id": doc_id, "defer": True})
+                done(*tried, {"doc_id": doc_id, "defer": True})
                 break
             except Exception as exc:  # noqa: BLE001
                 last = (ext.stamp, f"{type(exc).__name__}: {exc}")
@@ -119,7 +137,7 @@ def do_parse(
                     # document out again (a scan refused by the first
                     # extractor, empty for the fallback, came back every
                     # cycle otherwise)
-                    results.append(
+                    tried.append(
                         {
                             "doc_id": doc_id,
                             "extractor": ext.stamp,
@@ -128,7 +146,8 @@ def do_parse(
                         }
                     )
                 continue
-            results.append(
+            done(
+                *tried,
                 {
                     "doc_id": doc_id,
                     "extractor": stamp,
@@ -138,21 +157,76 @@ def do_parse(
                     "requested": it.get("extractor"),
                     "keep_source": ext.annotates,
                     "pages": pages,
-                }
+                },
             )
             _say(log_, f"parse doc {doc_id}: {len(text)} chars ({stamp})")
             break
         else:
-            results.append(
+            done(
+                *tried,
                 {
                     "doc_id": doc_id,
                     "extractor": last[0] if last else exts[0].stamp,
                     "error": last[1] if last else "failed",
                     "requested": it.get("extractor"),
                     "pages": pages,
-                }
+                },
             )
     return results
+
+
+BEAT_SECONDS = 300  # a third of the door's lease: the beat renews what is held
+
+
+class _Beating:
+    """A heartbeat beside a long batch: every ``BEAT_SECONDS`` the session
+    is beaten (so the door does not reap it for silence) and the leases of
+    the items still in flight are renewed (so the door does not hand them
+    out again while a book is being read). ``landed(ids)`` takes items out
+    of flight as their results are posted."""
+
+    def __init__(
+        self, door: Door, session: int | None, step: str, items: list[int]
+    ) -> None:
+        self.door = door
+        self.session = session
+        self.step = step
+        self.in_flight = set(items)
+        self.done = 0
+        self.total = len(items)
+        self.lock = threading.Lock()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def landed(self, ids: list[int]) -> None:
+        with self.lock:
+            self.in_flight.difference_update(ids)
+            self.done = self.total - len(self.in_flight)
+        self.beat()
+
+    def beat(self) -> None:
+        if self.session is None:
+            return
+        with self.lock:
+            body = {
+                "done": self.done,
+                "total": self.total,
+                "renew": {"step": self.step, "items": sorted(self.in_flight)},
+            }
+        with contextlib.suppress(Exception):  # a missed beat is not a failed batch
+            self.door.post_json(f"/work/session/{self.session}", body)
+
+    def _run(self) -> None:
+        while not self.stop.wait(BEAT_SECONDS):
+            self.beat()
+
+    def __enter__(self) -> Self:
+        self.thread.start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.stop.set()
+        self.thread.join(timeout=5)
 
 
 def _page_count(data: bytes) -> int | None:
@@ -560,9 +634,27 @@ def run_once(
                 {"note": f"{step}: {len(items)} items", "total": len(items), "done": 0},
             )
         if step == "parse":
-            results = do_parse(door, items, log_=log_)
-            rep = door.post_json("/work/parse", {"results": results})
-            out["parse"] = f"{rep.get('applied', 0)} parsed {rep.get('actions') or ''}"
+            # each document's results are posted as it is done, under a
+            # heartbeat: a batch of books lands one book at a time, and the
+            # door neither reaps the session nor re-leases the book being read
+            tally: dict[str, Any] = {"applied": 0, "actions": {}}
+            ids = [int(it["doc_id"]) for it in items]
+            with _Beating(door, session, "parse", ids) as beating:
+
+                def landed(
+                    rs: list[dict[str, Any]],
+                    *,
+                    tally: dict[str, Any] = tally,
+                    beating: _Beating = beating,
+                ) -> None:
+                    rep = door.post_json("/work/parse", {"results": rs})
+                    tally["applied"] += int(rep.get("applied", 0))
+                    for k, v in (rep.get("actions") or {}).items():
+                        tally["actions"][k] = tally["actions"].get(k, 0) + int(v)
+                    beating.landed([int(r["doc_id"]) for r in rs])
+
+                do_parse(door, items, log_=log_, landed=landed)
+            out["parse"] = f"{tally['applied']} parsed {tally['actions'] or ''}"
         elif step == "titles":
             spec = models.resolve("titles")
             if _paid(spec):

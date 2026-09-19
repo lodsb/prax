@@ -129,6 +129,21 @@ def _release(step: str, items: list[int]) -> None:
         _leases.pop((step, i), None)
 
 
+def renew(step: str, items: list[int], worker: str) -> int:
+    """The worker holding those items keeps them another ``LEASE_SECONDS``:
+    a book takes marker longer than one lease, and the worker beats while
+    it reads. An item leased to another worker, or free, is left alone.
+    Returns how many were renewed."""
+    n = 0
+    until = time.monotonic() + LEASE_SECONDS
+    for i in items:
+        held = _leases.get((step, i))
+        if held is not None and held[0] == worker:
+            _leases[(step, i)] = (worker, until)
+            n += 1
+    return n
+
+
 def leases() -> dict[str, int]:
     """How many items are out per step (for the status view)."""
     now = time.monotonic()

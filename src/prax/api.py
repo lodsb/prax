@@ -456,6 +456,7 @@ class SessionBeat(BaseModel):
     total: int | None = None
     note: str | None = None
     status: str | None = None  # "done" or "failed" ends the session
+    renew: dict[str, Any] | None = None  # {"step", "items"}: the leases still held
 
 
 @app.post("/work/session")
@@ -475,7 +476,14 @@ def work_beat(job_id: int, req: SessionBeat, request: Request) -> dict[str, Any]
         store.job_finish(con, job_id, status=req.status, note=req.note)
     else:
         store.job_update(con, job_id, done=req.done, total=req.total, note=req.note)
-    return {"ok": True}
+    renewed = 0
+    if req.renew and req.renew.get("items"):
+        renewed = work.renew(
+            str(req.renew.get("step") or ""),
+            [int(i) for i in req.renew["items"]],
+            _worker(request),
+        )
+    return {"ok": True, "renewed": renewed}
 
 
 @app.get("/work/{step}")
