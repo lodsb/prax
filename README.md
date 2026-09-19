@@ -51,6 +51,12 @@ extension: [`docs/howto.md`](docs/howto.md).
 <td colspan="2"><sub>A figure is read with the document's own words around it — title, caption, the text on either side — so the reading names the process and its four steps rather than the grey rectangles. It is a chunk of the document: searchable, citable, read by an answer.</sub></td>
 </tr>
 <tr>
+<td colspan="2"><a href="docs/images/youtube-extraction.png"><img src="docs/images/youtube-extraction.png" alt="A talk from YouTube as a document: the transcript in paragraphs headed by their moment, a frame of the talk as a figure with the words spoken there, the summary and the entities the extraction found beside it"></a></td>
+</tr>
+<tr>
+<td colspan="2"><sub>A talk sent from the browser: the transcript in paragraphs, each headed by its moment; a frame every so often as a figure, captioned with the words spoken there and read by the vision model like any figure; the summary and the entities from the same extraction as a paper's. Every moment is a link that seeks the player on the page.</sub></td>
+</tr>
+<tr>
 <td colspan="2"><a href="docs/images/themes.png"><img src="docs/images/themes.png" alt="The six themes: Bindery, Dessau, Riso, Cyanotype, Night, Funk — the same page in each"></a></td>
 </tr>
 <tr>
@@ -126,7 +132,10 @@ script's input, and `--door` points the same command at another machine
 — the board in the cupboard, from the laptop.
 
 **The browser extension** sends what you are reading, including pages
-that need your session.
+that need your session: a page as a self-contained snapshot, a paper's
+PDF from its abstract page with its DOI and authors, a talk from
+YouTube as its transcript and frames, a selection as an excerpt or
+onto one of your pages — from the popup, the context menu or one key.
 
 **HTTP, for anything else.** One service is the only writer and the only
 API, so a shell script with `curl` and `jq` reaches exactly what the UI
@@ -238,9 +247,11 @@ the measurements can be read and reused — there is no installer, no
 multi-user story, and the defaults reflect that library. Every push runs
 the suite on Linux and Windows and the quick start above in a fresh venv
 ([`ci.yml`](.github/workflows/ci.yml),
-[`scripts/smoke.sh`](scripts/smoke.sh)). The extension is hand-tested in
-Firefox, Waterfox and Chrome. Issues and pull requests are welcome but
-may wait.
+[`scripts/smoke.sh`](scripts/smoke.sh)). The extension has a test bed
+of its own that drives it in headless Chrome and Firefox against a
+throwaway door ([`scripts/extension_bed.mjs`](scripts/extension_bed.mjs)),
+and is used daily in Firefox, Waterfox and Chrome. Issues and pull
+requests are welcome but may wait.
 
 The name: the praxinoscope succeeded the zoetrope — same drum, sharper
 image. prax succeeds an external-disk store of the same library.
