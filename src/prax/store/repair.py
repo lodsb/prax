@@ -596,6 +596,32 @@ def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return out
 
 
+def _uncounted_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """PDFs with text and no page count in their metadata: parsed before
+    the worker recorded one. ``thin-texts`` cannot weigh them."""
+    from prax.store import documents as docs
+
+    ids = docs.uncounted_pages(con, limit=CAP)
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
+    return [
+        {"id": r["id"], "title": r["title"]}
+        for r in con.execute(
+            f"SELECT id, title FROM documents WHERE id IN ({marks}) ORDER BY id",
+            tuple(ids),
+        )
+    ]
+
+
+def _repair_uncounted_pages(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Count them all (not only the rows shown): each PDF opened once,
+    ``meta.pages`` written. Nothing where pymupdf is not installed."""
+    from prax.store import documents as docs
+
+    return docs.count_pages(con, docs.uncounted_pages(con))
+
+
 def _thin_texts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """PDFs read as if their cover were the book
     (``documents.thin_documents``): the longest first."""
@@ -1031,11 +1057,25 @@ AILMENTS: tuple[Ailment, ...] = (
         repair=_repair_not_documents,
     ),
     Ailment(
+        name="uncounted-pages",
+        what=(
+            "PDFs with text whose page count no parse recorded (read before"
+            " the worker kept one): thin-texts cannot weigh them"
+        ),
+        fix=(
+            "count them: each PDF opened once, meta.pages written (needs"
+            " pymupdf on the door; the worker records it for every parse since)"
+        ),
+        find=_uncounted_pages,
+        repair=_repair_uncounted_pages,
+    ),
+    Ailment(
         name="thin-texts",
         what=(
             "PDFs of five pages or more with under 100 bytes of text a page:"
             " scans whose text layer is the cover's, read as if it were the"
-            " book (the front matter of a Google Books scan, say)"
+            " book (the front matter of a Google Books scan, say); only the"
+            " PDFs with a page count are weighed (uncounted-pages)"
         ),
         fix=(
             "ask for OCR over all of them (`prax reread --extractor"

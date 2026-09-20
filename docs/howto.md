@@ -167,8 +167,8 @@ host.
     prax reread --extractor pymupdf4llm-ocr --unreadable
     # scans read as their cover — a text layer on the front matter only, under
     # 100 bytes a page over five pages or more (the `thin-texts` ailment; the
-    # worker records a PDF's page count as meta.pages, the door counts the
-    # older ones from the originals); --thin 40 for a stricter bar
+    # worker records a PDF's page count as meta.pages, and `prax heal --only
+    # uncounted-pages` counts the older ones once); --thin 40 for a stricter bar
     prax reread --extractor pymupdf4llm-ocr --thin
     # scans in another script: the recognizer is a setting (parse.ocr_language:
     # ch reads Chinese and English; en, latin, arabic, cyrillic, devanagari,
@@ -1534,6 +1534,7 @@ you still want to look at) stays alone.
 | `stale-parses` | documents read by an extractor prax has revised since: a re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed); the rest the backlog pass reads a few at a time, or `--upgrade` at once (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
 | `not-documents` | originals that cannot be what their type says — a macOS resource fork (`._file`), a Windows shortcut, a program, an empty file, a PDF without its header — registered from a folder that held them beside the real files | retire them (row and bytes stay); the unreadable list is the scans again |
+| `uncounted-pages` | PDFs with text whose page count no parse recorded (read before the worker kept `meta.pages`); `thin-texts` cannot weigh them | each PDF opened once, its count written — needs pymupdf on the door; a check never opens a file (ten thousand of them took 200 s) |
 | `thin-texts` | PDFs of five pages or more with under 100 bytes of text a page: scans whose text layer is the cover's, read as if it were the book (a Google Books scan whose only text is its usage page) | a report, with an offer on the panel: OCR over all of them (`prax reread --extractor pymupdf4llm-ocr --thin`; `parse.ocr_max_pages` must cover the longest) |
 | `unreadable-documents` | documents every extractor here has tried and found no text in (scans without a text layer); they wait and are not tried again | a report, with two offers on the panel: OCR over all of them, or the vision model over their scanned pages (`prax reread --unreadable --extractor …`); or retire them |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |

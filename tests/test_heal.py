@@ -178,15 +178,27 @@ def test_a_scan_read_as_its_cover_is_thin(con: sqlite3.Connection) -> None:
     # a leaflet of one page with a line of text: too short to be a scanned book
     leaf = store.register(con, _pdf(1, "A Leaflet"), mime="application/pdf")["doc_id"]
     store.index_text(con, leaf, "A Leaflet", text_source="pymupdf4llm/1")
+    # nothing is weighed until the pages are counted: the check does not
+    # open a file (ten thousand of them took 200 s), the repair counts once
+    assert store.thin_documents(con) == []
+    assert store.uncounted_pages(con) == [scan, paper, leaf]
+    found = {a["name"]: a for a in store.health(con)["ailments"]}
+    assert found["uncounted-pages"]["count"] == 3
+    assert store.heal(con, only=["uncounted-pages"])["uncounted-pages"] == {
+        "found": 3,
+        "repaired": 3,
+    }
+    assert store.uncounted_pages(con) == []
+    assert store.get_meta(con, leaf)["pages"] == 1
     thin = store.thin_documents(con)
     assert [o["id"] for o in thin] == [scan]
     assert thin[0]["pages"] == 6 and thin[0]["per_page"] < 100
     # the selector reaches it, with the bytes-a-page bar of its own
     assert store.select_for_reading(con, mime="application/pdf", thin=100) == [scan]
     assert store.select_for_reading(con, mime="application/pdf", thin=1) == []
-    # the page count is counted from the original when no parse recorded it,
-    # and taken from meta.pages when one did — a paper of 1,200 bytes said to
-    # have forty pages is thin after all
+    # the page count is counted from the original when asked to, and taken
+    # from meta.pages when a parse recorded one — a paper of 1,200 bytes
+    # said to have forty pages is thin after all
     assert store.page_counts(con, [scan, paper]) == {scan: 6, paper: 6}
     meta = store.get_meta(con, paper)
     meta["pages"] = 40

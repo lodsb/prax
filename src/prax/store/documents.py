@@ -660,9 +660,11 @@ def set_domains(
 ) -> list[str] | None:
     """Replace a document's domain set (None: every module). Names must be
     modules of the current ontology other than core. A change of the set
-    under an extraction makes that reading stale (``_lens_changed``): the
-    extract step takes the document again, first, and the new reading
-    retires the old."""
+    by a person or an agent (``by``) under an extraction makes that
+    reading stale (``_lens_changed``): the extract step takes the
+    document again, first, and the new reading retires the old. A rule's
+    or an importer's assignment leaves the stamp: the backlog pass
+    re-selects a document whose subset's version moved in its own time."""
     meta = get_meta(con, doc_id)
     before = meta.get("domains")
     if domains is None:
@@ -671,7 +673,7 @@ def set_domains(
     else:
         meta["domains"] = _check_domains(domains)
         meta["domains_by"] = by
-    if meta.get("domains") != before:
+    if meta.get("domains") != before and by in ("human", "agent"):
         _lens_changed(meta)
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
@@ -1012,11 +1014,16 @@ def figure_blob(ref: str) -> tuple[bytes, str] | None:
     return data, figures.media_of(data)
 
 
-def page_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
+def page_counts(
+    con: sqlite3.Connection, ids: list[int], *, open_files: bool = True
+) -> dict[int, int]:
     """How many pages each of those PDFs has: ``meta.pages`` where a parse
     recorded it, else counted from the original when pymupdf is here (the
     worker's library; a door without it knows what the parses told it and
-    leaves the rest out)."""
+    leaves the rest out). ``open_files=False`` is what the parses told it
+    only: the health check over ten thousand PDFs opened every one that
+    predates the count (200 s); ``uncounted_pages`` names those and
+    ``count_pages`` writes the count once."""
     out: dict[int, int] = {}
     todo: list[tuple[int, str]] = []
     for start in range(0, len(ids), 500):
@@ -1031,7 +1038,7 @@ def page_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
                 out[r["id"]] = int(r["pages"])
             else:
                 todo.append((r["id"], r["hash"]))
-    if not todo:
+    if not todo or not open_files:
         return out
     try:
         import pymupdf
@@ -1044,6 +1051,40 @@ def page_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
         except Exception:  # noqa: BLE001, S112 — not a PDF after all: left out
             continue
     return out
+
+
+def uncounted_pages(con: sqlite3.Connection, *, limit: int | None = None) -> list[int]:
+    """PDFs with text whose page count no parse recorded (``meta.pages``):
+    the thin-texts check cannot weigh them until ``count_pages`` has."""
+    sql = (
+        "SELECT id FROM documents WHERE mime = 'application/pdf'"
+        "   AND text_hash IS NOT NULL"
+        "   AND json_extract(meta, '$.pages') IS NULL"
+        "   AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    )
+    if limit:
+        sql += f" LIMIT {int(limit)}"
+    return [r["id"] for r in con.execute(sql)]
+
+
+def count_pages(con: sqlite3.Connection, ids: list[int]) -> int:
+    """Open each of those PDFs once and keep its page count in
+    ``meta.pages`` — what a parse records for every document since, done
+    for the ones before. Needs pymupdf; a PDF it cannot open is left as
+    it is. Returns how many were counted."""
+    counted = page_counts(con, ids, open_files=True)
+    done = 0
+    for doc_id in ids:
+        n = counted.get(doc_id)
+        if not n:
+            continue
+        meta = get_meta(con, doc_id)
+        if meta.get("pages"):
+            continue
+        meta["pages"] = n
+        set_meta(con, doc_id, meta)
+        done += 1
+    return done
 
 
 def thin_documents(
@@ -1063,7 +1104,9 @@ def thin_documents(
         "   AND text_hash IS NOT NULL"
         "   AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
     ).fetchall()
-    pages = page_counts(con, [r["id"] for r in rows])
+    # what the parses recorded: a PDF without a count is not weighed
+    # (``uncounted_pages``), rather than every one opened on every check
+    pages = page_counts(con, [r["id"] for r in rows], open_files=False)
     out = []
     for r in rows:
         n = pages.get(r["id"])
