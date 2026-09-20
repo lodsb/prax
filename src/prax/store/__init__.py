@@ -224,6 +224,8 @@ from .jobs import (  # noqa: F401
 from .maintain import (  # noqa: F401
     ON_REQUEST,
     PASSES,
+    bibliographies,
+    link_references,
     maintain,
 )
 from .pages import (  # noqa: F401

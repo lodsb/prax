@@ -10,11 +10,16 @@ against (the rules in ``prax.yaml``, for documents nobody assigned by
 hand), the duplicate captures of one page, and the review queue's two
 rule passes (a replay against the current ontology, then the typing
 rules — what the door does for one document right after its extraction,
-here for the whole queue). None of that needs a model, none of it needs
-anyone to look first: it is what a nightly pass runs after the worker's,
-and what ``prax maintain`` runs on request. ``rechunk`` — every chunk
-rebuilt from its text artifact after a change to the chunker — is a
-pass too, but only when named: the nightly has no reason to.
+here for the whole queue), and the citations a document's own reference
+list makes to documents in the library (``prax.references``: the entries
+read by rules, matched by title, creators and year with a score —
+``cites`` edges with the score as their confidence and evidence, for
+the four documents in five that have no DOI for Crossref to answer).
+None of that needs a model, none of it needs anyone to look first: it
+is what a nightly pass runs after the worker's, and what ``prax
+maintain`` runs on request. ``rechunk`` — every chunk rebuilt from its
+text artifact after a change to the chunker — is a pass too, but only
+when named: the nightly has no reason to.
 
 What stays out on purpose: the repairs (``store.repair``: a person picks
 the ailment), the readings and extractions (the worker, with a model),
@@ -25,26 +30,33 @@ thing is one job, so the Jobs view shows which pass it is on.
 
 from __future__ import annotations
 
+import json
+import re
 import sqlite3
 import time
 from collections import Counter
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
-from prax import acronyms, config
+from prax import acronyms, config, references
 
+from .base import _reading
 from .documents import (
     assign_domains,
     dedupe_captures,
+    get_meta,
     rechunk,
     refresh_document_fields,
+    set_meta,
 )
+from .graph import Edge, find_edges, link, retire_reading
 from .jobs import Job
 from .retrieval import replace_acronyms
 
 Log = Callable[[str], None]
 
-PASSES = ("acronyms", "fields", "domains", "dedupe", "review")
+PASSES = ("acronyms", "fields", "domains", "dedupe", "review", "references")
 ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
 
 
@@ -140,6 +152,254 @@ def _review(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------- references
+
+REFERENCES_PRODUCER = "references"
+REFERENCE_HEADINGS = ("references", "bibliography", "literatur", "works cited")
+_TITLE_TOKEN = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
+_SKIP_TOKENS = references._NOISE | {
+    "for",
+    "with",
+    "from",
+    "using",
+    "based",
+    "analysis",
+    "approach",
+    "method",
+    "methods",
+    "model",
+    "models",
+    "system",
+    "systems",
+    "study",
+    "new",
+    "via",
+    "towards",
+    "toward",
+}
+CANDIDATES = 10  # library documents scored per entry
+
+
+@_reading
+def bibliographies(
+    con: sqlite3.Connection, *, ids: list[int] | None = None
+) -> dict[int, tuple[str, str]]:
+    """doc_id -> (text_hash, the text of its reference-list chunks): the
+    chunks whose innermost heading is a References/Bibliography heading,
+    in order."""
+    sql = (
+        "SELECT c.doc_id, c.text, d.text_hash,"
+        " json_extract(c.heading, '$[#-1]') AS h"
+        " FROM chunks c JOIN documents d ON d.id = c.doc_id"
+        " WHERE c.kind = 'text' AND c.heading IS NOT NULL"
+        " AND json_extract(d.meta, '$.retired') IS NULL"
+    )
+    args: list[Any] = []
+    if ids:
+        sql += f" AND c.doc_id IN ({','.join('?' * len(ids))})"
+        args.extend(ids)
+    sql += " ORDER BY c.doc_id, c.id"
+    parts: dict[int, list[str]] = {}
+    hashes: dict[int, str] = {}
+    for r in con.execute(sql, args):
+        h = (r["h"] or "").strip().lower()
+        if not any(h.startswith(x) or h.endswith(x) for x in REFERENCE_HEADINGS):
+            continue
+        parts.setdefault(r["doc_id"], []).append(r["text"])
+        hashes[r["doc_id"]] = r["text_hash"] or ""
+    return {k: (hashes[k], "\n\n".join(v)) for k, v in parts.items()}
+
+
+def _library(con: sqlite3.Connection) -> dict[int, dict[str, Any]]:
+    """Every live document's title, creators, year and ids, once per pass."""
+    lib: dict[int, dict[str, Any]] = {}
+    for r in con.execute(
+        "SELECT id, title, meta FROM documents WHERE title IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    ):
+        meta = json.loads(r["meta"] or "{}")
+        year = None
+        for key in ("year", "date", "published"):
+            m = re.search(r"(?:19|20)\d{2}", str(meta.get(key) or ""))
+            if m:
+                year = int(m.group(0))
+                break
+        lib[r["id"]] = {
+            "title": r["title"],
+            "creators": [c.get("name", "") for c in meta.get("creators") or []],
+            "year": year,
+            "doi": (str(meta.get("doi") or "")).lower().strip() or None,
+            "arxiv": (str(meta.get("arxiv") or "")).lower().strip() or None,
+        }
+    return lib
+
+
+def _candidates(con: sqlite3.Connection, ref: references.Reference) -> list[int]:
+    """Library documents whose field shares the reference's title words:
+    the title's content tokens OR-ed over the document field, BM25's
+    top ``CANDIDATES``."""
+    toks = [t.lower() for t in _TITLE_TOKEN.findall(ref.title)]
+    toks = [t for t in toks if t not in _SKIP_TOKENS]
+    if len(toks) < 2:
+        return []
+    expr = " OR ".join(f'"{t}"' for t in toks[:12])
+    try:
+        rows = con.execute(
+            "SELECT rowid FROM documents_fts WHERE documents_fts MATCH ?"
+            " ORDER BY bm25(documents_fts) LIMIT ?",
+            (expr, CANDIDATES),
+        ).fetchall()
+    except sqlite3.OperationalError:
+        return []
+    return [r[0] for r in rows]
+
+
+def resolve_references(
+    con: sqlite3.Connection,
+    doc_id: int,
+    text: str,
+    lib: dict[int, dict[str, Any]],
+    *,
+    by_doi: dict[str, int],
+    by_arxiv: dict[str, int],
+) -> list[tuple[int, str, float, references.Reference]]:
+    """The library documents a reference list names: (doc_id, how, score,
+    the reference) per link — ``how`` "doi"/"arxiv" for an id match,
+    "sure" for a title match over the threshold, "ambiguous" for each of
+    several candidates within the margin (twins in the library)."""
+    out: list[tuple[int, str, float, references.Reference]] = []
+    for entry in references.entries(text):
+        ref = references.parse(entry)
+        if not ref.title:
+            continue
+        if ref.doi and ref.doi in by_doi:
+            out.append((by_doi[ref.doi], "doi", 1.0, ref))
+            continue
+        if ref.arxiv and ref.arxiv in by_arxiv:
+            out.append((by_arxiv[ref.arxiv], "arxiv", 1.0, ref))
+            continue
+        scored = []
+        for cid in _candidates(con, ref):
+            d = lib.get(cid)
+            if d is None or cid == doc_id:
+                continue
+            s = references.similarity(
+                ref, title=d["title"], creators=d["creators"], year=d["year"]
+            )
+            scored.append((cid, s))
+        targets, how = references.match(scored)
+        scores = dict(scored)
+        out.extend((t, how, scores[t], ref) for t in targets if t != doc_id)
+    return out
+
+
+def link_references(
+    con: sqlite3.Connection,
+    *,
+    run: str,
+    ids: list[int] | None = None,
+    again: bool = False,
+    job: Job | None = None,
+    log: Log | None = None,
+) -> dict[str, Any]:
+    """``paper --cites--> paper`` edges from every document's own reference
+    list to the library documents it names. A document is read once per
+    text (``meta.references.text_hash`` is the stamp; ``again`` reads all),
+    and a re-read retires this producer's earlier edges from it first
+    (history kept). An id match is ``EXTRACTED``; a sure title match is
+    ``INFERRED`` with its score in the evidence; each of several tied
+    candidates is ``AMBIGUOUS``. A triple already live (Crossref found
+    it) is left as it is."""
+    lib = _library(con)
+    by_doi = {v["doi"]: k for k, v in lib.items() if v["doi"]}
+    by_arxiv = {v["arxiv"]: k for k, v in lib.items() if v["arxiv"]}
+    bibs = bibliographies(con, ids=ids)
+    stats = Counter()
+    todo = []
+    for doc_id, (text_hash, text) in bibs.items():
+        stamp = get_meta(con, doc_id).get("references") or {}
+        if not again and stamp.get("text_hash") == text_hash:
+            stats["unchanged"] += 1
+            continue
+        todo.append((doc_id, text_hash, text))
+    if job is not None:
+        job.update(total=len(todo), done=0, note="references")
+    at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for n, (doc_id, text_hash, text) in enumerate(todo, 1):
+        title = lib.get(doc_id, {}).get("title")
+        if not title:
+            continue
+        retired = retire_reading(
+            con, doc_id, producer=REFERENCES_PRODUCER, except_version=""
+        )
+        stats["retired"] += retired
+        found = resolve_references(
+            con, doc_id, text, lib, by_doi=by_doi, by_arxiv=by_arxiv
+        )
+        linked = ambiguous = existing = 0
+        for target, how, score, ref in found:
+            name = lib[target]["title"]
+            if not name or name == title:
+                continue
+            edge = Edge(title, "paper", "cites", name, "paper")
+            if find_edges(con, edge):
+                existing += 1
+                continue
+            confidence = (
+                "EXTRACTED"
+                if how in ("doi", "arxiv")
+                else "AMBIGUOUS"
+                if how == "ambiguous"
+                else "INFERRED"
+            )
+            number = f"[{ref.number}] " if ref.number else ""
+            evidence = (
+                f"references: {number}{ref.title[:120]!r}"
+                + (f" ({ref.year})" if ref.year else "")
+                + (f" by {how}" if how in ("doi", "arxiv") else f", score {score:.2f}")
+            )
+            link(
+                con,
+                edge,
+                confidence=confidence,
+                source_doc=doc_id,
+                evidence=evidence,
+                producer=REFERENCES_PRODUCER,
+                run=run,
+            )
+            if how == "ambiguous":
+                ambiguous += 1
+            else:
+                linked += 1
+        meta = get_meta(con, doc_id)
+        meta["references"] = {
+            "text_hash": text_hash,
+            "entries": len(references.entries(text)),
+            "linked": linked,
+            "ambiguous": ambiguous,
+            "at": at,
+            "run": run,
+        }
+        set_meta(con, doc_id, meta)
+        stats["documents"] += 1
+        stats["linked"] += linked
+        stats["ambiguous"] += ambiguous
+        stats["existing"] += existing
+        if job is not None and (n % 20 == 0 or n == len(todo)):
+            job.update(done=n, note=f"references: {stats['linked']} linked")
+        if log and n % 200 == 0:
+            log(f"references: {n}/{len(todo)} documents, {stats['linked']} linked")
+    return dict(stats)
+
+
+def _references(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The citations a document's reference list makes to the library
+    (``link_references``): the documents whose text changed since their
+    last reading, or never were read."""
+    run = "references-" + time.strftime("%Y%m%dT%H%M%S")
+    return {"run": run, **link_references(con, run=run, job=job)}
+
+
 def _rechunk(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """Every indexed document's chunks rebuilt from its text artifact
     (``documents.rechunk``); chunks whose text did not change keep their
@@ -165,6 +425,7 @@ _RUN = {
     "domains": _domains,
     "dedupe": _dedupe,
     "review": _review,
+    "references": _references,
     "rechunk": _rechunk,
 }
 

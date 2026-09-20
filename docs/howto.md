@@ -757,6 +757,23 @@ The door fetches (it has the DOIs, and `citations.mailto` in prax.yaml
 for Crossref's polite pool); the job's note counts resolved documents,
 edges and requests as it goes.
 
+Four documents in five have no DOI for Crossref to answer, and their
+reference lists are in the parsed text all the same: the `references`
+pass of `prax maintain` (3n) reads them by rules — the entries under a
+References/Bibliography heading, each into surnames, year, title and a
+printed id — and matches each against the library's document field by
+title, creators and year with a score. A printed DOI or arXiv id is
+`EXTRACTED`; a title match over the threshold is `INFERRED`, the score
+in the evidence ("references: [12] 'Title as printed' (2018), score
+0.93"); several candidates within a margin of each other (twins of one
+paper) are each `AMBIGUOUS`. Nothing outside the library is named: the
+Crossref edges do that. Measured on the library
+(`docs/eval/references-2026-09-20.md`): 6,551 sure links from 1,612
+documents, three quarters of what Crossref found and 5,629 links from
+documents Crossref could not resolve.
+
+    prax maintain --only references     # the documents whose text changed since
+
 ### Review queue and ontology growth
 
 The review view (`#review`) filters by relation and by unmapped versus
@@ -1586,6 +1603,7 @@ by `prax maintain` on request:
 | `domains` | the domain set of every document nobody assigned by hand, from the `domains:` rules in `prax.yaml` (3e); nothing without rules |
 | `dedupe` | the duplicate captures of one page retired as duplicates of the keeper — a union: their facts, tags, domains and stamps join the keeper's first (3l); row and file kept |
 | `review` | the review queue: a replay against the current ontology (a typed item it accepts now becomes an edge), then the typing rules over every open item (3e) — what the door does for one document after its extraction, for the whole queue |
+| `references` | the citations a document's own reference list makes to documents in the library (3f): the entries under a References/Bibliography heading read by rules (`prax.references`), matched against the document field by title, creators and year; `cites` edges — `EXTRACTED` by a printed DOI or arXiv id, `INFERRED` by a title match with the score in the evidence, `AMBIGUOUS` for each of several candidates within the margin (twins in the library); a document is read once per text (`meta.references`), a re-read retires the earlier edges. Measured: `docs/eval/references-2026-09-20.md` |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c); the nightly has no reason to |
 
 What stays out on purpose: the repairs (`prax heal`, 3m — a person picks

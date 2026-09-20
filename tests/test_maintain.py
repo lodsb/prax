@@ -91,3 +91,78 @@ def test_the_door_runs_it_as_a_job(tmp_path: Path) -> None:
             time.sleep(0.05)
         assert row["status"] == "done", row
         assert row["note"].startswith("done: fields")
+
+
+def test_a_reference_list_cites_the_library(con: sqlite3.Connection) -> None:
+    """The references pass: a paper's bibliography names two library
+    documents (one by title, one by DOI) and one the library lacks; the
+    edges carry the score, the stamp keeps the pass from reading the same
+    text twice, a changed text is read again with the old edges retired."""
+    cited = store.ingest_text(
+        con,
+        "Antiderivative antialiasing reduces aliasing in stateful systems. " * 20,
+        title="Antiderivative antialiasing for stateful systems",
+        meta={"creators": [{"name": "Martin Holters"}], "date": "2018-09-01"},
+    )["doc_id"]
+    by_doi = store.ingest_text(
+        con,
+        "Wave digital filters and the diode clipper. " * 20,
+        title="A wave digital filter model of the diode clipper",
+        meta={"doi": "10.5555/wdf.2020"},
+    )["doc_id"]
+    body = "# Introduction\n\n" + "We build on earlier work. " * 40
+    bib = (
+        "\n\n# References\n\n"
+        "- [1] M. Holters and J. Parker, “Antiderivative antialiasing for"
+        " stateful systems,” in _Proc. DAFx_, 2018.\n\n"
+        "- [2] K. Werner, “Virtual analog modeling of audio circuitry,”"
+        " Ph.D. thesis, Stanford, 2016.\n\n"
+        "- [3] A. Author, “Something else entirely,” 2020."
+        " doi:10.5555/WDF.2020\n"
+    )
+    citing = store.ingest_text(
+        con, body + bib, title="Aliasing reduction in clipped signals"
+    )["doc_id"]
+    bibs = store.bibliographies(con)
+    assert list(bibs) == [citing]
+    report = store.maintain(con, only=["references"])["references"]
+    assert report["documents"] == 1 and report["linked"] == 2
+    edges = [
+        e
+        for e in store.traverse(con, "Aliasing reduction in clipped signals", hops=1)
+        if e["rel"] == "cites"
+    ]
+    by_dst = {e["dst"]: e for e in edges}
+    assert set(by_dst) == {
+        "Antiderivative antialiasing for stateful systems",
+        "A wave digital filter model of the diode clipper",
+    }
+    inferred = by_dst["Antiderivative antialiasing for stateful systems"]
+    assert inferred["confidence"] == "INFERRED" and inferred["source_doc"] == citing
+    assert inferred["producer"] == "references" and "score 1.00" in inferred["evidence"]
+    assert inferred["evidence"].startswith("references: [1] 'Antiderivative")
+    exact = by_dst["A wave digital filter model of the diode clipper"]
+    assert exact["confidence"] == "EXTRACTED" and "by doi" in exact["evidence"]
+    stamp = store.get_meta(con, citing)["references"]
+    assert stamp["entries"] == 3 and stamp["linked"] == 2 and stamp["ambiguous"] == 0
+    # the same text again: nothing to do
+    again = store.maintain(con, only=["references"])["references"]
+    assert again.get("documents", 0) == 0 and again["unchanged"] == 1
+    # the text read again (one entry gone): the old edges retired, new ones written
+    store.index_text(
+        con,
+        citing,
+        body + bib.replace("- [3] A. Author", "- [3] A. Nobody"),
+        text_source="t/2",
+    )
+    third = store.maintain(con, only=["references"])["references"]
+    assert third["documents"] == 1 and third["retired"] == 2 and third["linked"] == 2
+    live = con.execute(
+        "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+        (citing,),
+    ).fetchone()[0]
+    kept = con.execute(
+        "SELECT count(*) FROM edges WHERE source_doc = ?", (citing,)
+    ).fetchone()[0]
+    assert (live, kept) == (2, 4)
+    assert by_doi and cited  # both named
