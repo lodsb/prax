@@ -58,6 +58,41 @@ def _slug_of(question: str) -> str:
 # ------------------------------------------------------------------ pages
 
 
+def _previous_answer(text: str) -> str:
+    """The answer alone out of a question page's text: after the title,
+    before the source list and the trail."""
+    own, _ = _own_part(text)
+    body = own.split("\n", 1)[1] if own.startswith("#") and "\n" in own else own
+    for marker in ("\n\nSources:\n", "\n\nHow it was found:\n"):
+        cut = body.find(marker)
+        if cut >= 0:
+            body = body[:cut]
+    return body.strip()
+
+
+def _asked_again(question: str, new: list[dict[str, Any]], reread: list[int]) -> str:
+    """The question as it is asked the second time: what the library
+    holds now that it did not, so the model revises rather than starts
+    over (and the search side reaches for the newcomers)."""
+    if new:
+        titles = "; ".join(str(n.get("title") or "") for n in new[:4])
+        return (
+            f"{question} — asked again: the library now also holds {titles}."
+            " Revise the earlier answer where these change it; keep what"
+            " still holds."
+        )
+    if reread:
+        return (
+            f"{question} — asked again: a source of the earlier answer was"
+            " read again and its text changed. Revise the earlier answer"
+            " where the new text changes it; keep what still holds."
+        )
+    return (
+        f"{question} — asked again; revise the earlier answer where the library"
+        " changes it."
+    )
+
+
 def _own_part(text: str) -> tuple[str, str]:
     """A question page's text split into the agent's part (title, answer,
     sources, trail) and what a person appended under it (every ``## ``
@@ -284,20 +319,27 @@ def refresh(
     steps = opts.get("steps")
     if steps is None:
         steps = ask_mod.default_steps()
+    # the earlier answer is the conversation so far: the model revises it
+    # in the light of what is new (named in the question) and may cite
+    # only this turn's passages, so nothing stale comes back by name
+    current = store.get_page(con, slug)
+    previous = _previous_answer(current["text"] if current else "")
+    history = [{"question": question, "answer": previous}] if previous else None
     result = ask_mod.ask(
         con,
-        question,
+        _asked_again(question, seen["new"], seen["reread"]),
         limit=int(opts.get("limit") or ask_mod.PASSAGES),
         doctype=opts.get("doctype"),
         answerer=answerer,
+        history=history,
         steps=max(0, int(steps)),
         tokens=opts.get("tokens"),
         on_event=on_event,
     )
     if not (result.get("answer") or "").strip():
         return {"slug": slug, "refreshed": False, "why": "the model gave no answer"}
+    result["question"] = question  # the page keeps the question as asked
     section, docs = ask_mod.section_of(result)
-    current = store.get_page(con, slug)
     _, yours = _own_part(current["text"] if current else "")
     text = f"# {question}\n\n{section}\n" + (
         ("\n" + yours.lstrip("\n")) if yours.strip() else ""

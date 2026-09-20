@@ -136,6 +136,49 @@ def test_a_new_document_makes_the_question_due_and_it_is_asked_again(
     assert a  # the first source is still one
 
 
+def test_a_re_ask_shows_the_model_the_earlier_answer_and_what_is_new(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _library(con)
+    questions.create(con, _ask(con), options={"steps": 0})
+    store.append_page(
+        con, questions.question_pages(con)[0]["slug"], "Mine.", heading="Notes"
+    )
+    store.ingest_text(
+        con,
+        "Reverb built from feedback delay networks with a Householder delay matrix. "
+        * 20,
+        title="A newer FDN reverb",
+    )
+    asked: dict = {}
+    real = ask.ask
+
+    def spy(con_: sqlite3.Connection, question: str, **kw: object) -> dict:
+        asked.update(question=question, history=kw.get("history"))
+        return real(con_, question, **kw)
+
+    monkeypatch.setattr(ask, "ask", spy)
+    page = questions.question_pages(con)[0]
+    rep = questions.refresh(con, page, answerer=ask.StubAnswerer())
+    assert rep["refreshed"]
+    assert asked["question"].startswith(
+        "how do feedback delay networks build reverb — asked again: the library"
+        " now also holds A newer FDN reverb."
+    )
+    assert asked["history"] == [
+        {
+            "question": "how do feedback delay networks build reverb",
+            "answer": (
+                "Stub answer to 'how do feedback delay networks build reverb' [1]."
+            ),
+        }
+    ]
+    # the page keeps the question as asked, and the person's section
+    text = store.get_page(con, page["slug"])["text"]
+    assert text.startswith("# how do feedback delay networks build reverb\n\n")
+    assert text.rstrip().endswith("## Notes\n\nMine.")  # (the stub echoes its question)
+
+
 def test_a_source_read_again_and_shared_entities_make_it_due(
     con: sqlite3.Connection,
 ) -> None:
