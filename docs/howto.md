@@ -661,11 +661,16 @@ came before the rules, or after a rule changed (`store.assign_domains(...,
 force=True)` re-assigns rule-set documents too).
 
 A set written by hand ("domains…" in the document page's action row,
-`PUT /doc/{id}/domains`, `POST`/`DELETE /doc/{id}/domains/{name}`, the
-`set_domains` MCP tool) is never overwritten by the rules. Adding a
-domain keeps the others; removing the last one puts the document back in
-every module. A re-run for one domain reads the documents assigned to
-it that are not yet stamped with their subset's version:
+a box to tick per module; `PUT /doc/{id}/domains`, `POST`/`DELETE
+/doc/{id}/domains/{name}`, the `set_domains` MCP tool) is never
+overwritten by the rules. Adding a domain keeps the others; removing
+the last one puts the document back in every module. A change under an
+extraction made against the old set leaves that reading stale
+(`meta.extraction_stale.domains_changed`; the door answers `reread:
+true`): the worker's next extract pass takes the document before the
+backlog and the new reading retires the old one, history kept. A
+re-run for one domain reads the documents assigned to it that are not
+yet stamped with their subset's version:
 
     prax work --steps extract --scope all      # the backlog pass takes them: a
                                                # document is re-selected when its

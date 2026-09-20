@@ -447,6 +447,15 @@ a.moment { font-variant-numeric: tabular-nums; }
 .hit-figure { display: block; margin: .4rem 0 .2rem; }
 .hit-figure img { display: block; max-width: 100%; max-height: 9rem; border-radius: 2px; }
 .reading-form { display: flex; gap: .8rem; flex-wrap: wrap; align-items: flex-end; font-size: .9rem; margin: 0 0 .8rem; }
+.domains-form { align-items: center; }
+.domains-form .tick { display: inline-flex; align-items: center; gap: .3rem; }
+.doc-actions a.open { text-decoration: underline; }
+/* the figure strip: a contact sheet of the document's pictures, each a link to its chunk */
+.figure-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: .9rem 1rem; margin: .4rem 0 1.2rem; }
+.figure-strip a { display: block; font-size: .78rem; line-height: 1.25; text-decoration: none; color: var(--fg); }
+.figure-strip img { display: block; width: 100%; height: 8rem; object-fit: contain; background: var(--panel); border-radius: 2px; }
+.figure-strip .cap { display: block; margin-top: .3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.figure-strip .where { display: block; font-size: .72rem; }
 .reading-line { font-size: .84rem; margin: -.2rem 0 .8rem; }
 .ctx-domain select { font-size: .7rem; text-transform: none; letter-spacing: 0; margin-left: .4rem; padding: 0 .2rem; }
 h2 { font-weight: 600; letter-spacing: -.015em; }

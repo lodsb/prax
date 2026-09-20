@@ -295,6 +295,18 @@ function readingChoices(mime) {
   }
   return [];
 }
+function domainsForm(cur) {
+  const set = new Set(cur.domains || []);
+  return `
+  <form class="reading-form domains-form">
+    <span class="muted">Read against</span>
+    ${cur.modules.map((m) => `<label class="tick"><input type="checkbox" name="domain" value="${esc(m)}"${set.has(m) ? " checked" : ""}> ${esc(m)}</label>`).join("")}
+    <button type="submit">Save</button>
+    <button type="button" class="secondary domains-cancel">Cancel</button>
+    <span class="muted">none ticked: every module. A change is read again by the worker's next extract pass; the old reading is retired, its edges kept as history.</span>
+  </form>`;
+}
+
 function readingForm(doc) {
   const choices = readingChoices(doc.mime);
   if (!choices.length) return `<p class="muted">No extractor to ask for on ${esc(doc.mime || "this type")}.</p>`;
@@ -376,6 +388,25 @@ function renderFigure(c, docId) {
     ${d.caption ? `<figcaption>${esc(d.caption)}</figcaption>` : ""}
     ${rest ? md(rest) : ""}${readings}
   </figure>`;
+}
+
+// The figure strip: every picture of the document at a glance (a
+// paper's figures, a talk's slides, a scan's pages), each a link to its
+// chunk. Folded under the actions; "figures…" opens it, ?figures=1 too.
+function figureStrip(chunks, docId) {
+  const items = figureItems(chunks);
+  if (!items.length) return "";
+  const where = (f) => {
+    // a frame's caption already opens with its moment
+    if (f.time != null) return f.caption.startsWith(fmtTime(f.time)) ? "" : "at " + fmtTime(f.time);
+    return f.page ? "p. " + f.page : "";
+  };
+  return `<section id="doc-figures" class="figure-strip" hidden>${items.map((f) => `
+    <a href="#chunk-${f.chunk_id}" data-scroll="${f.chunk_id}" title="${esc(f.caption)}">
+      <img src="/doc/${docId}/figure/${f.ref}" alt="${esc(f.caption)}" loading="lazy">
+      <span class="cap">${esc(f.caption) || "<span class=muted>(no caption)</span>"}</span>
+      <span class="muted where">${where(f)}</span>
+    </a>`).join("")}</section>`;
 }
 
 // A hit or a passage that is a figure shows the figure: the reading is what
@@ -565,6 +596,7 @@ async function viewDoc(id, p) {
   if (!highlight && p.find) highlight = locateChunk(chunks, p.find);
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
   const pageMeta = meta.page || null;
+  const nFigures = figureItems(chunks).length;
   view.innerHTML = `
   <header class="doc-head">
     <h1>${pageMeta ? `<span class="kind-pill">${esc(pageMeta.kind)}</span> ` : ""}${esc(doc.title || "(untitled)")}</h1>
@@ -575,6 +607,7 @@ async function viewDoc(id, p) {
       <a href="${originalHref(doc.id, firstPage)}" target="_blank" rel="noopener">open original ↗</a>
       ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
       <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
+      ${nFigures ? `<a href="#" id="figures" title="every picture of the document at a glance">${nFigures} figure${nFigures === 1 ? "" : "s"}…</a>` : ""}
       ${pageMeta ? "" : `<a href="#" id="reading" title="run a named extractor on this document: the vision model over scanned pages, a second reading of an image, OCR, Docling">read again…</a>`}
       ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
@@ -582,9 +615,11 @@ async function viewDoc(id, p) {
     </div>
     ${readingLine(meta.reading)}
     <div id="reading-form" hidden></div>
+    <div id="domains-form" hidden></div>
     <div id="page-editor"></div>
   </header>
   ${rule()}
+  ${figureStrip(chunks, doc.id)}
   ${meta.video ? playerHtml(doc, chunks, meta) : ""}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
@@ -665,17 +700,33 @@ async function viewDoc(id, p) {
     await fetch(`/doc/${doc.id}/reading`, { method: "DELETE" });
     render({ keepScroll: true });
   });
+  const figLink = document.getElementById("figures");
+  const strip = document.getElementById("doc-figures");
+  if (figLink && strip) {
+    const showStrip = (on) => { strip.hidden = !on; figLink.classList.toggle("open", on); };
+    figLink.addEventListener("click", (e) => { e.preventDefault(); showStrip(strip.hidden); });
+    if (p.figures) showStrip(true);
+  }
+  // the domains as boxes to tick: none ticked is every module; a change
+  // is read again against the new set by the worker's next extract pass
   document.getElementById("domains").addEventListener("click", async (e) => {
     e.preventDefault();
-    const cur = await api(`/doc/${doc.id}/domains`);
-    const answer = prompt(`Domains for this document (comma-separated; empty = every module).\nModules: ${cur.modules.join(", ")}`, (cur.domains || []).join(", "));
-    if (answer === null) return;
-    const domains = answer.split(",").map((s) => s.trim()).filter(Boolean);
-    try {
-      const res = await fetch(`/doc/${doc.id}/domains`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains: domains.length ? domains : null }) });
-      if (!res.ok) throw new Error((await res.json()).detail || res.statusText);
-      render();
-    } catch (err) { setStatus(err.message); }
+    const box = document.getElementById("domains-form");
+    if (!box.hidden) { box.hidden = true; return; }
+    let cur;
+    try { cur = await api(`/doc/${doc.id}/domains`); } catch (err) { setStatus(err.message); return; }
+    box.innerHTML = domainsForm(cur);
+    box.hidden = false;
+    box.querySelector("form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const domains = [...box.querySelectorAll("input[name=domain]:checked")].map((i) => i.value);
+      try {
+        const r = await put(`/doc/${doc.id}/domains`, { domains: domains.length ? domains : null });
+        setStatus(r.reread ? "domains set; the next extract pass reads the document again" : "domains set");
+        render({ keepScroll: true });
+      } catch (err) { setStatus(err.message); }
+    });
+    box.querySelector(".domains-cancel").addEventListener("click", () => { box.hidden = true; });
   });
   if (!pageMeta) {
     const pr = document.getElementById("promote");

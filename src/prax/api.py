@@ -1449,11 +1449,14 @@ def get_domains(doc_id: int, request: Request) -> dict[str, Any]:
 
 @app.put("/doc/{doc_id}/domains")
 def put_domains(doc_id: int, req: DomainsReq, request: Request) -> dict[str, Any]:
-    """Replace the document's domain set; null means every module."""
+    """Replace the document's domain set; null means every module.
+    ``reread`` says the change left an extraction stale: the worker's
+    next extract pass reads the document again against the new set."""
     try:
-        return {
-            "domains": store.set_domains(_con(request), doc_id, req.domains, by=req.by)
-        }
+        con = _con(request)
+        domains = store.set_domains(con, doc_id, req.domains, by=req.by)
+        stale = store.get_meta(con, doc_id).get("extraction_stale") or {}
+        return {"domains": domains, "reread": bool(stale.get("domains_changed"))}
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:

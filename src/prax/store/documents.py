@@ -659,19 +659,54 @@ def set_domains(
     by: str = "human",
 ) -> list[str] | None:
     """Replace a document's domain set (None: every module). Names must be
-    modules of the current ontology other than core."""
+    modules of the current ontology other than core. A change of the set
+    under an extraction makes that reading stale (``_lens_changed``): the
+    extract step takes the document again, first, and the new reading
+    retires the old."""
     meta = get_meta(con, doc_id)
+    before = meta.get("domains")
     if domains is None:
         meta.pop("domains", None)
         meta.pop("domains_by", None)
     else:
         meta["domains"] = _check_domains(domains)
         meta["domains_by"] = by
+    if meta.get("domains") != before:
+        _lens_changed(meta)
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
     )
     con.commit()
     return meta.get("domains")
+
+
+def _lens_changed(meta: dict[str, Any]) -> bool:
+    """The document's domain set changed under an extraction made against
+    the old set: the stamp goes to the history, ``meta.extraction_stale``
+    says why, so the extract step selects the document before the
+    backlog and ``extraction.apply`` retires the old reading (history
+    kept). Nothing when the reading already carries the new subset's
+    version (the set changed to one the same modules make up). True when
+    a stamp moved."""
+    gone = meta.get("extraction")
+    if not gone:
+        meta.pop("extraction_error", None)
+        return False
+    want = ontology.current().for_domains(meta.get("domains")).version
+    if gone.get("ontology_version") == want:
+        return False
+    meta.pop("extraction")
+    meta.pop("extraction_error", None)
+    meta.setdefault("extraction_history", []).append(
+        {**gone, "superseded_by": "domains"}
+    )
+    meta["extraction_stale"] = {
+        "extractor": gone.get("extractor"),
+        "run": gone.get("run"),
+        "ontology_version": gone.get("ontology_version"),
+        "domains_changed": True,
+    }
+    return True
 
 
 def add_domain(

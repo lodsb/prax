@@ -239,6 +239,60 @@ def test_select_for_extraction_knows_subset_versions(
     ) == [res]
 
 
+def test_a_domain_change_makes_the_extraction_stale(
+    con: sqlite3.Connection, three_modules: Path
+) -> None:
+    """The lens changed under a reading: the stamp goes to the history,
+    the document goes first in the extract queue, the new reading
+    retires the old; the same set again, or one of the same version,
+    changes nothing."""
+    later = store.ingest_text(con, "later " * 300, title="Later")["doc_id"]
+    doc = store.ingest_text(con, "f " * 300, title="F")["doc_id"]
+    store.set_domains(con, doc, ["family"])
+    onto = ontology.current()
+    triple = extraction.Triple(
+        "Grandma", "person", "parent_of", "Mother", "person", "EXTRACTED", "F"
+    )
+    first = extraction.apply(
+        con,
+        doc,
+        extraction.Extraction(summary="s", triples=[triple]),
+        extractor="stub",
+        run="r1",
+    )
+    assert first.linked == 1
+    assert store.select_for_extraction(
+        con, ontology_version=onto.version, onto=onto
+    ) == [later]
+    store.set_domains(con, doc, ["family"])  # the same set: nothing
+    assert "extraction_stale" not in store.get_meta(con, doc)
+    store.set_domains(con, doc, ["research"])
+    meta = store.get_meta(con, doc)
+    assert "extraction" not in meta
+    assert meta["extraction_stale"]["domains_changed"] is True
+    assert meta["extraction_history"][-1]["superseded_by"] == "domains"
+    # first in the queue, before the never-extracted document
+    assert store.select_for_extraction(
+        con, ontology_version=onto.version, onto=onto
+    ) == [
+        doc,
+        later,
+    ]
+    # the next reading retires the old edges (history kept) and clears the mark
+    extraction.apply(
+        con, doc, extraction.Extraction(summary="t"), extractor="stub", run="r2"
+    )
+    meta = store.get_meta(con, doc)
+    assert "extraction_stale" not in meta
+    live = con.execute(
+        "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NULL", (doc,)
+    ).fetchone()[0]
+    kept = con.execute(
+        "SELECT count(*) FROM edges WHERE source_doc = ?", (doc,)
+    ).fetchone()[0]
+    assert (live, kept) == (0, 1)
+
+
 def test_search_domain_filter(con: sqlite3.Connection, three_modules: Path) -> None:
     fam = store.ingest_text(con, "reverb at the family party " * 20, title="Party")[
         "doc_id"
@@ -272,7 +326,8 @@ def test_api_domains(client: TestClient) -> None:
     r = client.get(f"/doc/{a}/domains").json()
     assert r["domains"] is None and r["modules"] == ["family", "research", "studio"]
     assert client.put(f"/doc/{a}/domains", json={"domains": ["family"]}).json() == {
-        "domains": ["family"]
+        "domains": ["family"],
+        "reread": False,  # nothing extracted yet
     }
     assert client.post(f"/doc/{a}/domains/research").json() == {
         "domains": ["family", "research"]
@@ -284,7 +339,8 @@ def test_api_domains(client: TestClient) -> None:
     )
     assert client.get("/doc/999/domains").status_code == 404
     assert client.put(f"/doc/{a}/domains", json={"domains": None}).json() == {
-        "domains": None
+        "domains": None,
+        "reread": False,
     }
     hits = client.get("/search", params={"q": "alpha", "domain": "family"}).json()
     assert hits and hits[0]["doc_id"] == a  # no set: in every module
@@ -329,3 +385,19 @@ def test_the_door_browses_and_places_within_a_domain(three_modules: Path) -> Non
             f"/doc/{a['doc_id']}/context", params={"domain": "family"}
         ).json()
         assert "similar" in ctx  # the filter is accepted; vectors decide the rest
+
+
+def test_the_door_says_when_a_domain_change_means_a_reread(client: TestClient) -> None:
+    a = client.post("/ingest", json={"text": "alpha " * 50, "title": "A"}).json()[
+        "doc_id"
+    ]
+    con = store.connect()
+    extraction.apply(con, a, extraction.Extraction(summary="s"), extractor="stub")
+    assert client.put(f"/doc/{a}/domains", json={"domains": ["family"]}).json() == {
+        "domains": ["family"],
+        "reread": True,
+    }
+    assert client.put(f"/doc/{a}/domains", json={"domains": ["family"]}).json() == {
+        "domains": ["family"],
+        "reread": True,  # still waiting for the pass
+    }

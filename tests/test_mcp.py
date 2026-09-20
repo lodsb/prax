@@ -177,7 +177,8 @@ def test_page_tools() -> None:
 def test_domains_and_promote_as_the_agent(proxied: TestClient) -> None:
     r = call("ingest", text="a paper about reverb " * 20, title="p")
     assert call("set_domains", doc_id=r["doc_id"], domains=["research"]) == {
-        "domains": ["research"]
+        "domains": ["research"],
+        "reread": False,
     }
     assert proxied.get(f"/doc/{r['doc_id']}/domains").json()["domains"] == ["research"]
     p = call("promote", doc_id=r["doc_id"], reason="central")

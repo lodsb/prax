@@ -205,7 +205,10 @@ def set_domains(doc_id: int, domains: list[str] | None) -> dict[str, Any]:
     """Which ontology modules a document is read against (its domains, e.g.
     ["research"], ["family", "research"] for a document that is both, or
     null for every module). A document extracted afterwards, or in a re-run
-    per domain, uses only those modules' types and relations."""
+    per domain, uses only those modules' types and relations; a change
+    under an extraction makes it stale (``reread`` true in the answer): the
+    worker's next extract pass reads the document again against the new
+    set and retires the old reading."""
     return _guard(
         lambda: door().put_json(
             f"/doc/{doc_id}/domains", {"domains": domains, "by": "agent"}

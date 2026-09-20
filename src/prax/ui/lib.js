@@ -80,6 +80,23 @@ function mathSpans(text) {
   return out;
 }
 
+// The figures of a document for the strip: every figure chunk with a
+// picture, its caption (the reference's own, else the first reading's
+// first words), where it is (page, or the moment of a video frame).
+function figureItems(chunks) {
+  const out = [];
+  for (const c of chunks || []) {
+    if (c.kind !== "figure" || !c.data || !c.data.ref) continue;
+    let caption = String(c.data.caption || "").trim();
+    if (!caption) {
+      const r = (c.data.readings || []).find((x) => x && x.text);
+      if (r) caption = String(r.text).trim().split(/(?<=[.!?])\s/)[0].slice(0, 120);
+    }
+    out.push({ chunk_id: c.chunk_id, ref: c.data.ref, caption, page: c.page || null, time: c.time != null ? c.time : null });
+  }
+  return out;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems };
 }

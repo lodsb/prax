@@ -72,3 +72,17 @@ test("mathSpans finds maths and leaves prices alone", () => {
   assert.deepEqual(lib.mathSpans(""), []);
   assert.deepEqual(lib.mathSpans(null), []);
 });
+
+test("figureItems: the figure chunks with a picture, captioned by the reference or the first reading, placed by page or moment", () => {
+  const chunks = [
+    { chunk_id: 1, kind: "text", text: "prose" },
+    { chunk_id: 2, kind: "figure", page: 3, data: { ref: "ab", caption: "Fig. 1: the filter" } },
+    { chunk_id: 3, kind: "figure", time: 95, data: { ref: "cd", caption: "", readings: [{ model: "m", text: "A slide listing three steps. Then more." }] } },
+    { chunk_id: 4, kind: "figure", data: { caption: "no ref" } },
+  ];
+  assert.deepEqual(lib.figureItems(chunks), [
+    { chunk_id: 2, ref: "ab", caption: "Fig. 1: the filter", page: 3, time: null },
+    { chunk_id: 3, ref: "cd", caption: "A slide listing three steps.", page: null, time: 95 },
+  ]);
+  assert.deepEqual(lib.figureItems([]), []);
+});
