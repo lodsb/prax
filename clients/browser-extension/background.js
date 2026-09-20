@@ -437,7 +437,8 @@ async function grabFrames(times, opt, prev) {
   // seeking (it fetches the segment; a bare <video>.currentTime on a
   // paused YouTube player mostly times out and shows the old frame),
   // then the frame is drawn once it has been presented
-  const v = document.querySelector("video");
+  const mainVideo = () => document.querySelector("video.html5-main-video") || document.querySelector("video");
+  let v = mainVideo();
   if (!v) return { frames: [], prev: null, error: "no video element" };
   const player = document.getElementById("movie_player");
   const api_ = player && typeof player.seekTo === "function" ? player : null;
@@ -463,12 +464,38 @@ async function grabFrames(times, opt, prev) {
     if (typeof v.requestVideoFrameCallback === "function") v.requestVideoFrameCallback(() => fin());
     setTimeout(fin, opt.frameTimeout || 800);
   });
+  // an ad in the player (YouTube marks it on #movie_player): a seek would
+  // land in the ad and time out, three of those and the storyboard took
+  // over, and the recording's frames stopped there. Skip it when the
+  // button is there, else wait it out (an ad blocker's skip comes late
+  // and the player stalls a while); never a miss
+  const adShowing = () => !!(player && (player.classList.contains("ad-showing") || player.classList.contains("ad-interrupting")));
+  let ads = 0;
+  const throughAd = async () => {
+    if (!adShowing()) return false;
+    ads += 1;
+    const until = Date.now() + (opt.adTimeout || 90000);
+    while (adShowing() && Date.now() < until) {
+      const skip = document.querySelector(".ytp-skip-ad-button, .ytp-ad-skip-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-slot button");
+      if (skip) { try { skip.click(); } catch (_) { /* not yet */ } }
+      await wait(250);
+    }
+    v = mainVideo() || v;  // the player may have swapped its element
+    if (api_) api_.pauseVideo(); else if (!v.paused) v.pause();
+    return true;
+  };
   const seek = async (t) => {
-    if (api_) api_.seekTo(t, true); else v.currentTime = t;
-    const until = Date.now() + (opt.seekTimeout || 6000);
-    while (Date.now() < until) {
-      if (!v.seeking && v.readyState >= 2 && Math.abs(v.currentTime - t) < 1.5) return true;
-      await wait(100);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await throughAd();
+      if (api_) api_.seekTo(t, true); else v.currentTime = t;
+      const until = Date.now() + (opt.seekTimeout || 6000);
+      let ad = false;
+      while (Date.now() < until) {
+        if ((ad = adShowing())) break;  // an ad took the player: through it, then once more
+        if (!v.seeking && v.readyState >= 2 && Math.abs(v.currentTime - t) < 1.5) return true;
+        await wait(100);
+      }
+      if (!ad) return false;
     }
     return false;
   };
@@ -512,7 +539,7 @@ async function grabFrames(times, opt, prev) {
       v.muted = state.muted;
     } catch (_) { /* the page's business */ }
   }
-  return { frames, prev: last, error, missed, gaveUp };
+  return { frames, prev: last, error, missed, gaveUp, ads };
 }
 
 async function storyboardFrames(plan, opt) {
@@ -637,6 +664,7 @@ async function captureVideo(tab, opts, cfg, common) {
   let prev = null;
   let frameError = null;
   const missedTimes = [];
+  let adsWaited = 0;
   const batch = 12;
   for (let i = 0; i < times.length; i += batch) {
     const part = times.slice(i, i + batch);
@@ -649,6 +677,7 @@ async function captureVideo(tab, opts, cfg, common) {
     if (!got) { frameError = "the tab answered nothing"; break; }
     frames.push(...(got.frames || []));
     if (got.missed && got.missed.length) missedTimes.push(...got.missed);
+    adsWaited += Number(got.ads) || 0;
     prev = got.prev;
     await setProgress({ note: `${frames.length} frames of ${times.length} moments…` });
     if (got.error) { frameError = got.error; break; }
@@ -671,6 +700,7 @@ async function captureVideo(tab, opts, cfg, common) {
   }
   const stillMissed = missedTimes.length && !smallFrames ? ` (${missedTimes.length} moments never arrived)` : "";
   notes.push(frames.length ? `${frames.length} frames${smallFrames ? ` (${smallFrames} small, from the storyboard)` : ""}${stillMissed}` : `no frames${frameError ? ` (${frameError})` : stillMissed}`);
+  if (adsWaited) notes.push(`through ${adsWaited} ad${adsWaited === 1 ? "" : "s"}`);
   if (!paragraphs.length && !frames.length) return { ...common, tabId: tab.id, mode: "video", error: `nothing to keep of the video: ${notes.join(", ")}` };
   const html = lib.videoHtml({ video, title: info.title || tab.title || "", description: info.description || "", paragraphs, frames });
   const note = notes.join(", ");

@@ -144,7 +144,11 @@ the tab shows, with a small popup for the few choices that matter.
   (it is not playing and will not buffer, the stream is protected),
   the seek bar's own preview picture stands in — small, 320×180 at
   best, but there for any video — and the result says how many were
-  those. The caption tracks the watch page hands out answer empty
+  those. An ad the player starts on a seek is skipped when its button
+  appears, else waited out (an ad blocker's skip comes late and the
+  player stalls a while); it never counts as a moment not delivered,
+  and the result says how many ads were sat through. The caption
+  tracks the watch page hands out answer empty
   unless the page's own player asks (a session token it adds), so the
   tracks are taken from YouTube's player service as the iOS client,
   whose answer plainly, from inside the tab; the page's own are the

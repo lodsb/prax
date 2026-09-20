@@ -141,6 +141,21 @@ const fixture = createServer((req, res) => {
 <body><h1>The Bed Talk</h1>
 <div id="movie_player"><video id="v" src="/bars.webm" preload="auto" controls muted playsinline width="320" height="180"></video></div>
 <script>
+  // the player seeks the way YouTube's does, and plays an ad on the first
+  // seek: the ad-showing class for a while, a skip button after a beat
+  const mp = document.getElementById("movie_player"), vid = document.getElementById("v");
+  let adDone = false;
+  mp.seekTo = (t) => {
+    if (!adDone) {
+      adDone = true;
+      mp.classList.add("ad-showing");
+      setTimeout(() => { const b = document.createElement("button"); b.className = "ytp-skip-ad-button"; b.textContent = "Skip"; b.onclick = () => { mp.classList.remove("ad-showing"); b.remove(); }; mp.appendChild(b); }, 700);
+      return;
+    }
+    vid.currentTime = t;
+  };
+  mp.pauseVideo = () => vid.pause();
+  mp.playVideo = () => vid.play();
   document.getElementById("movie_player").getPlayerResponse = () => ({
     videoDetails: { videoId: "bed1", title: "The Bed Talk", author: "The Bed Channel", lengthSeconds: "6",
       shortDescription: ["A talk for the bed.", "", "0:00 Intro", "0:02 The envelope", "0:04 The window"].join(String.fromCharCode(10)) },
@@ -365,6 +380,7 @@ async function exercise(b) {
     check(/transcript \(en, automatic, 2 paragraphs\)/.test(vr.note || ""), "with its transcript, grouped into paragraphs", vr.note || "");
     const nFrames = Number((vr.note || "").match(/(\d+) frames/)?.[1] || 0);
     check(nFrames === 3, "and the frames, the repeats dropped (three pictures in six moments)", vr.note || "");
+    check(/through 1 ad$|through 1 ad,/.test(vr.note || ""), "the ad the player showed on the first seek was skipped, not counted as a miss", vr.note || "");
     if (vr.doc_id) {
       const vdoc = await (await get(`/get/${vr.doc_id}?max_chars=4000`)).json();
       check(vdoc.meta?.video?.id === "bed1" && vdoc.meta?.video?.channel === "The Bed Channel" && vdoc.meta?.parser === "video", "the door kept what the page knew of the recording", JSON.stringify(vdoc.meta?.video).slice(0, 160));
