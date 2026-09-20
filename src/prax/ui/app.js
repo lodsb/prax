@@ -721,7 +721,12 @@ async function viewDoc(id, p) {
   const figLink = document.getElementById("figures");
   const strip = document.getElementById("doc-figures");
   if (figLink && strip) {
-    const showStrip = (on) => { strip.hidden = !on; figLink.classList.toggle("open", on); };
+    const label = figLink.textContent;
+    const showStrip = (on) => {
+      strip.hidden = !on;
+      figLink.classList.toggle("open", on);
+      figLink.textContent = on ? "fold the figures" : label;  // the same link both ways
+    };
     figLink.addEventListener("click", (e) => { e.preventDefault(); showStrip(strip.hidden); });
     if (p.figures) showStrip(true);
   }
