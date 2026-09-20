@@ -82,3 +82,26 @@ def test_search_expands_acronyms_and_ranks_all_terms_first(
     hits = store.search(con, "adaa iir")
     assert [h["doc_id"] for h in hits][:2] == [adaa, iir]
     assert hits[0]["fts_rank"] == 1
+
+
+def test_keyword_side_leaves_the_stopwords_out(con: sqlite3.Connection) -> None:
+    from prax.store import retrieval
+
+    terms = store.expand_query(con, "the cache and a compiler in C")
+    assert retrieval.keyword_terms(terms) == [["cache"], ["compiler"], ["c"]]
+    assert retrieval._expr(retrieval.keyword_terms(terms), all_terms=False) == (
+        '("cache") OR ("compiler") OR ("c")'
+    )
+    assert retrieval._fts_query("the cache and a compiler") == '"cache" OR "compiler"'
+    # a query of stopwords alone keeps them (German too)
+    assert retrieval.keyword_terms([["the"], ["and"]]) == [["the"], ["and"]]
+    assert retrieval._fts_query("und der") == '"und" OR "der"'
+    assert retrieval.keyword_terms([["der"], ["klang"]]) == [["klang"]]
+    # the search still finds a document by its content words, with the
+    # stopwords in the query, and one of stopwords alone still matches
+    doc = store.ingest_text(
+        con, "The cache lives in the compiler and a linker. " * 8, title="Caches"
+    )["doc_id"]
+    hits = store.search(con, "what is the cache in a compiler", mode="fts")
+    assert hits and hits[0]["doc_id"] == doc
+    assert store.search(con, "the and", mode="fts")

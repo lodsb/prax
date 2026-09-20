@@ -193,7 +193,10 @@ flowchart LR
 `search` first expands the query: a token the library defines as an
 acronym (the `acronyms` table, from "phrase (ACRONYM)" in the texts)
 becomes the token or its phrase for the keyword side (the embedder sees
-the query as typed; expanding it measured worse). It then fuses up to
+the query as typed; expanding it measured worse), and the stopwords
+(`STOPWORDS`, English and German) are left out of the match expression:
+each matched two thirds of a million chunks, and BM25 gives a term in
+more than half the rows a negative weight. It then fuses up to
 five rank lists per document: chunk BM25 over any term, chunk BM25 over
 chunks holding the query's rare acronym-shaped terms (weight 3), chunk
 KNN, and BM25 and KNN over the document field. The field list is weighted 2 for
@@ -397,6 +400,7 @@ here opens the database file.
 | `parse.formula_readings` [`PRAX_FORMULA_READINGS`] | the `formulas` extractor reads the unread display equations (`new`) or every one again (`again`); `steps.formulas` names its model |
 | `parse.vision_pages`, `.vision_max_pages`, `.vision_dpi` | the `vision-pages` extractor: `scans` (pages without a text layer, default) or `all`; its page budget (200); the rendering resolution (150) |
 | `door.cors_origins`, `door.inbox_scan_seconds`, `door.clock_seconds` | the extension's origin; how often the door reads its drop folder; how often it looks at its schedule |
+| `door.sqlite_cache_mb`, `door.sqlite_mmap_mb` [`PRAX_SQLITE_CACHE_MB`, `PRAX_SQLITE_MMAP_MB`] | SQLite's page cache per connection (64) and how much of the file is memory-mapped (1024; the OS's file-backed cache, 0 for none): a keyword query over a million chunks read its posting lists from disk on SQLite's 2 MB default |
 | `run.<role>` | what `prax up` keeps alive on this host: `llama-server` and `reranker` (a `models:` entry with a `serve:` block: slots, projector, `cpu_moe`…), `marker` (its venv, port, `ngl`; `on_demand` declares without starting), `door` (host, port, TLS files), `worker` (interval, steps, the `nightly` hour and limit, another host's `door`) (howto 4b) |
 | `schedule.maintain`, `schedule.backup` | the door's clock: an `HH:MM` (or `{at:, only:}` / `{at:, archive:}`) at which the door starts that job on itself once a day |
 | `paths.llama_server` [`PRAX_LLAMA_SERVER`] | the llama-server binary `prax up` starts (default: where howto 3h puts it, or the PATH) |

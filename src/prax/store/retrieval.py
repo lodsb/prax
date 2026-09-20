@@ -64,17 +64,51 @@ FIELD_WEIGHT_WORDS = 7
 VEC_SEARCH_CAP = 4000  # widest KNN candidate set when post-filtering by kind
 
 
+# The words the keyword side leaves out of a query. In a million chunks
+# "a", "in" and "and" each match two thirds, so an OR expression holding
+# them scores that many rows: a natural-language query took 1.7 s warm
+# and 18 s cold on the desktop, 0.06 s without them. FTS5's BM25 gives a
+# term in more than half the rows a negative idf besides, so they pulled
+# the ranking the wrong way. English and German, the library's
+# languages; a query of stopwords alone keeps them. The vector side sees
+# the whole query.
+STOPWORDS = frozenset(
+    """
+    a an the and or of to in on at for by with from as is are was were be
+    been being it its this that these those there here what which who whom
+    how why when where do does did done not no nor so if then than into
+    about over under between through during before after above below up
+    down out off again further once all any both each few more most other
+    some such only own same too very can will just should would could may
+    might must shall we you he she they them their our your my i me his her
+    der die das den dem des ein eine einer eines einem einen und oder aber
+    nicht mit von zu zum zur im am auf für über unter aus bei nach vor
+    ist sind war waren wird werden wurde ich du er sie es wir ihr man dass
+    als auch noch nur wie was wer wo wann warum
+    """.split()  # noqa: SIM905 - a word list reads as one
+)
+
+
+def keyword_terms(terms: list[list[str]]) -> list[list[str]]:
+    """The terms for the keyword side: the stopwords left out, unless the
+    query is nothing but."""
+    kept = [t for t in terms if t and t[0].lower() not in STOPWORDS]
+    return kept or terms
+
+
 def _fts_query(query: str) -> str | None:
     """Build a safe FTS5 MATCH expression: every token quoted, joined by OR.
 
     User strings are never passed to MATCH raw; punctuation and FTS operators
     in the input cannot raise. OR keeps recall for natural multi-word queries;
-    BM25 ranks chunks that match more (and rarer) terms first.
+    BM25 ranks chunks that match more (and rarer) terms first. The
+    stopwords are left out (``STOPWORDS``) unless the query is nothing but.
     """
     tokens = _TOKEN.findall(query)
     if not tokens:
         return None
-    return " OR ".join(f'"{t}"' for t in tokens)
+    kept = [t for t in tokens if t.lower() not in STOPWORDS] or tokens
+    return " OR ".join(f'"{t}"' for t in kept)
 
 
 ACRONYM_MIN_DOCS = 1  # one definition is enough: the phrase only adds an alternative
@@ -587,11 +621,13 @@ def _search_hits(
         raise ValueError("vector search unavailable: no embedder, index or vectors")
     fetch = limit * 4 if doctype else limit
     # the query as terms with the library's own expansions of its acronyms;
+    # the keyword side without the stopwords (the embedder sees them all):
     # one OR expression for recall, one AND expression for the tier that
     # wants every term present (only when there is more than one term)
     terms = expand_query(con, query)
-    or_expr = _expr(terms, all_terms=False)
-    and_expr = _expr(terms, all_terms=True) if len(terms) > 1 else None
+    keywords = keyword_terms(terms)
+    or_expr = _expr(keywords, all_terms=False)
+    and_expr = _expr(keywords, all_terms=True) if len(keywords) > 1 else None
     if mode == "fts":  # the raw chunk list, expanded but not fused
         hits = _fts_search(con, query, fetch, kind, expr=or_expr)
         return _finish(con, hits, query, limit, doctype, expr=or_expr)
@@ -613,7 +649,7 @@ def _search_hits(
                 _fts_search(con, query, depth, kind, snippets=False, expr=and_expr)
             )
         names.append("fts_all")
-    rare = _rare_terms(con, terms) if RARE_TERMS_WEIGHT > 0 else []
+    rare = _rare_terms(con, keywords) if RARE_TERMS_WEIGHT > 0 else []
     if rare and len(rare) == len(terms):
         # the whole query is rare tokens ("adaa"): the keyword list carries
         # the weight itself, vector neighbours of letters must not outvote it

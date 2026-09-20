@@ -141,6 +141,9 @@ steps:
 #   cors_origins: []           # [PRAX_CORS_ORIGINS] the browser extension's origin
 #   inbox_scan_seconds: 20     # [PRAX_INBOX_SCAN] the drop folder; 0 turns it off
 #   clock_seconds: 30          # [PRAX_CLOCK] how often the schedule below is checked
+#   sqlite_cache_mb: 64        # [PRAX_SQLITE_CACHE_MB] page cache per connection
+#   sqlite_mmap_mb: 1024       # [PRAX_SQLITE_MMAP_MB] how much of the file is mapped
+#                              #   (the OS's cache, given back under pressure); 0 for none
 
 # ontology:
 #   dir: /path/to/ontology     # [PRAX_ONTOLOGY] another set of module files

@@ -47,6 +47,17 @@ BUSY_TIMEOUT = 30.0
 _TOKEN = re.compile(r"\w+", re.UNICODE)
 
 
+# SQLite's page cache per connection (``door.sqlite_cache_mb``) and how
+# much of the file it maps (``door.sqlite_mmap_mb``). The defaults SQLite
+# ships with are a 2 MB cache and no mapping: a keyword query over a
+# million chunks read its posting lists from disk every time (18 s cold,
+# 1.7 s warm on the desktop; 1.7 s and 1.3 s with these). The mapping is
+# the operating system's cache, file-backed and shared, so a small board
+# gives it back under pressure; the cache is the connection's own.
+CACHE_MB = 64
+MMAP_MB = 1024
+
+
 _SURROGATE = re.compile(r"[\ud800-\udfff]")
 
 
@@ -144,6 +155,10 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA journal_mode = WAL")
+    cache = config.whole("door.sqlite_cache_mb", "PRAX_SQLITE_CACHE_MB", CACHE_MB)
+    mmap = config.whole("door.sqlite_mmap_mb", "PRAX_SQLITE_MMAP_MB", MMAP_MB)
+    con.execute(f"PRAGMA cache_size = -{max(cache, 0) * 1024}")
+    con.execute(f"PRAGMA mmap_size = {max(mmap, 0) * 1024 * 1024}")
     return con
 
 
