@@ -601,17 +601,19 @@ def _uncounted_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
     the worker recorded one. ``thin-texts`` cannot weigh them."""
     from prax.store import documents as docs
 
-    ids = docs.uncounted_pages(con, limit=CAP)
-    if not ids:
-        return []
-    marks = ",".join("?" * len(ids))
-    return [
-        {"id": r["id"], "title": r["title"]}
-        for r in con.execute(
-            f"SELECT id, title FROM documents WHERE id IN ({marks}) ORDER BY id",
-            tuple(ids),
+    ids = docs.uncounted_pages(con)  # all of them: the repair counts them all
+    out = []
+    for start in range(0, len(ids), 500):
+        part = ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        out.extend(
+            {"id": r["id"], "title": r["title"]}
+            for r in con.execute(
+                f"SELECT id, title FROM documents WHERE id IN ({marks}) ORDER BY id",
+                tuple(part),
+            )
         )
-    ]
+    return out
 
 
 def _repair_uncounted_pages(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
