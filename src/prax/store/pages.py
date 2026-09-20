@@ -23,9 +23,11 @@ from .graph import Edge, find_edges, link
 # artifact with an append-only revision row, and its relationships to other
 # documents are edges. An agent never overwrites human text: ``write_page``
 # refuses an agent revision over a human one unless told to; ``append_page``
-# adds a section instead.
+# adds a section instead. A ``question`` page is a standing question the
+# door keeps answered (``prax.questions``), a ``briefing`` the day's page
+# of what arrived; both are the agent's, a person adds sections under them.
 
-PAGE_KINDS = ("addendum", "project", "synthesis", "topic")
+PAGE_KINDS = ("addendum", "project", "synthesis", "topic", "question", "briefing")
 
 
 PAGE_AUTHORS = ("human", "agent")

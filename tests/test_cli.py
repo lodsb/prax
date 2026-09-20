@@ -374,3 +374,52 @@ def test_following_a_job_survives_a_dropped_poll(
     code = running.follow_job(client, started["job"], quiet=False, what="the pass")
     assert code == 0 and dropped["n"] == 2
     assert "did not answer a poll" in capsys.readouterr().out
+
+
+def test_questions_are_listed_and_asked_again(
+    door: TestClient,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PRAX_ASK", "stub")
+    door.post(
+        "/ingest",
+        json={"text": "feedback delay networks build reverb " * 30, "title": "FDN"},
+    )
+    assert run("questions") == 0
+    assert "No standing questions" in capsys.readouterr().out
+    assert (
+        run(
+            "ask",
+            "--answer",
+            "--steps",
+            "0",
+            "--stand",
+            "how",
+            "do",
+            "FDNs",
+            "build",
+            "reverb",
+        )
+        == 0
+    )
+    printed = capsys.readouterr().out
+    assert "Standing question q-how-do-fdns-build-reverb" in printed
+    assert run("questions") == 0
+    printed = capsys.readouterr().out
+    assert "1, 0 with something new" in printed and "settled" in printed
+    door.post(
+        "/ingest",
+        json={
+            "text": "feedback delay networks build reverb densely " * 30,
+            "title": "FDN 2",
+        },
+    )
+    assert run("questions") == 0
+    printed = capsys.readouterr().out
+    assert "1 with something new" in printed and "FDN 2" in printed
+    assert run("questions", "--ask", "--briefing") == 0
+    printed = capsys.readouterr().out
+    assert "1 of 1 asked again" in printed and "briefing" in printed
+    assert run("questions", "--json") == 0
+    assert json.loads(capsys.readouterr().out)[0]["revision"] == 2

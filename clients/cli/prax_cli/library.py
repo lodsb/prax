@@ -183,6 +183,14 @@ def ask(door: Door, a: Any) -> int:
         )
         out.say()
         out.say(f"Kept on page {a.save} (revision {kept.get('revision')}).")
+    if getattr(a, "stand", False):
+        options = {k: body.get(k) for k in ("steps", "tokens", "doctype", "limit")}
+        stood = door.post_json("/questions", {"result": result, "options": options})
+        out.say()
+        out.say(
+            f"Standing question {stood['slug']} (doc {stood['doc_id']}): asked again"
+            " when the library learns something; prax questions shows it."
+        )
     return 0
 
 

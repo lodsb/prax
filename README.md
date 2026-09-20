@@ -112,7 +112,10 @@ ontology version, with the sentence it was read from.
 for a few steps before it writes — searching again, reading on, walking
 the graph, setting aside what is beside the point — and cites the
 passages it kept. You watch it happen, and the answer can be kept as a
-page with edges to its sources. What it can and cannot do:
+page with edges to its sources — or as a standing question: a page the
+door asks again when a document arrives that speaks to it, each answer
+a revision, your notes under it kept. A daily briefing page says what
+arrived and which answers moved. What it can and cannot do:
 [`docs/ask.md`](docs/ask.md).
 
 **Keeps what you write.** Notes, project threads, topic write-ups, as

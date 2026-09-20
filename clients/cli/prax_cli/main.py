@@ -34,8 +34,8 @@ examples
 
 commands
   everyday     search, ask, add, import, show, open, graph, pages
-  running it   up, status, jobs, readings, inbox, work, heal, maintain, resolve,
-               backup, serve, doctor, models
+  running it   up, status, jobs, readings, inbox, work, heal, maintain, questions,
+               resolve, backup, serve, doctor, models
 """
 
 
@@ -153,6 +153,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument("--doctype", help="pdf, web, image, text, note or page")
     s.add_argument("--save", metavar="PAGE", help="keep the answer on a page")
+    s.add_argument(
+        "--stand",
+        action="store_true",
+        help="keep it as a standing question: a page the door asks again when"
+        " the library learns something (prax questions)",
+    )
     s.set_defaults(func=library.ask, needs_door=True)
 
     s = sub.add_parser(
@@ -641,6 +647,43 @@ def build_parser() -> argparse.ArgumentParser:
         help="also rebuild every chunk from its text (after a chunker change)",
     )
     s.set_defaults(func=running.maintain, needs_door=True)
+
+    s = sub.add_parser(
+        "questions",
+        parents=[door_opts, as_json],
+        help="the standing questions: what each remembers, what is new; ask again",
+        description=(
+            "A standing question is a page the door keeps answered: when a"
+            " document that arrived since ranks for the question, shares two"
+            " of the answer's entities, or a source was read again, the"
+            " question is asked again and the answer is a new revision, the"
+            " sections you added under it kept. `prax ask --stand` starts"
+            " one; schedule: questions: HH:MM in prax.yaml runs the check"
+            " daily, with the day's briefing (what arrived)."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax questions                      each question, and what is new\n"
+            "  prax questions --ask                ask again what is due (a job)\n"
+            "  prax questions --ask q-my-slug --force   one, whatever is new\n"
+            "  prax questions --briefing           the day's page of what arrived"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument(
+        "--ask",
+        nargs="?",
+        const="",
+        metavar="SLUG",
+        help="ask again what is due (one question by slug, or every one)",
+    )
+    s.add_argument(
+        "--force", action="store_true", help="ask again even when nothing is new"
+    )
+    s.add_argument(
+        "--briefing", action="store_true", help="write the day's briefing page too"
+    )
+    s.set_defaults(func=running.questions, needs_door=True)
 
     s = sub.add_parser(
         "resolve",

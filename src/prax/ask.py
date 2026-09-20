@@ -599,20 +599,10 @@ def trail_lines(result: dict[str, Any]) -> list[str]:
     return out
 
 
-def save(
-    con: sqlite3.Connection,
-    result: dict[str, Any],
-    slug: str,
-    *,
-    heading: str | None = None,
-    create: str | None = None,
-) -> dict[str, Any]:
-    """Append an answer to a page as the agent: the question as heading,
-    the answer, a source list linking the cited documents (all passages
-    when nothing was cited), and ``annotates`` edges to those documents
-    (``synthesizes`` on a synthesis page). ``create`` names a page kind to
-    create when no page has the slug: a new synthesis page is an answer
-    kept as the seed of a write-up across its sources."""
+def section_of(result: dict[str, Any]) -> tuple[str, list[int]]:
+    """An answer as a page section — the answer, a source list linking
+    the cited documents (all passages when nothing was cited), the trail
+    — and the documents it draws on, for the page's edges."""
     answer = (result.get("answer") or "").strip()
     if not answer:
         raise ValueError("nothing to save: the result has no answer")
@@ -639,8 +629,26 @@ def save(
     trail = trail_lines(result)
     if trail:
         section += "\n\nHow it was found:\n\n" + "\n".join(f"- {t}" for t in trail)
-    model = result.get("model") or "?"
     docs = list(dict.fromkeys(c["doc_id"] for c in cited if c.get("title")))
+    return section, docs
+
+
+def save(
+    con: sqlite3.Connection,
+    result: dict[str, Any],
+    slug: str,
+    *,
+    heading: str | None = None,
+    create: str | None = None,
+) -> dict[str, Any]:
+    """Append an answer to a page as the agent: the question as heading,
+    the answer, a source list linking the cited documents (all passages
+    when nothing was cited), and ``annotates`` edges to those documents
+    (``synthesizes`` on a synthesis page). ``create`` names a page kind to
+    create when no page has the slug: a new synthesis page is an answer
+    kept as the seed of a write-up across its sources."""
+    section, docs = section_of(result)
+    model = result.get("model") or "?"
     if create and store.get_page(con, store.slugify(slug)) is None:
         title = heading or result.get("question") or slug
         text = f"# {title}\n\n{section}\n"

@@ -618,7 +618,7 @@ async function viewDoc(id, p) {
   view.innerHTML = `
   <header class="doc-head">
     <h1>${pageMeta ? `<span class="kind-pill">${esc(pageMeta.kind)}</span> ` : ""}${esc(doc.title || "(untitled)")}</h1>
-    <div class="doc-meta">${metaLine(meta)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}</div>
+    <div class="doc-meta">${metaLine(meta)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}${meta.question ? ` · a standing question, asked ${esc((meta.question.asked_at || "").slice(0, 10))} by ${esc(meta.question.model || "?")}${(meta.question.history || []).length ? `, moved ${meta.question.history.length} time${meta.question.history.length === 1 ? "" : "s"}` : ""}` : ""}</div>
     ${tags(meta)}
     <div class="doc-actions">
       ${pageMeta ? `<a href="#" id="page-edit">edit page</a>` : `<a href="#" id="add-note">add a note</a>`}
@@ -626,6 +626,7 @@ async function viewDoc(id, p) {
       ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
       <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
       ${nFigures ? `<a href="#" id="figures" title="every picture of the document at a glance">${nFigures} figure${nFigures === 1 ? "" : "s"}…</a>` : ""}
+      ${meta.question ? `<a href="#" id="ask-again" title="ask the question again now, whatever is new">ask again</a>` : ""}
       ${pageMeta ? "" : `<a href="#" id="reading" title="run a named extractor on this document: the vision model over scanned pages, a second reading of an image, OCR, Docling">read again…</a>`}
       ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
@@ -678,6 +679,14 @@ async function viewDoc(id, p) {
     document.getElementById("page-edit").addEventListener("click", (e) => { e.preventDefault(); openEditor(pageMeta.slug); });
     if (p.edit) openEditor(pageMeta.slug);
   }
+  const askAgain = document.getElementById("ask-again");
+  if (askAgain) askAgain.addEventListener("click", async (e) => {
+    e.preventDefault();
+    try {
+      const r = await post("/questions/run", { slug: pageMeta.slug, force: true });
+      setStatus(`asking again (job ${r.job}); the page gets a new revision when the model is done`);
+    } catch (err) { setStatus(err.message); }
+  });
   const retireLink = document.getElementById("retire");
   if (retireLink) retireLink.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -1510,18 +1519,36 @@ async function viewPages(p) {
   try {
     const pages = await api("/pages", { kind: p.kind });
     if (!pages.length) { list.innerHTML = `<p class="muted">No pages yet. Create a topic or project page above, or add a note from any document.</p>`; return; }
-    const groups = { project: "Projects", synthesis: "Syntheses", topic: "Topics", addendum: "Notes on documents" };
+    const groups = { question: "Standing questions", project: "Projects", synthesis: "Syntheses", topic: "Topics", briefing: "Briefings", addendum: "Notes on documents" };
+    // a standing question says whether the library has learned something since
+    let news = {};
+    if (pages.some((pg) => pg.kind === "question")) {
+      try { news = Object.fromEntries((await api("/questions")).map((q) => [q.slug, q])); } catch (_) { news = {}; }
+    }
+    const state = (pg) => {
+      const q = news[pg.slug];
+      if (!q) return "";
+      if (q.due) return `<span title="${esc((q.new || []).map((n) => n.title).join(", "))}">${esc(q.why)}</span> · <a href="#" class="ask-again" data-slug="${esc(pg.slug)}">ask again</a>`;
+      return `settled · <a href="#" class="ask-again" data-slug="${esc(pg.slug)}" data-force="1">ask again anyway</a>`;
+    };
     list.innerHTML = Object.entries(groups).map(([kind, label]) => {
       const rows = pages.filter((pg) => pg.kind === kind);
       if (!rows.length) return "";
       return `<h2 style="font-size:1rem;margin:1rem 0 .3rem">${label}</h2>
         <table class="doc-list page-list"><tbody>${rows.map((pg) => `<tr>
           <td><a href="#doc/${pg.doc_id}">${esc(pg.title || pg.slug)}</a></td>
-          <td class="muted">${esc(pg.slug)}</td>
+          <td class="muted">${kind === "question" ? state(pg) : esc(pg.slug)}</td>
           <td class="muted">r${pg.revision} · ${esc(pg.author || "")}</td>
           <td class="muted">${esc((pg.updated_at || "").slice(0, 16).replace("T", " "))}</td>
         </tr>`).join("")}</tbody></table>`;
     }).join("");
+    list.querySelectorAll("a.ask-again").forEach((a) => a.addEventListener("click", async (e) => {
+      e.preventDefault();
+      try {
+        const r = await post("/questions/run", { slug: a.dataset.slug, force: !!a.dataset.force });
+        a.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: `asking (job ${r.job})…` }));
+      } catch (err) { setStatus(err.message); }
+    }));
   } catch (err) {
     list.innerHTML = `<p class="error">${esc(err.message)}</p>`;
   }
@@ -1828,6 +1855,7 @@ function renderKeepForm(t) {
       <input name="heading" type="text" value="${esc(t.question)}" placeholder="heading" title="section heading">
       <button>Add to page</button>
       <label>or start a synthesis <input name="new_slug" type="text" placeholder="new page name" title="a new synthesis page seeded with this answer"></label>
+      <button type="button" class="secondary ask-stand" title="a page of its own that the door asks again when the library learns something about it">or keep as a standing question</button>
       <span class="ask-save-msg muted"></span>
     </form>`;
 }
@@ -1842,6 +1870,15 @@ async function bindKeepForm(form, t) {
   } catch (err) {
     slugSel.innerHTML = `<option value="">${esc(err.message)}</option>`;
   }
+  form.querySelector(".ask-stand").addEventListener("click", async () => {
+    const msg = form.querySelector(".ask-save-msg");
+    try {
+      const res = await post("/questions", { result: t, options: t.asked_with || {} });
+      msg.innerHTML = `standing question <a href="#doc/${res.doc_id}">${esc(res.slug)}</a>: asked again when the library learns something`;
+    } catch (err) {
+      msg.textContent = err.message;
+    }
+  });
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form));
@@ -1930,6 +1967,7 @@ async function viewAsk(p) {
     };
     if (steps !== null) body.steps = steps;
     if (opts.tokens) body.tokens = Number(opts.tokens);
+    turn.asked_with = { steps: body.steps, tokens: body.tokens, doctype: body.doctype, limit: body.limit, backend: body.backend };
     let r;
     try {
       if (!surfing) {

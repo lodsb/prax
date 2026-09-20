@@ -628,6 +628,10 @@ def _search_hits(
     if mode == "vec" and not vectors_ready:
         raise ValueError("vector search unavailable: no embedder, index or vectors")
     fetch = limit * 4 if doctype else limit
+    # the pages that are the model's own answers (a standing question, a
+    # briefing) are never evidence: a question would find its own page
+    # first and the model would cite itself
+    aside = _aside_documents(con)
     # the query as terms with the library's own expansions of its acronyms;
     # the keyword side without the stopwords (the embedder sees them all):
     # one OR expression for recall, one AND expression for the tier that
@@ -637,7 +641,8 @@ def _search_hits(
     or_expr = _expr(keywords, all_terms=False)
     and_expr = _expr(keywords, all_terms=True) if len(keywords) > 1 else None
     if mode == "fts":  # the raw chunk list, expanded but not fused
-        hits = _fts_search(con, query, fetch, kind, expr=or_expr)
+        hits = _fts_search(con, query, fetch + len(aside), kind, expr=or_expr)
+        hits = _without(hits, aside)
         return _finish(con, hits, query, limit, doctype, expr=or_expr)
     depth = max(limit * 3, RRF_DEPTH)
     # keyword lists: any term (recall), optionally every term, and the rare
@@ -673,7 +678,7 @@ def _search_hits(
             lists.append(_field_fts_search(con, query, depth, expr=or_expr))
             names.append("field")
             weights["field"] = _field_weight(query)
-        fused = _rrf(lists, names, fetch, weights)
+        fused = _rrf([_without(x, aside) for x in lists], names, fetch, weights)
         return _finish(con, fused, query, limit, doctype, expr=or_expr)
     assert emb is not None
     with took("embed"):
@@ -681,7 +686,7 @@ def _search_hits(
     if mode == "vec":
         return _finish(
             con,
-            _vec_search(con, vector, fetch, kind),
+            _without(_vec_search(con, vector, fetch + len(aside), kind), aside),
             query,
             limit,
             doctype,
@@ -698,9 +703,30 @@ def _search_hits(
         with took("dvec"):
             lists.append(_field_vec_search(con, emb.name, vector, depth))
         names.append("dvec")
-    fused = _rrf(lists, names, fetch, weights)
+    fused = _rrf([_without(x, aside) for x in lists], names, fetch, weights)
     with took("finish"):
         return _finish(con, fused, query, limit, doctype, expr=or_expr)
+
+
+ASIDE_PAGE_KINDS = ("question", "briefing")
+
+
+def _aside_documents(con: sqlite3.Connection) -> frozenset[int]:
+    """The documents a search never returns: the pages that are the
+    model's own answers (``ASIDE_PAGE_KINDS``)."""
+    marks = ",".join("?" * len(ASIDE_PAGE_KINDS))
+    return frozenset(
+        r[0]
+        for r in con.execute(
+            f"SELECT doc_id FROM pages WHERE kind IN ({marks})", ASIDE_PAGE_KINDS
+        )
+    )
+
+
+def _without(hits: list[dict[str, Any]], aside: frozenset[int]) -> list[dict[str, Any]]:
+    if not aside:
+        return hits
+    return [h for h in hits if h["doc_id"] not in aside]
 
 
 class _Took:

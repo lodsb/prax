@@ -186,3 +186,6 @@ steps:
 #   maintain: "03:30"                       # every pass; or {at: …, only: [acronyms]}
 #   backup: {at: "04:30", archive: false}   # to paths.backup; archive: false
 #                                           #   leaves the originals out
+#   questions: "06:30"                      # the standing questions asked again where
+#                                           #   the library learned something, then the
+#                                           #   day's briefing ({at: …, briefing: false} skips it)

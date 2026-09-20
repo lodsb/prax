@@ -6,6 +6,7 @@ on itself::
     schedule:
       maintain: "03:30"                       # every pass (store.PASSES)
       backup:   {at: "04:30", archive: false}  # to paths.backup
+      questions: "06:30"                      # the standing questions, the briefing
 
 The door is the single writer and already runs both as jobs, so the clock
 is a thread of its own (``prax.api``): every half minute it asks
@@ -27,7 +28,7 @@ from typing import Any
 
 from prax import config
 
-NAMES = ("maintain", "backup")
+NAMES = ("maintain", "backup", "questions")
 TICK = 30.0
 
 

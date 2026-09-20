@@ -41,6 +41,7 @@ from . import (
     inbox,
     models,
     ontology,
+    questions,
     review,
     schedule,
     store,
@@ -105,6 +106,9 @@ def _clock(stop: threading.Event, every: float) -> None:
                         "maintain": lambda o: _start_maintain(con, o.get("only")),
                         "backup": lambda o: _start_backup(
                             con, o.get("dest"), archive=o.get("archive", True)
+                        ),
+                        "questions": lambda o: _start_questions(
+                            con, briefing=o.get("briefing", True)
                         ),
                     },
                 )
@@ -1446,6 +1450,95 @@ def ask_save(req: SaveReq, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+# -------------------------------------------------------------- questions
+
+
+class QuestionReq(BaseModel):
+    result: dict[str, Any]  # the result of POST /ask
+    slug: str | None = None
+    options: dict[str, Any] | None = None  # what the ask was asked with
+
+
+class QuestionsRunReq(BaseModel):
+    slug: str | None = None  # one question, else all
+    force: bool = False  # ask again even when nothing is new
+    briefing: bool = False  # write the day's briefing after
+
+
+@app.get("/questions")
+def questions_list(request: Request) -> list[dict[str, Any]]:
+    """The standing questions with what each remembers and whether the
+    library has learned something since (the check runs a search per
+    question; no model)."""
+    con = _con(request)
+    out = []
+    for page in questions.question_pages(con):
+        seen = questions.check(con, page)
+        q = page["question"]
+        out.append(
+            {
+                "slug": page["slug"],
+                "doc_id": page["doc_id"],
+                "title": page["title"],
+                "question": q.get("question"),
+                "asked_at": q.get("asked_at"),
+                "model": q.get("model"),
+                "revision": page["revision"],
+                "history": len(q.get("history") or []),
+                "due": seen["due"],
+                "new": seen["new"],
+                "reread": seen["reread"],
+                "why": seen["why"],
+            }
+        )
+    return out
+
+
+@app.post("/questions")
+def questions_create(req: QuestionReq, request: Request) -> dict[str, Any]:
+    """Keep an answer as a standing question: a page the door asks again
+    when the library learns something (``schedule: questions``)."""
+    try:
+        return questions.create(
+            _con(request), req.result, slug=req.slug, options=req.options
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.post("/questions/run")
+def questions_run(req: QuestionsRunReq, request: Request) -> dict[str, Any]:
+    """Check every question (or one) and ask again what is due, as a job;
+    with ``briefing`` the day's page after."""
+    return _start_questions(
+        _con(request), only=req.slug, force=req.force, briefing=req.briefing
+    )
+
+
+def _start_questions(
+    con: Any, *, only: str | None = None, force: bool = False, briefing: bool = True
+) -> dict[str, Any]:
+    job = store.Job(con, "questions", note=only or "every question")
+
+    def run() -> None:
+        con = store.connect()
+        try:
+            with store.Job.existing(con, job.id) as mine:
+                rep = questions.refresh_all(con, force=force, only=only, job=mine)
+                note = f"{rep['refreshed']} of {rep['checked']} asked again"
+                if briefing:
+                    b = questions.briefing(con, job=mine)
+                    note += f"; briefing: {b['documents']} documents"
+                mine.update(note=note)
+        except Exception:  # the job row carries the error
+            logging.getLogger("prax.questions").exception("the questions failed")
+        finally:
+            con.close()
+
+    threading.Thread(target=run, name="questions", daemon=True).start()
+    return {"job": job.id}
 
 
 # ---------------------------------------------------------------- domains

@@ -857,6 +857,63 @@ def maintain(door: Door, a: Any) -> int:
     return follow_job(door, started["job"], quiet=a.json, what="the pass")
 
 
+# --------------------------------------------------------------- questions
+
+
+def questions(door: Door, a: Any) -> int:
+    """The standing questions and what is new for each; --ask runs the
+    re-asks (and --briefing the day's page) as a job and follows it."""
+    if a.ask is not None or a.briefing:
+        body: dict[str, Any] = {"force": a.force, "briefing": a.briefing}
+        if a.ask:
+            body["slug"] = a.ask
+        started = door.post_json("/questions/run", body)
+        if not a.json:
+            out.say(
+                out.bold("Questions")
+                + out.dim(
+                    f"   {'question ' + a.ask if a.ask else 'every question'}"
+                    + (" · the briefing" if a.briefing else "")
+                    + f" · job {started['job']}"
+                )
+            )
+        return follow_job(door, started["job"], quiet=a.json, what="the questions")
+    rows = door.get_json("/questions")
+    if a.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        out.say("No standing questions. Start one: prax ask --answer --stand …")
+        return 0
+    due = sum(1 for r in rows if r["due"])
+    out.say(
+        out.bold("Standing questions")
+        + out.dim(f"   {len(rows)}, {due} with something new")
+    )
+    out.say()
+    for r in rows:
+        mark = out.paint("new", "yellow") if r["due"] else out.dim("settled")
+        out.say(f"{mark}   {out.bold(r['question'] or r['slug'])}")
+        when = (r.get("asked_at") or "")[:16].replace("T", " ")
+        out.hint(
+            f"    {r['slug']} · doc {r['doc_id']} · revision {r['revision']}"
+            f" · asked {when} by {r.get('model') or '?'}"
+            + (
+                f" · moved {r['history']} time{'s' if r['history'] != 1 else ''}"
+                if r.get("history")
+                else ""
+            )
+        )
+        for n in r.get("new") or []:
+            out.hint(f"      · {n['title']} — {n['why']}")
+        if r.get("reread"):
+            out.hint(f"      · {len(r['reread'])} source(s) read again")
+    if due:
+        out.say()
+        out.hint("Ask them again: prax questions --ask")
+    return 0
+
+
 # ----------------------------------------------------------------- resolve
 
 

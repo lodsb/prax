@@ -137,6 +137,32 @@ UI shows the picture in the sources column, and a search hit that is
 a figure shows it in the hit list — the reading is what found it,
 the picture is what it is about.
 
+## Standing questions
+
+An answer worth keeping can stand: "keep as a standing question" in the
+web UI, `prax ask --answer --stand …`, or `POST /questions` with the
+result, makes a page of kind `question` — the answer, its sources, the
+trail, as "keep on page" would write them — that remembers what it was
+built from: the documents it cited (and their text hashes), the top
+twenty of the search it came from, and how far the library had got.
+The check that keeps it needs no model: on the door's clock
+(`schedule: questions: "06:30"` in `prax.yaml`), or `prax questions`,
+the search is run again and the sources' entities looked up, and the
+question is asked again — the same options, the host's ask model unless
+the page names one — when a document that arrived since ranks in that
+top set, or shares two of the answer's entities, or a source was read
+again. The new answer is a new revision by the agent whose note names
+what changed ("ask: server-35b; new: *A newer FDN reverb*"); the
+sections a person appended under the answer are kept where they are,
+so the page's revisions are what the library learned about the
+question. A question page is never evidence for a search or an ask —
+neither its own re-ask nor anyone else's — nor is the briefing.
+
+The briefing is the clock's other page, one a day: "What arrived" lists
+the documents that came since the last briefing, each with the first
+line of its summary, and the questions whose answer moved. No model is
+asked for it; a question about the day is a question like any other.
+
 ## When it goes wrong
 
 - **The model repeats a move that brought nothing.** It is told which

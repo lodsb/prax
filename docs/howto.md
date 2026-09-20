@@ -815,6 +815,22 @@ papers support or contradict. Pages are extracted and embedded
 like any document, so a topic page's concepts enter the graph; the
 extractor's header carries `Kind: page` or `Kind: project`.
 
+Two kinds of page keep themselves (`prax.questions`, `docs/ask.md`
+"Standing questions"): a `question` page holds an answer the door asks
+again when the library learns something about it — a document that
+arrived since ranks for the question, shares two of the answer's
+entities, or a source was read again — as a new agent revision whose
+note names what changed, the sections you appended under the answer
+kept; a `briefing` page is the day's "What arrived". Neither is ever a
+search hit or an ask's evidence: they are the model's own words.
+
+    prax ask --answer --stand how does ADAA handle a stateful nonlinearity
+    prax questions                      # each question, and what is new for it
+    prax questions --ask [SLUG] [--force]   # ask again what is due, as a job
+    prax questions --briefing           # the day's page too
+    schedule:
+      questions: "06:30"                # in prax.yaml: the check daily, the briefing after
+
 ## 3h. Local models (optional)
 
 A local model runs in **llama-server** (llama.cpp's HTTP server), on the
