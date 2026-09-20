@@ -89,7 +89,9 @@ library's own acronyms are expanded on the way in.
 **Connects them.** Typed relations extracted against a small ontology
 you can read in an afternoon — papers, methods and claims; gear and its
 manuals; recipes and ingredients; builds and their parts. Citation edges
-from Crossref or OpenAlex. Every edge says who wrote it, from which
+from Crossref or OpenAlex, and from each paper's own reference list
+matched against the library — with a score, for the papers that have no
+DOI. Every edge says who wrote it, from which
 document, under which ontology version, with the sentence it was read
 from.
 
