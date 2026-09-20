@@ -5,13 +5,15 @@ YouTube's automatic captions come as one lower-case run with every
 *uh* in it: "thanks so uh title slide all right yeah i'm andrew kelly i
 am the uh president". A local model writes each paragraph again with
 its sentences, capitals and punctuation, the fillers dropped, and
-nothing else changed — a copy-edit, not a summary. Each paragraph keeps
-its time mark, the frames and headings between them are not touched,
-and a paragraph the model changed too much (more words lost than fillers
-account for, or words added) keeps its raw form: the model is not
-trusted with the content, only with the punctuation. The raw captions
-stay in the archived original; the polished text is the artifact, which
-a better model may write again.
+nothing else changed — a copy-edit, not a summary. One paragraph per
+call, with a worked example in front of the model: given six at once, a
+small model polishes the first and copies the rest. Each paragraph
+keeps its time mark, the frames and headings between them are not
+touched, and a paragraph the model changed too much (more words lost
+than fillers account for, or words added) keeps its raw form: the model
+is trusted with the punctuation, not the content. The raw captions stay
+in the archived original; the polished text is the artifact, which a
+better model may write again.
 """
 
 from __future__ import annotations
@@ -20,22 +22,27 @@ import re
 from typing import Any
 
 SYSTEM = """\
-You copy-edit the automatic transcript of a recorded talk. You are given
-its paragraphs, one per line, each opening with its time mark in square
-brackets. Write each paragraph again as the speaker meant it: proper
-sentences with capitals and punctuation, the filler words dropped (uh,
-um, er, you know, like, sort of, kind of, I mean, right?, okay so), a
-speech-recognition slip of a single word corrected only where the
-intended word is plain from the sentence. Change nothing else: every
-fact, name, number, term and the order of things stay as spoken; do not
-summarise, do not shorten, do not add a word the speaker did not say, do
-not drop a sentence. Keep each paragraph on its own line, opening with
-the same time mark. Answer with the paragraphs only, nothing before or
-after."""
+You copy-edit one paragraph of the automatic transcript of a recorded
+talk. Write it again as the speaker meant it: proper sentences with
+capitals and punctuation, the filler words dropped (uh, um, er, you
+know, like, sort of, kind of, I mean, right?, okay so), a speech
+recognition slip of a single word corrected only where the intended word
+is plain from the sentence. Change nothing else: every fact, name,
+number, term and the order of things stay as spoken; do not summarise,
+do not shorten, do not add a word the speaker did not say, do not drop a
+sentence, do not answer or comment. Answer with the paragraph only.
+
+Example. Given:
+thanks so uh title slide all right yeah i'm andrew kelly i am the uh \
+president and lead software developer of the zig software foundation \
+and uh thanks for coming to my talk so uh first thing um where am i pointing
+You answer:
+Thanks. So, title slide. All right, yeah, I'm Andrew Kelly. I am the \
+president and lead software developer of the Zig Software Foundation, \
+and thanks for coming to my talk. So, first thing: where am I pointing?"""
 
 MARK = re.compile(r"^\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\]\s+(?P<words>.+)$")
-BATCH_CHARS = 2400  # of paragraphs per call: a talk is a few dozen calls
-MAX_TOKENS = 1600
+MAX_TOKENS = 700  # a paragraph is under 450 characters; the answer about as long
 # what a paragraph may lose to the fillers and gain to a corrected word;
 # beyond it the model rewrote, and the raw paragraph stays
 MIN_KEPT = 0.72
@@ -74,22 +81,6 @@ def acceptable(raw: str, new: str) -> bool:
     return new_n >= min(kept_floor, raw_n)
 
 
-def _batches(paras: list[tuple[int, str, str]]) -> list[list[tuple[int, str, str]]]:
-    out: list[list[tuple[int, str, str]]] = []
-    cur: list[tuple[int, str, str]] = []
-    size = 0
-    for p in paras:
-        n = len(p[2]) + 12
-        if cur and size + n > BATCH_CHARS:
-            out.append(cur)
-            cur, size = [], 0
-        cur.append(p)
-        size += n
-    if cur:
-        out.append(cur)
-    return out
-
-
 def polish(previous: str, *, runtime: Any | None = None) -> tuple[str, dict[str, int]]:
     """The text with its transcript paragraphs punctuated; a count of
     what was polished and what stayed raw. ``runtime`` stands in for the
@@ -110,21 +101,17 @@ def polish(previous: str, *, runtime: Any | None = None) -> tuple[str, dict[str,
     lines = previous.split("\n")
     done = 0
     kept = 0
-    for batch in _batches(paras):
-        user = "\n".join(f"[{t}] {words}" for _, t, words in batch)
-        out, _usage = runtime.chat(SYSTEM, user, max_tokens=MAX_TOKENS, temperature=0.0)
-        answered: dict[str, str] = {}
-        for line in str(out).split("\n"):
-            m = MARK.match(line.strip())
-            if m and m.group("t") not in answered:
-                answered[m.group("t")] = m.group("words").strip()
-        for i, t, raw in batch:
-            new = answered.get(t)
-            if new is not None and acceptable(raw, new):
-                lines[i] = f"[{t}] {new}"
-                done += 1
-            else:
-                kept += 1
+    for i, t, raw in paras:
+        out, _usage = runtime.chat(SYSTEM, raw, max_tokens=MAX_TOKENS, temperature=0.0)
+        new = " ".join(str(out).split())
+        m = MARK.match(new)
+        if m:  # the mark given back with the words: only the words are wanted
+            new = m.group("words")
+        if new and new != raw and acceptable(raw, new):
+            lines[i] = f"[{t}] {new}"
+            done += 1
+        else:
+            kept += 1
     if not done:
         raise ExtractionError("no paragraph could be polished")
     return "\n".join(lines), {"polished": done, "kept_raw": kept}

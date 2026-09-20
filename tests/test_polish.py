@@ -39,6 +39,16 @@ RAW = """# A Talk
 """
 
 
+ANSWERS = {
+    "[0:04]": "Thanks. So, title slide. All right, yeah, I'm Andrew Kelly. I am"
+    " the president and lead software developer of the Zig Software Foundation.",
+    "[0:27]": "Here, pressing the Go button. Not working. No, we're experiencing"
+    " technical difficulties. I'll press it hard and long. There we go.",
+    "[1:02]": "A summary of what he said instead, in many more words than there"
+    " were, which is not a copy-edit at all and must be refused.",
+}
+
+
 class Fake:
     name = "stub"
 
@@ -47,16 +57,10 @@ class Fake:
 
     def chat(self, system: str, user: str, **kw: Any) -> tuple[str, dict[str, Any]]:
         self.calls.append(user)
-        answer = (
-            "[0:04] Thanks. So, title slide. All right, yeah, I'm Andrew Kelly. I am"
-            " the president and lead software developer of the Zig Software"
-            " Foundation.\n"
-            "[0:27] Here, pressing the Go button. Not working. No, we're experiencing"
-            " technical difficulties. I'll press it hard and long. There we go.\n"
-            "[1:02] A summary of what he said instead, in many more words than there"
-            " were, which is not a copy-edit at all and must be refused.\n"
-        )
-        return answer, {}
+        for mark, answer in ANSWERS.items():
+            if user.startswith(RAW.split(mark + " ", 1)[1][:30]):
+                return answer, {}
+        return user, {}
 
 
 def test_the_paragraphs_are_punctuated_and_a_rewrite_is_kept_raw() -> None:
@@ -68,8 +72,9 @@ def test_the_paragraphs_are_punctuated_and_a_rewrite_is_kept_raw() -> None:
     assert "[1:02] this one the model will rewrite" in text  # refused: too many words
     # the frame line and the headings are not touched; the model saw only paragraphs
     assert "![0:00 — thanks so uh title slide](figure:" in text and "# A Talk" in text
-    assert len(fake.calls) == 1 and fake.calls[0].startswith("[0:04] thanks so uh")
-    assert "figure:" not in fake.calls[0]
+    # one paragraph per call, the words alone: no mark, no frame line
+    assert len(fake.calls) == 3 and fake.calls[0].startswith("thanks so uh")
+    assert all("figure:" not in c and not c.startswith("[") for c in fake.calls)
     # the guard: the fillers may go, the rest must stay; nothing much added
     raw = (
         "thanks so uh title slide all right yeah i'm andrew kelly i am the uh president"
