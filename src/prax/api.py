@@ -56,6 +56,20 @@ def _con(request: Request) -> Any:
     return store.thread_connection()
 
 
+def _warm() -> None:
+    try:
+        emb = embeddings.serving()
+        if emb is not None and store.vectors_available():
+            store.warm_indexes(emb.name)
+        con = store.connect()
+        try:
+            store.warm_fts(con)
+        finally:
+            con.close()
+    except Exception:
+        logging.getLogger("prax.door").exception("warming the indexes failed")
+
+
 def _scan_inbox(app: FastAPI, stop: threading.Event, every: float) -> None:
     """The door consumes its own drop folder (``data/inbox/``): what lands
     there is registered through the store without any other process.
@@ -107,10 +121,11 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.con = con  # the main connection: migrations, the change stamp
     app.state.con_lock = threading.Lock()  # one thread on it at a time
     store.job_reap(con)  # sessions left behind by a killed door or worker
-    emb = embeddings.serving()
-    if emb is not None and store.vectors_available():
-        store.warm_indexes(emb.name)  # the views open before the first search
-    store.warm_fts(con)  # and the keyword index read through once
+    # the index views opened and the keyword index read through, beside
+    # the serving: a search that comes first waits on the index lock for
+    # the load (seconds) rather than the door being down for it — a cold
+    # start read for a minute and a half with llama-server on the disk
+    threading.Thread(target=_warm, name="prax-warm", daemon=True).start()
     stop = threading.Event()
     every = config.number("door.inbox_scan_seconds", "PRAX_INBOX_SCAN", 20.0)
     scanner = None
