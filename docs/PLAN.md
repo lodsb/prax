@@ -866,6 +866,16 @@ What the marker evenings taught, kept for the day:
       ambiguous links over the library, 5,629 from documents Crossref
       never resolved). *Not yet run on the live store* — `prax maintain
       --only references` is the user's call; nightly after that.
+- [x] **Standing questions and the briefing** (6d58058, 2026-09-21;
+      the user's note in `niggles.txt`: a "self-aware" wiki — an answer
+      page that updates itself as information arrives; also atomic's
+      scheduled briefing): `prax.questions`, a `question` page asked
+      again when the library learned something (a cheap check, no
+      model: the search's top, shared entities, a re-read source), a
+      person's sections kept, the `briefing` page daily; `schedule:
+      questions: "06:30"` on the live host. Later: the contradiction
+      scan (a new source that `argues` against the answer's claims),
+      a paragraph on top of the briefing from the model.
 - [ ] **Sub-graph export / import** (`niggles.txt`, "repo work"): one
       JSON-lines file per project (entities, live edges with provenance,
       pages with revisions, document stubs), imported as a producer with
