@@ -116,6 +116,7 @@ class Role:
     patience: float = DOOR_PATIENCE  # how long to wait for it
     env: dict[str, str] = field(default_factory=dict)
     on_demand: bool = False  # declared, started only by `prax up --start`
+    scratch: bool = False  # runs in the data directory's run/: it writes where it is
 
 
 # ------------------------------------------------------------- the model
@@ -269,6 +270,7 @@ def marker_role(opts: dict[str, Any]) -> Role:
         patience=SERVER_PATIENCE,
         env=env,
         on_demand=bool(opts.get("on_demand", False)),
+        scratch=True,  # its server keeps the last upload as ./uploads/document.pdf
     )
 
 
@@ -789,7 +791,7 @@ class Supervisor:
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                cwd=str(self.cwd),
+                cwd=str(self.run_dir if role.scratch else self.cwd),
                 env=env,
                 **_spawn_kwargs(),
             )
