@@ -70,8 +70,22 @@ def test_the_paragraphs_are_punctuated_and_a_rewrite_is_kept_raw() -> None:
     assert "[0:04] Thanks. So, title slide. All right, yeah, I'm Andrew Kelly." in text
     assert "[0:27] Here, pressing the Go button." in text
     assert "[1:02] this one the model will rewrite" in text  # refused: too many words
-    # the frame line and the headings are not touched; the model saw only paragraphs
+    # the headings are not touched; the model saw only paragraphs; a frame's
+    # caption is the polished paragraph's opening words when it has one at
+    # its moment (0:00 has none: it keeps the raw words)
     assert "![0:00 — thanks so uh title slide](figure:" in text and "# A Talk" in text
+    lines = [
+        "![0:04 — thanks so uh title](figure:" + "a" * 64 + ")",
+        "",
+        "[0:04] Thanks. So, title slide. All right, yeah, I'm Andrew.",
+    ]
+    assert polish.recaption(lines) == 1
+    assert (
+        lines[0]
+        == "![0:04 — Thanks. So, title slide. All right, yeah, I'm Andrew.](figure:"
+        + "a" * 64
+        + ")"
+    )
     # one paragraph per call, the words alone: no mark, no frame line
     assert len(fake.calls) == 3 and fake.calls[0].startswith("thanks so uh")
     assert all("figure:" not in c and not c.startswith("[") for c in fake.calls)

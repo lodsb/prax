@@ -114,4 +114,34 @@ def polish(previous: str, *, runtime: Any | None = None) -> tuple[str, dict[str,
             kept += 1
     if not done:
         raise ExtractionError("no paragraph could be polished")
+    recaption(lines)
     return "\n".join(lines), {"polished": done, "kept_raw": kept}
+
+
+FIGURE = re.compile(
+    r"^!\[(?P<t>(?:\d{1,2}:)?\d{1,2}:\d{2})\s*[—–-]\s*(?P<words>[^\]]*)\]"
+    r"\(figure:(?P<ref>[0-9a-f]{16,64})\)$"
+)
+CAPTION_WORDS = 12
+
+
+def recaption(lines: list[str]) -> int:
+    """A frame's caption is the opening words of the paragraph at its
+    moment, written by the extension from the raw captions: after the
+    polish, the same words as the polished paragraph has them (what the
+    vision model is told, and what the page shows under the frame)."""
+    by_mark = {t: words for _, t, words in paragraphs("\n".join(lines))}
+    n = 0
+    for i, line in enumerate(lines):
+        m = FIGURE.match(line.strip())
+        if not m:
+            continue
+        words = by_mark.get(m.group("t"))
+        if not words:
+            continue
+        head = " ".join(words.split()[:CAPTION_WORDS]).replace("]", ")")
+        new = f"![{m.group('t')} — {head}](figure:{m.group('ref')})"
+        if new != line.strip():
+            lines[i] = new
+            n += 1
+    return n
