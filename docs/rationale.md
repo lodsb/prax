@@ -429,3 +429,78 @@ plain-text artifact (the Zotero cache) yields paragraph chunks without
 headings or tables, which is why the upgrade pass over cache-derived
 documents is worth running. Legacy rows keep NULL structure until
 `prax maintain --rechunk` runs.
+
+## R17. A block a model keeps inside a person's page: sentinels, a hash, a fingerprint, no overwrite of hands
+
+Decided 2026-09-21, after the survey in `research.md` ("Living answers
+and mixed pages"). The standing question (2026-09-21, `prax.questions`)
+is a page that *is* one question; research mostly happens on a page of
+one's own — notes, links to documents, and a few questions one wants
+kept current. The block is that: a region of a person's page the door
+keeps answered, everything around it the person's.
+
+**The region is a comment pair with a hash.** The block is written by
+hand as `<!-- prax:ask id=q1 "how do feedback delay networks stay
+lossless" -->` … `<!-- /prax:ask id=q1 -->`, and the door fills what is
+between, closing it with the interior's hash and the pass in the tail
+marker (`sha=`, `asked=`, `run=`). HTML comments render as nothing in
+every Markdown viewer, survive every editor and diff as two stable
+lines (doctoc, markdown-magic, obsidian-second-brain); the query lives
+in the marker and the result inside (org-babel's `#+NAME` and
+`#+RESULTS[hash]`), and nothing of the pass — no timestamp, no counter —
+goes into the text (Foam's regenerated section is the cautionary case).
+The id is the block's identity across runs, so a person may move the
+block; the options a question takes (`steps=`, `doctype=`, `mode=`) are
+attributes of the head.
+
+**The door never writes over hands.** Before a rewrite the interior is
+hashed against the tail's `sha`; on a mismatch the block is *held* — the
+run says so, the page's meta records why, the UI shows "edited by hand;
+the door left it" with the choice to release it — which is cog's rule.
+A `<!-- prax:keep -->` … `<!-- /prax:keep -->` sub-region inside the
+block is carried over verbatim (Zotero Integration's `persist`), so an
+annotation to a generated answer does not fork it. Outside the pair the
+service touches nothing: the rewrite is a store function that replaces
+interiors by id and refuses when a marker is missing, so the guarantee
+is structural, not a `force` flag. The revision it writes is the
+agent's, its note naming the block and what changed.
+
+**A block is a standing question with the same check.** Its fingerprint
+— the documents it drew on and their text hashes, the search's top, the
+library's high-water mark — sits in the page's meta per block
+(`meta.asks[id]`), the check is the same cheap one (a new document that
+ranks or shares entities, a source read again), and the clock's
+`questions` job covers pages with blocks. The check writes only a
+status (`checked_at`, what is pending) — the cheap dated channel a
+living review keeps — never the page; the rewrite is the rare revision,
+and its note is the prose "what changed". A block's words are set aside
+from retrieval and never embedded (a chunk kind `ask`, beside
+`reference`): generated text must not become evidence for its own
+re-ask or anyone else's (atomic's kind discipline, STORM's source-bias
+transfer).
+
+**Revision, not regeneration, with the kind of change named.** The
+re-ask sees the earlier answer as its own previous turn and is asked
+again with what is new named — "the library now also holds X; where it
+changes the answer, replace; where it adds, add; where it disagrees,
+say so" — because naming the kind of conflict is what lifts a model's
+behaviour on stale answers, and because anchoring on the earlier text
+survives prompting alone; the evidence goes newest last, and the
+answer may cite only this turn's passages.
+
+**Links a person writes are relations.** A `[title](#doc/123)` in a page
+becomes `page --annotates--> document` on save (producer `page`, run
+`slug@revision`), retired when the link goes; the graph already treats
+an answer's sources that way, and a hand-written page should enter it
+by the same door. Typed inline fields (`part_of:: [[project]]`, the
+Breadcrumbs form) are the natural next step and are not in this cut.
+
+**What is deferred, and why.** A proposal with a diff and an accept
+(atomic's section operations) for a block the model owns — the survey
+says overwrite is the norm for a machine-owned field and the gate
+belongs where the model touches human text, which the pair forbids; a
+`mode=propose` attribute can add it later without changing the
+contract. Claim-level adjudication (KEEP / STALE / REPLACE against new
+hits, outside generation) and a contradiction scan over `argues`
+edges: the mechanism that makes a re-ask cheap and honest, one stage
+further, once the block exists to hang it on.

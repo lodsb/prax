@@ -1,9 +1,260 @@
 > **Status:** the landscape survey the first decisions were drawn from
 > (2025–2026), kept as source material, with a revisit written after the
-> system was built (2026-09-13) placed first. The decisions, with the
+> system was built (2026-09-13) and a survey of living answers and
+> mixed pages (2026-09-21) placed first. The decisions, with the
 > reasoning that still applies, are in `rationale.md`. Star counts,
 > versions and benchmark figures are point-in-time and were not
 > re-verified.
+
+## Living answers and mixed pages: what the neighbours do (2026-09-21)
+
+Written before the "ask block" stage (a model-maintained region inside a
+person's page) and after the standing-question page (a page that is one
+question). Four threads, read from the projects' own sources: atomic's
+repository; the products that keep a query alive; the note tools'
+conventions for a region a program owns inside a note; and the research
+on LLM-maintained wikis, agent memory, living reviews and stale answers.
+Sources are listed at the end of each thread; what could not be read is
+said so.
+
+### atomic, from its source
+
+One wiki article per *tag* (the tag and its descendants), generated from
+the chunks of captured atoms under it — centroid-ranked to about 60 % of
+the model's context, or curated by a fifteen-step search agent — as one
+long-form Markdown call with `[N]` citations resolved back to
+`(atom, chunk, excerpt)`. Articles are AI-only records in their own
+tables (`wiki_articles`, `wiki_citations`, `wiki_links`,
+`wiki_article_versions`, `wiki_proposals`); a person never writes one,
+only overrides the per-tag prompts and accepts or dismisses. An update is
+a **proposal**: the atoms newer than the article's `updated_at` are
+ranked, and the model emits *section operations* against the exact
+existing headings — `NoChange | AppendToSection | ReplaceSection |
+InsertSection`, citation numbering continued from the current maximum —
+which a pure applier executes so that untouched sections stay
+byte-identical; the person sees a line diff and accepts, which archives
+the old version. Staleness is a **count** ("N new atoms available"): an
+edit or a deletion never marks an article stale, a documented gap, and
+centroid selection can drop an atom for good. The trigger is a button;
+the planned background loop (a dirty set, a ten-minute quiet window, a
+thirty-minute cooldown, a supersede budget, daily caps, a provider
+precheck) is a plan, not code (issue #202 open).
+
+Reports (the daily briefing, the weekly contradiction scan) are a
+different primitive — *"wikis converge; reports accrue"* — a cron row
+with a research prompt, a source scope (the atoms since the last run)
+and a context scope (everything, or older than the source), a citation
+policy (`source_only` or `source_and_context`), and caps; a run takes its
+watermark when the scope is resolved, runs a three-tool agent
+(`read_atom`, `semantic_search`, `done`) whose search excludes the source
+batch and the report's own earlier findings, and writes one atom of
+`kind = 'report'` plus a citation ledger (`report_finding_citations`
+with position and excerpt, `ON DELETE SET NULL` and a name snapshot, so
+provenance survives the report's deletion). Generated atoms are excluded
+from wiki inputs, auto-tagging and other reports unless opted in — a
+*kind discipline* every context-assembling method must honour. The
+contradiction scan is a prompt over `since_last_run` against
+`older_than_source` ("state the new claim with a citation, the older
+claim, whether this is a clean contradiction or a tension"); no
+embedding-side detection, no edge type. There is **no block-level
+ownership**: no AI-maintained section inside a human note, no marker in
+Markdown; separation is per record (`atoms.kind`, `atom_tags.source`),
+and a report finding, being an ordinary atom, can be edited by hand with
+nothing re-checking its `[N]` markers afterwards. Edges are chunk kNN
+(cosine ≥ 0.5, ≤ 15 per atom, recomputed by deleting every edge that
+touches the atom), untyped, with no provenance beyond the score.
+
+Sources: the repository (README, CHANGELOG, `docs/manual/concepts/*`,
+`docs/plans/wiki-proposal-loop-plan.md`, `docs/plans/reports.md`,
+`docs/plans/automations-vision.md`, `docs/research/llm-wiki-gist-analysis.md`),
+`crates/atomic-core/src/{db.rs, wiki/*, storage/sqlite/wiki.rs,
+reports/*, embedding.rs, graph_maintenance.rs}`,
+`crates/atomic-server/src/routes/wiki.rs`, `src/lib/reportTemplates.ts`,
+issues #202 and #233, PR #182.
+
+### Products that keep a query alive
+
+- **Khoj automations**: a cron job whose run POSTs the query to the
+  app's own chat endpoint into a dedicated conversation, so every run is
+  an *appended chat turn*, never replaced or versioned; an LLM judge
+  ("notify or not") decides whether the answer meets the person's
+  condition before an email goes; a run is skipped within six hours of
+  the last. No write into notes, no dedupe against the earlier answer.
+- **Perplexity**: a Page is built once from a thread and edited by
+  prompting sections; Scheduled Tasks run a prompt on a cadence, each
+  run a fresh session, "stays quiet" when nothing is new. Page and run
+  are separate objects; nothing ties runs back into the page.
+- **Elicit, Consensus, Scite**: the *retrieval* stays alive (alerts as
+  saved searches with new papers marked unread; scite dashboards that
+  update as citations arrive), the *synthesis* is re-run by hand.
+- **NotebookLM**: a "Saved Response" note is uneditable and blue-labelled
+  (provenance by immutability); sources from Drive now sync, but
+  "AI-generated notes remain intact".
+- **Onyx, Glean**: scheduled tasks with a run ledger (queued, running,
+  succeeded, failed, skipped, awaiting approval) and a fallback line in
+  the prompt ("if nothing qualifies, say so; do not invent"); Glean's
+  *content triggers* run an agent when a document changes, with
+  source-specific filters ("unscoped triggers produce noisy results"),
+  and a *verification* badge with an expiry that puts the document back
+  on a to-do list.
+- **AI-maintained fields in a human document**: Notion autofill
+  overwrites a property on create, on edit (minutes later) or on a
+  schedule, and "only if empty" is a prompt convention; Tana AI fields
+  replace (fields) or append (children) with a sixty-second loop guard;
+  Capacities previews the change with Generate / Deny / Approve; Mem
+  removed its in-document writes for a side-by-side chat; the Obsidian
+  Dataview Serializer materialises a query between
+  `<!-- QueryToSerialize -->` and `<!-- SerializedQuery: END -->` with
+  per-block policies (auto, manual, once, once-and-eject).
+- **Saved-search alerts** (Zotero, Scholar, PubMed, ResearchRabbit): a
+  query plus a high-water mark; only the delta is delivered.
+
+Patterns: a live query block *or* materialised text between markers;
+the run as an appended record and the page as another object (nobody
+folds runs back into a page); overwrite by default, non-overwrite as a
+policy; propose-then-accept only where the model touches human text;
+quiet unless the delta matters; provenance by immutability or label;
+triggers by clock, by content change with filters, or by hand, with loop
+guards.
+
+Sources: docs.khoj.dev and khoj's `routers/helpers.py`,
+`api_automation.py`, `prompts.py`; Perplexity's help centre (blocked;
+snippets) and third-party guides; support.elicit.com, elicit.com/blog;
+scite.ai/features; support.google.com/notebooklm/answer/16262519 and
+the 2026-05 Workspace update; docs.onyx.app (craft_scheduled_tasks);
+docs.glean.com (schedule/content triggers, verification);
+notion.com/help/autofill and /custom-agents; outliner.tana.inc
+(ai-command-nodes); docs.capacities.io; get.mem.ai (2.0 transition);
+dsebastien/obsidian-dataview-serializer; zotero.org/support/searching;
+scholar.google.com/intl/en/scholar/help.html. Not reachable: Consensus'
+help centre, My NCBI, Medium.
+
+### A region a program owns inside a note
+
+The clean precedent is **org-babel**: a named source block, its results
+materialised under `#+RESULTS[hash]:` with a typed extent, `:results
+replace | append | prepend | silent`, and the hash of block plus
+arguments packed on the results line so a matching hash skips
+evaluation; hand edits inside a `replace` result are simply lost.
+**cog** adds the missing safety: a checksum on the generated region, and
+"if the generated code is edited, the checksum won't match, and cog will
+stop to avoid overwriting". **doctoc** and **markdown-magic** use
+HTML-comment sentinels (`<!-- START doctoc --> … <!-- END doctoc -->`,
+`<!-- doc-gen … --> … <!-- end-doc-gen -->`): invisible in every viewer,
+surviving every editor, two stable lines in a diff. **Zotero
+Integration** inverts the ownership — the file is the generator's and a
+named `{% persist %}` region, rendered as `%% begin notes %% … %% end
+notes %%`, is the person's, carried over verbatim on re-import — a
+pattern for annotating inside a generated block without forking it.
+**Dataview/Datacore/Bases** keep the query in the file and never
+materialise the result; **Logseq** renders `{{query}}` live but persists
+the view state as block properties; **Foam**'s regenerated link section
+(deleted and recreated on save) documents the cost of churn (issue
+#1339). Smart Connections and Copilot do not write into notes; Text
+Generator and Templater insert once, unmarked. Typed links in Markdown
+exist already: Breadcrumbs and Juggl read `rel:: [[x]]` inline fields
+and quoted links in frontmatter; a bare `[[x]]` is untyped.
+
+The delimiters compared — HTML-comment pair, `%% %%`, fenced block with
+a language tag, a heading with a marker, a frontmatter record, a block
+id — the comment pair is the only one that renders as nothing
+everywhere, survives round trips, diffs cleanly and can carry a hash;
+the fenced block is right when the query should be visible and the
+result is not stored.
+
+Sources: orgmode.org/manual (Evaluating Code Blocks, Results of
+Evaluation, Structure of Code Blocks); cog.readthedocs.io;
+github.com/thlorenz/doctoc; DavidWells/markdown-magic;
+mgmeyers/obsidian-zotero-integration `docs/Templating.md`;
+blacksmithgu.github.io/obsidian-dataview; github.com/blacksmithgu/datacore;
+silentvoid13.github.io/Templater; smartconnections.app docs;
+docs.obsidiancopilot.com; docs.text-gen.com; obsidian.md/help
+(properties, bases, links, graph); publish.obsidian.md/breadcrumbs-docs;
+juggl.io/link-types; logseq/docs (Properties, Built-in Properties);
+briansunter/logseq-plugin-gpt3-openai; docs.foam.md and foam #1339;
+wiki.dendron.so (note refs); nbformat and quarto docs.
+
+### LLM-maintained wikis, agent memory, living reviews, stale answers
+
+STORM and Co-STORM (Stanford) write Wikipedia-like articles section by
+section from a source pool with citations; neither updates an article
+when sources change, and Co-STORM's moderator keeps a list of sources
+*retrieved but never cited* — a ready-made candidate list for revision.
+Karpathy's LLM-wiki gist (raw, immutable; wiki, model-written; a lint
+that finds contradictions, superseded claims, orphans) is silent on
+regenerate-versus-edit; its derivatives answer it two ways —
+`<!-- @generated -->` / `<!-- @user -->` sentinel blocks with a nightly
+agent that never deletes without confirmation (obsidian-second-brain),
+and per-claim *evidence-version pinning* with a never-rewritten human
+file and changes shipped as a pull request (LangChain OpenWiki). Agent
+memory converged on: a trigger that is a count or a budget, never a
+clock (Generative Agents' importance sum; Letta's sleep-time agent after
+N steps); edits in place under a size cap (Letta memory blocks); and
+contradictions resolved by **invalidation with dates, not deletion**
+(Zep/Graphiti's four timestamps — prax's edges already carry them; Mem0's
+graph marks relations invalid). Cochrane's living systematic reviews
+separate the two channels: a dated "Amended" line on every monthly
+search ("N studies pending") and a rare full update when new evidence
+"is likely to impact review conclusions", with an author-written
+"what changed" rather than a textual diff, and an editorial gate to skip
+one.
+
+On stale answers: models struggle with fast-changing facts and false
+premises (FreshQA); naming the *type* of conflict — outdated,
+complementary, debate — lifts type-appropriate behaviour by 9–24 points
+(DRAGged into Conflicts); new evidence is retrieved in 77 % of cases but
+old memory entries are judged as needing an update in 3 % — the
+"adjudication gap" — and a write-time KEEP / STALE / REPLACE / UNKNOWN
+pass lifts it to 68 % (STALE); anchoring on a prior answer survives
+chain-of-thought, reflection and "ignore the hint", and self-refinement
+converges in about three iterations without dislodging it; the
+edit-based updater (FRUIT/EdiT5: emit edits with copy tokens and a
+reference per edit) hallucinated less than regeneration. The gain,
+several papers find, comes from separating evidence identification from
+answer writing rather than from asking the model to track freshness.
+
+Lessons: trigger on evidence, not clocks (the clock runs the search);
+pin a block's claims to the documents and text versions they rest on;
+revise as typed edits, not regeneration; adjudicate old claims against
+new hits at write time, outside generation; hand the model only active
+evidence, newest last, old claim and new evidence side by side;
+invalidate, never delete, stamp the pass; mark machine text and fence
+human text; two channels to the reader (a cheap dated status every pass,
+a rare versioned rewrite with a prose "what changed"); a human gate for
+the rewrite.
+
+Sources: arXiv 2402.14207 and 2408.15232 (STORM, Co-STORM);
+gist.github.com/karpathy/442a6bf555914893e9891c11519de94f;
+Astro-Han/karpathy-llm-wiki; eugeniughelbur/obsidian-second-brain;
+langchain-ai/openwiki; docs.factory.ai (AutoWiki); letta.com/blog/memory-blocks
+and docs.letta.com (sleep-time); arXiv 2504.19413 (Mem0); arXiv
+2501.13956 and getzep/graphiti; arXiv 2304.03442 (Generative Agents);
+Cochrane's 2019 LSR guidance (PDF), PMC12018299, f1000research.com
+(living systematic reviews); arXiv 2310.03214 (FreshLLMs), 2506.08500
+(DRAGged into Conflicts), 2506.07270, 2305.13300 (Adaptive Chameleon),
+2605.06527 (STALE), 2608.01619 (StateAuditor), 2606.01435, 2412.06593
+and 2505.15392 (anchoring), 2303.17651 (Self-Refine), 2607.22653,
+2112.08634 (FRUIT/EdiT5). Not verified: Mem0's "State of Agent Wikis"
+(paywalled), Letta's memory-tool names (snippets), LangMem and Cognee
+(snippets), the Elliott 2017 article (403).
+
+### What prax takes from it
+
+Recorded as a decision in `rationale.md` (R17). In one line each: the
+comment-pair sentinel with a hash (cog's rule) for a block a model owns
+inside a person's page; the query in the marker, the result inside, the
+pass in the marker's attributes, never in the text; a person's text
+outside the pair untouchable and a `keep` region inside carried over
+verbatim; the check as a cheap dated status, the rewrite as a rare
+revision with a prose note; typed edits with the kind of change named;
+the block's words set aside from retrieval like a reference list's; a
+`page_sources` record of what a block consumed, so an edit, a re-read
+or a retirement marks it stale, not only a count; and links a person
+writes as edges. What it does not take: proposals with a diff for a
+block the model owns (fields overwrite; a person who wants the gate has
+`mode=propose` later), similarity edges, and a contradiction scan that
+is only a prompt — that waits for `argues` edges and an adjudication
+pass.
 
 ## Revisit, 2026-09-13: the landscape a year on, and where prax sits
 
