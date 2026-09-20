@@ -52,11 +52,11 @@ from .documents import (
 )
 from .graph import Edge, find_edges, link, retire_reading
 from .jobs import Job
-from .retrieval import replace_acronyms
+from .retrieval import fts_merge, replace_acronyms
 
 Log = Callable[[str], None]
 
-PASSES = ("acronyms", "fields", "domains", "dedupe", "review", "references")
+PASSES = ("acronyms", "fields", "domains", "dedupe", "review", "references", "fts")
 ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
 
 
@@ -392,6 +392,13 @@ def link_references(
     return dict(stats)
 
 
+def _fts(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The keyword index's segments merged a little (``fts_merge``): a
+    term read from one place instead of two dozen."""
+    job.update(note="fts: merging segments")
+    return fts_merge(con)
+
+
 def _references(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The citations a document's reference list makes to the library
     (``link_references``): the documents whose text changed since their
@@ -426,6 +433,7 @@ _RUN = {
     "dedupe": _dedupe,
     "review": _review,
     "references": _references,
+    "fts": _fts,
     "rechunk": _rechunk,
 }
 

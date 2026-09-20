@@ -1408,7 +1408,12 @@ for 1.4 M vectors, on a host with the RAM; 11–50 ms a query after; the
 door loads it at startup and a merge loads the new file outside the
 lock, so no search waits on a load — the first search after a restart
 once waited 100 s for it while llama-server read its model from the
-same disk). Python is not on that list: the stalls were locks,
+same disk). The keyword index gets the same: read through once at
+startup (0.7 GB, a second), because on a host where llama-server's
+model file owns the operating system's cache the first searches after a
+start read their posting lists from disk — 25 s for a query holding a
+lone "2", which is in two thirds of the chunks and is left out of the
+keyword side now, as a stopword is. Python is not on that list: the stalls were locks,
 shared devices and a cold cache, and the heavy lifting (SQLite,
 usearch, ONNX, the model) is native already.
 
@@ -1608,6 +1613,7 @@ by `prax maintain` on request:
 | `dedupe` | the duplicate captures of one page retired as duplicates of the keeper — a union: their facts, tags, domains and stamps join the keeper's first (3l); row and file kept |
 | `review` | the review queue: a replay against the current ontology (a typed item it accepts now becomes an edge), then the typing rules over every open item (3e) — what the door does for one document after its extraction, for the whole queue |
 | `references` | the citations a document's own reference list makes to documents in the library (3f): the entries under a References/Bibliography heading read by rules (`prax.references`), matched against the document field by title, creators and year; `cites` edges — `EXTRACTED` by a printed DOI or arXiv id, `INFERRED` by a title match with the score in the evidence, `AMBIGUOUS` for each of several candidates within the margin (twins in the library); a document is read once per text (`meta.references`), a re-read retires the earlier edges. Measured: `docs/eval/references-2026-09-20.md` |
+| `fts` | the keyword index's segments merged a little (FTS5's `merge`, up to a minute): every batch of chunks leaves a segment behind, and a term spread over two dozen of them is read from two dozen places when the cache is cold |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c); the nightly has no reason to |
 
 What stays out on purpose: the repairs (`prax heal`, 3m — a person picks

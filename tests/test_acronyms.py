@@ -88,9 +88,9 @@ def test_keyword_side_leaves_the_stopwords_out(con: sqlite3.Connection) -> None:
     from prax.store import retrieval
 
     terms = store.expand_query(con, "the cache and a compiler in C")
-    assert retrieval.keyword_terms(terms) == [["cache"], ["compiler"], ["c"]]
+    assert retrieval.keyword_terms(terms) == [["cache"], ["compiler"]]  # C alone: no
     assert retrieval._expr(retrieval.keyword_terms(terms), all_terms=False) == (
-        '("cache") OR ("compiler") OR ("c")'
+        '("cache") OR ("compiler")'
     )
     assert retrieval._fts_query("the cache and a compiler") == '"cache" OR "compiler"'
     # a query of stopwords alone keeps them (German too)
@@ -105,3 +105,28 @@ def test_keyword_side_leaves_the_stopwords_out(con: sqlite3.Connection) -> None:
     hits = store.search(con, "what is the cache in a compiler", mode="fts")
     assert hits and hits[0]["doc_id"] == doc
     assert store.search(con, "the and", mode="fts")
+
+
+def test_a_lone_character_is_not_a_keyword(con: sqlite3.Connection) -> None:
+    from prax.store import retrieval
+
+    assert retrieval.keyword_terms([["rule"], ["110"], ["2"], ["c"]]) == [
+        ["rule"],
+        ["110"],
+    ]
+    assert retrieval._fts_query("a 2 c") == '"a" OR "2" OR "c"'  # nothing but
+    doc = store.ingest_text(con, "Rule 110 is a cellular automaton. " * 8, title="R")[
+        "doc_id"
+    ]
+    hits = store.search(con, "rule 110 in 2 steps", mode="fts")
+    assert hits and hits[0]["doc_id"] == doc
+
+
+def test_the_keyword_index_is_warmed_and_merged(con: sqlite3.Connection) -> None:
+    for n in range(6):
+        store.ingest_text(con, f"segment {n} of text " * 30, title=f"S{n}")
+    warmed = store.warm_fts(con)
+    assert warmed["blocks"] >= 1 and warmed["bytes"] > 0
+    rep = store.fts_merge(con, seconds=5)
+    assert rep["steps"] >= 1 and rep["segments_after"] <= rep["segments_before"]
+    assert store.search(con, "segment text", mode="fts")

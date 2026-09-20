@@ -110,6 +110,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     emb = embeddings.serving()
     if emb is not None and store.vectors_available():
         store.warm_indexes(emb.name)  # the views open before the first search
+    store.warm_fts(con)  # and the keyword index read through once
     stop = threading.Event()
     every = config.number("door.inbox_scan_seconds", "PRAX_INBOX_SCAN", 20.0)
     scanner = None

@@ -194,9 +194,10 @@ flowchart LR
 acronym (the `acronyms` table, from "phrase (ACRONYM)" in the texts)
 becomes the token or its phrase for the keyword side (the embedder sees
 the query as typed; expanding it measured worse), and the stopwords
-(`STOPWORDS`, English and German) are left out of the match expression:
-each matched two thirds of a million chunks, and BM25 gives a term in
-more than half the rows a negative weight. It then fuses up to
+(`STOPWORDS`, English and German) and lone characters ("2", "a") are
+left out of the match expression: each matched two thirds of a million
+chunks, and BM25 gives a term in more than half the rows a negative
+weight. It then fuses up to
 five rank lists per document: chunk BM25 over any term, chunk BM25 over
 chunks holding the query's rare acronym-shaped terms (weight 3), chunk
 KNN, and BM25 and KNN over the document field. The field list is weighted 2 for

@@ -297,6 +297,7 @@ from .retrieval import (  # noqa: F401
     delta_counts,
     expand_query,
     expanded_text,
+    fts_merge,
     merge_vectors,
     pending_document_embeddings,
     pending_embeddings,
@@ -308,6 +309,7 @@ from .retrieval import (  # noqa: F401
     store_document_embeddings,
     store_embeddings,
     vec_status,
+    warm_fts,
     warm_indexes,
 )
 from .summary import (  # noqa: F401

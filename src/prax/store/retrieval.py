@@ -89,10 +89,17 @@ STOPWORDS = frozenset(
 )
 
 
+def _keyword(token: str) -> bool:
+    """A token the keyword side scores: not a stopword, not a lone
+    character — a "2" or an "a" is in two thirds of a million chunks
+    (25 s cold for the one OR term), and never what a query is about."""
+    return len(token) > 1 and token.lower() not in STOPWORDS
+
+
 def keyword_terms(terms: list[list[str]]) -> list[list[str]]:
-    """The terms for the keyword side: the stopwords left out, unless the
-    query is nothing but."""
-    kept = [t for t in terms if t and t[0].lower() not in STOPWORDS]
+    """The terms for the keyword side: the stopwords and lone characters
+    left out, unless the query is nothing but."""
+    kept = [t for t in terms if t and _keyword(t[0])]
     return kept or terms
 
 
@@ -107,7 +114,7 @@ def _fts_query(query: str) -> str | None:
     tokens = _TOKEN.findall(query)
     if not tokens:
         return None
-    kept = [t for t in tokens if t.lower() not in STOPWORDS] or tokens
+    kept = [t for t in tokens if _keyword(t)] or tokens
     return " OR ".join(f'"{t}"' for t in kept)
 
 
@@ -968,6 +975,48 @@ def _merge(path: Path) -> dict[str, Any]:
             "delta": len(later),
             "bytes": path.stat().st_size,
         }
+
+
+@_reading
+def warm_fts(con: sqlite3.Connection) -> dict[str, int]:
+    """Read the keyword index through once (``chunks_fts_data``, 0.7 GB
+    at 1.4 M chunks, a second from the disk), so the first searches after
+    a start do not pay for it a posting list at a time: a query of common
+    words took 25 s cold on the desktop, where llama-server's model file
+    holds the operating system's cache, and 0.1 s warm."""
+    rows, size = con.execute(
+        "SELECT count(*), coalesce(sum(length(block)), 0) FROM chunks_fts_data"
+    ).fetchone()
+    con.execute("SELECT coalesce(sum(length(field)), 0) FROM documents_fts").fetchone()
+    return {"blocks": int(rows), "bytes": int(size)}
+
+
+def fts_merge(con: sqlite3.Connection, *, seconds: float = 60.0) -> dict[str, int]:
+    """Merge the keyword index's segments a little at a time (FTS5's
+    ``merge``, 500 pages a step) for up to ``seconds``: every batch of
+    chunks leaves a segment behind, and a term spread over two dozen of
+    them is read from two dozen places. Returns the steps taken and the
+    segments before and after."""
+    before = con.execute("SELECT count(DISTINCT segid) FROM chunks_fts_idx").fetchone()[
+        0
+    ]
+    steps = 0
+    t0 = time.monotonic()
+    while time.monotonic() - t0 < seconds:
+        changes = con.total_changes
+        con.execute("INSERT INTO chunks_fts(chunks_fts, rank) VALUES('merge', 500)")
+        con.commit()
+        steps += 1
+        if con.total_changes - changes <= 1:  # nothing left to merge
+            break
+    after = con.execute("SELECT count(DISTINCT segid) FROM chunks_fts_idx").fetchone()[
+        0
+    ]
+    return {
+        "steps": steps,
+        "segments_before": int(before),
+        "segments_after": int(after),
+    }
 
 
 def warm_indexes(model: str) -> dict[str, int]:
