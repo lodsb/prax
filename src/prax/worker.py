@@ -165,7 +165,14 @@ def do_parse(
                     "pages": pages,
                 },
             )
-            _say(log_, f"parse doc {doc_id}: {len(text)} chars ({stamp})")
+            pictures = len(figures.DATA_IMAGE.findall(text))
+            words = len(figures.DATA_IMAGE.sub("", text)) if pictures else len(text)
+            _say(
+                log_,
+                f"parse doc {doc_id}: {words} chars"
+                + (f" + {pictures} pictures to file" if pictures else "")
+                + f" ({stamp})",
+            )
             break
         else:
             done(
