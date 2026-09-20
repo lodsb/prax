@@ -857,6 +857,7 @@ READINGS = (
     "figures",
     "figure-refs",
     "formulas",
+    "polish",
     "pymupdf4llm-ocr",
     "docling",
     "marker",
@@ -1034,6 +1035,8 @@ def select_for_reading(
     title: str | None = None,
     unreadable: bool = False,
     thin: int | None = None,
+    doctype: str | None = None,
+    unpolished: bool = False,
     read_figures: bool = False,
     unread_figures: bool = False,
     read_formulas: bool = False,
@@ -1072,6 +1075,17 @@ def select_for_reading(
             " AND coalesce(json_extract(meta, '$.text_source'), '') LIKE ? ESCAPE '!'"
         )
         args.append(_like_prefix(text_source))
+    if doctype:
+        if doctype not in DOCTYPES:
+            raise ValueError(f"doctype must be one of {sorted(DOCTYPES)}")
+        sql += " AND " + DOCTYPES[doctype].replace("d.", "")
+    if unpolished:
+        # a video with an automatic transcript whose text the polish has
+        # not written yet
+        sql += (
+            " AND json_extract(meta, '$.video.captions') = 'asr'"
+            " AND coalesce(json_extract(meta, '$.text_source'), '') NOT LIKE 'polish/%'"
+        )
     sql += " ORDER BY id"
     chosen = [r[0] for r in con.execute(sql, args)]
     if unreadable:

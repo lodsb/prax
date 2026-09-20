@@ -281,6 +281,7 @@ const READINGS = {
   "text/html": [
     ["figures", "the vision model reads every figure the text references, and writes what it shows under each"],
     ["formulas", "the formulas model says in words what each display equation is, under it"],
+    ["polish", "a video's automatic transcript punctuated by the polish model, the fillers dropped (nothing else changed)"],
     ["trafilatura", "read the page again (finds the figures)"],
   ],
   "text/": [

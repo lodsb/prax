@@ -88,6 +88,9 @@ steps:
     model: opus
   # formulas:           # a reading in words under each display equation
   #   model: local-server   #   (marker's LaTeX, howto 3h); none by default
+  # polish:             # a video's automatic transcript punctuated, the
+  #   model: local-server   #   fillers dropped (asked for by the door after
+  #                         #   every such capture); none by default
 
 # ---------------------------------------------------------------------------
 # What this host does, as opposed to which model it asks. Every setting below

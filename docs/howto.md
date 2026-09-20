@@ -1257,7 +1257,12 @@ Four ways in:
   their moment (`locator.time`), the frames are figures the vision pass
   reads with a prompt of their own (the moment, the words spoken around
   it, and "transcribe the slide's text as written" — a talk's slides
-  become searchable text), `doctype=video` finds them, and the document's page shows the
+  become searchable text); an automatic transcript is punctuated first
+  by the polish step (`steps.polish`, a local model: sentences, capitals,
+  the fillers dropped, nothing else changed — a paragraph the model
+  rewrote keeps its raw form; the `unpolished-transcripts` ailment
+  lists the ones still raw, `prax reread --extractor polish
+  --unpolished` does them all); `doctype=video` finds them, and the document's page shows the
   player: the first frame as a poster until you press play (nothing is
   fetched from the provider before that), then the provider's embed;
   every passage's moment is a link that seeks it, and a search hit or
@@ -1364,7 +1369,7 @@ extension, a file in the drop folder — goes all the way on its own:
 |---|---|
 | parse, with the figures found and referenced, ligatures and Symbol-font glyphs turned into letters, page markers, the text cleaned | the parsers, `store.index_text` |
 | a title where the file name was one; the graph extraction under the current ontology; the typing rules over what it queued; the vectors | the worker's steps (titles, extract, embed) |
-| an image described, and a parsed document's figures read by the vision model | reading requests the door places itself, when the vision step is a local server — nothing is spent unasked; with Claude as the vision model these stay yours to ask for |
+| an image described, and a parsed document's figures read by the vision model; a video's automatic transcript punctuated (the polish step) and then its frames read; a marker read's display equations read (the formulas step) | reading requests the door places itself after a text lands — a capture parsed at ingest and a worker's parse alike (`pipeline.follow_ups`) — when the step is a local server; nothing is spent unasked, and with Claude as the model these stay yours to ask for |
 | a request placed on a document's page ("read again…") | the worker, before the pending captures |
 | a capture nothing here could read — a scan without a text layer: the first extractor refuses it, the fallback finds nothing — is tried once and then left; the inbox says "no text found" and the Health panel lists it (`unreadable-documents`); OCR or the vision model over its pages is yours to ask for on its page | the door, which does not hand a run chain out again |
 | jobs whose process is gone closed; the drop folder consumed | the door |
@@ -1484,6 +1489,7 @@ you still want to look at) stays alone.
 | `unnamed-entities` | no name at all, or a whole citation as one (a claim is a sentence and is left alone) | ends their edges |
 | `self-edges` | an edge from a thing to itself, left after two names were merged | ends them |
 | `edges-of-retired-documents`, `review-of-retired-documents` | written by a pass that was already reading a document when it was retired | ends them; resolves the queue items as dropped |
+| `unpolished-transcripts` | videos whose transcript is the automatic one as it came, the polish not written yet (captured before the step existed, or while its model was away) | a report with an offer: polish all of them (`prax reread --extractor polish --unpolished`) |
 | `stale-extractions` | documents whose extraction was made from a text a later read has replaced (marker over a pymupdf4llm text, OCR over a scan) — the graph speaks of a text that is gone | moves the stamp aside so the extract step selects them again; the old reading's edges are retired when the new one is applied. A replacing read does this on the way in now; these are from before |
 | `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
 | `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`): boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned; chunks with unchanged text keep their vectors |

@@ -31,6 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from prax import config, embeddings, extraction, models, ontology, store, titles
+from prax.parsers import figures
 
 log = logging.getLogger("prax.pipeline")
 
@@ -598,3 +599,78 @@ def _embed_step(
 
 def host_name() -> str:
     return socket.gethostname()
+
+
+# ------------------------------------------------- the readings the door asks for
+# The edges of the process graph: after a parse lands, what the door asks
+# the worker to read next, on its own — only from a model that costs
+# nothing (a local server), never over a request still waiting, one at a
+# time (a document has one reading slot; the next is placed when this one
+# lands). Both roads into the library call this: a capture parsed inline
+# at ingest, and a parse posted by a worker.
+
+
+def _free(step: str) -> bool:
+    """Whether a reading by that step's model costs nothing (a local
+    server): the readings the door asks for on its own are only those."""
+    try:
+        spec = models.resolve(step)
+    except Exception:  # noqa: BLE001 - a broken prax.yaml is not this step's problem
+        return False
+    return spec is not None and spec.kind == "openai"
+
+
+def vision_is_free() -> bool:
+    return _free("vision")
+
+
+def formulas_are_free() -> bool:
+    return _free("formulas")
+
+
+def polish_is_free() -> bool:
+    return _free("polish")
+
+
+def follow_ups(
+    con: sqlite3.Connection, doc_id: int, *, stamp: str, action: str
+) -> str | None:
+    """The reading the door places after a text landed under ``stamp``
+    with ``action`` (``created``/``upgraded``; nothing after ``same`` or an
+    error), or None. A video capture with an automatic transcript gets the
+    polish first and its frames read once that has landed; a marker read
+    with display equations gets the formula readings; a capture with
+    figures nobody has read gets the vision model."""
+    if action not in ("created", "upgraded"):
+        return None
+    meta = store.get_meta(con, doc_id)
+    reading = meta.get("reading") or {}
+    if reading.get("state") in ("requested", "leased"):
+        return None  # never over a request still waiting
+    video = meta.get("video") or {}
+    if (
+        video.get("captions") == "asr"
+        and not stamp.startswith("polish/")
+        and polish_is_free()
+    ):
+        store.request_reading(con, doc_id, "polish", by="door")
+        return "polish"
+    if (
+        stamp.startswith("marker/")
+        and formulas_are_free()
+        and store.has_unread_formulas(con, doc_id)
+    ):
+        store.request_reading(con, doc_id, "formulas", by="door")
+        return "formulas"
+    # never the edge whose reading just landed: a model that read none of
+    # the figures would be asked for them without end
+    if (
+        meta.get("source") in CAPTURE_SOURCES
+        and not stamp.startswith("figures/")
+        and vision_is_free()
+    ):
+        doc = store.get_document(con, doc_id)
+        if doc and any(not r["described_by"] for r in figures.refs(doc["text"])):
+            store.request_reading(con, doc_id, "figures", by="door")
+            return "figures"
+    return None

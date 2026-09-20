@@ -315,6 +315,18 @@ def ingest_bytes(
         # document lacks is filled in, what it has is left alone
         _fill_in(con, doc_id, extra_meta)
     indexed = _index_now(con, doc_id, mime)
+    if indexed and result["created"]:
+        # the readings the door asks for after a text lands (the polish of
+        # an automatic transcript, a capture's figures): the same edges a
+        # worker's parse gets in take_in
+        from prax import pipeline
+
+        pipeline.follow_ups(
+            con,
+            doc_id,
+            stamp=str(store.get_meta(con, doc_id).get("text_source") or ""),
+            action="created",
+        )
     got = _give_domains(con, doc_id, domains, by=by or source)
     replaced = None
     if same_id is not None and result["created"] and indexed:

@@ -513,6 +513,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="the documents nothing here could read (scans without a text layer)",
     )
     s.add_argument(
+        "--doctype",
+        choices=("pdf", "web", "video", "image", "text", "note", "page"),
+        help="documents of that kind (the search's doctype filter)",
+    )
+    s.add_argument(
+        "--unpolished",
+        action="store_true",
+        help="videos with an automatic transcript the polish has not written yet",
+    )
+    s.add_argument(
         "--thin",
         nargs="?",
         const=100,

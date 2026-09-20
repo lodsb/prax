@@ -42,7 +42,7 @@ from dataclasses import asdict
 from typing import Any
 
 from prax import embeddings, extraction, inbox, models, ontology, pipeline, store
-from prax.parsers import figures, queue
+from prax.parsers import queue
 
 LEASE_SECONDS = 900
 # a worker's "not yet" (the server it needs is loading or down) keeps the
@@ -65,33 +65,7 @@ STEPS = (
 def _vision_is_free() -> bool:
     """Whether a reading by the vision model costs nothing (a local
     server): the readings the door asks for on its own are only those."""
-    try:
-        spec = models.resolve("vision")
-    except Exception:  # noqa: BLE001 - a broken prax.yaml is not this step's problem
-        return False
-    return spec is not None and spec.kind == "openai"
-
-
-def _formulas_are_free() -> bool:
-    """Whether a formula reading costs nothing (a local server named by
-    the ``formulas`` step): the door asks for those on its own."""
-    try:
-        spec = models.resolve("formulas")
-    except Exception:  # noqa: BLE001
-        return False
-    return spec is not None and spec.kind == "openai"
-
-
-def _follow_up(con: sqlite3.Connection, doc_id: int, extractor: str) -> bool:
-    """The next reading after a finished one — the formulas of a text a
-    parser just wrote with its mathematics — placed by the door in the
-    finished request's stead (the outcome stays in ``parse_history``);
-    never over a request still waiting."""
-    reading = store.get_meta(con, doc_id).get("reading") or {}
-    if reading.get("state") in ("requested", "leased"):
-        return False
-    store.request_reading(con, doc_id, extractor, by="door")
-    return True
+    return pipeline.vision_is_free()
 
 
 def _ask_reading(con: sqlite3.Connection, doc_id: int, extractor: str) -> bool:
@@ -629,23 +603,10 @@ def take_in(
                 store.finish_reading(
                     con, doc_id, outcome=action, stamp=stamp, error=r.get("error")
                 )
-                # the edge of the process graph a marker read adds: a text
-                # that now holds display equations gets their readings next,
-                # as a fresh capture with figures gets the vision model
-                if (
-                    stamp.startswith("marker/")
-                    and action in ("created", "upgraded")
-                    and _formulas_are_free()
-                    and store.has_unread_formulas(con, doc_id)
-                ):
-                    _follow_up(con, doc_id, "formulas")
-            elif action in ("created", "upgraded") and _vision_is_free():
-                # a freshly parsed capture with figures: the vision model reads
-                # them next, as a reading the door asks for
-                doc = store.get_document(con, doc_id)
-                source = (doc or {}).get("meta", {}).get("source")
-                if source in pipeline.CAPTURE_SOURCES and figures.refs(doc["text"]):
-                    _ask_reading(con, doc_id, "figures")
+            # the edges of the process graph: what the door asks to be read
+            # next (pipeline.follow_ups: the formulas of a marker read, the
+            # polish of an automatic transcript, the figures of a capture)
+            pipeline.follow_ups(con, doc_id, stamp=stamp, action=action)
             actions[action] = actions.get(action, 0) + 1
             out["applied"] += 1
         out["actions"] = actions

@@ -60,6 +60,7 @@ STEPS = (
     "adjudicate",
     "typing",
     "formulas",
+    "polish",
 )
 STEP_DEFAULTS = {
     "extract": "claude-opus-5",
@@ -70,6 +71,7 @@ STEP_DEFAULTS = {
     "adjudicate": "none",
     "typing": "none",  # the model typing pass over the review queue
     "formulas": "none",  # a reading in words under each display equation
+    "polish": "none",  # an automatic transcript punctuated, the fillers dropped
 }
 DEFAULT_CTX = 8192  # what a step may assume of a server's context per slot
 OPENAI_TIMEOUT = 600.0

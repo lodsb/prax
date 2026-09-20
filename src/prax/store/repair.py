@@ -616,6 +616,24 @@ def _thin_texts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return [{**o, "title": titles.get(o["id"])} for o in rows]
 
 
+def _unpolished_transcripts(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Videos with an automatic transcript the polish has not written:
+    captured before the step existed, or while its model was away."""
+    from prax.store import documents as docs
+
+    ids = docs.select_for_reading(con, unpolished=True, limit=CAP)
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
+    return [
+        {"id": r["id"], "title": r["title"]}
+        for r in con.execute(
+            f"SELECT id, title FROM documents WHERE id IN ({marks}) ORDER BY id",
+            tuple(ids),
+        )
+    ]
+
+
 def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents whose text still holds ligature or Symbol-font code
     points: indexed before ``prax.glyphs`` cleaned every text."""
@@ -1097,6 +1115,29 @@ AILMENTS: tuple[Ailment, ...] = (
                 "label": "read the formulas",
                 "extractor": "formulas",
                 "unread_formulas": True,
+            },
+        ),
+    ),
+    Ailment(
+        name="unpolished-transcripts",
+        what=(
+            "videos whose transcript is the automatic one as it came — no"
+            " sentences, no capitals, every filler — and the polish has not"
+            " written it yet (captured before the step existed, or while its"
+            " model was away)"
+        ),
+        fix=(
+            "ask the polish for them (`prax reread --extractor polish"
+            " --unpolished`; steps.polish in prax.yaml names the model — a"
+            " local one costs only seconds a talk); the door asks for it by"
+            " itself for every new capture"
+        ),
+        find=_unpolished_transcripts,
+        offers=(
+            {
+                "label": "polish all of them",
+                "extractor": "polish",
+                "unpolished": True,
             },
         ),
     ),

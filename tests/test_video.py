@@ -200,3 +200,4 @@ def test_a_video_capture_through_the_door(client: TestClient) -> None:
     item = next(i for i in batch["items"] if i["doc_id"] == r["doc_id"])
     assert item["extractor"] == "video"
     assert [e.name for e in parsers.candidates("text/html", "video")] == ["video"]
+    work._leases.clear()  # the hand-out's lease, not taken in here

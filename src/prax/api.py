@@ -1534,6 +1534,8 @@ class BulkReadingReq(BaseModel):
     title: str | None = None  # words the title contains
     unreadable: bool = False  # the documents nothing here could read
     thin: int | None = None  # PDFs with under this many bytes of text a page
+    doctype: str | None = None  # pdf, web, video, image, text, note, page
+    unpolished: bool = False  # videos with an automatic transcript not yet polished
     read_figures: bool = False  # the documents whose figures a model has read
     unread_figures: bool = False  # the documents holding a figure nobody read
     read_formulas: bool = False  # the same for display equations
@@ -1569,6 +1571,8 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         or req.title
         or req.unreadable
         or req.thin is not None
+        or req.doctype
+        or req.unpolished
         or req.read_figures
         or req.unread_figures
         or req.read_formulas
@@ -1578,23 +1582,29 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         raise HTTPException(
             400,
             "a selection: ids, mime, text_source, title, unreadable, thin,"
-            " read_figures, unread_figures, read_formulas, unread_formulas or maths",
+            " doctype, unpolished, read_figures, unread_figures, read_formulas,"
+            " unread_formulas or maths",
         )
-    ids = store.select_for_reading(
-        con,
-        ids=req.ids,
-        mime=req.mime,
-        text_source=req.text_source,
-        title=req.title,
-        unreadable=req.unreadable,
-        thin=req.thin,
-        read_figures=req.read_figures,
-        unread_figures=req.unread_figures,
-        read_formulas=req.read_formulas,
-        unread_formulas=req.unread_formulas,
-        maths=req.maths,
-        limit=req.limit,
-    )
+    try:
+        ids = store.select_for_reading(
+            con,
+            ids=req.ids,
+            mime=req.mime,
+            text_source=req.text_source,
+            title=req.title,
+            unreadable=req.unreadable,
+            thin=req.thin,
+            doctype=req.doctype,
+            unpolished=req.unpolished,
+            read_figures=req.read_figures,
+            unread_figures=req.unread_figures,
+            read_formulas=req.read_formulas,
+            unread_formulas=req.unread_formulas,
+            maths=req.maths,
+            limit=req.limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     if req.dry_run:
         return {"selected": len(ids), "requested": 0, "skipped": 0, "dry_run": True}
     try:

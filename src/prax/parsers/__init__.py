@@ -21,6 +21,8 @@ time, so the serving path never loads them):
 | video           | text/html       | a video capture of the extension's: transcript|
 |                 |                 | with time marks, frames as figures, chapters  |
 |                 |                 | as headings (named by the document, meta.parser)|
+| polish          | text/html       | an automatic transcript punctuated by the     |
+|                 |                 | polish step's model, the fillers dropped      |
 |                 |                 | blocks fenced                                 |
 | docx            | .docx           | Word: zip of XML read here, headings, lists,  |
 |                 |                 | tables; no dependency                         |
@@ -671,6 +673,26 @@ def _formulas(
     return formulas.describe(previous)
 
 
+def _polish(
+    data: bytes, *, filename: str | None = None, previous: str | None = None
+) -> str:
+    """The transcript paragraphs of the current text punctuated
+    (``prax.parsers.polish``); the original is not needed."""
+    from prax.parsers import polish
+
+    if not previous:
+        raise ExtractionError("no text to polish: parse the document first")
+    text, _counts = polish.polish(previous)
+    return text
+
+
+def _polish_model() -> str:
+    from prax import models
+
+    spec = models.resolve("polish")
+    return spec.name if spec is not None else "none"
+
+
 def _formulas_model() -> str:
     from prax.parsers import formulas
 
@@ -1304,6 +1326,15 @@ REGISTRY: list[Extractor] = [
         variant=_formulas_model,
         previous=True,  # writes into the current text
         annotates=True,
+    ),
+    Extractor(
+        "polish",
+        ("text/html", "application/xhtml+xml"),
+        _polish,
+        explicit_only=True,
+        hints=True,
+        variant=_polish_model,  # which model wrote the sentences
+        previous=True,  # works on the current text and replaces it
     ),
     Extractor(
         "figure-refs",
