@@ -15,6 +15,7 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, ClassVar
+from unittest import mock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -404,6 +405,21 @@ def test_a_scanned_pages_pictures_are_markers_crops_filed_by_the_door(
     # a figure-refs pass keeps them (the original will never yield them)
     assert figures.REF.search(figures.add_refs(scan, kept)) is not None
     # what a worker's reading sees: the fetch hook stands in for the archive
-    with figures.fetching(lambda r: store.figure_blob(r)):
+    # — asked first for a filed picture, so the original is not searched
+    # through (every image of a 200-page scan extracted and hashed, per
+    # picture); asked last for any other reference
+    asked: list[str] = []
+
+    def hook(r: str) -> tuple[bytes, str] | None:
+        asked.append(r)
+        return store.figure_blob(r)
+
+    with (
+        figures.fetching(hook),
+        mock.patch.object(figures, "_find_in", wraps=figures._find_in) as scanned,
+    ):
+        assert figures.find(scan, ref, filed=True) == (crop, "image/jpeg")
+        assert asked == [ref] and scanned.call_count == 0
         assert figures.find(scan, ref) == (crop, "image/jpeg")
+        assert asked == [ref, ref] and scanned.call_count == 1
     assert figures.find(scan, ref) is None

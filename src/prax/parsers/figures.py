@@ -358,18 +358,29 @@ def media_of(data: bytes) -> str:
     return "application/octet-stream"
 
 
-def find(data: bytes, ref: str) -> tuple[bytes, str] | None:
+def find(data: bytes, ref: str, *, filed: bool = False) -> tuple[bytes, str] | None:
     """The bytes of the figure ``ref`` inside an original (a PDF or an HTML
     snapshot, told apart by their bytes), with their media type; else what
     the fetch hook answers (a filed picture: the archive on the door, the
-    door's figure route on a worker); None when nothing has it."""
+    door's figure route on a worker); None when nothing has it. A
+    ``filed`` picture (its caption says so: ``FILED``) is asked of the
+    hook first — no object in the original holds it, and looking for it
+    there means extracting and hashing every image of the original: 20 s
+    a picture over a 200-page scan, for each of its 500 pictures."""
+    if filed:
+        found = _fetched(ref)
+        return found if found is not None else _find_in(data, ref)
     found = _find_in(data, ref)
-    if found is None and _fetch[0] is not None:
-        try:
-            found = _fetch[0](ref)
-        except Exception:  # noqa: BLE001 - the door away is no figure
-            found = None
-    return found
+    return found if found is not None else _fetched(ref)
+
+
+def _fetched(ref: str) -> tuple[bytes, str] | None:
+    if _fetch[0] is None:
+        return None
+    try:
+        return _fetch[0](ref)
+    except Exception:  # noqa: BLE001 - the door away is no figure
+        return None
 
 
 def _find_in(data: bytes, ref: str) -> tuple[bytes, str] | None:
@@ -668,7 +679,7 @@ def describe(data: bytes, previous: str) -> str:
     done = 0
     broken: list[str] = []
     for r in wanted:
-        found = find(data, r["ref"])
+        found = find(data, r["ref"], filed=r["caption"].startswith(FILED))
         if found is None:
             continue
         try:

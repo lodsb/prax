@@ -1151,7 +1151,10 @@ def figure(doc_id: int, ref: str, request: Request) -> Response:
     info = store.original_info(con, doc_id)
     if info is None or not info["path"].exists():
         raise HTTPException(404, "no such document")
-    found = figures.find(info["path"].read_bytes(), ref) or store.figure_blob(ref)
+    # the archive first: a filed picture (a scanned page) is its own
+    # artifact, and looking for it in the original means extracting
+    # every image of a 200-page scan — the figure strip asked 500 times
+    found = store.figure_blob(ref) or figures.find(info["path"].read_bytes(), ref)
     if found is None:
         raise HTTPException(404, "no such figure in the original")
     data, media = found
