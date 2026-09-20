@@ -110,6 +110,9 @@ steps:
 #   dtype: f16                 # [PRAX_VEC_DTYPE] f16 (recall .98) or i8 (.93,
 #                              #   half the file: the board's setting)
 #   ef: 64                     # [PRAX_VEC_EF] search expansion
+#   serve: view                # [PRAX_VEC_SERVE] the door maps the main file (view) or
+#                              #   loads it (memory: 1.3 GB a million vectors, never paged
+#                              #   out by a big read; a host with the RAM)
 
 # rerank:
 #   model: "0"                 # [PRAX_RERANK] off; a cross-encoder name, or `stub`

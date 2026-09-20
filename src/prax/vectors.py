@@ -33,6 +33,14 @@ DEFAULT_DTYPE = "f16"  # f16: recall 0.98, 784 MB; i8: 0.93, 456 MB (855 K x 384
 DEFAULT_CONNECTIVITY = 16
 DEFAULT_EXPANSION_ADD = 128
 DEFAULT_EXPANSION_SEARCH = 64
+# how the door holds the main file for reads: ``view`` maps it (nothing
+# resident until a search touches it, and the operating system's cache
+# gives the pages up to any big read — a heal over ten thousand PDFs, a
+# marker evening — after which a search pays seconds of page faults over
+# the graph: 4–6 s measured on the desktop, 20 ms warm); ``memory``
+# loads it (1.3 GB at a million f16 vectors, never evicted). The board
+# views; a host with the RAM loads.
+DEFAULT_SERVE = "view"
 
 
 def available() -> bool:
@@ -57,7 +65,10 @@ class VectorIndex:
             if writable:
                 self._index = idx_mod.Index.restore(path, view=False)
             else:
-                self._index = idx_mod.Index.restore(path, view=True)
+                serve = str(
+                    config.setting("vectors.serve", "PRAX_VEC_SERVE", DEFAULT_SERVE)
+                )
+                self._index = idx_mod.Index.restore(path, view=serve != "memory")
             if self._index.ndim != dim:
                 raise ValueError(
                     f"{path.name} has dimension {self._index.ndim}, expected {dim}"

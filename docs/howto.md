@@ -1383,9 +1383,13 @@ thirds of a million chunks for every "a", "in" and "and" in a
 natural-language query, on a 2 MB page cache (18 s cold) — the
 stopwords are left out of the match expression now (the embedder still
 sees them), and a connection has 64 MB of cache and the file mapped
-(`door.sqlite_cache_mb`, `door.sqlite_mmap_mb`). Python is not on that
-list: the stalls were locks, shared devices and a cold cache, and the
-heavy lifting (SQLite, usearch, ONNX, the model) is native already.
+(`door.sqlite_cache_mb`, `door.sqlite_mmap_mb`); and the vector side
+took 4–6 s while a heal opened ten thousand PDFs — the mapped index had
+been given up to those reads, and a search page-faults its way through
+the graph (`vectors.serve: memory` loads it instead, 1.3 GB on a host
+with the RAM). Python is not on that list: the stalls were locks,
+shared devices and a cold cache, and the heavy lifting (SQLite,
+usearch, ONNX, the model) is native already.
 
 The UI polls `GET /changes` every ten seconds while its tab is visible:
 a stamp made of SQLite's `data_version` (another process committed) and

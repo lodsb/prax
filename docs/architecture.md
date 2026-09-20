@@ -391,7 +391,7 @@ here opens the database file.
 | `ontology.dir` [`PRAX_ONTOLOGY`] | another ontology directory (or a single legacy file) |
 | `embeddings.model` [`PRAX_EMBED`] | model name, `hash` (tests), `0` (off) |
 | `embeddings.variant`, `.providers`, `.threads` | onnxruntime precision, providers, threads |
-| `vectors.dtype`, `vectors.ef` | index precision (`f16`, `i8`) and search expansion |
+| `vectors.dtype`, `vectors.ef`, `vectors.serve` [`PRAX_VEC_SERVE`] | index precision (`f16`, `i8`), search expansion, and whether the door maps the main file (`view`, the board's) or loads it (`memory`: 1.3 GB at a million f16 vectors, never given up to another job's reads — a heal or a marker evening evicts a mapped index and the next search pays seconds of page faults) |
 | `parse.max_layout_mb`, `.layout_window` | layout analysis: the file size above which the plain extractor reads instead, and the pages per pass — a long document window by window, through pymupdf4llm and through marker's server alike |
 | `parse.ocr_max_pages` | page budget of the OCR extractor |
 | `parse.ocr_language`, `.ocr_gpu` | the OCR recognizer's script (`ch`, `en`, `latin`, `arabic`, `cyrillic`…; part of the text-source stamp) and whether it runs on DirectML |

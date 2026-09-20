@@ -146,3 +146,33 @@ def _embed_all_no_save(con: sqlite3.Connection) -> None:
         ],
         emb.name,
     )
+
+
+@needs_usearch
+def test_the_main_file_is_served_mapped_or_loaded(
+    con: sqlite3.Connection, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``vectors.serve``: ``view`` maps the main file, ``memory`` loads it;
+    a search answers the same either way, and the merge's fresh view
+    honours the setting."""
+    from prax.store import base
+
+    monkeypatch.setenv("PRAX_EMBED", "hash")
+    a = store.ingest_text(con, "feedback delay network reverberation " * 20, title="A")[
+        "doc_id"
+    ]
+    _embed_all(con)
+    mapped = store.search(con, "feedback delay reverberation", mode="vec")
+    assert mapped and mapped[0]["doc_id"] == a
+    main = data_dir / "vectors-hash-test.usearch"
+    view = base._open_index(main, writable=False)
+    assert view is not None
+    mapped_bytes = view._index.memory_usage
+    monkeypatch.setenv("PRAX_VEC_SERVE", "memory")
+    base._drop_index_views("hash-test")  # the next read reopens under the setting
+    loaded = store.search(con, "feedback delay reverberation", mode="vec")
+    assert [h["chunk_id"] for h in loaded] == [h["chunk_id"] for h in mapped]
+    idx = base._open_index(main, writable=False)
+    assert idx is not None and idx is not view
+    # a mapped index holds only its header in memory; a loaded one, the graph
+    assert idx._index.memory_usage > 10 * mapped_bytes
