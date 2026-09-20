@@ -835,6 +835,42 @@ What the marker evenings taught, kept for the day:
       concept and method, hyphen and case) without touching the likely
       tier.
 
+## The night of 2026-09-20: what the slow log said, and the niggles
+
+- [x] **The keyword side without stopwords, a page cache worth the
+      name** (0fb2d3d). `/search` 12–24 s, `fts 22.9 s` cold: "a", "in",
+      "and" each matched two thirds of a million chunks and the OR
+      expression scored them all on SQLite's 2 MB default cache.
+      `STOPWORDS` (English and German) out of the match expressions and
+      the rare-term probe, never out of the embedder's query;
+      `door.sqlite_cache_mb` (64) and `door.sqlite_mmap_mb` (1024) on
+      every connection. 0.08 s cold, 0.03 s warm for the same query.
+- [x] **The health check never opens a file** (febbf3d): `thin-texts`
+      opened 9,347 PDFs to count pages (/heal 200 s); `uncounted-pages`
+      names the PDFs without `meta.pages` and its repair counts them once.
+      *To run once on the live store:* `prax heal --check uncounted-pages
+      --apply` (a few minutes; needs pymupdf on the door — the desktop
+      has it).
+- [x] **An ad in the player** (ee44c4b): skipped or waited out, never a
+      missed moment; the bed's watch page plays one.
+- [x] **The figure strip and the domain boxes** (66365d6): "N figures…"
+      / `?figures=1`; domains as boxes to tick, a change by hand or by the
+      agent under an extraction marks it stale (first in the extract
+      queue, `reread: true`).
+- [ ] **A `references` pass** (the answer in `niggles.txt`, "model"):
+      the bibliography chunks split into entries, matched against the
+      library's document field with a score, `cites` edges with
+      confidence by score — calibrated on the 2,075 Crossref edges that
+      already land in the library. The splitter and the eval first.
+- [ ] **Sub-graph export / import** (`niggles.txt`, "repo work"): one
+      JSON-lines file per project (entities, live edges with provenance,
+      pages with revisions, document stubs), imported as a producer with
+      a run per file, conflicts to the review queue.
+- [ ] **If the UI still feels slow from the MacBook**: the next suspect
+      is `GET /doc/<id>/chunks` for a book (5 MB) on the single uvicorn
+      worker while a search waits; page it. Read `logs/door.log`'s slow
+      lines first.
+
 ## Later / maybe
 
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the
