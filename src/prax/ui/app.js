@@ -916,14 +916,14 @@ function renderContext(ctx) {
   parts.push(list("Shares entities with", ctx.shared, (d) => docLink(d, `${d.count}: ${esc(d.entities.join(", "))}`)));
   // a citation matched by title (the references pass) is marked as such:
   // "likely" for a match over the threshold, "?" for a tie between twins
-  const sureness = (c) => c.confidence === "INFERRED" ? ` <span class="muted" title="matched by title from the reference list">likely</span>` : c.confidence === "AMBIGUOUS" ? ` <span class="muted" title="one of several library documents under this title">?</span>` : "";
+  const sureness = (c) => c.confidence === "INFERRED" ? `<span title="matched by title from the reference list">likely</span>` : c.confidence === "AMBIGUOUS" ? `<span title="one of several library documents under this title">?</span>` : "";
   const inLib = ctx.cited_by.length;
-  parts.push(list(`Cited by${inLib ? ` (${inLib} in the library)` : ""}`, ctx.cited_by, (d) => docLink(d) + sureness(d)));
+  parts.push(list(`Cited by${inLib ? ` (${inLib} in the library)` : ""}`, ctx.cited_by, (d) => docLink(d, sureness(d))));
   if (ctx.cites.length) {
     const libCites = ctx.cites.filter((c) => c.doc_id);
     const external = ctx.cites.length - libCites.length;
     parts.push(`<h3>Cites (${ctx.cites.length}${ctx.citations && ctx.citations.cited_by_count != null ? ` · cited by ${Number(ctx.citations.cited_by_count).toLocaleString()} overall` : ""})</h3><ul>${
-      libCites.slice(0, 12).map((c) => `<li><a href="#doc/${c.doc_id}">${esc(c.title)}</a>${sureness(c)}</li>`).join("")
+      libCites.slice(0, 12).map((c) => `<li><a href="#doc/${c.doc_id}">${esc(c.title)}</a>${sureness(c) ? ` <span class="muted">${sureness(c)}</span>` : ""}</li>`).join("")
     }${external ? `<li class="muted">${external} outside the library</li>` : ""}</ul>`);
   }
   parts.push(list("Same authors", ctx.same_authors, (d) => docLink(d, esc(d.authors.join(", ")))));

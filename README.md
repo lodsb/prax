@@ -57,6 +57,14 @@ extension: [`docs/howto.md`](docs/howto.md).
 <td colspan="2"><sub>A talk sent from the browser: the transcript in paragraphs, each headed by its moment; a frame every so often as a figure, captioned with the words spoken there and read by the vision model like any figure; the summary and the entities from the same extraction as a paper's. Every moment is a link that seeks the player on the page.</sub></td>
 </tr>
 <tr>
+<td width="50%"><a href="docs/images/citations.png"><img src="docs/images/citations.png" alt="A paper's reference list in the document view: each entry a chunk of its own, and under it the library document it cites, matched by title with its score"></a></td>
+<td width="50%"><a href="docs/images/figure-strip.png"><img src="docs/images/figure-strip.png" alt="The figure strip of a talk: every frame the extension took, captioned by its moment and the words spoken there, each a link to its passage"></a></td>
+</tr>
+<tr>
+<td><sub>A paper's reference list: each entry is a chunk, matched against the library — the cited paper under it, "likely" with the score — and the [n] in the prose links to it.</sub></td>
+<td><sub>A talk's figures at a glance: the frames, each by its moment and what was said there; a paper shows its figures, a scan its pages.</sub></td>
+</tr>
+<tr>
 <td colspan="2"><a href="docs/images/themes.png"><img src="docs/images/themes.png" alt="The six themes: Bindery, Dessau, Riso, Cyanotype, Night, Funk — the same page in each"></a></td>
 </tr>
 <tr>
@@ -73,27 +81,32 @@ login, fetched with your own session. `prax import` handles GitHub
 stars, chat exports, bookmarks, Pocket and Raindrop, Medium, a project's
 docs.
 
-**Reads them.** PDFs through MuPDF, with OCR when you ask; HTML through
-trafilatura, comments included; Word documents; code kept as code.
-Figures are pulled out and read by a vision model that is shown what the
-document says around them — its title, the caption, the text on either
-side — so a plot comes back as "the frequency responses of the five
-learned CNN kernels against the ground truth filter" rather than "six
-stacked curves", and is searchable by what it shows. Titles that were
-file names get repaired.
+**Reads them.** PDFs through MuPDF, with OCR when you ask, or through
+marker for the mathematics as LaTeX; HTML through trafilatura, comments
+included; Word documents; code kept as code; a talk as its transcript
+with frames. Figures are pulled out and read by a vision model that is
+shown what the document says around them — its title, the caption, the
+text on either side — so a plot comes back as "the frequency responses
+of the five learned CNN kernels against the ground truth filter" rather
+than "six stacked curves", and is searchable by what it shows. A scanned
+book whose pages hold no text comes back as its pages, filed as
+pictures and read the same way. A reference list is cut into its
+entries and each is matched against the library. Titles that were file
+names get repaired.
 
 **Finds them.** Keyword and vector search over chunks *and* over what a
 document is, fused per document, filtered by kind or by subject. The
-library's own acronyms are expanded on the way in.
+library's own acronyms are expanded on the way in; stopwords and
+reference lists are left aside, so a query is about what it says.
 
 **Connects them.** Typed relations extracted against a small ontology
 you can read in an afternoon — papers, methods and claims; gear and its
 manuals; recipes and ingredients; builds and their parts. Citation edges
 from Crossref or OpenAlex, and from each paper's own reference list
 matched against the library — with a score, for the papers that have no
-DOI. Every edge says who wrote it, from which
-document, under which ontology version, with the sentence it was read
-from.
+DOI; on the page, the [12] in the prose is a link to what entry 12
+cites. Every edge says who wrote it, from which document, under which
+ontology version, with the sentence it was read from.
 
 **Answers questions.** With a model on the host, `ask` works the library
 for a few steps before it writes — searching again, reading on, walking
@@ -107,14 +120,17 @@ Markdown pages with revisions. A model may append to a page; it never
 overwrites a person.
 
 **Mends itself.** `prax heal` names the damage that recurs — a
-placeholder entity, a duplicate capture, figures nobody has read — and
-offers the way on. Nothing is deleted; a wrong document is retired with
-its history.
+placeholder entity, a duplicate capture, a scan read as if its cover
+were the book, figures nobody has read — and offers the way on. Nothing
+is deleted; a wrong document is retired with its history. What the door
+was doing when it felt slow is in its log, with the side that took the
+time.
 
 ## Four ways in
 
 **The web UI** at `/ui/`: search and ask, a document with its context
-column, the graph, the review queue, pages, the inbox, the jobs.
+column and its figures at a glance, the graph, the review queue, pages,
+the inbox, the jobs.
 
 **The `prax` command** is the whole library from a shell, and the way
 most of it gets used:
@@ -187,11 +203,13 @@ database keeps metadata and the hash, so the same file sent twice is one
 document. A parser writes a text artifact, stored by its own hash and
 stamped with what produced it. The text is chunked into addressable
 regions — text under a heading path, tables, figures, display equations,
-code — each with a
-locator back into the artifact; the chunks go into FTS5 and a usearch
-vector index, and the document gets a field of its own. A model reads it
-against the ontology modules it belongs to; each triple becomes an edge
-with its evidence, or goes to a review queue when it fits no type.
+code, the entries of the reference list — each with a locator back into
+the artifact; the chunks go into FTS5 and a usearch vector index (the
+reference entries into neither), and the document gets a field of its
+own. A model reads it against the ontology modules it belongs to; each
+triple becomes an edge with its evidence, or goes to a review queue when
+it fits no type; the reference entries are matched to the library by
+rules and become `cites` edges with a score.
 
 **A query.** Four rank lists — keyword and vector over chunks, keyword
 and vector over the document field — fused per document, optionally
@@ -202,6 +220,9 @@ queries and weighted paths are SQL rather than retrieval.
 **The passes.** Parsing, titles, extraction, embedding: batch jobs,
 never inside a request. A worker fetches work from the service and posts
 results back over HTTP. Nothing but the service writes to the store.
+What follows from a landing is the service's own doing — a transcript's
+polish, then its frames read; a marker read, then its equations — and a
+nightly pass keeps the derived tables and the citation links current.
 
 **What that buys.** Everything derived — text, chunks, vectors, edges,
 summaries, figure readings — is a model's work kept so it need not be

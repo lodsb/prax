@@ -136,14 +136,23 @@ flowchart TD
    (R3, R8)
 3. **Chunk** (`prax.chunking`, inside `index_text`). The Markdown is parsed
    into sections of paragraphs, whole tables with caption and parsed grid,
-   figure captions and code listings. Each chunk has a `kind`, a `locator`
+   figure captions, display equations, code listings, and the entries of
+   the reference list, one chunk each (`prax.references` cuts them under
+   a References/Bibliography heading and reads each into surnames, year,
+   title and a printed id). Each chunk has a `kind`, a `locator`
    (character range into the artifact plus page, with the invariant
    `chunk.text == artifact[start:end]`), the heading path it sits under,
-   and for tables a JSON grid in `data`. Chunks are disposable:
-   `prax maintain --rechunk` rebuilds them from the artifacts. (R13)
+   and in `data` what it is of: a table's grid, a figure's reference and
+   readings, an equation's LaTeX, a reference entry's fields and — once
+   the `references` pass has matched it — the library document it cites.
+   Chunks are disposable: `prax maintain --rechunk` rebuilds them from
+   the artifacts (the citation links come back from `meta.references`).
+   (R13)
 4. **Index**. FTS5 rows follow chunk inserts through triggers.
    The worker's embed step embeds chunks that have no vector from the
-   current model into a usearch HNSW file, then embeds the document field.
+   current model into a usearch HNSW file, then embeds the document
+   field; reference entries get no vector and stay out of a search
+   unless asked for by kind (`store.ASIDE_KINDS`).
    The document field (title, kind words, creators, venue, extraction
    summary, an image description's opening paragraph) is rebuilt by the
    store whenever a document's text or metadata changes and indexed in

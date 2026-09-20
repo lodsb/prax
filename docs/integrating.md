@@ -54,9 +54,9 @@ there is work: the UI polls exactly this.
 
 | Call | What it gives |
 |---|---|
-| `GET /search?q=…&limit=&doctype=&domain=` | compact hits: document id, chunk id, title, a snippet, and which side found it |
+| `GET /search?q=…&limit=&doctype=&domain=&kind=` | compact hits: document id, chunk id, title, a snippet, and which side found it; stopwords and the entries of reference lists are left aside (`kind=reference` searches those on purpose) |
 | `GET /get/{id}?offset=&max_chars=` | one document as a window, with `text_len` so you can page |
-| `GET /chunk/{id}` | one addressable region: its text, kind, heading path, page |
+| `GET /chunk/{id}`, `GET /doc/{id}/chunks` | one addressable region, or all of a document's: text, kind, heading path, page, and `data` — a table's grid, a figure's reference, an equation's LaTeX, a reference entry's number, surnames, year and title with `cited` (the library document it cites, the score, how) once matched |
 | `GET /doc/{id}/context` | what places a document: summary, entities, citations both ways, similar documents, its pages and projects |
 | `GET /traverse?entity=…&hops=1` | the graph around a name, every edge with its evidence and producer |
 | `GET /entities?q=` | names, types, how connected each is |
