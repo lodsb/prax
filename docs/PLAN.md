@@ -857,11 +857,15 @@ What the marker evenings taught, kept for the day:
       / `?figures=1`; domains as boxes to tick, a change by hand or by the
       agent under an extraction marks it stale (first in the extract
       queue, `reread: true`).
-- [ ] **A `references` pass** (the answer in `niggles.txt`, "model"):
-      the bibliography chunks split into entries, matched against the
-      library's document field with a score, `cites` edges with
-      confidence by score — calibrated on the 2,075 Crossref edges that
-      already land in the library. The splitter and the eval first.
+- [x] **A `references` pass** (7389bf4, e9db156; `prax.references`,
+      `scripts/eval_references.py`, `docs/eval/references-2026-09-20.md`):
+      the bibliography chunks split into entries by rules, matched
+      against the library's document field with a score, `cites` edges
+      with the confidence by score; the eval against Crossref's links
+      drove the rules (recall 0.75 of Crossref's, 6,551 sure + 2,735
+      ambiguous links over the library, 5,629 from documents Crossref
+      never resolved). *Not yet run on the live store* — `prax maintain
+      --only references` is the user's call; nightly after that.
 - [ ] **Sub-graph export / import** (`niggles.txt`, "repo work"): one
       JSON-lines file per project (entities, live edges with provenance,
       pages with revisions, document stubs), imported as a producer with
