@@ -86,3 +86,21 @@ test("figureItems: the figure chunks with a picture, captioned by the reference 
   ]);
   assert.deepEqual(lib.figureItems([]), []);
 });
+
+test("referenceLinks and citeMarkers: numbered entries link the in-text markers to what they cite", () => {
+  const chunks = [
+    { chunk_id: 7, kind: "reference", data: { number: 1, title: "Islands of music", cited: { doc_id: 42, title: "Islands of Music", how: "sure", score: 0.97 } } },
+    { chunk_id: 8, kind: "reference", data: { number: 2, title: "Unmatched work" } },
+    { chunk_id: 9, kind: "reference", data: { title: "Author-year entry, no number" } },
+    { chunk_id: 3, kind: "text", text: "prose" },
+  ];
+  const links = lib.referenceLinks(chunks);
+  assert.deepEqual(Object.keys(links), ["1", "2"]);
+  assert.equal(links["1"].href, "#doc/42");
+  assert.equal(links["2"].href, "#chunk-8");
+  const html = lib.citeMarkers("<p>As shown in [1] and [2, 5], see (3) and [3].</p>", links);
+  assert.match(html, /\[<a class="cite" href="#doc\/42" title="Islands of Music">1<\/a>\]/);
+  assert.match(html, /\[<a class="cite" href="#chunk-8" data-scroll="8" title="Unmatched work">2<\/a>, 5\]/);
+  assert.ok(html.includes("(3) and [3]."));  // no entry 3: untouched
+  assert.equal(lib.citeMarkers("<p>[1]</p>", {}), "<p>[1]</p>");
+});

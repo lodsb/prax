@@ -104,7 +104,11 @@ _ESCAPED = re.compile(r"\\([()\[\]*_])")  # Markdown's escapes: \(10\) is (10)
 # or one to a line without a blank line between: split before a marker
 # that follows a space or a line break, when the paragraph holds several
 _INLINE_MARK = re.compile(r"(?<=[.\d)\]])\s+(?=\[\d{1,4}\]\s)")
-_LINE_MARK = re.compile(r"\n\s*(?=(?:\[\d{1,4}\]|\(\d{1,4}\)|\d{1,4}\.)\s)")
+_LINE_MARK = re.compile(
+    r"\n\s*(?=(?:[-*•]\s*)?(?:\[\d{1,4}\]|\(\d{1,4}\)|\d{1,4}\.)\s)"
+)
+# the bibliography headings the chunker and the pass recognise
+_BIBLIOGRAPHY = ("references", "bibliography", "literatur", "works cited", "literature")
 
 
 _STRAY = re.compile(r"[´`ˆ¨˜]")  # an accent the extractor set beside its letter
@@ -134,28 +138,63 @@ class Reference:
     arxiv: str | None = None
 
 
-def entries(text: str) -> list[str]:
-    """The entries of a bibliography's text: paragraphs (blank-line
-    separated) that open with a number, a list marker or an author run;
-    a paragraph that opens with neither continues the entry before it
-    (a title wrapped onto the next paragraph by the extractor). Running
+def is_bibliography_heading(title: str) -> bool:
+    """Does a heading open a reference list ("References", "7. References",
+    "Bibliography", "Literaturverzeichnis", "Works Cited")?"""
+    h = re.sub(r"^[\d.\s]+", "", (title or "").strip().lower())
+    return any(h.startswith(x) or h.endswith(x) for x in _BIBLIOGRAPHY)
+
+
+def entry_spans(text: str) -> list[tuple[int, int, bool]]:
+    """Where the entries of a bibliography's text are, as ``(start, end,
+    opens)`` over the text as given — a chunk is a region of the artifact,
+    so the offsets are the raw text's, links and tags and all. A piece is
+    a paragraph (blank-line separated), a line that opens with a number
+    or a list marker, or the tail behind an inline "[20]" (Elsevier's one
+    paragraph). ``opens`` says the piece opens an entry — a number, a list
+    marker, an author run — rather than continuing the one before it (a
+    title wrapped onto the next paragraph by the extractor). Running
     headers and page numbers (short, no letters to speak of) are left out."""
-    out: list[str] = []
-    paras: list[str] = []
-    for para in _BLANK.split(_plain(text or "")):
-        lines = _LINE_MARK.split(para)
-        for line in lines:
-            parts = _INLINE_MARK.split(line)
-            paras.extend(parts if len(parts) > 1 else [line])
-    for para in paras:
-        p = " ".join(para.split())
-        if not p:
+    out: list[tuple[int, int, bool]] = []
+    text = text or ""
+    pos = 0
+    pieces: list[tuple[int, int]] = []
+    for m in _BLANK.finditer(text):
+        pieces.append((pos, m.start()))
+        pos = m.end()
+    pieces.append((pos, len(text)))
+    finer: list[tuple[int, int]] = []
+    for a, b in pieces:
+        para = text[a:b]
+        cuts = [0] + [m.end() for m in _LINE_MARK.finditer(para)] + [len(para)]
+        for i in range(len(cuts) - 1):
+            line = para[cuts[i] : cuts[i + 1]]
+            inline = [0] + [m.end() for m in _INLINE_MARK.finditer(line)] + [len(line)]
+            for j in range(len(inline) - 1):
+                finer.append((a + cuts[i] + inline[j], a + cuts[i] + inline[j + 1]))
+    for a, b in finer:
+        raw = text[a:b]
+        lead = len(raw) - len(raw.lstrip())
+        trail = len(raw) - len(raw.rstrip())
+        a, b = a + lead, b - trail
+        if b <= a:
             continue
+        p = " ".join(_plain(text[a:b]).split())
+        opens = bool(_MARK.match(p) or _LIST.match(p) or _author_run(p))
         letters = sum(ch.isalpha() for ch in p)
-        if len(p) < _MIN_ENTRY or letters < _MIN_ENTRY // 2:
-            continue  # "**1948**", "Sensors 2014, 14"
-        starts = bool(_MARK.match(p) or _LIST.match(p) or _author_run(p))
-        if out and not starts:
+        if not opens and (len(p) < _MIN_ENTRY or letters < _MIN_ENTRY // 2):
+            continue  # "**1948**", "Sensors 2014, 14": a running header
+        out.append((a, b, opens))
+    return out
+
+
+def entries(text: str) -> list[str]:
+    """The entries of a bibliography's text, each one line of plain text
+    (``entry_spans``, a continuation joined to the entry before it)."""
+    out: list[str] = []
+    for a, b, opens in entry_spans(text):
+        p = " ".join(_plain((text or "")[a:b]).split())
+        if out and not opens:
             out[-1] = out[-1] + " " + p
         else:
             out.append(p)

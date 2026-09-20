@@ -323,7 +323,7 @@ def test_a_formula_carries_what_a_model_read_in_it() -> None:
         }
     ]
     assert "*Formula, as read by" in formula.text
-    assert chunking.KINDS[-1] == "formula"
+    assert "formula" in chunking.KINDS
 
 
 def test_what_counts_as_a_formula() -> None:
@@ -334,3 +334,52 @@ def test_what_counts_as_a_formula() -> None:
     assert not chunking._is_formula("$$\rightarrow K$$")
     assert not chunking._is_formula("$$x$$")
     assert not chunking._is_formula("text $$x = 1$$ more")  # not alone on its line
+
+
+def test_a_reference_list_is_one_chunk_per_entry() -> None:
+    """Under a References heading each entry is a reference chunk over the
+    artifact's own characters, with what it names in data; a wrapped
+    continuation joins its entry; prose before the first entry is text;
+    Elsevier's one paragraph is cut at its inline numbers."""
+    text = (
+        "# A paper\n\nSome prose that cites [1] and [2].\n\n"
+        "# 7. References\n\n"
+        "The works cited, in order of appearance.\n\n"
+        "- [1] D. Turnbull, L. Barrington, and G. Lanckriet, \u201cFive approaches to"
+        " collecting tags for music,\u201d in _Proc. ISMIR_, pp. 225\u2013230,"
+        " 2008.\n\n"
+        "- [2] E. Pampalk, \u201cIslands of music: Analysis, organization, and"
+        " visualization of music archives,\u201d Master\u2019s thesis,\n\n"
+        "Vienna University of Technology, Vienna, Austria, December 2001.\n\n"
+        "[3] [G. Yu, M. Yu, C. Xu, Synchroextracting transform, IEEE Trans. Ind."
+        " Electron. 64 \\(10\\) \\(2017\\) 8042\u20138054.](http://refhub.elsevier.com/"
+        "S0888-3270(18)30390-X/h0095) [4] [K. Dragomiretskiy, D. Zosso, Variational"
+        " mode decomposition, IEEE Trans. Signal Process. 62 \\(3\\) \\(2014\\)"
+        " 531\u2013544.](http://refhub.elsevier.com/S0888-3270(18)30390-X/h0100)\n\n"
+        "# Appendix\n\nMore prose.\n"
+    )
+    chunks = chunking.chunk(text)
+    assert [c.kind for c in chunks] == [
+        "text",
+        "text",
+        "reference",
+        "reference",
+        "reference",
+        "reference",
+        "text",
+    ]
+    refs = [c for c in chunks if c.kind == "reference"]
+    assert all(c.heading == ["7. References"] for c in refs)
+    assert [c.data["number"] for c in refs] == [1, 2, 3, 4]
+    assert refs[0].data["title"] == "Five approaches to collecting tags for music"
+    assert refs[0].data["surnames"] == ["Turnbull", "Barrington", "Lanckriet"]
+    assert refs[0].data["year"] == 2008 and "doi" not in refs[0].data
+    assert refs[1].text.endswith("December 2001.") and refs[1].data["year"] == 2001
+    assert refs[1].data["title"].startswith("Islands of music: Analysis")
+    assert refs[2].text.startswith("[3] [G. Yu") and refs[2].data["year"] == 2017
+    assert refs[3].data["title"] == "Variational mode decomposition"
+    assert refs[3].data["surnames"] == ["Dragomiretskiy", "Zosso"]
+    assert chunks[1].text == "The works cited, in order of appearance."
+    for c in chunks:
+        assert c.text == text[c.char_start : c.char_end]
+    assert "reference" in chunking.KINDS

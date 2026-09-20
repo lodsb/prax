@@ -20,6 +20,7 @@ from prax import chunking, config, embeddings, ontology
 from prax import rerank as rerank_mod
 
 from .base import (
+    _ASIDE,
     _INDEX_LOCK,
     _NOW,
     _TOKEN,
@@ -247,7 +248,7 @@ def _fts_search(
     expr = expr or _fts_query(query)
     if expr is None:
         return []
-    kind_clause = "AND c.kind = ?" if kind is not None else ""
+    kind_clause = "AND c.kind = ?" if kind is not None else _ASIDE
     args: tuple[Any, ...] = (expr, kind, limit) if kind is not None else (expr, limit)
     snippet_col = (
         "snippet(chunks_fts, 0, '[', ']', '…', 12)"
@@ -315,7 +316,7 @@ def _vec_search(
     for i in range(0, len(ids), 500):
         part = ids[i : i + 500]
         marks = ",".join("?" * len(part))
-        kind_clause = "AND c.kind = ?" if kind is not None else ""
+        kind_clause = "AND c.kind = ?" if kind is not None else _ASIDE
         args: tuple[Any, ...] = (*part, kind) if kind is not None else tuple(part)
         rows = con.execute(
             f"""
@@ -770,7 +771,9 @@ def _all_chunks_embedded(con: sqlite3.Connection, model: str) -> bool:
     million chunks probing the embeddings table for each — seventeen
     seconds with nothing pending, under the store's lock, every worker
     cycle: the door's searches stood in that queue (2026-09-18)."""
-    chunks = con.execute("SELECT count(*) FROM chunks").fetchone()[0]
+    chunks = con.execute(f"SELECT count(*) FROM chunks c WHERE 1=1{_ASIDE}").fetchone()[
+        0
+    ]
     done = con.execute(
         "SELECT count(*) FROM chunk_embeddings WHERE model = ?", (model,)
     ).fetchone()[0]
@@ -789,7 +792,7 @@ def pending_embeddings(
     sql = (
         "SELECT c.id AS chunk_id, c.kind, c.text FROM chunks c"
         " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
-        " WHERE e.chunk_id IS NULL OR e.model != ? ORDER BY c.id DESC"
+        f" WHERE (e.chunk_id IS NULL OR e.model != ?){_ASIDE} ORDER BY c.id DESC"
     )
     args: tuple[Any, ...] = (model,)
     if limit is not None:

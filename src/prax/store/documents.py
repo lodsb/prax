@@ -22,6 +22,7 @@ from .base import (
     _NOW,
     _SURROGATE,
     _TOKEN,
+    ASIDE_KINDS,
     _archive_bytes,
     _archive_path,
     _like_prefix,
@@ -173,6 +174,13 @@ def _write_chunks(con: sqlite3.Connection, doc_id: int, text: str) -> int:
         " WHERE id = ?",
         [(i, *rows[i][1:], oid) for i, oid in kept.items()],
     )
+    # a kept chunk that became a kind the search sets aside gives up its
+    # vector (the bookkeeping row; the index key is filtered until compacted)
+    aside = [oid for i, oid in kept.items() if rows[i][1] in ASIDE_KINDS]
+    if aside:
+        con.executemany(
+            "DELETE FROM chunk_embeddings WHERE chunk_id = ?", [(o,) for o in aside]
+        )
     return len(rows)
 
 
@@ -193,6 +201,96 @@ def rechunk(con: sqlite3.Connection, doc_id: int) -> int:
         return 0
     text = _read_archive(row["text_hash"]).decode("utf-8")
     n = _write_chunks(con, doc_id, text)
+    links = (get_meta(con, doc_id).get("references") or {}).get("links") or []
+    if links:  # the same text: what the references pass matched still holds
+        _apply_reference_links(con, doc_id, links)
+    con.commit()
+    return n
+
+
+def reference_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """A document's reference chunks (one per entry of its reference list),
+    ``{chunk_id, text, data}`` in order."""
+    return [
+        {
+            "chunk_id": r["id"],
+            "text": r["text"],
+            "data": json.loads(r["data"]) if r["data"] else {},
+        }
+        for r in con.execute(
+            "SELECT id, text, data FROM chunks WHERE doc_id = ? AND kind = 'reference'"
+            " ORDER BY seq",
+            (doc_id,),
+        )
+    ]
+
+
+def _reference_key(data: dict[str, Any]) -> str:
+    """What a link is matched to a chunk by: the entry's number, else its
+    title normalised."""
+    if data.get("number") is not None:
+        return f"#{data['number']}"
+    return "t:" + " ".join(_TOKEN.findall(str(data.get("title") or "").lower()))
+
+
+def _apply_reference_links(
+    con: sqlite3.Connection, doc_id: int, links: list[dict[str, Any]]
+) -> int:
+    """Write the references pass's matches (``meta.references.links``:
+    number or title, the cited document, score, how) into the reference
+    chunks' ``data.cited``; a chunk no link names loses a stale one.
+    Chunks are disposable, the links are not: a rechunk calls this."""
+    by_key: dict[str, list[dict[str, Any]]] = {}
+    for link in links:  # keyed by the entry's number, else the entry's title
+        key = _reference_key({"number": link.get("number"), "title": link.get("entry")})
+        by_key.setdefault(key, []).append(link)
+    n = 0
+    for c in reference_chunks(con, doc_id):
+        data = dict(c["data"])
+        found = by_key.get(_reference_key(data))
+        if found:
+            best = max(found, key=lambda l: float(l.get("score") or 0))
+            cited = {
+                "doc_id": best["doc_id"],
+                "title": best.get("title"),
+                "score": best.get("score"),
+                "how": best.get("how"),
+            }
+            if len(found) > 1:
+                cited["also"] = [
+                    {"doc_id": o["doc_id"], "title": o.get("title")}
+                    for o in found
+                    if o is not best
+                ]
+            if data.get("cited") == cited:
+                continue
+            data["cited"] = cited
+        elif "cited" in data:
+            data.pop("cited")
+        else:
+            continue
+        con.execute(
+            "UPDATE chunks SET data = ? WHERE id = ?",
+            (json.dumps(data), c["chunk_id"]),
+        )
+        n += 1
+    return n
+
+
+@_serialized
+def set_reference_links(
+    con: sqlite3.Connection, doc_id: int, links: list[dict[str, Any]]
+) -> int:
+    """Keep the pass's matches on the document (``meta.references.links``)
+    and on its reference chunks; returns how many chunks changed."""
+    meta = get_meta(con, doc_id)
+    stamp = dict(meta.get("references") or {})
+    stamp["links"] = links
+    meta["references"] = stamp
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    n = _apply_reference_links(con, doc_id, links)
     con.commit()
     return n
 

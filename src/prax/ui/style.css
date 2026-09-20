@@ -262,6 +262,10 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .badge-figure { color: var(--figure); }
 .badge-code { color: var(--code); }
 .badge-formula { color: var(--formula); }
+.badge-reference { color: var(--muted); }
+.kind-reference .chunk-body { font-size: .92rem; }
+.kind-reference .cited { margin: .2rem 0 0 1.2rem; font-size: .88rem; }
+a.cite { text-decoration: none; border-bottom: 1px dotted currentColor; }
 
 /* ------------------------------------------------------------ search */
 .hit { padding: .8rem 0; border-bottom: 1px solid var(--line); }

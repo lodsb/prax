@@ -166,3 +166,58 @@ def test_a_reference_list_cites_the_library(con: sqlite3.Connection) -> None:
     ).fetchone()[0]
     assert (live, kept) == (2, 4)
     assert by_doi and cited  # both named
+
+
+def test_reference_chunks_carry_their_links_and_stay_out_of_search(
+    con: sqlite3.Connection,
+) -> None:
+    """The chunker cuts the reference list into reference chunks; the pass
+    writes what each cites into the chunk's data (and keeps it on the
+    document, so a rechunk puts it back); a search leaves reference
+    chunks out unless asked for them by kind; the embed step never
+    vectorises them."""
+    cited = store.ingest_text(
+        con,
+        "Antiderivative antialiasing reduces aliasing in stateful systems. " * 20,
+        title="Antiderivative antialiasing for stateful systems",
+    )["doc_id"]
+    citing = store.ingest_text(
+        con,
+        "# Intro\n\n"
+        + "We reduce aliasing with the method of [1]. " * 20
+        + "\n\n# References\n\n"
+        "- [1] M. Holters and J. Parker, “Antiderivative antialiasing for stateful"
+        " systems,” in _Proc. DAFx_, 2018.\n\n"
+        "- [2] K. Werner, “Virtual analog modeling of audio circuitry,” Ph.D."
+        " thesis, Stanford, 2016.\n",
+        title="Aliasing reduction in clipped signals",
+    )["doc_id"]
+    refs = store.reference_chunks(con, citing)
+    assert [r["data"]["number"] for r in refs] == [1, 2]
+    assert "cited" not in refs[0]["data"]
+    # the reference entries name the cited paper's words, and are not hits
+    hits = store.search(con, "antiderivative antialiasing stateful", mode="fts")
+    assert {h["doc_id"] for h in hits} == {cited}
+    aside = store.search(
+        con, "antiderivative antialiasing stateful", mode="fts", kind="reference"
+    )
+    assert [h["doc_id"] for h in aside] == [citing] and aside[0]["kind"] == "reference"
+    assert all(
+        r["kind"] != "reference" for r in store.pending_embeddings(con, "hash-test")
+    )
+    store.maintain(con, only=["references"])
+    refs = store.reference_chunks(con, citing)
+    cited_by_1 = refs[0]["data"]["cited"]
+    assert cited_by_1["doc_id"] == cited and cited_by_1["how"] == "sure"
+    assert cited_by_1["title"] == "Antiderivative antialiasing for stateful systems"
+    assert cited_by_1["score"] >= 0.9 and "cited" not in refs[1]["data"]
+    links = store.get_meta(con, citing)["references"]["links"]
+    assert [(k["number"], k["doc_id"]) for k in links] == [(1, cited)]
+    # a rechunk rebuilds the chunks from the text and puts the links back
+    store.rechunk(con, citing)
+    refs = store.reference_chunks(con, citing)
+    assert refs[0]["data"]["cited"]["doc_id"] == cited
+    # the door's chunk list carries the data the UI links from
+    chunks = store.list_chunks(con, citing)
+    ref_rows = [c for c in chunks if c["kind"] == "reference"]
+    assert ref_rows[0]["data"]["cited"]["doc_id"] == cited

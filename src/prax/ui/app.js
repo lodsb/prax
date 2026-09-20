@@ -487,7 +487,23 @@ function hasMaths(doc, chunks) {
   return (chunks || []).some((c) => c.kind === "formula") || String((doc.meta || {}).text_source || "").startsWith("marker");
 }
 
-function renderChunk(c, highlight, docId) {
+// A reference chunk: the entry as written, and under it the library
+// document it cites when the references pass matched one — "likely" for
+// a title match (the score beside it), "?" when twins tied
+function renderReference(c) {
+  const d = c.data || {};
+  const cited = d.cited;
+  let line = "";
+  if (cited && cited.doc_id) {
+    const sure = cited.how === "ambiguous" ? `<span class="muted" title="one of several library documents under this title">?</span>`
+      : cited.how === "sure" ? `<span class="muted" title="matched by title">likely${cited.score != null ? ` ${Number(cited.score).toFixed(2)}` : ""}</span>` : "";
+    const also = (cited.also || []).map((o) => ` or <a href="#doc/${o.doc_id}">${esc(o.title || "")}</a>`).join("");
+    line = `<p class="cited">&rarr; <a href="#doc/${cited.doc_id}">${esc(cited.title || "in the library")}</a>${also} ${sure}</p>`;
+  }
+  return md(c.text) + line;
+}
+
+function renderChunk(c, highlight, docId, cites) {
   const cls = "chunk kind-" + (c.kind || "text") + (c.chunk_id === highlight ? " highlight" : "");
   let body;
   if (c.kind === "table" && c.data && c.data.header && c.data.header.length) {
@@ -497,10 +513,12 @@ function renderChunk(c, highlight, docId) {
     body = renderFigure(c, docId);
   } else if (c.kind === "formula" && c.data && c.data.latex) {
     body = renderFormula(c);
+  } else if (c.kind === "reference") {
+    body = renderReference(c);
   } else if (c.kind === "code") {
     body = md(c.text);
   } else {
-    body = md(c.text);
+    body = citeMarkers(md(c.text), cites);  // "[12]" reaches what entry 12 cites
   }
   return `
   <section class="${cls}" id="chunk-${c.chunk_id}" data-chunk="${c.chunk_id}">
@@ -626,7 +644,7 @@ async function viewDoc(id, p) {
     <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? "" : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
-  const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks));
+  const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks), referenceLinks(chunks));
   const player = view.querySelector("#doc-player");
   if (player) {
     const play = player.querySelector("#player-play");
@@ -755,12 +773,16 @@ async function viewDoc(id, p) {
       } catch (err) { setStatus(err.message); }
     });
   }
-  document.querySelectorAll("[data-scroll]").forEach((a) => a.addEventListener("click", (e) => {
+  // outline links, the figure strip, in-text citation markers: chunks
+  // render as the reader nears them, so the click is caught on the view
+  view.addEventListener("click", (e) => {
+    const a = e.target.closest("a[data-scroll]");
+    if (!a) return;
     e.preventDefault();
     pages.ensure(Number(a.dataset.scroll));
     const el = document.getElementById("chunk-" + a.dataset.scroll);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }));
+  });
   if (highlight) {
     const el = document.getElementById("chunk-" + highlight);
     if (el) el.scrollIntoView({ block: "center" });
@@ -775,14 +797,14 @@ async function viewDoc(id, p) {
 // or a highlighted chunk renders up to itself first.
 const DOC_PAGE = 120;
 
-function pagedBody(body, chunks, highlight, doc, maths) {
+function pagedBody(body, chunks, highlight, doc, maths, cites) {
   const more = body.querySelector(".doc-more");
   let rendered = 0;
   const renderTo = (n) => {
     n = Math.min(n, chunks.length);
     if (n <= rendered) return;
     const box = document.createElement("div");
-    box.innerHTML = chunks.slice(rendered, n).map((c) => renderChunk(c, highlight, doc.id)).join("");
+    box.innerHTML = chunks.slice(rendered, n).map((c) => renderChunk(c, highlight, doc.id, cites)).join("");
     if (maths) typesetMaths(box);
     while (box.firstChild) more.before(box.firstChild);
     rendered = n;

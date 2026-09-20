@@ -97,6 +97,41 @@ function figureItems(chunks) {
   return out;
 }
 
+// A document's reference chunks as a table of what each numbered entry
+// cites: number -> {href, title, chunk} — the cited document's page when
+// the references pass matched it, else the entry's own chunk. Entries
+// without a number are not in-text markers and are left out.
+function referenceLinks(chunks) {
+  const out = {};
+  for (const c of chunks || []) {
+    if (c.kind !== "reference" || !c.data || c.data.number == null) continue;
+    const cited = c.data.cited;
+    out[String(c.data.number)] = cited && cited.doc_id
+      ? { href: `#doc/${cited.doc_id}`, title: cited.title || "", chunk: c.chunk_id, how: cited.how || "" }
+      : { href: `#chunk-${c.chunk_id}`, title: c.data.title || "", chunk: c.chunk_id, how: "" };
+  }
+  return out;
+}
+
+// The in-text citation markers of a numbered reference list — "[12]",
+// "[3, 5]", "[3–5]" — linked through the table above; a marker the list
+// has no entry for is left as it is (an equation, a footnote), and so is
+// everything that is not a bracketed number.
+function citeMarkers(html, links) {
+  if (!links || !Object.keys(links).length) return html;
+  return String(html || "").replace(/\[(\d{1,3}(?:\s*[,\u2013\u2014-]\s*\d{1,3})*)\]/g, (whole, inner) => {
+    let any = false;
+    const out = inner.split(/(\s*[,\u2013\u2014-]\s*)/).map((p) => {
+      const l = /^\d{1,3}$/.test(p) ? links[p] : null;
+      if (!l) return p;
+      any = true;
+      const scroll = l.href.startsWith("#chunk-") ? ` data-scroll="${l.chunk}"` : "";
+      return `<a class="cite" href="${l.href}"${scroll} title="${esc(l.title)}">${p}</a>`;
+    }).join("");
+    return any ? `[${out}]` : whole;
+  });
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers };
 }

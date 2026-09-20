@@ -17,6 +17,13 @@ chunks:
   stays in the sentence it belongs to — a chunk is a region of the artifact
   and cannot tear one;
 * one chunk per fenced **code** block;
+* one chunk per **reference** — an entry of the reference list, under a
+  References/Bibliography heading (``prax.references``: numbered, listed,
+  author-year, Elsevier's one paragraph cut at its inline numbers), with
+  what it names in ``data`` (number, surnames, year, title, a printed id)
+  and, once the ``references`` pass has matched it, the library document
+  it cites. A paragraph there that opens no entry continues the one before
+  it; one before any entry is text;
 * **text** chunks of consecutive paragraphs under the same heading path, up
   to ``TARGET_CHARS``; a paragraph longer than ``MAX_CHARS`` falls back to
   overlapping fixed windows.
@@ -43,6 +50,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from prax import references
+
 TARGET_CHARS = 1200  # flush a text chunk when the next paragraph would exceed this
 MIN_CHARS = 300  # merge into the previous chunk when smaller than this at a boundary
 MAX_CHARS = 2000  # paragraphs longer than this are windowed
@@ -50,7 +59,7 @@ MIN_CODE_CHARS = 200  # smaller fenced blocks are inline snippets: part of the t
 WINDOW = 1000
 OVERLAP = 150
 
-KINDS = ("text", "table", "figure", "code", "formula")
+KINDS = ("text", "table", "figure", "code", "formula", "reference")
 
 _PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
@@ -316,6 +325,28 @@ def parse_figure(text: str) -> dict[str, Any] | None:
     }
 
 
+def parse_reference(text: str) -> dict[str, Any]:
+    """What a reference entry names, for a chunk's ``data``: number,
+    surnames, year, title, a printed DOI or arXiv id (each left out when
+    absent). The match to a library document (``doc_id``, ``score``,
+    ``how``) is the ``references`` pass's to add."""
+    ref = references.parse(text)
+    data: dict[str, Any] = {}
+    if ref.number is not None:
+        data["number"] = ref.number
+    if ref.surnames:
+        data["surnames"] = ref.surnames
+    if ref.year:
+        data["year"] = ref.year
+    if ref.title:
+        data["title"] = ref.title
+    if ref.doi:
+        data["doi"] = ref.doi
+    if ref.arxiv:
+        data["arxiv"] = ref.arxiv
+    return data
+
+
 def parse_table(markdown: str) -> dict[str, Any]:
     """A pipe table → ``{"header": [...], "rows": [[...], ...]}``."""
     rows: list[list[str]] = []
@@ -428,6 +459,46 @@ def chunk(text: str) -> list[Chunk]:
             while heading and heading[-1][0] >= el.level:
                 heading.pop()
             heading.append((el.level, el.text))
+            continue
+        if (
+            el.kind == "para"
+            and heading
+            and references.is_bibliography_heading(heading[-1][1])
+        ):
+            # the reference list: one chunk per entry, over the artifact's
+            # own characters; a piece that opens no entry continues the
+            # chunk before it (a wrapped title), or is text before the first
+            spans = references.entry_spans(el.text)
+            if spans and not spans[0][2] and chunks and chunks[-1].kind == "reference":
+                last = chunks[-1]
+                a, b, _ = spans[0]
+                chunks[-1] = Chunk(
+                    "reference",
+                    text[last.char_start : el.start + b],
+                    last.char_start,
+                    el.start + b,
+                    last.page,
+                    last.heading,
+                    parse_reference(text[last.char_start : el.start + b]),
+                )
+                spans = spans[1:]
+            if spans and not spans[0][2]:
+                pending.append(el)  # prose under the heading, before any entry
+                continue
+            flush()
+            for a, b, _ in spans:
+                start, end = el.start + a, el.start + b
+                chunks.append(
+                    Chunk(
+                        "reference",
+                        text[start:end],
+                        start,
+                        end,
+                        el.page,
+                        path(),
+                        parse_reference(text[start:end]),
+                    )
+                )
             continue
         if el.kind == "para":
             if (

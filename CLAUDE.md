@@ -181,7 +181,14 @@ loop writes. What that model may and may not do, as a reference:
   door files it before indexing, `figures.file_inline`). A display
   equation alone on its line is a `formula` chunk with its LaTeX, the
   number the prose refers to it by and any readings in `data`; inline
-  maths stays in the text chunk around it. A video is a capture like a
+  maths stays in the text chunk around it. An entry of a reference list
+  (under a References/Bibliography heading) is a `reference` chunk with
+  what it names in `data` (number, surnames, year, title, a printed id;
+  `prax.references`) and, once the `references` pass of `prax maintain`
+  has matched it, the library document it cites (`data.cited`, kept on
+  the document as `meta.references.links` so a rechunk puts it back);
+  reference chunks are never embedded and stay out of a search unless
+  asked for by kind (`store.ASIDE_KINDS`). A video is a capture like a
   page (`prax.parsers.video`: the extension's transcript-with-frames HTML,
   `meta.video` for the player the UI shows, `meta.parser` naming the
   parser; the frames are figures, read by the vision pass like any). A re-index

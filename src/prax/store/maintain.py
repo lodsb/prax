@@ -47,8 +47,10 @@ from .documents import (
     dedupe_captures,
     get_meta,
     rechunk,
+    reference_chunks,
     refresh_document_fields,
     set_meta,
+    set_reference_links,
 )
 from .graph import Edge, find_edges, link, retire_reading
 from .jobs import Job
@@ -191,7 +193,7 @@ def bibliographies(
         "SELECT c.doc_id, c.text, d.text_hash,"
         " json_extract(c.heading, '$[#-1]') AS h"
         " FROM chunks c JOIN documents d ON d.id = c.doc_id"
-        " WHERE c.kind = 'text' AND c.heading IS NOT NULL"
+        " WHERE c.kind IN ('text', 'reference') AND c.heading IS NOT NULL"
         " AND json_extract(d.meta, '$.retired') IS NULL"
     )
     args: list[Any] = []
@@ -257,7 +259,7 @@ def _candidates(con: sqlite3.Connection, ref: references.Reference) -> list[int]
 def resolve_references(
     con: sqlite3.Connection,
     doc_id: int,
-    text: str,
+    entries: list[str],
     lib: dict[int, dict[str, Any]],
     *,
     by_doi: dict[str, int],
@@ -266,9 +268,11 @@ def resolve_references(
     """The library documents a reference list names: (doc_id, how, score,
     the reference) per link — ``how`` "doi"/"arxiv" for an id match,
     "sure" for a title match over the threshold, "ambiguous" for each of
-    several candidates within the margin (twins in the library)."""
+    several candidates within the margin (twins in the library).
+    ``entries`` are the entries' texts (the reference chunks, or a
+    bibliography's text split)."""
     out: list[tuple[int, str, float, references.Reference]] = []
-    for entry in references.entries(text):
+    for entry in entries:
         ref = references.parse(entry)
         if not ref.title:
             continue
@@ -333,14 +337,29 @@ def link_references(
             con, doc_id, producer=REFERENCES_PRODUCER, except_version=""
         )
         stats["retired"] += retired
+        # the entries: the reference chunks where the chunker cut them,
+        # the bibliography's text split where it has not (before a rechunk)
+        chunks = reference_chunks(con, doc_id)
+        entries = [c["text"] for c in chunks] or references.entries(text)
         found = resolve_references(
-            con, doc_id, text, lib, by_doi=by_doi, by_arxiv=by_arxiv
+            con, doc_id, entries, lib, by_doi=by_doi, by_arxiv=by_arxiv
         )
         linked = ambiguous = existing = 0
+        links: list[dict[str, Any]] = []
         for target, how, score, ref in found:
             name = lib[target]["title"]
             if not name or name == title:
                 continue
+            links.append(
+                {
+                    "number": ref.number,
+                    "entry": ref.title,
+                    "doc_id": target,
+                    "title": name,
+                    "score": round(score, 3),
+                    "how": how,
+                }
+            )
             edge = Edge(title, "paper", "cites", name, "paper")
             if find_edges(con, edge):
                 existing += 1
@@ -374,13 +393,16 @@ def link_references(
         meta = get_meta(con, doc_id)
         meta["references"] = {
             "text_hash": text_hash,
-            "entries": len(references.entries(text)),
+            "entries": len(entries),
             "linked": linked,
             "ambiguous": ambiguous,
             "at": at,
             "run": run,
         }
         set_meta(con, doc_id, meta)
+        # what each entry cites, on the document and on its chunks (a
+        # rechunk re-applies it): the link's title is the cited document's
+        set_reference_links(con, doc_id, links)
         stats["documents"] += 1
         stats["linked"] += linked
         stats["ambiguous"] += ambiguous

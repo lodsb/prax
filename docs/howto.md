@@ -772,6 +772,17 @@ Crossref edges do that. Measured on the library
 documents, three quarters of what Crossref found and 5,629 links from
 documents Crossref could not resolve.
 
+Each entry is a `reference` chunk (the chunker cuts them under the
+heading; `prax maintain --rechunk` once for a library indexed before),
+with what it names in `data` and, after the pass, the document it cites
+— the document page shows the entry with a link to that document
+("likely 0.93" for a title match, "?" between twins), and an in-text
+marker like "[12]" in the prose links to what entry 12 cites (or to the
+entry itself when nothing in the library matched). Reference chunks are
+never embedded and stay out of a search unless asked for with
+`kind=reference`: an entry matches every author, venue and year in the
+library and says nothing the cited paper does not say better.
+
     prax maintain --only references     # the documents whose text changed since
 
 ### Review queue and ontology growth

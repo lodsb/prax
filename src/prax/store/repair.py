@@ -35,7 +35,7 @@ from typing import Any
 
 from prax import glyphs
 
-from .base import _NOW, _reading
+from .base import _ASIDE, _NOW, _reading
 from .documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
@@ -804,7 +804,7 @@ def _unembedded_chunks(con: sqlite3.Connection) -> list[dict[str, Any]]:
     waiting = con.execute(
         "SELECT count(*) FROM chunks c"
         " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
-        " WHERE e.chunk_id IS NULL"
+        f" WHERE e.chunk_id IS NULL{_ASIDE}"
     ).fetchone()[0]
     if not waiting:
         return []
