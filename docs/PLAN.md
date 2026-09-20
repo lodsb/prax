@@ -876,6 +876,22 @@ What the marker evenings taught, kept for the day:
       questions: "06:30"` on the live host. Later: the contradiction
       scan (a new source that `argues` against the answer's claims),
       a paragraph on top of the briefing from the model.
+- [ ] **Ask blocks in a person's page** (next; decided in rationale R17
+      after the survey in `research.md` "Living answers and mixed
+      pages", 2026-09-21): `<!-- prax:ask id=q1 "question" -->` … `<!--
+      /prax:ask id=q1 sha= asked= run= -->` inside any page, the door
+      filling the interior and keeping it as a standing question (the
+      same fingerprint check, per block in `meta.asks`); a hand-edited
+      interior is held, never overwritten (cog's rule); `<!-- prax:keep
+      -->` carried over verbatim; the interior an `ask` chunk kind set
+      aside from search like `reference`; the check writes a dated
+      status only, the rewrite a revision with a prose note; the re-ask
+      names the kind of change (replace / add / disagree), evidence
+      newest last — apply that framing to question pages too; a
+      `[title](#doc/N)` a person writes becomes an `annotates` edge on
+      save, retired when the link goes. Deferred: `mode=propose` with a
+      diff, claim-level KEEP/STALE adjudication, the contradiction scan
+      over `argues`.
 - [ ] **Sub-graph export / import** (`niggles.txt`, "repo work"): one
       JSON-lines file per project (entities, live edges with provenance,
       pages with revisions, document stubs), imported as a producer with
