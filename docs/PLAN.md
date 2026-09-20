@@ -870,6 +870,19 @@ What the marker evenings taught, kept for the day:
       JSON-lines file per project (entities, live edges with provenance,
       pages with revisions, document stubs), imported as a producer with
       a run per file, conflicts to the review queue.
+- [x] **`vectors.serve: memory`** (20deffa, b4d8d5e, 6f64c37): a heal
+      over ten thousand PDFs evicted the mapped index and the next search
+      paid 4–6 s of page faults; the desktop loads it (2.7 GB resident for
+      1.4 M vectors), opened at startup and preloaded at a merge so no
+      search waits on the load (the first search after a restart once
+      waited 100 s while llama-server read its model from the same disk).
+- [ ] **The morning after (2026-09-20):** the eight books are marker-read
+      with 2,983 scanned-page pictures filed; their figure readings and
+      the videos' ran from 08:00 (`scratchpad/after-figures.ps1`, which
+      re-requests the formulas of 4780 and 4280 after — a figures request
+      displaced them: a document holds one request at a time, worth a
+      queue some day). `prax maintain --only references` is the user's
+      call. The extension needs a reload in the browsers for the ad fix.
 - [ ] **If the UI still feels slow from the MacBook**: the next suspect
       is `GET /doc/<id>/chunks` for a book (5 MB) on the single uvicorn
       worker while a search waits; page it. Read `logs/door.log`'s slow
