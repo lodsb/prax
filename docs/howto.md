@@ -1404,7 +1404,11 @@ sees them), and a connection has 64 MB of cache and the file mapped
 took 4–6 s while a heal opened ten thousand PDFs — the mapped index had
 been given up to those reads, and a search page-faults its way through
 the graph (`vectors.serve: memory` loads it instead: 2.7 GB resident
-for 1.4 M vectors, on a host with the RAM; 11–50 ms a query after). Python is not on that list: the stalls were locks,
+for 1.4 M vectors, on a host with the RAM; 11–50 ms a query after; the
+door loads it at startup and a merge loads the new file outside the
+lock, so no search waits on a load — the first search after a restart
+once waited 100 s for it while llama-server read its model from the
+same disk). Python is not on that list: the stalls were locks,
 shared devices and a cold cache, and the heavy lifting (SQLite,
 usearch, ONNX, the model) is native already.
 

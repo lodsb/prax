@@ -43,6 +43,15 @@ DEFAULT_EXPANSION_SEARCH = 64
 DEFAULT_SERVE = "view"
 
 
+def serve_in_memory() -> bool:
+    """Whether the door loads the main file (``vectors.serve: memory``)
+    rather than mapping it."""
+    return (
+        str(config.setting("vectors.serve", "PRAX_VEC_SERVE", DEFAULT_SERVE))
+        == "memory"
+    )
+
+
 def available() -> bool:
     try:
         importlib.import_module("usearch.index")
@@ -65,10 +74,7 @@ class VectorIndex:
             if writable:
                 self._index = idx_mod.Index.restore(path, view=False)
             else:
-                serve = str(
-                    config.setting("vectors.serve", "PRAX_VEC_SERVE", DEFAULT_SERVE)
-                )
-                self._index = idx_mod.Index.restore(path, view=serve != "memory")
+                self._index = idx_mod.Index.restore(path, view=not serve_in_memory())
             if self._index.ndim != dim:
                 raise ValueError(
                     f"{path.name} has dimension {self._index.ndim}, expected {dim}"

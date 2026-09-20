@@ -935,6 +935,14 @@ def _merge(path: Path) -> dict[str, Any]:
     tmp = path.with_suffix(path.suffix + ".merging")
     main.save_to(tmp)
     main.close()
+    # a door that serves the index from memory loads the new file now,
+    # outside the lock (seconds for a gigabyte), and installs the loaded
+    # copy at the swap; a mapping door reopens at the swap (milliseconds)
+    preloaded = (
+        vectors_mod.VectorIndex(tmp, VEC_DIM, writable=False)
+        if vectors_mod.serve_in_memory()
+        else None
+    )
     with _INDEX_LOCK:
         delta = _delta(path)
         later = [int(k) for k in delta.all_keys() if int(k) not in taken]
@@ -950,6 +958,9 @@ def _merge(path: Path) -> dict[str, Any]:
             fresh = _delta(path)  # a new, empty one
             fresh.add(later, later_vecs)
             fresh.save()
+        if preloaded is not None:
+            preloaded.path = path
+            _indexes[(str(path), False)] = preloaded
         reopened = _open_index(path, writable=False)
         return {
             "count": (len(reopened) if reopened is not None else 0) + len(later),
@@ -957,6 +968,21 @@ def _merge(path: Path) -> dict[str, Any]:
             "delta": len(later),
             "bytes": path.stat().st_size,
         }
+
+
+def warm_indexes(model: str) -> dict[str, int]:
+    """Open the read views of ``model``'s two index files now, so no
+    request pays for it: with ``vectors.serve: memory`` the load takes
+    seconds (a hundred while llama-server reads its model from the same
+    disk), and it happened under the index lock, on the first search."""
+    out: dict[str, int] = {}
+    for name, path in (
+        ("chunks", _index_path(model)),
+        ("documents", _doc_index_path(model)),
+    ):
+        idx = _open_index(path, writable=False) if path.exists() else None
+        out[name] = len(idx) if idx is not None else 0
+    return out
 
 
 def save_document_vectors(model: str) -> dict[str, Any]:

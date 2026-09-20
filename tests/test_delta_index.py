@@ -176,3 +176,37 @@ def test_the_main_file_is_served_mapped_or_loaded(
     assert idx is not None and idx is not view
     # a mapped index holds only its header in memory; a loaded one, the graph
     assert idx._index.memory_usage > 10 * mapped_bytes
+
+
+@needs_usearch
+def test_the_views_are_warmed_and_a_merge_preloads_in_memory(
+    con: sqlite3.Connection, data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``warm_indexes`` opens the read views before the first search; a
+    merge on a door that serves from memory installs a copy loaded
+    outside the lock and searches answer the same after it."""
+    from prax.store import base
+
+    monkeypatch.setenv("PRAX_EMBED", "hash")
+    monkeypatch.setenv("PRAX_VEC_SERVE", "memory")
+    a = store.ingest_text(con, "feedback delay network reverberation " * 20, title="A")[
+        "doc_id"
+    ]
+    _embed_all(con)
+    main = data_dir / "vectors-hash-test.usearch"
+    base._drop_index_views("hash-test")
+    assert (str(main), False) not in base._indexes
+    warmed = store.warm_indexes("hash-test")
+    assert warmed["chunks"] >= 1 and (str(main), False) in base._indexes
+    b = store.ingest_text(con, "granular cloud synthesis of textures " * 20, title="B")[
+        "doc_id"
+    ]
+    _embed_all(con)
+    rep = store.merge_vectors("hash-test")
+    assert rep["chunks"]["merged"] >= 1
+    view = base._indexes[(str(main), False)]
+    assert view.path == main and view._index.memory_usage > 100_000
+    hits = store.search(con, "granular cloud textures", mode="vec")
+    assert hits and hits[0]["doc_id"] == b
+    hits = store.search(con, "feedback delay reverberation", mode="vec")
+    assert hits and hits[0]["doc_id"] == a

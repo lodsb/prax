@@ -107,6 +107,9 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.con = con  # the main connection: migrations, the change stamp
     app.state.con_lock = threading.Lock()  # one thread on it at a time
     store.job_reap(con)  # sessions left behind by a killed door or worker
+    emb = embeddings.serving()
+    if emb is not None and store.vectors_available():
+        store.warm_indexes(emb.name)  # the views open before the first search
     stop = threading.Event()
     every = config.number("door.inbox_scan_seconds", "PRAX_INBOX_SCAN", 20.0)
     scanner = None

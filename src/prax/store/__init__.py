@@ -308,6 +308,7 @@ from .retrieval import (  # noqa: F401
     store_document_embeddings,
     store_embeddings,
     vec_status,
+    warm_indexes,
 )
 from .summary import (  # noqa: F401
     stats,
