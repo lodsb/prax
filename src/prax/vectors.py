@@ -38,8 +38,8 @@ DEFAULT_EXPANSION_SEARCH = 64
 # gives the pages up to any big read — a heal over ten thousand PDFs, a
 # marker evening — after which a search pays seconds of page faults over
 # the graph: 4–6 s measured on the desktop, 20 ms warm); ``memory``
-# loads it (1.3 GB at a million f16 vectors, never evicted). The board
-# views; a host with the RAM loads.
+# loads it (2.7 GB resident for 1.4 M f16 vectors, a 1.3 GB file, 3 s to
+# load; never evicted). The board views; a host with the RAM loads.
 DEFAULT_SERVE = "view"
 
 

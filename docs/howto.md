@@ -1386,8 +1386,8 @@ sees them), and a connection has 64 MB of cache and the file mapped
 (`door.sqlite_cache_mb`, `door.sqlite_mmap_mb`); and the vector side
 took 4–6 s while a heal opened ten thousand PDFs — the mapped index had
 been given up to those reads, and a search page-faults its way through
-the graph (`vectors.serve: memory` loads it instead, 1.3 GB on a host
-with the RAM). Python is not on that list: the stalls were locks,
+the graph (`vectors.serve: memory` loads it instead: 2.7 GB resident
+for 1.4 M vectors, on a host with the RAM; 11–50 ms a query after). Python is not on that list: the stalls were locks,
 shared devices and a cold cache, and the heavy lifting (SQLite,
 usearch, ONNX, the model) is native already.
 
