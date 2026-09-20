@@ -925,6 +925,19 @@ evening is the two swaps and the one request; the extraction follows,
 since the text changed under it. A reading whose server is the one
 paused waits, deferred, and comes round once the card is back (7).
 
+**The pictures of a scanned book.** A scanned page is one image, so the
+figure finder has nothing to point at; marker's layout finds the figures
+inside the page and crops them, and prax keeps those crops: the parse
+inlines each as a data URL captioned `Picture on page N` (with the
+"Figure N" line under it when there is one), the door files it in the
+archive as a content-addressed artifact before indexing — the one kind
+of figure not served out of the original, since the original holds
+only the page — and references it like any figure. The vision pass
+reads them (`prax reread --extractor figures --mode all --ids …`; their
+captions do not claim a figure, so `all`), a worker fetching the
+picture from the door; a figure-refs pass keeps them. A New Kind of
+Science, read again with marker, gets its pictures this way.
+
 `marker` is an explicit extractor, never a default or a fallback: asked
 for per document, stamped `marker/2.0.0` (the version read from the
 role's venv, `+balanced` for the other mode), reversible through

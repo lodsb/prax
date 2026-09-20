@@ -29,6 +29,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from prax import parsers, store
+from prax.parsers import figures
 
 MIN_CHARS = 200  # below this an extraction is "empty"
 MIN_RATIO = 0.2  # an upgrade must keep at least this share of the old length
@@ -227,6 +228,9 @@ def apply_parse(
             con, doc_id, {"extractor": stamp, "error": error or "no text"}, pages=pages
         )
         return "error"
+    # a picture the parser inlined (a scanned page's, cropped by marker)
+    # is filed in the archive and referenced: no blob in a text artifact
+    text, _filed = figures.file_inline(text.strip(), store.archive_blob)
     text = text.strip()
     old_len = doc["text_len"]
     entry = {"extractor": stamp, "chars": len(text), "seconds": seconds}

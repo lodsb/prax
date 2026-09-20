@@ -18,12 +18,12 @@ time, so the serving path never loads them):
 | docling         | application/pdf | IBM Docling layout + table models; explicit   |
 |                 |                 | only, seconds per page                        |
 | trafilatura     | text/html       | article Markdown, boilerplate stripped, code  |
+|                 |                 | blocks fenced                                 |
 | video           | text/html       | a video capture of the extension's: transcript|
 |                 |                 | with time marks, frames as figures, chapters  |
 |                 |                 | as headings (named by the document, meta.parser)|
 | polish          | text/html       | an automatic transcript punctuated by the     |
 |                 |                 | polish step's model, the fillers dropped      |
-|                 |                 | blocks fenced                                 |
 | docx            | .docx           | Word: zip of XML read here, headings, lists,  |
 |                 |                 | tables; no dependency                         |
 | office          | .doc .rtf .odt  | LibreOffice converts to .docx, then as above; |
@@ -56,6 +56,8 @@ extractor whose output changes without a package release bumps its
 
 from __future__ import annotations
 
+import base64
+import binascii
 import functools
 import importlib
 import importlib.metadata
@@ -555,6 +557,8 @@ def _marker(data: bytes) -> str:
     with _pymupdf_open(data) as doc:
         count = doc.page_count
         figs = figures.pdf_figures(doc)
+        # the pages without a text layer: their pictures are marker's crops
+        scanned = {p.number for p in doc if len(p.get_text().strip()) < 20}
     # a long document a window of pages at a time, as pymupdf4llm reads
     # it: marker's server converts the range asked for and numbers the
     # pages as the document does, so the parts join as one
@@ -564,6 +568,7 @@ def _marker(data: bytes) -> str:
         else [(a, min(a + window, count) - 1) for a in range(0, count, window)]
     )
     parts = []
+    images: dict[str, str] = {}
     for span in ranges:
         form = {
             "output_format": "markdown",
@@ -589,9 +594,64 @@ def _marker(data: bytes) -> str:
         if not body.get("success"):
             raise ExtractionError(f"marker failed: {str(body.get('error', ''))[:200]}")
         parts.append(str(body.get("output") or ""))
-    text = _MARKER_IMAGE.sub("", "\n\n".join(parts))
+        images.update(body.get("images") or {})
+    text = _marker_scan_pictures("\n\n".join(parts), images, scanned)
+    text = _MARKER_IMAGE.sub("", text)
     text = _marker_pages(text, count)
     return figures.place(text, figs)
+
+
+_MARKER_IMAGE_REF = re.compile(
+    r"^!\[(?P<alt>[^\]\n]*)\]"
+    r"\((?P<name>_page_(?P<page>\d+)_[A-Za-z]+_\d+\.\w+)\)[ \t]*$",
+    re.MULTILINE,
+)
+_MARKER_CAPTION = re.compile(
+    r"^\W*(fig\.?|figure|abb\.?|abbildung|plate)\s*\d+", re.IGNORECASE
+)
+
+
+def _marker_scan_pictures(text: str, images: dict[str, str], scanned: set[int]) -> str:
+    """marker's own crops of the figures on the scanned pages, inlined as
+    data URLs for the door to file (``figures.file_inline``): a scanned
+    page holds no image object a figure could be served from, so the crop
+    is the figure. Captioned ``Picture on page N``, with the "Figure N"
+    line under it when there is one; the crops of printed pages are
+    dropped as before (their images are found in the original)."""
+    if not images or not scanned:
+        return text
+    lines = text.split("\n")
+    out: list[str] = []
+    for i, line in enumerate(lines):
+        m = _MARKER_IMAGE_REF.match(line.strip())
+        if not m or int(m.group("page")) not in scanned:
+            out.append(line)
+            continue
+        b64 = images.get(m.group("name"))
+        try:
+            ok = bool(b64) and bool(base64.b64decode(b64, validate=True))
+        except (ValueError, binascii.Error):
+            ok = False
+        if not ok:
+            continue
+        page = int(m.group("page")) + 1
+        caption = f"{figures.FILED}{page}"
+        for nxt in lines[i + 1 : i + 4]:
+            s = nxt.strip()
+            if s and _MARKER_CAPTION.match(s):
+                caption += ": " + " ".join(s.split())[:200].replace("]", ")")
+                break
+            if s:
+                break
+        ext = m.group("name").rsplit(".", 1)[-1].lower()
+        media = {
+            "jpg": "image/jpeg",
+            "jpeg": "image/jpeg",
+            "png": "image/png",
+            "webp": "image/webp",
+        }.get(ext, "image/jpeg")
+        out.append(f"![{caption}](data:{media};base64,{b64.strip()})")
+    return "\n".join(out)
 
 
 def _comments_wanted() -> bool:

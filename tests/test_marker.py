@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import sqlite3
 import textwrap
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -19,8 +20,8 @@ import pytest
 from fastapi.testclient import TestClient
 from test_parsers import AMBRITS_PDF
 
-from prax import chunking, config, parsers, up
-from prax.parsers import figures
+from prax import chunking, config, parsers, store, up
+from prax.parsers import figures, queue
 
 needs_pymupdf = pytest.mark.skipif(
     importlib.util.find_spec("pymupdf") is None, reason="pymupdf not installed"
@@ -80,8 +81,12 @@ class FakeMarker(BaseHTTPRequestHandler):
                 f"{{{n}}}" + "-" * 48 + f"\n\nPage {n + 1} of the book."
                 for n in range(a, b + 1)
             )
+        images: dict[str, str] = {}
+        answer = getattr(FakeMarker, "answer", None)
+        if answer is not None:  # a test's own page text and crops
+            output, images = answer()
         out = json.dumps(
-            {"format": "markdown", "output": output, "images": {}, "success": True}
+            {"format": "markdown", "output": output, "images": images, "success": True}
         ).encode()
         self.send_response(200)
         self.send_header("content-type", "application/json")
@@ -335,3 +340,70 @@ def test_a_marker_read_asks_for_the_formula_readings_next(
             meta["reading"]["extractor"] == "marker"
             and meta["reading"]["state"] == "done"
         )
+
+
+def test_a_scanned_pages_pictures_are_markers_crops_filed_by_the_door(
+    con: sqlite3.Connection,
+    data_dir: Path,
+    marker_server: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A scanned page holds no image object a figure could be served from:
+    marker's crop of the figure is inlined by the extractor, filed in the
+    archive by the door, referenced as a figure like any, served out of the
+    archive, kept by a figure-refs pass, and fetched from the door by a
+    worker's reading."""
+    import base64
+    import io
+
+    import pymupdf
+    from PIL import Image
+
+    with pymupdf.open() as doc:  # two pages with no text layer, like a scan
+        doc.new_page()
+        doc.new_page()
+        scan = doc.tobytes()
+    buf = io.BytesIO()
+    Image.new("RGB", (120, 80), (200, 30, 30)).save(buf, "JPEG")
+    crop = buf.getvalue()
+    b64 = base64.b64encode(crop).decode()
+    fake_out = (
+        "{0}" + "-" * 48 + "\n\nA page of the scan.\n\n![](_page_0_Figure_1.jpeg)\n\n"
+        "Figure 1: The rig, as printed.\n\n![](_page_0_Picture_2.jpeg)\n\n"
+        "{1}" + "-" * 48 + "\n\nThe second page.\n\n![](_page_1_Figure_0.jpeg)\n"
+    )
+    images = {
+        "_page_0_Figure_1.jpeg": b64,
+        "_page_0_Picture_2.jpeg": b64,
+        "_page_1_Figure_0.jpeg": "not base64!!",
+    }
+    monkeypatch.setattr(
+        FakeMarker, "answer", staticmethod(lambda: (fake_out, images)), raising=False
+    )
+    text = parsers.by_name("marker")(scan)
+    # both pictures of the scanned page are inlined (the same crop twice is
+    # one artifact later), the one that does not decode is dropped
+    inlined = list(figures.DATA_IMAGE.finditer(text))
+    assert len(inlined) == 2 and "_page_" not in text
+    assert (
+        inlined[0].group("alt") == "Picture on page 1: Figure 1: The rig, as printed."
+    )
+    assert inlined[1].group("alt") == "Picture on page 1"
+    # the door files them before indexing: no blob in the artifact
+    doc_id = store.register(con, scan, mime="application/pdf", title="scan")["doc_id"]
+    assert queue.apply_parse(con, doc_id, stamp="marker/2.0.0", text=text) == "created"
+    kept = store.get_document(con, doc_id)["text"]
+    refs = figures.refs(kept)
+    assert "data:image" not in kept and len(refs) == 2
+    ref = refs[0]["ref"]
+    assert refs[0]["caption"].startswith("Picture on page 1: Figure 1")
+    assert store.figure_blob(ref) == (crop, "image/jpeg")
+    assert figures.find(scan, ref) is None  # not in the original
+    with_ref = [c for c in chunking.chunk(kept) if c.kind == "figure" and c.data]
+    assert len(with_ref) == 2 and with_ref[0].data["ref"] == ref
+    # a figure-refs pass keeps them (the original will never yield them)
+    assert figures.REF.search(figures.add_refs(scan, kept)) is not None
+    # what a worker's reading sees: the fetch hook stands in for the archive
+    with figures.fetching(lambda r: store.figure_blob(r)):
+        assert figures.find(scan, ref) == (crop, "image/jpeg")
+    assert figures.find(scan, ref) is None

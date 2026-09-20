@@ -1140,7 +1140,7 @@ def figure(doc_id: int, ref: str, request: Request) -> Response:
     info = store.original_info(con, doc_id)
     if info is None or not info["path"].exists():
         raise HTTPException(404, "no such document")
-    found = figures.find(info["path"].read_bytes(), ref)
+    found = figures.find(info["path"].read_bytes(), ref) or store.figure_blob(ref)
     if found is None:
         raise HTTPException(404, "no such figure in the original")
     data, media = found

@@ -30,6 +30,7 @@ from typing import Any, Self
 
 from prax import embeddings, extraction, hostinfo, inbox, models, parsers, titles, work
 from prax.client import Door
+from prax.parsers import figures
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
@@ -117,7 +118,12 @@ def do_parse(
         for ext in exts:
             t0 = time.monotonic()
             try:
-                with _mode(ext.name, it.get("mode")):
+                with (
+                    _mode(ext.name, it.get("mode")),
+                    figures.fetching(
+                        lambda ref, d=door, i=doc_id: _figure_from_door(d, i, ref)
+                    ),
+                ):
                     stamp = ext.stamp
                     text = ext(
                         data, filename=it.get("filename"), previous=it.get("previous")
@@ -227,6 +233,16 @@ class _Beating:
     def __exit__(self, *exc: object) -> None:
         self.stop.set()
         self.thread.join(timeout=5)
+
+
+def _figure_from_door(door: Door, doc_id: int, ref: str) -> tuple[bytes, str] | None:
+    """A figure the original does not hold (a filed picture of a scanned
+    page): the door serves it out of its archive."""
+    try:
+        data = door.get_bytes(f"/doc/{doc_id}/figure/{ref}")
+    except Exception:  # noqa: BLE001 - not there: the reading skips it
+        return None
+    return (data, figures.media_of(data)) if data else None
 
 
 def _page_count(data: bytes) -> int | None:

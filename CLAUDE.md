@@ -174,7 +174,11 @@ loop writes. What that model may and may not do, as a reference:
   *of* belongs in `data`, not in a kind of its own. A figure
   is a line in the text, `![caption](figure:<sha256>)`, and a `figure`
   chunk with the reference, caption and readings in `data`; its bytes
-  are served out of the original by hash, never stored again. A display
+  are served out of the original by hash, never stored again — except a
+  picture of a scanned page, which no object in the original holds:
+  marker's crop of it is filed as its own content-addressed artifact
+  (`figures.FILED` in its caption; a parse inlines it as a data URL, the
+  door files it before indexing, `figures.file_inline`). A display
   equation alone on its line is a `formula` chunk with its LaTeX, the
   number the prose refers to it by and any readings in `data`; inline
   maths stays in the text chunk around it. A video is a capture like a

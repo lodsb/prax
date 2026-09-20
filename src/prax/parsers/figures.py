@@ -54,6 +54,19 @@ REF = re.compile(
 READ_BY = re.compile(r"^\*Figure, as read by (?P<model>.+?):\*", re.MULTILINE)
 FIGURES_HEADING = "## Figures"
 UNCAPTIONED = "Figure on page "  # a PDF image no caption claims
+# a picture of a scanned page: no object in the original holds it, so
+# marker's crop is kept as its own content-addressed artifact, and its
+# caption says so — a figure-refs pass keeps such a reference, since the
+# original will never yield it
+FILED = "Picture on page "
+# a picture a parser inlines in its text for the door to file: what the
+# door turns into a figure reference before the text is indexed
+DATA_IMAGE = re.compile(
+    r"^!\[(?P<alt>[^\]\n]*)\]"
+    r"\((?P<url>data:image/[a-z+.-]+;base64,[A-Za-z0-9+/=\s]+)\)[ \t]*$",
+    re.MULTILINE,
+)
+MAX_FILED_BYTES = 8_000_000  # a picture bigger than this is not filed
 
 
 @dataclass
@@ -309,10 +322,57 @@ def _page_span(lines: list[str], page: int) -> tuple[int | None, int | None]:
 # ---------------------------------------------------------------- lookup
 
 
+# Where a figure that is not in the original comes from — a filed picture
+# (FILED): on the door, the archive; on a worker, the door's own figure
+# route. Set for the duration of a reading (``with fetching(fn)``).
+_fetch: list[Any] = [None]
+
+
+class fetching:
+    """``with figures.fetching(fn):`` — ``fn(ref) -> (bytes, media) | None``
+    answers for the figures the original does not hold."""
+
+    def __init__(self, fn: Any) -> None:
+        self.fn = fn
+        self.before: Any = None
+
+    def __enter__(self) -> None:
+        self.before = _fetch[0]
+        _fetch[0] = self.fn
+
+    def __exit__(self, *exc: object) -> None:
+        _fetch[0] = self.before
+
+
+def media_of(data: bytes) -> str:
+    """An image's media type from its first bytes (what a filed picture is
+    served as)."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    return "application/octet-stream"
+
+
 def find(data: bytes, ref: str) -> tuple[bytes, str] | None:
     """The bytes of the figure ``ref`` inside an original (a PDF or an HTML
-    snapshot, told apart by their bytes), with their media type; None when
-    the original has no such image."""
+    snapshot, told apart by their bytes), with their media type; else what
+    the fetch hook answers (a filed picture: the archive on the door, the
+    door's figure route on a worker); None when nothing has it."""
+    found = _find_in(data, ref)
+    if found is None and _fetch[0] is not None:
+        try:
+            found = _fetch[0](ref)
+        except Exception:  # noqa: BLE001 - the door away is no figure
+            found = None
+    return found
+
+
+def _find_in(data: bytes, ref: str) -> tuple[bytes, str] | None:
     if data[:5] == b"%PDF-":
         for fig in of(data):
             if fig.ref == ref:
@@ -323,6 +383,31 @@ def find(data: bytes, ref: str) -> tuple[bytes, str] | None:
         if found and sha(found[0]) == ref:
             return found
     return None
+
+
+def file_inline(text: str, archive: Any) -> tuple[str, int]:
+    """The text with every picture a parser inlined (``DATA_IMAGE``) filed
+    through ``archive(bytes) -> sha`` and referenced as ``figure:<sha>``
+    in its place; how many were filed. A picture too big, or one whose
+    data URL does not decode, is dropped from the text."""
+    n = 0
+
+    def sub(m: re.Match[str]) -> str:
+        nonlocal n
+        found = _data_url(m.group("url").replace("\n", "").replace(" ", ""))
+        if found is None or len(found[0]) > MAX_FILED_BYTES:
+            return ""
+        ref = archive(found[0])
+        n += 1
+        alt = m.group("alt").replace("]", ")")
+        return f"![{alt}](figure:{ref})"
+
+    text = DATA_IMAGE.sub(sub, text)
+    # a data line the pattern did not take (malformed): no blob stays behind
+    text = re.sub(
+        r"^!\[[^\]\n]*\]\(data:image/[^)\n]*\)[ \t]*$", "", text, flags=re.MULTILINE
+    )
+    return text, n
 
 
 def of(data: bytes) -> list[Figure]:
@@ -353,7 +438,10 @@ def prune(text: str, keep: set[str]) -> str:
     for line in text.split("\n"):
         m = REF.match(line)
         if m:
-            skipping = m.group("ref") not in keep
+            # a filed picture is never in the original: kept
+            skipping = m.group("ref") not in keep and not m.group("alt").startswith(
+                FILED
+            )
             if skipping:
                 continue
         elif skipping and READ_BY.match(line):

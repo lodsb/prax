@@ -957,6 +957,26 @@ THIN_BYTES_PER_PAGE = 100  # under this much text a page, the layer is the cover
 THIN_MIN_PAGES = 5  # a leaflet is not a scanned book
 
 
+def archive_blob(data: bytes) -> str:
+    """Content-address ``data`` into the archive (a filed picture: a
+    parser's crop of a scanned page, which no original holds); its sha."""
+    return _archive_bytes(data)
+
+
+def figure_blob(ref: str) -> tuple[bytes, str] | None:
+    """A filed picture by its reference, with its media type; None when
+    the archive has no such artifact."""
+    if not re.fullmatch(r"[0-9a-f]{16,64}", ref or ""):
+        return None
+    path = _archive_path(ref)
+    if not path.exists():
+        return None
+    from prax.parsers import figures
+
+    data = path.read_bytes()
+    return data, figures.media_of(data)
+
+
 def page_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
     """How many pages each of those PDFs has: ``meta.pages`` where a parse
     recorded it, else counted from the original when pymupdf is here (the
