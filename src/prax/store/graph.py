@@ -55,6 +55,7 @@ def _docs_by_zotero_key(con: sqlite3.Connection, key: str) -> list[dict[str, Any
 
 
 ASK_FACT_RELS_SKIPPED = ("cites",)  # dozens per paper; the passages carry them
+_CONFIDENCE_BY_RANK = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 
 
 @_reading
@@ -144,31 +145,50 @@ def document_context(
 
     # citations: what this document cites, and what cites it (source_doc is
     # the citing document); titles resolved to library documents where present
+    # each with the surest confidence any producer gave it: Crossref's
+    # and a printed id's edges are EXTRACTED, a title match INFERRED
+    # (the score in its evidence), a tie between twins AMBIGUOUS
     cites_rows = con.execute(
         """
-        SELECT DISTINCT t.name FROM edges x
+        SELECT t.name, min(CASE x.confidence WHEN 'EXTRACTED' THEN 0
+                           WHEN 'INFERRED' THEN 1 ELSE 2 END) AS rank
+        FROM edges x
         JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst
         WHERE x.rel = 'cites' AND x.valid_to IS NULL AND s.name = ? AND s.type = 'paper'
-        ORDER BY t.name
+        GROUP BY t.name ORDER BY t.name
         """,
         (title,),
     ).fetchall()
     cited_titles = [r["name"] for r in cites_rows]
     in_library = _doc_ids_by_title(con, cited_titles) if cited_titles else {}
     cites = sorted(
-        ({"title": t, "doc_id": in_library.get(t)} for t in cited_titles),
+        (
+            {
+                "title": r["name"],
+                "doc_id": in_library.get(r["name"]),
+                "confidence": _CONFIDENCE_BY_RANK[r["rank"]],
+            }
+            for r in cites_rows
+        ),
         key=lambda c: (c["doc_id"] is None, c["title"].lower()),
     )
     cited_by = [
-        dict(r)
+        {
+            "doc_id": r["doc_id"],
+            "title": r["title"],
+            "confidence": _CONFIDENCE_BY_RANK[r["rank"]],
+        }
         for r in con.execute(
             """
-            SELECT DISTINCT x.source_doc AS doc_id, d.title FROM edges x
+            SELECT x.source_doc AS doc_id, d.title,
+                   min(CASE x.confidence WHEN 'EXTRACTED' THEN 0
+                       WHEN 'INFERRED' THEN 1 ELSE 2 END) AS rank
+            FROM edges x
             JOIN entities t ON t.id = x.dst JOIN documents d ON d.id = x.source_doc
             WHERE x.rel = 'cites' AND x.valid_to IS NULL AND t.name = ?
               AND t.type = 'paper'
               AND x.source_doc != ?
-            ORDER BY d.title
+            GROUP BY x.source_doc, d.title ORDER BY d.title
             """,
             (title, doc_id),
         )

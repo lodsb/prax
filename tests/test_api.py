@@ -152,7 +152,12 @@ def test_document_context(client: TestClient) -> None:
     store.link(
         con, E("Paper A", "paper", "cites", "Outside Work", "paper"), source_doc=a
     )
-    store.link(con, E("Paper C", "paper", "cites", "Paper A", "paper"), source_doc=c)
+    store.link(
+        con,
+        E("Paper C", "paper", "cites", "Paper A", "paper"),
+        source_doc=c,
+        confidence="INFERRED",  # matched by title from C's reference list
+    )
     ctx = client.get(f"/doc/{a}/context").json()
     assert ctx["summary"] == "A is about grains."
     assert [(e["name"], e["rel"]) for e in ctx["entities"]] == [
@@ -160,10 +165,12 @@ def test_document_context(client: TestClient) -> None:
         ("phase vocoder", "uses"),
     ]
     assert ctx["cites"] == [
-        {"title": "Paper B", "doc_id": b},
-        {"title": "Outside Work", "doc_id": None},
+        {"title": "Paper B", "doc_id": b, "confidence": "EXTRACTED"},
+        {"title": "Outside Work", "doc_id": None, "confidence": "EXTRACTED"},
     ]
-    assert ctx["cited_by"] == [{"doc_id": c, "title": "Paper C"}]
+    assert ctx["cited_by"] == [
+        {"doc_id": c, "title": "Paper C", "confidence": "INFERRED"}
+    ]
     assert ctx["shared"][0]["doc_id"] == c and ctx["shared"][0]["count"] == 2
     assert ctx["same_authors"] == [
         {"doc_id": b, "title": "Paper B", "authors": ["Ada"]}
