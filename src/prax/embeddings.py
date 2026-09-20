@@ -14,8 +14,14 @@ brackets overrides it for one run):
 * ``variant`` [``PRAX_EMBED_VARIANT``]: ``int8`` (default: the faster one
   on CPU and on DirectML alike, and what every vector in the store was
   made with) or ``fp32``.
-* ``providers`` [``PRAX_EMBED_PROVIDERS``]: onnxruntime providers
-  (default: DirectML if the runtime offers it, else CPU).
+* ``providers`` [``PRAX_EMBED_PROVIDERS``]: onnxruntime providers for the
+  batch embedder — the worker's (default: DirectML if the runtime offers
+  it, else CPU).
+* ``door_providers`` [``PRAX_DOOR_EMBED_PROVIDERS``]: the providers for the
+  door's embedder (``serving()``), which embeds one query at a time:
+  the CPU by default, 3 ms a query, and never queued behind the card's
+  other work — on DirectML a query waited seconds while llama-server
+  had the card.
 * ``threads`` [``PRAX_EMBED_THREADS``]: intra-op threads for the CPU
   provider.
 
@@ -214,8 +220,8 @@ class HashEmbedder:
 # ---------------------------------------------------------------- current
 
 
-@functools.lru_cache(maxsize=2)
-def _build(setting: str) -> Embedder | None:
+@functools.lru_cache(maxsize=4)
+def _build(setting: str, providers: tuple[str, ...] | None) -> Embedder | None:
     if setting in ("0", "off", "false", ""):
         return None
     if setting == "hash":
@@ -224,12 +230,32 @@ def _build(setting: str) -> Embedder | None:
         raise ValueError(
             f"unknown embedding model {setting!r}; known: {sorted(MODELS)}"
         )
-    return OnnxEmbedder(MODELS[setting])
+    return OnnxEmbedder(
+        MODELS[setting], providers=list(providers) if providers else None
+    )
+
+
+def _setting() -> str:
+    return str(config.setting("embeddings.model", "PRAX_EMBED", DEFAULT_MODEL))
 
 
 def current() -> Embedder | None:
-    """The configured embedder, or None when embeddings are disabled.
+    """The configured embedder for batches — the worker's — or None when
+    embeddings are disabled. Built once per setting; the ONNX session
+    itself loads on first use."""
+    return _build(_setting(), None)
 
-    Built once per setting; the ONNX session itself loads on first use.
-    """
-    return _build(str(config.setting("embeddings.model", "PRAX_EMBED", DEFAULT_MODEL)))
+
+DOOR_PROVIDERS = ("CPUExecutionProvider",)
+
+
+def serving() -> Embedder | None:
+    """The door's embedder: the same model, one query at a time, on the
+    providers ``embeddings.door_providers`` names — the CPU by default.
+    A search's query vector is a millisecond's work; on the card it
+    queued behind the worker's model for seconds."""
+    providers = tuple(
+        config.words("embeddings.door_providers", "PRAX_DOOR_EMBED_PROVIDERS")
+        or DOOR_PROVIDERS
+    )
+    return _build(_setting(), providers)

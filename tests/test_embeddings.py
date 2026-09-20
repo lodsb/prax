@@ -337,3 +337,33 @@ def test_real_model_embeds_and_ranks(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     q = emb.embed_query("how to build a reverb")
     assert vs.shape == (2, 384) and float(vs[0] @ q) > float(vs[1] @ q)
+
+
+def test_the_door_embeds_a_query_on_the_cpu_and_the_worker_batches_where_told(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same model twice: the door's one query at a time on the CPU
+    (never behind the card's other work), the worker's batches on the
+    providers embeddings.providers names."""
+    pytest.importorskip("onnxruntime")
+    from prax import embeddings
+
+    for k in ("PRAX_EMBED", "PRAX_EMBED_PROVIDERS", "PRAX_DOOR_EMBED_PROVIDERS"):
+        monkeypatch.delenv(k, raising=False)
+    embeddings._build.cache_clear()
+    door = embeddings.serving()
+    worker = embeddings.current()
+    assert door is not None and worker is not None
+    assert door.name == worker.name and door is not worker
+    assert door.providers == ["CPUExecutionProvider"]
+    assert worker.providers is None  # decided at load: DirectML when there
+    monkeypatch.setenv(
+        "PRAX_DOOR_EMBED_PROVIDERS", "DmlExecutionProvider,CPUExecutionProvider"
+    )
+    assert embeddings.serving().providers == [
+        "DmlExecutionProvider",
+        "CPUExecutionProvider",
+    ]
+    # the test embedder is the same either way
+    monkeypatch.setenv("PRAX_EMBED", "hash")
+    assert embeddings.serving().name == embeddings.current().name == "hash-test"

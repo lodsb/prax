@@ -1363,6 +1363,20 @@ Side by side on one GPU: a watching worker and a second one-off worker
 (three on the desktop), which is the limit; a second GPU model or a
 second model server does not fit next to a 22 GB one on a 24 GB card.
 
+**When the UI feels slow.** The door logs every request over two seconds
+to `logs/door.log` — `slow: GET /search took 12.1 s (0 other requests in
+flight; jobs: worker; fts 0.3 s, embed 11.2 s, …)` — with what else
+was in flight, which jobs ran, and for a search which side took the
+time. Read that line before guessing. What it has said so far, and
+what was done: reads waited on the store's write lock (they take none
+now); the embed hand-out scanned a million chunks under it (counts
+first); the index merge rewrote a gigabyte under the index lock (built
+beside it now); and the door embedded each query on the card, behind
+the worker's model — `embeddings.door_providers` is the CPU by
+default, three milliseconds a query. Python is not on that list: the
+stalls were locks and shared devices, and the heavy lifting (SQLite,
+usearch, ONNX, the model) is native already.
+
 The UI polls `GET /changes` every ten seconds while its tab is visible:
 a stamp made of SQLite's `data_version` (another process committed) and
 the door's own write count, plus the number of running jobs for the

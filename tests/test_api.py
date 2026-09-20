@@ -590,3 +590,13 @@ def test_extension_origins_get_cors_and_private_network_consent(
         },
     )
     assert "access-control-allow-origin" not in r.headers
+
+
+def test_a_search_reports_where_its_time_went(client: TestClient) -> None:
+    from prax import store
+
+    client.post("/ingest", json={"text": "granular synthesis scatters grains " * 20})
+    timing: dict[str, float] = {}
+    hits = store.search(client.app.state.con, "granular grains", timing=timing)
+    assert hits and "fts" in timing and timing["fts"] >= 0
+    assert all(v >= 0 for v in timing.values())

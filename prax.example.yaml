@@ -101,7 +101,9 @@ steps:
 # embeddings:
 #   model: bge-small-en-v1.5   # [PRAX_EMBED] `0` off, `hash` for tests
 #   variant: int8              # [PRAX_EMBED_VARIANT] int8 (faster) or fp32
-#   providers: [DmlExecutionProvider, CPUExecutionProvider]  # [PRAX_EMBED_PROVIDERS]
+#   providers: [DmlExecutionProvider, CPUExecutionProvider]  # [PRAX_EMBED_PROVIDERS] the worker's batches
+#   door_providers: [CPUExecutionProvider]  # [PRAX_DOOR_EMBED_PROVIDERS] the door's one query at a
+#                              #   time: 3 ms on the CPU, seconds on a card the worker's model has
 #   threads: 0                 # [PRAX_EMBED_THREADS] 0: onnxruntime decides
 
 # vectors:

@@ -165,13 +165,18 @@ async def _count_writes(request: Request, call_next: Any) -> Any:
         with contextlib.suppress(Exception):
             running = store.list_jobs(store.thread_connection(), limit=1)["running"]
             jobs = ", ".join(j["name"] for j in running)
+        detail = getattr(request.state, "detail", None)
+        where = ""
+        if isinstance(detail, dict) and detail:
+            where = "; " + ", ".join(f"{k} {v:.1f} s" for k, v in detail.items())
         logging.getLogger("prax.door").warning(
-            "slow: %s %s took %.1f s (%d other requests in flight%s)",
+            "slow: %s %s took %.1f s (%d other requests in flight%s%s)",
             request.method,
             request.url.path,
             seconds,
             others,
             f"; jobs: {jobs}" if jobs else "",
+            where,
         )
     return response
 
@@ -917,6 +922,8 @@ def search(
     doctype: str | None = None,
     domain: str | None = None,
 ) -> list[dict[str, Any]]:
+    timing: dict[str, float] = {}
+    request.state.detail = timing  # the slow-request log says which side took long
     try:
         return store.search(
             _con(request),
@@ -927,6 +934,7 @@ def search(
             rerank=rerank,
             doctype=doctype,
             domain=domain,
+            timing=timing,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

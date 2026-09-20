@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
@@ -480,8 +481,12 @@ def search(
     rerank: bool | None = None,
     doctype: str | None = None,
     domain: str | None = None,
+    timing: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
-    """Search returning compact snippets + ids (agent-shaped).
+    """Search returning compact snippets + ids (agent-shaped). ``timing``,
+    when given, is filled with the seconds each side took (``fts``,
+    ``embed``, ``vec``, ``field``, ``dvec``, ``finish``): what the door's
+    slow-request log says of a search that took long.
 
     ``hybrid`` fuses four rank lists at document level: chunk BM25, chunk
     KNN, and BM25 and KNN over the document field (title, kind, summary;
@@ -517,11 +522,12 @@ def search(
     fetch = max(limit, int(depth)) if reranker else limit
     if domain:
         fetch *= 3
-    hits = _search_hits(con, query, fetch, kind, mode, doctype)
+    hits = _search_hits(con, query, fetch, kind, mode, doctype, timing)
     if domain:
         hits = _filter_domain(con, hits, domain)
     if reranker is not None and hits:
-        hits = _apply_rerank(con, reranker, query, hits)
+        with _Took(timing)("rerank"):
+            hits = _apply_rerank(con, reranker, query, hits)
     return hits[:limit]
 
 
@@ -568,8 +574,9 @@ def _search_hits(
     kind: str | None,
     mode: str,
     doctype: str | None = None,
+    timing: dict[str, float] | None = None,
 ) -> list[dict[str, Any]]:
-    emb = embeddings.current() if mode != "fts" else None
+    emb = embeddings.serving() if mode != "fts" else None
     vectors_ready = (
         emb is not None
         and vectors_available()
@@ -596,12 +603,15 @@ def _search_hits(
         "fts_all": ALL_TERMS_WEIGHT,
         "fts_rare": RARE_TERMS_WEIGHT,
     }
-    lists = [_fts_search(con, query, depth, kind, snippets=False, expr=or_expr)]
+    took = _Took(timing)
+    with took("fts"):
+        lists = [_fts_search(con, query, depth, kind, snippets=False, expr=or_expr)]
     names = ["fts"]
     if and_expr and ALL_TERMS_WEIGHT > 0:
-        lists.append(
-            _fts_search(con, query, depth, kind, snippets=False, expr=and_expr)
-        )
+        with took("fts"):
+            lists.append(
+                _fts_search(con, query, depth, kind, snippets=False, expr=and_expr)
+            )
         names.append("fts_all")
     rare = _rare_terms(con, terms) if RARE_TERMS_WEIGHT > 0 else []
     if rare and len(rare) == len(terms):
@@ -622,7 +632,8 @@ def _search_hits(
         fused = _rrf(lists, names, fetch, weights)
         return _finish(con, fused, query, limit, doctype, expr=or_expr)
     assert emb is not None
-    vector = emb.embed_query(expanded_text(terms) if VEC_EXPAND else query)
+    with took("embed"):
+        vector = emb.embed_query(expanded_text(terms) if VEC_EXPAND else query)
     if mode == "vec":
         return _finish(
             con,
@@ -632,16 +643,43 @@ def _search_hits(
             doctype,
             expr=or_expr,
         )
-    lists.append(_vec_search(con, vector, depth, kind))
+    with took("vec"):
+        lists.append(_vec_search(con, vector, depth, kind))
     names.append("vec")
     if kind is None:  # the field has no chunk kind to filter by
-        lists.append(_field_fts_search(con, query, depth, expr=or_expr))
+        with took("field"):
+            lists.append(_field_fts_search(con, query, depth, expr=or_expr))
         names.append("field")
         weights["field"] = _field_weight(query)
-        lists.append(_field_vec_search(con, emb.name, vector, depth))
+        with took("dvec"):
+            lists.append(_field_vec_search(con, emb.name, vector, depth))
         names.append("dvec")
     fused = _rrf(lists, names, fetch, weights)
-    return _finish(con, fused, query, limit, doctype, expr=or_expr)
+    with took("finish"):
+        return _finish(con, fused, query, limit, doctype, expr=or_expr)
+
+
+class _Took:
+    """``with took("vec"):`` adds the block's seconds to ``timing["vec"]``
+    (nothing when no dict was given)."""
+
+    def __init__(self, timing: dict[str, float] | None) -> None:
+        self.timing = timing
+        self.name = ""
+        self.t0 = 0.0
+
+    def __call__(self, name: str) -> _Took:
+        self.name = name
+        return self
+
+    def __enter__(self) -> None:
+        self.t0 = time.perf_counter()
+
+    def __exit__(self, *exc: object) -> None:
+        if self.timing is not None:
+            self.timing[self.name] = (
+                self.timing.get(self.name, 0.0) + time.perf_counter() - self.t0
+            )
 
 
 def _field_weight(query: str) -> float:
@@ -996,7 +1034,7 @@ def _similar_documents(
     index, grouped by document). The centroid skips chunks under
     ``CENTROID_MIN_CHARS`` (boilerplate headers) that pull it toward every
     document sharing the same template."""
-    emb = embeddings.current()
+    emb = embeddings.serving()
     if emb is None:
         return []
     import numpy as np  # the embed extra; only reachable when an index exists
