@@ -9,4 +9,5 @@ dist/
 .env
 *.log
 logs/
-uploads/  # marker's server keeps the last upload where it runs (prax up runs it in run/ now)
+# marker's server keeps the last upload where it runs (prax up runs it in run/ since 4ff564b)
+uploads/
