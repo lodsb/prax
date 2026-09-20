@@ -803,9 +803,26 @@ def print_version() -> int:
 def follow_job(door: Door, job_id: int, *, quiet: bool, what: str = "the job") -> int:
     """Poll a job the door started until it is over, printing each new
     note; the exit code says how it ended."""
+    import httpx
+
     last = ""
+    misses = 0
     while True:
-        row = door.get_json(f"/jobs/{job_id}")
+        try:
+            row = door.get_json(f"/jobs/{job_id}")
+        except httpx.HTTPError as exc:
+            # a poll the door dropped (a keep-alive connection it closed
+            # under load, a restart between two polls): the job outlives it
+            misses += 1
+            if misses > 30:
+                raise
+            if not quiet and misses == 1:
+                out.hint(
+                    f"  (the door did not answer a poll: {type(exc).__name__}; waiting)"
+                )
+            time.sleep(2)
+            continue
+        misses = 0
         note = row.get("note") or ""
         if row["status"] != "running":
             break

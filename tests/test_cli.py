@@ -346,3 +346,31 @@ def test_readings_shows_the_queue_and_wait_blocks_until_it_drains(
     monkeypatch.setattr(running.time, "monotonic", lambda: float(next(clock)))
     assert run("readings", "--wait", "--timeout", "1") == 2
     assert "still waiting after 1 min" in capsys.readouterr().err
+
+
+def test_following_a_job_survives_a_dropped_poll(
+    door: TestClient,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A poll the door drops (a keep-alive connection closed under load)
+    is not the end of the job: the CLI waits and asks again."""
+    import httpx
+    from prax_cli import running
+
+    started = door.post("/maintain", json={"only": ["fields"]}).json()
+    real = running.Door.get_json
+    dropped = {"n": 0}
+
+    def flaky(self: Any, path: str, params: Any = None) -> Any:
+        if path.startswith("/jobs/") and dropped["n"] < 2:
+            dropped["n"] += 1
+            raise httpx.RemoteProtocolError("Server disconnected")
+        return real(self, path, params)
+
+    monkeypatch.setattr(running.Door, "get_json", flaky)
+    monkeypatch.setattr(running.time, "sleep", lambda s: None)
+    client = Door("http://testserver", client=door, name="test")
+    code = running.follow_job(client, started["job"], quiet=False, what="the pass")
+    assert code == 0 and dropped["n"] == 2
+    assert "did not answer a poll" in capsys.readouterr().out

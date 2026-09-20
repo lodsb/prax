@@ -619,7 +619,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser(
         "maintain",
         parents=[door_opts, as_json],
-        help="what the store does to itself: acronyms, fields, domains, duplicates, references",
+        help="what the store does to itself: acronyms, fields, domains, duplicates,"
+        " references",
         description=(
             "The maintenance pass, a job on the door: the acronyms table rebuilt"
             " from every text, the document retrieval fields, the domain rules"
@@ -631,7 +632,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--only",
-        help="a comma-separated subset of: acronyms, fields, domains, dedupe, review, references",
+        help="a comma-separated subset of: acronyms, fields, domains, dedupe, review,"
+        " references, fts",
     )
     s.add_argument(
         "--rechunk",
