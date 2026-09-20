@@ -322,7 +322,10 @@ def link_references(
     todo = []
     for doc_id, (text_hash, text) in bibs.items():
         stamp = get_meta(con, doc_id).get("references") or {}
-        if not again and stamp.get("text_hash") == text_hash:
+        # the same text, read by a pass that kept its links: nothing to do
+        # (a stamp without links is the first pass's, before the chunks
+        # carried what they cite: read again once)
+        if not again and stamp.get("text_hash") == text_hash and "links" in stamp:
             stats["unchanged"] += 1
             continue
         todo.append((doc_id, text_hash, text))
