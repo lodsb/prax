@@ -876,13 +876,19 @@ What the marker evenings taught, kept for the day:
       1.4 M vectors), opened at startup and preloaded at a merge so no
       search waits on the load (the first search after a restart once
       waited 100 s while llama-server read its model from the same disk).
-- [ ] **The morning after (2026-09-20):** the eight books are marker-read
-      with 2,983 scanned-page pictures filed; their figure readings and
-      the videos' ran from 08:00 (`scratchpad/after-figures.ps1`, which
-      re-requests the formulas of 4780 and 4280 after — a figures request
-      displaced them: a document holds one request at a time, worth a
-      queue some day). `prax maintain --only references` is the user's
-      call. The extension needs a reload in the browsers for the ad fix.
+- [x] **The morning after (2026-09-20):** the eight books are marker-read
+      with 2,983 scanned-page pictures filed and read by the vision
+      model (08:00–13:30; the videos' frames too), the two displaced
+      formula readings after (a figures request displaces a waiting
+      formulas one: a document holds one request at a time — worth a
+      queue some day). Found on the way: a filed picture was searched
+      for in the original before the door was asked (066dcc1: 23 s a
+      picture on Hindemith), and the first searches after a restart read
+      the keyword index from disk (0bf3eb1: read through at startup, the
+      `fts` merge pass, lone characters no keywords). Door and worker run
+      0bf3eb1 since 13:45. `prax maintain --only references` is the
+      user's call. The extension needs a reload in the browsers for the
+      ad fix.
 - [ ] **If the UI still feels slow from the MacBook**: the next suspect
       is `GET /doc/<id>/chunks` for a book (5 MB) on the single uvicorn
       worker while a search waits; page it. Read `logs/door.log`'s slow
