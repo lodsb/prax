@@ -66,6 +66,12 @@ browser extension: [`docs/howto.md`](docs/howto.md).
 <td><sub>A talk's figures at a glance: the frames, each by its moment and what was said there; a paper shows its figures, a scan its pages.</sub></td>
 </tr>
 <tr>
+<td colspan="2"><a href="docs/images/ask-block.png"><img src="docs/images/ask-block.png" alt="A page of one's own notes with an ask block: the person's prose and links above, the door's answer on a plate below with the question on its rim, the documents the page links and cites as entities beside it"></a></td>
+</tr>
+<tr>
+<td colspan="2"><sub>A page of your own with a standing question in it. Two comment lines between your notes; the door fills them with an answer and its sources, keeps the block answered as the library grows, and never touches a word outside the markers. The documents you link and the ones the answer cites are the page's edges, in the column beside it.</sub></td>
+</tr>
+<tr>
 <td colspan="2"><a href="docs/images/themes.png"><img src="docs/images/themes.png" alt="The six themes: Bindery, Dessau, Riso, Cyanotype, Night, Funk — the same page in each"></a></td>
 </tr>
 <tr>
@@ -113,18 +119,24 @@ ontology version, with the sentence it was read from.
 for a few steps before it writes — searching again, reading on, walking
 the graph, setting aside what is beside the point — and cites the
 passages it kept. You watch it happen, and the answer can be kept as a
-page with edges to its sources — or as a standing question: a page the
-door asks again when a document arrives that speaks to it, each answer
-a revision, your notes under it kept — or as an ask block inside a
-page of your own, two comment lines between your notes that the door
-keeps filled. A daily briefing page says what
-arrived and which answers moved. What it can and cannot do:
-[`docs/ask.md`](docs/ask.md).
+page with edges to its sources, or as a standing question — a page of
+its own, or a block inside one of yours — that the door asks again when
+a document arrives that speaks to it, each answer a revision. A daily
+briefing page says what arrived and which answers moved. What it can
+and cannot do: [`docs/ask.md`](docs/ask.md).
 
 **Keeps what you write.** Notes, project threads, topic write-ups, as
-Markdown pages with revisions. A model may append to a page, or fill
-the blocks you left for it; it never overwrites a person — a block you
-edited by hand is left alone until you say otherwise.
+Markdown pages with revisions, a document like any other: searched,
+extracted, cited. A link to a document in your prose is an edge in the
+graph while the link stands. A standing question lives inside a page as
+two comment lines — the door answers between them, with sources, and
+asks again when a document arrives that speaks to it, showing the
+model its earlier answer and naming what is new so it revises rather
+than starts over. A model may append to a page, or fill the blocks you
+left for it; it never overwrites a person — a block you edited by hand
+is left alone until you say otherwise, and a remark you keep inside one
+survives every new answer. A rename keeps the address and takes the
+page's place in the graph along.
 
 **Mends itself.** `prax heal` names the damage that recurs — a
 placeholder entity, a duplicate capture, a scan read as if its cover
@@ -136,8 +148,8 @@ time.
 ## Four ways in
 
 **The web UI** at `/ui/`: search and ask, a document with its context
-column and its figures at a glance, the graph, the review queue, pages,
-the inbox, the jobs.
+column and its figures at a glance, the graph, the review queue, the
+pages with their standing questions, the inbox, the jobs.
 
 **The `prax` command** is the whole library from a shell, and the way
 most of it gets used:

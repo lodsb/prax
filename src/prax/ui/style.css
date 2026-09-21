@@ -294,7 +294,7 @@ a.cite { text-decoration: none; border-bottom: 1px dotted currentColor; }
    be assigned or asked of it (.doc-actions-edit: a note or the editor,
    domains, promote, a second reading, ask again); at the right edge
    what takes it out of the way (.doc-actions-remove: retire, quieter) */
-.doc-actions { display: grid; grid-template-columns: 1fr auto 1fr; gap: .4rem 1.6rem; margin: .5rem 0 .6rem; font-size: .84rem; align-items: center; }
+.doc-actions { display: grid; grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr); gap: .4rem 1.6rem; margin: .5rem 0 .6rem; font-size: .84rem; align-items: center; }
 .doc-actions-zone { display: inline-flex; align-items: center; flex-wrap: wrap; gap: .3rem 1rem; }
 .doc-actions-remove { justify-self: end; }
 @media (max-width: 900px) { .doc-actions { display: flex; flex-wrap: wrap; } }
