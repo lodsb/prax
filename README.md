@@ -24,8 +24,9 @@ models, `prax work --watch` takes new documents the rest of the way —
 text, title, graph, vectors. To keep all of it running — the door, the
 worker, a local model server — name them under `run:` in `prax.yaml`
 and `prax up --install` starts them at login, on Windows, Linux or
-macOS alike. The longer version, with the Zotero import and the browser
-extension: [`docs/howto.md`](docs/howto.md).
+macOS alike — on a desktop with an icon in the tray that says what is
+up and opens prax. The longer version, with the Zotero import and the
+browser extension: [`docs/howto.md`](docs/howto.md).
 
 <table>
 <tr>

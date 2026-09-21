@@ -876,6 +876,10 @@ What the marker evenings taught, kept for the day:
       questions: "06:30"` on the live host. Later: the contradiction
       scan (a new source that `argues` against the answer's claims),
       a paragraph on top of the briefing from the model.
+- [x] **A tray icon** (195d058, cb5305e, 2026-09-21): `prax up --tray`
+      and `prax tray`, the login entry carrying `--tray` on a desktop;
+      the mark with a red dot when a role is down, the menu to open
+      prax, restart or stop a role, stop everything, the logs.
 - [ ] **Ask blocks in a person's page** (next; decided in rationale R17
       after the survey in `research.md` "Living answers and mixed
       pages", 2026-09-21): `<!-- prax:ask id=q1 "question" -->` … `<!--

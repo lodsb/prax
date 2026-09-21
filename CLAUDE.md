@@ -209,7 +209,9 @@ loop writes. What that model may and may not do, as a reference:
   (llama-server, a reranker, the door, the worker) this host keeps
   alive and `prax up` (`prax.up`) keeps them so — the operating
   system's only job is one login entry that starts `prax up`
-  (`prax.autostart`); the timed passes are the door's own clock
+  (`prax.autostart`; on a desktop with the tray icon of `prax.tray`, an
+  optional extra and a client of the supervisor's status and command
+  files, never a second supervisor); the timed passes are the door's own clock
   (`schedule:`, `prax.schedule`) and the worker's `nightly` hour, never
   a cron or scheduler entry per pass. No shell script derives the
   process model a second time.
