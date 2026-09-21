@@ -122,7 +122,7 @@ polish model for a talk's transcript. Of an image: a second reading by
 the vision model. *The figures*: the ones nobody has read, every one
 again under the current prompt (this model's earlier readings
 replaced, another model's kept), and for a PDF the images no caption
-claims. *The equations*: the unread ones, or every one again. *The
+claims (a manual's screenshots; often decoration). *The equations*: the unread ones, or every one again. *The
 graph*: the local model again, with the earlier reading's edges
 retired, and the promote flag for the expensive model. Each route is a
 button with the detail beside it and the model the step resolves to on

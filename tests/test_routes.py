@@ -57,6 +57,7 @@ def test_routes_of_a_pdf(
     assert state["text_source"] == "pymupdf4llm/3"
     assert (state["figures"], state["figures_read"]) == (3, 1)
     assert state["figures_uncaptioned"] == 1
+    assert state["figures_uncaptioned_read"] == 0
     assert (state["formulas"], state["formulas_read"]) == (1, 0)
     assert state["extraction"] is None and state["promote"] is None
     assert state["models"]["vision"] == {"name": "stub", "paid": False}
@@ -74,7 +75,7 @@ def test_routes_of_a_pdf(
     assert by["marker"]["action"]["mode"] == "fast"
     assert {"reread", "docling", "vision-pages-all"} <= set(by)
     # the figures: nobody-has-read, every-one-again, uncaptioned too
-    assert "2 of 3 figures" in by["figures"]["detail"]
+    assert "1 of 2 captioned figures" in by["figures"]["detail"]
     assert by["figures"]["available"] is True
     assert by["figures-again"]["action"] == {
         "kind": "reading",
@@ -83,7 +84,8 @@ def test_routes_of_a_pdf(
     }
     assert by["figures-all"]["action"]["mode"] == "all"
     assert by["figures-all"]["available"] is True
-    assert "1 image no caption claims" in by["figures-all"]["detail"]
+    assert by["figures-all"]["detail"].startswith("1 of 1 unread")
+    assert "the 2 captioned figures" in by["figures-again"]["detail"]
     assert by["figures"]["model"] == "stub" and by["figures"]["paid"] is False
     # the formulas step is off on this host: the route says so
     assert by["formulas"]["available"] is False

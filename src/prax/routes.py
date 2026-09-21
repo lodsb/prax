@@ -46,11 +46,13 @@ def _model(step: str) -> dict[str, Any] | None:
 
 def _counts(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
     """Figures and formulas in the document's chunks, how many of each
-    carry a reading, and how many figures no caption claims."""
+    carry a reading, and the figures no caption claims (``Figure on
+    page N``) apart, since the captioned pass leaves those out."""
     out = {
         "figures": 0,
         "figures_read": 0,
         "figures_uncaptioned": 0,
+        "figures_uncaptioned_read": 0,
         "formulas": 0,
         "formulas_read": 0,
     }
@@ -66,6 +68,8 @@ def _counts(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
             out[key + "_read"] += 1
         if key == "figures" and str(data.get("caption", "")).startswith(UNCAPTIONED):
             out["figures_uncaptioned"] += 1
+            if data.get("readings"):
+                out["figures_uncaptioned_read"] += 1
     return out
 
 
@@ -139,6 +143,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         "figures": counts["figures"],
         "figures_read": counts["figures_read"],
         "figures_uncaptioned": counts["figures_uncaptioned"],
+        "figures_uncaptioned_read": counts["figures_uncaptioned_read"],
         "formulas": counts["formulas"],
         "formulas_read": counts["formulas_read"],
         "video": bool(meta.get("video")),
@@ -285,46 +290,53 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
 
     # -- the figures
     if is_pdf or is_html:
-        n = counts["figures"]
-        unread = n - counts["figures_read"]
+        loose = counts["figures_uncaptioned"]
+        n = counts["figures"] - loose  # the captioned ones
+        unread = n - (counts["figures_read"] - counts["figures_uncaptioned_read"])
+        if n:
+            detail = (
+                f"{unread} of {n} captioned figures without a reading; the vision"
+                " model is shown the caption and the text around each, about"
+                " 4 s a figure locally"
+            )
+        elif loose:
+            detail = "no captioned figures: every image here is one no caption claims"
+        else:
+            detail = (
+                "no figure references in the text yet: read the document again"
+                " first (finds them)"
+            )
         add(
             "figures",
             "figures",
             "Read the figures nobody has read",
-            (
-                f"{unread} of {n} figures without a reading; the vision model is"
-                " shown the caption and the text around each, about 4 s a"
-                " figure locally"
-            )
-            if n
-            else "no figure references in the text yet: read the document"
-            " again first (finds them)",
+            detail,
             {"kind": "reading", "extractor": "figures", "mode": "captioned"},
             step="vision",
-            available=n > 0,
+            available=unread > 0,
         )
         add(
             "figures-again",
             "figures",
             "Read every figure again",
-            f"all {n} figures under the current prompt (the one that shows the"
-            " model the text around the figure); this model's earlier readings"
-            " replaced, another model's kept",
+            f"the {n} captioned figures under the current prompt (the one that"
+            " shows the model the text around the figure); this model's earlier"
+            " readings replaced, another model's kept",
             {"kind": "reading", "extractor": "figures", "mode": "again"},
             step="vision",
             available=n > 0,
         )
         if is_pdf:
-            loose = counts["figures_uncaptioned"]
+            loose_unread = loose - counts["figures_uncaptioned_read"]
             add(
                 "figures-all",
                 "figures",
-                "Read every image, the uncaptioned ones too",
-                f"{loose} image{'' if loose == 1 else 's'} no caption claims;"
-                " often decoration, sometimes the plot the caption missed",
+                "Read the images no caption claims too",
+                f"{loose_unread} of {loose} unread; a manual's screenshots and"
+                " panels, but often decoration",
                 {"kind": "reading", "extractor": "figures", "mode": "all"},
                 step="vision",
-                available=loose > 0,
+                available=loose_unread > 0,
             )
 
     # -- the formulas
