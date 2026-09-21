@@ -62,6 +62,10 @@ def test_the_menu_as_data() -> None:
     assert alone[-1]["label"] == "Quit the tray"
     with_up = tray.entries_of(None, supervising=True)
     assert [r["action"] for r in with_up] == ["open", None, "logs", "quit"]
+    # beside a supervisor of its own: stop it all, or only close the icon
+    beside = tray.entries_of(UP, supervising=False)
+    assert [r["action"] for r in beside[-3:]] == ["logs", "stop-all", "quit"]
+    assert beside[-2]["label"] == "Stop prax" and beside[-1]["label"] == "Quit the tray"
 
 
 def test_the_door_url_follows_the_run_section(monkeypatch: pytest.MonkeyPatch) -> None:

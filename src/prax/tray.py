@@ -76,7 +76,8 @@ def entries_of(
     """The menu as data: ``{label, action, args, enabled, default,
     children}`` rows. ``action`` names what the tray does: ``open``,
     ``logs``, ``restart``, ``stop``, ``start``, ``start-all`` (a supervisor
-    when none runs), ``quit``."""
+    when none runs), ``stop-all`` (the one running, from a tray beside
+    it), ``quit``."""
     rows: list[dict[str, Any]] = [
         {"label": "Open prax", "action": "open", "default": True, "enabled": True}
     ]
@@ -102,6 +103,9 @@ def entries_of(
                 }
             )
     rows.append({"label": "Logs folder", "action": "logs", "enabled": True})
+    if not supervising and snap is not None:
+        # beside a supervisor of its own: stop it all, the icon stays
+        rows.append({"label": "Stop prax", "action": "stop-all", "enabled": True})
     rows.append(
         {
             "label": "Quit prax" if supervising else "Quit the tray",
@@ -201,6 +205,8 @@ class Tray:
             up.command(self.data_dir, {"cmd": "start", "name": str(args)})
         elif action == "start-all":
             up.detach(self.data_dir, [])
+        elif action == "stop-all":
+            up.command(self.data_dir, {"cmd": "stop"})
         elif action == "quit":
             self.quit()
 

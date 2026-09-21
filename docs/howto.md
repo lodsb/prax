@@ -1902,8 +1902,9 @@ face to it: the mark in the tray, with a red dot when a role is down or
 nothing runs, a tooltip naming each role's state, and a menu — open
 prax in the browser, restart or stop a role, start a paused one, the
 logs folder, quit (which stops everything in order). `prax tray` alone
-puts the icon beside a supervisor already running, or offers to start
-one; a Linux user unit has no display, so the icon is not part of it
+puts the icon beside a supervisor already running — its menu has "Stop
+prax" for everything and "Quit the tray" for the icon alone — or offers
+to start one; a Linux user unit has no display, so the icon is not part of it
 there — `prax tray` from a session does the same. The tray is a client
 of the supervisor like `prax up --status`: it reads the status file and
 writes the command file, nothing more. Secrets never go into the entry:
