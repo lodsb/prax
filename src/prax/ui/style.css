@@ -286,7 +286,16 @@ a.cite { text-decoration: none; border-bottom: 1px dotted currentColor; }
 /* --------------------------------------------------------- document */
 .doc-head h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; margin: 0 0 .3rem; }
 .doc-meta { color: var(--muted); font-size: .88rem; }
-.doc-actions { display: flex; gap: 1rem; flex-wrap: wrap; margin: .5rem 0 .6rem; font-size: .84rem; align-items: center; }
+/* the action row in four groups, each its own element, a hairline
+   between them: .doc-actions-info (mime, chunks, chars, id),
+   .doc-actions-open (the original, the raw text, its figures),
+   .doc-actions-edit (a note or the editor, domains, promote, a second
+   reading, ask again), .doc-actions-remove (retire), the last quieter */
+.doc-actions { display: flex; gap: .4rem 0; flex-wrap: wrap; margin: .5rem 0 .6rem; font-size: .84rem; align-items: center; }
+.doc-actions-group { display: inline-flex; gap: 1rem; align-items: center; padding: 0 1.1rem; border-left: 1px solid var(--line); }
+.doc-actions-group:first-child { padding-left: 0; border-left: 0; }
+.doc-actions-remove a { color: var(--muted); }
+.doc-actions-remove a:hover { color: var(--accent); }
 .tags { margin: .3rem 0; }
 .tag { display: inline-block; padding: 0 .4rem; margin: 0 .3rem .3rem 0; border-bottom: 1px solid var(--line); color: var(--muted); }
 
