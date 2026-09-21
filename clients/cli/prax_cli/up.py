@@ -124,7 +124,7 @@ def up(a: Any) -> int:
             )
             return 1
         if a.detach:
-            pid = up.detach(data_dir, [])
+            pid = up.detach(data_dir, ["--tray"] if getattr(a, "tray", False) else [])
             out.say(f"prax up started (pid {pid}): {', '.join(r.name for r in roles)}")
             out.hint(
                 f"  prax up --status · prax up --stop · logs in {up.logs_dir(data_dir)}"

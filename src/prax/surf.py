@@ -161,6 +161,7 @@ class Surf:
     limit: int  # hits per search
     steps_left: int
     tokens_left: int
+    note: str = ""  # beside the question, for the model only
     passages: list[ask.Passage] = field(default_factory=list)
     seq: dict[int, int] = field(default_factory=dict)  # passage n -> where to read on
     dropped: set[int] = field(default_factory=set)  # passage numbers
@@ -188,6 +189,8 @@ class Surf:
 
     def message(self) -> str:
         parts = [f"Question: {self.question}"]
+        if self.note:
+            parts.append(f"Note: {self.note}")
         if self.history:
             parts += ["", "Earlier in this conversation:"]
             for turn in self.history:
@@ -588,6 +591,7 @@ def run(
     history: list[dict[str, str]] | None = None,
     on_event: Event | None = None,
     stop: threading.Event | None = None,
+    note: str = "",
 ) -> dict[str, Any]:
     """Surf, then answer. Step 0 is the door's own search of the question
     (what the one-shot ask starts from); the model's steps follow, up to
@@ -602,6 +606,7 @@ def run(
         query=ask.search_query(question, history),
         history=history,
         doctype=doctype,
+        note=note,
         limit=max(1, min(limit, 20)),
         steps_left=steps,
         tokens_left=tokens,
@@ -672,7 +677,9 @@ def run(
     if not kept or (stop is not None and stop.is_set()):
         return _result(s, answerer, None, t0)
     emit({"event": "answering", "model": answerer.name, "passages": len(kept)})
-    bundle = ask.Bundle(question=s.question, passages=kept, history=history)
+    bundle = ask.Bundle(
+        question=s.question, passages=kept, history=history, note=s.note
+    )
     bundle.facts = store.document_facts(
         con, list(dict.fromkeys(p.doc_id for p in kept)), limit=ask.FACTS_PER_DOC
     )
@@ -723,7 +730,9 @@ def _result(
     from prax import extraction
 
     if bundle is None:
-        bundle = ask.Bundle(question=s.question, passages=s.kept, history=s.history)
+        bundle = ask.Bundle(
+            question=s.question, passages=s.kept, history=s.history, note=s.note
+        )
     out = bundle.to_dict()
     out.update(
         answer=text.strip() if text else None,

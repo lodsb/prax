@@ -70,26 +70,23 @@ def _previous_answer(text: str) -> str:
     return body.strip()
 
 
-def _asked_again(question: str, new: list[dict[str, Any]], reread: list[int]) -> str:
-    """The question as it is asked the second time: what the library
-    holds now that it did not, so the model revises rather than starts
-    over (and the search side reaches for the newcomers)."""
+def _asked_again(new: list[dict[str, Any]], reread: list[int]) -> str:
+    """The word to the model on a re-ask, beside the question (never in
+    the search): what the library holds now that it did not, and the
+    kind of change asked for — replace where the new evidence changes
+    the answer, add where it adds, say so where it disagrees — so the
+    model revises rather than starts over or clings to its earlier text."""
     if new:
         titles = "; ".join(str(n.get("title") or "") for n in new[:4])
-        return (
-            f"{question} — asked again: the library now also holds {titles}."
-            " Revise the earlier answer where these change it; keep what"
-            " still holds."
-        )
-    if reread:
-        return (
-            f"{question} — asked again: a source of the earlier answer was"
-            " read again and its text changed. Revise the earlier answer"
-            " where the new text changes it; keep what still holds."
-        )
+        what = f"the library now also holds {titles}"
+    elif reread:
+        what = "a source of the earlier answer was read again and its text changed"
+    else:
+        what = "the question is asked again"
     return (
-        f"{question} — asked again; revise the earlier answer where the library"
-        " changes it."
+        f"{what}. Your earlier answer is above. Where the new evidence"
+        " changes it, replace; where it adds, add; where it disagrees, say"
+        " so; keep what still holds, and cite only the passages here."
     )
 
 
@@ -327,7 +324,7 @@ def refresh(
     history = [{"question": question, "answer": previous}] if previous else None
     result = ask_mod.ask(
         con,
-        _asked_again(question, seen["new"], seen["reread"]),
+        question,
         limit=int(opts.get("limit") or ask_mod.PASSAGES),
         doctype=opts.get("doctype"),
         answerer=answerer,
@@ -335,10 +332,10 @@ def refresh(
         steps=max(0, int(steps)),
         tokens=opts.get("tokens"),
         on_event=on_event,
+        note=_asked_again(seen["new"], seen["reread"]),
     )
     if not (result.get("answer") or "").strip():
         return {"slug": slug, "refreshed": False, "why": "the model gave no answer"}
-    result["question"] = question  # the page keeps the question as asked
     section, docs = ask_mod.section_of(result)
     _, yours = _own_part(current["text"] if current else "")
     text = f"# {question}\n\n{section}\n" + (

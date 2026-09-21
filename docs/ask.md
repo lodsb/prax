@@ -153,11 +153,14 @@ the page names one — when a document that arrived since ranks in that
 top set, or shares two of the answer's entities, or a source was read
 again. The re-ask is a revision, not a fresh start: the earlier answer
 is the conversation so far (the model sees it as its own previous turn)
-and the question is asked again with what is new named — "the library
-now also holds *A newer FDN reverb*; revise the earlier answer where
-these change it, keep what still holds" — which also pulls the
-newcomers into the search; the answer may cite only this turn's
-passages, so nothing stale comes back by name. The new answer is a new
+and a note beside the question — never in the search, which sees the
+question as asked — names what is new and the kind of change wanted:
+"the library now also holds *A newer FDN reverb*; where the new
+evidence changes the answer, replace; where it adds, add; where it
+disagrees, say so; keep what still holds" (naming the kind of change is
+what the research on stale answers found to work, and anchoring on the
+old text survives prompting alone); the answer may cite only this
+turn's passages, so nothing stale comes back by name. The new answer is a new
 revision by the agent whose note names what changed ("ask: server-35b;
 new: *A newer FDN reverb*"); the
 sections a person appended under the answer are kept where they are,

@@ -188,6 +188,26 @@ def test_backend_selection(monkeypatch: pytest.MonkeyPatch) -> None:
         ask.answerer_named("gpt")
 
 
+def test_a_note_reaches_the_model_beside_the_question_and_not_the_search(
+    con: sqlite3.Connection,
+) -> None:
+    _library(con)
+    runtime = FakeRuntime()
+    r = ask.ask(
+        con,
+        "reverb methods",
+        answerer=ask.LocalAnswerer(runtime),
+        note="the library now also holds a newer paper; revise where it changes",
+    )
+    assert r["answer"]
+    prompt = runtime.calls[-1]["user"]
+    assert "Question: reverb methods\nNote: the library now also holds" in prompt
+    # the surf carries it the same way (its own bundle at the answer)
+    stub = ask.StubAnswerer()
+    r = ask.ask(con, "reverb methods", answerer=stub, steps=1, note="a word")
+    assert r["answer"] and any("Note: a word" in s["user"] for s in stub.steps)
+
+
 def test_save_appends_with_sources_and_edges(con: sqlite3.Connection) -> None:
     a, b = _library(con)
     store.write_page(con, "reverb", "# Reverb\n\nMy notes.")

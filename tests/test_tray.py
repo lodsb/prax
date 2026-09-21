@@ -95,5 +95,57 @@ def test_the_login_entry_carries_the_tray_on_a_desktop(
     assert autostart.command(tmp_path, tray=True)[-1] == "--tray"
 
 
+def test_a_signal_or_a_failed_supervisor_ends_the_tray(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The supervising tray owns the signal handlers its supervisor cannot
+    set from a thread: a SIGTERM asks everything to stop in order; a
+    supervisor that fails at once is logged and the icon never opens."""
+    import types
+
+    calls: list[str] = []
+
+    class FakeIcon:
+        def __init__(self, *a: object, **k: object) -> None:
+            self.title = ""
+            self.icon = None
+
+        def run(self) -> None:
+            calls.append("run")
+
+        def stop(self) -> None:
+            calls.append("stop")
+
+        def update_menu(self) -> None:
+            pass
+
+    class FakeMenu:
+        SEPARATOR = None
+
+        def __init__(self, *a: object) -> None:
+            pass
+
+    fake = types.SimpleNamespace(Icon=FakeIcon, Menu=FakeMenu, MenuItem=None)
+    monkeypatch.setitem(sys.modules, "pystray", fake)
+    t = tray.Tray(Path("nowhere"), supervise=False)
+    t.icon = FakeIcon()
+    t._on_signal(15, None)
+    assert t.stopping.is_set() and calls == ["stop"]
+
+    # a supervisor that raises before the icon loop: logged, the loop skipped
+    class Broken:
+        stopping = tray.threading.Event()
+
+        def run(self) -> None:
+            raise OSError("read-only store")
+
+    t2 = tray.Tray(Path("nowhere"), supervise=False)
+    t2.icon = FakeIcon()
+    t2.supervisor = Broken()  # type: ignore[assignment]
+    calls.clear()
+    t2._supervise()
+    assert t2.stopping.is_set() and calls == ["stop"]
+
+
 def test_the_icon_ships_with_the_package() -> None:
     assert tray.ICON.is_file() and tray.ICON.stat().st_size > 500

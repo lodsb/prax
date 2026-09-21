@@ -140,6 +140,7 @@ class Bundle:
     passages: list[Passage] = field(default_factory=list)
     facts: dict[int, list[dict[str, Any]]] = field(default_factory=dict)
     history: list[dict[str, str]] = field(default_factory=list)  # earlier turns
+    note: str = ""  # a word to the model beside the question, not searched for
 
     def as_message(self) -> str:
         n = len(self.passages)
@@ -153,7 +154,10 @@ class Bundle:
             parts.append("")
         contiguous = [p.n for p in self.passages] == list(range(1, n + 1))
         numbered = f"Passages (1 to {n}):" if contiguous else "Passages:"
-        parts += [f"Question: {self.question.strip()}", "", numbered]
+        parts.append(f"Question: {self.question.strip()}")
+        if self.note:
+            parts.append(f"Note: {self.note.strip()}")
+        parts += ["", numbered]
         for p in self.passages:
             parts += ["", f"[{p.n}] {p.label()}", p.text]
             if p.nearby:
@@ -216,13 +220,14 @@ def gather(
     doctype: str | None = None,
     passage_chars: int = PASSAGE_CHARS,
     history: list[dict[str, str]] | None = None,
+    note: str = "",
 ) -> Bundle:
     """The context for a question: one passage per document from the
     hybrid search (the matched chunk, or the document field for a hit that
     came from the field alone) and the graph facts about those documents.
     ``history`` (earlier turns) rides along for the model and widens the
     search when the question leans on it."""
-    bundle = Bundle(question=question.strip(), history=list(history or []))
+    bundle = Bundle(question=question.strip(), history=list(history or []), note=note)
     if not bundle.question:
         return bundle
     # hybrid search fuses at document level; the FTS-only fallback does not,
@@ -536,12 +541,15 @@ def ask(
     tokens: int | None = None,
     on_event: Any = None,
     stop: Any = None,
+    note: str = "",
 ) -> dict[str, Any]:
     """Gather, then answer with ``answerer`` (None: the bundle alone, the
     caller's model answers). ``history`` is the conversation so far, as
     the client kept it: the model sees the earlier turns, the search
     widens for a follow-up, and the answer cites only this turn's
-    passages. With ``steps`` and an answerer the model surfs first
+    passages. ``note`` is a word to the model beside the question — what
+    a standing question's re-ask says about what is new — that the
+    search never sees. With ``steps`` and an answerer the model surfs first
     (``prax.surf.run``: that many steps, ``tokens`` of reading, each step
     an ``on_event``, ``stop`` an event that ends the surf early). The
     store is only held while gathering; the model runs outside the
@@ -561,9 +569,15 @@ def ask(
             history=clean_history(history),
             on_event=on_event,
             stop=stop,
+            note=note,
         )
     bundle = gather(
-        con, question, limit=limit, doctype=doctype, history=clean_history(history)
+        con,
+        question,
+        limit=limit,
+        doctype=doctype,
+        history=clean_history(history),
+        note=note,
     )
     out = bundle.to_dict()
     out.update(answer=None, model=None, citations=[], usage={}, seconds=0.0)

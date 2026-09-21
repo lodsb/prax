@@ -154,16 +154,19 @@ def test_a_re_ask_shows_the_model_the_earlier_answer_and_what_is_new(
     real = ask.ask
 
     def spy(con_: sqlite3.Connection, question: str, **kw: object) -> dict:
-        asked.update(question=question, history=kw.get("history"))
+        asked.update(question=question, history=kw.get("history"), note=kw.get("note"))
         return real(con_, question, **kw)
 
     monkeypatch.setattr(ask, "ask", spy)
     page = questions.question_pages(con)[0]
     rep = questions.refresh(con, page, answerer=ask.StubAnswerer())
     assert rep["refreshed"]
-    assert asked["question"].startswith(
-        "how do feedback delay networks build reverb — asked again: the library"
-        " now also holds A newer FDN reverb."
+    # the question itself is what is searched for; what is new, and the
+    # kind of change asked for, is a note beside it for the model alone
+    assert asked["question"] == "how do feedback delay networks build reverb"
+    assert asked["note"].startswith(
+        "the library now also holds A newer FDN reverb. Your earlier answer is"
+        " above. Where the new evidence changes it, replace;"
     )
     assert asked["history"] == [
         {
@@ -176,7 +179,7 @@ def test_a_re_ask_shows_the_model_the_earlier_answer_and_what_is_new(
     # the page keeps the question as asked, and the person's section
     text = store.get_page(con, page["slug"])["text"]
     assert text.startswith("# how do feedback delay networks build reverb\n\n")
-    assert text.rstrip().endswith("## Notes\n\nMine.")  # (the stub echoes its question)
+    assert text.rstrip().endswith("## Notes\n\nMine.")
 
 
 def test_a_source_read_again_and_shared_entities_make_it_due(

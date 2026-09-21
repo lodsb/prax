@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import signal
 import subprocess
 import sys
 import threading
@@ -240,27 +241,49 @@ class Tray:
                 raise up.UpError("prax up is already running; prax tray attaches to it")
             up.attach_log(self.data_dir)
             self.supervisor = up.Supervisor(roles, data_dir=self.data_dir)
+            # the supervisor's own handlers cannot be set from its thread:
+            # a SIGTERM (launchd, systemd, a kill) or ctrl-c reaches this
+            # one, which asks it to stop everything in order
+            for name in ("SIGINT", "SIGTERM", "SIGBREAK"):
+                if hasattr(signal, name):
+                    with contextlib.suppress(ValueError, OSError):
+                        signal.signal(getattr(signal, name), self._on_signal)
             threading.Thread(
                 target=self._supervise, name="prax-up", daemon=True
             ).start()
         threading.Thread(target=self._watch, name="prax-tray", daemon=True).start()
-        self.icon.run()  # blocks on the main thread (macOS insists)
-        self.stopping.set()
-        if self.supervisor is not None:
-            self.supervisor.stopping.set()
-            for _ in range(300):  # the roles stop in order; up to a minute
-                if up.running_pid(self.data_dir) is None:
-                    break
-                time.sleep(0.2)
+        try:
+            if not self.stopping.is_set():  # a supervisor that failed at once
+                self.icon.run()  # blocks on the main thread (macOS insists)
+        finally:
+            self.stopping.set()
+            self._wait_for_supervisor()
         return 0
+
+    def _on_signal(self, signum: int, _frame: Any) -> None:
+        log.info("tray: signal %s", signum)
+        self.quit()
+
+    def _wait_for_supervisor(self) -> None:
+        if self.supervisor is None:
+            return
+        self.supervisor.stopping.set()
+        for _ in range(300):  # the roles stop in order; up to a minute
+            if up.running_pid(self.data_dir) is None:
+                break
+            time.sleep(0.2)
 
     def _supervise(self) -> None:
         assert self.supervisor is not None
         try:
             self.supervisor.run()
+        except Exception:
+            # under the login entry's pythonw there is no stderr to see
+            # it on: the log is the place
+            log.exception("prax up failed")
         finally:
             # the supervisor ended (a signal, a stop from the menu or the
-            # command file): the icon goes with it
+            # command file, a failure): the icon goes with it
             self.stopping.set()
             with contextlib.suppress(Exception):
                 self.icon.stop()
