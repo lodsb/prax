@@ -1884,7 +1884,8 @@ which is safe for prax: the database is in WAL mode, the archive is
 content-addressed, every job is re-selectable), and writes each role's
 output to `<data dir>/logs/<name>.log` — rotated on every start, ten
 kept — and its own lines to `up.log`. It has no port and no state: a pid
-file and a status file under `<data dir>/run/`, and a command file that
+file and a status file under `<data dir>/run/`, and a command queue
+(`run/commands/`, one file per command, renamed into place whole) that
 `--stop` and `--restart` write, which is what works the same everywhere.
 Children get no console on Windows (and sit in a job object that ends
 them if the supervisor itself is killed) and a session of their own
@@ -1923,7 +1924,7 @@ prax" for everything and "Quit the tray" for the icon alone — or offers
 to start one; a Linux user unit has no display, so the icon is not part of it
 there — `prax tray` from a session does the same. The tray is a client
 of the supervisor like `prax up --status`: it reads the status file and
-writes the command file, nothing more. Secrets never go into the entry:
+writes the command queue, nothing more. Secrets never go into the entry:
 
 | | where it comes from |
 |---|---|

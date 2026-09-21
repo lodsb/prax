@@ -16,9 +16,10 @@ for a minute), restarts what dies with a capped backoff, stops them in
 reverse order, and writes each one's output to ``<data dir>/logs/<name>.log``
 (rotated on every start, ten kept) and its own lines to ``up.log``. It
 has no port and no state: a pid file and a status file under
-``<data dir>/run/``, and a command file the ``prax up --stop`` and
-``--restart`` commands write, which is what works the same on every
-platform. Children get no console on Windows and a session of their own
+``<data dir>/run/``, and a command queue (one file per command,
+``run/commands/``) the ``prax up --stop`` and ``--restart`` commands
+write, which is what works the same on every platform. Children get no
+console on Windows and a session of their own
 elsewhere, so no terminal window can end them; on Windows they are also
 in a job object that ends them if the supervisor itself is killed.
 
@@ -31,6 +32,7 @@ operating system is one login entry, which ``prax.autostart`` writes.
 from __future__ import annotations
 
 import contextlib
+import itertools
 import json
 import logging
 import os
@@ -65,7 +67,7 @@ SERVER_PATIENCE = 900.0  # a 20 GB model takes a while to load
 TICK = 1.0
 PIDFILE = "up.pid"  # the files under <data dir>/run/
 STATUS = "up.json"
-COMMAND = "up.cmd"
+COMMANDS = "commands"  # a directory: one file per command, taken in order
 SERVE_KEYS = (
     "path",  # the GGUF file; else repo and file of the models: entry
     "slots",
@@ -493,15 +495,32 @@ def status(data_dir: Path) -> dict[str, Any] | None:
         return None
 
 
+_commands_sent = itertools.count()
+
+
 def command(data_dir: Path, what: dict[str, Any]) -> None:
-    """Queue a command for the running supervisor: one JSON line appended
-    to the command file, which the supervisor reads whole and removes on
-    its next tick — two commands a second apart both arrive (a `--restart
-    door` followed at once by a `--restart worker` lost the first once)."""
-    path = run_dir(data_dir) / COMMAND
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(what) + "\n")
+    """Queue a command for the running supervisor: one JSON file in the
+    commands directory, written under a temporary name and renamed into
+    place, so the supervisor never sees a command half written and
+    commands a moment apart all arrive, in order. (One file appended to
+    and read whole lost commands two ways: a line appended between the
+    supervisor's read and its unlink, and the open that created the file
+    an instant before a tick read it empty and removed it — both seen on
+    the CI runners, where a tick is 50 ms.)"""
+    queue = run_dir(data_dir) / COMMANDS
+    queue.mkdir(parents=True, exist_ok=True)
+    name = f"{time.time_ns():020d}-{os.getpid()}-{next(_commands_sent):06d}"
+    tmp = queue / (name + ".tmp")
+    tmp.write_text(json.dumps(what) + "\n", encoding="utf-8")
+    os.replace(tmp, queue / (name + ".json"))
+
+
+def _clear_commands(run_dir_: Path) -> None:
+    """Whatever an earlier supervisor left unread, or this one is leaving."""
+    with contextlib.suppress(OSError):
+        for path in (run_dir_ / COMMANDS).iterdir():
+            with contextlib.suppress(OSError):
+                path.unlink()
 
 
 def stop(data_dir: Path, *, wait: float = 45.0, name: str | None = None) -> bool:
@@ -877,19 +896,25 @@ class Supervisor:
     # -- all of them
 
     def _control(self) -> None:
-        """Every command queued since the last tick, in order."""
-        path = self.run_dir / COMMAND
-        if not path.exists():
-            return
+        """Every command queued since the last tick, in order: the files
+        of the commands directory by name (a timestamp, the sender's
+        pid, a counter), each read and removed; a file still under its
+        temporary name is not there yet."""
+        queue = self.run_dir / COMMANDS
         try:
-            lines = path.read_text(encoding="utf-8").splitlines()
+            names = sorted(n for n in os.listdir(queue) if n.endswith(".json"))
         except OSError:
-            lines = []
-        with contextlib.suppress(OSError):
-            path.unlink()
-        for line in lines:
+            return
+        for name in names:
+            path = queue / name
             try:
-                what = json.loads(line)
+                text = path.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            with contextlib.suppress(OSError):
+                path.unlink()
+            try:
+                what = json.loads(text)
             except ValueError:
                 continue
             self._command(what)
@@ -972,8 +997,7 @@ class Supervisor:
         (self.run_dir / PIDFILE).write_text(
             f"{os.getpid()} {self.started}\n", encoding="utf-8"
         )
-        with contextlib.suppress(OSError):
-            (self.run_dir / COMMAND).unlink()
+        _clear_commands(self.run_dir)
 
         def on_signal(signum: int, _frame: Any) -> None:
             self._say(f"signal {signum}")
@@ -1006,9 +1030,9 @@ class Supervisor:
         finally:
             self._stop_all()
             self._write_status()
-            for name in (PIDFILE, COMMAND):
-                with contextlib.suppress(OSError):
-                    (self.run_dir / name).unlink()
+            with contextlib.suppress(OSError):
+                (self.run_dir / PIDFILE).unlink()
+            _clear_commands(self.run_dir)
             self._say("prax up: stopped")
         return 0
 

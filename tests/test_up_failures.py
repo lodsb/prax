@@ -180,6 +180,36 @@ def test_a_stale_pid_file_is_cleared(data_dir: Path) -> None:
     assert up.restart(data_dir, "door") is False
 
 
+def test_no_command_is_lost_however_close_together_they_come(
+    data_dir: Path, tmp_path: Path
+) -> None:
+    """The commands are a queue of files, each renamed into place whole:
+    a burst of them against a supervisor ticking as fast as it can all
+    arrive, in order. (One file appended to lost commands on the CI
+    runners: a line appended between the supervisor's read and its
+    unlink, or the file created empty an instant before a tick read
+    it — `--restart b` right after `--restart a` never happened, and a
+    `--stop` sat unanswered for the whole wait.)"""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark, argv = child(tmp_path, "a", 60)
+    said: list[str] = []
+    sup = up.Supervisor(
+        [up.Role("a", argv)], data_dir=data_dir, say=said.append, tick=0.001
+    )
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    wait_for(lambda: runs_of(mark) == 1)
+    n = 200
+    for i in range(n):
+        up.command(data_dir, {"cmd": "start", "name": f"nope-{i:03d}"})
+    wait_for(lambda: sum("no role named nope-" in line for line in said) == n)
+    heard = [line.split("nope-")[1] for line in said if "no role named nope-" in line]
+    assert heard == [f"{i:03d}" for i in range(n)]  # every one, in order
+    assert up.stop(data_dir, wait=20)
+    thread.join(timeout=10)
+    assert not any((up.run_dir(data_dir) / up.COMMANDS).iterdir())
+
+
 def test_restart_all_and_an_unknown_name(data_dir: Path, tmp_path: Path) -> None:
     data_dir.mkdir(parents=True, exist_ok=True)
     mark_a, argv_a = child(tmp_path, "a", 60)
