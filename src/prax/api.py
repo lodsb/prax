@@ -1275,9 +1275,14 @@ def pages(request: Request, kind: str | None = None) -> list[dict[str, Any]]:
 
 @app.get("/page/{slug}")
 def page(slug: str, request: Request) -> dict[str, Any]:
+    """The page, with what the questions pass is doing to it right now:
+    ``asking`` the ids of the ask blocks being answered, ``asking_page``
+    when the page is a standing question being asked again."""
     p = store.get_page(_con(request), store.slugify(slug))
     if p is None:
         raise HTTPException(404, "no such page")
+    p["asking"] = _asking(p["slug"], [b["id"] for b in p["blocks"]])
+    p["asking_page"] = p["kind"] == questions.KIND and _asking_page(p["slug"])
     return p
 
 
@@ -1495,7 +1500,11 @@ def questions_list(request: Request) -> list[dict[str, Any]]:
     of other pages as ``slug#id`` — with what each remembers and whether
     the library has learned something since (the check runs a search
     per question; no model)."""
-    return questions.standing(_con(request))
+    rows = questions.standing(_con(request))
+    for row in rows:  # what the pass is doing to each right now
+        slug, _, block = row["slug"].partition("#")
+        row["asking"] = bool(_asking(slug, [block])) if block else _asking_page(slug)
+    return rows
 
 
 @app.post("/questions")
@@ -1523,8 +1532,24 @@ def questions_run(req: QuestionsRunReq, request: Request) -> dict[str, Any]:
     )
 
 
-_answering: set[str] = set()  # the pages whose blocks a job is filling now
+# what the questions pass has in hand: the ``only`` of each running job
+# ("" for every question, a slug, a slug#id), so a page and a listing
+# can say "asking…" instead of leaving a click unanswered
+_answering: set[str] = set()
 _answering_lock = threading.Lock()
+
+
+def _asking_page(slug: str) -> bool:
+    with _answering_lock:
+        return "" in _answering or slug in _answering
+
+
+def _asking(slug: str, block_ids: list[str]) -> list[str]:
+    """The ask blocks of a page being answered right now."""
+    with _answering_lock:
+        if "" in _answering or slug in _answering:
+            return list(block_ids)
+        return [b for b in block_ids if f"{slug}#{b}" in _answering]
 
 
 def _start_questions(
@@ -1536,7 +1561,7 @@ def _start_questions(
     release: bool = False,
 ) -> dict[str, Any]:
     job = store.Job(con, "questions", note=only or "every question")
-    key = (only or "").partition("#")[0]
+    key = only or ""
     with _answering_lock:
         _answering.add(key)
 
@@ -1576,9 +1601,8 @@ def _answer_new_blocks(con: Any, slug: str, text: str) -> int | None:
         b["asked_at"] is None and not b["held"] for b in page["blocks"]
     ):
         return None  # (a held block is the person's until released)
-    with _answering_lock:
-        if slug in _answering:
-            return None
+    if _asking_page(slug):
+        return None
     return _start_questions(con, only=slug, briefing=False)["job"]
 
 

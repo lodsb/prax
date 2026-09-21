@@ -508,12 +508,16 @@ function renderReference(c) {
 // a model, or edited by hand and left. The links run the questions pass
 // for this block alone (PAGE_OF has the page's slug; the view fills it).
 const PAGE_OF = {};
+const ASKING_OF = {};  // doc id -> the block ids the pass is answering now
+const ASKING = `<span class="asking">asking… <span class="muted">the page gets a revision when the model is done</span></span>`;
 function renderAsk(c, docId) {
   const d = c.data || {};
   const slug = PAGE_OF[docId] || "";
   const ref = `${slug}#${d.id || ""}`;
   let state;
-  if (d.held) {
+  if ((ASKING_OF[docId] || new Set()).has(d.id)) {
+    state = ASKING;
+  } else if (d.held) {
     state = `<span class="held" title="the interior no longer matches what the door wrote">edited by hand; the door left it</span> · <a href="#" class="ask-block-run" data-slug="${esc(ref)}" data-release="1" title="answer it anew; what you wrote inside goes">answer anew</a>`;
   } else if (!d.filled) {
     state = `not yet asked · <a href="#" class="ask-block-run" data-slug="${esc(ref)}" title="run the questions pass for this block now">ask now</a>`;
@@ -636,7 +640,16 @@ async function viewDoc(id, p) {
   }
   const meta = doc.meta || {};
   if (meta.video) VIDEO_OF[doc.id] = meta.video;
-  if (meta.page && meta.page.slug) PAGE_OF[doc.id] = meta.page.slug;
+  let askingPage = false;
+  if (meta.page && meta.page.slug) {
+    PAGE_OF[doc.id] = meta.page.slug;
+    // what the questions pass has in hand for this page right now
+    try {
+      const pg = await api(`/page/${meta.page.slug}`);
+      ASKING_OF[doc.id] = new Set(pg.asking || []);
+      askingPage = !!pg.asking_page;
+    } catch (_) { ASKING_OF[doc.id] = new Set(); }
+  }
   let highlight = p.chunk ? Number(p.chunk) : null;
   if (!highlight && p.find) highlight = locateChunk(chunks, p.find);
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
@@ -661,7 +674,7 @@ async function viewDoc(id, p) {
         <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
         ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
         ${pageMeta ? "" : `<a href="#" id="reading" title="run a named extractor on this document: the vision model over scanned pages, a second reading of an image, OCR, Docling">read again…</a>`}
-        ${meta.question ? `<a href="#" id="ask-again" title="ask the question again now, whatever is new">ask again</a>` : ""}
+        ${meta.question ? (askingPage ? ASKING : `<a href="#" id="ask-again" title="ask the question again now, whatever is new">ask again</a>`) : ""}
       </div>
       <div class="doc-actions-zone doc-actions-group doc-actions-remove">
         ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
@@ -722,7 +735,8 @@ async function viewDoc(id, p) {
     e.preventDefault();
     try {
       const r = await post("/questions/run", { slug: pageMeta.slug, force: true });
-      setStatus(`asking again (job ${r.job}); the page gets a new revision when the model is done`);
+      askAgain.outerHTML = ASKING;  // the change poll re-renders the page when the revision lands
+      setStatus(`asking again (job ${r.job})`);
     } catch (err) { setStatus(err.message); }
   });
   const retireLink = document.getElementById("retire");
@@ -845,7 +859,10 @@ async function viewDoc(id, p) {
     if (release && !confirm("Answer this block anew? What you wrote inside it is replaced by the door's answer (a <!-- prax:keep --> region would stay).")) return;
     try {
       const r = await post("/questions/run", { slug: a.dataset.slug, force: true, release });
-      setStatus(`asking (job ${r.job}); the page gets a new revision when the model is done`);
+      const head = a.closest(".ask-block-head");
+      const where = head ? head.querySelector(".muted") : null;
+      if (where) where.innerHTML = `standing question · ${ASKING}`;  // until the change poll re-renders with the revision
+      setStatus(`asking (job ${r.job})`);
     } catch (err) { setStatus(err.message); }
   });
   if (highlight) {
@@ -1612,6 +1629,7 @@ async function viewPages(p) {
     const blocks = standing.filter((q) => q.block);
     const state = (q, slug) => {
       if (!q) return "";
+      if (q.asking) return `<span class="asking">asking…</span>`;
       if (q.held) return `<span class="held">edited by hand; left</span> · <a href="#" class="ask-again" data-slug="${esc(slug)}" data-force="1" data-release="1">answer anew</a>`;
       if (q.due) return `<span title="${esc((q.new || []).map((n) => n.title).join(", "))}">${esc(q.why)}</span> · <a href="#" class="ask-again" data-slug="${esc(slug)}">${q.filled === false ? "ask now" : "ask again"}</a>`;
       return `settled · <a href="#" class="ask-again" data-slug="${esc(slug)}" data-force="1">ask again anyway</a>`;

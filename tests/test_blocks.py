@@ -430,6 +430,22 @@ def test_the_door_answers_a_saved_block_and_lists_it(client: TestClient) -> None
     page = client.get("/page/fdn-notes").json()
     assert page["revision"] == 2 and page["blocks"][0]["filled"]
     assert page["blocks"][0]["model"] == "stub"
+    assert page["asking"] == [] and page["asking_page"] is False
+    # while the pass has a block in hand, the page and the listing say so
+    from prax import api as api_mod
+
+    with api_mod._answering_lock:
+        api_mod._answering.add("fdn-notes#q2")
+    try:
+        assert client.get("/page/fdn-notes").json()["asking"] == ["q2"]
+        rows = {q["slug"]: q["asking"] for q in client.get("/questions").json()}
+        assert rows == {"fdn-notes#q1": False, "fdn-notes#q2": True}
+        with api_mod._answering_lock:
+            api_mod._answering.add("")  # a run over everything
+        assert client.get("/page/fdn-notes").json()["asking"] == ["q1", "q2"]
+    finally:
+        with api_mod._answering_lock:
+            api_mod._answering.clear()
     # nothing to ask: no job; a page without blocks: none either
     r = client.put(
         "/page/fdn-notes", json={"text": page["text"], "kind": "topic"}
