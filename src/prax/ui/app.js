@@ -509,6 +509,46 @@ function renderReference(c) {
 // for this block alone (PAGE_OF has the page's slug; the view fills it).
 const PAGE_OF = {};
 const ASKING_OF = {};  // doc id -> the block ids the pass is answering now
+// The document view's click handlers are bound once, on the view, and
+// read the current render's state from here: a listener added inside
+// the view function would be added again on every re-render (the change
+// poll re-renders the view every ten seconds while the store moves).
+const DOC_VIEW = { pages: null, player: null };
+// outline links, the figure strip, in-text citation markers: chunks
+// render as the reader nears them, so the click is caught on the view
+view.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-scroll]");
+  if (!a || !DOC_VIEW.pages) return;
+  e.preventDefault();
+  DOC_VIEW.pages.ensure(Number(a.dataset.scroll));
+  const el = document.getElementById("chunk-" + a.dataset.scroll);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+// a moment link seeks the page's player instead of leaving the page
+view.addEventListener("click", (e) => {
+  const a = e.target.closest("a.moment");
+  if (!a || !DOC_VIEW.player || !DOC_VIEW.player.isConnected) return;
+  e.preventDefault();
+  playerSeek(DOC_VIEW.player, Number(a.dataset.t));
+});
+// An ask block's "ask now / ask again / answer anew": the questions pass
+// for that block alone, as a job; the page gets a new revision. Bound
+// once, like the two above: bound per render, one click started as many
+// runs as there had been renders — twenty-six, once.
+view.addEventListener("click", async (e) => {
+  const a = e.target.closest("a.ask-block-run");
+  if (!a) return;
+  e.preventDefault();
+  const release = a.dataset.release === "1";
+  if (release && !confirm("Answer this block anew? What you wrote inside it is replaced by the door's answer (a <!-- prax:keep --> region would stay).")) return;
+  const head = a.closest(".ask-block-head");
+  const where = head ? head.querySelector(".muted") : null;
+  if (where) where.innerHTML = `standing question · ${ASKING}`;  // at once; the change poll re-renders with the revision
+  try {
+    const r = await post("/questions/run", { slug: a.dataset.slug, force: true, release });
+    setStatus(r.running ? `already asking (job ${r.job})` : `asking (job ${r.job})`);
+  } catch (err) { setStatus(err.message); }
+});
 const ASKING = `<span class="asking">asking… <span class="muted">the page gets a revision when the model is done</span></span>`;
 function renderAsk(c, docId) {
   const d = c.data || {};
@@ -694,17 +734,12 @@ async function viewDoc(id, p) {
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
   const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks), referenceLinks(chunks));
+  DOC_VIEW.pages = pages;  // for the click handlers bound once below
   const player = view.querySelector("#doc-player");
+  DOC_VIEW.player = player;
   if (player) {
     const play = player.querySelector("#player-play");
     if (play) play.addEventListener("click", () => playerLoad(player, p.t ? Number(p.t) : 0));
-    // a moment link seeks the player instead of leaving the page
-    view.addEventListener("click", (e) => {
-      const a = e.target.closest("a.moment");
-      if (!a) return;
-      e.preventDefault();
-      playerSeek(player, Number(a.dataset.t));
-    });
   }
   const loadContext = async (domain) => {
     try {
@@ -839,32 +874,6 @@ async function viewDoc(id, p) {
       } catch (err) { setStatus(err.message); }
     });
   }
-  // outline links, the figure strip, in-text citation markers: chunks
-  // render as the reader nears them, so the click is caught on the view
-  view.addEventListener("click", (e) => {
-    const a = e.target.closest("a[data-scroll]");
-    if (!a) return;
-    e.preventDefault();
-    pages.ensure(Number(a.dataset.scroll));
-    const el = document.getElementById("chunk-" + a.dataset.scroll);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  // an ask block's "ask now / ask again / answer anew": the questions
-  // pass for that block alone, as a job; the page gets a new revision
-  view.addEventListener("click", async (e) => {
-    const a = e.target.closest("a.ask-block-run");
-    if (!a) return;
-    e.preventDefault();
-    const release = a.dataset.release === "1";
-    if (release && !confirm("Answer this block anew? What you wrote inside it is replaced by the door's answer (a <!-- prax:keep --> region would stay).")) return;
-    try {
-      const r = await post("/questions/run", { slug: a.dataset.slug, force: true, release });
-      const head = a.closest(".ask-block-head");
-      const where = head ? head.querySelector(".muted") : null;
-      if (where) where.innerHTML = `standing question · ${ASKING}`;  // until the change poll re-renders with the revision
-      setStatus(`asking (job ${r.job})`);
-    } catch (err) { setStatus(err.message); }
-  });
   if (highlight) {
     const el = document.getElementById("chunk-" + highlight);
     if (el) el.scrollIntoView({ block: "center" });

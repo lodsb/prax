@@ -1533,9 +1533,12 @@ def questions_run(req: QuestionsRunReq, request: Request) -> dict[str, Any]:
 
 
 # what the questions pass has in hand: the ``only`` of each running job
-# ("" for every question, a slug, a slug#id), so a page and a listing
-# can say "asking…" instead of leaving a click unanswered
-_answering: set[str] = set()
+# ("" for every question, a slug, a slug#id) and its job id, so a page
+# and a listing can say "asking…" instead of leaving a click unanswered,
+# and a second click while the first runs joins that job instead of
+# starting another (a run is a model call; a page once took twenty-six
+# in four minutes from one person's clicks)
+_answering: dict[str, int] = {}
 _answering_lock = threading.Lock()
 
 
@@ -1560,10 +1563,13 @@ def _start_questions(
     briefing: bool = True,
     release: bool = False,
 ) -> dict[str, Any]:
-    job = store.Job(con, "questions", note=only or "every question")
     key = only or ""
     with _answering_lock:
-        _answering.add(key)
+        running = _answering.get(key)
+        if running is not None:
+            return {"job": running, "running": True}
+        job = store.Job(con, "questions", note=only or "every question")
+        _answering[key] = job.id
 
     def run() -> None:
         con = store.connect()
@@ -1582,7 +1588,7 @@ def _start_questions(
         finally:
             con.close()
             with _answering_lock:
-                _answering.discard(key)
+                _answering.pop(key, None)
 
     threading.Thread(target=run, name="questions", daemon=True).start()
     return {"job": job.id}

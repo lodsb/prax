@@ -435,14 +435,21 @@ def test_the_door_answers_a_saved_block_and_lists_it(client: TestClient) -> None
     from prax import api as api_mod
 
     with api_mod._answering_lock:
-        api_mod._answering.add("fdn-notes#q2")
+        api_mod._answering["fdn-notes#q2"] = 99
     try:
         assert client.get("/page/fdn-notes").json()["asking"] == ["q2"]
         rows = {q["slug"]: q["asking"] for q in client.get("/questions").json()}
         assert rows == {"fdn-notes#q1": False, "fdn-notes#q2": True}
         with api_mod._answering_lock:
-            api_mod._answering.add("")  # a run over everything
+            api_mod._answering[""] = 98  # a run over everything
         assert client.get("/page/fdn-notes").json()["asking"] == ["q1", "q2"]
+        # a second run for a question in hand joins the first: no new job
+        r = client.post("/questions/run", json={"slug": "fdn-notes#q2"}).json()
+        assert r == {"job": 99, "running": True}
+        assert client.post("/questions/run", json={}).json() == {
+            "job": 98,
+            "running": True,
+        }
     finally:
         with api_mod._answering_lock:
             api_mod._answering.clear()
