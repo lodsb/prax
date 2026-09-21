@@ -1474,6 +1474,7 @@ function graphPanelUpdater(panel, graphOf) {
 async function viewGraph(arg, p) {
   const q = p.q || "";
   const entity = p.entity || arg || "";
+  view.classList.add("wide");  // the canvas takes the page, like a document's text
   view.innerHTML = `
   <form id="graph-form" class="search-form">
     <input name="q" type="search" value="${esc(q)}" placeholder="find an entity…">
@@ -2562,7 +2563,7 @@ const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: vi
 async function render(opts) {
   const r = route();
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === r.name));
-  view.classList.remove("stage", "wide");  // the ask view widens the page, the document view takes all of it; others get the default
+  view.classList.remove("stage", "wide");  // the ask view widens the page, the document and graph views take all of it; others get the default
   if (!(opts && opts.keepScroll)) window.scrollTo(0, 0);
   const key = `${r.name}/${r.arg || ""}`;
   quiet = !!(opts && opts.keepScroll) && view.dataset.route === key;  // the same page, refreshed in place
