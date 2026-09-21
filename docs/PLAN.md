@@ -880,6 +880,15 @@ What the marker evenings taught, kept for the day:
       and `prax tray`, the login entry carrying `--tray` on a desktop;
       the mark with a red dot when a role is down, the menu to open
       prax, restart or stop a role, stop everything, the logs.
+- [ ] **The embed hand-out after a rechunk** (seen 2026-09-21: `GET
+      /work/embed` 15–63 s a cycle while the 11,600 re-chunked text
+      chunks were embedded): `pending_embeddings` walks the chunks from
+      the highest id down and the rechunk had put 148,000 reference
+      chunks — never embedded, filtered out one by one — above the
+      pending ones, so every hand-out read past them again. Steady state
+      is 0.1 s (the two counts). Worth a pending-set that does not scan
+      (the ids a rechunk or an index inserts, drained as they are
+      embedded) before the next library-wide rechunk.
 - [ ] **Ask blocks in a person's page** (next; decided in rationale R17
       after the survey in `research.md` "Living answers and mixed
       pages", 2026-09-21): `<!-- prax:ask id=q1 "question" -->` … `<!--

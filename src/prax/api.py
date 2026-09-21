@@ -118,8 +118,23 @@ def _clock(stop: threading.Event, every: float) -> None:
         con.close()
 
 
+class _QuietResets(logging.Filter):
+    """A client that goes away mid-response — a tab closed, a poll cut,
+    a curl that timed out — makes asyncio's proactor on Windows log a
+    traceback ("_call_connection_lost … forcibly closed by the remote
+    host") that says nothing about the door; the log keeps the rest."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc = record.exc_info[1] if record.exc_info else None
+        return not (
+            isinstance(exc, ConnectionResetError)
+            and "connection_lost" in record.getMessage()
+        )
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    logging.getLogger("asyncio").addFilter(_QuietResets())
     con = store.connect()
     store.init_db(con)
     app.state.con = con  # the main connection: migrations, the change stamp
