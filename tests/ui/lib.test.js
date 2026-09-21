@@ -104,3 +104,12 @@ test("referenceLinks and citeMarkers: numbered entries link the in-text markers 
   assert.ok(html.includes("(3) and [3]."));  // no entry 3: untouched
   assert.equal(lib.citeMarkers("<p>[1]</p>", {}), "<p>[1]</p>");
 });
+
+test("askInterior, askBlockMarkers and nextAskId: the block as shown, and as written", () => {
+  const block = '<!-- prax:ask id=q1 steps=2 "how do FDNs stay lossless" -->\n\nAn answer [1].\n\n<!-- prax:keep -->\nMy remark.\n<!-- /prax:keep -->\n\nSources:\n\n- [1] [T](#doc/1)\n\n<!-- /prax:ask id=q1 sha=abc asked=2026-09-21 run=stub -->';
+  assert.equal(lib.askInterior(block), "An answer [1].\n\n\nMy remark.\n\n\nSources:\n\n- [1] [T](#doc/1)");
+  assert.equal(lib.askInterior('<!-- prax:ask id=q2 "q" -->\n<!-- /prax:ask id=q2 -->'), "");
+  assert.equal(lib.askBlockMarkers("q3", ' why "this"  works ', { steps: 2, doctype: "" }), '<!-- prax:ask id=q3 steps=2 "why \'this\' works" -->\n<!-- /prax:ask id=q3 -->\n');
+  assert.equal(lib.nextAskId(""), "q1");
+  assert.equal(lib.nextAskId(block + '\n<!-- prax:ask id=q2 "x" -->'), "q3");
+});

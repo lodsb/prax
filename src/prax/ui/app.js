@@ -503,6 +503,30 @@ function renderReference(c) {
   return md(c.text) + line;
 }
 
+// An ask block of a page: the question on the frame, the door's answer
+// inside it, and what state it is in — not yet asked, asked on a day by
+// a model, or edited by hand and left. The links run the questions pass
+// for this block alone (PAGE_OF has the page's slug; the view fills it).
+const PAGE_OF = {};
+function renderAsk(c, docId) {
+  const d = c.data || {};
+  const slug = PAGE_OF[docId] || "";
+  const ref = `${slug}#${d.id || ""}`;
+  let state;
+  if (d.held) {
+    state = `<span class="held" title="the interior no longer matches what the door wrote">edited by hand; the door left it</span> · <a href="#" class="ask-block-run" data-slug="${esc(ref)}" data-release="1" title="answer it anew; what you wrote inside goes">answer anew</a>`;
+  } else if (!d.filled) {
+    state = `not yet asked · <a href="#" class="ask-block-run" data-slug="${esc(ref)}" title="run the questions pass for this block now">ask now</a>`;
+  } else {
+    state = `asked ${esc(d.asked || "")}${d.run ? ` by ${esc(d.run)}` : ""} · <a href="#" class="ask-block-run" data-slug="${esc(ref)}" title="ask the question again now, whatever is new">ask again</a>`;
+  }
+  const inside = askInterior(c.text);
+  return `<div class="ask-block ${d.held ? "is-held" : "plate"}">
+    <div class="ask-block-head"><span class="ask-block-q">${esc(d.question || "")}</span><span class="muted">standing question · ${state}</span></div>
+    <div class="ask-block-body">${inside ? md(inside) : `<p class="muted">The door answers it when the pass runs (a page saved with a new block starts one).</p>`}</div>
+  </div>`;
+}
+
 function renderChunk(c, highlight, docId, cites) {
   const cls = "chunk kind-" + (c.kind || "text") + (c.chunk_id === highlight ? " highlight" : "");
   let body;
@@ -515,6 +539,8 @@ function renderChunk(c, highlight, docId, cites) {
     body = renderFormula(c);
   } else if (c.kind === "reference") {
     body = renderReference(c);
+  } else if (c.kind === "ask") {
+    body = renderAsk(c, docId);
   } else if (c.kind === "code") {
     body = md(c.text);
   } else {
@@ -610,6 +636,7 @@ async function viewDoc(id, p) {
   }
   const meta = doc.meta || {};
   if (meta.video) VIDEO_OF[doc.id] = meta.video;
+  if (meta.page && meta.page.slug) PAGE_OF[doc.id] = meta.page.slug;
   let highlight = p.chunk ? Number(p.chunk) : null;
   if (!highlight && p.find) highlight = locateChunk(chunks, p.find);
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
@@ -797,6 +824,19 @@ async function viewDoc(id, p) {
     const el = document.getElementById("chunk-" + a.dataset.scroll);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  // an ask block's "ask now / ask again / answer anew": the questions
+  // pass for that block alone, as a job; the page gets a new revision
+  view.addEventListener("click", async (e) => {
+    const a = e.target.closest("a.ask-block-run");
+    if (!a) return;
+    e.preventDefault();
+    const release = a.dataset.release === "1";
+    if (release && !confirm("Answer this block anew? What you wrote inside it is replaced by the door's answer (a <!-- prax:keep --> region would stay).")) return;
+    try {
+      const r = await post("/questions/run", { slug: a.dataset.slug, force: true, release });
+      setStatus(`asking (job ${r.job}); the page gets a new revision when the model is done`);
+    } catch (err) { setStatus(err.message); }
+  });
   if (highlight) {
     const el = document.getElementById("chunk-" + highlight);
     if (el) el.scrollIntoView({ block: "center" });
@@ -872,21 +912,40 @@ async function openEditor(slug) {
         <input id="page-note" type="text" placeholder="what changed (optional)">
         <button id="page-save">Save revision ${page.revision + 1}</button>
         <button id="page-cancel" class="secondary" type="button">Cancel</button>
+        <button id="page-ask" class="secondary" type="button" title="a standing question inside this page: the door answers it between the markers and asks again when the library learns something">+ standing question</button>
         <span id="page-msg" class="muted"></span>
       </div>
       <div class="muted" style="margin-top:.4rem">Revisions: ${page.revisions.map((r) => `<a href="/page/${esc(slug)}/revision/${r.revision}" target="_blank" rel="noopener" title="${esc(r.note || "")}">r${r.revision} ${esc(r.author)} ${esc((r.created_at || "").slice(0, 10))}</a>`).join(" · ")}</div>
     </div>`;
   document.getElementById("page-cancel").addEventListener("click", () => { box.innerHTML = ""; delete box.dataset.open; });
+  // the markers of an ask block at the cursor; the door fills them on save
+  document.getElementById("page-ask").addEventListener("click", () => {
+    const ta = document.getElementById("page-text");
+    const question = prompt("The question the door keeps answered here:");
+    if (!question || !question.trim()) return;
+    const markers = askBlockMarkers(nextAskId(ta.value), question.trim());
+    const at = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+    const before = ta.value.slice(0, at), after = ta.value.slice(at);
+    // on a line of its own, a blank line either side
+    const nl = String.fromCharCode(10);
+    let lead = "";
+    if (before && !before.endsWith(nl + nl)) lead = before.endsWith(nl) ? nl : nl + nl;
+    const trail = after && !after.startsWith(nl) ? nl : "";
+    ta.value = before + lead + markers + trail + after;
+    ta.focus();
+    document.getElementById("page-msg").textContent = "the block is answered when you save";
+  });
   document.getElementById("page-save").addEventListener("click", async () => {
     const msg = document.getElementById("page-msg");
     try {
-      await put(`/page/${slug}`, {
+      const r = await put(`/page/${slug}`, {
         text: document.getElementById("page-text").value,
         title: document.getElementById("page-title").value || null,
         note: document.getElementById("page-note").value || null,
         author: "human",
       });
       render();
+      if (r.job) setStatus(`saved; a new standing question is being answered (job ${r.job}) — the page gets a revision when the model is done`);
     } catch (err) { msg.textContent = err.message; }
   });
 }
@@ -1520,32 +1579,39 @@ async function viewPages(p) {
     const pages = await api("/pages", { kind: p.kind });
     if (!pages.length) { list.innerHTML = `<p class="muted">No pages yet. Create a topic or project page above, or add a note from any document.</p>`; return; }
     const groups = { question: "Standing questions", project: "Projects", synthesis: "Syntheses", topic: "Topics", briefing: "Briefings", addendum: "Notes on documents" };
-    // a standing question says whether the library has learned something since
-    let news = {};
-    if (pages.some((pg) => pg.kind === "question")) {
-      try { news = Object.fromEntries((await api("/questions")).map((q) => [q.slug, q])); } catch (_) { news = {}; }
-    }
-    const state = (pg) => {
-      const q = news[pg.slug];
+    // a standing question says whether the library has learned something
+    // since; the ask blocks of other pages are standing questions too
+    let standing = [];
+    try { standing = await api("/questions"); } catch (_) { standing = []; }
+    const news = Object.fromEntries(standing.map((q) => [q.slug, q]));
+    const blocks = standing.filter((q) => q.block);
+    const state = (q, slug) => {
       if (!q) return "";
-      if (q.due) return `<span title="${esc((q.new || []).map((n) => n.title).join(", "))}">${esc(q.why)}</span> · <a href="#" class="ask-again" data-slug="${esc(pg.slug)}">ask again</a>`;
-      return `settled · <a href="#" class="ask-again" data-slug="${esc(pg.slug)}" data-force="1">ask again anyway</a>`;
+      if (q.held) return `<span class="held">edited by hand; left</span> · <a href="#" class="ask-again" data-slug="${esc(slug)}" data-force="1" data-release="1">answer anew</a>`;
+      if (q.due) return `<span title="${esc((q.new || []).map((n) => n.title).join(", "))}">${esc(q.why)}</span> · <a href="#" class="ask-again" data-slug="${esc(slug)}">${q.filled === false ? "ask now" : "ask again"}</a>`;
+      return `settled · <a href="#" class="ask-again" data-slug="${esc(slug)}" data-force="1">ask again anyway</a>`;
     };
+    const blockRows = blocks.map((q) => `<tr>
+          <td><a href="#doc/${q.doc_id}">${esc(q.question)}</a> <span class="muted">in ${esc(q.title || "")}</span></td>
+          <td class="muted">${state(q, q.slug)}</td>
+          <td class="muted">r${q.revision}${q.model ? ` · ${esc(q.model)}` : ""}</td>
+          <td class="muted">${esc((q.asked_at || "").slice(0, 16).replace("T", " "))}</td>
+        </tr>`).join("");
     list.innerHTML = Object.entries(groups).map(([kind, label]) => {
       const rows = pages.filter((pg) => pg.kind === kind);
-      if (!rows.length) return "";
+      if (!rows.length && !(kind === "question" && blocks.length)) return "";
       return `<h2 style="font-size:1rem;margin:1rem 0 .3rem">${label}</h2>
         <table class="doc-list page-list"><tbody>${rows.map((pg) => `<tr>
           <td><a href="#doc/${pg.doc_id}">${esc(pg.title || pg.slug)}</a></td>
-          <td class="muted">${kind === "question" ? state(pg) : esc(pg.slug)}</td>
+          <td class="muted">${kind === "question" ? state(news[pg.slug], pg.slug) : esc(pg.slug)}</td>
           <td class="muted">r${pg.revision} · ${esc(pg.author || "")}</td>
           <td class="muted">${esc((pg.updated_at || "").slice(0, 16).replace("T", " "))}</td>
-        </tr>`).join("")}</tbody></table>`;
+        </tr>`).join("")}${kind === "question" ? blockRows : ""}</tbody></table>`;
     }).join("");
     list.querySelectorAll("a.ask-again").forEach((a) => a.addEventListener("click", async (e) => {
       e.preventDefault();
       try {
-        const r = await post("/questions/run", { slug: a.dataset.slug, force: !!a.dataset.force });
+        const r = await post("/questions/run", { slug: a.dataset.slug, force: !!a.dataset.force, release: !!a.dataset.release });
         a.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: `asking (job ${r.job})…` }));
       } catch (err) { setStatus(err.message); }
     }));

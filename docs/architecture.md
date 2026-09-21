@@ -144,7 +144,11 @@ flowchart TD
    `chunk.text == artifact[start:end]`), the heading path it sits under,
    and in `data` what it is of: a table's grid, a figure's reference and
    readings, an equation's LaTeX, a reference entry's fields and — once
-   the `references` pass has matched it — the library document it cites.
+   the `references` pass has matched it — the library document it cites,
+   an ask block's question, id and state (a page's standing question,
+   `prax.blocks`, is one `ask` chunk from head marker to tail). A
+   reference entry and an ask block are set aside (`store.ASIDE_KINDS`):
+   never embedded, out of a search unless asked for by kind.
    Chunks are disposable: `prax maintain --rechunk` rebuilds them from
    the artifacts (the citation links come back from `meta.references`).
    (R13)
@@ -255,7 +259,8 @@ With `steps` the model surfs before it answers (`prax.surf`; the moves, the budg
 | `prax.acronyms` | "phrase (ACRONYM)" definitions from a text, letters checked against the phrase's initials; the batch script writes the `acronyms` table the search expands from | no |
 | `prax.references` | a reference list read by rules: the entries' spans over the raw text (numbered, listed, author-year, Elsevier's one-paragraph lists), each read into surnames, year, title and a printed id; a score against a library document's title, creators and year; the decision with a threshold and a margin. The chunker cuts `reference` chunks with it; the `references` pass of `prax maintain` matches them, writes the `cites` edges and puts what each entry cites on the chunk (`data.cited`) and the document (`meta.references.links`) | no |
 | `prax.ask` | a question answered from the library: bundle (passages plus graph facts), answer backends (local, Claude, none, stub) with their step protocol and reading bounds, citation resolution, saving an answer (and its trail) to a page | via store |
-| `prax.questions` | the standing questions: a question page's fingerprint (sources and their hashes, the search's top, the library's high-water mark), the check that needs no model, the re-ask as a new agent revision keeping a person's sections, the day's briefing; a job on the door's clock (`schedule: questions`) | via store and ask |
+| `prax.blocks` | the ask block's grammar (R17): the head and tail markers in a page's text, the interior between them, the tail's hash of the door's own text (keep regions and edge whitespace left out), `held` (the interior no longer matches: a hand was in it), `fill` (interiors replaced by id, keep regions carried over, tails written; a held block refused unless released, a missing block reported), the answer alone out of an interior for a re-ask's history | no |
+| `prax.questions` | the standing questions: a question page's fingerprint (sources and their hashes, the search's top, the library's high-water mark), the check that needs no model, the re-ask as a new agent revision keeping a person's sections; the same for the ask blocks of any page (`meta.asks[id]`, one agent revision per page through `store.fill_blocks`, a held block left and noted until released); the day's briefing; a job on the door's clock (`schedule: questions`), and for one page when it is saved with a block not yet answered | via store and ask |
 | `prax.surf` | ask as a loop: the tools (search, read, facts, walk, similar, drop) over the store's reads, the per-step grammar, the budgets, the event trail, the answer from what was kept | via store |
 | `prax.review` | replay of the review queue against a newer ontology; the typing rules that recover what a model meant from its systematic misfits | via store |
 | `prax.resolution` | entity merge candidates (normalized names, initials, concept/method twins, name embeddings), adjudicators, apply through `merge_entities` | via store |
@@ -451,6 +456,7 @@ here opens the database file.
 | add an agent tool | a store function first, a handler in `prax.api`, then the tool in `prax.mcp_server` that calls it; keep responses compact |
 | add a UI view | a hash route and a render function in `prax/ui/app.js`; new data needs a read endpoint on the door, never a store call from the browser |
 | add a page kind | `store.PAGE_KINDS` and the `pages` view; relationships stay edges |
+| keep a question answered inside a page, or change how a block behaves | write the markers (`prax.blocks`, the editor's "+ standing question", `blocks.head_line`); the pass is `questions.refresh_blocks` (the check, the re-ask with the earlier interior as history, `store.fill_blocks` for the one revision), its state `meta.asks[id]`; a hand inside the block holds it (`blocks.held`, released with `--release`), a `prax:keep` region is carried over; the grammar and the hash rule are `prax.blocks` alone, the chunk is `chunking.ask_data` |
 | fix a document's title | `store.retitle(con, id, title, source="human")`; the old one stays in `meta.title_history`, the paper entity follows; the titles step reruns the model for what still has a file name |
 | move a step to another model (a GPU box, a cheaper API) | a `models` entry and the step's `model` in `prax.yaml`; nothing in code; `PRAX_<STEP>` for one run |
 | change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name`, `reading`, `answer(bundle)` and `step(system, user, grammar)` |

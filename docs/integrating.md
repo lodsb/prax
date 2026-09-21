@@ -61,7 +61,7 @@ there is work: the UI polls exactly this.
 | `GET /traverse?entity=…&hops=1` | the graph around a name, every edge with its evidence and producer |
 | `GET /entities?q=` | names, types, how connected each is |
 | `POST /ask {question, steps, stream}` | passages and graph facts, and an answer with citations when the host has a model (`docs/ask.md`) |
-| `POST /questions {result, options}`, `GET /questions`, `POST /questions/run {slug, force, briefing}` | keep an ask's result as a standing question (a page asked again when the library learns something about it); each question with what is new for it; ask again what is due, as a job, the day's briefing after |
+| `POST /questions {result, options}`, `GET /questions`, `POST /questions/run {slug, force, briefing, release}` | keep an ask's result as a standing question (a page asked again when the library learns something about it); each question with what is new for it — the question pages, then the ask blocks of other pages as `slug#id` (`docs/ask.md` "Ask blocks": `<!-- prax:ask id=q1 "…" -->` … `<!-- /prax:ask id=q1 -->` in any page's text; `GET /page/{slug}` lists them as `blocks` with their state; `PUT /page/{slug}` with a block not yet answered starts the pass for it and answers `job`) with `held` when a hand edited the block's interior; ask again what is due, as a job (`slug` may name a block; `release` answers a held block anew), the day's briefing after |
 | `POST /ingest`, `/ingest/file`, `/ingest/url` | text, a file, or a URL for the door to fetch |
 | `PUT /page/{slug}`, `POST /page/{slug}/append` | a Markdown page, or a section appended to one |
 | `POST /link` | one edge, with its evidence and your name as producer |

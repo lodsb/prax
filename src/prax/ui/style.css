@@ -263,8 +263,18 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .badge-code { color: var(--code); }
 .badge-formula { color: var(--formula); }
 .badge-reference { color: var(--muted); }
+.badge-ask { color: var(--accent); }
 .kind-reference .chunk-body { font-size: .92rem; }
 .kind-reference .cited { margin: .2rem 0 0 1.2rem; font-size: .88rem; }
+/* an ask block: the door's answer on a plate inside the person's page,
+   the question on its rim; a hand-edited one has no plate, a rule instead */
+.ask-block { padding: .9rem 1.2rem .6rem; margin: .2rem 0; }
+.ask-block.is-held { border-left: 2px solid var(--line); padding-left: 1rem; }
+.ask-block-head { display: flex; flex-wrap: wrap; gap: .3rem 1rem; align-items: baseline; margin-bottom: .4rem; font-size: .84rem; }
+.ask-block-q { font-weight: 600; font-size: .98rem; letter-spacing: -.01em; }
+.ask-block-body > :first-child { margin-top: 0; }
+.ask-block-body > :last-child { margin-bottom: .2rem; }
+.held { color: var(--accent); }
 a.cite { text-decoration: none; border-bottom: 1px dotted currentColor; }
 
 /* ------------------------------------------------------------ search */

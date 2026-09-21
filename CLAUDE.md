@@ -188,7 +188,15 @@ loop writes. What that model may and may not do, as a reference:
   has matched it, the library document it cites (`data.cited`, kept on
   the document as `meta.references.links` so a rechunk puts it back);
   reference chunks are never embedded and stay out of a search unless
-  asked for by kind (`store.ASIDE_KINDS`). A video is a capture like a
+  asked for by kind (`store.ASIDE_KINDS`). An ask block of a page — a
+  standing question between `<!-- prax:ask id=q1 "…" -->` and
+  `<!-- /prax:ask id=q1 -->` (`prax.blocks`: the grammar, the tail's
+  hash of the door's text, held when a hand was in it, `prax:keep`
+  regions carried over) — is one `ask` chunk from head to tail, set
+  aside like a reference so an answer is never its own evidence; the
+  pass fills interiors by id (`store.fill_blocks`) and touches nothing
+  outside the markers. A page's `[title](#doc/N)` links are its
+  `annotates` edges, retired when the link goes. A video is a capture like a
   page (`prax.parsers.video`: the extension's transcript-with-frames HTML,
   `meta.video` for the player the UI shows, `meta.parser` naming the
   parser; the frames are figures, read by the vision pass like any). A re-index

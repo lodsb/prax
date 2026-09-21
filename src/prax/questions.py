@@ -15,6 +15,18 @@ its note naming what changed; the sections a person added under the
 answer are kept where they are. So the page's history is what the
 library learned about the question, one revision per change.
 
+An ask block is the same standing question inside a page of the
+person's own (``prax.blocks``): ``<!-- prax:ask id=q1 "…" -->`` …
+``<!-- /prax:ask id=q1 -->`` in a project or topic page, between their
+notes. The pass fills its interior (the answer and its sources, no
+trail) and remembers per block, in ``meta.asks[id]``, what a question
+page remembers; the same check says when to ask again, the earlier
+interior is the history of the re-ask. Nothing outside the markers is
+touched (``store.fill_blocks``), and a block whose interior was edited
+by hand is left alone and noted — the person releases it by asking
+again. The block's interior is an ``ask`` chunk, set aside from search
+the way a reference is, so an answer is never its own evidence.
+
 The briefing is one page a day, "What arrived": the documents that
 came since the last one, with the first line of their summaries, and
 the questions whose answer moved. No model is asked for it.
@@ -33,7 +45,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from prax import ask as ask_mod
-from prax import store
+from prax import blocks, store
 
 log = logging.getLogger("prax.questions")
 
@@ -42,8 +54,10 @@ BRIEFING_KIND = "briefing"
 TOP = 20  # how much of the search a question remembers
 SHARED_ENTITIES = 2  # a new document sharing this many of the answer's entities
 MAX_NOTE = 160
+HELD = "edited by hand since the door wrote it"
 
 _SECTION = re.compile(r"\n(?=## )")
+_RUN_CHARS = re.compile(r"[^\w.:@/+-]+")
 
 
 def _now() -> str:
@@ -215,10 +229,19 @@ def check(con: sqlite3.Connection, page: dict[str, Any]) -> dict[str, Any]:
     since and share ``SHARED_ENTITIES`` entities with the answer's
     sources; sources whose text was read again. Returns ``{due, new,
     reread, why}`` — ``new`` the documents as ``{doc_id, title}``."""
-    q = page.get("question") or {}
+    return _check(con, page.get("question") or {}, page.get("doc_id"))
+
+
+def _check(
+    con: sqlite3.Connection, q: dict[str, Any], page_doc: int | None
+) -> dict[str, Any]:
+    """The check over what a question page (``meta.question``) or an ask
+    block (``meta.asks[id]``) remembers; ``page_doc`` is the page itself,
+    never news."""
     question = q.get("question") or ""
     if not question:
         return {"due": False, "new": [], "reread": [], "why": "no question kept"}
+    page = {"doc_id": page_doc}
     since = int(q.get("since_id") or 0)
     known = {int(d) for d in q.get("top") or []} | {
         int(d) for d in q.get("sources") or []
@@ -402,6 +425,260 @@ def refresh(
     }
 
 
+# ------------------------------------------------------------ ask blocks
+
+
+def block_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The pages that hold ask blocks — found by their ``ask`` chunks, so
+    a page saved with a block is one as soon as it is indexed — each
+    read in full (``store.get_page``: text, meta, ``blocks``)."""
+    rows = con.execute(
+        "SELECT DISTINCT p.slug FROM chunks c JOIN pages p ON p.doc_id = c.doc_id"
+        " WHERE c.kind = 'ask' ORDER BY p.slug"
+    ).fetchall()
+    out = []
+    for r in rows:
+        page = store.get_page(con, r["slug"])
+        if page is not None and page["blocks"]:
+            out.append(page)
+    return out
+
+
+def block_check(
+    con: sqlite3.Connection, page: dict[str, Any], block: blocks.Block
+) -> dict[str, Any]:
+    """The check for one block: not yet asked, edited by hand and left,
+    or the library's news since its answer."""
+    text = page["text"]
+    kept = (page.get("meta") or {}).get("asks", {}).get(block.id) or {}
+    if blocks.held(block, text):
+        return {"due": False, "new": [], "reread": [], "why": HELD, "held": True}
+    if not block.filled or not kept.get("question"):
+        return {"due": True, "new": [], "reread": [], "why": "not yet asked"}
+    if kept.get("question") != block.question:
+        return {"due": True, "new": [], "reread": [], "why": "the question changed"}
+    q = {**kept, "question": block.question, "options": dict(block.options)}
+    return _check(con, q, page["doc_id"])
+
+
+def _run_of(model: str) -> str:
+    """The model's name as the tail's ``run=``: one word."""
+    return _RUN_CHARS.sub("-", model).strip("-") or "ask"
+
+
+def refresh_blocks(
+    con: sqlite3.Connection,
+    page: dict[str, Any],
+    *,
+    force: bool = False,
+    block: str | None = None,
+    answerer: Any = None,
+    on_event: Any = None,
+    release: bool = False,
+) -> dict[str, Any]:
+    """The ask blocks of one page: each not yet filled, or due by the
+    check (or ``force``), is asked — the earlier interior as the
+    conversation so far, the change as a note beside the question — and
+    every answer goes into the page as one agent revision through
+    ``store.fill_blocks``, which touches nothing outside the markers.
+    A block edited by hand is left and noted in ``meta.asks[id].held``
+    unless ``release``; ``block`` names one id. Returns ``{slug,
+    refreshed, blocks: {id: {filled, why | revision, new, reread,
+    model}}}``."""
+    slug = page["slug"]
+    text = page["text"]
+    meta = dict(page.get("meta") or {})
+    asks: dict[str, Any] = dict(meta.get("asks") or {})
+    found = [b for b in blocks.blocks(text) if block is None or b.id == block]
+    now = _now()
+    report: dict[str, Any] = {}
+    fills: dict[str, str] = {}
+    results: dict[str, tuple[dict[str, Any], list[int], dict[str, Any]]] = {}
+    if answerer is None:
+        answerer = ask_mod.current()
+    for b in found:
+        kept = dict(asks.get(b.id) or {})
+        kept["checked_at"] = now
+        if blocks.held(b, text) and not release:
+            kept["held"] = kept.get("held") or {"at": now, "why": HELD}
+            asks[b.id] = kept
+            report[b.id] = {"filled": False, "why": HELD, "held": True}
+            continue
+        kept.pop("held", None)
+        seen = block_check(con, page, b)
+        if seen.get("held"):  # released: asked again in full
+            seen = {"due": True, "new": [], "reread": [], "why": "released"}
+        asks[b.id] = kept
+        if not seen["due"] and not force:
+            report[b.id] = {"filled": False, "why": "nothing new"}
+            continue
+        if answerer is None:
+            report[b.id] = {"filled": False, "why": "no model to ask"}
+            continue
+        opts = dict(b.options)
+        steps = opts.get("steps")
+        if steps is None:
+            steps = ask_mod.default_steps()
+        previous = (
+            blocks.answer_of(text[b.interior[0] : b.interior[1]]) if b.filled else ""
+        )
+        history = [{"question": b.question, "answer": previous}] if previous else None
+        try:
+            result = ask_mod.ask(
+                con,
+                b.question,
+                limit=int(opts.get("limit") or ask_mod.PASSAGES),
+                doctype=opts.get("doctype"),
+                answerer=answerer,
+                history=history,
+                steps=max(0, int(steps)),
+                on_event=on_event,
+                note=_asked_again(seen["new"], seen["reread"]) if previous else "",
+            )
+        except ValueError as exc:  # an option written by hand the ask refuses
+            report[b.id] = {"filled": False, "why": f"not asked: {exc}"}
+            continue
+        if not (result.get("answer") or "").strip():
+            report[b.id] = {"filled": False, "why": "the model gave no answer"}
+            continue
+        section, docs = ask_mod.section_of(result, trail=False)
+        fills[b.id] = section
+        results[b.id] = (result, docs, seen)
+    revision = page.get("revision")
+    if fills:
+        model = str(next(iter(results.values()))[0].get("model") or "?")
+        parts = []
+        for b_id, (_, _, seen) in results.items():
+            what = ", ".join(n["title"] for n in seen["new"][:2])
+            if len(seen["new"]) > 2:
+                what += f" and {len(seen['new']) - 2} more"
+            if what:
+                parts.append(f"{b_id}: new: {what}")
+            elif seen["reread"]:
+                parts.append(f"{b_id}: a source read again")
+            elif seen["why"] in ("not yet asked", "released"):
+                parts.append(f"{b_id}: {seen['why']}")
+            else:
+                parts.append(f"{b_id}: asked again")
+        note = f"ask {model}; " + "; ".join(parts)
+        written = store.fill_blocks(
+            con,
+            slug,
+            fills,
+            asked=now[:10],
+            run=_run_of(model),
+            note=note[:MAX_NOTE],
+            release=set(fills) if release else None,
+        )
+        revision = written["revision"]
+        for b_id, (result, docs, seen) in results.items():
+            if written["report"].get(b_id) != "filled":
+                report[b_id] = {"filled": False, "why": written["report"].get(b_id)}
+                continue
+            b = next(x for x in found if x.id == b_id)
+            print_ = _fingerprint(con, b.question, dict(b.options))
+            kept = dict(asks.get(b_id) or {})
+            history = list(kept.get("history") or [])
+            history.append(
+                {
+                    "revision": revision,
+                    "at": now,
+                    "model": model,
+                    "new": [
+                        {"doc_id": n["doc_id"], "title": n["title"]}
+                        for n in seen["new"]
+                    ],
+                    "reread": seen["reread"],
+                    "forced": bool(force and not seen["due"]),
+                }
+            )
+            kept.update(
+                question=b.question,
+                options=dict(b.options),
+                asked_at=now,
+                model=model,
+                revision=revision,
+                sources=docs,
+                source_hashes=_hashes(con, docs),
+                top=print_["top"],
+                since_id=print_["since_id"],
+                history=history[-50:],
+            )
+            asks[b_id] = kept
+            report[b_id] = {
+                "filled": True,
+                "revision": revision,
+                "new": seen["new"],
+                "reread": seen["reread"],
+                "model": model,
+            }
+    # the blocks the page no longer has are forgotten with it
+    asks = {
+        k: v for k, v in asks.items() if any(b.id == k for b in blocks.blocks(text))
+    }
+    meta = store.get_meta(con, page["doc_id"])
+    meta["asks"] = asks
+    store.set_meta(con, page["doc_id"], meta)
+    return {
+        "slug": slug,
+        "refreshed": sum(1 for r in report.values() if r.get("filled")),
+        "revision": revision,
+        "doc_id": page["doc_id"],
+        "blocks": report,
+    }
+
+
+def standing(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Every standing question with its state: the question pages, then
+    the ask blocks of other pages (``slug#id``), each with the check's
+    verdict (a search per question; no model)."""
+    out = []
+    for page in question_pages(con):
+        seen = check(con, page)
+        q = page["question"]
+        out.append(
+            {
+                "slug": page["slug"],
+                "doc_id": page["doc_id"],
+                "title": page["title"],
+                "question": q.get("question"),
+                "asked_at": q.get("asked_at"),
+                "model": q.get("model"),
+                "revision": page["revision"],
+                "history": len(q.get("history") or []),
+                "due": seen["due"],
+                "new": seen["new"],
+                "reread": seen["reread"],
+                "why": seen["why"],
+            }
+        )
+    for page in block_pages(con):
+        asks = (page.get("meta") or {}).get("asks") or {}
+        for b in blocks.blocks(page["text"]):
+            seen = block_check(con, page, b)
+            kept = asks.get(b.id) or {}
+            out.append(
+                {
+                    "slug": f"{page['slug']}#{b.id}",
+                    "doc_id": page["doc_id"],
+                    "title": page["title"],
+                    "block": b.id,
+                    "question": b.question,
+                    "asked_at": kept.get("asked_at"),
+                    "model": kept.get("model"),
+                    "revision": page["revision"],
+                    "history": len(kept.get("history") or []),
+                    "due": seen["due"],
+                    "new": seen["new"],
+                    "reread": seen["reread"],
+                    "why": seen["why"],
+                    "held": bool(seen.get("held")),
+                    "filled": b.filled,
+                }
+            )
+    return out
+
+
 def refresh_all(
     con: sqlite3.Connection,
     *,
@@ -409,16 +686,31 @@ def refresh_all(
     only: str | None = None,
     answerer: Any = None,
     job: Any = None,
+    release: bool = False,
 ) -> dict[str, Any]:
-    """Every question page checked and, when due, asked again; ``only``
-    names one slug. Returns per page what happened."""
+    """Every question page checked and, when due, asked again, then every
+    page with ask blocks; ``only`` names one page by slug, or one block
+    as ``slug#id``. Returns per page what happened."""
+    slug_only, _, block_only = (only or "").partition("#")
+    slug_only = store.slugify(slug_only) if slug_only else None
     pages = question_pages(con)
-    if only:
-        pages = [p for p in pages if p["slug"] == store.slugify(only)]
-    out: dict[str, Any] = {"checked": len(pages), "refreshed": 0, "pages": {}}
+    if slug_only:
+        pages = [p for p in pages if p["slug"] == slug_only]
+    with_blocks = block_pages(con)
+    if slug_only:
+        with_blocks = [p for p in with_blocks if p["slug"] == slug_only]
+    if pages and block_only:
+        pages = []  # a block was named: the question pages are not meant
+    out: dict[str, Any] = {
+        "checked": len(pages) + len(with_blocks),
+        "refreshed": 0,
+        "pages": {},
+    }
     if job is not None:
-        job.update(total=len(pages), done=0, note="questions")
-    for n, page in enumerate(pages, 1):
+        job.update(total=out["checked"], done=0, note="questions")
+    n = 0
+    for page in pages:
+        n += 1
         if job is not None:
             job.update(note=f"questions: {page['slug']}")
         try:
@@ -429,6 +721,26 @@ def refresh_all(
         out["pages"][page["slug"]] = rep
         if rep.get("refreshed"):
             out["refreshed"] += 1
+        if job is not None:
+            job.update(done=n)
+    for page in with_blocks:
+        n += 1
+        if job is not None:
+            job.update(note=f"questions: {page['slug']} (blocks)")
+        try:
+            rep = refresh_blocks(
+                con,
+                page,
+                force=force,
+                block=block_only or None,
+                answerer=answerer,
+                release=release,
+            )
+        except Exception as exc:
+            log.exception("the blocks of %s failed", page["slug"])
+            rep = {"slug": page["slug"], "refreshed": 0, "why": f"failed: {exc}"}
+        out["pages"][page["slug"]] = rep
+        out["refreshed"] += int(rep.get("refreshed") or 0)
         if job is not None:
             job.update(done=n)
     return out
@@ -506,6 +818,16 @@ def briefing(
                     f"- [{q.get('question')}](#doc/{page['doc_id']}) — revision"
                     f" {h.get('revision')}" + (f": new: {what}" if what else "")
                 )
+    for page in block_pages(con):
+        for kept in ((page.get("meta") or {}).get("asks") or {}).values():
+            for h in kept.get("history") or []:
+                if since < str(h.get("at") or "") <= until:
+                    what = ", ".join(n["title"] for n in h.get("new") or [])
+                    moved.append(
+                        f"- [{kept.get('question')}](#doc/{page['doc_id']}) — in"
+                        f" {page['title']}, revision {h.get('revision')}"
+                        + (f": new: {what}" if what else "")
+                    )
     text = f"# What arrived, {day}\n\n"
     text += (
         f"{len(arrived)} document{'s' if len(arrived) != 1 else ''} since"

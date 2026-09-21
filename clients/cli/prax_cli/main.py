@@ -682,7 +682,9 @@ def build_parser() -> argparse.ArgumentParser:
             " of the answer's entities, or a source was read again, the"
             " question is asked again and the answer is a new revision, the"
             " sections you added under it kept. `prax ask --stand` starts"
-            " one; schedule: questions: HH:MM in prax.yaml runs the check"
+            " one; an ask block in a page of your own (<!-- prax:ask id=q1"
+            ' "…" --> … <!-- /prax:ask id=q1 -->) is one too, listed as'
+            " slug#id. schedule: questions: HH:MM in prax.yaml runs the check"
             " daily, with the day's briefing (what arrived)."
         ),
         epilog=(
@@ -690,6 +692,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  prax questions                      each question, and what is new\n"
             "  prax questions --ask                ask again what is due (a job)\n"
             "  prax questions --ask q-my-slug --force   one, whatever is new\n"
+            "  prax questions --ask notes#q1 --release  a block you edited: anew\n"
             "  prax questions --briefing           the day's page of what arrived"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -706,6 +709,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--briefing", action="store_true", help="write the day's briefing page too"
+    )
+    s.add_argument(
+        "--release",
+        action="store_true",
+        help="an ask block edited by hand: ask it again all the same (with --ask)",
     )
     s.set_defaults(func=running.questions, needs_door=True)
 

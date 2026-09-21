@@ -132,6 +132,35 @@ function citeMarkers(html, links) {
   });
 }
 
+// An ask chunk's text — the block from its head marker to its tail — as
+// what the frame shows: the interior alone, the markers gone (the keep
+// markers too; what they held stays), and the source list's [n] markers
+// left as they are. The question and the state come from the chunk's
+// data, not from here.
+function askInterior(text) {
+  return String(text || "")
+    .replace(/^[ \t]*<!--\s*\/?prax:ask\b[^>]*-->[ \t]*$/gm, "")
+    .replace(/<!--\s*\/?prax:keep\s*-->/g, "")
+    .trim();
+}
+
+// The markers a person writes to put a standing question in a page: an
+// id the page does not use yet, the question quoted, the options given.
+function askBlockMarkers(id, question, options) {
+  const opts = Object.entries(options || {}).filter(([, v]) => v !== "" && v != null).map(([k, v]) => `${k}=${v}`).join(" ");
+  const q = String(question || "").replace(/"/g, "'").replace(/\s+/g, " ").trim();
+  return `<!-- prax:ask id=${id}${opts ? " " + opts : ""} "${q}" -->\n<!-- /prax:ask id=${id} -->\n`;
+}
+
+// The next free block id in a page's text: q1, q2, … past the ones there.
+function nextAskId(text) {
+  const used = new Set();
+  for (const m of String(text || "").matchAll(/<!--\s*prax:ask\s+[^>]*\bid=(\S+)/g)) used.add(m[1].replace(/["']/g, ""));
+  let n = 1;
+  while (used.has(`q${n}`)) n += 1;
+  return `q${n}`;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId };
 }

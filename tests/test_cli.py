@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -423,3 +424,28 @@ def test_questions_are_listed_and_asked_again(
     assert "1 of 1 asked again" in printed and "briefing" in printed
     assert run("questions", "--json") == 0
     assert json.loads(capsys.readouterr().out)[0]["revision"] == 2
+    # an ask block in a page of one's own is listed beside it, as slug#id;
+    # saved through the door it is answered at once; a hand in it is shown
+    text = (
+        "# My notes\n\nMine.\n\n"
+        '<!-- prax:ask id=q1 steps=0 "how do FDNs build reverb" -->\n'
+        "<!-- /prax:ask id=q1 -->\n"
+    )
+    job = door.put("/page/my-notes", json={"text": text, "title": "My notes"}).json()
+    for _ in range(100):
+        if door.get(f"/jobs/{job['job']}").json()["status"] != "running":
+            break
+        time.sleep(0.1)
+    assert run("questions") == 0
+    printed = capsys.readouterr().out
+    assert "my-notes#q1" in printed and "in My notes" in printed
+    page = door.get("/page/my-notes").json()
+    assert page["blocks"][0]["filled"]
+    edited = page["text"].replace("Stub answer", "My own answer")
+    door.put("/page/my-notes", json={"text": edited})
+    assert run("questions") == 0
+    printed = capsys.readouterr().out
+    assert "held" in printed and "--release" in printed
+    assert run("questions", "--ask", "my-notes#q1", "--release") == 0
+    assert "1 of 1 asked again" in capsys.readouterr().out
+    assert "Stub answer" in door.get("/page/my-notes").json()["text"]

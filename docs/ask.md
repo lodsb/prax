@@ -168,9 +168,55 @@ so the page's revisions are what the library learned about the
 question. A question page is never evidence for a search or an ask —
 neither its own re-ask nor anyone else's — nor is the briefing.
 
+### Ask blocks: a standing question inside your own page
+
+The same question can stand inside a page of your own — a project or
+topic page with your notes, links to documents and, between them, the
+questions you want kept answered — as an *ask block*: two HTML
+comments on lines of their own,
+
+```markdown
+<!-- prax:ask id=q1 "how do feedback delay networks stay lossless" -->
+<!-- /prax:ask id=q1 -->
+```
+
+(the editor's "+ standing question" writes them at the cursor; the
+head may carry `steps=`, `doctype=`, `limit=`, `domain=`). Saving the
+page starts the pass for it: the door fills what is between the
+markers with the answer and its source list (no trail — the block is
+compact), closes the block with the interior's hash, the day and the
+model in the tail (`<!-- /prax:ask id=q1 sha=1f3a… asked=2026-09-21
+run=server-35b -->`), and remembers per block, in `meta.asks[id]`,
+what a question page remembers. HTML comments render as nothing
+anywhere, so the page reads the same in any Markdown viewer; the UI
+frames the block on a plate with the question on its rim and "asked
+<day> by <model> · ask again". From then on the block is checked and
+re-asked exactly like a question page — the earlier interior is the
+conversation so far, the change is the note beside the question — and
+the re-ask replaces the interior in one agent revision whose note
+names the block and the change ("ask server-35b; q1: new: *A newer FDN
+reverb*"). Nothing outside the markers is ever touched: the fill
+replaces interiors by id and refuses a page whose markers are gone.
+
+Two rules keep your hands safe inside a block. An interior that no
+longer matches the tail's hash was edited by hand: the pass *leaves*
+it, notes why (`meta.asks[id].held`; the UI says "edited by hand; the
+door left it"), and only "answer anew" (`--release`) replaces it. A
+`<!-- prax:keep -->` … `<!-- /prax:keep -->` region inside a block is
+yours by design: it does not hold the block, and it is carried over
+verbatim after each new answer — the place for a remark on the answer
+that should survive the next one. A block's interior is an `ask`
+chunk, set aside from search and never embedded the way a reference
+entry is, so an answer is never its own evidence; the links in a
+page's prose (`[title](#doc/N)`, the answer's sources among them) are
+the page's `annotates` edges, made when a link appears and retired when
+it goes. `GET /questions` and `prax questions` list blocks beside the
+question pages as `slug#id`; `prax questions --ask slug#id` asks one.
+
 The briefing is the clock's other page, one a day: "What arrived" lists
 the documents that came since the last briefing, each with the first
-line of its summary, and the questions whose answer moved. No model is
+line of its summary, and the questions whose answer moved — blocks
+too, named with their page. No model is
 asked for it; a question about the day is a question like any other.
 
 ## When it goes wrong

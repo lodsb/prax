@@ -35,6 +35,7 @@ from pydantic import BaseModel
 from . import ask as ask_mod
 from . import (
     auth,
+    blocks,
     config,
     embeddings,
     hostinfo,
@@ -1292,10 +1293,13 @@ def page_revision(slug: str, revision: int, request: Request) -> dict[str, Any]:
 @app.put("/page/{slug}")
 def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
     """Create the page or add a revision. An agent revision over a human
-    one is refused with 409 unless ``force``; use append."""
+    one is refused with 409 unless ``force``; use append. A page saved
+    with an ask block not yet answered has the questions pass started
+    for it (``job`` in the answer)."""
     try:
-        return store.write_page(
-            _con(request),
+        con = _con(request)
+        written = store.write_page(
+            con,
             slug,
             req.text,
             title=req.title,
@@ -1306,6 +1310,8 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
             part_of=req.part_of,
             force=req.force,
         )
+        job = _answer_new_blocks(con, written["slug"], req.text)
+        return {**written, "job": job} if job is not None else written
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     except KeyError as exc:
@@ -1477,38 +1483,19 @@ class QuestionReq(BaseModel):
 
 
 class QuestionsRunReq(BaseModel):
-    slug: str | None = None  # one question, else all
+    slug: str | None = None  # one question (a page, or a block as slug#id), else all
     force: bool = False  # ask again even when nothing is new
     briefing: bool = False  # write the day's briefing after
+    release: bool = False  # a block edited by hand: ask it again all the same
 
 
 @app.get("/questions")
 def questions_list(request: Request) -> list[dict[str, Any]]:
-    """The standing questions with what each remembers and whether the
-    library has learned something since (the check runs a search per
-    question; no model)."""
-    con = _con(request)
-    out = []
-    for page in questions.question_pages(con):
-        seen = questions.check(con, page)
-        q = page["question"]
-        out.append(
-            {
-                "slug": page["slug"],
-                "doc_id": page["doc_id"],
-                "title": page["title"],
-                "question": q.get("question"),
-                "asked_at": q.get("asked_at"),
-                "model": q.get("model"),
-                "revision": page["revision"],
-                "history": len(q.get("history") or []),
-                "due": seen["due"],
-                "new": seen["new"],
-                "reread": seen["reread"],
-                "why": seen["why"],
-            }
-        )
-    return out
+    """The standing questions — the question pages, then the ask blocks
+    of other pages as ``slug#id`` — with what each remembers and whether
+    the library has learned something since (the check runs a search
+    per question; no model)."""
+    return questions.standing(_con(request))
 
 
 @app.post("/questions")
@@ -1528,20 +1515,38 @@ def questions_run(req: QuestionsRunReq, request: Request) -> dict[str, Any]:
     """Check every question (or one) and ask again what is due, as a job;
     with ``briefing`` the day's page after."""
     return _start_questions(
-        _con(request), only=req.slug, force=req.force, briefing=req.briefing
+        _con(request),
+        only=req.slug,
+        force=req.force,
+        briefing=req.briefing,
+        release=req.release,
     )
 
 
+_answering: set[str] = set()  # the pages whose blocks a job is filling now
+_answering_lock = threading.Lock()
+
+
 def _start_questions(
-    con: Any, *, only: str | None = None, force: bool = False, briefing: bool = True
+    con: Any,
+    *,
+    only: str | None = None,
+    force: bool = False,
+    briefing: bool = True,
+    release: bool = False,
 ) -> dict[str, Any]:
     job = store.Job(con, "questions", note=only or "every question")
+    key = (only or "").partition("#")[0]
+    with _answering_lock:
+        _answering.add(key)
 
     def run() -> None:
         con = store.connect()
         try:
             with store.Job.existing(con, job.id) as mine:
-                rep = questions.refresh_all(con, force=force, only=only, job=mine)
+                rep = questions.refresh_all(
+                    con, force=force, only=only, job=mine, release=release
+                )
                 note = f"{rep['refreshed']} of {rep['checked']} asked again"
                 if briefing:
                     b = questions.briefing(con, job=mine)
@@ -1551,9 +1556,24 @@ def _start_questions(
             logging.getLogger("prax.questions").exception("the questions failed")
         finally:
             con.close()
+            with _answering_lock:
+                _answering.discard(key)
 
     threading.Thread(target=run, name="questions", daemon=True).start()
     return {"job": job.id}
+
+
+def _answer_new_blocks(con: Any, slug: str, text: str) -> int | None:
+    """A page saved with an ask block not yet filled: the pass runs for
+    that page now, as a job, so the answer is there within a moment
+    rather than at the clock's hour. One job per page at a time. Returns
+    the job id, or None when there was nothing to ask."""
+    if not any(not b.filled for b in blocks.blocks(text)):
+        return None
+    with _answering_lock:
+        if slug in _answering:
+            return None
+    return _start_questions(con, only=slug, briefing=False)["job"]
 
 
 # ---------------------------------------------------------------- domains

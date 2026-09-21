@@ -889,22 +889,33 @@ What the marker evenings taught, kept for the day:
       is 0.1 s (the two counts). Worth a pending-set that does not scan
       (the ids a rechunk or an index inserts, drained as they are
       embedded) before the next library-wide rechunk.
-- [ ] **Ask blocks in a person's page** (next; decided in rationale R17
-      after the survey in `research.md` "Living answers and mixed
-      pages", 2026-09-21): `<!-- prax:ask id=q1 "question" -->` … `<!--
-      /prax:ask id=q1 sha= asked= run= -->` inside any page, the door
-      filling the interior and keeping it as a standing question (the
-      same fingerprint check, per block in `meta.asks`); a hand-edited
-      interior is held, never overwritten (cog's rule); `<!-- prax:keep
-      -->` carried over verbatim; the interior an `ask` chunk kind set
-      aside from search like `reference`; the check writes a dated
-      status only, the rewrite a revision with a prose note; the re-ask
-      names the kind of change (replace / add / disagree), evidence
-      newest last — apply that framing to question pages too; a
-      `[title](#doc/N)` a person writes becomes an `annotates` edge on
-      save, retired when the link goes. Deferred: `mode=propose` with a
-      diff, claim-level KEEP/STALE adjudication, the contradiction scan
-      over `argues`.
+- [x] **Ask blocks in a person's page** (2026-09-21; decided in
+      rationale R17 after the survey in `research.md` "Living answers
+      and mixed pages"): `<!-- prax:ask id=q1 "question" -->` … `<!--
+      /prax:ask id=q1 sha= asked= run= -->` inside any page
+      (`prax.blocks`: the grammar, `fill` by id, the tail's hash of the
+      door's own text), the door filling the interior with the answer
+      and its sources and keeping it as a standing question (the same
+      check as a question page, per block in `meta.asks`;
+      `questions.refresh_blocks`, one agent revision per page through
+      `store.fill_blocks`, which touches nothing outside the markers and
+      refuses a page whose markers are gone); a hand-edited interior is
+      held — left, noted, shown — until "answer anew" / `--release`;
+      `<!-- prax:keep -->` regions are the person's, neither hold the
+      block nor go with the next answer; the block is one `ask` chunk
+      set aside from search like `reference` (`ASIDE_KINDS`); a page
+      saved with an unanswered block starts the pass for it at once;
+      `[title](#doc/N)` links in any page are `annotates` edges made when
+      the link appears and retired when it goes (an edge given as
+      `annotates` is never retired by an edit); the UI frames a block on
+      a plate with its state, the editor writes the markers ("+ standing
+      question"), the Pages view and `prax questions` list blocks as
+      `slug#id`, the briefing names the blocks that moved. Not done: the
+      check's dated status is written to `meta.asks[id].checked_at` on
+      every pass (no revision), as planned; "evidence newest last" in the
+      bundle is not ordered yet (the passages come ranked). Deferred as
+      before: `mode=propose` with a diff, claim-level KEEP/STALE
+      adjudication, the contradiction scan over `argues`.
 - [ ] **Sub-graph export / import** (`niggles.txt`, "repo work"): one
       JSON-lines file per project (entities, live edges with provenance,
       pages with revisions, document stubs), imported as a producer with

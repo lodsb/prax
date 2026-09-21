@@ -24,6 +24,11 @@ chunks:
   and, once the ``references`` pass has matched it, the library document
   it cites. A paragraph there that opens no entry continues the one before
   it; one before any entry is text;
+* one chunk per **ask** block of a page — from ``<!-- prax:ask id=… "…"
+  -->`` to its ``<!-- /prax:ask … -->`` (``prax.blocks``), the answer the
+  door keeps there with the question, the block's id and when it was
+  asked in ``data``. Like a reference it is set aside: never embedded,
+  out of a search, so an answer is never its own evidence;
 * **text** chunks of consecutive paragraphs under the same heading path, up
   to ``TARGET_CHARS``; a paragraph longer than ``MAX_CHARS`` falls back to
   overlapping fixed windows.
@@ -50,7 +55,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import references
+from prax import blocks, references
 
 TARGET_CHARS = 1200  # flush a text chunk when the next paragraph would exceed this
 MIN_CHARS = 300  # merge into the previous chunk when smaller than this at a boundary
@@ -59,7 +64,7 @@ MIN_CODE_CHARS = 200  # smaller fenced blocks are inline snippets: part of the t
 WINDOW = 1000
 OVERLAP = 150
 
-KINDS = ("text", "table", "figure", "code", "formula", "reference")
+KINDS = ("text", "table", "figure", "code", "formula", "reference", "ask")
 
 _PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
@@ -150,13 +155,14 @@ class Chunk:
 
 @dataclass
 class _Element:
-    kind: str  # heading | table | code | figure | para | page | blank
+    kind: str  # heading | table | code | figure | para | page | ask | blank
     start: int
     end: int
     text: str
     level: int = 0
     page: int | None = None
     time: int | None = None
+    block: blocks.Block | None = None  # an ask element's block
 
 
 # ---------------------------------------------------------------- parsing
@@ -172,9 +178,23 @@ def _lines_with_offsets(text: str) -> list[tuple[int, int, str]]:
     return out
 
 
+def _ask_regions(text: str) -> dict[int, tuple[int, blocks.Block]]:
+    """The ask blocks of a page by the offset of their head line: each
+    one is a single element from its head to its tail (the head alone
+    when unfilled), the line break after it left out like any element's."""
+    out: dict[int, tuple[int, blocks.Block]] = {}
+    for b in blocks.blocks(text):
+        end = b.tail[1] if b.tail is not None else b.head[1]
+        while end > b.head[0] and text[end - 1] in "\r\n":
+            end -= 1
+        out[b.head[0]] = (end, b)
+    return out
+
+
 def _elements(text: str) -> list[_Element]:
     lines = _lines_with_offsets(text)
     els: list[_Element] = []
+    asks = _ask_regions(text)
     i = 0
     n = len(lines)
     while i < n:
@@ -182,6 +202,12 @@ def _elements(text: str) -> list[_Element]:
         stripped = body.strip()
         if not stripped:
             i += 1
+            continue
+        if start in asks:
+            aend, block = asks[start]
+            els.append(_Element("ask", start, aend, text[start:aend], block=block))
+            while i < n and lines[i][0] < aend:
+                i += 1
             continue
         m = _PAGE_MARK.match(stripped)
         if m:
@@ -235,6 +261,7 @@ def _elements(text: str) -> list[_Element]:
                 or _PAGE_MARK.match(s)
                 or _HEADING.match(s)
                 or s.startswith(_FENCE)
+                or lines[j][0] in asks
             ):
                 break
             if (
@@ -323,6 +350,24 @@ def parse_figure(text: str) -> dict[str, Any] | None:
             for r in _READ_BY.finditer(text)
         ],
     }
+
+
+def ask_data(block: blocks.Block, text: str) -> dict[str, Any]:
+    """What an ask chunk carries: the block's id and question, its
+    options, when and by which pass it was last filled, whether it is
+    filled at all and whether a hand has been in it since."""
+    data: dict[str, Any] = {
+        "id": block.id,
+        "question": block.question,
+        "filled": block.filled,
+        "held": blocks.held(block, text),
+    }
+    if block.options:
+        data["options"] = dict(block.options)
+    for k in ("asked", "run", "sha"):
+        if block.tail_attrs.get(k):
+            data[k] = block.tail_attrs[k]
+    return data
 
 
 def parse_reference(text: str) -> dict[str, Any]:
@@ -459,6 +504,22 @@ def chunk(text: str) -> list[Chunk]:
             while heading and heading[-1][0] >= el.level:
                 heading.pop()
             heading.append((el.level, el.text))
+            continue
+        if el.kind == "ask":
+            flush()
+            maybe_merge_small_tail()
+            assert el.block is not None
+            chunks.append(
+                Chunk(
+                    "ask",
+                    text[el.start : el.end],
+                    el.start,
+                    el.end,
+                    el.page,
+                    path(),
+                    ask_data(el.block, text),
+                )
+            )
             continue
         if (
             el.kind == "para"

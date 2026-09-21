@@ -831,6 +831,22 @@ search hit or an ask's evidence: they are the model's own words.
     schedule:
       questions: "06:30"                # in prax.yaml: the check daily, the briefing after
 
+A standing question can also live *inside* a page of your own, between
+your notes, as an ask block (`docs/ask.md` "Ask blocks"): two HTML
+comments the editor's "+ standing question" writes for you,
+
+    <!-- prax:ask id=q1 "how does ADAA handle a stateful nonlinearity" -->
+    <!-- /prax:ask id=q1 -->
+
+Saving the page answers it (the interior is filled, the tail closed
+with the interior's hash and the day); from then on it is checked and
+re-asked like a question page, the interior replaced, nothing outside
+the markers touched. Edit inside the block and the pass leaves it
+("edited by hand"); "answer anew" in the UI or `prax questions --ask
+SLUG#q1 --release` replaces it; a `<!-- prax:keep -->…<!-- /prax:keep -->`
+region inside survives every answer. `prax questions` lists blocks as
+`slug#id`. A page's `[title](#doc/N)` links are its `annotates` edges.
+
 ## 3h. Local models (optional)
 
 A local model runs in **llama-server** (llama.cpp's HTTP server), on the

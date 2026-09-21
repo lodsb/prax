@@ -342,7 +342,13 @@ def write_page(
     as the agent. Refused when a person wrote the latest revision: use
     append_page then. ``annotates`` lists document ids the page is about;
     ``part_of`` names a project page's slug. Cite what you read as
-    chunk ids or document ids in the text so readers can check."""
+    chunk ids or document ids in the text so readers can check; a link
+    ``[title](#doc/N)`` in the text is an edge to that document. A
+    standing question inside the page is an ask block, ``<!-- prax:ask
+    id=q1 "the question" -->`` on one line and ``<!-- /prax:ask id=q1
+    -->`` on the next: the door answers it between the markers and asks
+    again when the library learns something (``get_page`` lists them as
+    ``blocks``)."""
     return _guard(
         lambda: door().put_json(
             f"/page/{slug}",

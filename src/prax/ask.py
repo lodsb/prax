@@ -613,10 +613,11 @@ def trail_lines(result: dict[str, Any]) -> list[str]:
     return out
 
 
-def section_of(result: dict[str, Any]) -> tuple[str, list[int]]:
+def section_of(result: dict[str, Any], *, trail: bool = True) -> tuple[str, list[int]]:
     """An answer as a page section — the answer, a source list linking
     the cited documents (all passages when nothing was cited), the trail
-    — and the documents it draws on, for the page's edges."""
+    unless told otherwise (an ask block keeps only answer and sources) —
+    and the documents it draws on, for the page's edges."""
     answer = (result.get("answer") or "").strip()
     if not answer:
         raise ValueError("nothing to save: the result has no answer")
@@ -640,9 +641,9 @@ def section_of(result: dict[str, Any]) -> tuple[str, list[int]]:
             + (f" — {where}" if where else "")
         )
     section = answer + "\n\nSources:\n\n" + "\n".join(lines) if lines else answer
-    trail = trail_lines(result)
-    if trail:
-        section += "\n\nHow it was found:\n\n" + "\n".join(f"- {t}" for t in trail)
+    found = trail_lines(result) if trail else []
+    if found:
+        section += "\n\nHow it was found:\n\n" + "\n".join(f"- {t}" for t in found)
     docs = list(dict.fromkeys(c["doc_id"] for c in cited if c.get("title")))
     return section, docs
 

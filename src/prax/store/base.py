@@ -28,8 +28,10 @@ VEC_DIM = 384  # dimension of the vector index; another dimension is a new index
 # chunk kinds the search leaves out unless asked for by kind, and the
 # embed step never vectorises: a reference entry matches every author,
 # venue and year in the library and says nothing the cited paper does
-# not say better — the references pass turns it into an edge instead
-ASIDE_KINDS = ("reference",)
+# not say better — the references pass turns it into an edge instead;
+# an ask block in a page is the model's own answer, and an answer must
+# never be its own evidence the next time the question is asked
+ASIDE_KINDS = ("reference", "ask")
 _ASIDE = (  # a legacy row without a kind is text
     " AND (c.kind IS NULL OR c.kind NOT IN ("
     + ", ".join(f"'{k}'" for k in ASIDE_KINDS)

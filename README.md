@@ -115,13 +115,16 @@ the graph, setting aside what is beside the point — and cites the
 passages it kept. You watch it happen, and the answer can be kept as a
 page with edges to its sources — or as a standing question: a page the
 door asks again when a document arrives that speaks to it, each answer
-a revision, your notes under it kept. A daily briefing page says what
+a revision, your notes under it kept — or as an ask block inside a
+page of your own, two comment lines between your notes that the door
+keeps filled. A daily briefing page says what
 arrived and which answers moved. What it can and cannot do:
 [`docs/ask.md`](docs/ask.md).
 
 **Keeps what you write.** Notes, project threads, topic write-ups, as
-Markdown pages with revisions. A model may append to a page; it never
-overwrites a person.
+Markdown pages with revisions. A model may append to a page, or fill
+the blocks you left for it; it never overwrites a person — a block you
+edited by hand is left alone until you say otherwise.
 
 **Mends itself.** `prax heal` names the damage that recurs — a
 placeholder entity, a duplicate capture, a scan read as if its cover

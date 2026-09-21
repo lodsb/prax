@@ -504,3 +504,20 @@ contract. Claim-level adjudication (KEEP / STALE / REPLACE against new
 hits, outside generation) and a contradiction scan over `argues`
 edges: the mechanism that makes a re-ask cheap and honest, one stage
 further, once the block exists to hang it on.
+
+**As built (2026-09-21).** `prax.blocks` is the grammar and the rewrite
+alone (no store, no model); the hash in the tail is of the door's own
+text — the keep regions and the edge whitespace left out — so an
+editor's trailing newline and a remark in a keep region are not hands,
+a changed word is. A held block is left and noted in `meta.asks[id]`
+(`held: {at, why}`), shown as such, and released by asking it again
+with `release`; a block the page no longer has (its markers gone) is
+refused by `store.fill_blocks` as a structural error, never `force`d.
+Saving a page with an unanswered block starts the pass for that page
+at once (one job per page at a time), so the answer is there in a
+moment rather than at the clock's hour. The interior holds the answer
+and its source list, no trail; the sources' links make the page's
+edges the way any link does, so a re-ask that drops a source retires
+its edge. An edge given as `annotates` (a note made from a document's
+page) is never retired by an edit that leaves the link out: the
+evidence column says which edges came from links.

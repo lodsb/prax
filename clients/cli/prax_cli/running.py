@@ -867,6 +867,9 @@ def questions(door: Door, a: Any) -> int:
         body: dict[str, Any] = {"force": a.force, "briefing": a.briefing}
         if a.ask:
             body["slug"] = a.ask
+        if getattr(a, "release", False):
+            body["release"] = True
+            body["force"] = True  # a release is a re-ask
         started = door.post_json("/questions/run", body)
         if not a.json:
             out.say(
@@ -892,18 +895,33 @@ def questions(door: Door, a: Any) -> int:
     )
     out.say()
     for r in rows:
-        mark = out.paint("new", "yellow") if r["due"] else out.dim("settled")
+        if r.get("held"):
+            mark = out.paint("held", "yellow")
+        elif r["due"]:
+            mark = out.paint("new", "yellow")
+        else:
+            mark = out.dim("settled")
         out.say(f"{mark}   {out.bold(r['question'] or r['slug'])}")
         when = (r.get("asked_at") or "")[:16].replace("T", " ")
         out.hint(
             f"    {r['slug']} · doc {r['doc_id']} · revision {r['revision']}"
-            f" · asked {when} by {r.get('model') or '?'}"
+            + (f" · in {r['title']}" if r.get("block") else "")
+            + (
+                f" · asked {when} by {r.get('model') or '?'}"
+                if r.get("asked_at")
+                else " · not yet asked"
+            )
             + (
                 f" · moved {r['history']} time{'s' if r['history'] != 1 else ''}"
                 if r.get("history")
                 else ""
             )
         )
+        if r.get("held"):
+            out.hint(
+                "      · edited by hand; the door left it. prax questions --ask"
+                f" {r['slug']} --release answers it anew"
+            )
         for n in r.get("new") or []:
             out.hint(f"      · {n['title']} — {n['why']}")
         if r.get("reread"):

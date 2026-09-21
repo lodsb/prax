@@ -13,9 +13,11 @@ import re
 import sqlite3
 from typing import Any
 
+from prax import blocks
+
 from .base import _read_archive, _reading, _serialized
 from .documents import _set_promote, get_meta, index_text, register, set_meta
-from .graph import Edge, find_edges, link
+from .graph import Edge, find_edges, invalidate_edge, link
 
 # Living Markdown documents (migration 0006): notes on a document, ongoing
 # projects, topic pages. A page is a document, so everything that applies
@@ -23,9 +25,11 @@ from .graph import Edge, find_edges, link
 # artifact with an append-only revision row, and its relationships to other
 # documents are edges. An agent never overwrites human text: ``write_page``
 # refuses an agent revision over a human one unless told to; ``append_page``
-# adds a section instead. A ``question`` page is a standing question the
-# door keeps answered (``prax.questions``), a ``briefing`` the day's page
-# of what arrived; both are the agent's, a person adds sections under them.
+# adds a section instead, ``fill_blocks`` replaces the interiors of the
+# page's ask blocks (``prax.blocks``) and nothing outside them. A
+# ``question`` page is a standing question the door keeps answered
+# (``prax.questions``), a ``briefing`` the day's page of what arrived;
+# both are the agent's, a person adds sections under them.
 
 PAGE_KINDS = ("addendum", "project", "synthesis", "topic", "question", "briefing")
 
@@ -34,6 +38,10 @@ PAGE_AUTHORS = ("human", "agent")
 
 
 _SLUG_CHARS = re.compile(r"[^a-z0-9]+")
+# a link to a library document in a page's own prose, ``[title](#doc/12)``:
+# the page annotates that document, an edge kept while the link stands
+_DOC_LINK = re.compile(r"\]\(#doc/(\d+)(?:[?#][^)]*)?\)")
+_LINK_EVIDENCE = "link in page"
 
 
 def slugify(text: str) -> str:
@@ -90,7 +98,42 @@ def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
         "author": revisions[-1]["author"] if revisions else None,
         "revisions": revisions,
         "meta": meta,
+        "blocks": page_blocks(text, meta),
     }
+
+
+def page_blocks(text: str, meta: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """The ask blocks of a page's text as data, each with what the page's
+    ``meta.asks`` remembers of it (when it was asked, by which model, its
+    sources, whether the pass found it edited by hand and left it)."""
+    asks = (meta or {}).get("asks") or {}
+    out = []
+    for b in blocks.blocks(text):
+        kept = asks.get(b.id) or {}
+        out.append(
+            {
+                "id": b.id,
+                "question": b.question,
+                "options": dict(b.options),
+                "filled": b.filled,
+                "held": blocks.held(b, text),
+                "asked": b.asked,
+                "run": b.tail_attrs.get("run"),
+                "asked_at": kept.get("asked_at"),
+                "model": kept.get("model"),
+                "sources": kept.get("sources") or [],
+                "checked_at": kept.get("checked_at"),
+                "history": len(kept.get("history") or []),
+                "left": kept.get("held"),  # {at, why} when the pass left it
+            }
+        )
+    return out
+
+
+def linked_documents(text: str) -> list[int]:
+    """The library documents a page's text links to, ``[title](#doc/N)``,
+    in order of first mention."""
+    return list(dict.fromkeys(int(m.group(1)) for m in _DOC_LINK.finditer(text or "")))
 
 
 @_reading
@@ -238,6 +281,9 @@ def write_page(
                 producer="page",
                 run=f"{slug}@{revision}",
             )
+    _link_edges(
+        con, doc_id, slug, revision, text, page_title, page_type, source_rel, annotates
+    )
     if part_of:
         project = con.execute(
             "SELECT d.title FROM pages p JOIN documents d ON d.id = p.doc_id"
@@ -259,6 +305,113 @@ def write_page(
             )
     con.commit()
     return {"doc_id": doc_id, "slug": slug, "revision": revision, "created": created}
+
+
+def _link_edges(
+    con: sqlite3.Connection,
+    doc_id: int,
+    slug: str,
+    revision: int,
+    text: str,
+    page_title: str,
+    page_type: str,
+    rel: str,
+    annotates: list[int] | None,
+) -> None:
+    """The documents the page's text links to are what it annotates (or
+    synthesizes) too: an edge for each link, made when the link appears
+    and retired when it goes — the evidence says it was a link, so an
+    edge given as ``annotates`` (a note made from a document's page, the
+    sources of an answer kept) is never retired by an edit that leaves
+    the link out. A link to a document the library does not have, or to
+    the page itself, makes no edge."""
+    named = set(annotates or [])
+    wanted_titles: set[str] = set()
+    for target in linked_documents(text):
+        if target == doc_id or target in named:
+            continue
+        t = con.execute(
+            "SELECT title FROM documents WHERE id = ?", (target,)
+        ).fetchone()
+        if t is None or not t[0]:
+            continue
+        wanted_titles.add(t[0])
+        target_type = (
+            "page"
+            if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (target,)).fetchone()
+            else "paper"
+        )
+        edge = Edge(page_title, page_type, rel, t[0], target_type)
+        if not find_edges(con, edge):
+            link(
+                con,
+                edge,
+                confidence="EXTRACTED",
+                source_doc=doc_id,
+                evidence=f"{_LINK_EVIDENCE} {slug} revision {revision}",
+                producer="page",
+                run=f"{slug}@{revision}",
+            )
+    gone = con.execute(
+        "SELECT e.id, t.name FROM edges e JOIN entities t ON t.id = e.dst"
+        " WHERE e.source_doc = ? AND e.producer = 'page' AND e.rel = ?"
+        " AND e.valid_to IS NULL AND e.evidence LIKE ?",
+        (doc_id, rel, _LINK_EVIDENCE + " %"),
+    ).fetchall()
+    for row in gone:
+        if row["name"] not in wanted_titles:
+            invalidate_edge(con, row["id"])
+
+
+def fill_blocks(
+    con: sqlite3.Connection,
+    slug: str,
+    fills: dict[str, str],
+    *,
+    asked: str,
+    run: str,
+    note: str | None = None,
+    release: set[str] | None = None,
+) -> dict[str, Any]:
+    """Replace the interiors of a page's ask blocks (``prax.blocks``), by
+    id, as one agent revision; nothing outside the blocks changes, so a
+    person's text needs no ``force``. A block edited by hand since the
+    door wrote it is left as it is and reported ``held`` unless its id is
+    in ``release``; a block the page no longer has (its markers gone) is
+    structural, not a permission, and raises. The documents the new
+    interiors link become the page's edges the way any link does.
+    Returns ``{doc_id, slug, revision, created, report}`` with the report
+    ``{id: "filled" | "held"}``; the revision is unchanged when nothing
+    was filled."""
+    page = get_page(con, slugify(slug))
+    if page is None:
+        raise KeyError(f"no page {slug!r}")
+    text, report = blocks.fill(
+        page["text"], fills, asked=asked, run=run, release=release
+    )
+    missing = [i for i, r in report.items() if r == "missing"]
+    if missing:
+        raise ValueError(
+            f"page {slug!r} has no ask block {', '.join(missing)}: its markers are gone"
+        )
+    if not any(r == "filled" for r in report.values()):
+        return {
+            "doc_id": page["doc_id"],
+            "slug": page["slug"],
+            "revision": page["revision"],
+            "created": False,
+            "report": report,
+        }
+    written = write_page(
+        con,
+        page["slug"],
+        text,
+        kind=page["kind"],
+        author="agent",
+        note=note,
+        force=True,  # the blocks are the door's; the rest of the text is as it was
+    )
+    return {**written, "report": report}
 
 
 def append_page(
