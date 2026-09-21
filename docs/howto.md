@@ -1847,6 +1847,8 @@ Windows, Linux and macOS, and the same tests cover it there.
     prax up --start llama-server  # and back (a --restart of a stopped role starts it too)
     prax up --stop           # everything, in order
     prax up --install        # start at login; --uninstall removes the entry
+    prax up --tray           # the same, with a tray icon as its face (see below)
+    prax tray                # an icon beside the prax up already running
 
 | role | what | waits for |
 |---|---|---|
@@ -1892,7 +1894,19 @@ closing that window is how three services once ended together with
 enable-linger $USER` keeps it running without a session), a launchd agent
 on macOS (`~/Library/LaunchAgents/io.github.lodsb.prax.plist`, `KeepAlive`).
 Under your own account, nothing system-wide, no password stored: the
-services run while you are logged on. Secrets never go into the entry:
+services run while you are logged on.
+
+On a desktop the entry runs `prax up --tray` when the tray library is
+installed (`pip install prax[tray]`: pystray and Pillow), so there is a
+face to it: the mark in the tray, with a red dot when a role is down or
+nothing runs, a tooltip naming each role's state, and a menu — open
+prax in the browser, restart or stop a role, start a paused one, the
+logs folder, quit (which stops everything in order). `prax tray` alone
+puts the icon beside a supervisor already running, or offers to start
+one; a Linux user unit has no display, so the icon is not part of it
+there — `prax tray` from a session does the same. The tray is a client
+of the supervisor like `prax up --status`: it reads the status file and
+writes the command file, nothing more. Secrets never go into the entry:
 
 | | where it comes from |
 |---|---|

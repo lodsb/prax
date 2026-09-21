@@ -454,11 +454,18 @@ def build_parser() -> argparse.ArgumentParser:
             " --start brings it back\n"
             "  prax up --stop\n"
             "  prax up --install        start at login (Task Scheduler, systemd,"
-            " launchd)"
+            " launchd; with a tray icon on a desktop)\n"
+            "  prax up --tray           the same, with a tray icon as its face"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     s.add_argument("-d", "--detach", action="store_true", help="run in the background")
+    s.add_argument(
+        "--tray",
+        action="store_true",
+        help="run with a tray icon: the roles' state, open prax, restart, stop"
+        " (pip install prax[tray])",
+    )
     s.add_argument(
         "--data-dir", metavar="DIR", help="the store (default: $PRAX_DATA_DIR)"
     )
@@ -480,6 +487,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     what.add_argument("--uninstall", action="store_true", help="remove that entry")
     s.set_defaults(func=up_cmd.up, needs_door=False)
+
+    s = sub.add_parser(
+        "tray",
+        help="a tray icon for the prax up already running (or to start one)",
+        description=(
+            "The mark in the tray: a red dot when a role is down or nothing"
+            " runs; the menu opens prax, restarts or stops a role, opens the"
+            " logs. Attaches to the supervisor running here; `prax up --tray`"
+            " runs both together, and `prax up --install` registers that at"
+            " login on a desktop. Needs pystray and Pillow: pip install"
+            " prax[tray]."
+        ),
+    )
+    s.add_argument(
+        "--data-dir", metavar="DIR", help="the store (default: $PRAX_DATA_DIR)"
+    )
+    s.set_defaults(func=up_cmd.tray, needs_door=False)
 
     s = sub.add_parser(
         "reread",

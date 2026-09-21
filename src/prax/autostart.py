@@ -36,8 +36,11 @@ def _python_without_console() -> str:
     return str(exe)
 
 
-def command(data_dir: Path) -> list[str]:
-    return [
+def command(data_dir: Path, *, tray: bool | None = None) -> list[str]:
+    """The login entry's command: ``prax up`` on the store, with a tray
+    icon on a desktop (Windows, macOS) when the tray library is here;
+    a Linux user unit runs without one (no display in a unit's session)."""
+    argv = [
         _python_without_console(),
         "-m",
         "prax_cli.main",
@@ -45,6 +48,20 @@ def command(data_dir: Path) -> list[str]:
         "--data-dir",
         str(data_dir),
     ]
+    if tray is None:
+        tray = sys.platform in ("win32", "darwin") and tray_available()
+    if tray:
+        argv.append("--tray")
+    return argv
+
+
+def tray_available() -> bool:
+    try:
+        import pystray  # noqa: F401
+        from PIL import Image  # noqa: F401
+    except ImportError:
+        return False
+    return True
 
 
 def where() -> str:

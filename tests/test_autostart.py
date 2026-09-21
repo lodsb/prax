@@ -29,6 +29,7 @@ def test_the_command_has_no_console_on_windows(
     interpreter: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(autostart, "tray_available", lambda: False)  # tests/test_tray
     cmd = autostart.command(tmp_path / "data")
     assert cmd[0].endswith("pythonw.exe")
     assert cmd[1:] == [
@@ -78,6 +79,7 @@ def test_install_on_windows_registers_one_task_and_starts_it(
     interpreter: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(autostart, "tray_available", lambda: False)
     monkeypatch.setenv("USERDOMAIN", "BOX")
     monkeypatch.setenv("USERNAME", "me")
     scripts: list[str] = []

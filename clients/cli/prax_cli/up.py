@@ -130,11 +130,30 @@ def up(a: Any) -> int:
                 f"  prax up --status · prax up --stop · logs in {up.logs_dir(data_dir)}"
             )
             return 0
+        if getattr(a, "tray", False):
+            from prax import tray as tray_mod
+
+            return tray_mod.run(data_dir, supervise=True)
         up.attach_log(data_dir)
         say = out.say if sys.stdout is not None else None
         if say:
             out.hint(f"store {data_dir} · ctrl-c stops everything in order")
         return up.Supervisor(roles, data_dir=data_dir, say=say).run()
+    except (up.UpError, config.ConfigError) as exc:
+        out.fail(str(exc))
+        return 2
+
+
+def tray(a: Any) -> int:
+    """``prax tray``: an icon beside the supervisor running here."""
+    from prax import config, up
+    from prax import tray as tray_mod
+
+    data_dir = _data_dir(a)
+    try:
+        if up.running_pid(data_dir) is None:
+            out.hint("prax up is not running; the tray's menu can start it")
+        return tray_mod.run(data_dir, supervise=False)
     except (up.UpError, config.ConfigError) as exc:
         out.fail(str(exc))
         return 2

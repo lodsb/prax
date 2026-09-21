@@ -32,6 +32,7 @@ docling = ["docling"]                         # optional extractor; ~3 GB of PyT
 embed = ["usearch>=2.12", "onnxruntime", "tokenizers", "numpy"]  # Stage 2; Windows GPU: onnxruntime-directml instead (never both)
 serve = ["prax[embed]"]                       # the door on the board: the core plus vectors for hybrid search; nothing else
 work = ["prax[embed,ingest]"]                 # the worker on the machine with the models: parse, titles, extract, embed
+tray = ["pystray>=0.19", "pillow"]           # the tray icon of `prax up --tray` on a desktop
 dev = ["pytest>=8", "ruff"]
 
 [project.scripts]

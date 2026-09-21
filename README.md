@@ -146,7 +146,7 @@ most of it gets used:
     prax show 4312 | less             read one in the terminal
     prax graph "wave digital filter"  what the graph knows around a name
     prax status · jobs · heal · backup · doctor
-    prax up · serve · work --watch    run it
+    prax up · serve · work --watch    run it (--tray: an icon in the tray)
 
 Each command is one HTTP call. `--json` turns any of them into a
 script's input, and `--door` points the same command at another machine

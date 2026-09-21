@@ -92,6 +92,11 @@ def test_tick_starts_what_is_due_and_remembers_it_in_the_jobs_table(
     # one still running is left alone
     running = store.job_start(con, "backup")
     later = next_day.replace(hour=12)
+    # stamped with the test's clock, not the real one (the real day caught
+    # up with the test's on 2026-09-21 and made "backup" look already run)
+    con.execute(
+        "UPDATE jobs SET started_at = ? WHERE id = ?", (later.isoformat(), running)
+    )
     assert tick(later + timedelta(days=2)) == ["maintain"]
     store.job_finish(con, running, status="done")
     # a starter that fails does not stop the others
