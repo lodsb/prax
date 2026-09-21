@@ -648,20 +648,22 @@ async function viewDoc(id, p) {
     <div class="doc-meta">${metaLine(meta)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}${meta.question ? ` · a standing question, asked ${esc((meta.question.asked_at || "").slice(0, 10))} by ${esc(meta.question.model || "?")}${(meta.question.history || []).length ? `, moved ${meta.question.history.length} time${meta.question.history.length === 1 ? "" : "s"}` : ""}` : ""}</div>
     ${tags(meta)}
     <div class="doc-actions">
+      <div class="doc-actions-zone doc-actions-left">
       <div class="doc-actions-group doc-actions-info muted">${esc(doc.mime || "")} · ${chunks.length} chunk${chunks.length === 1 ? "" : "s"} · ${(doc.text_len || 0).toLocaleString()} chars · doc ${doc.id}</div>
       <div class="doc-actions-group doc-actions-open">
         <a href="${originalHref(doc.id, firstPage)}" target="_blank" rel="noopener">open original ↗</a>
         <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
         ${nFigures ? `<a href="#" id="figures" title="every picture of the document at a glance">${nFigures} figure${nFigures === 1 ? "" : "s"}…</a>` : ""}
       </div>
-      <div class="doc-actions-group doc-actions-edit">
+      </div>
+      <div class="doc-actions-zone doc-actions-group doc-actions-edit">
         ${pageMeta ? `<a href="#" id="page-edit">edit page</a>` : `<a href="#" id="add-note">add a note</a>`}
         <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
         ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
         ${pageMeta ? "" : `<a href="#" id="reading" title="run a named extractor on this document: the vision model over scanned pages, a second reading of an image, OCR, Docling">read again…</a>`}
         ${meta.question ? `<a href="#" id="ask-again" title="ask the question again now, whatever is new">ask again</a>` : ""}
       </div>
-      <div class="doc-actions-group doc-actions-remove">
+      <div class="doc-actions-zone doc-actions-group doc-actions-remove">
         ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       </div>
     </div>
