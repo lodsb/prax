@@ -703,7 +703,10 @@ async function viewDoc(id, p) {
   };
   loadContext(p.domain || "");
   if (pageMeta) {
-    document.getElementById("page-edit").addEventListener("click", (e) => { e.preventDefault(); openEditor(pageMeta.slug); });
+    document.getElementById("page-edit").addEventListener("click", (e) => {
+      e.preventDefault();  // a toggle: open the editor, or close it again
+      if (document.getElementById("page-editor").dataset.open) closeEditor(); else openEditor(pageMeta.slug);
+    });
     if (p.edit) openEditor(pageMeta.slug);
   }
   const askAgain = document.getElementById("ask-again");
@@ -897,11 +900,24 @@ async function put(path, body) {
 }
 
 // The page editor: the current Markdown in a textarea, saved as a new
-// revision; the revision list with links to earlier texts.
+// revision; the revision list with links to earlier texts. "edit page"
+// opens it and reads "close the editor" while it is open; Cancel and
+// that link close it, a save re-renders the page.
+function closeEditor() {
+  const box = document.getElementById("page-editor");
+  if (!box) return;
+  box.innerHTML = "";
+  delete box.dataset.open;
+  const link = document.getElementById("page-edit");
+  if (link) link.textContent = "edit page";
+}
+
 async function openEditor(slug) {
   const box = document.getElementById("page-editor");
   if (!box || box.dataset.open) return;
   box.dataset.open = "1";
+  const link = document.getElementById("page-edit");
+  if (link) link.textContent = "close the editor";
   let page;
   try { page = await api(`/page/${slug}`); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   box.innerHTML = `
@@ -917,7 +933,7 @@ async function openEditor(slug) {
       </div>
       <div class="muted" style="margin-top:.4rem">Revisions: ${page.revisions.map((r) => `<a href="/page/${esc(slug)}/revision/${r.revision}" target="_blank" rel="noopener" title="${esc(r.note || "")}">r${r.revision} ${esc(r.author)} ${esc((r.created_at || "").slice(0, 10))}</a>`).join(" · ")}</div>
     </div>`;
-  document.getElementById("page-cancel").addEventListener("click", () => { box.innerHTML = ""; delete box.dataset.open; });
+  document.getElementById("page-cancel").addEventListener("click", closeEditor);
   // the markers of an ask block at the cursor; the door fills them on save
   document.getElementById("page-ask").addEventListener("click", () => {
     const ta = document.getElementById("page-text");
