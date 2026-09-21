@@ -218,6 +218,9 @@ the documents that came since the last briefing, each with the first
 line of its summary, and the questions whose answer moved — blocks
 too, named with their page. No model is
 asked for it; a question about the day is a question like any other.
+What you put under a briefing (a remark, an ask block) stays when the
+day's page is run again: the agent replaces its own part and leaves
+the rest, and a briefing whose own part you edited is left alone.
 
 ## When it goes wrong
 

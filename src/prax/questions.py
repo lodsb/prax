@@ -771,8 +771,9 @@ def briefing(
     """The day's page, "What arrived": the documents that came since the
     last briefing (else the last day), each with the first line of its
     summary; the questions whose answer moved since. Written as the
-    agent, once per day (the day's page is replaced by a new revision
-    when run again)."""
+    agent, once per day; run again the same day, the agent's part is
+    replaced and what a person put under it (a remark, an ask block)
+    stays — a page whose agent part was edited by hand is left alone."""
     now = datetime.now(UTC)
     day = day or now.strftime("%Y-%m-%d")
     since = _last_briefing_until(con) or (now - timedelta(days=1)).strftime(
@@ -838,6 +839,29 @@ def briefing(
     if moved:
         text += "\n## Questions that moved\n\n" + "\n".join(moved) + "\n"
     slug = f"briefing-{day}"
+    # the day's page run again: the agent's part is replaced, what a
+    # person wrote under it (a note, an ask block) stays where it is;
+    # a page whose agent part was edited by hand is left as it is
+    own = text  # the agent's part, remembered so the next run knows its own
+    current = store.get_page(con, slug)
+    before = ((current or {}).get("meta") or {}).get("briefing", {}).get("own")
+    touched = current is not None and any(
+        r["author"] == "human" for r in current["revisions"]
+    )
+    if current is not None and (
+        (before and not current["text"].startswith(before)) or (touched and not before)
+    ):
+        # a hand in the agent's part, or a page from before the part was
+        # remembered that a person has written to: not ours to replace
+        return {
+            **{k: current[k] for k in ("doc_id", "slug", "revision")},
+            "created": False,
+            "left": "edited by hand",
+            "documents": len(arrived),
+            "moved": len(moved),
+        }
+    if current is not None and before:
+        text = own + current["text"][len(before) :]
     written = store.write_page(
         con,
         slug,
@@ -855,6 +879,7 @@ def briefing(
         "until": until,
         "documents": len(arrived),
         "moved": len(moved),
+        "own": own,
     }
     store.set_meta(con, written["doc_id"], meta)
     return {**written, "documents": len(arrived), "moved": len(moved)}

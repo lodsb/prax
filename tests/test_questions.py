@@ -265,6 +265,31 @@ def test_refresh_all_and_the_briefing(con: sqlite3.Connection) -> None:
     b2 = questions.briefing(con, day="2026-09-22")
     assert b2["documents"] == 0
     assert "Nothing arrived since" in store.get_page(con, "briefing-2026-09-22")["text"]
+    # the day's page run again keeps what a person put under it (a
+    # remark, an ask block): the agent's part is replaced, the rest stays
+    own = store.get_page(con, "briefing-2026-09-22")["meta"]["briefing"]["own"]
+    assert own.startswith("# What arrived, 2026-09-22\n")
+    store.append_page(
+        con,
+        "briefing-2026-09-22",
+        '<!-- prax:ask id=q1 "what came today" -->\n<!-- /prax:ask id=q1 -->',
+        heading="Mine",
+        author="human",
+    )
+    time.sleep(1.1)  # the briefing counts from its second: the newcomer after it
+    store.ingest_text(con, "A late arrival about reverb. " * 20, title="Late")
+    b3 = questions.briefing(con, day="2026-09-22")
+    assert b3["documents"] == 1 and b3["revision"] == 3
+    text = store.get_page(con, "briefing-2026-09-22")["text"]
+    assert "[Late](#doc/" in text and "Nothing arrived" not in text
+    assert text.rstrip().endswith("<!-- /prax:ask id=q1 -->")
+    assert "## Mine" in text
+    # a hand in the agent's own part: the page is left as it is
+    edited = text.replace("# What arrived, 2026-09-22", "# What came, 2026-09-22")
+    store.write_page(con, "briefing-2026-09-22", edited, kind="briefing")
+    b4 = questions.briefing(con, day="2026-09-22")
+    assert b4["left"] == "edited by hand" and b4["revision"] == 4
+    assert store.get_page(con, "briefing-2026-09-22")["text"] == edited
 
 
 def test_the_schedule_knows_the_questions_entry() -> None:
