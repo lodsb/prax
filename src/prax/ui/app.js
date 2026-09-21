@@ -266,35 +266,6 @@ function snippetHtml(s) {
 // -------------------------------------------------------------- document
 
 
-// A reading request: which extractor a person may ask for on a document
-// of this type, and what became of the last request (meta.reading).
-const READINGS = {
-  "application/pdf": [
-    ["figures", "the vision model reads the figures the text references (the captioned ones, or every image), and writes what it shows under each"],
-    ["vision-pages", "the vision model over the scanned pages (handwriting, scores, what OCR cannot read)"],
-    ["pymupdf4llm", "read the PDF again (finds the figures)"],
-    ["pymupdf4llm-ocr", "OCR (RapidOCR) on the pages without a text layer"],
-    ["marker", "marker: the mathematics as LaTeX (formula chunks), tables as tables; needs its server (prax up --start marker)"],
-    ["formulas", "the formulas model says in words what each display equation is, under it (needs LaTeX in the text: marker first)"],
-    ["docling", "Docling's layout model (code, tables); slow"],
-  ],
-  "text/html": [
-    ["figures", "the vision model reads every figure the text references, and writes what it shows under each"],
-    ["formulas", "the formulas model says in words what each display equation is, under it"],
-    ["polish", "a video's automatic transcript punctuated by the polish model, the fillers dropped (nothing else changed)"],
-    ["trafilatura", "read the page again (finds the figures)"],
-  ],
-  "text/": [
-    ["formulas", "the formulas model says in words what each display equation ($$…$$) is, under it"],
-  ],
-  "image/": [["vision", "the vision model describes the image; a second model's reading joins the first"]],
-};
-function readingChoices(mime) {
-  for (const [prefix, choices] of Object.entries(READINGS)) {
-    if ((mime || "").startsWith(prefix)) return choices;
-  }
-  return [];
-}
 function domainsForm(cur) {
   const set = new Set(cur.domains || []);
   return `
@@ -307,33 +278,6 @@ function domainsForm(cur) {
   </form>`;
 }
 
-function readingForm(doc) {
-  const choices = readingChoices(doc.mime);
-  if (!choices.length) return `<p class="muted">No extractor to ask for on ${esc(doc.mime || "this type")}.</p>`;
-  return `
-  <form class="reading-form">
-    <label>Read with
-      <select name="extractor">${choices.map(([v, l]) => `<option value="${v}">${esc(v)} — ${esc(l)}</option>`).join("")}</select>
-    </label>
-    <label class="reading-mode" data-for="vision-pages">pages
-      <select name="mode"><option value="scans">the scanned ones (no text layer)</option><option value="all">every page (printed pages with notes in the margin)</option></select>
-    </label>
-    <label class="reading-mode" data-for="figures">figures
-      <select name="mode"><option value="captioned">the ones a caption claims</option><option value="all">every image the text references, the uncaptioned ones too (decoration included)</option></select>
-    </label>
-    <label class="reading-mode" data-for="pymupdf4llm-ocr">language
-      <input name="mode" type="text" placeholder="the host's setting (ch, en, latin, arabic, cyrillic…)" size="28">
-    </label>
-    <label class="reading-mode" data-for="formulas">which
-      <select name="mode"><option value="new">the ones this model has not read</option><option value="again">every one, this model's earlier reading replaced</option></select>
-    </label>
-    <label class="reading-mode" data-for="marker">layout
-      <select name="mode"><option value="fast">fast: the layout by rules, the maths by the model</option><option value="balanced">balanced: the vision model lays out too (slower)</option></select>
-    </label>
-    <button>Request</button>
-    <span class="muted">A worker picks it up (Jobs shows what is waiting); the result replaces the text, except an image's readings, which add up.</span>
-  </form>`;
-}
 function readingLine(r) {
   if (!r) return "";
   const when = (r.finished_at || r.at || "").replace("T", " ").slice(0, 16);
@@ -550,6 +494,114 @@ view.addEventListener("click", async (e) => {
   } catch (err) { setStatus(err.message); }
 });
 const ASKING = `<span class="asking">asking… <span class="muted">the page gets a revision when the model is done</span></span>`;
+// The "process…" dialog: the routes a document can take from here
+// (GET /doc/{id}/routes), grouped, each with the document's state
+// beside it, the model the step resolves to and whether it costs money,
+// and a button that asks for it. One dialog for every document view,
+// made once; its clicks are caught on the dialog, like the view's.
+const PROCESS = document.createElement("dialog");
+PROCESS.id = "process-dialog";
+document.body.appendChild(PROCESS);
+const PROCESS_GROUPS = [["text", "The text"], ["figures", "The figures"], ["formulas", "The equations"], ["graph", "The graph"]];
+let processDoc = null;  // the document the dialog is open for
+let processTouched = false;  // something was asked for: re-render the page on close
+function processState(s) {
+  const bits = [];
+  if (s.text_source) bits.push(`text: ${esc(s.text_source)}`);
+  if (s.pages) bits.push(`${s.pages} pages`);
+  bits.push(`${(s.text_len || 0).toLocaleString()} chars`);
+  if (s.no_text) bits.push(`<span class="error">no text: every extractor found none</span>`);
+  else if (s.thin) bits.push(`<span class="error">thin: under 100 bytes a page</span>`);
+  if (s.figures) bits.push(`${s.figures} figure${s.figures === 1 ? "" : "s"}, ${s.figures_read} read`);
+  if (s.formulas) bits.push(`${s.formulas} equation${s.formulas === 1 ? "" : "s"}, ${s.formulas_read} read`);
+  if (s.extraction) bits.push(`graph by ${esc(s.extraction.extractor || "?")} on ${esc((s.extraction.at || "").slice(0, 10))}`);
+  else bits.push("no graph yet");
+  if (s.last_parse && s.last_parse.outcome && s.last_parse.outcome !== "ok") bits.push(`last parse: ${esc(s.last_parse.extractor || "")} ${esc(s.last_parse.outcome)}${s.last_parse.error ? ` (${esc(s.last_parse.error)})` : ""}`);
+  return bits.join(" · ");
+}
+function processRoute(r) {
+  const cls = ["route", r.available ? "" : "route-off", r.pending ? "route-pending" : ""].filter(Boolean).join(" ");
+  const model = r.model ? `<span class="route-model ${r.paid ? "route-paid" : ""}" title="${r.paid ? "a paid model: the run costs money" : "a local model"}">${esc(r.model)}${r.paid ? " · paid" : ""}</span>` : "";
+  const field = r.id === "ocr" ? `<input class="route-mode" name="mode" type="text" placeholder="language (host's default)" size="18" aria-label="OCR language">` : "";
+  const button = r.pending
+    ? `<button type="button" class="route-go" disabled>${esc(r.label)}</button><span class="route-requested">requested${r.action.kind === "reading" ? ` · <a href="#" class="route-cancel">cancel</a>` : ""}</span>`
+    : `<button type="button" class="route-go" data-route="${esc(r.id)}"${r.available ? "" : " disabled"}>${esc(r.label)}</button>`;
+  return `<div class="${cls}" data-route="${esc(r.id)}">
+    <div class="route-act">${button}${field}</div>
+    <div class="route-text"><span class="route-detail">${esc(r.detail)}</span>${r.note ? ` <span class="route-note muted">${esc(r.note)}</span>` : ""} ${model}</div>
+  </div>`;
+}
+function processHtml(doc, view) {
+  const routes = view.routes || [];
+  const groups = PROCESS_GROUPS.filter(([g]) => routes.some((r) => r.group === g));
+  const waiting = view.state.reading && view.state.reading.state === "requested" ? view.state.reading : null;
+  return `
+  <h2>Process</h2>
+  <p class="muted process-title">${esc(doc.title || "(untitled)")}</p>
+  <p class="muted process-state">${processState(view.state)}</p>
+  ${waiting ? `<p class="muted process-waiting">a reading is waiting for a worker: ${esc(waiting.extractor)}${waiting.mode ? ` (${esc(waiting.mode)})` : ""}. A new request replaces it.</p>` : ""}
+  ${groups.length ? groups.map(([g, title]) => `<section class="route-group"><h3>${title}</h3>${routes.filter((r) => r.group === g).map(processRoute).join("")}</section>`).join("") : `<p class="muted">Nothing to ask for on this document.</p>`}
+  <p class="muted process-foot">A worker takes each request on its next pass (Jobs shows what waits). A reading replaces the text; a figure's or an image's readings add up. The graph is read again on the worker's next extract pass; the promote flag runs only with <code>--spend</code>.</p>
+  <div class="dialog-actions"><button type="button" class="secondary process-close">Close</button></div>`;
+}
+async function openProcess(doc) {
+  processDoc = doc;
+  processTouched = false;
+  let view;
+  try { view = await api(`/doc/${doc.id}/routes`); } catch (err) { setStatus(err.message); return; }
+  PROCESS.dataset.doc = String(doc.id);
+  PROCESS.innerHTML = processHtml(doc, view);
+  PROCESS.routes = view.routes;
+  if (!PROCESS.open) PROCESS.showModal();
+}
+async function refreshProcess() {
+  if (!processDoc) return;
+  try {
+    const view = await api(`/doc/${processDoc.id}/routes`);
+    PROCESS.innerHTML = processHtml(processDoc, view);
+    PROCESS.routes = view.routes;
+  } catch (err) { setStatus(err.message); }
+}
+PROCESS.addEventListener("click", async (e) => {
+  if (e.target.closest(".process-close")) { PROCESS.close(); return; }
+  const cancel = e.target.closest(".route-cancel");
+  if (cancel && processDoc) {
+    e.preventDefault();
+    await fetch(`/doc/${processDoc.id}/reading`, { method: "DELETE" });
+    processTouched = true;
+    refreshProcess();
+    return;
+  }
+  const btn = e.target.closest("button.route-go");
+  if (!btn || !processDoc) return;
+  const route = (PROCESS.routes || []).find((r) => r.id === btn.dataset.route);
+  if (!route) return;
+  const act = route.action;
+  try {
+    if (act.kind === "promote") {
+      const reason = prompt("Why does this document deserve the expensive pass? (optional)");
+      if (reason === null) return;
+      await post(`/doc/${processDoc.id}/promote`, { reason: reason || null });
+      setStatus("promoted: the worker's promote pass runs it with --spend");
+    } else if (act.kind === "extract") {
+      await post(`/doc/${processDoc.id}/extract`, {});
+      setStatus("the graph is read again on the worker's next extract pass");
+    } else {
+      if (route.paid && !confirm(`This runs ${route.model}, which costs money. Request it?`)) return;
+      let mode = act.mode;
+      const field = btn.closest(".route").querySelector(".route-mode");
+      if (field && field.value.trim()) mode = field.value.trim();
+      await post(`/doc/${processDoc.id}/reading`, { extractor: act.extractor, mode });
+      setStatus(`reading requested: ${act.extractor}${mode ? ` (${mode})` : ""}`);
+    }
+    processTouched = true;
+    refreshProcess();
+  } catch (err) { setStatus(err.message); }
+});
+PROCESS.addEventListener("close", () => {
+  if (processTouched) render({ keepScroll: true });
+  processDoc = null;
+});
 function renderAsk(c, docId) {
   const d = c.data || {};
   const slug = PAGE_OF[docId] || "";
@@ -712,8 +764,8 @@ async function viewDoc(id, p) {
       <div class="doc-actions-zone doc-actions-group doc-actions-edit">
         ${pageMeta ? `<a href="#" id="page-edit">edit page</a>` : `<a href="#" id="add-note">add a note</a>`}
         <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
-        ${pageMeta ? "" : (meta.promote ? `<a href="#" id="unpromote">un-promote</a>` : `<a href="#" id="promote" title="flag for the expensive model's pass">promote</a>`)}
-        ${pageMeta ? "" : `<a href="#" id="reading" title="run a named extractor on this document: the vision model over scanned pages, a second reading of an image, OCR, Docling">read again…</a>`}
+        ${pageMeta ? "" : `<a href="#" id="process" title="what has been done to this document and what can be asked for: OCR, the vision model over its pages or figures, marker, the graph again, the expensive model">process…</a>`}
+        ${pageMeta || !meta.promote ? "" : `<a href="#" id="unpromote" title="take the promote flag off">un-promote</a>`}
         ${meta.question ? (askingPage ? ASKING : `<a href="#" id="ask-again" title="ask the question again now, whatever is new">ask again</a>`) : ""}
       </div>
       <div class="doc-actions-zone doc-actions-group doc-actions-remove">
@@ -721,7 +773,6 @@ async function viewDoc(id, p) {
       </div>
     </div>
     ${readingLine(meta.reading)}
-    <div id="reading-form" hidden></div>
     <div id="domains-form" hidden></div>
     <div id="page-editor"></div>
   </header>
@@ -787,27 +838,8 @@ async function viewDoc(id, p) {
     await fetch(`/doc/${doc.id}/retire`, { method: "DELETE" });
     render();
   });
-  const rd = document.getElementById("reading");
-  if (rd) rd.addEventListener("click", (e) => {
-    e.preventDefault();
-    const box = document.getElementById("reading-form");
-    if (!box.hidden) { box.hidden = true; return; }
-    box.innerHTML = readingForm(doc);
-    box.hidden = false;
-    const form = box.querySelector("form");
-    const pick = form.extractor;
-    const modes = [...form.querySelectorAll(".reading-mode")];
-    const showMode = () => { modes.forEach((m) => { m.hidden = m.dataset.for !== pick.value; }); };
-    pick.addEventListener("change", showMode);
-    showMode();
-    form.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      const chosen = modes.find((m) => m.dataset.for === pick.value);
-      const field = chosen && chosen.querySelector("select, input");
-      const body = { extractor: pick.value, mode: field && field.value.trim() ? field.value.trim() : null };
-      try { await post(`/doc/${doc.id}/reading`, body); render({ keepScroll: true }); } catch (err) { setStatus(err.message); }
-    });
-  });
+  const proc = document.getElementById("process");
+  if (proc) proc.addEventListener("click", (e) => { e.preventDefault(); openProcess(doc); });
   const cancelReading = document.getElementById("reading-cancel");
   if (cancelReading) cancelReading.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -848,12 +880,6 @@ async function viewDoc(id, p) {
     box.querySelector(".domains-cancel").addEventListener("click", () => { box.hidden = true; });
   });
   if (!pageMeta) {
-    const pr = document.getElementById("promote");
-    if (pr) pr.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const reason = prompt("Why does this document deserve the expensive pass? (optional)") || null;
-      try { await post(`/doc/${doc.id}/promote`, { reason }); render(); } catch (err) { setStatus(err.message); }
-    });
     const un = document.getElementById("unpromote");
     if (un) un.addEventListener("click", async (e) => {
       e.preventDefault();

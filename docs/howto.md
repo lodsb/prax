@@ -210,7 +210,10 @@ two.
     prax reread --extractor vision-pages --mode all --ids 8605
 
 The same request can come from the document's page in the web UI.
-"read again…" asks for the extractor and the pages. A running worker
+"process…" lists every route from the document with its state beside
+each: OCR, the vision model over the scanned pages or every page,
+marker, the extractor again, Docling, the figures, the equations, the
+graph. A button asks for one. A running worker
 (`scripts/work.py --watch`) does it next; requests go out before the
 pending captures. The outcome is shown on the page and the queue on
 Jobs. A worker refuses a reading whose model would cost money (the
@@ -239,10 +242,14 @@ The second half is the reading:
     # what the vision model makes of every figure, written under each
     prax reread --extractor figures --ids 9706
 
-The same request is "read again… → figures" on the page. A PDF image
-no caption claims (`Figure on page N`) is read only with `parse.figures:
-all` (`PRAX_FIGURES=all`, or "every image" in the page's form), because
-many of those are decoration. The reading goes under the image line as
+The same request is "process… → Read the figures nobody has read" on
+the page. A PDF image no caption claims (`Figure on page N`) is read
+only with `parse.figures: all` (`PRAX_FIGURES=all`, or "Read every
+image, the uncaptioned ones too" in the dialog), because many of those
+are decoration. "Read every figure again" (`--mode again`) reads them
+all under the current prompt, this model's earlier readings replaced;
+that is how a library takes up a better prompt or a better model of
+the same name. The reading goes under the image line as
 `*Figure, as read by <model>:* …`. A model reads a figure once; another
 model's reading joins it. The figure chunk carries the reading, so it
 is findable, read by the extraction, and read by a surfing ask like any
@@ -266,8 +273,8 @@ anything:
 1. *Found.* The parser writes `![caption](figure:<sha>)` where the
    image sits (`trafilatura` r3, `pymupdf4llm` r2; `figure-refs` for a
    library parsed before that). The bytes stay in the original.
-2. *Asked for.* A reading request comes from "read again… → figures",
-   from `prax reread`, or from the door itself when a capture is parsed
+2. *Asked for.* A reading request comes from the page's "process…"
+   dialog, from `prax reread`, or from the door itself when a capture is parsed
    and the vision model is local. The door never asks for a reading
    that costs money.
 3. *Read.* A worker takes the request. The vision model describes the
@@ -639,10 +646,11 @@ clearing that column.
 
 The local pass reads everything once. The papers you work with deserve
 the richer pass, which finds claims and relations between methods. A
-document is flagged in `meta.promote` from its page ("promote"), from
-the Promote view's candidates, by Claude Code through the `promote` MCP
-tool, or by the store itself when the document joins a project or
-becomes a synthesis source. The candidates are scored by project
+document is flagged in `meta.promote` from its page ("process… →
+Promote to the expensive model") or from the Promote view's
+candidates. Claude Code flags one through the `promote` MCP tool. The
+store itself flags a document when it joins a project or becomes a
+synthesis source. The candidates are scored by project
 membership, synthesis sources, notes on the document and citations
 from other library documents. The flag queues; nothing is spent until
 the pass runs. The pass is a work step the worker takes only when
@@ -660,6 +668,18 @@ extraction history, so the pass is idempotent and a later local pass
 does not undo it. Both producers' edges sit side by side. `GET
 /promote` returns the flagged list with status and the candidates.
 `POST /doc/{id}/promote` sets the flag and `DELETE` clears it.
+
+### Reading the graph again
+
+The extract pass reads a document once per ontology version and
+domain set. To have the local model read one again now, without
+changing anything else: "process… → Extract the graph again" on its
+page, or `POST /doc/{id}/extract`. The stamp goes to the history,
+`meta.extraction_stale.requested` says who asked, and the worker's next
+extract pass takes the document before its backlog, in the captures
+scope too. The new reading retires the producer's earlier edges, which
+stay as history (invariant 8). The dialog reads `requested` until the
+pass has run.
 
 ### A document's domains
 

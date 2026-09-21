@@ -754,11 +754,12 @@ def apply(
         con, doc_id, producer=extractor, except_version=onto.version
     )
     stale = store.get_meta(con, doc_id).get("extraction_stale")
-    if stale and stale.get("extractor") == extractor:
+    if stale and (stale.get("extractor") == extractor or stale.get("requested")):
         # the text this producer read has been replaced since (a parser
-        # that reads the mathematics, OCR over a scan): its whole earlier
-        # reading of the document goes, whatever version it was under,
-        # and this one is written afresh — history kept (invariant 8)
+        # that reads the mathematics, OCR over a scan), or a person asked
+        # for the document to be read again: this producer's whole
+        # earlier reading of the document goes, whatever version it was
+        # under, and this one is written afresh — history kept (invariant 8)
         report.retired += store.retire_reading(
             con, doc_id, producer=extractor, except_version=""
         )
@@ -845,7 +846,8 @@ def apply(
         report.queued += 1
     meta = store.get_meta(con, doc_id)
     meta.pop("extraction_error", None)  # a reading that worked
-    if (meta.get("extraction_stale") or {}).get("extractor") == extractor:
+    stale_now = meta.get("extraction_stale") or {}
+    if stale_now.get("extractor") == extractor or stale_now.get("requested"):
         meta.pop("extraction_stale")
     if extraction.summary:
         meta["summary"] = extraction.summary

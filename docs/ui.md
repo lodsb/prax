@@ -33,7 +33,9 @@ The ones added for browsing, each a thin wrapper over a store function:
 | `GET /doc/{id}/domains`, `PUT /doc/{id}/domains {domains}`, `POST` and `DELETE /doc/{id}/domains/{name}` | the document's domain set (the ontology modules it is read against; null means every module) with the modules to choose from; replace it, add one, remove one. `GET /search?domain=` keeps one domain's documents |
 | `POST /ingest/file` (multipart `file`, `title`, `domains`, `tags`, `session`, `by`), `POST /ingest/html {url, html, title, domains, tags, session, mode, note}`, `POST /ingest/url {url, title, domains, tags, session}` | captures: an uploaded file, a page as the browser rendered it, a URL the door fetches. Each returns the document id, whether it was new, whether it is searchable already, its domains, and the previous capture of the same URL |
 | `GET /inbox?limit` | recent captures with their state, the drop folder's path, and the domains to choose from |
-| `POST /doc/{id}/reading {extractor, mode}`, `DELETE /doc/{id}/reading` | ask for a named extractor on one document, or withdraw the request. Extractors: `vision-pages` with `scans` or `all`, `figures` with `captioned` or `all`, `vision`, `pymupdf4llm-ocr`, `docling`. The extractor is validated against the document's type and the mode against the extractor |
+| `GET /doc/{id}/routes` | the document's state (text stamp and length, pages, whether it looks like a scan, figures and equations with how many have a reading, extraction, promote flag, waiting reading) and the routes from it, grouped `text`, `figures`, `formulas`, `graph`. Each route has a label, a detail, the action a button sends (a reading request with extractor and mode, an extraction request, the promote flag), the model the step resolves to on this host and whether it is paid, whether it is available, and whether it is requested already (`prax.routes`). A page has no routes |
+| `POST /doc/{id}/reading {extractor, mode}`, `DELETE /doc/{id}/reading` | ask for a named extractor on one document, or withdraw the request. Extractors: `vision-pages` with `scans` or `all`, `figures` with `captioned`, `all`, `again` or `all-again`, `formulas` with `new` or `again`, `marker` with `fast` or `balanced`, `vision`, `polish`, `pymupdf4llm-ocr` with a language, `pymupdf4llm`, `trafilatura`, `docling`. The extractor is validated against the document's type and the mode against the extractor |
+| `POST /doc/{id}/extract {by}` | ask for the document's graph to be read again by the extract step's model. The stamp goes to `meta.extraction_history`, `meta.extraction_stale.requested` marks the request, and the worker's next extract pass takes the document first, whatever its scope. The new reading retires the producer's earlier edges, history kept. 400 without text |
 | `POST /readings/bulk {extractor, mode, ids | mime | text_source | unreadable | read_figures, limit, dry_run}` | the same on a selection at once: ids, a MIME prefix, a text-source stamp prefix, the unreadable documents. One request per document; what the extractor does not read is skipped and counted; `dry_run` only counts (`prax reread`) |
 | `GET /readings` | the waiting requests, the recently finished ones with their outcome, and what the vision step resolves to. The work protocol hands requests out before the pending captures, forced, with the mode. A worker refuses one whose model would cost money and says so in the outcome |
 | `GET /promote?limit`, `POST /doc/{id}/promote {reason}`, `DELETE /doc/{id}/promote` | the documents flagged for the expensive model's pass with their status, and scored candidates (project members, synthesis sources, notes, library citations); set and clear the flag |
@@ -94,7 +96,8 @@ is drawn out over the page's width in three zones. At the left is what
 the document is (mime, chunks, chars, id) and, past a hairline, how to
 open it: "open original", "raw text", "N figures…". Centred is what
 can be assigned or asked of it: "add a note" or "edit page",
-"domains…", "promote", "read again…", "ask again". At the right edge
+"domains…", "process…", "un-promote" while the flag is set, "ask
+again". At the right edge
 is what takes it out of the way: "retire…", drawn quieter. Each zone
 is its own element (`doc-actions-info`, `-open`, `-edit`, `-remove`)
 for a stylesheet.
@@ -105,14 +108,32 @@ the meta line. A change under an extraction leaves that reading stale:
 the worker's next extract pass reads the document again against the
 new set and retires the old reading, and the status line says so.
 
-"read again…" opens a small form asking for an extractor on this
-document. For a PDF that is the vision model over its figures (the
-captioned ones, or every image the text references) or over its
-scanned pages (or every page), a re-read that finds the figures, OCR,
-or Docling. For a captured page it is the figures or a re-read. For an
-image it is a second reading by the vision model. A line under the
-actions says what became of the last request: waiting for a worker,
-done with the stamp and outcome, or failed with the reason.
+"process…" opens a dialog with the routes from this document
+(`GET /doc/{id}/routes`). A line at the top is the document's state.
+It names the text's stamp and length, the pages, and whether the
+document looks like a scan (no text at all, or under 100 bytes a
+page). It counts the figures and equations and how many have a
+reading, names the graph's producer and date, and shows the last parse
+when it failed. The routes are grouped. *The text* of a PDF: OCR
+(with a language field), the vision model over the scanned pages or
+over every page, marker for the mathematics, the default extractor
+again, Docling. Of a captured page: the extractor again, and the
+polish model for a talk's transcript. Of an image: a second reading by
+the vision model. *The figures*: the ones nobody has read, every one
+again under the current prompt (this model's earlier readings
+replaced, another model's kept), and for a PDF the images no caption
+claims. *The equations*: the unread ones, or every one again. *The
+graph*: the local model again, with the earlier reading's edges
+retired, and the promote flag for the expensive model. Each route is a
+button with the detail beside it and the model the step resolves to on
+this host, marked `paid` when it is Claude. A route without a model, or
+with nothing to work on, is greyed with the reason. A route already
+asked for reads `requested`, with `cancel` for a reading. A paid
+reading asks for confirmation. The buttons post `/doc/{id}/reading`,
+`/doc/{id}/extract` and `/doc/{id}/promote`; the page is drawn again
+when the dialog closes. A line under the actions says what became of
+the last reading request: waiting for a worker, done with the stamp and
+outcome, or failed with the reason.
 
 "N figures…" (or `?figures=1`) unfolds a strip of every picture of the
 document: a paper's figures, a talk's frames, a scan's pages. Each is
@@ -255,7 +276,8 @@ with who flagged them, why, when, and whether they are done or pending
 under the promote step's model (`prax work --steps promote --spend`
 reads them), each with an un-promote control. The candidates are
 listed with their score breakdown and a promote button. A document
-page has "promote" in its action row.
+page has the flag under "process…" in its action row, and "un-promote"
+beside it while the flag is set.
 
 ### `#inbox`
 

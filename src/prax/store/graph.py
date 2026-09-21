@@ -1023,8 +1023,11 @@ def select_for_extraction(
     )
     args: list[Any] = []
     if sources is not None:
+        # a document whose reading was asked for is due whatever its
+        # source: the request is explicit, like a promote flag
         sql += (
-            f" AND json_extract(meta, '$.source') IN ({','.join('?' * len(sources))})"
+            f" AND (json_extract(meta, '$.source') IN ({','.join('?' * len(sources))})"
+            " OR json_extract(meta, '$.extraction_stale.requested') IS NOT NULL)"
         )
         args.extend(sources)
     want, want_args = _subset_version_case(con, onto, ontology_version)

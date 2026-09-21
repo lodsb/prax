@@ -44,6 +44,7 @@ from . import (
     ontology,
     questions,
     review,
+    routes,
     schedule,
     store,
     work,
@@ -1687,6 +1688,39 @@ def promote_doc(doc_id: int, req: PromoteReq, request: Request) -> dict[str, Any
 @app.delete("/doc/{doc_id}/promote")
 def unpromote_doc(doc_id: int, request: Request) -> dict[str, bool]:
     return {"removed": store.unpromote(_con(request), doc_id)}
+
+
+@app.get("/doc/{doc_id}/routes")
+def doc_routes(doc_id: int, request: Request) -> dict[str, Any]:
+    """The document's state and the routes from it: what has been done to
+    its text, figures, formulas and graph, and what can be asked for,
+    with the model each step resolves to on this host and whether it
+    costs money (``prax.routes``). The UI's "process…" dialog."""
+    try:
+        return routes.routes_for(_con(request), doc_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+class ExtractReq(BaseModel):
+    by: str = "human"
+
+
+@app.post("/doc/{doc_id}/extract")
+def request_extraction(
+    doc_id: int, req: ExtractReq, request: Request
+) -> dict[str, Any]:
+    """Ask for the document's graph to be read again by the extract
+    step's model, before the backlog. The worker's next extract pass
+    takes it, whatever its scope; the earlier reading's edges are
+    retired, history kept."""
+    con = _con(request)
+    doc = store.get_document(con, doc_id, max_chars=0)
+    if doc is None:
+        raise HTTPException(404, "no such document")
+    if doc.get("text_hash") is None:
+        raise HTTPException(400, "no text to extract from yet")
+    return store.request_extraction(con, doc_id, by=req.by)
 
 
 class ReadingReq(BaseModel):

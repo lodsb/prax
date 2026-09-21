@@ -809,6 +809,49 @@ def _lens_changed(meta: dict[str, Any]) -> bool:
     return True
 
 
+@_serialized
+def request_extraction(
+    con: sqlite3.Connection, doc_id: int, *, by: str = "human"
+) -> dict[str, Any]:
+    """Ask for the document's graph to be read again by the extract
+    step's model, before the backlog: the current stamp goes to
+    ``meta.extraction_history`` and ``meta.extraction_stale`` says a
+    person asked (``requested``), which is what the extract hand-out
+    puts first whatever the scope. A document never extracted is marked
+    the same way. The new reading retires the old one's edges
+    (``extraction.apply``), history kept. Returns the stale record."""
+    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"]) if row["meta"] else {}
+    gone = meta.pop("extraction", None)
+    meta.pop("extraction_error", None)
+    if gone:
+        meta.setdefault("extraction_history", []).append(
+            {**gone, "superseded_by": "request"}
+        )
+    meta["extraction_stale"] = {
+        **(
+            {
+                "extractor": gone.get("extractor"),
+                "run": gone.get("run"),
+                "ontology_version": gone.get("ontology_version"),
+            }
+            if gone
+            else {}
+        ),
+        "requested": {
+            "by": by,
+            "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    }
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+    return meta["extraction_stale"]
+
+
 def add_domain(
     con: sqlite3.Connection, doc_id: int, domain: str, *, by: str = "human"
 ) -> list[str]:
