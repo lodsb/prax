@@ -17,7 +17,7 @@ from prax import blocks
 
 from .base import _read_archive, _reading, _serialized
 from .documents import _set_promote, get_meta, index_text, register, set_meta
-from .graph import Edge, find_edges, invalidate_edge, link
+from .graph import Edge, find_edges, invalidate_edge, link, rename_entity
 
 # Living Markdown documents (migration 0006): notes on a document, ongoing
 # projects, topic pages. A page is a document, so everything that applies
@@ -234,8 +234,17 @@ def write_page(
                 " a section, force=True overwrites"
             )
         revision = (last["revision"] if last else 0) + 1
-        if title:
+        if title and title != existing["title"]:
+            # a rename: the page's entity in the graph goes with it, so
+            # its edges stay its own (merged into a namesake if one exists)
             con.execute("UPDATE documents SET title = ? WHERE id = ?", (title, doc_id))
+            page_type = "project" if kind == "project" else "page"
+            row = con.execute(
+                "SELECT id FROM entities WHERE name = ? AND type = ?",
+                (existing["title"], page_type),
+            ).fetchone()
+            if row is not None:
+                rename_entity(con, row["id"], title)
     indexed = index_text(con, doc_id, text, text_source=f"page/{author}")
     con.execute(
         "INSERT INTO page_revisions (doc_id, revision, text_hash, author, note)"

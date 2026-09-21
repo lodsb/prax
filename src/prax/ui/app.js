@@ -958,8 +958,8 @@ async function openEditor(slug) {
     <div class="page-editor">
       <textarea id="page-text">${esc(page.text)}</textarea>
       <div class="row">
-        <input id="page-title" type="text" value="${esc(page.title || "")}" placeholder="title">
-        <input id="page-note" type="text" placeholder="what changed (optional)">
+        <label class="field"><span class="muted">title</span><input id="page-title" type="text" value="${esc(page.title || "")}" placeholder="title" title="the page's title: change it to rename the page (its address stays)"></label>
+        <label class="field"><span class="muted">what changed</span><input id="page-note" type="text" placeholder="a word for the revision list (optional)"></label>
         <button id="page-save">Save revision ${page.revision + 1}</button>
         <button id="page-cancel" class="secondary" type="button">Cancel</button>
         <button id="page-ask" class="secondary" type="button" title="a standing question inside this page: the door answers it between the markers and asks again when the library learns something">+ standing question</button>

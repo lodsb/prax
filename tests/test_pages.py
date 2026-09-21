@@ -229,3 +229,40 @@ def test_extraction_input_names_the_page_kind(con: sqlite3.Connection) -> None:
     assert "page or project entity" in extraction.system_prompt(
         __import__("prax.ontology", fromlist=["current"]).current()
     )
+
+
+def test_renaming_a_page_takes_its_entity_and_edges_along(
+    con: sqlite3.Connection,
+) -> None:
+    a = store.ingest_text(con, "alpha " * 40, title="Paper A")["doc_id"]
+    r = store.write_page(
+        con, "ai-bubble", "# ai bubble\n\nMine.", kind="topic", annotates=[a]
+    )
+    assert store.get_page(con, "ai-bubble")["title"] == "Ai bubble"
+    # the rename: same slug, new title; the page's entity is renamed, so
+    # the edge it made is still its own, under the new name
+    store.write_page(
+        con, "ai-bubble", "# The AI bubble\n\nMine.", title="The AI bubble"
+    )
+    assert store.get_page(con, "ai-bubble")["title"] == "The AI bubble"
+    names = [
+        row[0]
+        for row in con.execute(
+            "SELECT s.name FROM edges e JOIN entities s ON s.id = e.src"
+            " WHERE e.source_doc = ? AND e.valid_to IS NULL",
+            (r["doc_id"],),
+        )
+    ]
+    assert names == ["The AI bubble"]
+    assert (
+        con.execute(
+            "SELECT count(*) FROM entities WHERE name = 'Ai bubble' AND type = 'page'"
+        ).fetchone()[0]
+        == 0
+    )
+    assert store.traverse(con, "The AI bubble", hops=1)[0]["rel"] == "annotates"
+    # the same title again is no rename; a title of another page's merges
+    store.write_page(
+        con, "ai-bubble", "# The AI bubble\n\nMore.", title="The AI bubble"
+    )
+    assert store.get_page(con, "ai-bubble")["revision"] == 3
