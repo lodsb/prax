@@ -1,34 +1,43 @@
 # prax architecture
 
-The picture of the whole system as built through Stage 3 (September 2026).
-Invariants are in `CLAUDE.md`, the reasoning behind each choice in
-`rationale.md` (R1–R15), practical commands in `howto.md`, the web UI in
-`ui.md`. This document explains how the parts fit and where to touch what.
+The picture of the whole system as built through Stage 3 (September
+2026). The invariants are in `CLAUDE.md`. The reasoning behind each
+choice is in `rationale.md` (R1–R17). The practical commands are in
+`howto.md`, the web UI in `ui.md`. This document explains how the
+parts fit and where to touch what.
 
 ## 1. The shape in one paragraph
 
-prax is one SQLite file plus a content-addressed archive of original files,
-wrapped in a single Python package. Everything that changes the store goes
-through `prax.store` ("one door"). Sources register originals; batch jobs
-turn originals into text artifacts, text into structure-aware chunks, and
-chunks into a keyword index and vectors; a document-level field says what
-each document is; Claude extraction and the citation importer turn
-documents into an evidence-bearing graph over a small versioned ontology;
-entity resolution merges names for the same thing; pages written by a
-person or an agent are documents too. Two thin doors serve queries: a
-FastAPI HTTP service (with a plain web UI as its client) and a FastMCP
-server that gives Claude search, get, traverse, link, ingest and page
-tools. The desktop runs the batch jobs; a Pi-class board is meant to
-serve.
+prax is one SQLite file plus a content-addressed archive of original
+files, wrapped in a single Python package. Everything that changes the
+store goes through `prax.store`, the one door. Sources register
+originals. Batch jobs turn originals into text artifacts, text into
+structure-aware chunks, and chunks into a keyword index and vectors. A
+document-level field says what each document is. The extraction and
+the citation importer turn documents into an evidence-bearing graph
+over a small versioned ontology. Entity resolution merges names for
+the same thing. Pages written by a person or an agent are documents
+too. Two thin doors serve queries: a FastAPI HTTP service, with a
+plain web UI as its client, and a FastMCP server that gives Claude
+search, get, traverse, link, ingest and page tools. The desktop runs
+the batch jobs. A Pi-class board is meant to serve.
 
-Ten invariants hold that shape, and everything below follows from them:
-SQLite is the canonical store; files are content-addressed; one module
-writes; one process writes; the MCP server is a thin proxy; endpoints
-return snippets and ids; nothing in the serving path needs more than a
-gigabyte; edges are evidence with provenance, never truth; the ontology
-is small, versioned and modular; importers never write to their source.
-They are stated in [`CLAUDE.md`](../CLAUDE.md), with the measurements and
-the revisit conditions in [`rationale.md`](rationale.md).
+Ten invariants hold that shape, and everything below follows from
+them:
+
+1. SQLite is the canonical store.
+2. Files are content-addressed.
+3. One module writes.
+4. One process writes.
+5. The MCP server is a thin proxy.
+6. Endpoints return snippets and ids.
+7. Nothing in the serving path needs more than a gigabyte.
+8. Edges are evidence with provenance, never truth.
+9. The ontology is small, versioned and modular.
+10. Importers never write to their source.
+
+They are stated in [`CLAUDE.md`](../CLAUDE.md), with the measurements
+and the revisit conditions in [`rationale.md`](rationale.md).
 
 ```mermaid
 flowchart LR
@@ -73,8 +82,8 @@ flowchart LR
 
 | Where | What runs | Why |
 |---|---|---|
-| Windows desktop (12 cores, GTX 1070 8 GB) | development, every batch job: import, parse, OCR, vision, embed, extract, resolve, eval; the local llama.cpp path | MuPDF layout analysis, OCR, embedding and a 7B model are CPU/GPU heavy; never on the serving path (invariant 7) |
-| Pi-class SBC (an 8 GB Radxa Dragon Q6A is on hand; a Mac mini or N100 box under consideration) | the HTTP door and the UI, reachable over the private network (the MCP server runs where Claude Code runs and talks to the door) | under 1 GB resident: SQLite, FTS5, two memory-mapped usearch files and one query embedding |
+| Windows desktop (12 cores, GTX 1070 8 GB) | development, and every batch job: import, parse, OCR, vision, embed, extract, resolve, eval; the local llama.cpp path | MuPDF layout analysis, OCR, embedding and a 7B model are CPU/GPU heavy. None of it is on the serving path (invariant 7) |
+| Pi-class SBC (an 8 GB Radxa Dragon Q6A is on hand; a Mac mini or N100 box under consideration) | the HTTP door and the UI, reachable over the private network. The MCP server runs where Claude Code runs and talks to the door | under 1 GB resident: SQLite, FTS5, two memory-mapped usearch files and one query embedding |
 
 The store is one directory (`PRAX_DATA_DIR`):
 
@@ -85,10 +94,10 @@ The store is one directory (`PRAX_DATA_DIR`):
     batches/<id>.json                    submitted extraction batches
     zotero-import/zotero.sqlite          the importer's private copy
 
-Moving the service is a copy of that directory (R11). On Windows the door
-keeps the vector files memory-mapped, so an embedding run needs the door
-stopped; the batch host and the serving host otherwise coexist under WAL
-and the single-writer rule (invariant 4).
+Moving the service is a copy of that directory (R11). On Windows the
+door keeps the vector files memory-mapped, so an embedding run needs
+the door stopped. Otherwise the batch host and the serving host coexist
+under WAL and the single-writer rule (invariant 4).
 
 ## 3. Life of a document
 
@@ -108,78 +117,84 @@ flowchart TD
 ```
 
 1. **Register** (`store.register`). The original bytes are hashed
-   (sha256), written once to `archive/`, and a `documents` row is inserted
-   with MIME type, title, source URL and a `meta` JSON blob. The same bytes
-   under two Zotero records are one document. Nothing is parsed here. (R2,
-   R4)
+   (sha256) and written once to `archive/`. A `documents` row is
+   inserted with MIME type, title, source URL and a `meta` JSON blob.
+   The same bytes under two Zotero records are one document. Nothing is
+   parsed here. (R2, R4)
 2. **Extract** (`prax.parsers`, the worker's parse step). An extractor
-   chosen by MIME type turns the original into Markdown: pymupdf4llm for
-   PDFs with a text layer, plain MuPDF as fallback, RapidOCR for scans when
-   asked, Docling when named, trafilatura for HTML with `<pre>` blocks
-   fenced, plain decode for text with source files fenced as code (by
-   extension, else Magika), and `vision` for images (the vision step's
-   model — Claude, or llama-server with the model's projector — describes
-   the picture and transcribes its text, handwriting included). A figure
-   inside a document is read with what the document says around it: its
-   title, the figure's caption and the text on either side of the image
-   line, because what a plot is *of* is written there and not in the
-   picture. The model is told to name things in the document's terms but
-   to state only what is visible, so the text names the subject without
-   being described in the figure's place.
-   The Markdown is its own content-addressed artifact (`documents.text_hash`),
-   stamped in `meta.text_source` as `name/version[-rN]`; every attempt is
-   appended to `meta.parse_history` with the hash of the text it
-   produced, so an earlier text stays addressable. A better extractor
-   later is a queue selection (`--upgrade <prefix>`, or the backlog pass
-   in scope `all`, which hands out the documents whose stamp is behind
-   the extractor's revision, `parsers.behind`), never a migration.
-   (R3, R8)
-3. **Chunk** (`prax.chunking`, inside `index_text`). The Markdown is parsed
-   into sections of paragraphs, whole tables with caption and parsed grid,
-   figure captions, display equations, code listings, and the entries of
-   the reference list, one chunk each (`prax.references` cuts them under
-   a References/Bibliography heading and reads each into surnames, year,
-   title and a printed id). Each chunk has a `kind`, a `locator`
-   (character range into the artifact plus page, with the invariant
-   `chunk.text == artifact[start:end]`), the heading path it sits under,
-   and in `data` what it is of: a table's grid, a figure's reference and
-   readings, an equation's LaTeX, a reference entry's fields and — once
-   the `references` pass has matched it — the library document it cites,
-   an ask block's question, id and state (a page's standing question,
-   `prax.blocks`, is one `ask` chunk from head marker to tail). A
+   chosen by MIME type turns the original into Markdown. The extractors are these.
+   pymupdf4llm reads PDFs with a text layer, and plain MuPDF is the
+   fallback. RapidOCR reads scans, when asked. Docling runs when named.
+   trafilatura reads HTML, with `<pre>` blocks fenced. A plain decode
+   reads text, with source files fenced as code (by extension, else
+   Magika). `vision` reads images. The vision step's model (Claude, or
+   llama-server with the model's projector) describes the picture and
+   transcribes its text, handwriting included. A figure inside a
+   document is read with what the document says around it: its title,
+   the figure's caption, and the text on either side of the image line.
+   What a plot is *of* is written there, not in the picture. The model
+   is told to name things in the document's terms but to state only
+   what is visible, so the text supplies the subject without being
+   described in the figure's place.
+
+   The Markdown is its own content-addressed artifact
+   (`documents.text_hash`), stamped in `meta.text_source` as
+   `name/version[-rN]`. Every attempt is appended to
+   `meta.parse_history` with the hash of the text it produced, so an
+   earlier text stays addressable. A better extractor later is a queue
+   selection, never a migration: `--upgrade <prefix>`, or the backlog
+   pass in scope `all`, which hands out the documents whose stamp is
+   behind the extractor's revision (`parsers.behind`). (R3, R8)
+3. **Chunk** (`prax.chunking`, inside `index_text`). The Markdown is
+   parsed into sections of paragraphs, whole tables with caption and
+   parsed grid, figure captions, display equations, code listings, and
+   the entries of the reference list, one chunk each.
+   `prax.references` cuts the entries under a References/Bibliography
+   heading and reads each into surnames, year, title and a printed id.
+   Each chunk has a `kind`, a `locator` (character range into the
+   artifact plus page, with the invariant `chunk.text ==
+   artifact[start:end]`), the heading path it sits under, and in `data`
+   what it is of. `data` holds a table's grid, a figure's reference and
+   readings, an equation's LaTeX, a reference entry's fields and, once
+   the `references` pass has matched it, the library document it cites,
+   or an ask block's question, id and state. A page's standing question
+   (`prax.blocks`) is one `ask` chunk from head marker to tail. A
    reference entry and an ask block are set aside (`store.ASIDE_KINDS`):
-   never embedded, out of a search unless asked for by kind.
-   Chunks are disposable: `prax maintain --rechunk` rebuilds them from
-   the artifacts (the citation links come back from `meta.references`).
+   never embedded, out of a search unless asked for by kind. Chunks are
+   disposable. `prax maintain --rechunk` rebuilds them from the
+   artifacts, and the citation links come back from `meta.references`.
    (R13)
-4. **Index**. FTS5 rows follow chunk inserts through triggers.
-   The worker's embed step embeds chunks that have no vector from the
+4. **Index**. FTS5 rows follow chunk inserts through triggers. The
+   worker's embed step embeds the chunks that have no vector from the
    current model into a usearch HNSW file, then embeds the document
-   field; reference entries get no vector and stay out of a search
-   unless asked for by kind (`store.ASIDE_KINDS`).
-   The document field (title, kind words, creators, venue, extraction
-   summary, an image description's opening paragraph) is rebuilt by the
-   store whenever a document's text or metadata changes and indexed in
-   `documents_fts`; it is what makes "schematic" find the schematic. (R6)
-5. **Graph**. The Zotero importer seeds `authored_by` edges;
+   field. Reference entries get no vector and stay out of a search
+   unless asked for by kind (`store.ASIDE_KINDS`). The document field
+   holds the title, kind words, creators, venue, the extraction summary
+   and an image description's opening paragraph. The store rebuilds it
+   whenever a document's text or metadata changes and indexes it in
+   `documents_fts`. It is what makes "schematic" find the schematic.
+   (R6)
+5. **Graph**. The Zotero importer seeds `authored_by` edges.
    `prax.extraction` sends the document's header, its first 12,000
-   characters and its closing sections to Claude (sync or the Batch API)
-   and writes the returned triples with a quoted `evidence`, parking
-   misfits in `review_queue`; `prax.importers.citations` writes `cites`
-   edges from Crossref or OpenAlex reference lists. Every edge carries the
-   ontology version it was written under and bi-temporal validity; nothing
-   is deleted, only invalidated. Types are validated against
-   the composed ontology at the door; when a module grows, `prax.review`
-   replays the queue. (R7)
-6. **Resolve**. `prax.resolution` merges entities that name the same thing
-   through `canonical_id`: sure merges (case, accents, punctuation, author
-   initials), concept/method twins into the method, and likely merges by
-   name embedding that a Claude adjudicator confirms. Traversal, hubs and
-   context walk canonical ids; edges keep the alias they were written with.
-7. **Pages**. A note on a document, a project thread or a topic write-up is
-   a document with `source = wiki`, Markdown text and append-only
-   revisions; its relationships are edges (`annotates`, `part_of`). An
-   agent may append but never overwrite a person's revision. (R15)
+   characters and its closing sections to the model (sync or the Batch
+   API) and writes the returned triples with a quoted `evidence`;
+   misfits are parked in `review_queue`. `prax.importers.citations`
+   writes `cites` edges from Crossref or OpenAlex reference lists. Every
+   edge carries the ontology version it was written under and
+   bi-temporal validity. Nothing is deleted, only invalidated. Types are
+   validated against the composed ontology at the door. When a module
+   grows, `prax.review` replays the queue. (R7)
+6. **Resolve**. `prax.resolution` merges entities that name the same
+   thing through `canonical_id`. Sure merges are by case, accents,
+   punctuation and author initials. Concept/method twins merge into
+   the method. Likely merges are by name embedding, and a Claude
+   adjudicator confirms them. Traversal, hubs and context walk
+   canonical ids; edges keep the alias they were written with.
+7. **Pages**. A note on a document, a project thread or a topic
+   write-up is a document with `source = wiki`, Markdown text and
+   append-only revisions. Its relationships are edges (`annotates`,
+   `part_of`). An agent may append but never overwrite a person's
+   revision. (R15)
 
 ## 4. Life of a query
 
@@ -203,29 +218,75 @@ flowchart LR
   S -->|answer| M
 ```
 
-`search` first expands the query: a token the library defines as an
-acronym (the `acronyms` table, from "phrase (ACRONYM)" in the texts)
-becomes the token or its phrase for the keyword side (the embedder sees
-the query as typed; expanding it measured worse), and the stopwords
-(`STOPWORDS`, English and German) and lone characters ("2", "a") are
-left out of the match expression: each matched two thirds of a million
-chunks, and BM25 gives a term in more than half the rows a negative
-weight. It then fuses up to
-five rank lists per document: chunk BM25 over any term, chunk BM25 over
-chunks holding the query's rare acronym-shaped terms (weight 3), chunk
-KNN, and BM25 and KNN over the document field. The field list is weighted 2 for
-queries of up to three words and fades to 1 by seven, because a short
-query names a thing and a long one describes content. A hit says which
-lists found it; a hit found only through the field opens at the
-document's best-matching chunk. `fts` and `vec` modes are the raw chunk
-lists; hybrid degrades to FTS-only when no vectors exist, so the serving
-host works before embeddings do. Responses stay small by design (invariant
-6): snippets and ids, then `get_chunk`, `get` or `context` for exactly
-what is needed.
+`search` first expands the query. A token the library defines as an
+acronym becomes the token or its phrase for the keyword side. The
+`acronyms` table is built from "phrase (ACRONYM)" in the texts. The
+embedder sees the query as typed, because expanding it measured worse.
+The stopwords (`STOPWORDS`, English and German) and lone characters
+("2", "a") are left out of the match expression. Each of those matched
+two thirds of a million chunks, and BM25 gives a term in more than half
+the rows a negative weight.
 
-`ask` is retrieval plus generation on top of the same search (`prax.ask`). The bundle is one passage per document (the matched chunk, 1,200 characters) for the top eight documents plus what the graph records about each of them (its extracted relations, canonical names, `cites` left out), about 3,000 tokens, so it fits a 7B model with an 8 K window. Which model answers is a per-host setting (`PRAX_ASK`): `local` runs a GGUF model in the door's process on the desktop (Qwen2.5-7B answers in about 20 s on the GTX 1070), `claude` calls the API, `none` returns the bundle alone, which is what the MCP tool gives Claude Code by default and what the serving board does, since it loads no model (invariant 7). The answer cites passages as `[n]`; the numbers are resolved to chunk and document ids, the UI links them, and an answer worth keeping is appended to a page as the agent with its sources listed and `annotates` edges to the documents it rests on.
+It then fuses up to five rank lists per document: chunk BM25 over any
+term, chunk BM25 over chunks holding the query's rare acronym-shaped
+terms (weight 3), chunk KNN, and BM25 and KNN over the document field.
+The field list is weighted 2 for queries of up to three words and fades
+to 1 by seven words, because a short query names a thing and a long one
+describes content. A hit says which lists found it. A hit found only
+through the field opens at the document's best-matching chunk. The
+`fts` and `vec` modes are the raw chunk lists. Hybrid degrades to
+FTS-only when no vectors exist, so the serving host works before
+embeddings do. Responses stay small by design (invariant 6): snippets
+and ids first, then `get_chunk`, `get` or `context` for exactly what is
+needed.
 
-With `steps` the model surfs before it answers (`prax.surf`; the moves, the budgets and the failure modes are [`docs/ask.md`](ask.md)). The one-shot bundle is what the model gets when it cannot choose; surfing gives it the library for a bounded number of steps, each two lines — a note and one action: `search` again, `read` on where a passage stopped, a document a result named, or — with words — the part of that document which holds them (`store.find_chunk`, the same scoring that opens a document-field hit somewhere), `facts` of a document, `walk` the graph from an entity (its relations and the documents behind them), `similar` documents, `drop` what is beside the point, or `answer`. Every step is one of the door's own reads; nothing is written. A local model is held to the two lines by a grammar whose passage numbers and document ids are the ones it has seen, so it can only point at what exists; Claude follows the same lines without one. The prompt is one growing message — the question, then every step and its result in order — so a llama-server's prefix cache makes a step cost its own tokens (two to four seconds on the 35B-A3B). Two budgets bound the loop, the steps and the tokens of reading, both clamped to the model's context; the answer is a separate call with the ask prompt over the passages kept, under their loop numbers, so a citation points at what was read. The trail (each step's note, action, what it brought) streams to the client as it happens and comes back with the answer; a kept answer carries it on the page.
+`ask` is retrieval plus generation on top of the same search
+(`prax.ask`). The bundle is one passage per document (the matched
+chunk, 1,200 characters) for the top eight documents, plus what the
+graph records about each of them: its extracted relations and
+canonical names, `cites` left out. That is about 3,000 tokens, so it
+fits a 7B model with an 8 K window. Which model answers is a per-host
+setting (`PRAX_ASK`). `local` runs a GGUF model in the door's process
+on the desktop; Qwen2.5-7B answers in about 20 s on the GTX 1070.
+`claude` calls the API. `none` returns the bundle alone, which is what
+the MCP tool gives Claude Code by default and what the serving board
+does, since it loads no model (invariant 7). The answer cites passages
+as `[n]`. The numbers are resolved to chunk and document ids, and the
+UI links them. An answer worth keeping is appended to a page as the
+agent, with its sources listed and `annotates` edges to the documents
+it rests on.
+
+With `steps` the model surfs before it answers (`prax.surf`; the
+moves, the budgets and the failure modes are in
+[`docs/ask.md`](ask.md)). The one-shot bundle is what the model gets
+when it cannot choose. Surfing gives it the library for a bounded
+number of steps. Each step is two lines, a note and one action. The actions:
+
+- `search` again;
+- `read` on where a passage stopped, or a document a result named, or,
+  with words, the part of that document which holds them
+  (`store.find_chunk`, the same scoring that opens a document-field
+  hit somewhere);
+- `facts` of a document;
+- `walk` the graph from an entity: its relations and the documents
+  behind them;
+- `similar` documents;
+- `drop` what is beside the point;
+- `answer`.
+
+Every step is one of the door's own reads; nothing is written. A grammar holds a local model to
+the two lines, and its passage numbers and document ids are the ones
+the model has seen, so it can only point at what exists. Claude
+follows the same lines without a grammar. The prompt is one growing
+message: the question, then every step and its result in order. A
+llama-server's prefix cache therefore makes a step cost its own tokens,
+two to four seconds on the 35B-A3B. Two budgets bound the loop, the
+steps and the tokens of reading, both clamped to the model's context.
+The answer is a separate call with the ask prompt over the passages
+kept, under their loop numbers, so a citation points at what was read.
+The trail (each step's note, action, what it brought) streams to the
+client as it happens and comes back with the answer. A kept answer
+carries it on the page.
 
 ## 5. Module map
 
@@ -283,14 +344,15 @@ With `steps` the model surfs before it answers (`prax.surf`; the moves, the budg
 | `prax.client` | the door as a client sees it: JSON calls, one download, one upload; the worker and the MCP server use it | no (HTTP only) |
 | `prax.config` | paths, `PRAX_DATA_DIR`, migrations dir | no |
 
-Schema version: `PRAGMA user_version` is the number of the last applied
-migration; `store.init_db` runs on every connect (door, scripts, MCP)
-and applies the pending numbered files in order, each in its own
-transaction, so any client upgrades the store it opens, and refuses a
-store newer than the code. Data written by a tool carries the tool's
-version on the row (`ontology_version`, `producer`/`run`, the parse
-stamp's extractor and revision, the embedding model, `title_source`),
-which is how a later pass knows what to redo.
+Schema version: `PRAGMA user_version` is the number of the last
+applied migration. `store.init_db` runs on every connect (door,
+scripts, MCP) and applies the pending numbered files in order, each in
+its own transaction. Any client therefore upgrades the store it opens,
+and refuses a store newer than the code. Data written by a tool carries
+the tool's version on the row: `ontology_version`, `producer` and
+`run`, the parse stamp's extractor and revision, the embedding model,
+`title_source`. That is how a later pass knows what to redo.
+
 | `scripts/*.py` | thin CLIs over the modules above: import, parse, rechunk, embed, refresh fields, extract, import citations, resolve, replay, eval, compare extractors, bench the local model, build fixture | via store |
 
 ## 6. Data model
@@ -315,12 +377,12 @@ page_revisions   doc_id, revision, text_hash, author (human | agent), note, crea
 ```
 
 Schema changes are numbered migrations in `src/prax/migrations/`
-(`0001_baseline` through `0007_provenance`), applied by `store.init_db` and
-tracked in `PRAGMA user_version`. The vector indexes are files beside the
-database, not tables (R6). (R12)
+(`0001_baseline` through `0007_provenance`), applied by `store.init_db`
+and tracked in `PRAGMA user_version`. The vector indexes are files
+beside the database, not tables (R6). (R12)
 
-`documents.meta` is the extension point for anything a source knows that
-has no column yet. Conventions in use:
+`documents.meta` is the extension point for anything a source knows
+that has no column yet. The conventions in use:
 
 | key | meaning |
 |---|---|
@@ -336,44 +398,44 @@ has no column yet. Conventions in use:
 
 ## 7. The passes and their stamps
 
-**What a model makes is kept, not repeated.** Reading a figure, parsing
-a PDF, writing a summary, extracting triples, embedding a chunk: each is
-a model's work on one thing, done once and written into the store beside
-what it was made from — the figure's description in the text under its
-image line, the summary in `meta`, the triples as edges, the vector in
-the index. Everything after that reads it for nothing. A search over
-figures is a search over descriptions a vision model wrote months ago; a
-surfing answer that quotes a plot is quoting that same sentence, not
-looking at the picture. The library is, in that sense, a cache of model
-work over a set of originals that do not change — with three properties
-a cache needs:
+**What a model makes is kept, not repeated.** Reading a figure,
+parsing a PDF, writing a summary, extracting triples, embedding a
+chunk: each is a model's work on one thing, done once and written into
+the store beside what it was made from. The figure's description goes
+in the text under its image line, the summary in `meta`, the triples
+as edges, the vector in the index. Everything after that reads it for
+nothing. A search over figures is a search over descriptions a vision
+model wrote months ago. A surfing answer that quotes a plot is quoting
+that same sentence, not looking at the picture. The library is, in
+that sense, a cache of model work over a set of originals that do not
+change, with the three properties a cache needs:
 
-- **A key that says who made it and how.** Not a hash of the input: the
-  producer's stamp — `pymupdf4llm/1.28.2-r2`, `figures/1-r2+<model>`,
-  an edge's `producer` and `ontology_version`, `chunk_embeddings.model`.
-  Two models' readings of one figure sit side by side, each under its
-  own name.
+- **A key that says who made it and how.** Not a hash of the input but
+  the producer's stamp: `pymupdf4llm/1.28.2-r2`, `figures/1-r2+<model>`,
+  an edge's `producer` and `ontology_version`,
+  `chunk_embeddings.model`. Two models' readings of one figure sit
+  side by side, each under its own name.
 - **Invalidation as a version, not a timestamp.** A better prompt is a
   revision (`-r2`), a better model is a new name, a grown ontology is a
   new version. The work already stored stays valid under the stamp it
-  carries; what is behind the current stamp is *found* (`parsers.behind`,
-  the `stale-parses` and `unread-figures` ailments) and re-done on
+  carries. What is behind the current stamp is found (`parsers.behind`,
+  the `stale-parses` and `unread-figures` ailments) and redone on
   request. Nothing re-runs because a file changed on disk.
-- **A miss that is visible and priced.** What has never been done shows
-  up as an ailment on the Jobs page with the count and the way on, and
-  the way on says what it costs — about four seconds a figure on a local
-  model. A cache miss here is not a slow request; it is a job to run
-  tonight.
+- **A miss that is visible and priced.** What has never been done
+  shows up as an ailment on the Jobs page with the count and the way
+  on, and the way on says what it costs: about four seconds a figure on
+  a local model. A cache miss here is not a slow request. It is a job
+  to run tonight.
 
-The originals are the one thing that is never derived (invariant 2), so
-the whole of the rest can be thrown away and made again: that is what
-makes it safe to re-read 10,901 figures under a better prompt.
+The originals are the one thing that is never derived (invariant 2),
+so the whole of the rest can be thrown away and made again. That is
+what makes it safe to re-read 10,901 figures under a better prompt.
 
-Every pass is idempotent because it selects by a stamp and writes a
+Every pass is idempotent, because it selects by a stamp and writes a
 stamp. Interrupt any of them and run the same command again. The
-worker's steps (`prax work`, `prax.work` hands out and takes in) do the
-model work through the door; the jobs run on the door itself; nothing
-here opens the database file.
+worker's steps do the model work through the door (`prax work`;
+`prax.work` hands out and takes in). The jobs run on the door itself.
+Nothing here opens the database file.
 
 | Pass | Selects | Writes | Guards |
 |---|---|---|---|
@@ -481,11 +543,7 @@ here opens the database file.
 
 ## 11. What is not built yet
 
-The browser extension (`docs/extension.md`; the door's side, `POST
-/ingest/html`, exists), the backfill of the
-old external-disk store, a second, richer extraction pass by Sonnet on the
-papers that matter (the local pass covered everything once), a typing
-pass for the unmapped review items and an ontology look at what the
-local pass queued (affiliations above all), the 801 unconfirmed titles, page deletion or
-archiving, the move of the service onto the serving board, and the MCP
-server proxying the HTTP door instead of importing the store.
+The backfill of the old external-disk store. The move of the service
+onto the serving board (the code is in `deploy/`). The 715 scans
+nothing could read yet. The sub-graph export and import of a project
+(`PLAN.md`). What else is open is in `PLAN.md`.
