@@ -1564,12 +1564,18 @@ def _start_questions(
 
 
 def _answer_new_blocks(con: Any, slug: str, text: str) -> int | None:
-    """A page saved with an ask block not yet filled: the pass runs for
-    that page now, as a job, so the answer is there within a moment
-    rather than at the clock's hour. One job per page at a time. Returns
-    the job id, or None when there was nothing to ask."""
-    if not any(not b.filled for b in blocks.blocks(text)):
+    """A page saved with an ask block this page has not asked yet — one
+    not filled, or one pasted in from another page, filled there — the
+    pass runs for that page now, as a job, so the answer is there within
+    a moment rather than at the clock's hour. One job per page at a
+    time. Returns the job id, or None when there was nothing to ask."""
+    if not blocks.blocks(text):
         return None
+    page = store.get_page(con, slug)
+    if page is None or not any(
+        b["asked_at"] is None and not b["held"] for b in page["blocks"]
+    ):
+        return None  # (a held block is the person's until released)
     with _answering_lock:
         if slug in _answering:
             return None

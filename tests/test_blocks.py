@@ -437,8 +437,19 @@ def test_the_door_answers_a_saved_block_and_lists_it(client: TestClient) -> None
     assert "job" not in r
     r = client.put("/page/plain", json={"text": "# Plain\n\nText.\n"}).json()
     assert "job" not in r
+    # the filled block pasted into another page, markers and all: that
+    # page has not asked it yet, so it is asked there at once, the pasted
+    # answer as the conversation so far
+    b1 = blocks.blocks(page["text"])[0]
+    moved = "# Moved\n\nMine.\n\n" + page["text"][b1.head[0] : b1.tail[1]]  # type: ignore[index]
+    r = client.put("/page/moved", json={"text": moved, "kind": "topic"}).json()
+    assert r["created"] and r["job"]
+    assert _wait(client, r["job"])["note"] == "1 of 1 asked again"
+    other = client.get("/page/moved").json()
+    assert other["revision"] == 2 and other["blocks"][0]["asked_at"]
+    assert other["blocks"][0]["history"] == 1 and other["text"].startswith("# Moved")
     listed = client.get("/questions").json()
-    assert [q["slug"] for q in listed] == ["fdn-notes#q1", "fdn-notes#q2"]
+    assert [q["slug"] for q in listed] == ["fdn-notes#q1", "fdn-notes#q2", "moved#q1"]
     assert listed[1]["held"] and listed[0]["asked_at"]
     # release the held block through the run
     job = client.post(
