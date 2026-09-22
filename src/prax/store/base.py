@@ -17,6 +17,7 @@ import sqlite3
 import threading
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
@@ -49,7 +50,14 @@ _LOCK = threading.RLock()
 _INDEX_LOCK = threading.RLock()
 
 
-_NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"
+_NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"  # the same shape as now(), in SQL
+
+
+def now() -> str:
+    """The moment, as every timestamp prax writes: UTC, ISO-8601 to the
+    second, ``Z`` (``2026-09-22T01:49:03Z``). One shape, so the strings
+    sort as the moments do."""
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 # how long a connection waits for another process's write transaction

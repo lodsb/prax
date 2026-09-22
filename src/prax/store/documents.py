@@ -13,7 +13,6 @@ import hashlib
 import json
 import re
 import sqlite3
-from datetime import UTC, datetime
 from typing import Any
 
 from prax import chunking, glyphs, ontology
@@ -29,6 +28,7 @@ from .base import (
     _read_archive,
     _reading,
     _serialized,
+    now,
 )
 
 
@@ -402,7 +402,7 @@ def retitle(
         {
             "title": old,
             "source": meta.get("title_source"),
-            "until": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "until": now(),
         }
     )
     meta["title_history"] = history
@@ -490,7 +490,7 @@ def retire_document(
         moved = _join_duplicate(con, doc_id, duplicate_of)
         meta = get_meta(con, doc_id)
     meta["retired"] = {
-        "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "at": now(),
         "reason": reason,
         "of": duplicate_of,
         "by": by,
@@ -576,7 +576,7 @@ def _join_duplicate(
             theirs[key] = mine[key]
     theirs.setdefault("recaptured", []).append(
         {
-            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "at": now(),
             "session": (mine.get("capture") or {}).get("session"),
             "by": (mine.get("capture") or {}).get("by"),
             "was": doc_id,
@@ -678,7 +678,7 @@ def note_recapture(
     again = meta.setdefault("recaptured", [])
     again.append(
         {
-            "at": datetime.now(UTC).isoformat(timespec="seconds"),
+            "at": now(),
             "session": session,
             "by": by,
         }
@@ -865,7 +865,7 @@ def request_extraction(
         ),
         "requested": {
             "by": by,
-            "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "at": now(),
         },
     }
     con.execute(
@@ -1004,7 +1004,7 @@ def _set_promote(
     meta["promote"] = {
         "by": by,
         "reason": reason,
-        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "at": now(),
     }
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
@@ -1117,7 +1117,7 @@ def request_reading(
         "extractor": extractor,
         "mode": mode,
         "by": by,
-        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "at": now(),
         "state": "requested",
     }
     con.execute(
@@ -1491,7 +1491,7 @@ def finish_reading(
         outcome=outcome,
         stamp=stamp,
         error=error,
-        finished_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        finished_at=now(),
     )
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)

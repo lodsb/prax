@@ -24,7 +24,6 @@ import json
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from prax import ontology, store
@@ -682,7 +681,7 @@ def note_failure(
     meta["extraction_error"] = {
         "extractor": extractor,
         "ontology_version": onto.version,
-        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "at": store.now(),
         "error": error[:500],
     }
     store.set_meta(con, doc_id, meta)
@@ -858,7 +857,7 @@ def apply(
         "extractor": extractor,
         "ontology_version": onto.version,
         "run": run,
-        "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "at": store.now(),
         "linked": report.linked,
         "existing": report.existing,
         "queued": report.queued,

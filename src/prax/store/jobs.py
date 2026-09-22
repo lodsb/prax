@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
 
-from .base import _INDEX_LOCK, _NOW, _indexes, _reading, _serialized
+from .base import _INDEX_LOCK, _NOW, _indexes, _reading, _serialized, now
 
 # What runs on the batch host, for the door and the UI to show: each pass
 # is a row with a heartbeat; one that stops beating without finishing is
@@ -25,7 +25,7 @@ JOB_DEAD_SECONDS = 1800  # no heartbeat this long: the job is closed as failed
 
 
 def _job_now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
+    return now()  # kept by name: the jobs' own clock is the store's
 
 
 @_serialized

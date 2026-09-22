@@ -30,13 +30,12 @@ import shutil
 import sqlite3
 import time
 from collections.abc import Callable
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from prax import config
 
-from .base import _LOCK
+from .base import _LOCK, now
 from .jobs import Job
 
 MANIFEST = "backup.json"
@@ -112,7 +111,7 @@ def _run(
         copied = {"files": 0, "copied": 0, "bytes": 0, "skipped": True}
         say("archive: left out")
     report = {
-        "at": datetime.now(UTC).isoformat(timespec="seconds"),
+        "at": now(),
         "source": str(src),
         "dest": str(dest),
         "database_bytes": db_bytes,

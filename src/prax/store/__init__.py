@@ -74,6 +74,7 @@ from .base import (  # noqa: F401
     connect,
     init_db,
     migrations,
+    now,
     schema_version,
     sha256_file,
     thread_connection,

@@ -61,7 +61,7 @@ _RUN_CHARS = re.compile(r"[^\w.:@/+-]+")
 
 
 def _now() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return store.now()
 
 
 def _slug_of(question: str) -> str:

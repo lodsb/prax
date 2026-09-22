@@ -238,7 +238,8 @@ reference `docs/ask.md`.
   the door's own clock (`schedule:`, `prax.schedule`) and the worker's
   `nightly` hour, never a cron or scheduler entry per pass. No shell
   script derives the process model a second time.
-- Timestamps are UTC ISO-8601 strings.
+- Timestamps are UTC ISO-8601 strings to the second with `Z`, from
+  `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.
 - Tests must not touch `data/`. Use tmp_path fixtures and set
   `PRAX_DATA_DIR` before importing `prax.api`.
 - Commit at the end of each green stage; do not commit failing tests.

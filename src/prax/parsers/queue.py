@@ -25,7 +25,6 @@ import time
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 from prax import parsers, store
@@ -50,7 +49,7 @@ class Report:
 
 
 def _now() -> str:
-    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return store.now()
 
 
 def _record(

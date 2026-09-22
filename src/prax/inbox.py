@@ -63,7 +63,7 @@ TRACKING_PARAMS = re.compile(
 
 
 def _now() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds")
+    return store.now()
 
 
 def inbox_dir() -> Path:

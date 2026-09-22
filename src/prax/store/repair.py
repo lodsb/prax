@@ -30,12 +30,11 @@ import re
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from prax import glyphs
 
-from .base import _ASIDE, _NOW, _reading
+from .base import _ASIDE, _NOW, _reading, now
 from .documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
@@ -736,7 +735,7 @@ def _repair_stale_parses(con: sqlite3.Connection, rows: list[dict[str, Any]]) ->
             continue
         meta = docs.get_meta(con, r["id"])
         history = list(meta.get("parse_history", []))
-        at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        at = now()
         history.append({"at": at, "extractor": r["covered"], "outcome": "stamped"})
         meta["parse_history"] = history
         meta["text_source"] = r["covered"]

@@ -35,7 +35,6 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any, Protocol
 
 from prax import config, store
@@ -345,7 +344,7 @@ def _one(
     if work is None and resolve_titles and title:
         work = source.by_title(title)
     stamp = {
-        "fetched_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "fetched_at": store.now(),
         "source": source.name,
     }
     if work is None:

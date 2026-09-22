@@ -36,12 +36,11 @@ import sqlite3
 import time
 from collections import Counter
 from collections.abc import Callable
-from datetime import UTC, datetime
 from typing import Any
 
 from prax import acronyms, config, references
 
-from .base import _reading
+from .base import _reading, now
 from .documents import (
     assign_domains,
     dedupe_captures,
@@ -341,7 +340,7 @@ def link_references(
         todo.append((doc_id, text_hash, text))
     if job is not None:
         job.update(total=len(todo), done=0, note="references")
-    at = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    at = now()
     for n, (doc_id, text_hash, text) in enumerate(todo, 1):
         title = lib.get(doc_id, {}).get("title")
         if not title:
