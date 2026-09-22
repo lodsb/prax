@@ -335,6 +335,7 @@ carries it on the page.
 | `prax.autostart` | the one login entry per platform that starts `prax up`: a Task Scheduler task under `pythonw.exe`, a systemd user unit, a launchd agent; `--tray` on a desktop when the tray library is installed | no |
 | `prax.tray` | the tray icon: the mark with a red dot when a role is down, the roles' states as the tooltip, a menu to open prax, restart or stop a role, the logs, quit; a client of the supervisor through its status and command files; `prax up --tray` runs both (the icon on the main thread, the supervisor on a thread), `prax tray` attaches | no |
 | `prax.schedule` | the door's clock: `maintain` and `backup` at their hours, the jobs table as the memory | via store (reads) |
+| `prax.hostinfo` | what the host has left: free RAM and commit on Windows and Linux, the cards through `nvidia-smi` (`gpu`, `vram_free_mb`), this process's own footprint. No dependency, no raising: a host that cannot say has no numbers | no |
 | `prax.drop` | a drop folder's rules, shared by the door's inbox scan and the worker's upload of its own folders: what is settled, what is a sidecar, what goes to `failed/`. Touches no store | no |
 | `prax.inbox` | captures: uploads, pages sent with their rendered DOM, URLs fetched server-side, the drop folder scan; canonical URLs and re-capture links; HTML indexed at once, the rest left to the queue; domains from the request, the folder or the rules | via store |
 | `prax.auth` | bearer token or session cookie on the HTTP door; loopback-only when unset | no |

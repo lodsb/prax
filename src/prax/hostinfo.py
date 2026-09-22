@@ -1,19 +1,26 @@
-"""What this machine has left: free RAM, commit headroom, and this
-process's own footprint. No dependency: Windows through the kernel's
-``GlobalMemoryStatusEx`` and ``GetProcessMemoryInfo``, Linux through
-``/proc``; elsewhere the numbers are ``None``. The Jobs view shows the
-door host's numbers so the commit wall is visible before it is hit (a
-GPU model server on Windows charges system commit for its VRAM)."""
+"""What this machine has left: free RAM, commit headroom, the cards'
+memory, and this process's own footprint. No dependency: Windows
+through the kernel's ``GlobalMemoryStatusEx`` and
+``GetProcessMemoryInfo``, Linux through ``/proc``, the cards through
+``nvidia-smi``; elsewhere the numbers are ``None`` or empty. The Jobs
+view shows the door host's numbers so the commit wall is visible before
+it is hit (a GPU model server on Windows charges system commit for its
+VRAM), and ``prax up`` reads the cards to decide whether two roles that
+both want one fit together (``docs/howto.md`` 4b)."""
 
 from __future__ import annotations
 
 import contextlib
 import ctypes
+import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
 MB = 1024 * 1024
+GPU_FRESH = 2.0  # seconds a reading of the cards is served again
+_gpu: tuple[float, list[dict[str, Any]]] | None = None
 
 
 def memory() -> dict[str, int | None]:
@@ -32,6 +39,53 @@ def memory() -> dict[str, int | None]:
         elif Path("/proc/meminfo").exists():
             out.update(_linux_memory())
     return out
+
+
+def gpu(fresh: float = GPU_FRESH) -> list[dict[str, Any]]:
+    """Each card as ``{index, name, total_mb, used_mb, free_mb}``, newest
+    reading kept ``fresh`` seconds; ``[]`` without ``nvidia-smi`` (no
+    card, another make, a machine that has none). Never raises: a host
+    that cannot say is a host with no numbers."""
+    global _gpu
+    now = time.monotonic()
+    if _gpu is not None and now - _gpu[0] < fresh:
+        return [dict(c) for c in _gpu[1]]
+    cards: list[dict[str, Any]] = []
+    with contextlib.suppress(Exception):  # no nvidia-smi, or it said nothing
+        out = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=index,name,memory.total,memory.used,memory.free",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        ).stdout
+        for line in out.splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) != 5 or not parts[0].isdigit():
+                continue
+            cards.append(
+                {
+                    "index": int(parts[0]),
+                    "name": parts[1],
+                    "total_mb": int(float(parts[2])),
+                    "used_mb": int(float(parts[3])),
+                    "free_mb": int(float(parts[4])),
+                }
+            )
+    _gpu = (now, cards)
+    return [dict(c) for c in cards]
+
+
+def vram_free_mb() -> int | None:
+    """The freest card's free memory, or None when there is no card to
+    ask: what decides whether a role that wants the card can have it
+    beside the one that holds it."""
+    cards = gpu()
+    return max((c["free_mb"] for c in cards), default=None) if cards else None
 
 
 def process_mb() -> int | None:

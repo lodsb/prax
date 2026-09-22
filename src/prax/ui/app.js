@@ -2451,6 +2451,23 @@ function hostLine(h) {
     (h.commit_limit_mb != null ? `, commit headroom <span class="${tight ? "error" : ""}" title="RAM plus page file, minus what every process has charged; a GPU model server on Windows charges its VRAM here">${gb(h.commit_free_mb)} of ${gb(h.commit_limit_mb)} GB</span>${tight ? " (tight: close something or enlarge the page file)" : ""}` : "") + `.</p>`;
 }
 
+async function upCommand(body, msg) {
+  msg.textContent = "asking…";
+  try {
+    const r = await post("/up/command", body);
+    msg.textContent = `asked: ${r.asked} ${r.role || ""}${r.released ? ` · ${r.released} held requests released` : ""}`;
+    setTimeout(() => render({ keepScroll: true }), 2500);
+  } catch (err) { msg.textContent = err.message; }
+}
+view.addEventListener("click", (e) => {
+  const swap = e.target.closest("button.up-swap");
+  const back = e.target.closest("button.up-unswap");
+  if (!swap && !back) return;
+  const msg = document.getElementById("up-msg") || document.createElement("p");
+  if (swap) upCommand({ cmd: "swap", to: swap.dataset.to, back_when: "idle" }, msg);
+  else upCommand({ cmd: "unswap", group: back.dataset.group }, msg);
+});
+
 // The model servers prax.yaml names, with their load when started with
 // --metrics: which model, slots, whether it sees images, tokens per second
 // and the KV cache in use, so a slow pass can be told from an idle one.
@@ -2580,16 +2597,18 @@ async function healNow(button, checks) {
 
 async function viewJobs(p) {
   loading();
-  let d, servers = [], readings = null;
+  let d, servers = [], readings = null, host = null;
   try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   try { servers = (await api("/models/servers")).servers; } catch (_) { /* the list is a nicety */ }
   try { readings = await api("/readings", { limit: 20 }); } catch (_) { /* so is this one */ }
+  try { host = await api("/up"); } catch (_) { /* no supervisor here, or an older door */ }
   const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
   view.innerHTML = `
     <p class="muted">The passes announce themselves here: the worker's session, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale; one gone for half an hour is closed.</p>
     ${hostLine(d.host)}
     ${serverLines(servers)}
     ${readingLines(readings)}
+    ${upPanel(host)}
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Running (${d.running.length})</h2>
     ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the machine with the models: <code>scripts/work.py --watch</code> keeps captures moving.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>

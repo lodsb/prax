@@ -23,6 +23,20 @@ def _since(stamp: str | None) -> str:
     return out.when(stamp, "%m-%d %H:%M") if stamp else ""
 
 
+def _groups_lines(state: dict) -> list[str]:
+    """One line per group whose resource is on loan."""
+    out_lines = []
+    for name, g in (state.get("groups") or {}).items():
+        others = ", ".join(g.get("was_up") or []) or "nothing"
+        how = "beside" if g.get("fits") else "instead of"
+        back = g.get("back_when", "idle")
+        out_lines.append(
+            f"  {name}: {g.get('holder')} has it {how} {others}"
+            f" (back when {back}; prax up --unswap {name})"
+        )
+    return out_lines
+
+
 def show_status(data_dir: Path) -> int:
     from prax import up
 
@@ -55,6 +69,14 @@ def show_status(data_dir: Path) -> int:
             note += f" · {out.plural(r['restarts'], 'restart')}"
         rows.append([name, shown, str(r.get("pid") or ""), note.strip(" ·")])
     out.table(rows, headers=["role", "state", "pid", ""])
+    for line in _groups_lines(snap):
+        out.hint(line)
+    waiting = {k: v for k, v in (snap.get("waiting") or {}).items() if v}
+    if waiting:
+        out.hint(
+            "  waiting: "
+            + ", ".join(f"{n} for {role}" for role, n in sorted(waiting.items()))
+        )
     out.hint(f"  logs: {up.logs_dir(data_dir)}")
     return 0
 
@@ -99,6 +121,23 @@ def up(a: Any) -> int:
                 f"{a.start} did not start", "prax up --status; is it a role of run:?"
             )
             return 1
+        if getattr(a, "swap", None):
+            if not up.swap(data_dir, a.swap):
+                out.fail("prax up is not running", "prax up -d starts it")
+                return 1
+            out.say(f"asked prax up for the card for {a.swap}")
+            out.hint(
+                "  prax up --status shows who holds it; it goes back when"
+                " nothing waits. A worker that just met a server that was"
+                " down may hold its request for up to ten minutes"
+            )
+            return 0
+        if getattr(a, "unswap", None):
+            if not up.unswap(data_dir, a.unswap):
+                out.fail("prax up is not running", "prax up -d starts it")
+                return 1
+            out.say("asked prax up to give it back")
+            return 0
         if a.restart:
             if not up.restart(data_dir, a.restart):
                 out.fail("prax up is not running", "prax up -d starts it")

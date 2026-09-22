@@ -113,3 +113,33 @@ test("askInterior, askBlockMarkers and nextAskId: the block as shown, and as wri
   assert.equal(lib.nextAskId(""), "q1");
   assert.equal(lib.nextAskId(block + '\n<!-- prax:ask id=q2 "x" -->'), "q3");
 });
+
+test("upPanel: the group's holder, what waits, and the buttons offered", () => {
+  const swapped = lib.upPanel({
+    up: { roles: { "llama-server": { state: "paused" }, marker: { state: "up" }, door: { state: "up" } },
+          groups: { card: { holder: "marker", was_up: ["llama-server"], back_when: "idle", fits: false, members: ["llama-server", "marker"] } } },
+    demand: { roles: { "llama-server": 4, marker: 1 } },
+    gpu: [{ name: "RTX 4090", free_mb: 18000, total_mb: 24564 }],
+  });
+  assert.match(swapped, /marker<\/span> has it instead of llama-server/);
+  assert.match(swapped, /back when nothing waits/);
+  assert.match(swapped, /llama-server: paused · 4 waiting/);
+  assert.match(swapped, /17\.6 GB free of 24\.0 GB/);
+  assert.match(swapped, /class="secondary up-swap" data-to="llama-server">give it to llama-server \(4 waiting\)/);
+  assert.match(swapped, /up-unswap" data-group="card">back to llama-server/);
+  assert.doesNotMatch(swapped, /data-to="marker"/);  // it already holds it
+  assert.match(swapped, /door: up/);  // a role in no group is listed, not offered
+  // nothing on loan: the members and their states, no unswap
+  const shared = lib.upPanel({
+    up: { roles: { "llama-server": { state: "up" }, marker: { state: "paused" } },
+          groups: {} },
+    demand: { roles: {} }, gpu: [],
+  });
+  assert.match(shared, /No role shares a resource/);
+  assert.doesNotMatch(shared, /up-unswap/);
+  // no supervisor on the host: no panel at all
+  assert.equal(lib.upPanel(null), "");
+  assert.equal(lib.upPanel({ up: null }), "");
+  assert.equal(lib.mb(null), "?");
+  assert.equal(lib.mb(512), "512 MB");
+});

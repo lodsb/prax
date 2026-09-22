@@ -636,3 +636,42 @@ def test_a_body_over_the_cap_is_refused(
         "/ingest/file", files={"file": ("ok.txt", b"fine " * 100, "text/plain")}
     )
     assert small.status_code == 200
+
+
+def test_the_door_reports_what_waits_and_writes_a_swap(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """GET /work/demand says what waits per extractor and per role of
+    prax up; POST /up/command writes the supervisor's command file and
+    lets the deferred readings of that role go. Without a supervisor
+    running here, the command is refused."""
+    import json
+    import os
+
+    from prax import config, up, work
+
+    pdf = client.post(
+        "/ingest/file",
+        files={"file": ("scan.pdf", b"%PDF-1.4 fake", "application/pdf")},
+    ).json()
+    client.post(f"/doc/{pdf['doc_id']}/reading", json={"extractor": "marker"})
+    demand = client.get("/work/demand").json()
+    assert demand["readings"] == {"marker": 1}
+    assert demand["roles"]["marker"] == 1 and demand["roles"]["llama-server"] == 0
+    # no supervisor on this host: the door says so rather than pretending
+    assert (
+        client.post("/up/command", json={"cmd": "swap", "to": "marker"}).status_code
+        == 409
+    )
+    assert client.post("/up/command", json={"cmd": "fly"}).status_code == 400
+    # with one running (its pid file is the proof), the command is written
+    run = up.run_dir(config.data_dir())
+    run.mkdir(parents=True, exist_ok=True)
+    (run / up.PIDFILE).write_text(f"{os.getpid()} now\n", encoding="utf-8")
+    work._lease("parse", [pdf["doc_id"]], "someone", seconds=600)  # a "not yet"
+    r = client.post("/up/command", json={"cmd": "swap", "to": "marker"})
+    assert r.status_code == 200 and r.json()["role"] == "marker"
+    assert r.json()["released"] == 1  # the held request is offered again
+    queued = [json.loads(f.read_text()) for f in (run / up.COMMANDS).glob("*.json")]
+    assert {"cmd": "swap", "to": "marker", "back_when": "idle"} in queued
+    assert client.post("/up/command", json={"cmd": "swap"}).status_code == 400

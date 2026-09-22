@@ -483,6 +483,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     what.add_argument("--restart", metavar="ROLE", help="restart one role, or all")
     what.add_argument(
+        "--swap",
+        metavar="ROLE",
+        help=(
+            "give this role the card its group shares: what holds it stops"
+            " unless both fit, and it comes back when nothing waits"
+        ),
+    )
+    what.add_argument(
+        "--unswap",
+        nargs="?",
+        const="all",
+        metavar="GROUP",
+        help="give a borrowed resource back now (default: every group)",
+    )
+    what.add_argument(
         "--install", action="store_true", help="start prax up when you log in"
     )
     what.add_argument("--uninstall", action="store_true", help="remove that entry")

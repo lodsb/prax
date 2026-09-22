@@ -50,6 +50,8 @@ The ones added for browsing, each a thin wrapper over a store function:
 | `GET /heal?check&examples`, `POST /heal` | the recurring damage in the store and its repair: placeholder entities, mangled names, self-edges, stale jobs, stale parses (howto 3m) |
 | `GET /models/servers` | the `openai` model servers of `prax.yaml`, one entry per server: reachable, alias, model file, slots, vision, and the load from `/metrics` when the server exposes it (tokens per second, busy slots, requests running and waiting, prompt tokens total and cached) |
 | `GET /changes`, `GET /jobs?limit` | the change stamp and running-job count the UI polls; the running and recent batch jobs with heartbeat, progress and note |
+| `GET /work/demand` | what waits for a role that has to be running to do it: the reading requests per extractor, and per role of `prax up` (`prax.work.ROLE_WORK`). The supervisor asks this to know when a borrowed card can go back |
+| `GET /up`, `POST /up/command {cmd, name \| to, group, back_when}` | what `prax up` runs on the door's host, its groups, the cards and what waits; and a role change asked of it — `start`, `stop`, `restart`, `swap`, `unswap`. The door writes the command file the tray and the CLI write, and answers 409 when no supervisor runs there |
 | `POST /vectors/release` | drop the door's index views, so a batch job on the same machine can replace the files |
 | `GET /doc/{id}/context?limit` | what places a document in the library: extraction summary and entities, citations in and out (library documents resolved), the nearest documents by vector (the centroid of the document's chunk vectors, one KNN), documents sharing its entities or authors, Zotero parent, siblings, collections and tags |
 
@@ -307,6 +309,15 @@ servers `prax.yaml` names (`GET /models/servers`): reachable or not,
 model file, slots, whether it sees images, and, when started with
 `--metrics`, requests running and waiting, tokens per second, tokens
 read and the share the prompt cache served.
+
+Under them is this host (`GET /up`): what `prax up` runs, and the
+groups of roles that share a card (`docs/howto.md` 4b). A group says
+who holds it, what waits for the roles that are down (`GET
+/work/demand`), the cards' free memory, and a button that hands it
+over (`POST /up/command`, which writes the supervisor's command file).
+A swap comes back on its own when nothing waits for the borrower. On a
+host without `prax up`, or one whose roles share nothing, the panel
+says so.
 
 At the foot is Health: what every ailment of `prax heal` finds right
 now (`GET /heal`). The check reads every chunk, so the page is drawn

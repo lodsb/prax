@@ -51,12 +51,13 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from prax import config, models
+from prax import config, hostinfo, models
 
 # the start order; the stop order is the reverse. A reranker is a second
 # llama-server with a cross-encoder (serve: {reranker: true} on its model);
 # marker is marker's own server, the PDF-to-LaTeX reading (howto 3h)
 ROLES = ("llama-server", "reranker", "marker", "door", "worker")
+MARKER_VRAM_MB = 5000  # what marker's models want of the card (howto 3h)
 MARKER_PORT = 8765
 KEEP_LOGS = 10
 BACKOFF = (1, 2, 4, 8, 16, 32, 60)  # seconds before a restart, per failure in a row
@@ -82,11 +83,14 @@ SERVE_KEYS = (
     "reranker",  # a cross-encoder server instead of a chat one
     "extra",  # more llama-server arguments, as a list
 )
+# every role may say which resource it competes for and what it needs of
+# it; the supervisor keeps one holder of a group when they do not fit
+GROUP_KEYS = ("group", "needs_vram_mb", "swap")
 ROLE_KEYS = {
-    "llama-server": ("model",),
-    "reranker": ("model",),
-    "marker": ("venv", "port", "ngl", "on_demand"),
-    "door": ("host", "port", "ssl_certfile", "ssl_keyfile"),
+    "llama-server": ("model", *GROUP_KEYS),
+    "reranker": ("model", *GROUP_KEYS),
+    "marker": ("venv", "port", "ngl", "on_demand", *GROUP_KEYS),
+    "door": ("host", "port", "ssl_certfile", "ssl_keyfile", *GROUP_KEYS),
     "worker": (
         "door",
         "interval",
@@ -97,8 +101,13 @@ ROLE_KEYS = {
         "nightly",
         "nightly_limit",
         "spend",
+        *GROUP_KEYS,
     ),
 }
+SWAP_WHEN = ("ask", "auto")  # who starts a swap: a person, or the supervisor
+BACK_WHEN = ("idle", "never")  # when the group goes back to what held it
+GROUP_QUIET = 90.0  # seconds of no work for the borrower before it goes back
+DEMAND_SECONDS = 20.0  # how often the supervisor asks the door what waits
 
 
 def _s(items: list[Any]) -> str:
@@ -119,6 +128,11 @@ class Role:
     env: dict[str, str] = field(default_factory=dict)
     on_demand: bool = False  # declared, started only by `prax up --start`
     scratch: bool = False  # runs in the data directory's run/: it writes where it is
+    # the resource this role competes for (``group: card``), what it needs
+    # of it, and whether the supervisor may take it on its own (``swap``)
+    group: str | None = None
+    needs_vram_mb: int | None = None
+    swap: str = "ask"
 
 
 # ------------------------------------------------------------- the model
@@ -274,6 +288,10 @@ def marker_role(opts: dict[str, Any]) -> Role:
             " uvicorn python-multipart there)"
         )
     port = int(opts.get("port", MARKER_PORT))
+    # what marker's own models want of the card when they are on it
+    needs = opts.get("needs_vram_mb")
+    if needs is None and int(opts.get("ngl", 99)) > 0:
+        needs = MARKER_VRAM_MB
     env = {
         "SURYA_INFERENCE_BACKEND": "llamacpp",
         "LLAMA_CPP_BINARY": llama_binary(),
@@ -287,7 +305,28 @@ def marker_role(opts: dict[str, Any]) -> Role:
         env=env,
         on_demand=bool(opts.get("on_demand", False)),
         scratch=True,  # its server keeps the last upload as ./uploads/document.pdf
+        group=str(opts["group"]) if opts.get("group") else None,
+        needs_vram_mb=int(needs) if needs else None,
+        swap=_swap_setting(opts),
     )
+
+
+def _swap_setting(opts: dict[str, Any]) -> str:
+    """``swap: ask`` (a person asks for the resource; the default) or
+    ``auto`` (the supervisor takes it when work waits for this role)."""
+    value = str(opts.get("swap", "ask")).strip().lower()
+    if value not in SWAP_WHEN:
+        raise UpError(f"swap: must be one of {', '.join(SWAP_WHEN)}, not {value!r}")
+    return value
+
+
+def _grouped(role: Role, opts: dict[str, Any]) -> Role:
+    """A role with its group settings read off ``run:``."""
+    role.group = str(opts["group"]) if opts.get("group") else None
+    if opts.get("needs_vram_mb"):
+        role.needs_vram_mb = int(opts["needs_vram_mb"])
+    role.swap = _swap_setting(opts)
+    return role
 
 
 def _health_of(base_url: str) -> str:
@@ -344,14 +383,16 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
                 raise UpError(
                     f"run.reranker: {model!r} is not a reranker (serve: reranker: true)"
                 )
-            out.append(
-                Role(
-                    name,
-                    llama_argv(spec),
-                    health=_health_of(spec.base_url or ""),
-                    patience=SERVER_PATIENCE,
-                )
+            served = Role(
+                name,
+                llama_argv(spec),
+                health=_health_of(spec.base_url or ""),
+                patience=SERVER_PATIENCE,
             )
+            with contextlib.suppress(OSError):  # the model file is what it maps
+                size = model_path(spec).stat().st_size
+                served.needs_vram_mb = max(1, int(size / (1 << 20)))
+            out.append(_grouped(served, opts))
         elif name == "marker":
             out.append(marker_role(opts))
         elif name == "door":
@@ -369,7 +410,7 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
                     "--ssl-keyfile",
                     str(opts.get("ssl_keyfile", "")),
                 ]
-            out.append(Role(name, argv, health=f"{door_url}/health"))
+            out.append(_grouped(Role(name, argv, health=f"{door_url}/health"), opts))
         elif name == "worker":
             target = str(opts.get("door") or door_url or "http://127.0.0.1:8000")
             argv = prax_command(
@@ -399,7 +440,9 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
             if opts.get("spend"):
                 argv.append("--spend")  # the paid steps run: money is spent
             after = "door" if ("door" in raw and not opts.get("door")) else None
-            out.append(Role(name, argv, after=after, env={"PRAX_DOOR": target}))
+            out.append(
+                _grouped(Role(name, argv, after=after, env={"PRAX_DOOR": target}), opts)
+            )
     return out
 
 
@@ -559,6 +602,24 @@ def stop(data_dir: Path, *, wait: float = 45.0, name: str | None = None) -> bool
             return True
         time.sleep(0.2)
     return False
+
+
+def swap(data_dir: Path, to: str, *, back_when: str = "idle") -> bool:
+    """Ask the supervisor for the group's resource for ``to`` (the card
+    for marker, say): what holds it stops unless both fit, and it goes
+    back when the door says nothing waits for the borrower."""
+    if running_pid(data_dir) is None:
+        return False
+    command(data_dir, {"cmd": "swap", "to": to, "back_when": back_when})
+    return True
+
+
+def unswap(data_dir: Path, group: str = "all") -> bool:
+    """Give a group's resource back now, whatever the borrower still has."""
+    if running_pid(data_dir) is None:
+        return False
+    command(data_dir, {"cmd": "unswap", "group": group})
+    return True
 
 
 def restart(data_dir: Path, name: str) -> bool:
@@ -753,6 +814,11 @@ class Supervisor:
         }
         self.restart_now: set[str] = set()
         self.paused: set[str] = set()  # roles told to stop until told to start
+        # a group's resource on loan: who has it, who had it, when it goes
+        # back (``_groups``). Empty until a swap is asked for
+        self.groups: dict[str, dict[str, Any]] = {}
+        self.demand: dict[str, Any] = {}  # what the door says waits, per role
+        self._demand_at = 0.0
         self.started = _now()
         self.jobs: dict[str, _JobObject] = {}  # Windows: one per role, its tree
         self.paused.update(r.name for r in roles_ if r.on_demand)
@@ -779,6 +845,14 @@ class Supervisor:
                 "updated": _now(),
                 "data_dir": str(self.data_dir),
                 "roles": {r.name: dict(self.state[r.name]) for r in self.roles},
+                "groups": {
+                    name: {
+                        **{k: v for k, v in g.items() if k != "quiet_since"},
+                        "members": [r.name for r in self.roles if r.group == name],
+                    }
+                    for name, g in self.groups.items()
+                },
+                "waiting": dict(self.demand),
             }
         path = self.run_dir / STATUS
         tmp = path.with_suffix(".tmp")
@@ -958,6 +1032,16 @@ class Supervisor:
                     self.paused.discard(one)
                 else:
                     self._say(f"{one}: not stopped")
+        elif cmd == "swap":
+            self._swap(str(what.get("to") or ""), str(what.get("back_when") or "idle"))
+        elif cmd == "unswap":
+            groups = (
+                list(self.groups)
+                if what.get("group") in (None, "", "all")
+                else [str(what["group"])]
+            )
+            for group in groups:
+                self._unswap(group, "asked for")
         elif cmd == "restart":
             names = (
                 [r.name for r in self.roles]
@@ -973,6 +1057,130 @@ class Supervisor:
                 proc = self.procs.get(name)
                 if proc is not None and proc.poll() is None:
                     self._end(name, proc)
+
+    # -- the groups: roles that compete for one resource (the card)
+
+    def _members(self, group: str) -> list[Role]:
+        return [r for r in self.roles if r.group == group]
+
+    def _fits(self, role: Role) -> bool:
+        """Whether the role can have what it needs of the card beside what
+        is on it now. Without a number for either, no: the swap is what
+        the group is for, and a wrong yes wedges two servers on one card."""
+        want = role.needs_vram_mb
+        free = hostinfo.vram_free_mb()
+        return bool(want and free is not None and free >= want)
+
+    def _swap(self, to: str, back_when: str = "idle") -> None:
+        """Give the group's resource to ``to``: the members that hold it
+        stop (unless it fits beside them), and go back when the door says
+        no work is left for the borrower (``idle``) or never."""
+        role = next((r for r in self.roles if r.name == to), None)
+        if role is None or not role.group:
+            self._say(f"{to}: not a role of a group (run.{to}.group)")
+            return
+        if back_when not in BACK_WHEN:
+            self._say(f"swap: back_when must be one of {', '.join(BACK_WHEN)}")
+            return
+        group = role.group
+        members = self._members(group)
+        was_up = [r.name for r in members if r.name != to and r.name not in self.paused]
+        fits = self._fits(role)
+        if not fits:
+            for name in was_up:
+                self.paused.add(name)
+                proc = self.procs.get(name)
+                if proc is not None and proc.poll() is None:
+                    self._end(name, proc)
+        self.groups[group] = {
+            "holder": to,
+            "was_up": was_up,
+            "back_when": back_when,
+            "since": _now(),
+            "fits": fits,
+            "quiet_since": None,
+        }
+        self.paused.discard(to)
+        self.restart_now.discard(to)
+        how = "beside" if fits else "instead of"
+        others = ", ".join(was_up) or "nothing"
+        self._say(f"{group}: {to} takes it {how} {others} (back when {back_when})")
+        self._write_status()
+
+    def _unswap(self, group: str, why: str) -> None:
+        """The group's resource back to what held it: the borrower stops
+        if it was not up before, and the others start again."""
+        loan = self.groups.pop(group, None)
+        if loan is None:
+            return
+        holder = str(loan["holder"])
+        role = next((r for r in self.roles if r.name == holder), None)
+        if role is not None and (role.on_demand or holder not in loan["was_up"]):
+            self.paused.add(holder)
+            proc = self.procs.get(holder)
+            if proc is not None and proc.poll() is None:
+                self._end(holder, proc)
+        for name in loan["was_up"]:
+            self.paused.discard(name)
+        back = ", ".join(loan["was_up"]) or "nothing"
+        self._say(f"{group}: {holder} gives it back to {back} ({why})")
+        self._write_status()
+
+    def _door_url(self) -> str | None:
+        role = next((r for r in self.roles if r.name == "door"), None)
+        if role is None or not role.health:
+            return None
+        return role.health.rsplit("/health", 1)[0]
+
+    def _ask_demand(self) -> None:
+        """What the door says waits, per role (``GET /work/demand``): one
+        ask every ``DEMAND_SECONDS``. A door that is down or refuses says
+        nothing, and a group on loan then falls back to its quiet time."""
+        now = time.monotonic()
+        if now - self._demand_at < DEMAND_SECONDS:
+            return
+        self._demand_at = now
+        url = self._door_url()
+        if not url:
+            return
+        token = environment(self.data_dir).get("PRAX_TOKEN", "")
+        req = urllib.request.Request(f"{url}/work/demand")
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            with urllib.request.urlopen(req, timeout=5) as r:
+                self.demand = json.loads(r.read().decode("utf-8")).get("roles", {})
+        except (urllib.error.URLError, OSError, ValueError):
+            self.demand = {}
+
+    def _groups(self) -> None:
+        """Every tick: a group whose borrower has nothing left to do gives
+        the resource back, and a paused role with ``swap: auto`` takes it
+        when work waits for it."""
+        if not any(r.group for r in self.roles):
+            return
+        self._ask_demand()
+        for group, loan in list(self.groups.items()):
+            if loan["back_when"] != "idle":
+                continue
+            waiting = int(self.demand.get(str(loan["holder"]), 0) or 0)
+            if waiting:
+                loan["quiet_since"] = None
+                continue
+            since = loan["quiet_since"]
+            if since is None:
+                loan["quiet_since"] = time.monotonic()
+            elif time.monotonic() - since >= GROUP_QUIET:
+                self._unswap(group, "nothing left waiting")
+        for role in self.roles:
+            if (
+                role.group
+                and role.swap == "auto"
+                and role.name in self.paused
+                and role.group not in self.groups
+                and int(self.demand.get(role.name, 0) or 0) > 0
+            ):
+                self._swap(role.name, "idle")
 
     def _end(self, name: str, proc: subprocess.Popen[bytes]) -> None:
         """End a role's process and whatever it started: the job on
@@ -1035,6 +1243,7 @@ class Supervisor:
             ticks = 0
             while not self.stopping.is_set():
                 self._control()
+                self._groups()
                 ticks += 1
                 if ticks % 10 == 0:  # a heartbeat; every change writes it anyway
                     self._write_status()

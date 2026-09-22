@@ -81,6 +81,15 @@ def work_beat(job_id: int, req: SessionBeat, request: Request) -> dict[str, Any]
     return {"ok": True, "renewed": renewed}
 
 
+@router.get("/work/demand")
+def work_demand(request: Request) -> dict[str, Any]:
+    """What waits for a role that has to be running to do it (``prax.work``
+    ``ROLE_WORK``): the reading requests per extractor and per role. The
+    supervisor asks this to know when a borrowed card can go back, and
+    the Jobs view shows it beside the roles."""
+    return work.demand(_con(request))
+
+
 @router.get("/work/{step}")
 def work_out(
     step: str, request: Request, limit: int = 10, scope: str = "captures"
@@ -430,6 +439,60 @@ def stats(request: Request) -> dict[str, Any]:
     """What the store holds: documents, chunks, vectors, the graph, the
     review queue, the ontology (`prax status`)."""
     return store.stats(_con(request))
+
+
+@router.get("/up")
+def up_state(request: Request) -> dict[str, Any]:
+    """What ``prax up`` is running on this host, what each group's
+    resource is doing, what waits for the roles that are down, and the
+    cards' memory: everything the Jobs view needs to offer a swap."""
+    from prax import config, hostinfo, up
+
+    state = up.status(config.data_dir())
+    return {
+        "up": state,
+        "demand": work.demand(_con(request)),
+        "gpu": hostinfo.gpu(),
+        "memory": hostinfo.memory(),
+    }
+
+
+class UpCommand(BaseModel):
+    cmd: str  # start, stop, restart, swap, unswap
+    name: str | None = None  # the role, for start/stop/restart
+    to: str | None = None  # the role that takes the resource, for swap
+    group: str | None = None  # for unswap
+    back_when: str = "idle"
+
+
+@router.post("/up/command")
+def up_command(req: UpCommand, request: Request) -> dict[str, Any]:
+    """Ask the supervisor on this host for a role change: the same
+    commands ``prax up`` and the tray write, from the UI. The door does
+    not supervise anything; it writes the command file and says whether
+    a supervisor is there to read it. A swap also lets the deferred
+    readings of that role go, so the worker offers them at once instead
+    of waiting out its ten minutes."""
+    from prax import config, up
+
+    if req.cmd not in ("start", "stop", "restart", "swap", "unswap"):
+        raise HTTPException(400, "cmd must be start, stop, restart, swap or unswap")
+    data_dir = config.data_dir()
+    if up.running_pid(data_dir) is None:
+        raise HTTPException(409, "prax up is not running on this host")
+    role = req.to if req.cmd == "swap" else req.name
+    if req.cmd in ("start", "stop", "restart", "swap") and not role:
+        raise HTTPException(400, f"{req.cmd}: which role?")
+    if req.cmd == "swap":
+        up.swap(data_dir, str(role), back_when=req.back_when)
+        released = work.release_deferred("parse")
+    elif req.cmd == "unswap":
+        up.unswap(data_dir, req.group or "all")
+        released = 0
+    else:
+        up.command(data_dir, {"cmd": req.cmd, "name": role})
+        released = work.release_deferred("parse") if req.cmd != "stop" else 0
+    return {"asked": req.cmd, "role": role, "released": released}
 
 
 @router.get("/jobs")

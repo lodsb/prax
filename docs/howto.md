@@ -1038,6 +1038,14 @@ CPU. The library's 250,000 pages are still days, but the papers whose
 formulas matter are an evening:
 
     prax reread --extractor marker --maths 6 --mime application/pdf --dry-run   # the mathematical papers: how many
+    prax reread --extractor marker --maths 6 --mime application/pdf           # the requests placed
+    prax up --swap marker                # the card changes hands, and comes back when they are read
+
+With the two roles in one group (4b) that is the whole evening: the
+supervisor stops llama-server, starts marker, and puts them back the
+other way round when the door says no marker request is left. The long
+way, without a group, is still there:
+
     prax up --stop llama-server          # the card free
     prax up --start marker               # ten seconds, then a minute for its first request
     prax reread --extractor marker --maths 6 --mime application/pdf --wait --timeout 420   # or --ids 9549 9813 …
@@ -2016,6 +2024,48 @@ there.
 | `marker` | marker's server from its own venv, the PDF-to-LaTeX reading (3h). `on_demand: true` declares it without starting it | — |
 | `door` | `prax serve --host … --port …` (`ssl_certfile`, `ssl_keyfile` for HTTPS) | — |
 | `worker` | `prax work --watch`, with `--nightly` for one bounded pass over everything a day | the door, unless `door:` names one elsewhere |
+
+### Roles that share a card
+
+Two roles can want the same card. On a 24 GB one a 20 GB model and
+marker's 5 GB of layout models do not both fit, and until now that was
+an evening of six commands (3h). `group:` says they compete:
+
+    run:
+      llama-server: {model: server-35b, group: card}
+      marker: {venv: …, on_demand: true, group: card}
+
+    prax up --swap marker      # the card to marker; back when nothing waits for it
+    prax up --unswap           # back now, whatever is left
+    prax up --status           # who holds it, and what waits for whom
+
+What the supervisor does with that: it reads the cards
+(`nvidia-smi`, `prax.hostinfo.gpu`) and what each role needs — a
+served model needs what its file takes, marker 5 GB unless `ngl: 0`
+puts it on the CPU, `needs_vram_mb:` says otherwise. When the borrower
+fits beside what is there, nothing is stopped and both run. When it
+does not, the holders stop, the borrower starts, and the group goes
+back when the door reports no work left for the borrower
+(`GET /work/demand`, the reading requests nobody has taken) and stays
+quiet for ninety seconds. `back_when: never` (the `--swap` of the UI
+offers it) leaves it until asked.
+
+`swap: auto` on a role lets the supervisor take the card for it by
+itself when work for it waits:
+
+      marker: {venv: …, on_demand: true, group: card, swap: auto}
+
+The default is `ask`: nothing moves unless a person asks, from the
+command line, the tray, or the Jobs view. That view shows each group,
+who holds it, what waits for the roles that are down, and a button to
+hand it over. The door writes the supervisor's command file for that
+(`POST /up/command`); it supervises nothing itself, and says so when
+no `prax up` runs on its host. A swap also releases the readings a
+worker had set aside because the server they need was down, so the
+next pass offers them at once instead of waiting out its ten minutes.
+
+Nothing here is required: a host whose roles fit together declares no
+group, and the supervisor never stops anything on its own.
 
 `prax up` starts the roles in that order behind real health gates. The
 worker starts once the door answers `/health`. A model server shows

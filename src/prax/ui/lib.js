@@ -161,6 +161,55 @@ function nextAskId(text) {
   return `q${n}`;
 }
 
+// What `prax up` runs on this host, and the card the roles share. A
+// group is the roles that compete for one resource (run: group: card);
+// one holds it, and a person can hand it to another — marker wants the
+// card for a scan's pages, llama-server wants it for everything else.
+// The door writes the supervisor's command file (POST /up/command); it
+// does not supervise anything, so a host without `prax up` shows nothing.
+function mb(n) {
+  return n == null ? "?" : n >= 1024 ? `${(n / 1024).toFixed(1)} GB` : `${Math.round(n)} MB`;
+}
+function upPanel(u) {
+  const s = u && u.up;
+  if (!s) return "";
+  const roles = s.roles || {};
+  const groups = s.groups || {};
+  const demand = (u.demand && u.demand.roles) || {};
+  const card = (u.gpu || []).map((c) => `${esc(c.name)} ${mb(c.free_mb)} free of ${mb(c.total_mb)}`).join(" · ");
+  const grouped = new Set();
+  for (const g of Object.values(groups)) (g.members || []).forEach((m) => grouped.add(m));
+  const lines = Object.entries(groups).map(([name, g]) => {
+    const members = g.members || [];
+    const holder = g.holder;
+    const others = (g.was_up || []).join(", ") || "nothing";
+    const back = g.back_when === "idle" ? "when nothing waits for it" : "when you say so";
+    const waiting = members.filter((m) => m !== holder && (demand[m] || 0) > 0)
+      .map((m) => `${demand[m]} for ${esc(m)}`).join(", ");
+    return `<div class="up-group">
+      <div><strong>${esc(name)}</strong> ${holder
+        ? `— <span class="up-holder">${esc(holder)}</span> has it ${g.fits ? "beside" : "instead of"} ${esc(others)}, back ${back}`
+        : "— shared"}</div>
+      <div class="up-line muted">${members.map((m) => {
+        const st = (roles[m] || {}).state || "?";
+        const n = demand[m] || 0;
+        return `${esc(m)}: ${esc(st)}${n ? ` · ${n} waiting` : ""}`;
+      }).join(" · ")}${card ? ` · ${card}` : ""}</div>
+      <div class="up-acts">${members.map((m) => (roles[m] || {}).state === "up" || m === holder
+        ? ""
+        : `<button type="button" class="secondary up-swap" data-to="${esc(m)}">give it to ${esc(m)}${(demand[m] || 0) ? ` (${demand[m]} waiting)` : ""}</button>`).join("")}
+        ${holder ? `<button type="button" class="secondary up-unswap" data-group="${esc(name)}">back to ${esc(others)}</button>` : ""}</div>
+    </div>`;
+  });
+  const loose = Object.entries(roles).filter(([n]) => !grouped.has(n))
+    .map(([n, r]) => `${esc(n)}: ${esc(r.state || "?")}`).join(" · ");
+  return `<section class="up-panel">
+    <h2 style="font-size:1rem;margin:1rem 0 .3rem">This host (prax up)</h2>
+    ${lines.join("") || `<p class="muted">No role shares a resource with another (run: group:).</p>`}
+    ${loose ? `<p class="muted up-line">${loose}</p>` : ""}
+    <p id="up-msg" class="muted"></p>
+  </section>`;
+}
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb };
 }

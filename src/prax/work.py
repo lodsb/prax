@@ -50,6 +50,12 @@ LEASE_SECONDS = 900
 # the same ten items again — the follow-ups of the first papers marker
 # read once starved the 228 behind them
 DEFER_SECONDS = 600
+# which role of ``prax up`` a reading waits for: what the door reports as
+# demand (``GET /work/demand``) so the supervisor can give it the card
+ROLE_WORK = {
+    "marker": ("marker",),
+    "llama-server": ("figures", "vision", "vision-pages", "formulas", "polish"),
+}
 STEPS = (
     "parse",
     "titles",
@@ -83,6 +89,38 @@ SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
 _leases: dict[tuple[str, int], tuple[str, float]] = {}
+
+
+def demand(con: Any) -> dict[str, Any]:
+    """What waits, per extractor and per role of ``prax up``: the reading
+    requests nobody has taken. A role with a count has work it cannot do
+    unless it is running, which is what a swap of the card is for. The
+    extraction backlog is left out on purpose: it is never empty, so it
+    would say "work waiting" for ever."""
+    from prax import store
+
+    readings = store.waiting_readings(con)
+    roles = {
+        role: sum(readings.get(x, 0) for x in extractors)
+        for role, extractors in ROLE_WORK.items()
+    }
+    return {"readings": readings, "roles": roles}
+
+
+def release_deferred(step: str, extractors: tuple[str, ...] = ()) -> int:
+    """Forget the "not yet" deferrals of a step, so the next hand-out
+    offers those items again: what the door does when the server they
+    waited for has just been given the card. Returns how many were
+    released."""
+    now = time.monotonic()
+    gone = [
+        key
+        for key, (_worker, until) in list(_leases.items())
+        if key[0] == step and until > now
+    ]
+    for key in gone:
+        _leases.pop(key, None)
+    return len(gone)
 
 
 def _free(step: str, item: int, now: float) -> bool:

@@ -388,3 +388,132 @@ def test_log_rotation_keeps_ten(data_dir: Path) -> None:
     rotated = sorted(logs.glob("door.20*.log"))
     assert len(rotated) == up.KEEP_LOGS
     assert (logs / "door.log").read_text() == "run 12\n"
+
+
+def _marker_venv(tmp_path: Path) -> Path:
+    """A venv with a marker_server binary in it, as the role wants."""
+    venv = tmp_path / "marker-venv"
+    exe = venv / ("Scripts" if up.sys.platform == "win32" else "bin")
+    exe.mkdir(parents=True, exist_ok=True)
+    name = "marker_server.exe" if up.sys.platform == "win32" else "marker_server"
+    (exe / name).write_bytes(b"MZ")
+    return venv
+
+
+def test_a_group_is_read_off_run(gpu_host: Path, tmp_path: Path) -> None:
+    """``group``, ``needs_vram_mb`` and ``swap`` come off ``run:``; a
+    served model needs what its file takes on the card; a bad ``swap``
+    is refused."""
+    roles = up.roles(
+        {
+            "llama-server": {"model": "big", "group": "card"},
+            "marker": {
+                "venv": str(_marker_venv(tmp_path)),
+                "group": "card",
+                "on_demand": True,
+                "swap": "auto",
+            },
+            "door": {"port": 8000},
+        }
+    )
+    by = {r.name: r for r in roles}
+    assert by["llama-server"].group == "card" and by["marker"].group == "card"
+    assert by["door"].group is None
+    assert by["llama-server"].needs_vram_mb and by["llama-server"].needs_vram_mb > 0
+    assert by["marker"].needs_vram_mb == up.MARKER_VRAM_MB
+    assert by["marker"].swap == "auto" and by["llama-server"].swap == "ask"
+    # on the CPU, marker wants nothing of the card
+    cpu = up.roles(
+        {"marker": {"venv": str(_marker_venv(tmp_path)), "ngl": 0, "group": "card"}}
+    )
+    assert cpu[0].needs_vram_mb is None
+    with pytest.raises(up.UpError, match="swap: must be one of"):
+        up.roles({"marker": {"venv": str(_marker_venv(tmp_path)), "swap": "sometimes"}})
+
+
+def test_a_swap_hands_the_card_over_and_takes_it_back(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The holder stops, the borrower starts, and the group goes back
+    when the door says nothing waits for the borrower."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark_a, argv_a = child(tmp_path, "holder", 60)
+    mark_b, argv_b = child(tmp_path, "borrower", 60)
+    holder = up.Role("llama-server", argv_a, group="card", needs_vram_mb=20000)
+    borrower = up.Role(
+        "marker", argv_b, group="card", needs_vram_mb=5000, on_demand=True
+    )
+    said: list[str] = []
+    sup = up.Supervisor(
+        [holder, borrower], data_dir=data_dir, say=said.append, tick=0.05
+    )
+    monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 100)  # they do not fit
+    waiting = {"marker": 1}
+    monkeypatch.setattr(
+        up.Supervisor, "_ask_demand", lambda self: setattr(self, "demand", waiting)
+    )
+    monkeypatch.setattr(up, "GROUP_QUIET", 0.0)
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    try:
+        wait_for(lambda: runs_of(mark_a) >= 1)
+        assert runs_of(mark_b) == 0  # on demand: not started with the rest
+        up.swap(data_dir, "marker")
+        wait_for(lambda: runs_of(mark_b) >= 1)
+        status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        group = status["groups"]["card"]
+        assert group["holder"] == "marker" and group["was_up"] == ["llama-server"]
+        assert group["fits"] is False
+        assert status["roles"]["llama-server"]["state"] in ("paused", "stopped", "down")
+        # nothing waits any more: the card goes back on its own
+        waiting.clear()
+        wait_for(lambda: runs_of(mark_a) >= 2)
+        status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        assert "card" not in status.get("groups", {})
+        assert any("gives it back" in line for line in said)
+    finally:
+        up.stop(data_dir, wait=20)
+        thread.join(timeout=10)
+
+
+def test_a_borrower_that_fits_runs_beside_the_holder(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A card with room for both is not a swap: nothing is stopped."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark_a, argv_a = child(tmp_path, "holder", 60)
+    mark_b, argv_b = child(tmp_path, "borrower", 60)
+    roles = [
+        up.Role("llama-server", argv_a, group="card", needs_vram_mb=2000),
+        up.Role("marker", argv_b, group="card", needs_vram_mb=5000, on_demand=True),
+    ]
+    sup = up.Supervisor(roles, data_dir=data_dir, say=lambda _line: None, tick=0.05)
+    monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 40000)  # room for both
+    monkeypatch.setattr(up.Supervisor, "_ask_demand", lambda self: None)
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    try:
+        wait_for(lambda: runs_of(mark_a) >= 1)
+        up.swap(data_dir, "marker", back_when="never")
+        wait_for(lambda: runs_of(mark_b) >= 1)
+        status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        group = status["groups"]["card"]
+        assert group["fits"] is True and group["was_up"] == ["llama-server"]
+        assert status["roles"]["llama-server"]["state"] == "up"  # never stopped
+        assert runs_of(mark_a) == 1  # and never restarted
+    finally:
+        up.stop(data_dir, wait=20)
+        thread.join(timeout=10)
+
+
+def test_swap_says_when_a_role_has_no_group(data_dir: Path, tmp_path: Path) -> None:
+    data_dir.mkdir(parents=True, exist_ok=True)
+    _mark, argv = child(tmp_path, "lonely", 60)
+    said: list[str] = []
+    sup = up.Supervisor(
+        [up.Role("door", argv)], data_dir=data_dir, say=said.append, tick=0.05
+    )
+    sup._swap("door")
+    assert any("not a role of a group" in line for line in said)
+    sup._swap("nobody")
+    assert sum("not a role of a group" in line for line in said) == 2
