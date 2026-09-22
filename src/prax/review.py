@@ -88,6 +88,31 @@ def replay(
 # stays in the queue for a person or a bigger ontology.
 
 RULES_PRODUCER = "typing-rules"
+# a relation name that is an attribute of one thing, not a relation
+# between two: "date 2004-03-06", "language German", "role tutor" (the
+# queue held 130 of these on 2026-09-22); dropped, whatever the names
+ATTRIBUTES = frozenset(
+    {
+        "date",
+        "year",
+        "language",
+        "document_type",
+        "type",
+        "format",
+        "has_content",
+        "content",
+        "has_grade",
+        "grade",
+        "domain",
+        "role",
+        "title",
+        "status",
+        "version",
+        "pages",
+        "length",
+        "duration",
+    }
+)
 _ORG = re.compile(
     r"\b(universit|institut|laborator|\blabs?\b|department|dept\.|faculty|school|"
     r"college|centre|center|foundation|fund\b|council|academy|gmbh|inc\.?\b|ltd|"
@@ -258,6 +283,8 @@ def decide_unmapped(
         return "drop", [], "placeholder-name"
     if rel in ("unknown", ""):  # related_to stays: the queue is its evidence
         return "drop", [], "no-relation"
+    if rel in ATTRIBUTES:
+        return "drop", [], "attribute-not-relation"
     is_self = bool(title) and src == title
     if rel in ("affiliation", "affiliated_with", "affiliated with"):
         # the document itself and an institution: written there
@@ -394,6 +421,12 @@ _MALFORMED = re.compile(
 )
 # (rel, src_type, dst_type) -> new relation, after the self-name retyping
 REMAP: dict[tuple[str, str, str], str] = {
+    # an affiliation read as a place is where the thing is (v8: a person
+    # can be located_in too); an organization "affiliated with" a paper
+    # is the paper's institution, said the other way round (flipped below)
+    ("affiliated_with", "organization", "place"): "located_in",
+    ("affiliated_with", "person", "place"): "located_in",
+    ("affiliated_with", "author", "place"): "located_in",
     ("affiliated_with", "paper", "organization"): "written_at",
     ("affiliated_with", "document", "organization"): "written_at",
     ("affiliated_with", "page", "organization"): "written_at",
@@ -556,6 +589,11 @@ def decide(
     check happens in ``apply_typing_rules``."""
     src, dst = item["src"], item["dst"]
     rel, st, dt = item["rel"], item["src_type"], item["dst_type"]
+    onto = ontology.current()
+    if onto.is_reversed(rel):  # "X publisher_of Y": Y published_by X
+        src, dst, st, dt = dst, src, dt, st
+    rel = onto.canonical_relation(rel)
+    aliased = rel != item["rel"]  # the model's name for a relation that exists
     if _MALFORMED.search(src) or _MALFORMED.search(dst):
         return "drop", [], "malformed-name"
     if _placeholder(src) or _placeholder(dst):
@@ -579,6 +617,36 @@ def decide(
             "link",
             [store.Edge(dst, "author", "affiliated_with", src, "organization")],
             "flip-affiliated_with",
+        )
+    if (
+        rel == "affiliated_with"
+        and st == "organization"
+        and dt in ("paper", "document")
+    ):
+        return (
+            "link",
+            [store.Edge(dst, dt, "written_at", src, "organization")],
+            "flip-affiliated_with->written_at",
+        )
+    if rel == "affiliated_with" and st == dt == "organization":
+        # one inside the other is part_of, either way round (v7's rule for
+        # untyped items); two peers are affiliated, which v8 admits
+        if _inside(src, dst):
+            return (
+                "link",
+                [store.Edge(src, "organization", "part_of", dst, "organization")],
+                "affiliation->part_of",
+            )
+        if _inside(dst, src):
+            return (
+                "link",
+                [store.Edge(dst, "organization", "part_of", src, "organization")],
+                "affiliation->part_of",
+            )
+        return (
+            "link",
+            [store.Edge(src, "organization", "affiliated_with", dst, "organization")],
+            "affiliation-between-organizations",
         )
     # the document under a wrong type: it is itself
     if title and src == title and st != own:
@@ -624,6 +692,8 @@ def decide(
         return "drop", [], f"drop-{rel}-{st}-{dt}"
     if rule == "self-name":
         return "link", [store.Edge(src, st, rel, dst, dt)], rule
+    if aliased:  # under its canonical name (and way round) as it stands
+        return "link", [store.Edge(src, st, rel, dst, dt)], f"alias-{item['rel']}"
     return "open", [], None
 
 

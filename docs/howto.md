@@ -122,9 +122,15 @@ review` (section 3f) before extracting anything new. The bump also
 re-selects every document for extraction. A document is extracted
 against the modules of its domain set (section 3e, "A document's
 domains"), so a new module re-selects only the documents without a set.
-The reasoning behind v2 is in `docs/ontology-v2.md`. The studio module
-(gear, manuals, datasheets, magazine articles) is in
-`docs/ontology-studio.md`.
+The reasoning behind v2 is in `docs/ontology-v2.md`, and each bump
+since has a note of its own. The latest is `docs/ontology-v8.md`:
+affiliation beyond persons, and reversed aliases such as `mentioned_in`
+for `mentions`, which the typing pass and the rules read the other way
+round. The studio module (gear, manuals, datasheets, magazine
+articles) is in `docs/ontology-studio.md`. A bump that only widens what
+the modules accept moves the extraction stamps in a migration instead
+of re-selecting every document (0018 did); one that renames or removes
+is a data migration too, and a re-read.
 
 ## 3a. Importing the Zotero library
 

@@ -434,7 +434,7 @@ def test_review_filters_bulk_and_replay(
     for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
         (onto_dir / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     research = (onto_dir / "research.yaml").read_text(encoding="utf-8")
-    research = research.replace("version: 7", "version: 99", 1).replace(
+    research = research.replace("version: 8", "version: 99", 1).replace(
         "    domain: [paper, page, project]\n    range: [paper]\n",
         "    domain: [paper, page, project]\n    range: [paper, tool]\n",
         1,

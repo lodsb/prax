@@ -101,7 +101,7 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core2+craft1+kitchen2+research7+studio4+workshop2`) is what
+   (`core3+craft1+kitchen2+research8+studio4+workshop2`) is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that

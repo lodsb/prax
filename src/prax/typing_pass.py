@@ -332,6 +332,10 @@ def _apply(
             store.resolve_review(con, it["id"], "dropped")
         return
     rel = b.onto.canonical_relation(it["rel"])
+    src, dst = it["src"], it["dst"]
+    flipped = b.onto.is_reversed(it["rel"])
+    if flipped:  # "X mentioned_in Y": Y mentions X
+        src, dst, st, dt = dst, src, dt, st
     # the rules' near-miss tables: a venue typed as an organization is a
     # venue, a "cited" tool is used, a "cited" person is mentioned
     st, dt = RETYPE.get((rel, st, dt), (st, dt))
@@ -344,9 +348,10 @@ def _apply(
         if commit:
             # the item keeps the types the model gave it: a typed misfit
             # for the rules and a later ontology, not asked again
-            store.retype_review(con, it["id"], st, dt)
+            # in the row's own orientation, which a reversed alias is not
+            store.retype_review(con, it["id"], *((dt, st) if flipped else (st, dt)))
         return
-    edge = store.Edge(it["src"], st, rel, it["dst"], dt)
+    edge = store.Edge(src, st, rel, dst, dt)
     rep.hit(f"{st} -{rel}-> {dt}")
     if len(rep.samples) < keep_samples:
         rep.samples.append(

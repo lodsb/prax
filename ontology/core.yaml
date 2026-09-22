@@ -15,8 +15,15 @@
 # and two relations the review queue asked for: `located_in`
 # (organization or event → place) and `published_by` (document →
 # organization, the publisher or issuing body).
+# core v3 (2026-09-22, docs/ontology-v8.md): affiliation is not only a
+# person's — an organization is affiliated with a network, a parent body
+# or a movement, and a person with a school of thought — so
+# `affiliated_with` takes organizations on the left and concepts on the
+# right; `located_in` takes a person ("based in Berlin"); and the
+# relations the models keep saying the other way round are aliases that
+# flip (`has_part`, `publisher_of`).
 module: core
-version: 2
+version: 3
 
 entity_types:
   person:
@@ -58,9 +65,14 @@ entity_types:
 
 relation_types:
   affiliated_with:
-    domain: [person]
-    range: [organization]
-    description: the person's institution as stated in the document
+    domain: [person, organization]
+    range: [organization, concept]
+    description: >-
+      the person's institution as stated in the document; an
+      organization's network, parent body or movement (a lab in a
+      consortium, a label under a group, a studio of a school); a person
+      or organization's school of thought or movement, as a concept.
+      When one organization is inside the other, part_of is the relation
   developed_by:
     domain: [tool]
     range: [organization, person]
@@ -89,11 +101,11 @@ relation_types:
       organization within a larger one (a lab or department in a
       university, a subsidiary in a group)
   located_in:
-    domain: [organization, event]
+    domain: [organization, event, person]
     range: [place]
     description: >-
-      where an organization is based or an event was held, as the text
-      states it (a city, a country)
+      where an organization is based, an event was held or a person is
+      based, as the text states it (a city, a country)
 
 type_aliases:
   institution: organization
@@ -118,3 +130,7 @@ relation_aliases:
   created_by: developed_by
   built_by: developed_by
   made_by: developed_by
+  member_of: affiliated_with
+  publisher_of: {to: published_by, reversed: true}
+  has_part: {to: part_of, reversed: true}
+  contains: {to: part_of, reversed: true}

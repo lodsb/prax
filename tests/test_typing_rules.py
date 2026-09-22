@@ -420,3 +420,67 @@ def test_v7_relations_for_untyped_items() -> None:
         )[0]
         == "open"
     )
+
+
+def test_v8_rules_for_affiliation_and_attributes() -> None:
+    doc = ("A Manual", "paper")
+    item = lambda src, st, rel, dst, dt: {
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+    }
+    # two peer organizations stay affiliated (v8 admits it)
+    a, edges, rule = review.decide(
+        item("Citron GmbH", "organization", "affiliated_with", "TTHA", "organization"),
+        doc,
+    )
+    assert a == "link" and rule == "affiliation-between-organizations"
+    assert edges[0].rel == "affiliated_with"
+    # one inside the other is part_of, whichever side the model put first
+    a, edges, rule = review.decide(
+        item(
+            "Stanford University",
+            "organization",
+            "affiliated_with",
+            "Center for Computer Research in Music and Acoustics",
+            "organization",
+        ),
+        doc,
+    )
+    assert a == "link" and rule == "affiliation->part_of"
+    assert edges[0].src.startswith("Center") and edges[0].dst == "Stanford University"
+    # an affiliation with a place is where the thing is
+    a, edges, rule = review.decide(
+        item("Ann Author", "author", "affiliated_with", "Berlin", "place"), doc
+    )
+    assert a == "link" and edges[0].rel == "located_in"
+    # an organization "affiliated with" the paper is the paper's institution
+    a, edges, rule = review.decide(
+        item("IRCAM", "organization", "affiliated_with", "A Manual", "paper"), doc
+    )
+    assert a == "link" and rule == "flip-affiliated_with->written_at"
+    assert (edges[0].src, edges[0].rel, edges[0].dst) == (
+        "A Manual",
+        "written_at",
+        "IRCAM",
+    )
+    # a reversed alias on a typed item: flipped, then the usual rules
+    a, edges, rule = review.decide(
+        item("Springer", "organization", "publisher_of", "A Manual", "paper"), doc
+    )
+    assert a == "link" and edges[0].rel == "published_by"
+    assert (edges[0].src, edges[0].dst) == ("A Manual", "Springer")
+    # an attribute written as a relation is dropped, untyped
+    untyped = lambda src, rel, dst: {
+        "src": src,
+        "rel": rel,
+        "dst": dst,
+        "src_type": None,
+        "dst_type": None,
+    }
+    a, edges, rule = review.decide_unmapped(untyped("A Manual", "date", "2004"), doc)
+    assert a == "drop" and rule == "attribute-not-relation"
+    a, _, rule = review.decide_unmapped(untyped("Robert", "role", "tutor"), doc)
+    assert a == "drop" and rule == "attribute-not-relation"

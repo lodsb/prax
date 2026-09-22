@@ -41,6 +41,8 @@ class FakeModel:
                 lines.append(f"{n}: paper -> tool")
             elif rel == "about":
                 lines.append(f"{n}: venue -> author")  # a misfit: a venue is not about
+            elif rel == "used_in":
+                lines.append(f"{n}: tool -> paper")  # the tool is used in the paper
         return "\n".join(lines), {"input_tokens": 10, "output_tokens": 5}
 
 
@@ -110,4 +112,22 @@ def test_answers_are_parsed_leniently() -> None:
         1: ("paper", "venue"),
         2: ("author", "organization"),
         3: ("tool", "concept"),
+    }
+
+
+def test_a_reversed_alias_is_typed_the_other_way_round(
+    con: sqlite3.Connection,
+) -> None:
+    """ "NumPy used_in <paper>" becomes the paper uses NumPy: the ends and
+    their types swap with the canonical name (research v8)."""
+    title = "A Study of Arrays"
+    doc = store.ingest_text(con, "arrays " * 50, title=title)["doc_id"]
+    store.set_domains(con, doc, ["research"])
+    _queue(con, doc, "NumPy", "used_in", title)
+    model = FakeModel()
+    real = typing_pass.run(con, commit=True, runtime=model)
+    assert (real.linked, real.misfit) == (1, 0)
+    edges = store.traverse(con, title, hops=1)
+    assert {(e["src"], e["rel"], e["dst"], e["dst_type"]) for e in edges} == {
+        (title, "uses", "NumPy", "tool")
     }

@@ -30,8 +30,12 @@
 # v7 (2026-09-13, docs/ontology-v7.md): `authored_by` and `part_of` moved
 # to core (every kind of document has authors and belongs to something;
 # `part_of` now holds between organizations too). Nothing else changed.
+# v8 (2026-09-22, docs/ontology-v8.md): aliases only — what the models
+# kept saying for relations that exist: `is_about`, `proposed`, and the
+# reversed names `mentioned_in`, `discussed_in`, `used_in`, `used_by`,
+# `cited_by`, which flip the ends. No type or relation changed.
 module: research
-version: 7
+version: 8
 requires: [core]
 self_types: [paper]
 
@@ -193,3 +197,10 @@ relation_aliases:
   discusses: mentions
   builds_on: extends
   compares: contrasts
+  is_about: about
+  proposed: proposes
+  mentioned_in: {to: mentions, reversed: true}
+  discussed_in: {to: mentions, reversed: true}
+  used_in: {to: uses, reversed: true}
+  used_by: {to: uses, reversed: true}
+  cited_by: {to: cites, reversed: true}

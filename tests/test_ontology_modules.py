@@ -132,7 +132,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "studio",
         "workshop",
     }
-    assert o.version == "core2+craft1+kitchen2+research7+studio4+workshop2"
+    assert o.version == "core3+craft1+kitchen2+research8+studio4+workshop2"
     assert set(o.self_types) == {
         "paper",
         "manual",
@@ -155,15 +155,15 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert (
         ontology.current().version
-        == "core2+craft1+kitchen2+research7+studio4+workshop2"
+        == "core3+craft1+kitchen2+research8+studio4+workshop2"
     )
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
-        text.replace("version: 7", "version: 99", 1), encoding="utf-8"
+        text.replace("version: 8", "version: 99", 1), encoding="utf-8"
     )
     assert (
         ontology.current().version
-        == "core2+craft1+kitchen2+research99+studio4+workshop2"
+        == "core3+craft1+kitchen2+research99+studio4+workshop2"
     )
 
 
@@ -171,7 +171,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     o = ontology.current()
     kitchen = o.for_domains(["kitchen"])
     assert set(kitchen.modules) == {"core", "craft", "kitchen"}
-    assert kitchen.version == "core2+craft1+kitchen2"
+    assert kitchen.version == "core3+craft1+kitchen2"
     assert kitchen.self_types == ("recipe",)
     assert "paper" not in kitchen.types and "device" not in kitchen.types
     kitchen.check_edge("recipe", "makes", "dish")
@@ -187,7 +187,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 
     workshop = o.for_domains(["workshop"])
     assert set(workshop.modules) == {"core", "craft", "studio", "workshop"}
-    assert workshop.version == "core2+craft1+studio4+workshop2"
+    assert workshop.version == "core3+craft1+studio4+workshop2"
     workshop.check_edge("build", "made_with", "component")  # studio's component
     workshop.check_edge("build", "made_with", "material")  # craft's material
     workshop.check_edge("build", "follows", "design")
@@ -203,13 +203,13 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     # reads the word as its own method
     assert o.canonical_type("technique") == "technique"
     assert o.for_domains(["research"]).canonical_type("technique") == "method"
-    assert o.for_domains(["research"]).version == "core2+research7"
+    assert o.for_domains(["research"]).version == "core3+research8"
 
 
 def test_studio_module() -> None:
     o = ontology.current()
     s = o.for_domains(["studio"])
-    assert set(s.modules) == {"core", "studio"} and s.version == "core2+studio4"
+    assert set(s.modules) == {"core", "studio"} and s.version == "core3+studio4"
     assert s.self_types == ("manual", "datasheet", "schematic", "article")
     assert "paper" not in s.types and "cites" not in s.relations
     assert s.is_a("device", "tool") and s.is_a("manufacturer", "organization")
@@ -234,3 +234,45 @@ def test_studio_module() -> None:
 def test_self_types_must_exist() -> None:
     with pytest.raises(ValueError, match="self type"):
         ontology.parse("version: '1'\nentity_types: [a]\nself_types: [b]\n")
+
+
+def test_a_reversed_alias_names_the_relation_the_other_way_round() -> None:
+    """``mentioned_in: {to: mentions, reversed: true}`` maps to the
+    relation and says the ends swap; a plain alias does not; a wrong
+    shape is refused."""
+    text = """
+module: main
+version: 1
+entity_types:
+  paper:
+  tool:
+relation_types:
+  mentions: {domain: [paper], range: [tool]}
+relation_aliases:
+  discusses: mentions
+  mentioned_in: {to: mentions, reversed: true}
+"""
+    o = ontology.compose([ontology.parse_module(text)])
+    assert o.canonical_relation("mentioned_in") == "mentions"
+    assert o.canonical_relation("discusses") == "mentions"
+    assert o.is_reversed("mentioned_in") and not o.is_reversed("discusses")
+    assert not o.is_reversed("mentions")
+    with pytest.raises(ValueError, match="expected a name or"):
+        ontology.parse_module(
+            text.replace("{to: mentions, reversed: true}", "{rev: 1}")
+        )
+
+
+def test_v8_admits_affiliation_beyond_persons() -> None:
+    o = ontology.current()
+    assert o.version.startswith("core3+")
+    o.check_edge("organization", "affiliated_with", "organization")
+    o.check_edge("person", "affiliated_with", "concept")
+    o.check_edge("person", "located_in", "place")
+    with pytest.raises(ValueError):
+        o.check_edge("paper", "affiliated_with", "organization")  # written_at
+    r = o.for_domains(["research"])
+    assert r.canonical_relation("is_about") == "about"
+    assert r.canonical_relation("used_in") == "uses" and r.is_reversed("used_in")
+    assert o.canonical_relation("publisher_of") == "published_by"
+    assert o.is_reversed("publisher_of") and o.is_reversed("contains")

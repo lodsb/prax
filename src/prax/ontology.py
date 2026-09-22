@@ -18,7 +18,9 @@ A module file::
     relation_types:
       advised_by: {domain: [author], range: [author], description: ...}
     type_aliases: {technique: method}          # what a model may call it
-    relation_aliases: {supervised_by: advised_by}
+    relation_aliases:
+      supervised_by: advised_by
+      mentioned_in: {to: mentions, reversed: true}   # said the other way round
 
 Rules of composition: type and relation names are unique across modules
 (the loader refuses a collision); a subtype is accepted wherever its
@@ -73,6 +75,9 @@ class Module:
     relations: dict[str, Relation]
     type_aliases: dict[str, str]
     relation_aliases: dict[str, str]
+    # the aliases that name the relation the other way round: ``X
+    # mentioned_in Y`` is ``Y mentions X``; the ends are swapped with it
+    reversed_aliases: frozenset[str] = frozenset()
     # what the document being extracted may be in this module (a paper;
     # a manual, datasheet, schematic or article); empty: a plain document
     self_types: tuple[str, ...] = ()
@@ -86,6 +91,7 @@ class Ontology:
     relations: dict[str, Relation] = field(default_factory=dict)
     type_aliases: dict[str, str] = field(default_factory=dict)
     relation_aliases: dict[str, str] = field(default_factory=dict)
+    reversed_aliases: frozenset[str] = frozenset()
     self_types: tuple[str, ...] = ()
     # composed subsets by domain set (``for_domains`` is asked per document)
     _subsets: dict[frozenset[str], Ontology] = field(
@@ -128,6 +134,12 @@ class Ontology:
 
     def canonical_relation(self, name: str) -> str:
         return self.relation_aliases.get(name, name)
+
+    def is_reversed(self, name: str) -> bool:
+        """Whether a relation a model named runs the other way round from
+        the canonical one (``mentioned_in`` for ``mentions``): the caller
+        swaps the ends when it takes the canonical name."""
+        return name in self.reversed_aliases
 
     def _allowed(self, allowed: frozenset[str], t: str) -> bool:
         return not allowed or any(a in allowed for a in self.ancestors(t))
@@ -220,6 +232,21 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
         )
         for n, a in _names(data.get("relation_types"), "relation_types").items()
     }
+    relation_aliases: dict[str, str] = {}
+    reversed_aliases: set[str] = set()
+    for k, v in (data.get("relation_aliases") or {}).items():
+        # a plain name, or {to: name, reversed: true} for one said the
+        # other way round (X mentioned_in Y is Y mentions X)
+        if isinstance(v, dict):
+            if "to" not in v or set(v) - {"to", "reversed"}:
+                raise ValueError(
+                    f"relation alias {k!r}: expected a name or {{to, reversed}}"
+                )
+            relation_aliases[str(k)] = str(v["to"])
+            if v.get("reversed"):
+                reversed_aliases.add(str(k))
+        else:
+            relation_aliases[str(k)] = str(v)
     return Module(
         name=mod,
         version=str(data["version"]),
@@ -229,9 +256,8 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
         type_aliases={
             str(k): str(v) for k, v in (data.get("type_aliases") or {}).items()
         },
-        relation_aliases={
-            str(k): str(v) for k, v in (data.get("relation_aliases") or {}).items()
-        },
+        relation_aliases=relation_aliases,
+        reversed_aliases=frozenset(reversed_aliases),
         self_types=tuple(str(t) for t in (data.get("self_types") or [])),
     )
 
@@ -244,6 +270,7 @@ def compose(modules: list[Module]) -> Ontology:
     relations: dict[str, Relation] = {}
     type_aliases: dict[str, str] = {}
     relation_aliases: dict[str, str] = {}
+    reversed_aliases: set[str] = set()
     for m in modules:
         for req in m.requires:
             if req not in by_name:
@@ -294,6 +321,8 @@ def compose(modules: list[Module]) -> Ontology:
                 raise ValueError(f"relation alias {alias!r} -> {target!r} is not valid")
             if alias not in relations:
                 relation_aliases[alias] = target
+                if alias in m.reversed_aliases:
+                    reversed_aliases.add(alias)
     self_types: list[str] = []
     for m in modules:
         for t in m.self_types:
@@ -313,6 +342,7 @@ def compose(modules: list[Module]) -> Ontology:
         relations=relations,
         type_aliases=type_aliases,
         relation_aliases=relation_aliases,
+        reversed_aliases=frozenset(reversed_aliases),
         self_types=tuple(self_types),
     )
 
