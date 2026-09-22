@@ -137,9 +137,22 @@ function go(name, arg, params) {
   location.hash = name + (arg ? "/" + arg : "") + (q ? "?" + q : "");
 }
 
+// Markdown to HTML, then through DOMPurify (vendored): a document's text
+// is somebody else's writing, and Markdown carries raw HTML through. The
+// page's policy already refuses inline script; the sanitizer removes it,
+// and with it forms, frames, styles and every attribute that is not
+// plain content, so a captured page cannot restyle or clobber the UI.
+// KaTeX's output is added after, by typesetMaths, and is the UI's own.
+const MD_CLEAN = {
+  USE_PROFILES: { html: true },
+  FORBID_TAGS: ["style", "form", "input", "button", "select", "textarea", "iframe", "object", "embed", "base", "meta", "link", "svg", "math"],
+  FORBID_ATTR: ["style", "class", "id", "name", "target"],
+  ALLOW_DATA_ATTR: false,
+};
 function md(text) {
   // U+FFFD is a glyph the PDF's font gave no name: a box, not a question
-  const html = marked.parse(text || "", { gfm: true, breaks: false });
+  const raw = marked.parse(text || "", { gfm: true, breaks: false });
+  const html = typeof DOMPurify === "undefined" ? esc(raw) : DOMPurify.sanitize(raw, MD_CLEAN);
   return html.replace(/\uFFFD/g, '<span class="lost" title="a glyph the document\u2019s font did not name">\u25AB</span>');
 }
 

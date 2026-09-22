@@ -382,6 +382,46 @@ def test_ingest_url_fetches(
         inbox.check_url("file:///etc/passwd")
 
 
+def test_the_door_does_not_fetch_private_addresses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A URL at this machine, the LAN, the tailnet or the link-local range
+    is refused before any connection, on the first URL and on every
+    redirect; ``door.fetch_private`` allows it."""
+    for url in (
+        "http://127.0.0.1:8000/stats",
+        "http://localhost/",
+        "http://192.168.178.1/admin",
+        "http://10.0.0.5/",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://100.100.1.2/",
+        "http://[::1]/",
+        "http://[fe80::1]/",
+    ):
+        with pytest.raises(ValueError, match="private or local"):
+            inbox.check_reachable(url)
+    # a redirect into the LAN is refused at the hop
+    handler = inbox._CheckedRedirects()
+    with pytest.raises(ValueError, match="private or local"):
+        handler.redirect_request(None, None, 302, "Found", {}, "http://127.0.0.1/x")
+    # a public name that resolves to a private address is refused too
+    monkeypatch.setattr(
+        inbox.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(2, 1, 6, "", ("10.1.2.3", 0))],
+    )
+    with pytest.raises(ValueError, match="private or local"):
+        inbox.check_reachable("https://example.org/paper.pdf")
+    monkeypatch.setattr(
+        inbox.socket,
+        "getaddrinfo",
+        lambda *a, **k: [(2, 1, 6, "", ("93.184.216.34", 0))],
+    )
+    inbox.check_reachable("https://example.org/paper.pdf")
+    monkeypatch.setenv("PRAX_FETCH_PRIVATE", "1")
+    inbox.check_reachable("http://192.168.178.1/admin")
+
+
 def test_upload_uses_rules_when_no_domain_is_given(
     con: sqlite3.Connection,
     tmp_path: Path,

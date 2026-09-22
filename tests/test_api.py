@@ -509,10 +509,21 @@ def test_browsing_endpoints_and_ui(client: TestClient) -> None:
     assert orig.status_code == 200 and orig.content == b"%PDF-1.4 fake"
     assert orig.headers["content-type"].startswith("application/pdf")
     assert "inline" in orig.headers["content-disposition"]
+    assert orig.headers["x-content-type-options"] == "nosniff"
+    assert "content-security-policy" not in orig.headers  # the viewer runs nothing
     assert client.get("/doc/999/original").status_code == 404
+    # anything that is not a PDF or a raster image is sandboxed: an SVG
+    # with a script would otherwise run on the door's origin
+    svg = client.post(
+        "/ingest/file",
+        files={"file": ("d.svg", b"<svg onload='x()'/>", "image/svg+xml")},
+    ).json()
+    orig = client.get(f"/doc/{svg['doc_id']}/original")
+    assert orig.headers["content-security-policy"].startswith("sandbox")
 
     text = client.get(f"/doc/{note['doc_id']}/text")
     assert text.status_code == 200 and text.text.startswith("# Intro")
+    assert text.headers["x-content-type-options"] == "nosniff"
     assert text.headers["content-type"].startswith("text/markdown")
 
     chunks = client.get(f"/doc/{note['doc_id']}/chunks").json()
@@ -607,3 +618,21 @@ def test_a_search_reports_where_its_time_went(client: TestClient) -> None:
     hits = store.search(client.app.state.con, "granular grains", timing=timing)
     assert hits and "fts" in timing and timing["fts"] >= 0
     assert all(v >= 0 for v in timing.values())
+
+
+def test_a_body_over_the_cap_is_refused(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The door reads an upload into memory on a host with a gigabyte:
+    ``door.max_upload_mb`` bounds it, by the declared length before the
+    body is read, and by the bytes read when nothing was declared."""
+    monkeypatch.setenv("PRAX_MAX_UPLOAD_MB", "1")
+    big = b"x" * (1024 * 1024 + 1)
+    r = client.post("/ingest/file", files={"file": ("big.txt", big, "text/plain")})
+    assert r.status_code == 413 and "max_upload_mb" in r.json()["detail"]
+    r = client.post("/ingest", json={"text": "x" * (1024 * 1024 + 100)})
+    assert r.status_code == 413
+    small = client.post(
+        "/ingest/file", files={"file": ("ok.txt", b"fine " * 100, "text/plain")}
+    )
+    assert small.status_code == 200

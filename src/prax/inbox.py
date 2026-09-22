@@ -25,10 +25,12 @@ belongs to that domain; ``<name>.json`` next to a file is a sidecar with
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import re
 import shutil
+import socket
 import sqlite3
 import time
 import urllib.error
@@ -116,10 +118,69 @@ def check_url(url: str) -> None:
         raise ValueError(f"not an http(s) URL: {url!r}")
 
 
+def fetch_private() -> bool:
+    """Whether the door may fetch from private addresses (``door.fetch_private``
+    in ``prax.yaml``, ``PRAX_FETCH_PRIVATE``); off unless a host says so."""
+    raw = config.setting("door.fetch_private", "PRAX_FETCH_PRIVATE", False)
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+def _is_private(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    if ip.version == 6 and ip.ipv4_mapped is not None:
+        ip = ip.ipv4_mapped
+    return (
+        ip.is_private  # 10/8, 172.16/12, 192.168/16, fc00::/7 (and 100.64/10 on 3.13)
+        or ip.is_loopback
+        or ip.is_link_local  # 169.254/16, the cloud metadata address among them
+        or ip.is_multicast
+        or ip.is_reserved
+        or ip.is_unspecified
+        or ip in ipaddress.ip_network("100.64.0.0/10")  # carrier NAT, Tailscale
+    )
+
+
+def check_reachable(url: str) -> None:
+    """Refuse a URL whose host is this machine, the LAN, the tailnet or a
+    link-local address (the cloud metadata service), unless the host has
+    ``door.fetch_private`` on. The door fetches on a caller's word (a
+    bookmarklet, an importer, the MCP ``capture_url`` tool, which a model
+    may call on a page's say-so), and what it fetches becomes a readable
+    document, so it must not be a way to read what the network keeps to
+    itself. Every address the name resolves to is checked."""
+    check_url(url)
+    if fetch_private():
+        return
+    host = urllib.parse.urlsplit(url).hostname or ""
+    try:
+        infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise ValueError(f"{url}: cannot resolve {host!r}: {exc}") from exc
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if _is_private(ip):
+            raise ValueError(
+                f"{url}: {host} is a private or local address ({ip}); the door"
+                " does not fetch those (door.fetch_private in prax.yaml allows it)"
+            )
+
+
+class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
+    """Every hop of a redirect goes through the same check as the first
+    URL: a public page that redirects into the LAN is refused there."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+        check_reachable(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_opener = urllib.request.build_opener(_CheckedRedirects)
+
+
 def fetch_url(url: str, *, timeout: float = FETCH_TIMEOUT) -> tuple[bytes, str, str]:
     """Fetch ``url``: the bytes, the content type and the final URL after
-    redirects. Only http(s)."""
-    check_url(url)
+    redirects. Only http(s), and only public addresses unless the host
+    allows private ones (``check_reachable``), on every hop."""
+    check_reachable(url)
     req = urllib.request.Request(
         url,
         headers={
@@ -128,7 +189,7 @@ def fetch_url(url: str, *, timeout: float = FETCH_TIMEOUT) -> tuple[bytes, str, 
             "Accept-Language": "en-US,en;q=0.7",
         },
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _opener.open(req, timeout=timeout) as resp:
         data = resp.read(FETCH_MAX_BYTES + 1)
         if len(data) > FETCH_MAX_BYTES:
             raise ValueError(f"{url}: larger than {FETCH_MAX_BYTES} bytes")

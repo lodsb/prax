@@ -38,7 +38,8 @@ SECTIONS = (
     "rerank",  # model, variant, providers
     "parse",  # ocr_max_pages, max_layout_mb, layout_window
     "citations",  # mailto
-    "door",  # cors_origins, inbox_scan_seconds, clock_seconds
+    "door",  # cors_origins, inbox_scan_seconds, clock_seconds, fetch_private,
+    # max_upload_mb
     "ontology",  # dir
     "paths",  # models (where fetched model files go), backup, llama_server
     "sources",  # what the importers need: github user and token

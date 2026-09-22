@@ -181,6 +181,28 @@ SLOW_SECONDS = 2.0  # a request slower than this is logged with what else was on
 app.state.in_flight = 0
 
 
+def max_upload() -> int:
+    """The largest request body the door takes, in bytes
+    (``door.max_upload_mb`` in ``prax.yaml``, ``PRAX_MAX_UPLOAD_MB``;
+    256 MB). An upload is read into memory before it is archived, and the
+    serving host is Pi-class (invariant 7)."""
+    return int(config.number("door.max_upload_mb", "PRAX_MAX_UPLOAD_MB", 256) * 1024**2)
+
+
+@app.middleware("http")
+async def _cap_body(request: Request, call_next: Any) -> Any:
+    """A body larger than ``max_upload`` is refused at the door with 413
+    before it is read, when the client says how large it is."""
+    length = request.headers.get("content-length")
+    cap = max_upload()
+    if length and length.isdigit() and int(length) > cap:
+        return JSONResponse(
+            {"detail": f"request body over {cap >> 20} MB (door.max_upload_mb)"},
+            status_code=413,
+        )
+    return await call_next(request)
+
+
 @app.middleware("http")
 async def _count_writes(request: Request, call_next: Any) -> Any:
     """Every mutating request bumps a counter: with SQLite's data_version
@@ -398,10 +420,15 @@ def ingest_file(
             paper_info = json.loads(paper)
         except ValueError as exc:
             raise HTTPException(400, f"paper must be JSON: {exc}") from exc
+    data = file.file.read(max_upload() + 1)  # chunked uploads carry no length
+    if len(data) > max_upload():
+        raise HTTPException(
+            413, f"file over {max_upload() >> 20} MB (door.max_upload_mb)"
+        )
     try:
         cap = inbox.ingest_upload(
             _con(request),
-            file.file.read(),
+            data,
             filename=file.filename,
             mime=file.content_type,
             title=title,
@@ -1167,14 +1194,24 @@ def original(doc_id: int, request: Request) -> FileResponse:
     if info is None or not info["path"].exists():
         raise HTTPException(404, "no such document")
     name = Path(info["original_path"] or info["title"] or f"document-{doc_id}").name
-    headers = {"Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}"}
-    if (info["mime"] or "").split(";")[0] in ("text/html", "application/xhtml+xml"):
-        # a captured page is somebody else's content rendered from this
-        # origin: no scripts, no forms, no access to the door's cookies
-        headers["Content-Security-Policy"] = (
-            "sandbox; default-src data: 'unsafe-inline'"
-        )
+    headers = {
+        "Content-Disposition": f"inline; filename*=UTF-8''{quote(name)}",
+        "X-Content-Type-Options": "nosniff",
+    }
+    if (info["mime"] or "").split(";")[0] not in INERT_TYPES:
+        # a captured page, an SVG, an XML document: somebody else's content
+        # rendered from this origin, so no scripts, no forms, no access to
+        # the door's cookies, and nothing fetched from elsewhere
+        headers["Content-Security-Policy"] = SANDBOX_POLICY
     return FileResponse(info["path"], media_type=info["mime"], headers=headers)
+
+
+# what a browser renders without running anything: the PDF viewer and the
+# raster image types. Everything else served out of the archive is sandboxed.
+INERT_TYPES = frozenset(
+    {"application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp"}
+)
+SANDBOX_POLICY = "sandbox; default-src data: 'unsafe-inline'"
 
 
 @app.get("/doc/{doc_id}/figure/{ref}")
@@ -1198,7 +1235,12 @@ def figure(doc_id: int, ref: str, request: Request) -> Response:
     return Response(
         data,
         media_type=media,
-        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+            # an <img> ignores this; a tab opened on the figure's URL does not
+            "Content-Security-Policy": SANDBOX_POLICY,
+        },
     )
 
 
@@ -1208,7 +1250,11 @@ def text(doc_id: int, request: Request) -> PlainTextResponse:
     doc = store.get_document(_con(request), doc_id)
     if doc is None:
         raise HTTPException(404, "no such document")
-    return PlainTextResponse(doc["text"], media_type="text/markdown; charset=utf-8")
+    return PlainTextResponse(
+        doc["text"],
+        media_type="text/markdown; charset=utf-8",
+        headers={"X-Content-Type-Options": "nosniff"},
+    )
 
 
 @app.get("/doc/{doc_id}/chunks")
