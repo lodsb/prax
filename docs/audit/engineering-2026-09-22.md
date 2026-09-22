@@ -46,13 +46,13 @@ Migrations 15 and 16 apply when the door next starts. Then, once:
 
 While measuring the `source_doc` index, a scratch script attached the
 live database to a temporary one and ran `DROP TABLE IF EXISTS edges`
-unqualified, meaning the temporary database's copy; SQLite resolved the
+unqualified, meaning the temporary database's copy. SQLite resolved the
 name to the attached live database and dropped the graph's `edges`
 table (03:48, 2026-09-22). The main database file had last been
-checkpointed at 03:33, so a copy of it taken at once,
+checkpointed at 03:33. A copy of it taken at once,
 `C:\prax-data\recover\prax-main-only.db`, holds the table intact:
 242,982 rows, `quick_check` ok, one edge short of the count read at
-03:40. The live file has since been checkpointed; the copy is the
+03:40. The live file has since been checkpointed. The copy is the
 source. `C:\prax-data\recover\restore_edges.py` puts the table and its
 four indexes back in one write transaction, every name qualified. It
 was not run: writing to the live store and stopping the door are the
