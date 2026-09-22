@@ -2067,6 +2067,49 @@ next pass offers them at once instead of waiting out its ten minutes.
 Nothing here is required: a host whose roles fit together declares no
 group, and the supervisor never stops anything on its own.
 
+### Models that cost money: the ledger and the budget
+
+A host whose steps are somebody's API has no card to run out of; it has
+a bill. What is paid is what the file prices. A `claude` model always;
+an `openai` one as soon as it has a `price:`, two numbers in USD per
+million tokens, in and out. `paid: false` says a priced model is free
+after all: a server of your own, priced so the ledger can compare it
+with what it replaces.
+
+    models:
+      gpt: {kind: openai, base_url: https://api.openai.com/v1, model: …,
+            api_key_env: OPENAI_API_KEY, price: [2, 8]}
+    budget:
+      daily_usd: 5        # 0 or absent: no limit
+      monthly_usd: 50
+
+Every paid call the door makes or takes in is a row in `spend`: when,
+which step, which model, the document, the tokens, and the money at the
+price of that moment (`store.record_spend`, migration 19). A price
+changed later never rewrites what was paid. Nothing is written for a
+local model.
+
+The two numbers are the host's ceiling, in UTC calendar days and
+months, read against that ledger. When one is reached the door hands
+out no paid work: the batch comes back empty with the reason, which the
+worker prints. A paid `ask` is refused with 402, and the bundle still
+comes back, so the caller's own model can answer. The `--spend` flag of
+`prax work` is unchanged and still required: the budget is the ceiling,
+`--spend` is consent for the run.
+
+What is counted is money already spent, so a pass can pass the limit by
+its last call and stop after it. A call is never split or refused
+halfway.
+
+    prax status                # what today and this month have cost
+    GET /spending?days=30      # the budget, the ledger by step and model, the last calls
+
+The Jobs view shows it as two bars with what each step and model cost.
+Readings do not report their usage yet: the parsers return text, not
+tokens. So a vision pass on a paid model is not in the ledger. The
+worker still refuses a paid reading without `--spend`, and what it
+cost is what the provider's own bill says.
+
 `prax up` starts the roles in that order behind real health gates. The
 worker starts once the door answers `/health`. A model server shows
 *starting* until its own `/health` says loaded, three minutes cold for

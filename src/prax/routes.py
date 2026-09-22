@@ -41,7 +41,7 @@ def _model(step: str) -> dict[str, Any] | None:
         return None
     if spec is None:
         return None
-    return {"name": spec.name, "paid": spec.kind == "claude"}
+    return {"name": spec.name, "paid": spec.paid}
 
 
 def _counts(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:

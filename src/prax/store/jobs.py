@@ -269,6 +269,100 @@ def release_vector_views() -> int:
 
 
 @_reading
+@_serialized
+def record_spend(
+    con: sqlite3.Connection,
+    *,
+    step: str,
+    model: str,
+    usage: dict[str, Any] | None = None,
+    usd: float = 0.0,
+    doc_id: int | None = None,
+    run: str | None = None,
+) -> float:
+    """One paid call in the ledger (``spend``), with the money at the
+    price of this moment. Returns what it cost. A call that cost nothing
+    and moved no tokens is not written: the ledger is what was paid."""
+    u = usage or {}
+    tokens = {
+        "input_tokens": int(u.get("input_tokens", 0) or 0),
+        "output_tokens": int(u.get("output_tokens", 0) or 0),
+        "cached_tokens": int(
+            (u.get("cache_read_input_tokens") or 0) + (u.get("cached_tokens") or 0)
+        ),
+    }
+    if not usd and not any(tokens.values()):
+        return 0.0
+    con.execute(
+        "INSERT INTO spend (at, step, model, doc_id, run, input_tokens,"
+        " output_tokens, cached_tokens, usd) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            now(),
+            step,
+            model,
+            doc_id,
+            run,
+            tokens["input_tokens"],
+            tokens["output_tokens"],
+            tokens["cached_tokens"],
+            round(float(usd), 6),
+        ),
+    )
+    con.commit()
+    return round(float(usd), 6)
+
+
+@_reading
+def spent_usd(con: sqlite3.Connection, since: str) -> float:
+    """What the paid steps have cost since a timestamp (``store.now()``
+    shape, so a day is ``2026-09-22T00:00:00Z``)."""
+    row = con.execute(
+        "SELECT coalesce(sum(usd), 0) FROM spend WHERE at >= ?", (since,)
+    ).fetchone()
+    return round(float(row[0] or 0.0), 6)
+
+
+@_reading
+def spending(
+    con: sqlite3.Connection, *, since: str = "", limit: int = 20
+) -> dict[str, Any]:
+    """The ledger read three ways: the total, what each step and each
+    model cost, and the last calls. What the Jobs view shows."""
+    where, args = ("WHERE at >= ?", (since,)) if since else ("", ())
+    by_step = [
+        {"step": r[0], "usd": round(float(r[1]), 6), "calls": int(r[2])}
+        for r in con.execute(
+            f"SELECT step, sum(usd), count(*) FROM spend {where}"
+            " GROUP BY step ORDER BY sum(usd) DESC",
+            args,
+        )
+    ]
+    by_model = [
+        {"model": r[0], "usd": round(float(r[1]), 6), "calls": int(r[2])}
+        for r in con.execute(
+            f"SELECT model, sum(usd), count(*) FROM spend {where}"
+            " GROUP BY model ORDER BY sum(usd) DESC",
+            args,
+        )
+    ]
+    recent = [
+        dict(r)
+        for r in con.execute(
+            f"SELECT at, step, model, doc_id, run, input_tokens, output_tokens,"
+            f" cached_tokens, usd FROM spend {where} ORDER BY id DESC LIMIT ?",
+            (*args, int(limit)),
+        )
+    ]
+    total = sum(x["usd"] for x in by_step)
+    return {
+        "usd": round(total, 6),
+        "calls": sum(x["calls"] for x in by_step),
+        "by_step": by_step,
+        "by_model": by_model,
+        "recent": recent,
+    }
+
+
 def data_version(con: sqlite3.Connection) -> int:
     """Changes whenever another connection commits (``PRAGMA data_version``):
     the cheap "did anything change" signal the UI polls. Serialized like

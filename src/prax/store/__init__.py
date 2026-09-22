@@ -228,8 +228,11 @@ from .jobs import (  # noqa: F401
     job_update,
     last_job,
     list_jobs,
+    record_spend,
     release_vector_views,
     running_jobs,
+    spending,
+    spent_usd,
 )
 from .maintain import (  # noqa: F401
     ON_REQUEST,

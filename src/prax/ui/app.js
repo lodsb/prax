@@ -2597,11 +2597,12 @@ async function healNow(button, checks) {
 
 async function viewJobs(p) {
   loading();
-  let d, servers = [], readings = null, host = null;
+  let d, servers = [], readings = null, host = null, money = null;
   try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   try { servers = (await api("/models/servers")).servers; } catch (_) { /* the list is a nicety */ }
   try { readings = await api("/readings", { limit: 20 }); } catch (_) { /* so is this one */ }
   try { host = await api("/up"); } catch (_) { /* no supervisor here, or an older door */ }
+  try { money = await api("/spending", { days: 30 }); } catch (_) { /* an older door */ }
   const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
   view.innerHTML = `
     <p class="muted">The passes announce themselves here: the worker's session, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale; one gone for half an hour is closed.</p>
@@ -2609,6 +2610,7 @@ async function viewJobs(p) {
     ${serverLines(servers)}
     ${readingLines(readings)}
     ${upPanel(host)}
+    ${spendPanel(money)}
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Running (${d.running.length})</h2>
     ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the machine with the models: <code>scripts/work.py --watch</code> keeps captures moving.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>

@@ -7,6 +7,7 @@ import json
 import logging
 import socket
 import threading
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -439,6 +440,26 @@ def stats(request: Request) -> dict[str, Any]:
     """What the store holds: documents, chunks, vectors, the graph, the
     review queue, the ontology (`prax status`)."""
     return store.stats(_con(request))
+
+
+@router.get("/spending")
+def spending(request: Request, days: int = 30, limit: int = 20) -> dict[str, Any]:
+    """What the paid steps have cost: the budget and what is left of it
+    today and this month, then the ledger by step, by model and call by
+    call over the last ``days`` (``prax.budget``, ``store.spending``).
+    A host with only local models has an empty ledger and no limits."""
+    from prax import budget
+
+    con = _con(request)
+    since = (datetime.now(UTC) - timedelta(days=max(1, min(days, 365)))).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    return {
+        "budget": budget.state(con),
+        "since": since,
+        "ledger": store.spending(con, since=since, limit=max(1, min(limit, 200))),
+        "today": store.spending(con, since=budget.day_start(), limit=0),
+    }
 
 
 @router.get("/up")

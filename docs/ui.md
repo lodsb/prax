@@ -50,6 +50,7 @@ The ones added for browsing, each a thin wrapper over a store function:
 | `GET /heal?check&examples`, `POST /heal` | the recurring damage in the store and its repair: placeholder entities, mangled names, self-edges, stale jobs, stale parses (howto 3m) |
 | `GET /models/servers` | the `openai` model servers of `prax.yaml`, one entry per server: reachable, alias, model file, slots, vision, and the load from `/metrics` when the server exposes it (tokens per second, busy slots, requests running and waiting, prompt tokens total and cached) |
 | `GET /changes`, `GET /jobs?limit` | the change stamp and running-job count the UI polls; the running and recent batch jobs with heartbeat, progress and note |
+| `GET /spending?days&limit` | what the paid steps have cost: the budget and what is left of it today and this month, and the ledger by step, by model and call by call (`prax.budget`, `store.spending`) |
 | `GET /work/demand` | what waits for a role that has to be running to do it: the reading requests per extractor, and per role of `prax up` (`prax.work.ROLE_WORK`). The supervisor asks this to know when a borrowed card can go back |
 | `GET /up`, `POST /up/command {cmd, name \| to, group, back_when}` | what `prax up` runs on the door's host, its groups, the cards and what waits; and a role change asked of it — `start`, `stop`, `restart`, `swap`, `unswap`. The door writes the command file the tray and the CLI write, and answers 409 when no supervisor runs there |
 | `POST /vectors/release` | drop the door's index views, so a batch job on the same machine can replace the files |
@@ -318,6 +319,13 @@ over (`POST /up/command`, which writes the supervisor's command file).
 A swap comes back on its own when nothing waits for the borrower. On a
 host without `prax up`, or one whose roles share nothing, the panel
 says so.
+
+Under that is Spending, on a host whose steps cost money: today and
+this month against the budget's two numbers (`budget.daily_usd`,
+`budget.monthly_usd`), then what each step and model cost over the last
+thirty days. A host with only local models has an empty ledger and says
+so in a line. When a limit is reached the panel says the paid steps are
+held until the day or the month turns.
 
 At the foot is Health: what every ailment of `prax heal` finds right
 now (`GET /heal`). The check reads every chunk, so the page is drawn

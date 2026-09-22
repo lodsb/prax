@@ -255,6 +255,13 @@ dialog#settings label { display: flex; justify-content: space-between; gap: 1rem
 dialog#settings input[type="number"] { width: 4.5rem; }
 .dialog-actions { text-align: right; margin-top: 1rem; }
 
+/* what the paid steps have cost, against the budget */
+.spend-panel .spend-line { font-size: .84rem; margin: .25rem 0; }
+.spend-panel .spend-bar { position: relative; display: inline-block; padding-bottom: .25rem; }
+.spend-panel .spend-bar i { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--line); }
+.spend-panel .spend-bar i::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--share); background: var(--accent); }
+.spend-panel .spend-over i::before { background: var(--error, #b23); }
+
 /* prax up on this host: the groups of roles that share a card */
 .up-panel .up-group { border-top: 1px solid var(--line); padding: .45rem 0; font-size: .86rem; }
 .up-panel .up-holder { color: var(--accent); }

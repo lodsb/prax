@@ -143,3 +143,31 @@ test("upPanel: the group's holder, what waits, and the buttons offered", () => {
   assert.equal(lib.mb(null), "?");
   assert.equal(lib.mb(512), "512 MB");
 });
+
+test("spendPanel: the budget bars, the ledger, and a host that spends nothing", () => {
+  const paid = lib.spendPanel({
+    budget: { limits: { daily_usd: 5, monthly_usd: 50 }, spent: { day: 1.234, month: 12.5 }, ok: true, why: "" },
+    since: "2026-08-23T00:00:00Z",
+    ledger: { usd: 12.5, calls: 340, by_step: [{ step: "extract", usd: 9.2, calls: 300 }], by_model: [{ model: "claude-sonnet-5", usd: 12.5, calls: 340 }] },
+    today: { usd: 1.234 },
+  });
+  assert.match(paid, /today: \$1\.23 of \$5\.00/);
+  assert.match(paid, /this month: \$12\.50 of \$50\.00/);
+  assert.match(paid, /340 paid calls since 2026-08-23/);
+  assert.match(paid, /extract \$9\.20/);
+  assert.match(paid, /--share:25%/);  // a quarter of today's budget
+  const over = lib.spendPanel({
+    budget: { limits: { daily_usd: 1 }, spent: { day: 1.4, month: 1.4 }, ok: false, why: "today's 1.00 USD is spent (1.40)" },
+    ledger: { usd: 1.4, calls: 3, by_step: [], by_model: [] }, today: { usd: 1.4 },
+  });
+  assert.match(over, /spend-over/);
+  assert.match(over, /held until it turns/);
+  const free = lib.spendPanel({
+    budget: { limits: {}, spent: { day: 0, month: 0 }, ok: true, why: "" },
+    ledger: { usd: 0, calls: 0, by_step: [], by_model: [] }, today: { usd: 0 },
+  });
+  assert.match(free, /no limit set/);
+  assert.match(free, /every step on this host is a local model/);
+  assert.equal(lib.spendPanel(null), "");
+  assert.equal(lib.usd(0.004), "0.40 ¢");
+});

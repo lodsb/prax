@@ -18,6 +18,7 @@ from pydantic import BaseModel
 
 from prax import ask as ask_mod
 from prax import (
+    budget,
     store,
 )
 
@@ -70,6 +71,16 @@ def ask(req: AskReq, request: Request) -> Any:
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    con = _con(request)
+    if answerer is not None:
+        # a paid backend answers only while the host's budget has room;
+        # without one the bundle still comes back and the caller's own
+        # model answers, which is what a Pi-class host does anyway
+        may, why = budget.allows(con, "ask")
+        if not may and (req.backend or "") not in ("none", ""):
+            raise HTTPException(402, why)
+        if not may:
+            answerer = None
     steps = req.steps
     if steps is None and answerer is not None:
         steps = ask_mod.default_steps()
@@ -83,12 +94,25 @@ def ask(req: AskReq, request: Request) -> Any:
     }
     if not req.stream:
         try:
-            return ask_mod.ask(_con(request), req.question, **kw)
+            out = ask_mod.ask(con, req.question, **kw)
+            _note_ask(con, out)
+            return out
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
     return _ask_stream(req.question, kw)
+
+
+def _note_ask(con: Any, out: dict[str, Any]) -> None:
+    """What an answer cost, into the ledger (``prax.budget``): the ask
+    step's own model, the usage the answerer reported."""
+    import contextlib
+
+    if not out.get("usage"):
+        return
+    with contextlib.suppress(Exception):  # a ledger row is never worth an error
+        budget.note(con, "ask", out["usage"])
 
 
 def _ask_stream(question: str, kw: dict[str, Any]) -> StreamingResponse:

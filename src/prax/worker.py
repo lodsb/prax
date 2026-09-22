@@ -535,7 +535,10 @@ def do_embed(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
 
 
 def _paid(spec: models.ModelSpec | None) -> bool:
-    return spec is not None and spec.kind == "claude"
+    """Whether running this step costs money (``ModelSpec.paid``): a
+    Claude model, or any model the file prices — an OpenAI-shaped
+    endpoint at somebody else's API is paid too, and used not to be."""
+    return spec is not None and spec.paid
 
 
 def _say(logger: Log | None, text: str) -> None:

@@ -203,8 +203,16 @@ def hand_out(
     scope: str = "captures",
     worker: str = "worker",
 ) -> dict[str, Any]:
-    """A batch of work for ``step``, leased to ``worker``."""
+    """A batch of work for ``step``, leased to ``worker``. A step whose
+    model costs money offers nothing once the host's budget for the day
+    or the month is spent (``prax.budget``); the reason comes back with
+    the empty batch, and the worker says it."""
     limit = _check(step, scope, limit)
+    from prax import budget
+
+    may, why = budget.allows(con, step)
+    if not may:
+        return {"step": step, "items": [], "lease_seconds": 0, "held": why}
     now = time.monotonic()
     if step in ("extract", "promote"):
         onto = ontology.current()
@@ -462,6 +470,22 @@ def hand_out(
 # ----------------------------------------------------------------- take in
 
 
+def _note_spend(
+    con: sqlite3.Connection,
+    step: str,
+    usage: dict[str, Any] | None,
+    *,
+    doc_id: int | None = None,
+    run: str | None = None,
+) -> None:
+    """What a worker's paid call cost, into the ledger. The worker never
+    writes to the store; the door records what comes back through it."""
+    from prax import budget
+
+    with contextlib.suppress(Exception):  # a ledger row is never worth an error
+        budget.note(con, step, usage, doc_id=doc_id, run=run)
+
+
 def _extraction_from(data: dict[str, Any]) -> extraction.Extraction:
     triples = [extraction.Triple(**t) for t in data.get("triples") or []]
     return extraction.Extraction(
@@ -515,10 +539,12 @@ def take_in(
                     )
                 continue
             try:
+                ex = _extraction_from(r["extraction"])
+                _note_spend(con, step, ex.usage, doc_id=doc_id, run=run)
                 rep = extraction.apply(
                     con,
                     doc_id,
-                    _extraction_from(r["extraction"]),
+                    ex,
                     extractor=extractor,
                     run=run,
                 )
@@ -564,6 +590,7 @@ def take_in(
         if len(same) != len(items):
             raise ValueError("adjudicate takes one decision per item")
         _release(step, [int(it["drop"]) for it in items])
+        _note_spend(con, step, payload.get("usage"))
         rep = resolution.decide(con, items, resolution.DecidedAdjudicator(model, same))
         out["applied"] = rep.merged_likely
         out["declined"] = rep.declined
@@ -575,6 +602,7 @@ def take_in(
         run = payload.get("run") or f"typing-model-{time.strftime('%Y%m%dT%H%M%S')}"
         for r in results:
             _release(step, [it["id"] for it in r.get("items") or []])
+            _note_spend(con, step, r.get("usage"), run=run)
         rep = typing_pass.take_in(con, results, model=model, run=run)
         out["applied"] = rep.requests
         out["report"] = {

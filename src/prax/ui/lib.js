@@ -210,6 +210,39 @@ function upPanel(u) {
     <p id="up-msg" class="muted"></p>
   </section>`;
 }
+// What the paid steps have cost, and what is left of the budget. A host
+// whose models are all local has an empty ledger and no limits, and the
+// panel says so in one line. Money is what was charged at the price of
+// the moment (prax.budget), not an estimate of the invoice.
+function usd(n) {
+  const v = Number(n || 0);
+  return v && v < 0.01 ? `${(v * 100).toFixed(2)} ¢` : `$${v.toFixed(2)}`;
+}
+function spendPanel(s) {
+  if (!s || !s.budget) return "";
+  const b = s.budget, led = s.ledger || {}, today = (s.today || {}).usd || 0;
+  const lim = b.limits || {}, spent = b.spent || {};
+  const bar = (name, spentUsd, limit) => {
+    if (!limit) return `<span class="muted">${name}: ${usd(spentUsd)} (no limit set)</span>`;
+    const share = Math.min(100, Math.round((spentUsd / limit) * 100));
+    return `<span class="spend-bar${share >= 100 ? " spend-over" : ""}" title="${usd(spentUsd)} of ${usd(limit)}">
+      ${name}: ${usd(spentUsd)} of ${usd(limit)}<i style="--share:${share}%"></i></span>`;
+  };
+  const steps = (led.by_step || []).slice(0, 6)
+    .map((x) => `${esc(x.step)} ${usd(x.usd)}`).join(" · ");
+  const models = (led.by_model || []).slice(0, 4)
+    .map((x) => `${esc(x.model)} ${usd(x.usd)} over ${x.calls} call${x.calls === 1 ? "" : "s"}`).join(" · ");
+  return `<section class="spend-panel">
+    <h2 style="font-size:1rem;margin:1rem 0 .3rem">Spending</h2>
+    <div class="spend-line">${bar("today", spent.day || 0, lim.daily_usd)} · ${bar("this month", spent.month || 0, lim.monthly_usd)}</div>
+    ${b.ok ? "" : `<p class="error spend-line">${esc(b.why)} — the paid steps are held until it turns.</p>`}
+    ${led.calls
+      ? `<p class="muted spend-line">${led.calls} paid call${led.calls === 1 ? "" : "s"} since ${esc((s.since || "").slice(0, 10))}: ${usd(led.usd)}${steps ? ` · ${steps}` : ""}</p>
+         ${models ? `<p class="muted spend-line">${models}</p>` : ""}`
+      : `<p class="muted spend-line">No paid call recorded${today ? "" : " — every step on this host is a local model"}.</p>`}
+  </section>`;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd };
 }

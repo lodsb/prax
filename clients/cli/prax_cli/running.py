@@ -3,6 +3,7 @@ the door itself, and a check-up when something feels wrong."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sys
@@ -108,6 +109,22 @@ def status(door: Door, a: Any) -> int:
         )
         + f" at {stats['store']['path']}",
     )
+    money = None
+    with contextlib.suppress(Exception):  # an older door has no ledger
+        money = door.get_json("/spending", {"days": 30, "limit": 1})
+    if money and (money["ledger"]["calls"] or any(money["budget"]["limits"].values())):
+        b = money["budget"]
+        spent, lim = b["spent"], b["limits"]
+        parts = [
+            f"{spent['day']:.2f} today"
+            + (f" of {lim['daily_usd']:.2f}" if lim["daily_usd"] else ""),
+            f"{spent['month']:.2f} this month"
+            + (f" of {lim['monthly_usd']:.2f}" if lim["monthly_usd"] else ""),
+        ]
+        line = "USD " + " · ".join(parts)
+        if not b["ok"]:
+            line += " · " + out.paint("paid steps held", "red")
+        out.field("Spending", line)
     running = jobs.get("running") or []
     if running:
         out.lines("Running", [_job_line(j) for j in running])

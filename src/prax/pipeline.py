@@ -431,7 +431,7 @@ def embed_pending(
 
 
 def _paid(spec: models.ModelSpec | None) -> bool:
-    return spec is not None and spec.kind == "claude"
+    return spec is not None and spec.paid
 
 
 def captures_ready(con: sqlite3.Connection, onto: ontology.Ontology) -> list[int]:

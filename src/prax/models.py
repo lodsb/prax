@@ -90,10 +90,23 @@ class ModelSpec:
     n_ctx: int = DEFAULT_CTX  # the server's context per slot (openai)
     effort: str | None = None
     price: tuple[float, float] | None = None  # USD per million in, out
+    # whether a call to this model costs money. A claude model does; an
+    # openai one at somebody else's API does as soon as it is priced;
+    # ``paid: false`` says a priced model is free after all (a server of
+    # one's own, priced so the ledger can compare it with what it replaces)
+    paid_: bool | None = None
     params: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
     # how `prax up` starts the server for this model (openai kind, on this
     # machine): the slots, the projector, what stays in RAM (prax.up)
     serve: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
+
+    @property
+    def paid(self) -> bool:
+        """Whether a call costs money: what the worker refuses without
+        ``--spend``, what the budget counts, and what the UI marks."""
+        if self.paid_ is not None:
+            return self.paid_
+        return self.kind == "claude" or bool(self.price)
 
     @property
     def runtime_name(self) -> str:
@@ -147,6 +160,7 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
         "n_ctx",
         "effort",
         "price",
+        "paid",
         "serve",
     }
     if kind == "openai" and not (raw.get("base_url") and raw.get("model")):
@@ -172,6 +186,7 @@ def _spec_from(name: str, raw: dict[str, Any]) -> ModelSpec:
         n_ctx=int(raw.get("n_ctx", DEFAULT_CTX)),
         effort=raw.get("effort"),
         price=(float(price[0]), float(price[1])) if price else None,
+        paid_=None if raw.get("paid") is None else bool(raw.get("paid")),
         params=tuple(sorted((k, v) for k, v in raw.items() if k not in known)),
         serve=tuple(sorted(serve.items())),
     )
