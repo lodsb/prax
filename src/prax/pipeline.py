@@ -21,7 +21,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-import socket
 import sqlite3
 import time
 import urllib.request
@@ -595,10 +594,6 @@ def _embed_step(
             except IndexBusy as exc:
                 out["embed"] = f"deferred: {exc}"
                 _say(log, out["embed"])
-
-
-def host_name() -> str:
-    return socket.gethostname()
 
 
 # ------------------------------------------------- the readings the door asks for

@@ -28,8 +28,6 @@ from typing import Any
 
 from prax import config, models, store
 
-STEPS_FREE_OF_CHARGE: tuple[str, ...] = ()  # none: what is paid is what is priced
-
 
 def limits() -> dict[str, float]:
     """``daily_usd`` and ``monthly_usd`` from ``prax.yaml``; 0 is no limit."""

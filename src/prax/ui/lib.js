@@ -1,4 +1,4 @@
-/* prax web UI: the pure helpers, shared by the page (loaded before app.js)
+/* prax web UI: the pure helpers, shared by the page (loaded first)
    and by the node tests (tests/ui/lib.test.js). No DOM, no fetch, no
    globals read: everything here is a function of its arguments. */
 "use strict";

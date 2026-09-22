@@ -492,7 +492,7 @@ def test_browsing_endpoints_and_ui(client: TestClient) -> None:
     ).json()
     listing = client.get("/documents").json()
     assert listing["total"] == 2
-    js = client.get("/ui/app.js")
+    js = client.get("/ui/core.js")
     assert js.status_code == 200 and js.headers["cache-control"] == "no-cache"
     assert [d["id"] for d in listing["items"]] == [note["doc_id"], pdf["doc_id"]]
     assert listing["items"][0]["n_chunks"] >= 1 and listing["items"][0]["meta"] == {
@@ -551,7 +551,7 @@ def test_browsing_endpoints_and_ui(client: TestClient) -> None:
     assert client.get("/", follow_redirects=False).status_code == 307
     page = client.get("/ui/")
     assert page.status_code == 200 and "<title>prax</title>" in page.text
-    assert client.get("/ui/app.js").status_code == 200
+    assert client.get("/ui/core.js").status_code == 200
     assert client.get("/ui/vendor/marked.min.js").status_code == 200
     # the maths: KaTeX and one of its fonts, served by the door itself (the
     # policy allows no other origin for scripts, styles or fonts)

@@ -204,7 +204,11 @@ def child(
     tmp_path: Path, name: str, life: float, code: int = 0
 ) -> tuple[Path, list[str]]:
     script = tmp_path / "child.py"
-    script.write_text(CHILD, encoding="utf-8")
+    if not script.exists():
+        # written once per test: rewriting it while a child of an earlier
+        # role is reading it is a sharing violation on Windows, which the
+        # suite saw twice as a PermissionError out of pytest's own cleanup
+        script.write_text(CHILD, encoding="utf-8")
     mark = tmp_path / f"{name}.ran"
     return mark, [PY, str(script), str(mark), str(life), str(code)]
 
@@ -458,6 +462,10 @@ def test_a_swap_hands_the_card_over_and_takes_it_back(
     try:
         wait_for(lambda: runs_of(mark_a) >= 1)
         assert runs_of(mark_b) == 0  # on demand: not started with the rest
+        # the group is in the status file before any swap: the Jobs view
+        # has something to offer from the start
+        before = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+        assert before["groups"]["card"]["holder"] is None
         up.swap(data_dir, "marker")
         wait_for(lambda: runs_of(mark_b) >= 1)
         status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
@@ -469,7 +477,12 @@ def test_a_swap_hands_the_card_over_and_takes_it_back(
         waiting.clear()
         wait_for(lambda: runs_of(mark_a) >= 2)
         status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
-        assert "card" not in status.get("groups", {})
+        card = status["groups"]["card"]  # still declared, nothing on loan
+        assert card["holder"] is None and card["members"] == [
+            "llama-server",
+            "marker",
+        ]
+        assert card["needs_vram_mb"] == {"llama-server": 20000, "marker": 5000}
         assert any("gives it back" in line for line in said)
     finally:
         up.stop(data_dir, wait=20)

@@ -845,13 +845,7 @@ class Supervisor:
                 "updated": _now(),
                 "data_dir": str(self.data_dir),
                 "roles": {r.name: dict(self.state[r.name]) for r in self.roles},
-                "groups": {
-                    name: {
-                        **{k: v for k, v in g.items() if k != "quiet_since"},
-                        "members": [r.name for r in self.roles if r.group == name],
-                    }
-                    for name, g in self.groups.items()
-                },
+                "groups": self._group_status(),
                 "waiting": dict(self.demand),
             }
         path = self.run_dir / STATUS
@@ -1059,6 +1053,34 @@ class Supervisor:
                     self._end(name, proc)
 
     # -- the groups: roles that compete for one resource (the card)
+
+    def _group_status(self) -> dict[str, Any]:
+        """Every group ``run:`` declares, whether or not its resource is on
+        loan: the members and what each wants of it, and the loan when
+        there is one. A group only listed while borrowed would leave the
+        Jobs view with nothing to offer until the first swap."""
+        out: dict[str, Any] = {}
+        for role in self.roles:
+            if not role.group:
+                continue
+            group = out.setdefault(
+                role.group,
+                {
+                    "members": [],
+                    "needs_vram_mb": {},
+                    "holder": None,
+                    "was_up": [],
+                    "back_when": None,
+                    "fits": None,
+                    "since": None,
+                },
+            )
+            group["members"].append(role.name)
+            group["needs_vram_mb"][role.name] = role.needs_vram_mb
+        for name, loan in self.groups.items():
+            group = out.setdefault(name, {"members": []})
+            group.update({k: v for k, v in loan.items() if k != "quiet_since"})
+        return out
 
     def _members(self, group: str) -> list[Role]:
         return [r for r in self.roles if r.group == group]

@@ -38,8 +38,6 @@ log = logging.getLogger("prax.tray")
 
 ICON = Path(__file__).resolve().parent / "ui" / "prax-tray.png"
 POLL = 2.0  # seconds between reads of the status file
-DOWN_STATES = ("down", "waiting", "starting")
-
 
 def door_url() -> str:
     """Where the UI is: ``run.door`` in prax.yaml, on this machine."""

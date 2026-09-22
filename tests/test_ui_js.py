@@ -21,7 +21,7 @@ needs_node = pytest.mark.skipif(NODE is None, reason="node is not installed")
 @needs_node
 @pytest.mark.parametrize(
     "script",
-    [UI / "app.js", UI / "lib.js", *sorted(EXT.glob("*.js"))],
+    [*sorted(UI.glob("*.js")), *sorted(EXT.glob("*.js"))],
     ids=lambda p: p.name,
 )
 def test_scripts_parse(script: Path) -> None:

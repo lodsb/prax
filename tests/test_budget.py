@@ -142,3 +142,27 @@ def test_the_door_reports_the_spending_and_refuses_a_paid_ask(
         "/ask", json={"question": "granular", "backend": "api", "steps": 0}
     )
     assert asked.status_code == 402 and "is spent" in asked.json()["detail"]
+
+
+def test_the_claude_prices_and_the_cache_shares(data_dir: Path) -> None:
+    """The published table (2026-09-22), a dated model id priced as its
+    model, an unknown one at Opus rates, and the two models whose cache
+    reads are cheaper than a tenth."""
+    from prax import extraction
+
+    million = {"input_tokens": 1_000_000, "output_tokens": 100_000}
+    assert extraction.price("claude-sonnet-5") == (2.0, 10.0)
+    assert extraction.price("claude-haiku-4-5-20251001") == (1.0, 5.0)  # dated
+    assert extraction.price("claude-opus-5-5") == (4.0, 20.0)
+    assert extraction.price("claude-opus-4-1") == (15.0, 75.0)
+    assert extraction.price("claude-something-new") == (5.0, 25.0)  # Opus rates
+    assert extraction.price("qwen@127.0.0.1:8080") == (0.0, 0.0)
+    assert extraction.cost_usd("claude-sonnet-5", million) == pytest.approx(3.0)
+    # a cache read is a tenth of the input price, and less on two models
+    cached = {"input_tokens": 0, "cache_read_input_tokens": 1_000_000}
+    assert extraction.cost_usd("claude-sonnet-5", cached) == pytest.approx(0.2)
+    assert extraction.cost_usd("claude-opus-5-5", cached) == pytest.approx(0.2)
+    assert extraction.cost_usd("claude-fable-5-1", cached) == pytest.approx(0.25)
+    # a write is a quarter more than the input price (the five-minute cache)
+    written = {"input_tokens": 0, "cache_creation_input_tokens": 1_000_000}
+    assert extraction.cost_usd("claude-sonnet-5", written) == pytest.approx(2.5)

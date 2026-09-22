@@ -389,7 +389,7 @@ its costume as the page. What the UI does with it:
   Both are vendored under `vendor/fonts/` (OFL, latin and latin-ext
   subsets, loaded by `unicode-range`), with the brief's fallbacks.
 - **Ornament**, three pieces and no more. The double rule under the
-  masthead. The rule that ends in a lozenge (`rule()` in `app.js`,
+  masthead. The rule that ends in a lozenge (`rule()` in `core.js`,
   between a document's head and its body and under the sources' head).
   Plates: panels held by four drawn corner ticks instead of a border, a
   shadow or a radius (`.plate`; a mask, so the tick takes the theme's
@@ -411,9 +411,11 @@ browser-side preferences go into the same dialog and the same key.
 ## Files
 
     src/prax/ui/
-      index.html        the page: nav, a view container, script tags
-      lib.js            the pure helpers (escaping, hash parsing, chunk locating, citation links); also loaded by the node tests
-      app.js            API client, one render function per view, the error reporter
+      index.html        the page: nav, a view container, the script tags in load order
+      lib.js            the pure helpers (escaping, hash parsing, chunk locating, citation links, the host and spending panels); also loaded by the node tests
+      core.js           the API client, the session, the status line, and the helpers every view uses
+      view-<name>.js    one file per view: search, doc, browse, graph, pages, review, ask, promote, inbox, jobs
+      boot.js           the change poll, the views map, the router, the error reporter, the first render
       style.css         the six themes as custom properties, the type, the ornament, the views
       theme.js          applies the chosen theme before the first paint (loaded in <head>)
       favicon.svg       the mark, one pull and a colour, Bindery (static)
@@ -422,7 +424,7 @@ browser-side preferences go into the same dialog and the same key.
 
 ## Tests and errors
 
-`tests/test_ui_js.py` parses both scripts with `node --check` and runs
+`tests/test_ui_js.py` parses every script with `node --check` and runs
 `node --test tests/ui`, the unit tests of `lib.js` (router, chunk
 locator, citation links, escaping), when node is installed. Nothing
 else executes JavaScript, and no browser automation is part of the
