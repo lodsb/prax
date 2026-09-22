@@ -68,8 +68,8 @@ Consequences for the importer:
   (four copies of one 44 KB article, for instance). Hashing collapses
   them; all Zotero keys are kept in `meta.zotero.keys`.
 - **Space.** A full copy import needs about 22–26 GB for the archive plus
-  roughly 1.5 GB for the database and text artifacts; the external drive
-  had no room for a second copy, the system drive did. The plan is a
+  roughly 1.5 GB for the database and text artifacts. The external drive
+  had no room for a second copy; the system drive did. The plan is a
   scratch run there with `PRAX_DATA_DIR` set, in three steps: the
   fixture, then `--limit 500`, then the whole library. A zero-copy
   variant (hard-linking into an archive on the same NTFS volume as
@@ -97,35 +97,35 @@ Searching the store for "extended complex Kalman filter pitch tracking"
 returns the Das 2020 URL-only document and its full-text twin first.
 
 **The cache-less backlog** (first parse-queue pass, 2026-09-07). The 1,090
-PDFs Zotero had no text for split into 28 with a text layer (indexed by
-pymupdf4llm, two of them through the plain fallback), 1,006 scans with no
-text layer, and 56 files that are not readable PDFs (mostly truncated
-downloads; MuPDF cannot open them). Zotero's cache therefore already
-covered every born-digital PDF. The scans hold 21,886 pages: 937 documents
-of at most 60 pages (4,531 pages, invoices, letters, short papers) go
-through the bounded OCR pass; 71 scanned books (17,355 pages) wait for a
-deliberate run with a raised `PRAX_OCR_MAX_PAGES`.
+PDFs Zotero had no text for split three ways. 28 had a text layer,
+indexed by pymupdf4llm, two of them through the plain fallback. 1,006
+were scans with no text layer. 56 are not readable PDFs at all, mostly
+truncated downloads MuPDF cannot open. Zotero's cache therefore already
+covered every born-digital PDF. The scans hold 21,886 pages. 937 documents of at most 60 pages go
+through the bounded OCR pass: 4,531 pages of invoices, letters and short
+papers. 71 scanned books, 17,355 pages, wait for a deliberate run with a
+raised `PRAX_OCR_MAX_PAGES`.
 
-**OCR pass** (RapidOCR through pymupdf4llm, 87 minutes): 283 scans got
-usable text (median 3.3 K characters: letters, invoices, short papers, a
-few scanned articles); 613 came back empty, and a look at them shows
-single-page artwork (a font-art series of decorated letters, word clouds,
-schematics), not failed OCR; 42 hit MuPDF or pymupdf4llm faults on odd
-files. After both passes 8,448 documents are indexed and 779 PDFs stay
+**OCR pass** (RapidOCR through pymupdf4llm, 87 minutes). 283 scans got
+usable text, median 3.3 K characters: letters, invoices, short papers, a
+few scanned articles. 613 came back empty, and a look at them shows
+single-page artwork rather than failed OCR: a font-art series of
+decorated letters, word clouds, schematics. 42 hit MuPDF or pymupdf4llm
+faults on odd files. After both passes 8,448 documents are indexed and 779 PDFs stay
 pending: the 71 books, the 56 unreadable files, the artwork, and the
 faulting few. Every attempt is in `meta.parse_history`.
 
-**Upgrade pass** (2026-09-07, pymupdf4llm and trafilatura over everything
-Zotero's cache had covered; about five hours of desktop time in batches of
-200 documents per process): 7,732 documents now carry pymupdf4llm
+**Upgrade pass** (2026-09-07). pymupdf4llm and trafilatura over
+everything Zotero's cache had covered, about five hours of desktop time
+in batches of 200 documents per process. 7,732 documents now carry
+pymupdf4llm
 Markdown with page markers, 99 HTML snapshots trafilatura text, 68 plain
 MuPDF text (oversized or layout-hostile originals), and 163 kept the cache
-text because the new extraction was shorter. After re-chunking, 8,448
-indexed documents hold 855,731 chunks (median text chunk 742 characters),
-784,742 of them with a page number; tables, figure captions and code
-listings are chunks of their own. The database is 1.8 GB. Three guards came out of this pass: lone surrogates from broken
-fonts are replaced before archiving, layout analysis is capped at 400
-pages and 40 MB, and documents an extractor version has already tried are
+text because the new extraction was shorter. After re-chunking, 8,448 indexed documents hold 855,731 chunks, median text
+chunk 742 characters, 784,742 of them with a page number. Tables, figure
+captions and code listings are chunks of their own. The database is 1.8 GB. Three guards came out of this pass. Lone surrogates from broken fonts are
+replaced before archiving. Layout analysis is capped at 400 pages and 40 MB.
+Documents an extractor version has already tried are
 skipped so batch loops always progress.
 
 ### Schema mapping
@@ -207,10 +207,11 @@ attachment, `original_path` the file's path under `storage/`.
 A handful of open-access items are copied from the library into
 `tests/fixtures/zotero/` as a `storage/` subtree plus a `zotero.sqlite`
 reduced to those items (25 items, 12 storage folders, 6.3 MB). This is
-the corpus for importer tests and for the Stage 2 eval queries. Every
-file is under a licence that allows redistribution (CC BY 3.0 and 4.0
-papers from DAFx, SMC and arXiv, an IEEE open-access letter, a Stack
-Exchange page under CC BY-SA, a CC BY-SA schematic sheet);
+the corpus for importer tests and for the Stage 2 eval queries.
+
+Every file is under a licence that allows redistribution: CC BY 3.0 and
+4.0 papers from DAFx, SMC and arXiv, an IEEE open-access letter, a Stack
+Exchange page under CC BY-SA, a CC BY-SA schematic sheet.
 `tests/fixtures/zotero/README.md` lists each with its licence. Personal
 documents in the library and papers under a publisher's copyright are
 imported into the private store but never into the fixture.
@@ -228,17 +229,17 @@ imported into the private store but never into the fixture.
 | One standalone PDF, no parent | `UW29C5GP` | a front-panel drawing; title-from-filename path |
 
 Rebuilt (2026-09-11) with `scripts/make_zotero_fixture.py` from those
-keys. The library drive was not mounted, so the source was a
-Zotero-shaped directory assembled from the importer's private copy of
-`zotero.sqlite` and the archived originals, with `.zotero-ft-cache` files
-written from the store's text artifacts. The earlier fixture (2026-09-07)
+keys. The library drive was not mounted. So the source was a Zotero-shaped
+directory, assembled from the importer's private copy of `zotero.sqlite` and
+the archived originals, with `.zotero-ft-cache` files written from the
+store's text artifacts. The earlier fixture (2026-09-07)
 held publisher-copyrighted papers and was removed from the history before
 the repository went public.
 
 ## 1b. Citation sources (OpenAlex, Crossref)
 
-Not documents but edges: `prax import citations` (a job on the door) looks each
-document up by DOI (or exact title) and writes `cites` edges from the
+Not documents but edges. `prax import citations`, a job on the door, looks
+each document up by DOI or exact title. It writes `cites` edges from the
 source's reference list, with the citation count in `meta.citations`.
 Read-only, no key, idempotent per document. Details in
 `prax.importers.citations` and `docs/howto.md` 3f.
@@ -287,10 +288,9 @@ set per capture, CORS for the extension's origin through
 
 ## 3. Inbox folder
 
-`data/inbox/` (howto 3l). The door registers any file dropped there,
-indexes text at once and leaves the rest for the worker's parse step; a
-subfolder names the domain, a
-JSON sidecar carries title, URL, domains and tags; consumed files are
+`data/inbox/` (howto 3l). The door registers any file dropped there, indexes text at once and leaves
+the rest for the worker's parse step. A subfolder names the domain, and a
+JSON sidecar carries title, URL, domains and tags. Consumed files are
 removed because the archive holds their bytes, refused ones go to
 `inbox/failed/`. Useful for PDFs that arrive by mail or download and for
 any future front-end (Karakeep, Linkwarden) that can write files to a
@@ -308,20 +308,19 @@ Zotero import dedupe automatically by hash.
 ## 5. Later front-ends
 
 Karakeep (organization, local AI tagging) or Linkwarden (archival) can sit
-in front of the inbox. prax re-indexes everything into its own FTS5 and
-vector tables, so a front-end can be swapped or removed without touching
-search.
+in front of the inbox. prax re-indexes everything into its own FTS5 and vector tables. A front-end
+can be swapped or removed without touching search.
 
 ## 6. What you keep elsewhere: `prax import`
 
 The Zotero importer opens the database on the door's host. The importers
-that came after it are clients of the door (`prax.importers.feed`): they
-read an export or an API, send each item through `POST /ingest` (a
-document of their own) or `POST /ingest/url` (a link the door fetches),
-and run wherever the `prax` command runs. Idempotence is by key: a text
-item carries `meta.<source>.key` and a version (what changes when the
-source's item changes), and the run lists the library's documents of its
-source first; a link asks `GET /captures?url=` before fetching. `--refresh`
+that came after it are clients of the door (`prax.importers.feed`). Each
+reads an export or an API and sends every item through `POST /ingest`,
+as a document of its own, or `POST /ingest/url`, as a link the door
+fetches. They run wherever the `prax` command runs. Idempotence is by key. A text item carries `meta.<source>.key` and a
+version, which is what changes when the source's item changes, and the run
+lists the library's documents of its source first. A link asks `GET
+/captures?url=` before fetching. `--refresh`
 re-sends what changed and retires the earlier document as replaced;
 `--dry-run` lists what would be sent. Every run takes `--domain` and
 `--tag`.
@@ -336,10 +335,9 @@ re-sends what changed and retires the earlier document as replaced;
 
 Neither reads an app's own database: Signal Desktop's is encrypted and
 sigtop is the tool that knows how to read it; a browser's bookmarks are
-exported, not opened. Nothing writes back (invariant 10). Medium serves
-a public story to the door's fetch; a member-only one comes back as its
-preview, and the extension is the way to capture that with your own
-session.
+exported, not opened. Nothing writes back (invariant 10). Medium serves a public story to the door's fetch. A member-only one comes
+back as its preview, and the extension is the way to capture it with your
+own session.
 
 ### What else could feed it
 
@@ -347,18 +345,18 @@ The same shape fits most of what a person keeps: a reader that yields
 `Item`s, and `feed.run`. Candidates, roughly by how much of the work is
 already done:
 
-- **Any HTML or CSV of links** already works (`links`): Hacker News
+- **Any HTML or CSV of links** already works (`links`). Hacker News
   favourites (the page), Pinboard (its bookmark export is the Netscape
-  file), Raindrop, Instapaper (CSV), a Mastodon or Bluesky bookmark export
-  once it is a list of links.
+  file), Raindrop, Instapaper (CSV), and a Mastodon or Bluesky bookmark
+  export once it is a list of links.
 - **Telegram groups and channels** already work (`chat`), so a channel
   someone curates is a feed.
-- **Kindle highlights** (`My Clippings.txt`, or the Kindle notebook
-  export): one document per book, the highlights as quotes with their
-  locations — a small reader, and the book itself is often in the library.
-- **RSS and Atom feeds**: a reader that polls a list of feed URLs and
-  yields each entry as a link, with the feed's name as a tag; the
-  captures are what the extension would have made. The run becomes a
+- **Kindle highlights** (`My Clippings.txt`, or the Kindle notebook export):
+  one document per book, the highlights as quotes with their locations. A
+  small reader, and the book itself is often in the library.
+- **RSS and Atom feeds**: a reader that polls a list of feed URLs and yields
+  each entry as a link, with the feed's name as a tag. The captures are what
+  the extension would have made. The run becomes a
   scheduled task like the backup.
 - **YouTube** (Watch later, playlists, a channel): the video page is thin;
   the transcript is the document, fetched per video.

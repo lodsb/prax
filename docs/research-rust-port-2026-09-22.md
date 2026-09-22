@@ -44,7 +44,7 @@ Three things, each a migration and one pass, all before the first
 Rust line that reads a chunk:
 
 1. **Locators to byte offsets.** `chunks.locator` holds character
-   ranges; Rust wants bytes. A migration rewrites every locator from
+   ranges, and Rust wants bytes. A migration rewrites every locator from
    the artifact (one read per document), and the contract becomes
    `chunk.text == artifact[start..end]` over bytes.
 2. **Extractor stamps.** Every `text_source`, `parse_history` entry and
@@ -65,8 +65,9 @@ beside the Python one on a second port, against the same `prax.db` and
 `.usearch` files. Responses are diffed for a week before the Python
 side is switched off for that area.
 
-1. the store's `base` and `documents` with the migrations; byte
-   locators; `chunking`, `blocks`, `references`, `glyphs`, `acronyms`
+1. the store's `base` and `documents` with the migrations, byte
+   locators, then `chunking`, `blocks`, `references`, `glyphs`,
+   `acronyms`
 2. `retrieval` and `vectors` on `rusqlite` + `usearch` + `fastembed`:
    search answers the same top ten on the 62 library queries of
    `docs/eval/`
@@ -76,8 +77,8 @@ side is switched off for that area.
 5. `ask` and `surf`, `questions`, `extraction.apply` and the typing
    rules, `resolution`
 6. the worker: `mupdf` text and figures, `trafilatura`, the OCR crate,
-   Word/ODT; the Markdown layout extractor last, measured against the
-   eval sets before it replaces `pymupdf4llm` for anything
+   Word/ODT. The Markdown layout extractor comes last, measured against
+   the eval sets before it replaces `pymupdf4llm` for anything
 7. `up`, the tray, autostart, the CLI, the MCP proxy
 
 Stages 1–5 are the door on the board: two to three months for one
@@ -94,4 +95,4 @@ their own that nothing else waits for.
 - ONNX Runtime as a shared library beside the binary, unless the
   embedder moves to `candle`.
 - The Pi's build: `mupdf-sys` and `usearch` compile C and C++ on the
-  target (or in an arm64 builder); an hour on the board the first time.
+  target, or in an arm64 builder. An hour on the board the first time.

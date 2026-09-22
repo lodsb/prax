@@ -1,7 +1,7 @@
 # prax in a Claude Code workflow
 
 Two directions: what a project learns becomes part of the library, and
-a project draws on what the library holds. Both go through the door;
+a project draws on what the library holds. Both go through the door.
 the plugin (`clients/claude-plugin/`) is the packaged form, the pieces
 work on their own too.
 
@@ -12,9 +12,9 @@ work on their own too.
     claude plugin marketplace add lodsb/prax
     claude plugin install prax@prax
 
-It registers the `prax` MCP server for every session, a skill that says
-when to reach for the library and how to cite and write back, four
-commands and a session-end hook:
+It registers the `prax` MCP server for every session. With it come a skill
+that says when to reach for the library and how to cite and write back,
+four commands, and a session-end hook:
 
 | | |
 |---|---|
@@ -35,13 +35,13 @@ server; disable one of the two there.
 `PRAX_INGEST_ROOTS` in the server's environment (paths separated by
 the OS path separator) names other roots, such as a downloads folder.
 What a page in the library says is data to the model, never an
-instruction; the skill says so, and the roots keep a key file out of
-the library should a page ask for one.
+instruction. The skill says so, and the roots keep a key file out of the
+library should a page ask for one.
 
-Without the plugin, the same server is one line at user scope —
-`claude mcp add --scope user prax -e PRAX_DOOR=… -- <python> -m
-prax.mcp_server` — and the skill's guidance goes into the project's
-`CLAUDE.md` by hand (the snippets below).
+Without the plugin, the same server is one line at user scope: `claude mcp
+add --scope user prax -e PRAX_DOOR=… -- <python> -m prax.mcp_server`. The
+skill's guidance then goes into the project's `CLAUDE.md` by hand, from
+the snippets below.
 
 ## Project → library
 
@@ -55,15 +55,15 @@ Three levels, from the cheapest up:
 
    Then `prax import project .` (or the hook at session end) sends
    every documentation file, keyed by `<name>/<path>` and versioned by
-   its content, so a rewritten note replaces its earlier self
-   (`--refresh`) and nothing is sent twice. Source code stays in git;
-   what was decided and why is what the library keeps.
-2. **The project's page.** `project-<name>` in the wiki, kind
-   `project` (slugs are slugified: `Project Synth` and `project/synth`
-   both become `project-synth`): the agent appends decisions, findings and open questions
-   as it goes (`/prax:remember`), citing the documents they rest on;
-   the page is a document — searchable, in the graph, with revisions —
-   and the agent appends, never overwrites.
+   its content. A rewritten note replaces its earlier self
+   (`--refresh`), and nothing is sent twice. Source code stays in git.
+   What was decided and why is what the library keeps.
+2. **The project's page.** `project-<name>` in the wiki, kind `project`. Slugs are slugified, so
+   `Project Synth` and `project/synth` both become `project-synth`. The
+   agent appends decisions, findings and open questions as it goes
+   (`/prax:remember`), citing the documents they rest on. The page is a
+   document: searchable, in the graph, with revisions. The agent appends
+   and never overwrites.
 3. **Facts.** What the project uses, follows, was built with: `link`
    edges against the ontology, with the page or the source document as
    `source_doc`. Everything the agent writes is stamped `agent`, so a
@@ -71,11 +71,11 @@ Three levels, from the cheapest up:
    (`retire_run`).
 4. **The raw record.** `prax import claude .` (or `/prax:archive`, or
    the hook with `archive: [transcripts, memory]` in `.prax-project`)
-   keeps each Claude Code session as a document: the person's turns and
-   the assistant's prose, tool calls and results left out, keyed by
-   session id and refreshed while the session grows; the project's
-   memory files go as `<name>-memory`. The page (2) is what was decided;
-   this is what was said. Transcripts can carry what was pasted into
+   keeps each Claude Code session as a document. It holds the person's
+   turns and the assistant's prose, with tool calls and results left out,
+   keyed by session id and refreshed while the session grows. The
+   project's memory files go as `<name>-memory`. The page (2) is what was decided.
+   This is what was said. Transcripts can carry what was pasted into
    them, which is why it is a separate opt-in and `--dry-run` lists the
    sessions first.
 
@@ -93,20 +93,20 @@ when the plugin is not installed:
     Start with `context(slug="project-synth-firmware")`. Keep decisions on
     that page with `append_page`; never store source code in the library.
 
-`context(slug=…)` returns the page and its members, the entities its
-edges point at, citations and nearest documents — the orientation a
-session needs in one call. `documents(tag="project:<name>")` lists what
-the project has synced; `documents(domain=…)` what a module holds.
+`context(slug=…)` returns the page and its members, the entities its edges point at,
+citations and nearest documents. That is the orientation a session needs,
+in one call. `documents(tag="project:<name>")` lists what
+the project has synced. `documents(domain=…)` says what a module holds.
 
 ## What is not there
 
-- The agent story is built for Claude Code; another MCP client gets
+- The agent story is built for Claude Code. Another MCP client gets
   the server and the tools but not the skill and commands.
 - The change feed (`GET /changes`) is polling, not push; a workflow
   that should react to new documents polls it or runs on a schedule.
 - "Scheduled" means a cron line: `prax backup`, `prax import github`,
   `prax import project ~/work/synth`.
-- Whether a project's decisions and requirements deserve ontology types
-  of their own (a `project` module: decision, requirement, component)
-  is open; pages and tags carry them today, and the review queue will
+- Whether a project's decisions and requirements deserve ontology types of
+  their own is open: a `project` module with decision, requirement and
+  component. Pages and tags carry them today, and the review queue will
   say when the models keep wanting to say more.

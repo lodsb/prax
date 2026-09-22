@@ -1,8 +1,8 @@
 # The studio module: gear and its paperwork (2026-09-12)
 
 The first batch of uploads through the Inbox view brought 19 documents
-that are not papers: synthesizer and microphone manuals, a service
-manual, datasheets, schematics, a cheat sheet, a magazine test and a
+that are not papers. They are synthesizer and microphone manuals, a
+service manual, datasheets, schematics, a cheat sheet, a magazine test and a
 forum guide. Read under the research module they produced five
 documents with no edges at all and a queue that says what the model
 wanted to say. Counted by the shape:
@@ -22,14 +22,12 @@ wanted to say. Counted by the shape:
 
 - A module may declare `self_types`: what the document being extracted
   may be. Research says `paper`; studio says `manual`, `datasheet`,
-  `schematic`, `article`. The prompt names the one type when only one is
-  possible and asks the model to pick when several are, and the local
-  extractor maps "this manual" and "the document" to the title for any
-  of them.
+  `schematic`, `article`. The prompt names the one type when only one is possible, and asks the
+model to pick when several are. The local extractor maps "this manual" and
+"the document" to the title for any of them.
 - Aliases do not shadow declared names across independent modules.
-  Studio aliases `mentions` to `names` and `about` to `covers` for a
-  document that is studio only; when research is loaded as well, the
-  research relations keep their names and the aliases are left out. An
+  Studio aliases `mentions` to `names` and `about` to `covers` for a document that is studio only. When research is loaded as well, the
+research relations keep their names and the aliases are left out. An
   alias that shadows a name in its own module or a required one is still
   an error.
 - The composed version is now `core1+research5+studio1`. Documents with
@@ -41,9 +39,8 @@ wanted to say. Counted by the shape:
   (`store.retire_reading`, history kept) before writing the new ones.
   The manuals' first reading as papers is gone from the live graph that
   way; other producers' edges stay.
-- One typing rule (`self-as-device`): the model likes to write "the
-  manual has this feature" and "the datasheet has this spec"; when the
-  document `describes` exactly one device, the rule moves the edge onto
+- One typing rule (`self-as-device`): the model likes to write "the manual has this feature" and "the datasheet
+has this spec". When the document `describes` exactly one device, the rule moves the edge onto
   the device.
 
 ## What was done with the library
@@ -62,7 +59,7 @@ re-extracted against the studio subset:
 | devices in the graph | 35 (Sony C-38B, Waldorf Iridium, XV-5080, Rane ONE, Mutable Instruments Clouds, the Leadshine motors, the SC500 and SC1000 boards, the microphones a review compares) |
 
 The five documents that had no edges under research now have between 4
-and 20 each. Two things the queue still shows: the model also writes
+and 20 each. Two things the queue still shows. The model also writes
 `covers` and `names` without types for parts and standards it is unsure
 of, and a datasheet's specs come as many small `has_spec` lines the
 rule types only when the device is known.
