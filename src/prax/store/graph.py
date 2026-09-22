@@ -432,13 +432,18 @@ def find_entities(
     con: sqlite3.Connection, q: str, *, limit: int = 20
 ) -> list[dict[str, Any]]:
     """Entities whose name contains ``q`` (case-insensitive), with their
-    number of currently valid edges, most connected first."""
+    number of currently valid edges, most connected first. The degree is
+    two counts, one per end: an OR across ``src`` and ``dst`` made the
+    subquery scan the edges for every matching name (340 names, 14 s;
+    two indexed counts, 46 ms, 2026-09-22)."""
     pattern = "%" + _like_prefix(q.lower())[:-1] + "%"
     rows = con.execute(
         """
         SELECT e.id, e.name, e.type,
                (SELECT count(*) FROM edges x
-                WHERE (x.src = e.id OR x.dst = e.id) AND x.valid_to IS NULL) AS degree
+                WHERE x.src = e.id AND x.valid_to IS NULL)
+               + (SELECT count(*) FROM edges x
+                  WHERE x.dst = e.id AND x.valid_to IS NULL) AS degree
         FROM entities e WHERE lower(e.name) LIKE ? ESCAPE '!'
           AND e.canonical_id IS NULL
         ORDER BY degree DESC, e.name LIMIT ?
