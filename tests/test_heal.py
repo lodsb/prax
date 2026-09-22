@@ -509,3 +509,29 @@ def test_the_glyph_check_reads_a_text_once(
     store.retire_document(con, ok, reason="test")
     repair._glyph_documents(con)
     assert ok not in repair._glyphs_seen
+
+
+def test_a_truncated_pdf_records_no_pages_rather_than_nagging(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A PDF MuPDF opens with no pages at all (a truncated download whose
+    text came from somewhere else) records zero. It used to be skipped,
+    so uncounted-pages listed it for ever and repaired nothing."""
+    from prax.store import documents as docs
+
+    doc = store.register(con, b"%PDF-1.4 truncated", mime="application/pdf", title="t")[
+        "doc_id"
+    ]
+    store.index_text(con, doc, "text from the cache " * 20)
+    whole = store.register(con, b"%PDF-1.4 whole", mime="application/pdf", title="w")[
+        "doc_id"
+    ]
+    store.index_text(con, whole, "text " * 20)
+    assert store.uncounted_pages(con) == [doc, whole]
+    monkeypatch.setattr(
+        docs, "page_counts", lambda _con, ids, **_kw: {doc: 0, whole: 12}
+    )
+    assert store.count_pages(con, [doc, whole]) == 2
+    assert store.get_meta(con, doc)["pages"] == 0
+    assert store.get_meta(con, whole)["pages"] == 12
+    assert store.uncounted_pages(con) == []  # neither is asked about again

@@ -27,11 +27,16 @@ def _groups_lines(state: dict) -> list[str]:
     """One line per group whose resource is on loan."""
     out_lines = []
     for name, g in (state.get("groups") or {}).items():
+        members = ", ".join(g.get("members") or [])
+        holder = g.get("holder")
+        if not holder:  # nothing borrowed: who shares it, and how to ask
+            out_lines.append(f"  {name}: shared by {members} · prax up --swap <role>")
+            continue
         others = ", ".join(g.get("was_up") or []) or "nothing"
         how = "beside" if g.get("fits") else "instead of"
-        back = g.get("back_when", "idle")
+        back = g.get("back_when") or "idle"
         out_lines.append(
-            f"  {name}: {g.get('holder')} has it {how} {others}"
+            f"  {name}: {holder} has it {how} {others}"
             f" (back when {back}; prax up --unswap {name})"
         )
     return out_lines

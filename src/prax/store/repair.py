@@ -1084,7 +1084,8 @@ AILMENTS: tuple[Ailment, ...] = (
             " the worker kept one): thin-texts cannot weigh them"
         ),
         fix=(
-            "count them: each PDF opened once, meta.pages written (needs"
+            "count them: each PDF opened once, meta.pages written, zero for"
+            " a truncated original MuPDF opens with no pages at all (needs"
             " pymupdf on the door; the worker records it for every parse since)"
         ),
         find=_uncounted_pages,

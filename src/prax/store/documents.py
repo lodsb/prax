@@ -1245,17 +1245,19 @@ def uncounted_pages(con: sqlite3.Connection, *, limit: int | None = None) -> lis
 
 def count_pages(con: sqlite3.Connection, ids: list[int]) -> int:
     """Open each of those PDFs once and keep its page count in
-    ``meta.pages`` — what a parse records for every document since, done
+    ``meta.pages``: what a parse records for every document since, done
     for the ones before. Needs pymupdf; a PDF it cannot open is left as
-    it is. Returns how many were counted."""
+    it is. A PDF that opens with no pages at all records zero, which is
+    the truth about a truncated original and stops the check asking
+    again. Returns how many were counted."""
     counted = page_counts(con, ids, open_files=True)
     done = 0
     for doc_id in ids:
         n = counted.get(doc_id)
-        if not n:
+        if n is None:
             continue
         meta = get_meta(con, doc_id)
-        if meta.get("pages"):
+        if meta.get("pages") is not None:
             continue
         meta["pages"] = n
         set_meta(con, doc_id, meta)
