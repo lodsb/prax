@@ -248,26 +248,50 @@ def _fts_search(
     expr = expr or _fts_query(query)
     if expr is None:
         return []
-    kind_clause = "AND c.kind = ?" if kind is not None else _ASIDE
-    args: tuple[Any, ...] = (expr, kind, limit) if kind is not None else (expr, limit)
     snippet_col = (
         "snippet(chunks_fts, 0, '[', ']', '…', 12)"
         if snippets
         else "substr(c.text, 1, 160)"
     )
-    rows = con.execute(
-        f"""
-        SELECT c.id AS chunk_id, c.doc_id, d.title,
-               {snippet_col} AS snippet,
-               bm25(chunks_fts) AS score,
-               c.kind, c.locator, c.heading, c.data
-        FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
-                        JOIN documents d ON d.id = c.doc_id
-        WHERE chunks_fts MATCH ? {kind_clause}
-        ORDER BY score LIMIT ?
-        """,
-        args,
-    ).fetchall()
+    if kind is None and not snippets:
+        # rank inside the keyword index alone, then join the survivors: the
+        # joins to chunks and documents ran for every matched row before
+        # the sort, and doubled a common query's cost (51 ms against 25 on
+        # "feedback delay network" over 3.4 M chunks, 2026-09-22). The
+        # aside kinds are dropped after; the inner list is three times as
+        # deep so they seldom cost a slot (they are few: reference entries
+        # and ask blocks)
+        sql = f"""
+            SELECT c.id AS chunk_id, c.doc_id, d.title,
+                   {snippet_col} AS snippet,
+                   f.score,
+                   c.kind, c.locator, c.heading, c.data
+            FROM (SELECT rowid, bm25(chunks_fts) AS score FROM chunks_fts
+                  WHERE chunks_fts MATCH ? ORDER BY score LIMIT ?) f
+            JOIN chunks c ON c.id = f.rowid
+            JOIN documents d ON d.id = c.doc_id
+            WHERE 1 = 1 {_ASIDE}
+            ORDER BY f.score LIMIT ?
+            """
+        args: tuple[Any, ...] = (expr, limit * 3, limit)
+    else:
+        # a kind asked for is a small share of the chunks (tables, figures),
+        # so its filter has to sit inside the ranking; snippet() needs the
+        # keyword index in the outer query (the raw keyword mode): the join
+        # stays there for both
+        kind_clause = "AND c.kind = ?" if kind is not None else _ASIDE
+        sql = f"""
+            SELECT c.id AS chunk_id, c.doc_id, d.title,
+                   {snippet_col} AS snippet,
+                   bm25(chunks_fts) AS score,
+                   c.kind, c.locator, c.heading, c.data
+            FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
+                            JOIN documents d ON d.id = c.doc_id
+            WHERE chunks_fts MATCH ? {kind_clause}
+            ORDER BY score LIMIT ?
+            """
+        args = (expr, kind, limit) if kind is not None else (expr, limit)
+    rows = con.execute(sql, args).fetchall()
     out = []
     for r in rows:
         hit = {k: r[k] for k in ("chunk_id", "doc_id", "title", "snippet", "score")}
