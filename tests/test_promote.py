@@ -127,3 +127,21 @@ def test_api_promote_view(client: TestClient) -> None:
     assert view["candidates"] == []  # A is promoted already; B is cited by nobody
     assert client.delete(f"/doc/{a}/promote").json() == {"removed": True}
     assert client.get("/promote").json()["candidates"][0]["doc_id"] == a
+
+
+def test_the_promote_view_says_who_would_do_the_work(client: TestClient) -> None:
+    """A pending promotion explains itself: the step is named on the
+    command line or it never runs, whatever the flag says."""
+    a = client.post("/ingest", json={"text": "alpha " * 50, "title": "A"}).json()[
+        "doc_id"
+    ]
+    client.post(f"/doc/{a}/promote", json={"reason": "it matters"})
+    wait = client.get("/promote").json()["waiting"]
+    assert wait["step"] == "promote" and wait["watched"] is False
+    assert "unless the run names it" in wait["why"]
+    assert wait["how"] == "prax work --steps promote"  # the stub costs nothing
+    routes = client.get(f"/doc/{a}/routes").json()["routes"]
+    promote_route = next(r for r in routes if r["action"]["kind"] == "promote")
+    assert promote_route["pending"] is True
+    assert "unless the run names it" in promote_route["why"]
+    assert all(r["why"] == "" for r in routes if not r["pending"])

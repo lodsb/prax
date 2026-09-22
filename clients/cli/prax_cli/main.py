@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from prax.client import Door, DoorError
+from prax.steps import STEPS, WATCHED_STEPS
 
 from . import importing, library, out, running
 from . import up as up_cmd
@@ -378,22 +379,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--steps",
-        default="parse,titles,extract,embed,resolve",
+        default=",".join(WATCHED_STEPS),
         help="promote (the paid pass over flagged documents), typing (untyped"
         " review items to the typing model) and adjudicate (the likely pairs"
         " of entity resolution to the adjudicate model, paid: --spend) only"
         " when named; resolve is the likely tier's pairs, a type's names a week",
     )
-    for step in (
-        "parse",
-        "titles",
-        "extract",
-        "promote",
-        "typing",
-        "embed",
-        "resolve",
-        "adjudicate",
-    ):
+    for step in STEPS:
         s.add_argument(
             f"--no-{step}", action="store_true", help=f"skip the {step} step"
         )

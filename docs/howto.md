@@ -665,7 +665,23 @@ named, and only with `--spend`, which is the asking:
     prax work --steps promote --spend          # the flagged documents, once each
     prax work --steps promote --spend -n 5     # five of them
 
-Without `--spend` the worker says the step is paid and touches nothing.
+Without `--spend` the worker says the step is paid and touches
+nothing. A watching worker never asks for the step at all: `--steps`
+names the free passes (`parse,titles,extract,embed,resolve`,
+`prax.steps`), and the paid ones are named on purpose. So a flag can
+sit at "pending" with nothing broken. The door says so rather than
+leaving it at that. `GET /promote` carries `waiting`: the step, its
+model, whether it is paid, when a worker last asked for it, why
+nothing is doing it, and the command that would. The Promote view and
+the process dialog print that line. To leave the pass running, give the
+worker role the step and the money in `prax.yaml`, with a budget to
+bound it ("Models that cost money"):
+
+    run:
+      worker: {steps: [parse, titles, extract, embed, resolve, promote],
+               spend: true}
+    budget: {daily_usd: 2}
+
 A promoted image is first described again by the promote model, and
 the extraction reads that. The model is the `promote` step in
 `prax.yaml` (section 3k; default Sonnet 5, `max_triples: 30`). A

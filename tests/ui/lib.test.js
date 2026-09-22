@@ -171,3 +171,22 @@ test("spendPanel: the budget bars, the ledger, and a host that spends nothing", 
   assert.equal(lib.spendPanel(null), "");
   assert.equal(lib.usd(0.004), "0.40 ¢");
 });
+
+test("waitingNote: a queue nobody asks for, and one in hand", () => {
+  const stuck = lib.waitingNote({
+    step: "promote", model: "sonnet", paid: true, watched: false, asked: null,
+    why: "no worker asks for promote work unless the run names it; sonnet costs money, so the run wants --spend",
+    how: "prax work --steps promote --spend",
+  }, 7);
+  assert.match(stuck, /Nothing here is doing that work/);
+  assert.match(stuck, /unless the run names it/);
+  assert.match(stuck, /prax work --steps promote --spend -n 7/);
+  assert.match(stuck, /spend: true/);
+  const asked = lib.waitingNote({ why: "the budget is spent", how: "", asked: "2026-09-23T21:14:02Z" }, 3);
+  assert.match(asked, /last asked at 21:14/);
+  assert.equal(asked.includes("<code>"), false);  // no command to offer
+  // nothing pending, or nothing in the way: no line at all
+  assert.equal(lib.waitingNote({ why: "no worker has asked", how: "x" }, 0), "");
+  assert.equal(lib.waitingNote({ why: "", how: "x" }, 7), "");
+  assert.equal(lib.waitingNote(null, 7), "");
+});

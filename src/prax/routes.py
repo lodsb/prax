@@ -30,6 +30,9 @@ from prax.parsers.figures import UNCAPTIONED
 
 # the steps whose model the dialog names
 _STEPS = ("vision", "formulas", "polish", "extract", "promote")
+# which step of the worker takes a route's kind of request, for the
+# "nobody is asking for this" line under a route already requested
+_ASKED_BY = {"reading": "parse", "extract": "extract", "promote": "promote"}
 
 
 def _model(step: str) -> dict[str, Any] | None:
@@ -130,6 +133,15 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     )
 
     models_of = {step: _model(step) for step in _STEPS}
+    why_of: dict[str, str] = {}  # one answer per kind, asked at most once
+
+    def why_pending(kind: str) -> str:
+        if kind not in why_of:
+            from prax import work
+
+            why_of[kind] = work.who_runs(con, _ASKED_BY[kind])["why"]
+        return why_of[kind]
+
     state: dict[str, Any] = {
         "mime": mime,
         "text_source": meta.get("text_source"),
@@ -196,6 +208,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
                 "available": available,
                 "note": note,
                 "pending": pending,
+                "why": why_pending(action["kind"]) if pending else "",
             }
         )
 

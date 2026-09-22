@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from prax import store
+from prax import store, work
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +32,11 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         with contextlib.suppress(Exception):
             idx.close()
     store._indexes.clear()
+    # the door's leases and its record of who asked are process globals too,
+    # keyed by (step, document id): a hand-out in one test's database would
+    # otherwise hide the next test's document, which has the same id
+    work._leases.clear()
+    work._asked.clear()
     return d
 
 

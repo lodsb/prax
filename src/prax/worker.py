@@ -37,21 +37,13 @@ from prax import (
     titles,
     work,
 )
+from prax import steps as steps_mod
 from prax.client import Door
 from prax.parsers import figures
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
-STEPS = (
-    "parse",
-    "titles",
-    "extract",
-    "promote",
-    "typing",
-    "embed",
-    "resolve",
-    "adjudicate",
-)
+STEPS = steps_mod.STEPS
 
 
 # ------------------------------------------------------------------ steps

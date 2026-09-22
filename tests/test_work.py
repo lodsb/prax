@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import embeddings, inbox, store, work, worker
+from prax import embeddings, inbox, models, steps, store, work, worker
 
 needs_usearch = pytest.mark.skipif(
     not store.vectors_available(), reason="usearch not installed"
@@ -1054,3 +1054,40 @@ def test_an_extraction_whose_server_is_down_is_not_a_failure_of_the_document(
     assert ailment.repair is not None and ailment.repair(con, found) == 1
     assert "extraction_error" not in store.get_meta(con, a)
     assert store.get_meta(con, b)["extraction_error"]["error"].startswith("prompt")
+
+
+def test_who_runs_says_why_a_queue_sits_still(
+    con: store.sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Why a flagged document sits at "pending" with nothing broken: no
+    worker asks for the promote step unless the run names it, and its
+    model costs money. The door says both, and the command that moves
+    it. A watched step only waits for a worker to turn up."""
+    for var in ("PRAX_PROMOTE", "PRAX_PROMOTE_MODEL", "PRAX_CONFIG"):
+        monkeypatch.delenv(var, raising=False)
+    models.reset()
+    work._asked.clear()
+    it = work.who_runs(con, "promote")
+    assert it["model"] == "claude-sonnet-5" and it["paid"] is True
+    assert it["watched"] is False and it["asked"] is None
+    assert "unless the run names it" in it["why"] and "costs money" in it["why"]
+    assert it["how"] == "prax work --steps promote --spend"
+    parse = work.who_runs(con, "parse")
+    assert parse["watched"] is True and parse["paid"] is False
+    assert parse["why"] == "no worker has asked this door for parse work"
+    work.hand_out(con, "parse", limit=1)
+    after = work.who_runs(con, "parse")
+    assert after["asked"] and after["why"] == ""
+    assert work.asked_at("parse") == after["asked"]
+
+
+def test_the_steps_are_named_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """One list of steps for the door, the worker and the command line."""
+    from prax_cli.main import build_parser
+
+    assert work.STEPS is steps.STEPS and worker.STEPS is steps.STEPS
+    assert set(steps.WATCHED_STEPS) < set(steps.STEPS)
+    assert steps.NAMED_ONLY == ("promote", "typing", "adjudicate")
+    a = build_parser().parse_args(["work"])
+    assert tuple(a.steps.split(",")) == steps.WATCHED_STEPS
+    assert all(hasattr(a, f"no_{s}") for s in steps.STEPS)

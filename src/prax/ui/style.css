@@ -270,6 +270,10 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .up-panel .up-acts button { padding: .25rem .6rem; font-size: .78rem; letter-spacing: .01em; text-transform: none; }
 .up-panel #up-msg { font-size: .8rem; min-height: 1em; }
 
+/* a queue nobody is asking for: why it sits, and what would move it */
+.waiting-note { font-size: .84rem; border-left: 2px solid var(--accent); padding: .3rem 0 .3rem .6rem; margin: .4rem 0; color: var(--fg); }
+.waiting-note code { font-size: .8rem; }
+
 /* process…: the routes from a document, grouped, a button each */
 dialog#process-dialog { max-width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; }
 dialog#process-dialog h2 { margin: 0 0 .2rem; font-size: 1.05rem; font-weight: 600; letter-spacing: -.02em; }
@@ -290,6 +294,7 @@ dialog#process-dialog .route-note { display: block; font-size: .8rem; }
 dialog#process-dialog .route-model { display: block; font-size: .78rem; color: var(--muted); margin-top: .15rem; }
 dialog#process-dialog .route-paid { color: var(--accent); }
 dialog#process-dialog .route-requested { font-size: .8rem; color: var(--accent); }
+dialog#process-dialog .route-why { display: block; font-size: .78rem; color: var(--muted); margin-top: .15rem; }
 dialog#process-dialog .route-pending .route-go { border-color: var(--accent); color: var(--accent); opacity: 1; }
 dialog#process-dialog .route-pending .route-detail { color: var(--muted); }
 @media (max-width: 40rem) { dialog#process-dialog .route { grid-template-columns: 1fr; } }

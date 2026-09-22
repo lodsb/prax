@@ -13,6 +13,7 @@ from prax import (
     ontology,
     routes,
     store,
+    work,
 )
 
 from ._base import _con
@@ -282,6 +283,7 @@ def promote_view(request: Request, limit: int = 30) -> dict[str, Any]:
     producer = step["runtime"]
     return {
         "step": step,
+        "waiting": work.who_runs(_con(request), "promote"),
         "promoted": store.promoted_documents(_con(request), producer=producer),
         "candidates": store.promotion_candidates(_con(request), limit=limit),
     }

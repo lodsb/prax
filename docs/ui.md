@@ -277,7 +277,11 @@ and how often it moved.
 The queue for the expensive model. The flagged documents are listed
 with who flagged them, why, when, and whether they are done or pending
 under the promote step's model (`prax work --steps promote --spend`
-reads them), each with an un-promote control. The candidates are
+reads them), each with an un-promote control. When something is
+pending and nothing on the host would read it — no worker asks for a
+paid step unless the run names it — a line says why and what would
+move it. The same line sits under a requested route in the process
+dialog. The candidates are
 listed with their score breakdown and a promote button. A document
 page has the flag under "process…" in its action row, and "un-promote"
 beside it while the flag is set.

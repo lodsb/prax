@@ -202,7 +202,9 @@ def test_the_command_opens_no_database() -> None:
     )
     loaded = json.loads(out.stdout.replace("'", '"'))
     assert "prax.store" not in loaded and "prax.api" not in loaded
-    assert loaded == ["prax.client"]
+    # the door's HTTP client, and the names of the worker's steps (a module
+    # of tuples, so that the --steps default is not a second list)
+    assert loaded == ["prax.client", "prax.steps"]
 
 
 def test_help_lists_the_everyday_commands(capsys: pytest.CaptureFixture[str]) -> None:

@@ -243,6 +243,16 @@ function spendPanel(s) {
   </section>`;
 }
 
+// Why a queue is not moving: what the door says about the step nobody
+// is asking for (`work.who_runs`). Empty when the work is in hand, so a
+// view can render it unconditionally.
+function waitingNote(w, pending) {
+  if (!w || !w.why || !pending) return "";
+  const how = w.how ? ` Run <code>${esc(w.how)} -n ${pending}</code>, or give the worker role <code>steps</code>${w.paid ? " and <code>spend: true</code>" : ""} in <code>prax.yaml</code>.` : "";
+  const last = w.asked ? ` A worker last asked at ${esc(String(w.asked).slice(11, 16))}.` : "";
+  return `<p class="waiting-note">Nothing here is doing that work: ${esc(w.why)}.${how}${last}</p>`;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote };
 }

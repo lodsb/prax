@@ -43,6 +43,7 @@ from typing import Any
 
 from prax import embeddings, extraction, inbox, models, ontology, pipeline, store
 from prax.parsers import queue
+from prax.steps import STEPS, WATCHED_STEPS
 
 LEASE_SECONDS = 900
 # a worker's "not yet" (the server it needs is loading or down) keeps the
@@ -56,16 +57,6 @@ ROLE_WORK = {
     "marker": ("marker",),
     "llama-server": ("figures", "vision", "vision-pages", "formulas", "polish"),
 }
-STEPS = (
-    "parse",
-    "titles",
-    "extract",
-    "promote",
-    "typing",
-    "embed",
-    "resolve",
-    "adjudicate",
-)
 
 
 def _vision_is_free() -> bool:
@@ -89,6 +80,58 @@ SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
 _leases: dict[tuple[str, int], tuple[str, float]] = {}
+# when a worker last asked for each step's work, since this door started.
+# A queue nobody asks about is the whole answer to "why is this pending"
+_asked: dict[str, str] = {}
+
+
+def asked_at(step: str) -> str | None:
+    """When a worker last asked this door for the step's work."""
+    return _asked.get(step)
+
+
+def who_runs(con: Any, step: str) -> dict[str, Any]:
+    """Why work for ``step`` may be sitting there untouched. A queue is
+    only as awake as the workers asking about it, and three things keep
+    one asleep: the step is off on this host, no run names it (the paid
+    passes are never in the default set), or the budget is spent. The
+    Promote view and the process dialog say this, rather than leaving a
+    document at "pending" with no account of itself."""
+    from prax import budget
+    from prax.config import ConfigError
+
+    out: dict[str, Any] = {
+        "step": step,
+        "model": None,
+        "paid": False,
+        "watched": step in WATCHED_STEPS,
+        "asked": _asked.get(step),
+        "why": "",
+        "how": f"prax work --steps {step}",
+    }
+    if step in models.STEPS:
+        try:
+            spec = models.resolve(step)
+        except ConfigError:  # a config error is the host's, not the page's
+            spec = None
+        if spec is None:
+            out["why"] = f"the {step} step is off on this host (prax.yaml)"
+            out["how"] = ""
+            return out
+        out["model"], out["paid"] = spec.name, spec.paid
+    why = []
+    if not out["watched"]:
+        why.append(f"no worker asks for {step} work unless the run names it")
+    elif out["asked"] is None:
+        why.append(f"no worker has asked this door for {step} work")
+    if out["paid"]:
+        out["how"] += " --spend"
+        may, no = budget.allows(con, step)
+        why.append(
+            no if not may else f"{out['model']} costs money, so the run wants --spend"
+        )
+    out["why"] = "; ".join(why)
+    return out
 
 
 def demand(con: Any) -> dict[str, Any]:
@@ -208,6 +251,7 @@ def hand_out(
     or the month is spent (``prax.budget``); the reason comes back with
     the empty batch, and the worker says it."""
     limit = _check(step, scope, limit)
+    _asked[step] = store.now()
     from prax import budget
 
     may, why = budget.allows(con, step)

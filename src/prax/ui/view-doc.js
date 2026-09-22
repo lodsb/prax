@@ -269,7 +269,7 @@ function processRoute(r) {
     : `<button type="button" class="route-go" data-route="${esc(r.id)}"${r.available ? "" : " disabled"}>${esc(r.label)}</button>`;
   return `<div class="${cls}" data-route="${esc(r.id)}">
     <div class="route-act">${button}${field}</div>
-    <div class="route-text"><span class="route-detail">${esc(r.detail)}</span>${r.note ? ` <span class="route-note muted">${esc(r.note)}</span>` : ""} ${model}</div>
+    <div class="route-text"><span class="route-detail">${esc(r.detail)}</span>${r.note ? ` <span class="route-note muted">${esc(r.note)}</span>` : ""} ${model}${r.why ? `<span class="route-why">${esc(r.why)}</span>` : ""}</div>
   </div>`;
 }
 function processHtml(doc, view) {
