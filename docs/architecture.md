@@ -549,6 +549,8 @@ Nothing here opens the database file.
 ## 11. What is not built yet
 
 The backfill of the old external-disk store. The move of the service
-onto the serving board (the code is in `deploy/`). The 715 scans
-nothing could read yet. The sub-graph export and import of a project
-(`PLAN.md`). What else is open is in `PLAN.md`.
+onto the serving board (the code is in `deploy/`). The figures nobody
+has read (55,607 on 2026-09-23, going down as the vision pass runs).
+The sub-graph export and import of a project. What else is open is in
+`PLAN.md`. The scans nothing could read are down to seven documents:
+the OCR and marker passes took the rest.
