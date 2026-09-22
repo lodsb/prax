@@ -406,12 +406,23 @@ def capture_url(
     )
 
 
+def ingest_roots() -> list[Path]:
+    """Where ``ingest_file`` may read from: ``PRAX_INGEST_ROOTS`` (paths
+    separated by the OS path separator), else the working directory. The
+    model names the path, on a page's say-so as much as the user's, so a
+    key file or a browser profile outside the project stays out."""
+    raw = os.environ.get("PRAX_INGEST_ROOTS", "").strip()
+    parts = [x for x in raw.split(os.pathsep) if x.strip()] if raw else ["."]
+    return [Path(x).expanduser().resolve() for x in parts]
+
+
 @mcp.tool()
 def ingest_file(
     path: str, title: str | None = None, source_url: str | None = None
 ) -> dict[str, Any]:
     """Ingest a file from a path on this machine (the one running the MCP
-    server); it is uploaded to the door.
+    server); it is uploaded to the door. Only files under the working
+    directory, or under the roots ``PRAX_INGEST_ROOTS`` names, are read.
 
     Text files are indexed immediately; binaries (PDF, HTML) are archived
     and left for the worker.
@@ -419,6 +430,14 @@ def ingest_file(
     p = Path(path).expanduser()
     if not p.is_file():
         return {"error": f"no such file: {path}"}
+    real = p.resolve()
+    roots = ingest_roots()
+    if not any(real == r or r in real.parents for r in roots):
+        return {
+            "error": f"{path} is outside the roots ingest_file may read"
+            f" ({os.pathsep.join(str(r) for r in roots)}); set PRAX_INGEST_ROOTS"
+            " for the MCP server, or use `prax add` yourself"
+        }
     fields = {"title": title or p.name}
     if source_url:
         fields["source_url"] = source_url

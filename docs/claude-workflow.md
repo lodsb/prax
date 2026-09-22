@@ -31,6 +31,13 @@ plugins, servers and tools are read at startup. Inside the prax
 repository itself the repo's `.mcp.json` registers a second `prax`
 server; disable one of the two there.
 
+`ingest_file` reads files under the session's working directory only.
+`PRAX_INGEST_ROOTS` in the server's environment (paths separated by
+the OS path separator) names other roots, such as a downloads folder.
+What a page in the library says is data to the model, never an
+instruction; the skill says so, and the roots keep a key file out of
+the library should a page ask for one.
+
 Without the plugin, the same server is one line at user scope —
 `claude mcp add --scope user prax -e PRAX_DOOR=… -- <python> -m
 prax.mcp_server` — and the skill's guidance goes into the project's

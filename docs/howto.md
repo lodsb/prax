@@ -1811,6 +1811,21 @@ Never bind a public one. Plain HTTP inside the private network is
 fine. Use TLS through a reverse proxy only if the door were ever
 exposed. The MCP server talks to the door with the same token.
 
+The token is the whole lock: the door has no lock-out and no second
+factor. Make it long (the line above gives 43 characters; the door
+warns in its log under 24). When the token lives in `<data
+dir>/door.token`, keep the file readable by you alone (`chmod 600` on
+Linux). Three things the door refuses on its own, whatever the token.
+A fetch from a private address: `POST /ingest/url`, the importers and
+the MCP `capture_url` tool are refused for this machine, the LAN, the
+tailnet and link-local addresses, unless `door.fetch_private: true` in
+`prax.yaml` allows them. A body over `door.max_upload_mb` (256). A
+captured page or an SVG served as anything but a sandboxed document.
+The MCP server's
+`ingest_file` reads under its working directory only unless
+`PRAX_INGEST_ROOTS` names more (`docs/claude-workflow.md`). The audit
+that set these is `docs/audit/security-2026-09-22.md`.
+
 Endpoints:
 
 | Method | Path | Body / params | Returns |

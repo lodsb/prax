@@ -1083,6 +1083,22 @@ def _docx_blocks(parent: Any) -> list[tuple[str, str]]:
     return blocks
 
 
+ZIPPED_XML_MAX = 256 * 1024 * 1024  # an office file's XML inflates far past its zip
+
+
+def _zipped_xml(archive: Any, member: str) -> bytes:
+    """One XML member of an office file, refused before it is inflated when
+    the zip's directory says it is larger than ``ZIPPED_XML_MAX``: a
+    document that is small on disk can be gigabytes of XML inside."""
+    info = archive.getinfo(member)
+    if info.file_size > ZIPPED_XML_MAX:
+        raise ValueError(
+            f"{member} inflates to {info.file_size >> 20} MB, over the"
+            f" {ZIPPED_XML_MAX >> 20} MB the parser reads"
+        )
+    return archive.read(member)
+
+
 def _docx(data: bytes) -> str:
     """A Word document as Markdown: headings by outline level or style name,
     numbered and bulleted paragraphs as list items, tables as Markdown
@@ -1093,7 +1109,7 @@ def _docx(data: bytes) -> str:
 
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            xml = archive.read("word/document.xml")
+            xml = _zipped_xml(archive, "word/document.xml")
     except KeyError as exc:  # a zip, but not a Word one
         raise ValueError("not a Word document (no word/document.xml)") from exc
     except zipfile.BadZipFile as exc:  # .doc and .rtf land here: the office
@@ -1207,7 +1223,7 @@ def _odt(data: bytes) -> str:
 
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            xml = archive.read("content.xml")
+            xml = _zipped_xml(archive, "content.xml")
     except (KeyError, zipfile.BadZipFile) as exc:
         raise ValueError("not an OpenDocument text (no content.xml)") from exc
     body = ElementTree.fromstring(xml).find(f"{_ODT_OFFICE}body")

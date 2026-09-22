@@ -142,6 +142,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.con = con  # the main connection: migrations, the change stamp
     app.state.con_lock = threading.Lock()  # one thread on it at a time
     store.job_reap(con)  # sessions left behind by a killed door or worker
+    _say_auth()
     # the index views opened and the keyword index read through, beside
     # the serving: a search that comes first waits on the index lock for
     # the load (seconds) rather than the door being down for it — a cold
@@ -170,6 +171,28 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
             if thread is not None:
                 thread.join(timeout=5)
         con.close()
+
+
+SHORT_TOKEN = 24  # characters; under this a token is guessable over a network
+
+
+def _say_auth() -> None:
+    """One line in the door's log at start: what gates it. A short token
+    gets a warning, since the door has no lock-out and a LAN or a tailnet
+    is a network."""
+    log = logging.getLogger("prax.door")
+    secret = auth.token()
+    if secret is None:
+        log.info("auth: no PRAX_TOKEN; loopback clients only, others are refused")
+    elif len(secret) < SHORT_TOKEN:
+        log.warning(
+            "auth: the token is %d characters; a network can guess that. Use 32"
+            " random ones (python -c 'import secrets; print(secrets.token_hex(24))')"
+            " and keep door.token readable by you alone",
+            len(secret),
+        )
+    else:
+        log.info("auth: token (%d characters)", len(secret))
 
 
 app = FastAPI(title="prax", version="0.0.1", lifespan=_lifespan)

@@ -85,7 +85,12 @@ front of any MCP client as tools: `search`, `get`, `get_chunk`,
 `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`,
 `promote`, `set_domains`. It is a proxy: one HTTP call per tool, no
 logic of its own. The door's handlers are the whole contract, and an
-agent can do nothing a script could not.
+agent can do nothing a script could not. One tool reads the agent's
+machine rather than the door: `ingest_file(path)` uploads a local file,
+and it reads under the server's working directory only, or under the
+roots `PRAX_INGEST_ROOTS` names (paths separated by the OS path
+separator). A page in the library can ask the model for a file; the
+roots say what it may have.
 
     PRAX_DOOR=http://127.0.0.1:8000 PRAX_TOKEN=… python -m prax.mcp_server
 

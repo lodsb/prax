@@ -133,9 +133,13 @@ def test_link_bad_confidence_returns_error() -> None:
     assert "error" in r
 
 
-def test_ingest_file(tmp_path: Path) -> None:
+def test_ingest_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     f = tmp_path / "note.md"
     f.write_text("granular synthesis from a file", encoding="utf-8")
+    # outside the working directory: refused until a root allows it
+    r = call("ingest_file", path=str(f))
+    assert "outside the roots" in r["error"]
+    monkeypatch.setenv("PRAX_INGEST_ROOTS", str(tmp_path))
     r = call("ingest_file", path=str(f))
     assert r["created"]
     doc = call("get", doc_id=r["doc_id"])
