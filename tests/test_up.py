@@ -151,6 +151,31 @@ def test_a_served_model_needs_its_file_and_the_binary(gpu_host: Path) -> None:
         up.roles({"reranker": {"model": "big"}})
 
 
+def test_a_server_beyond_loopback_asks_for_its_key(
+    gpu_host: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Bound to a LAN address, llama-server gets --api-key from the model's
+    api_key_env; without one the supervisor says so. On loopback, neither."""
+    spec = models.spec("big")
+    assert spec is not None
+    lan = models.ModelSpec(
+        **{
+            **spec.__dict__,
+            "base_url": "http://192.168.1.20:8085/v1",
+            "api_key_env": "PRAX_TEST_LLAMA_KEY",
+        }
+    )
+    monkeypatch.setenv("PRAX_TEST_LLAMA_KEY", "s3cret")
+    argv = up.llama_argv(lan)
+    assert argv[argv.index("--api-key") + 1] == "s3cret"
+    assert argv[argv.index("--host") + 1] == "192.168.1.20"
+    monkeypatch.delenv("PRAX_TEST_LLAMA_KEY")
+    with caplog.at_level("WARNING", logger="prax.up"):
+        argv = up.llama_argv(lan)
+    assert "--api-key" not in argv and "without an api key" in caplog.text
+    assert "--api-key" not in up.llama_argv(spec)  # loopback: nothing to ask
+
+
 def test_the_serve_block_is_only_for_a_server(data_dir: Path) -> None:
     with pytest.raises(models.ConfigError, match="only an openai model"):
         models._spec_from(

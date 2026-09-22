@@ -221,6 +221,20 @@ def llama_argv(spec: models.ModelSpec, *, binary: str | None = None) -> list[str
     threads = str(int(serve.get("threads", 8)))
     common = ["--model", str(path), "--alias", spec.model or spec.name, "--host", host]
     common += ["--port", str(port), "--n-gpu-layers", "999"]
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        # a server on a LAN or tailnet address answers anyone who reaches
+        # it: the model's api_key_env is what the worker sends (prax.models),
+        # so the server is told to ask for it (security audit, item 10)
+        key = os.environ.get(spec.api_key_env or "", "") if spec.api_key_env else ""
+        if key:
+            common += ["--api-key", key]
+        else:
+            logging.getLogger("prax.up").warning(
+                "llama-server for %s binds %s without an api key: set api_key_env"
+                " on the model and the variable, or bind 127.0.0.1",
+                spec.name,
+                host,
+            )
     if serve.get("reranker"):
         # a cross-encoder: the query and a candidate in one sequence, read in
         # one batch, one score out; so the batch is the context, and 4096

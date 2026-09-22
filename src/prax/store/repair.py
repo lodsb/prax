@@ -661,17 +661,37 @@ def _unpolished_transcripts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     ]
 
 
+_GLYPH_GLOB = "'*[\ufb00-\ufb06\uf020-\uf0fe]*'"  # the ligature and Symbol ranges
+# what the glyph check found per document, by the text it looked at: a
+# text that has not changed is not read again (a GLOB over every chunk of
+# the library took 13 s of every GET /heal; the door lives long)
+_glyphs_seen: dict[int, tuple[str, bool]] = {}
+
+
 def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents whose text still holds ligature or Symbol-font code
-    points: indexed before ``prax.glyphs`` cleaned every text."""
+    points: indexed before ``prax.glyphs`` cleaned every text. Each
+    document's chunks are read once per text (``_glyphs_seen``)."""
     out = []
-    rows = con.execute(
-        "SELECT DISTINCT c.doc_id AS id, d.title FROM chunks c"
-        " JOIN documents d ON d.id = c.doc_id"
-        " WHERE c.text GLOB '*[\ufb00-\ufb06\uf020-\uf0fe]*' ORDER BY c.doc_id"
-    ).fetchall()
-    for r in rows:
-        out.append({"id": r["id"], "title": r["title"]})
+    live: set[int] = set()
+    for r in con.execute(
+        "SELECT id, title, text_hash FROM documents WHERE text_hash IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ):
+        live.add(r["id"])
+        seen = _glyphs_seen.get(r["id"])
+        if seen is None or seen[0] != r["text_hash"]:
+            hit = con.execute(
+                f"SELECT 1 FROM chunks WHERE doc_id = ? AND text GLOB {_GLYPH_GLOB}"
+                " LIMIT 1",
+                (r["id"],),
+            ).fetchone()
+            seen = (r["text_hash"], hit is not None)
+            _glyphs_seen[r["id"]] = seen
+        if seen[1]:
+            out.append({"id": r["id"], "title": r["title"]})
+    for gone in [d for d in _glyphs_seen if d not in live]:
+        del _glyphs_seen[gone]
     return out
 
 

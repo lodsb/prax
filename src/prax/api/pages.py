@@ -147,13 +147,33 @@ class QuestionsRunReq(BaseModel):
     release: bool = False  # a block edited by hand: ask it again all the same
 
 
+# the last standing listing, keyed by the store's change stamp (the door's
+# writes and any other connection's commits, as /changes reports it): the
+# check runs a search per question, a second on a large library, and a
+# listing asked twice of an unchanged store is the same listing
+_standing: tuple[str, list[dict[str, Any]]] | None = None
+
+
+def _stamp(request: Request) -> str:
+    state = request.app.state
+    with state.con_lock:
+        return f"{store.data_version(state.con)}-{state.writes}"
+
+
 @router.get("/questions")
 def questions_list(request: Request) -> list[dict[str, Any]]:
     """The standing questions — the question pages, then the ask blocks
     of other pages as ``slug#id`` — with what each remembers and whether
     the library has learned something since (the check runs a search
-    per question; no model)."""
-    rows = questions.standing(_con(request))
+    per question; no model). Served again as it was while the store's
+    change stamp stands."""
+    global _standing
+    stamp = _stamp(request)
+    if _standing is not None and _standing[0] == stamp:
+        rows = [dict(r) for r in _standing[1]]
+    else:
+        rows = questions.standing(_con(request))
+        _standing = (stamp, [dict(r) for r in rows])
     for row in rows:  # what the pass is doing to each right now
         slug, _, block = row["slug"].partition("#")
         row["asking"] = bool(_asking(slug, [block])) if block else _asking_page(slug)

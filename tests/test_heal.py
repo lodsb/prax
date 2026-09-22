@@ -477,3 +477,35 @@ def test_an_extraction_of_a_replaced_text_is_found_and_unstamped(
     assert meta["extraction_history"][-1]["superseded_by"] == "marker/2.0.0"
     assert ailment.find(con) == []  # repaired: nothing left to find
     assert store.get_meta(con, annotated).get("extraction")
+
+
+def test_the_glyph_check_reads_a_text_once(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Each document's chunks are read once per text: a second check
+    over an unchanged library consults the memo, a re-indexed text is
+    read again, a retired document leaves the memo."""
+    from prax.store import documents, repair
+
+    repair._glyphs_seen.clear()
+    # a text indexed before prax.glyphs cleaned every text: the ligature
+    # is in the artifact and the chunks
+    with monkeypatch.context() as m:
+        m.setattr(documents.glyphs, "clean", lambda t: t)
+        bad = store.ingest_text(con, "a ﬁne ligature " * 10, title="lig")["doc_id"]
+    ok = store.ingest_text(con, "plain words " * 10, title="ok")["doc_id"]
+    assert [d["id"] for d in repair._glyph_documents(con)] == [bad]
+    assert set(repair._glyphs_seen) == {bad, ok}
+    # nothing changed: the memo answers (a planted lie is believed, which
+    # is the proof the chunks are not read again)
+    repair._glyphs_seen[ok] = (repair._glyphs_seen[ok][0], True)
+    assert [d["id"] for d in repair._glyph_documents(con)] == [bad, ok]
+    repair._glyphs_seen[ok] = (repair._glyphs_seen[ok][0], False)
+    # the repair cleans the text: a new artifact, read again, clean now
+    assert (
+        repair.heal(con, only=["unmapped-glyphs"])["unmapped-glyphs"]["repaired"] == 1
+    )
+    assert repair._glyph_documents(con) == []
+    store.retire_document(con, ok, reason="test")
+    repair._glyph_documents(con)
+    assert ok not in repair._glyphs_seen

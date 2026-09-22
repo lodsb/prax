@@ -66,3 +66,16 @@ Until then every read of the graph fails (`/stats`, a document's facts,
 an ask's context). The rule that would have kept this from happening:
 a script that touches the live store attaches nothing and drops
 nothing; measurements run on a copy.
+
+## Follow-up, the same day
+
+Items 9 and 10 of the runtime table and items 8 and 10 of the security
+audit, done in one commit: the glyph check remembers each text it read
+(`repair._glyphs_seen`, keyed by `text_hash`); the unread figures are a
+partial index (migration 17), so their check is an index scan; the
+standing questions' listing is kept while the store's change stamp
+stands; a figure is served only under a document whose text references
+it; llama-server bound beyond loopback is started with the model's
+`api_key_env` as its `--api-key`, or the supervisor's log says it has
+none.
+

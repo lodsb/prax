@@ -257,6 +257,9 @@ def test_the_door_serves_a_figure_and_a_re_read_that_changes_nothing_is_same(
     assert r.headers["content-type"].startswith("image/png")
     assert "immutable" in r.headers["cache-control"]
     assert client.get(f"/doc/{doc_id}/figure/{'0' * 64}").status_code == 404
+    # the same figure under another document: not that document's
+    other = store.ingest_text(con, "no figures here " * 20, title="o")["doc_id"]
+    assert client.get(f"/doc/{other}/figure/{ref}").status_code == 404
     chunk = next(c for c in store.list_chunks(con, doc_id) if c["kind"] == "figure")
     assert chunk["data"]["ref"] == ref
     # a second run of the same extractor: nothing new, chunks stay

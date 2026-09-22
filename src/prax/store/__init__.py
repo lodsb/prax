@@ -110,6 +110,7 @@ from .documents import (  # noqa: F401
     dedupe_captures,
     document_domains,
     document_field,
+    document_has_figure,
     document_outline,
     document_titles,
     documents_in_domain,

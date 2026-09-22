@@ -1164,6 +1164,18 @@ def archive_blob(data: bytes) -> str:
     return _archive_bytes(data)
 
 
+def document_has_figure(con: sqlite3.Connection, doc_id: int, ref: str) -> bool:
+    """Whether the document's text references the figure ``ref`` (a figure
+    chunk carries it in ``data.ref``): what the figure route checks, so an
+    archive artifact is served only under a document that shows it."""
+    row = con.execute(
+        "SELECT 1 FROM chunks WHERE doc_id = ? AND kind = 'figure'"
+        " AND json_extract(data, '$.ref') = ? LIMIT 1",
+        (doc_id, ref),
+    ).fetchone()
+    return row is not None
+
+
 def figure_blob(ref: str) -> tuple[bytes, str] | None:
     """A filed picture by its reference, with its media type; None when
     the archive has no such artifact."""

@@ -141,6 +141,10 @@ def figure(doc_id: int, ref: str, request: Request) -> Response:
     info = store.original_info(con, doc_id)
     if info is None or not info["path"].exists():
         raise HTTPException(404, "no such document")
+    if not store.document_has_figure(con, doc_id, ref):
+        # the archive is addressed by hash; a document shows only the
+        # figures its own text references (security audit, item 8)
+        raise HTTPException(404, "no such figure in this document")
     # the archive first: a filed picture (a scanned page) is its own
     # artifact, and looking for it in the original means extracting
     # every image of a 200-page scan — the figure strip asked 500 times
