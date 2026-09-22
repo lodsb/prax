@@ -73,3 +73,62 @@ Edges keep the version they were written under.
 
     prax maintain --only review        # replay and the rules under v8
     prax work --steps typing -n 60     # the untyped items the aliases admit
+
+## The rules round of 2026-09-23
+
+No version bump: the ontology stood, and the rules learned to read
+what the queue holds. 2,655 items were open. The first pass cleared
+560 of them, and the second, with the rules below it, another 68.
+About 2,000 are left, and the count moves: extraction opens new items
+as it runs.
+
+**The document, under the type its relation wants.** The old rule
+retyped a source that was the document's title, to the type the graph
+had given the document. That is not always the type the relation
+asks for. `calls_for` takes a recipe, and a recipe captured from a
+food site is a `document` in the graph. So the rule now asks the
+relation: the document's own type where the relation admits it, else
+the one kind of document its domain names (`_self_document_type`).
+Where more than one kind fits, a document nobody typed is a paper,
+the library's default. A page of my own, or a project, is never
+retyped to make an edge fit; those items wait for the ontology
+instead. The match is normalized, and a title's first part counts:
+the model names the recipe, and the capture's title carries the
+site's tail ("… | ZEIT"). 348 items.
+
+**The shapes the queue kept coming back with.** A manual "part of"
+the thing it documents is `about` it (83). The firm behind a manual
+`published_by` it, not `developed_by` (46, core's own wording). An
+institution is not something a paper `uses`: it `mentions` it (17).
+A paper that "implements" a tool `uses` it (15). "applies" over an
+ingredient is `calls_for` (25). An ingredient written first, with the
+dish after it, is the dish calling for the ingredient (13). A manual
+that "covers" a device is the manual of it, which studio calls
+`describes`; `covers` is for a concept or a standard (35).
+
+**The author, under either type.** `authored_by` written backwards
+was flipped when the model typed the author `author`; it now flips a
+`person` too (48, with the reversed alias `author_of`).
+
+**Names that are not names.** "Author not listed", "no author" and
+"author unknown" join the noise list. A name that begins with a field
+the model echoed (`build=`, `component=`) is malformed, as the fields
+prax already knew were (9 dropped).
+
+The passes wrote their edges as `typing-rules`, INFERRED and
+retirable with `retire_run`: 560 in run `typing-20260922T225935`, the
+rest in the run after it.
+
+## What is still open
+
+Just under 2,000 items. Four groups the rules do not touch. `is_a`
+and `subclass_of`, which type an entity rather than relate two.
+`mentions` said of an organization or a person rather than of the
+document (86). `about` said of a work, an organization or a tool
+(52). A document `funded_by` an organization (15), which no v8
+relation holds. The rest is a long tail of one-off shapes.
+
+What is left is a v9 question rather than a rules question. The
+relations a document takes name `paper` where they could name
+`document`, and a captured page has to be read as a paper for an
+edge to fit.

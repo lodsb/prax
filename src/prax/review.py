@@ -164,7 +164,12 @@ _NOISE_NAMES = frozenset(
         "title",
         "no claims",
         "no authors",
+        "no author",
         "not stated",
+        "author not listed",
+        "not listed",
+        "no author listed",
+        "author unknown",
         "[venue not stated]",
         "various",
         "author",
@@ -417,7 +422,7 @@ def decide_unmapped(
 
 _MALFORMED = re.compile(
     r"(src_type=|dst_type=|confidence=|evidence=|\trel=|target name=|source name=|"
-    r"^(?:paper|author|source|target|src|dst|title|name|entity)=)"
+    r"^[a-z][a-z_]{1,19}=)"  # the model echoing a field: build=, component=
 )
 # (rel, src_type, dst_type) -> new relation, after the self-name retyping
 REMAP: dict[tuple[str, str, str], str] = {
@@ -459,6 +464,21 @@ REMAP: dict[tuple[str, str, str], str] = {
     ("about", "method", "method"): "implements",
     ("implements", "paper", "method"): "uses",
     ("implements", "paper", "concept"): "about",
+    # a lecture inside its course, a manual inside the thing it documents:
+    # part_of is for a document inside a document (2026-09-23)
+    ("part_of", "paper", "concept"): "about",
+    ("part_of", "paper", "tool"): "about",
+    ("part_of", "paper", "method"): "about",
+    ("part_of", "document", "tool"): "about",
+    ("part_of", "document", "concept"): "about",
+    ("implements", "paper", "tool"): "uses",
+    # who made the manual is core's published_by ("the manufacturer behind
+    # a manual"); developed_by is for the tool itself
+    ("developed_by", "paper", "organization"): "published_by",
+    # an institution is not a thing a paper uses
+    ("uses", "paper", "organization"): "mentions",
+    # an ingredient is not a technique: "applies" over one is calls_for
+    ("applies", "recipe", "ingredient"): "calls_for",
 }
 # (rel, src_type, dst_type) -> (src_type, dst_type): a near miss retyped —
 # a cited "document" or "work" in a research library is a paper, a listed
@@ -474,6 +494,8 @@ RETYPE: dict[tuple[str, str, str], tuple[str, str]] = {
     ("authored_by", "document", "person"): ("paper", "author"),
     ("published_in", "paper", "organization"): ("paper", "venue"),
     ("published_in", "document", "venue"): ("paper", "venue"),
+    ("applies", "paper", "ingredient"): ("recipe", "ingredient"),
+    ("applies", "document", "ingredient"): ("recipe", "ingredient"),
 }
 # (rel, src_type, dst_type) with "*" as a wildcard -> dropped
 DROP: set[tuple[str, str, str]] = {
@@ -581,6 +603,39 @@ def _self_as_device(
     return [store.Edge(device, "device", rel, item["dst"], dt or DEVICE_DST[rel])]
 
 
+def _names_document(src: str, title: str) -> bool:
+    """Whether the source names the document itself. The title as it
+    stands, or its first part: a captured page carries the site's tail
+    ("Mohn-Pfannkuchen …: Sieben Zwetschgen und ein Pfannkuchen | ZEIT")
+    and the model names the recipe alone."""
+    if not src or not title:
+        return False
+    a, b = " ".join(src.lower().split()), " ".join(title.lower().split())
+    return a == b or (len(a) >= 12 and b.startswith(a))
+
+
+def _self_document_type(onto: ontology.Ontology, rel: str, own: str) -> str:
+    """The type the document itself takes under one relation: its own
+    where the relation admits it, else the one kind of document the
+    relation's domain names. A recipe calls_for its ingredients and
+    makes its dish; a paper uses a tool. Its own type when in doubt."""
+    r = onto.relations.get(rel)
+    if r is None or not r.domain:
+        return own
+    if any(onto.is_a(own, allowed) for allowed in r.domain):
+        return own
+    kinds = sorted(t for t in r.domain if onto.is_a(t, "document"))
+    if not kinds or own not in ("document", "paper"):
+        # a page of my own, a project, a recipe: what the graph already
+        # calls the document stands, and the item waits for the ontology
+        return own
+    if len(kinds) == 1:
+        return kinds[0]
+    # several kinds fit (proposes takes a paper or a page): the library's
+    # default for a document nobody typed
+    return "paper" if "paper" in kinds else own
+
+
 def decide(
     item: dict[str, Any], doc: tuple[str, ...] | None
 ) -> tuple[str, list[store.Edge], str | None]:
@@ -606,11 +661,28 @@ def decide(
         return "link", edges, "self-as-device"
     # written backwards: the author "authored_by" the paper, the
     # organization "affiliated_with" the person
-    if rel == "authored_by" and st == "author" and dt in ("paper", "document"):
+    if rel == "authored_by" and st in ("author", "person") and dt in (
+        "paper",
+        "document",
+    ):
         return (
             "link",
             [store.Edge(dst, "paper", "authored_by", src, "author")],
             "flip-authored_by",
+        )
+    # a manual "covering" a device is the manual of it (studio's describes;
+    # covers is for a concept or a standard)
+    if rel == "covers" and dt in ("device", "component") and onto.is_a(st, "document"):
+        return (
+            "link",
+            [store.Edge(src, st, "describes", dst, dt)],
+            "covers->describes",
+        )
+    if rel == "calls_for" and st == "ingredient" and dt in ("dish", "recipe"):
+        return (
+            "link",
+            [store.Edge(dst, dt, "calls_for", src, "ingredient")],
+            "flip-calls_for",
         )
     if rel == "affiliated_with" and st == "organization" and dt in ("person", "author"):
         return (
@@ -648,9 +720,12 @@ def decide(
             [store.Edge(src, "organization", "affiliated_with", dst, "organization")],
             "affiliation-between-organizations",
         )
-    # the document under a wrong type: it is itself
-    if title and src == title and st != own:
-        st, rule = own, "self-name"
+    # the document under a wrong type: it is itself, in the shape the
+    # relation wants it (a recipe where a recipe is asked for)
+    if _names_document(src, title):
+        want = _self_document_type(onto, rel, own)
+        if want != st:
+            st, rule = want, "self-name"
     # authored_by written backwards, or with authors on both ends
     if rel == "authored_by" and st == "author":
         if title and dst == title and (dt == own or _looks_person(src)):

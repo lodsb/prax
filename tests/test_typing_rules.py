@@ -484,3 +484,134 @@ def test_v8_rules_for_affiliation_and_attributes() -> None:
     assert a == "drop" and rule == "attribute-not-relation"
     a, _, rule = review.decide_unmapped(untyped("Robert", "role", "tutor"), doc)
     assert a == "drop" and rule == "attribute-not-relation"
+
+
+def test_the_document_takes_the_type_its_relation_wants() -> None:
+    """A recipe calls for its ingredients and makes its dish, whatever
+    type the model gave the document, and whether it named the title as
+    it stands or only its first part (a captured page carries the site's
+    tail). A page of my own stays a page: the ontology is what would
+    have to change, not the document."""
+    item = lambda src, st, rel, dst, dt: {  # noqa: E731
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+    }
+    recipe = ("Tacos mit Sellerie: Zeit, Ihre Tacos | ZEIT", "paper")
+    a, edges, rule = review.decide(
+        item("Tacos mit Sellerie", "document", "calls_for", "celeriac", "ingredient"),
+        recipe,
+    )
+    assert a == "link" and rule == "self-name"
+    assert edges[0].src_type == "recipe" and edges[0].rel == "calls_for"
+    a, edges, _ = review.decide(
+        item(
+            "Tacos mit Sellerie: Zeit, Ihre Tacos | ZEIT",
+            "document",
+            "makes",
+            "Sellerie-Tacos",
+            "dish",
+        ),
+        recipe,
+    )
+    assert a == "link" and edges[0].src_type == "recipe"
+    # an ingredient is not a technique: "applies" over one is calls_for
+    a, edges, rule = review.decide(
+        item("Tacos mit Sellerie", "document", "applies", "lime", "ingredient"), recipe
+    )
+    assert a == "link" and edges[0].rel == "calls_for"
+    assert edges[0].src_type == "recipe" and rule.startswith("retype-applies")
+    # the ingredient list written from the ingredient's side
+    a, edges, rule = review.decide(
+        item("Linsen", "ingredient", "calls_for", "Dal Makhani", "dish"), recipe
+    )
+    assert a == "link" and rule == "flip-calls_for"
+    assert (edges[0].src, edges[0].dst_type) == ("Dal Makhani", "ingredient")
+    # a paper's own type is enough where the relation takes a paper
+    paper = ("A Study of Reverb", "paper")
+    a, edges, rule = review.decide(
+        item("A Study of Reverb", "document", "proposes", "a method", "method"), paper
+    )
+    assert a == "link" and edges[0].src_type == "paper"
+    # a page of my own is not turned into a paper to make an edge fit
+    page = ("Reverb notes", "page")
+    a, edges, rule = review.decide(
+        item("Reverb notes", "page", "uses", "SuperCollider", "tool"), page
+    )
+    assert a == "open" and not edges
+    # where several kinds of document fit (proposes takes a paper or a
+    # page), a document nobody typed is the library's default
+    a, edges, _ = review.decide(
+        item("A Study of Reverb", "document", "proposes", "a claim", "claim"), paper
+    )
+    assert a == "link" and edges[0].src_type == "paper"
+
+
+def test_a_manual_covering_a_device_is_the_manual_of_it() -> None:
+    """studio's `covers` is for a concept or a standard; the manual of a
+    device `describes` it, whatever kind of document it is."""
+    item = lambda src, st, rel, dst, dt: {  # noqa: E731
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+    }
+    doc = ("TherapSID User Manual", "manual")
+    a, edges, rule = review.decide(
+        item("TherapSID User Manual", "manual", "covers", "MOS 6581", "device"), doc
+    )
+    assert a == "link" and rule == "covers->describes"
+    assert (edges[0].rel, edges[0].src_type) == ("describes", "manual")
+    a, edges, _ = review.decide(
+        item("TherapSID User Manual", "manual", "covers", "SID chip", "component"), doc
+    )
+    assert a == "link" and edges[0].rel == "describes"
+    # a concept is what covers is for: left as it stands
+    a, edges, rule = review.decide(
+        item("TherapSID User Manual", "manual", "covers", "MIDI", "standard"), doc
+    )
+    assert a == "open"
+    # a field name the model echoed is not a name
+    a, edges, rule = review.decide(
+        item("A Manual", "manual", "covers", "component=DB-25", "component"), doc
+    )
+    assert a == "drop" and rule == "malformed-name"
+
+
+def test_the_shapes_the_queue_kept_coming_back_with() -> None:
+    """A manual "part of" the thing it documents is about it; the firm
+    behind a manual published it; an institution is not something a
+    paper uses; the author written first, under either type."""
+    doc = ("A Manual", "paper")
+    item = lambda src, st, rel, dst, dt: {  # noqa: E731
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+    }
+    a, edges, rule = review.decide(
+        item("A Manual", "paper", "part_of", "Continuum Fingerboard", "tool"), doc
+    )
+    assert a == "link" and edges[0].rel == "about" and rule == "part_of->about"
+    a, edges, _ = review.decide(
+        item("A Manual", "paper", "developed_by", "u-he", "organization"), doc
+    )
+    assert a == "link" and edges[0].rel == "published_by"
+    a, edges, _ = review.decide(
+        item("A Manual", "paper", "uses", "Technische Universität", "organization"), doc
+    )
+    assert a == "link" and edges[0].rel == "mentions"
+    a, edges, rule = review.decide(
+        item("G. Krucker", "person", "authored_by", "A Manual", "paper"), doc
+    )
+    assert a == "link" and rule == "flip-authored_by"
+    assert (edges[0].src, edges[0].dst_type) == ("A Manual", "author")
+    # a name that is not one: no author is not an author
+    a, edges, rule = review.decide(
+        item("Author not listed", "person", "authored_by", "A Manual", "paper"), doc
+    )
+    assert a == "drop" and rule == "placeholder-name"
