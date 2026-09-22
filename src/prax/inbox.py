@@ -29,10 +29,8 @@ import ipaddress
 import json
 import logging
 import re
-import shutil
 import socket
 import sqlite3
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -41,7 +39,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from prax import config, models, ontology, parsers, store
+from prax import config, drop, models, ontology, parsers, store
 
 log = logging.getLogger("prax.inbox")
 
@@ -53,9 +51,10 @@ USER_AGENT = (
 )
 FETCH_TIMEOUT = 30.0
 FETCH_MAX_BYTES = 64 * 1024 * 1024
-SETTLE_SECONDS = 2.0  # a file still being written is left for the next scan
-SKIP_SUFFIXES = (".part", ".crdownload", ".tmp", ".download")
-FAILED_DIR = "failed"
+# the drop folder's rules live in prax.drop, shared with the worker
+SETTLE_SECONDS = drop.SETTLE_SECONDS
+SKIP_SUFFIXES = drop.SKIP_SUFFIXES
+FAILED_DIR = drop.FAILED_DIR
 TRACKING_PARAMS = re.compile(
     r"^(utm_\w+|fbclid|gclid|dclid|msclkid|mc_cid|mc_eid|igshid|ref|ref_src"
     r"|_hsenc|_hsmi|yclid|vero_id|s_cid)$",
@@ -607,32 +606,6 @@ class ScanReport:
         )
 
 
-def _sidecar(path: Path) -> tuple[Path | None, dict[str, Any]]:
-    side = path.with_name(path.name + ".json")
-    if not side.is_file():
-        return None, {}
-    try:
-        data = json.loads(side.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        log.warning("%s: unreadable sidecar: %s", side, exc)
-        return side, {}
-    return side, data if isinstance(data, dict) else {}
-
-
-def _is_sidecar_name(path: Path) -> bool:
-    """``report.pdf.json`` is a sidecar for ``report.pdf``; ``notes.json``
-    is a file of its own."""
-    stem = path.name[:-5]
-    return "." in stem and not stem.startswith(".")
-
-
-def _settled(path: Path) -> bool:
-    try:
-        return time.time() - path.stat().st_mtime >= SETTLE_SECONDS
-    except OSError:
-        return False
-
-
 def _folder_domains(root: Path, path: Path) -> list[str]:
     """``inbox/<module>/…`` puts the file in that domain."""
     rel = path.relative_to(root).parts
@@ -663,19 +636,11 @@ def scan(
     failed_dir = root / FAILED_DIR
     report = ScanReport()
     session = session or f"inbox-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}"
-    for path in sorted(p for p in root.rglob("*") if p.is_file()):
-        if failed_dir in path.parents or not path.exists():
-            continue  # a sidecar goes with its file
-        if path.name.startswith(".") or path.suffix.lower() in SKIP_SUFFIXES:
+    for item in drop.walk(root):
+        if item is None:
+            report.waiting += 1  # still being written, or a sidecar alone
             continue
-        if path.suffix == ".json" and _is_sidecar_name(path):
-            if not path.with_name(path.name[:-5]).exists():
-                report.waiting += 1  # the file it belongs to is still coming
-            continue  # a sidecar; handled with its file
-        if not _settled(path):
-            report.waiting += 1
-            continue
-        side, extra = _sidecar(path)
+        path, extra = item.path, item.extra
         doms = (
             list(extra.get("domains") or [])
             or _folder_domains(root, path)
@@ -700,16 +665,11 @@ def scan(
             log.warning("%s: %s", path, exc)
             report.failed.append(str(path))
             if consume:
-                failed_dir.mkdir(exist_ok=True)
-                shutil.move(str(path), failed_dir / path.name)
-                if side:
-                    shutil.move(str(side), failed_dir / side.name)
+                drop.fail(root, item)
             continue
         (report.registered if cap.created else report.duplicates).append(cap.doc_id)
         if consume:
-            path.unlink()
-            if side:
-                side.unlink()
+            drop.taken(item)
     if consume:
         for d in sorted((p for p in root.rglob("*") if p.is_dir()), reverse=True):
             if d != failed_dir and not any(d.iterdir()):

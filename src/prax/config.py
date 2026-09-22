@@ -68,14 +68,23 @@ def config_path() -> Path:
     return Path(os.environ.get("PRAX_CONFIG") or data_dir() / CONFIG_NAME)
 
 
+_parsed: tuple[Path, bytes, dict[str, Any]] | None = None  # the last file parsed
+
+
 def document() -> dict[str, Any]:
-    """``prax.yaml`` parsed, ``{}`` when there is none. Read on every call:
-    the file is a page long, and a person editing it expects the next pass
-    to see the change."""
+    """``prax.yaml`` parsed, ``{}`` when there is none. The file is read on
+    every call, so a person editing it sees the change at the next pass;
+    it is parsed again only when its bytes changed. A search asked the
+    file three or four things, and PyYAML's parse of a page is
+    milliseconds on a desktop and tens of them on the board."""
+    global _parsed
     path = config_path()
     if not path.is_file():
         return {}
-    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    raw = path.read_bytes()
+    if _parsed is not None and _parsed[0] == path and _parsed[1] == raw:
+        return _parsed[2]
+    data = yaml.safe_load(raw.decode("utf-8")) or {}
     if not isinstance(data, dict):
         raise ConfigError(f"{path}: expected a mapping at the top")
     unknown = [k for k in data if k not in SECTIONS]
@@ -84,6 +93,7 @@ def document() -> dict[str, Any]:
             f"{path}: unknown section{'s' if len(unknown) > 1 else ''}"
             f" {', '.join(sorted(unknown))}; known: {', '.join(SECTIONS)}"
         )
+    _parsed = (path, raw, data)
     return data
 
 

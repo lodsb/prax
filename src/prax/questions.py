@@ -131,25 +131,12 @@ def _fingerprint(
 
 
 def _hashes(con: sqlite3.Connection, ids: list[int]) -> dict[str, str]:
-    out: dict[str, str] = {}
-    for doc_id in ids:
-        row = con.execute(
-            "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
-        ).fetchone()
-        if row is not None:
-            out[str(doc_id)] = row["text_hash"] or ""
-    return out
+    """The sources' text hashes keyed by id as a string (JSON keys)."""
+    return {str(k): v for k, v in store.text_hashes(con, ids).items()}
 
 
 def _titles(con: sqlite3.Connection, ids: list[int]) -> dict[int, str]:
-    out: dict[int, str] = {}
-    for doc_id in ids:
-        row = con.execute(
-            "SELECT title FROM documents WHERE id = ?", (doc_id,)
-        ).fetchone()
-        if row is not None:
-            out[doc_id] = row["title"] or f"document {doc_id}"
-    return out
+    return {k: v or f"document {k}" for k, v in store.document_titles(con, ids).items()}
 
 
 def create(
@@ -273,14 +260,11 @@ def _check(
                 doc_id = int(r["source_doc"])
                 if doc_id != page.get("doc_id") and doc_id not in fresh:
                     fresh[doc_id] = f"shares {r['n']} of the answer's entities"
-    reread = []
     hashes = q.get("source_hashes") or {}
-    for doc_id, old in hashes.items():
-        row = con.execute(
-            "SELECT text_hash FROM documents WHERE id = ?", (int(doc_id),)
-        ).fetchone()
-        if row is not None and (row["text_hash"] or "") != old:
-            reread.append(int(doc_id))
+    now = store.text_hashes(con, [int(d) for d in hashes])
+    reread = [
+        int(d) for d, old in hashes.items() if int(d) in now and now[int(d)] != old
+    ]
     # a retired document is no news
     live = {
         doc_id for doc_id in fresh if not store.is_retired(store.get_meta(con, doc_id))

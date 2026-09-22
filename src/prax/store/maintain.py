@@ -45,6 +45,7 @@ from .base import _reading
 from .documents import (
     assign_domains,
     dedupe_captures,
+    fill_text_lengths,
     get_meta,
     rechunk,
     reference_chunks,
@@ -58,7 +59,16 @@ from .retrieval import fts_merge, replace_acronyms
 
 Log = Callable[[str], None]
 
-PASSES = ("acronyms", "fields", "domains", "dedupe", "review", "references", "fts")
+PASSES = (
+    "acronyms",
+    "fields",
+    "domains",
+    "dedupe",
+    "review",
+    "references",
+    "fts",
+    "lengths",
+)
 ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
 
 
@@ -432,6 +442,13 @@ def _references(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"run": run, **link_references(con, run=run, job=job)}
 
 
+def _lengths(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """``documents.text_len`` filled for the texts indexed before the
+    column existed (``fill_text_lengths``); nothing once it is."""
+    job.update(note="lengths: reading the artifacts without a length")
+    return {"filled": fill_text_lengths(con)}
+
+
 def _rechunk(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """Every indexed document's chunks rebuilt from its text artifact
     (``documents.rechunk``); chunks whose text did not change keep their
@@ -459,6 +476,7 @@ _RUN = {
     "review": _review,
     "references": _references,
     "fts": _fts,
+    "lengths": _lengths,
     "rechunk": _rechunk,
 }
 

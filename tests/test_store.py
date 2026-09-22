@@ -345,3 +345,37 @@ def test_link_records_provenance(con: sqlite3.Connection) -> None:
     )
     row = store.traverse(con, "paper X")[0]
     assert row["source_doc"] == doc["doc_id"] and row["confidence"] == "EXTRACTED"
+
+
+def test_the_row_knows_its_text_length(con: sqlite3.Connection) -> None:
+    """``index_text`` writes ``text_len``; ``get_document(max_chars=0)``
+    answers from the row without opening the artifact; a row indexed
+    before the column (NULL) is read once, and the ``lengths`` pass
+    fills it."""
+    from prax import config
+
+    text = "héllo wörld " * 100
+    doc = store.ingest_text(con, text, title="T")["doc_id"]
+    row = con.execute("SELECT text_hash, text_len FROM documents WHERE id = ?", (doc,))
+    text_hash, n = row.fetchone()
+    assert n == len(text.strip()) or n == len(text)
+    path = config.archive_dir() / text_hash[:2] / text_hash
+    kept = path.read_bytes()
+    path.unlink()  # no artifact: the row alone must do
+    got = store.get_document(con, doc, max_chars=0)
+    assert got["text"] == "" and got["text_len"] == n and got["truncated"] is True
+    assert store.get_document(con, doc, offset=n, max_chars=0)["truncated"] is False
+    path.write_bytes(kept)
+    # a text from before the column: read from the artifact, then filled once
+    con.execute("UPDATE documents SET text_len = NULL WHERE id = ?", (doc,))
+    con.commit()
+    assert store.get_document(con, doc, max_chars=0)["text_len"] == n
+    assert store.fill_text_lengths(con) == 1
+    assert (
+        con.execute("SELECT text_len FROM documents WHERE id = ?", (doc,)).fetchone()[0]
+        == n
+    )
+    assert store.fill_text_lengths(con) == 0
+    assert store.maintain(con, only=["lengths"])["lengths"]["filled"] == 0
+    # windows still read the artifact
+    assert store.get_document(con, doc, max_chars=5)["text"] == text[:5]

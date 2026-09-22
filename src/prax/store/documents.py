@@ -84,8 +84,9 @@ def index_text(
     text_hash = _archive_bytes(data)
     n_chunks = _write_chunks(con, doc_id, text)
     con.execute(
-        f"UPDATE documents SET text_hash = ?, parsed_at = {_NOW} WHERE id = ?",
-        (text_hash, doc_id),
+        f"UPDATE documents SET text_hash = ?, text_len = ?, parsed_at = {_NOW}"
+        " WHERE id = ?",
+        (text_hash, len(text), doc_id),
     )
     if text_source is not None:
         con.execute(
@@ -106,6 +107,28 @@ def _cleaned(text: str) -> str:
     Symbol-font code points become the letters they stand for
     (``prax.glyphs``)."""
     return glyphs.clean(_SURROGATE.sub("�", text.replace("\x00", "")))
+
+
+@_serialized
+def fill_text_lengths(con: sqlite3.Connection, *, limit: int | None = None) -> int:
+    """``documents.text_len`` for the rows indexed before the column (NULL
+    with an artifact): each artifact read once. Returns how many were
+    filled."""
+    sql = (
+        "SELECT id, text_hash FROM documents WHERE text_hash IS NOT NULL"
+        " AND text_len IS NULL ORDER BY id"
+    )
+    if limit is not None:
+        sql += f" LIMIT {int(limit)}"
+    rows = con.execute(sql).fetchall()
+    for r in rows:
+        try:
+            n = len(_read_archive(r["text_hash"]).decode("utf-8"))
+        except OSError:  # an artifact gone from the archive: heal's business
+            continue
+        con.execute("UPDATE documents SET text_len = ? WHERE id = ?", (n, r["id"]))
+    con.commit()
+    return len(rows)
 
 
 def text_unchanged(con: sqlite3.Connection, doc_id: int, text: str) -> bool:
@@ -1972,15 +1995,24 @@ def get_document(
     """One document with its text read from the parsed-text artifact.
 
     ``text`` is the window ``[offset, offset + max_chars)``; ``text_len`` and
-    ``truncated`` tell the caller whether more remains.
+    ``truncated`` tell the caller whether more remains. With ``max_chars=0``
+    the artifact is not read when the row knows its length (every text
+    indexed since migration 15; the ``lengths`` maintain pass fills the
+    rest): the row alone, for the callers that want the row.
     """
     doc = con.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if not doc:
         return None
     out = dict(doc)
     out["meta"] = json.loads(out["meta"]) if out["meta"] else {}
-    full = _read_archive(doc["text_hash"]).decode("utf-8") if doc["text_hash"] else ""
     offset = max(0, offset)
+    known = doc["text_len"] if doc["text_hash"] else 0
+    if max_chars == 0 and known is not None:
+        out.update(
+            text="", text_len=int(known), offset=offset, truncated=offset < int(known)
+        )
+        return out
+    full = _read_archive(doc["text_hash"]).decode("utf-8") if doc["text_hash"] else ""
     end = len(full) if max_chars is None else min(len(full), offset + max(0, max_chars))
     out.update(
         text=full[offset:end],
@@ -2327,6 +2359,20 @@ def document_outline(
 
 
 @_reading
+def text_hashes(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
+    """The text artifact's hash by id, one query (unknown ids left out; a
+    document without text is an empty string): what a standing question
+    keeps to tell a re-read source from an unchanged one."""
+    ids = list(dict.fromkeys(int(i) for i in doc_ids))
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    rows = con.execute(
+        f"SELECT id, text_hash FROM documents WHERE id IN ({marks})", ids
+    ).fetchall()
+    return {r["id"]: r["text_hash"] or "" for r in rows}
+
+
 def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
     """Titles by id, for naming documents in a result (unknown ids left
     out; an untitled document is an empty string)."""

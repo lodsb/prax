@@ -19,7 +19,6 @@ import contextlib
 import json
 import logging
 import os
-import shutil
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -28,7 +27,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Self
 
-from prax import embeddings, extraction, hostinfo, inbox, models, parsers, titles, work
+from prax import (
+    drop,
+    embeddings,
+    extraction,
+    hostinfo,
+    models,
+    parsers,
+    titles,
+    work,
+)
 from prax.client import Door
 from prax.parsers import figures
 
@@ -768,20 +776,11 @@ def push_folder(
     counts = {"sent": 0, "failed": 0, "waiting": 0}
     if not folder.is_dir():
         return counts
-    failed_dir = folder / inbox.FAILED_DIR
-    for path in sorted(p for p in folder.rglob("*") if p.is_file()):
-        if failed_dir in path.parents or not path.exists():
-            continue
-        if path.name.startswith(".") or path.suffix.lower() in inbox.SKIP_SUFFIXES:
-            continue
-        if path.suffix == ".json" and inbox._is_sidecar_name(path):
-            if not path.with_name(path.name[:-5]).exists():
-                counts["waiting"] += 1
-            continue
-        if not inbox._settled(path):
+    for item in drop.walk(folder):
+        if item is None:
             counts["waiting"] += 1
             continue
-        side, extra = inbox._sidecar(path)
+        path, extra = item.path, item.extra
         rel = path.relative_to(folder).parts
         doms = (
             list(extra.get("domains") or [])
@@ -805,15 +804,10 @@ def push_folder(
         except Exception as exc:  # noqa: BLE001
             _say(log_, f"{path.name}: {exc}")
             counts["failed"] += 1
-            failed_dir.mkdir(exist_ok=True)
-            shutil.move(str(path), failed_dir / path.name)
-            if side:
-                shutil.move(str(side), failed_dir / side.name)
+            drop.fail(folder, item)
             continue
         counts["sent"] += 1
-        path.unlink()
-        if side:
-            side.unlink()
+        drop.taken(item)
     return counts
 
 

@@ -73,19 +73,20 @@ def _counts(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
     return out
 
 
-def _promote_done(con: sqlite3.Connection, doc_id: int) -> bool:
+def _promote_done(meta: dict[str, Any]) -> bool:
     """Has the promote step's model read this flagged document under the
-    current ontology? (``store.promoted_documents`` knows.)"""
-    from prax import extraction
+    current ontology? The same test ``store.promoted_documents`` makes,
+    for this one document's meta."""
+    from prax import extraction, ontology
 
     try:
         producer = extraction.current("promote").name
     except RuntimeError:
         return False
-    for d in store.promoted_documents(con, producer=producer):
-        if d["doc_id"] == doc_id:
-            return bool(d.get("done"))
-    return False
+    onto = ontology.current()
+    return store.extracted_by(
+        meta, producer, ontology_version=store.expected_version(meta, onto)
+    )
 
 
 def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
@@ -128,6 +129,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         and text_len < store.THIN_BYTES_PER_PAGE * int(pages)
     )
 
+    models_of = {step: _model(step) for step in _STEPS}
     state: dict[str, Any] = {
         "mime": mime,
         "text_source": meta.get("text_source"),
@@ -152,7 +154,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         "extraction_stale": stale,
         "promote": promote,
         "reading": reading,
-        "models": {step: _model(step) for step in _STEPS},
+        "models": models_of,
     }
 
     routes: list[dict[str, Any]] = []
@@ -168,7 +170,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         available: bool = True,
         note: str = "",
     ) -> None:
-        model = _model(step) if step else None
+        model = models_of[step] if step else None
         if step and model is None:
             available = False
             note = note or f"no model for the {step} step on this host (prax.yaml)"
@@ -181,7 +183,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         elif action["kind"] == "extract":
             pending = bool(stale and stale.get("requested"))
         elif action["kind"] == "promote":
-            pending = bool(promote) and not _promote_done(con, doc_id)
+            pending = bool(promote) and not _promote_done(meta)
         routes.append(
             {
                 "id": rid,

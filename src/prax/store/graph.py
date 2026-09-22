@@ -1017,19 +1017,12 @@ def select_for_extraction(
     ``meta.source`` values (captures); ``skip_mime_prefix`` drops images
     and the like."""
     stamp = "json_extract(meta, '$.extraction.ontology_version')"
-    sql = (
+    base = (
         "SELECT id FROM documents WHERE text_hash IS NOT NULL"
         " AND json_extract(meta, '$.retired') IS NULL"
     )
+    sql = ""  # the predicates every variant shares, after the scope's own
     args: list[Any] = []
-    if sources is not None:
-        # a document whose reading was asked for is due whatever its
-        # source: the request is explicit, like a promote flag
-        sql += (
-            f" AND (json_extract(meta, '$.source') IN ({','.join('?' * len(sources))})"
-            " OR json_extract(meta, '$.extraction_stale.requested') IS NOT NULL)"
-        )
-        args.extend(sources)
     want, want_args = _subset_version_case(con, onto, ontology_version)
     sql += f" AND ({stamp} IS NULL OR {stamp} != {want})"
     args.extend(want_args)
@@ -1064,7 +1057,21 @@ def select_for_extraction(
     if limit is not None:
         sql += " LIMIT ?"
         args.append(limit)
-    return [r["id"] for r in con.execute(sql, args)]
+    if sources is None:
+        return [r["id"] for r in con.execute(base + sql, args)]
+    # a scope of sources (the captures): the source index answers it. A
+    # document whose reading a person asked for is due whatever its
+    # source, like a promote flag; it goes first, from its own partial
+    # index (an OR of the two turned the source index into a scan)
+    asked = " AND json_extract(meta, '$.extraction_stale.requested') IS NOT NULL"
+    marks = ",".join("?" * len(sources))
+    by_source = f" AND json_extract(meta, '$.source') IN ({marks})"
+    out = [r["id"] for r in con.execute(base + asked + sql, args)]
+    seen = set(out)
+    for r in con.execute(base + by_source + sql, [*sources, *args]):
+        if r["id"] not in seen:
+            out.append(r["id"])
+    return out[:limit] if limit is not None else out
 
 
 def _subset_version_case(
