@@ -209,12 +209,15 @@ def build_input(
         lines.append(f"DOI: {meta['doi']}")
     if meta.get("abstract"):
         lines.append(f"Abstract: {meta['abstract']}")
-    # the text: chunks in order, figure captions and code skipped, up to the
-    # head budget; then the closing sections that fell past it, up to the tail
+    # the text: chunks in order, up to the head budget; then the closing
+    # sections that fell past it, up to the tail. Figure captions and code
+    # are skipped, and so are the regions of a capture that are not the
+    # document: its advertising and what its readers wrote under it
+    skip = ("figure", "code", "ad", "comment")
     chunks = [
         c
         for c in store.list_chunks(con, doc_id)
-        if c["kind"] not in ("figure", "code") and c["text"].strip()
+        if c["kind"] not in skip and c["text"].strip()
     ]
     parts: list[str] = []
     used = 0

@@ -131,6 +131,24 @@ def request_extraction(
     return store.request_extraction(con, doc_id, by=req.by)
 
 
+@router.post("/doc/{doc_id}/rechunk")
+def rechunk_doc(doc_id: int, request: Request) -> dict[str, Any]:
+    """Chunk this document's text again, with the chunker as it stands.
+
+    Chunks are disposable: the artifact and everything else stay as they
+    are, and a chunk whose text did not change keeps its id and its
+    vector. One document at a time is how a chunker change is tried
+    before ``prax maintain --rechunk`` puts the library through it.
+    """
+    con = _con(request)
+    doc = store.get_document(con, doc_id, max_chars=0)
+    if doc is None:
+        raise HTTPException(404, "no such document")
+    if doc.get("text_hash") is None:
+        raise HTTPException(400, "no text to chunk yet")
+    return {"chunks": store.rechunk(con, doc_id)}
+
+
 class ReadingReq(BaseModel):
     extractor: str  # one of store.READINGS
     mode: str | None = (

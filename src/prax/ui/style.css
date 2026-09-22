@@ -270,6 +270,21 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .up-panel .up-acts button { padding: .25rem .6rem; font-size: .78rem; letter-spacing: .01em; text-transform: none; }
 .up-panel #up-msg { font-size: .8rem; min-height: 1em; }
 
+/* set aside: an advertisement, what readers wrote under a page */
+.aside-chunk details { border-left: 2px solid var(--line); padding-left: .7rem; }
+.aside-chunk summary { cursor: pointer; font-size: .84rem; list-style: none; padding: .2rem 0; }
+.aside-chunk summary::-webkit-details-marker { display: none; }
+.aside-chunk summary::before { content: "▸"; color: var(--muted); margin-right: .4rem; }
+.aside-chunk details[open] summary::before { content: "▾"; }
+.aside-chunk details[open] .chunk-body { margin-top: .4rem; opacity: .85; }
+
+/* a recipe's ingredients, as the box they are on the page */
+.ingredients-box { border: 1px solid var(--line); padding: .7rem .9rem; }
+.ingredients-box .ingredients-serves { margin: 0 0 .5rem; font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.ingredients-box h4 { margin: .7rem 0 .3rem; font-size: .88rem; font-weight: 600; }
+.ingredients-box ul.ingredient-list { margin: 0; padding-left: 1.1rem; }
+.ingredients-box ul.ingredient-list li { margin: .15rem 0; }
+
 /* a queue nobody is asking for: why it sits, and what would move it */
 .waiting-note { font-size: .84rem; border-left: 2px solid var(--accent); padding: .3rem 0 .3rem .6rem; margin: .4rem 0; color: var(--fg); }
 .waiting-note code { font-size: .8rem; }
@@ -308,6 +323,8 @@ dialog#process-dialog .route-pending .route-detail { color: var(--muted); }
 .badge-formula { color: var(--formula); }
 .badge-reference { color: var(--muted); }
 .badge-ask { color: var(--accent); }
+.badge-ad, .badge-comment { color: var(--muted); }
+.badge-ingredients { color: var(--table); }
 .kind-reference .chunk-body { font-size: .92rem; }
 .kind-reference .cited { margin: .2rem 0 0 1.2rem; font-size: .88rem; }
 /* an ask block: the door's answer on a plate inside the person's page,

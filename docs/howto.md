@@ -691,6 +691,41 @@ does not undo it. Both producers' edges sit side by side. `GET
 /promote` returns the flagged list with status and the candidates.
 `POST /doc/{id}/promote` sets the flag and `DELETE` clears it.
 
+### What a capture carries that is not the document
+
+A snapshot of a blog post or a video keeps the comment section under
+it and the advertising inside it. Both become their own chunk and are set
+aside, as a reference entry is. They stay in the text artifact and are
+never embedded. A search passes over them unless it asks for that
+kind, and an extraction does not read them. The document view folds
+them to one line.
+
+The comment section is the `## Comments` heading the HTML parser
+writes, at the end of a page with some document above it. A paper's
+"Discussion", and a tutorial whose last section is about writing
+comments, are the document's own.
+
+An advertisement is a run of pieces (`prax.furniture`). There are three
+ways in. One piece says outright that it was paid for: "today's
+sponsor", "paid promotion", a German page's "Anzeige" on its own line.
+Or it names a sponsor and makes an offer beside it, which is a code, a
+discount or a trial. Or it makes that offer with a link to take it up. A funding acknowledgement is none of those:
+"Research sponsored by the U.S. Department of Energy" stays part of
+the paper. The run then reaches over the pieces beside it that name
+the same brand, which is where a sponsor read begins and ends. It
+takes the frames inside it with it, so the vision pass never reads the
+sponsor's slides.
+
+A recipe's ingredient list is the other way round: one chunk because
+four fragments say nothing, and not set aside at all. `data` holds the
+servings and every line with its amount, unit and note
+(`prax.ingredients`); the line as written is kept beside them.
+
+All three are the chunker's, so they arrive with a re-chunk. One
+document at a time from its page ("process… → Chunk the text again",
+`POST /doc/{id}/rechunk`), the library with `prax maintain --rechunk`.
+A chunk whose text did not change keeps its id and its vector.
+
 ### Reading the graph again
 
 The extract pass reads a document once per ontology version and

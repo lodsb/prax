@@ -251,3 +251,26 @@ def test_api_routes_and_extract(client: TestClient) -> None:
     assert by["figures-again"]["pending"] is True
     assert by["figures"]["pending"] is False
     assert view["state"]["models"]["extract"] == {"name": "stub", "paid": False}
+
+
+def test_one_document_chunked_again(client: TestClient) -> None:
+    """The chunker changes more often than anything else in prax, so a
+    document can be put through it on its own, from its own page."""
+    doc = client.post(
+        "/ingest",
+        json={
+            "text": "# A capture\n\n" + ("Some prose about reverb. " * 60),
+            "title": "A capture",
+        },
+    ).json()["doc_id"]
+    routes = client.get(f"/doc/{doc}/routes").json()["routes"]
+    rechunk = next(r for r in routes if r["id"] == "rechunk")
+    assert rechunk["action"] == {"kind": "rechunk"} and rechunk["available"]
+    before = client.get(f"/doc/{doc}/chunks").json()
+    out = client.post(f"/doc/{doc}/rechunk", json={}).json()
+    assert out["chunks"] == len(before)
+    after = client.get(f"/doc/{doc}/chunks").json()
+    # the same regions, and the ids the unchanged text kept
+    assert [c["text"] for c in after] == [c["text"] for c in before]
+    assert [c["chunk_id"] for c in after] == [c["chunk_id"] for c in before]
+    assert client.post("/doc/99999/rechunk", json={}).status_code == 404

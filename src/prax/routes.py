@@ -214,6 +214,16 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
 
     if is_page:
         return {"doc_id": doc_id, "state": state, "routes": routes}
+    if text_len or row["text_hash"]:
+        add(
+            "rechunk",
+            "text",
+            "Chunk the text again",
+            "rebuild this document's chunks with the chunker as it stands"
+            f" ({text_len:,} characters of text now); nothing else changes,"
+            " and a chunk whose text did not change keeps its vector",
+            {"kind": "rechunk"},
+        )
 
     # -- the text
     if is_pdf:

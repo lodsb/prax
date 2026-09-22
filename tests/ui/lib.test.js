@@ -190,3 +190,26 @@ test("waitingNote: a queue nobody asks for, and one in hand", () => {
   assert.equal(lib.waitingNote({ why: "", how: "x" }, 7), "");
   assert.equal(lib.waitingNote(null, 7), "");
 });
+
+test("asideLine and ingredientsBox: what is folded, and the recipe box", () => {
+  const ad = lib.asideLine("ad", { brand: "brilliant", why: ["“20% off”"] }, "x".repeat(1200));
+  assert.match(ad, /advertisement · brilliant/);
+  assert.match(ad, /1\.2k characters/);
+  assert.match(lib.asideLine("comment", null, "abc"), /what readers wrote · 3 characters/);
+  const box = lib.ingredientsBox({
+    servings: { text: "Für 4 Personen", n: 4 },
+    groups: [
+      { name: null, items: [{ text: "60 ml Olivenöl", amount: 60, unit: "ml", item: "Olivenöl" },
+                            { text: "½ TL Salz", amount: 0.5, unit: "TL", item: "Salz" }] },
+      { name: "Für die Soße", items: [{ text: "120 g Sour Cream", amount: 120, unit: "g", item: "Sour Cream", note: "kalt" }] },
+    ],
+  });
+  assert.match(box, /Für 4 Personen/);
+  assert.match(box, /<b>60 ml<\/b> Olivenöl/);
+  assert.match(box, /<b>½ TL<\/b> Salz/);
+  assert.match(box, /<h4>Für die Soße<\/h4>/);
+  assert.match(box, /\(kalt\)/);
+  assert.equal(lib.ingredientsBox({ groups: [] }), "");
+  assert.equal(lib.amount(2), "2");
+  assert.equal(lib.amount(1.5), "1½");
+});

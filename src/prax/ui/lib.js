@@ -243,6 +243,43 @@ function spendPanel(s) {
   </section>`;
 }
 
+// What an advertisement or a comment section says on its folded line:
+// what it is, whose it is, and how much of it there is.
+function asideLine(kind, data, text) {
+  const n = (text || "").length;
+  const size = n >= 1000 ? `${Math.round(n / 100) / 10}k characters` : `${n} characters`;
+  if (kind === "comment") return `what readers wrote · ${size}`;
+  const d = data || {};
+  const why = (d.why || []).join(", ");
+  return `advertisement${d.brand ? ` · ${esc(d.brand)}` : ""}${why ? ` · ${esc(why)}` : ""} · ${size}`;
+}
+
+// An amount as a cook writes it: halves and quarters as fractions, a
+// whole number without its zero.
+const FRACTIONS = { 0.5: "½", 0.25: "¼", 0.75: "¾", 0.333: "⅓", 0.667: "⅔", 0.125: "⅛" };
+function amount(n) {
+  if (n == null) return "";
+  const whole = Math.floor(n), rest = Math.round((n - whole) * 1000) / 1000;
+  const frac = FRACTIONS[rest];
+  if (frac) return (whole ? whole : "") + frac;
+  return String(Math.round(n * 100) / 100);
+}
+
+// A recipe's ingredient list as the box it is on the page: for how many,
+// then every line with its amount, grouped as the recipe groups them.
+function ingredientsBox(data) {
+  const d = data || {}, groups = d.groups || [];
+  if (!groups.length) return "";
+  const item = (it) => {
+    const head = it.amount != null ? `<b>${esc(amount(it.amount))}${it.unit ? ` ${esc(it.unit)}` : ""}</b> ` : "";
+    const note = it.note ? ` <span class="muted">(${esc(it.note)})</span>` : "";
+    return `<li>${head}${esc(it.item || it.text)}${note}</li>`;
+  };
+  const group = (g) => `${g.name ? `<h4>${esc(g.name)}</h4>` : ""}<ul class="ingredient-list">${(g.items || []).map(item).join("")}</ul>`;
+  const serves = d.servings ? `<p class="ingredients-serves">${esc(d.servings.text)}</p>` : "";
+  return `<div class="ingredients-box">${serves}${groups.map(group).join("")}</div>`;
+}
+
 // Why a queue is not moving: what the door says about the step nobody
 // is asking for (`work.who_runs`). Empty when the work is in hand, so a
 // view can render it unconditionally.
@@ -254,5 +291,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote, asideLine, ingredientsBox, amount };
 }

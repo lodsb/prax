@@ -272,6 +272,12 @@ the same state, or "not yet asked · ask now", or "edited by hand; left
 action row has "ask again", and its meta line says when it was asked
 and how often it moved.
 
+A comment section and an advertisement are folded to one line saying
+what they are ("what readers wrote · 3.4k characters", "advertisement ·
+brilliant · “20% off”"); a click opens either. A recipe's ingredients
+are the box they are on the page: for how many people, then every line
+with its amount in bold, grouped as the recipe groups them.
+
 ### `#promote`
 
 The queue for the expensive model. The flagged documents are listed

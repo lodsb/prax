@@ -324,6 +324,10 @@ PROCESS.addEventListener("click", async (e) => {
       if (reason === null) return;
       await post(`/doc/${processDoc.id}/promote`, { reason: reason || null });
       setStatus("promoted: the worker's promote pass runs it with --spend");
+    } else if (act.kind === "rechunk") {
+      const out = await post(`/doc/${processDoc.id}/rechunk`, {});
+      setStatus(`chunked again: ${out.chunks} chunks`);
+      processTouched = true;
     } else if (act.kind === "extract") {
       await post(`/doc/${processDoc.id}/extract`, {});
       setStatus("the graph is read again on the worker's next extract pass");
@@ -364,6 +368,20 @@ function renderAsk(c, docId) {
   </div>`;
 }
 
+// An advertisement or a comment section: folded, with one line saying
+// what it is. The text is the artifact's own — nothing was removed — and
+// it opens on a click.
+function renderAside(c, docId, highlight) {
+  const open = c.chunk_id === highlight ? " open" : "";
+  return `
+  <section class="chunk kind-${c.kind} aside-chunk${highlight === c.chunk_id ? " highlight" : ""}" id="chunk-${c.chunk_id}" data-chunk="${c.chunk_id}">
+    <details${open}>
+      <summary>${badge(c.kind)} <span class="muted">${esc(asideLine(c.kind, c.data, c.text))}</span></summary>
+      <div class="chunk-body">${md(c.text)}</div>
+    </details>
+  </section>`;
+}
+
 function renderChunk(c, highlight, docId, cites) {
   const cls = "chunk kind-" + (c.kind || "text") + (c.chunk_id === highlight ? " highlight" : "");
   let body;
@@ -380,6 +398,10 @@ function renderChunk(c, highlight, docId, cites) {
     body = renderAsk(c, docId);
   } else if (c.kind === "code") {
     body = md(c.text);
+  } else if (c.kind === "ad" || c.kind === "comment") {
+    return renderAside(c, docId, highlight);
+  } else if (c.kind === "ingredients") {
+    body = ingredientsBox(c.data) || md(c.text);
   } else {
     body = citeMarkers(md(c.text), cites);  // "[12]" reaches what entry 12 cites
   }

@@ -193,6 +193,20 @@ reference `docs/ask.md`.
 - A display equation alone on its line is a `formula` chunk with its
   LaTeX, the number the prose refers to it by, and any readings in
   `data`. Inline maths stays in the text chunk around it.
+- What a captured page carries that is not the document is set aside
+  like a reference. Its comment section is one `comment` chunk, from
+  the `## Comments` heading the HTML parser writes at the end of a page
+  of some size. Its advertising is an `ad` chunk per run
+  (`prax.furniture`: a sponsor's mark with an offer beside it, reaching
+  over the pieces that name the same brand). Both stay in the artifact,
+  out of the vectors, out of a search unless asked for by kind, out of
+  what an extraction reads, and folded in the document view.
+- A recipe's ingredient list is one `ingredients` chunk, from its
+  "Zutaten" or "Ingredients" heading to the last of its lists, with the
+  servings and every line's amount, unit and note in `data`
+  (`prax.ingredients`). Not set aside: an ingredient is what a search
+  for one should find. The line as written is always kept, so a later
+  pass can answer "the same for six people".
 - An entry of a reference list (under a References/Bibliography
   heading) is a `reference` chunk. Its `data` holds what it names
   (number, surnames, year, title, a printed id; `prax.references`) and,

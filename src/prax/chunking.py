@@ -12,10 +12,6 @@ chunks:
   LaTeX and the number the prose refers to it by in ``data``. Inline maths
   stays in the sentence it belongs to — a chunk is a region of the artifact
   and cannot tear one;
-* one chunk per **formula**: a display equation alone on its line, with the
-  LaTeX and the number the prose refers to it by in ``data``. Inline maths
-  stays in the sentence it belongs to — a chunk is a region of the artifact
-  and cannot tear one;
 * one chunk per fenced **code** block;
 * one chunk per **reference** — an entry of the reference list, under a
   References/Bibliography heading (``prax.references``: numbered, listed,
@@ -29,6 +25,20 @@ chunks:
   door keeps there with the question, the block's id and when it was
   asked in ``data``. Like a reference it is set aside: never embedded,
   out of a search, so an answer is never its own evidence;
+* one chunk for the **comment** section of a captured page, from the
+  ``## Comments`` heading the HTML parser writes to the next heading of its
+  own level or the end (``prax.furniture``). Set aside like a reference:
+  never embedded, out of a search, out of what an extraction reads;
+* one chunk per **ad**: a run of advertising in a capture — the sponsor
+  read of a transcript, the offer block of a video's description — found by
+  a sponsor's mark together with something to act on, and reaching over the
+  pieces beside it that name the same brand (``prax.furniture``). Set aside
+  too, and folded in the document view;
+* one chunk for a recipe's **ingredients**: the region from its "Zutaten"
+  or "Ingredients" heading to the last of its lists, whose ``data`` holds
+  the servings and every line with its amount, unit and note
+  (``prax.ingredients``). One box rather than four fragments, and not set
+  aside: an ingredient is what a search for one should find;
 * **text** chunks of consecutive paragraphs under the same heading path, up
   to ``TARGET_CHARS``; a paragraph longer than ``MAX_CHARS`` falls back to
   overlapping fixed windows.
@@ -55,7 +65,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import blocks, references
+from prax import blocks, furniture, ingredients, references
 
 TARGET_CHARS = 1200  # flush a text chunk when the next paragraph would exceed this
 MIN_CHARS = 300  # merge into the previous chunk when smaller than this at a boundary
@@ -63,8 +73,20 @@ MAX_CHARS = 2000  # paragraphs longer than this are windowed
 MIN_CODE_CHARS = 200  # smaller fenced blocks are inline snippets: part of the text
 WINDOW = 1000
 OVERLAP = 150
+COMMENTS_AFTER = 2000  # characters of document before a comment section
 
-KINDS = ("text", "table", "figure", "code", "formula", "reference", "ask")
+KINDS = (
+    "text",
+    "table",
+    "figure",
+    "code",
+    "formula",
+    "reference",
+    "ask",
+    "ad",
+    "comment",
+    "ingredients",
+)
 
 _PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
@@ -406,6 +428,78 @@ def parse_table(markdown: str) -> dict[str, Any]:
     return {"header": rows[0], "rows": rows[1:]}
 
 
+# --------------------------------------------------------------- regions
+
+
+def _comment_region(els: list[_Element]) -> tuple[int, int] | None:
+    """The comment section: its heading to the end of the document.
+
+    Only to the end, and only under a document of some size. What a
+    page's readers wrote is the last thing on it, which is where the
+    HTML parser puts it. A heading called "Comments" with the document
+    carrying on under it is the document's own (a paper's remarks, a
+    tutorial on writing comments), and so is one that arrives before
+    the document has said anything (an assessment whose last line is
+    the examiner's comment).
+    """
+    for i, el in enumerate(els):
+        if el.kind != "heading" or not furniture.is_comment_heading(el.text):
+            continue
+        if el.start < COMMENTS_AFTER:
+            continue
+        if any(e.kind == "heading" and e.level <= el.level for e in els[i + 1 :]):
+            continue
+        return i, len(els) - 1
+    return None
+
+
+def _ingredient_regions(els: list[_Element], taken: set[int]) -> list[tuple[int, int]]:
+    """Each ingredient list: its heading, the line that says for how many,
+    the lists, and the small headings that group them. It ends at the
+    first piece that is prose."""
+    out = []
+    for i, el in enumerate(els):
+        if i in taken or el.kind != "heading" or not ingredients.is_heading(el.text):
+            continue
+        last, seen = i, False
+        for j in range(i + 1, len(els)):
+            nxt = els[j]
+            if nxt.kind == "heading" and nxt.level > el.level:
+                last = j
+                continue
+            if nxt.kind == "para" and ingredients.is_list(nxt.text):
+                last, seen = j, True
+                continue
+            if nxt.kind == "page":  # a page break inside the list
+                continue
+            break
+        if seen:
+            out.append((i, last))
+            taken.update(range(i, last + 1))
+    return out
+
+
+def _regions(els: list[_Element]) -> dict[int, tuple[str, int, dict[str, Any] | None]]:
+    """``{first element: (kind, last element, data)}`` for the regions a
+    single chunk takes whole. The comment section is found first and the
+    rest are looked for outside it: an advertisement under a comment is
+    the commenter's business."""
+    out: dict[int, tuple[str, int, dict[str, Any] | None]] = {}
+    taken: set[int] = set()
+    comments = _comment_region(els)
+    if comments:
+        first, last = comments
+        out[first] = ("comment", last, None)
+        taken.update(range(first, last + 1))
+    pieces = ["" if i in taken else el.text for i, el in enumerate(els)]
+    for first, last, data in furniture.ad_runs(pieces):
+        out[first] = ("ad", last, data)
+        taken.update(range(first, last + 1))
+    for first, last in _ingredient_regions(els, taken):
+        out[first] = ("ingredients", last, None)  # parsed from the text below
+    return out
+
+
 # --------------------------------------------------------------- windows
 
 
@@ -487,7 +581,25 @@ def chunk(text: str) -> list[Chunk]:
                 chunks.pop()
 
     els = _elements(text)
+    regions = _regions(els)
+    skip_to = 0
     for idx, el in enumerate(els):
+        if idx < skip_to:
+            continue
+        region = regions.get(idx)
+        if region is not None:
+            kind, last, data = region
+            flush()
+            maybe_merge_small_tail()
+            start, end = el.start, els[last].end
+            body = text[start:end]
+            if kind == "ingredients":
+                data = ingredients.parse(body)
+            chunks.append(
+                Chunk(kind, body, start, end, el.page, path(), data, time=el.time)
+            )
+            skip_to = last + 1
+            continue
         if el.kind == "page":
             # a substantial chunk ends with its page; a small one (a running
             # header, a sentence cut by the break) carries on into the next
