@@ -944,6 +944,114 @@ What the marker evenings taught, kept for the day:
       worker while a search waits; page it. Read `logs/door.log`'s slow
       lines first.
 
+## The night of 2026-09-23: queues that explain themselves, what a capture is not, and the languages
+
+- [x] **Who would do this work** (4573df1). A flagged document sat at
+      "pending" with nothing broken and nothing said: no worker asks for
+      the `promote` step unless the run names it (`--steps` defaults to
+      the free passes), so the flag waited for a pass this host never
+      runs, and re-promoting could not help. `work.who_runs` answers it
+      for any step — the model, whether it is paid, whether a run names
+      it by default, when a worker last asked this door, why nothing is
+      doing it, and the command that would. `GET /promote` carries it as
+      `waiting`; the Promote view and a requested route in the process
+      dialog print it. The steps themselves are named once now
+      (`prax.steps`) instead of three times.
+- [x] **The typing rules round** (e8ec76f). 2,655 open items, 628
+      resolved in two passes, about 2,000 left. The unlock: the
+      self-name rule gave the document the type the graph had for it,
+      which is not always the type the relation wants — `calls_for`
+      takes a recipe, and a captured recipe is a `document`. It asks the
+      relation now, prefers `paper` where several kinds fit, and leaves
+      a page of my own alone. With it: a manual "part of" the thing it
+      documents is `about` it, the firm behind a manual `published_by`
+      it, a manual that "covers" a device `describes` it, `authored_by`
+      flips for a `person` as well as an `author`.
+      `docs/ontology-v8.md` records the round.
+- [x] **What a capture carries that is not the document** (cebc9e4,
+      `prax.furniture`, `prax.ingredients`). The comment section and the
+      advertising are their own chunks (`comment`, `ad`), set aside like
+      a reference and folded to one line in the document view; a
+      recipe's ingredient list is one `ingredients` chunk with the
+      servings and every line's amount, unit and note in `data`, and is
+      not set aside. Measured over the whole store: 14 ad chunks in 7
+      captures, 7 in 9,633 PDFs (two magazine adverts, a voucher, an
+      offer in a manual), 67 comment sections. One document can be
+      chunked again from its own page (`POST /doc/{id}/rechunk`), which
+      is how a chunker change is tried now.
+- [x] **The multilingual question, measured and researched** (96f2da1,
+      `docs/research-multilingual-2026-09-23.md`).
+
+### What the multilingual study found, and the order it proposes
+
+The library is 72 % English and 20.8 % German, no document records
+which, and the embedder is `bge-small-en-v1.5` — English only. On the
+live door: "noise reduction in audio signals" finds the four right
+papers, "Rauschunterdrückung in Audiosignalen" finds an ethnomusicology
+journal and packaging tips. In the graph one thing arrives four times
+(`Olivenöl`, `olivenöl`, `olive oil` as ingredient, `olive oil` as
+concept). The study's order, each step to be measured against the
+cross-language eval before the next:
+
+- [ ] **1. Record the language.** `lang` in `documents.meta` at parse
+      time, and on a chunk where it differs (a German comment section
+      under an English post). `lingua-py` for short text, `fastText`
+      `lid.176.ftz` (917 kB) for artifacts. No migration: `meta` is
+      where a new key goes. Precondition for everything below.
+- [ ] **2. A multilingual embedder of the same 384 dimensions.**
+      `multilingual-e5-small` is already in `prax.embeddings.MODELS`, so
+      it is `embeddings.model` in `prax.yaml` plus a re-embed into a new
+      `vectors-<model>.usearch`; the old file keeps serving until the
+      new one is complete, which makes it reversible.
+      `granite-embedding-97m-multilingual-r2` is nine points better on
+      multilingual retrieval (60.3 against 50.9) at 97 M parameters and
+      wants a `ModelSpec` — verify its ONNX export first. Not `bge-m3`
+      or `jina-v3`: four times the parameters, 1024 dimensions, a new
+      `VEC_DIM`. *The cost is the re-embed: 1,115,976 chunk vectors at
+      three to four times bge-small's compute. Measure it on the desktop
+      before starting; the user's call.*
+- [ ] **3. The query in both languages.** Detect the query's language,
+      have the local model translate it once, add the translation as a
+      second keyword list in the fusion — the shape the acronym
+      expansion already has. This is what fixes the BM25 half, which no
+      embedder can.
+- [ ] **4. The resolution pass, cross-lingual.** Once entity names are
+      embedded by a multilingual model, `Olivenöl` and `olive oil` sit
+      next to each other and the likely tier proposes the pair; the
+      adjudicating tier decides as it does now. The literature's own
+      answer to this task (sentence embeddings beat statistical
+      alignment and string similarity, +20 F1 over Wikidata labels).
+      Give the alias a language while there, so the canonical name is
+      chosen per language rather than by whichever spelling arrived
+      first.
+- [ ] **5. A dictionary only where the domain is closed.** A few
+      hundred German-English ingredient pairs would clean the kitchen
+      graph in one pass and never need a model. Wikidata's labels are
+      the general fallback, and belong in a `prax import` of their own.
+- [ ] **The eval for it:** the 62 library queries translated into
+      German, scored against the same answers. A cross-language MRR that
+      is near zero today, and the number every step above should move.
+
+### Waiting on a decision
+
+- [ ] **`prax maintain --rechunk`** — the `ad`, `comment` and
+      `ingredients` regions only arrive with a re-chunk (10,261
+      documents; a chunk whose text did not change keeps its id and its
+      vector). An overnight job; the user's call.
+- [ ] **The seven pending promotions** — `prax work --steps promote
+      --spend -n 7` (roughly $1–3 on Sonnet 5), or the standing shape
+      now that a budget can bound it: `steps` and `spend: true` on the
+      worker role with `budget: {daily_usd: N}`.
+- [ ] **`twin-documents`** (6) — the repair retires documents, so it
+      waits for the user's word.
+- [ ] **The unread figures** — 55,607 left of 93,158 as the vision pass
+      runs; the captioned ones first, sliced so a request does not
+      pre-empt the parse queue for days.
+- [ ] **Ontology v9, the question the rules round left open**: the
+      relations a document takes name `paper` where they could name
+      `document`, so a captured page has to be read as a paper for an
+      edge to fit. A version bump and a restamp, not a rules change.
+
 ## Later / maybe
 
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the
