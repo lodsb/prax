@@ -31,6 +31,7 @@ import sqlite3
 import unicodedata
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import numpy as np
@@ -38,6 +39,7 @@ import numpy as np
 from prax import extraction, ontology, store
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "phd", "dr", "prof"}
+PRODUCER = "resolution"  # who signs a merge, for retiring a bad round
 LIKELY_THRESHOLD = 0.92  # cosine of name embeddings to become a candidate
 LIKELY_BLOCK = 2048  # names per block of the similarity computation (a worker)
 LIKELY_DAYS = 7  # a type's pairs are computed again after this long
@@ -437,21 +439,27 @@ def apply(
     adjudicator: Adjudicator | None = None,
     twins: bool = False,
     subtypes: bool = False,
+    run: str | None = None,
 ) -> Report:
     """Merge every sure candidate, the concept/method twins and the
     subtype folds when asked, and ask the adjudicator about the likely
     ones. Idempotent: a re-run finds nothing left to merge."""
     report = Report()
+    run = run or "resolve-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
     for c in p.sure:
-        store.merge_entities(con, c.drop, c.keep)
+        store.merge_entities(con, c.drop, c.keep, producer=PRODUCER, run=run)
         report.merged_sure += 1
     if subtypes:
         for c in p.subtypes:
-            store.merge_entities(con, c.drop, c.keep, across_types=True)
+            store.merge_entities(
+                con, c.drop, c.keep, across_types=True, producer=PRODUCER, run=run
+            )
             report.merged_subtypes += 1
     if twins:
         for c in p.twins:
-            store.merge_entities(con, c.drop, c.keep, across_types=True)
+            store.merge_entities(
+                con, c.drop, c.keep, across_types=True, producer=PRODUCER, run=run
+            )
             report.merged_twins += 1
     if p.likely:
         decisions = (adjudicator or NoAdjudicator()).decide(p.likely)
@@ -459,7 +467,9 @@ def apply(
         for c, yes in zip(p.likely, decisions, strict=True):
             if yes:
                 try:
-                    store.merge_entities(con, c.drop, c.keep)
+                    store.merge_entities(
+                        con, c.drop, c.keep, producer=PRODUCER, run=run
+                    )
                 except ValueError:
                     continue  # already merged the other way this round
                 report.merged_likely += 1

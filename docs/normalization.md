@@ -147,16 +147,27 @@ cleans up after it).
 
 The representation the field settled on is one entity with language-
 tagged labels: a preferred label per language, alternatives for the
-rest. prax has half of it, in 22,589 aliases. The half it lacks is that
-an alias carries no language, no source and no confidence. The table to
-add, when the language work reaches it:
+rest. prax had half of it, in 22,589 aliases. The half it lacked was
+that an alias carried no language, no source and no confidence.
 
-    entity_labels(entity_id, label, lang, kind[pref|alt],
-                  source_doc, producer, run, confidence)
+**Built 2026-09-24** (migration 20):
 
-Then the canonical name can be chosen per language instead of by
-whichever spelling arrived first, a German search can match a German
-label of an English entity, and a merge can be undone by its run.
+    entity_labels(entity_id, label, lang, kind[pref|alt], from_entity,
+                  source_doc, producer, run, confidence, at)
+
+A merge writes the folded name as a label of the survivor, with the
+language `prax.language` reads off it and the producer and run that
+decided the merge. Two things hold now that did not. A German name
+reaches the English entity it belongs to (`entities_by_label`), which is
+where the cross-language work will land its findings. And a round of
+merging can be taken back whole (`unmerge_run`), the counterpart of
+`retire_run` for edges; without it no new rule could be tried on the
+live graph.
+
+What a merge still cannot do is choose the canonical name per language.
+The `pref` kind is there and nothing writes it yet, because that waits
+for labels in languages worth choosing between, which waits for the
+embedder.
 
 ## Prevention: what the extractor should be told
 

@@ -332,3 +332,81 @@ def test_a_page_of_my_own_is_never_folded_into_a_paper(
         run="r1",
     )
     assert resolution.plan(con, likely=False).subtypes == []
+
+
+def test_a_merge_leaves_a_label_and_can_be_undone(con: sqlite3.Connection) -> None:
+    """A merge is a claim like an edge: it says who decided and in which
+    pass, the folded name stays as a label with the language it is in,
+    and a round of merging can be taken back whole (docs/normalization.md
+    — until migration 20 neither was true)."""
+    doc = store.ingest_text(con, "a paper about reverb " * 30, title="P")["doc_id"]
+    for name, etype in (("Olivenöl", "ingredient"), ("olive oil", "ingredient")):
+        store.link(
+            con,
+            store.Edge("A Recipe", "recipe", "calls_for", name, etype),
+            source_doc=doc,
+            producer="test",
+            run="r1",
+        )
+    ids = {
+        r["name"]: r["id"]
+        for r in con.execute("SELECT id, name FROM entities WHERE type = 'ingredient'")
+    }
+    store.merge_entities(
+        con,
+        ids["Olivenöl"],
+        ids["olive oil"],
+        producer="resolution",
+        run="resolve-test",
+        confidence="INFERRED",
+    )
+    labels = store.entity_labels(con, ids["olive oil"])
+    assert [x["label"] for x in labels] == ["Olivenöl"]
+    got = labels[0]
+    assert got["lang"] is None or got["lang"] == "de"  # a word alone may not say
+    assert got["producer"] == "resolution" and got["run"] == "resolve-test"
+    assert got["from_entity"] == ids["Olivenöl"]
+    # the German name now reaches the English entity
+    assert store.entities_by_label(con, "Olivenöl") == [ids["olive oil"]]
+
+    # and the round can be taken back
+    assert store.unmerge_run(con, "resolve-test") == 1
+    back = con.execute(
+        "SELECT canonical_id FROM entities WHERE id = ?", (ids["Olivenöl"],)
+    ).fetchone()
+    assert back[0] is None
+    assert store.entity_labels(con, ids["olive oil"]) == []
+    assert store.unmerge_run(con, "resolve-test") == 0  # idempotent
+
+
+def test_a_label_can_be_added_by_hand(con: sqlite3.Connection) -> None:
+    """What a dictionary import or a person writes: a name in a language,
+    with who said so."""
+    doc = store.ingest_text(con, "a paper about reverb " * 30, title="P")["doc_id"]
+    store.link(
+        con,
+        store.Edge("A Recipe", "recipe", "calls_for", "celeriac", "ingredient"),
+        source_doc=doc,
+        producer="test",
+        run="r1",
+    )
+    entity = con.execute("SELECT id FROM entities WHERE name = 'celeriac'").fetchone()[
+        0
+    ]
+    assert (
+        store.add_label(
+            con,
+            entity,
+            "Knollensellerie",
+            lang="de",
+            kind="pref",
+            producer="dictionary:kitchen",
+            confidence="EXTRACTED",
+        )
+        == 1
+    )
+    assert store.add_label(con, entity, "Knollensellerie", lang="de") == 0  # once
+    german = store.entity_labels(con, entity, lang="de")
+    assert [x["label"] for x in german] == ["Knollensellerie"]
+    assert german[0]["kind"] == "pref"
+    assert store.entities_by_label(con, "knollensellerie") == [entity]

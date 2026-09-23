@@ -188,6 +188,7 @@ from .graph import (  # noqa: F401
     _entity_id,
     _review_where,
     _subset_version_case,
+    add_label,
     backfill_provenance,
     candidate_runs,
     canonical_entity,
@@ -195,7 +196,9 @@ from .graph import (  # noqa: F401
     decide_candidates,
     document_context,
     document_facts,
+    entities_by_label,
     entity_candidates,
+    entity_labels,
     entity_names,
     find_edges,
     find_entities,
@@ -215,6 +218,7 @@ from .graph import (  # noqa: F401
     retype_review,
     select_for_extraction,
     traverse,
+    unmerge_run,
 )
 from .jobs import (  # noqa: F401
     JOB_DEAD_SECONDS,

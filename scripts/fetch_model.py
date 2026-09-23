@@ -70,7 +70,7 @@ def main() -> int:
             return 2
         todo.append((name, s.repo, s.file))
     if a.embed:
-        emb = embeddings.MODELS[embeddings.DEFAULT_MODEL]
+        emb = embeddings.MODELS[embeddings.chosen()]
         for f in (*emb.files.values(), emb.tokenizer):
             todo.append((emb.name, emb.repo, f))
         rr = rerank.current_spec()

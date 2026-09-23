@@ -1,5 +1,11 @@
 # Retrieval eval set over tests/fixtures/zotero (docs/PLAN.md, Stage 2).
 #
+# `de` is the same question in German, against the same expected
+# documents, which are English. A model that cannot carry meaning across
+# a language answers none of them, and that is the number behind step 2
+# of docs/research-multilingual-2026-09-23.md (the library is a fifth
+# German and the embedder was trained on English alone).
+#
 # Each query names the documents that should come first, by Zotero key
 # (any key recorded in meta.zotero.keys of the target document). `kind`
 # restricts the search to one chunk kind. `style` is informational:
@@ -19,62 +25,81 @@
 
 queries:
   - q: polynomial transition regions alias-suppressed signal synthesis
+    de: polynomiale Übergangsbereiche aliasfreie Signalsynthese
     expect: [FCEK3EI9]
     style: keyword
   - q: reducing aliasing of a sawtooth oscillator by correcting samples around the discontinuity
+    de: Aliasing eines Sägezahnoszillators verringern, indem die Abtastwerte um die Unstetigkeit korrigiert werden
     expect: [FCEK3EI9]
     style: paraphrase
   - q: real-time signal reconstruction from STFT magnitude
+    de: Signalrekonstruktion in Echtzeit aus dem Betrag der Kurzzeit-Fouriertransformation
     expect: [HJR45JMH]
     style: keyword
   - q: recovering the phase of a spectrogram frame by frame with low latency
+    de: die Phase eines Spektrogramms Rahmen für Rahmen mit geringer Latenz zurückgewinnen
     expect: [HJR45JMH]
     style: paraphrase
   - q: traceability of the compositional process
+    de: Nachvollziehbarkeit des kompositorischen Prozesses
     expect: [FBT2AP8S]
     style: keyword
   - q: recording how a piece of electronic music was made so the steps can be followed later
+    de: festhalten, wie ein Stück elektronische Musik entstanden ist, damit die Schritte später nachvollziehbar sind
     expect: [FBT2AP8S]
     style: paraphrase
   - q: SampleRNN generating albums metal rock punk
+    de: SampleRNN erzeugt Alben Metal Rock Punk
     expect: [M86T746S]
     style: keyword
   - q: neural network trained on a band's records producing raw audio in its style
+    de: neuronales Netz, das auf den Platten einer Band trainiert wurde und Rohaudio in deren Stil erzeugt
     expect: [M86T746S]
     style: paraphrase
   - q: collaborative melody composition generative approach conveying emotion
+    de: gemeinsames Komponieren von Melodien, generativer Ansatz, der Gefühle vermittelt
     expect: [PTHEK9QS, R89PCW52, 5QSJDXUQ]
     style: keyword
   - q: two people writing a tune together with software that suggests notes matching a mood
+    de: zwei Menschen schreiben gemeinsam eine Melodie mit einer Software, die zur Stimmung passende Noten vorschlägt
     expect: [PTHEK9QS, R89PCW52, 5QSJDXUQ]
     style: paraphrase
   - q: IIR Hilbert transformer
+    de: IIR-Hilbert-Transformator
     expect: [AYY57KAK]
     style: keyword
   - q: allpass filter pair that produces a ninety degree phase shift for an analytic signal
+    de: Allpassfilterpaar, das eine Phasenverschiebung von neunzig Grad für ein analytisches Signal erzeugt
     expect: [AYY57KAK]
     style: paraphrase
   - q: monophonic pitch tracking extended complex Kalman filter
+    de: monophone Tonhöhenverfolgung erweiterter komplexer Kalman-Filter
     expect: [ZRWHFMBJ]
     style: keyword
   - q: real-time fundamental frequency estimation using a state-space tracker
+    de: Schätzung der Grundfrequenz in Echtzeit mit einem Zustandsraum-Verfolger
     expect: [ZRWHFMBJ]
     style: paraphrase
   - q: robust non-negative tensor factorization PyTorch implementation
+    de: robuste nichtnegative Tensorfaktorisierung, Implementierung in PyTorch
     expect: [IIJ9PSTU]
     style: keyword
   - q: SID GUTS controls schematic
+    de: SID GUTS Bedienelemente Schaltplan
     expect: [UW29C5GP]
     style: keyword
   - q: table of results comparing polynomial transition region variants
+    de: Ergebnistabelle, die Varianten polynomialer Übergangsbereiche vergleicht
     expect: [FCEK3EI9]
     style: structure
     kind: table
   - q: figure of the alias-suppressed waveform and its spectrum
+    de: Abbildung der aliasfreien Wellenform und ihres Spektrums
     expect: [FCEK3EI9]
     style: structure
     kind: figure
   - q: figure showing the FugueGenerator interface
+    de: Abbildung der Benutzeroberfläche des FugueGenerators
     expect: [PTHEK9QS, R89PCW52, 5QSJDXUQ]
     style: structure
     kind: figure

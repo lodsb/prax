@@ -543,6 +543,9 @@ def merge_entities(
     into_id: int,
     *,
     across_types: bool = False,
+    producer: str | None = None,
+    run: str | None = None,
+    confidence: str | None = None,
 ) -> None:
     """Record that ``duplicate_id`` is the same thing as ``into_id``.
 
@@ -550,6 +553,12 @@ def merge_entities(
     edges (they are evidence), and gets ``canonical_id`` pointing at the
     survivor; ``traverse`` and lookups follow the pointer. Chains are
     flattened so every alias points straight at the final survivor.
+
+    The duplicate's name becomes a label of the survivor
+    (``entity_labels``) with its language and, when the caller says so,
+    the producer and run that decided it. That is what makes a round of
+    merging retirable (``unmerge_run``): a merge is a claim like an edge,
+    and a claim nobody signed cannot be taken back.
     """
     if duplicate_id == into_id:
         raise ValueError("an entity cannot be merged into itself")
@@ -571,7 +580,126 @@ def merge_entities(
         "UPDATE entities SET canonical_id = ? WHERE id = ? OR canonical_id = ?",
         (survivor, duplicate_id, duplicate_id),
     )
+    _label_from_merge(con, survivor, duplicate_id, producer, run, confidence)
     con.commit()
+
+
+def _label_from_merge(
+    con: sqlite3.Connection,
+    survivor: int,
+    duplicate_id: int,
+    producer: str | None,
+    run: str | None,
+    confidence: str | None,
+) -> None:
+    """The duplicate's name, kept as a label of the survivor."""
+    from prax import language
+
+    row = con.execute(
+        "SELECT name FROM entities WHERE id = ?", (duplicate_id,)
+    ).fetchone()
+    if row is None:
+        return
+    name = str(row["name"] if hasattr(row, "keys") else row[0])
+    con.execute(
+        "INSERT OR IGNORE INTO entity_labels (entity_id, label, lang, kind,"
+        " from_entity, producer, run, confidence) VALUES (?, ?, ?, 'alt', ?, ?, ?, ?)",
+        (
+            survivor,
+            name,
+            language.detect(name),
+            duplicate_id,
+            producer,
+            run,
+            confidence,
+        ),
+    )
+
+
+@_serialized
+def add_label(
+    con: sqlite3.Connection,
+    entity_id: int,
+    label: str,
+    *,
+    lang: str | None = None,
+    kind: str = "alt",
+    producer: str | None = None,
+    run: str | None = None,
+    source_doc: int | None = None,
+    confidence: str | None = None,
+) -> int:
+    """A name this entity is also known by, in a language. ``kind`` is
+    ``pref`` for the name to show in that language, ``alt`` otherwise.
+    Returns how many rows were written (0 when it was already there)."""
+    if not label.strip():
+        raise ValueError("a label needs a name")
+    cur = con.execute(
+        "INSERT OR IGNORE INTO entity_labels (entity_id, label, lang, kind,"
+        " source_doc, producer, run, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (entity_id, label, lang, kind, source_doc, producer, run, confidence),
+    )
+    con.commit()
+    return int(cur.rowcount or 0)
+
+
+@_reading
+def entity_labels(
+    con: sqlite3.Connection, entity_id: int, *, lang: str | None = None
+) -> list[dict[str, Any]]:
+    """Every name an entity is known by, newest first; ``lang`` narrows to
+    one language and the labels nobody could place."""
+    where = " AND (lang = ? OR lang IS NULL)" if lang else ""
+    args: tuple[Any, ...] = (entity_id, lang) if lang else (entity_id,)
+    return [
+        dict(r)
+        for r in con.execute(
+            "SELECT id, label, lang, kind, from_entity, source_doc, producer,"
+            f" run, confidence, at FROM entity_labels WHERE entity_id = ?{where}"
+            " ORDER BY kind = 'pref' DESC, id DESC",
+            args,
+        )
+    ]
+
+
+@_reading
+def entities_by_label(con: sqlite3.Connection, label: str) -> list[int]:
+    """The entities known by this name, whatever their own name is: how a
+    German word reaches an entity the library calls something else."""
+    return [
+        int(r[0])
+        for r in con.execute(
+            "SELECT DISTINCT entity_id FROM entity_labels WHERE label = ?"
+            " COLLATE NOCASE",
+            (label,),
+        )
+    ]
+
+
+@_serialized
+def unmerge_run(con: sqlite3.Connection, run: str) -> int:
+    """Undo a round of merging: every entity a run folded away stands on
+    its own again, and the labels it wrote are gone. Returns how many
+    entities came back.
+
+    The counterpart of ``retire_run`` for edges. A merge is a claim, and
+    a pass that claimed wrongly has to be undoable, or nobody can try a
+    new rule on the live graph.
+    """
+    rows = con.execute(
+        "SELECT from_entity FROM entity_labels WHERE run = ? AND from_entity"
+        " IS NOT NULL",
+        (run,),
+    ).fetchall()
+    ids = [int(r[0]) for r in rows]
+    for entity_id in ids:
+        con.execute(
+            "UPDATE entities SET canonical_id = NULL WHERE id = ? OR canonical_id = ?",
+            (entity_id, entity_id),
+        )
+    con.execute("DELETE FROM entity_labels WHERE run = ?", (run,))
+    con.commit()
+    return len(ids)
 
 
 @_serialized

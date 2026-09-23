@@ -44,6 +44,14 @@ class Query:
     expect_title: list[str] = field(default_factory=list)  # regexes, case-insensitive
     style: str = "keyword"
     kind: str | None = None
+    de: str | None = None  # the same question in German, same expectations
+
+    def asked(self, lang: str = "en") -> str | None:
+        """The question in one language, or None where the set does not
+        carry it. The expectations do not change with the language: an
+        English document is the answer either way, which is the whole
+        point of asking in German."""
+        return self.q if lang == "en" else getattr(self, lang, None)
 
 
 @dataclass
@@ -124,14 +132,18 @@ def run_query(
     mode: str,
     resolver: Resolver | dict[str, int],
     depth: int,
+    lang: str = "en",
 ) -> QueryResult:
     if isinstance(resolver, dict):
         resolver = Resolver(resolver, [])
     expected = resolver.expected(query)
+    asked = query.asked(lang)
+    if asked is None:
+        raise ValueError(f"the set has no {lang} for {query.q!r}")
     if mode == RERANK_MODE:
-        hits = store.search(con, query.q, depth, kind=query.kind, rerank=True)
+        hits = store.search(con, asked, depth, kind=query.kind, rerank=True)
     else:
-        hits = store.search(con, query.q, depth, kind=query.kind, mode=mode)
+        hits = store.search(con, asked, depth, kind=query.kind, mode=mode)
     docs: list[int] = []
     for h in hits:
         if h["doc_id"] not in docs:
@@ -146,7 +158,11 @@ def evaluate(
     modes: tuple[str, ...] = MODES,
     *,
     depth: int = 10,
+    lang: str = "en",
 ) -> tuple[list[ModeScore], list[QueryResult]]:
+    """The set against one store. ``lang`` asks the questions in another
+    language against the same expected documents: a cross-language score,
+    which is near zero for an embedder trained on one language."""
     resolver = Resolver.for_store(con)
     scores: list[ModeScore] = []
     results: list[QueryResult] = []
@@ -154,8 +170,8 @@ def evaluate(
         score = ModeScore(mode)
         for query in queries:
             try:
-                r = run_query(con, query, mode, resolver, depth)
-            except ValueError:  # e.g. mode=vec with no vectors
+                r = run_query(con, query, mode, resolver, depth, lang=lang)
+            except ValueError:  # e.g. mode=vec with no vectors, or no such language
                 continue
             results.append(r)
             score.n += 1

@@ -28,6 +28,12 @@ def main() -> int:
     ap.add_argument("--modes", nargs="+", default=["fts", "vec", "hybrid"])
     ap.add_argument("--depth", type=int, default=10)
     ap.add_argument("--out", type=Path, help="write the Markdown report here")
+    ap.add_argument(
+        "--lang",
+        default="en",
+        help="ask the set in this language (de: the same questions, the same"
+        " expected documents — what an embedder must cross)",
+    )
     a = ap.parse_args()
 
     tmp = None
@@ -46,7 +52,9 @@ def main() -> int:
         build = evaluation.build_fixture_store(con, Path(tmp.name) / "work")
         print(f"fixture store: {build}", file=sys.stderr)
     queries = evaluation.load_queries(a.queries or evaluation.QUERIES)
-    scores, results = evaluation.evaluate(con, queries, tuple(a.modes), depth=a.depth)
+    scores, results = evaluation.evaluate(
+        con, queries, tuple(a.modes), depth=a.depth, lang=a.lang
+    )
     text = evaluation.report(scores, results, build=build)
     print(text)
     if a.out:

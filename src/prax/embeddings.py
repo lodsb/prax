@@ -54,6 +54,10 @@ class ModelSpec:
     tokenizer: str = "tokenizer.json"
     max_tokens: int = 512
     query_prefix: str = ""  # instruction prepended to queries (bge style)
+    # what a document gets instead, where the model was trained with one:
+    # e5 wants "query: " and "passage: " and is measurably worse without
+    # them, bge wants the instruction on the query alone
+    passage_prefix: str = ""
     pooling: str = "cls"
 
 
@@ -72,6 +76,7 @@ MODELS: dict[str, ModelSpec] = {
         dim=384,
         files={"fp32": "onnx/model.onnx", "int8": "onnx/model_quantized.onnx"},
         query_prefix="query: ",
+        passage_prefix="passage: ",
         pooling="mean",
     ),
 }
@@ -166,9 +171,12 @@ class OnnxEmbedder:
 
     def embed(self, texts: list[str]) -> np.ndarray:
         """Vectors for ``texts`` in order; batches are length-sorted so
-        padding is minimal."""
+        padding is minimal. A model trained with a document instruction
+        gets it here (``passage_prefix``)."""
         if not texts:
             return np.zeros((0, self.dim), dtype=np.float32)
+        if self.spec.passage_prefix:
+            texts = [self.spec.passage_prefix + t for t in texts]
         self._resolve()
         encs = self._tokenizer.encode_batch(texts)
         order = sorted(range(len(texts)), key=lambda i: len(encs[i].ids))
@@ -236,6 +244,14 @@ def _build(setting: str, providers: tuple[str, ...] | None) -> Embedder | None:
 
 
 def _setting() -> str:
+    return chosen()
+
+
+def chosen() -> str:
+    """The embedding model this host is configured for, which is not
+    always the built-in default: what a fetch of the files must ask for
+    (`scripts/fetch_model.py --embed` used to fetch the default and leave
+    a configured host without its model)."""
     return str(config.setting("embeddings.model", "PRAX_EMBED", DEFAULT_MODEL))
 
 
