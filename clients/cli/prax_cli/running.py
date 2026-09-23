@@ -242,6 +242,32 @@ def inbox(door: Door, a: Any) -> int:
     return 0
 
 
+def _config_note() -> str:
+    """Where this run's settings come from, for the worker's first line."""
+    from prax import config
+
+    path = config.config_path()
+    return str(path) if path.exists() else f"{path} (absent: the built-in defaults)"
+
+
+def _paid_note(a: Any) -> str:
+    """The steps of this run whose model costs money, and whether the run
+    may spend."""
+    from prax import models
+    from prax import steps as steps_mod
+
+    paid = []
+    for step in sorted(set(models.STEPS) | set(steps_mod.READING_STEPS.values())):
+        with contextlib.suppress(Exception):  # a bad config says so elsewhere
+            spec = models.resolve(step)
+            if spec is not None and spec.paid:
+                paid.append(f"{step}={spec.name}")
+    if not paid:
+        return " · every step local"
+    asked = "--spend given" if getattr(a, "spend", False) else "refused without --spend"
+    return f" · paid: {', '.join(paid)} ({asked})"
+
+
 # -------------------------------------------------------------------- work
 
 
@@ -271,6 +297,10 @@ def work(a: Any) -> int:
         f"worker {door.name} → {a.door} · steps {', '.join(steps)} · scope {a.scope}"
         + ("" if a.watch else " · one pass")
     )
+    # which file the models come from, and which of them cost money: a
+    # worker that cannot find the host's prax.yaml silently falls back to
+    # the built-in defaults, and those name Claude (2026-09-23)
+    out.hint(f"  models from {_config_note()}{_paid_note(a)}")
     try:
         worker.watch(
             door,

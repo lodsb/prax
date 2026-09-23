@@ -49,11 +49,19 @@ STEPS = steps_mod.STEPS
 # ------------------------------------------------------------------ steps
 
 
-def _requested(it: dict[str, Any]) -> tuple[list[Any], str | None]:
+def _requested(
+    it: dict[str, Any], *, spend: bool = False
+) -> tuple[list[Any], str | None]:
     """The extractors to try for an item: a requested reading names one
-    (and is refused when its model would cost money, so nobody's click
-    spends unasked — the request stays on the document with that
-    reason); otherwise the candidates for the type."""
+    (and is refused when its model would cost money and ``spend`` was not
+    given, so nobody's click spends unasked — the request stays on the
+    document with that reason); otherwise the candidates for the type.
+
+    What a reading costs is the step's model it runs
+    (``store.READING_STEPS``), never the reading's own name: `figures`
+    and `vision-pages` are the vision step as much as `vision` is, and
+    keying on the name let them past this guard until 2026-09-23.
+    """
     name = it.get("extractor")
     if not name:
         return parsers.candidates(it.get("mime") or ""), None
@@ -61,12 +69,15 @@ def _requested(it: dict[str, Any]) -> tuple[list[Any], str | None]:
         ext = parsers.by_name(name)
     except KeyError as exc:
         return [], str(exc)
-    if name.startswith("vision") and _paid(models.resolve("vision")):
-        spec = models.resolve("vision")
-        return [], (
-            f"the vision step is {spec.name if spec else 'none'} (paid): run"
-            " it with --spend as the promote step, or point the step at a local server"
-        )
+    step = steps_mod.READING_STEPS.get(name)
+    if step and not spend:
+        spec = models.resolve(step)
+        if _paid(spec):
+            return [], (
+                f"the {step} step is {spec.name if spec else 'none'} (paid):"
+                " run it with --spend as the promote step, or point the step"
+                " at a local server"
+            )
     if ext.check is None and not ext.available():
         return [], f"{name} is not installed on this worker"
     return [ext], None  # a server that is not up says so itself: NotYet
@@ -78,6 +89,7 @@ def do_parse(
     *,
     log_: Log | None = None,
     landed: Callable[[list[dict[str, Any]]], None] | None = None,
+    spend: bool = False,
 ) -> list[dict[str, Any]]:
     """Every item through its extractor chain. ``landed`` is called with
     each document's results as soon as it is done — the caller posts them
@@ -92,7 +104,7 @@ def do_parse(
 
     for it in items:
         doc_id = it["doc_id"]
-        exts, refused = _requested(it)
+        exts, refused = _requested(it, spend=spend)
         if not exts:
             done(
                 {
@@ -679,7 +691,7 @@ def run_once(
                         tally["actions"][k] = tally["actions"].get(k, 0) + int(v)
                     beating.landed([int(r["doc_id"]) for r in rs])
 
-                do_parse(door, items, log_=log_, landed=landed)
+                do_parse(door, items, log_=log_, landed=landed, spend=spend)
             out["parse"] = f"{tally['applied']} parsed {tally['actions'] or ''}"
         elif step == "titles":
             spec = models.resolve("titles")

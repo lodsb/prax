@@ -1091,3 +1091,50 @@ def test_the_steps_are_named_once(monkeypatch: pytest.MonkeyPatch) -> None:
     a = build_parser().parse_args(["work"])
     assert tuple(a.steps.split(",")) == steps.WATCHED_STEPS
     assert all(hasattr(a, f"no_{s}") for s in steps.STEPS)
+
+
+def test_no_reading_spends_without_being_asked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every reading that runs a step's model is refused while the model
+    costs money and --spend was not given — by the step it runs, never by
+    what the reading is called. The guard used to key on the name, so
+    `figures` and `formulas` walked past it and read 30 figures with
+    claude-sonnet-5 on 2026-09-23.
+    """
+    from prax import models, worker
+
+    monkeypatch.setenv("PRAX_VISION", "claude-sonnet-5")
+    monkeypatch.setenv("PRAX_FORMULAS", "claude-sonnet-5")
+    models.reset()
+    for name in ("vision", "vision-pages", "figures", "formulas"):
+        exts, refused = worker._requested({"extractor": name, "mime": "image/png"})
+        assert exts == [], f"{name} ran a paid model unasked"
+        assert refused and "(paid)" in refused and "--spend" in refused
+    # with --spend the same request goes through
+    exts, refused = worker._requested(
+        {"extractor": "figures", "mime": "application/pdf"}, spend=True
+    )
+    assert refused is None and exts
+    # and a local model needs no asking at all
+    monkeypatch.setenv("PRAX_VISION", "none")
+    models.reset()
+    exts, refused = worker._requested({"extractor": "figures", "mime": "image/png"})
+    assert refused is None or "(paid)" not in refused
+
+
+def test_every_reading_that_runs_a_model_is_named(monkeypatch) -> None:
+    """A reading missing from READING_STEPS is a reading nothing guards,
+    which is how this got out. The readings that run a step's model are
+    the vision ones, the formulas and the polish."""
+    from prax import steps as steps_mod
+    from prax import store
+
+    assert set(steps_mod.READING_STEPS) <= set(store.READINGS)
+    assert set(steps_mod.READING_STEPS) == {
+        "vision",
+        "vision-pages",
+        "figures",
+        "formulas",
+        "polish",
+    }

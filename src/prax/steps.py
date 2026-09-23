@@ -30,3 +30,16 @@ WATCHED_STEPS = ("parse", "titles", "extract", "embed", "resolve")
 
 # the rest: named on the command line, and the paid ones want --spend
 NAMED_ONLY = tuple(s for s in STEPS if s not in WATCHED_STEPS)
+
+# the step whose model a reading runs, where it runs one at all. What a
+# reading costs is that step's model and never the reading's own name:
+# `figures` and `vision-pages` are the vision step as much as `vision`
+# is, and a guard that keyed on the name let them spend unasked
+# (2026-09-23). A reading absent from here runs no model of its own.
+READING_STEPS = {
+    "vision": "vision",
+    "vision-pages": "vision",
+    "figures": "vision",
+    "formulas": "formulas",
+    "polish": "polish",
+}
