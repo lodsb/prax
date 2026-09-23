@@ -1331,6 +1331,7 @@ def select_for_reading(
     unpolished: bool = False,
     read_figures: bool = False,
     unread_figures: bool = False,
+    bare_captions: bool = False,
     read_formulas: bool = False,
     unread_formulas: bool = False,
     maths: float | None = None,
@@ -1345,7 +1346,9 @@ def select_for_reading(
     a figure a model has read
     (``read_figures``: what a better prompt or a better model goes over
     again) and to the ones holding a figure nobody has read
-    (``unread_figures``), the same for formulas (``read_formulas``,
+    (``unread_figures``), the documents holding a caption with no
+    picture behind it (``bare_captions``: what `figure-crops` renders),
+    the same for formulas (``read_formulas``,
     ``unread_formulas``), and to the mathematical ones (``maths``: at
     least that many references to numbered equations per 10,000
     characters of prose, and at least :data:`MATHS_MIN_REFS` of them —
@@ -1386,6 +1389,18 @@ def select_for_reading(
     if thin is not None:
         keep = {o["id"] for o in thin_documents(con, per_page=thin)}
         chosen = [i for i in chosen if i in keep]
+    if bare_captions:
+        # a caption with no picture behind it: what the crop pass renders,
+        # and asking for it anywhere else is a fetch and a parse for
+        # nothing (the figures queue spent a day doing exactly that)
+        with_bare = {
+            r[0]
+            for r in con.execute(
+                "SELECT DISTINCT doc_id FROM chunks WHERE kind = 'figure'"
+                " AND json_extract(data, '$.ref') IS NULL"
+            )
+        }
+        chosen = [i for i in chosen if i in with_bare]
     for wanted, kind, read in (
         (read_figures, "figure", True),
         (unread_figures, "figure", False),

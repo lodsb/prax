@@ -488,6 +488,7 @@ def reread(door: Door, a: Any) -> int:
         "unpolished": a.unpolished,
         "read_figures": a.read_figures,
         "unread_figures": a.unread_figures,
+        "bare_captions": getattr(a, "bare_captions", False),
         "read_formulas": a.read_formulas,
         "unread_formulas": a.unread_formulas,
         "maths": a.maths,

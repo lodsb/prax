@@ -195,6 +195,7 @@ class BulkReadingReq(BaseModel):
     unpolished: bool = False  # videos with an automatic transcript not yet polished
     read_figures: bool = False  # the documents whose figures a model has read
     unread_figures: bool = False  # the documents holding a figure nobody read
+    bare_captions: bool = False  # captions with no picture: the crop pass
     read_formulas: bool = False  # the same for display equations
     unread_formulas: bool = False
     maths: float | None = None  # references to numbered equations per 10k characters
@@ -232,6 +233,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         or req.unpolished
         or req.read_figures
         or req.unread_figures
+        or req.bare_captions
         or req.read_formulas
         or req.unread_formulas
         or req.maths is not None
@@ -239,7 +241,8 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         raise HTTPException(
             400,
             "a selection: ids, mime, text_source, title, unreadable, thin,"
-            " doctype, unpolished, read_figures, unread_figures, read_formulas,"
+            " doctype, unpolished, read_figures, unread_figures, bare_captions,"
+            " read_formulas,"
             " unread_formulas or maths",
         )
     try:
@@ -255,6 +258,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
             unpolished=req.unpolished,
             read_figures=req.read_figures,
             unread_figures=req.unread_figures,
+            bare_captions=req.bare_captions,
             read_formulas=req.read_formulas,
             unread_formulas=req.unread_formulas,
             maths=req.maths,

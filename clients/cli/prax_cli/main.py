@@ -580,6 +580,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="documents holding a figure nobody has read",
     )
     s.add_argument(
+        "--bare-captions",
+        action="store_true",
+        help="documents holding a caption with no picture behind it: what"
+        " figure-crops renders off the page",
+    )
+    s.add_argument(
         "--read-formulas",
         action="store_true",
         help="documents whose display equations a model has read (--mode again)",
