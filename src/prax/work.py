@@ -394,7 +394,15 @@ def hand_out(
         # whole queue, oldest first — the status view's newest fifty hid
         # the 228 marker requests behind the follow-ups placed after them
         offered: set[int] = set()  # one reading a document a batch
-        for req in store.reading_requests(con, limit=None, oldest_first=True):
+        # a reading that runs no model goes first, whenever it was asked
+        # for: it costs seconds of CPU, and it makes the pictures the
+        # expensive readings then read. Among equals, oldest first, so a
+        # burst of new requests never hides the ones behind it
+        requests = sorted(
+            store.reading_requests(con, limit=None, oldest_first=True),
+            key=lambda r: (r["extractor"] in READING_STEPS, r["id"]),
+        )
+        for req in requests:
             doc_id = req["doc_id"]
             if len(items) >= limit or not _free(step, doc_id, now):
                 continue

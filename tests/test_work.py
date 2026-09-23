@@ -1250,6 +1250,21 @@ def test_a_document_waits_for_several_readings(con: store.sqlite3.Connection) ->
     assert [it["extractor"] for it in first] == ["vision-pages"]
     work._leases.clear()
 
+    # except that a reading running no model goes ahead of one that does,
+    # however long the queue: it costs seconds and it makes the pictures
+    # the expensive readings then read
+    other = store.register(con, b"%PDF-1.4 x", mime="application/pdf")["doc_id"]
+    store.index_text(
+        con,
+        other,
+        "# A paper\n\nProse.\n\nFigure 1: A plot of two lines.\n",
+        text_source="pymupdf4llm/1.28.2-r2",
+    )
+    store.request_reading(con, other, "figure-crops")
+    out = work.hand_out(con, "parse", limit=1, scope="all")["items"]
+    assert [it["doc_id"] for it in out] == [other]
+    work._leases.clear()
+
     # finishing one leaves the other waiting, and the document remembers
     # the one that finished
     store.finish_reading(
