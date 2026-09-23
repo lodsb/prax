@@ -517,14 +517,20 @@ def _repair_extraction_failed(
 
 
 def _unread_figures(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Documents holding a figure no model has read: the picture is in
-    the text as a reference and a caption, and nothing says what it
-    shows, so a search cannot find it and a reading cannot use it."""
+    """Documents holding a picture no model has read: the reference and
+    the caption are in the text and nothing says what the picture shows,
+    so a search cannot find it and a reading cannot use it.
+
+    Only a figure with a ``ref`` counts. A caption whose image no
+    extractor could pull out of the PDF is not a backlog — nothing can
+    read it — and counting those made this ailment three times its true
+    size (2026-09-24)."""
     rows = con.execute(
         "SELECT c.doc_id AS id, d.title, count(*) AS unread,"
         "       json_extract(d.meta, '$.source') AS source"
         " FROM chunks c JOIN documents d ON d.id = c.doc_id"
         " WHERE c.kind = 'figure'"
+        "   AND json_extract(c.data, '$.ref') IS NOT NULL"
         "   AND json_extract(d.meta, '$.retired') IS NULL"
         "   AND coalesce("
         "         json_array_length(json_extract(c.data, '$.readings')), 0) = 0"

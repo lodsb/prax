@@ -1200,3 +1200,15 @@ def test_a_figures_request_with_nothing_to_read_is_dropped(
     con.commit()
     assert store.figures_to_read(con, page.doc_id, model=who) == 0
     assert store.figures_to_read(con, page.doc_id, model=who, every=True) == 1
+
+    # and a caption with no picture behind it is nothing to read at all:
+    # a PDF whose images no extractor could pull out leaves those, and
+    # 55,607 of the live store's 108,781 figure chunks were counted as a
+    # backlog because of it (2026-09-24)
+    con.execute(
+        "UPDATE chunks SET data = ? WHERE id = ?",
+        (json.dumps({"caption": "Figure 1: the signal path"}), chunk["chunk_id"]),
+    )
+    con.commit()
+    assert store.figures_to_read(con, page.doc_id, model=who) == 0
+    assert store.figures_to_read(con, page.doc_id, model=who, every=True) == 0

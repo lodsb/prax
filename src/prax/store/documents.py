@@ -1602,11 +1602,15 @@ def figures_to_read(
 ) -> int:
     """How many of a document's figures this model has not read yet.
 
-    The same test the reading itself makes (``parsers.figures.annotate``):
-    a figure is wanted when the model is absent from its readings, and,
-    unless ``every``, when a caption claims it — the captioned pass
-    leaves "Figure on page N" alone, so a document holding only those has
-    nothing for it however often it is asked.
+    The same test the reading itself makes (``parsers.figures.annotate``).
+    A figure is wanted when it holds a picture at all, when the model is
+    absent from its readings, and, unless ``every``, when a caption
+    claims it — the captioned pass leaves "Figure on page N" alone.
+
+    The picture is the part that was missed: a `figure` chunk without a
+    ``ref`` is a caption whose image no extractor could pull out of the
+    PDF, and no reading will ever change it. More than half the store's
+    figure chunks are those.
     """
     from prax.parsers.figures import UNCAPTIONED
 
@@ -1615,6 +1619,8 @@ def figures_to_read(
         "SELECT data FROM chunks WHERE doc_id = ? AND kind = 'figure'", (doc_id,)
     ):
         data = json.loads(row[0] or "{}")
+        if not data.get("ref"):  # a caption with no picture behind it
+            continue
         if not every and str(data.get("caption") or "").startswith(UNCAPTIONED):
             continue
         read_by = {r.get("model") for r in (data.get("readings") or [])}
