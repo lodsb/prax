@@ -220,3 +220,12 @@ test("languageName: a code under a name, and an unknown one as it stands", () =>
   assert.equal(lib.languageName("xx"), "xx");
   assert.equal(lib.languageName(null), "");
 });
+
+test("queueRate: how fast a queue moves, and how long that leaves", () => {
+  const demand = { readings: { figures: 3477, marker: 0 }, rate: { figures: 55 }, hours_left: { figures: 63.2 } };
+  assert.equal(lib.queueRate(demand, "figures"), "3477 waiting · 55/h · about 3 days left");
+  assert.equal(lib.queueRate(demand, "marker"), "");
+  assert.match(lib.queueRate({ readings: { figures: 12 } }, "figures"), /nothing has read one in hours/);
+  const soon = { readings: { formulas: 40 }, rate: { formulas: 10 }, hours_left: { formulas: 4 } };
+  assert.equal(lib.queueRate(soon, "formulas"), "40 waiting · 10/h · about 4 h left");
+});

@@ -134,12 +134,23 @@ def who_runs(con: Any, step: str) -> dict[str, Any]:
     return out
 
 
+RATE_HOURS = 3  # the window a queue's rate is measured over
+
+
 def demand(con: Any) -> dict[str, Any]:
     """What waits, per extractor and per role of ``prax up``: the reading
     requests nobody has taken. A role with a count has work it cannot do
     unless it is running, which is what a swap of the card is for. The
     extraction backlog is left out on purpose: it is never empty, so it
-    would say "work waiting" for ever."""
+    would say "work waiting" for ever.
+
+    ``rate`` is how many readings finished per hour over the last few,
+    and ``hours_left`` what is waiting at that rate. A long queue and a
+    stopped one look the same in a count alone, and the figures backlog
+    spent a day looking stopped while it was moving at 55 an hour.
+    """
+    from datetime import UTC, datetime, timedelta
+
     from prax import store
 
     readings = store.waiting_readings(con)
@@ -147,7 +158,17 @@ def demand(con: Any) -> dict[str, Any]:
         role: sum(readings.get(x, 0) for x in extractors)
         for role, extractors in ROLE_WORK.items()
     }
-    return {"readings": readings, "roles": roles}
+    since = (datetime.now(UTC) - timedelta(hours=RATE_HOURS)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    done = store.readings_done_since(con, since)
+    rate = {name: round(n / RATE_HOURS, 1) for name, n in done.items() if n}
+    left = {
+        name: round(waiting / rate[name], 1)
+        for name, waiting in readings.items()
+        if rate.get(name)
+    }
+    return {"readings": readings, "roles": roles, "rate": rate, "hours_left": left}
 
 
 def release_deferred(step: str, extractors: tuple[str, ...] = ()) -> int:
@@ -207,6 +228,24 @@ def leases() -> dict[str, int]:
         if until >= now:
             out[step] = out.get(step, 0) + 1
     return out
+
+
+def _nothing_to_read(con: sqlite3.Connection, doc_id: int, req: dict[str, Any]) -> bool:
+    """Whether a figures request has nothing left for the vision model:
+    every figure it would read is read. Only the figures reading knows
+    this cheaply; every other reading is handed out as it stands."""
+    if req.get("extractor") != "figures":
+        return False
+    from prax import models
+
+    try:
+        spec = models.resolve("vision")
+    except Exception:  # noqa: BLE001 - a config error is not this queue's
+        return False
+    if spec is None:
+        return False
+    every = str(req.get("mode") or "") == "all"
+    return store.figures_to_read(con, doc_id, model=spec.runtime_name, every=every) == 0
 
 
 def _takes_previous(extractor: str) -> bool:
@@ -360,6 +399,12 @@ def hand_out(
                 continue
             doc = store.get_document(con, doc_id, max_chars=0)
             if doc is None:
+                continue
+            if _nothing_to_read(con, doc_id, req):
+                # every figure this model reads has been read: the request
+                # would cost a fetch, a parse and a round trip to come back
+                # "same". Half the queue was this on 2026-09-23
+                store.cancel_reading(con, doc_id)
                 continue
             path = doc.get("original_path")
             item = {

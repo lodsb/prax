@@ -186,6 +186,10 @@ function upPanel(u) {
     const back = g.back_when === "idle" ? "when nothing waits for it" : "when you say so";
     const waiting = members.filter((m) => m !== holder && (demand[m] || 0) > 0)
       .map((m) => `${demand[m]} for ${esc(m)}`).join(", ");
+    const rates = Object.entries((u.demand || {}).readings || {})
+      .filter(([, n]) => n > 0)
+      .map(([name]) => `${esc(name)}: ${esc(queueRate(u.demand, name))}`)
+      .join(" · ");
     return `<div class="up-group">
       <div><strong>${esc(name)}</strong> ${holder
         ? `— <span class="up-holder">${esc(holder)}</span> has it ${g.fits ? "beside" : "instead of"} ${esc(others)}, back ${back}`
@@ -195,6 +199,7 @@ function upPanel(u) {
         const n = demand[m] || 0;
         return `${esc(m)}: ${esc(st)}${n ? ` · ${n} waiting` : ""}`;
       }).join(" · ")}${card ? ` · ${card}` : ""}</div>
+      ${rates ? `<div class="up-line muted">${rates}</div>` : ""}
       <div class="up-acts">${members.map((m) => (roles[m] || {}).state === "up" || m === holder
         ? ""
         : `<button type="button" class="secondary up-swap" data-to="${esc(m)}">give it to ${esc(m)}${(demand[m] || 0) ? ` (${demand[m]} waiting)` : ""}</button>`).join("")}
@@ -241,6 +246,20 @@ function spendPanel(s) {
          ${models ? `<p class="muted spend-line">${models}</p>` : ""}`
       : `<p class="muted spend-line">No paid call recorded${today ? "" : " — every step on this host is a local model"}.</p>`}
   </section>`;
+}
+
+// How a waiting queue is doing: what waits, how fast it moves, and how
+// long that leaves. A long queue and a stopped one look the same in a
+// count, which is how the figures backlog looked stuck for a day while
+// it was moving at 55 an hour.
+function queueRate(demand, name) {
+  const waiting = ((demand || {}).readings || {})[name] || 0;
+  if (!waiting) return "";
+  const rate = ((demand || {}).rate || {})[name] || 0;
+  const left = ((demand || {}).hours_left || {})[name];
+  if (!rate) return `${waiting} waiting · nothing has read one in hours`;
+  const when = left >= 48 ? `${Math.round(left / 24)} days` : `${Math.round(left)} h`;
+  return `${waiting} waiting · ${rate}/h · about ${when} left`;
 }
 
 // The language a document is in, under a name rather than a code.
@@ -298,5 +317,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote, asideLine, ingredientsBox, amount, languageName };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

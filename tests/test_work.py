@@ -1138,3 +1138,65 @@ def test_every_reading_that_runs_a_model_is_named(monkeypatch) -> None:
         "formulas",
         "polish",
     }
+
+
+def test_a_figures_request_with_nothing_to_read_is_dropped(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Half the live queue (1,818 of 3,477 on 2026-09-23) asked the
+    vision model to read documents whose every figure it had read
+    already: a fetch, a parse and a round trip each, all coming back
+    "same". The door drops such a request instead of handing it out.
+    """
+    from prax import models, store
+
+    con = client.app.state.con
+    monkeypatch.setenv("PRAX_VISION", "claude-sonnet-5")
+    models.reset()
+    who = models.resolve("vision").runtime_name
+    html = b"<html><body><p>Prose.</p></body></html>"
+    page = inbox.ingest_upload(con, html, filename="p.html", mime="text/html")
+    ref = "ab" * 32
+    store.index_text(
+        con,
+        page.doc_id,
+        "# A page\n\nProse about it.\n\n![A plot](figure:" + ref + ")\n",
+        text_source="trafilatura/2.2.0-r3",
+    )
+    assert store.figures_to_read(con, page.doc_id, model=who) == 1
+
+    # the reading is handed out while the figure is unread
+    client.post(f"/doc/{page.doc_id}/reading", json={"extractor": "figures"})
+    assert [it["doc_id"] for it in client.get("/work/parse").json()["items"]] == [
+        page.doc_id
+    ]
+    work._leases.clear()
+
+    # once that model has read it, the same request has nothing to do
+    chunk = next(
+        c for c in store.list_chunks(con, page.doc_id) if c["kind"] == "figure"
+    )
+    data = dict(chunk["data"] or {})
+    data["readings"] = [{"model": who, "text": "a plot of two lines"}]
+    con.execute(
+        "UPDATE chunks SET data = ? WHERE id = ?",
+        (json.dumps(data), chunk["chunk_id"]),
+    )
+    con.commit()
+    assert store.figures_to_read(con, page.doc_id, model=who) == 0
+    client.post(f"/doc/{page.doc_id}/reading", json={"extractor": "figures"})
+    assert client.get("/work/parse").json()["items"] == []
+    # and the request is gone, not left waiting for ever
+    assert store.reading_requests(con) == []
+
+    # "every image" is a different question: an uncaptioned figure is
+    # left alone by the captioned pass and read by this one
+    data["caption"] = "Figure on page 3"
+    data["readings"] = []
+    con.execute(
+        "UPDATE chunks SET data = ? WHERE id = ?",
+        (json.dumps(data), chunk["chunk_id"]),
+    )
+    con.commit()
+    assert store.figures_to_read(con, page.doc_id, model=who) == 0
+    assert store.figures_to_read(con, page.doc_id, model=who, every=True) == 1

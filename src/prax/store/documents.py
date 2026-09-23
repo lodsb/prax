@@ -1597,6 +1597,46 @@ def finished_readings(
     ]
 
 
+def figures_to_read(
+    con: sqlite3.Connection, doc_id: int, *, model: str, every: bool = False
+) -> int:
+    """How many of a document's figures this model has not read yet.
+
+    The same test the reading itself makes (``parsers.figures.annotate``):
+    a figure is wanted when the model is absent from its readings, and,
+    unless ``every``, when a caption claims it — the captioned pass
+    leaves "Figure on page N" alone, so a document holding only those has
+    nothing for it however often it is asked.
+    """
+    from prax.parsers.figures import UNCAPTIONED
+
+    n = 0
+    for row in con.execute(
+        "SELECT data FROM chunks WHERE doc_id = ? AND kind = 'figure'", (doc_id,)
+    ):
+        data = json.loads(row[0] or "{}")
+        if not every and str(data.get("caption") or "").startswith(UNCAPTIONED):
+            continue
+        read_by = {r.get("model") for r in (data.get("readings") or [])}
+        if model not in read_by:
+            n += 1
+    return n
+
+
+def readings_done_since(con: sqlite3.Connection, since: str) -> dict[str, int]:
+    """How many readings finished since a moment, per extractor: the rate
+    a waiting queue is moving at, which is what says whether it is stuck
+    or merely long."""
+    rows = con.execute(
+        "SELECT json_extract(meta, '$.reading.extractor'), count(*) FROM documents"
+        " WHERE json_extract(meta, '$.reading.state') = 'done'"
+        " AND json_extract(meta, '$.reading.finished_at') >= ?"
+        " GROUP BY 1",
+        (since,),
+    ).fetchall()
+    return {str(name or "?"): int(n) for name, n in rows}
+
+
 def waiting_readings(con: sqlite3.Connection) -> dict[str, int]:
     """How many requests wait per extractor: what a script that swaps
     the card to marker and back watches (``prax readings --wait``)."""
