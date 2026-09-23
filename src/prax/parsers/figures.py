@@ -455,14 +455,13 @@ def of(data: bytes) -> list[Figure]:
     return html_figures(data)
 
 
-def crop_region(page: Any, caption: Any) -> Any | None:
-    """The picture above a caption, as a rectangle of the page.
+def page_boxes(page: Any) -> list[Any]:
+    """Every drawing and image of a page, as rectangles.
 
-    Every drawing and image whose box sits over the caption and overlaps
-    its column, taken from the caption upwards and stopped by a gap of
-    white space, so the paragraph above is not swept in. None when there
-    is nothing there, when what is there is too small to be a picture, or
-    when it covers so much of the page that it is the page.
+    The caller keeps this and passes it back for each caption of the same
+    page: a figure-dense page carries a dozen captions and thousands of
+    vector paths, and reading them per caption cost minutes a book over
+    the live backlog.
     """
     import pymupdf
 
@@ -474,6 +473,20 @@ def crop_region(page: Any, caption: Any) -> Any | None:
             continue
         if box:
             boxes.append(pymupdf.Rect(box))
+    return boxes
+
+
+def crop_region(page: Any, caption: Any, boxes: list[Any] | None = None) -> Any | None:
+    """The picture above a caption, as a rectangle of the page.
+
+    Every drawing and image whose box sits over the caption and overlaps
+    its column, taken from the caption upwards and stopped by a gap of
+    white space, so the paragraph above is not swept in. None when there
+    is nothing there, when what is there is too small to be a picture, or
+    when it covers so much of the page that it is the page. ``boxes`` is
+    ``page_boxes(page)``, which the caller reads once a page.
+    """
+    boxes = page_boxes(page) if boxes is None else boxes
     over = [
         b
         for b in boxes
@@ -568,6 +581,7 @@ def add_crops(data: bytes, previous: str, *, dpi: int = CROP_DPI) -> str:
     try:
         lines = previous.split("\n")
         bare = bare_captions(lines)
+        seen_boxes: dict[int, list[Any]] = {}  # a page's drawings, read once
         page_no = 1
         out: list[str] = []
         made = 0
@@ -581,7 +595,13 @@ def add_crops(data: bytes, previous: str, *, dpi: int = CROP_DPI) -> str:
                 continue
             page = doc[page_no - 1]
             where = find_caption(page, stripped)
-            rect = crop_region(page, where) if where is not None else None
+            if where is not None and page_no not in seen_boxes:
+                seen_boxes[page_no] = page_boxes(page)
+            rect = (
+                crop_region(page, where, seen_boxes[page_no])
+                if where is not None
+                else None
+            )
             if rect is None:
                 out.append(line)
                 continue
