@@ -196,6 +196,7 @@ test("asideLine and ingredientsBox: what is folded, and the recipe box", () => {
   assert.match(ad, /advertisement · brilliant/);
   assert.match(ad, /1\.2k characters/);
   assert.match(lib.asideLine("comment", null, "abc"), /what readers wrote · 3 characters/);
+  assert.match(lib.asideLine("comment", null, "x".repeat(4200), 6), /6 blocks · 4\.2k characters/);
   const box = lib.ingredientsBox({
     servings: { text: "Für 4 Personen", n: 4 },
     groups: [

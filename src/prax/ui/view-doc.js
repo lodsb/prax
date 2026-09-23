@@ -369,17 +369,41 @@ function renderAsk(c, docId) {
 }
 
 // An advertisement or a comment section: folded, with one line saying
-// what it is. The text is the artifact's own — nothing was removed — and
-// it opens on a click.
-function renderAside(c, docId, highlight) {
-  const open = c.chunk_id === highlight ? " open" : "";
+// what it is. A run of them folds as one — a comment section is chunked
+// per block, and a reader wants one line for the section, not twelve.
+// The text is the artifact's own; nothing was removed, and a click opens
+// it. Each block keeps its own anchor, so a link to a chunk still lands.
+function renderAside(run, docId, highlight) {
+  const kind = run[0].kind;
+  const inside = run.some((c) => c.chunk_id === highlight);
+  const text = run.map((c) => c.text).join("\n\n");
+  const ids = run.map((c) => c.chunk_id).join(" ");
+  const blocks = run
+    .map((c) => `<div class="chunk-body" id="chunk-${c.chunk_id}" data-chunk="${c.chunk_id}">${md(c.text)}</div>`)
+    .join("");
   return `
-  <section class="chunk kind-${c.kind} aside-chunk${highlight === c.chunk_id ? " highlight" : ""}" id="chunk-${c.chunk_id}" data-chunk="${c.chunk_id}">
-    <details${open}>
-      <summary>${badge(c.kind)} <span class="muted">${esc(asideLine(c.kind, c.data, c.text))}</span></summary>
-      <div class="chunk-body">${md(c.text)}</div>
+  <section class="chunk kind-${kind} aside-chunk${inside ? " highlight" : ""}" data-chunks="${ids}">
+    <details${inside ? " open" : ""}>
+      <summary>${badge(kind)} <span class="muted">${esc(asideLine(kind, run[0].data, text, run.length))}</span></summary>
+      ${blocks}
     </details>
   </section>`;
+}
+
+// The chunks in order, with each run of set-aside ones folded together.
+function renderChunks(list, highlight, docId, cites) {
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.kind === "ad" || c.kind === "comment") {
+      const run = [c];
+      while (i + 1 < list.length && list[i + 1].kind === c.kind) run.push(list[++i]);
+      out.push(renderAside(run, docId, highlight));
+      continue;
+    }
+    out.push(renderChunk(c, highlight, docId, cites));
+  }
+  return out.join("");
 }
 
 function renderChunk(c, highlight, docId, cites) {
@@ -398,8 +422,6 @@ function renderChunk(c, highlight, docId, cites) {
     body = renderAsk(c, docId);
   } else if (c.kind === "code") {
     body = md(c.text);
-  } else if (c.kind === "ad" || c.kind === "comment") {
-    return renderAside(c, docId, highlight);
   } else if (c.kind === "ingredients") {
     body = ingredientsBox(c.data) || md(c.text);
   } else {
@@ -684,7 +706,7 @@ function pagedBody(body, chunks, highlight, doc, maths, cites) {
     n = Math.min(n, chunks.length);
     if (n <= rendered) return;
     const box = document.createElement("div");
-    box.innerHTML = chunks.slice(rendered, n).map((c) => renderChunk(c, highlight, doc.id, cites)).join("");
+    box.innerHTML = renderChunks(chunks.slice(rendered, n), highlight, doc.id, cites);
     if (maths) typesetMaths(box);
     while (box.firstChild) more.before(box.firstChild);
     rendered = n;

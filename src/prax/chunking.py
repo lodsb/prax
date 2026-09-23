@@ -25,10 +25,12 @@ chunks:
   door keeps there with the question, the block's id and when it was
   asked in ``data``. Like a reference it is set aside: never embedded,
   out of a search, so an answer is never its own evidence;
-* one chunk for the **comment** section of a captured page, from the
-  ``## Comments`` heading the HTML parser writes to the next heading of its
-  own level or the end (``prax.furniture``). Set aside like a reference:
-  never embedded, out of a search, out of what an extraction reads;
+* **comment** chunks for a captured page's comment section, from the
+  ``## Comments`` heading the HTML parser writes (with the avatars beside
+  it) to the end of the page — one chunk per block of it, grouped as text
+  is, so a comment is addressable and a long section is not one blob
+  (``prax.furniture``). Set aside like a reference: never embedded, out of
+  a search, out of what an extraction reads;
 * one chunk per **ad**: a run of advertising in a capture — the sponsor
   read of a transcript, the offer block of a video's description — found by
   a sponsor's mark together with something to act on, and reaching over the
@@ -449,7 +451,13 @@ def _comment_region(els: list[_Element]) -> tuple[int, int] | None:
             continue
         if any(e.kind == "heading" and e.level <= el.level for e in els[i + 1 :]):
             continue
-        return i, len(els) - 1
+        # the pictures right before the heading belong to the section: a
+        # page puts the first commenter's avatar there, and no reader
+        # wants it in the document's figures or in the vision queue
+        first = i
+        while first and els[first - 1].kind == "figure" and i - first < 3:
+            first -= 1
+        return first, len(els) - 1
     return None
 
 
@@ -503,6 +511,23 @@ def _regions(els: list[_Element]) -> dict[int, tuple[str, int, dict[str, Any] | 
 # --------------------------------------------------------------- windows
 
 
+def line_windows(text: str, target: int = TARGET_CHARS) -> list[tuple[int, int]]:
+    """``(start, end)`` pieces of at most ``target`` characters, cut where
+    the text's own lines end and never inside one. What a comment section
+    is split by: its lines are its comments (a name, what they wrote), and
+    a window that cuts one in half helps nobody."""
+    out: list[tuple[int, int]] = []
+    start = pos = 0
+    for line in text.splitlines(keepends=True):
+        if pos > start and pos - start + len(line) > target:
+            out.append((start, pos))
+            start = pos
+        pos += len(line)
+    if pos > start:
+        out.append((start, pos))
+    return out or [(0, len(text))]
+
+
 def windows(
     text: str, size: int = WINDOW, overlap: int = OVERLAP
 ) -> list[tuple[int, int]]:
@@ -528,12 +553,14 @@ def chunk(text: str) -> list[Chunk]:
     chunks: list[Chunk] = []
     heading: list[tuple[int, str]] = []  # (level, title) stack
     pending: list[_Element] = []  # paragraphs of the text chunk being built
+    kind_of_text = "text"  # "comment" inside a comment section
 
     def path() -> list[str]:
         return [t for _, t in heading]
 
     def flush() -> None:
         nonlocal pending
+        kind = kind_of_text
         if not pending:
             return
         start, end = pending[0].start, pending[-1].end
@@ -541,11 +568,12 @@ def chunk(text: str) -> list[Chunk]:
         # and under its first time mark, when its paragraphs carry any
         time = next((e.time for e in pending if e.time is not None), None)
         body = text[start:end]
-        if len(body) > MAX_CHARS and len(pending) == 1:
-            for ws, we in windows(body):
+        if len(body) > MAX_CHARS and (len(pending) == 1 or kind == "comment"):
+            cut = line_windows(body) if kind == "comment" else windows(body)
+            for ws, we in cut:
                 chunks.append(
                     Chunk(
-                        "text",
+                        kind,
                         body[ws:we],
                         start + ws,
                         start + we,
@@ -555,7 +583,7 @@ def chunk(text: str) -> list[Chunk]:
                     )
                 )
         else:
-            chunks.append(Chunk("text", body, start, end, page, path(), time=time))
+            chunks.append(Chunk(kind, body, start, end, page, path(), time=time))
         pending = []
 
     def maybe_merge_small_tail() -> None:
@@ -564,13 +592,13 @@ def chunk(text: str) -> list[Chunk]:
         if len(chunks) >= 2:
             a, b = chunks[-2], chunks[-1]
             if (
-                a.kind == b.kind == "text"
+                a.kind == b.kind == kind_of_text
                 and a.heading == b.heading
                 and len(b.text) < MIN_CHARS
                 and len(a.text) + len(b.text) <= MAX_CHARS
             ):
                 chunks[-2] = Chunk(
-                    "text",
+                    a.kind,
                     text[a.char_start : b.char_end],
                     a.char_start,
                     b.char_end,
@@ -582,12 +610,20 @@ def chunk(text: str) -> list[Chunk]:
 
     els = _elements(text)
     regions = _regions(els)
-    skip_to = 0
+    skip_to, comments_until = 0, -1
     for idx, el in enumerate(els):
         if idx < skip_to:
             continue
         region = regions.get(idx)
-        if region is not None:
+        if region is not None and region[0] == "comment":
+            # the section is chunked like text, block by block, under the
+            # comment kind: every piece of it is one, headings and avatars
+            # included, and a long section stays addressable
+            flush()
+            maybe_merge_small_tail()
+            comments_until = region[1]
+            kind_of_text = "comment"
+        elif region is not None:
             kind, last, data = region
             flush()
             maybe_merge_small_tail()
@@ -600,6 +636,8 @@ def chunk(text: str) -> list[Chunk]:
             )
             skip_to = last + 1
             continue
+        if idx <= comments_until and el.kind != "page":
+            el = _Element("para", el.start, el.end, el.text, page=el.page)
         if el.kind == "page":
             # a substantial chunk ends with its page; a small one (a running
             # header, a sentence cut by the break) carries on into the next

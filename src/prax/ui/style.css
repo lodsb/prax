@@ -277,6 +277,7 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .aside-chunk summary::before { content: "▸"; color: var(--muted); margin-right: .4rem; }
 .aside-chunk details[open] summary::before { content: "▾"; }
 .aside-chunk details[open] .chunk-body { margin-top: .4rem; opacity: .85; }
+.aside-chunk details[open] .chunk-body + .chunk-body { border-top: 1px solid var(--line); padding-top: .4rem; }
 
 /* a recipe's ingredients, as the box they are on the page */
 .ingredients-box { border: 1px solid var(--line); padding: .7rem .9rem; }

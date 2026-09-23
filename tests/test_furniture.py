@@ -101,6 +101,40 @@ def test_the_comment_section_is_one_chunk_set_aside() -> None:
         assert c.text == SPONSOR_READ[c.char_start : c.char_end]
 
 
+def test_a_long_comment_section_is_chunked_per_block() -> None:
+    """A page's readers can write more than a chunk holds. The section is
+    grouped like text, cut where its own lines end so a comment is never
+    torn in half, and the pictures before its heading — the first
+    commenter's avatar — belong to it rather than to the document."""
+    page = (
+        "# A piece about AI\n\n"
+        + ("Some prose about the argument. " * 90)
+        + "\n\n![Avatar of unfinished view](figure:"
+        + "a" * 64
+        + ")\n\n"
+        + "## Comments\n\n"
+        + "74 Kommentare\n"
+        + "\n".join(
+            f"reader{i}\nWhat reader {i} wrote about it. " * 6 for i in range(12)
+        )
+        + "\n"
+    )
+    chunks = chunking.chunk(page)
+    comments = [c for c in chunks if c.kind == "comment"]
+    assert len(comments) > 3  # per block, not one blob
+    assert all(len(c.text) <= 2 * chunking.TARGET_CHARS for c in comments)
+    assert "Avatar of unfinished view" in comments[0].text
+    assert not [c for c in chunks if c.kind == "figure"]  # the avatar is not one
+    # the section is contiguous, and every chunk is the region it names
+    first = chunks.index(comments[0])
+    assert [c.kind for c in chunks[first:]] == ["comment"] * len(comments)
+    for c in chunks:
+        assert c.text == page[c.char_start : c.char_end]
+    # no line is torn: every block starts where a line does
+    for c in comments[1:]:
+        assert page[c.char_start - 1] == "\n"
+
+
 def test_a_papers_discussion_is_not_a_comment_section() -> None:
     """Only the last section of a page, under a document of some size."""
     paper = (

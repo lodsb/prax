@@ -245,13 +245,14 @@ function spendPanel(s) {
 
 // What an advertisement or a comment section says on its folded line:
 // what it is, whose it is, and how much of it there is.
-function asideLine(kind, data, text) {
+function asideLine(kind, data, text, blocks) {
   const n = (text || "").length;
   const size = n >= 1000 ? `${Math.round(n / 100) / 10}k characters` : `${n} characters`;
-  if (kind === "comment") return `what readers wrote · ${size}`;
+  const many = blocks > 1 ? ` · ${blocks} blocks` : "";
+  if (kind === "comment") return `what readers wrote${many} · ${size}`;
   const d = data || {};
   const why = (d.why || []).join(", ");
-  return `advertisement${d.brand ? ` · ${esc(d.brand)}` : ""}${why ? ` · ${esc(why)}` : ""} · ${size}`;
+  return `advertisement${d.brand ? ` · ${esc(d.brand)}` : ""}${why ? ` · ${esc(why)}` : ""}${many} · ${size}`;
 }
 
 // An amount as a cook writes it: halves and quarters as fractions, a
