@@ -274,3 +274,61 @@ def test_papers_and_claims_are_never_likely_candidates(
     store.replace_entity_candidates(con, "paper", pairs, producer="test")
     plan = resolution.plan(con)
     assert plan.sure == [] and plan.likely == []
+
+
+def test_a_person_who_is_an_author_is_one_entity(con: sqlite3.Connection) -> None:
+    """One name under a type and its subtype: the ontology says an author
+    is a person and a paper is a document, so the general side is the
+    extractor reaching for the safe word. The specific side survives."""
+    doc = store.ingest_text(con, "a paper about reverb " * 30, title="P")["doc_id"]
+    for src, st, rel, dst, dt in (
+        ("A Study of Reverb", "paper", "authored_by", "Ann Author", "author"),
+        ("A Study of Reverb", "document", "mentions", "Ann Author", "person"),
+    ):
+        store.link(
+            con,
+            store.Edge(src, st, rel, dst, dt),
+            source_doc=doc,
+            producer="test",
+            run="r1",
+        )
+    plan = resolution.plan(con, likely=False)
+    folds = {(c.drop_name, c.keep_name, c.type) for c in plan.subtypes}
+    assert ("Ann Author", "Ann Author", "person→author") in folds
+    assert ("A Study of Reverb", "A Study of Reverb", "document→paper") in folds
+    assert not plan.sure  # the names are equal, the types are not
+    report = resolution.apply(con, plan, subtypes=True)
+    assert report.merged_subtypes == 2
+    # and the graph now has one of each, under the type that says more
+    names = {
+        (r["name"], r["type"])
+        for r in con.execute(
+            "SELECT name, type FROM entities WHERE canonical_id IS NULL"
+        )
+    }
+    assert ("Ann Author", "author") in names and ("Ann Author", "person") not in names
+    assert ("A Study of Reverb", "paper") in names
+    assert resolution.plan(con, likely=False).subtypes == []  # idempotent
+
+
+def test_a_page_of_my_own_is_never_folded_into_a_paper(
+    con: sqlite3.Connection,
+) -> None:
+    """`page` and `project` are the store's kinds, not the extractor's
+    guess, so a note that shares a title with a paper stays itself."""
+    doc = store.ingest_text(con, "reverb notes " * 40, title="Reverb notes")["doc_id"]
+    store.link(
+        con,
+        store.Edge("Reverb notes", "page", "annotates", "A Study", "paper"),
+        source_doc=doc,
+        producer="test",
+        run="r1",
+    )
+    store.link(
+        con,
+        store.Edge("Reverb notes", "document", "mentions", "reverb", "concept"),
+        source_doc=doc,
+        producer="test",
+        run="r1",
+    )
+    assert resolution.plan(con, likely=False).subtypes == []

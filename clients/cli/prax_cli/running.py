@@ -958,6 +958,7 @@ def resolve(door: Door, a: Any) -> int:
         "apply": a.apply,
         "type": a.type,
         "twins": a.twins,
+        "subtypes": getattr(a, "subtypes", False),
         "likely": not a.no_likely,
         "show": a.show,
     }
@@ -970,11 +971,15 @@ def resolve(door: Door, a: Any) -> int:
         out.say(
             out.bold("Entity resolution")
             + out.dim(
-                f"   {plan['sure']['count']} sure, {plan['twins']['count']} twins,"
+                f"   {plan['sure']['count']} sure,"
+                f" {plan.get('subtypes', {}).get('count', 0)} subtypes,"
+                f" {plan['twins']['count']} twins,"
                 f" {plan['likely']['count']} likely"
             )
         )
-        for tier in ("sure", "twins", "likely"):
+        for tier in ("sure", "subtypes", "twins", "likely"):
+            if tier not in plan:
+                continue
             for c in plan[tier]["examples"]:
                 pair = f"{c['drop']!r} -> {c['keep']!r}"
                 out.hint(f"  {tier:6} {c['score']:.2f} [{c['type']}] {pair}")
@@ -995,7 +1000,9 @@ def resolve(door: Door, a: Any) -> int:
     if not a.apply:
         if not a.json:
             out.hint(
-                "  --apply merges the sure ones" + (" and the twins" if a.twins else "")
+                "  --apply merges the sure ones"
+                + (" and the subtypes" if getattr(a, "subtypes", False) else "")
+                + (" and the twins" if a.twins else "")
             )
         return 0
     return follow_job(door, r["job"], quiet=a.json, what="the resolution")

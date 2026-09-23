@@ -35,7 +35,7 @@ from typing import Any, Protocol
 
 import numpy as np
 
-from prax import extraction, store
+from prax import extraction, ontology, store
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "phd", "dr", "prof"}
 LIKELY_THRESHOLD = 0.92  # cosine of name embeddings to become a candidate
@@ -88,6 +88,13 @@ class Plan:
     sure: list[Candidate] = field(default_factory=list)
     likely: list[Candidate] = field(default_factory=list)
     twins: list[Candidate] = field(default_factory=list)  # concept + method, one name
+    subtypes: list[Candidate] = field(default_factory=list)  # a person who is an author
+
+
+# The store's own kinds of document. A page is written here and a project
+# is declared here; neither is ever the extractor reaching for a general
+# type, so neither takes part in the subtype fold.
+SELF_KINDS = frozenset({"page", "project"})
 
 
 # A technique extracted as both a concept and a method (the v1 prompt let
@@ -185,6 +192,44 @@ def plan(
                 )
             )
             taken.add(drop["id"])
+
+    # tier 1c: one name under a type and its subtype. The ontology says an
+    # author is a person, a paper is a document, a venue is an organization;
+    # the extractor reaches for the general type when a document does not
+    # make the specific one plain, and the two are one thing. The specific
+    # side survives, because it says more and the general is implied.
+    onto = ontology.current()
+    by_plain: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for e in ents:
+        if e["id"] not in taken and e["type"] not in SELF_KINDS:
+            by_plain[normalize(e["name"], plural=False)].append(e)
+    for members in by_plain.values():
+        if len(members) < 2:
+            continue
+        by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for e in members:
+            by_type[e["type"]].append(e)
+        for specific, kin in by_type.items():
+            kin.sort(key=_rank, reverse=True)
+            keep = kin[0]
+            for general, others in by_type.items():
+                if general == specific or not onto.is_a(specific, general):
+                    continue
+                for drop in others:
+                    if drop["id"] in taken or drop["id"] == keep["id"]:
+                        continue
+                    out.subtypes.append(
+                        Candidate(
+                            keep["id"],
+                            drop["id"],
+                            keep["name"],
+                            drop["name"],
+                            f"{general}→{specific}",
+                            "subtype",
+                            1.0,
+                        )
+                    )
+                    taken.add(drop["id"])
 
     # tier 1b: authors by initials form (J. O. Smith == Julius O. Smith)
     by_initials: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
@@ -381,6 +426,7 @@ class Report:
     merged_sure: int = 0
     merged_likely: int = 0
     merged_twins: int = 0
+    merged_subtypes: int = 0
     declined: int = 0
 
 
@@ -390,14 +436,19 @@ def apply(
     *,
     adjudicator: Adjudicator | None = None,
     twins: bool = False,
+    subtypes: bool = False,
 ) -> Report:
-    """Merge every sure candidate, the concept/method twins when asked,
-    and ask the adjudicator about the likely ones. Idempotent: a re-run
-    finds nothing left to merge."""
+    """Merge every sure candidate, the concept/method twins and the
+    subtype folds when asked, and ask the adjudicator about the likely
+    ones. Idempotent: a re-run finds nothing left to merge."""
     report = Report()
     for c in p.sure:
         store.merge_entities(con, c.drop, c.keep)
         report.merged_sure += 1
+    if subtypes:
+        for c in p.subtypes:
+            store.merge_entities(con, c.drop, c.keep, across_types=True)
+            report.merged_subtypes += 1
     if twins:
         for c in p.twins:
             store.merge_entities(con, c.drop, c.keep, across_types=True)

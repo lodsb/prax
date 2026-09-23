@@ -218,8 +218,8 @@ own words as the alias.
 
 The eval set exists (`scripts/eval_retrieval.py`, 62 library queries,
 MRR 0.89 hybrid). The multilingual version of it is the same queries
-translated into German, scored against the same answers: a
-cross-language MRR that is near zero today and is the number every step above
+translated into German, scored against the same answers: a cross-
+language MRR that is near zero today and is the number every step above
 should move. Run it before step 2 and after, and again with step 3 on
 top.
 

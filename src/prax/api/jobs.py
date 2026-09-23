@@ -230,20 +230,26 @@ class ResolveReq(BaseModel):
     apply: bool = False  # False: the plan only
     type: str | None = None  # one entity type
     twins: bool = False  # merge a concept into the method of the same name
+    subtypes: bool = False  # merge a name's general type into its specific one
     likely: bool = True  # the likely tier: the pairs a worker left
     show: int = 40  # candidates per tier in the plan
 
 
 @router.post("/graph/resolve")
 def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
-    """Entity resolution (``prax.resolution``): the plan — sure candidates
-    (equal after normalization, an initials form of one author name),
-    concept/method twins, likely ones (close by name embedding, computed
-    by a worker through the resolve step and kept until decided) — and,
-    with ``apply``, a job that merges the sure ones (and the twins when
-    asked); the likely ones are a person's decision, or an adjudicator's,
-    and stay in the plan. Merges are pointers (``entities.canonical_id``):
-    nothing is deleted."""
+    """Entity resolution (``prax.resolution``): the plan and, with
+    ``apply``, a job that merges what is safe.
+
+    The tiers: sure (equal after normalization, an initials form of one
+    author name), subtypes (one name under a type and its subtype — an
+    author who is also a person, a paper that is also a document),
+    concept/method twins, and likely ones (close by name embedding,
+    computed by a worker through the resolve step and kept until
+    decided). ``apply`` merges the sure ones, and the subtypes and twins
+    when asked; the likely ones are a person's decision, or an
+    adjudicator's, and stay in the plan. Merges are pointers
+    (``entities.canonical_id``): nothing is deleted.
+    """
     from prax import resolution
 
     con = _con(request)
@@ -263,6 +269,7 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
         }
         for tier, items in (
             ("sure", plan.sure),
+            ("subtypes", plan.subtypes),
             ("twins", plan.twins),
             ("likely", plan.likely),
         )
@@ -273,7 +280,9 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     job = store.Job(
         con,
         "resolve",
-        total=len(plan.sure) + (len(plan.twins) if req.twins else 0),
+        total=len(plan.sure)
+        + (len(plan.subtypes) if req.subtypes else 0)
+        + (len(plan.twins) if req.twins else 0),
         note=f"{len(plan.sure)} sure"
         + (f", {len(plan.twins)} twins" if req.twins else ""),
     )
@@ -282,9 +291,12 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
         own = store.connect()
         try:
             with store.Job.existing(own, job.id) as mine:
-                rep = resolution.apply(own, plan, twins=req.twins)
+                rep = resolution.apply(
+                    own, plan, twins=req.twins, subtypes=req.subtypes
+                )
                 mine.note(
-                    f"done: merged {rep.merged_sure} sure, {rep.merged_twins} twins;"
+                    f"done: merged {rep.merged_sure} sure,"
+                    f" {rep.merged_subtypes} subtypes, {rep.merged_twins} twins;"
                     f" {len(plan.likely)} likely left for a person"
                 )
         except Exception:

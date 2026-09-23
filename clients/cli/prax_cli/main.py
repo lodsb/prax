@@ -746,6 +746,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--apply", action="store_true", help="merge the sure ones")
     s.add_argument("--type", help="one entity type")
     s.add_argument(
+        "--subtypes",
+        action="store_true",
+        help="merge a name's general type into its specific one (a person"
+        " who is an author, a document that is a paper): the ontology's"
+        " own hierarchy, never a page or a project of your own",
+    )
+    s.add_argument(
         "--twins",
         action="store_true",
         help="a concept into the method of the same name",
