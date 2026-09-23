@@ -28,6 +28,17 @@ function readingLine(r) {
   return `<p class="reading-line muted">read again ${when}: ${esc(r.stamp || what)} → ${esc(r.outcome || r.state)} <a href="#" id="reading-cancel">dismiss</a></p>`;
 }
 
+// What a document is waiting to be read by. Several may wait: a
+// reading queues beside the others rather than replacing them.
+function pendingLine(pending) {
+  const waiting = pending || [];
+  if (!waiting.length) return "";
+  const what = waiting
+    .map((r) => `${esc(r.extractor)}${r.mode ? ` (${esc(r.mode)})` : ""}`)
+    .join(", ");
+  return `<p class="reading-line muted">waiting for a worker: ${what}</p>`;
+}
+
 function metaLine(meta) {
   const bits = [];
   if (meta.creators && meta.creators.length) bits.push(meta.creators.map((c) => c.name).join(", "));
@@ -276,14 +287,14 @@ function processRoute(r) {
 function processHtml(doc, view) {
   const routes = view.routes || [];
   const groups = PROCESS_GROUPS.filter(([g]) => routes.some((r) => r.group === g));
-  const waiting = view.state.reading && view.state.reading.state === "requested" ? view.state.reading : null;
+  const waiting = view.state.pending || [];
   return `
   <h2>Process</h2>
   <p class="muted process-title">${esc(doc.title || "(untitled)")}</p>
   <p class="muted process-state">${processState(view.state)}</p>
-  ${waiting ? `<p class="muted process-waiting">a reading is waiting for a worker: ${esc(waiting.extractor)}${waiting.mode ? ` (${esc(waiting.mode)})` : ""}. A new request replaces it.</p>` : ""}
+  ${waiting.length ? `<p class="muted process-waiting">waiting for a worker: ${waiting.map((w) => `${esc(w.extractor)}${w.mode ? ` (${esc(w.mode)})` : ""}`).join(", ")}. Asking for another queues it beside these.</p>` : ""}
   ${groups.length ? groups.map(([g, title]) => `<section class="route-group"><h3>${title}</h3>${routes.filter((r) => r.group === g).map(processRoute).join("")}</section>`).join("") : `<p class="muted">Nothing to ask for on this document.</p>`}
-  <p class="muted process-foot">A worker takes each request on its next pass (Jobs shows what waits). A reading replaces the text; a figure's or an image's readings add up. The graph is read again on the worker's next extract pass; the promote flag runs only with <code>--spend</code>.</p>
+  <p class="muted process-foot">A worker takes each request on its next pass, oldest first (Jobs shows what waits). A reading replaces the text; a figure's or an image's readings add up. The graph is read again on the worker's next extract pass; the promote flag runs only with <code>--spend</code>.</p>
   <div class="dialog-actions"><button type="button" class="secondary process-close">Close</button></div>`;
 }
 async function openProcess(doc) {
@@ -558,7 +569,7 @@ async function viewDoc(id, p) {
         ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       </div>
     </div>
-    ${readingLine(meta.reading)}
+    ${readingLine(meta.reading)}${pendingLine(doc.pending)}
     <div id="domains-form" hidden></div>
     <div id="page-editor"></div>
   </header>

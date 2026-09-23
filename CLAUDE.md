@@ -235,6 +235,13 @@ reference `docs/ask.md`.
   keyed by chunk id in the usearch file. Changing the model means
   re-embedding into a new file. Another dimension means a new file and
   `VEC_DIM`.
+- A reading is a row of the `readings` queue, not a field on the
+  document. A document may wait for several at once: the crops of its
+  vector figures, the readings of its pictures, the formulas of a marker
+  read. Asking for one never replaces another. The hand-out serves
+  them oldest first and at most one a document a batch, because two
+  annotating readings are computed from the same text. `meta.reading` is
+  the last reading that finished, which is what a page shows.
 - What a host chooses is configuration, not code. It lives in
   `prax.yaml` in the data directory, read through `prax.models` for the
   models and steps (`resolve(step)`, `runtime(spec)`) and `prax.config`

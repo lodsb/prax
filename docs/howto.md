@@ -691,6 +691,22 @@ does not undo it. Both producers' edges sit side by side. `GET
 /promote` returns the flagged list with status and the candidates.
 `POST /doc/{id}/promote` sets the flag and `DELETE` clears it.
 
+### What a document is waiting to be read by
+
+A reading request is a row of the `readings` table, and a document may
+hold several at once: the crops of its vector figures, the readings of
+its pictures, the formulas of a marker read. Asking for one never
+replaces another, asking twice for the same one changes nothing, and
+`prax reread` over the library no longer wipes what was already queued.
+
+A worker takes them oldest first, before any other parse work and
+whatever its scope. At most one reading of a document goes out per
+batch: two annotating readings are computed from the same text, so the
+second would undo the first. What finished stays on the document as
+`meta.reading` and on its row, which is what the page and the Jobs view
+show. `prax readings` lists the queue; "cancel" on a document page
+withdraws what it is waiting for.
+
 ### The figures nothing could extract
 
 A `figure` chunk is a caption plus, usually, a reference to the picture

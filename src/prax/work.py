@@ -393,9 +393,15 @@ def hand_out(
         # requested readings first: a person asked, whatever the scope; the
         # whole queue, oldest first — the status view's newest fifty hid
         # the 228 marker requests behind the follow-ups placed after them
+        offered: set[int] = set()  # one reading a document a batch
         for req in store.reading_requests(con, limit=None, oldest_first=True):
             doc_id = req["doc_id"]
             if len(items) >= limit or not _free(step, doc_id, now):
+                continue
+            if doc_id in offered:
+                # its other readings wait their turn: two annotating
+                # readings of one document in a batch are computed from
+                # the same text, and the second would undo the first
                 continue
             doc = store.get_document(con, doc_id, max_chars=0)
             if doc is None:
@@ -425,6 +431,7 @@ def hand_out(
                 # figures' readings and references go into the parsed text
                 item["previous"] = store.get_document(con, doc_id)["text"]
             items.append(item)
+            offered.add(doc_id)
         waiting = list(inbox.pending_captures(con))
         if scope == "all":
             # the backlog pass also brings texts up to date: documents read

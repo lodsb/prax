@@ -27,9 +27,13 @@ router = APIRouter()
 def get(
     doc_id: int, request: Request, offset: int = 0, max_chars: int | None = None
 ) -> dict[str, Any]:
-    doc = store.get_document(_con(request), doc_id, offset=offset, max_chars=max_chars)
+    con = _con(request)
+    doc = store.get_document(con, doc_id, offset=offset, max_chars=max_chars)
     if doc is None:
         raise HTTPException(404, "no such document")
+    # what it is waiting to be read by: a list since migration 21, and
+    # `meta.reading` is the last reading that finished
+    doc["pending"] = store.pending_readings(con, doc_id)
     return doc
 
 

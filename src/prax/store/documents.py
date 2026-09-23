@@ -1117,24 +1117,30 @@ def request_reading(
     """Ask for ``extractor`` (one of ``READINGS``) on a document; ``mode``
     is the extractor's setting for this run (``MODES``: ``vision-pages``
     reads the scans or every page, ``figures`` the captioned ones or every
-    image). A request replaces an earlier one."""
+    image).
+
+    Requests queue: a document may wait for several readings at once, and
+    asking again for one it is already waiting for changes nothing. Until
+    migration 21 a request was one field on the document and a new one
+    replaced whatever was waiting there.
+    """
     check_mode(extractor, mode)
-    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    row = con.execute("SELECT id FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
         raise KeyError(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"]) if row["meta"] else {}
-    meta["reading"] = {
-        "extractor": extractor,
-        "mode": mode,
-        "by": by,
-        "at": now(),
-        "state": "requested",
-    }
     con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+        "INSERT OR IGNORE INTO readings (doc_id, extractor, mode, asked_by, at)"
+        f" VALUES (?, ?, ?, ?, {_NOW})",
+        (doc_id, extractor, mode, by),
     )
     con.commit()
-    return meta["reading"]
+    waiting = con.execute(
+        "SELECT extractor, mode, asked_by AS by, at, state FROM readings"
+        " WHERE doc_id = ? AND extractor = ? AND state = 'requested'"
+        " ORDER BY id DESC LIMIT 1",
+        (doc_id, extractor),
+    ).fetchone()
+    return dict(waiting) if waiting else {}
 
 
 def unreadable_documents(
@@ -1482,16 +1488,41 @@ def request_readings(
 
 
 @_serialized
-def cancel_reading(con: sqlite3.Connection, doc_id: int) -> bool:
-    """Withdraw a request (or forget a finished one)."""
-    meta = get_meta(con, doc_id)
-    if not meta.pop("reading", None):
-        return False
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+def cancel_reading(
+    con: sqlite3.Connection, doc_id: int, *, extractor: str | None = None
+) -> bool:
+    """Withdraw what a document is waiting for: one reading by name, or
+    every one of them. Returns whether anything was waiting."""
+    args: tuple[Any, ...] = (doc_id,)
+    sql = "DELETE FROM readings WHERE doc_id = ? AND state = 'requested'"
+    if extractor:
+        sql += " AND extractor = ?"
+        args += (extractor,)
+    cur = con.execute(sql, args)
+    dropped = int(cur.rowcount or 0)
+    if not extractor:  # the old single slot, for a document read before m21
+        meta = get_meta(con, doc_id)
+        if meta.pop("reading", None):
+            con.execute(
+                "UPDATE documents SET meta = ? WHERE id = ?",
+                (json.dumps(meta), doc_id),
+            )
+            dropped += 1
     con.commit()
-    return True
+    return dropped > 0
+
+
+@_reading
+def pending_readings(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """What this document is waiting to be read by, oldest asked first."""
+    return [
+        dict(r)
+        for r in con.execute(
+            "SELECT id, extractor, mode, asked_by AS by, at, state FROM readings"
+            " WHERE doc_id = ? AND state = 'requested' ORDER BY id",
+            (doc_id,),
+        )
+    ]
 
 
 @_serialized
@@ -1502,21 +1533,48 @@ def finish_reading(
     outcome: str,
     stamp: str,
     error: str | None = None,
+    extractor: str | None = None,
 ) -> None:
     """The worker's result for a requested reading: ``outcome`` is the
     parse action (``upgraded``, ``created``, ``kept``, ``empty``) or
-    ``error`` with its message."""
-    meta = get_meta(con, doc_id)
-    reading = meta.get("reading")
-    if not reading:
-        return
-    reading.update(
-        state="error" if error else "done",
-        outcome=outcome,
-        stamp=stamp,
-        error=error,
-        finished_at=now(),
+    ``error`` with its message.
+
+    ``extractor`` names which of the document's waiting readings this
+    was; without it the oldest is taken, which is what a worker that
+    reported no request means. The row is marked done and the document's
+    ``meta.reading`` keeps it as its last reading, which is what the page
+    shows.
+    """
+    args: tuple[Any, ...] = (doc_id,)
+    sql = (
+        "SELECT id, extractor, mode, asked_by, at FROM readings"
+        " WHERE doc_id = ? AND state = 'requested'"
     )
+    if extractor:
+        sql += " AND extractor = ?"
+        args += (extractor,)
+    row = con.execute(sql + " ORDER BY id LIMIT 1", args).fetchone()
+    finished = now()
+    state = "error" if error else "done"
+    if row is not None:
+        con.execute(
+            "UPDATE readings SET state = ?, outcome = ?, stamp = ?, error = ?,"
+            " finished_at = ? WHERE id = ?",
+            (state, outcome, stamp, error, finished, row["id"]),
+        )
+    meta = get_meta(con, doc_id)
+    was = meta.get("reading") or {}
+    meta["reading"] = {
+        "extractor": row["extractor"] if row is not None else was.get("extractor"),
+        "mode": row["mode"] if row is not None else was.get("mode"),
+        "by": row["asked_by"] if row is not None else was.get("by"),
+        "at": row["at"] if row is not None else was.get("at"),
+        "state": state,
+        "outcome": outcome,
+        "stamp": stamp,
+        "error": error,
+        "finished_at": finished,
+    }
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
     )
@@ -1530,47 +1588,39 @@ def reading_requests(
     limit: int | None = 50,
     oldest_first: bool = False,
 ) -> list[dict[str, Any]]:
-    """Documents with a reading request: the waiting ones (``state``
-    ``requested``), or every state (None), newest first for the status
-    view; the hand-out asks for the whole queue oldest first (``limit``
-    None), so a burst of newer requests never hides the older ones."""
+    """Reading requests: the waiting ones (``state`` ``requested``), or
+    every state (None), newest first for the status view; the hand-out
+    asks for the whole queue oldest first (``limit`` None), so a burst of
+    newer requests never hides the older ones.
+
+    A document may wait for several readings, so a document can appear
+    more than once here — one row per request, which is what the queue
+    is (migration 21).
+    """
     params: list[Any] = [state] if state else []
     sql = (
-        "SELECT id, title, mime, meta FROM documents"
-        " WHERE json_extract(meta, '$.reading') IS NOT NULL"
-        + (" AND json_extract(meta, '$.reading.state') = ?" if state else "")
-        + " ORDER BY json_extract(meta, '$.reading.at')"
-        + (" ASC, id ASC" if oldest_first else " DESC, id DESC")
+        "SELECT r.id, r.doc_id, r.extractor, r.mode, r.asked_by AS by, r.at,"
+        " r.state, r.outcome, r.stamp, r.error, r.finished_at,"
+        " d.title, d.mime FROM readings r JOIN documents d ON d.id = r.doc_id"
+        + (" WHERE r.state = ?" if state else "")
+        + (" ORDER BY r.id ASC" if oldest_first else " ORDER BY r.id DESC")
     )
     if limit is not None:
         sql += " LIMIT ?"
         params.append(limit)
-    rows = con.execute(sql, params).fetchall()
-    return [
-        {
-            "doc_id": r["id"],
-            "title": r["title"],
-            "mime": r["mime"],
-            **json.loads(r["meta"])["reading"],
-        }
-        for r in rows
-    ]
+    return [dict(r) for r in con.execute(sql, params)]
 
 
 @_reading
 def count_reading_requests(
     con: sqlite3.Connection, *, state: str | None = "requested"
 ) -> int:
-    """How many documents have a reading request in that state — the list
-    is a page (``reading_requests``), and a bulk re-read places thousands.
-    """
-    sql = (
-        "SELECT count(*) FROM documents"
-        " WHERE json_extract(meta, '$.reading') IS NOT NULL"
-    )
+    """How many reading requests are in that state — the list is a page
+    (``reading_requests``), and a bulk re-read places thousands."""
+    sql = "SELECT count(*) FROM readings"
     args: tuple[Any, ...] = ()
     if state:
-        sql += " AND json_extract(meta, '$.reading.state') = ?"
+        sql += " WHERE state = ?"
         args = (state,)
     return int(con.execute(sql, args).fetchone()[0])
 
@@ -1581,20 +1631,16 @@ def finished_readings(
     """The reading requests lately finished, newest finish first — its own
     query, because a bulk request places hundreds at one time and the
     newest-requested window then holds nothing but waiting ones."""
-    rows = con.execute(
-        "SELECT id, title, mime, meta FROM documents"
-        " WHERE json_extract(meta, '$.reading.state') IN ('done', 'error')"
-        " ORDER BY json_extract(meta, '$.reading.finished_at') DESC, id DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
     return [
-        {
-            "doc_id": r["id"],
-            "title": r["title"],
-            "mime": r["mime"],
-            **json.loads(r["meta"])["reading"],
-        }
-        for r in rows
+        dict(r)
+        for r in con.execute(
+            "SELECT r.doc_id, r.extractor, r.mode, r.asked_by AS by, r.at, r.state,"
+            " r.outcome, r.stamp, r.error, r.finished_at, d.title, d.mime"
+            " FROM readings r JOIN documents d ON d.id = r.doc_id"
+            " WHERE r.state IN ('done', 'error')"
+            " ORDER BY r.finished_at DESC, r.id DESC LIMIT ?",
+            (limit,),
+        )
     ]
 
 
@@ -1635,10 +1681,8 @@ def readings_done_since(con: sqlite3.Connection, since: str) -> dict[str, int]:
     a waiting queue is moving at, which is what says whether it is stuck
     or merely long."""
     rows = con.execute(
-        "SELECT json_extract(meta, '$.reading.extractor'), count(*) FROM documents"
-        " WHERE json_extract(meta, '$.reading.state') = 'done'"
-        " AND json_extract(meta, '$.reading.finished_at') >= ?"
-        " GROUP BY 1",
+        "SELECT extractor, count(*) FROM readings WHERE state = 'done'"
+        " AND finished_at >= ? GROUP BY 1",
         (since,),
     ).fetchall()
     return {str(name or "?"): int(n) for name, n in rows}
@@ -1648,8 +1692,7 @@ def waiting_readings(con: sqlite3.Connection) -> dict[str, int]:
     """How many requests wait per extractor: what a script that swaps
     the card to marker and back watches (``prax readings --wait``)."""
     rows = con.execute(
-        "SELECT json_extract(meta, '$.reading.extractor'), count(*) FROM documents"
-        " WHERE json_extract(meta, '$.reading.state') = 'requested'"
+        "SELECT extractor, count(*) FROM readings WHERE state = 'requested'"
         " GROUP BY 1 ORDER BY 2 DESC, 1"
     ).fetchall()
     return {str(name or "?"): int(n) for name, n in rows}

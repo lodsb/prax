@@ -323,11 +323,12 @@ def test_a_marker_read_asks_for_the_formula_readings_next(
         meta = store.get_meta(con, pdf)
         assert meta["text_source"] == "marker/?"
         assert meta["parse_history"][-1]["outcome"] == "upgraded"
-        # the follow-up: a formulas request, placed by the door
-        assert meta["reading"]["extractor"] == "formulas"
-        assert (
-            meta["reading"]["state"] == "requested" and meta["reading"]["by"] == "door"
-        )
+        # the follow-up: a formulas request, placed by the door and
+        # queued beside anything else the document waits for
+        assert [x["extractor"] for x in store.pending_readings(con, pdf)] == [
+            "formulas"
+        ]
+        assert store.pending_readings(con, pdf)[0]["by"] == "door"
         assert client.get("/readings").json()["waiting"] == 1
         # the formulas step off: a second marker read asks for nothing
         (data_dir / config.CONFIG_NAME).write_text("steps: {formulas: {model: none}}\n")

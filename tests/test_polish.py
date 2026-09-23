@@ -121,7 +121,7 @@ def test_the_door_asks_for_the_polish_after_a_video_capture_and_the_frames_after
         json={"url": META["url"], "html": PAGE, "mode": "video", "video": META},
     ).json()
     assert r["created"] and r["indexed"]
-    reading = store.get_meta(con, r["doc_id"])["reading"]
+    reading = store.pending_readings(con, r["doc_id"])[0]
     assert reading["extractor"] == "polish" and reading["by"] == "door"
     # the polish lands (as a reading, through the store's own apply): next,
     # the frames, since the vision model is free and nobody read them
@@ -142,7 +142,11 @@ def test_the_door_asks_for_the_polish_after_a_video_capture_and_the_frames_after
         pipeline.follow_ups(con, r["doc_id"], stamp="polish/1+local", action=action)
         == "figures"
     )
-    assert store.get_meta(con, r["doc_id"])["reading"]["extractor"] == "figures"
+    # the figures reading is now what waits; the polish is the last one done
+    assert [x["extractor"] for x in store.pending_readings(con, r["doc_id"])] == [
+        "figures"
+    ]
+    assert store.get_meta(con, r["doc_id"])["reading"]["extractor"] == "polish"
     # a video whose track a person wrote gets no polish: straight to the frames
     uploaded = dict(
         META, id="up1", url="https://www.youtube.com/watch?v=up1", captions="uploaded"
@@ -156,7 +160,9 @@ def test_the_door_asks_for_the_polish_after_a_video_capture_and_the_frames_after
             "video": uploaded,
         },
     ).json()
-    assert store.get_meta(con, r2["doc_id"])["reading"]["extractor"] == "figures"
+    assert [x["extractor"] for x in store.pending_readings(con, r2["doc_id"])] == [
+        "figures"
+    ]
 
 
 def test_the_heal_names_the_unpolished_and_offers_the_polish(

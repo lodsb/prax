@@ -9,11 +9,21 @@ import os
 import time
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from prax import embeddings, inbox, models, steps, store, work, worker
+
+
+def pending_one(con: Any, doc_id: int) -> dict[str, Any]:
+    """The reading a document is waiting for, or {} — a pending request
+    is a row of the queue since migration 21, not a field on the
+    document."""
+    rows = store.pending_readings(con, doc_id)
+    return rows[0] if rows else {}
+
 
 needs_usearch = pytest.mark.skipif(
     not store.vectors_available(), reason="usearch not installed"
@@ -501,6 +511,8 @@ def test_a_requested_reading_goes_out_first_and_comes_back_with_its_outcome(
     paid = models.ModelSpec(name="sonnet", kind="claude", model="claude-sonnet-5")
     monkeypatch.setattr(models, "resolve", lambda s: paid if s == "vision" else None)
     worker.run_once(_door(client), steps=("parse",), log_=lambda t: None)
+    # the refusal is the reading's outcome: it is finished, not waiting
+    assert not store.pending_readings(con, scan)
     reading = store.get_meta(con, scan)["reading"]
     assert reading["state"] == "error" and "(paid)" in reading["error"]
     assert client.delete(f"/doc/{scan}/reading").json()["removed"] is True
@@ -521,14 +533,14 @@ def test_the_door_asks_for_readings_of_captures_when_the_vision_model_is_free(
     paid = models.ModelSpec(name="sonnet", kind="claude", model="claude-sonnet-5")
     monkeypatch.setattr(models, "resolve", lambda s: paid if s == "vision" else None)
     client.get("/work/parse")
-    assert "reading" not in store.get_meta(con, image.doc_id)
+    assert not store.pending_readings(con, image.doc_id)
     # a local server: the image is asked for, once, and handed out next
     free = models.ModelSpec(
         name="server-vl", kind="openai", base_url="http://127.0.0.1:1/v1", model="vl"
     )
     monkeypatch.setattr(models, "resolve", lambda s: free if s == "vision" else None)
     client.get("/work/parse")
-    reading = store.get_meta(con, image.doc_id)["reading"]
+    reading = pending_one(con, image.doc_id)
     assert reading["extractor"] == "vision" and reading["by"] == "door"
     work._leases.clear()
     items = client.get("/work/parse").json()["items"]
@@ -540,14 +552,14 @@ def test_the_door_asks_for_readings_of_captures_when_the_vision_model_is_free(
     result = {"doc_id": page.doc_id, "extractor": "trafilatura/9", "text": text * 20}
     rep = client.post("/work/parse", json={"results": [result]}).json()
     assert rep["applied"] == 1
-    reading = store.get_meta(con, page.doc_id)["reading"]
+    reading = pending_one(con, page.doc_id)
     assert reading["extractor"] == "figures" and reading["by"] == "door"
     # a parse without figures asks for nothing
     plain = inbox.ingest_upload(con, html + b" ", filename="q.html", mime="text/html")
     prose = "Prose. " * 60
     result = {"doc_id": plain.doc_id, "extractor": "trafilatura/9", "text": prose}
     client.post("/work/parse", json={"results": [result]})
-    assert "reading" not in store.get_meta(con, plain.doc_id)
+    assert not store.pending_readings(con, plain.doc_id)
 
 
 def test_a_backlog_pass_re_reads_what_a_revised_extractor_would_read_differently(
@@ -787,12 +799,12 @@ def test_readings_asked_for_a_selection_at_once(
         json={"extractor": "pymupdf4llm-ocr", "unreadable": True, "dry_run": True},
     ).json()
     assert dry == {"selected": 1, "requested": 0, "skipped": 0, "dry_run": True}
-    assert "reading" not in store.get_meta(con, scan.doc_id)
+    assert not store.pending_readings(con, scan.doc_id)
     done = client.post(
         "/readings/bulk", json={"extractor": "pymupdf4llm-ocr", "unreadable": True}
     ).json()
     assert done["requested"] == 1
-    assert store.get_meta(con, scan.doc_id)["reading"]["extractor"] == "pymupdf4llm-ocr"
+    assert pending_one(con, scan.doc_id)["extractor"] == "pymupdf4llm-ocr"
     # by stamp prefix, with a mode; a document the extractor cannot read is skipped
     r = client.post(
         "/readings/bulk",
@@ -806,7 +818,7 @@ def test_readings_asked_for_a_selection_at_once(
     assert (
         r["selected"] == 1 and r["requested"] == 1
     )  # only the paper matches the prefix
-    assert store.get_meta(con, paper["doc_id"])["reading"]["mode"] == "all"
+    assert pending_one(con, paper["doc_id"])["mode"] == "all"
     r = client.post(
         "/readings/bulk",
         json={"extractor": "trafilatura", "ids": [page.doc_id, paper["doc_id"]]},
@@ -940,7 +952,7 @@ def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
     out = worker.run_once(_door(client), steps=("parse",), log_=said.append)
     assert out.get("parse", "0 parsed").startswith("0 parsed")
     assert any("not yet" in line and "Loading model" in line for line in said)
-    reading = store.get_meta(con, doc)["reading"]
+    reading = pending_one(con, doc)
     assert reading["state"] == "requested"  # still waiting, no error recorded
     assert "parse_history" not in store.get_meta(con, doc)
     # and deferred: leased well past a batch, so the next hand-outs hold
@@ -965,7 +977,7 @@ def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
     said.clear()
     worker.run_once(_door(client), steps=("parse",), log_=said.append)
     assert any("marker's server" in line and "not yet" in line for line in said)
-    assert store.get_meta(con, pdf)["reading"]["state"] == "requested"
+    assert pending_one(con, pdf)["state"] == "requested"
     assert isinstance(parsers.NotYet("x"), parsers.ExtractionError)
 
 
@@ -1212,3 +1224,90 @@ def test_a_figures_request_with_nothing_to_read_is_dropped(
     con.commit()
     assert store.figures_to_read(con, page.doc_id, model=who) == 0
     assert store.figures_to_read(con, page.doc_id, model=who, every=True) == 0
+
+
+def test_a_document_waits_for_several_readings(con: store.sqlite3.Connection) -> None:
+    """A reading queues beside the others instead of replacing them.
+
+    Until migration 21 the request was one field on the document, so a
+    figures request wiped the formulas the door had queued behind a
+    marker read, and a bulk re-read wiped every pending reading it
+    touched. The plan carried it from 2026-09-20 as "worth a queue some
+    day"; the crop pass, which every PDF wants alongside its other
+    readings, made it due.
+    """
+    doc = store.ingest_text(con, "a paper about reverb " * 40, title="P")["doc_id"]
+    store.request_reading(con, doc, "vision-pages", mode="scans", by="door")
+    store.request_reading(con, doc, "formulas", by="human")
+    store.request_reading(con, doc, "vision-pages", mode="scans")  # again: nothing new
+    waiting = store.pending_readings(con, doc)
+    assert [r["extractor"] for r in waiting] == ["vision-pages", "formulas"]
+    assert waiting[0]["by"] == "door"  # the first asking stands
+    assert store.count_reading_requests(con) == 2
+
+    # the hand-out serves them oldest first, one document at a time
+    first = work.hand_out(con, "parse", limit=10, scope="all")["items"]
+    assert [it["extractor"] for it in first] == ["vision-pages"]
+    work._leases.clear()
+
+    # finishing one leaves the other waiting, and the document remembers
+    # the one that finished
+    store.finish_reading(
+        con,
+        doc,
+        outcome="upgraded",
+        stamp="vision-pages/1+local",
+        extractor="vision-pages",
+    )
+    assert [r["extractor"] for r in store.pending_readings(con, doc)] == ["formulas"]
+    last = store.get_meta(con, doc)["reading"]
+    assert last["extractor"] == "vision-pages" and last["state"] == "done"
+
+    # and one can be withdrawn by name
+    assert store.cancel_reading(con, doc, extractor="formulas") is True
+    assert store.pending_readings(con, doc) == []
+    assert store.cancel_reading(con, doc, extractor="formulas") is False
+
+
+def test_the_door_asks_for_the_crops_of_a_pdf_itself(
+    con: store.sqlite3.Connection,
+) -> None:
+    """A caption with no picture behind it is a figure drawn in vector
+    paths. Rendering it runs no model, so the door asks for it after any
+    PDF parse, beside whatever else is waiting."""
+    from prax import pipeline
+
+    doc = store.register(con, b"%PDF-1.4 fake", mime="application/pdf")["doc_id"]
+    store.index_text(
+        con,
+        doc,
+        "# A paper\n\nProse about it.\n\nFigure 1: A plot of two lines.\n",
+        text_source="pymupdf4llm/1.28.2-r2",
+    )
+    store.request_reading(con, doc, "formulas", by="human")
+    assert (
+        pipeline.follow_ups(con, doc, stamp="pymupdf4llm/1.28.2-r2", action="upgraded")
+        == "figure-crops"
+    )
+    # queued beside the formulas, not over it
+    assert [r["extractor"] for r in store.pending_readings(con, doc)] == [
+        "formulas",
+        "figure-crops",
+    ]
+    # and not twice
+    pipeline.follow_ups(con, doc, stamp="pymupdf4llm/1.28.2-r2", action="upgraded")
+    assert len(store.pending_readings(con, doc)) == 2
+    # a document whose captions all have pictures is left alone
+    other = store.register(con, b"%PDF-1.4 other", mime="application/pdf")["doc_id"]
+    store.index_text(
+        con,
+        other,
+        "# Another\n\n![Figure 1: A plot.](figure:" + "ab" * 32 + ")\n",
+        text_source="pymupdf4llm/1.28.2-r2",
+    )
+    assert (
+        pipeline.follow_ups(
+            con, other, stamp="pymupdf4llm/1.28.2-r2", action="upgraded"
+        )
+        != "figure-crops"
+    )

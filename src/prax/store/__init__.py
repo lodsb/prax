@@ -143,6 +143,7 @@ from .documents import (  # noqa: F401
     note_recapture,
     original_info,
     page_counts,
+    pending_readings,
     promote,
     promoted_documents,
     promotion_candidates,

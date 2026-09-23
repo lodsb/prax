@@ -627,6 +627,16 @@ def polish_is_free() -> bool:
     return _free("polish")
 
 
+def _wants_crops(con: sqlite3.Connection, doc_id: int) -> bool:
+    """Whether this document holds a caption with no picture behind it —
+    a figure drawn with vector paths, which no extractor pulls out."""
+    doc = store.get_document(con, doc_id)
+    if not doc or doc.get("mime") != "application/pdf":
+        return False
+    lines = (doc.get("text") or "").split("\n")
+    return bool(figures.bare_captions(lines))
+
+
 def follow_ups(
     con: sqlite3.Connection, doc_id: int, *, stamp: str, action: str
 ) -> str | None:
@@ -639,24 +649,37 @@ def follow_ups(
     if action not in ("created", "upgraded"):
         return None
     meta = store.get_meta(con, doc_id)
-    reading = meta.get("reading") or {}
-    if reading.get("state") in ("requested", "leased"):
-        return None  # never over a request still waiting
+    # what the document is already waiting for: since migration 21 a
+    # reading queues beside the others instead of replacing them, so the
+    # door only declines to ask for the same one twice
+    pending = {r["extractor"] for r in store.pending_readings(con, doc_id)}
     video = meta.get("video") or {}
     if (
         video.get("captions") == "asr"
         and not stamp.startswith("polish/")
         and polish_is_free()
     ):
-        store.request_reading(con, doc_id, "polish", by="door")
+        if "polish" not in pending:
+            store.request_reading(con, doc_id, "polish", by="door")
         return "polish"
     if (
         stamp.startswith("marker/")
         and formulas_are_free()
         and store.has_unread_formulas(con, doc_id)
     ):
-        store.request_reading(con, doc_id, "formulas", by="door")
+        if "formulas" not in pending:
+            store.request_reading(con, doc_id, "formulas", by="door")
         return "formulas"
+    # a PDF whose captions have no picture: the crop pass renders them off
+    # the page and runs no model at all, so there is nothing to be free.
+    # Never after itself, and never for a scan (its pages are the picture)
+    if (
+        stamp.startswith(("pymupdf4llm/", "marker/"))
+        and "figure-crops" not in pending
+        and _wants_crops(con, doc_id)
+    ):
+        store.request_reading(con, doc_id, "figure-crops", by="door")
+        return "figure-crops"
     # never the edge whose reading just landed: a model that read none of
     # the figures would be asked for them without end
     if (
@@ -666,6 +689,7 @@ def follow_ups(
     ):
         doc = store.get_document(con, doc_id)
         if doc and any(not r["described_by"] for r in figures.refs(doc["text"])):
-            store.request_reading(con, doc_id, "figures", by="door")
+            if "figures" not in pending:
+                store.request_reading(con, doc_id, "figures", by="door")
             return "figures"
     return None

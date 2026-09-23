@@ -122,7 +122,13 @@ def test_a_scan_is_named_and_a_request_shows_as_pending(
     store.request_reading(con, doc, "pymupdf4llm-ocr", mode="latin")
     by = _by_id(routes.routes_for(con, doc))
     assert by["ocr"]["pending"] is True  # any language is that route
-    assert by["vision-pages"]["pending"] is False  # a request replaces the last
+    # both wait: a reading queues beside the others rather than replacing
+    # them (migration 21), so asking for one never loses another
+    assert by["vision-pages"]["pending"] is True
+    assert {r["extractor"] for r in store.pending_readings(con, doc)} == {
+        "vision-pages",
+        "pymupdf4llm-ocr",
+    }
     store.promote(con, doc)
     by = _by_id(routes.routes_for(con, doc))
     assert by["promote"]["pending"] is True

@@ -119,8 +119,10 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         ).fetchone()[0]
     )
     counts = _counts(con, doc_id)
-    reading = meta.get("reading") or None
-    waiting = reading if reading and reading.get("state") == "requested" else {}
+    reading = meta.get("reading") or None  # the last one, for the state line
+    # what it waits for now: a document may wait for several readings
+    # since migration 21, so this is a list and not a field
+    pending_now = store.pending_readings(con, doc_id)
     extraction = meta.get("extraction") or None
     stale = meta.get("extraction_stale") or None
     promote = meta.get("promote") or None
@@ -169,6 +171,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         "extraction_stale": stale,
         "promote": promote,
         "reading": reading,
+        "pending": pending_now,
         "models": models_of,
     }
 
@@ -192,8 +195,10 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         pending = False
         if action["kind"] == "reading":
             # the same extractor, and the same mode where the route names one
-            pending = waiting.get("extractor") == action["extractor"] and (
-                action["mode"] is None or waiting.get("mode") == action["mode"]
+            pending = any(
+                r["extractor"] == action["extractor"]
+                and (action["mode"] is None or r["mode"] == action["mode"])
+                for r in pending_now
             )
         elif action["kind"] == "extract":
             pending = bool(stale and stale.get("requested"))
