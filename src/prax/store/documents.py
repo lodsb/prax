@@ -15,7 +15,7 @@ import re
 import sqlite3
 from typing import Any
 
-from prax import chunking, glyphs, ontology
+from prax import chunking, glyphs, language, ontology
 
 from .base import (
     _NOW,
@@ -74,7 +74,9 @@ def index_text(
 
     ``text_source`` names what produced the text (an extractor stamp such as
     ``"pymupdf4llm/0.0.27"`` or ``"zotero-ft-cache"``) and is written to
-    ``meta.text_source`` in the same transaction.
+    ``meta.text_source`` in the same transaction. So is ``meta.lang``, the
+    language the text is in (``prax.language``), which nothing recorded
+    before and every side of retrieval had to guess.
     """
     exists = con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if exists is None:
@@ -93,6 +95,13 @@ def index_text(
             "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
             " '$.text_source', ?) WHERE id = ?",
             (text_source, doc_id),
+        )
+    lang = language.detect(text)
+    if lang:
+        con.execute(
+            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+            " '$.lang', ?) WHERE id = ?",
+            (lang, doc_id),
         )
     _refresh_document_field(con, doc_id)
     con.commit()

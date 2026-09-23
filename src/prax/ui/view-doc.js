@@ -35,6 +35,7 @@ function metaLine(meta) {
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
+  if (meta.lang) bits.push(`<span class="muted" title="what the language pass read (meta.lang)">${esc(languageName(meta.lang))}</span>`);
   if (meta.domains) bits.push(`<span class="muted" title="ontology modules this document is read against">domains: ${meta.domains.map(esc).join(", ")}</span>`);
   if (meta.promote) bits.push(`<span class="muted" title="${esc(meta.promote.reason || "")}">promoted by ${esc(meta.promote.by)}</span>`);
   if (meta.retired) bits.push(`<span class="error">retired ${esc((meta.retired.at || "").slice(0, 10))}: ${esc(meta.retired.reason || "")}${meta.retired.of ? ` of <a href="#doc/${meta.retired.of}">doc ${meta.retired.of}</a>` : ""}</span>`);

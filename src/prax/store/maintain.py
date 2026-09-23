@@ -67,6 +67,7 @@ PASSES = (
     "references",
     "fts",
     "lengths",
+    "languages",
 )
 ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
 
@@ -448,6 +449,48 @@ def _lengths(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"filled": fill_text_lengths(con)}
 
 
+def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The language of every document that does not say yet
+    (``prax.language`` over the head of its text artifact). Cheap and
+    idempotent: a document with ``meta.lang`` is passed over, so the
+    nightly only reads what arrived since."""
+    from prax import language
+
+    rows = con.execute(
+        "SELECT id, text_hash FROM documents WHERE text_hash IS NOT NULL"
+        " AND json_extract(meta, '$.lang') IS NULL"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ).fetchall()
+    found: Counter[str] = Counter()
+    unsure = 0
+    for n, r in enumerate(rows, 1):
+        path = config.archive_dir() / r["text_hash"][:2] / r["text_hash"]
+        try:
+            with path.open(encoding="utf-8", errors="replace") as fh:
+                text = fh.read(language.SAMPLE)
+        except OSError:
+            continue
+        code = language.detect(text)
+        if code is None:
+            unsure += 1
+            continue
+        found[code] += 1
+        con.execute(
+            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+            " '$.lang', ?) WHERE id = ?",
+            (code, r["id"]),
+        )
+        if n % 200 == 0:
+            con.commit()
+            job.update(done=n, total=len(rows), note=f"languages: {n} of {len(rows)}")
+    con.commit()
+    return {
+        "read": len(rows),
+        "unsure": unsure,
+        **{k: v for k, v in found.most_common()},
+    }
+
+
 def _rechunk(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """Every indexed document's chunks rebuilt from its text artifact
     (``documents.rechunk``); chunks whose text did not change keep their
@@ -476,6 +519,7 @@ _RUN = {
     "references": _references,
     "fts": _fts,
     "lengths": _lengths,
+    "languages": _languages,
     "rechunk": _rechunk,
 }
 

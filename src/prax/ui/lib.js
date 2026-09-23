@@ -243,6 +243,12 @@ function spendPanel(s) {
   </section>`;
 }
 
+// The language a document is in, under a name rather than a code.
+const LANGUAGES = { en: "English", de: "German", fr: "French", es: "Spanish", it: "Italian", nl: "Dutch", pt: "Portuguese", sv: "Swedish", da: "Danish", pl: "Polish", cs: "Czech", ru: "Russian", tr: "Turkish", ja: "Japanese", zh: "Chinese", ko: "Korean", ar: "Arabic", he: "Hebrew", el: "Greek", la: "Latin" };
+function languageName(code) {
+  return code ? (LANGUAGES[code] || code) : "";
+}
+
 // What an advertisement or a comment section says on its folded line:
 // what it is, whose it is, and how much of it there is.
 function asideLine(kind, data, text, blocks) {
@@ -292,5 +298,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote, asideLine, ingredientsBox, amount };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote, asideLine, ingredientsBox, amount, languageName };
 }

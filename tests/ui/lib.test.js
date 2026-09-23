@@ -214,3 +214,9 @@ test("asideLine and ingredientsBox: what is folded, and the recipe box", () => {
   assert.equal(lib.amount(2), "2");
   assert.equal(lib.amount(1.5), "1½");
 });
+
+test("languageName: a code under a name, and an unknown one as it stands", () => {
+  assert.equal(lib.languageName("de"), "German");
+  assert.equal(lib.languageName("xx"), "xx");
+  assert.equal(lib.languageName(null), "");
+});

@@ -252,6 +252,13 @@ reference `docs/ask.md`.
   the door's own clock (`schedule:`, `prax.schedule`) and the worker's
   `nightly` hour, never a cron or scheduler entry per pass. No shell
   script derives the process model a second time.
+- A document says what language it is in: `meta.lang`, an ISO 639-1
+  code written by `prax.language` when the text is indexed, and filled
+  in for older documents by the `languages` pass of `prax maintain`.
+  The detector is `py3langid` narrowed to the languages the host
+  expects (`parse.languages`), with a stopword count as the fallback
+  where it is not installed. It says nothing rather than guess, so a
+  missing `lang` is always allowed.
 - Timestamps are UTC ISO-8601 strings to the second with `Z`, from
   `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.
 - Tests must not touch `data/`. Use tmp_path fixtures and set

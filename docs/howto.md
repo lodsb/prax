@@ -691,6 +691,31 @@ does not undo it. Both producers' edges sit side by side. `GET
 /promote` returns the flagged list with status and the candidates.
 `POST /doc/{id}/promote` sets the flag and `DELETE` clears it.
 
+### What language a document is in
+
+`meta.lang` holds an ISO 639-1 code, written when the text is indexed
+(`prax.language`) and filled in for everything older by the `languages`
+pass of `prax maintain`, which reads only documents that do not say
+yet. The document page shows it beside the text stamp.
+
+The detector is `py3langid` (a 4.6 MB pure-Python wheel in the `ingest`
+extra) narrowed to the languages this host expects, which is what makes
+a short text reliable:
+
+    parse:
+      languages: [en, de, fr, es, it, nl]   # the default
+
+Without the package a stopword count over the same sample does the same
+job for those six. Either way the answer may be nothing: a title, a
+page of numbers or a two-line note carries no language, and that is
+allowed everywhere.
+
+This is the first step of the multilingual work
+(`docs/research-multilingual-2026-09-23.md`). Recording the language is
+what the steps after it need. A search that can filter by it. An
+extraction prompt that stops translating entity names by itself. The
+measurement of how much of the library a given embedder can read.
+
 ### What a capture carries that is not the document
 
 A snapshot of a blog post or a video keeps the comment section under

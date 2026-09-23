@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-ingest = ["pymupdf4llm", "rapidocr", "python-bidi>=0.6", "trafilatura", "magika", "striprtf", "pillow"]   # parsing; rapidocr is what the OCR extractor runs (declared: it used to arrive with Docling and left with it) and python-bidi what it needs for right-to-left scripts; magika: code detection
+ingest = ["pymupdf4llm", "rapidocr", "python-bidi>=0.6", "trafilatura", "magika", "striprtf", "pillow", "py3langid"]   # parsing; rapidocr is what the OCR extractor runs (declared: it used to arrive with Docling and left with it) and python-bidi what it needs for right-to-left scripts; magika: code detection; py3langid: the language of a text (prax.language falls back to stopwords without it)
 docling = ["docling"]                         # optional extractor; ~3 GB of PyTorch
 embed = ["usearch>=2.12", "onnxruntime", "tokenizers", "numpy"]  # Stage 2; Windows GPU: onnxruntime-directml instead (never both)
 serve = ["prax[embed]"]                       # the door on the board: the core plus vectors for hybrid search; nothing else
