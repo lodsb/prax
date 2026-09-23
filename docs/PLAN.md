@@ -864,8 +864,14 @@ What the marker evenings taught, kept for the day:
       with the confidence by score; the eval against Crossref's links
       drove the rules (recall 0.75 of Crossref's, 6,551 sure + 2,735
       ambiguous links over the library, 5,629 from documents Crossref
-      never resolved). *Not yet run on the live store* — `prax maintain
-      --only references` is the user's call; nightly after that.
+      never resolved). *Run on the live store* the same night, and every
+      night since: the pass is in `maintain.PASSES`, so the nightly job
+      took it as soon as it existed. Measured 2026-09-24: 9,463 `cites`
+      edges from 1,332 citing documents (8,037 INFERRED by title, 1,289
+      AMBIGUOUS between twins, 137 EXTRACTED from a printed id), 3,436
+      documents stamped `meta.references`, the score in every edge's
+      evidence. A later run costs six seconds, because only a document
+      whose text changed is read again.
 - [x] **Standing questions and the briefing** (6d58058, 2026-09-21;
       the user's note in `niggles.txt`: a "self-aware" wiki — an answer
       page that updates itself as information arrives; also atomic's
@@ -958,9 +964,8 @@ What the marker evenings taught, kept for the day:
       picture on Hindemith), and the first searches after a restart read
       the keyword index from disk (0bf3eb1: read through at startup, the
       `fts` merge pass, lone characters no keywords). Door and worker run
-      0bf3eb1 since 13:45. `prax maintain --only references` is the
-      user's call. The extension needs a reload in the browsers for the
-      ad fix.
+      0bf3eb1 since 13:45. The extension needs a reload in the browsers
+      for the ad fix.
 - [ ] **taco and tacos are different searches** (`niggles.txt`). The
       cause: `chunks_fts` is FTS5 with no `tokenize=` at all, so it uses
       `unicode61`, which folds case and accents and stems nothing.
