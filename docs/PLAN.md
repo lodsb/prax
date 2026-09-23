@@ -1200,6 +1200,64 @@ extraction is, and an alias carries no language, which is what the
       library to answer. *Next:* run it for both models, then decide —
       and only then pay for 1.1 M vectors.
 
+## The night of 2026-09-24: the figures nothing could extract, and a real queue
+
+- [x] **"55,607 unread figures" was wrong** (52b681c). A figure chunk is
+      a caption plus, usually, a reference to the picture it claims. Of
+      the store's 108,781, only 53,174 held a picture; the other 55,607
+      were captions of figures no extractor could pull out, counted as a
+      backlog, handed to the vision model and returned as "same" —
+      1,478 of one hour's 2,847 readings. The ailment and the hand-out
+      ask for a `ref` now, and the real backlog was 25,837.
+- [x] **figure-crops** (cd66c10, 4b042a4): the cause was that
+      pymupdf4llm places a reference for an embedded *image object*, and
+      a plot drawn with vector paths is not one (a page of the first
+      paper opened: 65 drawings, no images). So render the region
+      instead — find the caption on its page, gather the drawings and
+      images above it that overlap its column, stop at a gap of white
+      space, render at 150 dpi and inline it for the door to file.
+      Everything in the rectangle comes out, which is why a crop beats
+      an extraction for a plot with raster panels and vector axes.
+      Two things only measuring caught: a caption whose figure is
+      already placed must be left alone (the extractor writes the
+      picture *and* leaves the caption in the prose), and "Figure 2
+      shows a recorded performance" is a sentence, not a caption.
+- [x] **A reading queue** (377b3ad, migration 21). A request was one
+      field on the document, so asking for one replaced whatever was
+      waiting — the note from 2026-09-20 ("worth a queue some day") came
+      due the moment every PDF wanted crops beside its other readings.
+      Now a `readings` row per request, several per document, oldest
+      first, and the hand-out offers one reading of a document per batch
+      (two annotating readings are computed from the same text, so the
+      second would undo the first). `meta.reading` stays as the last
+      reading that finished.
+- [x] **What the queue made possible**: the door asks for the crops
+      itself after any PDF parse whose captions have no pictures
+      (`pipeline.follow_ups`), queued beside whatever waits rather than
+      over it; a reading that runs **no model** is served first
+      (da59e98), because it costs seconds and makes the pictures the
+      expensive readings then read; and `--bare-captions` (837e30b)
+      selects the documents the pass has something to do in — without
+      it the command asked all 9,323 PDFs, 6,000 of them for nothing.
+
+### What is left of the figures
+
+The crop pass over the backlog ran on 2026-09-24 night: 3,066
+documents, about a hundred a minute, the cost being the fetch of each
+original rather than the geometry. The pictures it makes arrive unread,
+so they join the vision queue behind what is already there — reading
+them is a separate decision, and the sensible shape is the documents
+you actually reach for rather than the whole library.
+
+A known limit: a caption line needs a delimiter after its number
+("Figure 2:", "Fig 1 --"), which is what keeps prose about a figure from
+being taken for one. A book whose captions read "Figure 2.34 A simple
+circuit" is therefore mostly skipped — *Practical Electronics for
+Inventors* has 1,005 bare captions and yielded one picture. Widening
+that rule wants its own measurement, because the failure it prevents
+(cropping from a sentence, sweeping the real caption into the picture)
+is worse than the one it causes.
+
 ## Later / maybe
 
 - A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a
