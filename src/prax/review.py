@@ -661,9 +661,14 @@ def decide(
         return "link", edges, "self-as-device"
     # written backwards: the author "authored_by" the paper, the
     # organization "affiliated_with" the person
-    if rel == "authored_by" and st in ("author", "person") and dt in (
-        "paper",
-        "document",
+    if (
+        rel == "authored_by"
+        and st in ("author", "person")
+        and dt
+        in (
+            "paper",
+            "document",
+        )
     ):
         return (
             "link",

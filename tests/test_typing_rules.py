@@ -492,7 +492,7 @@ def test_the_document_takes_the_type_its_relation_wants() -> None:
     it stands or only its first part (a captured page carries the site's
     tail). A page of my own stays a page: the ontology is what would
     have to change, not the document."""
-    item = lambda src, st, rel, dst, dt: {  # noqa: E731
+    item = lambda src, st, rel, dst, dt: {
         "src": src,
         "src_type": st,
         "rel": rel,
@@ -552,7 +552,7 @@ def test_the_document_takes_the_type_its_relation_wants() -> None:
 def test_a_manual_covering_a_device_is_the_manual_of_it() -> None:
     """studio's `covers` is for a concept or a standard; the manual of a
     device `describes` it, whatever kind of document it is."""
-    item = lambda src, st, rel, dst, dt: {  # noqa: E731
+    item = lambda src, st, rel, dst, dt: {
         "src": src,
         "src_type": st,
         "rel": rel,
@@ -586,7 +586,7 @@ def test_the_shapes_the_queue_kept_coming_back_with() -> None:
     behind a manual published it; an institution is not something a
     paper uses; the author written first, under either type."""
     doc = ("A Manual", "paper")
-    item = lambda src, st, rel, dst, dt: {  # noqa: E731
+    item = lambda src, st, rel, dst, dt: {
         "src": src,
         "src_type": st,
         "rel": rel,
