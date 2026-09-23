@@ -2166,10 +2166,10 @@ changed later never rewrites what was paid. Nothing is written for a
 local model.
 
 A reading counts too, and used not to. The worker never writes to the
-store, so what a reading paid travels home with its result: the client
-records the tokens as it calls (`prax.usage`), the worker takes them
-when the document is done, and the door writes the row under the step
-the reading ran and the model the worker says it used. That last part
+store, so what a reading paid travels home with its result. The client
+records the tokens as it calls (`prax.usage`) and the worker takes them
+when the document is done. The door writes the row, under the step the
+reading ran and the model the worker says it used. That last part
 matters. A worker started against another configuration runs another
 model, which is how 30 figures were read by Claude on 2026-09-23 with
 nothing in the ledger to show it.
