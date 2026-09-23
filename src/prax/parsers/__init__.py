@@ -776,6 +776,20 @@ def _figure_refs(
     return figures.add_refs(data, previous)
 
 
+def _figure_crops(
+    data: bytes, *, filename: str | None = None, previous: str | None = None
+) -> str:
+    """The picture a caption claims, rendered off the page, where no
+    extractor could pull an image object out: a plot drawn with vector
+    paths is not an image object, and more than half the store's figure
+    chunks were captions with nothing behind them."""
+    if not previous:
+        raise ExtractionError(
+            "no text to put the pictures in: parse the document first"
+        )
+    return figures.add_crops(data, previous)
+
+
 def _vision(
     data: bytes, *, filename: str | None = None, previous: str | None = None
 ) -> str:
@@ -1411,6 +1425,15 @@ REGISTRY: list[Extractor] = [
         hints=True,
         variant=_polish_model,  # which model wrote the sentences
         previous=True,  # works on the current text and replaces it
+    ),
+    Extractor(
+        "figure-crops",
+        ("application/pdf",),
+        _figure_crops,
+        explicit_only=True,
+        hints=True,
+        previous=True,  # writes into the current text
+        annotates=True,
     ),
     Extractor(
         "figure-refs",

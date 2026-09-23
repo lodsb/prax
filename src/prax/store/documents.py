@@ -1066,6 +1066,7 @@ READINGS = (
     "vision",
     "figures",
     "figure-refs",
+    "figure-crops",
     "formulas",
     "polish",
     "pymupdf4llm-ocr",

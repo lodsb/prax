@@ -691,6 +691,37 @@ does not undo it. Both producers' edges sit side by side. `GET
 /promote` returns the flagged list with status and the candidates.
 `POST /doc/{id}/promote` sets the flag and `DELETE` clears it.
 
+### The figures nothing could extract
+
+A `figure` chunk is a caption plus, usually, a reference to the picture
+it claims. `pymupdf4llm` places that reference for an embedded image
+object, and a scientific plot usually is not one: a page of the first
+paper tried holds 65 vector drawings and no images at all. Of the live
+store's 108,781 figure chunks, 55,607 were captions with nothing behind
+them.
+
+The `figure-crops` reading renders the region instead of extracting an
+object (`prax.parsers.figures.add_crops`, "process… → Render the figures
+nothing could extract"). It works on a caption whose figure has no picture anywhere in the text.
+It finds the caption on its page, gathers every drawing and image above
+it that overlaps its column, and stops climbing at a gap of white space.
+That rectangle is rendered at 150 dpi and inlined as a data URL, and the
+door files it like any other inlined picture. Whatever
+is in the rectangle comes out — paths, rasters and the labels drawn
+inside the figure — which is also why a crop beats an extraction for a
+plot whose panels are raster and whose axes are vector.
+
+Three things it leaves alone. A caption whose figure is already placed,
+because the extractor writes the picture *and* leaves the caption in the
+prose, so the same figure appears twice. Prose about a figure: "Figure 2
+shows a recorded performance" is a sentence, not a caption. And a
+caption with nothing drawn above it. Measured over a sample: about three quarters of
+the bare captions render, the rest are left as they were.
+
+No model runs, so it costs seconds a document. The pictures it makes are
+then unread, which is the vision pass's business and a separate
+decision.
+
 ### What language a document is in
 
 `meta.lang` holds an ISO 639-1 code, written when the text is indexed

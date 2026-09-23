@@ -185,11 +185,13 @@ reference `docs/ask.md`.
 - A figure is a line in the text, `![caption](figure:<sha256>)`, and a
   `figure` chunk with the reference, caption and readings in `data`.
   Its bytes are served out of the original by hash, never stored again.
-  The one exception is a picture of a scanned page, which no object in
-  the original holds: marker's crop of it is filed as its own
-  content-addressed artifact (`figures.FILED` in its caption). A parse
-  inlines such a picture as a data URL, and the door files it before
-  indexing (`figures.file_inline`).
+  The one exception is a picture no object in the original holds. A
+  scanned page is one (marker's crop, `figures.FILED` in its caption).
+  A figure drawn with vector paths is another, and is not an image
+  object at all: the `figure-crops` reading renders the region above its
+  caption (`figures.add_crops`). Both are filed as their own
+  content-addressed artifact. A parse inlines the picture as a data URL
+  and the door files it before indexing (`figures.file_inline`).
 - A display equation alone on its line is a `formula` chunk with its
   LaTeX, the number the prose refers to it by, and any readings in
   `data`. Inline maths stays in the text chunk around it.

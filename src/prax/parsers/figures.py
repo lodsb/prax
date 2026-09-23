@@ -47,6 +47,15 @@ MAX_PDF_REPEATS = 3  # an image placed on more pages than this is a logo
 MAX_FIGURES = 60  # per document
 MAX_SIDE = 1600  # pixels, for the vision model
 _CAPTION = re.compile(r"^\W*(fig\.?|figure|abb\.?|abbildung)\s*\d+", re.IGNORECASE)
+# the page a line belongs to, as pymupdf4llm marks it (prax.chunking)
+_PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
+# a caption *line*, which is stricter than _CAPTION: the number is
+# followed by a delimiter, so "Figure 2 shows a recorded performance" —
+# prose about a figure — is not taken for the figure's own caption
+_CAPTION_LINE = re.compile(
+    r"^\W*(?:fig\.?|figure|abb\.?|abbildung)\s*\d+(?:\.\d+)?\s*[.:;)\]|–—-](?!\d)",
+    re.IGNORECASE,
+)
 
 REF = re.compile(
     r"^!\[(?P<alt>[^\]\n]*)\]\(figure:(?P<ref>[0-9a-f]{16,64})\)[ \t]*$", re.MULTILINE
@@ -67,6 +76,20 @@ DATA_IMAGE = re.compile(
     re.MULTILINE,
 )
 MAX_FILED_BYTES = 8_000_000  # a picture bigger than this is not filed
+
+# a caption whose picture no extractor could pull out of the PDF: the
+# region above it is rendered instead (``add_crops``)
+CROP_DPI = 150
+CROP_GAP = 24  # points of white space above a figure that end it
+CROP_MIN_AREA = 2_000  # square points: less is a rule or a stray path
+CROP_MIN_SIDE = 40  # points: less is not a picture
+CROP_MAX_PAGE_SHARE = 0.9  # more of the page than this is the page itself
+CROP_NEAR = 12  # points a drawing may sit outside the caption's column
+CROP_ADJACENT = 3  # lines: a picture this close to a caption is its own
+_EMPHASIS = re.compile(r"[*_`]+")
+_FIGURE_NUMBER = re.compile(
+    r"^\W*(?:fig\.?|figure|abb\.?|abbildung)\s*(\d+)", re.IGNORECASE
+)
 
 
 @dataclass
@@ -430,6 +453,149 @@ def of(data: bytes) -> list[Figure]:
         with pymupdf.open(stream=data, filetype="pdf") as doc:
             return pdf_figures(doc)
     return html_figures(data)
+
+
+def crop_region(page: Any, caption: Any) -> Any | None:
+    """The picture above a caption, as a rectangle of the page.
+
+    Every drawing and image whose box sits over the caption and overlaps
+    its column, taken from the caption upwards and stopped by a gap of
+    white space, so the paragraph above is not swept in. None when there
+    is nothing there, when what is there is too small to be a picture, or
+    when it covers so much of the page that it is the page.
+    """
+    import pymupdf
+
+    boxes = [pymupdf.Rect(d["rect"]) for d in page.get_drawings()]
+    for image in page.get_images(full=True):
+        try:
+            box = page.get_image_bbox(image)
+        except Exception:  # noqa: BLE001, S112 - an image MuPDF cannot place
+            continue
+        if box:
+            boxes.append(pymupdf.Rect(box))
+    over = [
+        b
+        for b in boxes
+        if b.y1 <= caption.y0 + 2
+        and b.x1 > caption.x0 - CROP_NEAR
+        and b.x0 < caption.x1 + CROP_NEAR
+        and b.get_area() > 4
+    ]
+    if not over:
+        return None
+    over.sort(key=lambda b: -b.y1)
+    kept = [over[0]]
+    for b in over[1:]:
+        if min(k.y0 for k in kept) - b.y1 > CROP_GAP:
+            break
+        kept.append(b)
+    rect = kept[0]
+    for b in kept[1:]:
+        rect |= b
+    rect.y1 = min(caption.y0 - 1, rect.y1)
+    page_area = max(1.0, page.rect.width * page.rect.height)
+    if rect.width < CROP_MIN_SIDE or rect.height < CROP_MIN_SIDE:
+        return None
+    if rect.get_area() < CROP_MIN_AREA:
+        return None
+    if rect.get_area() > CROP_MAX_PAGE_SHARE * page_area:
+        return None
+    return rect
+
+
+def find_caption(page: Any, caption: str) -> Any | None:
+    """Where a caption sits on its page. The text carries the extractor's
+    Markdown emphasis (``_Block diagram_``) and the page does not, so the
+    search is over the plain words, and shortens until it finds them."""
+    plain = " ".join(_EMPHASIS.sub("", caption).split())
+    for n in (48, 24, 14):
+        if len(plain) < 6:
+            break
+        hits = page.search_for(plain[:n])
+        if hits:
+            return hits[0]
+    return None
+
+
+def bare_captions(lines: list[str]) -> set[int]:
+    """The caption lines whose figure has no picture anywhere in the text.
+
+    A caption alone is not enough to go by: pymupdf4llm places
+    ``![Figure 2: …](figure:<sha>)`` for an image it could extract and
+    leaves the caption in the prose as well, so the same figure appears
+    twice. A caption is bare when no picture line carries its number, and
+    none sits within a line or two of it.
+    """
+    pictured: set[str] = set()
+    picture_at: list[int] = []
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not (REF.match(stripped) or DATA_IMAGE.match(stripped)):
+            continue
+        picture_at.append(i)
+        alt = stripped[2 : stripped.find("]")] if "]" in stripped else ""
+        number = _FIGURE_NUMBER.match(alt)
+        if number:
+            pictured.add(number.group(1))
+    out: set[int] = set()
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if not _CAPTION_LINE.match(stripped) or REF.match(stripped):
+            continue
+        number = _FIGURE_NUMBER.match(stripped)
+        if number and number.group(1) in pictured:
+            continue  # its picture is already in the text
+        if any(abs(i - at) <= CROP_ADJACENT for at in picture_at):
+            continue  # a picture right beside it is its own
+        out.add(i)
+    return out
+
+
+def add_crops(data: bytes, previous: str, *, dpi: int = CROP_DPI) -> str:
+    """The current text with a picture under every caption that lacked
+    one: the region above the caption on its own page, rendered and
+    inlined as a data URL for the door to file (``file_inline``).
+
+    Only a caption whose figure has no picture anywhere
+    (``bare_captions``) is touched, and only where something is actually
+    drawn above it. A caption the page does not carry, or one with
+    nothing over it, is left exactly as it was.
+    """
+    import pymupdf
+
+    doc = pymupdf.open(stream=data, filetype="pdf")
+    try:
+        lines = previous.split("\n")
+        bare = bare_captions(lines)
+        page_no = 1
+        out: list[str] = []
+        made = 0
+        for i, line in enumerate(lines):
+            mark = _PAGE_MARK.match(line)
+            stripped = line.strip()
+            if made >= MAX_FIGURES or i not in bare or page_no > doc.page_count:
+                out.append(line)
+                if mark:
+                    page_no = int(mark.group(1)) + 1
+                continue
+            page = doc[page_no - 1]
+            where = find_caption(page, stripped)
+            rect = crop_region(page, where) if where is not None else None
+            if rect is None:
+                out.append(line)
+                continue
+            png = page.get_pixmap(clip=rect, dpi=dpi).tobytes("png")
+            if len(png) > MAX_FILED_BYTES:
+                out.append(line)
+                continue
+            alt = " ".join(_EMPHASIS.sub("", stripped).split()).replace("]", ")")
+            url = base64.b64encode(png).decode("ascii")
+            out.append(f"![{alt}](data:image/png;base64,{url})")
+            made += 1
+        return "\n".join(out)
+    finally:
+        doc.close()
 
 
 def add_refs(data: bytes, previous: str) -> str:

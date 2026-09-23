@@ -53,6 +53,7 @@ def _counts(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
     page N``) apart, since the captioned pass leaves those out."""
     out = {
         "figures": 0,
+        "figures_with_picture": 0,
         "figures_read": 0,
         "figures_uncaptioned": 0,
         "figures_uncaptioned_read": 0,
@@ -67,6 +68,8 @@ def _counts(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
         data = json.loads(row["data"]) if row["data"] else {}
         key = "figures" if row["kind"] == "figure" else "formulas"
         out[key] += 1
+        if key == "figures" and data.get("ref"):
+            out["figures_with_picture"] += 1
         if data.get("readings"):
             out[key + "_read"] += 1
         if key == "figures" and str(data.get("caption", "")).startswith(UNCAPTIONED):
@@ -226,6 +229,17 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         )
 
     # -- the text
+    if is_pdf and counts["figures"] > counts["figures_with_picture"]:
+        add(
+            "figure-crops",
+            "figures",
+            "Render the figures nothing could extract",
+            f"{counts['figures'] - counts['figures_with_picture']} captions here have"
+            " no picture behind them: a plot drawn with vector paths is not an image"
+            " object, so the region above each caption is rendered off the page"
+            " instead. No model, seconds a document",
+            {"kind": "reading", "extractor": "figure-crops", "mode": None},
+        )
     if is_pdf:
         looks = ""
         if no_text:
