@@ -1152,6 +1152,54 @@ producer and no run, so a bad pass cannot be retired the way a bad
 extraction is, and an alias carries no language, which is what the
 `entity_labels` table in that note would fix.
 
+## 2026-09-24, the four steps: the ledger, the queue, the embedder, the labels
+
+- [x] **A reading's tokens reach the ledger** (aea99d8). The morning's
+      hole had two halves. The first was that a paid reading ran unasked
+      (afae553: the guard keyed on the extractor's name, so `figures`,
+      `vision-pages`, `formulas` and `polish` walked past it; it asks
+      the step now, and a worker prints where its models come from). The
+      second was that when a paid reading does run, nothing recorded it:
+      `prax.usage` is a thread-local the client records into, the worker
+      posts with its result, and the door turns into a `spend` row under
+      the step that ran and the model the worker says it used — not the
+      model this host would have chosen, because a worker pointed
+      elsewhere uses another.
+- [x] **A reading with nothing to do is not handed out** (763b4f7).
+      First, a correction: reading requests are handed out whatever the
+      worker's scope, so yesterday's diagnosis of the figures backlog
+      was wrong — it was never blocked, it was moving at 250 an hour.
+      What it was doing was half wasted: 1,818 of 3,477 requests were
+      for documents whose every figure the vision model had already
+      read, each costing a fetch, a parse and a round trip to come back
+      "same". The door checks before handing one out and cancels it
+      instead. And `GET /work/demand` now carries the rate a queue is
+      moving at and the hours that leaves, because a count alone cannot
+      tell a long queue from a stopped one — which is exactly how I
+      misread it.
+- [x] **A merge says who made it, and can be taken back** (643e5f6,
+      migration 20). `entity_labels` holds the names an entity is known
+      by, each with its language and the producer, run and entity it
+      came from. `unmerge_run` undoes a round of merging whole, the
+      counterpart of `retire_run` for edges; `entities_by_label` takes a
+      German name to the English entity it belongs to. The `pref` kind
+      waits for labels in languages worth choosing between.
+- [ ] **The embedder** — the step that was not taken, and why. Two
+      prerequisites came out of trying: the ONNX fetch asked for the
+      built-in default rather than this host's model, and `embed()`
+      applied no passage instruction, which multilingual-e5 is
+      measurably worse without. Both fixed. On terms the multilingual
+      model is plainly better (a translation pair is its nearest
+      neighbour 10 times in 20, against 3 for bge-small), and a chunk
+      experiment I ran over the live store was not worth trusting: the
+      haystack came out all English and bge "won" rows it cannot win.
+      So the decision waits on the eval instead of a hunch. The set now
+      carries the same twenty questions in German against the same
+      expected documents (`tests/eval/queries.yaml`, `evaluate(lang=)`),
+      which runs on the fixture and needs no re-embedding of the
+      library to answer. *Next:* run it for both models, then decide —
+      and only then pay for 1.1 M vectors.
+
 ## Later / maybe
 
 - A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a
