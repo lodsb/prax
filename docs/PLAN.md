@@ -916,10 +916,32 @@ What the marker evenings taught, kept for the day:
       bundle is not ordered yet (the passages come ranked). Deferred as
       before: `mode=propose` with a diff, claim-level KEEP/STALE
       adjudication, the contradiction scan over `argues`.
-- [ ] **Sub-graph export / import** (`niggles.txt`, "repo work"): one
-      JSON-lines file per project (entities, live edges with provenance,
-      pages with revisions, document stubs), imported as a producer with
-      a run per file, conflicts to the review queue.
+- [ ] **Sub-graph export / import**, the answer to "what if a repo's
+      `docs/` were a piece of the library instead". A sub-graph is what
+      is reachable from a seed (a project page's members, a domain, a
+      tag, an entity and its hops): the entities and live edges with
+      every provenance column, the pages as Markdown with their
+      revisions, and for documents only the identity (hash, title, ids,
+      meta) unless the originals are asked for. One file, JSON lines,
+      deterministic order so it diffs in git, plus the ontology modules
+      it was written against: `.prax/graph.jsonl` beside
+      `.prax-project`, refreshed by the session-end sync the skill
+      already does for notes.
+      Import is where the invariants earn their keep. It is a producer
+      (`import:<repo>@<commit>`) with a run per file, so it never
+      overwrites: edges go through `store.link` with their original
+      provenance kept in evidence, an entity name that exists is merged
+      by the same resolution the extractor's output goes through, and
+      edges the export marks `valid_to` are ended here too.
+      Re-importing a newer export is `retire_run(old)` plus `link(new)`,
+      so the graph converges on the file; conflicts (one triple with two
+      confidences, a page changed on both sides) go to the review queue
+      rather than silently one way. A page changed on both sides becomes
+      two revisions with a note, never a merge by machine. Not exported:
+      chunks, vectors, the review queue. `prax export --project X` and
+      `prax import graph FILE`; a day with the tests, and an export
+      written against research7 imported into research8 goes through the
+      replay the review queue already uses.
 - [x] **`vectors.serve: memory`** (20deffa, b4d8d5e, 6f64c37): a heal
       over ten thousand PDFs evicted the mapped index and the next search
       paid 4–6 s of page faults; the desktop loads it (2.7 GB resident for
@@ -939,6 +961,28 @@ What the marker evenings taught, kept for the day:
       0bf3eb1 since 13:45. `prax maintain --only references` is the
       user's call. The extension needs a reload in the browsers for the
       ad fix.
+- [ ] **taco and tacos are different searches** (`niggles.txt`). The
+      cause: `chunks_fts` is FTS5 with no `tokenize=` at all, so it uses
+      `unicode61`, which folds case and accents and stems nothing.
+      "taco" reaches the recipe called "Tacos …" only through the vector
+      side, which is why the two queries look unrelated. Porter is the
+      one-line fix and English-only, so it belongs with the multilingual
+      work rather than before it (German wants Snowball's `german2`, and
+      the FTS index is rebuilt either way). Until then the query
+      expansion is where a stem could be added, beside the acronyms.
+- [ ] **A document's own neighbourhood** (`niggles.txt`): a link from a
+      document page into the graph view, seeded with its entities —
+      "what this document is connected to" as a view rather than a list
+      of chips.
+- [ ] **One workflow for maintenance and healing** (`niggles.txt`):
+      `prax maintain`, `prax heal`, `prax resolve`, `prax backup` and
+      the rechunk are five commands with five shapes; the UI cannot
+      start any of them, and says nothing while one runs. Wanted: the
+      passes as one list in the Jobs view with what each would do, a
+      button where it is safe (the read-only checks and the idempotent
+      passes), and a banner while the door is busy with one —
+      "maintenance: rechunk 3,400 of 9,962". The door already has the
+      job records for the banner.
 - [ ] **If the UI still feels slow from the MacBook**: the next suspect
       is `GET /doc/<id>/chunks` for a book (5 MB) on the single uvicorn
       worker while a search waits; page it. Read `logs/door.log`'s slow
@@ -1054,6 +1098,12 @@ cross-language eval before the next:
 
 ## Later / maybe
 
+- A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a
+  document's facts, and a note that becomes a prax page. Their editors
+  are years ahead of our textarea, and the MCP tools are already the
+  API. What prax does before anyone writes is what neither has: the
+  archive, the staged readings, the graph as evidence (`niggles.txt`,
+  "comparison to other systems", 2026-09-21)
 - Streamable-HTTP MCP transport for remote access over Tailscale, and the
   MCP server proxying the HTTP door instead of importing the store
 - Litestream replication of `data/prax.db`
