@@ -29,6 +29,8 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from prax import usage
+
 DEFAULT_MODEL = "claude-sonnet-5"  # Haiku misread a schematic; Sonnet read it
 MAX_BYTES = 5 * 1024 * 1024  # the API's limit per image
 MEDIA_TYPES = {
@@ -200,6 +202,7 @@ def read(
         ],
     )
     text = "".join(b.text for b in response.content if getattr(b, "type", "") == "text")
+    usage.record(model, getattr(response, "usage", None))
     return text, model
 
 

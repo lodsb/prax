@@ -35,6 +35,7 @@ from prax import (
     models,
     parsers,
     titles,
+    usage,
     work,
 )
 from prax import steps as steps_mod
@@ -104,6 +105,7 @@ def do_parse(
 
     for it in items:
         doc_id = it["doc_id"]
+        usage.clear()  # what this document's readings pay for, and nothing before
         exts, refused = _requested(it, spend=spend)
         if not exts:
             done(
@@ -175,6 +177,8 @@ def do_parse(
                     "requested": it.get("extractor"),
                     "keep_source": ext.annotates,
                     "pages": pages,
+                    # what the reading paid for, for the door's ledger
+                    "usage": usage.take(),
                 },
             )
             pictures = len(figures.DATA_IMAGE.findall(text))

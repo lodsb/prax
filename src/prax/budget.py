@@ -95,6 +95,17 @@ def allows(con: Any, step: str) -> tuple[bool, str]:
     return False, f"{step} is {spec.name}, which costs money, and {now['why']}"
 
 
+def extraction_cost(model: str, usage: dict[str, Any] | None) -> float:
+    """What a named model's call cost, by the price table."""
+    from prax import extraction
+
+    return extraction.cost_usd(model, usage or {})
+
+
+def _tokens(usage: dict[str, Any] | None) -> int:
+    return sum(int(v or 0) for v in (usage or {}).values() if isinstance(v, int))
+
+
 def price(spec: models.ModelSpec | None, usage: dict[str, Any] | None) -> float:
     """What a call cost: ``extraction.cost_usd`` over the model's runtime
     name, which reads ``price:`` from ``prax.yaml`` first and the Claude
@@ -115,9 +126,30 @@ def note(
     doc_id: int | None = None,
     run: str | None = None,
     spec: models.ModelSpec | None = None,
+    model: str | None = None,
 ) -> float:
     """Write what a step's call cost to the ledger, if it cost anything.
-    Every paid call the door makes or takes in goes through here."""
+    Every paid call the door makes or takes in goes through here.
+
+    ``model`` names what actually ran, when that is known better than
+    the step's configuration — a worker reports the model it used, and
+    a worker pointed at another config uses another model. The price is
+    then that model's (``extraction.cost_usd``), whatever this host
+    would have chosen.
+    """
+    if model:
+        usd = extraction_cost(model, usage)
+        if not usd and not _tokens(usage):
+            return 0.0
+        return store.record_spend(
+            con,
+            step=step,
+            model=model,
+            usage=usage,
+            usd=usd,
+            doc_id=doc_id,
+            run=run,
+        )
     if spec is None:
         if step not in models.STEPS:
             return 0.0

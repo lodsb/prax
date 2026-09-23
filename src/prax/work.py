@@ -43,7 +43,7 @@ from typing import Any
 
 from prax import embeddings, extraction, inbox, models, ontology, pipeline, store
 from prax.parsers import queue
-from prax.steps import STEPS, WATCHED_STEPS
+from prax.steps import READING_STEPS, STEPS, WATCHED_STEPS
 
 LEASE_SECONDS = 900
 # a worker's "not yet" (the server it needs is loading or down) keeps the
@@ -514,6 +514,12 @@ def hand_out(
 # ----------------------------------------------------------------- take in
 
 
+def _reading_step(extractor: str) -> str:
+    """The step a reading ran, for the ledger's row: the vision step for
+    a figure or a page, and the reading's own where it has one."""
+    return READING_STEPS.get(extractor, "vision")
+
+
 def _note_spend(
     con: sqlite3.Connection,
     step: str,
@@ -521,13 +527,19 @@ def _note_spend(
     *,
     doc_id: int | None = None,
     run: str | None = None,
+    model: str | None = None,
 ) -> None:
     """What a worker's paid call cost, into the ledger. The worker never
-    writes to the store; the door records what comes back through it."""
+    writes to the store; the door records what comes back through it.
+
+    ``model`` is what the worker says it ran, which is not always what
+    this host's config resolves the step to — a worker started against
+    another config is exactly how an unrecorded bill happens — so the
+    reported name is what the row carries."""
     from prax import budget
 
     with contextlib.suppress(Exception):  # a ledger row is never worth an error
-        budget.note(con, step, usage, doc_id=doc_id, run=run)
+        budget.note(con, step, usage, doc_id=doc_id, run=run, model=model)
 
 
 def _extraction_from(data: dict[str, Any]) -> extraction.Extraction:
@@ -709,6 +721,16 @@ def take_in(
                     {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
                 )
                 continue
+            # what the reading paid for, if anything: the worker carries
+            # the tokens home (prax.usage) because it never writes itself
+            for model, tokens in (r.get("usage") or {}).items():
+                _note_spend(
+                    con,
+                    _reading_step(str(r.get("requested") or "")),
+                    tokens,
+                    doc_id=doc_id,
+                    model=str(model),
+                )
             if r.get("requested"):
                 store.finish_reading(
                     con, doc_id, outcome=action, stamp=stamp, error=r.get("error")

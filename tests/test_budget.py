@@ -166,3 +166,76 @@ def test_the_claude_prices_and_the_cache_shares(data_dir: Path) -> None:
     # a write is a quarter more than the input price (the five-minute cache)
     written = {"input_tokens": 0, "cache_creation_input_tokens": 1_000_000}
     assert extraction.cost_usd("claude-sonnet-5", written) == pytest.approx(2.5)
+
+
+def test_a_reading_by_a_paid_model_reaches_the_ledger(data_dir: Path) -> None:
+    """A worker does the reading and never writes to the store, so what
+    it paid travels home with the result (``prax.usage``) and the door
+    writes the row. Until 2026-09-23 the tokens were dropped and 30
+    figures were read by Claude for nothing the ledger could show."""
+    from prax import usage, work
+
+    _paid_host(data_dir)
+    con = store.connect()
+    store.init_db(con)
+    doc = store.ingest_text(con, "a paper with a figure " * 40, title="F")["doc_id"]
+
+    # the reader's side: what a client records after a call
+    usage.clear()
+    usage.record("claude-sonnet-5", {"input_tokens": 2000, "output_tokens": 150})
+    usage.record("claude-sonnet-5", {"input_tokens": 1000, "output_tokens": 50})
+    carried = usage.take()
+    assert carried == {"claude-sonnet-5": {"input_tokens": 3000, "output_tokens": 200}}
+    assert usage.take() == {}  # the taking clears it, so nothing counts twice
+
+    # the door's side: the result comes in, the ledger row goes out
+    work.take_in(
+        con,
+        "parse",
+        {
+            "results": [
+                {
+                    "doc_id": doc,
+                    "extractor": "figures/1-r2+claude-sonnet-5",
+                    "text": "a paper with a figure, now read",
+                    "requested": "figures",
+                    "usage": carried,
+                }
+            ]
+        },
+    )
+    spent = store.spending(con)
+    assert spent["calls"] == 1
+    row = spent["by_model"][0]
+    assert row["model"] == "claude-sonnet-5"
+    # sonnet 5 is $2/M in and $10/M out: 3000 in, 200 out
+    assert row["usd"] == pytest.approx(3000 / 1e6 * 2 + 200 / 1e6 * 10)
+    assert spent["by_step"][0]["step"] == "vision"
+    con.close()
+
+
+def test_a_free_reading_writes_no_row(data_dir: Path) -> None:
+    """A local model reports nothing, and an empty usage is not a call."""
+    from prax import work
+
+    _paid_host(data_dir)
+    con = store.connect()
+    store.init_db(con)
+    doc = store.ingest_text(con, "a paper with a figure " * 40, title="F")["doc_id"]
+    work.take_in(
+        con,
+        "parse",
+        {
+            "results": [
+                {
+                    "doc_id": doc,
+                    "extractor": "figures/1-r2+qwen",
+                    "text": "read by the local model",
+                    "requested": "figures",
+                    "usage": {},
+                }
+            ]
+        },
+    )
+    assert store.spending(con)["calls"] == 0
+    con.close()
