@@ -1101,6 +1101,57 @@ cross-language eval before the next:
       `document`, so a captured page has to be read as a paper for an
       edge to fit. A version bump and a restamp, not a rules change.
 
+## 2026-09-24: the four that were waiting, and how normalization should work
+
+- [x] **The twin documents** (6): folded into their keepers by
+      `prax heal --apply --check twin-documents`. Two were `[blank
+      page]` scans; the rest a PDF downloaded twice.
+- [x] **The seven promotions**: `prax work --steps promote --spend -n 7
+      --scope all`. 94 edges linked, 94 of the local model's retired
+      (history kept), 11 already there, 9 to the review queue, 0
+      rejected. **$0.25** on claude-sonnet-5, all seven calls in the
+      ledger — the first paid work the budget and the spend table have
+      seen.
+- [x] **The language of every document** (2a4e41c): `meta.lang`,
+      written at index time and backfilled by the new `languages` pass
+      of `prax maintain` (9,957 documents in 68 s). The library says it
+      now: 70.9 % English, 20.9 % German, 7.6 % too short to tell, then
+      French, Spanish, Italian, Dutch. Step 1 of the multilingual
+      study, and the precondition for the rest.
+- [x] **The subtype fold** (fcbbf5d, `docs/normalization.md`): the
+      resolver grouped by name and type and never asked the ontology,
+      which already says an author is a person and a paper a document.
+      3,219 folds applied (2,049 person→author, 739 document→paper, 255
+      organization→venue, and a tail), plus the 439 sure merges that had
+      arrived since the last pass. The type clashes fell from 6,018
+      names to 3,723, and what is left is polysemy rather than
+      duplication: a paper named after the method it proposes is two
+      things, not one.
+- [ ] **The figures backlog, and why it was not moving.** 3,692
+      documents were waiting for a figure reading with llama-server up
+      and a worker running. The worker's `--scope` is `captures` by
+      default, so it never takes work for a Zotero PDF; only the
+      nightly pass does, 100 documents a night. One bounded pass
+      (`prax work --steps parse --scope all -n 40`) drains it at the
+      GPU's pace. *To decide:* whether the worker role should carry
+      `scope: all` in `prax.yaml`, and whether the door should say this
+      the way it now says why a promotion is pending — the demand
+      endpoint knows the readings are waiting, and nothing joins that
+      to the worker's scope. The same product gap, one queue over.
+
+### What `docs/normalization.md` says, in short
+
+Five kinds of duplicate, five mechanisms, and keeping them apart is the
+design. Surface (a deterministic key, done), subtype (the ontology's
+hierarchy, done today), morphological (a stemmer, half done — and the
+search side has none at all, which is the taco/tacos niggle), language
+(a shared vector space, or a dictionary; open), and polysemy, which is
+not a merge and wants an edge instead. The pipeline is key, block,
+score, decide, record. What is missing structurally: a merge carries no
+producer and no run, so a bad pass cannot be retired the way a bad
+extraction is, and an alias carries no language, which is what the
+`entity_labels` table in that note would fix.
+
 ## Later / maybe
 
 - A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a
