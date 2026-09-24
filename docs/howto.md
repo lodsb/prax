@@ -1949,6 +1949,26 @@ explicit only (OCR, `vision-pages`, Docling). What was asked for once
 is not asked for again by itself. It does not spend money: the worker
 refuses a paid model in any step, whatever the scope.
 
+### A worker that has read an older prax.yaml
+
+A worker loads the configuration and the code once, at start. Change
+either — add a step, edit `prax.yaml` — and the worker already running
+does not know about it. Before 2026-09-24 it failed every pass in the
+same way for ever: 519 of them in three hours, doing no work, logging
+identically, showing "up" in `prax up --status`, and growing by about
+350 MB an hour in the error loop until the machine had nothing left.
+
+A worker stops now after five passes that fail the same way, and `prax
+up` starts one that has read the current configuration. So the repair is
+automatic; what it costs is a gap of a few passes.
+
+Restart it by hand after a change if you do not want to wait:
+
+    prax up --restart worker
+
+`prax up --status` shows when each role last started, which is the
+quickest way to see that a worker predates a change you have made.
+
 ## 3m. Healing what recurs
 
 Extraction at scale leaves the same few kinds of damage behind, and

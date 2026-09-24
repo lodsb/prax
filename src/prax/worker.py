@@ -49,6 +49,9 @@ from prax.parsers import figures
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
 STEPS = steps_mod.STEPS
+# passes that fail the same way in a row before the worker stops and lets
+# the supervisor start one with the current code (2026-09-24: 519)
+GIVE_UP_AFTER = 5
 
 
 # ------------------------------------------------------------------ steps
@@ -1031,6 +1034,7 @@ def watch(
     # up brings one back after a crash, a person after a change — waits
     # for tomorrow's rather than running a pass over everything at noon
     last_night: datetime | None = datetime.now().astimezone() if night else None
+    same, last_trouble = 0, ""  # a failure that repeats is not a bad pass
     session = None
     try:
         session = door.post_json(
@@ -1087,8 +1091,28 @@ def watch(
                             + (f" · {mb} MB" if (mb := hostinfo.process_mb()) else "")
                         },
                     )
-            except Exception as exc:  # noqa: BLE001 - the worker outlives a bad pass
-                _say(log_, f"pass failed: {type(exc).__name__}: {exc}")
+            except Exception as exc:  # a bad pass is outlived; a repeated one is not
+                trouble = f"{type(exc).__name__}: {exc}"
+                _say(log_, f"pass failed: {trouble}")
+                # a bad pass is worth outliving; the same bad pass over and
+                # over is not. A worker started before a change to
+                # prax.yaml or to the code fails identically for ever —
+                # 519 passes in three hours on 2026-09-24, doing no work
+                # and growing by 350 MB an hour. Exiting is the repair:
+                # `prax up` restarts the role, and the new process reads
+                # the new configuration with the new code.
+                same = same + 1 if trouble == last_trouble else 1
+                last_trouble = trouble
+                if not once and same >= GIVE_UP_AFTER:
+                    _say(
+                        log_,
+                        f"the same failure {same} times: stopping so the"
+                        " supervisor starts a worker that has read the"
+                        " current configuration and code",
+                    )
+                    raise SystemExit(1) from exc
+            else:
+                same, last_trouble = 0, ""
             if once:
                 return
             time.sleep(interval)

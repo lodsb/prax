@@ -1326,3 +1326,63 @@ def test_the_door_asks_for_the_crops_of_a_pdf_itself(
         )
         != "figure-crops"
     )
+
+
+def test_a_worker_stops_when_every_pass_fails_the_same_way(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A worker started before a change to prax.yaml or to the code fails
+    identically for ever: 519 passes in three hours on 2026-09-24, doing
+    no work and growing by 350 MB an hour. Exiting is the repair — the
+    supervisor starts one that has read the current configuration."""
+    calls = {"n": 0}
+
+    def always_fails(*a: object, **k: object) -> None:
+        calls["n"] += 1
+        raise RuntimeError("unknown step 'sections'")
+
+    monkeypatch.setattr(worker, "run_once", always_fails)
+    monkeypatch.setattr(worker.time, "sleep", lambda _s: None)
+
+    class Stub:
+        name = "test"
+
+        def post_json(self, path: str, body: dict) -> dict:
+            return {"job": 1}
+
+        def get_json(self, path: str, params: dict | None = None) -> dict:
+            return {}
+
+    with pytest.raises(SystemExit) as caught:
+        worker.watch(Stub(), steps=("parse",), interval=0)
+    assert caught.value.code == 1
+    assert calls["n"] == worker.GIVE_UP_AFTER
+
+
+def test_a_worker_outlives_a_pass_that_fails_differently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The door restarting is a bad pass, not a stale worker."""
+    calls = {"n": 0}
+
+    def flaky(*a: object, **k: object) -> None:
+        calls["n"] += 1
+        if calls["n"] > worker.GIVE_UP_AFTER * 2:
+            raise KeyboardInterrupt
+        raise RuntimeError(f"connection reset {calls['n']}")
+
+    monkeypatch.setattr(worker, "run_once", flaky)
+    monkeypatch.setattr(worker.time, "sleep", lambda _s: None)
+
+    class Stub:
+        name = "test"
+
+        def post_json(self, path: str, body: dict) -> dict:
+            return {"job": 1}
+
+        def get_json(self, path: str, params: dict | None = None) -> dict:
+            return {}
+
+    with pytest.raises(KeyboardInterrupt):
+        worker.watch(Stub(), steps=("parse",), interval=0)
+    assert calls["n"] > worker.GIVE_UP_AFTER  # it kept going

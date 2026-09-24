@@ -267,6 +267,11 @@ reference `docs/ask.md`.
   of its own. It names a setting, and the matching `PRAX_*` variable
   overrides it for one run. Environment-only: the data directory, the
   config path, the token, the door's address, and the per-run switches.
+- A worker holds the configuration and the code it started with. It
+  stops after five passes that fail the same way, so `prax up` starts
+  one that has read the current `prax.yaml` — a worker that predates a
+  change otherwise fails identically for ever, doing no work and
+  growing (519 passes in three hours, 2026-09-24).
 - What a host *runs* is configuration too. `run:` names which of
   prax's roles (llama-server, a reranker, the door, the worker) this
   host keeps alive, and `prax up` (`prax.up`) keeps them so. The
