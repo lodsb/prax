@@ -323,7 +323,18 @@ not done (below).
   one type sharing a label is left as a question rather than settled by
   taking the lower id.
 
-**Not done: `entities.name` is still the identity.** The full SKOS shape
+**Not done: `entities.name` is still the identity.** Surveyed on
+2026-09-24 and written up as `docs/identity.md`, which changes the shape
+of the work: of 430 references to an entity's name across the codebase,
+almost all are joins that *display* a name they already have by id, and
+none decides identity. So the end state is not that the column goes away
+— it stays as a maintained cache of the preferred label in the host's
+display language, the label table becomes authoritative, and the six
+lookups and five writers (all in `prax.store`) are what move. The first
+step, a preferred label for every entity, is independently useful and
+carries no risk.
+
+The original reasoning: The full SKOS shape
 would make the name a display label and the row the identity, with every
 lookup going through the label table. It is the right end state and it is
 not a day's work: `link`, `resolve_review`, `retitle`, the importers and

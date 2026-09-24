@@ -275,6 +275,7 @@ product, with sources, is in
 | [`CLAUDE.md`](CLAUDE.md) | Invariants and conventions. The file an agent session loads. |
 | [`docs/rationale.md`](docs/rationale.md) | Decision records: what was chosen, what was measured, when to revisit. |
 | [`docs/stratification.md`](docs/stratification.md) | What the patterns in the code are for, what comparable systems do about it, and the plan that follows. |
+| [`docs/identity.md`](docs/identity.md) | What a thing is, and what it is called: the survey behind the identity change, and why the name column stays. |
 | [`docs/normalization.md`](docs/normalization.md) | One thing under several names: the five kinds of duplicate and the mechanism for each, with what the measurements changed. |
 | [`docs/ui.md`](docs/ui.md) | The web UI: the endpoints it uses, its routes and rules. |
 | [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The look: the mark printed the way an 1877 label was, the six themes as four values, the type. |
