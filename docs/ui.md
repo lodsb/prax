@@ -251,7 +251,9 @@ the canvas gets what the panel does not.
 ### `#graph?q=…` and `#graph?entity=…`
 
 Entity search, then the entity's neighbourhood as a force layout on a
-canvas (`GET /traverse`, one hop). Nodes are coloured by type and sized
+canvas (`GET /traverse`, one hop, reading its `edges`; the second hop
+is a ranked map meant for an agent rather than for the canvas, and the
+UI never asks for it). Nodes are coloured by type and sized
 by degree. Edges are dashed when inferred or ambiguous, and labelled
 with the relation around the selected node. A click selects a node
 and expands it by one more hop, forty neighbours at a time; the panel

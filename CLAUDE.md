@@ -73,7 +73,14 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    contains no business logic. The door's handlers are the contract.
 6. **Agent-shaped endpoints.** `search` returns compact snippets and
    ids, never full documents. `get` fetches one record fully but accepts
-   an offset and a character limit. `traverse` expands 1–2 hops. Keep
+   an offset and a character limit. `traverse` expands 1–2 hops, and the
+   two are not the same kind of answer: `edges` is the first hop, every
+   fact the entity carries with its evidence, and `neighbours` is the
+   second, a ranked map of what the documents around it are also about —
+   never landing on a document, ranked by how many documents separately
+   say so, capped per type, with `left_out` counting what did not fit
+   (`graph:` in prax.yaml; `docs/eval/traverse-neighbourhood-2026-09-25.md`
+   measured why: 3.4 MB to 76 KB). Keep
    responses small; Claude's context is the scarce resource.
 7. **Pi-class hardware target.** No dependency that needs more than
    1 GB of resident RAM in the serving path. Parsing (Docling) and

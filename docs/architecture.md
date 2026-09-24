@@ -212,7 +212,7 @@ flowchart LR
   H -->|get_chunk| C[one chunk: text, locator, table grid]
   H -->|get offset/max_chars| T[text window of the artifact]
   H -->|doc/id/context| X[summary, entities, similar, citations,<br/>shared entities, authors, notes, Zotero]
-  H -->|traverse entity| G[1-2 hop neighbourhood, with provenance]
+  H -->|traverse entity| G[the entity's edges, and a ranked map around them]
   H -->|ask| B[bundle: one passage per document,<br/>graph facts per document] --> M[a local model server, Claude,<br/>or the MCP client itself] --> A[answer citing n] -->|ask/save| P[page section with sources,<br/>annotates edges]
   B -->|steps > 0| S[surf: search again, read on<br/>or into a document, facts,<br/>walk, similar, drop] --> S
   S -->|answer| M

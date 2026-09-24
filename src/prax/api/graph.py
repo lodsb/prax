@@ -49,8 +49,13 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
 
 
 @router.get("/traverse")
-def traverse(entity: str, request: Request, hops: int = 1) -> list[dict[str, Any]]:
-    return store.traverse(_con(request), entity, hops)
+def traverse(entity: str, request: Request, hops: int = 1) -> dict[str, Any]:
+    """The neighbourhood of an entity: the edges, and what was left out.
+
+    The second hop is a map rather than every edge in it, so the answer
+    says how many neighbours it did not carry (`store._second_hop`).
+    """
+    return store.traverse_map(_con(request), entity, hops)
 
 
 @router.get("/ontology")

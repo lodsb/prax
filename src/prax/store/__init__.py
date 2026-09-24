@@ -229,6 +229,7 @@ from .graph import (  # noqa: F401
     retype_review,
     select_for_extraction,
     traverse,
+    traverse_map,
     unmerge_run,
 )
 from .jobs import (  # noqa: F401

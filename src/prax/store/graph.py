@@ -13,12 +13,25 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-from prax import ontology
+from prax import config, ontology
 
 from .base import _NOW, _like_prefix, _reading, _serialized
 from .retrieval import CONTEXT_LIMIT, _similar_documents
 
 MAX_HOPS = 2
+
+# What the second hop keeps. Every edge within two hops of a
+# well-connected entity is thousands of rows and megabytes of JSON, which
+# is a map returned as the territory: 7,032 edges and 3.4 MB for
+# `Fourier transform`, 22% of it the bibliographies of the papers the
+# first hop reached. The measurement, and why a ranking by independent
+# evidence beats the cleverer ones, is
+# `docs/eval/traverse-neighbourhood-2026-09-25.md`.
+NEIGHBOURS = 40  # hop-2 neighbours kept in all
+PER_TYPE = 12  # …and at most this many of any one type, so that the
+# papers and the authors do not crowd out the ideas
+MIN_DOCUMENTS = 1  # …each backed by at least this many documents (94% of
+# the second hop is reached through exactly one)
 
 
 CONFIDENCE_LEVELS = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
@@ -1781,15 +1794,142 @@ def _subset_version_case(
     return f"CASE json_extract(meta, '$.domains') {' '.join(whens)} ELSE ? END", args
 
 
+def _neighbourhood_limits() -> tuple[int, int, int]:
+    """How wide a map this host wants (``graph:`` in prax.yaml)."""
+    return (
+        config.whole("graph.neighbours", "PRAX_GRAPH_NEIGHBOURS", NEIGHBOURS),
+        config.whole("graph.per_type", "PRAX_GRAPH_PER_TYPE", PER_TYPE),
+        config.whole("graph.min_documents", "PRAX_GRAPH_MIN_DOCUMENTS", MIN_DOCUMENTS),
+    )
+
+
+def _second_hop(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
+    """The second hop as a map: which ideas the neighbourhood holds, not
+    every edge that reaches them. Returns the shaped rows, and how many
+    neighbours were left out of them.
+
+    Three rules, each measured rather than guessed
+    (``docs/eval/traverse-neighbourhood-2026-09-25.md``):
+
+    *It may pass through a document but not land on one.* A document node
+    is a record, and expanding one returns its catalogue card — the first
+    hop reaches a hundred papers and the second returns their
+    bibliographies, which was 22% of the payload. Passing through a
+    document is how two ideas are connected at all, so only the
+    destination is checked, and against the ontology's own hierarchy
+    rather than a list of type names kept here.
+
+    *Rank by independent evidence.* A neighbour is worth as many documents
+    as separately say so. That is invariant 8 read as a ranking; it needs
+    no degree lookup, which matters because degree by canonical id
+    undercounts (edge rows keep the alias ids they were written with);
+    and it beat both inverse-degree weighting and Zhou's resource
+    allocation on the same neighbourhood.
+
+    *A quota per type.* Ranking alone gives 44 papers in 50, because a
+    paper accumulates edges mechanically while a concept does not.
+
+    The first hop is untouched: it is a fact list rather than a map, it
+    is already small, and the UI and the surfer only ever ask for one.
+    """
+    near = [r for r in rows if int(r["hop"]) < 2]
+    far = [r for r in rows if int(r["hop"]) >= 2]
+    if not far:
+        return near, 0
+
+    onto = ontology.current()
+    reached = {r["src"] for r in near} | {r["dst"] for r in near}
+
+    docs: dict[str, set[Any]] = {}
+    kind: dict[str, str] = {}
+    edges: dict[str, list[dict[str, Any]]] = {}
+    for r in far:
+        if r["src"] in reached:
+            name, type_ = r["dst"], r["dst_type"]
+        elif r["dst"] in reached:
+            name, type_ = r["src"], r["src_type"]
+        else:
+            continue
+        if name in reached:
+            continue  # already met at the first hop
+        if type_ and onto.is_a(type_, "document"):
+            continue  # a bibliography entry, not a neighbour
+        docs.setdefault(name, set()).add(r["source_doc"])
+        kind[name] = type_
+        edges.setdefault(name, []).append(r)
+
+    limit, per_type, least = _neighbourhood_limits()
+    taken: dict[str, int] = {}
+    keep: list[str] = []
+    for name in sorted(docs, key=lambda n: (-len(docs[n]), n)):
+        if len(docs[name]) < least:
+            continue
+        type_ = kind[name] or "?"
+        if taken.get(type_, 0) >= per_type:
+            continue
+        taken[type_] = taken.get(type_, 0) + 1
+        keep.append(name)
+        if len(keep) >= limit:
+            break
+
+    out = list(near)
+    for name in keep:
+        rows_ = edges[name]
+        out.append(
+            {
+                "name": name,
+                "type": kind[name],
+                "via": sorted({str(r["rel"]) for r in rows_}),
+                "documents": len(docs[name]),
+                "source_docs": sorted(d for d in docs[name] if d is not None)[:5],
+                "hop": 2,
+            }
+        )
+    return out, len(docs) - len(keep)
+
+
 @_reading
 def traverse(
     con: sqlite3.Connection, entity_name: str, hops: int = 1
 ) -> list[dict[str, Any]]:
-    """Currently-valid edges within ``hops`` (max MAX_HOPS) of an entity.
+    """The entity's own edges: every currently-valid one, with its evidence.
 
-    An edge is returned only when both of its endpoints are reachable within
-    the hop limit; ``hop`` is the distance of its farther endpoint.
+    This is the first hop, which is a fact list — what the UI draws and
+    what the surfer reads. ``hops`` beyond 1 does not add edges here,
+    because the second hop is a different kind of thing; ask
+    ``traverse_map`` for it.
     """
+    return [r for r in _walk(con, entity_name, hops)[0] if int(r["hop"]) < 2]
+
+
+@_reading
+def traverse_map(
+    con: sqlite3.Connection, entity_name: str, hops: int = 1
+) -> dict[str, Any]:
+    """The neighbourhood of an entity: its own edges, the ideas around
+    them, and how many of those did not fit.
+
+    Two keys rather than one list, because the two hops are not the same
+    kind of thing. ``edges`` is the fact list — every edge the entity
+    itself carries, with its evidence. ``neighbours`` is the map: what
+    the documents around it are also about, each with the relations that
+    reach it and the number of documents that separately say so. A map
+    that silently dropped the rest would be worse than a large one, so
+    ``left_out`` counts the neighbours past the limits.
+    """
+    rows, left_out = _walk(con, entity_name, hops)
+    return {
+        "entity": entity_name,
+        "hops": max(0, min(hops, MAX_HOPS)),
+        "edges": [r for r in rows if int(r["hop"]) < 2],
+        "neighbours": [r for r in rows if int(r["hop"]) >= 2],
+        "left_out": left_out,
+    }
+
+
+def _walk(
+    con: sqlite3.Connection, entity_name: str, hops: int
+) -> tuple[list[dict[str, Any]], int]:
     hops = max(0, min(hops, MAX_HOPS))
     # The walk runs over raw entity ids and, at every step, expands the
     # entity reached to its whole alias group (idx_entities_canonical), so
@@ -1853,4 +1993,4 @@ def traverse(
         """,
         (entity_name, entity_name, hops, hops),
     ).fetchall()
-    return [dict(r) for r in rows]
+    return _second_hop([dict(r) for r in rows])

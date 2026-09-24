@@ -114,10 +114,12 @@ def test_link_and_traverse(proxied: TestClient) -> None:
         )
         assert "edge_id" in r
     one = call("traverse", entity="A", hops=1)
-    assert {(e["src"], e["dst"]) for e in one} == {("A", "B")}
-    assert one[0]["producer"] == "agent"
+    assert {(e["src"], e["dst"]) for e in one["edges"]} == {("A", "B")}
+    assert one["edges"][0]["producer"] == "agent"
+    assert one["left_out"] == 0
     two = call("traverse", entity="A", hops=2)
-    assert {(e["src"], e["dst"]) for e in two} == {("A", "B"), ("B", "C")}
+    assert {(e["src"], e["dst"]) for e in two["edges"]} == {("A", "B")}
+    assert [n["name"] for n in two["neighbours"]] == ["C"]
 
 
 def test_link_bad_confidence_returns_error() -> None:

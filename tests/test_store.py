@@ -296,24 +296,34 @@ def test_link_traverse_roundtrip(con: sqlite3.Connection) -> None:
     )
     one_hop = store.traverse(con, "phase vocoder", hops=1)
     assert any(e["dst"] == "STFT" for e in one_hop)
-    two_hop = store.traverse(con, "phase vocoder", hops=2)
-    assert any(e["dst"] == "Fourier transform" for e in two_hop)
+    # the second hop is a map of what is around, not more edges
+    around = store.traverse_map(con, "phase vocoder", hops=2)
+    assert [n["name"] for n in around["neighbours"]] == ["Fourier transform"]
+    assert around["neighbours"][0]["via"] == ["extends"]
 
 
 def test_traverse_respects_hop_limit(con: sqlite3.Connection) -> None:
     _chain(con, "A", "B", "C", "D")
+    # traverse is the entity's own edges however many hops are asked for
     assert _pairs(store.traverse(con, "A", hops=1)) == {("A", "B")}
-    assert _pairs(store.traverse(con, "A", hops=2)) == {("A", "B"), ("B", "C")}
-    assert _pairs(store.traverse(con, "A", hops=5)) == {("A", "B"), ("B", "C")}
+    assert _pairs(store.traverse(con, "A", hops=2)) == {("A", "B")}
     assert store.traverse(con, "A", hops=0) == []
+    # the neighbourhood reaches one further, and no further than that
+    assert [n["name"] for n in store.traverse_map(con, "A", hops=2)["neighbours"]] == [
+        "C"
+    ]
+    far = store.traverse_map(con, "A", hops=5)
+    assert far["hops"] == 2 and [n["name"] for n in far["neighbours"]] == ["C"]
+    assert store.traverse_map(con, "A", hops=1)["neighbours"] == []
 
 
 def test_traverse_is_undirected_and_reports_hop(con: sqlite3.Connection) -> None:
     _chain(con, "A", "B", "C")
-    rows = store.traverse(con, "C", hops=2)
-    by_pair = {(r["src"], r["dst"]): r for r in rows}
-    assert by_pair[("B", "C")]["hop"] == 1
-    assert by_pair[("A", "B")]["hop"] == 2
+    answer = store.traverse_map(con, "C", hops=2)
+    rows = answer["edges"]
+    # C is the far end of B -> C, so the walk goes backwards as well
+    assert {(r["src"], r["dst"]): r["hop"] for r in rows} == {("B", "C"): 1}
+    assert [n["name"] for n in answer["neighbours"]] == ["A"]
     assert rows[0]["src_type"] == "concept" and rows[0]["rel"] == "extends"
     assert {"edge_id", "confidence", "source_doc"} <= rows[0].keys()
 

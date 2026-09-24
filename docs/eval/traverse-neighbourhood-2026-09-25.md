@@ -155,3 +155,43 @@ above the neighbourhood, and `ask` a cheaper way in than chunks.
 It is not proposed here. The measurement above fixes the breach for one
 call's cost, and a community layer is a pass, a table and a staleness
 rule. It belongs in the plan, not in this change.
+
+## What was built, and what it measures now
+
+Shipped the same day. `traverse` keeps returning the first hop as a plain
+edge list, because that is a fact list and the UI and the surfer only
+ever ask for one. `traverse_map`, which the door answers with, adds
+`neighbours`: the second hop as the map it always was.
+
+    entity                             before     after   edges  nbrs  left_out
+    Fourier transform                  3,439 KB   76 KB     151    40     2,444
+    memory management                    562 KB   27 KB      45    40       462
+    nonnegative matrix factorization       —     325 KB     642    40     1,094
+
+45× on the worst case, and the neighbourhood reads as one: 12 methods,
+12 tools, 5 concepts, 3 authors, against 44 papers of 50 before.
+
+       14 docs  [method ] fast Fourier transform     via about, uses
+       10 docs  [method ] convolution                via about
+        7 docs  [concept] aliasing                   via about
+        7 docs  [method ] z-transform                via about
+        6 docs  [tool   ] Max/MSP                    via about, uses
+
+The limits are `graph.neighbours`, `graph.per_type` and
+`graph.min_documents` in prax.yaml, because what a good map looks like
+is a host's judgement rather than a constant. `min_documents: 2` would
+drop 94% of the candidates; it is 1 by default, since a library smaller
+than this one has little corroboration to spend.
+
+## What this did not fix
+
+`nonnegative matrix factorization` is still 325 KB, and **all of it is
+the first hop** — 642 edges, each with its evidence and its provenance.
+The second hop is 40 rows either way. So the breach of invariant 6 that
+was measured here is closed, and a second one is now visible underneath
+it: a hub's own fact list is too large for an agent, though it is
+exactly what the UI wants for its canvas.
+
+That is a different problem with a different answer — paging, or a
+summary of the edge list rather than a ranking of it — and it wants its
+own measurement rather than a limit picked here.

@@ -59,7 +59,8 @@ work. The UI polls exactly this.
 | `GET /get/{id}?offset=&max_chars=` | one document as a window, with `text_len` so you can page |
 | `GET /chunk/{id}`, `GET /doc/{id}/chunks` | one addressable region, or all of a document's: text, kind, heading path, page, and `data`. `data` holds a table's grid, a figure's reference, an equation's LaTeX, or a reference entry's number, surnames, year and title, with `cited` (the library document it cites, the score, how) once matched |
 | `GET /doc/{id}/context` | what places a document: summary, entities, citations both ways, similar documents, its pages and projects |
-| `GET /traverse?entity=…&hops=1` | the graph around a name, every edge with its evidence and producer |
+| `GET /traverse?entity=…&hops=1` | the graph around a name: `edges`, every edge with its evidence and producer |
+| `GET /traverse?entity=…&hops=2` | and `neighbours`, the ideas those documents are also about, ranked by how many say so, with `left_out` |
 | `GET /entities?q=` | names, types, how connected each is |
 | `POST /ask {question, steps, stream}` | passages and graph facts, and an answer with citations when the host has a model (`docs/ask.md`) |
 | `POST /questions {result, options}` | keep an ask's result as a standing question: a page asked again when the library learns something about it |

@@ -128,11 +128,20 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
 
 
 @mcp.tool()
-def traverse(entity: str, hops: int = 1) -> list[dict[str, Any]]:
-    """Expand the knowledge graph 1-2 hops from a named entity."""
-    return _guarded_list(
-        lambda: door().get_json("/traverse", {"entity": entity, "hops": hops})
-    )
+def traverse(entity: str, hops: int = 1) -> dict[str, Any]:
+    """Expand the knowledge graph 1-2 hops from a named entity.
+
+    ``edges`` is the first hop: every fact the entity itself carries,
+    with the evidence for each. ``hops=2`` adds ``neighbours``, a map of
+    what the documents around it are also about — each with the
+    relations that reach it and ``documents``, how many documents
+    separately say so, which is what they are ranked by. It is capped
+    per type so the papers do not crowd out the ideas, and ``left_out``
+    counts the neighbours that did not fit. To go further, traverse a
+    neighbour by name; there is no third hop.
+    """
+    out = _guard(lambda: door().get_json("/traverse", {"entity": entity, "hops": hops}))
+    return out if isinstance(out, dict) else {"error": str(out)}
 
 
 @mcp.tool()

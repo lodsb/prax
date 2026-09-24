@@ -346,10 +346,13 @@ def open_doc(door: Door, a: Any) -> int:
 
 
 def graph(door: Door, a: Any) -> int:
-    edges = door.get_json("/traverse", {"entity": a.entity, "hops": a.hops})
+    answer = door.get_json("/traverse", {"entity": a.entity, "hops": a.hops})
     if a.json:
-        print(json.dumps(edges, indent=2))
+        print(json.dumps(answer, indent=2))
         return 0
+    edges = answer.get("edges") or []
+    neighbours = answer.get("neighbours") or []
+    left_out = int(answer.get("left_out") or 0)
     if not edges:
         out.say(f"Nothing in the graph about {a.entity!r}.")
         out.hint(
@@ -397,6 +400,33 @@ def graph(door: Door, a: Any) -> int:
         out.hint(
             f"({out.plural(len(selves), 'edge')} from the name to itself,"
             " left by merged aliases)"
+        )
+    if neighbours:
+        out.say("")
+        out.say(
+            out.bold("around it")
+            + out.dim(
+                f" — {out.plural(len(neighbours), 'idea')} the documents about"
+                f" {a.entity} are also about"
+            )
+        )
+        out.table(
+            [
+                [
+                    str(n.get("documents") or ""),
+                    (n.get("type") or "")[:12],
+                    (n.get("name") or "")[:52],
+                    ", ".join(n.get("via") or [])[:28],
+                ]
+                for n in neighbours
+            ],
+            headers=["docs", "kind", "what", "via"],
+        )
+    if left_out:
+        out.hint(
+            f"… and {out.num(left_out)} further neighbours: the map keeps the"
+            " ones most documents agree on. `prax graph <name>` on any of"
+            " these goes further."
         )
     return 0
 

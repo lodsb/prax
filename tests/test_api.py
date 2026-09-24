@@ -96,10 +96,13 @@ def test_link_and_traverse(client: TestClient) -> None:
     client.post("/link", json=body)
 
     one = client.get("/traverse", params={"entity": "A", "hops": 1}).json()
-    assert {(e["src"], e["dst"]) for e in one} == {("A", "B")}
+    assert {(e["src"], e["dst"]) for e in one["edges"]} == {("A", "B")}
+    assert (one["entity"], one["hops"], one["left_out"]) == ("A", 1, 0)
     capped = client.get("/traverse", params={"entity": "A", "hops": 9}).json()
-    assert {(e["src"], e["dst"]) for e in capped} == {("A", "B"), ("B", "C")}
-    assert capped[0]["hop"] == 1 and capped[-1]["hop"] == 2
+    assert capped["hops"] == 2  # MAX_HOPS, whatever was asked for
+    # the first hop stays a fact list, the second becomes the map
+    assert {(e["src"], e["dst"]) for e in capped["edges"]} == {("A", "B")}
+    assert [(n["name"], n["via"]) for n in capped["neighbours"]] == [("C", ["extends"])]
 
 
 def test_document_context(client: TestClient) -> None:
@@ -334,7 +337,7 @@ def test_review_queue_endpoints(client: TestClient) -> None:
         f"/review/{a}", json={"resolution": "linked", "dst_type": "concept"}
     )
     assert r.status_code == 200 and r.json()["edge_id"]
-    edge = client.get("/traverse", params={"entity": "P"}).json()[0]
+    edge = client.get("/traverse", params={"entity": "P"}).json()["edges"][0]
     assert (edge["dst"], edge["dst_type"], edge["evidence"], edge["source_doc"]) == (
         "STFT",
         "concept",
@@ -421,7 +424,7 @@ def test_review_filters_bulk_and_replay(
     # "paper cites tool" stays open until an ontology allows it
     rep = client.post("/review/replay").json()
     assert (rep["linked"], rep["still_open"]) == (1, 1)
-    edge = client.get("/traverse", params={"entity": "Fourier"}).json()[0]
+    edge = client.get("/traverse", params={"entity": "Fourier"}).json()["edges"][0]
     assert (edge["rel"], edge["evidence"]) == ("uses", "q")
     assert edge["ontology_version"] == ontology_version_now()
     assert client.get("/review").json()["total"] == 1
