@@ -55,6 +55,7 @@ from prax.parsers import queue
 from prax.steps import READING_STEPS, STEPS, WATCHED_STEPS
 
 LEASE_SECONDS = 900
+SECTIONS_BATCH = 3  # documents a batch: each is a book's worth of calls
 # a worker's "not yet" (the server it needs is loading or down) keeps the
 # item leased this long, so the next batches hold other work instead of
 # the same ten items again — the follow-ups of the first papers marker
@@ -439,6 +440,32 @@ def hand_out(
             for r in store.foreign_names(con, limit=limit, skip=leased)
         ]
         _lease(step, [i["id"] for i in items], worker)
+        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
+    if step == "sections":
+        # a long document's chapters, read one at a time. The whole
+        # document never goes to the model: a section does, and only the
+        # sections long enough to be chapters
+        if models.resolve("sections") is None:
+            return {"step": step, "items": [], "lease_seconds": 0}
+        # one item is a whole book, and a book is up to forty model calls:
+        # a batch of thirty was 1,200 of them before anything was posted,
+        # and the worker's heartbeat went stale inside it (2026-09-24)
+        limit = min(limit, SECTIONS_BATCH)
+        items = []
+        for doc_id in store.sections_needed(con, limit=limit * 4):
+            if len(items) >= limit or not _free(step, doc_id, now):
+                continue
+            if not _in_scope(con, doc_id, scope):
+                continue
+            row = store.get_document(con, doc_id, max_chars=0)
+            items.append(
+                {
+                    "doc_id": doc_id,
+                    "title": (row["title"] if row else "") or "",
+                    "sections": store.document_sections(con, doc_id),
+                }
+            )
+        _lease(step, [i["doc_id"] for i in items], worker)
         return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
     if step == "typing":
         # untyped review items to the typing model, a batch of items each;
@@ -847,6 +874,29 @@ def take_in(
                     doc_id,
                     str(r["summary"]),
                     lang=str(r.get("lang") or "") or None,
+                    source=str(r.get("source") or worker),
+                    run=run,
+                )
+            except Exception as exc:  # noqa: BLE001
+                out["errors"].append(
+                    {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
+                )
+                continue
+            out["applied"] += 1
+        return out
+    if step == "sections":
+        run = payload.get("run") or f"sections-{time.strftime('%Y%m%dT%H%M%S')}"
+        for r in results:
+            doc_id = int(r["doc_id"])
+            _release(step, [doc_id])
+            if r.get("error"):
+                out["errors"].append({"doc_id": doc_id, "error": r["error"]})
+                continue
+            try:
+                store.set_sections(
+                    con,
+                    doc_id,
+                    list(r.get("sections") or []),
                     source=str(r.get("source") or worker),
                     run=run,
                 )

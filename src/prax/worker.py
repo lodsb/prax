@@ -34,6 +34,7 @@ from prax import (
     hostinfo,
     models,
     parsers,
+    sections,
     summaries,
     titles,
     usage,
@@ -399,6 +400,52 @@ def do_summaries(
             }
         )
         _say(log_, f"summary doc {doc_id} ({lang}): {got.text[:60]!r}")
+    return results
+
+
+def do_sections(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each of a document's chapters read in turn.
+
+    A document with no section long enough to be a chapter comes back
+    with an empty list, which is an answer: the door records it against
+    the text it was read from, and the document is not offered again
+    until that text changes.
+    """
+    results = []
+    for it in items:
+        doc_id = it["doc_id"]
+        done: list[dict[str, Any]] = []
+        deferred = False
+        for part in it.get("sections") or []:
+            if runtime is None:
+                break
+            try:
+                got = sections.summarize(
+                    runtime,
+                    str(part.get("heading") or ""),
+                    str(part.get("text") or ""),
+                    title=str(it.get("title") or ""),
+                )
+            except models.ServerNotReady as exc:
+                _say(log_, f"sections doc {doc_id}: not yet - {exc}")
+                deferred = True
+                break
+            if got is not None:
+                done.append(got.as_meta())
+        if deferred:
+            results.append({"doc_id": doc_id, "defer": True})
+            continue
+        results.append(
+            {
+                "doc_id": doc_id,
+                "sections": done,
+                "source": runtime.name if runtime else "none",
+            }
+        )
+        if done:
+            _say(log_, f"sections doc {doc_id}: {len(done)} sections")
     return results
 
 
@@ -803,6 +850,22 @@ def run_once(
             out["summaries"] = (
                 f"{rep.get('applied', 0)} translated, {rep.get('skipped', 0)} left"
             )
+        elif step == "sections":
+            spec = models.resolve("sections")
+            if _paid(spec):
+                out["sections"] = f"skipped: the sections step is {spec.name} (paid)"
+                continue
+            runtime = models.runtime(spec) if spec else None
+            results = do_sections(items, runtime, log_=log_)
+            rep = door.post_json(
+                "/work/sections",
+                {
+                    "results": results,
+                    "run": f"sections-{time.strftime('%Y%m%dT%H%M%S')}",
+                },
+            )
+            wrote = sum(len(r.get("sections") or []) for r in results)
+            out["sections"] = f"{rep.get('applied', 0)} documents, {wrote} sections"
         elif step == "vocabulary":
             spec = models.resolve("vocabulary")
             if _paid(spec):

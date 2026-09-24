@@ -286,6 +286,14 @@ reference `docs/ask.md`.
 - What a model wrapped its answer in is `prax.answers` — a fence, a
   preamble, a label the message used, quotes, a chat token. What a
   *good* answer looks like stays with the caller that asked.
+- A long document says what its parts are about: `meta.sections`,
+  one summary per top-level heading region over a few thousand
+  characters, written by the `sections` step and stamped with the text
+  artifact they were read from, so a re-parse makes them stale rather
+  than wrong. They reach a search through the document field, capped —
+  a book of ninety chapters would otherwise put thirty thousand
+  characters in one FTS row. Not chunks: a chunk's text *is* its region
+  of the artifact, and a generated sentence is not.
 - A document says what language it is in: `meta.lang`, an ISO 639-1
   code written by `prax.language` when the text is indexed, and filled
   in for older documents by the `languages` pass of `prax maintain`.

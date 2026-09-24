@@ -19,6 +19,7 @@ STEPS = (
     "titles",
     "summaries",
     "vocabulary",
+    "sections",
     "extract",
     "promote",
     "typing",

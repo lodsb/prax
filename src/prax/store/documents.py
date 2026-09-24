@@ -2004,7 +2004,40 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
         if shows:
             lines = [ln for ln in shows["text"].splitlines() if not ln.startswith("#")]
             parts.append(" ".join(lines).strip()[:1200])
+    parts.extend(_section_lines(meta))
     return "\n".join(p for p in parts if p.strip())
+
+
+SECTION_FIELD_CHARS = 3_000  # of section summaries in one document's field
+
+
+def _section_lines(meta: dict[str, Any]) -> list[str]:
+    """What a long document's parts are about, for its field.
+
+    Capped: a book of ninety chapters would otherwise put thirty thousand
+    characters in one FTS row, where BM25's length normalization buries
+    it and one document vector over that much text means nothing. The
+    longest sections first, which is the order they are stored in.
+    """
+    held = meta.get("sections") or {}
+    items = held.get("items") if isinstance(held, dict) else None
+    if not items:
+        return []
+    out: list[str] = []
+    budget = SECTION_FIELD_CHARS
+    for item in items:
+        line = " ".join(
+            str(x).strip()
+            for x in (item.get("heading"), item.get("summary"))
+            if str(x or "").strip()
+        )
+        if not line:
+            continue
+        if len(line) > budget:
+            break
+        out.append(line)
+        budget -= len(line)
+    return out
 
 
 def _refresh_document_field(con: sqlite3.Connection, doc_id: int) -> bool:
@@ -2542,6 +2575,105 @@ def document_outline(
         if path:
             out.append(" › ".join(path))
     return out
+
+
+@_reading
+def document_sections(
+    con: sqlite3.Connection, doc_id: int, *, min_chars: int | None = None
+) -> list[dict[str, Any]]:
+    """The document's top-level sections with their text, longest first.
+
+    A chapter in a book, a major section in a manual. Only where there is
+    enough of it to be worth a sentence: a document whose headings carry
+    a paragraph each is a paper, and its own summary already covers it
+    (``prax.sections``).
+    """
+    from prax import sections as sec
+
+    floor = sec.MIN_SECTION if min_chars is None else min_chars
+    rows = con.execute(
+        "SELECT json_extract(heading, '$[0]') AS top, seq, text FROM chunks"
+        " WHERE doc_id = ? AND heading IS NOT NULL AND kind NOT IN"
+        f" ({','.join('?' * len(ASIDE_KINDS))})"
+        " ORDER BY seq",
+        (doc_id, *ASIDE_KINDS),
+    ).fetchall()
+    parts: dict[str, list[str]] = {}
+    order: list[str] = []
+    for r in rows:
+        top = r["top"]
+        if not top:
+            continue
+        if top not in parts:
+            parts[top] = []
+            order.append(top)
+        parts[top].append(r["text"])
+    joiner = "\n\n"
+    out = [
+        {"heading": sec.clean_heading(h), "text": joiner.join(parts[h])}
+        for h in order
+        if sum(len(t) for t in parts[h]) >= floor
+    ]
+    out.sort(key=lambda s: -len(s["text"]))
+    return out[: sec.MAX_SECTIONS]
+
+
+@_serialized
+def set_sections(
+    con: sqlite3.Connection,
+    doc_id: int,
+    sections: list[dict[str, Any]],
+    *,
+    source: str,
+    run: str | None = None,
+) -> dict[str, Any]:
+    """What a document's parts are about, kept in ``meta.sections`` with
+    the text artifact they were read from — so a re-parse makes them
+    stale rather than wrong. The document field is refreshed, which is
+    how they reach a search."""
+    row = con.execute(
+        "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"] or "{}")
+    meta["sections"] = {
+        "text_hash": row["text_hash"],
+        "source": source,
+        "run": run,
+        "at": now(),
+        "items": sections,
+    }
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    changed = _refresh_document_field(con, doc_id)
+    con.commit()
+    return {"doc_id": doc_id, "sections": len(sections), "field": changed}
+
+
+@_reading
+def sections_needed(
+    con: sqlite3.Connection, *, limit: int = 200, untried_only: bool = True
+) -> list[int]:
+    """Long documents whose sections nobody has read, or has read from a
+    text that has since been replaced. Longest first: a book gains most."""
+    from prax import sections as sec
+
+    rows = con.execute(
+        "SELECT id FROM documents WHERE text_len >= ?"
+        " AND json_extract(meta, '$.retired') IS NULL AND text_hash IS NOT NULL"
+        " AND (json_extract(meta, '$.sections.text_hash') IS NULL"
+        "      OR json_extract(meta, '$.sections.text_hash') != text_hash)"
+        + (
+            " AND json_extract(meta, '$.sections_tried') IS NULL"
+            if untried_only
+            else ""
+        )
+        + " ORDER BY text_len DESC LIMIT ?",
+        (sec.MIN_DOCUMENT, max(1, limit)),
+    ).fetchall()
+    return [int(r["id"]) for r in rows]
 
 
 @_reading

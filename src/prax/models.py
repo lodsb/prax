@@ -58,6 +58,7 @@ STEPS = (
     "titles",
     "summaries",
     "vocabulary",
+    "sections",
     "vision",
     "adjudicate",
     "typing",
@@ -71,6 +72,7 @@ STEP_DEFAULTS = {
     "titles": "none",
     "summaries": "none",  # a summary written in another language, translated
     "vocabulary": "none",  # an entity named in another language, put into English
+    "sections": "none",  # what a long document's chapters are about
     "vision": "claude-sonnet-5",
     "adjudicate": "none",
     "typing": "none",  # the model typing pass over the review queue
