@@ -463,6 +463,29 @@ class Edge:
 
 
 def _entity_id(con: sqlite3.Connection, name: str, etype: str) -> int:
+    """The entity of this type called ``name``, created if there is none.
+
+    A name the graph already knows this thing by counts: ``Olivenöl`` is
+    a label of ``olive oil``, so a German recipe naming it again lands on
+    the entity the vocabulary pass folded it into rather than starting
+    the split over (`docs/stratification.md`, step 5). Only an unmerged
+    entity of the same type, and only when exactly one answers — two
+    entities of one type sharing a label is a question, and a question is
+    not resolved by picking the lower id.
+    """
+    row = con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = ?", (name, etype)
+    ).fetchone()
+    if row is not None:
+        return int(row["id"])
+    known = con.execute(
+        "SELECT DISTINCT e.id FROM entity_labels l JOIN entities e"
+        " ON e.id = l.entity_id WHERE l.label = ? COLLATE NOCASE"
+        " AND e.type = ? AND e.canonical_id IS NULL LIMIT 2",
+        (name, etype),
+    ).fetchall()
+    if len(known) == 1:
+        return int(known[0]["id"])
     con.execute(
         "INSERT OR IGNORE INTO entities (name, type) VALUES (?,?)", (name, etype)
     )
@@ -628,17 +651,55 @@ def add_label(
     run: str | None = None,
     source_doc: int | None = None,
     confidence: str | None = None,
+    was: bool = False,
 ) -> int:
-    """A name this entity is also known by, in a language. ``kind`` is
-    ``pref`` for the name to show in that language, ``alt`` otherwise.
-    Returns how many rows were written (0 when it was already there)."""
+    """A name this entity is also known by, in a language.
+
+    ``kind`` is ``pref`` for the name to show in that language and ``alt``
+    otherwise, the two SKOS gives a concept. There is one preferred name
+    per language (migration 22 holds it), so a new one demotes the one
+    already there rather than colliding with it — a language whose
+    preferred name is decided twice should end with the later answer, not
+    with an error.
+
+    ``was`` marks the name the entity carried before a pass renamed it,
+    which is what ``unmerge_run`` puts back. It is a fact about the label,
+    not a kind of label.
+
+    Returns how many rows were written (0 when it was already there).
+    """
     if not label.strip():
         raise ValueError("a label needs a name")
+    if kind == "pref" and lang is not None:
+        con.execute(
+            "UPDATE entity_labels SET kind = 'alt'"
+            " WHERE entity_id = ? AND lang = ? AND kind = 'pref' AND label != ?",
+            (entity_id, lang, label),
+        )
     cur = con.execute(
         "INSERT OR IGNORE INTO entity_labels (entity_id, label, lang, kind,"
-        " source_doc, producer, run, confidence) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (entity_id, label, lang, kind, source_doc, producer, run, confidence),
+        " source_doc, producer, run, confidence, was)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            entity_id,
+            label,
+            lang,
+            kind,
+            source_doc,
+            producer,
+            run,
+            confidence,
+            1 if was else 0,
+        ),
     )
+    if not cur.rowcount and kind == "pref":
+        # the name was already a label of this entity, as an alt: the
+        # caller is saying it is the preferred one now
+        con.execute(
+            "UPDATE entity_labels SET kind = 'pref' WHERE entity_id = ?"
+            " AND label = ? AND coalesce(lang, '') = coalesce(?, '')",
+            (entity_id, label, lang),
+        )
     con.commit()
     return int(cur.rowcount or 0)
 
@@ -702,7 +763,7 @@ def unmerge_run(con: sqlite3.Connection, run: str) -> int:
             (entity_id, entity_id),
         )
     renamed = con.execute(
-        "SELECT entity_id, label FROM entity_labels WHERE run = ? AND kind = 'was'",
+        "SELECT entity_id, label FROM entity_labels WHERE run = ? AND was = 1",
         (run,),
     ).fetchall()
     for r in renamed:
@@ -878,17 +939,18 @@ def name_in_english(
         out["into"] = survivor
         return out
     con.execute("UPDATE entities SET name = ? WHERE id = ?", (english, entity_id))
-    # `was` rather than `alt`: it is both the name a search in that
-    # language must still reach, and what ``unmerge_run`` puts back
+    # an alt like any other, marked as the name the entity had: a search
+    # in that language must still reach it, and ``unmerge_run`` puts it back
     add_label(
         con,
         entity_id,
         was,
         lang=lang,
-        kind="was",
+        kind="alt",
         producer=producer,
         run=run,
         confidence=confidence,
+        was=True,
     )
     con.commit()
     out["action"] = "renamed"

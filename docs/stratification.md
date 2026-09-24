@@ -193,7 +193,7 @@ instead of a colon (`The English name is "olive oil".`). `summaries`,
 looks like stays with each of them, because that is about the answer and
 this is about the packaging.
 
-### 3. The lexicons move next to the ontology
+### 3. The lexicons move next to the ontology ✅
 
 `review.py`'s organization words, person shape, type words and noise
 names, `ingredients.py`'s units, `references.py`'s venue words and
@@ -216,8 +216,25 @@ This is also what makes the next step possible: a lexicon that is data
 can be *measured* against the review queue's decisions, and a lexicon
 that is code cannot.
 
-*Cost*: two days. *Risk*: moderate, because the cues currently decide
-types on 22,089 edges. Do it with the queue as the test set (below).
+*Done 2026-09-24.* `ontology/lexicon.yaml`: the organization cues, the
+top-level ones, the words that name a type, and the three kinds of
+non-name (matched whole, a vague start, a start that is never a thing).
+`prax.ontology.lexicon()` loads it; `prax.review` builds its patterns
+from it and keeps only the logic and the one thing a word list cannot
+say, which is a *shape* — `_PERSON` is two to five capitalized words, not
+a vocabulary.
+
+Two things the move settled that the old form hid. The loader reserves
+the file name, because composed as a module it would join the version
+string and every document in the library would look unread against the
+new version. And a cue has to say whether it is a stem or a whole word:
+the original spelled `mit\b` and a flat list lost the boundary, which
+made `Julius Smith` an organization. The lexicon has `stems:` and
+`words:`, and a test holds Smith.
+
+Checked rather than assumed: the rules' verdicts on all 2,279 open
+review items are identical before and after the move — 2,048 open, 229
+link, 2 drop, rule for rule.
 
 ### 4. Calibrate instead of choosing ✅
 
@@ -248,7 +265,7 @@ and agree with the model on 2; they are candidates for deletion rather
 than repair. The table and the caveats are
 `docs/eval/typing-rules-2026-09-24.md`.
 
-### 5. Normalization, properly
+### 5. Normalization, properly — in part
 
 This is where the strata pay for themselves, and it is the part with a
 design decision in it.
@@ -283,11 +300,37 @@ The stratified design:
   These are the polysemy backlog (about 3,700) arriving by a second road,
   and they want the calibration of step 4 before anything folds them.
 
-*Cost*: the label-identity change is the largest single item here, three
-or four days, and it touches `link`, which is the busiest function in the
-store. *Risk*: high enough to want the chunk-fingerprint and
-review-queue tests of steps 1 and 4 in place first. That is why it is
-last.
+*Done 2026-09-24*, except the identity change, which is deliberately
+not done (below).
+
+- **One preferred name per language, enforced** (migration 22). A unique
+  index where `kind = 'pref'`, and `add_label` demotes the name already
+  there rather than colliding with it: a language whose preferred name is
+  decided twice should end with the later answer, not with an error. The
+  store was already clean — no entity had two, none lacked a language —
+  so the index went on without a repair.
+- **`kind='was'` is gone.** It was an undo record wearing a label's
+  clothes. The kinds are SKOS's two again, and the fact that a label is
+  what an entity used to be called is a column (`was`), which
+  `unmerge_run` reads.
+- **A name the graph knows reaches the entity that owns it.** `link`
+  creates an entity by name; now, when no entity of that type carries the
+  name, it asks whether exactly one *answers* to it
+  (`entity_labels`) and uses that one. A merge did not need this — the
+  old name stays on an entity of its own and `traverse` resolves it —
+  but a rename did: without it the next German recipe would make
+  `Knoblauchzehen` again and the split would start over. Two entities of
+  one type sharing a label is left as a question rather than settled by
+  taking the lower id.
+
+**Not done: `entities.name` is still the identity.** The full SKOS shape
+would make the name a display label and the row the identity, with every
+lookup going through the label table. It is the right end state and it is
+not a day's work: `link`, `resolve_review`, `retitle`, the importers and
+`resolution` all find entities by name, and a half-migrated graph is
+worse than an unmigrated one. What is built here gets most of the value —
+the constraint, the undo, and the lookup on the one path where a name is
+lost — and leaves the identity change to be done whole.
 
 ## What this does not propose
 

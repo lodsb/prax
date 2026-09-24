@@ -1,0 +1,172 @@
+# The words that say what a name is, and the words that say a name is not
+# one. Data, beside the types they are about, rather than regular
+# expressions in `prax.review` — which is where they lived until
+# 2026-09-24, invisible to the ontology they describe, so growing
+# research.yaml grew nothing here and nothing said it should
+# (docs/stratification.md, stratum C).
+#
+# `prax.ontology.lexicon()` loads this; `prax.review` builds its patterns
+# from it. A `stem` matches from the start of a word onwards, so
+# "universit" catches university, universities and Universität. A `word`
+# must be the whole word: "mit" is MIT and not Smith, which is the
+# difference between an institute and a person, and a test holds it.
+#
+# It bumps no module version. A cue changes what the typing rules guess
+# about a misfit, never what triples the ontology accepts, so no document
+# needs re-extracting when one is added — and the loader keeps this file
+# out of the composed modules so it cannot join the version string.
+#
+# Measure a change: docs/eval/typing-rules-2026-09-24.md says what these
+# words are worth against the typing model, rule by rule.
+version: 1
+
+# a name carrying one of these is an organization. Deliberately wide: an
+# organization word beats the shape of a name, because "Stanford
+# University" and "Waves Audio" are both two capitalized words
+organization:
+  stems:
+    - universit
+    - institut
+    - laborator
+    - department
+    - dept.
+    - faculty
+    - school
+    - college
+    - centre
+    - center
+    - foundation
+    - council
+    - academy
+    - gmbh
+    - corporation
+    - company
+    - research
+    - cnrs
+    - ircam
+    - ccrma
+    - hochschule
+    - fraunhofer
+    - association
+    - society
+    - consortium
+    - programme
+    - agency
+    - ministry
+    - technolog
+    - audio
+    - software
+    - systems
+    - instruments
+    - electronics
+    - devices
+    - networks
+    - solutions
+    - media
+    - records
+    - project
+  words:
+    - lab
+    - labs
+    - fund
+    - inc
+    - inc.
+    - ltd
+    - group
+    - studio
+    - studios
+    - program
+    - mit
+
+# an organization that contains others rather than sitting inside one: a
+# lab is part of a university, never the other way round
+top_organization:
+  stems:
+    - universit
+    - hochschule
+    - college
+    - institute of technology
+    - gmbh
+    - ltd
+    - corporation
+    - foundation
+    - ministry
+    - agency
+  words:
+    - inc
+
+# a word in a name that says which type it is. The first type whose cue
+# matches wins, so the order of the types here is the precedence
+by_type:
+  tool:
+    - tool
+    - software
+    - library
+    - plugin
+    - service
+    - system
+  method:
+    - method
+    - algorithm
+    - technique
+  dataset:
+    - dataset
+    - corpus
+    - database
+    - benchmark
+  concept:
+    - concept
+
+# a name that is not a name: what a model writes when it has nothing
+not_a_name:
+  # matched whole, lowercased and with runs of space collapsed
+  exact:
+    - unknown
+    - none
+    - n/a
+    - n.d.
+    - s.n.
+    - "[s.n.]"
+    - "s.n.]"
+    - "?"
+    - "-"
+    - title
+    - no claims
+    - no authors
+    - no author
+    - not stated
+    - author not listed
+    - not listed
+    - no author listed
+    - author unknown
+    - "[venue not stated]"
+    - various
+    - author
+    - authors
+    - paper
+    - source
+    - target
+    - entity
+    - document
+  # a name that begins with one of these is a pointer, not a thing: "this
+  # inference scheme", "the proposed method". Matched case-sensitively on
+  # purpose, so "The Beatles" and "Various Artists" survive
+  vague_start:
+    - this
+    - these
+    - those
+    - our
+    - the proposed
+    - a proposed
+    - specific
+    - various
+    - different
+    - several
+    - some
+    - other
+  # a name that begins with one of these is not a thing at all, whatever
+  # its case
+  never_start:
+    - unknown
+    - (unknown
+    - supporting document

@@ -115,6 +115,13 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    names to write in English and a vocabulary pass which entities may be
    folded across languages; it says how names behave rather than what
    types exist, so it bumps no version and re-extracts nothing.
+   The words that say what a name *is* — which terms mean an
+   organization, which name a type, which are not names at all — are
+   `ontology/lexicon.yaml` beside the modules, not patterns in the
+   module that reads them. A cue is a stem or a whole word, it changes
+   what a typing rule guesses and never what the ontology accepts, and
+   the loader keeps the file out of the composed modules so it cannot
+   join the version string.
    Growing a module is its version bump. Renaming or removing a type is
    a data migration. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.
@@ -286,6 +293,16 @@ reference `docs/ask.md`.
   expects (`parse.languages`), with a stopword count as the fallback
   where it is not installed. It says nothing rather than guess, so a
   missing `lang` is always allowed.
+- An entity's names are `entity_labels`: one preferred name per
+  language (migration 22 holds it; `store.add_label` demotes the one
+  already there) and any number of alternatives, which is the shape SKOS
+  gives a concept. A label carries its language, the producer, the run
+  and, when it is what the entity used to be called, `was` — so
+  `store.unmerge_run` puts a renamed entity's name back as well as
+  undoing its merges. `store.link` lands on the entity that answers to a
+  name when none carries it, so a rename does not start the split over.
+  `entities.name` is still the identity; making it a display label is
+  `docs/stratification.md` step 5, to be done whole.
 - The document field is written in one language, English. `meta.summary`
   is the summary it indexes, `meta.summaries` holds every summary there
   is keyed by language, so the German summary of a German document is

@@ -17,6 +17,7 @@ producer ``typing-rules``.
 
 from __future__ import annotations
 
+import functools
 import re
 import sqlite3
 from dataclasses import dataclass, field
@@ -129,85 +130,56 @@ ATTRIBUTES = frozenset(
         "duration",
     }
 )
-_ORG = re.compile(
-    r"\b(universit|institut|laborator|\blabs?\b|department|dept\.|faculty|school|"
-    r"college|centre|center|foundation|fund\b|council|academy|gmbh|inc\.?\b|ltd|"
-    r"corporation|company|group|studios?\b|research|cnrs|ircam|ccrma|mit\b|"
-    r"hochschule|fraunhofer|association|society|consortium|programme|program\b|"
-    r"agency|ministry|technolog|audio|software|systems|instruments|electronics|"
-    r"devices|networks|solutions|media|records|project)",
-    re.IGNORECASE,
-)
+# The words that say what a name is live in ``ontology/lexicon.yaml``
+# beside the types they are about, not here: they are data about the
+# ontology, and a regular expression in this module was invisible to it
+# (docs/stratification.md, stratum C). Built once per lexicon version.
+
+
+@functools.lru_cache(maxsize=4)
+def _cues(version: str) -> dict[str, re.Pattern[str]]:
+    lex = ontology.lexicon()
+
+    def alt(cues: tuple[tuple[str, ...], tuple[str, ...]]) -> re.Pattern[str]:
+        """A stem matches from the start of a word on, a whole word must
+        be the whole word. Longest first, so "inc." wins over "inc"."""
+        stems, words = cues
+        parts = [rf"\b{re.escape(w)}" for w in sorted(stems, key=len, reverse=True)]
+        parts += [rf"\b{re.escape(w)}\b" for w in sorted(words, key=len, reverse=True)]
+        return re.compile("|".join(parts) or r"(?!x)x", re.IGNORECASE)
+
+    return {
+        "org": alt(lex.organization),
+        "top": alt(lex.top_organization),
+        "never": re.compile(
+            "|".join(r"^" + re.escape(w) for w in lex.never_start) or r"(?!x)x",
+            re.IGNORECASE,
+        ),
+        # case-sensitive on purpose: "The Beatles" and "Various Artists" stay
+        "vague": re.compile(
+            "|".join(r"^" + re.escape(w) + r"\b" for w in lex.vague_start) or r"(?!x)x"
+        ),
+    }
+
+
+def cues() -> dict[str, re.Pattern[str]]:
+    return _cues(ontology.lexicon().version)
+
+
 _PARTICLES = "van|von|de|der|den|du|la|le|di|da"
 _PERSON = re.compile(
     r"^[A-ZÀ-Ý][\w'\-\.]*(?: (?:[A-ZÀ-Ý][\w'\-\.]*|" + _PARTICLES + r")){1,4}$"
 )
-_TYPE_WORD = re.compile(
-    r"\b(tool|software|library|plugin|service|system|method|algorithm|technique|dataset|corpus|database|benchmark|concept)\b",
-    re.IGNORECASE,
-)
-_WORD_TYPE = {
-    "tool": "tool",
-    "software": "tool",
-    "library": "tool",
-    "plugin": "tool",
-    "service": "tool",
-    "system": "tool",
-    "method": "method",
-    "algorithm": "method",
-    "technique": "method",
-    "dataset": "dataset",
-    "corpus": "dataset",
-    "database": "dataset",
-    "benchmark": "dataset",
-    "concept": "concept",
-}
 
 
 _URL = re.compile(r"^(https?://|www\.)", re.IGNORECASE)
 _ACRONYM = re.compile(r"^[A-Z]{2,7}$")
-_NOISE_NAMES = frozenset(
-    {
-        "unknown",
-        "none",
-        "n/a",
-        "n.d.",
-        "s.n.",
-        "[s.n.]",
-        "s.n.]",
-        "?",
-        "-",
-        "title",
-        "no claims",
-        "no authors",
-        "no author",
-        "not stated",
-        "author not listed",
-        "not listed",
-        "no author listed",
-        "author unknown",
-        "[venue not stated]",
-        "various",
-        "author",
-        "authors",
-        "paper",
-        "source",
-        "target",
-        "entity",
-        "document",
-    }
-)
 _NOT_A_NAME = re.compile(r"not stated|unknown|/|\bn\.?d\.?\b|^\W*$", re.IGNORECASE)
 
 
-_VAGUE = re.compile(
-    r"^(this|these|those|our|the proposed|a proposed|specific|various|different|"
-    r"several|some|other)\b"
-)
-_NOT_A_THING = re.compile(
-    r"^(unknown\b|\(unknown|comment: \d+ pages?|supporting document\b"
-    r"|fig(ure)?\.? ?\d)",
-    re.IGNORECASE,
+# what the lexicon cannot say in words: a shape
+_NOT_A_THING_SHAPE = re.compile(
+    r"^(comment: \d+ pages?|fig(ure)?\.? ?\d)", re.IGNORECASE
 )
 _REFNUM = re.compile(r"\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]")
 
@@ -217,15 +189,17 @@ def _placeholder(name: str) -> bool:
     "target name", "unknown", "(unknown paper)", "this inference scheme",
     "supporting document [34]", a bare URL, an empty pattern."""
     low = " ".join(name.lower().split())
+    c = cues()
     if _REFNUM.search(name) and len(_REFNUM.sub("", name).split()) <= 3:
         return True
     return (
         low in store.PLACEHOLDER_NAMES
-        or low in _NOISE_NAMES
+        or low in ontology.lexicon().exact
         or bool(_URL.match(low))
         or bool(_MALFORMED.search(name))
-        or bool(_VAGUE.match(name))  # lower case on purpose: "The Beatles" stays
-        or bool(_NOT_A_THING.match(name))
+        or bool(c["vague"].match(name))  # case-sensitive: "The Beatles" stays
+        or bool(c["never"].match(name))
+        or bool(_NOT_A_THING_SHAPE.match(name))
     )
 
 
@@ -251,29 +225,23 @@ def _looks_venue(name: str) -> bool:
     )
 
 
-_TOP_ORG = re.compile(
-    r"universit|hochschule|college|institute of technology|gmbh|\binc\b|\bltd|"
-    r"corporation|foundation|ministry|agency",
-    re.IGNORECASE,
-)
-
-
 def _inside(src: str, dst: str) -> bool:
     """Two organizations where the first can be part of the second: a
     lab in a university, a group in a company — never a university in a
     course, and never two universities (aliases of one, more likely)."""
+    top = cues()["top"]
     return (
         _looks_org(src)
         and _looks_org(dst)
-        and not (_TOP_ORG.search(src) and not _TOP_ORG.search(dst))
-        and not (_TOP_ORG.search(src) and _TOP_ORG.search(dst))
+        and not (top.search(src) and not top.search(dst))
+        and not (top.search(src) and top.search(dst))
     )
 
 
 def _looks_org(name: str) -> bool:
     # an organization word wins over the shape of a name: "Stanford
     # University" and "Waves Audio" are two capitalized words, and organizations
-    return bool(_ORG.search(name))
+    return bool(cues()["org"].search(name))
 
 
 def _looks_person(name: str) -> bool:
@@ -281,7 +249,7 @@ def _looks_person(name: str) -> bool:
     # longer than a surname gets ("Betriebssysteme" is a course, not a person)
     return (
         bool(_PERSON.match(name))
-        and not _ORG.search(name)
+        and not cues()["org"].search(name)
         and all(len(w) <= 14 for w in name.split())
     )
 
@@ -424,12 +392,12 @@ def decide_unmapped(
             )
         return "open", [], None
     if rel in ("mentions", "references", "discusses", "names"):
-        m = _TYPE_WORD.search(item.get("reason") or "")
-        if m and (title and src == title or src == item["src"]):
+        said = ontology.lexicon().type_of(item.get("reason") or "")
+        if said and (title and src == title or src == item["src"]):
             st = own if title and src == title else "paper"
             return (
                 "link",
-                [store.Edge(src, st, "mentions", dst, _WORD_TYPE[m.group(1).lower()])],
+                [store.Edge(src, st, "mentions", dst, said)],
                 "mentions",
             )
         return "open", [], None

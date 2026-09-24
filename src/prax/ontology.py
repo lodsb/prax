@@ -415,12 +415,70 @@ def parse(text: str) -> Ontology:
     return compose([parse_module(text)])
 
 
+LEXICON = "lexicon"  # a file beside the modules that is not one of them
+
+
 def load_dir(directory: Path) -> Ontology:
-    files = sorted(directory.glob("*.yaml"))
+    # the lexicon is words *about* the types, not types: composed as a
+    # module it would join the version string, and every document would
+    # look unread against the new version
+    files = sorted(f for f in directory.glob("*.yaml") if f.stem != LEXICON)
     if not files:
         raise ValueError(f"no ontology modules in {directory}")
     return compose(
         [parse_module(f.read_text(encoding="utf-8"), name=f.stem) for f in files]
+    )
+
+
+@dataclass(frozen=True)
+class Lexicon:
+    """The words that say what a name is, and that a name is not one.
+
+    Data beside the types they are about (``ontology/lexicon.yaml``)
+    rather than regular expressions in the module that reads them, so a
+    cue can be added, versioned and measured like anything else the
+    ontology holds. It changes what a typing rule guesses about a misfit,
+    never what the ontology accepts, so it bumps no module version.
+    """
+
+    version: str = "0"
+    # (stems, whole words): a stem matches from the start of a word on, a
+    # word must be the whole one — "mit" is MIT and not Smith
+    organization: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
+    top_organization: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
+    by_type: tuple[tuple[str, tuple[str, ...]], ...] = ()  # ordered: first wins
+    exact: frozenset[str] = frozenset()
+    vague_start: tuple[str, ...] = ()
+    never_start: tuple[str, ...] = ()
+
+    def type_of(self, name: str) -> str | None:
+        """The type a name's own words say it is, or None."""
+        low = name.lower()
+        for etype, cues in self.by_type:
+            if any(cue in low for cue in cues):
+                return etype
+        return None
+
+
+def parse_lexicon(text: str) -> Lexicon:
+    data = yaml.safe_load(text) or {}
+    words = data.get("not_a_name") or {}
+
+    def seq(section: Any) -> tuple[str, ...]:
+        return tuple(str(x) for x in (section or []))
+
+    def cues(section: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        section = section or {}
+        return seq(section.get("stems")), seq(section.get("words"))
+
+    return Lexicon(
+        version=str(data.get("version") or "0"),
+        organization=cues(data.get("organization")),
+        top_organization=cues(data.get("top_organization")),
+        by_type=tuple((str(k), seq(v)) for k, v in (data.get("by_type") or {}).items()),
+        exact=frozenset(str(x).lower() for x in (words.get("exact") or [])),
+        vague_start=seq(words.get("vague_start")),
+        never_start=seq(words.get("never_start")),
     )
 
 
@@ -443,3 +501,17 @@ def current() -> Ontology:
     """The ontology on disk; re-parsed only when a file changes."""
     p = path()
     return _load(p, _stamp(p))
+
+
+@functools.lru_cache(maxsize=4)
+def _load_lexicon(p: Path, stamp: tuple[Any, ...]) -> Lexicon:
+    f = (p / f"{LEXICON}.yaml") if p.is_dir() else p.with_name(f"{LEXICON}.yaml")
+    if not f.exists():
+        return Lexicon()  # a host without one: the callers fall back to nothing
+    return parse_lexicon(f.read_text(encoding="utf-8"))
+
+
+def lexicon() -> Lexicon:
+    """The words beside the types; re-parsed only when the file changes."""
+    p = path()
+    return _load_lexicon(p, _stamp(p))

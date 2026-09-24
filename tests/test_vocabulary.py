@@ -328,3 +328,80 @@ def test_the_fold_lands_on_the_survivor_not_the_twin(client: TestClient) -> None
     # and it is not asked again (the third entity of the fixture is its
     # own candidate, which is right)
     assert eid not in {r["id"] for r in store.foreign_names(con)}
+
+
+# ------------------------------------------- one name per thing, afterwards
+
+
+def test_a_name_the_graph_knows_lands_on_the_entity_that_owns_it(
+    client: TestClient,
+) -> None:
+    """The payoff of the pass. A merge leaves the old name on an entity
+    of its own, which `traverse` resolves; a *rename* does not, so
+    without this the next German recipe would make `Knoblauchzehen`
+    again and the split would start over."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.name_in_english(con, eid, "garlic cloves", run="r9")
+    assert not con.execute(
+        "SELECT 1 FROM entities WHERE name = ?", ("Knoblauchzehen",)
+    ).fetchone()  # nothing carries the old name now
+
+    again = store.link(
+        con,
+        store.Edge("Rezept", "recipe", "calls_for", "Knoblauchzehen", "ingredient"),
+        source_doc=None,
+        producer="test",
+    )
+    assert again
+    row = con.execute("SELECT dst FROM edges WHERE id = ?", (again,)).fetchone()
+    assert row["dst"] == eid  # the entity that answers to that name
+
+
+def test_a_label_shared_by_two_entities_of_one_type_is_a_question(
+    client: TestClient,
+) -> None:
+    """Two entities of one type answering to a name is not resolved by
+    taking the lower id: a new entity is made and the pass can decide."""
+    con = client.app.state.con
+    a = _german_entity(con, client, "first", "concept")
+    b = _german_entity(con, client, "second", "concept")
+    for eid in (a, b):
+        store.add_label(con, eid, "shared name", lang="de", producer="test", run="r0")
+    store.link(
+        con,
+        store.Edge("Rezept", "document", "about", "shared name", "concept"),
+        source_doc=None,
+        producer="test",
+    )
+    made = con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = 'concept'", ("shared name",)
+    ).fetchone()
+    assert made is not None and made["id"] not in (a, b)
+
+
+def test_one_preferred_name_per_language(client: TestClient) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Olivenöl", "ingredient")
+    store.add_label(con, eid, "olive oil", lang="en", kind="pref", run="r0")
+    store.add_label(con, eid, "olive-oil", lang="en", kind="pref", run="r1")
+    prefs = con.execute(
+        "SELECT label FROM entity_labels WHERE entity_id = ? AND lang = 'en'"
+        " AND kind = 'pref'",
+        (eid,),
+    ).fetchall()
+    assert [r["label"] for r in prefs] == ["olive-oil"]  # the later one wins
+    # and the one it displaced is still a name the entity answers to
+    assert eid in store.entities_by_label(con, "olive oil")
+
+
+def test_a_rename_is_an_alt_label_marked_as_what_it_was(client: TestClient) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.name_in_english(con, eid, "garlic cloves", run="r10")
+    row = con.execute(
+        "SELECT kind, was FROM entity_labels WHERE entity_id = ? AND label = ?",
+        (eid, "Knoblauchzehen"),
+    ).fetchone()
+    assert row["kind"] == "alt"  # the SKOS kinds are pref and alt
+    assert row["was"] == 1  # and this one is what the entity was called
