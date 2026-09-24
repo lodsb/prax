@@ -24,10 +24,9 @@ them as LaTeX (``marker``, howto 3h).
 
 from __future__ import annotations
 
-import re
 from typing import Any
 
-from prax import chunking
+from prax import chunking, markup
 
 SYSTEM = """\
 You read one display equation from a document in a personal research
@@ -43,7 +42,7 @@ and do not describe the text itself."""
 
 AROUND_CHARS = 700  # of the text on each side of the equation
 MAX_TOKENS = 160
-READ_BY = re.compile(r"^\*Formula, as read by (?P<model>.+?):\*", re.MULTILINE)
+READ_BY = markup.read_by_pattern("Formula")
 WHICH = ("new", "again")
 
 

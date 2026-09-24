@@ -138,7 +138,7 @@ chooses them by hand.
 Five steps, each one green on its own, in this order. None of them
 changes what the store holds; they change who owns a pattern.
 
-### 1. `prax.markup` — the artifact's grammar, written once
+### 1. `prax.markup` — the artifact's grammar, written once ✅
 
 One module that both *writes* and *matches* every mark prax puts in a
 text: the page mark, a figure line and its reference, `*Read by …*`, a
@@ -153,11 +153,26 @@ The test is the one the current code cannot pass: for each mark, what the
 writer emits is what the matcher matches. Today nothing checks that, and
 the page mark exists in seven places.
 
-*Cost*: a day, entirely mechanical. *Risk*: low — every replacement is
-checkable by running the chunker over the library and comparing chunk
-fingerprints, which `store.chunk_fingerprint` already computes.
+*Done 2026-09-24.* `prax.markup` holds the page mark, the figure line
+and its inlined form, the reading line, the Markdown heading, the table
+separator, the display formula and its number, the section headings, and
+the document link — each as a matcher *and* a writer. Eleven definitions
+across six modules became references to one. The page mark is the measure
+of it: written in four places in `prax.parsers` and matched by three
+copies in two other modules, one file holding two of them; there is now
+one source string and three compiled forms from it (a line, a whole text,
+unanchored), and no `re.compile` outside `markup` mentions it.
 
-### 2. `prax.answers` — what a model said, cleaned
+The test is the one the old arrangement could not have: for every mark,
+what the writer emits is what the matcher matches. `markup` imports
+nothing of prax, which a test asserts — it is the bottom of the stack.
+
+One thing measuring caught: `titles.head` matched the page mark
+*anywhere* while the shared pattern is anchored to its own line. That is
+a behaviour difference, so the unanchored form is kept as its own name
+rather than quietly tightened inside a refactor.
+
+### 2. `prax.answers` — what a model said, cleaned ✅
 
 One `clean()` that takes the preamble, the fence, the quotation marks,
 the trailing full stop, a reflected label and a `<tool_call>` tail off an
@@ -169,8 +184,14 @@ is the caller's business, *what the model wrapped it in* is not.
 The test is every failure any of the nine has met, in one file. There are
 about fifteen, and they are already written down across seven test files.
 
-*Cost*: half a day. *Risk*: low, and it pays immediately — the next
-module that calls a model gets fifteen known failures handled.
+*Done 2026-09-24.* `prax.answers` holds `unwrap`, `first_line`,
+`strip_tokens` and `is_label_line`, and 27 cases in one file — every
+failure the seven modules had met separately, plus two the pooling found:
+`Here's` has no space before the `'s`, and a label can end at a quote
+instead of a colon (`The English name is "olive oil".`). `summaries`,
+`vocabulary`, `titles` and `lineformat` call it; what a *good* answer
+looks like stays with each of them, because that is about the answer and
+this is about the packaging.
 
 ### 3. The lexicons move next to the ontology
 
@@ -198,7 +219,7 @@ that is code cannot.
 *Cost*: two days. *Risk*: moderate, because the cues currently decide
 types on 22,089 edges. Do it with the queue as the test set (below).
 
-### 4. Calibrate instead of choosing
+### 4. Calibrate instead of choosing ✅
 
 Two places pick a number by hand: the resolution tiers' similarity
 thresholds and `review.py`'s cue precedence. Both have ground truth
@@ -212,8 +233,20 @@ then decide whether a cue is dropped, a threshold moves, or the whole
 thing becomes a small model trained on the queue (the Snorkel shape:
 rules vote, the queue labels, something else decides).
 
-*Cost*: an afternoon to measure, unknown to act. *Risk*: none for the
-measurement, which is the point of doing it first.
+*Done 2026-09-24*, and the first answer was that the question could not
+be asked: no edge recorded *which* rule wrote it, and the pass's 3.3%
+retirement rate is two passes withdrawn wholesale, not a judgement. A
+rule signs its work now (`typing-rules/<rule>`).
+
+What could be measured is the rules against the typing model where both
+spoke about the same pair of names: the rules have no opinion on 93% of
+those items, and where both speak they split 265 to 266. Per rule it is
+not a coin flip at all — `funded_by` agrees 94%, `developed_by` 92%,
+`affiliation` 86%, while `affiliated_with->written_at` differs on 54 of
+56 and `cites->uses` on 27 of 30. Four rules decide 76 edges between them
+and agree with the model on 2; they are candidates for deletion rather
+than repair. The table and the caveats are
+`docs/eval/typing-rules-2026-09-24.md`.
 
 ### 5. Normalization, properly
 

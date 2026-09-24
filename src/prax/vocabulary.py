@@ -37,6 +37,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
+from prax import answers
+
 CANONICAL = "en"  # the language the graph's common names are written in
 MAX_WORDS = 6  # a longer "name" is a sentence, and not this pass's business
 LOOK_AT = 200  # chunks of a name's occurrences to look through, at most
@@ -45,11 +47,6 @@ _WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
 # what a model says when it has nothing to change, in the words it uses
 _UNCHANGED = re.compile(
     r"^(same|unchanged|already english|n/?a|none|-)\W*$", re.IGNORECASE
-)
-_PREAMBLE = re.compile(
-    r"^\s*(?:the )?(?:english (?:name|term|translation)|translation|answer)"
-    r"\s*(?:is|:)\s*",
-    re.IGNORECASE,
 )
 
 SYSTEM = (
@@ -104,19 +101,13 @@ def in_english_text(con: sqlite3.Connection, name: str) -> bool:
 
 def parse(out: str) -> str | None:
     """The name out of what the model returned, or None when it returned
-    nothing usable."""
-    text = (out or "").strip().splitlines()[0].strip() if (out or "").strip() else ""
-    text = _PREAMBLE.sub("", text).strip()
-    # a full stop outside the quotes and a quote outside the full stop are
-    # both what a model does; take whichever is outermost until neither is
-    for _ in range(3):
-        was = text
-        text = text.strip().rstrip(".").strip()
-        if len(text) >= 2 and text[0] in "\"'“„«" and text[-1] in "\"'”“»":
-            text = text[1:-1]
-        if text == was:
-            break
-    text = text.strip()
+    nothing usable.
+
+    The wrapping is ``prax.answers``; what is peculiar here is that a
+    model with nothing to change says so in words rather than repeating
+    the name, and "same" is not a name.
+    """
+    text = answers.first_line(out)
     if not text or _UNCHANGED.match(text):
         return None
     return text

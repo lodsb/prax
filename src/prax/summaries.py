@@ -29,11 +29,10 @@ what to do with it is `docs/PLAN.md`, not this module.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import language
+from prax import answers, language
 
 CANONICAL = "en"  # the language the document field is written in
 
@@ -47,18 +46,8 @@ SYSTEM = (
     " works exactly as printed, and leave a term the field uses untranslated"
     " where English uses it too."
 )
-# a model that has been told not to explain itself and explains itself
-_PREAMBLE = re.compile(
-    r"^\s*(?:here (?:is|'s) (?:the )?(?:english )?(?:translation|version)"
-    r"|english(?: translation| version)?|translation)\s*[:\-—]\s*",
-    re.IGNORECASE,
-)
-_FENCE = re.compile(r"^```[a-z]*\s*|\s*```$", re.IGNORECASE)
-# the message's own words, handed back above the translation
-_TITLE_LINE = re.compile(r"^(?:document )?title\s*:.*(?:\n|$)", re.IGNORECASE)
-_DESCRIPTION = re.compile(
-    r"^(?:description|text|summary)\b[^:\n]{0,40}:[ \t]*\n?", re.IGNORECASE
-)
+# the preamble, the fence, the quotes and the message's own labels are
+# `prax.answers` — every module that calls a model met them separately
 MAX_GROWTH = 2.5  # a translation longer than this is the model talking
 
 
@@ -94,14 +83,22 @@ def user_message(summary: str, *, lang: str | None = None, title: str = "") -> s
 
 def parse(out: str) -> str | None:
     """The English text out of what the model returned, or None when it
-    returned nothing usable."""
-    text = _FENCE.sub("", (out or "").strip()).strip()
-    text = _PREAMBLE.sub("", text).strip()
-    text = _TITLE_LINE.sub("", text).strip()
-    text = _DESCRIPTION.sub("", text).strip()
-    if len(text) >= 2 and text[0] in "\"'“„«" and text[-1] in "\"'”“»":
-        text = text[1:-1].strip()
-    return text or None
+    returned nothing usable.
+
+    The wrapping — a fence, a preamble, a label the message used, quotes —
+    is ``prax.answers``; what is left here is the one thing peculiar to a
+    summary, which is that the model may put the title on its own line
+    above the description.
+    """
+    text = answers.FENCE.sub("", answers.strip_tokens(out or "").strip()).strip()
+    # "Document title: X\nDescription, written in German:\n<the English>":
+    # a model handed labelled fields fills the form in, and the answer is
+    # under the labels. A label on the *last* line is kept, because what
+    # follows it on that line is the answer
+    lines = text.splitlines()
+    while len(lines) > 1 and answers.is_label_line(lines[0].strip()):
+        lines = lines[1:]
+    return answers.unwrap("\n".join(lines), sentence=True) or None
 
 
 def acceptable(text: str, original: str) -> str | None:
@@ -114,7 +111,7 @@ def acceptable(text: str, original: str) -> str | None:
     the last, the detector the first, and this is where a translation
     that came back wearing the prompt is caught rather than stored.
     """
-    if _TITLE_LINE.match(text) or _DESCRIPTION.match(text):
+    if answers.is_label_line(text):
         return "the prompt's labels"
     if len(text) > max(400, len(original) * MAX_GROWTH):
         return "too long"

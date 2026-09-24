@@ -13,7 +13,7 @@ import re
 import sqlite3
 from typing import Any
 
-from prax import blocks
+from prax import blocks, markup
 
 from .base import _read_archive, _reading, _serialized
 from .documents import _set_promote, get_meta, index_text, register, set_meta
@@ -40,7 +40,7 @@ PAGE_AUTHORS = ("human", "agent")
 _SLUG_CHARS = re.compile(r"[^a-z0-9]+")
 # a link to a library document in a page's own prose, ``[title](#doc/12)``:
 # the page annotates that document, an edge kept while the link stands
-_DOC_LINK = re.compile(r"\]\(#doc/(\d+)(?:[?#][^)]*)?\)")
+_DOC_LINK = markup.DOC_LINK
 _LINK_EVIDENCE = "link in page"
 
 

@@ -38,6 +38,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from prax import markup
+
 MIN_HTML_BYTES = 4_000  # smaller inline images are icons
 BIG_HTML_BYTES = 40_000  # a photo, caption or not
 MIN_ALT_WORDS = 3
@@ -48,7 +50,7 @@ MAX_FIGURES = 60  # per document
 MAX_SIDE = 1600  # pixels, for the vision model
 _CAPTION = re.compile(r"^\W*(fig\.?|figure|abb\.?|abbildung)\s*\d+", re.IGNORECASE)
 # the page a line belongs to, as pymupdf4llm marks it (prax.chunking)
-_PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
+_PAGE_MARK = markup.PAGE_MARK
 # a caption *line*, which is stricter than _CAPTION: the number is
 # followed by a delimiter, so "Figure 2 shows a recorded performance" —
 # prose about a figure — is not taken for the figure's own caption
@@ -57,11 +59,9 @@ _CAPTION_LINE = re.compile(
     re.IGNORECASE,
 )
 
-REF = re.compile(
-    r"^!\[(?P<alt>[^\]\n]*)\]\(figure:(?P<ref>[0-9a-f]{16,64})\)[ \t]*$", re.MULTILINE
-)
-READ_BY = re.compile(r"^\*Figure, as read by (?P<model>.+?):\*", re.MULTILINE)
-FIGURES_HEADING = "## Figures"
+REF = markup.FIGURE_REF
+READ_BY = markup.read_by_pattern("Figure")
+FIGURES_HEADING = markup.FIGURES_HEADING
 UNCAPTIONED = "Figure on page "  # a PDF image no caption claims
 # a picture of a scanned page: no object in the original holds it, so
 # marker's crop is kept as its own content-addressed artifact, and its
@@ -70,11 +70,7 @@ UNCAPTIONED = "Figure on page "  # a PDF image no caption claims
 FILED = "Picture on page "
 # a picture a parser inlines in its text for the door to file: what the
 # door turns into a figure reference before the text is indexed
-DATA_IMAGE = re.compile(
-    r"^!\[(?P<alt>[^\]\n]*)\]"
-    r"\((?P<url>data:image/[a-z+.-]+;base64,[A-Za-z0-9+/=\s]+)\)[ \t]*$",
-    re.MULTILINE,
-)
+DATA_IMAGE = markup.DATA_IMAGE
 MAX_FILED_BYTES = 8_000_000  # a picture bigger than this is not filed
 
 # a caption whose picture no extractor could pull out of the PDF: the
@@ -252,7 +248,7 @@ def _pdf_caption(page: Any, bbox: Any) -> str:
 
 def line_for(fig: Figure) -> str:
     alt = fig.caption.replace("]", ")").replace("\n", " ").strip()
-    return f"![{alt}](figure:{fig.ref})"
+    return markup.figure_ref(alt, fig.ref)
 
 
 def place(markdown: str, figures: list[Figure]) -> str:
@@ -325,7 +321,7 @@ def _anchor_line(lines: list[str], fig: Figure) -> int | None:
     return None
 
 
-_PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
+_PAGE_MARK = markup.PAGE_MARK
 
 
 def _page_span(lines: list[str], page: int) -> tuple[int | None, int | None]:
@@ -434,7 +430,7 @@ def file_inline(text: str, archive: Any) -> tuple[str, int]:
         ref = archive(found[0])
         n += 1
         alt = m.group("alt").replace("]", ")")
-        return f"![{alt}](figure:{ref})"
+        return markup.figure_ref(alt, ref)
 
     text = DATA_IMAGE.sub(sub, text)
     # a data line the pattern did not take (malformed): no blob stays behind

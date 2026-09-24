@@ -30,7 +30,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from prax import ontology
+from prax import answers, ontology
 from prax.extraction import CONFIDENCES, Extraction, Triple
 
 SEP = "\t"
@@ -193,7 +193,7 @@ _KEY = re.compile(r"^[a-z_]+=")
 _SNAKE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+$")
 
 
-_TOKENS = re.compile(r"</?tool_call>|<\|im_end\|>|<\|endoftext\|>")
+_TOKENS = answers.TOKENS  # the chat template leaking into the text
 
 
 def _unkey(field: str) -> str:

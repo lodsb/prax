@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from prax import extraction
+from prax import answers, extraction, markup
 
 HEAD_CHARS = 1500
 TITLE_MAX = 160
@@ -47,7 +47,7 @@ SECTION_HEADING = re.compile(
     r"|summary|zusammenfassung|inhalt|references|aufgabe \d|chapter \d)",
     re.IGNORECASE,
 )
-PAGE_MARK = re.compile(r"--- end of page\.page_number=\d+ ---")
+PAGE_MARK = markup.PAGE_MARK_ANY
 PICTURE = re.compile(
     r"<!-- Start of picture text -->.*?<!-- End of picture text -->", re.DOTALL
 )
@@ -338,7 +338,7 @@ Introduction or Table of Contents, never a person's name alone, no quotes,
 no label, under 120 characters, in normal title or sentence case (fix
 broken capitalisation from scanning, no ALL CAPS)."""
 
-LABEL = re.compile(r"^(title|document|dokument|titel|answer)\s*[:=]\s*", re.IGNORECASE)
+LABEL = answers.LABEL  # kept as a name: the guess prompt refers to it
 WORD = re.compile(r"[^\W\d_]{4,}", re.UNICODE)
 
 
@@ -371,10 +371,7 @@ def parse(text: str) -> str | None:
     """The first line of the model's answer as a title: labels, quotes and
     trailing chatter removed; None when nothing usable is left."""
     for line in text.splitlines():
-        t = line.strip().strip("\"'“”‘’")
-        t = LABEL.sub("", t).strip().strip("\"'“”‘’")
-        t = t.split("<tool_call>")[0].split("</")[0].strip()
-        t = " ".join(t.split())
+        t = " ".join(answers.unwrap(line.split("</")[0]).split())
         if len(t) >= 3:
             return t[:TITLE_MAX].rstrip(" ,;:-")
     return None

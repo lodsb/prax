@@ -67,7 +67,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import blocks, furniture, ingredients, references
+from prax import blocks, furniture, ingredients, markup, references
 
 TARGET_CHARS = 1200  # flush a text chunk when the next paragraph would exceed this
 MIN_CHARS = 300  # merge into the previous chunk when smaller than this at a boundary
@@ -90,26 +90,21 @@ KINDS = (
     "ingredients",
 )
 
-_PAGE_MARK = re.compile(r"^--- end of page\.page_number=(\d+) ---\s*$")
-_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
-_TABLE_SEP = re.compile(r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
+_PAGE_MARK = markup.PAGE_MARK
+_HEADING = markup.HEADING
+_TABLE_SEP = markup.TABLE_SEP
 _FIGURE = re.compile(
     r"^(\**(Fig\.?|Figure)\s*\d+|!\[[^\]\n]*\]\(figure:)", re.IGNORECASE
 )
-_FIGURE_REF = re.compile(
-    r"^!\[(?P<alt>[^\]\n]*)\]\(figure:(?P<ref>[0-9a-f]{16,64})\)", re.MULTILINE
-)
-_READ_BY = re.compile(
-    r"^\*(?:Figure|Formula), as read by (?P<model>.+?):\* ?(?P<text>.*)$",
-    re.MULTILINE,
-)
+_FIGURE_REF = markup.FIGURE_REF
+_READ_BY = markup.READ_BY
 # A display equation on a line of its own, as a parser that reads maths
 # writes it: `$$ x = \frac{a}{b}, \quad (4) $$`. Inline maths stays in the
 # sentence it belongs to — a chunk is a region of the artifact, and an
 # inline formula cannot be one without tearing the text around it.
-_FORMULA = re.compile(r"^\$\$(?P<latex>.+)\$\$$", re.DOTALL)
+_FORMULA = markup.FORMULA
 # the equation number a paper refers to it by, at the end: "\quad (4)"
-_EQ_NUMBER = re.compile(r"\\(?:quad|qquad|hfill|tag)\s*\{?\(?(\d{1,3}[a-z]?)\)?\}?\s*$")
+_EQ_NUMBER = markup.EQ_NUMBER
 # What makes a line of maths a formula rather than a stray symbol a parser
 # lifted out of a diagram (`$$\rightarrow K$$`): it states a relation, or it
 # is long enough to be an expression in its own right. "E = mc^2" passes on

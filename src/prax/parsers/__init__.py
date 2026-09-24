@@ -70,7 +70,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from prax import config
+from prax import config, markup
 from prax.parsers import figures
 
 
@@ -322,7 +322,7 @@ def _ocr_pages(doc: Any, engine: Any, *, right_to_left: bool) -> str:
             texts = [] if result.txts is None else list(result.txts)
             text = "\n".join(_ocr_rows(boxes, texts, right_to_left=right_to_left))
         out.append(text)
-        out.append(f"\n\n--- end of page.page_number={page.number + 1} ---\n\n")
+        out.append(markup.page_break(page.number + 1))
     return "".join(out)
 
 
@@ -439,7 +439,7 @@ def _vision_pages(data: bytes) -> str:
             else:
                 pix = page.get_pixmap(dpi=dpi)
                 out.append(vision.transcribe_page(pix.tobytes("jpg", jpg_quality=88)))
-            out.append(f"\n\n--- end of page.page_number={page.number + 1} ---\n\n")
+            out.append(markup.page_break(page.number + 1))
     return "".join(out)
 
 
@@ -529,11 +529,11 @@ def _marker_pages(text: str, count: int) -> str:
 
     def mark(m: re.Match[str]) -> str:
         n = int(m.group(1))
-        return "\n\n" if n == 0 else f"\n\n--- end of page.page_number={n} ---\n\n"
+        return "\n\n" if n == 0 else markup.page_break(n)
 
     out = _MARKER_PAGE.sub(mark, text).strip()
     if count:
-        out += f"\n\n--- end of page.page_number={count} ---\n"
+        out += markup.page_break(count).rstrip() + "\n"
     return out
 
 
@@ -677,7 +677,7 @@ def _trafilatura_variant() -> str:
     return "" if _comments_wanted() else "nocomments"
 
 
-COMMENTS_HEADING = "## Comments"
+COMMENTS_HEADING = markup.COMMENTS_HEADING
 
 
 def _trafilatura(data: bytes) -> str:
