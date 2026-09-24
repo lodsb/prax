@@ -381,7 +381,7 @@ R14). Design in `docs/ui.md`.
 - [x] `traverse` surfaces confidence, evidence, ontology version and
       validity on every edge (store, API and MCP)
 
-## Next modules (planned, after the v5 backlog finishes)
+## Next modules (done 2026-09-13 — craft, kitchen, workshop)
 
 Agreed 2026-09-12. Three small modules, written the way v5 and studio
 were: small first, twenty documents read with the local model, the
@@ -434,7 +434,7 @@ one-off clean-up.
       by case or punctuation, edges whose evidence quote is no longer in
       the document, documents whose archive file is missing.
 
-## Housekeeping pass (planned, after the v5 backlog finishes)
+## Housekeeping pass (done 2026-09-12–16)
 
 Measured 2026-09-12 against the live store (9,500 documents, 1.7 GB).
 The rule for this pass: quality first; a dependency is dropped only when
@@ -638,7 +638,7 @@ since a batch pass opens the SQLite file directly today.
       script, measure the door's memory there, decide `i8` or the
       desktop's `f16`.
 
-## Reading the mathematics, and what prax runs (planned, 2026-09-16)
+## Reading the mathematics, and what prax runs (done 2026-09-17)
 
 Two threads that met on 2026-09-15. The measurement first
 (`docs/eval/marker-equations-2026-09-15.md`): the eight most
@@ -1395,6 +1395,48 @@ could only be reached by a script that opens the database.
       theory` a `method`. The pass will meet the polysemy question head
       on rather than beside it, and should hand a clash to the review
       queue rather than guess.
+
+## A level above the neighbourhood: communities as nodes (planned, 2026-09-25)
+
+`docs/eval/traverse-neighbourhood-2026-09-25.md` measured what the second
+hop returns and why it is 3.4 MB, and the repair it proposes — a path
+shape and a ranking by how many documents connect an idea to the entry
+point — fixes the size for one call's work. It does not give the graph
+anything to say *above* the neighbourhood, which is the other half of
+what a reader wants: not only "what is next to the Fourier transform"
+but "what region of the library is this".
+
+The standard answer is GraphRAG's: partition the entity graph into
+communities (Leiden, hierarchically), write a summary of each with a
+model, and keep the summary as a node of its own. It suits prax better
+than it suits most, because the machinery is already here — the
+`sections` step writes a summary per heading region with the local
+model, and a community summary is the same pass over a cluster of
+entities instead. Nothing paid, nothing new to install.
+
+What it would want, in order:
+
+- [ ] **A partition, and a way to keep it.** Leiden over the live edges,
+      folded to canonical entities. It is a derived index like chunks,
+      so it may be rebuilt at any time; the question is what triggers a
+      rebuild. Probably the `maintain` clock rather than every write.
+- [ ] **A summary per community**, written by the `sections` model over
+      the cluster's entities and their strongest edges, stamped with
+      what it read so a moved partition makes it stale rather than
+      wrong — the rule `meta.sections` already follows.
+- [ ] **A way in.** `traverse` names the community an entry point sits
+      in; `search` may offer it as a hit of its own; `ask` gets a
+      cheaper way in than chunks for a question about a region rather
+      than a fact.
+- [ ] **A decision about the hubs first.** 164 of the 200 biggest hubs
+      are papers, and the largest is `Proceedings of the International
+      Conference…` at degree 1,951 — a container that should probably
+      not be an entity. A partition computed before that is decided
+      will cluster around artifacts. This is the cheap part and it
+      comes first.
+
+Not started. It is a pass, a table and a staleness rule, so it wants its
+own stage rather than a corner of the traverse change.
 
 ## Later / maybe
 
