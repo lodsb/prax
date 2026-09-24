@@ -200,12 +200,13 @@ passes. The numbers are here for scale, not as targets.
 
 | | |
 |---|---|
-| Documents | 9,950: 9,447 PDFs, 317 web pages, 103 text files, 73 notes. 9,233 came from Zotero; the rest were uploaded, sent from the browser or dropped in the folder |
-| Text and passages | 995,000 passages (859,000 text, 92,000 figures, 37,000 tables, 7,000 code), every one with a vector; 6,781 acronyms the library defines |
-| Figures | 92,078 across 5,107 documents, served out of the originals. 11,212 have been read by the local vision model, and each reading can be searched like a paragraph |
-| Graph | 147,000 live relations over 126,600 entities (42,700 papers, 29,600 concepts, 17,200 methods, 9,500 authors), against six ontology modules |
+| Documents | 10,305: 9,324 PDFs, 493 web pages, 104 text files, 73 notes, 34 talks from YouTube, 8 pages of my own. 8,990 came from Zotero; the rest were uploaded, sent from the browser or dropped in the folder |
+| Text and passages | 1,265,000 passages (937,000 text, 148,000 reference entries, 109,000 figures, 45,000 tables, 17,000 formulas, 9,000 code), 1,106,000 of them with a vector; 7,570 acronyms the library defines |
+| Figures | 62,400 with a picture across 4,966 documents, served out of the originals; 33,000 read by the local vision model, and each reading can be searched like a paragraph. Where the picture was drawn with vector paths and no extractor could lift it out, the region above its caption is rendered instead |
+| Graph | 162,000 live relations over 144,000 entities (43,600 papers, 25,600 concepts, 15,500 methods, 9,500 authors), against six ontology modules. 22,900 names are folded into another: the same thing under a different spelling, an initials form, or — since 2026-09-24 — the same thing in another language |
+| Languages | 71% English, 21% German, the rest French, Spanish, Italian and Dutch. The document field is written in English whatever the document is in, and an entity keeps the document's own word as a label in its own language |
 | Retrieval | MRR 0.905 for the combined search over 62 real queries (0.82 keywords alone, 0.79 vectors alone), hit@1 0.85 |
-| Running | one Windows desktop: service, worker and llama-server started at login, a backlog pass at 03:00, a backup at 04:30. A 2.0 GB database and a 20 GB archive |
+| Running | one Windows desktop: service, worker and llama-server started at login, a backlog pass at 03:00, maintenance at 03:30, a backup at 04:30. A 2.3 GB database, a 1.3 GB vector index and a 20 GB archive |
 
 715 of those documents are scans nothing could read yet. The service
 has not moved onto the serving board, though the code for it is in
@@ -273,12 +274,14 @@ product, with sources, is in
 | [`docs/architecture.md`](docs/architecture.md) | The system as built: hosts, the life of a document and of a query, the modules, where to touch what. |
 | [`CLAUDE.md`](CLAUDE.md) | Invariants and conventions. The file an agent session loads. |
 | [`docs/rationale.md`](docs/rationale.md) | Decision records: what was chosen, what was measured, when to revisit. |
+| [`docs/stratification.md`](docs/stratification.md) | What the patterns in the code are for, what comparable systems do about it, and the plan that follows. |
+| [`docs/normalization.md`](docs/normalization.md) | One thing under several names: the five kinds of duplicate and the mechanism for each, with what the measurements changed. |
 | [`docs/ui.md`](docs/ui.md) | The web UI: the endpoints it uses, its routes and rules. |
 | [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The look: the mark printed the way an 1877 label was, the six themes as four values, the type. |
 | [`docs/sources.md`](docs/sources.md), [`docs/extension.md`](docs/extension.md) | Where documents come from, and the browser extension. |
 | [`docs/claude-workflow.md`](docs/claude-workflow.md) | One agent workflow in full, as an example: the Claude Code plugin. |
 | [`docs/eval/`](docs/eval/) | Measurements: extractors, retrieval, the local models. |
-| ontology [`v2`](docs/ontology-v2.md) [`v4`](docs/ontology-v4.md) [`v5`](docs/ontology-v5.md) [`v6`](docs/ontology-v6.md) [`v7`](docs/ontology-v7.md), [`studio`](docs/ontology-studio.md), [`craft`](docs/ontology-craft.md) | How the vocabulary grew, one version at a time, and why. |
+| ontology [`v2`](docs/ontology-v2.md) [`v4`](docs/ontology-v4.md) [`v5`](docs/ontology-v5.md) [`v6`](docs/ontology-v6.md) [`v7`](docs/ontology-v7.md) [`v8`](docs/ontology-v8.md), [`studio`](docs/ontology-studio.md), [`craft`](docs/ontology-craft.md) | How the vocabulary grew, one version at a time, and why. |
 | [`docs/PLAN.md`](docs/PLAN.md), [`docs/research.md`](docs/research.md) | The staged plan, and the survey of the field. |
 | [`prax.example.yaml`](prax.example.yaml) | Template for `prax.yaml`: models, steps, every other setting. |
 

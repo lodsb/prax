@@ -5,6 +5,20 @@ A design note, 2026-09-23, written after the multilingual study
 what should prax do about one thing arriving under several names? The
 measurements here are of the live store on that day.
 
+> **What became of it, 2026-09-24.** The language row was built and run
+> over the library (1,435 names decided; `docs/PLAN.md` and
+> `prax.vocabulary`), and building it settled two of the guesses below
+> the other way round. **The library-as-dictionary proposal was wrong in
+> the form written here** and right in another: a miner of
+> "Knollensellerie (celeriac)" glosses yields almost nothing, but asking
+> whether a name occurs in an *English document at all* is a far better
+> test than any rule per language. And the prevention rule was inverted:
+> naming an entity in the document's own words costs a re-extraction of
+> the library, while the model already writes English 95% of the time,
+> so the prompt says English and the stragglers are a pass. Both are
+> marked in place below. What is now open is `docs/stratification.md`
+> step 5, the identity change.
+
 The short answer is that normalization is not string munging. It is
 identity resolution, it produces claims, and a claim in prax carries who
 made it, when, and how sure they were. Invariant 8 says an edge is
@@ -20,7 +34,7 @@ them apart is most of the design.
 | surface | `Short-Time Fourier Transform` / `short-time fourier transform` | a deterministic key | done (`resolution.normalize`, tier 1a) |
 | subtype | `Ann Author` as `person` and as `author` | the ontology's hierarchy | done 2026-09-23 (tier 1c) |
 | morphological | `audio unit` / `audio units`, `taco` / `tacos` | a stemmer, per language | half done |
-| language | `Olivenöl` / `olive oil` | a shared vector space, or a dictionary | open |
+| language | `Olivenöl` / `olive oil` | the library as the dictionary, then a model | done 2026-09-24 (`prax.vocabulary`) |
 | polysemy | the paper *Variational Mode Decomposition* and the method | **not a merge** | open, an ontology question |
 
 ### What the live graph held
@@ -112,13 +126,28 @@ up to 20 points of F1, even across scripts. In prax it is a consequence
 of changing the embedder, not new machinery. It is step 2 of the
 multilingual study and the single highest-value change here.
 
-**The library as its own dictionary.** A bilingual library defines its
-own terms in passing: "Knollensellerie (celeriac)", "Faltung
+**The library as its own dictionary.** ~~A bilingual library defines
+its own terms in passing: "Knollensellerie (celeriac)", "Faltung
 (convolution)". `prax.acronyms` already mines "phrase (ACRONYM)" out of
 every text; the same miner with a different shape yields translation
-pairs with a document behind each one, which is a *feature with
-evidence* rather than an outside claim. Cheap, and it improves as the
-library grows.
+pairs with a document behind each one.~~
+
+**Measured 2026-09-24, and it does not.** Over 300 German documents the
+gloss miner found 2,348 distinct parentheticals and almost none were
+translations: "Raum (Datenstruktur)", "Groß (Jane)", "Archéologie
+(Istanbul)". The shape that makes acronyms work does not carry over.
+
+The library *is* the dictionary, but for a different question. Not
+"what is the English for this?" — "is this English at all?" A name that
+occurs in the text of an English document is an English name; one that
+occurs nowhere in the English half is a candidate. One FTS match, 7 ms a
+name, no rule per language, and it generalizes for free: it caught
+`psycho-acoustique` with no French anywhere in it. Measured against a
+regex of German endings on 400 entities, the regex found 24 and the
+library 102, and what only the library found was real — `compilerbau`,
+`erwartungswert`, `wahrscheinlichkeitsraum`. It is wrong in the cheap
+direction: a rare English term nobody else wrote down becomes a
+candidate, and the model hands it back unchanged.
 
 **A hand-made list, where the domain is closed.** The kitchen is 65
 documents and perhaps 300 ingredients; a file of German-English pairs
@@ -174,12 +203,19 @@ embedder.
 Half of this is made at extraction time. A German recipe whose
 ingredient list reads *Sellerieknollen, Olivenöl, Salz* produced the
 entities *celeriac, olive oil, salt*. The model translated, silently and
-only sometimes. The rule should be that an entity is named **in the
-document's own words**, because those are the evidence and everything
-else is a claim the store cannot check. Normalization then merges the
-German name into the English one where it can show why. That is a prompt
-change and a re-extraction, so it waits for the next ontology version
-rather than arriving alone.
+only sometimes.
+
+~~The rule should be that an entity is named **in the document's own
+words**.~~ **Inverted 2026-09-24, on the measurement.** Of 42,068 live
+entities of a common type only 372 are named in German: the model
+already writes English about 95% of the time, so asking for the
+document's own words would mean re-extracting the library to *undo* what
+it mostly gets right. The prompt asks for English instead — and says
+which names that applies to, from the ontology's `naming:` key rather
+than a list beside it, so a common noun translates and `Niklas Klügel`
+never does. The document's own word is kept as a label in its own
+language, so nothing is lost and a German search still reaches the
+entity. The stragglers were a pass, not a re-extraction.
 
 ## Measuring it
 

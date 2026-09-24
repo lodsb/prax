@@ -550,3 +550,70 @@ the page's edges the way any link does, so a re-ask that drops a source
 retires its edge. An edge given as `annotates` (a note made from a
 document's page) is never retired by an edit that leaves the link out;
 the evidence column says which edges came from links.
+
+## R18. One language for the field and the graph, and the ontology says which names may move
+
+**Decision.** The document field (`meta.summary`) and the graph's
+common-noun names are written in English, whatever language the document
+is in. Which names that applies to is a property of the *type*, not a
+list in the code: `naming: common` on an entity type means its names are
+a kind of thing, which every language has its own word for, and `proper`
+means one particular thing whose name is the same string everywhere. The
+document's own word is kept beside the English one as a label in its own
+language (`entity_labels`, `meta.summaries`), never replaced by it.
+
+**Why.** Nothing chose the language before, and the result was not
+bilingual but random: only 12% of German documents were described in
+German, and `Olivenöl` sat beside `olive oil` with the evidence split
+between them. The field is most of what the document-level search reads,
+so its language decides which queries can reach a document at all.
+
+The rule has to live with the types because two passes need the same
+answer — the extraction prompt, which says what to write, and the
+vocabulary pass, which says what may be folded. A list in either would
+drift from the other. And it has to distinguish a kind from a
+particular: translating `Niklas Klügel` is a worse mistake than leaving
+`Virtualisierung`, so a type that says nothing is proper.
+
+**Cost.** A prompt change, a pass over the stragglers (273 summaries,
+1,435 names, both on the local model, both free), and a review item
+wherever the same words are two types. Not a re-extraction: the model
+already wrote English about 95% of the time, which is why the decision
+went this way round rather than "name it in the document's own words"
+(`docs/normalization.md`, inverted on the measurement).
+
+**Revisit when** a second reader wants the library in another language
+throughout, at which point `entities.name` should stop being the
+identity and become a display label per language — the SKOS shape the
+label table is already built for (`docs/stratification.md`, step 5).
+
+## R19. Ask the corpus, not the author
+
+**Decision.** Where a pass needs to know something about language or
+usage, ask the library rather than encode a rule. "Is this name
+English?" is answered by whether any English document in the library
+uses it, one FTS match; not by a list of German endings.
+
+**Why.** Measured against each other on 400 entities, a regex of German
+morphemes found 24 and the corpus test 102, and what only the corpus
+found was real — `compilerbau`, `erwartungswert`,
+`wahrscheinlichkeitsraum`, none of which carries an umlaut. The corpus
+test needs no rule per language and generalizes for nothing: it caught
+`psycho-acoustique` with no French in it anywhere. It is also wrong in
+the cheap direction — a rare English term nobody else wrote down becomes
+a candidate, and the model hands it back unchanged.
+
+The same reasoning had already been tried the other way and failed. The
+first proposal was to mine "Knollensellerie (celeriac)" glosses the way
+`prax.acronyms` mines "phrase (ACRONYM)": over 300 German documents it
+found 2,348 parentheticals and almost no translations. The corpus is a
+good dictionary for *membership* and a poor one for *equivalence*.
+
+**Cost.** 7 ms a name, and a dependency on the library being large
+enough in the canonical language to be representative. A small or
+one-language library makes everything a candidate, which costs model
+calls that all come back unchanged.
+
+**Revisit when** a pass needs equivalence rather than membership — what
+*is* the English for this — where a model or a real lexicon is the
+answer and the corpus is not.

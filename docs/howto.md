@@ -112,7 +112,28 @@ place.
 `ontology/` holds the entity and relation types the graph accepts, one
 module per domain: `core.yaml`, `research.yaml`, `studio.yaml`,
 `craft.yaml`, `kitchen.yaml`, `workshop.yaml`. The format is in
-`src/prax/ontology.py`. Each module has a `version`. `store.link`
+`src/prax/ontology.py`. Each module has a `version`.
+
+Two things beside the types are data too, and neither bumps a version,
+because neither changes what the ontology accepts:
+
+- **`naming:`** on an entity type says whether its names are `proper`
+  (one particular thing: a person, a publisher, a product, a title —
+  the same string in every language) or `common` (a kind of thing,
+  which every language has its own word for). The nearest declaration
+  wins, so a subtype may differ from its parent either way: a `dish` is
+  a `work` whose name translates, a `standard` is a `concept` whose
+  name does not. A type that says nothing and inherits nothing is
+  proper, because translating a name that should not be translated is
+  the worse mistake. It tells the extraction prompt what to write in
+  English and the vocabulary pass what may be folded.
+- **`lexicon.yaml`** holds the words that say what a name *is*: the
+  organization cues, the words that name a type, and the three kinds of
+  non-name. A cue is a `stem` (matched from the start of a word on:
+  "universit" catches Universität) or a `word` (the whole word: "mit"
+  is MIT and not Smith). The loader keeps this file out of the composed
+  modules — as one it would join the version string and every document
+  in the library would look unread. `store.link`
 rejects any type the modules do not declare. To grow a module, add
 types and bump its version; edges keep the version they were written
 under. `PRAX_ONTOLOGY` points at a different file (the tests use it).
@@ -757,11 +778,86 @@ job for those six. Either way the answer may be nothing: a title, a
 page of numbers or a two-line note carries no language, and that is
 allowed everywhere.
 
-This is the first step of the multilingual work
-(`docs/research-multilingual-2026-09-23.md`). Recording the language is
-what the steps after it need. A search that can filter by it. An
-extraction prompt that stops translating entity names by itself. The
-measurement of how much of the library a given embedder can read.
+Recording the language is what the two passes below need, and what
+the embedder measurement used
+(`docs/eval/retrieval-multilingual-2026-09-24.md`: the multilingual
+model is worse in *both* languages on this library, so the embedder does
+not change).
+
+### One language for the document field
+
+`meta.summary` is most of what `documents_fts` and the document vectors
+search, so the language it is written in decides which queries can reach
+a document at all. Nothing chose it until 2026-09-24: the extraction
+prompt said nothing, so the model followed the source when it felt like
+it, and only 12% of German documents were described in German — random,
+not bilingual.
+
+The field is English now. The prompt says so, and the `summaries` step
+brings the older ones into line:
+
+    prax work --steps summaries --scope all
+
+It reads no document — the summary itself is the whole input — so it
+runs on the local model in seconds a piece and costs nothing. It is a
+watched step, so a worker asks for it without being told, and the queue
+is normally empty.
+
+Nothing is thrown away. `meta.summaries` holds every summary there is,
+keyed by language, so the German one of a German document survives the
+English one that replaced it; `meta.summary_lang` says which language
+the canonical one is in, and the `languages` pass of `prax maintain`
+fills it in for anything that arrives without it. A summary too short to
+place claims no language and is never handed to a model.
+
+If a model hands its instructions back with the answer — four of the
+first eight came out as `Document title: …` — `prax heal --check
+labelled-summaries --apply` takes the label off; no model call, and the
+English underneath is usually right.
+
+### One name per thing: the vocabulary pass
+
+The graph's half of the same problem. `Olivenöl` had ten documents
+behind it and `olive oil` one, so a walk from either reached half the
+evidence; `Speicherverwaltung` sat beside `memory management`,
+`kurzzeit-fourier-transformation` beside `short-time Fourier transform`
+and its 92 edges.
+
+    prax work --steps vocabulary            # named, never watched
+
+Which names may be folded at all is the ontology's `naming:` key: a
+`common` type names a kind of thing, which every language has its own
+word for, and a `proper` one names a particular thing whose name is the
+same string everywhere. `Niklas Klügel` is never translated.
+
+Which names are not English is asked of the **library**, not of a rule
+per language: a name that occurs in the text of an English document is
+an English name, and one that occurs nowhere in the English half is a
+candidate. That needs no German endings, and it caught
+`psycho-acoustique` — French — with no French anywhere in it.
+
+Then the local model answers and the answer is recorded as evidence:
+
+- an entity of the same type already called that → the two are merged;
+- nobody called that yet → the entity is renamed and the name the
+  document used stays as a label in its own language, so a German search
+  still reaches it;
+- an entity of *another* type called that → a review item, not a fold.
+  `Olivenöl` is an `ingredient` where `olive oil` is a `concept`, and
+  which is right is a question. The queue caught `aktie` against an
+  entity named `stock` typed as an **author**.
+
+The run signs every label and every merge, so a round is undoable whole:
+
+    prax resolve --unmerge vocabulary-20260924T051618
+
+Every entity that run folded stands on its own again and every one it
+renamed is called what it was called. Use it after a bad round rather
+than repairing rows: tighten the check, take the round back, run again.
+
+The pass over the library on 2026-09-24 decided 1,435 names — 556
+renamed, 309 merged, 509 already the word English uses, 89 type clashes
+queued — in about half an hour of the local model.
 
 ### What a capture carries that is not the document
 
@@ -886,9 +982,20 @@ replay against the current ontology first, then the rules.
 
 A rule retypes, flips, renames the relation, or drops what no relation
 can hold. It never invents. What it links is written as INFERRED edges
-with the producer `typing-rules` and one run id per pass, with the
-item's evidence and source document, so a pass can be retired like any
-other producer's. Unmapped items are covered too, when the relation the
+with the producer `typing-rules/<rule>` — the pass, then the rule that
+decided it — and one run id per pass, with the item's evidence and
+source document, so a pass can be retired like any other producer's and
+a *rule* can be judged on its own edges.
+
+Until 2026-09-24 the producer was the bare `typing-rules`, so of 22,855
+edges none said which of sixty-odd rules wrote it, and no rule could be
+measured after the fact. What was measurable instead, against the typing
+model where both had spoken about the same pair of names, is
+`docs/eval/typing-rules-2026-09-24.md`: the rules have no opinion on 93%
+of those items, and of the rest `funded_by` agrees with the model 94% of
+the time while `affiliated_with->written_at` differs on 54 of 56. Four
+rules decide 76 edges between them and agree on 2. Before changing any
+of them, let the stamped pass run and measure per rule directly. Unmapped items are covered too, when the relation the
 model named and the shape of the names decide the case. Those cases
 are affiliation between a person and an institution, supervision
 between two people, authorship between a title and a person, funding,
