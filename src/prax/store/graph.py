@@ -678,13 +678,17 @@ def entities_by_label(con: sqlite3.Connection, label: str) -> list[int]:
 
 @_serialized
 def unmerge_run(con: sqlite3.Connection, run: str) -> int:
-    """Undo a round of merging: every entity a run folded away stands on
-    its own again, and the labels it wrote are gone. Returns how many
-    entities came back.
+    """Undo a round: every entity the run folded away stands on its own
+    again, every entity it renamed is called what it was called, and the
+    labels it wrote are gone. Returns how many entities came back.
 
     The counterpart of ``retire_run`` for edges. A merge is a claim, and
     a pass that claimed wrongly has to be undoable, or nobody can try a
-    new rule on the live graph.
+    new rule on the live graph. A rename is a claim too — the vocabulary
+    pass makes both — which is why the name an entity had is written as a
+    ``was`` label under the same run and put back here. Without that a
+    pass could be taken back halfway: the folds undone, the wrong names
+    left behind.
     """
     rows = con.execute(
         "SELECT from_entity FROM entity_labels WHERE run = ? AND from_entity"
@@ -697,9 +701,17 @@ def unmerge_run(con: sqlite3.Connection, run: str) -> int:
             "UPDATE entities SET canonical_id = NULL WHERE id = ? OR canonical_id = ?",
             (entity_id, entity_id),
         )
+    renamed = con.execute(
+        "SELECT entity_id, label FROM entity_labels WHERE run = ? AND kind = 'was'",
+        (run,),
+    ).fetchall()
+    for r in renamed:
+        con.execute(
+            "UPDATE entities SET name = ? WHERE id = ?", (r["label"], r["entity_id"])
+        )
     con.execute("DELETE FROM entity_labels WHERE run = ?", (run,))
     con.commit()
-    return len(ids)
+    return len(ids) + len(renamed)
 
 
 @_serialized
@@ -783,10 +795,16 @@ def name_in_english(
         }
     was = str(row["name"])
     lang = lang or language.detect(was)
+    # the same name can be several entities, of several types: the one to
+    # fold into is one of this entity's own type that is still standing.
+    # Without the ordering `page table` the concept (itself already merged
+    # away) answered for `page table` the method, and a fold that should
+    # have happened was reported as a clash instead (2026-09-24)
     twin = con.execute(
         "SELECT id, type, canonical_id FROM entities WHERE name = ? COLLATE NOCASE"
-        " AND id != ?",
-        (english, entity_id),
+        " AND id != ? ORDER BY (type = ?) DESC, (canonical_id IS NULL) DESC, id"
+        " LIMIT 1",
+        (english, entity_id, row["type"]),
     ).fetchone()
     out: dict[str, Any] = {"entity": entity_id, "was": was, "name": english}
     if twin is not None and twin["type"] != row["type"]:
@@ -833,12 +851,14 @@ def name_in_english(
         out["into"] = survivor
         return out
     con.execute("UPDATE entities SET name = ? WHERE id = ?", (english, entity_id))
+    # `was` rather than `alt`: it is both the name a search in that
+    # language must still reach, and what ``unmerge_run`` puts back
     add_label(
         con,
         entity_id,
         was,
         lang=lang,
-        kind="pref" if lang else "alt",
+        kind="was",
         producer=producer,
         run=run,
         confidence=confidence,

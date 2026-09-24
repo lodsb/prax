@@ -136,6 +136,14 @@ def acceptable(name: str, given: str) -> str | None:
         return "too long"
     if name.strip().lower() == given.strip().lower():
         return "unchanged"
+    # a name that is the given one with words taken out is not a
+    # translation of it: "outdoor travel health insurance" came back as
+    # "travel health insurance", which is the model editing an English
+    # name it was asked to repeat (2026-09-24)
+    words = [w.lower() for w in _WORD.findall(name)]
+    had = [w.lower() for w in _WORD.findall(given)]
+    if words and all(w in had for w in words):
+        return "only words taken out"
     return None
 
 

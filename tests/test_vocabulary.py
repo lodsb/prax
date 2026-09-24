@@ -241,3 +241,54 @@ def test_a_name_kept_as_english_is_not_asked_again(
     assert rep["actions"] == {"kept": 1}
     work._leases.clear()
     assert client.get("/work/vocabulary").json()["items"] == []
+
+
+def test_a_name_with_words_only_taken_out_is_refused() -> None:
+    """The candidate net catches rare English names too, and the model
+    was told to repeat them. One came back shortened instead."""
+    runtime = Runtime({"outdoor travel health insurance": "travel health insurance"})
+    assert (
+        vocabulary.rename(runtime, "outdoor travel health insurance", "concept") is None
+    )
+    assert (
+        vocabulary.acceptable(
+            "travel health insurance", "outdoor travel health insurance"
+        )
+        == "only words taken out"
+    )
+    # a real translation shares no words with what it replaces, or adds some
+    assert vocabulary.acceptable("white beans", "Weiße Bohnen") is None
+    assert vocabulary.acceptable("trapezoidal rule", "Trapez rule") is None
+
+
+def test_a_rename_is_taken_back_with_the_run(client: TestClient) -> None:
+    """A rename is a claim like a merge; taking back only the merges
+    would leave the wrong names behind."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Seitentabelle", "concept")
+    store.name_in_english(con, eid, "side table", run="r5")
+    assert (
+        con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()["name"]
+        == "side table"
+    )
+    assert store.unmerge_run(con, "r5") == 1
+    assert (
+        con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()["name"]
+        == "Seitentabelle"
+    )
+    assert store.entity_labels(con, eid) == []
+
+
+def test_the_twin_is_one_of_its_own_type_that_is_still_standing(
+    client: TestClient,
+) -> None:
+    """The same name can be several entities of several types. Taking
+    whichever came first made `page table` the concept answer for `page
+    table` the method, and turned a fold into a clash."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Seitentabelle", "method")
+    concept = _german_entity(con, client, "page table", "concept")
+    method = _german_entity(con, client, "page table", "method")
+    assert concept < method  # the wrong one comes first by id
+    got = store.name_in_english(con, eid, "page table", run="r6")
+    assert got["action"] == "merged" and got["into"] == method
