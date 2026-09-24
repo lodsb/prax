@@ -17,6 +17,7 @@ from __future__ import annotations
 STEPS = (
     "parse",
     "titles",
+    "summaries",
     "extract",
     "promote",
     "typing",

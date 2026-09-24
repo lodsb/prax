@@ -34,6 +34,7 @@ from prax import (
     hostinfo,
     models,
     parsers,
+    summaries,
     titles,
     usage,
     work,
@@ -360,6 +361,43 @@ def do_titles(
                 }
             )
             _say(log_, f"title doc {doc_id}: {guess.title[:60]!r}")
+    return results
+
+
+def do_summaries(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each summary translated into the language the document field is
+    written in. Nothing reads the document: the summary is the input."""
+    results = []
+    for it in items:
+        doc_id, lang = it["doc_id"], it.get("lang")
+        if runtime is None:
+            results.append({"doc_id": doc_id, "tried": "no summaries model"})
+            continue
+        try:
+            got = summaries.translate(
+                runtime,
+                str(it.get("summary") or ""),
+                lang=lang,
+                title=str(it.get("title") or ""),
+            )
+        except models.ServerNotReady as exc:
+            _say(log_, f"summary doc {doc_id}: not yet — {exc}")
+            results.append({"doc_id": doc_id, "defer": True})
+            continue
+        if got is None:
+            results.append({"doc_id": doc_id, "tried": f"no usable {lang} translation"})
+            continue
+        results.append(
+            {
+                "doc_id": doc_id,
+                "summary": got.text,
+                "lang": summaries.CANONICAL,
+                "source": runtime.name,
+            }
+        )
+        _say(log_, f"summary doc {doc_id} ({lang}): {got.text[:60]!r}")
     return results
 
 
@@ -710,6 +748,23 @@ def run_once(
             )
             out["titles"] = (
                 f"{rep.get('applied', 0)} retitled, {rep.get('skipped', 0)} left"
+            )
+        elif step == "summaries":
+            spec = models.resolve("summaries")
+            if _paid(spec):
+                out["summaries"] = f"skipped: the summaries step is {spec.name} (paid)"
+                continue
+            runtime = models.runtime(spec) if spec else None
+            results = do_summaries(items, runtime, log_=log_)
+            rep = door.post_json(
+                "/work/summaries",
+                {
+                    "results": results,
+                    "run": f"summaries-{time.strftime('%Y%m%dT%H%M%S')}",
+                },
+            )
+            out["summaries"] = (
+                f"{rep.get('applied', 0)} translated, {rep.get('skipped', 0)} left"
             )
         elif step == "extract":
             spec = models.resolve("extract")

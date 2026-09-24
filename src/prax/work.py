@@ -372,6 +372,34 @@ def hand_out(
             )
         _lease(step, [i["doc_id"] for i in items], worker)
         return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
+    if step == "summaries":
+        # a summary written in another language than the document field,
+        # translated by the summaries model. No document is read: the
+        # summary itself is the whole input, which is why this is seconds
+        # of a local model and not a re-extraction
+        if models.resolve("summaries") is None:
+            return {"step": step, "items": [], "lease_seconds": 0}
+        items = []
+        for doc_id, lang in pipeline.summaries_needed(con, untried_only=True):
+            if len(items) >= limit or not _free(step, doc_id, now):
+                continue
+            if not _in_scope(con, doc_id, scope):
+                continue
+            meta = store.get_meta(con, doc_id)
+            summary = str(meta.get("summary") or "")
+            if not summary:
+                continue
+            row = store.get_document(con, doc_id, max_chars=0)
+            items.append(
+                {
+                    "doc_id": doc_id,
+                    "lang": lang,
+                    "summary": summary,
+                    "title": (row["title"] if row else "") or "",
+                }
+            )
+        _lease(step, [i["doc_id"] for i in items], worker)
+        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
     if step == "typing":
         # untyped review items to the typing model, a batch of items each;
         # nothing without a model for the step
@@ -750,6 +778,37 @@ def take_in(
                     source=str(r.get("source") or worker),
                     run=run,
                     confidence=r.get("confidence"),
+                )
+            except Exception as exc:  # noqa: BLE001
+                out["errors"].append(
+                    {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
+                )
+                continue
+            out["applied"] += 1
+        return out
+    if step == "summaries":
+        run = payload.get("run") or f"summaries-{time.strftime('%Y%m%dT%H%M%S')}"
+        for r in results:
+            doc_id = int(r["doc_id"])
+            _release(step, [doc_id])
+            if r.get("error"):
+                out["errors"].append({"doc_id": doc_id, "error": r["error"]})
+                continue
+            if r.get("tried"):
+                # the model could not translate it: the summary stays as it
+                # was written, and the document is not offered again
+                with contextlib.suppress(Exception):
+                    store.summary_tried(con, doc_id, run, str(r["tried"]))
+                out["skipped"] += 1
+                continue
+            try:
+                store.set_summary(
+                    con,
+                    doc_id,
+                    str(r["summary"]),
+                    lang=str(r.get("lang") or "") or None,
+                    source=str(r.get("source") or worker),
+                    run=run,
                 )
             except Exception as exc:  # noqa: BLE001
                 out["errors"].append(

@@ -18,6 +18,7 @@ requires: [core]
 
 entity_types:
   technique:
+    naming: common
     description: >-
       A named way of doing something with hands, tools or heat: dovetail
       joint, reflow soldering, sous vide, lost-wax casting, French
@@ -26,6 +27,7 @@ entity_types:
       (an algorithm, an experimental procedure). Lowercase unless it
       carries a person's or a place's name.
   material:
+    naming: common
     description: >-
       What a thing is made of, as a kind and never as an amount: oak, 3 mm
       plywood, PLA, 60/40 solder, plain flour, linseed oil, brass sheet.

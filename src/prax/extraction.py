@@ -26,7 +26,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from prax import ontology, store
+from prax import ontology, store, summaries
 
 DEFAULT_MODEL = "claude-opus-5"
 CALL_TIMEOUT = 180.0  # seconds; a call takes under 90, the SDK default is 600
@@ -362,6 +362,17 @@ def system_prompt(
             " not support."
         ),
         (
+            # which types those are is the ontology's `naming:` key, not a
+            # list kept here: the same split decides what the vocabulary
+            # pass may fold across languages (prax.vocabulary)
+            "Write English even where the document is not, for the summary and for"
+            f" the name of any {', '.join(sorted(onto.common_types))}: these name a"
+            " kind of thing, and every language has its own word for it. Every other"
+            " type names one particular thing — a person, an organization, a title, a"
+            " product, a place — so give its name exactly as the document prints it,"
+            " accents and all, and never translate it."
+        ),
+        (
             "confidence: EXTRACTED when the text states it, INFERRED when it clearly"
             " follows, AMBIGUOUS when you are unsure. evidence: a short verbatim quote"
             " (under 200 characters) from the text that supports the triple; for"
@@ -372,8 +383,8 @@ def system_prompt(
             " with a one-line reason instead of forcing it."
         ),
         (
-            "summary: two or three sentences a reader would use to decide whether to"
-            " open the document."
+            "summary: two or three sentences in English that a reader would use to"
+            " decide whether to open the document."
         ),
     ]
     answer = (
@@ -877,7 +888,7 @@ def apply(
     if stale_now.get("extractor") == extractor or stale_now.get("requested"):
         meta.pop("extraction_stale")
     if extraction.summary:
-        meta["summary"] = extraction.summary
+        summaries.keep(meta, extraction.summary)
     if meta.get("extraction"):  # every model that has read the document
         history = meta.setdefault("extraction_history", [])
         history.append(meta["extraction"])

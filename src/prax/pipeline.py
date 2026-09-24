@@ -29,7 +29,16 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import config, embeddings, extraction, models, ontology, store, titles
+from prax import (
+    config,
+    embeddings,
+    extraction,
+    models,
+    ontology,
+    store,
+    summaries,
+    titles,
+)
 from prax.parsers import figures
 
 log = logging.getLogger("prax.pipeline")
@@ -178,6 +187,41 @@ def pdf_title(con: sqlite3.Connection, doc: dict[str, Any]) -> str | None:
 def file_name(doc: dict[str, Any]) -> str | None:
     z = (doc["meta"] or {}).get("zotero") or {}
     return z.get("filename") or doc["title"]
+
+
+def summaries_needed(
+    con: sqlite3.Connection,
+    *,
+    ids: list[int] | None = None,
+    untried_only: bool = False,
+) -> list[tuple[int, str]]:
+    """``(doc_id, lang)`` for the documents whose summary is not in the
+    language the document field is written in.
+
+    The language is read from ``meta.summary_lang``, which the extraction
+    writes and the ``languages`` pass of ``prax maintain`` fills in for
+    the summaries written before it existed. A summary nobody has
+    detected yet is not handed out: detecting it is free and belongs to
+    that pass, not to a model call.
+
+    With ``untried_only`` the documents a translation already failed on
+    are left out, as a guess costs a model call; a pass that wants them
+    again clears ``meta.summary_tried``.
+    """
+    sql = (
+        "SELECT id, json_extract(meta, '$.summary_lang') AS lang FROM documents"
+        " WHERE json_extract(meta, '$.summary') IS NOT NULL"
+        " AND json_extract(meta, '$.summary_lang') IS NOT NULL"
+        " AND json_extract(meta, '$.summary_lang') != ?"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    )
+    if untried_only:
+        sql += " AND json_extract(meta, '$.summary_tried') IS NULL"
+    args: tuple[Any, ...] = (summaries.CANONICAL,)
+    if ids is not None:
+        sql += f" AND id IN ({','.join('?' * len(ids))})"
+        args += tuple(ids)
+    return [(r["id"], str(r["lang"])) for r in con.execute(sql + " ORDER BY id", args)]
 
 
 def titles_needed(

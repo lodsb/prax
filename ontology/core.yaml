@@ -5,6 +5,17 @@
 # relations declared here on person hold for authors. Format:
 # src/prax/ontology.py. Bump `version` when a type or relation changes.
 #
+# `naming:` says whether a type's names are `proper` (one particular
+# thing: a person, a publisher, a product, a title — the same string in
+# every language) or `common` (a kind of thing, which every language has
+# its own word for). A type that declares nothing inherits from its
+# parent, and a root that declares nothing is proper, because translating
+# a name that should not be translated is the worse mistake. It is what
+# tells the extraction prompt which names to write in English and the
+# vocabulary pass which entities may be folded across languages. It is
+# not a change to the type set — no triple that validated before stops
+# validating — so it bumps no version and re-extracts nothing.
+#
 # core v1 (2026-09-12): split out of the single ontology.yaml (v5); the
 # shared types the modular ontology needs, and the two relations that
 # belong to people and organizations rather than to research.
@@ -52,6 +63,7 @@ entity_types:
       A creative work named as such: a piece of music, an album, a film,
       a book as a work rather than as the document at hand.
   concept:
+    naming: common
     description: >-
       An idea, topic, phenomenon or quantity a document is about: source
       separation, pitch perception, aliasing, room acoustics. Lowercase

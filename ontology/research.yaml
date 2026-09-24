@@ -57,6 +57,7 @@ entity_types:
       A journal, conference series or publisher where a paper appeared
       (IEEE ICASSP, JAES, DAFx, Springer).
   method:
+    naming: common
     description: >-
       A named algorithm, technique or procedure: nonnegative matrix
       factorization, extended Kalman filter, wave digital filter, PLP.
@@ -67,6 +68,7 @@ entity_types:
       A named corpus, benchmark or measurement set: MUSDB18, NSynth,
       a specific HRTF database.
   claim:
+    naming: common
     description: >-
       One sentence stating a result or assertion the document makes, in
       the document's own terms ("SSST resolves close tones that SST

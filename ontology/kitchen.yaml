@@ -29,6 +29,7 @@ entity_types:
       always the recipe; another recipe it names by title is a recipe too.
   dish:
     parent: work
+    naming: common  # potato salad is Kartoffelsalat
     description: >-
       What is made, under the name a person would say at the table: tarte
       tatin, ragù alla bolognese, sourdough loaf, cold brew, pierogi. The

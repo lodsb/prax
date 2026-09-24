@@ -375,6 +375,64 @@ def set_meta(
 
 
 @_serialized
+def set_summary(
+    con: sqlite3.Connection,
+    doc_id: int,
+    text: str,
+    *,
+    lang: str | None = None,
+    source: str,
+    run: str | None = None,
+) -> dict[str, Any]:
+    """Put a summary on a document, keeping the ones already there.
+
+    ``meta.summaries`` holds every summary we have keyed by language, so
+    translating a German summary into English never loses the German one;
+    ``meta.summary`` is the one the document field indexes, which is
+    English wherever an English one exists (``prax.summaries``). The field
+    is refreshed, so the new summary is searchable and the document vector
+    is embedded again.
+    """
+    from prax import summaries
+
+    text = text.strip()
+    if not text:
+        raise ValueError("a summary cannot be empty")
+    row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"] or "{}")
+    was = str(meta.get("summary") or "")
+    code = summaries.keep(meta, text, lang=lang)
+    meta.pop("summary_tried", None)  # it worked this time
+    meta["summary_source"] = source
+    meta["summary_run"] = run
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    changed = _refresh_document_field(con, doc_id)
+    con.commit()
+    return {
+        "doc_id": doc_id,
+        "lang": code,
+        "canonical": meta.get("summary") == text,
+        "replaced": was,
+        "field": changed,
+    }
+
+
+def summary_tried(
+    con: sqlite3.Connection, doc_id: int, run: str | None, why: str
+) -> None:
+    """Note that a summary could not be translated, so the next pass does
+    not hand out the same document to the same model for ever. A pass that
+    wants them again clears ``meta.summary_tried``."""
+    meta = get_meta(con, doc_id)
+    meta["summary_tried"] = {"run": run, "why": why[:200], "at": now()}
+    set_meta(con, doc_id, meta)
+
+
+@_serialized
 def retitle(
     con: sqlite3.Connection,
     doc_id: int,

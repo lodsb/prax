@@ -55,6 +55,13 @@ class EntityType:
     module: str
     parent: str | None = None
     description: str = ""
+    # how the type's names behave, "proper" or "common"; empty inherits
+    # from the parent, and a root that says nothing is proper (see
+    # ``Ontology.naming``)
+    naming: str = ""
+
+
+NAMINGS = ("proper", "common")
 
 
 @dataclass(frozen=True)
@@ -127,6 +134,36 @@ class Ontology:
 
     def is_a(self, name: str, ancestor: str) -> bool:
         return ancestor in self.ancestors(name)
+
+    def naming(self, name: str) -> str:
+        """Whether the type's names are ``proper`` or ``common``.
+
+        A proper name belongs to one particular thing — a person, a
+        publisher, a product, a title — and is the same string in every
+        language: *Niklas Klügel* is not translated, and neither is
+        *Einführung in die Softwaretechnik*. A common name is the name of
+        a kind of thing, which every language has its own word for:
+        *Olivenöl* and *olive oil* are one ingredient, *Virtualisierung*
+        and *virtualization* one concept.
+
+        The nearest declaration wins, so a subtype may differ from its
+        parent in either direction: a ``dish`` is a ``work`` whose name
+        translates, a ``standard`` is a ``concept`` whose name does not.
+        A type that says nothing and inherits nothing is proper, because
+        translating a name that should not be translated is the worse
+        mistake of the two.
+        """
+        for n in self.ancestors(name):
+            declared = self.types[n].naming
+            if declared:
+                return declared
+        return "proper"
+
+    @property
+    def common_types(self) -> frozenset[str]:
+        """The types whose names are a kind of thing, not a particular
+        one: what a vocabulary may be standardized across languages."""
+        return frozenset(n for n in self.types if self.naming(n) == "common")
 
     def canonical_type(self, name: str) -> str:
         """A type a model named, as this ontology spells it (aliases)."""
@@ -206,6 +243,18 @@ def _names(section: Any, what: str) -> dict[str, dict[str, Any]]:
     raise ValueError(f"{what} must be a list or mapping")
 
 
+def _naming(type_name: str, value: Any) -> str:
+    """A type's declared ``naming``, checked. Absent inherits."""
+    if value is None:
+        return ""
+    got = str(value).strip().lower()
+    if got not in NAMINGS:
+        raise ValueError(
+            f"entity type {type_name!r}: naming is {got!r}, one of {', '.join(NAMINGS)}"
+        )
+    return got
+
+
 def parse_module(text: str, *, name: str | None = None) -> Module:
     """One module file. Without ``module:`` the file is a module named
     ``name`` (default ``main``) that requires nothing."""
@@ -219,6 +268,7 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
             module=mod,
             parent=str(a["parent"]) if a.get("parent") else None,
             description=str(a.get("description") or "").strip(),
+            naming=_naming(n, a.get("naming")),
         )
         for n, a in _names(data.get("entity_types"), "entity_types").items()
     }

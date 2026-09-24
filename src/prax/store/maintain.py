@@ -451,9 +451,15 @@ def _lengths(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 
 def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The language of every document that does not say yet
-    (``prax.language`` over the head of its text artifact). Cheap and
-    idempotent: a document with ``meta.lang`` is passed over, so the
-    nightly only reads what arrived since."""
+    (``prax.language`` over the head of its text artifact), and of every
+    summary that does not say yet.
+
+    Cheap and idempotent: a document with ``meta.lang`` is passed over, so
+    the nightly only reads what arrived since. The summary's language is
+    read from the summary itself and costs no file at all; it is what
+    tells the ``summaries`` step which of them are not in the language the
+    document field is written in.
+    """
     from prax import language
 
     rows = con.execute(
@@ -484,10 +490,35 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             con.commit()
             job.update(done=n, total=len(rows), note=f"languages: {n} of {len(rows)}")
     con.commit()
+    from prax import summaries
+
+    written = con.execute(
+        "SELECT id, json_extract(meta, '$.summary') AS summary FROM documents"
+        " WHERE json_extract(meta, '$.summary') IS NOT NULL"
+        " AND json_extract(meta, '$.summary_lang') IS NULL"
+    ).fetchall()
+    said: Counter[str] = Counter()
+    for n, r in enumerate(written, 1):
+        code = language.detect(r["summary"])
+        if code is None:
+            continue
+        said[code] += 1
+        con.execute(
+            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+            " '$.summary_lang', ?) WHERE id = ?",
+            (code, r["id"]),
+        )
+        if n % 500 == 0:
+            con.commit()
+    con.commit()
     return {
         "read": len(rows),
         "unsure": unsure,
         **{k: v for k, v in found.most_common()},
+        "summaries_read": len(written),
+        "summaries_to_translate": sum(
+            v for k, v in said.items() if k != summaries.CANONICAL
+        ),
     }
 
 

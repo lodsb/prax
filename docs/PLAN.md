@@ -1258,6 +1258,78 @@ that rule wants its own measurement, because the failure it prevents
 (cropping from a sentence, sweeping the real caption into the picture)
 is worse than the one it causes.
 
+## 2026-09-24: the language nobody chose
+
+The reader's complaint was that the abstracts of German papers were
+sometimes English and sometimes German, "slightly random". The sources
+are not: over a balanced 600-document sample `meta.lang` disagrees with
+the body in 1%, and front matter in another language than the body turns
+up in about 2%. What is random is ours.
+
+Of 9,030 summaries, 8,746 are English and 273 are not, 270 of them
+German — but only 12% of German documents are summarised in German. An
+*Arbeitsbescheinigung* described in English, the brand-eins article
+beside it likewise, no rule. The cause is one silence: the extraction
+prompt asked for "two or three sentences a reader would use to decide
+whether to open the document" and said nothing about which language, so
+the model chose, mostly English. The same silence governs entity names
+three rules above it, which is where `celeriac` came from and why
+`Olivenöl` (10 edges) sits beside `olive oil` (8).
+
+It is not only untidy. `meta.summary` *is* most of the document field
+that `documents_fts` and `document_embeddings` search, so a German query
+meets an English description of a German document — part of the German
+keyword MRR of 0.39 against English's 0.91
+(`docs/eval/retrieval-multilingual-2026-09-24.md`).
+
+- [x] **The ontology says which names translate.** A `naming:` key per
+      entity type, `proper` (a person, a publisher, a product, a title —
+      the same string in every language) or `common` (a kind of thing,
+      which every language has its own word for). The nearest
+      declaration wins, so a subtype may differ from its parent in either
+      direction: a `dish` is a `work` whose name translates, a `standard`
+      is a `concept` whose name does not. A type that says nothing and
+      inherits nothing is proper, because translating a name that should
+      not be translated is the worse mistake. Ten types are common:
+      claim, concept, cuisine, dish, feature, ingredient, material,
+      method, spec, technique.
+
+      It bumps no module version. It says how a type's *names* behave,
+      not what types exist; no triple that validated before stops
+      validating, so nothing re-extracts. What changed is the prompt,
+      and the prompt is a producer — which edges already carry a column
+      for (invariant 8).
+- [x] **The prompt says it.** One rule, built from `onto.common_types`
+      rather than a list kept beside it, so the extraction and the
+      vocabulary pass cannot drift apart. New documents stop drifting;
+      the ones already read are the two passes below.
+- [x] **The `summaries` step.** A summary in another language than the
+      field, translated by the local model: 273 documents, no source
+      document read, no paid call. `meta.summaries` keeps every summary
+      we have keyed by language, so the German one is not lost to the
+      English one that replaced it; `meta.summary` is the canonical
+      English text the field indexes; `meta.summary_lang` says which
+      language that is, and the `languages` pass of `prax maintain`
+      fills it in for the summaries written before it existed. A summary
+      too short to place claims no language and is never handed out.
+
+### What is left
+
+- **The native summary in the field.** `meta.summaries` holds the German
+  text; the field does not index it yet. Adding it is the cheapest lever
+  on the German keyword number, and it is one line of `document_field` —
+  but it widens every German document's field, so it wants the eval run
+  on either side of it before it goes in.
+- **Section summaries for a long document.** Two or three sentences for
+  a book is two or three sentences for its first chapter and nothing for
+  the rest. A summary per chapter or per large section would give the
+  document field something to say about the middle of a 400-page book,
+  and would give `ask` a cheaper way in than the chunks. The shape is
+  probably a summary chunk per heading region, written by the same local
+  model, indexed like the document field rather than like text.
+- **The vocabulary pass** over the 336 German-named common-noun
+  entities: the graph half of the same fix, below.
+
 ## Later / maybe
 
 - A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a

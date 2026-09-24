@@ -106,6 +106,15 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that
    subset and stamped with the subset's version (`core1+family1`).
+   A type says with `naming:` whether its names are `proper` (one
+   particular thing: a person, a publisher, a product, a title, the same
+   string in every language) or `common` (a kind of thing, which every
+   language has its own word for). The nearest declaration wins, so a
+   subtype may differ from its parent either way, and a type that says
+   nothing and inherits nothing is proper. It tells the prompt which
+   names to write in English and a vocabulary pass which entities may be
+   folded across languages; it says how names behave rather than what
+   types exist, so it bumps no version and re-extracts nothing.
    Growing a module is its version bump. Renaming or removing a type is
    a data migration. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.
@@ -268,6 +277,16 @@ reference `docs/ask.md`.
   expects (`parse.languages`), with a stopword count as the fallback
   where it is not installed. It says nothing rather than guess, so a
   missing `lang` is always allowed.
+- The document field is written in one language, English. `meta.summary`
+  is the summary it indexes, `meta.summaries` holds every summary there
+  is keyed by language, so the German summary of a German document is
+  kept rather than replaced by the English one, and `meta.summary_lang`
+  says which language the canonical one is in (absent when the summary
+  is too short to place). The extraction prompt asks for English — for
+  the summary and for the name of every type the ontology marks
+  `naming: common` — and the `summaries` step (`prax.summaries`)
+  translates the ones written before it said so, with the local model
+  and no document read. Nothing translates a `proper` name.
 - Timestamps are UTC ISO-8601 strings to the second with `Z`, from
   `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.
 - Tests must not touch `data/`. Use tmp_path fixtures and set

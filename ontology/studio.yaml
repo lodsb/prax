@@ -85,11 +85,13 @@ entity_types:
       never the document's subject on its own.
   standard:
     parent: concept
+    naming: proper  # AES3, USB 2.0: a name, not a word
     description: >-
       A protocol, interface, bus, file format or standard a device speaks
       or complies with: MIDI, CV/gate, USB, RS-485, Modbus, SCSI, WAV,
       AES/EBU, General MIDI 2, phantom power.
   spec:
+    naming: common
     description: >-
       One rated or measured value as the text states it, unit included:
       "frequency response 20 Hz to 20 kHz", "holding torque 2.0 Nm",

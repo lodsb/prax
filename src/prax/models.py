@@ -56,6 +56,7 @@ STEPS = (
     "promote",
     "ask",
     "titles",
+    "summaries",
     "vision",
     "adjudicate",
     "typing",
@@ -67,6 +68,7 @@ STEP_DEFAULTS = {
     "promote": "claude-sonnet-5",  # the expensive pass over flagged documents
     "ask": "none",  # the caller's own model answers unless the file says otherwise
     "titles": "none",
+    "summaries": "none",  # a summary written in another language, translated
     "vision": "claude-sonnet-5",
     "adjudicate": "none",
     "typing": "none",  # the model typing pass over the review queue
