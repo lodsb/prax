@@ -39,11 +39,13 @@ CANONICAL = "en"  # the language the document field is written in
 
 SYSTEM = (
     "You translate one short description of a document into English."
-    " Return the English text only: no preamble, no quotation marks, no"
-    " notes. Keep the meaning, the sentence count and the register. Leave"
-    " names of people, organizations, places, products and works exactly as"
-    " printed, and leave a term the field uses untranslated where English"
-    " uses it too."
+    " Answer with the English text and nothing else: the first word of your"
+    " answer is the first word of the translation. No preamble, no quotation"
+    " marks, no notes, and never repeat the instruction, the title or a"
+    " label from the message. Keep the meaning, the sentence count and the"
+    " register. Leave names of people, organizations, places, products and"
+    " works exactly as printed, and leave a term the field uses untranslated"
+    " where English uses it too."
 )
 # a model that has been told not to explain itself and explains itself
 _PREAMBLE = re.compile(
@@ -52,6 +54,11 @@ _PREAMBLE = re.compile(
     re.IGNORECASE,
 )
 _FENCE = re.compile(r"^```[a-z]*\s*|\s*```$", re.IGNORECASE)
+# the message's own words, handed back above the translation
+_TITLE_LINE = re.compile(r"^(?:document )?title\s*:.*(?:\n|$)", re.IGNORECASE)
+_DESCRIPTION = re.compile(
+    r"^(?:description|text|summary)\b[^:\n]{0,40}:[ \t]*\n?", re.IGNORECASE
+)
 MAX_GROWTH = 2.5  # a translation longer than this is the model talking
 
 
@@ -64,11 +71,23 @@ class Translation:
 
 
 def user_message(summary: str, *, lang: str | None = None, title: str = "") -> str:
-    """What the model is given: the summary, and the title as context for
-    the names in it (an untranslated title is a hint, not an instruction)."""
+    """What the model is given: an instruction and the text.
+
+    Written as sentences rather than labelled fields, because a model
+    handed ``Document title: …\nDescription: …`` fills the form in and
+    returns the labels with the answer (2026-09-24, four of the first
+    eight). The title is context for the names in the text and is named
+    inside the sentence, where there is nothing to copy.
+    """
     named = language.name(lang) or "another language"
-    parts = [f"Document title: {title.strip()}"] if title.strip() else []
-    parts.append(f"Description, written in {named}:")
+    parts = []
+    if title.strip():
+        parts.append(
+            f"The document is called \u201c{title.strip()}\u201d. That is context"
+            " for the names below, not part of what you translate."
+        )
+    parts.append(f"Translate this {named} text into English.")
+    parts.append("")
     parts.append(summary.strip())
     return "\n".join(parts)
 
@@ -78,6 +97,8 @@ def parse(out: str) -> str | None:
     returned nothing usable."""
     text = _FENCE.sub("", (out or "").strip()).strip()
     text = _PREAMBLE.sub("", text).strip()
+    text = _TITLE_LINE.sub("", text).strip()
+    text = _DESCRIPTION.sub("", text).strip()
     if len(text) >= 2 and text[0] in "\"'“„«" and text[-1] in "\"'”“»":
         text = text[1:-1].strip()
     return text or None
@@ -86,11 +107,15 @@ def parse(out: str) -> str | None:
 def acceptable(text: str, original: str) -> str | None:
     """Why the translation cannot be used, or None when it can.
 
-    Three ways a small model fails this task and one of them is silent:
-    it hands the German back, it answers about the text instead of
-    translating it, or it writes an essay. Length catches the third,
-    the detector the first.
+    Four ways a small model fails this task and two of them are silent:
+    it hands the German back, it fills in the form the message looked
+    like and returns the labels with the answer, it answers about the
+    text instead of translating it, or it writes an essay. Length catches
+    the last, the detector the first, and this is where a translation
+    that came back wearing the prompt is caught rather than stored.
     """
+    if _TITLE_LINE.match(text) or _DESCRIPTION.match(text):
+        return "the prompt's labels"
     if len(text) > max(400, len(original) * MAX_GROWTH):
         return "too long"
     if len(text) < len(original) / 3:
@@ -100,6 +125,19 @@ def acceptable(text: str, original: str) -> str | None:
     code = language.detect(text)
     if code is not None and code != CANONICAL:
         return f"still {code}"
+    return None
+
+
+def native(held: dict[str, Any]) -> tuple[str, str] | None:
+    """The summary as first written, ``(language, text)``, out of
+    ``meta.summaries`` — or None when the only one there is English.
+
+    It is what a translation is made from and remade from: translating a
+    translation compounds whatever the first one got wrong.
+    """
+    for code, text in (held or {}).items():
+        if code != CANONICAL and isinstance(text, str) and text.strip():
+            return str(code), text
     return None
 
 
@@ -121,8 +159,17 @@ def keep(meta: dict[str, Any], text: str, *, lang: str | None = None) -> str | N
     """
     code = lang or language.detect(text)
     held = meta.setdefault("summaries", {})
-    if code and isinstance(held, dict):
-        held[code] = text
+    if isinstance(held, dict):
+        # the one already there goes in first, under its own language. It
+        # got here before ``meta.summaries`` existed, so nothing else
+        # would file it, and the first batch of translations overwrote
+        # eight German summaries that this line would have kept
+        # (2026-09-24)
+        there, there_lang = meta.get("summary"), meta.get("summary_lang")
+        if there and there_lang and there_lang not in held:
+            held[str(there_lang)] = there
+        if code:
+            held[code] = text
     if code == CANONICAL or not meta.get("summary"):
         meta["summary"] = text
         if code:

@@ -629,6 +629,60 @@ def _repair_uncounted_pages(con: sqlite3.Connection, rows: list[dict[str, Any]])
     return docs.count_pages(con, docs.uncounted_pages(con))
 
 
+def _labelled_summaries(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Summaries that begin with the words of the message that asked for
+    them — "Document title: …", "Description: …".
+
+    A model told to answer with the translation and nothing else fills in
+    the form the message looked like instead, and the English underneath
+    is usually right. ``summaries.parse`` is what takes the label off, so
+    the mend costs no model call.
+    """
+    from prax import summaries
+
+    rows = con.execute(
+        "SELECT id, title, json_extract(meta, '$.summary') AS summary"
+        " FROM documents WHERE json_extract(meta, '$.summary') IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    ).fetchall()
+    out = []
+    for r in rows:
+        if summaries.acceptable(r["summary"], r["summary"]) != "the prompt's labels":
+            continue
+        out.append(
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "summary": r["summary"][:160],
+            }
+        )
+    return out[:CAP]
+
+
+def _repair_labelled_summaries(
+    con: sqlite3.Connection, rows: list[dict[str, Any]]
+) -> int:
+    """The label taken off every one of them, not only the rows shown."""
+    from prax import summaries
+    from prax.store import documents as docs
+
+    n = 0
+    for r in _labelled_summaries(con):
+        meta = docs.get_meta(con, r["id"])
+        cleaned = summaries.parse(str(meta.get("summary") or ""))
+        if not cleaned or cleaned == meta.get("summary"):
+            continue
+        docs.set_summary(
+            con,
+            r["id"],
+            cleaned,
+            lang=meta.get("summary_lang"),
+            source="heal",
+        )
+        n += 1
+    return n
+
+
 def _thin_texts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """PDFs read as if their cover were the book
     (``documents.thin_documents``): the longest first."""
@@ -1096,6 +1150,22 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_uncounted_pages,
         repair=_repair_uncounted_pages,
+    ),
+    Ailment(
+        name="labelled-summaries",
+        what=(
+            "summaries that begin with the words of the message that asked"
+            ' for them ("Document title: …", "Description: …"): a model'
+            " told to answer with the translation and nothing else filled in"
+            " the form instead, and the document field indexes the label"
+        ),
+        fix=(
+            "take the label off (summaries.parse), which is what the check"
+            " refuses now; no model call, and the English underneath is"
+            " usually right"
+        ),
+        find=_labelled_summaries,
+        repair=_repair_labelled_summaries,
     ),
     Ailment(
         name="thin-texts",

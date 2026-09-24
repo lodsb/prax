@@ -204,24 +204,45 @@ def summaries_needed(
     detected yet is not handed out: detecting it is free and belongs to
     that pass, not to a model call.
 
+    A translation already made but not good enough to keep is asked for
+    again, from the original ``meta.summaries`` held on to. That is what
+    makes the check worth tightening: a model that handed the prompt's
+    labels back with the answer (2026-09-24) is corrected by improving
+    ``summaries.acceptable`` and running the pass, not by repairing rows.
+    It cannot loop — a second refusal is the worker's, which writes
+    ``meta.summary_tried``.
+
     With ``untried_only`` the documents a translation already failed on
     are left out, as a guess costs a model call; a pass that wants them
     again clears ``meta.summary_tried``.
     """
-    sql = (
-        "SELECT id, json_extract(meta, '$.summary_lang') AS lang FROM documents"
+    where = (
         " WHERE json_extract(meta, '$.summary') IS NOT NULL"
-        " AND json_extract(meta, '$.summary_lang') IS NOT NULL"
-        " AND json_extract(meta, '$.summary_lang') != ?"
         " AND json_extract(meta, '$.retired') IS NULL"
     )
     if untried_only:
-        sql += " AND json_extract(meta, '$.summary_tried') IS NULL"
-    args: tuple[Any, ...] = (summaries.CANONICAL,)
+        where += " AND json_extract(meta, '$.summary_tried') IS NULL"
+    args: tuple[Any, ...] = ()
     if ids is not None:
-        sql += f" AND id IN ({','.join('?' * len(ids))})"
-        args += tuple(ids)
-    return [(r["id"], str(r["lang"])) for r in con.execute(sql + " ORDER BY id", args)]
+        where += f" AND id IN ({','.join('?' * len(ids))})"
+        args = tuple(ids)
+    out: list[tuple[int, str]] = []
+    sql = (
+        "SELECT id, json_extract(meta, '$.summary') AS summary,"
+        " json_extract(meta, '$.summary_lang') AS lang,"
+        " json_extract(meta, '$.summaries') AS held FROM documents"
+    )
+    for r in con.execute(sql + where + " ORDER BY id", args):
+        lang = r["lang"]
+        if lang is None:  # nothing placed it; the languages pass does that
+            continue
+        if lang != summaries.CANONICAL:
+            out.append((r["id"], str(lang)))
+            continue
+        native = summaries.native(json.loads(r["held"] or "{}"))
+        if native is not None and summaries.acceptable(r["summary"], native[1]):
+            out.append((r["id"], native[0]))  # translated, but not usably
+    return out
 
 
 def titles_needed(

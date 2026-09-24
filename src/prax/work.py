@@ -41,7 +41,16 @@ import time
 from dataclasses import asdict
 from typing import Any
 
-from prax import embeddings, extraction, inbox, models, ontology, pipeline, store
+from prax import (
+    embeddings,
+    extraction,
+    inbox,
+    models,
+    ontology,
+    pipeline,
+    store,
+    summaries,
+)
 from prax.parsers import queue
 from prax.steps import READING_STEPS, STEPS, WATCHED_STEPS
 
@@ -386,7 +395,12 @@ def hand_out(
             if not _in_scope(con, doc_id, scope):
                 continue
             meta = store.get_meta(con, doc_id)
-            summary = str(meta.get("summary") or "")
+            # always from the summary as first written, where we kept it:
+            # translating a translation compounds the first one's mistakes
+            held = summaries.native(meta.get("summaries") or {})
+            summary = str(
+                held[1] if held and held[0] == lang else meta.get("summary") or ""
+            )
             if not summary:
                 continue
             row = store.get_document(con, doc_id, max_chars=0)

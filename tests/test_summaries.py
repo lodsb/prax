@@ -244,3 +244,119 @@ def test_a_summary_the_model_cannot_translate_is_not_handed_out_again(
         assert (
             client.get("/work/summaries", params={"scope": "all"}).json()["items"] == []
         )
+
+
+# --------------------------------- the prompt handed back with the answer
+
+
+ECHOED = (
+    "Document title: Use Case Diagrams\n"
+    "Description, written in German:\n"
+    "This document introduces use case diagrams according to UML 2 to model"
+    " functional requirements, with a cafeteria system as the example, and"
+    " says where each notation belongs in a specification."
+)
+
+
+def test_the_labels_come_off_a_reflected_answer() -> None:
+    got = summaries.parse(ECHOED)
+    assert got is not None
+    assert got.startswith("This document introduces")
+    assert "Document title" not in got
+
+
+def test_a_one_line_label_comes_off() -> None:
+    got = summaries.parse("Description: The text analyzes the aesthetics of design.")
+    assert got == "The text analyzes the aesthetics of design."
+
+
+def test_a_label_that_survived_the_parse_is_refused() -> None:
+    assert (
+        summaries.acceptable("Title: something\nAnd more.", DE) == "the prompt's labels"
+    )
+
+
+def test_the_message_is_a_sentence_not_a_form() -> None:
+    message = summaries.user_message(DE, lang="de", title="Ebike Hersteller")
+    assert "Ebike Hersteller" in message
+    assert "German" in message
+    for label in ("Document title:", "Description:", "Summary:"):
+        assert label not in message
+
+
+def test_a_translation_not_good_enough_is_asked_for_again(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fix for a bad batch is a better check and another pass, not a
+    repair of rows: the summary as first written is still there."""
+    from fastapi.testclient import TestClient
+
+    from prax import pipeline, store, work, worker
+
+    monkeypatch.setenv("PRAX_SUMMARIES", "stub")
+    work._leases.clear()
+    from prax.api import app
+
+    with TestClient(app) as client:
+        con = client.app.state.con
+        doc_id = client.post(
+            "/ingest", json={"text": "ein Text " * 80, "title": "Ebike"}
+        ).json()["doc_id"]
+        meta = store.get_meta(con, doc_id)
+        summaries.keep(meta, DE)
+        store.set_meta(con, doc_id, meta)
+
+        # a batch that went through before the check knew about labels
+        batch = client.get("/work/summaries", params={"scope": "all"}).json()
+        results = worker.do_summaries(batch["items"], Runtime(ECHOED))
+        # the worker refuses it now, so put it in the way the door did then
+        store.set_summary(con, doc_id, ECHOED, lang="en", source="test")
+        assert store.get_meta(con, doc_id)["summary_lang"] == "en"
+        assert results  # the worker's own refusal is the other half
+
+        # the pass asks for it again, and from the German, not the English
+        work._leases.clear()
+        assert pipeline.summaries_needed(con) == [(doc_id, "de")]
+        again = client.get("/work/summaries", params={"scope": "all"}).json()
+        assert again["items"][0]["summary"] == DE
+
+        results = worker.do_summaries(again["items"], Runtime(EN))
+        client.post("/work/summaries", json={"results": results})
+        assert store.get_meta(con, doc_id)["summary"] == EN
+        assert pipeline.summaries_needed(con) == []
+
+
+def test_the_summary_already_there_is_filed_before_it_is_replaced() -> None:
+    """The first batch overwrote eight German summaries: `keep` filed what
+    it was handed and nothing filed what was already there."""
+    meta: dict[str, Any] = {"summary": DE, "summary_lang": "de"}  # written before
+    summaries.keep(meta, EN, lang="en")
+    assert meta["summary"] == EN
+    assert meta["summaries"]["de"] == DE
+    assert meta["summaries"]["en"] == EN
+
+
+def test_heal_takes_the_label_off_a_stored_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fastapi.testclient import TestClient
+
+    from prax import store
+    from prax.api import app
+    from prax.store import repair
+
+    with TestClient(app) as client:
+        con = client.app.state.con
+        doc_id = client.post(
+            "/ingest", json={"text": "ein Text " * 80, "title": "Use Case Diagrams"}
+        ).json()["doc_id"]
+        meta = store.get_meta(con, doc_id)
+        meta["summary"], meta["summary_lang"] = ECHOED, "en"
+        store.set_meta(con, doc_id, meta)
+
+        found = repair._labelled_summaries(con)
+        assert [r["id"] for r in found] == [doc_id]
+        assert repair._repair_labelled_summaries(con, found) == 1
+        got = store.get_meta(con, doc_id)["summary"]
+        assert got.startswith("This document introduces")
+        assert repair._labelled_summaries(con) == []
