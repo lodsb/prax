@@ -226,23 +226,32 @@ def summaries_needed(
     if ids is not None:
         where += f" AND id IN ({','.join('?' * len(ids))})"
         args = tuple(ids)
-    out: list[tuple[int, str]] = []
-    sql = (
+    # two narrow questions rather than one pass over every summary: this
+    # runs on every hand-out, and a worker asks every twenty seconds
+    out: list[tuple[int, str]] = [
+        (r["id"], str(r["lang"]))
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.summary_lang') AS lang FROM documents"
+            + where
+            + " AND json_extract(meta, '$.summary_lang') IS NOT NULL"
+            " AND json_extract(meta, '$.summary_lang') != ?",
+            (*args, summaries.CANONICAL),
+        )
+    ]
+    # and the ones a translation has already been made for, which are only
+    # the documents this pass has touched
+    for r in con.execute(
         "SELECT id, json_extract(meta, '$.summary') AS summary,"
-        " json_extract(meta, '$.summary_lang') AS lang,"
         " json_extract(meta, '$.summaries') AS held FROM documents"
-    )
-    for r in con.execute(sql + where + " ORDER BY id", args):
-        lang = r["lang"]
-        if lang is None:  # nothing placed it; the languages pass does that
-            continue
-        if lang != summaries.CANONICAL:
-            out.append((r["id"], str(lang)))
-            continue
+        + where
+        + " AND json_extract(meta, '$.summaries') IS NOT NULL"
+        " AND json_extract(meta, '$.summary_lang') = ?",
+        (*args, summaries.CANONICAL),
+    ):
         native = summaries.native(json.loads(r["held"] or "{}"))
         if native is not None and summaries.acceptable(r["summary"], native[1]):
             out.append((r["id"], native[0]))  # translated, but not usably
-    return out
+    return sorted(out)
 
 
 def titles_needed(
