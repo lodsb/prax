@@ -1243,6 +1243,18 @@ The slot count changes little: a `q8_0` 8 K slot is about 0.3 GB.
 first N layers in RAM, which is a MoE model's bulk. 2 costs a tenth of
 the speed, 8 most of it. The desktop wants 3–4 GB for itself.
 
+That last 3–4 GB is not all the desktop's, because **the worker parses
+on the same card**. Docling's layout and table models take about 2.2 GB
+of dedicated memory while a parse pass runs, which with the compositor's
+0.8 GB fills the card to 23.9 of 24.5 GB beside a 20.1 GB server
+(2026-09-24). Nothing fails — the driver spills to shared memory and the
+pass slows — but it is why a machine that was comfortable while only the
+server ran is not while the worker is parsing. Per-process VRAM is the
+counter, not `nvidia-smi`, which reports `[N/A]` per process under WDDM:
+
+    (Get-Counter '\GPU Process Memory(*)\Dedicated Usage').CounterSamples |
+      Where-Object CookedValue -gt 50MB
+
 Memory on Windows (2026-09-12, a 22 GB model on a 32 GB machine): the
 driver backs every VRAM allocation with system commit, so the server
 charges 20–30 GB of commit whatever the load mode. `mmap` keeps that at
