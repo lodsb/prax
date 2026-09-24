@@ -18,6 +18,7 @@ STEPS = (
     "parse",
     "titles",
     "summaries",
+    "vocabulary",
     "extract",
     "promote",
     "typing",

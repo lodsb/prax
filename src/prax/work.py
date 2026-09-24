@@ -196,6 +196,19 @@ def release_deferred(step: str, extractors: tuple[str, ...] = ()) -> int:
     return len(gone)
 
 
+def _named_in(con: sqlite3.Connection, entity_id: int) -> str:
+    """The title of a document that named this entity: context for a
+    model asked what English calls the thing, since a bare word can be
+    two things and the document says which."""
+    row = con.execute(
+        "SELECT d.title FROM edges x JOIN documents d ON d.id = x.source_doc"
+        " WHERE x.valid_to IS NULL AND (x.src = ? OR x.dst = ?) AND d.title IS NOT NULL"
+        " LIMIT 1",
+        (entity_id, entity_id),
+    ).fetchone()
+    return str(row["title"]) if row else ""
+
+
 def _free(step: str, item: int, now: float) -> bool:
     held = _leases.get((step, item))
     return held is None or held[1] < now
@@ -413,6 +426,19 @@ def hand_out(
                 }
             )
         _lease(step, [i["doc_id"] for i in items], worker)
+        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
+    if step == "vocabulary":
+        # entities named in the language of the document that named them,
+        # where English calls the thing something else. Over the graph,
+        # not over documents, so scope does not apply
+        if models.resolve("vocabulary") is None:
+            return {"step": step, "items": [], "lease_seconds": 0}
+        leased = tuple(i for (s, i) in _leases if s == step and not _free(step, i, now))
+        items = [
+            {**r, "context": _named_in(con, r["id"])}
+            for r in store.foreign_names(con, limit=limit, skip=leased)
+        ]
+        _lease(step, [i["id"] for i in items], worker)
         return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
     if step == "typing":
         # untyped review items to the typing model, a batch of items each;
@@ -830,6 +856,48 @@ def take_in(
                 )
                 continue
             out["applied"] += 1
+        return out
+    if step == "vocabulary":
+        run = payload.get("run") or f"vocabulary-{time.strftime('%Y%m%dT%H%M%S')}"
+        actions_taken: dict[str, int] = {}
+        for r in results:
+            entity_id = int(r["id"])
+            _release(step, [entity_id])
+            if r.get("error"):
+                out["errors"].append({"id": entity_id, "error": r["error"]})
+                continue
+            try:
+                if r.get("changed"):
+                    got = store.name_in_english(
+                        con,
+                        entity_id,
+                        str(r["name"]),
+                        producer="vocabulary",
+                        run=run,
+                        confidence=str(r.get("confidence") or "INFERRED"),
+                    )
+                    action = str(got.get("action") or "?")
+                else:
+                    # already the word English uses: the pass says so with a
+                    # label, which is also what keeps it from being asked twice
+                    store.add_label(
+                        con,
+                        entity_id,
+                        str(r["name"]),
+                        lang="en",
+                        kind="pref",
+                        producer="vocabulary",
+                        run=run,
+                    )
+                    action = "kept"
+            except Exception as exc:  # noqa: BLE001
+                out["errors"].append(
+                    {"id": entity_id, "error": f"{type(exc).__name__}: {exc}"}
+                )
+                continue
+            actions_taken[action] = actions_taken.get(action, 0) + 1
+            out["applied"] += 1
+        out["actions"] = actions_taken
         return out
     if step == "parse":
         actions: dict[str, int] = {}

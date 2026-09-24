@@ -37,6 +37,7 @@ from prax import (
     summaries,
     titles,
     usage,
+    vocabulary,
     work,
 )
 from prax import steps as steps_mod
@@ -398,6 +399,42 @@ def do_summaries(
             }
         )
         _say(log_, f"summary doc {doc_id} ({lang}): {got.text[:60]!r}")
+    return results
+
+
+def do_vocabulary(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each name asked of the model: what does English call this thing?
+
+    The commonest answer is the name it was given — a rare English term
+    nobody else in the library wrote down looks foreign to the candidate
+    net and is handed back unchanged, which costs the call and nothing
+    else.
+    """
+    results = []
+    for it in items:
+        entity_id, name = it["id"], str(it.get("name") or "")
+        if runtime is None or not name:
+            results.append({"id": entity_id, "name": name, "changed": False})
+            continue
+        try:
+            got = vocabulary.rename(
+                runtime,
+                name,
+                str(it.get("type") or "concept"),
+                context=str(it.get("context") or ""),
+            )
+        except models.ServerNotReady as exc:
+            _say(log_, f"name {entity_id}: not yet — {exc}")
+            results.append({"id": entity_id, "defer": True})
+            continue
+        if got is None:
+            results.append({"id": entity_id, "name": name, "changed": False})
+            continue
+        results.append({"id": entity_id, "name": got.name, "changed": got.changed})
+        if got.changed:
+            _say(log_, f"name {entity_id}: {name!r} -> {got.name!r}")
     return results
 
 
@@ -765,6 +802,25 @@ def run_once(
             )
             out["summaries"] = (
                 f"{rep.get('applied', 0)} translated, {rep.get('skipped', 0)} left"
+            )
+        elif step == "vocabulary":
+            spec = models.resolve("vocabulary")
+            if _paid(spec):
+                out["vocabulary"] = (
+                    f"skipped: the vocabulary step is {spec.name} (paid)"
+                )
+                continue
+            runtime = models.runtime(spec) if spec else None
+            results = do_vocabulary(items, runtime, log_=log_)
+            rep = door.post_json(
+                "/work/vocabulary",
+                {
+                    "results": results,
+                    "run": f"vocabulary-{time.strftime('%Y%m%dT%H%M%S')}",
+                },
+            )
+            out["vocabulary"] = (
+                f"{rep.get('applied', 0)} named {rep.get('actions') or ''}"
             )
         elif step == "extract":
             spec = models.resolve("extract")

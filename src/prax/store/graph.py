@@ -740,6 +740,184 @@ def entity_names(con: sqlite3.Connection, etype: str) -> list[tuple[int, str]]:
 
 
 @_serialized
+def name_in_english(
+    con: sqlite3.Connection,
+    entity_id: int,
+    english: str,
+    *,
+    lang: str | None = None,
+    producer: str = "vocabulary",
+    run: str | None = None,
+    confidence: str | None = None,
+) -> dict[str, Any]:
+    """Give an entity the name English uses, keeping the one the document
+    used as a label in its own language.
+
+    Three outcomes, and the caller is told which. An entity of the same
+    type already called that: the two are merged, and the German name
+    becomes a label of the survivor. An entity of *another* type called
+    that: nothing is merged — ``Olivenöl`` is an ingredient where ``olive
+    oil`` is a concept, and which of the two is right is the review
+    queue's question, not this pass's. Nobody called that yet: the entity
+    is renamed and the old name kept as a label, so a German search still
+    reaches it.
+
+    Everything this writes carries ``producer`` and ``run``, so a round
+    is undoable whole (``unmerge_run``).
+    """
+    from prax import language, vocabulary
+
+    english = " ".join(english.split())
+    if not english:
+        raise ValueError("a name cannot be empty")
+    row = con.execute(
+        "SELECT id, name, type, canonical_id FROM entities WHERE id = ?", (entity_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such entity: {entity_id}")
+    if row["canonical_id"]:
+        return {
+            "entity": entity_id,
+            "action": "merged away",
+            "into": row["canonical_id"],
+        }
+    was = str(row["name"])
+    lang = lang or language.detect(was)
+    twin = con.execute(
+        "SELECT id, type, canonical_id FROM entities WHERE name = ? COLLATE NOCASE"
+        " AND id != ?",
+        (english, entity_id),
+    ).fetchone()
+    out: dict[str, Any] = {"entity": entity_id, "was": was, "name": english}
+    if twin is not None and twin["type"] != row["type"]:
+        # the same words, a different kind of thing: a question, not a fold
+        queue_review(
+            con,
+            src=was,
+            src_type=row["type"],
+            rel="same_as",
+            dst=english,
+            dst_type=str(twin["type"]),
+            reason=(
+                f"{producer}: {was!r} is {english!r} in English, but the library"
+                f" has that as a {twin['type']} and this as a {row['type']}"
+            ),
+            source_doc=None,
+        )
+        add_label(
+            con,
+            entity_id,
+            english,
+            lang=vocabulary.CANONICAL,
+            kind="alt",
+            producer=producer,
+            run=run,
+            confidence=confidence,
+        )
+        out["action"] = "type clash"
+        out["twin"] = int(twin["id"])
+        return out
+    if twin is not None:
+        survivor = int(twin["canonical_id"] or twin["id"])
+        if survivor == entity_id:
+            return {**out, "action": "already"}
+        merge_entities(
+            con,
+            entity_id,
+            survivor,
+            producer=producer,
+            run=run,
+            confidence=confidence,
+        )
+        out["action"] = "merged"
+        out["into"] = survivor
+        return out
+    con.execute("UPDATE entities SET name = ? WHERE id = ?", (english, entity_id))
+    add_label(
+        con,
+        entity_id,
+        was,
+        lang=lang,
+        kind="pref" if lang else "alt",
+        producer=producer,
+        run=run,
+        confidence=confidence,
+    )
+    con.commit()
+    out["action"] = "renamed"
+    return out
+
+
+@_reading
+def foreign_names(
+    con: sqlite3.Connection, *, limit: int = 200, skip: tuple[int, ...] = ()
+) -> list[dict[str, Any]]:
+    """Entities whose name is not the word English uses for the thing.
+
+    Three conditions, cheapest first. The type names a kind of thing, so
+    the name may be translated at all (``naming: common``, invariant 9).
+    Every document behind it is in one language and that language is not
+    English — a term that an English document also uses is that
+    document's word, not a translation. And the name occurs nowhere in
+    the English half of the library (``vocabulary.in_english_text``),
+    which is the dictionary this uses instead of a rule per language.
+
+    An entity a pass has already named is passed over
+    (``entity_labels`` under ``vocabulary``), so a run picks up where the
+    last one stopped. The most connected first: the whole point is the
+    edges the two halves of a name divide between them.
+    """
+    from prax import ontology, vocabulary
+
+    common = sorted(ontology.current().common_types)
+    if not common:
+        return []
+    marks = ",".join("?" * len(common))
+    rows = con.execute(
+        f"""
+        SELECT e.id, e.name, e.type, count(DISTINCT x.doc) AS docs,
+               count(*) AS edges,
+               group_concat(DISTINCT x.lang) AS langs
+          FROM entities e
+          JOIN (SELECT src AS ent, source_doc AS doc,
+                       json_extract(d.meta, '$.lang') AS lang
+                  FROM edges JOIN documents d ON d.id = source_doc
+                 WHERE valid_to IS NULL
+                 UNION ALL
+                SELECT dst, source_doc, json_extract(d.meta, '$.lang')
+                  FROM edges JOIN documents d ON d.id = source_doc
+                 WHERE valid_to IS NULL) x ON x.ent = e.id
+         WHERE e.canonical_id IS NULL AND e.type IN ({marks})
+           AND NOT EXISTS (SELECT 1 FROM entity_labels l
+                            WHERE l.entity_id = e.id AND l.producer = 'vocabulary')
+         GROUP BY e.id
+        HAVING langs IS NOT NULL AND langs NOT LIKE '%en%' AND langs NOT LIKE '%,%'
+         ORDER BY edges DESC, docs DESC, e.id
+        """,
+        tuple(common),
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if r["id"] in skip:
+            continue
+        if vocabulary.in_english_text(con, r["name"]):
+            continue
+        out.append(
+            {
+                "id": int(r["id"]),
+                "name": str(r["name"]),
+                "type": str(r["type"]),
+                "lang": str(r["langs"]),
+                "docs": int(r["docs"]),
+                "edges": int(r["edges"]),
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
+@_serialized
 def replace_entity_candidates(
     con: sqlite3.Connection,
     etype: str,

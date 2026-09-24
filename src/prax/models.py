@@ -57,6 +57,7 @@ STEPS = (
     "ask",
     "titles",
     "summaries",
+    "vocabulary",
     "vision",
     "adjudicate",
     "typing",
@@ -69,6 +70,7 @@ STEP_DEFAULTS = {
     "ask": "none",  # the caller's own model answers unless the file says otherwise
     "titles": "none",
     "summaries": "none",  # a summary written in another language, translated
+    "vocabulary": "none",  # an entity named in another language, put into English
     "vision": "claude-sonnet-5",
     "adjudicate": "none",
     "typing": "none",  # the model typing pass over the review queue

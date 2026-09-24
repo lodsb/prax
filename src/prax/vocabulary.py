@@ -1,0 +1,172 @@
+"""One name per thing, whatever language the document was in.
+
+The graph holds `Olivenöl` with ten documents behind it and `olive oil`
+with one, and a walk from either reaches half the evidence. The same
+happens to `Speicherverwaltung` beside `memory management` and
+`Gauß-Elimination` beside `Gaussian elimination`. It is the graph's half
+of what `prax.summaries` fixes for the document field.
+
+Only some names may be folded this way, and the ontology says which:
+a type whose `naming:` is `common` names a *kind* of thing, which every
+language has its own word for, and a `proper` one names a particular
+thing whose name is the same string everywhere. `Niklas Klügel` is not
+translated and neither is `Einführung in die Softwaretechnik`; `Olivenöl`
+is.
+
+**Which names are not English** is answered by the library rather than by
+a list of German endings. A name that occurs in the text of an English
+document is an English name; one that occurs nowhere in the English half
+of the library is a candidate. FTS5 already indexes every chunk, so the
+test is one MATCH. It cost 7 ms a name when it was measured, it needs no
+rule per language, and it is wrong in a way that costs nothing: a rare
+English term nobody else wrote down (`extendible hashing`) becomes a
+candidate, and the model hands it back unchanged.
+
+**The model decides**, and its answer is recorded as evidence, not as
+truth. The name it gives is a label with its language, producer and run
+(`entity_labels`, migration 20), the name the document used stays a label
+too, so a German search still reaches the entity, and where the English
+name is already an entity the two are merged under that run — which
+`store.unmerge_run` undoes whole.
+"""
+
+from __future__ import annotations
+
+import re
+import sqlite3
+from dataclasses import dataclass, field
+from typing import Any
+
+CANONICAL = "en"  # the language the graph's common names are written in
+MAX_WORDS = 6  # a longer "name" is a sentence, and not this pass's business
+LOOK_AT = 200  # chunks of a name's occurrences to look through, at most
+
+_WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
+# what a model says when it has nothing to change, in the words it uses
+_UNCHANGED = re.compile(
+    r"^(same|unchanged|already english|n/?a|none|-)\W*$", re.IGNORECASE
+)
+_PREAMBLE = re.compile(
+    r"^\s*(?:the )?(?:english (?:name|term|translation)|translation|answer)"
+    r"\s*(?:is|:)\s*",
+    re.IGNORECASE,
+)
+
+SYSTEM = (
+    "You are given the name of a concept, method, technique, material,"
+    " ingredient, dish or cuisine as one document called it, and you give"
+    " the name English uses for the same thing."
+    " Answer with that name alone: no preamble, no quotation marks, no"
+    " explanation, no full stop."
+    " A name that is already English you repeat exactly as given."
+    " Keep a person's name, a place, a product or a standard inside the"
+    " name exactly as printed and translate only the words around it, so"
+    " Gauß-Elimination is Gaussian elimination and Büchi-Automat is Büchi"
+    " automaton."
+    " Give the established term, lowercase unless it is a proper noun,"
+    " singular, and never a description: if you do not know the English"
+    " term, repeat the name you were given."
+)
+
+
+@dataclass
+class Naming:
+    """What the model called the thing, and what the call cost."""
+
+    name: str
+    changed: bool
+    usage: dict[str, Any] = field(default_factory=dict)
+
+
+def in_english_text(con: sqlite3.Connection, name: str) -> bool:
+    """Does this name occur in the text of an English document?
+
+    The library as its own dictionary. A name nobody wrote in an English
+    document is the candidate; everything else is already the word
+    English uses, whatever it looks like.
+    """
+    words = _WORD.findall(name)
+    if not words or len(words) > MAX_WORDS:
+        return True  # nothing to look up, or not a name
+    match = " ".join(f'"{w}"' for w in words)  # the words in order
+    try:
+        row = con.execute(
+            "SELECT 1 FROM chunks_fts f JOIN chunks c ON c.id = f.rowid"
+            " JOIN documents d ON d.id = c.doc_id"
+            " WHERE chunks_fts MATCH ?"
+            " AND json_extract(d.meta, '$.lang') = ? LIMIT 1",
+            (match, CANONICAL),
+        ).fetchone()
+    except sqlite3.OperationalError:
+        return True  # a name FTS cannot parse is not this pass's business
+    return row is not None
+
+
+def parse(out: str) -> str | None:
+    """The name out of what the model returned, or None when it returned
+    nothing usable."""
+    text = (out or "").strip().splitlines()[0].strip() if (out or "").strip() else ""
+    text = _PREAMBLE.sub("", text).strip()
+    # a full stop outside the quotes and a quote outside the full stop are
+    # both what a model does; take whichever is outermost until neither is
+    for _ in range(3):
+        was = text
+        text = text.strip().rstrip(".").strip()
+        if len(text) >= 2 and text[0] in "\"'“„«" and text[-1] in "\"'”“»":
+            text = text[1:-1]
+        if text == was:
+            break
+    text = text.strip()
+    if not text or _UNCHANGED.match(text):
+        return None
+    return text
+
+
+def acceptable(name: str, given: str) -> str | None:
+    """Why the name cannot be used, or None when it can.
+
+    A small model asked for a term writes a definition instead, or
+    answers in the language it was given, or invents something with
+    nothing of the original in it. The first two are catchable here; the
+    third is what the review queue and ``unmerge_run`` are for.
+    """
+    if len(_WORD.findall(name)) > MAX_WORDS:
+        return "a description, not a name"
+    if len(name) > max(60, len(given) * 2):
+        return "too long"
+    if name.strip().lower() == given.strip().lower():
+        return "unchanged"
+    return None
+
+
+def user_message(name: str, kind: str, *, context: str = "") -> str:
+    """What the model is given: the name, what kind of thing it is, and
+    where it was said, as sentences — a model handed labelled fields
+    fills the form in and returns the labels (``prax.summaries``)."""
+    parts = [f"A {kind} is called “{name}”."]
+    if context.strip():
+        parts.append(f"It was named in a document called “{context.strip()}”.")
+    parts.append("What does English call it?")
+    return " ".join(parts)
+
+
+def rename(runtime: Any, name: str, kind: str, *, context: str = "") -> Naming | None:
+    """The English name of the thing, or None when the model did not
+    manage one. ``changed`` is False when the name was already English,
+    which is the commonest answer and costs only the call."""
+    out, usage = runtime.chat(
+        SYSTEM,
+        user_message(name, kind, context=context),
+        max_tokens=40,
+        temperature=0.0,
+        stop=["\n"],
+    )
+    got = parse(out)
+    if got is None:
+        return Naming(name=name, changed=False, usage=usage)
+    why = acceptable(got, name)
+    if why == "unchanged":
+        return Naming(name=name, changed=False, usage=usage)
+    if why is not None:
+        return None
+    return Naming(name=got, changed=True, usage=usage)

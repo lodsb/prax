@@ -1099,7 +1099,7 @@ def test_the_steps_are_named_once(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert work.STEPS is steps.STEPS and worker.STEPS is steps.STEPS
     assert set(steps.WATCHED_STEPS) < set(steps.STEPS)
-    assert steps.NAMED_ONLY == ("promote", "typing", "adjudicate")
+    assert steps.NAMED_ONLY == ("vocabulary", "promote", "typing", "adjudicate")
     a = build_parser().parse_args(["work"])
     assert tuple(a.steps.split(",")) == steps.WATCHED_STEPS
     assert all(hasattr(a, f"no_{s}") for s in steps.STEPS)
