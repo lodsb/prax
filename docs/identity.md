@@ -70,7 +70,46 @@ already falls back to the labels when no entity carries a name
    the entity has. That is the feature the whole thing is for: the graph
    in German for a German reader, one node either way.
 
-## Why it is not being written today
+## As built, 2026-09-24
+
+All four, with llama-server stopped for the duration — none of it calls a
+model, which is what made it safe to do while the box was short of
+memory.
+
+- **Migration 23**: a preferred label for every entity, and `_entity_id`
+  writes one for each it creates. 145,243 labels over 144,211 entities in
+  3 seconds on a copy of the live store.
+- **`entities.name` is a cache**, rebuilt from the labels by
+  `_refresh_name` and by the `names` pass of `prax maintain`.
+  `graph.language` in prax.yaml says which language a host shows.
+- **A rename is two label writes**: the document's word stops being
+  preferred where the translation now is, and the column follows. One
+  preferred label *per language*, so the German name stays the preferred
+  German name — which is the point.
+- **Routes for what the store could already do**: `POST /graph/label`,
+  since `add_label`'s own docstring said "what a dictionary import or a
+  person writes" and nothing could write one.
+
+### What went wrong, and what it taught
+
+Migration 23 wrote a label `WHERE NOT EXISTS (a preferred label)`, which
+skipped exactly the entities that most needed one — the 1,516 a pass had
+already given a preferred name in another language. Their own name was
+then in no row, and the first rebuild of the display names renamed four
+of them with nothing left to put back: `Chomsky-Normalform` became
+`Chomsky normal form` and the German spelling was gone from the store.
+
+Migration 24 fixes the rule. The four were recovered from a copy taken
+before the migration — which is the only reason this is a footnote rather
+than a loss.
+
+The lesson is in the code rather than in a guard. `_refresh_name` records
+the name it is about to replace, so a name cannot be dropped by any path,
+whether or not a migration prepared the ground. A guard would have caught
+the one route that lost these four; recording the outgoing name makes the
+loss impossible on all of them.
+
+## Why it waited a few hours (kept, because the reasoning stands)
 
 Three reasons, in order of weight.
 
@@ -90,10 +129,11 @@ llama-server holding twenty of them), and 2,005 documents of the
 sections backlog and the rest of the vocabulary candidates are still
 waiting. Those want the machine before a migration does.
 
-## What is worth doing first, and is small
+What changed the answer was noticing that **none of it calls a model**.
+llama-server was holding twenty of the machine's thirty-one gigabytes for
+work this change does not need; stopping it freed the box, and the
+migration ran on a copy first, then live, in seconds.
 
-Step 1 on its own — **a preferred label for every entity** — is
-independently useful and carries no risk: it adds rows, changes no
-behaviour, and makes `entities_by_label` answer for the whole graph
-rather than for the 1% the passes have touched. Every later step assumes
-it. It is the right first commit whenever this is picked up.
+Step 1 was still the right first commit — a preferred label for every
+entity, which adds rows and changes no behaviour — and the bug above is
+what happens when it is written slightly wrong.

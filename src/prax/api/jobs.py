@@ -226,6 +226,49 @@ def _start_maintain(con: Any, only: list[str] | None) -> dict[str, Any]:
     return {"job": job.id, "passes": chosen}
 
 
+class LabelReq(BaseModel):
+    entity_id: int
+    label: str
+    lang: str | None = None
+    kind: str = "alt"  # pref (one per language) | alt
+    producer: str | None = None
+    confidence: str | None = None
+    run: str | None = None
+
+
+@router.post("/graph/label")
+def label(req: LabelReq, request: Request) -> dict[str, Any]:
+    """A name an entity is also known by (``store.add_label``).
+
+    What a dictionary import or a person writes — which the function has
+    said since migration 20 and which nothing could do, there being no
+    route to it. A preferred label displaces the one already preferred in
+    that language, and the shown name follows.
+    """
+    con = _con(request)
+    try:
+        wrote = store.add_label(
+            con,
+            req.entity_id,
+            req.label,
+            lang=req.lang,
+            kind=req.kind,
+            producer=req.producer,
+            run=req.run,
+            confidence=req.confidence,
+        )
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    row = con.execute(
+        "SELECT name FROM entities WHERE id = ?", (req.entity_id,)
+    ).fetchone()
+    return {
+        "entity": req.entity_id,
+        "written": wrote,
+        "name": row["name"] if row else None,
+    }
+
+
 class RetireReq(BaseModel):
     run: str | None = None  # the pass to end
     producer: str | None = None  # or everything one producer wrote

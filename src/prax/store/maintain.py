@@ -69,6 +69,7 @@ PASSES = (
     "fts",
     "lengths",
     "languages",
+    "names",
 )
 ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
 
@@ -570,6 +571,22 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     }
 
 
+def _names(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """Every entity's shown name rebuilt from its labels.
+
+    `entities.name` is a cache of the preferred label in the language
+    this host shows (`graph.language`; docs/identity.md). The labels say
+    what a thing is called; this is what a join reads. Idempotent and a
+    few seconds over 144,000 entities, because it writes only where the
+    two have drifted — a pass that gave an entity a preferred name in
+    another language, or a host that changed which language it shows.
+    """
+    from .graph import rename_display_language
+
+    job.update(note="names from the labels")
+    return rename_display_language(con)
+
+
 def _lengths(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """``documents.text_len`` filled for the texts indexed before the
     column existed (``fill_text_lengths``); nothing once it is."""
@@ -698,6 +715,7 @@ _RUN = {
     "fts": _fts,
     "lengths": _lengths,
     "languages": _languages,
+    "names": _names,
     "rechunk": _rechunk,
 }
 

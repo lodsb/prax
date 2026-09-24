@@ -361,8 +361,10 @@ def test_a_merge_leaves_a_label_and_can_be_undone(con: sqlite3.Connection) -> No
         confidence="INFERRED",
     )
     labels = store.entity_labels(con, ids["olive oil"])
-    assert [x["label"] for x in labels] == ["Olivenöl"]
-    got = labels[0]
+    # its own name and the one it absorbed: every entity carries a
+    # preferred label of its own since migration 23
+    assert {x["label"] for x in labels} == {"olive oil", "Olivenöl"}
+    got = next(x for x in labels if x["label"] == "Olivenöl")
     assert got["lang"] is None or got["lang"] == "de"  # a word alone may not say
     assert got["producer"] == "resolution" and got["run"] == "resolve-test"
     assert got["from_entity"] == ids["Olivenöl"]
@@ -375,7 +377,10 @@ def test_a_merge_leaves_a_label_and_can_be_undone(con: sqlite3.Connection) -> No
         "SELECT canonical_id FROM entities WHERE id = ?", (ids["Olivenöl"],)
     ).fetchone()
     assert back[0] is None
-    assert store.entity_labels(con, ids["olive oil"]) == []
+    # what the run wrote is gone; the entity's own name is not
+    assert [x["label"] for x in store.entity_labels(con, ids["olive oil"])] == [
+        "olive oil"
+    ]
     assert store.unmerge_run(con, "resolve-test") == 0  # idempotent
 
 
@@ -407,6 +412,8 @@ def test_a_label_can_be_added_by_hand(con: sqlite3.Connection) -> None:
     )
     assert store.add_label(con, entity, "Knollensellerie", lang="de") == 0  # once
     german = store.entity_labels(con, entity, lang="de")
-    assert [x["label"] for x in german] == ["Knollensellerie"]
-    assert german[0]["kind"] == "pref"
+    # `lang` asks for that language and the labels nobody has placed, so
+    # the entity's own name is in the answer too
+    assert {x["label"] for x in german} == {"Knollensellerie", "celeriac"}
+    assert next(x for x in german if x["label"] == "Knollensellerie")["kind"] == "pref"
     assert store.entities_by_label(con, "knollensellerie") == [entity]

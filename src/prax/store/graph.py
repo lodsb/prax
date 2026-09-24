@@ -524,9 +524,18 @@ def _entity_id(con: sqlite3.Connection, name: str, etype: str) -> int:
     con.execute(
         "INSERT OR IGNORE INTO entities (name, type) VALUES (?,?)", (name, etype)
     )
-    return con.execute(
+    made = con.execute(
         "SELECT id FROM entities WHERE name = ? AND type = ?", (name, etype)
     ).fetchone()["id"]
+    # a new entity answers to its own name from the start, so the labels
+    # are the whole truth about what a thing is called and the name
+    # column can be rebuilt from them (migration 23, docs/identity.md)
+    con.execute(
+        "INSERT OR IGNORE INTO entity_labels (entity_id, label, kind, producer)"
+        " VALUES (?, ?, 'pref', 'baseline')",
+        (made, name),
+    )
+    return int(made)
 
 
 @_serialized
@@ -674,6 +683,108 @@ def _label_from_merge(
     )
 
 
+DEFAULT_LANGUAGE = "en"  # what a host shows when `graph.language` says nothing
+
+
+def display_language() -> str:
+    """Which of a thing's names this host shows (`graph.language` in
+    prax.yaml). The graph in German for a German reader, one node either
+    way — the point of the label table."""
+    from prax import config
+
+    return str(
+        config.setting("graph.language", "PRAX_GRAPH_LANGUAGE", DEFAULT_LANGUAGE)
+    )
+
+
+def _display_name(con: sqlite3.Connection, entity_id: int) -> str | None:
+    """The name to show for an entity: its preferred label in the host's
+    language, then in English, then any preferred label it has.
+
+    None when it has none, which after migration 23 means the entity was
+    made by something that bypassed ``_entity_id`` — the caller then
+    leaves the name it has.
+    """
+    want = display_language()
+    rows = con.execute(
+        "SELECT label, lang FROM entity_labels WHERE entity_id = ? AND kind = 'pref'",
+        (entity_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    by_lang = {r["lang"]: r["label"] for r in rows}
+    for lang in (want, DEFAULT_LANGUAGE, None):
+        if lang in by_lang:
+            return str(by_lang[lang])
+    return str(rows[0]["label"])
+
+
+def _refresh_name(con: sqlite3.Connection, entity_id: int) -> str | None:
+    """Rewrite the cached name from the labels. Returns it when it moved.
+
+    ``entities.name`` is a cache of the preferred label in the host's
+    language (docs/identity.md): the labels say what a thing is called,
+    the column is what a join reads and what the unique index guards. A
+    name another entity of that type already shows is left alone — two
+    things may not display the same, which is the type clash the review
+    queue is for, not something to resolve by overwriting.
+    """
+    show = _display_name(con, entity_id)
+    if show is None:
+        return None
+    row = con.execute(
+        "SELECT name, type FROM entities WHERE id = ?", (entity_id,)
+    ).fetchone()
+    if row is None or row["name"] == show:
+        return None
+    taken = con.execute(
+        "SELECT 1 FROM entities WHERE name = ? AND type = ? AND id != ?",
+        (show, row["type"], entity_id),
+    ).fetchone()
+    if taken is not None:
+        return None
+    # the name being replaced is a name this entity answers to, and is
+    # recorded before it goes. `Chomsky-Normalform` was lost because
+    # migration 23 had skipped entities that already had a preferred
+    # label, so their own name was in no row and a rebuild renamed them
+    # with nothing left to put back. A guard would have caught that one
+    # path; this makes the loss impossible on all of them.
+    # a name appears once per entity whatever its language, so this asks
+    # for the text rather than leaning on the unique index, which counts
+    # a different `lang` as a different label
+    con.execute(
+        "INSERT INTO entity_labels (entity_id, label, kind, producer)"
+        " SELECT ?, ?, 'alt', 'baseline' WHERE NOT EXISTS ("
+        "   SELECT 1 FROM entity_labels WHERE entity_id = ?"
+        "    AND label = ? COLLATE NOCASE)",
+        (entity_id, row["name"], entity_id, row["name"]),
+    )
+    con.execute("UPDATE entities SET name = ? WHERE id = ?", (show, entity_id))
+    return show
+
+
+@_serialized
+def rename_display_language(con: sqlite3.Connection) -> dict[str, int]:
+    """Every entity's shown name rebuilt from its labels: what a host
+    runs after changing `graph.language`. The maintain pass calls it."""
+    moved = 0
+    rows = con.execute(
+        "SELECT DISTINCT entity_id FROM entity_labels WHERE kind = 'pref'"
+    ).fetchall()
+    for n, r in enumerate(rows, 1):
+        entity_id = int(r["entity_id"])
+        if _refresh_name(con, entity_id):
+            moved += 1
+        if n % 2000 == 0:
+            con.commit()
+    con.commit()
+    return {
+        "entities": len(rows),
+        "renamed": moved,
+        "language": display_language(),
+    }
+
+
 @_serialized
 def add_label(
     con: sqlite3.Connection,
@@ -705,6 +816,18 @@ def add_label(
     """
     if not label.strip():
         raise ValueError("a label needs a name")
+    # a name appears once per entity: its language is a property of the
+    # label, not part of which label it is. Migration 23 gives every
+    # entity a label with no language, and the passes then learn one — so
+    # without this a rename left two rows differing only in `lang`, and
+    # the `languages` backfill would collide on the unique index trying
+    # to place the first (2026-09-24)
+    if lang is not None:
+        con.execute(
+            "UPDATE entity_labels SET lang = ? WHERE entity_id = ? AND label = ?"
+            " AND lang IS NULL",
+            (lang, entity_id, label),
+        )
     if kind == "pref" and lang is not None:
         con.execute(
             "UPDATE entity_labels SET kind = 'alt'"
@@ -727,14 +850,38 @@ def add_label(
             1 if was else 0,
         ),
     )
-    if not cur.rowcount and kind == "pref":
-        # the name was already a label of this entity, as an alt: the
-        # caller is saying it is the preferred one now
+    if not cur.rowcount:
+        # the name was already a label of this entity: the caller is
+        # saying something about it — which kind it is, whether it is the
+        # name the entity used to carry, and who says so. The provenance
+        # has to move with it, or a pass cannot mark what it decided and
+        # `unmerge_run` cannot find its own work: every entity carries a
+        # `baseline` label from migration 23, so this is the common path
+        # now rather than the rare one (2026-09-24)
         con.execute(
-            "UPDATE entity_labels SET kind = 'pref' WHERE entity_id = ?"
-            " AND label = ? AND coalesce(lang, '') = coalesce(?, '')",
-            (entity_id, label, lang),
+            # a caller naming a label it did not give a kind to is saying
+            # the name exists, not that it stopped being the preferred
+            # one: the kind goes up, never down
+            "UPDATE entity_labels SET"
+            " kind = CASE WHEN ? = 'pref' THEN 'pref' ELSE kind END,"
+            " was = max(was, ?),"
+            " producer = COALESCE(?, producer), run = COALESCE(?, run),"
+            " confidence = COALESCE(?, confidence)"
+            " WHERE entity_id = ? AND label = ?"
+            " AND coalesce(lang, '') = coalesce(?, '')",
+            (
+                kind,
+                1 if was else 0,
+                producer,
+                run,
+                confidence,
+                entity_id,
+                label,
+                lang,
+            ),
         )
+    if kind == "pref":
+        _refresh_name(con, entity_id)  # the column follows the labels
     con.commit()
     return int(cur.rowcount or 0)
 
@@ -761,12 +908,18 @@ def entity_labels(
 @_reading
 def entities_by_label(con: sqlite3.Connection, label: str) -> list[int]:
     """The entities known by this name, whatever their own name is: how a
-    German word reaches an entity the library calls something else."""
+    German word reaches an entity the library calls something else.
+
+    A merged alias answers for its survivor, not for itself: every entity
+    carries its own name as a label since migration 23, so without that a
+    lookup would return the fold and the thing it folded into.
+    """
     return [
         int(r[0])
         for r in con.execute(
-            "SELECT DISTINCT entity_id FROM entity_labels WHERE label = ?"
-            " COLLATE NOCASE",
+            "SELECT DISTINCT COALESCE(e.canonical_id, e.id) FROM entity_labels l"
+            " JOIN entities e ON e.id = l.entity_id"
+            " WHERE l.label = ? COLLATE NOCASE",
             (label,),
         )
     ]
@@ -801,11 +954,18 @@ def unmerge_run(con: sqlite3.Connection, run: str) -> int:
         "SELECT entity_id, label FROM entity_labels WHERE run = ? AND was = 1",
         (run,),
     ).fetchall()
+    # what the run *wrote* goes; what it only *claimed* stays. A `was`
+    # label is the entity's own older name, which the run demoted rather
+    # than made — deleting it with the rest took away the very name the
+    # undo exists to put back (2026-09-24)
+    con.execute("DELETE FROM entity_labels WHERE run = ? AND was = 0", (run,))
     for r in renamed:
         con.execute(
-            "UPDATE entities SET name = ? WHERE id = ?", (r["label"], r["entity_id"])
+            "UPDATE entity_labels SET kind = 'pref', was = 0, run = NULL"
+            " WHERE entity_id = ? AND label = ?",
+            (r["entity_id"], r["label"]),
         )
-    con.execute("DELETE FROM entity_labels WHERE run = ?", (run,))
+        _refresh_name(con, int(r["entity_id"]))
     con.commit()
     return len(ids) + len(renamed)
 
@@ -990,9 +1150,11 @@ def name_in_english(
         out["action"] = "merged"
         out["into"] = survivor
         return out
-    con.execute("UPDATE entities SET name = ? WHERE id = ?", (english, entity_id))
-    # an alt like any other, marked as the name the entity had: a search
-    # in that language must still reach it, and ``unmerge_run`` puts it back
+    # a rename is two label writes and nothing else: the name the
+    # document used stops being preferred in its language, the English one
+    # starts being preferred in English, and `entities.name` follows the
+    # labels (docs/identity.md). `was` stays only so `unmerge_run` knows
+    # which label to prefer again.
     add_label(
         con,
         entity_id,
@@ -1003,6 +1165,16 @@ def name_in_english(
         run=run,
         confidence=confidence,
         was=True,
+    )
+    add_label(
+        con,
+        entity_id,
+        english,
+        lang=vocabulary.CANONICAL,
+        kind="pref",
+        producer=producer,
+        run=run,
+        confidence=confidence,
     )
     con.commit()
     out["action"] = "renamed"

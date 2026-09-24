@@ -187,6 +187,7 @@ from .documents import (  # noqa: F401
 from .graph import (  # noqa: F401
     ASK_FACT_RELS_SKIPPED,
     CONFIDENCE_LEVELS,
+    DEFAULT_LANGUAGE,
     HUB_TYPES,
     MAX_HOPS,
     Edge,
@@ -201,6 +202,7 @@ from .graph import (  # noqa: F401
     canonical_entity,
     count_review,
     decide_candidates,
+    display_language,
     document_context,
     document_facts,
     entities_by_label,
@@ -219,6 +221,7 @@ from .graph import (  # noqa: F401
     name_in_english,
     provenance_summary,
     queue_review,
+    rename_display_language,
     replace_entity_candidates,
     resolve_review,
     resolve_review_many,

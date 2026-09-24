@@ -41,6 +41,7 @@ SECTIONS = (
     "door",  # cors_origins, inbox_scan_seconds, clock_seconds, fetch_private,
     # max_upload_mb
     "ontology",  # dir
+    "graph",  # language: which of a thing's names this host shows
     "paths",  # models (where fetched model files go), backup, llama_server
     "sources",  # what the importers need: github user and token
     "run",  # what `prax up` keeps alive on this host (prax.up)

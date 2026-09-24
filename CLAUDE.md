@@ -301,10 +301,15 @@ reference `docs/ask.md`.
   expects (`parse.languages`), with a stopword count as the fallback
   where it is not installed. It says nothing rather than guess, so a
   missing `lang` is always allowed.
-- An entity's names are `entity_labels`: one preferred name per
-  language (migration 22 holds it; `store.add_label` demotes the one
-  already there) and any number of alternatives, which is the shape SKOS
-  gives a concept. A label carries its language, the producer, the run
+- An entity's names are `entity_labels`, which is what a thing is
+  called; `entities.name` is a cache of the preferred one in the
+  language this host shows (`graph.language`), rebuilt by the `names`
+  pass of `prax maintain`. Every entity carries a label of its own name
+  (migrations 23 and 24), so the cache can always be rebuilt from the
+  labels, and `store._refresh_name` records the name it replaces before
+  replacing it — a name this design drops is one nothing can put back.
+  One preferred name per language (migration 22 holds it) and any number
+  of alternatives, which is the shape SKOS gives a concept. A label carries its language, the producer, the run
   and, when it is what the entity used to be called, `was` — so
   `store.unmerge_run` puts a renamed entity's name back as well as
   undoing its merges. `store.link` lands on the entity that answers to a

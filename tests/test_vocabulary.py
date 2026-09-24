@@ -276,7 +276,11 @@ def test_a_rename_is_taken_back_with_the_run(client: TestClient) -> None:
         con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()["name"]
         == "Seitentabelle"
     )
-    assert store.entity_labels(con, eid) == []
+    # what the run wrote is gone, the name the entity always had is the
+    # preferred one again, and the name it briefly carried is kept as one
+    # it answered to — a name this design drops is one nothing can recover
+    left = {ln["label"]: ln["kind"] for ln in store.entity_labels(con, eid)}
+    assert left == {"Seitentabelle": "pref", "side table": "alt"}
 
 
 def test_the_twin_is_one_of_its_own_type_that_is_still_standing(
@@ -395,16 +399,30 @@ def test_one_preferred_name_per_language(client: TestClient) -> None:
     assert eid in store.entities_by_label(con, "olive oil")
 
 
-def test_a_rename_is_an_alt_label_marked_as_what_it_was(client: TestClient) -> None:
+def test_a_rename_leaves_a_preferred_name_in_each_language(
+    client: TestClient,
+) -> None:
+    """One preferred label *per language*, which is the shape SKOS gives
+    a concept: the document's own word stays the preferred German name
+    and the translation becomes the preferred English one. Only the
+    display follows the host's language."""
     con = client.app.state.con
     eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
     store.name_in_english(con, eid, "garlic cloves", run="r10")
-    row = con.execute(
-        "SELECT kind, was FROM entity_labels WHERE entity_id = ? AND label = ?",
-        (eid, "Knoblauchzehen"),
-    ).fetchone()
-    assert row["kind"] == "alt"  # the SKOS kinds are pref and alt
-    assert row["was"] == 1  # and this one is what the entity was called
+    rows = con.execute(
+        "SELECT label, lang, kind, was FROM entity_labels WHERE entity_id = ?",
+        (eid,),
+    ).fetchall()
+    by_label = {r["label"]: r for r in rows}
+    assert by_label["Knoblauchzehen"]["lang"] == "de"
+    assert by_label["Knoblauchzehen"]["kind"] == "pref"  # preferred, in German
+    assert by_label["Knoblauchzehen"]["was"] == 1  # and what the entity was called
+    assert by_label["garlic cloves"]["lang"] == "en"
+    assert by_label["garlic cloves"]["kind"] == "pref"
+    assert (
+        con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()["name"]
+        == "garlic cloves"
+    )
 
 
 # ------------------------------------------ the names a search has to reach
@@ -539,3 +557,109 @@ def test_the_library_is_not_its_own_evidence(client: TestClient) -> None:
     meta["lang"] = "en"
     store.set_meta(con, meta_doc["doc_id"], meta)
     assert not vocabulary.in_english_text(con, "Olivenöl")
+
+
+# ------------------------------------ the name as a cache of the labels
+
+
+def test_every_entity_answers_to_its_own_name(client: TestClient) -> None:
+    """Migration 23 and `_entity_id`: without this the labels are not the
+    whole truth and the name cannot be rebuilt from them."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    labels = store.entity_labels(con, eid)
+    assert [(ln["label"], ln["kind"]) for ln in labels] == [("Knoblauchzehen", "pref")]
+
+
+def test_a_name_appears_once_per_entity(client: TestClient) -> None:
+    """Its language is a property of the label, not part of which label
+    it is — two rows differing only in `lang` collided later."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.add_label(con, eid, "Knoblauchzehen", lang="de", kind="alt", run="r")
+    rows = con.execute(
+        "SELECT label, lang FROM entity_labels WHERE entity_id = ?", (eid,)
+    ).fetchall()
+    assert [(r["label"], r["lang"]) for r in rows] == [("Knoblauchzehen", "de")]
+
+
+def test_the_shown_name_follows_the_preferred_label(client: TestClient) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.add_label(con, eid, "garlic cloves", lang="en", kind="pref", run="r")
+    assert (
+        con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()["name"]
+        == "garlic cloves"
+    )
+
+
+def test_the_host_chooses_which_name_it_shows(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The graph in German for a German reader, one node either way."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.add_label(con, eid, "Knoblauchzehen", lang="de", kind="pref", run="r")
+    store.add_label(con, eid, "garlic cloves", lang="en", kind="pref", run="r")
+    assert con.execute("SELECT name FROM entities WHERE id=?", (eid,)).fetchone()[
+        0
+    ] == ("garlic cloves")
+
+    monkeypatch.setenv("PRAX_GRAPH_LANGUAGE", "de")
+    got = store.rename_display_language(con)
+    assert got["language"] == "de" and got["renamed"] >= 1
+    assert con.execute("SELECT name FROM entities WHERE id=?", (eid,)).fetchone()[
+        0
+    ] == ("Knoblauchzehen")
+    # and it is the same entity either way
+    assert store.entities_by_label(con, "garlic cloves") == [eid]
+
+
+def test_a_name_another_entity_shows_is_not_taken(client: TestClient) -> None:
+    """Two things may not display the same, which is the type clash the
+    review queue is for — not something to resolve by overwriting."""
+    con = client.app.state.con
+    a = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    b = _german_entity(con, client, "garlic cloves", "ingredient")
+    store.add_label(con, a, "garlic cloves", lang="en", kind="pref", run="r")
+    assert (
+        con.execute("SELECT name FROM entities WHERE id = ?", (a,)).fetchone()["name"]
+        == "Knoblauchzehen"
+    )
+    assert b  # the one that already shows it keeps it
+
+
+def test_the_maintain_pass_rebuilds_the_names(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.add_label(con, eid, "Knoblauchzehen", lang="de", kind="pref", run="r")
+    store.add_label(con, eid, "garlic cloves", lang="en", kind="pref", run="r")
+    monkeypatch.setenv("PRAX_GRAPH_LANGUAGE", "de")
+    got = store.maintain(con, only=["names"])["names"]
+    assert got["language"] == "de"
+    assert (
+        con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()["name"]
+        == "Knoblauchzehen"
+    )
+
+
+def test_a_name_that_is_replaced_is_recorded_before_it_goes(
+    client: TestClient,
+) -> None:
+    """Migration 23 skipped the entities that already had a preferred
+    label, so their own name was in no row and the first rebuild renamed
+    four of them with nothing left to put back — `Chomsky-Normalform`
+    among them. A guard would have caught that one path; recording the
+    outgoing name makes the loss impossible on all of them."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Chomsky-Normalform", "concept")
+    con.execute("DELETE FROM entity_labels WHERE entity_id = ?", (eid,))  # pre-24
+    store.add_label(con, eid, "Chomsky normal form", lang="en", kind="pref", run="r")
+    assert (
+        con.execute("SELECT name FROM entities WHERE id = ?", (eid,)).fetchone()["name"]
+        == "Chomsky normal form"
+    )
+    # and the name it used to have is still a name it answers to
+    assert store.entities_by_label(con, "Chomsky-Normalform") == [eid]

@@ -323,7 +323,7 @@ not done (below).
   one type sharing a label is left as a question rather than settled by
   taking the lower id.
 
-**Not done: `entities.name` is still the identity.** Surveyed on
+**Done 2026-09-24** (`docs/identity.md`). Surveyed first, on
 2026-09-24 and written up as `docs/identity.md`, which changes the shape
 of the work: of 430 references to an entity's name across the codebase,
 almost all are joins that *display* a name they already have by id, and
