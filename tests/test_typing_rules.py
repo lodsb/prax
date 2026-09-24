@@ -170,14 +170,21 @@ def test_apply_links_drops_and_leaves(con: sqlite3.Connection) -> None:
         for r in con.execute(
             "SELECT s.name s, x.rel, t.name t, x.confidence, x.producer FROM edges x"
             " JOIN entities s ON s.id = x.src JOIN entities t ON t.id = x.dst"
-            " WHERE x.valid_to IS NULL AND x.producer = 'typing-rules'"
+            " WHERE x.valid_to IS NULL AND x.producer LIKE 'typing-rules%'"
         )
     }
+    # the producer names the rule, so a rule can be judged on its own work
     assert edges == {
-        ("A Manual", "about", "reverb", "INFERRED", "typing-rules"),
-        ("A Manual", "authored_by", "Ann Author", "INFERRED", "typing-rules"),
-        ("A Manual", "uses", "Matlab", "INFERRED", "typing-rules"),
-        ("A Manual", "mentions", "Ann", "INFERRED", "typing-rules"),
+        ("A Manual", "about", "reverb", "INFERRED", "typing-rules/self-name"),
+        (
+            "A Manual",
+            "authored_by",
+            "Ann Author",
+            "INFERRED",
+            "typing-rules/flip-authored_by",
+        ),
+        ("A Manual", "uses", "Matlab", "INFERRED", "typing-rules/cites->uses"),
+        ("A Manual", "mentions", "Ann", "INFERRED", "typing-rules/cites->mentions"),
     }
     # a second pass finds nothing new
     again = review.apply_typing_rules(con, commit=True)

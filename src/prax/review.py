@@ -88,6 +88,22 @@ def replay(
 # stays in the queue for a person or a bigger ontology.
 
 RULES_PRODUCER = "typing-rules"
+
+
+def rule_producer(rule: str | None) -> str:
+    """The producer an edge carries: the pass, then the rule that decided
+    it — ``typing-rules/flip-authored_by``.
+
+    Which rule wrote an edge was not recorded until 2026-09-24, so no rule
+    could be judged after the fact; the pass could only be judged whole,
+    and the passes that were withdrawn were withdrawn whole
+    (`docs/eval/typing-rules-2026-09-24.md`). A rule is a claim like any
+    other and signs its work. The prefix is kept, so everything that asks
+    for the pass still finds it with ``LIKE 'typing-rules%'``.
+    """
+    return f"{RULES_PRODUCER}/{rule}" if rule else RULES_PRODUCER
+
+
 # a relation name that is an attribute of one thing, not a relation
 # between two: "date 2004-03-06", "language German", "role tutor" (the
 # queue held 130 of these on 2026-09-22); dropped, whatever the names
@@ -841,7 +857,7 @@ def apply_typing_rules(
                     confidence="INFERRED",
                     source_doc=it["source_doc"],
                     evidence=it["evidence"],
-                    producer=RULES_PRODUCER,
+                    producer=rule_producer(rule),
                     run=rep.run,
                 )
         if wrote:
