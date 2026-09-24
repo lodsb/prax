@@ -405,3 +405,79 @@ def test_a_rename_is_an_alt_label_marked_as_what_it_was(client: TestClient) -> N
     ).fetchone()
     assert row["kind"] == "alt"  # the SKOS kinds are pref and alt
     assert row["was"] == 1  # and this one is what the entity was called
+
+
+# ------------------------------------------ the names a search has to reach
+
+
+def test_a_renamed_entity_is_found_by_the_word_the_document_used(
+    client: TestClient,
+) -> None:
+    """522 names reached nothing on 2026-09-24: the pass renamed them and
+    the entity search read only `entities.name`."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.name_in_english(con, eid, "garlic cloves", run="r11")
+
+    hits = store.find_entities(con, "Knoblauchzehen")
+    assert [h["id"] for h in hits] == [eid]
+    assert hits[0]["name"] == "garlic cloves"  # what it is called now
+    assert hits[0]["as"] == "Knoblauchzehen"  # and what matched
+    # the English name matches without an explanation
+    assert "as" not in store.find_entities(con, "garlic")[0]
+
+
+def test_a_walk_starts_from_a_name_the_entity_is_known_by(
+    client: TestClient,
+) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.name_in_english(con, eid, "garlic cloves", run="r12")
+    walked = store.traverse(con, "Knoblauchzehen", hops=1)
+    assert walked
+    assert any(
+        e["dst"] == "garlic cloves" or e["src"] == "garlic cloves" for e in walked
+    )
+
+
+def test_a_merged_name_is_found_under_the_survivor(client: TestClient) -> None:
+    con = client.app.state.con
+    german = _german_entity(con, client, "Olivenöl", "ingredient")
+    english = _german_entity(con, client, "olive oil", "ingredient")
+    store.name_in_english(con, german, "olive oil", run="r13")
+    hits = store.find_entities(con, "Olivenöl")
+    assert [h["id"] for h in hits] == [english]
+
+
+def test_the_rename_label_carries_the_document_s_language(
+    client: TestClient,
+) -> None:
+    """A two-word name is under the detector's floor, so the document that
+    named it says which language it was."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.name_in_english(con, eid, "garlic cloves", run="r14")
+    row = con.execute(
+        "SELECT lang FROM entity_labels WHERE entity_id = ? AND label = ?",
+        (eid, "Knoblauchzehen"),
+    ).fetchone()
+    assert row["lang"] == "de"
+
+
+def test_a_name_with_an_umlaut_is_found_whatever_the_case(
+    client: TestClient,
+) -> None:
+    """SQLite's own lower() is ASCII-only, so `lower(name) LIKE
+    '%ästhetik%'` never matched "Ästhetik der Lüge" — in a library a
+    fifth of which is German, silently."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Ästhetik der Lüge", "concept")
+    for q in ("Ästhetik der Lüge", "ästhetik", "ÄSTHETIK", "der lüge"):
+        assert [h["id"] for h in store.find_entities(con, q)] == [eid], q
+
+
+def test_a_label_with_an_umlaut_is_found_too(client: TestClient) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Übertragung", "concept")
+    store.name_in_english(con, eid, "transmission", run="r15")
+    assert [h["id"] for h in store.find_entities(con, "übertragung")] == [eid]

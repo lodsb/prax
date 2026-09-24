@@ -431,26 +431,61 @@ def hub_graph(
 def find_entities(
     con: sqlite3.Connection, q: str, *, limit: int = 20
 ) -> list[dict[str, Any]]:
-    """Entities whose name contains ``q`` (case-insensitive), with their
-    number of currently valid edges, most connected first. The degree is
-    two counts, one per end: an OR across ``src`` and ``dst`` made the
-    subquery scan the edges for every matching name (340 names, 14 s;
-    two indexed counts, 46 ms, 2026-09-22)."""
+    """Entities whose name — or a name they are *known by* — contains
+    ``q`` (case-insensitive), with their number of currently valid edges,
+    most connected first.
+
+    The labels matter as much as the names. A pass that renames
+    ``Knoblauchzehen`` to ``garlic cloves`` leaves the German as a label,
+    and a search that read only ``entities.name`` would answer nothing
+    for the word the document actually used: 522 names reached nothing
+    that way on 2026-09-24. A hit found only through a label says so
+    (``as``), so a caller can show what it matched.
+
+    The degree is two counts, one per end: an OR across ``src`` and
+    ``dst`` made the subquery scan the edges for every matching name (340
+    names, 14 s; two indexed counts, 46 ms, 2026-09-22).
+    """
     pattern = "%" + _like_prefix(q.lower())[:-1] + "%"
+    # SQLite's own lower() is ASCII-only: it leaves Ä and Ü alone, so
+    # `lower(name) LIKE '%ästhetik%'` never matched "Ästhetik der Lüge" —
+    # in a library a fifth of which is German, silently. Python's does the
+    # whole of Unicode, and is used only when the query needs it, because
+    # a callback per row costs a few times the scan
+    lower = "lower"
+    if not q.isascii():
+        con.create_function("unicode_lower", 1, lambda s: s.lower() if s else s)
+        lower = "unicode_lower"
     rows = con.execute(
-        """
-        SELECT e.id, e.name, e.type,
+        f"""
+        WITH hit(id, matched) AS (
+            SELECT id, NULL FROM entities
+             WHERE {lower}(name) LIKE ? ESCAPE '!' AND canonical_id IS NULL
+            UNION
+            SELECT COALESCE(e.canonical_id, e.id), l.label
+              FROM entity_labels l JOIN entities e ON e.id = l.entity_id
+             WHERE {lower}(l.label) LIKE ? ESCAPE '!'
+        )
+        SELECT e.id, e.name, e.type, min(hit.matched) AS "as",
                (SELECT count(*) FROM edges x
                 WHERE x.src = e.id AND x.valid_to IS NULL)
                + (SELECT count(*) FROM edges x
                   WHERE x.dst = e.id AND x.valid_to IS NULL) AS degree
-        FROM entities e WHERE lower(e.name) LIKE ? ESCAPE '!'
-          AND e.canonical_id IS NULL
+        FROM hit JOIN entities e ON e.id = hit.id
+        WHERE e.canonical_id IS NULL
+        GROUP BY e.id
         ORDER BY degree DESC, e.name LIMIT ?
         """,
-        (pattern, max(1, min(limit, 200))),
+        (pattern, pattern, max(1, min(limit, 200))),
     ).fetchall()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        row = dict(r)
+        # the name itself matched: nothing to explain
+        if pattern.strip("%") in row["name"].lower():
+            row.pop("as", None)
+        out.append(row)
+    return out
 
 
 @dataclass
@@ -812,6 +847,19 @@ def entity_names(con: sqlite3.Connection, etype: str) -> list[tuple[int, str]]:
     return [(int(r["id"]), str(r["name"])) for r in rows]
 
 
+def _named_by_language(con: sqlite3.Connection, entity_id: int) -> str | None:
+    """The language of a document that named this entity, where they all
+    agree. Two languages naming one thing say nothing about the name."""
+    rows = con.execute(
+        "SELECT DISTINCT json_extract(d.meta, '$.lang') AS lang FROM edges x"
+        " JOIN documents d ON d.id = x.source_doc"
+        " WHERE x.valid_to IS NULL AND (x.src = ? OR x.dst = ?)"
+        " AND json_extract(d.meta, '$.lang') IS NOT NULL LIMIT 3",
+        (entity_id, entity_id),
+    ).fetchall()
+    return str(rows[0]["lang"]) if len(rows) == 1 else None
+
+
 @_serialized
 def name_in_english(
     con: sqlite3.Connection,
@@ -856,7 +904,11 @@ def name_in_english(
             "into": row["canonical_id"],
         }
     was = str(row["name"])
-    lang = lang or language.detect(was)
+    # a name is one to three words, which is under the detector's floor, so
+    # it says nothing about nearly all of them — and a label whose language
+    # is unknown cannot answer "show me this in German". The document that
+    # named the entity knows: `meta.lang` of a document with an edge to it
+    lang = lang or language.detect(was) or _named_by_language(con, entity_id)
     # the same name can be several entities, of several types: the one to
     # fold into is one of this entity's own type that is still standing.
     # Without the ordering `page table` the concept (itself already merged
@@ -1545,6 +1597,13 @@ def traverse(
         WITH RECURSIVE
         start(cid) AS (
             SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ?
+            UNION
+            -- a name the entity is known by is an entry too: after a
+            -- rename the document's own word is only a label, and a walk
+            -- from it would otherwise start nowhere
+            SELECT COALESCE(e.canonical_id, e.id)
+              FROM entity_labels l JOIN entities e ON e.id = l.entity_id
+             WHERE l.label = ? COLLATE NOCASE
         ),
         walk(id, depth) AS (
             SELECT n.id, 0 FROM entities n
@@ -1586,6 +1645,6 @@ def traverse(
         WHERE e.valid_to IS NULL
         ORDER BY hop, e.id
         """,
-        (entity_name, hops, hops),
+        (entity_name, entity_name, hops, hops),
     ).fetchall()
     return [dict(r) for r in rows]

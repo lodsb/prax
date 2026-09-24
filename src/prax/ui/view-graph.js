@@ -455,7 +455,9 @@ async function viewGraph(arg, p) {
     if (!entity) {
       const ents = await api("/entities", { q, limit: 40 });
       if (!ents.length) { out.innerHTML = `<p class="muted">No entity matches.</p>`; return; }
-      out.innerHTML = `<ul class="entities">${ents.map((e) => `<li><a href="#graph?entity=${encodeURIComponent(e.name)}">${esc(e.name)}</a> <span class="muted">${esc(e.type)} · ${e.degree} edges</span></li>`).join("")}</ul>`;
+      // `as` is there when the hit was found under a name the entity is
+      // known by rather than its own: the word the document used
+      out.innerHTML = `<ul class="entities">${ents.map((e) => `<li><a href="#graph?entity=${encodeURIComponent(e.name)}">${esc(e.name)}</a> <span class="muted">${esc(e.type)} · ${e.degree} edges${e.as ? ` · also called ${esc(e.as)}` : ""}</span></li>`).join("")}</ul>`;
       return;
     }
     const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
