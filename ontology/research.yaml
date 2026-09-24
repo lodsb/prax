@@ -68,7 +68,10 @@ entity_types:
       A named corpus, benchmark or measurement set: MUSDB18, NSynth,
       a specific HRTF database.
   claim:
-    naming: common
+    # a sentence this document asserts, not the name of a kind of
+    # thing: two documents never state the same claim, so it is never
+    # folded across languages and stays as the document puts it
+    naming: proper
     description: >-
       One sentence stating a result or assertion the document makes, in
       the document's own terms ("SSST resolves close tones that SST

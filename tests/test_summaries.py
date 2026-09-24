@@ -48,6 +48,9 @@ def test_common_types_are_the_kinds_of_thing() -> None:
         assert onto.naming(name) == "common", name
     for name in ("person", "author", "organization", "paper", "place", "tool"):
         assert onto.naming(name) == "proper", name
+    # a claim is a sentence one document asserts, not the name of a kind
+    # of thing: never folded across languages
+    assert onto.naming("claim") == "proper"
 
 
 def test_a_subtype_may_differ_from_its_parent() -> None:
