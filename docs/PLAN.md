@@ -1327,8 +1327,44 @@ keyword MRR of 0.39 against English's 0.91
   and would give `ask` a cheaper way in than the chunks. The shape is
   probably a summary chunk per heading region, written by the same local
   model, indexed like the document field rather than like text.
-- **The vocabulary pass** over the 336 German-named common-noun
-  entities: the graph half of the same fix, below.
+### The vocabulary pass: the graph half
+
+Measured against the ontology's own split rather than a list written
+beside it. Of 42,068 live entities of a common type, **372 are named in
+German** — concept 238, method 67, ingredient 37, dish 19, cuisine 6,
+technique 5 — carrying **533 live edges**. That is 0.9%: the extractor
+already writes English most of the time, which is why this is a pass over
+a few hundred and not a re-reading of the library.
+
+An entity counts when its name carries a mark no English word carries
+*and* its evidence is a German document. Both, because "functions" ends
+in the letters of a German ending and is not German.
+
+The twins are mostly already there. Of ten checked by hand, eight have an
+English entity in the graph: `Olivenöl` (10 documents) beside `olive
+oil`, `Speicherverwaltung` beside `memory management` (38 edges),
+`Gauß-Elimination` beside `Gaussian elimination`. So the pass is mostly a
+merge, not a renaming.
+
+- [ ] **Name them.** The local model gives the English name of each,
+      under the rule the extraction prompt now carries: the common noun
+      translates, a proper noun inside it does not
+      (`Kolmogorov-Komplexität` → `Kolmogorov complexity`,
+      `Büchi-Automat` → `Büchi automaton`). A name that comes back
+      unchanged is already English and means nothing to do, which is how
+      `Gödel's incompleteness theorems` — caught by the umlaut in a
+      person's name — takes itself out.
+- [ ] **Record it as a label, not a rename.** `entity_labels` (migration
+      20) holds the German name with its language, producer and run, so a
+      German search still reaches the entity and `unmerge_run` can undo a
+      round.
+- [ ] **Merge where the twin exists**, through the tiers that already
+      exist, signed with a producer and run.
+- [ ] **The type clashes come with it.** `Olivenöl` is an `ingredient`
+      and `olive oil` a `concept`; `mengenlehre` a `concept` and `set
+      theory` a `method`. The pass will meet the polysemy question head
+      on rather than beside it, and should hand a clash to the review
+      queue rather than guess.
 
 ## Later / maybe
 
