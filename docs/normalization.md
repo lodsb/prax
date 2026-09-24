@@ -6,7 +6,7 @@ what should prax do about one thing arriving under several names? The
 measurements here are of the live store on that day.
 
 > **What became of it, 2026-09-24.** The language row was built and run
-> over the library (1,435 names decided; `docs/PLAN.md` and
+> over the library (1,435 names decided; `docs/log.md` and
 > `prax.vocabulary`), and building it settled two of the guesses below
 > the other way round. **The library-as-dictionary proposal was wrong in
 > the form written here** and right in another: a miner of

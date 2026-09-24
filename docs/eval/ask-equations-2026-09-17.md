@@ -357,7 +357,7 @@ minutes; the hand-out reads the whole queue oldest first), and two
 more the morning showed (a connection lost under a request is the
 server's, not the document's; a restarted worker waits for the next
 night's hour rather than running the nightly pass at once). Timings and
-counts: `docs/PLAN.md`, "After the mathematics".
+counts: `docs/log.md`, "After the mathematics".
 
 ## What follows
 

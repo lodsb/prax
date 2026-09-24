@@ -363,6 +363,8 @@ else. The two faces are vendored under `src/prax/ui/vendor/fonts/`
 
 ## Roadmap
 
-See `docs/PLAN.md`. Work one stage per session. Write tests before
-wiring the MCP layer. Background research and rationale:
-`docs/rationale.md` (decisions) and `docs/research.md` (raw survey).
+See `docs/PLAN.md` for what is next; `docs/log.md` is the record of what
+was done, with the reasoning and the measurements under each night. Work
+one stage per session. Write tests before wiring the MCP layer.
+Background research and rationale: `docs/rationale.md` (decisions) and
+`docs/research.md` (raw survey).

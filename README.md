@@ -284,7 +284,8 @@ product, with sources, is in
 | [`docs/claude-workflow.md`](docs/claude-workflow.md) | One agent workflow in full, as an example: the Claude Code plugin. |
 | [`docs/eval/`](docs/eval/) | Measurements: extractors, retrieval, the local models. |
 | ontology [`v2`](docs/ontology-v2.md) [`v4`](docs/ontology-v4.md) [`v5`](docs/ontology-v5.md) [`v6`](docs/ontology-v6.md) [`v7`](docs/ontology-v7.md) [`v8`](docs/ontology-v8.md), [`studio`](docs/ontology-studio.md), [`craft`](docs/ontology-craft.md) | How the vocabulary grew, one version at a time, and why. |
-| [`docs/PLAN.md`](docs/PLAN.md), [`docs/research.md`](docs/research.md) | The staged plan, and the survey of the field. |
+| [`docs/PLAN.md`](docs/PLAN.md), [`docs/log.md`](docs/log.md) | What is next, and the record of what was done with the measurements under each night. |
+| [`docs/research.md`](docs/research.md) | The survey of the field. |
 | [`prax.example.yaml`](prax.example.yaml) | Template for `prax.yaml`: models, steps, every other setting. |
 
 ## Scope and status

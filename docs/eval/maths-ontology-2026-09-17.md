@@ -1,6 +1,6 @@
 # Does the library want a mathematics module? 2026-09-17
 
-Question (`docs/PLAN.md`, since 2026-09-15): once papers are read with
+Question (`docs/log.md`, since 2026-09-15): once papers are read with
 their mathematics — equations as `formula` chunks, each with a reading in
 words — does the extraction produce shapes the ontology has no home for,
 the way the review queue asked for `written_at` and `mentions` in v6? Or
