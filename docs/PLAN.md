@@ -1346,7 +1346,37 @@ oil`, `Speicherverwaltung` beside `memory management` (38 edges),
 `Gauß-Elimination` beside `Gaussian elimination`. So the pass is mostly a
 merge, not a renaming.
 
-- [ ] **Name them.** The local model gives the English name of each,
+### It ran on 2026-09-24
+
+1,435 entities decided, about half an hour of the local model, nothing
+spent: **556 renamed, 309 merged, 509 already the word English uses, 89
+type clashes queued for review**. The candidate net ended at zero.
+
+What a sample of thirty renames looks like: twenty-two are plain
+translations (`levinson-rekursion` → Levinson recursion, `durchlaufzeit`
+→ throughput time, `betriebsrentengesetz` → pension scheme act), four
+repair a garbled or mixed name (`multipiste editing` → multitrack
+editing, `bplus tree` → b plus tree), and four replace an English name
+with another English term — of which two are the field's own
+(`budgeted cost of work performed` → earned value, `BFPRT algorithm` →
+median of medians algorithm), one is defensible (`microphone wind
+protection` → windscreen) and one is lossy (`card game 17 und 4` → 17
+and 4). Call it one clear loss in thirty, all of it undoable by run.
+
+The clash queue earned its place immediately: it caught `aktie` against
+an entity named `stock` **typed as an author**, and `compilerbau` and
+`sizetest` against entities typed as `paper`. Folding those would have
+been a disaster, and the 89 are as much a report on the graph's existing
+typing as on this pass.
+
+Three bugs, two of them silent, are in the commits of that night: the
+fold landed on the twin rather than on the twin's survivor, so 62
+entities were refused by `merge_entities` and asked again for ever; an
+outcome that wrote nothing (`already`) left the entity a candidate; and
+`unmerge_run` had no route and no CLI, so the undo this pass advertised
+could only be reached by a script that opens the database.
+
+- [x] **Name them.** The local model gives the English name of each,
       under the rule the extraction prompt now carries: the common noun
       translates, a proper noun inside it does not
       (`Kolmogorov-Komplexität` → `Kolmogorov complexity`,
@@ -1354,13 +1384,13 @@ merge, not a renaming.
       unchanged is already English and means nothing to do, which is how
       `Gödel's incompleteness theorems` — caught by the umlaut in a
       person's name — takes itself out.
-- [ ] **Record it as a label, not a rename.** `entity_labels` (migration
+- [x] **Record it as a label, not a rename.** `entity_labels` (migration
       20) holds the German name with its language, producer and run, so a
       German search still reaches the entity and `unmerge_run` can undo a
       round.
-- [ ] **Merge where the twin exists**, through the tiers that already
+- [x] **Merge where the twin exists**, through the tiers that already
       exist, signed with a producer and run.
-- [ ] **The type clashes come with it.** `Olivenöl` is an `ingredient`
+- [x] **The type clashes come with it.** `Olivenöl` is an `ingredient`
       and `olive oil` a `concept`; `mengenlehre` a `concept` and `set
       theory` a `method`. The pass will meet the polysemy question head
       on rather than beside it, and should hand a clash to the review
