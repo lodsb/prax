@@ -31,11 +31,13 @@ explains it.
 
 ### The graph
 
-- [ ] **The second hop** — `traverse` at two hops returns 3.4 MB on a
-      well-connected entity, which breaks invariant 6. The path shape
-      and the ranking that fix it are measured in
-      `docs/eval/traverse-neighbourhood-2026-09-25.md`: 3,552 KB → 73 KB.
-      Next up.
+- [ ] **A hub's own fact list** — the second hop is fixed (`docs/log.md`,
+      2026-09-25) and a second breach of invariant 6 is visible under it:
+      `nonnegative matrix factorization` answers with 325 KB, all of it
+      the first hop, 642 edges each carrying their evidence. It is
+      exactly what the UI wants for its canvas and far too much for an
+      agent, so the answer is paging or a summary of the edge list
+      rather than a ranking of it — and its own measurement.
 - [ ] **Ontology v9** — the relations a document takes name `paper`
       where they could name `document`, so a captured page has to be
       read as a paper for an edge to fit. A version bump and a restamp,

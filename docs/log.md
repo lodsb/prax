@@ -1385,3 +1385,35 @@ could only be reached by a script that opens the database.
       on rather than beside it, and should hand a clash to the review
       queue rather than guess.
 
+## 2026-09-25: the second hop stops being returned as the territory
+
+`traverse` at two hops on `Fourier transform` was 3.4 MB. The measurement
+of why — including a scale-free fit of the whole graph, and two
+plausible explanations that died on the way — is
+`docs/eval/traverse-neighbourhood-2026-09-25.md`.
+
+- [x] **The two hops stop sharing a shape.** `edges` is the entity's own
+      facts with their evidence, untouched, which is what the UI draws
+      and what the surfer reads; `neighbours` is the map of what the
+      documents around it are also about. `left_out` counts what did not
+      fit, because a map that drops the rest silently is worse than a
+      large one.
+- [x] **Never land on a document**, tested against the ontology's own
+      hierarchy so a new module's document type needs no list in the
+      code. A document node is a record; expanding one returns its
+      catalogue card, which was 22% of the payload.
+- [x] **Rank by independent evidence** — how many documents separately
+      say so. Invariant 8 read as a ranking. It beat inverse-degree
+      weighting and Zhou's resource allocation on the same
+      neighbourhood, and needs no degree lookup, which matters because
+      degree by canonical id undercounts.
+- [x] **A quota per type** (`graph.neighbours`, `graph.per_type`,
+      `graph.min_documents` in prax.yaml): ranking alone gave 44 papers
+      in 50.
+
+On the live store: **3,439 KB → 76 KB**, and the map reads as one — 12
+methods, 12 tools, 5 concepts, 3 authors. 818 passed.
+
+What it did not fix is in `docs/PLAN.md`: a hub's own first hop is still
+325 KB.
+
