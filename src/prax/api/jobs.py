@@ -226,6 +226,24 @@ def _start_maintain(con: Any, only: list[str] | None) -> dict[str, Any]:
     return {"job": job.id, "passes": chosen}
 
 
+class UnmergeReq(BaseModel):
+    run: str  # the run to take back
+
+
+@router.post("/graph/unmerge")
+def unmerge(req: UnmergeReq, request: Request) -> dict[str, Any]:
+    """Take a round of merging and renaming back (``store.unmerge_run``).
+
+    A merge and a rename are claims like an edge, and a pass that claimed
+    wrongly has to be undoable through the door — or the only way to undo
+    it is a script that opens the database, which invariant 4 forbids.
+    Every entity the run folded stands on its own again, every entity it
+    renamed is called what it was called, and the labels it wrote are
+    gone.
+    """
+    return {"run": req.run, "entities": store.unmerge_run(_con(request), req.run)}
+
+
 class ResolveReq(BaseModel):
     apply: bool = False  # False: the plan only
     type: str | None = None  # one entity type

@@ -985,6 +985,10 @@ def questions(door: Door, a: Any) -> int:
 
 def resolve(door: Door, a: Any) -> int:
     """Entity resolution: the plan, and with --apply the sure merges."""
+    if getattr(a, "unmerge", None):
+        r = door.post_json("/graph/unmerge", {"run": a.unmerge})
+        out.say(f"{r['entities']} entities back from run {r['run']}")
+        return 0
     body = {
         "apply": a.apply,
         "type": a.type,

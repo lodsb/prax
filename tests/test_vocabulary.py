@@ -292,3 +292,39 @@ def test_the_twin_is_one_of_its_own_type_that_is_still_standing(
     assert concept < method  # the wrong one comes first by id
     got = store.name_in_english(con, eid, "page table", run="r6")
     assert got["action"] == "merged" and got["into"] == method
+
+
+def test_a_name_the_entity_already_answers_to_is_not_asked_again(
+    client: TestClient,
+) -> None:
+    """An earlier pass had folded `reachability graph` into
+    `Erreichbarkeitsgraph`, so the English name was already this entity's
+    own. The outcome wrote nothing, and 62 entities were asked about on
+    every pass for ever."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Erreichbarkeitsgraph", "concept")
+    other = _german_entity(con, client, "reachability graph", "concept")
+    store.merge_entities(con, other, eid, producer="earlier", run="r0")
+
+    got = store.name_in_english(con, eid, "reachability graph", run="r7")
+    assert got["action"] == "already"
+    assert store.foreign_names(con) == []
+
+
+def test_the_fold_lands_on_the_survivor_not_the_twin(client: TestClient) -> None:
+    """A twin of this entity's own type may itself have been folded into
+    one of another type. Comparing the twin let that through to
+    merge_entities, which refused it — and the worker's summary line does
+    not print errors, so 62 entities failed silently."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Erreichbarkeitsgraph", "concept")
+    twin = _german_entity(con, client, "reachability graph", "concept")
+    survivor = _german_entity(con, client, "reachability graph too", "method")
+    store.merge_entities(con, twin, survivor, across_types=True, run="r0")
+
+    got = store.name_in_english(con, eid, "reachability graph", run="r8")
+    assert got["action"] == "type clash"  # not a refusal, and not a bad fold
+    assert got["twin"] == survivor
+    # and it is not asked again (the third entity of the fixture is its
+    # own candidate, which is right)
+    assert eid not in {r["id"] for r in store.foreign_names(con)}

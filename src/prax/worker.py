@@ -819,8 +819,14 @@ def run_once(
                     "run": f"vocabulary-{time.strftime('%Y%m%dT%H%M%S')}",
                 },
             )
+            errors = rep.get("errors") or []
             out["vocabulary"] = (
                 f"{rep.get('applied', 0)} named {rep.get('actions') or ''}"
+                + (
+                    f" · {len(errors)} refused: {errors[0]['error'][:60]}"
+                    if errors
+                    else ""
+                )
             )
         elif step == "extract":
             spec = models.resolve("extract")

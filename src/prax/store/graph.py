@@ -788,6 +788,7 @@ def name_in_english(
     if row is None:
         raise KeyError(f"no such entity: {entity_id}")
     if row["canonical_id"]:
+        # already folded into another entity, which `foreign_names` skips
         return {
             "entity": entity_id,
             "action": "merged away",
@@ -807,7 +808,18 @@ def name_in_english(
         (english, entity_id, row["type"]),
     ).fetchone()
     out: dict[str, Any] = {"entity": entity_id, "was": was, "name": english}
-    if twin is not None and twin["type"] != row["type"]:
+    # what a fold would land on is the twin's survivor, not the twin: a
+    # twin of this entity's own type may itself have been folded into one
+    # of another type, and comparing the twin let that through to
+    # `merge_entities`, which refused it — silently, because the worker's
+    # summary line does not print errors (2026-09-24)
+    into = None
+    if twin is not None:
+        into = con.execute(
+            "SELECT id, type FROM entities WHERE id = ?",
+            (int(twin["canonical_id"] or twin["id"]),),
+        ).fetchone()
+    if into is not None and into["type"] != row["type"]:
         # the same words, a different kind of thing: a question, not a fold
         queue_review(
             con,
@@ -815,10 +827,10 @@ def name_in_english(
             src_type=row["type"],
             rel="same_as",
             dst=english,
-            dst_type=str(twin["type"]),
+            dst_type=str(into["type"]),
             reason=(
                 f"{producer}: {was!r} is {english!r} in English, but the library"
-                f" has that as a {twin['type']} and this as a {row['type']}"
+                f" has that as a {into['type']} and this as a {row['type']}"
             ),
             source_doc=None,
         )
@@ -833,11 +845,26 @@ def name_in_english(
             confidence=confidence,
         )
         out["action"] = "type clash"
-        out["twin"] = int(twin["id"])
+        out["twin"] = int(into["id"])
         return out
-    if twin is not None:
-        survivor = int(twin["canonical_id"] or twin["id"])
+    if into is not None:
+        survivor = int(into["id"])
         if survivor == entity_id:
+            # the English name is already one of this entity's own: an
+            # earlier pass folded it in. Nothing to do — but say so with a
+            # label, because an outcome that writes nothing leaves the
+            # entity a candidate and the pass asks about it for ever
+            # (62 of them, on the night of 2026-09-24)
+            add_label(
+                con,
+                entity_id,
+                english,
+                lang=vocabulary.CANONICAL,
+                kind="pref",
+                producer=producer,
+                run=run,
+                confidence=confidence,
+            )
             return {**out, "action": "already"}
         merge_entities(
             con,

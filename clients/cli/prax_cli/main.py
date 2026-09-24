@@ -769,6 +769,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="leave out the likely tier (the pairs a worker's resolve step left)",
     )
     s.add_argument("--show", type=int, default=40, help="candidates per tier")
+    s.add_argument(
+        "--unmerge",
+        metavar="RUN",
+        help="take a round back: every entity that run folded stands on its"
+        " own again and every one it renamed is called what it was called",
+    )
     s.set_defaults(func=running.resolve, needs_door=True)
 
     s = sub.add_parser(
