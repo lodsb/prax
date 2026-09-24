@@ -91,7 +91,13 @@ def in_english_text(con: sqlite3.Connection, name: str) -> bool:
             "SELECT 1 FROM chunks_fts f JOIN chunks c ON c.id = f.rowid"
             " JOIN documents d ON d.id = c.doc_id"
             " WHERE chunks_fts MATCH ?"
-            " AND json_extract(d.meta, '$.lang') = ? LIMIT 1",
+            " AND json_extract(d.meta, '$.lang') = ?"
+            # not prax's own pages: a briefing that says "Olivenöl sits
+            # beside olive oil" is an English document containing the
+            # German word, and it took Olivenöl out of the net that would
+            # have folded it. The library must not be its own evidence
+            " AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.doc_id = d.id)"
+            " LIMIT 1",
             (match, CANONICAL),
         ).fetchone()
     except sqlite3.OperationalError:

@@ -989,6 +989,11 @@ def resolve(door: Door, a: Any) -> int:
         r = door.post_json("/graph/unmerge", {"run": a.unmerge})
         out.say(f"{r['entities']} entities back from run {r['run']}")
         return 0
+    if getattr(a, "retire", None) or getattr(a, "retire_producer", None):
+        body = {"run": a.retire, "producer": getattr(a, "retire_producer", None)}
+        r = door.post_json("/graph/retire", {k: v for k, v in body.items() if v})
+        out.say(f"{r['edges']} edges ended")
+        return 0
     body = {
         "apply": a.apply,
         "type": a.type,

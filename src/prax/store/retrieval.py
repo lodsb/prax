@@ -175,17 +175,60 @@ def acronym_expansions(
     ]
 
 
+NAMED_AS = 2  # names an entity answers to, per query term
+
+
+def known_as(con: sqlite3.Connection, text: str, *, limit: int = NAMED_AS) -> list[str]:
+    """The names the graph gives a thing this text is a name of.
+
+    The vocabulary pass left a dictionary behind it: `Olivenöl` is a
+    label of the entity called `olive oil`, `Verklemmung` of `deadlock`.
+    Nothing had to be built for it, and it is the library's own word for
+    the thing rather than a translation service's, with a document behind
+    every pair.
+
+    That is what a German query needs on the keyword side, where the
+    vectors already cope and BM25 cannot: MRR 0.39 against English's 0.91
+    (`docs/eval/retrieval-multilingual-2026-09-24.md`), because nothing
+    tells FTS5 that Faltung and convolution are one word.
+    """
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT DISTINCT e.name FROM entity_labels l"
+            " JOIN entities e ON e.id = l.entity_id"
+            " WHERE l.label = ? COLLATE NOCASE AND e.canonical_id IS NULL"
+            " AND lower(e.name) != lower(?) LIMIT ?",
+            (text, text, max(1, limit)),
+        )
+    ]
+
+
 def expand_query(con: sqlite3.Connection, query: str) -> list[list[str]]:
-    """The query as terms, each a list of alternatives: the token itself and
+    """The query as terms, each a list of alternatives: the token itself,
     the phrases the library defines it as (``[["adaa", "antiderivative
-    antialiasing"], ["iir"]]``). Tokens of nine or more characters, and
-    digits, are never acronyms."""
+    antialiasing"], ["iir"]]``), and the name the graph knows the thing
+    by where the token is one of its other names. Tokens of nine or more
+    characters, and digits, are never acronyms.
+
+    The whole query is looked up as one name too, because a thing is
+    often several words (`dünn besetzte Matrizen`) and no single token of
+    it is the name.
+    """
     terms: list[list[str]] = []
     for tok in _TOKEN.findall(query):
         alts = [tok.lower()]
         if 2 <= len(tok) <= 8 and tok.isalpha():
             alts += [e for e in acronym_expansions(con, tok) if e != tok.lower()]
+        alts += [n.lower() for n in known_as(con, tok) if n.lower() not in alts]
         terms.append(alts)
+    whole = " ".join(_TOKEN.findall(query))
+    if len(terms) > 1 and whole:
+        named = [n.lower() for n in known_as(con, whole)]
+        if named:
+            # one more term, OR-ed with the rest: a document using the
+            # English name matches even though no single token did
+            terms.append(named)
     return terms
 
 

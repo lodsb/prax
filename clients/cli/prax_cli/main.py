@@ -775,6 +775,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="take a round back: every entity that run folded stands on its"
         " own again and every one it renamed is called what it was called",
     )
+    s.add_argument(
+        "--retire",
+        metavar="RUN",
+        help="end every live edge a run wrote (invariant 8: upgrading a"
+        " producer's work is retiring it and running a better pass); the"
+        " rows stay, with the moment they stopped being true",
+    )
+    s.add_argument(
+        "--retire-producer",
+        metavar="NAME",
+        help="the same for everything one producer ever wrote",
+    )
     s.set_defaults(func=running.resolve, needs_door=True)
 
     s = sub.add_parser(

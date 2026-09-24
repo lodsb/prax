@@ -226,6 +226,27 @@ def _start_maintain(con: Any, only: list[str] | None) -> dict[str, Any]:
     return {"job": job.id, "passes": chosen}
 
 
+class RetireReq(BaseModel):
+    run: str | None = None  # the pass to end
+    producer: str | None = None  # or everything one producer wrote
+
+
+@router.post("/graph/retire")
+def retire(req: RetireReq, request: Request) -> dict[str, Any]:
+    """End every live edge a run or a producer wrote (``store.retire_run``).
+
+    "Upgrading a producer's work is `retire_run` plus a new pass"
+    (invariant 8), and until now there was no way to do the first half
+    except a script that opens the database, which invariant 4 forbids.
+    Nothing is deleted: the edges keep their rows and get a `valid_to`,
+    so what the graph said and when is still there.
+    """
+    if not (req.run or req.producer):
+        raise HTTPException(400, "name a run or a producer")
+    ended = store.retire_run(_con(request), run=req.run, producer=req.producer)
+    return {"run": req.run, "producer": req.producer, "edges": ended}
+
+
 class UnmergeReq(BaseModel):
     run: str  # the run to take back
 

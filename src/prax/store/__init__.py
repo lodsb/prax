@@ -325,6 +325,7 @@ from .retrieval import (  # noqa: F401
     expand_query,
     expanded_text,
     fts_merge,
+    known_as,
     merge_vectors,
     pending_document_embeddings,
     pending_embeddings,

@@ -65,6 +65,7 @@ PASSES = (
     "dedupe",
     "review",
     "references",
+    "proposes",
     "fts",
     "lengths",
     "languages",
@@ -442,6 +443,133 @@ def _references(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"run": run, **link_references(con, run=run, job=job)}
 
 
+def _has_authors(con: sqlite3.Connection, doc_id: int, name: str) -> bool:
+    """Whether the document behaves like a published work: does the graph
+    know who wrote it?
+
+    A title of one or two words is usually a lecture handout or a chapter
+    *about* the thing, not a paper proposing it — "Expertise", "Computer
+    Graphics", "Sparse grids" were all in the first run. Counting words
+    is a proxy for nothing; authorship is the evidence that this is a
+    work with contributors, and it cut 326 edges to the 192 with a reason
+    behind them.
+    """
+    return bool(
+        con.execute(
+            "SELECT 1 FROM edges x JOIN entities s ON s.id = x.src"
+            " WHERE x.rel = 'authored_by' AND x.valid_to IS NULL"
+            " AND x.source_doc = ? AND s.name = ? LIMIT 1",
+            (doc_id, name),
+        ).fetchone()
+    )
+
+
+def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The `proposes` edge between a paper and the thing named after it.
+
+    5,746 names in the library are carried by more than one type, and
+    they are three different problems wearing one shape: a mistype, a
+    subtype the fold already handles, and *polysemy* — "Fractional
+    wavelet transform" is a paper and the method that paper introduced.
+    The third is not a duplicate and must never be merged
+    (`docs/normalization.md`); what the graph is missing is the relation
+    between the two.
+
+    Only where the library itself is the evidence: the document-side name
+    has to be the title of a document the store holds, so the document
+    entity is a fact rather than the extractor's guess. A title nobody
+    holds is left alone — 3,006 clashes have a document side and only 523
+    have a document behind it.
+
+    The relation is the ontology's own, so its domain and range decide
+    what may take it: a method, a tool, a concept or a claim. An
+    organization or an author of the same name is a different question
+    and stays open.
+
+    A known limit, 11 of 192 on the live library: where the title names a
+    document kind — "KSP Reference Manual", "More Feedback Machine User
+    Guide" — the *thing* side is the mistake, because nothing is a tool
+    called that. The edge is written anyway rather than guarded by
+    another word list: it is INFERRED and signed with a run, the typing
+    of that entity is the real fault, and a rule that is wrong more often
+    than not is worse than no rule
+    (`docs/eval/typing-rules-2026-09-24.md`).
+    """
+    from prax import ontology
+    from prax.resolution import SELF_KINDS
+
+    onto = ontology.current()
+    proposes = onto.relations.get("proposes")
+    if proposes is None:
+        return {"skipped": "this ontology has no proposes relation"}
+    titles: dict[str, int] = {}
+    for doc_id, title in con.execute(
+        "SELECT id, title FROM documents WHERE title IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    ):
+        titles.setdefault(title.lower(), doc_id)
+    by_name: dict[str, list[tuple[str, str]]] = {}
+    for name, etype in con.execute(
+        "SELECT name, type FROM entities WHERE canonical_id IS NULL"
+    ):
+        by_name.setdefault(name.lower(), []).append((etype, name))
+
+    run = "polysemy-" + time.strftime("%Y%m%dT%H%M%S")
+    made = 0
+    existing = 0
+    pairs: Counter[str] = Counter()
+    todo = [(low, m) for low, m in by_name.items() if low in titles and len(m) > 1]
+    for n, (low, members) in enumerate(todo, 1):
+        types = {t for t, _ in members}
+        name = members[0][1]
+        docs = sorted(t for t in types if onto.is_a(t, "document"))
+        things = sorted(
+            t for t in types if onto._allowed(proposes.range, t) and t not in docs
+        )
+        if not docs or not things:
+            continue
+        # never a page or a project of your own: "Ableton Live 7 Reference
+        # Manual" does not propose Ableton Live, it is about it, and the
+        # six such cases were all manuals typed as pages
+        src_type = next(
+            (
+                t
+                for t in docs
+                if onto._allowed(proposes.domain, t) and t not in SELF_KINDS
+            ),
+            None,
+        )
+        if src_type is None:
+            continue
+        if not _has_authors(con, titles[low], name):
+            continue
+        for thing in things:
+            edge = Edge(name, src_type, "proposes", name, thing)
+            if find_edges(con, edge):
+                existing += 1
+                continue
+            link(
+                con,
+                edge,
+                confidence="INFERRED",
+                source_doc=titles[low],
+                evidence="the library holds a document of this title",
+                producer="polysemy",
+                run=run,
+            )
+            made += 1
+            pairs[f"{src_type}->{thing}"] += 1
+        if n % 100 == 0:
+            job.update(done=n, total=len(todo), note=f"proposes: {made} edges")
+    con.commit()
+    return {
+        "run": run,
+        "linked": made,
+        "existing": existing,
+        **dict(pairs.most_common()),
+    }
+
+
 def _lengths(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """``documents.text_len`` filled for the texts indexed before the
     column existed (``fill_text_lengths``); nothing once it is."""
@@ -511,9 +639,27 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         if n % 500 == 0:
             con.commit()
     con.commit()
+    # the labels that never got one. A name is one to three words, under
+    # the detector's floor, so `language.detect` says nothing for nearly
+    # all of them; the document that named the entity knows
+    from .graph import _named_by_language
+
+    placed = 0
+    for r in con.execute(
+        "SELECT id, entity_id FROM entity_labels WHERE lang IS NULL"
+    ).fetchall():
+        code = _named_by_language(con, r["entity_id"])
+        if code:
+            con.execute(
+                "UPDATE entity_labels SET lang = ? WHERE id = ?", (code, r["id"])
+            )
+            placed += 1
+    con.commit()
+
     return {
         "read": len(rows),
         "unsure": unsure,
+        "labels_placed": placed,
         **{k: v for k, v in found.most_common()},
         "summaries_read": len(written),
         "summaries_to_translate": sum(
@@ -548,6 +694,7 @@ _RUN = {
     "dedupe": _dedupe,
     "review": _review,
     "references": _references,
+    "proposes": _proposes,
     "fts": _fts,
     "lengths": _lengths,
     "languages": _languages,

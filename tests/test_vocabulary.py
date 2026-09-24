@@ -481,3 +481,61 @@ def test_a_label_with_an_umlaut_is_found_too(client: TestClient) -> None:
     eid = _german_entity(con, client, "Übertragung", "concept")
     store.name_in_english(con, eid, "transmission", run="r15")
     assert [h["id"] for h in store.find_entities(con, "übertragung")] == [eid]
+
+
+# ------------------------------------------- the dictionary it leaves behind
+
+
+def test_a_query_reaches_the_english_name_through_the_graph(
+    client: TestClient,
+) -> None:
+    """The vocabulary pass leaves a dictionary: Olivenöl is a label of
+    the entity called olive oil, with a document behind the pair. That is
+    what the German keyword half needs, and nothing had to be built."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.name_in_english(con, eid, "garlic cloves", run="r16")
+
+    assert store.known_as(con, "Knoblauchzehen") == ["garlic cloves"]
+    terms = store.expand_query(con, "Knoblauchzehen")
+    assert terms == [["knoblauchzehen", "garlic cloves"]]
+
+
+def test_a_name_of_several_words_is_looked_up_whole(client: TestClient) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "dünn besetzte Matrizen", "concept")
+    store.name_in_english(con, eid, "sparse matrix", run="r17")
+    terms = store.expand_query(con, "dünn besetzte Matrizen")
+    # no single token is the name, so the whole query is a term of its own
+    assert ["sparse matrix"] in terms
+
+
+def test_a_query_that_names_nothing_is_unchanged(client: TestClient) -> None:
+    con = client.app.state.con
+    assert store.expand_query(con, "reverberation time") == [
+        ["reverberation"],
+        ["time"],
+    ]
+
+
+def test_the_library_is_not_its_own_evidence(client: TestClient) -> None:
+    """A briefing page of prax's own that says "Olivenöl sits beside
+    olive oil" is an English document containing the German word, and it
+    took Olivenöl out of the net that would have folded it."""
+    con = client.app.state.con
+    client.post("/ingest", json={"text": GERMAN, "title": "Rezept"})
+    assert not vocabulary.in_english_text(con, "Olivenöl")
+    store.write_page(
+        con,
+        slug="what-arrived",
+        title="What arrived",
+        text="Olivenöl sits beside olive oil in the graph. " * 8,
+        kind="topic",
+    )
+    meta_doc = con.execute(
+        "SELECT doc_id FROM pages WHERE slug = 'what-arrived'"
+    ).fetchone()
+    meta = store.get_meta(con, meta_doc["doc_id"])
+    meta["lang"] = "en"
+    store.set_meta(con, meta_doc["doc_id"], meta)
+    assert not vocabulary.in_english_text(con, "Olivenöl")
