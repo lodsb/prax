@@ -270,6 +270,15 @@ reference `docs/ask.md`.
   the door's own clock (`schedule:`, `prax.schedule`) and the worker's
   `nightly` hour, never a cron or scheduler entry per pass. No shell
   script derives the process model a second time.
+- The format prax writes into a text is `prax.markup`, which both emits
+  a mark and matches it: the page mark, a figure line and its inlined
+  form, a reading, a heading, a table separator, a display formula and
+  its number, the `## Figures` and `## Comments` sections, a
+  `[title](#doc/N)` link. A module that reads the format imports it and
+  never writes the pattern again; it imports nothing of prax itself.
+- What a model wrapped its answer in is `prax.answers` — a fence, a
+  preamble, a label the message used, quotes, a chat token. What a
+  *good* answer looks like stays with the caller that asked.
 - A document says what language it is in: `meta.lang`, an ISO 639-1
   code written by `prax.language` when the text is indexed, and filled
   in for older documents by the `languages` pass of `prax maintain`.
