@@ -82,6 +82,32 @@ def name(code: str | None) -> str:
     return NAMES.get(code, code)
 
 
+CANONICAL = "en"  # the language a library is written in unless it says otherwise
+
+
+def canonical() -> str:
+    """The language this library is written in: its summaries, the names
+    of the kinds of thing in its graph, and what the graph shows
+    (``graph.language`` in prax.yaml).
+
+    One setting rather than two, because a library has one language the
+    way it has one ontology. Changing it is not free: the summaries of
+    every document in the old language become work for the `summaries`
+    step, and the common names in the graph work for the `vocabulary`
+    step. Both run on a local model and cost time rather than money, but
+    they are not a display preference — the point is that the library
+    *is* in that language, not that it is shown in it.
+
+    A document's own language is `meta.lang` and is never changed by
+    this; a name the documents used stays a label in the language they
+    used it in.
+    """
+    from prax import config
+
+    got = config.setting("graph.language", "PRAX_GRAPH_LANGUAGE", CANONICAL)
+    return str(got or CANONICAL)
+
+
 def _likely() -> tuple[str, ...]:
     """The languages this host expects, from ``parse.languages``."""
     from prax import config

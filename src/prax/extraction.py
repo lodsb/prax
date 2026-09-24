@@ -324,6 +324,18 @@ def output_schema(onto: ontology.Ontology) -> dict[str, Any]:
     }
 
 
+def _written_in() -> str:
+    """The language this library is written in, named (`graph.language`).
+
+    The prompt is cached across calls, so this is part of the cache key
+    in effect: a host that changes the setting gets a different prompt
+    and the cache is cold once.
+    """
+    from prax import language
+
+    return language.name(language.canonical()) or "English"
+
+
 def system_prompt(
     onto: ontology.Ontology,
     *,
@@ -365,12 +377,12 @@ def system_prompt(
             # which types those are is the ontology's `naming:` key, not a
             # list kept here: the same split decides what the vocabulary
             # pass may fold across languages (prax.vocabulary)
-            "Write English even where the document is not, for the summary and for"
-            f" the name of any {', '.join(sorted(onto.common_types))}: these name a"
-            " kind of thing, and every language has its own word for it. Every other"
-            " type names one particular thing — a person, an organization, a title, a"
-            " product, a place — so give its name exactly as the document prints it,"
-            " accents and all, and never translate it."
+            f"Write {_written_in()} even where the document is not, for the summary"
+            f" and for the name of any {', '.join(sorted(onto.common_types))}: these"
+            " name a kind of thing, and every language has its own word for it. Every"
+            " other type names one particular thing — a person, an organization, a"
+            " title, a product, a place — so give its name exactly as the document"
+            " prints it, accents and all, and never translate it."
         ),
         (
             "confidence: EXTRACTED when the text states it, INFERRED when it clearly"
@@ -383,8 +395,8 @@ def system_prompt(
             " with a one-line reason instead of forcing it."
         ),
         (
-            "summary: two or three sentences in English that a reader would use to"
-            " decide whether to open the document."
+            f"summary: two or three sentences in {_written_in()} that a reader would"
+            " use to decide whether to open the document."
         ),
     ]
     answer = (

@@ -363,3 +363,20 @@ def test_heal_takes_the_label_off_a_stored_summary(
         got = store.get_meta(con, doc_id)["summary"]
         assert got.startswith("This document introduces")
         assert repair._labelled_summaries(con) == []
+
+
+def test_the_library_s_language_is_a_setting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """English by default and not a constant: the two passes, the
+    extraction prompt and the sections prompt all read `graph.language`."""
+    from prax import extraction, language, sections
+
+    assert language.canonical() == "en"
+    assert "English" in summaries.system()
+
+    monkeypatch.setenv("PRAX_GRAPH_LANGUAGE", "fr")
+    assert language.canonical() == "fr"
+    assert "French" in summaries.system()
+    assert "French" in sections.system()
+    assert "Write French even where the document is not" in extraction.system_prompt(
+        ontology.current()
+    )

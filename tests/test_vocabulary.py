@@ -77,8 +77,19 @@ def test_a_definition_instead_of_a_name_is_refused() -> None:
 
 
 def test_the_prompt_keeps_a_persons_name() -> None:
-    assert "Gauß-Elimination" in vocabulary.SYSTEM
-    assert "Büchi" in vocabulary.SYSTEM
+    assert "Gauß-Elimination" in vocabulary.system()
+    assert "Büchi" in vocabulary.system()
+
+
+def test_the_prompt_names_the_library_s_language(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """English by default, and a setting rather than a constant: a French
+    library normalizes to French."""
+    assert "English" in vocabulary.system()
+    monkeypatch.setenv("PRAX_GRAPH_LANGUAGE", "fr")
+    assert "French" in vocabulary.system()
+    assert "English" not in vocabulary.system()
 
 
 # ------------------------------------------------- the library as dictionary
@@ -663,3 +674,35 @@ def test_a_name_that_is_replaced_is_recorded_before_it_goes(
     )
     # and the name it used to have is still a name it answers to
     assert store.entities_by_label(con, "Chomsky-Normalform") == [eid]
+
+
+def test_the_corpus_ruling_is_remembered(client: TestClient) -> None:
+    """The third condition costs an FTS lookup a name, and on an
+    exhausted queue it was paid for every candidate on every ask: 97
+    seconds to answer "nothing". The ruling is monotone — a name in an
+    English document will always be in one — so it is kept, and the
+    second ask took 0.7."""
+    con = client.app.state.con
+    client.post("/ingest", json={"text": ENGLISH, "title": "Pasta"})
+    eid = _german_entity(con, client, "olive oil", "ingredient")
+
+    assert store.foreign_names(con) == []  # ruled out by the corpus
+    row = con.execute(
+        "SELECT producer FROM entity_labels WHERE entity_id = ? AND label = ?",
+        (eid, "olive oil"),
+    ).fetchone()
+    assert row["producer"] == "vocabulary:corpus"
+    # and it is not asked about again, so the pass converges
+    assert store.foreign_names(con) == []
+
+
+def test_a_ruling_does_not_overwrite_a_pass_s_own_word(client: TestClient) -> None:
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    store.name_in_english(con, eid, "garlic cloves", run="r20")
+    store.foreign_names(con)
+    row = con.execute(
+        "SELECT producer FROM entity_labels WHERE entity_id = ? AND label = ?",
+        (eid, "garlic cloves"),
+    ).fetchone()
+    assert row["producer"] == "vocabulary"  # not the corpus's marker

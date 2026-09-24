@@ -43,16 +43,23 @@ MAX_SECTIONS = 40  # per document, longest first
 READ_CHARS = 12_000  # of a section given to the model
 MAX_SUMMARY = 400  # characters of answer kept
 
-SYSTEM = (
-    "You are given one section of a longer document and you say what it"
-    " is about, in one or two sentences, so a reader searching a library"
-    " can tell whether this is the part they want."
-    " Answer with those sentences and nothing else: no preamble, no"
-    " heading, no bullet list, no quotation marks."
-    " Name what the section actually covers — the ideas, methods, people"
-    " or things in it — rather than describing it as a section of a"
-    ' document. Never write "this section" or "the text".'
-)
+
+def system() -> str:
+    """What the model is told. The answer is in the language the library
+    is written in, whatever the section is in."""
+    from prax import language
+
+    into = language.name(language.canonical()) or "English"
+    return (
+        "You are given one section of a longer document and you say what"
+        f" it is about, in one or two sentences of {into}, so a reader"
+        " searching a library can tell whether this is the part they want."
+        " Answer with those sentences and nothing else: no preamble, no"
+        " heading, no bullet list, no quotation marks."
+        " Name what the section actually covers — the ideas, methods,"
+        " people or things in it — rather than describing it as a section"
+        ' of a document. Never write "this section" or "the text".'
+    )
 
 
 @dataclass
@@ -147,7 +154,7 @@ def summarize(
 ) -> Section | None:
     """One section read, or None when the model did not manage it."""
     out, usage = runtime.chat(
-        SYSTEM,
+        system(),
         user_message(heading, text, title=title),
         max_tokens=160,
         temperature=0.0,

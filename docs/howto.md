@@ -786,6 +786,21 @@ not change).
 
 ### One language for the document field
 
+The library is written in one language — `graph.language` in prax.yaml,
+English unless you say otherwise:
+
+    graph:
+      language: de     # or en, fr, es, it, nl
+
+It is what the extraction prompt asks for, what the summaries and
+vocabulary passes normalize to, and which of a thing's names the graph
+shows. One setting rather than two, because a library has one language
+the way it has one ontology. Changing it is not free: every summary in
+the old language becomes work for the `summaries` step and every common
+name work for `vocabulary`. Both run on the local model, so the cost is
+time rather than money.
+
+
 `meta.summary` is most of what `documents_fts` and the document vectors
 search, so the language it is written in decides which queries can reach
 a document at all. Nothing chose it until 2026-09-24: the extraction

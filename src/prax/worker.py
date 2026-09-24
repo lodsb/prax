@@ -32,6 +32,7 @@ from prax import (
     embeddings,
     extraction,
     hostinfo,
+    language,
     models,
     parsers,
     sections,
@@ -395,7 +396,7 @@ def do_summaries(
             {
                 "doc_id": doc_id,
                 "summary": got.text,
-                "lang": summaries.CANONICAL,
+                "lang": language.canonical(),
                 "source": runtime.name,
             }
         )

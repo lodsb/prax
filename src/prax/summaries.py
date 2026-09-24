@@ -34,18 +34,23 @@ from typing import Any
 
 from prax import answers, language
 
-CANONICAL = "en"  # the language the document field is written in
 
-SYSTEM = (
-    "You translate one short description of a document into English."
-    " Answer with the English text and nothing else: the first word of your"
-    " answer is the first word of the translation. No preamble, no quotation"
-    " marks, no notes, and never repeat the instruction, the title or a"
-    " label from the message. Keep the meaning, the sentence count and the"
-    " register. Leave names of people, organizations, places, products and"
-    " works exactly as printed, and leave a term the field uses untranslated"
-    " where English uses it too."
-)
+def system() -> str:
+    """What the model is told. The language is the library's, not a
+    constant: a French library normalizes to French."""
+    into = language.name(language.canonical()) or "English"
+    return (
+        f"You translate one short description of a document into {into}."
+        f" Answer with the {into} text and nothing else: the first word of"
+        " your answer is the first word of the translation. No preamble, no"
+        " quotation marks, no notes, and never repeat the instruction, the"
+        " title or a label from the message. Keep the meaning, the sentence"
+        " count and the register. Leave names of people, organizations,"
+        " places, products and works exactly as printed, and leave a term"
+        f" the field uses untranslated where {into} uses it too."
+    )
+
+
 # the preamble, the fence, the quotes and the message's own labels are
 # `prax.answers` — every module that calls a model met them separately
 MAX_GROWTH = 2.5  # a translation longer than this is the model talking
@@ -69,13 +74,14 @@ def user_message(summary: str, *, lang: str | None = None, title: str = "") -> s
     inside the sentence, where there is nothing to copy.
     """
     named = language.name(lang) or "another language"
+    into = language.name(language.canonical()) or "English"
     parts = []
     if title.strip():
         parts.append(
             f"The document is called \u201c{title.strip()}\u201d. That is context"
             " for the names below, not part of what you translate."
         )
-    parts.append(f"Translate this {named} text into English.")
+    parts.append(f"Translate this {named} text into {into}.")
     parts.append("")
     parts.append(summary.strip())
     return "\n".join(parts)
@@ -120,7 +126,7 @@ def acceptable(text: str, original: str) -> str | None:
     if text.strip() == original.strip():
         return "unchanged"
     code = language.detect(text)
-    if code is not None and code != CANONICAL:
+    if code is not None and code != language.canonical():
         return f"still {code}"
     return None
 
@@ -133,7 +139,7 @@ def native(held: dict[str, Any]) -> tuple[str, str] | None:
     translation compounds whatever the first one got wrong.
     """
     for code, text in (held or {}).items():
-        if code != CANONICAL and isinstance(text, str) and text.strip():
+        if code != language.canonical() and isinstance(text, str) and text.strip():
             return str(code), text
     return None
 
@@ -167,7 +173,7 @@ def keep(meta: dict[str, Any], text: str, *, lang: str | None = None) -> str | N
             held[str(there_lang)] = there
         if code:
             held[code] = text
-    if code == CANONICAL or not meta.get("summary"):
+    if code == language.canonical() or not meta.get("summary"):
         meta["summary"] = text
         if code:
             meta["summary_lang"] = code
@@ -190,7 +196,7 @@ def translate(
     better than a paragraph of the model thinking aloud.
     """
     out, usage = runtime.chat(
-        SYSTEM,
+        system(),
         user_message(summary, lang=lang, title=title),
         max_tokens=max(200, len(summary) // 2),
         temperature=0.0,

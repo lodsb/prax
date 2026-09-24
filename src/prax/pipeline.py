@@ -33,6 +33,7 @@ from prax import (
     config,
     embeddings,
     extraction,
+    language,
     models,
     ontology,
     store,
@@ -235,7 +236,7 @@ def summaries_needed(
             + where
             + " AND json_extract(meta, '$.summary_lang') IS NOT NULL"
             " AND json_extract(meta, '$.summary_lang') != ?",
-            (*args, summaries.CANONICAL),
+            (*args, language.canonical()),
         )
     ]
     # and the ones a translation has already been made for, which are only
@@ -246,7 +247,7 @@ def summaries_needed(
         + where
         + " AND json_extract(meta, '$.summaries') IS NOT NULL"
         " AND json_extract(meta, '$.summary_lang') = ?",
-        (*args, summaries.CANONICAL),
+        (*args, language.canonical()),
     ):
         native = summaries.native(json.loads(r["held"] or "{}"))
         if native is not None and summaries.acceptable(r["summary"], native[1]):

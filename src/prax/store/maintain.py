@@ -635,7 +635,6 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             con.commit()
             job.update(done=n, total=len(rows), note=f"languages: {n} of {len(rows)}")
     con.commit()
-    from prax import summaries
 
     written = con.execute(
         "SELECT id, json_extract(meta, '$.summary') AS summary FROM documents"
@@ -680,7 +679,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         **{k: v for k, v in found.most_common()},
         "summaries_read": len(written),
         "summaries_to_translate": sum(
-            v for k, v in said.items() if k != summaries.CANONICAL
+            v for k, v in said.items() if k != language.canonical()
         ),
     }
 

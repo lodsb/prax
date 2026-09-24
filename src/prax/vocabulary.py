@@ -37,9 +37,8 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import answers
+from prax import answers, language
 
-CANONICAL = "en"  # the language the graph's common names are written in
 MAX_WORDS = 6  # a longer "name" is a sentence, and not this pass's business
 LOOK_AT = 200  # chunks of a name's occurrences to look through, at most
 
@@ -49,21 +48,25 @@ _UNCHANGED = re.compile(
     r"^(same|unchanged|already english|n/?a|none|-)\W*$", re.IGNORECASE
 )
 
-SYSTEM = (
-    "You are given the name of a concept, method, technique, material,"
-    " ingredient, dish or cuisine as one document called it, and you give"
-    " the name English uses for the same thing."
-    " Answer with that name alone: no preamble, no quotation marks, no"
-    " explanation, no full stop."
-    " A name that is already English you repeat exactly as given."
-    " Keep a person's name, a place, a product or a standard inside the"
-    " name exactly as printed and translate only the words around it, so"
-    " Gauß-Elimination is Gaussian elimination and Büchi-Automat is Büchi"
-    " automaton."
-    " Give the established term, lowercase unless it is a proper noun,"
-    " singular, and never a description: if you do not know the English"
-    " term, repeat the name you were given."
-)
+
+def system() -> str:
+    """What the model is told. The language is the library's."""
+    into = language.name(language.canonical()) or "English"
+    return (
+        "You are given the name of a concept, method, technique, material,"
+        " ingredient, dish or cuisine as one document called it, and you"
+        f" give the name {into} uses for the same thing."
+        " Answer with that name alone: no preamble, no quotation marks, no"
+        " explanation, no full stop."
+        f" A name that is already {into} you repeat exactly as given."
+        " Keep a person's name, a place, a product or a standard inside the"
+        " name exactly as printed and translate only the words around it,"
+        " so Gauß-Elimination is Gaussian elimination and Büchi-Automat is"
+        " Büchi automaton."
+        " Give the established term, lowercase unless it is a proper noun,"
+        f" singular, and never a description: if you do not know the {into}"
+        " term, repeat the name you were given."
+    )
 
 
 @dataclass
@@ -85,6 +88,7 @@ def in_english_text(con: sqlite3.Connection, name: str) -> bool:
     words = _WORD.findall(name)
     if not words or len(words) > MAX_WORDS:
         return True  # nothing to look up, or not a name
+    canonical = language.canonical()
     match = " ".join(f'"{w}"' for w in words)  # the words in order
     try:
         row = con.execute(
@@ -98,7 +102,7 @@ def in_english_text(con: sqlite3.Connection, name: str) -> bool:
             # have folded it. The library must not be its own evidence
             " AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.doc_id = d.id)"
             " LIMIT 1",
-            (match, CANONICAL),
+            (match, canonical),
         ).fetchone()
     except sqlite3.OperationalError:
         return True  # a name FTS cannot parse is not this pass's business
@@ -160,7 +164,7 @@ def rename(runtime: Any, name: str, kind: str, *, context: str = "") -> Naming |
     manage one. ``changed`` is False when the name was already English,
     which is the commonest answer and costs only the call."""
     out, usage = runtime.chat(
-        SYSTEM,
+        system(),
         user_message(name, kind, context=context),
         max_tokens=40,
         temperature=0.0,

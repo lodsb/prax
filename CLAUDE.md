@@ -316,7 +316,15 @@ reference `docs/ask.md`.
   name when none carries it, so a rename does not start the split over.
   `entities.name` is still the identity; making it a display label is
   `docs/stratification.md` step 5, to be done whole.
-- The document field is written in one language, English. `meta.summary`
+- The library is written in one language, `graph.language` (English by
+  default, `prax.language.canonical`): its summaries, the common names in
+  its graph, and what the graph shows. One setting rather than two,
+  because a library has one language the way it has one ontology. The
+  extraction prompt, the summaries pass, the vocabulary pass and the
+  sections pass all read it, so a French library normalizes to French.
+  Changing it is not free: every summary in the old language becomes
+  work for the `summaries` step.
+- The document field is written in that language. `meta.summary`
   is the summary it indexes, `meta.summaries` holds every summary there
   is keyed by language, so the German summary of a German document is
   kept rather than replaced by the English one, and `meta.summary_lang`

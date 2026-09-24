@@ -683,18 +683,14 @@ def _label_from_merge(
     )
 
 
-DEFAULT_LANGUAGE = "en"  # what a host shows when `graph.language` says nothing
-
-
 def display_language() -> str:
-    """Which of a thing's names this host shows (`graph.language` in
+    """Which of a thing's names this host shows: the language the library
+    is written in (`prax.language.canonical`, `graph.language` in
     prax.yaml). The graph in German for a German reader, one node either
     way — the point of the label table."""
-    from prax import config
+    from prax import language
 
-    return str(
-        config.setting("graph.language", "PRAX_GRAPH_LANGUAGE", DEFAULT_LANGUAGE)
-    )
+    return language.canonical()
 
 
 def _display_name(con: sqlite3.Connection, entity_id: int) -> str | None:
@@ -705,6 +701,8 @@ def _display_name(con: sqlite3.Connection, entity_id: int) -> str | None:
     made by something that bypassed ``_entity_id`` — the caller then
     leaves the name it has.
     """
+    from prax import language
+
     want = display_language()
     rows = con.execute(
         "SELECT label, lang FROM entity_labels WHERE entity_id = ? AND kind = 'pref'",
@@ -713,7 +711,7 @@ def _display_name(con: sqlite3.Connection, entity_id: int) -> str | None:
     if not rows:
         return None
     by_lang = {r["lang"]: r["label"] for r in rows}
-    for lang in (want, DEFAULT_LANGUAGE, None):
+    for lang in (want, language.CANONICAL, None):
         if lang in by_lang:
             return str(by_lang[lang])
     return str(rows[0]["label"])
@@ -1046,7 +1044,7 @@ def name_in_english(
     Everything this writes carries ``producer`` and ``run``, so a round
     is undoable whole (``unmerge_run``).
     """
-    from prax import language, vocabulary
+    from prax import language
 
     english = " ".join(english.split())
     if not english:
@@ -1111,7 +1109,7 @@ def name_in_english(
             con,
             entity_id,
             english,
-            lang=vocabulary.CANONICAL,
+            lang=language.canonical(),
             kind="alt",
             producer=producer,
             run=run,
@@ -1132,7 +1130,7 @@ def name_in_english(
                 con,
                 entity_id,
                 english,
-                lang=vocabulary.CANONICAL,
+                lang=language.canonical(),
                 kind="pref",
                 producer=producer,
                 run=run,
@@ -1170,7 +1168,7 @@ def name_in_english(
         con,
         entity_id,
         english,
-        lang=vocabulary.CANONICAL,
+        lang=language.canonical(),
         kind="pref",
         producer=producer,
         run=run,
@@ -1195,10 +1193,21 @@ def foreign_names(
     the English half of the library (``vocabulary.in_english_text``),
     which is the dictionary this uses instead of a rule per language.
 
-    An entity a pass has already named is passed over
-    (``entity_labels`` under ``vocabulary``), so a run picks up where the
-    last one stopped. The most connected first: the whole point is the
-    edges the two halves of a name divide between them.
+    An entity a pass has already decided is passed over — a label under
+    ``vocabulary`` — so a run picks up where the last one stopped. The
+    most connected first: the whole point is the edges the two halves of
+    a name divide between them.
+
+    **What the corpus rules out is recorded.** The third condition costs
+    an FTS lookup a name, and on an exhausted queue it was paid for every
+    candidate on every ask: 87 seconds to answer "nothing", which is why
+    this step could not be one a worker asks for by itself. The ruling is
+    monotone — a name that occurs in an English document will always
+    occur in one, since documents are retired and never deleted — so it
+    is worth keeping. An entity the corpus rules out is marked
+    ``vocabulary:corpus``, which is a truthful thing to say about it: the
+    library's own text was asked, and this name is already the word the
+    library uses.
     """
     from prax import ontology, vocabulary
 
@@ -1222,7 +1231,8 @@ def foreign_names(
                  WHERE valid_to IS NULL) x ON x.ent = e.id
          WHERE e.canonical_id IS NULL AND e.type IN ({marks})
            AND NOT EXISTS (SELECT 1 FROM entity_labels l
-                            WHERE l.entity_id = e.id AND l.producer = 'vocabulary')
+                            WHERE l.entity_id = e.id
+                              AND l.producer LIKE 'vocabulary%')
          GROUP BY e.id
         HAVING langs IS NOT NULL AND langs NOT LIKE '%en%' AND langs NOT LIKE '%,%'
          ORDER BY edges DESC, docs DESC, e.id
@@ -1230,10 +1240,12 @@ def foreign_names(
         tuple(common),
     ).fetchall()
     out: list[dict[str, Any]] = []
+    ruled_out: list[tuple[int, str]] = []
     for r in rows:
         if r["id"] in skip:
             continue
         if vocabulary.in_english_text(con, r["name"]):
+            ruled_out.append((int(r["id"]), str(r["name"])))
             continue
         out.append(
             {
@@ -1247,7 +1259,29 @@ def foreign_names(
         )
         if len(out) >= limit:
             break
+    if ruled_out:
+        _mark_corpus_ruling(con, ruled_out)
     return out
+
+
+@_serialized
+def _mark_corpus_ruling(
+    con: sqlite3.Connection, ruled_out: list[tuple[int, str]]
+) -> int:
+    """Record that the library's own text answered for these names.
+
+    The entity already carries the label (every one does since migration
+    23); this says who decided it and on what evidence, which is what
+    keeps the pass from asking the corpus about it again.
+    """
+    con.executemany(
+        "UPDATE entity_labels SET producer = 'vocabulary:corpus'"
+        " WHERE entity_id = ? AND label = ? COLLATE NOCASE"
+        " AND (producer IS NULL OR producer = 'baseline')",
+        ruled_out,
+    )
+    con.commit()
+    return len(ruled_out)
 
 
 @_serialized

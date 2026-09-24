@@ -187,7 +187,6 @@ from .documents import (  # noqa: F401
 from .graph import (  # noqa: F401
     ASK_FACT_RELS_SKIPPED,
     CONFIDENCE_LEVELS,
-    DEFAULT_LANGUAGE,
     HUB_TYPES,
     MAX_HOPS,
     Edge,

@@ -29,7 +29,15 @@ STEPS = (
 )
 
 # what a worker asks for unless the run names its steps
-WATCHED_STEPS = ("parse", "titles", "summaries", "extract", "embed", "resolve")
+WATCHED_STEPS = (
+    "parse",
+    "titles",
+    "summaries",
+    "vocabulary",
+    "extract",
+    "embed",
+    "resolve",
+)
 
 # the rest: named on the command line, and the paid ones want --spend
 NAMED_ONLY = tuple(s for s in STEPS if s not in WATCHED_STEPS)
