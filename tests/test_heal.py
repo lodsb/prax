@@ -535,3 +535,48 @@ def test_a_truncated_pdf_records_no_pages_rather_than_nagging(
     assert store.get_meta(con, doc)["pages"] == 0
     assert store.get_meta(con, whole)["pages"] == 12
     assert store.uncounted_pages(con) == []  # neither is asked about again
+
+
+def test_a_citation_of_the_container_ends(con: sqlite3.Connection) -> None:
+    """A paper cites a work, never the volume it appeared in. The prompt
+    prevents it; this is what predates the prompt
+    (docs/eval/traverse-neighbourhood-2026-09-25.md)."""
+    volume = "Proceedings of the International Conference on New Interfaces"
+    bad = store.link(
+        con,
+        store.Edge("A Paper", "paper", "cites", volume, "paper"),
+        producer="extraction",
+    )
+    store.link(
+        con,
+        store.Edge("A Paper", "paper", "cites", "Wave digital filters", "paper"),
+        producer="extraction",
+    )
+
+    found = store.health(con, only=["container-citations"])["ailments"][0]
+    assert found["count"] == 1
+    assert found["examples"][0]["container"] == volume
+
+    store.heal(con, only=["container-citations"])
+    live = {e["dst"] for e in store.traverse(con, "A Paper", hops=1)}
+    assert live == {"Wave digital filters"}
+    # ended, not deleted, and the container itself is untouched
+    assert con.execute("SELECT valid_to FROM edges WHERE id = ?", (bad,)).fetchone()[
+        "valid_to"
+    ]
+    kept = con.execute("SELECT type FROM entities WHERE name = ?", (volume,)).fetchone()
+    assert kept["type"] == "paper"
+
+
+def test_the_container_is_never_retyped(con: sqlite3.Connection) -> None:
+    """38 of this library's 914 container-named entities are real documents
+    someone imported, so their own edges are earned: a blanket retype would
+    have ended 3,844 of them."""
+    volume = "Proceedings of the 8th Sound and Music Computing Conference"
+    store.link(
+        con,
+        store.Edge(volume, "paper", "about", "gesture", "concept"),
+        producer="extraction",
+    )
+    store.heal(con, only=["container-citations"])
+    assert {e["dst"] for e in store.traverse(con, volume, hops=1)} == {"gesture"}

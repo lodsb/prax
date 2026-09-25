@@ -233,6 +233,40 @@ def _mangled_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return found[:CAP]
 
 
+def _container_citations(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """`cites` edges whose target is the container a work appeared in — a
+    proceedings volume, a journal, a conference series — rather than the
+    work itself.
+
+    The extraction reached for the volume on the reference line instead of
+    the paper printed above it, so the citation points at a container and
+    names no work. One volume collected 733 of these here and became the
+    largest node in the library
+    (``docs/eval/traverse-neighbourhood-2026-09-25.md``). The prompt now
+    asks for the individual work (``prax.extraction``), so a library
+    started today grows none; this is what predates the prompt.
+
+    Only the citation ends. The container is **not** retyped: 38 of the
+    914 container-named entities here are real documents in the library —
+    someone imported the whole volume — so their own edges are earned and
+    a blanket retype would have ended 3,844 of them. The words are the
+    ontology's (``lexicon.by_type``), not a pattern here.
+    """
+    from prax import ontology
+
+    lex = ontology.lexicon()
+    found = []
+    for row in con.execute(
+        "SELECT e.id, e.src, e.dst, e.source_doc, s.name AS citing,"
+        " d.name AS container FROM edges e"
+        " JOIN entities s ON s.id = e.src JOIN entities d ON d.id = e.dst"
+        " WHERE e.valid_to IS NULL AND e.rel = 'cites'"
+    ):
+        if lex.type_of(row["container"] or "") == "venue":
+            found.append(dict(row))
+    return found[:CAP]
+
+
 def _wire_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Unmerged entities whose name holds the wire syntax, with the name
     cut at it (``cleaned``; empty when nothing but syntax was there)."""
@@ -990,6 +1024,17 @@ def _repair_jobs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
 # --------------------------------------------------------------- the list
 
 AILMENTS: tuple[Ailment, ...] = (
+    Ailment(
+        name="container-citations",
+        what=(
+            "citations that point at the container a work appeared in — a"
+            " proceedings volume, a journal — rather than at the work, so the"
+            " citation names no paper and the volume becomes a hub"
+        ),
+        fix="end the citation; the container itself is left alone",
+        find=_container_citations,
+        repair=_repair_edges,
+    ),
     Ailment(
         name="placeholder-entities",
         what=(

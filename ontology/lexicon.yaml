@@ -98,6 +98,18 @@ top_organization:
 # a word in a name that says which type it is. The first type whose cue
 # matches wins, so the order of the types here is the precedence
 by_type:
+  # a container a work appeared in, which the extraction prompt now asks
+  # for as a venue. Kept here too, because a name already in the graph is
+  # past the prompt: `prax heal --check container-entities` reads these
+  venue:
+    - proceedings
+    - symposium
+    - transactions on
+    - journal of
+    - conference on
+    - workshop on
+    - annual meeting
+    - congress of
   tool:
     - tool
     - software

@@ -391,6 +391,16 @@ def system_prompt(
             " authored_by and published_in quote the header line."
         ),
         (
+            # Without this the container becomes a `paper` and then a hub:
+            # one proceedings volume reached degree 1,951 in this library,
+            # the largest node in it (docs/eval/
+            # traverse-neighbourhood-2026-09-25.md)
+            "A proceedings volume, journal, conference series or book that a work"
+            " appeared *in* is a venue, not a paper. Name it with published_in and"
+            " never as something the document cites; cite the individual work by"
+            " its own title."
+        ),
+        (
             "If a relationship matters but no relation or type fits, put it in unmapped"
             " with a one-line reason instead of forcing it."
         ),
