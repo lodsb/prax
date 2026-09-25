@@ -97,6 +97,67 @@ explains it.
 - [ ] **The old zoetrope disk** — the hash inventory and the import that
       follows it (`docs/log.md`, Stage 1).
 
+## What holds the card, and what a batch may ask for (planned, 2026-09-25)
+
+Not a new service. `prax up` already is one: roles it keeps alive,
+`on_demand` for a role that cannot fit beside the others, and
+`up.swap(data_dir, to, back_when="idle")`, which is the marker evening.
+What the day found missing is narrower, and in this order.
+
+- [ ] **See who holds the card.** `prax.hostinfo` reads `nvidia-smi`,
+      which gives totals: prax could say the card was at 23.7 of
+      24.5 GB and not say by whom. Under WDDM per-process VRAM is a
+      performance counter, `\GPU Process Memory(*)\Dedicated Usage`,
+      and it names llama-server 20.8, the parse worker's Docling 2.25,
+      the compositor 0.8. This is the item that pays: the embedder ran
+      at **9 chunks/s instead of 331** for most of a day and nothing
+      said why, which turned a one-hour job into a thirty-four-hour
+      estimate. A few dozen lines in `hostinfo`, shown by `prax status`
+      and the jobs view.
+- [ ] **Ask the runtime what a text costs, rather than guessing.**
+      `models.fits` bounds a prompt by characters *and* UTF-8 bytes
+      because it has no way to ask how many tokens that is — a
+      heuristic that works and is still a guess. llama.cpp serves
+      `/tokenize`; a `runtime.measure(text)` would make it a fact. This
+      is the class of bug that cost 71 failures and three documents that
+      could not be read at all on 2026-09-25, and a wrong token estimate
+      is a hard failure where a wrong batch size is only slow.
+- [ ] **Let a queue ask for the card.** `swap(back_when="idle")` exists
+      and a person invokes it. "A million chunks pending and no ask
+      traffic for ten minutes" is a policy the machinery could already
+      execute. Last of the three, and hysteretic if it is built at all:
+      the 35B takes about three minutes to load, so a policy that
+      changes its mind quickly is worse than none.
+
+**Not** a general resource manager. The serving host has no contention
+to arbitrate (invariant 7), the supervisor is `prax up` and not a second
+thing beneath it (invariant 4), and most of what went wrong on 2026-09-25
+was not resources at all — a stale configuration, a unit error, and the
+session's own memory guard.
+
+### And the one that would make it moot
+
+The architecture already allows the model work to run elsewhere, and that
+is what invariant 4 is for: a worker never opens the database or the
+archive, it fetches work and originals over HTTP and posts results back
+(`door.get_bytes`), so `--door` pointed at another machine is all it
+takes. There are two axes and they are independent — the **worker**
+elsewhere, or just **llama-server** elsewhere, since `server-35b` is an
+`openai` model with a `base_url`.
+
+Moving llama-server is one line of prax.yaml and dissolves the
+contention above completely: Docling and the embedder get the card to
+themselves and the 35B answers over the private network. Whether there
+is a second machine to put it on is hardware, not design.
+
+What does **not** pay is distributing `embed`. It is round-trip bound
+already — 331 chunks/s of embedder delivering 98 on loopback — so a
+second GPU would hit the door's ceiling before it gained anything. The
+model steps (extract, titles, summaries, sections, vocabulary, typing)
+distribute cleanly, since they fetch text and post small JSON; `parse`
+distributes acceptably, being heavy compute for a megabyte down and
+kilobytes up.
+
 ## Deployment shape: the board holds the store, the desktop does the model work (planned)
 
 Agreed 2026-09-12. The queue already exists implicitly: every document
