@@ -101,12 +101,25 @@ def asked_at(step: str) -> str | None:
 
 
 def who_runs(con: Any, step: str) -> dict[str, Any]:
-    """Why work for ``step`` may be sitting there untouched. A queue is
-    only as awake as the workers asking about it, and three things keep
-    one asleep: the step is off on this host, no run names it (the paid
-    passes are never in the default set), or the budget is spent. The
-    Promote view and the process dialog say this, rather than leaving a
-    document at "pending" with no account of itself."""
+    """Why work for ``step`` may be sitting there untouched, and whether
+    it would go badly if it ran.
+
+    A queue is only as awake as the workers asking about it, and three
+    things keep one asleep: the step is off on this host, no run names it
+    (the paid passes are never in the default set), or the budget is
+    spent. To those is added what the model itself says (``models.ready``,
+    ``embeddings.ready``), because the resource differs by kind and a
+    megabyte figure is the wrong interface for it: Claude wants a key and
+    money, a server wants to be loaded and to have a free slot, a GGUF in
+    the door's process wants the card.
+
+    ``warn`` is the one worth reading. A model that refuses is visible; a
+    model that runs badly is not, and on 2026-09-25 the embedder gave way
+    to the CPU without a word and ran at a thirtieth of the speed for
+    most of a day.
+
+    The Promote view and the process dialog say all this, rather than
+    leaving a document at "pending" with no account of itself."""
     from prax import budget
     from prax.config import ConfigError
 
@@ -117,6 +130,7 @@ def who_runs(con: Any, step: str) -> dict[str, Any]:
         "watched": step in WATCHED_STEPS,
         "asked": _asked.get(step),
         "why": "",
+        "warn": "",
         "how": f"prax work --steps {step}",
     }
     if step in models.STEPS:
@@ -129,6 +143,21 @@ def who_runs(con: Any, step: str) -> dict[str, Any]:
             out["how"] = ""
             return out
         out["model"], out["paid"] = spec.name, spec.paid
+        verdict = models.ready(spec)
+        out["warn"] = verdict["warn"]
+        if not verdict["ok"]:
+            out["why"] = verdict["why"]
+            out["how"] = verdict["how"]
+            return out
+    if step == "embed":
+        from prax import embeddings
+
+        verdict = embeddings.ready()
+        out["model"] = verdict["model"]
+        out["warn"] = verdict["warn"]
+        if not verdict["ok"]:
+            out["why"], out["how"] = verdict["why"], verdict["how"]
+            return out
     why = []
     if not out["watched"]:
         why.append(f"no worker asks for {step} work unless the run names it")

@@ -40,6 +40,7 @@ import base64
 import contextlib
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -546,6 +547,113 @@ def parse_metrics(text: str) -> dict[str, float]:
         except ValueError:
             continue
     return out
+
+
+READY_FRESH = 10.0  # seconds a verdict about a server is served again
+_ready: dict[str, tuple[float, dict[str, Any]]] = {}
+
+
+def ready(spec: ModelSpec | None, *, fresh: float = READY_FRESH) -> dict[str, Any]:
+    """Whether this model can run now, in whatever its own resource is.
+
+    A memory figure is the wrong interface for this question. Claude has
+    no VRAM and wants money, a key and a rate limit; a llama-server wants
+    to be loaded and to have a slot; a GGUF in the door's own process
+    wants the card. So each kind answers for itself and they share only
+    the shape: ``ok``, a ``why`` when it cannot, a ``how`` to fix it, and
+    a ``warn`` for the case that matters most — **it will run, badly**.
+
+    That last one is why this exists. A thing that refuses is visible. On
+    2026-09-25 the embedder could not get a device, did not refuse, fell
+    back to the CPU and ran at a thirtieth of the speed for most of a
+    day, which looked like a slow model rather than a full card.
+
+    Never raises and never blocks for long: a host that cannot say
+    answers ``ok`` with an empty ``why``, because not knowing is not the
+    same as no.
+    """
+    out: dict[str, Any] = {"model": None, "ok": True, "why": "", "how": "", "warn": ""}
+    if spec is None:
+        return out
+    out["model"] = spec.name
+    now = time.monotonic()
+    got = _ready.get(spec.name)
+    if got is not None and now - got[0] < fresh:
+        return dict(got[1])
+    with contextlib.suppress(Exception):  # a verdict is never worth an exception
+        if spec.kind == "openai":
+            out.update(_openai_ready(spec))
+        elif spec.kind == "claude":
+            out.update(_claude_ready(spec))
+        elif spec.kind == "gguf":
+            out.update(_gguf_ready(spec))
+    _ready[spec.name] = (now, dict(out))
+    return out
+
+
+def _openai_ready(spec: ModelSpec) -> dict[str, Any]:
+    """A server answers by being reachable, loaded and not full."""
+    st = server_status(spec)
+    if not st.get("reachable"):
+        return {
+            "ok": False,
+            "why": f"{st.get('url') or spec.base_url} is not answering",
+            "how": "prax up --start llama-server (the model takes minutes to load)",
+        }
+    slots = st.get("slots")
+    busy = st.get("busy_slots")
+    waiting = st.get("requests_waiting")
+    out: dict[str, Any] = {"ok": True, "why": "", "how": ""}
+    if isinstance(slots, int) and isinstance(busy, int) and busy >= slots:
+        out["warn"] = (
+            f"every slot is busy ({busy} of {slots})"
+            + (f" and {waiting} requests are waiting" if waiting else "")
+            + ": this will queue rather than refuse"
+        )
+    return out
+
+
+def _claude_ready(spec: ModelSpec) -> dict[str, Any]:
+    """A paid model answers by having a key and money, which is a
+    resource with no megabytes in it."""
+    import os
+
+    if spec.api_key_env and not os.environ.get(spec.api_key_env):
+        return {
+            "ok": False,
+            "why": f"{spec.api_key_env} is not set in this process",
+            "how": f"set {spec.api_key_env}, or point the step at a local model",
+        }
+    return {"ok": True, "why": "", "how": ""}
+
+
+def _gguf_ready(spec: ModelSpec) -> dict[str, Any]:
+    """A model loaded in the door's own process answers by the file being
+    there and the card having room for it."""
+    from prax import hostinfo
+
+    path = Path(str(spec.path or ""))
+    if not path.exists():
+        return {
+            "ok": False,
+            "why": f"{path.name or spec.name} is not on this host",
+            "how": "prax fetch, or point the step elsewhere",
+        }
+    need = int(path.stat().st_size / (1024 * 1024))
+    room = hostinfo.room(need)
+    if room["fits"] is False:
+        held = ", ".join(f"{h['name']} {h['mb']} MB" for h in room["free_by"][:3])
+        return {
+            "ok": True,  # it will load on the CPU rather than refuse
+            "why": "",
+            "how": "",
+            "warn": (
+                f"about {need} MB wanted, {room['free_mb']} free"
+                + (f"; {held} would have to give it up" if held else "")
+                + ": this will fall back rather than refuse"
+            ),
+        }
+    return {"ok": True, "why": "", "how": ""}
 
 
 def server_status(s: ModelSpec) -> dict[str, Any]:

@@ -1409,3 +1409,43 @@ def test_the_give_up_counter_sees_a_kind_not_a_string() -> None:
     assert worker._kind_of_trouble(ValueError("x")) != worker._kind_of_trouble(
         RuntimeError("x")
     )
+
+
+def test_who_runs_carries_what_the_model_says(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The resource differs by kind, so each model answers for itself and
+    `who_runs` is the one question (2026-09-25)."""
+    monkeypatch.setattr(
+        work.models,
+        "ready",
+        lambda spec, **k: {
+            "model": "x",
+            "ok": False,
+            "why": "the server is not answering",
+            "how": "prax up --start llama-server",
+            "warn": "",
+        },
+    )
+    got = work.who_runs(None, "extract")
+    assert got["why"] == "the server is not answering"
+    assert got["how"] == "prax up --start llama-server"
+
+
+def test_who_runs_warns_when_a_step_would_run_badly(
+    con: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model that refuses is visible; one that quietly runs at a
+    thirtieth of the speed is not, which cost most of 2026-09-25."""
+    monkeypatch.setattr(
+        work.models,
+        "ready",
+        lambda spec, **k: {
+            "model": "x",
+            "ok": True,
+            "why": "",
+            "how": "",
+            "warn": "every slot is busy: this will queue rather than refuse",
+        },
+    )
+    got = work.who_runs(con, "extract")
+    assert "queue rather than refuse" in got["warn"]
+    assert got["why"] != "the server is not answering"  # still ran the rest

@@ -228,6 +228,53 @@ class HashEmbedder:
 # ---------------------------------------------------------------- current
 
 
+def ready() -> dict[str, Any]:
+    """Whether the embedder will run, and whether it will run *well*.
+
+    The case this exists for: onnxruntime does not refuse when it cannot
+    get a device, it falls back to the next provider. On 2026-09-25 the
+    card was full, DirectML was asked and silently gave way to the CPU,
+    and the embedder ran at 9 chunks/s instead of 331 for most of a day —
+    which reads as a slow model rather than a full card, and turned a
+    one-hour job into a thirty-four-hour estimate.
+
+    So the verdict is about the gap between what was asked for and what
+    the session actually got, which onnxruntime will tell you afterwards
+    and nothing was asking.
+    """
+    out: dict[str, Any] = {
+        "model": chosen(),
+        "ok": True,
+        "why": "",
+        "how": "",
+        "warn": "",
+    }
+    emb = current()
+    if emb is None:
+        return {
+            **out,
+            "ok": False,
+            "why": "embeddings are off on this host",
+            "how": "embeddings.model in prax.yaml",
+        }
+    want = getattr(emb, "providers", None)
+    if not want:
+        return out
+    sess = getattr(emb, "_session", None)
+    if sess is None:  # the session loads on first use; nothing to compare yet
+        return out
+    got = list(sess.get_providers())
+    missing = [p for p in want if p not in got]
+    if missing and got:
+        out["warn"] = (
+            f"asked for {', '.join(missing)} and got {', '.join(got)}:"
+            " this runs rather than refuses, and an accelerator that gave"
+            " way to the CPU is about thirty times slower"
+        )
+        out["how"] = "free the card (prax up --stop llama-server), or accept the rate"
+    return out
+
+
 @functools.lru_cache(maxsize=4)
 def _build(setting: str, providers: tuple[str, ...] | None) -> Embedder | None:
     if setting in ("0", "off", "false", ""):
