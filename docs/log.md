@@ -1481,8 +1481,18 @@ including the two explanations that died on the way.
       the setting and the new index starts empty. Search degrades
       gracefully rather than breaking: FTS is untouched, vector recall
       is whatever has been re-embedded so far, and hybrid returns hits
-      throughout. The old 1,380 MB index is left alone, so reverting is
-      one line of prax.yaml.
+      throughout.
+- [x] **"Reverting is one line" was wrong as well**, found mid-run.
+      `chunk_embeddings.chunk_id` is the primary key and the insert is
+      `ON CONFLICT(chunk_id) DO UPDATE SET model = excluded.model`, so
+      the table remembers **one model per chunk** and the record that a
+      chunk has a bge-small vector is overwritten as the e5 one lands.
+      The old 1,380 MB index is physically untouched — 1,579,095 vectors,
+      keys readable — so going back does not mean recomputing; it means a
+      script that reads those keys and puts the rows back. Cheap, and not
+      written. The design holds one model at a time on purpose, which is
+      defensible; what was wrong was calling it reversible without
+      checking.
 - [x] **The protocol, not the model, is the limit** — 331 chunks/s of
       capacity delivering 98. In `docs/PLAN.md`.
 
