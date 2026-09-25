@@ -535,7 +535,45 @@ Nothing here opens the database file.
 | **environment only** | `PRAX_DATA_DIR`, `PRAX_CONFIG`, `PRAX_TOKEN`, `PRAX_DOOR`, `PRAX_OFFLINE`, `PRAX_DEBUG`; a setting's own `PRAX_*` name overrides the file for one run |
 | `PRAX_PYTHON` | interpreter for the MCP server in `.mcp.json` |
 
-## 9. Where to touch what
+## 9. How a change reaches the library
+
+Three kinds, and knowing which one a change is answers most of "do I need
+to run something afterwards".
+
+**A serving change** is computed per request and stores nothing. Ship the
+code, restart the door, and every answer is different from that moment;
+nothing old needs fixing because nothing old was kept. `traverse`'s
+neighbourhood map and its cap on a hub's own edges are this, and so is
+the dictionary encoding of provenance when it comes. The cost of one is
+never in the store — it is in the clients, since the UI, the CLI, the MCP
+tool and the surfer all read the shape.
+
+**A pass** changes the store, and the queue is what makes it happen. The
+step's hand-out asks for what lacks the current answer — chunks without a
+vector *from the configured model*, documents whose `meta.sections`
+stamp does not match their text, entities without a label from the
+vocabulary pass — so changing the model or the code makes the whole
+library pending and the worker grinds through it. Automatic, and slow:
+re-embedding 1.1 M chunks is hours on the card and days on the CPU.
+Reversible where the answer is a file beside the old one (a new
+`vectors-<model>.usearch` while the old keeps serving) and by
+`retire_run` where it is edges.
+
+**A repair** is for damage a pass will never find, because the pass
+thinks its work is done. `prax heal` names each ailment, finds it, and
+fixes it under a run; `--apply` is deliberate and the dry run comes
+first. The 851 citations that pointed at a proceedings volume rather than
+at the work inside it are this: no pass asks whether a finished
+extraction was right.
+
+Prevention cuts across all three, and is usually the cheaper half. The
+container work was one of each — a rule in the extraction prompt so the
+next extraction never writes one, a cue in `ontology/lexicon.yaml` so the
+typing rules know the words, and a heal ailment for what predates both.
+A library started today needs only the first; `docs/generalizing.md` is
+the audit of which repairs have earned their prevention.
+
+## 10. Where to touch what
 
 | I want to… | Touch |
 |---|---|
@@ -569,7 +607,7 @@ Nothing here opens the database file.
 | change what a model sees when asked | `ask.gather` (passages, facts) and `ask.SYSTEM`; a backend is an `Answerer` with `name`, `reading`, `answer(bundle)` and `step(system, user, grammar)` |
 | give the surfing model another move | a `do_<action>` in `prax.surf` over a store read, the action in `SYSTEM` and `grammar`, a word for it in the UI's `STEP_WORDS` and the CLI's `_STEP_WORDS` |
 
-## 10. Numbers as of 2026-09-12
+## 11. Numbers as of 2026-09-12
 
 | | |
 |---|---|
@@ -586,7 +624,7 @@ Nothing here opens the database file.
 | Retrieval eval (62 library queries) | MRR 0.82 fts, 0.79 vec, 0.89 hybrid; hit@1 0.85 hybrid |
 | Costs so far | about $60 of Claude API; everything since the title pass ran locally |
 
-## 11. What is not built yet
+## 12. What is not built yet
 
 The backfill of the old external-disk store. The move of the service
 onto the serving board (the code is in `deploy/`). The figures nobody
