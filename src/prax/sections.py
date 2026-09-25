@@ -159,17 +159,10 @@ def user_message(heading: str, text: str, *, title: str = "") -> str:
 
 
 def read_for(text: str, *, chars: int = READ_CHARS, byts: int = READ_BYTES) -> str:
-    """As much of a section as the model can be given: whichever of the
-    character and the UTF-8 budget runs out first.
+    """As much of a section as the model can be given (``models.fits``)."""
+    from prax import models
 
-    Cutting on a byte count alone would split a character, so the byte
-    budget is applied by encoding, slicing and decoding what survives.
-    """
-    out = text[:chars]
-    raw = out.encode("utf-8")
-    if len(raw) <= byts:
-        return out
-    return raw[:byts].decode("utf-8", "ignore")
+    return models.fits(text, chars=chars, byts=byts)
 
 
 def summarize(

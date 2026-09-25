@@ -435,3 +435,22 @@ def test_a_replacing_reread_unstamps_the_extraction_and_the_next_one_supersedes_
     assert (
         extraction.apply(con, doc_id, again, extractor="other", run="o1").retired == 0
     )
+
+
+def test_the_input_is_budgeted_in_bytes_as_well_as_characters(
+    con: sqlite3.Connection,
+) -> None:
+    """Extraction had the same character-only cap the sections pass had:
+    12,000 characters of Arabic is 23,834 tokens against a 16,384-token
+    slot (2026-09-25)."""
+    arabic = "هذا نص عربي طويل جدا للاختبار وفيه كلمات كثيرة. " * 600
+    doc = store.ingest_text(con, arabic, title="مقال")
+    got = extraction.build_input(con, doc["doc_id"])
+    assert len(got.text.encode("utf-8")) <= extraction.INPUT_BYTES + 200
+    assert got.text.strip()
+
+    latin = "The quick brown fox jumps over the lazy dog. " * 600
+    doc = store.ingest_text(con, latin, title="A paper")
+    got = extraction.build_input(con, doc["doc_id"])
+    # a Latin document is unaffected: it reaches the character cap first
+    assert len(got.text) > extraction.INPUT_CHARS / 2

@@ -135,6 +135,27 @@ class ServerNotReady(RuntimeError):
 # ------------------------------------------------------------------ file
 
 
+def fits(text: str, *, chars: int, byts: int) -> str:
+    """As much of ``text`` as a model may be given: whichever of the
+    character and the UTF-8 budget runs out first.
+
+    A character costs what its script makes it cost. 12,000 characters of
+    Latin is about 3,000 tokens, of Arabic 23,834 and of Tibetan 26,255 —
+    measured on 2026-09-25, when three documents failed a pass 71 times
+    against a 16,384-token slot because the only budget was in
+    characters. UTF-8 length is the cheap proxy that tracks it: a Latin
+    character is one byte, an Arabic one two, a Tibetan one three.
+
+    Cutting on a byte count alone would split a character, so the byte
+    budget is applied by encoding, slicing and decoding what survives.
+    """
+    out = text[:chars]
+    raw = out.encode("utf-8")
+    if len(raw) <= byts:
+        return out
+    return raw[:byts].decode("utf-8", "ignore")
+
+
 def config_path() -> Path:
     return config.config_path()
 

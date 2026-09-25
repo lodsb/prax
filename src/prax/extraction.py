@@ -26,11 +26,15 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from prax import ontology, store, summaries
+from prax import models, ontology, store, summaries
 
 DEFAULT_MODEL = "claude-opus-5"
 CALL_TIMEOUT = 180.0  # seconds; a call takes under 90, the SDK default is 600
 INPUT_CHARS = 12_000  # of document text after the metadata header
+# …and of its UTF-8, for the same reason the sections pass has one: a
+# character costs what its script makes it cost, and 12,000 characters of
+# Arabic was 23,834 tokens against a 16,384-token slot (2026-09-25).
+INPUT_BYTES = 12_000
 # After the head budget, the closing sections (conclusion, discussion) are
 # appended up to this many characters: that is where a paper states what it
 # showed, and the head alone stops in the middle of the method.
@@ -177,6 +181,7 @@ def build_input(
     doc_id: int,
     *,
     max_chars: int = INPUT_CHARS,
+    max_bytes: int = INPUT_BYTES,
     tail_chars: int = TAIL_CHARS,
 ) -> DocumentInput:
     doc = store.get_document(con, doc_id, max_chars=0)
@@ -221,15 +226,19 @@ def build_input(
     ]
     parts: list[str] = []
     used = 0
+    used_bytes = 0
     cut = len(chunks)
     for i, c in enumerate(chunks):
         piece = c["text"].strip()
-        if used + len(piece) > max_chars:
-            piece = piece[: max(0, max_chars - used)]
+        room = max(0, max_chars - used)
+        room_bytes = max(0, max_bytes - used_bytes)
+        if len(piece) > room or len(piece.encode("utf-8")) > room_bytes:
+            piece = models.fits(piece, chars=room, byts=room_bytes)
         if piece:
             parts.append(piece)
         used += len(piece) + 2
-        if used >= max_chars:
+        used_bytes += len(piece.encode("utf-8")) + 2
+        if used >= max_chars or used_bytes >= max_bytes:
             cut = i + 1
             break
     tail: list[str] = []
