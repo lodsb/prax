@@ -305,6 +305,83 @@ to find out whether a local logprob predicts anything.
 Deliberately after the current run of work: it is a measurement with a
 possible change behind it, not a change.
 
+## The engineering pass of 2026-09-25, as work
+
+`docs/audit/engineering-2026-09-25.md` is the review. These are its
+findings in the order they pay, and one that came out of writing it.
+
+### A step is an object, not three if-chains
+
+- [ ] **`work.hand_out` (363 lines), `work.take_in` (295) and
+      `worker.run_once` (267) are the same dispatch written three times**,
+      over the same step names, in two modules. Adding `sections` meant
+      editing all three in the same order: its batch cap in one, its
+      lease in another, its results in a third, and its worker side in
+      the fourth place.
+
+      A `Step` with `hand_out`, `take_in` and `do`, registered once, so a
+      new pass is an object rather than four edits. The lease and the
+      scope handling are the same for every step and belong to the
+      registry; what differs is the query, the payload and the model
+      call.
+
+      It touches every step, so it is a stage of its own and wants the
+      tests first — the work protocol is where a mistake costs a batch of
+      real work.
+
+### The store's modules outgrew the split that was already made
+
+- [ ] **`store/documents.py` is 2,739 lines and `store/graph.py` 2,044**,
+      against the 2,000 that made `prax.api` a package on 2026-09-22.
+      `graph.py` splits along what it holds — entities, edges, labels,
+      traversal — and `documents.py` along documents, chunks, the
+      document field. The module order is an invariant, so a split has to
+      keep it and the checker in the audit script is what proves it did.
+
+### The reads outside the store are growing, not shrinking
+
+- [ ] **26 on 2026-09-22, 38 now**, in 13 modules. The last pass left
+      them with "worth doing when a module's query breaks on a schema
+      change"; the count going up is the evidence that the answer was
+      wrong. A store read per question is the cleaner surface. The
+      importers are the bulk (`zotero.py` alone has 10) and are also the
+      least coupled to the rest, so they are the place to start or the
+      place to exempt deliberately.
+
+### Three names for one idea
+
+- [ ] **`models.fits`, `models.fits_for`, `sections.read_for`**, all
+      added on 2026-09-25. The wrapper earns its place — the budget's
+      defaults belong to the pass rather than to `models` — but nothing
+      in the name says that. `sections.budget()` reads as what it is.
+      Small, and the kind of thing that is free now and confusing later.
+
+### Name what kind of invariant each one is
+
+- [ ] **The ten invariants are held in four different ways, and the file
+      does not say which.** That matters because it decides what can
+      catch a breach:
+
+      | kind | how a breach is caught | which |
+      |---|---|---|
+      | **checked** | a test fails | 3 (the module order, no writes outside the store), 5 (what the proxy imports), 10 (the importers open read-only) |
+      | **enforced** | the code path makes it true | 2 (register hashes the bytes), 4 (the locks), 8 (`link` stamps, nothing deletes), 9 (`check_edge`) |
+      | **measured** | only a number says | 6 (response size), 7 (resident RAM in the serving path) |
+      | **chosen** | a standing decision with a revisit threshold | 1 (SQLite, and when to stop) |
+
+      The point of the table is the third row. **Invariant 6 was breached
+      for months and nothing noticed** — `traverse` answered 3.4 MB and
+      no test could have failed, because "keep responses small" is not a
+      property of the code, it is a property of an answer to a real
+      question on a real library. A measured invariant needs a recurring
+      measurement or it is a wish.
+
+      So: say the kind beside each invariant in `CLAUDE.md`, put the
+      checkable ones in a test (the audit script already checks three of
+      them by hand), and give the measured ones a number that a pass
+      reports — the largest answer `search`, `get` and `traverse` gave
+      this week, and the door's resident memory.
+
 ## Later / maybe
 
 - A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a
