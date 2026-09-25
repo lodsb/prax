@@ -61,14 +61,30 @@ explains it.
 
 ### Retrieval
 
-- [ ] **The embed protocol is round-trip bound** (found 2026-09-25 during
-      the re-embed). The embedder does 331 chunks/s with the card free;
-      through `GET /work/embed` and `POST` back it delivers 98, and 10 at
-      the supervisor worker's batch size. So five sixths of the capacity
-      goes on the round trip, the per-vector index add under
-      `_INDEX_LOCK`, and the row insert. A bulk re-embed is three hours
-      where it could be one. Worth a look when a re-embed is next
-      wanted; a batch and a short interval are the workaround
+- [ ] **The embed pass redoes its finished work twice a batch** (measured
+      2026-09-25, mid-re-embed; "round-trip bound" was the wrong first
+      answer — marshalling is 7%). Two quadratic costs, both the same
+      shape: work proportional to what is already done, repeated per
+      batch.
+
+      **The hand-out scans past everything finished.**
+      `pending_embeddings` is `LEFT JOIN chunk_embeddings ... WHERE
+      model != ? ORDER BY c.id DESC`, which SQLite plans as `SCAN c`.
+      Measured at the halfway mark: it walks **1,198,689 already-embedded
+      rows** to find the next 2,000, 759 ms, and worse the further it
+      gets. A cursor — hand out below the last id given — or an index
+      that lets it skip.
+
+      **Every batch rewrites the whole delta index.** `work.take_in`
+      calls `store.save_vectors(model)` after *each* POST, and that
+      writes the accumulated delta: 31 MB at the halfway mark, headed for
+      about 800 MB before a merge. A 200-vector batch rewrites the entire
+      file, which is the 10-17 s the door logs as a slow POST. Save every
+      N batches or on a timer; `merge_vectors` already folds it.
+
+      Together: 331 chunks/s of embedder delivering 98 early in a run and
+      67 at the halfway mark, degrading as it goes. The workaround while
+      it stands is a big batch and several workers
       (`-n 600 --workers 3 --interval 1`).
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
