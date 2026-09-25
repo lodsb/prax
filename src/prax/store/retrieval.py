@@ -1204,13 +1204,11 @@ def adopt_vectors(
         ("chunks", _index_path(model), "chunk_embeddings", "chunk_id"),
         ("documents", _doc_index_path(model), "document_embeddings", "doc_id"),
     ):
-        keys = _index_keys(path)  # the index lock, for as long as a read
-        if not keys:
-            continue
         table_of = "chunks" if what == "chunks" else "documents"
-        live = {r[0] for r in con.execute(f"SELECT id FROM {table_of}")}
-        take = sorted(keys & live)
-        out["missing"] += len(keys - live)
+        live = [r[0] for r in con.execute(f"SELECT id FROM {table_of}")]
+        take = _index_has(path, live)
+        if not take:
+            continue
         for i in range(0, len(take), 20_000):
             _adopt_batch(con, table, column, model, take[i : i + 20_000])
             if job is not None:
@@ -1235,24 +1233,35 @@ def _adopt_batch(
     return len(keys)
 
 
-def _index_keys(path: Path) -> set[int]:
-    """Every key an index file and its delta hold, or an empty set when
-    there is no such file."""
-    out: set[int] = set()
+def _index_has(path: Path, ids: list[int]) -> list[int]:
+    """Which of ``ids`` this index and its delta hold.
+
+    Asked of the index rather than read out of it. Reading every key and
+    intersecting in Python took over twenty-five minutes of a core on a
+    1.58 M-vector file and wedged the door doing it (2026-09-26);
+    ``contains`` over the ids actually wanted is vectorised and answers
+    in 0.13 s for 1.12 M. The question was always the intersection, so
+    asking for the whole key set was work nobody needed.
+    """
+    if not ids:
+        return []
+    import numpy as np
+
+    want = np.asarray(ids, dtype=np.uint64)
+    found = np.zeros(len(want), dtype=bool)
     with _INDEX_LOCK:
         for p_ in (path, _delta_path(path)):
             if not p_.exists():
                 continue
-            idx = None
             with contextlib.suppress(Exception):
                 # an empty or half-written file says nothing, which is an
-                # answer: there are no keys to adopt from it
+                # answer: it holds none of them
                 from usearch.index import Index
 
                 idx = Index.restore(str(p_), view=True)
-            if idx is not None:
-                out |= {int(k) for k in idx.keys}
-    return out
+                if idx is not None and len(idx):
+                    found |= np.asarray(idx.contains(want))
+    return [int(x) for x in want[found]]
 
 
 @_serialized
