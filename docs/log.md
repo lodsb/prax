@@ -1461,3 +1461,28 @@ sixteen hours of the local model over two days, nothing spent.
 `docs/eval/traverse-neighbourhood-2026-09-25.md` has the measurements,
 including the two explanations that died on the way.
 
+## 2026-09-25: the multilingual embedder, and what the card was costing
+
+- [x] **`embeddings.model: multilingual-e5-small`** in the live
+      prax.yaml, the last step of the multilingual study. Same 384
+      dimensions, so `VEC_DIM` is unchanged and the only cost is the
+      re-embed of 1,119,641 chunk vectors and 9,982 document fields.
+- [x] **The plan's cost estimate was wrong twice over.** It assumed
+      three to four times bge-small's compute; measured with the card
+      free, e5-small is 331 chunks/s against bge-small's 418 — 20%
+      slower, not 350%. And the 9 chunks/s measured earlier was not the
+      model at all: llama-server held 20.8 GB of a 24 GB card, the
+      DirectML embedder could not get a device (174 "GPU device instance
+      has been suspended"), and it fell back. Stopping llama-server is
+      the whole difference.
+- [x] **"The old file keeps serving" was wrong too.** The door refuses
+      vectors from a model that is not its own (`work.py`, "the door
+      embeds with X, not Y"), which is right, so door and worker share
+      the setting and the new index starts empty. Search degrades
+      gracefully rather than breaking: FTS is untouched, vector recall
+      is whatever has been re-embedded so far, and hybrid returns hits
+      throughout. The old 1,380 MB index is left alone, so reverting is
+      one line of prax.yaml.
+- [x] **The protocol, not the model, is the limit** — 331 chunks/s of
+      capacity delivering 98. In `docs/PLAN.md`.
+

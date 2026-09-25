@@ -61,16 +61,15 @@ explains it.
 
 ### Retrieval
 
-- [ ] **A multilingual embedder of the same 384 dimensions** — the one
-      step of the multilingual study that was not taken, and the only
-      one left. `multilingual-e5-small` is already in
-      `prax.embeddings.MODELS`, so it is `embeddings.model` in
-      `prax.yaml` plus a re-embed into a new `vectors-<model>.usearch`;
-      the old file keeps serving until the new one is complete, which
-      makes it reversible. The cost is 1,115,976 chunk vectors at three
-      to four times bge-small's compute — measure it on the desktop
-      first. Why it was deferred: `docs/log.md`, "the ledger, the queue,
-      the embedder, the labels".
+- [ ] **The embed protocol is round-trip bound** (found 2026-09-25 during
+      the re-embed). The embedder does 331 chunks/s with the card free;
+      through `GET /work/embed` and `POST` back it delivers 98, and 10 at
+      the supervisor worker's batch size. So five sixths of the capacity
+      goes on the round trip, the per-vector index add under
+      `_INDEX_LOCK`, and the row insert. A bulk re-embed is three hours
+      where it could be one. Worth a look when a re-embed is next
+      wanted; a batch and a short interval are the workaround
+      (`-n 600 --workers 3 --interval 1`).
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
 - [ ] **taco and tacos are different searches** (`niggles.txt`).
