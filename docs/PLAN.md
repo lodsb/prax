@@ -164,6 +164,65 @@ What it would want, in order:
 Not started. It is a pass, a table and a staleness rule, so it wants its
 own stage rather than a corner of the traverse change.
 
+## A confidence that was measured, not written (planned, 2026-09-25)
+
+Every edge in the graph carries `confidence`: EXTRACTED, INFERRED or
+AMBIGUOUS. The model *writes that word* and `extraction.py` stores it —
+`t.get("confidence", "AMBIGUOUS")`. Invariant 8 says edges are evidence
+rather than truth and makes confidence a column on the fact, and then
+fills that column with an unvalidated claim. A model's probability of
+emitting the token "EXTRACTED" is not the probability that the triple is
+right.
+
+Prompted by `doc:10307` ("Jev's Architecture Unmasked", captured
+2026-09-24), which is a speculative reverse-engineering of a closed API
+and says so. Nothing here depends on that API being real or on adopting
+it; what the piece gets right is the critique, and it lands on prax.
+
+Four passes have exactly the shape it describes — shared state, one
+question, a fixed set of allowed answers:
+
+| pass | the question | what it costs now |
+|---|---|---|
+| extraction | how sure is this triple? | a generated word |
+| `typing` | which of N types is this? | a generated name |
+| `vocabulary` | is this name English; does it fold? | a generated answer |
+| `adjudicate` | are these two entities one thing? | Opus 5, $2.59 for 8,242 pairs |
+
+prax reads **no logprobs anywhere** today (grammars exist, for the
+surfer). A single constrained token plus its logprob gives a number out
+of the model already running, at no extra cost — the answer is one token
+either way.
+
+**The experiment comes before the change, and the labels already exist.**
+The adjudicated round recorded 3,683 merges and 4,559 declines: a
+labelled outcome set of 8,242 decisions, which is exactly what is needed
+to find out whether a local logprob predicts anything.
+
+- [ ] **Ask the local model the adjudicator's question** on those 8,242
+      pairs, under a grammar that allows one token, and keep the
+      logprob. A few hours of llama-server, nothing spent.
+- [ ] **Score it against the labels.** Reliability diagram and Brier
+      score, not accuracy: the question is whether 0.8 means 0.8, not
+      whether the argmax is right. Raw logprobs from an
+      instruction-tuned model are famously not calibrated, which is
+      exactly why the article's subject trains against outcomes — so
+      expect to need Platt or isotonic scaling fitted on part of the
+      pairs and measured on the rest.
+- [ ] **Then decide what it buys.** If it calibrates, the likely tier
+      can act on a threshold and send only the uncertain middle to the
+      paid model, which is where the money goes. If it does not, that is
+      a finding worth writing down and the paid tier stays as it is.
+- [ ] **Only then, `confidence` as a number.** A column beside the
+      three words rather than instead of them, written where a pass
+      measured it and left null where nothing did — an edge whose
+      confidence nobody measured should say so rather than claim a
+      number. A migration, and not one to start before the numbers
+      above exist.
+
+Deliberately after the current run of work: it is a measurement with a
+possible change behind it, not a change.
+
 ## Later / maybe
 
 - A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a
