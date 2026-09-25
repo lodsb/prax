@@ -27,6 +27,7 @@ MAX_HOPS = 2
 # first hop reached. The measurement, and why a ranking by independent
 # evidence beats the cleverer ones, is
 # `docs/eval/traverse-neighbourhood-2026-09-25.md`.
+EDGES = 150  # of an entity's own edges, the commonest relations first
 NEIGHBOURS = 40  # hop-2 neighbours kept in all
 PER_TYPE = 12  # …and at most this many of any one type, so that the
 # papers and the authors do not crowd out the ideas
@@ -1803,6 +1804,47 @@ def _neighbourhood_limits() -> tuple[int, int, int]:
     )
 
 
+def _first_hop(
+    near: list[dict[str, Any]], limit: int
+) -> tuple[list[dict[str, Any]], int]:
+    """A hub's own edges, capped, with every relation represented.
+
+    The first hop is a fact list and stays one — but `nonnegative matrix
+    factorization` carries 642 edges and answers with 319 KB, which is
+    the same breach of invariant 6 the second hop had, one level down.
+    Taking the first 150 rows would take them in id order, which is the
+    order they were extracted in: 229 `about` edges before the first
+    `implements`. So the cap is spent round-robin over the relations,
+    commonest first, and every relation an entity has appears before any
+    relation has a second row.
+
+    A caller that wants the whole list asks for it (``limit=0``), which
+    is what the UI's canvas does.
+    """
+    if limit <= 0 or len(near) <= limit:
+        return near, 0
+    by_rel: dict[str, list[dict[str, Any]]] = {}
+    for e in near:
+        by_rel.setdefault(str(e.get("rel") or ""), []).append(e)
+    order = sorted(by_rel, key=lambda r: (-len(by_rel[r]), r))
+    kept: list[dict[str, Any]] = []
+    round_ = 0
+    while len(kept) < limit:
+        took = False
+        for rel in order:
+            rows = by_rel[rel]
+            if round_ < len(rows):
+                kept.append(rows[round_])
+                took = True
+                if len(kept) >= limit:
+                    break
+        if not took:
+            break
+        round_ += 1
+    keep = {id(e) for e in kept}
+    return [e for e in near if id(e) in keep], len(near) - len(kept)
+
+
 def _second_hop(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
     """The second hop as a map: which ideas the neighbourhood holds, not
     every edge that reaches them. Returns the shaped rows, and how many
@@ -1890,7 +1932,7 @@ def _second_hop(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
 
 @_reading
 def traverse(
-    con: sqlite3.Connection, entity_name: str, hops: int = 1
+    con: sqlite3.Connection, entity_name: str, hops: int = 1, limit: int | None = None
 ) -> list[dict[str, Any]]:
     """The entity's own edges: every currently-valid one, with its evidence.
 
@@ -1899,12 +1941,12 @@ def traverse(
     because the second hop is a different kind of thing; ask
     ``traverse_map`` for it.
     """
-    return [r for r in _walk(con, entity_name, hops)[0] if int(r["hop"]) < 2]
+    return [r for r in _walk(con, entity_name, hops, limit)[0] if int(r["hop"]) < 2]
 
 
 @_reading
 def traverse_map(
-    con: sqlite3.Connection, entity_name: str, hops: int = 1
+    con: sqlite3.Connection, entity_name: str, hops: int = 1, limit: int | None = None
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: its own edges, the ideas around
     them, and how many of those did not fit.
@@ -1917,7 +1959,7 @@ def traverse_map(
     that silently dropped the rest would be worse than a large one, so
     ``left_out`` counts the neighbours past the limits.
     """
-    rows, left_out = _walk(con, entity_name, hops)
+    rows, left_out = _walk(con, entity_name, hops, limit)
     return {
         "entity": entity_name,
         "hops": max(0, min(hops, MAX_HOPS)),
@@ -1928,9 +1970,11 @@ def traverse_map(
 
 
 def _walk(
-    con: sqlite3.Connection, entity_name: str, hops: int
-) -> tuple[list[dict[str, Any]], int]:
+    con: sqlite3.Connection, entity_name: str, hops: int, limit: int | None = None
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     hops = max(0, min(hops, MAX_HOPS))
+    if limit is None:
+        limit = config.whole("graph.edges", "PRAX_GRAPH_EDGES", EDGES)
     # The walk runs over raw entity ids and, at every step, expands the
     # entity reached to its whole alias group (idx_entities_canonical), so
     # a merged alias and its survivor are one node and the recursion uses
@@ -1993,4 +2037,8 @@ def _walk(
         """,
         (entity_name, entity_name, hops, hops),
     ).fetchall()
-    return _second_hop([dict(r) for r in rows])
+    shaped, neighbours_left = _second_hop([dict(r) for r in rows])
+    near = [r for r in shaped if int(r["hop"]) < 2]
+    far = [r for r in shaped if int(r["hop"]) >= 2]
+    near, edges_left = _first_hop(near, limit)
+    return near + far, {"edges": edges_left, "neighbours": neighbours_left}

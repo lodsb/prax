@@ -352,7 +352,11 @@ def graph(door: Door, a: Any) -> int:
         return 0
     edges = answer.get("edges") or []
     neighbours = answer.get("neighbours") or []
-    left_out = int(answer.get("left_out") or 0)
+    left = answer.get("left_out") or {}
+    if not isinstance(left, dict):  # an older door answered
+        left = {"neighbours": int(left)}
+    left_out = int(left.get("neighbours") or 0)
+    edges_left = int(left.get("edges") or 0)
     if not edges:
         out.say(f"Nothing in the graph about {a.entity!r}.")
         out.hint(
@@ -396,6 +400,12 @@ def graph(door: Door, a: Any) -> int:
     out.table(rows, headers=["hop", "relation", "what", "how", "from"])
     if len(useful) > len(shown):
         out.hint(f"… {out.num(len(useful) - len(shown))} more (-n to see further)")
+    if edges_left:
+        out.hint(
+            f"{out.num(edges_left)} further edges were not carried: the door"
+            " sends the commonest relations first and every relation once."
+            " `--json` with a larger door limit has them all."
+        )
     if selves:
         out.hint(
             f"({out.plural(len(selves), 'edge')} from the name to itself,"

@@ -97,7 +97,8 @@ def test_link_and_traverse(client: TestClient) -> None:
 
     one = client.get("/traverse", params={"entity": "A", "hops": 1}).json()
     assert {(e["src"], e["dst"]) for e in one["edges"]} == {("A", "B")}
-    assert (one["entity"], one["hops"], one["left_out"]) == ("A", 1, 0)
+    assert (one["entity"], one["hops"]) == ("A", 1)
+    assert one["left_out"] == {"edges": 0, "neighbours": 0}
     capped = client.get("/traverse", params={"entity": "A", "hops": 9}).json()
     assert capped["hops"] == 2  # MAX_HOPS, whatever was asked for
     # the first hop stays a fact list, the second becomes the map

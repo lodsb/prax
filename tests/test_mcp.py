@@ -116,7 +116,7 @@ def test_link_and_traverse(proxied: TestClient) -> None:
     one = call("traverse", entity="A", hops=1)
     assert {(e["src"], e["dst"]) for e in one["edges"]} == {("A", "B")}
     assert one["edges"][0]["producer"] == "agent"
-    assert one["left_out"] == 0
+    assert one["left_out"]["edges"] == 0
     two = call("traverse", entity="A", hops=2)
     assert {(e["src"], e["dst"]) for e in two["edges"]} == {("A", "B")}
     assert [n["name"] for n in two["neighbours"]] == ["C"]

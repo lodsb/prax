@@ -456,7 +456,7 @@ def do_walk(con: sqlite3.Connection, s: Surf, name: str) -> str:
     name = " ".join(name.split())
     if not name:
         return "walk takes an entity's name"
-    edges = store.traverse(con, name, hops=1)[:WALK_EDGES]
+    edges = store.traverse(con, name, hops=1, limit=WALK_EDGES)
     if not edges:
         like = store.find_entities(con, name, limit=6)
         if not like:

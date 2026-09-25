@@ -122,7 +122,7 @@ class ForceGraph {
   async expand(key) {
     const n = this.nodes.get(key);
     n.expanded = true;
-    const edges = (await api("/traverse", { entity: n.name, hops: 1 })).edges;
+    const edges = (await api("/traverse", { entity: n.name, hops: 1, limit: 0 })).edges;
     if (!n.expanded) return;  // folded while the fetch was in flight
     this.merge(edges, key);
     this.select(key);
@@ -475,7 +475,7 @@ async function viewGraph(arg, p) {
     const panel = document.getElementById("graph-panel");
     const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
     document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
-    const edges = (await api("/traverse", { entity, hops: 1 })).edges;
+    const edges = (await api("/traverse", { entity, hops: 1, limit: 0 })).edges;
     if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity.</p>`; return; }
     const first = edges.find((e) => e.src === entity || e.dst === entity);
     if (!first) { graph.merge(edges, null); return; }

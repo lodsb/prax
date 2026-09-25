@@ -219,3 +219,47 @@ handles it: `traverse` never lands on a document, so nothing reaches
 these edges by accident any more. What was wrong was only the 851
 citations pointing at containers the library does not hold, and those
 are gone.
+
+## The hub's own fact list, the same day
+
+The second hop's repair left a second breach visible under it:
+`nonnegative matrix factorization` answered its *first* hop with 319 KB
+of 642 edges, and `short-time Fourier transform` with 258 KB. That is a
+fact list, not a map, so it is not the same problem — but it is the same
+invariant.
+
+Where those bytes went, for the 642:
+
+    evidence 72 KB · src 48 · dst 29 · valid_from 23 · producer 21
+    ontology_version 19 · confidence 16 · run 15 · types 25 · rest 35
+
+Evidence is 24% of it. **Provenance is 30%** — and there are 268 distinct
+provenance tuples across 642 edges, 7 producers and 34 runs, so most of
+those bytes are repetition. `src` is 48 KB of the entity's own name,
+written out once per edge, for a caller who named it.
+
+Both are worth compressing and neither is the answer: 642 facts is a lot
+of facts. So the fix is the same move as the second hop — a cap that says
+what it left out — with one thing added. Taking the first 150 rows would
+take them in id order, which is extraction order: 229 `about` edges
+before the first `implements`. The cap is spent **round-robin over the
+relations**, commonest first, so every relation an entity has appears
+before any relation has a second row:
+
+    about 22 · uses 21 · proposes 21 · implements 21 · extends 21
+    cites 21 · contrasts 21 · defines 1 · mentions 1
+
+`defines` and `mentions` have one edge each in the whole list and both
+survive, where a naive cap would have shown neither.
+
+| entity | hop 1 before | after |
+|---|---|---|
+| nonnegative matrix factorization | 319 KB | **71 KB** |
+| short-time Fourier transform | 258 KB | **72 KB** |
+| Fourier transform | 70 KB | 70 KB |
+
+`traverse` now answers in 70–78 KB whatever it is asked about, at either
+hop, which is the property invariant 6 actually wants: not a small
+average but a bounded worst case. `graph.edges` sets it; a caller that
+wants the whole list asks with `limit=0`, which is what the UI's canvas
+does, since it draws the neighbourhood rather than reading it.

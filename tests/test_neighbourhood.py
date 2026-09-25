@@ -136,10 +136,11 @@ def test_the_map_says_what_it_left_out(
     answer = store.traverse_map(con, "convolution", hops=2)
     assert (answer["entity"], answer["hops"]) == ("convolution", 2)
     assert len(answer["neighbours"]) == 2
-    assert answer["left_out"] == 4
+    assert answer["left_out"]["neighbours"] == 4
+    assert answer["left_out"]["edges"] == 0
 
     one = store.traverse_map(con, "convolution", hops=1)
-    assert one["neighbours"] == [] and one["left_out"] == 0
+    assert one["neighbours"] == [] and one["left_out"]["neighbours"] == 0
 
 
 def test_a_neighbour_carries_the_way_back(con: sqlite3.Connection) -> None:
@@ -165,3 +166,47 @@ def test_an_entity_already_met_is_not_a_neighbour(con: sqlite3.Connection) -> No
     _link(con, "aliasing", "concept", "extends", "convolution", "method", doc=doc)
 
     assert [n["name"] for n in _map(con, "convolution")] == []
+
+
+def test_the_first_hop_is_capped_with_every_relation_represented(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`nonnegative matrix factorization` answered its own first hop with
+    319 KB of 642 edges. Taking the first N would take them in id order,
+    which is extraction order: 229 `about` rows before the first
+    `implements`."""
+    monkeypatch.setenv("PRAX_GRAPH_EDGES", "6")
+    doc = _paper(con, 1)
+    for n in range(20):
+        _link(con, "Paper 1", "paper", "about", f"about {n}", "concept", doc=doc)
+    for n in range(4):
+        _link(con, "Paper 1", "paper", "uses", f"tool {n}", "tool", doc=doc)
+    _link(con, "Paper 1", "paper", "proposes", "the one method", "method", doc=doc)
+
+    answer = store.traverse_map(con, "Paper 1", hops=1)
+    assert len(answer["edges"]) == 6
+    assert answer["left_out"]["edges"] == 19
+    rels = {e["rel"] for e in answer["edges"]}
+    assert rels == {"about", "uses", "proposes"}  # the rare one survived
+    assert "the one method" in {e["dst"] for e in answer["edges"]}
+
+
+def test_a_caller_can_ask_for_the_whole_list(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The UI's canvas draws the neighbourhood and asks for all of it."""
+    monkeypatch.setenv("PRAX_GRAPH_EDGES", "3")
+    doc = _paper(con, 1)
+    for n in range(10):
+        _link(con, "Paper 1", "paper", "about", f"about {n}", "concept", doc=doc)
+
+    assert len(store.traverse(con, "Paper 1", hops=1)) == 3
+    whole = store.traverse_map(con, "Paper 1", hops=1, limit=0)
+    assert len(whole["edges"]) == 10 and whole["left_out"]["edges"] == 0
+
+
+def test_a_small_entity_is_not_capped(con: sqlite3.Connection) -> None:
+    doc = _paper(con, 1)
+    _link(con, "Paper 1", "paper", "about", "convolution", "method", doc=doc)
+    answer = store.traverse_map(con, "convolution", hops=1)
+    assert len(answer["edges"]) == 1 and answer["left_out"]["edges"] == 0
