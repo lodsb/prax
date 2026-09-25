@@ -145,6 +145,21 @@ def vectors_merge() -> dict[str, Any]:
     return store.merge_vectors(emb.name)
 
 
+@router.post("/vectors/adopt")
+def vectors_adopt(request: Request, model: str) -> dict[str, Any]:
+    """Record that a model's index already holds these vectors.
+
+    The way back from an embedder change. `chunk_embeddings` remembers
+    one model per chunk, so re-embedding overwrote the record that the
+    old model's vectors exist — but the vectors are still in its index
+    file. Put `embeddings.model` back, restart the door, and call this:
+    bookkeeping rather than compute.
+    """
+    if not store.vectors_available():
+        raise HTTPException(400, "no usearch")
+    return store.adopt_vectors(_con(request), model)
+
+
 @router.get("/changes")
 def changes(request: Request) -> dict[str, Any]:
     """A stamp that changes when the store changed (this door's writes or
@@ -568,6 +583,7 @@ def up_state(request: Request) -> dict[str, Any]:
         "up": state,
         "demand": work.demand(_con(request)),
         "gpu": hostinfo.gpu(),
+        "gpu_holders": hostinfo.holders(),
         "memory": hostinfo.memory(),
     }
 

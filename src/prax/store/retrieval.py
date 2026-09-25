@@ -9,6 +9,7 @@ vector from which model.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import sqlite3
@@ -1165,6 +1166,71 @@ def delta_counts(model: str) -> dict[str, int]:
             if idx is None and dpath.exists():
                 idx = _delta(path)
             out[name] = len(idx) if idx is not None else 0
+    return out
+
+
+@_serialized
+def adopt_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
+    """Record that this model's index already holds vectors for these
+    chunks — the way back from a model switch, without recomputing.
+
+    ``chunk_embeddings.chunk_id`` is the primary key and the embed step
+    writes ``ON CONFLICT DO UPDATE SET model``, so the table remembers
+    **one model per chunk**: re-embedding into a new model overwrites the
+    record that the old one's vectors exist. The vectors themselves are
+    untouched — they are in ``vectors-<old>.usearch``, which nothing
+    deletes — so going back is bookkeeping rather than compute, and this
+    is that bookkeeping.
+
+    It is the mirror of ``compact_vectors``, which forgets rows whose
+    vector is missing. This claims vectors whose row is missing, for the
+    chunks and documents that still exist; a key whose chunk is gone is
+    left alone, because the row would not survive the foreign key.
+
+    Used after ``embeddings.model`` in prax.yaml is put back, and then
+    the door restarted so it opens that model's index.
+    """
+    out = {"chunks": 0, "documents": 0, "missing": 0}
+    for what, path, table, column in (
+        ("chunks", _index_path(model), "chunk_embeddings", "chunk_id"),
+        ("documents", _doc_index_path(model), "document_embeddings", "doc_id"),
+    ):
+        keys = _index_keys(path)
+        if not keys:
+            continue
+        table_of = "chunks" if what == "chunks" else "documents"
+        live = {r[0] for r in con.execute(f"SELECT id FROM {table_of}")}
+        take = sorted(keys & live)
+        out["missing"] += len(keys - live)
+        for i in range(0, len(take), 5_000):
+            con.executemany(
+                f"INSERT INTO {table} ({column}, model) VALUES (?, ?)"
+                f" ON CONFLICT({column}) DO UPDATE SET model = excluded.model,"
+                f" embedded_at = {_NOW}",
+                [(k, model) for k in take[i : i + 5_000]],
+            )
+        out[what] = len(take)
+    con.commit()
+    return out
+
+
+def _index_keys(path: Path) -> set[int]:
+    """Every key an index file and its delta hold, or an empty set when
+    there is no such file."""
+    out: set[int] = set()
+    with _INDEX_LOCK:
+        for p_ in (path, _delta_path(path)):
+            if not p_.exists():
+                continue
+            idx = None
+            with contextlib.suppress(Exception):
+                # an empty or half-written file says nothing, which is an
+                # answer: there are no keys to adopt from it
+                from usearch.index import Index
+
+                idx = Index.restore(str(p_), view=True)
+            if idx is not None:
+                out |= {int(k) for k in idx.keys}
     return out
 
 

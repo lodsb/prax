@@ -389,3 +389,50 @@ def test_the_row_knows_its_text_length(con: sqlite3.Connection) -> None:
     assert store.maintain(con, only=["lengths"])["lengths"]["filled"] == 0
     # windows still read the artifact
     assert store.get_document(con, doc, max_chars=5)["text"] == text[:5]
+
+
+def test_adopt_vectors_is_the_way_back_from_a_model_change(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`chunk_embeddings` remembers one model per chunk, so re-embedding
+    overwrites the record that the old model's vectors exist. The vectors
+    do not go anywhere, so going back is bookkeeping (2026-09-25)."""
+    pytest.importorskip("usearch")
+    monkeypatch.setenv("PRAX_EMBED", "hash")
+    doc = store.ingest_text(con, "wave digital filters and their practice " * 40)
+    ids = [
+        r[0]
+        for r in con.execute("SELECT id FROM chunks WHERE doc_id = ?", (doc["doc_id"],))
+    ]
+    assert ids
+    import numpy as np
+
+    old = "old-model"
+    store.store_embeddings(
+        con, [(i, "text", np.ones(384, dtype="float32")) for i in ids], old
+    )
+    store.save_vectors(old)
+    assert {r[0] for r in con.execute("SELECT model FROM chunk_embeddings")} == {old}
+
+    # a switch: the same chunks re-embedded under a new name
+    new = "new-model"
+    store.store_embeddings(
+        con, [(i, "text", np.ones(384, dtype="float32")) for i in ids], new
+    )
+    assert {r[0] for r in con.execute("SELECT model FROM chunk_embeddings")} == {new}
+
+    # and back, without recomputing anything
+    got = store.adopt_vectors(con, old)
+    assert got["chunks"] == len(ids)
+    assert {r[0] for r in con.execute("SELECT model FROM chunk_embeddings")} == {old}
+
+
+def test_adopt_vectors_claims_nothing_from_a_model_with_no_index(
+    con: sqlite3.Connection,
+) -> None:
+    pytest.importorskip("usearch")
+    assert store.adopt_vectors(con, "never-used") == {
+        "chunks": 0,
+        "documents": 0,
+        "missing": 0,
+    }

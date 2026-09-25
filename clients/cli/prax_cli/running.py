@@ -11,6 +11,7 @@ import textwrap
 import time
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from prax.client import Door, DoorError
 
@@ -893,6 +894,22 @@ def follow_job(door: Door, job_id: int, *, quiet: bool, what: str = "the job") -
 
 def maintain(door: Door, a: Any) -> int:
     """Ask the door for the maintenance pass and follow the job."""
+    adopt = getattr(a, "adopt_vectors", None)
+    if adopt:
+        got = door.post_json(f"/vectors/adopt?model={quote(adopt)}")
+        out.say(
+            out.bold("Adopted")
+            + out.dim(
+                f"   {got['chunks']:,} chunk and {got['documents']:,} document"
+                f" vectors as {adopt}"
+                + (
+                    f"; {got['missing']:,} keys had no row to claim"
+                    if got["missing"]
+                    else ""
+                )
+            )
+        )
+        return 0
     only = [p.strip() for p in (a.only or "").split(",") if p.strip()] or None
     if getattr(a, "rechunk", False):
         only = (only or []) + ["rechunk"]

@@ -683,6 +683,13 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="also rebuild every chunk from its text (after a chunker change)",
     )
+    s.add_argument(
+        "--adopt-vectors",
+        metavar="MODEL",
+        help="record that this model's index already holds the vectors, the"
+        " way back from an embedder change without re-embedding (set"
+        " embeddings.model back first, then restart the door)",
+    )
     s.set_defaults(func=running.maintain, needs_door=True)
 
     s = sub.add_parser(

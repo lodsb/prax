@@ -6,7 +6,13 @@ through the kernel's ``GlobalMemoryStatusEx`` and
 view shows the door host's numbers so the commit wall is visible before
 it is hit (a GPU model server on Windows charges system commit for its
 VRAM), and ``prax up`` reads the cards to decide whether two roles that
-both want one fit together (``docs/howto.md`` 4b)."""
+both want one fit together (``docs/howto.md`` 4b).
+
+``holders()`` says *which* processes hold the card, which the totals
+cannot: on 2026-09-25 the embedder ran at 9 chunks/s instead of 331 for
+most of a day because llama-server had 20.8 GB of a 24 GB card and
+DirectML could not get a device, and prax could say the card was full
+without saying by whom."""
 
 from __future__ import annotations
 
@@ -21,6 +27,7 @@ from typing import Any
 MB = 1024 * 1024
 GPU_FRESH = 2.0  # seconds a reading of the cards is served again
 _gpu: tuple[float, list[dict[str, Any]]] | None = None
+_holders: tuple[float, list[dict[str, Any]]] | None = None
 
 
 def memory() -> dict[str, int | None]:
@@ -39,6 +46,127 @@ def memory() -> dict[str, int | None]:
         elif Path("/proc/meminfo").exists():
             out.update(_linux_memory())
     return out
+
+
+def holders(fresh: float = GPU_FRESH) -> list[dict[str, Any]]:
+    r"""What each process holds of the cards, biggest first, as
+    ``{pid, name, mb}``; ``[]`` where the host cannot say.
+
+    ``nvidia-smi`` answers this on Linux. On Windows it reports
+    ``[N/A]`` per process under WDDM, so the number comes from the
+    performance counter ``\GPU Process Memory(*)\Dedicated Usage``
+    instead — one PowerShell call, cached like the card totals.
+    """
+    global _holders
+    now = time.monotonic()
+    if _holders is not None and now - _holders[0] < fresh:
+        return [dict(h) for h in _holders[1]]
+    found: list[dict[str, Any]] = []
+    with contextlib.suppress(Exception):  # a host that cannot say says nothing
+        found = _windows_holders() if sys.platform == "win32" else _nvidia_holders()
+    found.sort(key=lambda h: -h["mb"])
+    _holders = (now, found)
+    return [dict(h) for h in found]
+
+
+def _nvidia_holders() -> list[dict[str, Any]]:
+    out = subprocess.run(
+        [
+            "nvidia-smi",
+            "--query-compute-apps=pid,process_name,used_memory",
+            "--format=csv,noheader,nounits",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    ).stdout
+    found = []
+    for line in out.splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) != 3 or not parts[0].isdigit() or not parts[2].isdigit():
+            continue
+        found.append(
+            {"pid": int(parts[0]), "name": Path(parts[1]).name, "mb": int(parts[2])}
+        )
+    return found
+
+
+_HOLDERS_PS = (
+    r"(Get-Counter '\GPU Process Memory(*)\Dedicated Usage'"
+    " -ErrorAction SilentlyContinue).CounterSamples |"
+    " Where-Object CookedValue -gt 52428800 |"
+    " ForEach-Object { $p = ($_.InstanceName -split '_')[1];"
+    " $n = (Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName;"
+    ' "$p`t$n`t$([math]::Round($_.CookedValue/1MB))" }'
+)
+
+
+def _windows_holders() -> list[dict[str, Any]]:
+    out = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", _HOLDERS_PS],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    ).stdout
+    by_pid: dict[int, dict[str, Any]] = {}
+    for line in out.splitlines():
+        parts = line.split("\t")
+        if len(parts) != 3 or not parts[0].strip().isdigit():
+            continue
+        pid, name, mb = int(parts[0]), parts[1].strip(), parts[2].strip()
+        if not mb.isdigit() or not name:
+            continue
+        # one process can hold several allocations; they add up
+        row = by_pid.setdefault(pid, {"pid": pid, "name": name, "mb": 0})
+        row["mb"] += int(mb)
+    return list(by_pid.values())
+
+
+def room(need_mb: int, *, card: int = 0) -> dict[str, Any]:
+    """Whether ``need_mb`` of a card is free, and what is in the way.
+
+    The question a batch should ask before it starts rather than after it
+    is slow: an embedder that cannot get a device does not fail, it falls
+    back to the CPU and runs at a thirtieth of the speed, which looks
+    like a slow model rather than a full card (2026-09-25).
+
+    Returns ``fits``, ``free_mb``, ``total_mb``, the ``holders`` biggest
+    first, and ``free_by`` — the fewest of them whose memory would be
+    enough, so a caller can say what to stop rather than only that it
+    cannot run. Everything is ``None`` or empty on a host with no card,
+    where ``fits`` is ``None``: not knowing is not the same as no.
+    """
+    cards = gpu()
+    if not cards or card >= len(cards):
+        return {
+            "fits": None,
+            "need_mb": need_mb,
+            "free_mb": None,
+            "total_mb": None,
+            "holders": [],
+            "free_by": [],
+        }
+    c = cards[card]
+    free = int(c.get("free_mb") or 0)
+    held = holders()
+    want = max(0, need_mb - free)
+    enough: list[dict[str, Any]] = []
+    got = 0
+    for h in held:  # biggest first, so the shortest list of things to stop
+        if got >= want:
+            break
+        enough.append(h)
+        got += int(h["mb"])
+    return {
+        "fits": free >= need_mb,
+        "need_mb": need_mb,
+        "free_mb": free,
+        "total_mb": int(c.get("total_mb") or 0),
+        "holders": held,
+        "free_by": [] if free >= need_mb else enough,
+    }
 
 
 def gpu(fresh: float = GPU_FRESH) -> list[dict[str, Any]]:

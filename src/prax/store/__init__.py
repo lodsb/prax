@@ -325,6 +325,7 @@ from .retrieval import (  # noqa: F401
     _vec_count,
     _vec_search,
     acronym_expansions,
+    adopt_vectors,
     compact_vectors,
     count_pending_document_embeddings,
     count_pending_embeddings,

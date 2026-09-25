@@ -37,6 +37,7 @@ so the registry hands out a ``ModelSpec`` and, for chat-shaped work, a
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import os
 import urllib.error
@@ -148,6 +149,9 @@ def fits(text: str, *, chars: int, byts: int) -> str:
 
     Cutting on a byte count alone would split a character, so the byte
     budget is applied by encoding, slicing and decoding what survives.
+
+    This is the guess. ``measure`` asks the server instead, and
+    ``fits_for`` uses the answer where there is one.
     """
     out = text[:chars]
     raw = out.encode("utf-8")
@@ -328,6 +332,43 @@ def price_of(runtime_name: str) -> tuple[float, float] | None:
 # -------------------------------------------------------------- runtimes
 
 
+def fits_for(runtime: Any, text: str, *, tokens: int, chars: int, byts: int) -> str:
+    """As much of ``text`` as fits in ``tokens``, measured if the runtime
+    can measure and guessed otherwise.
+
+    The guess (``fits``) is a byte budget, which tracks a tokenizer well
+    enough for a Latin or an Arabic script and is still a guess. Where the
+    server can count — llama.cpp serves ``/tokenize`` — the count is a
+    fact, and the difference is the difference between a slow pass and a
+    failed one: 12,000 characters of Arabic is 23,834 tokens against a
+    16,384-token slot, which no byte budget was going to know
+    (2026-09-25).
+
+    Narrows by halving rather than by arithmetic, because tokens per
+    character is not constant within a text either.
+    """
+    out = fits(text, chars=chars, byts=byts)
+    for _ in range(6):
+        got = measure(runtime, out)
+        if got is None or got <= tokens:
+            return out
+        out = out[: max(1, int(len(out) * tokens / got * 0.9))]
+    return out
+
+
+def measure(runtime: Any, text: str) -> int | None:
+    """How many tokens this runtime makes of ``text``, or None when it
+    cannot say — which is not an error, only a host without the route."""
+    ask = getattr(runtime, "count_tokens", None)
+    if ask is None:
+        return None
+    with contextlib.suppress(Exception):  # a server that will not count is silent
+        got = ask(text)
+        if isinstance(got, int) and got >= 0:
+            return got
+    return None
+
+
 class StubRuntime:
     """Tests: echoes a fixed line."""
 
@@ -354,6 +395,21 @@ class OpenAIRuntime:
     model: str
     api_key_env: str | None = None
     timeout: float = OPENAI_TIMEOUT
+
+    def count_tokens(self, text: str) -> int | None:
+        """What this server makes of the text, through llama.cpp's
+        ``/tokenize``. None where the server has no such route (vLLM,
+        OpenAI itself), which leaves the caller with the byte budget."""
+        import httpx
+
+        root = self.base_url.rstrip("/").removesuffix("/v1")
+        with contextlib.suppress(Exception):
+            r = httpx.post(f"{root}/tokenize", json={"content": text}, timeout=30.0)
+            if r.status_code == 200:
+                got = r.json().get("tokens")
+                if isinstance(got, list):
+                    return len(got)
+        return None
 
     @property
     def name(self) -> str:

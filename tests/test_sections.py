@@ -243,3 +243,41 @@ def test_the_byte_cut_never_splits_a_character() -> None:
         got = sections.read_for("é" * 50, byts=n)
         assert "�" not in got
         assert got == "é" * (n // 2)
+
+
+class _Counts:
+    """A server that can count, as llama.cpp can through /tokenize."""
+
+    name = "counting"
+
+    def __init__(self, per_char: float) -> None:
+        self.per_char = per_char
+        self.asked = 0
+
+    def count_tokens(self, text: str) -> int:
+        self.asked += 1
+        return int(len(text) * self.per_char)
+
+
+def test_the_read_is_measured_where_the_server_can_count() -> None:
+    """The byte budget is a guess that works; a count is a fact. Arabic
+    ran at about two tokens a character, which no byte budget knew."""
+    text = "x" * 40_000
+    heavy = _Counts(2.0)
+    got = sections.read_for(text, runtime=heavy)
+    assert heavy.asked  # it asked rather than assumed
+    assert len(got) * 2.0 <= sections.READ_TOKENS * 1.05
+
+    light = _Counts(0.25)  # Latin: the character budget binds first
+    got = sections.read_for(text, runtime=light)
+    assert len(got) == sections.READ_CHARS
+
+
+def test_a_server_that_cannot_count_leaves_the_guess_alone() -> None:
+    """Not every server has the route; that is not an error."""
+
+    class Mute:
+        name = "mute"
+
+    text = "x" * 40_000
+    assert sections.read_for(text, runtime=Mute()) == sections.read_for(text)

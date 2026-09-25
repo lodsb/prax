@@ -50,6 +50,7 @@ READ_CHARS = 12_000  # of a section given to the model, in Latin script
 # roughly a token, a Tibetan one is three. Budgeting on bytes therefore
 # costs a Latin document nothing and holds the others inside the slot.
 READ_BYTES = 12_000  # …and of its UTF-8, which is what a tokenizer sees
+READ_TOKENS = 11_000  # …and what it really costs, where the server counts
 MAX_SUMMARY = 400  # characters of answer kept
 
 
@@ -146,7 +147,9 @@ def acceptable(text: str, heading: str) -> str | None:
     return None
 
 
-def user_message(heading: str, text: str, *, title: str = "") -> str:
+def user_message(
+    heading: str, text: str, *, title: str = "", runtime: Any | None = None
+) -> str:
     """The section, named and given. Sentences rather than labelled
     fields, so the model has no form to fill in (``prax.answers``)."""
     parts = []
@@ -154,15 +157,27 @@ def user_message(heading: str, text: str, *, title: str = "") -> str:
         parts.append(f"The document is called “{title.strip()}”.")
     parts.append(f"This is its section “{heading}”. What is it about?")
     parts.append("")
-    parts.append(read_for(text))
+    parts.append(read_for(text, runtime=runtime))
     return "\n".join(parts)
 
 
-def read_for(text: str, *, chars: int = READ_CHARS, byts: int = READ_BYTES) -> str:
-    """As much of a section as the model can be given (``models.fits``)."""
+def read_for(
+    text: str,
+    *,
+    chars: int = READ_CHARS,
+    byts: int = READ_BYTES,
+    runtime: Any | None = None,
+) -> str:
+    """As much of a section as the model can be given.
+
+    Measured against the server where it can count (``models.fits_for``),
+    guessed from the UTF-8 length where it cannot.
+    """
     from prax import models
 
-    return models.fits(text, chars=chars, byts=byts)
+    if runtime is None:
+        return models.fits(text, chars=chars, byts=byts)
+    return models.fits_for(runtime, text, tokens=READ_TOKENS, chars=chars, byts=byts)
 
 
 def summarize(
@@ -171,7 +186,7 @@ def summarize(
     """One section read, or None when the model did not manage it."""
     out, usage = runtime.chat(
         system(),
-        user_message(heading, text, title=title),
+        user_message(heading, text, title=title, runtime=runtime),
         max_tokens=160,
         temperature=0.0,
     )
