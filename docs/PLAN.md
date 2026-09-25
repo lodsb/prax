@@ -37,13 +37,13 @@ explains it.
 
 ### The graph
 
-- [ ] **A hub's own fact list** — the second hop is fixed (`docs/log.md`,
-      2026-09-25) and a second breach of invariant 6 is visible under it:
-      `nonnegative matrix factorization` answers with 325 KB, all of it
-      the first hop, 642 edges each carrying their evidence. It is
-      exactly what the UI wants for its canvas and far too much for an
-      agent, so the answer is paging or a summary of the edge list
-      rather than a ranking of it — and its own measurement.
+- [ ] **Compress what repeats in an edge list.** The cap
+      (`docs/log.md`, 2026-09-25) bounded `traverse` at 70-78 KB, and
+      left the repetition untouched: provenance is 30% of a fact list
+      across 268 distinct tuples, and `src` is the entity's own name
+      once per edge. A dictionary would take a bounded 70 KB to a
+      bounded 40 without dropping anything. Worth doing when something
+      needs the room, not before.
 - [ ] **Ontology v9** — the relations a document takes name `paper`
       where they could name `document`, so a captured page has to be
       read as a paper for an edge to fit. A version bump and a restamp,

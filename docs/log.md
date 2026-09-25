@@ -1441,3 +1441,23 @@ sixteen hours of the local model over two days, nothing spent.
       wanted byte-identical messages and these differed in a token count:
       71 failures. It counts kinds now.
 
+## 2026-09-25: traverse gets a bounded worst case
+
+- [x] **The second hop became a map** rather than every edge in it:
+      3,439 KB to 76 on `Fourier transform`, ranked by how many documents
+      separately say so and capped per type, never landing on a document.
+- [x] **The first hop got a cap of its own**, spent round-robin over the
+      relations so the rare one survives: 319 KB to 71 on `nonnegative
+      matrix factorization`. `traverse` now answers in 70-78 KB whatever
+      it is asked about, at either hop.
+- [x] **The container citations went** — 851 edges that pointed at a
+      proceedings volume rather than at the work inside it — and the
+      extraction prompt now asks for the volume as a venue, so a library
+      started today grows none.
+- [x] **The hub that remains is earned.** 1,947 edges, every one its
+      own: a real PDF someone imported. The first design would have
+      retyped it and destroyed them; the dry run is what caught that.
+
+`docs/eval/traverse-neighbourhood-2026-09-25.md` has the measurements,
+including the two explanations that died on the way.
+
