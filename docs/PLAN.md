@@ -25,9 +25,15 @@ explains it.
       --spend -n 7`, roughly $1–3 on Sonnet 5; or the standing shape,
       `spend: true` on the worker role with `budget: {daily_usd: N}`.
 - [ ] **`twin-documents`** (6) — the repair retires documents.
-- [ ] **The sections backlog** — 1,584 of 2,024 documents left as of
-      2026-09-25; the pass runs detached and is reaped if it is started
-      as a session background task (`docs/howto.md`).
+- [ ] **The sections pass on the vector side.**
+      `docs/eval/sections-2026-09-25.md` measured the keyword half —
+      hit@10 0.087 to 0.130, MRR 0.048 to 0.077 — and says nothing about
+      `document_embeddings`, where a query that paraphrases a chapter
+      rather than quoting it should do better. The same A/B, the vector
+      arm. (The backlog itself is done: 2,050 documents.)
+- [ ] **What sections are worth to `ask`**, which was the second reason
+      for the pass: a cheaper way into a long book than its chunks.
+      `scripts/eval_ask.py` is the instrument.
 
 ### The graph
 

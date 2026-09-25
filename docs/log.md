@@ -1417,3 +1417,27 @@ methods, 12 tools, 5 concepts, 3 authors. 818 passed.
 What it did not fix is in `docs/PLAN.md`: a hub's own first hop is still
 325 KB.
 
+## 2026-09-25: the sections pass, and three A/Bs of one question
+
+The pass finished: **2,050 long documents**, about 10,400 summaries,
+sixteen hours of the local model over two days, nothing spent.
+
+- [x] **What they are worth to the document field**, measured on a copy:
+      hit@10 **0.087 to 0.130**, MRR 0.048 to 0.077. Half again as many
+      documents found, from a low base, on questions about the middle of
+      a book — which the field could say nothing about before, since a
+      book's own summary describes its first chapter.
+- [x] **Two wrong designs before the right one**, which is the part
+      worth keeping: heading queries gave +0.263 and are circular, since
+      the field holds the heading as well as the summary; removing the
+      summary's words gave +0.007 and excluded exactly what could match.
+      A factor of forty between two plausible A/Bs.
+      `docs/eval/sections-2026-09-25.md`.
+- [x] **The read budget was in the wrong unit** — three documents could
+      not be read at all until it was. 12,000 characters of Arabic is
+      23,834 tokens; `models.fits` now bounds by UTF-8 length too, and
+      extraction had the same cap with the same number.
+- [x] **The give-up rule from the day before did not fire**, because it
+      wanted byte-identical messages and these differed in a token count:
+      71 failures. It counts kinds now.
+
