@@ -195,3 +195,27 @@ exactly what the UI wants for its canvas.
 That is a different problem with a different answer — paging, or a
 summary of the edge list rather than a ranking of it — and it wants its
 own measurement rather than a limit picked here.
+
+## The repair, applied 2026-09-25
+
+`prax heal --apply --check container-citations` on the live store: **851
+edges ended**, 162,341 live edges to 161,491, the ailment clear.
+
+The narrowing the dry run forced was right, and the top hub shows why.
+It is still there at 1,947 edges, and every one of them is its own:
+
+    730  about (owns)        274  authored_by (owns)
+    344  cites (owns)         92  proposes (owns)
+    305  uses (owns)          89  mentions (owns)
+
+Nothing points *at* it. It is a real 23,105-character PDF that someone
+imported and the extraction read, so those 1,947 edges are earned — and
+the first design, which would have retyped it to `venue` and ended
+everything a venue refuses, would have destroyed all of them.
+
+The hub is therefore not a defect at all. A volume that is genuinely in
+the library is genuinely about 730 things, and the second hop already
+handles it: `traverse` never lands on a document, so nothing reaches
+these edges by accident any more. What was wrong was only the 851
+citations pointing at containers the library does not hold, and those
+are gone.
