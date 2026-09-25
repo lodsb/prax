@@ -1169,8 +1169,9 @@ def delta_counts(model: str) -> dict[str, int]:
     return out
 
 
-@_serialized
-def adopt_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
+def adopt_vectors(
+    con: sqlite3.Connection, model: str, *, job: Any | None = None
+) -> dict[str, int]:
     """Record that this model's index already holds vectors for these
     chunks — the way back from a model switch, without recomputing.
 
@@ -1189,29 +1190,49 @@ def adopt_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
 
     Used after ``embeddings.model`` in prax.yaml is put back, and then
     the door restarted so it opens that model's index.
+
+    **A job, not a request.** The first version of this was `@_serialized`
+    and held the store's write lock *and* the index lock for the whole
+    run, which wedged the door: `/health` answered in 0.6 s while
+    `/search` timed out (2026-09-26). The keys are read once, outside
+    both; the rows go in batches, each its own short write; and the
+    caller is a thread with a job row, so progress is visible and nothing
+    else waits on it.
     """
     out = {"chunks": 0, "documents": 0, "missing": 0}
     for what, path, table, column in (
         ("chunks", _index_path(model), "chunk_embeddings", "chunk_id"),
         ("documents", _doc_index_path(model), "document_embeddings", "doc_id"),
     ):
-        keys = _index_keys(path)
+        keys = _index_keys(path)  # the index lock, for as long as a read
         if not keys:
             continue
         table_of = "chunks" if what == "chunks" else "documents"
         live = {r[0] for r in con.execute(f"SELECT id FROM {table_of}")}
         take = sorted(keys & live)
         out["missing"] += len(keys - live)
-        for i in range(0, len(take), 5_000):
-            con.executemany(
-                f"INSERT INTO {table} ({column}, model) VALUES (?, ?)"
-                f" ON CONFLICT({column}) DO UPDATE SET model = excluded.model,"
-                f" embedded_at = {_NOW}",
-                [(k, model) for k in take[i : i + 5_000]],
-            )
+        for i in range(0, len(take), 20_000):
+            _adopt_batch(con, table, column, model, take[i : i + 20_000])
+            if job is not None:
+                job.note(f"{what}: {min(i + 20_000, len(take)):,} of {len(take):,}")
         out[what] = len(take)
-    con.commit()
     return out
+
+
+@_serialized
+def _adopt_batch(
+    con: sqlite3.Connection, table: str, column: str, model: str, keys: list[int]
+) -> int:
+    """One batch of bookkeeping, behind the write lock for its own length
+    and no longer."""
+    con.executemany(
+        f"INSERT INTO {table} ({column}, model) VALUES (?, ?)"
+        f" ON CONFLICT({column}) DO UPDATE SET model = excluded.model,"
+        f" embedded_at = {_NOW}",
+        [(k, model) for k in keys],
+    )
+    con.commit()
+    return len(keys)
 
 
 def _index_keys(path: Path) -> set[int]:

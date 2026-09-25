@@ -152,12 +152,34 @@ def vectors_adopt(request: Request, model: str) -> dict[str, Any]:
     The way back from an embedder change. `chunk_embeddings` remembers
     one model per chunk, so re-embedding overwrote the record that the
     old model's vectors exist — but the vectors are still in its index
-    file. Put `embeddings.model` back, restart the door, and call this:
-    bookkeeping rather than compute.
+    file. Put `embeddings.model` back, restart the door, and ask for
+    this: bookkeeping rather than compute.
+
+    A job on a thread of its own; poll ``GET /jobs/{id}``. It was a
+    synchronous write until 2026-09-26, which held the store's lock for
+    minutes and wedged the door.
     """
     if not store.vectors_available():
         raise HTTPException(400, "no usearch")
-    return store.adopt_vectors(_con(request), model)
+    job = store.Job(_con(request), "adopt-vectors", note=model)
+
+    def run() -> None:
+        con = store.connect()
+        try:
+            with store.Job.existing(con, job.id) as mine:
+                got = store.adopt_vectors(con, model, job=mine)
+                lost = got["missing"]
+                mine.note(
+                    f"{got['chunks']:,} chunks, {got['documents']:,} documents"
+                    + (f", {lost:,} keys with no row" if lost else "")
+                )
+        except Exception:  # the job row carries the error
+            logging.getLogger("prax.adopt").exception("adopt failed")
+        finally:
+            con.close()
+
+    threading.Thread(target=run, name="adopt-vectors", daemon=True).start()
+    return {"job": job.id, "model": model}
 
 
 @router.get("/changes")

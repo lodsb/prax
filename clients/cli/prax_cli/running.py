@@ -896,20 +896,12 @@ def maintain(door: Door, a: Any) -> int:
     """Ask the door for the maintenance pass and follow the job."""
     adopt = getattr(a, "adopt_vectors", None)
     if adopt:
-        got = door.post_json(f"/vectors/adopt?model={quote(adopt)}")
-        out.say(
-            out.bold("Adopted")
-            + out.dim(
-                f"   {got['chunks']:,} chunk and {got['documents']:,} document"
-                f" vectors as {adopt}"
-                + (
-                    f"; {got['missing']:,} keys had no row to claim"
-                    if got["missing"]
-                    else ""
-                )
+        started = door.post_json(f"/vectors/adopt?model={quote(adopt)}")
+        if not a.json:
+            out.say(
+                out.bold("Adopting") + out.dim(f"   {adopt} · job {started['job']}")
             )
-        )
-        return 0
+        return follow_job(door, started["job"], quiet=a.json, what="the pass")
     only = [p.strip() for p in (a.only or "").split(",") if p.strip()] or None
     if getattr(a, "rechunk", False):
         only = (only or []) + ["rechunk"]

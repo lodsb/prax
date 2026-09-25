@@ -679,3 +679,15 @@ def test_the_door_reports_what_waits_and_writes_a_swap(
     queued = [json.loads(f.read_text()) for f in (run / up.COMMANDS).glob("*.json")]
     assert {"cmd": "swap", "to": "marker", "back_when": "idle"} in queued
     assert client.post("/up/command", json={"cmd": "swap"}).status_code == 400
+
+
+def test_adopt_vectors_is_a_job_not_a_blocking_write(client: TestClient) -> None:
+    """It was a synchronous `@_serialized` write until 2026-09-26, which
+    held the store's lock for minutes and wedged the door: /health
+    answered in 0.6 s while /search timed out."""
+    r = client.post("/vectors/adopt", params={"model": "never-used"})
+    assert r.status_code == 200
+    got = r.json()
+    assert got["model"] == "never-used" and isinstance(got["job"], int)
+    # the door is still answering while it runs
+    assert client.get("/health").status_code == 200
