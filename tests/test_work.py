@@ -1362,14 +1362,21 @@ def test_a_worker_stops_when_every_pass_fails_the_same_way(
 def test_a_worker_outlives_a_pass_that_fails_differently(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The door restarting is a bad pass, not a stale worker."""
+    """A pass that fails a different way each time is having trouble, not
+    stuck: only one kind repeated says the worker itself is the problem."""
     calls = {"n": 0}
+    troubles = [
+        RuntimeError("connection reset"),
+        ValueError("a bad row"),
+        OSError("disk hiccup"),
+        RuntimeError("the model said nothing"),
+    ]
 
     def flaky(*a: object, **k: object) -> None:
         calls["n"] += 1
         if calls["n"] > worker.GIVE_UP_AFTER * 2:
             raise KeyboardInterrupt
-        raise RuntimeError(f"connection reset {calls['n']}")
+        raise troubles[calls["n"] % len(troubles)]
 
     monkeypatch.setattr(worker, "run_once", flaky)
     monkeypatch.setattr(worker.time, "sleep", lambda _s: None)
@@ -1386,3 +1393,19 @@ def test_a_worker_outlives_a_pass_that_fails_differently(
     with pytest.raises(KeyboardInterrupt):
         worker.watch(Stub(), steps=("parse",), interval=0)
     assert calls["n"] > worker.GIVE_UP_AFTER  # it kept going
+
+
+def test_the_give_up_counter_sees_a_kind_not_a_string() -> None:
+    """Three documents a worker cannot read fail with messages differing
+    only in a token count. The first version of the rule wanted them
+    byte-identical and so never fired: 71 failures, no give-up
+    (2026-09-25)."""
+    a = RuntimeError("HTTP 400: request (23834 tokens) exceeds 16384")
+    b = RuntimeError("HTTP 400: request (26255 tokens) exceeds 16384")
+    assert worker._kind_of_trouble(a) == worker._kind_of_trouble(b)
+
+    other = RuntimeError("the door is not reachable")
+    assert worker._kind_of_trouble(a) != worker._kind_of_trouble(other)
+    assert worker._kind_of_trouble(ValueError("x")) != worker._kind_of_trouble(
+        RuntimeError("x")
+    )

@@ -40,7 +40,16 @@ from prax import answers
 MIN_DOCUMENT = 60_000  # characters: shorter than this and one summary does
 MIN_SECTION = 4_000  # a section shorter than this is not a chapter
 MAX_SECTIONS = 40  # per document, longest first
-READ_CHARS = 12_000  # of a section given to the model
+READ_CHARS = 12_000  # of a section given to the model, in Latin script
+# What a character costs in tokens depends on the script, and the cap
+# above is the only budget this pass had until 2026-09-25 — when three
+# documents failed 71 times because 12,000 characters of Arabic and of
+# Tibetan are 23,834 and 26,255 tokens against a 16,384-token slot.
+# UTF-8 length is the cheap proxy that tracks it: a Latin character is
+# one byte and about a quarter of a token, an Arabic one is two bytes and
+# roughly a token, a Tibetan one is three. Budgeting on bytes therefore
+# costs a Latin document nothing and holds the others inside the slot.
+READ_BYTES = 12_000  # …and of its UTF-8, which is what a tokenizer sees
 MAX_SUMMARY = 400  # characters of answer kept
 
 
@@ -145,8 +154,22 @@ def user_message(heading: str, text: str, *, title: str = "") -> str:
         parts.append(f"The document is called “{title.strip()}”.")
     parts.append(f"This is its section “{heading}”. What is it about?")
     parts.append("")
-    parts.append(text[:READ_CHARS])
+    parts.append(read_for(text))
     return "\n".join(parts)
+
+
+def read_for(text: str, *, chars: int = READ_CHARS, byts: int = READ_BYTES) -> str:
+    """As much of a section as the model can be given: whichever of the
+    character and the UTF-8 budget runs out first.
+
+    Cutting on a byte count alone would split a character, so the byte
+    budget is applied by encoding, slicing and decoding what survives.
+    """
+    out = text[:chars]
+    raw = out.encode("utf-8")
+    if len(raw) <= byts:
+        return out
+    return raw[:byts].decode("utf-8", "ignore")
 
 
 def summarize(

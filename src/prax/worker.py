@@ -19,6 +19,7 @@ import contextlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -49,9 +50,29 @@ from prax.parsers import figures
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
 STEPS = steps_mod.STEPS
-# passes that fail the same way in a row before the worker stops and lets
-# the supervisor start one with the current code (2026-09-24: 519)
-GIVE_UP_AFTER = 5
+# passes that fail in a row before the worker stops and lets the
+# supervisor start one with the current code (2026-09-24: 519 identical).
+# Counted by the *kind* of failure, not its text: the first version of
+# this rule wanted byte-identical messages and so never fired on three
+# documents whose errors differed only in a token count — 71 failures,
+# no give-up (2026-09-25). Counting kinds makes the rule bite sooner, so
+# the count is higher: a door restarting is one kind repeated, and at the
+# worker's 20 s interval twenty passes is about seven minutes, long
+# enough to outlive any restart and short of the hours both incidents
+# cost.
+GIVE_UP_AFTER = 20
+
+
+def _kind_of_trouble(exc: BaseException) -> str:
+    """What sort of failure this is, with the varying parts taken out.
+
+    A worker cycling through three documents it cannot read is as stuck
+    as one repeating a single error, but its messages differ — in a token
+    count, a document id, a duration. Numbers become a mark and only the
+    head of the message is kept, so the counter sees a kind rather than a
+    string.
+    """
+    return f"{type(exc).__name__}: {re.sub(chr(92) + 'd+', '#', str(exc))[:160]}"
 
 
 # ------------------------------------------------------------------ steps
@@ -1094,6 +1115,7 @@ def watch(
             except Exception as exc:  # a bad pass is outlived; a repeated one is not
                 trouble = f"{type(exc).__name__}: {exc}"
                 _say(log_, f"pass failed: {trouble}")
+                kind = _kind_of_trouble(exc)
                 # a bad pass is worth outliving; the same bad pass over and
                 # over is not. A worker started before a change to
                 # prax.yaml or to the code fails identically for ever —
@@ -1101,8 +1123,8 @@ def watch(
                 # and growing by 350 MB an hour. Exiting is the repair:
                 # `prax up` restarts the role, and the new process reads
                 # the new configuration with the new code.
-                same = same + 1 if trouble == last_trouble else 1
-                last_trouble = trouble
+                same = same + 1 if kind == last_trouble else 1
+                last_trouble = kind
                 if not once and same >= GIVE_UP_AFTER:
                     _say(
                         log_,

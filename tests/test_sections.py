@@ -212,3 +212,34 @@ def test_a_heading_loses_the_extractor_s_markup() -> None:
     assert sections.clean_heading("<mark>12</mark> KNOWLEDGE") == "12 KNOWLEDGE"
     assert sections.clean_heading("24<sup>PERCEPTION</sup>") == "24 PERCEPTION"
     assert sections.clean_heading("**Part V** Modeling") == "Part V Modeling"
+
+
+def test_the_read_is_budgeted_in_bytes_as_well_as_characters() -> None:
+    """12,000 characters of Arabic were 23,834 tokens against a
+    16,384-token slot, and three documents failed 71 times for it
+    (2026-09-25). UTF-8 length is the proxy that tracks a tokenizer."""
+    latin = "The quick brown fox. " * 900
+    arabic = "هذا نص عربي طويل جدا للاختبار. " * 700
+
+    kept = sections.read_for(latin)
+    assert len(kept) == sections.READ_CHARS  # a Latin document pays nothing
+    assert len(kept.encode("utf-8")) <= sections.READ_BYTES
+
+    kept = sections.read_for(arabic)
+    assert len(kept) < sections.READ_CHARS  # the byte budget bit first
+    assert len(kept.encode("utf-8")) <= sections.READ_BYTES
+    assert kept  # and something survived
+
+
+def test_a_short_section_is_given_whole() -> None:
+    text = "one paragraph, well under either budget."
+    assert sections.read_for(text) == text
+
+
+def test_the_byte_cut_never_splits_a_character() -> None:
+    """Slicing bytes can land inside a character; decoding must not raise
+    or leave a replacement mark."""
+    for n in range(20, 40):
+        got = sections.read_for("é" * 50, byts=n)
+        assert "�" not in got
+        assert got == "é" * (n // 2)
