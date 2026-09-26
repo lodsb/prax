@@ -233,6 +233,82 @@ def _mangled_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return found[:CAP]
 
 
+# the kinds a document is: a document beside its topic (the paper
+# *Timbre*, the concept timbre) is two things, not one in pieces
+DOCUMENT_KINDS = frozenset(
+    {
+        "paper",
+        "document",
+        "page",
+        "project",
+        "work",
+        "manual",
+        "article",
+        "datasheet",
+        "schematic",
+        "recipe",
+        "build",
+    }
+)
+
+
+def _split_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """One name held by things of unrelated types: `SuperCollider` a tool
+    with 65 edges and a method with 7, `TU Munich` an organization and an
+    author. Mostly one thing the extraction typed differently from
+    document to document, sometimes two things (the concept *music
+    perception*, the journal *Music Perception*); which is a person's call.
+
+    A type and its subtype, and one type twice, are left to resolution,
+    which merges them on the door's clock; a document beside its topic is
+    two things and is not listed. The biggest part first, with the others
+    and their edges (docs/eval/fractured-names-2026-09-27.md)."""
+    from prax import ontology
+
+    onto = ontology.current()
+
+    def related(a: str, b: str) -> bool:
+        return a == b or onto.is_a(a, b) or onto.is_a(b, a)
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in con.execute(
+        "SELECT id, name, type FROM entities WHERE canonical_id IS NULL"
+    ):
+        if row["type"] in DOCUMENT_KINDS or not (row["name"] or "").strip():
+            continue
+        groups.setdefault(row["name"].casefold().strip(), []).append(dict(row))
+    split = [
+        g
+        for g in groups.values()
+        if len(g) > 1 and any(not related(a["type"], b["type"]) for a in g for b in g)
+    ]
+    counts = _live_edge_counts(con, [e["id"] for g in split for e in g])
+    found = []
+    for g in split:
+        parts = sorted(
+            ({**e, "edges": counts.get(e["id"], 0)} for e in g),
+            key=lambda e: (-e["edges"], e["id"]),
+        )
+        parts = [e for e in parts if e["edges"]]
+        if len({e["type"] for e in parts}) < 2:
+            continue
+        lead = parts[0]
+        found.append(
+            {
+                "id": lead["id"],
+                "name": lead["name"],
+                "type": lead["type"],
+                "edges": lead["edges"],
+                "also": [
+                    {"id": e["id"], "type": e["type"], "edges": e["edges"]}
+                    for e in parts[1:]
+                ],
+            }
+        )
+    found.sort(key=lambda f: -(f["edges"] + sum(a["edges"] for a in f["also"])))
+    return found[:CAP]
+
+
 def _container_citations(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """`cites` edges whose target is the container a work appeared in — a
     proceedings volume, a journal, a conference series — rather than the
@@ -1093,6 +1169,21 @@ AILMENTS: tuple[Ailment, ...] = (
         fix="end every edge they carry",
         find=_unnamed_entities,
         repair=_repair_entities,
+    ),
+    Ailment(
+        name="split-names",
+        what=(
+            "one name held by things of unrelated types (SuperCollider a tool"
+            " and a method, TU Munich an organization and an author): mostly"
+            " one thing typed differently from document to document,"
+            " sometimes two things"
+        ),
+        fix=(
+            "a person's call: merge the parts that are one thing"
+            " (POST /graph/merge with across_types), or leave two things apart;"
+            " a traverse from the name already walks one and names the others"
+        ),
+        find=_split_names,
     ),
     Ailment(
         name="twin-documents",

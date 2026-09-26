@@ -120,3 +120,51 @@ def test_the_surfer_is_told_the_other_things_and_can_walk_one(
     other = surf.do_walk(con, s, "apple (ingredient)")
     assert "calls_for" in other and "developed_by" not in other
     assert "walk: apple (organization)" in other
+
+
+# ---------------------------------------------- one thing in pieces, stage G
+
+
+def test_split_names_lists_one_name_of_unrelated_types(con: sqlite3.Connection) -> None:
+    """SuperCollider a tool and a method: listed for a person, biggest
+    part first. A document beside its topic, and a type beside its
+    subtype, are not listed: two things, and resolution's, respectively."""
+    for i in range(3):
+        _edge(con, store.Edge(f"P{i}", "paper", "uses", "SuperCollider", "tool"))
+    _edge(con, store.Edge("P9", "paper", "uses", "SuperCollider", "method"))
+    _edge(con, store.Edge("Timbre", "paper", "about", "pitch", "concept"))
+    _edge(con, store.Edge("X", "paper", "about", "timbre", "concept"))
+    _edge(con, store.Edge("Onsets", "paper", "authored_by", "Simon Dixon", "author"))
+    _edge(
+        con,
+        store.Edge("Simon Dixon", "person", "affiliated_with", "QMUL", "organization"),
+    )
+    found = store.health(con, only=["split-names"])["ailments"][0]
+    names = [(e["name"], e["type"]) for e in found["examples"]]
+    assert names == [("SuperCollider", "tool")]
+    assert found["examples"][0]["also"][0]["type"] == "method"
+    assert not found["repairable"]
+
+
+def test_a_person_merges_across_types_and_can_take_it_back(client: TestClient) -> None:
+    con = client.app.state.con
+    _edge(con, store.Edge("P1", "paper", "uses", "SuperCollider", "tool"))
+    _edge(con, store.Edge("P2", "paper", "uses", "SuperCollider", "method"))
+    ids = {
+        r["type"]: r["id"]
+        for r in con.execute(
+            "SELECT id, type FROM entities WHERE name = 'SuperCollider'"
+        )
+    }
+    refused = client.post(
+        "/graph/merge", json={"drop": ids["method"], "into": ids["tool"]}
+    )
+    assert refused.status_code == 400  # across types only when said so
+    got = client.post(
+        "/graph/merge",
+        json={"drop": ids["method"], "into": ids["tool"], "across_types": True},
+    ).json()
+    walk = store.traverse_map(con, "SuperCollider", 1)
+    assert "senses" not in walk and len(walk["edges"]) == 2
+    client.post("/graph/unmerge", json={"run": got["run"]})
+    assert len(store.traverse_map(con, "SuperCollider", 1)["senses"]) == 2

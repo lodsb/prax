@@ -1670,3 +1670,33 @@ on.
       documents with a picture the current model has not read, and
       nothing while the last slice waits or the model is paid. It is a
       job like the others, so a restart does not run the night twice.
+
+## 2026-09-27: stage G, one thing in pieces
+
+- [x] **The safe merges were a plan away and never applied.** Entity
+      resolution already proposes the sure merges (equal after
+      normalisation), the subtype folds (a person who is an author) and
+      the concept/method twins. They pile up because `prax resolve
+      --apply` is run by hand. A sample read sound, with one known
+      blind spot: a person mistyped as concept and method folds into a
+      method (`W.E.B. Du Bois`). Applied: 205 sure, 59 subtypes, 130
+      twins, run `resolve-20260926T234815`.
+- [x] **On the door's clock now** (`schedule: resolve`, 03:00, before
+      maintain): the same round nightly, the endpoint's own job. The
+      likely pairs (741, by name embedding) stay a person's.
+- [x] **The rest is listed, not merged.** `heal` has a report-only
+      ailment, `split-names`: one name held by things of unrelated types,
+      a document beside its topic not counted, the biggest part first.
+      `POST /graph/merge` is a person's answer to it (across types only
+      when asked, filed under a run). A traverse from such a name already
+      walks one thing and names the others.
+- [x] **A merge could not always be taken back.** `unmerge_run` found a
+      round's merges through the label each wrote under its run, written
+      `INSERT OR IGNORE`. When the survivor already answered to that
+      name, nothing was written. The round above left 363 labels for 394
+      merges. Migration 25 stamps the merge on the entity (`merged_by`,
+      `merged_run`), carries over what the labels knew (873 of 23,494
+      merges ever made had a run), and `unmerge_run` reads both. The 31
+      unrecorded merges of that round stay unrecorded; they were
+      same-name merges, correct as made. The migration took 0.4 s on a
+      copy.

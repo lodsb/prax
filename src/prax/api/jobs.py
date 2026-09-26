@@ -342,6 +342,34 @@ def unmerge(req: UnmergeReq, request: Request) -> dict[str, Any]:
     return {"run": req.run, "entities": store.unmerge_run(_con(request), req.run)}
 
 
+class MergeReq(BaseModel):
+    drop: int  # the entity that is the same thing as ``into``
+    into: int
+    across_types: bool = False  # a tool and a method that are one thing
+    run: str | None = None  # the run it is filed under; one of its own by default
+
+
+@router.post("/graph/merge")
+def merge(req: MergeReq, request: Request) -> dict[str, Any]:
+    """Say that two entities are one thing (``store.merge_entities``): a
+    person's answer to what ``split-names`` lists, where resolution will
+    not decide. Filed under a run like any merge, so ``/graph/unmerge``
+    takes it back; nothing is deleted."""
+    run = req.run or "merge-" + store.now().replace(":", "").replace("-", "")
+    try:
+        store.merge_entities(
+            _con(request),
+            req.drop,
+            req.into,
+            across_types=req.across_types,
+            producer="human",
+            run=run,
+        )
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"merged": req.drop, "into": req.into, "run": run}
+
+
 class ResolveReq(BaseModel):
     apply: bool = False  # False: the plan only
     type: str | None = None  # one entity type
@@ -393,23 +421,40 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     tiers["likely"]["computed"] = store.candidate_runs(con)
     if not req.apply:
         return {"plan": tiers, "applied": False}
+    job = _start_resolve(con, plan, twins=req.twins, subtypes=req.subtypes)
+    return {"plan": tiers, "applied": True, "job": job}
+
+
+def _start_resolve(
+    con: Any, plan: Any = None, *, twins: bool = True, subtypes: bool = True
+) -> int:
+    """A round of the safe tiers as a job: the sure merges, and the twins
+    and subtype folds when asked; the likely pairs stay a person's.
+
+    On the door's clock (``schedule: resolve``) as well as on request.
+    Run by hand, the round was run too seldom: 205 sure merges, 59
+    subtype folds and 130 twins had piled up by 2026-09-27, the missed
+    merges a traverse from a name then showed as several things
+    (docs/eval/fractured-names-2026-09-27.md). Each round is one run,
+    which ``unmerge_run`` takes back."""
+    from prax import resolution
+
+    if plan is None:
+        plan = resolution.plan(con, likely=False)
     job = store.Job(
         con,
         "resolve",
         total=len(plan.sure)
-        + (len(plan.subtypes) if req.subtypes else 0)
-        + (len(plan.twins) if req.twins else 0),
-        note=f"{len(plan.sure)} sure"
-        + (f", {len(plan.twins)} twins" if req.twins else ""),
+        + (len(plan.subtypes) if subtypes else 0)
+        + (len(plan.twins) if twins else 0),
+        note=f"{len(plan.sure)} sure" + (f", {len(plan.twins)} twins" if twins else ""),
     )
 
     def run() -> None:
         own = store.connect()
         try:
             with store.Job.existing(own, job.id) as mine:
-                rep = resolution.apply(
-                    own, plan, twins=req.twins, subtypes=req.subtypes
-                )
+                rep = resolution.apply(own, plan, twins=twins, subtypes=subtypes)
                 mine.note(
                     f"done: merged {rep.merged_sure} sure,"
                     f" {rep.merged_subtypes} subtypes, {rep.merged_twins} twins;"
@@ -421,7 +466,7 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
             own.close()
 
     threading.Thread(target=run, name="resolve", daemon=True).start()
-    return {"plan": tiers, "applied": True, "job": job.id}
+    return int(job.id)
 
 
 @router.post("/import/zotero/item")

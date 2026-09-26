@@ -54,6 +54,12 @@ def merge_entities(
         "UPDATE entities SET canonical_id = ? WHERE id = ? OR canonical_id = ?",
         (survivor, duplicate_id, duplicate_id),
     )
+    # the claim carries who made it, on the row it changes (migration 25):
+    # the label below is not always written, and was the only record
+    con.execute(
+        "UPDATE entities SET merged_by = ?, merged_run = ? WHERE id = ?",
+        (producer, run, duplicate_id),
+    )
     _label_from_merge(con, survivor, duplicate_id, producer, run, confidence)
     con.commit()
 
@@ -402,15 +408,26 @@ def unmerge_run(con: sqlite3.Connection, run: str) -> int:
     pass could be taken back halfway: the folds undone, the wrong names
     left behind.
     """
-    rows = con.execute(
-        "SELECT from_entity FROM entity_labels WHERE run = ? AND from_entity"
-        " IS NOT NULL",
-        (run,),
-    ).fetchall()
-    ids = [int(r[0]) for r in rows]
+    # the merges stamped with the run (migration 25), and those only a
+    # label of the run records, from before the stamp
+    ids = sorted(
+        {
+            int(r[0])
+            for r in con.execute("SELECT id FROM entities WHERE merged_run = ?", (run,))
+        }
+        | {
+            int(r[0])
+            for r in con.execute(
+                "SELECT from_entity FROM entity_labels WHERE run = ? AND from_entity"
+                " IS NOT NULL",
+                (run,),
+            )
+        }
+    )
     for entity_id in ids:
         con.execute(
-            "UPDATE entities SET canonical_id = NULL WHERE id = ? OR canonical_id = ?",
+            "UPDATE entities SET canonical_id = NULL, merged_by = NULL,"
+            " merged_run = NULL WHERE id = ? OR canonical_id = ?",
             (entity_id, entity_id),
         )
     renamed = con.execute(

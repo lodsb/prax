@@ -357,7 +357,9 @@ reference `docs/ask.md`.
   of alternatives, which is the shape SKOS gives a concept. A label carries its language, the producer, the run
   and, when it is what the entity used to be called, `was` — so
   `store.unmerge_run` puts a renamed entity's name back as well as
-  undoing its merges. `store.link` lands on the entity that answers to a
+  undoing its merges. A merge is stamped on the entity it folds
+  (`merged_by`, `merged_run`, migration 25), because the label it also
+  writes is skipped when the survivor already answers to that name. `store.link` lands on the entity that answers to a
   name when none carries it, so a rename does not start the split over.
   `entities.name` is still the identity; making it a display label is
   `docs/stratification.md` step 5, to be done whole.

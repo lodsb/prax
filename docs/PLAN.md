@@ -18,7 +18,8 @@ the precondition for communities, then two things a user notices.
       then the repair), the seven pending promotions (`--spend`, capped
       at the seven, roughly $1-3), and the unread figures started in
       slices that leave the parse queue its turn.
-- [ ] **G. One thing in pieces** (`docs/eval/fractured-names-2026-09-27.md`).
+- [x] (2026-09-27: 394 safe merges, the round on the clock, `split-names` and
+      `POST /graph/merge` for the rest, merges stamped with their run) **G. One thing in pieces** (`docs/eval/fractured-names-2026-09-27.md`).
       A `heal` ailment that lists them, merges for the safe classes (the
       same type twice, a type and its subtype) under a run that
       `unmerge_run` takes back, and a rule for which unrelated type pairs
@@ -247,7 +248,7 @@ recipe at once. Three independent failures, each wanting a different fix.
 - [x] **A name is not an identity** (2026-09-27): traverse walks one of the
       things a name reaches and names the others (`senses`, `type`), in the
       door, the MCP tool, the CLI, the UI and the surfer's walk.
-- [ ] **One thing in pieces** (`docs/eval/fractured-names-2026-09-27.md`):
+- [x] (stage G) **One thing in pieces** (`docs/eval/fractured-names-2026-09-27.md`):
       75 missed same-type merges (casing, ß/ss), 34 subtype pairs, ~1,700
       unrelated-type splits, mostly tool/method (640 names). A resolution
       rule for which type pairs may name one thing, with a person deciding,
