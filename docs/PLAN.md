@@ -37,7 +37,8 @@ stage safe, or a thing a user would notice.
 ### B. Make the invariants able to catch things — second, because it is
 ### cheap and it protects everything after it
 
-- [ ] The four kinds, the tests, and the measured pass: "Name what kind
+- [x] (done 2026-09-26: CLAUDE.md marks each invariant, tests/test_invariants.py,
+      the `attachment` pass) The four kinds, the tests, and the measured pass: "Name what kind
       of invariant each one is", below. **Invariant 6 was breached for
       months and no test could have failed**, which is the argument for
       doing this before the refactors rather than after them: a
@@ -77,7 +78,8 @@ stage safe, or a thing a user would notice.
       ruled English if any English document contained it, which let out
       `Mehl`, `Zucker`, `Salz`. Now a rate
       (`docs/eval/apfelkuchen-2026-09-26.md`, "After the re-extraction").
-- [ ] **Re-judge what the old rule ruled out.** 979 of the 4,103
+- [x] (done 2026-09-26: `prax maintain` pass `rejudge`, 979 overturned and
+      folded; a second run overturned none) **Re-judge what the old rule ruled out.** 979 of the 4,103
       entities marked `vocabulary:corpus` would be candidates under the
       rate: 59 ingredients, ~900 concepts and methods the German course
       material uses more than the English half does. Clearing the mark
@@ -121,7 +123,7 @@ failure a user can work around by adding a word.
 ### D. The two quadratics — fourth, because they cost hours whenever a
 ### pass runs over the library and nothing else waits on them
 
-- [ ] The embed hand-out's cursor and the delta's save frequency ("The
+- [x] (done 2026-09-26) The embed hand-out's cursor and the delta's save frequency ("The
       embed pass redoes its finished work twice a batch", below). Both
       small, both measured, and the re-embed that found them is done, so
       there is no rush and no reason to leave them.
@@ -176,20 +178,20 @@ explains it.
 apfelkuchen?" answered no, and the same question in English found the
 recipe at once. Three independent failures, each wanting a different fix.
 
-- [ ] **German compounds are one FTS token.** `Apfelkuchen` matches
+- [x] (stage C) **German compounds are one FTS token.** `Apfelkuchen` matches
       nothing; `Apfel` and `Kuchen` each match. For a compound query the
       keyword half of the hybrid contributes nothing at all, which is why
       the German answer held a chickpea pan and an insertion sort. German
       is 1,988 documents here and compounding is how the language builds
       nouns. FTS5 takes a custom tokenizer and a splitter needs a word
       list rather than a model, so this is the cheapest of the three.
-- [ ] **A common noun loses to a brand that owns the word.** `apple`
+- [x] (stage C, layers 1 and 2) **A common noun loses to a brand that owns the word.** `apple`
       returns Logic Pro and Logic Express manuals — correctly, by BM25,
       since they say it far more often. Even in English the fruit is
       unreachable until "bars" disambiguates. prax handles one name
       meaning two things in the *graph* (the `proposes` pass, the review
       queue) and not at all in retrieval.
-- [ ] **An ingredient list without a heading is not recognised**, so the
+- [x] (stage C) **An ingredient list without a heading is not recognised**, so the
       cross-lingual bridge has nothing standing on it. `prax.ingredients`
       cuts from a "Zutaten"/"Ingredients" heading; the Guardian writes its
       quantities into the prose. The library has **38 `ingredients` chunks
@@ -231,7 +233,11 @@ recipe at once. Three independent failures, each wanting a different fix.
 
 ### Retrieval
 
-- [ ] **The embed pass redoes its finished work twice a batch** (measured
+- [x] (stage D, 2026-09-26: the hand-out walks on from where it was, 770 ms
+      once a walk and then 1 ms against 755–800 every time, measured on a
+      copy halfway through; the delta is written every 30 s
+      (`door.vector_save_seconds`) and when the queue drains, and the rows a
+      killed door had not written are forgotten at start) **The embed pass redoes its finished work twice a batch** (measured
       2026-09-25, mid-re-embed; "round-trip bound" was the wrong first
       answer — marshalling is 7%). Two quadratic costs, both the same
       shape: work proportional to what is already done, repeated per
@@ -259,7 +265,7 @@ recipe at once. Three independent failures, each wanting a different fix.
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
 - [ ] **taco and tacos are different searches** (`niggles.txt`).
-- [ ] **The embed hand-out after a rechunk** — `GET /work/embed` and the
+- [x] (stage D: the walk skips what it has passed) **The embed hand-out after a rechunk** — `GET /work/embed` and the
       backlog it leaves (`docs/log.md`, "The night of 2026-09-20").
 - [ ] **The figures backlog, and why it was not moving** — 3,692
       waiting (`docs/log.md`, 2026-09-24).

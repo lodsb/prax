@@ -1522,3 +1522,27 @@ No German document in this library names an apple, so `Apfelkuchen`
 still does not reach the recipe by the graph. Every piece of the route is
 now in place and tested, and the library holds no word for it to cross
 on.
+
+## 2026-09-26: stage D, the embed hand-out and the delta
+
+- [x] **The hand-out walks on from where it was.** It used to scan from
+      the top every time, past every finished chunk. Now the door
+      remembers the lowest id it handed out and asks below it. It looks
+      first at the range above the highest id there was when the walk
+      began, so a new capture is not starved. At the bottom it looks once
+      more at the stretch it passed (what a lease let go) and starts a
+      new walk. The two counts that answer "nothing pending" are asked
+      only when a walk begins. On a snapshot copy with half the embedding
+      rows removed (the state it was measured in): **755–800 ms per
+      hand-out before; 770 ms once and then 1 ms after**, the same 1,600
+      distinct chunks in both arms.
+- [x] **The delta is written every 30 s** (`door.vector_save_seconds`),
+      after 20,000 vectors, and when the queue drains, not after every
+      batch (31 MB rewritten per 200-vector POST, the 10–17 s slow POSTs
+      of 2026-09-25).
+- [x] **What that costs at a kill is given back at start.** `prax up`
+      ends the door by terminating its job object, so no shutdown hook
+      runs. The warm-up thread asks the index about the embedding rows
+      newer than the index files (`store.reconcile_unsaved`, by
+      `contains`) and forgets the ones without a vector, so those chunks
+      are embedded again.

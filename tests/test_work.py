@@ -4,6 +4,7 @@ only writer."""
 
 from __future__ import annotations
 
+import itertools
 import json
 import os
 import time
@@ -1449,3 +1450,138 @@ def test_who_runs_warns_when_a_step_would_run_badly(
     got = work.who_runs(con, "extract")
     assert "queue rather than refuse" in got["warn"]
     assert got["why"] != "the server is not answering"  # still ran the rest
+
+
+# ------------------------------------------ the embed hand-out, Stage D
+
+
+_NOTES = itertools.count()
+
+
+def _chunks_for(client: TestClient, n: int) -> list[int]:
+    """``n`` documents of one chunk each; their chunk ids, highest first."""
+    con = client.app.state.con
+    for _ in range(n):
+        i = next(_NOTES)  # the same text twice is one document
+        client.post(
+            "/ingest", json={"text": f"note {i} about filters", "title": f"N{i}"}
+        )
+    return [r[0] for r in con.execute("SELECT id FROM chunks ORDER BY id DESC")]
+
+
+def _embed(client: TestClient, chunk_ids: list[int], model: str) -> None:
+    client.post(
+        "/work/embed",
+        json={
+            "model": model,
+            "chunks": [[c, "text", [0.1] * store.VEC_DIM] for c in chunk_ids],
+            "fields": [],
+        },
+    )
+
+
+def test_the_hand_out_walks_on_from_where_it_was(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """It asks below the lowest id it handed out, not from the top again:
+    the finished chunks above are never walked twice in one pass."""
+    emb = embeddings.current()
+    assert emb is not None
+    ids = _chunks_for(client, 12)
+    asked: list[dict[str, Any]] = []
+    real = store.pending_embeddings
+
+    def spy(con: Any, model: str, **kw: Any) -> list[dict[str, Any]]:
+        asked.append(kw)
+        return real(con, model, **kw)
+
+    monkeypatch.setattr(store, "pending_embeddings", spy)
+    first = client.get("/work/embed", params={"limit": 4}).json()["chunks"]
+    assert [c["chunk_id"] for c in first] == ids[:4]
+    _embed(client, [c["chunk_id"] for c in first], emb.name)
+    asked.clear()
+    second = client.get("/work/embed", params={"limit": 4}).json()["chunks"]
+    assert [c["chunk_id"] for c in second] == ids[4:8]
+    assert any(kw.get("below") == ids[3] for kw in asked)
+
+
+def test_a_new_chunk_is_handed_out_before_the_walk_goes_on(
+    client: TestClient,
+) -> None:
+    emb = embeddings.current()
+    assert emb is not None
+    ids = _chunks_for(client, 12)
+    first = client.get("/work/embed", params={"limit": 4}).json()["chunks"]
+    _embed(client, [c["chunk_id"] for c in first], emb.name)
+    newest = _chunks_for(client, 1)[0]
+    assert newest > ids[0]
+    got = [
+        c["chunk_id"]
+        for c in client.get("/work/embed", params={"limit": 4}).json()["chunks"]
+    ]
+    assert got[0] == newest and got[1:] == ids[4:7]
+
+
+def test_what_a_lease_let_go_is_found_when_the_walk_reaches_the_bottom(
+    client: TestClient,
+) -> None:
+    """A chunk handed out and never answered sits above the walk; the
+    look back at the bottom finds it, and nothing is left behind."""
+    con = client.app.state.con
+    emb = embeddings.current()
+    assert emb is not None
+    _chunks_for(client, 9)
+    dropped = client.get("/work/embed", params={"limit": 3}).json()["chunks"]
+    work._leases.clear()  # the worker died; the lease ran out
+    for _ in range(6):
+        batch = client.get("/work/embed", params={"limit": 3}).json()["chunks"]
+        if not batch:
+            break
+        _embed(client, [c["chunk_id"] for c in batch], emb.name)
+    assert store.count_pending_embeddings(con, emb.name) == 0
+    assert dropped
+
+
+def test_the_delta_is_written_on_a_timer_and_when_the_queue_drains(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    emb = embeddings.current()
+    assert emb is not None
+    saved: list[str] = []
+    monkeypatch.setattr(store, "save_vectors", lambda model: saved.append(model))
+    monkeypatch.setenv("PRAX_VECTOR_SAVE", "3600")
+    _chunks_for(client, 4)
+    batch = client.get("/work/embed", params={"limit": 2}).json()["chunks"]
+    _embed(client, [c["chunk_id"] for c in batch], emb.name)
+    assert saved == []  # not after every batch any more
+    rest = client.get("/work/embed", params={"limit": 10}).json()["chunks"]
+    _embed(client, [c["chunk_id"] for c in rest], emb.name)
+    assert client.get("/work/embed", params={"limit": 10}).json()["chunks"] == []
+    assert saved == [emb.name]  # the queue drained: written now
+    monkeypatch.setenv("PRAX_VECTOR_SAVE", "0")
+    _chunks_for(client, 1)
+    batch = client.get("/work/embed", params={"limit": 2}).json()["chunks"]
+    _embed(client, [c["chunk_id"] for c in batch], emb.name)
+    assert saved == [emb.name, emb.name]  # the timer
+
+
+def test_vectors_a_killed_door_had_not_written_are_embedded_again(
+    client: TestClient,
+) -> None:
+    """``prax up`` ends the door by terminating it, so nothing is written
+    at the end: the rows since the last write are asked about at start."""
+    con = client.app.state.con
+    emb = embeddings.current()
+    assert emb is not None
+    ids = _chunks_for(client, 3)
+    _embed(client, ids[:1], emb.name)
+    store.save_vectors(emb.name)
+    _embed(client, ids[1:], emb.name)  # taken in, never written
+    assert store.count_pending_embeddings(con, emb.name) == 0
+    # the door is killed: the delta in memory goes with it
+    path = store._delta_path(store._index_path(emb.name))
+    store._indexes.pop((str(path), True)).close()
+    got = store.reconcile_unsaved(con, emb.name)
+    assert got["forgotten"] == 2
+    left = {r["chunk_id"] for r in store.pending_embeddings(con, emb.name)}
+    assert left == set(ids[1:])

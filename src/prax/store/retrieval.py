@@ -1218,23 +1218,53 @@ def _all_chunks_embedded(con: sqlite3.Connection, model: str) -> bool:
 
 @_reading
 def pending_embeddings(
-    con: sqlite3.Connection, model: str, *, limit: int | None = None
+    con: sqlite3.Connection,
+    model: str,
+    *,
+    limit: int | None = None,
+    below: int | None = None,
+    above: int | None = None,
+    check: bool = True,
 ) -> list[dict[str, Any]]:
     """Chunks without a vector from ``model``: ``{chunk_id, kind, text}``,
     the newest first — new chunks are where the work is, and the scan
-    stops at ``limit`` as soon as it has them."""
-    if _all_chunks_embedded(con, model):
+    stops at ``limit`` as soon as it has them.
+
+    ``below`` and ``above`` bound the ids, which is what lets a caller
+    that remembers where it was skip what it has already been through.
+    From the top every time, the scan walked every finished chunk above
+    the ones still waiting: 1.2 M rows and 759 ms a hand-out halfway
+    through a re-embed, and worse the further it got (2026-09-25).
+
+    ``check=False`` skips the two counts that answer "nothing pending"
+    before the scan: a caller in the middle of a walk knows there is work,
+    and the counts were 300 ms of every hand-out once the walk was fast."""
+    if check and _all_chunks_embedded(con, model):
         return []
+    bounds = ""
+    args: list[Any] = [model]
+    if below is not None:
+        bounds += " AND c.id < ?"
+        args.append(below)
+    if above is not None:
+        bounds += " AND c.id > ?"
+        args.append(above)
     sql = (
         "SELECT c.id AS chunk_id, c.kind, c.text FROM chunks c"
         " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
-        f" WHERE (e.chunk_id IS NULL OR e.model != ?){_ASIDE} ORDER BY c.id DESC"
+        f" WHERE (e.chunk_id IS NULL OR e.model != ?){bounds}{_ASIDE}"
+        " ORDER BY c.id DESC"
     )
-    args: tuple[Any, ...] = (model,)
     if limit is not None:
         sql += " LIMIT ?"
-        args = (model, limit)
+        args.append(limit)
     return [dict(r) for r in con.execute(sql, args)]
+
+
+@_reading
+def newest_chunk(con: sqlite3.Connection) -> int:
+    """The highest chunk id: where "new since" starts."""
+    return int(con.execute("SELECT coalesce(max(id), 0) FROM chunks").fetchone()[0])
 
 
 @_reading
@@ -1475,6 +1505,54 @@ def warm_indexes(model: str) -> dict[str, int]:
 
 def save_document_vectors(model: str) -> dict[str, Any]:
     return _save_delta(_doc_index_path(model))  # index files only, as save_vectors
+
+
+@_serialized
+def reconcile_unsaved(con: sqlite3.Connection, model: str) -> dict[str, int]:
+    """Forget the bookkeeping rows written after the index files were last
+    saved whose vector is not in them, so those chunks are embedded again.
+
+    The door saves the delta on a timer rather than after every batch, and
+    ``prax up`` ends it by terminating its job object: no shutdown hook
+    runs, so the vectors of the last seconds can be lost while their rows
+    say they are there. Only the rows since the last save are asked
+    about, and the index answers with ``contains``, so this costs a
+    fraction of a second at start where ``compact_vectors`` costs minutes.
+    """
+    out = {"checked": 0, "forgotten": 0}
+    for path, table, key in (
+        (_index_path(model), "chunk_embeddings", "chunk_id"),
+        (_doc_index_path(model), "document_embeddings", "doc_id"),
+    ):
+        files = [f for f in (path, _delta_path(path)) if f.exists()]
+        if not files:
+            continue
+        saved = max(f.stat().st_mtime for f in files) - RECONCILE_SLACK
+        since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(saved))
+        ids = [
+            int(r[0])
+            for r in con.execute(
+                f"SELECT {key} FROM {table} WHERE model = ? AND embedded_at >= ?",
+                (model, since),
+            )
+        ]
+        if not ids:
+            continue
+        held = set(_index_has(path, ids))
+        lost = [i for i in ids if i not in held]
+        for i in range(0, len(lost), 500):
+            part = lost[i : i + 500]
+            con.execute(
+                f"DELETE FROM {table} WHERE {key} IN ({','.join('?' * len(part))})",
+                part,
+            )
+        con.commit()
+        out["checked"] += len(ids)
+        out["forgotten"] += len(lost)
+    return out
+
+
+RECONCILE_SLACK = 120.0  # seconds: a row stamped just before a save is asked about
 
 
 def save_vectors(model: str) -> dict[str, Any]:

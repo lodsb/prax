@@ -42,6 +42,7 @@ from dataclasses import asdict
 from typing import Any
 
 from prax import (
+    config,
     embeddings,
     extraction,
     inbox,
@@ -87,10 +88,96 @@ def _ask_reading(con: sqlite3.Connection, doc_id: int, extractor: str) -> bool:
     return True
 
 
+def _embed_batch(con: Any, model: str, limit: int, now: float) -> list[dict[str, Any]]:
+    """The next chunks to embed, without walking past the finished ones.
+
+    Two places to look. Above ``top``, the highest id when the walk began,
+    is what arrived since: a range the index answers at once, looked at
+    first. At or below it is the walk, which goes on below the lowest id
+    it handed out last time. When the walk reaches the bottom it looks
+    once more between there and ``top`` (what a lease let go, what a
+    crash forgot) and then begins again. A hand-out used to scan from the
+    top every time: 759 ms at the halfway mark of a re-embed, 1.2 M
+    finished rows walked each time (2026-09-25).
+    """
+    want = limit * 4
+
+    def free(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return [r for r in rows if _free("embed", r["chunk_id"], now)]
+
+    below, top = _embed_walk.get(model, (None, store.newest_chunk(con)))
+    # the range above the walk is a lookup; the counts that say "nothing
+    # pending" are asked only where a walk would begin, since a walk under
+    # way knows there is work
+    fresh = free(
+        store.pending_embeddings(con, model, limit=want, above=top, check=False)
+    )
+    walk: list[dict[str, Any]] = []
+    if len(fresh) < want:
+        start = below if below is not None else top + 1
+        walked = store.pending_embeddings(
+            con, model, limit=want, below=start, check=below is None
+        )
+        walk = free(walked)
+        if len(walked) < want and below is not None:
+            # the bottom: the stretch walked already, once, then a new walk
+            again = store.pending_embeddings(
+                con, model, limit=want, below=top + 1, above=below - 1, check=False
+            )
+            walk += free(again)
+            below = None
+    chosen = (fresh + walk)[:limit]
+    if not chosen:
+        # nothing to hand out: the walk is over, and what was taken in is
+        # written now rather than when the timer next looks
+        _embed_walk.pop(model, None)
+        save_if_due(model, force=True)
+        return []
+    walked_ids = [r["chunk_id"] for r in chosen if r["chunk_id"] <= top]
+    if walked_ids:
+        below = min(walked_ids)
+    _embed_walk[model] = (below, top)
+    return chosen
+
+
+SAVE_SECONDS = 30.0  # the delta is written at most this often while vectors arrive
+SAVE_VECTORS = 20_000  # or when this many have arrived since it was
+
+
+def save_if_due(model: str, *, force: bool = False) -> bool:
+    """Write the vector deltas when enough time or enough vectors have
+    passed since the last write, or when ``force`` and anything waits.
+
+    After every batch it rewrote the whole delta, which grows with the run:
+    31 MB at the halfway mark of a re-embed, the 10-17 s the door logged
+    as a slow POST (2026-09-25). What a door that is killed between two
+    writes loses, ``store.reconcile_unsaved`` gives back at start."""
+    waiting = _unsaved.get(model, 0)
+    if not waiting:
+        return False
+    every = config.number("door.vector_save_seconds", "PRAX_VECTOR_SAVE", SAVE_SECONDS)
+    last = _saved_at.setdefault(model, time.monotonic())
+    due = force or waiting >= SAVE_VECTORS or time.monotonic() - last >= every
+    if not due:
+        return False
+    store.save_vectors(model)
+    _unsaved[model] = 0
+    _saved_at[model] = time.monotonic()
+    return True
+
+
 SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
 _leases: dict[tuple[str, int], tuple[str, float]] = {}
+# where the embed hand-out is in its walk down the chunks, per model: the
+# lowest id it handed out (the next scan starts below it) and the highest
+# id there was when the walk began (anything above is new since, and is
+# looked for first, by a range the index answers at once)
+_embed_walk: dict[str, tuple[int | None, int]] = {}
+# vectors taken in since the delta was last written, and when that was
+_unsaved: dict[str, int] = {}
+_saved_at: dict[str, float] = {}
 # when a worker last asked for each step's work, since this door started.
 # A queue nobody asks about is the whole answer to "why is this pending"
 _asked: dict[str, str] = {}
@@ -678,11 +765,7 @@ def hand_out(
             "fields": [],
             "lease_seconds": 0,
         }
-    chunks = [
-        r
-        for r in store.pending_embeddings(con, emb.name, limit=limit * 4)
-        if _free("embed", r["chunk_id"], now)
-    ][:limit]
+    chunks = _embed_batch(con, emb.name, limit, now)
     fields = [
         r
         for r in store.pending_document_embeddings(con, emb.name, limit=limit * 4)
@@ -1053,7 +1136,8 @@ def take_in(
     _release("embed-doc", [d for d, _ in fields])
     if chunks:
         out["applied"] += store.store_embeddings(con, chunks, model)
-        store.save_vectors(model)
+        _unsaved[model] = _unsaved.get(model, 0) + len(chunks)
+        save_if_due(model)
     if fields:
         out["applied"] += store.store_document_embeddings(con, fields, model)
         store.save_document_vectors(model)

@@ -40,6 +40,14 @@ def _warm() -> None:
             store.warm_indexes(emb.name)
         con = store.connect()
         try:
+            if emb is not None and store.vectors_available():
+                # the vectors a killed door had not written yet: their rows
+                # are forgotten, so the chunks are embedded again
+                got = store.reconcile_unsaved(con, emb.name)
+                if got["forgotten"]:
+                    logging.getLogger("prax.door").info(
+                        "vectors lost at the last stop, to embed again: %s", got
+                    )
             store.warm_fts(con)
         finally:
             con.close()
