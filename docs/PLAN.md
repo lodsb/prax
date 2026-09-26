@@ -15,10 +15,9 @@ and the order is load-bearing rather than a preference — each stage is
 either a thing that might be broken now, a thing that makes the next
 stage safe, or a thing a user would notice.
 
-### A. Settle whether the surfer got worse — first, because it is the
-### only thing that may be worse today than last week
+### A. Settle whether the surfer got worse — done 2026-09-26, cleared
 
-- [ ] **What the surf sees when it walks changed under it.** `prax.surf`
+- [x] **What the surf sees when it walks changed under it.** `prax.surf`
       took `store.traverse(...)[:WALK_EDGES]`, the first N edges by id,
       and since 2026-09-25 passes `limit=WALK_EDGES` into traverse, which
       spends the cap round-robin across relations. Same count, different
@@ -27,10 +26,13 @@ stage safe, or a thing a user would notice.
       (`docs/eval/ask-equations-2026-09-26.md`), while every mechanical
       number rose.
 
-      `--repeat 3` on that arm, and a run with the old slice beside it.
-      Hours, and it either clears the change or names the fix. Nothing
-      else should be built on top of an open question about whether the
-      graph half of `ask` regressed.
+      Three repeats put it at 43.7 with a range of 42-46 against the
+      baseline's 45.0 (43-48), so the 42 was the bottom of a spread:
+      `cited` matches the baseline to the decimal, `match` is marginally
+      above, and `sources` went 90% to 100%. No regression demonstrated
+      and no second arm run — `docs/eval/ask-surf-walk-2026-09-26.md`,
+      which also records that 42 alone means nothing, for the next time
+      the surf changes.
 
 ### B. Make the invariants able to catch things — second, because it is
 ### cheap and it protects everything after it
