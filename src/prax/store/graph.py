@@ -797,6 +797,64 @@ def rename_display_language(con: sqlite3.Connection) -> dict[str, int]:
     }
 
 
+PRINTED_MAX = 120  # a printed name longer than this is a sentence
+
+
+@_serialized
+def keep_printed(
+    con: sqlite3.Connection,
+    name: str,
+    etype: str,
+    printed: str,
+    *,
+    lang: str | None = None,
+    source_doc: int | None = None,
+    producer: str | None = None,
+    run: str | None = None,
+) -> int:
+    """Keep the word a document printed for a thing the graph names
+    otherwise, as an alternative label in the document's language.
+
+    Since 2026-09-24 the extraction prompt writes a common noun in the
+    library's language, which is right for the graph and dropped
+    something: a new entity gets one label, its own name, so a German
+    recipe's "Äpfel" became `apple` with no German label anywhere. The
+    vocabulary pass it replaced had left the German word behind every
+    time it renamed, and that label is what a German query crosses to the
+    English documents on (`Apfelkuchen` -> `apfel` -> `apple`,
+    ``store.expand_query``). The prevention lost the repair's side effect,
+    and the side effect was the bridge
+    (``docs/eval/apfelkuchen-2026-09-26.md``).
+
+    Nothing is written when the printed word is the name, is empty, or is
+    too long to be a name. The entity is the one ``link`` landed on
+    (``_entity_id`` answers the same way it did there), and a word printed
+    again by another document is the same label, not a second one.
+    Returns the rows written.
+    """
+    said = " ".join((printed or "").split())
+    if (
+        not said
+        or len(said) > PRINTED_MAX
+        or said.casefold() == " ".join(name.split()).casefold()
+    ):
+        return 0
+    eid = _entity_id(con, name, etype)
+    row = con.execute(
+        "SELECT COALESCE(canonical_id, id) FROM entities WHERE id = ?", (eid,)
+    ).fetchone()
+    return add_label(
+        con,
+        int(row[0]),
+        said,
+        lang=lang,
+        kind="alt",
+        producer=producer,
+        run=run,
+        source_doc=source_doc,
+    )
+
+
 @_serialized
 def add_label(
     con: sqlite3.Connection,

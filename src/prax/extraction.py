@@ -275,6 +275,11 @@ class Triple:
     dst_type: str
     confidence: str
     evidence: str
+    # the names as the document printed them, where the graph's name is
+    # another (a common noun written in the library's language); empty
+    # when they are the same
+    src_as: str = ""
+    dst_as: str = ""
 
 
 @dataclass
@@ -294,6 +299,14 @@ def output_schema(onto: ontology.Ontology) -> dict[str, Any]:
         "properties": {
             "name": {"type": "string"},
             "type": {"type": "string", "enum": types},
+            # the name as the document printed it, only where it differs;
+            # the schema says so itself, since the shared rules must not
+            # name one output format's fields
+            "as": {
+                "type": "string",
+                "description": "the name as the document prints it, where"
+                " name is written in another language; omitted otherwise",
+            },
         },
         "required": ["name", "type"],
         "additionalProperties": False,
@@ -392,6 +405,9 @@ def system_prompt(
             " other type names one particular thing — a person, an organization, a"
             " title, a product, a place — so give its name exactly as the document"
             " prints it, accents and all, and never translate it."
+            " Where you write a name in another language than the document prints"
+            " it, give the printed word as well, in the field the answer has for"
+            " it, and leave it out where the name is the one printed."
         ),
         (
             "confidence: EXTRACTED when the text states it, INFERRED when it clearly"
@@ -475,6 +491,8 @@ def parse_output(data: dict[str, Any]) -> Extraction:
                 dst_type=str(t["dst"]["type"]),
                 confidence=str(t.get("confidence", "AMBIGUOUS")),
                 evidence=str(t.get("evidence", ""))[:300],
+                src_as=str(t["src"].get("as") or "").strip(),
+                dst_as=str(t["dst"].get("as") or "").strip(),
             )
         )
     return Extraction(
@@ -801,6 +819,7 @@ class ApplyReport:
     existing: int = 0
     queued: int = 0
     rejected: int = 0
+    printed: int = 0  # words kept as the document printed them
 
 
 def apply(
@@ -833,6 +852,7 @@ def apply(
             con, doc_id, producer=extractor, except_version=""
         )
     page_titles = store.page_titles(con)
+    lang = store.get_meta(con, doc_id).get("lang")
     for t in extraction.triples:
         edge = store.Edge(t.src, t.src_type, t.rel, t.dst, t.dst_type)
         # page and project entities exist only as pages in the store; a
@@ -886,18 +906,35 @@ def apply(
             continue
         if store.find_edges(con, edge):
             report.existing += 1
-            continue
-        store.link(
-            con,
-            edge,
-            confidence=t.confidence,
-            source_doc=doc_id,
-            ontology_version=onto.version,
-            evidence=t.evidence or None,
-            producer=extractor,
-            run=run,
-        )
-        report.linked += 1
+        else:
+            store.link(
+                con,
+                edge,
+                confidence=t.confidence,
+                source_doc=doc_id,
+                ontology_version=onto.version,
+                evidence=t.evidence or None,
+                producer=extractor,
+                run=run,
+            )
+            report.linked += 1
+        # the word the document printed, kept whether or not the edge was
+        # new: the label is about the thing, not about this fact
+        for name, etype, said in (
+            (t.src, t.src_type, t.src_as),
+            (t.dst, t.dst_type, t.dst_as),
+        ):
+            if said:
+                report.printed += store.keep_printed(
+                    con,
+                    name,
+                    etype,
+                    said,
+                    lang=lang,
+                    source_doc=doc_id,
+                    producer=extractor,
+                    run=run,
+                )
     for u in extraction.unmapped:
         if unmapped_is_noise(u):
             report.rejected += 1

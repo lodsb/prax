@@ -9,7 +9,7 @@ and the length of every field::
 
     summary<TAB>two or three sentences
     triple<TAB>src=...<TAB>src_type=...<TAB>rel=...<TAB>dst=...<TAB>dst_type=...
-      <TAB>confidence=...<TAB>evidence=...
+      <TAB>confidence=...<TAB>evidence=...[<TAB>src_as=...][<TAB>dst_as=...]
     unmapped<TAB>src=...<TAB>rel=...<TAB>dst=...<TAB>reason=...
 
 Fields carry their key: without it a 7B model swaps sources and targets
@@ -63,8 +63,11 @@ def grammar(
             (
                 'triple ::= "triple\\tsrc=" name "\\tsrc_type=" etype "\\trel=" rel'
                 ' "\\tdst=" name "\\tdst_type=" etype "\\tconfidence=" conf'
-                ' "\\tevidence=" text "\\n"'
+                ' "\\tevidence=" text srcas? dstas? "\\n"'
             ),
+            # the names as printed, where the name written is another
+            'srcas ::= "\\tsrc_as=" name',
+            'dstas ::= "\\tdst_as=" name',
             (
                 'unmapped ::= "unmapped\\tsrc=" name "\\trel=" name "\\tdst=" name'
                 ' "\\treason=" text "\\n"'
@@ -96,6 +99,7 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
                 f"triple{t}src=<name>{t}src_type=<type>{t}rel=<relation>"
                 f"{t}dst=<name>{t}dst_type=<type>{t}confidence=<EXTRACTED or"
                 f" INFERRED or AMBIGUOUS>{t}evidence=<verbatim quote>"
+                f"[{t}src_as=<name as printed>][{t}dst_as=<name as printed>]"
             ),
             f"unmapped{t}src=<name>{t}rel=<relation>{t}dst=<name>{t}reason=<why>",
             (
@@ -111,7 +115,10 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
                 " no relation; never add one to say what the text does not"
                 " mention."
                 " Names are written as printed, with spaces, never as"
-                " identifiers. Fields never contain tabs or line breaks; names"
+                " identifiers. Where a name is written in another language than"
+                " the document prints it, add src_as or dst_as with the printed"
+                " word; leave them out otherwise."
+                " Fields never contain tabs or line breaks; names"
                 f" stay under {NAME_CHARS} and quotes under {TEXT_CHARS}"
                 " characters. Fewer good triples beat many weak ones; stop"
                 " after the last line."
@@ -148,13 +155,20 @@ def parse(text: str) -> Extraction:
             ex.summary = whole_sentences(
                 " ".join(f for f in fields[1:] if f), SUMMARY_CHARS
             )
-        elif kind == "triple" and len(fields) == 8 and all(fields[1:7]):
+        elif kind == "triple" and 8 <= len(fields) <= 10 and all(fields[1:7]):
             key = tuple(f.lower() for f in fields[1:6])
             if key in seen:
                 repeats += 1
                 continue
             seen.add(key)
             src, src_type, rel, dst, dst_type, conf = fields[1:7]
+            # the optional fields are read by their key, not their place:
+            # either may be there without the other
+            printed = {
+                m.group(1): m.group(2).strip()
+                for f in raw.split(SEP)[8:]
+                if (m := _PRINTED.match(_TOKENS.sub("", f).strip()))
+            }
             ex.triples.append(
                 Triple(
                     _name(src),
@@ -164,6 +178,8 @@ def parse(text: str) -> Extraction:
                     dst_type,
                     conf,
                     evidence=fields[7][:TEXT_CHARS],
+                    src_as=printed.get("src_as", "")[:NAME_CHARS],
+                    dst_as=printed.get("dst_as", "")[:NAME_CHARS],
                 )
             )
         elif kind == "unmapped" and len(fields) == 5:
@@ -190,6 +206,7 @@ def parse(text: str) -> Extraction:
 
 
 _KEY = re.compile(r"^[a-z_]+=")
+_PRINTED = re.compile(r"^(src_as|dst_as)=(.*)$")
 _SNAKE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+$")
 
 
@@ -229,7 +246,11 @@ def render(ex: Extraction) -> str:
             t.confidence,
             _clean(t.evidence),
         ]
-        lines.append("triple" + SEP + _keyed(TRIPLE_KEYS, values))
+        line = "triple" + SEP + _keyed(TRIPLE_KEYS, values)
+        for key, said in (("src_as", t.src_as), ("dst_as", t.dst_as)):
+            if said:
+                line += f"{SEP}{key}={_clean(said)}"
+        lines.append(line)
     for u in ex.unmapped:
         values = [_clean(u.get(k, "")) for k in UNMAPPED_KEYS]
         lines.append("unmapped" + SEP + _keyed(UNMAPPED_KEYS, values))

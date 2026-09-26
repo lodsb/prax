@@ -214,6 +214,7 @@ from .graph import (  # noqa: F401
     get_review,
     hub_graph,
     invalidate_edge,
+    keep_printed,
     link,
     list_review,
     merge_entities,
