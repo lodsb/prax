@@ -16,6 +16,17 @@ later pass needs to answer "the same for six people".
 
 Unlike a comment or an advertisement this is not set aside: an
 ingredient list is exactly what a search for an ingredient should find.
+
+Not every list has a heading. The Guardian prints none, marks nothing as
+a list, sets the quantities in bold and runs the group name into the
+first item ("For the fruit filling**750g apples**"). So a list is also
+recognised by what its lines say (``looks_like_list``): enough lines
+that open with an amount, a real cooking unit among them, and the
+furniture a recipe prints and a datasheet does not — prep, cook, serves,
+makes. Measured over the library before it went in: 20 of the 32 kitchen
+documents that had no list got one, against 2 false alarms outside the
+kitchen domain in ten thousand documents
+(``docs/eval/apfelkuchen-2026-09-26.md``).
 """
 
 from __future__ import annotations
@@ -127,6 +138,91 @@ _AMOUNT = re.compile(
 )
 
 
+# the headingless test: how many item lines, what share of the lines,
+# and how long a paragraph may be and still be a line of a list
+MIN_ITEMS = 4
+MIN_SHARE = 0.4
+PIECE_MAX = 300
+_TIME = re.compile(
+    r"^(?:min|mins|minutes?|hrs?|hours?|secs?|std|stunden?|minuten?)\b", re.IGNORECASE
+)
+# what a recipe prints around its list and a datasheet does not
+_CUE = re.compile(
+    r"\b(?:prep|cook|serves|makes|portionen|personen|zubereitung|"
+    r"arbeitszeit|kochzeit|backzeit)\b",
+    re.IGNORECASE,
+)
+_BARE_CUE = re.compile(r"^\s*(?:prep|cook|serves|makes|ergibt)\s*:?\s*$", re.IGNORECASE)
+# furniture opens its line ("Prep 10 min", "Makes 12 bars"); a method
+# paragraph that says "cook, swirling" is prose, and without the anchor
+# it was taken for furniture and pulled into the list
+_CUE_LINE = re.compile(
+    r"^\s*(?:prep|cook|serves|makes|ergibt|zubereitung|arbeitszeit|"
+    r"kochzeit|backzeit)\b",
+    re.IGNORECASE,
+)
+_GROUP = re.compile(r"^\s*(?:for|f[üu]r)\s+(?:the|den|die|das)?\s*\S", re.IGNORECASE)
+
+
+def lines(text: str) -> list[str]:
+    """The lines of a region as a reader sees them. A bold span that opens
+    on a number starts a line of its own, because a page that sets its
+    quantities in bold often runs them into the words before."""
+    text = re.sub(r"\*\*(?=\d|[½⅓⅔¼¾])", "\n", text)
+    text = text.replace("**", "")
+    return [ln.strip() for ln in text.splitlines() if ln.strip()]
+
+
+def item_of(line: str) -> dict[str, Any] | None:
+    """A line read as an ingredient, or None: an amount and something
+    after it that is not a length of time ("10 min" is the prep, not an
+    ingredient)."""
+    if len(line) > 160:
+        return None
+    it = parse_item(line)
+    if "amount" not in it or not it.get("item") or _TIME.match(it["item"]):
+        return None
+    return it
+
+
+def looks_like_list(text: str) -> bool:
+    """Whether a run of text is an ingredient list without a heading.
+
+    Two ways in. Enough lines with an amount *and* a cooking unit say so
+    on their own. Countable ingredients ("4 courgettes") have no unit, so
+    a looser count is allowed as well — but only beside the furniture a
+    recipe prints, because a manual's numbered specifications look just
+    like a count of things: without the cue the loose test fired in seven
+    more documents outside the kitchen, a DSP textbook and a loudspeaker
+    manual among them.
+    """
+    found = lines(text)
+    if not found:
+        return False
+    items = [it for it in (item_of(ln) for ln in found) if it]
+    units = sum(1 for it in items if "unit" in it)
+    share = len(items) / len(found)
+    if units >= MIN_ITEMS and units / len(found) >= MIN_SHARE:
+        return True
+    return (
+        units >= 2
+        and len(items) >= MIN_ITEMS
+        and share >= MIN_SHARE
+        and bool(_CUE.search(text))
+    )
+
+
+def is_piece(text: str) -> bool:
+    """Whether a short paragraph belongs at the edge of a headingless
+    list: it holds an ingredient, or it is the recipe's furniture."""
+    if len(text) > PIECE_MAX:
+        return False
+    found = lines(text)
+    return any(
+        _CUE_LINE.match(ln) or _SERVINGS.match(ln) or item_of(ln) for ln in found
+    )
+
+
 def is_heading(title: str) -> bool:
     """Whether a heading opens an ingredient list."""
     return bool(_HEADING.match(title or ""))
@@ -190,6 +286,8 @@ def parse(text: str) -> dict[str, Any]:
     opens the next one ("Für die Soße"). ``servings`` is the line that
     says for how many, with the number where it can be read off.
     """
+    if not any(_MARKER.match(ln) for ln in text.splitlines()):
+        return _parse_unmarked(text)
     servings: dict[str, Any] | None = None
     groups: list[dict[str, Any]] = [{"name": None, "items": []}]
     for raw in text.splitlines():
@@ -210,6 +308,49 @@ def parse(text: str) -> dict[str, Any]:
                 continue
         if _MARKER.match(line):
             groups[-1]["items"].append(parse_item(line))
+    groups = [g for g in groups if g["items"]]
+    out: dict[str, Any] = {"groups": groups}
+    if servings:
+        out["servings"] = servings
+    out["count"] = sum(len(g["items"]) for g in groups)
+    return out
+
+
+def _parse_unmarked(text: str) -> dict[str, Any]:
+    """A list with no markers: every line that reads as an ingredient is
+    one, "For the filling" opens a group, "Makes" and "Serves" say for how
+    many. A line printed twice within a group is one item: a capture that
+    kept both the bold and the plain copy repeats lines, and not always
+    next to each other."""
+    servings: dict[str, Any] | None = None
+    groups: list[dict[str, Any]] = [{"name": None, "items": []}]
+    found = lines(text)
+    skip: set[int] = set()
+    for i, line in enumerate(found):
+        if i in skip:
+            continue
+        if _BARE_CUE.match(line) and i + 1 < len(found):
+            skip.add(i + 1)  # its value is the next line, not an ingredient
+            said = f"{line.strip()} {found[i + 1]}"
+            if servings is None and re.match(
+                r"\s*(serves|makes|ergibt)", line, re.IGNORECASE
+            ):
+                n = re.search(r"\d{1,3}", found[i + 1])
+                servings = {"text": said, "n": int(n.group()) if n else None}
+            continue
+        if servings is None:
+            m = _SERVINGS.match(line)
+            if m:
+                servings = {"text": line, "n": int(m.group("n"))}
+                continue
+        it = item_of(line)
+        if it:
+            here = groups[-1]["items"]
+            if all(x["text"] != it["text"] for x in here):
+                here.append(it)
+            continue
+        if _GROUP.match(line) and len(line) <= 60:
+            groups.append({"name": line.rstrip(" :"), "items": []})
     groups = [g for g in groups if g["items"]]
     out: dict[str, Any] = {"groups": groups}
     if servings:

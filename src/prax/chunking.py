@@ -479,6 +479,52 @@ def _ingredient_regions(els: list[_Element], taken: set[int]) -> list[tuple[int,
         if seen:
             out.append((i, last))
             taken.update(range(i, last + 1))
+    out += _headless_ingredient_regions(els, taken)
+    return sorted(out)
+
+
+def _headless_ingredient_regions(
+    els: list[_Element], taken: set[int]
+) -> list[tuple[int, int]]:
+    """An ingredient list that has no heading: a run of short paragraphs
+    between the prose, trimmed at both ends to what holds an ingredient or
+    the recipe's furniture, and kept when what is left reads as a list
+    (``ingredients.looks_like_list``)."""
+
+    def short(k: int) -> bool:
+        el = els[k]
+        return (
+            k not in taken
+            and el.kind == "para"
+            and len(el.text) <= (ingredients.PIECE_MAX)
+        )
+
+    out = []
+    i = 0
+    while i < len(els):
+        if not short(i):
+            i += 1
+            continue
+        j = i
+        while j + 1 < len(els) and (short(j + 1) or els[j + 1].kind == "page"):
+            j += 1
+        a, b = i, j
+        while a <= b and (
+            els[a].kind != "para" or not ingredients.is_piece(els[a].text)
+        ):
+            a += 1
+        while b >= a and (
+            els[b].kind != "para" or not ingredients.is_piece(els[b].text)
+        ):
+            b -= 1
+        if a <= b:
+            body = "\n\n".join(
+                els[k].text for k in range(a, b + 1) if els[k].kind == "para"
+            )
+            if ingredients.looks_like_list(body):
+                out.append((a, b))
+                taken.update(range(a, b + 1))
+        i = j + 1
     return out
 
 

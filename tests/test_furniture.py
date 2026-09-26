@@ -208,3 +208,83 @@ def test_an_ingredient_line_read_in_the_two_languages() -> None:
     }
     assert ingredients.is_heading("Ingredients") and ingredients.is_heading("Zutaten")
     assert not ingredients.is_heading("Instructions")
+
+
+# the shape of a Guardian recipe as trafilatura keeps it: no heading, no
+# list markers, the quantities in bold, the group name run into the first
+# item, and one pair of lines printed twice (doc 10070, 2026-09-26)
+HEADLESS = """# Brown butter apple and blackberry bars
+
+September is always a wistful time for me. Summer has all but slipped
+away, the days are noticeably shorter and the children are heading back
+to school. These bars are just the sort of thing to have waiting.
+
+Prep **10 min**
+
+Cook **1 hr 20 min**
+
+Makes **12 bars**
+
+For the crumb base **250g unsalted butter**, plus extra for greasing
+
+**220g plain flour
+95g rolled oats**
+
+95g rolled oats
+
+For the fruit filling**750g apples**, peeled and diced
+
+**80g caster sugar**
+
+1 cinnamon stick
+
+**300g blackberries**
+
+1 cinnamon stick
+
+Grease and line a 20cm x 30cm baking tin with greaseproof paper, leaving
+enough overhang to help lift out the bars later. Put the butter in a pan
+on a medium heat and cook, swirling, until it smells nutty and brown.
+"""
+
+
+def test_a_list_without_a_heading_is_found_by_what_its_lines_say() -> None:
+    box = [c for c in chunking.chunk(HEADLESS) if c.kind == "ingredients"]
+    assert len(box) == 1
+    c = box[0]
+    assert "750g apples" in c.text
+    assert "wistful" not in c.text and "Grease and line" not in c.text
+    assert c.text == HEADLESS[c.char_start : c.char_end]
+    data = c.data or {}
+    assert data["servings"]["n"] == 12
+    names = [g["name"] for g in data["groups"]]
+    assert names == ["For the crumb base", "For the fruit filling"]
+    items = [it["item"] for g in data["groups"] for it in g["items"]]
+    assert "apples, peeled and diced" in items
+    # printed twice by the capture, and not next to each other: one item
+    assert items.count("rolled oats") == 1 and items.count("cinnamon stick") == 1
+    apples = next(
+        it for g in data["groups"] for it in g["items"] if "apples" in it["item"]
+    )
+    assert (apples["amount"], apples["unit"]) == (750.0, "g")
+
+
+def test_a_datasheet_is_not_a_recipe() -> None:
+    """Numbered specifications look like a count of things. Without a
+    recipe's furniture the loose test fired in a DSP textbook and a
+    loudspeaker manual; the unit anchor and the cue keep them out."""
+    spec = (
+        "# Technical data\n\n"
+        "Frequency response 45 Hz to 21 kHz\n\n"
+        "2 inputs, balanced\n\n4 outputs\n\n1 power supply\n\n"
+        "3 mounting points\n\n12 kg net weight\n\n"
+        "The monitor is designed for near-field listening in small rooms.\n"
+    )
+    assert not [c for c in chunking.chunk(spec) if c.kind == "ingredients"]
+    assert not ingredients.looks_like_list(spec)
+
+
+def test_the_time_a_recipe_takes_is_not_an_ingredient() -> None:
+    assert ingredients.item_of("10 min") is None
+    assert ingredients.item_of("35 Minuten") is None
+    assert ingredients.item_of("4 courgettes")["item"] == "courgettes"
