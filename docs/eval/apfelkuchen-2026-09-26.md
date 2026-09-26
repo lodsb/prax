@@ -74,7 +74,31 @@ label to cross from.
 
 ## What this says
 
-The three failures are independent and want different fixes:
+### Corrected the same day, by the pass written to prevent exactly this
+
+The paragraph above says "38 ingredient lists in ten thousand documents",
+which is true and is the wrong denominator. The `attachment` pass
+(`store.maintain`, added for this) gives the right one on its first run:
+
+    in the kitchen domain               68
+    with an ingredient list             36   = 53%
+    entities                       121,651
+    named in a second language      13,357   = 11%
+
+So the bridge is **not** empty. Eleven per cent of entities carry a name
+in a second language, and just over half the kitchen documents have their
+ingredient list cut. What is small is the kitchen domain itself: 68
+documents. The apple recipe is in the 47% that lack a list, which is a
+parser gap worth fixing, not a mechanism with nothing on it.
+
+Worth keeping as written and corrected rather than quietly edited,
+because the error is the one the pass exists to stop: a count against the
+whole library said "nothing uses this" where a count against the domain
+says "half of it does". The denominator was the finding.
+
+## The three failures
+
+They are independent and want different fixes:
 
 | | fix | shape |
 |---|---|---|

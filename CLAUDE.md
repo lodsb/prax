@@ -9,7 +9,16 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
 
 ## Architecture invariants (do not violate without updating this file)
 
-1. **SQLite is the canonical store.** One database file
+Each says what kind of thing it is, because that decides what can catch a
+breach. **checked**: a test in the suite fails (`tests/test_invariants.py`).
+**enforced**: the code path makes it true, so breaking it means changing
+that path. **measured**: only a number says, and a number nobody takes is
+a wish — invariant 6 was breached for months because "keep responses
+small" is not a property of the code, and `traverse` answered 3.4 MB with
+no test that could have failed. **chosen**: a standing decision with a
+revisit threshold, under "Decision thresholds" below.
+
+1. **SQLite is the canonical store.** *(chosen)* One database file
    (`data/prax.db`). It holds FTS5 for BM25 and a plain `edges` table
    for the graph. `chunk_embeddings` is the record of which chunk has a
    vector from which model. `documents_fts` plus `document_embeddings`
@@ -24,14 +33,14 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    into the main file: the merged file is built beside it outside the
    index lock and swapped in under it. Nothing else lives outside
    SQLite. No Postgres, no Neo4j, no server databases.
-2. **Files are content-addressed.** Originals (PDFs, HTML snapshots)
+2. **Files are content-addressed.** *(enforced, partly checked)* Originals (PDFs, HTML snapshots)
    live at `data/archive/<sha256[:2]>/<sha256>`. The database stores
    metadata and the hash only. Never store blobs in SQLite. The document
    hash is the sha256 of the **original bytes**, never of extracted
    text. Parsed text is its own content-addressed artifact
    (`documents.text_hash`). Chunks are a disposable index derived from
    it and may be rebuilt at any time.
-3. **One door.** All mutations go through `prax.store`, which the
+3. **One door.** *(checked)* All mutations go through `prax.store`, which the
    FastAPI app in `prax.api` uses. Capture inboxes, importers, cron jobs
    and the MCP server are all clients of that layer. No module writes to
    SQLite directly except `prax.store`. Ingest is two steps: `register`
@@ -44,7 +53,7 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    caller writes `store.<name>` and never imports a submodule. Inside
    the package, a module imports only from the ones before it in that
    order.
-4. **Single writer.** The service process, the door, is the only
+4. **Single writer.** *(enforced)* The service process, the door, is the only
    writer. The recurring passes (parse, titles, extract, embed, and the
    likely tier of entity resolution) are done by workers. A worker
    fetches work and posts results through the door (`prax.work` hands
@@ -68,11 +77,11 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    WAL, a 30 s busy timeout and a retry with rollback in
    `store._serialized` are the safety net for those, not a mechanism to
    rely on.
-5. **The MCP server is a thin proxy.** `prax.mcp_server` exposes tools
+5. **The MCP server is a thin proxy.** *(checked)* `prax.mcp_server` exposes tools
    that each make one HTTP call to the door (`prax.client`, `PRAX_DOOR`,
    `PRAX_TOKEN`). It imports no store module, opens no database and
    contains no business logic. The door's handlers are the contract.
-6. **Agent-shaped endpoints.** `search` returns compact snippets and
+6. **Agent-shaped endpoints.** *(measured)* `search` returns compact snippets and
    ids, never full documents. `get` fetches one record fully but accepts
    an offset and a character limit. `traverse` expands 1–2 hops, and the
    two are not the same kind of answer: `edges` is the first hop, every
@@ -83,10 +92,10 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    (`graph:` in prax.yaml; `docs/eval/traverse-neighbourhood-2026-09-25.md`
    measured why: 3.4 MB to 76 KB). Keep
    responses small; Claude's context is the scarce resource.
-7. **Pi-class hardware target.** No dependency that needs more than
+7. **Pi-class hardware target.** *(measured)* No dependency that needs more than
    1 GB of resident RAM in the serving path. Parsing (Docling) and
    embedding run as batch jobs, never inline in a request.
-8. **Graph edges are evidence, not truth.** Every edge carries
+8. **Graph edges are evidence, not truth.** *(enforced)* Every edge carries
    `confidence` (EXTRACTED, INFERRED or AMBIGUOUS), `source_doc`,
    `ontology_version`, `producer` and `run` (which model, importer or
    person wrote it, in which batch or pass), and the bi-temporal
@@ -94,7 +103,7 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    invalidates edges by setting `valid_to`; it never deletes them.
    Provenance is a column on the fact, never an edge in the graph.
    Upgrading a producer's work is `retire_run` plus a new pass.
-9. **The ontology is small, versioned and modular.** Entity and
+9. **The ontology is small, versioned and modular.** *(enforced)* Entity and
    relation types live in `ontology/`, one YAML module per domain.
    `core.yaml` holds the shared types (person, organization, document,
    place, event, work, concept, tool) and the relations every kind of
@@ -133,7 +142,7 @@ browser tabs sent from an extension, a drop folder (`docs/sources.md`).
    Growing a module is its version bump. Renaming or removing a type is
    a data migration. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.
-10. **Importers never write to their source.** The Zotero importer
+10. **Importers never write to their source.** *(checked)* The Zotero importer
     works on a copy of `zotero.sqlite` opened read-only. Nothing in prax
     modifies a Zotero library, a browser profile, or the old zoetrope
     disk.

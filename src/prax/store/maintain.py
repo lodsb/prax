@@ -70,6 +70,7 @@ PASSES = (
     "lengths",
     "languages",
     "names",
+    "attachment",
 )
 ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
 
@@ -571,6 +572,68 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     }
 
 
+def _attachment(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """How much of the library each mechanism actually holds.
+
+    Two invariants cannot be tested, only measured (CLAUDE.md): 6, that an
+    answer stays small, and 7, that the serving path stays under a
+    gigabyte. A number nobody takes is a wish, and invariant 6 was
+    breached for months on exactly that account.
+
+    The rest of this is the lesson of one question in German
+    (`docs/eval/apfelkuchen-2026-09-26.md`). The route from `Apfel` to an
+    English recipe was built and measured on 2026-09-24, and almost
+    nothing was attached to it — 38 ingredient lists in ten thousand
+    documents — so it failed like a mechanism that does not work.
+    **A mechanism that works and is unattached is indistinguishable from
+    a broken one from outside**, and the only way to tell is to count what
+    uses it. So this pass counts, every night, and writes the counts on
+    its job row where the Jobs view shows them.
+    """
+    out: dict[str, Any] = {}
+    live = " AND json_extract(meta,'$.retired') IS NULL"
+    counts = {
+        "documents": f"SELECT COUNT(*) FROM documents WHERE 1=1{live}",
+        "with a summary": "SELECT COUNT(*) FROM documents"
+        f" WHERE json_extract(meta,'$.summary') IS NOT NULL{live}",
+        "with a language": "SELECT COUNT(*) FROM documents"
+        f" WHERE json_extract(meta,'$.lang') IS NOT NULL{live}",
+        "with section summaries": "SELECT COUNT(*) FROM documents"
+        f" WHERE json_extract(meta,'$.sections.text_hash') = text_hash{live}",
+        "long enough for sections": "SELECT COUNT(*) FROM documents"
+        f" WHERE text_len >= 60000{live}",
+        "with an ingredient list": "SELECT COUNT(DISTINCT doc_id) FROM chunks"
+        " WHERE kind = 'ingredients'",
+        "in the kitchen domain": "SELECT COUNT(*) FROM documents"
+        f" WHERE json_extract(meta,'$.domains') LIKE '%kitchen%'{live}",
+        "with a reference list": "SELECT COUNT(DISTINCT doc_id) FROM chunks"
+        " WHERE kind = 'reference'",
+        "entities": "SELECT COUNT(*) FROM entities WHERE canonical_id IS NULL",
+        "named in a second language": "SELECT COUNT(DISTINCT entity_id) FROM"
+        " entity_labels WHERE lang IS NOT NULL AND lang != 'en'",
+    }
+    for name, sql in counts.items():
+        try:
+            out[name] = int(con.execute(sql).fetchone()[0])
+        except sqlite3.Error:  # a count nobody can take is not a failed pass
+            out[name] = -1
+    # the pairs worth reading as a ratio, because the bare count hides the gap
+    for whole, part in (
+        ("long enough for sections", "with section summaries"),
+        ("in the kitchen domain", "with an ingredient list"),
+    ):
+        if out.get(whole, 0) > 0 and out.get(part, -1) >= 0:
+            out[f"{part} / {whole}"] = f"{100 * out[part] / out[whole]:.0f}%"
+    job.note(
+        ", ".join(
+            f"{k} {v}"
+            for k, v in out.items()
+            if k.endswith("%") or k.startswith(("with an", "named in"))
+        )
+    )
+    return out
+
+
 def _names(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """Every entity's shown name rebuilt from its labels.
 
@@ -715,6 +778,7 @@ _RUN = {
     "lengths": _lengths,
     "languages": _languages,
     "names": _names,
+    "attachment": _attachment,
     "rechunk": _rechunk,
 }
 
