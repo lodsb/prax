@@ -108,6 +108,11 @@ def canonical() -> str:
     return str(got or CANONICAL)
 
 
+def expected() -> tuple[str, ...]:
+    """The languages this host expects documents in (``parse.languages``)."""
+    return _likely()
+
+
 def _likely() -> tuple[str, ...]:
     """The languages this host expects, from ``parse.languages``."""
     from prax import config

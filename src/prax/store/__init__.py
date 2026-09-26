@@ -215,6 +215,7 @@ from .graph import (  # noqa: F401
     hub_graph,
     invalidate_edge,
     keep_printed,
+    label_in_language,
     link,
     list_review,
     merge_entities,
@@ -231,6 +232,7 @@ from .graph import (  # noqa: F401
     select_for_extraction,
     traverse,
     traverse_map,
+    unlabelled_names,
     unmerge_run,
 )
 from .jobs import (  # noqa: F401

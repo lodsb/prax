@@ -734,3 +734,122 @@ def test_a_ruling_does_not_overwrite_a_pass_s_own_word(client: TestClient) -> No
         (eid, "garlic cloves"),
     ).fetchone()
     assert row["producer"] == "vocabulary"  # not the corpus's marker
+
+
+# ------------------------------------------ the other way: a word to cross on
+
+
+def _english_entity(con: Any, client: TestClient, name: str, etype: str) -> int:
+    """An entity of ``etype`` named in an English document, with an edge."""
+    doc_id = client.post("/ingest", json={"text": ENGLISH, "title": "Pasta"}).json()[
+        "doc_id"
+    ]
+    meta = store.get_meta(con, doc_id)
+    meta["lang"] = "en"
+    store.set_meta(con, doc_id, meta)
+    rel, src = (
+        ("calls_for", "recipe") if etype == "ingredient" else ("about", "document")
+    )
+    store.link(
+        con,
+        store.Edge("Pasta", src, rel, name, etype),
+        confidence="EXTRACTED",
+        source_doc=doc_id,
+        producer="test",
+        run="test",
+    )
+    row = con.execute(
+        "SELECT id FROM entities WHERE name = ? AND type = ?", (name, etype)
+    ).fetchone()
+    return int(row["id"])
+
+
+def test_the_languages_to_label_in_are_the_library_s_readers(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A language the library holds a share of, unless the host says."""
+    con = client.app.state.con
+    _english_entity(con, client, "apple", "ingredient")
+    assert vocabulary.label_languages(con) == ()
+    _german_entity(con, client, "Olivenöl", "ingredient")
+    assert vocabulary.label_languages(con) == ("de",)
+    monkeypatch.setenv("PRAX_GRAPH_LABEL_LANGUAGES", "fr,en")
+    assert vocabulary.label_languages(con) == ("fr",)
+
+
+def test_an_english_name_is_offered_for_a_german_word(client: TestClient) -> None:
+    con = client.app.state.con
+    apple = _english_entity(con, client, "apple", "ingredient")
+    title = _english_entity(con, client, "olive-brine vinaigrette with capers", "dish")
+    _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    offered = {r["id"]: r for r in store.unlabelled_names(con, ("de",))}
+    assert offered[apple]["into"] == "de"
+    # a dish's title is not what a German query types
+    assert title not in offered
+    # a German name is the other half's business
+    assert {r["name"] for r in offered.values()} == {"apple"}
+
+
+def test_the_german_word_is_what_a_german_query_crosses_on(
+    client: TestClient,
+) -> None:
+    con = client.app.state.con
+    apple = _english_entity(con, client, "apple", "ingredient")
+    assert store.label_in_language(con, apple, "Apfel", lang="de", run="r6") == (
+        "labelled"
+    )
+    assert "apple" in store.expand_query(con, "Apfel")[0]
+    # an alternative label: the name the graph shows does not move
+    row = con.execute("SELECT name FROM entities WHERE id = ?", (apple,)).fetchone()
+    assert row["name"] == "apple"
+    assert store.unlabelled_names(con, ("de",)) == []
+    # and a run of them is taken back whole
+    store.unmerge_run(con, "r6")
+    assert [r["id"] for r in store.unlabelled_names(con, ("de",))] == [apple]
+
+
+def test_the_same_word_in_german_keeps_the_name_english(client: TestClient) -> None:
+    """German says Mozzarella too. The answer is written, in German, so
+    the entity is not asked again, and the English name stays English."""
+    con = client.app.state.con
+    eid = _english_entity(con, client, "mozzarella", "ingredient")
+    assert store.label_in_language(con, eid, "Mozzarella", lang="de") == "same"
+    langs = {(ln["label"], ln["lang"]) for ln in store.entity_labels(con, eid)}
+    assert ("mozzarella", "en") in langs and ("mozzarella", "de") in langs
+    assert store.unlabelled_names(con, ("de",)) == []
+
+
+def test_the_step_asks_the_other_way_when_nothing_is_foreign(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    con = client.app.state.con
+    apple = _english_entity(con, client, "apple", "ingredient")
+    _german_entity(con, client, "Knoblauchzehen", "ingredient")
+    monkeypatch.setenv("PRAX_VOCABULARY", "stub")
+    items = client.get("/work/vocabulary").json()["items"]
+    assert [(i["name"], i.get("into")) for i in items] == [
+        ("Knoblauchzehen", None),
+        ("apple", "de"),
+    ]
+    runtime = Runtime({"Knoblauchzehen": "garlic", "apple": "Apfel"})
+    results = worker.do_vocabulary(items, runtime)
+    assert "What does German call it?" in runtime.asked[1]
+    rep = client.post("/work/vocabulary", json={"results": results}).json()
+    assert rep["actions"] == {"renamed": 1, "labelled": 1}
+    assert apple in store.entities_by_label(con, "Apfel")
+    work._leases.clear()
+    assert client.get("/work/vocabulary").json()["items"] == []
+
+
+def test_a_refused_answer_still_converges(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A model that writes a description instead of a word has still
+    been asked: the name is written as it is, and not asked again."""
+    con = client.app.state.con
+    _english_entity(con, client, "apple", "ingredient")
+    _german_entity(con, client, "Olivenöl", "ingredient")
+    items = store.unlabelled_names(con, ("de",))
+    runtime = Runtime({"apple": "eine runde Frucht, die an Bäumen wächst und rot ist"})
+    results = worker.do_vocabulary(items, runtime)
+    assert results == [{"id": items[0]["id"], "name": "apple", "into": "de"}]

@@ -487,8 +487,10 @@ def do_vocabulary(
     results = []
     for it in items:
         entity_id, name = it["id"], str(it.get("name") or "")
+        into = it.get("into")
         if runtime is None or not name:
-            results.append({"id": entity_id, "name": name, "changed": False})
+            if not into:  # no model, no word in another language
+                results.append({"id": entity_id, "name": name, "changed": False})
             continue
         try:
             got = vocabulary.rename(
@@ -496,10 +498,19 @@ def do_vocabulary(
                 name,
                 str(it.get("type") or "concept"),
                 context=str(it.get("context") or ""),
+                into=into,
             )
         except models.ServerNotReady as exc:
             _say(log_, f"name {entity_id}: not yet — {exc}")
             results.append({"id": entity_id, "defer": True})
+            continue
+        if into:
+            # a refused answer writes the name as it is: the pass has asked,
+            # and a label in the language is what says so
+            said = got.name if got is not None else name
+            results.append({"id": entity_id, "name": said, "into": into})
+            if said != name:
+                _say(log_, f"name {entity_id}: {name!r} in {into} is {said!r}")
             continue
         if got is None:
             results.append({"id": entity_id, "name": name, "changed": False})

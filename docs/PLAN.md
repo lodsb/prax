@@ -89,6 +89,14 @@ stage safe, or a thing a user would notice.
       no German document in this library names an apple, so the route
       from `Apfelkuchen` to `apple` is built and has nothing to cross
       on. The route is only as good as the words the library holds.
+- [x] **The word the other way** — the vocabulary step now also writes
+      a German label for each common English name of up to three words
+      the library's documents use, so a German query crosses where no
+      German document printed the word. Kitchen subset dry run: 203
+      names at 0.14 s each, 162 labelled, 37 the same word, 4 refused,
+      about 6 wrong (blackberry jam → Himbeermarmelade, cumin → Kümmel).
+      Library-wide it offers 22,389, mostly research concepts: about 50
+      minutes of the local model once the door runs it.
 - [ ] **The brand collision** is then what stands between an English
       "apple cake" and the Logic Pro manuals. Still design work.
 

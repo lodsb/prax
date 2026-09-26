@@ -50,6 +50,7 @@ from prax import (
     pipeline,
     store,
     summaries,
+    vocabulary,
 )
 from prax.parsers import queue
 from prax.steps import READING_STEPS, STEPS, WATCHED_STEPS
@@ -464,10 +465,17 @@ def hand_out(
         if models.resolve("vocabulary") is None:
             return {"step": step, "items": [], "lease_seconds": 0}
         leased = tuple(i for (s, i) in _leases if s == step and not _free(step, i, now))
-        items = [
-            {**r, "context": _named_in(con, r["id"])}
-            for r in store.foreign_names(con, limit=limit, skip=leased)
-        ]
+        found = store.foreign_names(con, limit=limit, skip=leased)
+        # then the other way: the word a reader of another language would
+        # search for, where no document of theirs has printed it yet
+        if len(found) < limit:
+            found += store.unlabelled_names(
+                con,
+                vocabulary.label_languages(con),
+                limit=limit - len(found),
+                skip=leased + tuple(r["id"] for r in found),
+            )
+        items = [{**r, "context": _named_in(con, r["id"])} for r in found]
         _lease(step, [i["id"] for i in items], worker)
         return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
     if step == "sections":
@@ -946,7 +954,16 @@ def take_in(
                 out["errors"].append({"id": entity_id, "error": r["error"]})
                 continue
             try:
-                if r.get("changed"):
+                if r.get("into"):
+                    action = store.label_in_language(
+                        con,
+                        entity_id,
+                        str(r["name"]),
+                        lang=str(r["into"]),
+                        producer="vocabulary",
+                        run=run,
+                    )
+                elif r.get("changed"):
                     got = store.name_in_english(
                         con,
                         entity_id,

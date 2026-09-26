@@ -43,9 +43,16 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import answers, language
+from prax import answers, config, language
 
 MAX_WORDS = 6  # a longer "name" is a sentence, and not this pass's business
+# the other way, a longer name is a dish's title: "olive-brine vinaigrette"
+# came back as "Olivenpökellake-Dressing", and a title is not what a query
+# in another language crosses on (2026-09-26)
+LABEL_WORDS = 3
+# a language the library's documents are written in this much of is one a
+# reader of it asks in, and worth a label for every common name
+LABEL_SHARE = 0.05
 LOOK_AT = 200  # chunks of a name's occurrences to look through, at most
 
 _WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
@@ -72,6 +79,52 @@ def system() -> str:
         " Give the established term, lowercase unless it is a proper noun,"
         f" singular, and never a description: if you do not know the {into}"
         " term, repeat the name you were given."
+    )
+
+
+def system_into(lang: str) -> str:
+    """What the model is told when it writes a name *out* of the library's
+    language: the word a reader of ``lang`` would search for. Not
+    lowercase, which is English's rule and not German's."""
+    into = language.name(lang) or lang
+    source = language.name(language.canonical()) or "English"
+    return (
+        "You are given the name of a concept, method, technique, material,"
+        f" ingredient, dish or cuisine as a {source} document called it, and"
+        f" you give the name {into} uses for the same thing."
+        " Answer with that name alone: no preamble, no quotation marks, no"
+        " explanation, no full stop."
+        " Keep a person's name, a place, a product or a standard inside the"
+        " name exactly as printed and translate only the words around it."
+        f" Give the established term, written as {into} writes it, singular,"
+        f" and never a description: if {into} uses the same word, or you do"
+        " not know the term, repeat the name you were given."
+    )
+
+
+def label_languages(con: sqlite3.Connection) -> tuple[str, ...]:
+    """The languages every common name is also written in, as a label.
+
+    ``graph.label_languages`` when the host says; otherwise the languages
+    it expects (``parse.languages``) that hold at least ``LABEL_SHARE`` of
+    the library's documents, which asks the library whose readers there
+    are. Here that is German alone: 2,051 documents, where French has 41.
+    """
+    chosen = config.words("graph.label_languages", "PRAX_GRAPH_LABEL_LANGUAGES")
+    canonical = language.canonical()
+    if config.setting("graph.label_languages") is not None or chosen:
+        return tuple(x for x in chosen if x != canonical)
+    counts = dict(
+        con.execute(
+            "SELECT json_extract(meta, '$.lang'), count(*) FROM documents"
+            " WHERE json_extract(meta, '$.lang') IS NOT NULL GROUP BY 1"
+        ).fetchall()
+    )
+    total = sum(counts.values()) or 1
+    return tuple(
+        x
+        for x in language.expected()
+        if x != canonical and counts.get(x, 0) / total >= LABEL_SHARE
     )
 
 
@@ -180,7 +233,9 @@ def acceptable(name: str, given: str) -> str | None:
     return None
 
 
-def user_message(name: str, kind: str, *, context: str = "") -> str:
+def user_message(
+    name: str, kind: str, *, context: str = "", into: str | None = None
+) -> str:
     """What the model is given: the name, what kind of thing it is, and
     where it was said, as sentences — a model handed labelled fields
     fills the form in and returns the labels (``prax.summaries``).
@@ -198,17 +253,29 @@ def user_message(name: str, kind: str, *, context: str = "") -> str:
             f"It was named in a document called “{context.strip()}”, which may"
             " be about something else: name this thing, not the document."
         )
-    parts.append("What does English call it?")
+    lang = language.name(into or language.canonical()) or "English"
+    parts.append(f"What does {lang} call it?")
     return " ".join(parts)
 
 
-def rename(runtime: Any, name: str, kind: str, *, context: str = "") -> Naming | None:
+def rename(
+    runtime: Any,
+    name: str,
+    kind: str,
+    *,
+    context: str = "",
+    into: str | None = None,
+) -> Naming | None:
     """The English name of the thing, or None when the model did not
     manage one. ``changed`` is False when the name was already English,
-    which is the commonest answer and costs only the call."""
+    which is the commonest answer and costs only the call.
+
+    ``into`` asks the other way: the name a reader of that language uses
+    for a thing the library names in its own, which is what a German
+    query crosses on when no German document has named the thing yet."""
     out, usage = runtime.chat(
-        system(),
-        user_message(name, kind, context=context),
+        system_into(into) if into else system(),
+        user_message(name, kind, context=context, into=into),
         max_tokens=40,
         temperature=0.0,
         stop=["\n"],

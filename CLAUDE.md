@@ -367,6 +367,13 @@ reference `docs/ask.md`.
   model that translates anyway can still hand the word over in an
   optional field (`src_as`/`dst_as`, the JSON entity's `as`), which
   `store.keep_printed` keeps.
+  The same step also works the other way: a common name of up to three
+  words that the library's own documents use gets the word a reader of
+  each `graph.label_languages` language would search for (by default,
+  the expected languages that hold 5% of the documents), as an
+  alternative label (`store.unlabelled_names`, `store.label_in_language`).
+  That is the bridge when no document in that language has printed the
+  word (`Apfelkuchen` -> `apfel` -> `apple`).
 - Timestamps are UTC ISO-8601 strings to the second with `Z`, from
   `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.
 - Tests must not touch `data/`. Use tmp_path fixtures and set

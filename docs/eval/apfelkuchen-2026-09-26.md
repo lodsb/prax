@@ -190,3 +190,30 @@ on. It is the attachment lesson a third time. The route is built from
 what the library holds, so a word no German document uses has no
 bridge until one does. Only a dictionary would change that, and "the
 library is the word list" is the choice not to have one.
+
+## The word the other way
+
+The library holds no German word for an apple because no German
+document printed one. So the vocabulary step now also asks the other
+way. For a common name of up to three words that the library's own
+documents use, it asks what a reader of German would search for. It
+writes the answer as an alternative label, so the name the graph shows
+does not move. The languages are the expected ones that hold at least
+5% of the documents: German alone here (2,051 documents; French has 41).
+
+Dry run over the kitchen subset, read-only, with the real candidate
+query and prompt:
+
+| | |
+|---|---|
+| offered | 203 (22,389 library-wide, mostly research concepts) |
+| time | 0.14 s a name; the candidate query 0.7–1.6 s |
+| labelled | 162, `apple` → `Apfel` among them |
+| the same word in German | 37 (Mozzarella, Prosecco, Tahini) |
+| refused, written as they are | 4 |
+| wrong | about 6: blackberry jam → Himbeermarmelade, cumin → Kümmel (caraway), white short-grain rice → Klebreis, sourdough baking → Sauerteigbrot |
+
+A three-word limit keeps out dish titles, which an earlier probe turned
+into literal translations nobody types ("Olivenpökellake-Dressing"). A
+wrong label adds one false route from a German word to an English
+entity. It changes no name, and `unmerge_run` takes a run back whole.

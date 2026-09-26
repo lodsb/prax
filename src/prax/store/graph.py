@@ -1339,6 +1339,133 @@ def foreign_names(
     return out
 
 
+def unlabelled_names(
+    con: sqlite3.Connection,
+    langs: tuple[str, ...],
+    *,
+    limit: int = 200,
+    skip: tuple[int, ...] = (),
+) -> list[dict[str, Any]]:
+    """Entities the library names in its own language and a reader of
+    ``langs`` would not find: no label in that language yet.
+
+    The other half of ``foreign_names``. That one folds a German word
+    into the English name when a German document printed it; this one
+    writes the German word for an English name no German document has
+    printed. "Apfelkuchen" split into `apfel` and found nothing, because
+    nothing in this library had ever called an apple `Apfel`
+    (docs/eval/apfelkuchen-2026-09-26.md).
+
+    Only a common type (``naming: common``), only a name the library's
+    own documents use, so it is known to be the library's word, and only
+    a name of up to ``vocabulary.LABEL_WORDS`` words: a longer one is a
+    dish's title, which came back as a literal translation nobody would
+    type. A label in the language, whoever wrote it, takes the entity
+    out, so the pass converges on its own answers.
+    """
+    from prax import language, ontology, vocabulary
+
+    common = sorted(ontology.current().common_types)
+    if not common or not langs:
+        return []
+    marks = ",".join("?" * len(common))
+    canonical = language.canonical()
+    out: list[dict[str, Any]] = []
+    for lang in langs:
+        rows = con.execute(
+            f"""
+            SELECT e.id, e.name, e.type, count(*) AS edges
+              FROM entities e
+              JOIN (SELECT src AS ent FROM edges x
+                      JOIN documents d ON d.id = x.source_doc
+                     WHERE x.valid_to IS NULL
+                       AND json_extract(d.meta, '$.lang') = ?
+                     UNION ALL
+                    SELECT dst FROM edges x
+                      JOIN documents d ON d.id = x.source_doc
+                     WHERE x.valid_to IS NULL
+                       AND json_extract(d.meta, '$.lang') = ?) x ON x.ent = e.id
+             WHERE e.canonical_id IS NULL AND e.type IN ({marks})
+               AND length(e.name) - length(replace(e.name, ' ', '')) < ?
+               AND NOT EXISTS (SELECT 1 FROM entity_labels l
+                                WHERE l.entity_id = e.id AND l.lang = ?)
+             GROUP BY e.id
+             ORDER BY edges DESC, e.id
+             LIMIT ?
+            """,
+            (
+                canonical,
+                canonical,
+                *common,
+                vocabulary.LABEL_WORDS,
+                lang,
+                limit + len(skip),
+            ),
+        ).fetchall()
+        for r in rows:
+            if r["id"] in skip:
+                continue
+            out.append(
+                {
+                    "id": int(r["id"]),
+                    "name": str(r["name"]),
+                    "type": str(r["type"]),
+                    "edges": int(r["edges"]),
+                    "into": lang,
+                }
+            )
+            if len(out) >= limit:
+                return out
+    return out
+
+
+@_serialized
+def label_in_language(
+    con: sqlite3.Connection,
+    entity_id: int,
+    label: str,
+    *,
+    lang: str,
+    producer: str = "vocabulary",
+    run: str | None = None,
+    confidence: str | None = "INFERRED",
+) -> str:
+    """Write what a reader of ``lang`` calls this entity, as an
+    alternative label: the shown name does not move.
+
+    ``same`` when the word is the entity's own name (German says
+    `Mozzarella` too). It is written all the same, in that language,
+    which is what keeps the entity from being asked again. The entity's
+    own name is placed in the library's language first when it has none:
+    ``add_label`` otherwise moves a language-less label of the same text
+    into ``lang``, and an English name would become a German one.
+    """
+    from prax import language
+
+    row = con.execute("SELECT name FROM entities WHERE id = ?", (entity_id,)).fetchone()
+    if row is None:
+        raise ValueError(f"no entity {entity_id}")
+    name = str(row["name"])
+    con.execute(
+        "UPDATE entity_labels SET lang = ? WHERE entity_id = ? AND label = ?"
+        " AND lang IS NULL",
+        (language.canonical(), entity_id, name),
+    )
+    same = label.strip().casefold() == name.casefold()
+    add_label(
+        con,
+        entity_id,
+        name if same else label.strip(),
+        lang=lang,
+        kind="alt",
+        producer=producer,
+        run=run,
+        confidence=confidence,
+    )
+    con.commit()
+    return "same" if same else "labelled"
+
+
 @_serialized
 def _mark_corpus_ruling(
     con: sqlite3.Connection, ruled_out: list[tuple[int, str]]
