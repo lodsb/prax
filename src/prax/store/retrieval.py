@@ -919,7 +919,8 @@ def _search_hits(
     if not vectors_ready:
         if kind is None:  # hybrid without vectors: the field too
             _field_lists(con, query, depth, or_expr, sensed, lists, names, weights)
-        fused = _rrf([_without(x, aside) for x in lists], names, fetch, weights)
+        fused = _rrf([_without(x, aside) for x in lists], names, _drawn(fetch), weights)
+        fused = _domain_prior(con, fused, fetch, keywords)
         return _finish(con, fused, query, limit, doctype, expr=full_expr)
     assert emb is not None
     with took("embed"):
@@ -942,9 +943,118 @@ def _search_hits(
         with took("dvec"):
             lists.append(_field_vec_search(con, emb.name, vector, depth))
         names.append("dvec")
-    fused = _rrf([_without(x, aside) for x in lists], names, fetch, weights)
+    fused = _rrf([_without(x, aside) for x in lists], names, _drawn(fetch), weights)
+    fused = _domain_prior(con, fused, fetch, keywords)
     with took("finish"):
         return _finish(con, fused, query, limit, doctype, expr=full_expr)
+
+
+# A question for one of the small domains is recognised by its own
+# candidates: when several of the best fused hits are in a domain that
+# holds a sliver of the library, that domain's hits get one more vote.
+# "apple cake" put the Logic manuals first, which say Apple hundreds of
+# times, over the recipes the other word was asking for (2026-09-26).
+# The words' own domain statistics could not say it: a domain of thirty
+# documents gives any German word a lift of 20 to 90 by accident.
+DOMAIN_PRIOR = True
+PRIOR_DEPTH = 30  # the fused candidates looked at
+PRIOR_MIN = 3  # of them in one small domain; chance gives it 0.2
+PRIOR_SMALL = 0.2  # a domain holding less than this share of the documents
+PRIOR_WEIGHT = 1.0  # the vote, as a list's weight in the fusion
+
+
+def _drawn(fetch: int) -> int:
+    """How deep the fusion is drawn: deep enough for the prior to see."""
+    return max(fetch, PRIOR_DEPTH) if DOMAIN_PRIOR else fetch
+
+
+def _domain_prior(
+    con: sqlite3.Connection,
+    fused: list[dict[str, Any]],
+    fetch: int,
+    terms: list[list[str]],
+) -> list[dict[str, Any]]:
+    """The fused hits with the vote of the small domain they point to, if
+    they point to one, trimmed to ``fetch``.
+
+    Pointing to one is two things: at least ``PRIOR_MIN`` of the best
+    candidates are in it, and its candidates hold every word of the
+    question. The count alone moved three recipes that say "apple" once
+    above the manuals for "Apple Loops" in a small library; no recipe says
+    "loops", so that is not a question for the kitchen.
+
+    Nothing is filtered: a hit outside the domain keeps its score, and the
+    domain's hits gain what a list ranking them would give. A research
+    question never gets it, because research is nearly the whole library
+    and no small domain gathers three of its candidates.
+    """
+    if not DOMAIN_PRIOR or not fused:
+        return fused[:fetch]
+    ids = sorted({h["doc_id"] for h in fused})
+    marks = ",".join("?" * len(ids))
+    domains: dict[int, list[str]] = {
+        int(r[0]): json.loads(r[1]) if r[1] else []
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.domains') FROM documents"
+            f" WHERE id IN ({marks})",
+            ids,
+        )
+    }
+    counts: dict[str, int] = {}
+    for h in fused[:PRIOR_DEPTH]:
+        for d in domains.get(h["doc_id"], []):
+            counts[d] = counts.get(d, 0) + 1
+    small = {
+        d: n
+        for d, n in counts.items()
+        if n >= PRIOR_MIN and _share(con, frozenset({d})) < PRIOR_SMALL
+    }
+    if not small:
+        return fused[:fetch]
+    best = max(small.values())
+    chosen = [d for d, n in small.items() if n == best]
+    if len(chosen) > 1:  # two domains as likely: no preference
+        return fused[:fetch]
+    domain = chosen[0]
+    inside = [h["doc_id"] for h in fused if domain in domains.get(h["doc_id"], [])]
+    if not _holds_every_term(con, inside, terms):
+        return fused[:fetch]
+    rank = 0
+    for h in fused:
+        if domain in domains.get(h["doc_id"], []):
+            rank += 1
+            h["score"] += PRIOR_WEIGHT / (RRF_K + rank)
+            h["domain_rank"] = rank
+    fused.sort(key=lambda h: -h["score"])
+    return fused[:fetch]
+
+
+def _holds_every_term(
+    con: sqlite3.Connection, doc_ids: list[int], terms: list[list[str]]
+) -> bool:
+    """Do these documents between them hold every term (any of its
+    alternatives)? Asked of their chunks by rowid, which the keyword index
+    answers a chunk at a time rather than by scanning a common word."""
+    rowids = [
+        int(r[0])
+        for r in con.execute(
+            f"SELECT id FROM chunks WHERE doc_id IN ({','.join('?' * len(doc_ids))})",
+            doc_ids,
+        )
+    ]
+    if not rowids:
+        return False
+    marks = ",".join("?" * len(rowids))
+    for term in terms:
+        expr = _expr([term], all_terms=False)
+        hit = con.execute(
+            f"SELECT 1 FROM chunks_fts WHERE rowid IN ({marks})"
+            " AND chunks_fts MATCH ? LIMIT 1",
+            (*rowids, expr),
+        ).fetchone()
+        if hit is None:
+            return False
+    return True
 
 
 def _field_lists(

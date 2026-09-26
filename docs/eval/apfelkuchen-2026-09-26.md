@@ -261,3 +261,35 @@ inside the ranking joined every matched chunk first, which took 940 ms
 for "signal synthesis". A small one (kitchen) keeps the filter inside.
 Measured: +0 to +20 ms on most questions, +107 ms on "Signalsynthese",
 where `synthesis` has many edges to look through.
+
+## Layer 2: a question for one of the small domains
+
+Layer 1 can't help an English "apple cake", because the user typed
+"apple". The graph can't say the word is ambiguous either. The only
+things it calls "apple" are the ingredient and a stray research venue.
+The brand is in the manuals' text, not in the graph under that name.
+
+The words' own statistics didn't work. The domains are very uneven
+(research 10,185 documents; kitchen 68, studio 38, workshop 35, craft
+27), and in a domain of thirty documents any common German word gets a
+lift of 20–96 by accident. By that measure half the eval questions
+"belonged" to craft.
+
+What worked is the search's own candidates. If at least three of the
+best thirty fused hits are in one small domain (chance gives 0.2), and
+those hits hold every word of the question between them, that domain's
+hits get one more vote in the fusion, ranked as their own list. Nothing
+is filtered. The every-word condition came from a test: in a small
+library, three recipes that say "apple" once got the vote for "Apple
+Loops". No recipe says "loops".
+
+| | before | after |
+|---|---|---|
+| eval, English (20, by Zotero key) | 13 found, MRR 0.392 | the same |
+| eval, German (19) | 7 found, MRR 0.131 | the same |
+| eval top tens moved | — | 0 of 39 |
+| apple cake | recipe 4th, manuals 2nd and 3rd | recipe 2nd, manuals 3rd and 4th |
+| apple juice | cocktail 1st, manuals 2nd–4th | cocktail, recipe, then manuals |
+| Apfelkuchen | two recipes, then Melodyne, maths | the top four all kitchen |
+| Apple Loops, apple logic, apple | manuals | unchanged, no vote |
+| cost | | +0 to +25 ms |

@@ -102,10 +102,16 @@ stage safe, or a thing a user would notice.
       the apple recipe second, after a cocktail with apple juice, and no
       Logic manual on the first page. 43 of the 44 eval questions keep
       their top ten; the German set is unchanged (9 found, 4.58).
-- [ ] **Layer 2: a word the user typed that the graph knows is
-      ambiguous** (an English "apple cake"): the other words of the query
-      choose the domain, as a soft preference. Measure it.
-- [ ] **The brand collision** is then what stands between an English
+- [x] **Layer 2: a question for one of the small domains** gets
+      a soft extra vote for that domain's hits. The graph could not be
+      the trigger: nothing called "apple" is the brand, and a domain of
+      30 documents gives any German word a lift of 20–90 by accident.
+      The trigger is the query's own candidates. "apple cake": the recipe
+      goes from 4th to 2nd. "Apple Loops", "apple" and every eval question
+      are unchanged.
+- [x] **The brand collision** — done by the two layers above. Left: the
+      manuals are still 3rd and 4th for "apple cake", which a preference
+      rather than a filter accepts. Was: what stands between an English
       "apple cake" and the Logic Pro manuals. Still design work.
 
 Brand polysemy (`apple` → Logic Pro manuals) is deliberately not here.

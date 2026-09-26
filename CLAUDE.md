@@ -177,7 +177,13 @@ searched only where the thing it names lives: its type's domains and
 the domains of the documents that say something about it. It is merged
 with the plain words by BM25 score, not given a list of its own, so it
 adds no vote (`store.expand_query_senses`; `Apfelkuchen` -> `apple`
-the ingredient, not the Logic manuals).
+the ingredient, not the Logic manuals). A question for one of the small
+domains (kitchen, studio, workshop, craft; research is nearly the whole
+library) is recognised by its own candidates: when three of the best
+thirty fused hits are in one, and they hold every word of the question
+between them, that domain's hits get one more vote in the fusion. It is
+a preference and never a filter (`DOMAIN_PRIOR`; "apple cake" against
+"Apple Loops").
 An optional cross-encoder rerank (bge-reranker-v2-m3) runs over the
 fused top-N; benchmark it on the target hardware before enabling it by
 default. Graph traversal expands entry-point hits 1–2 hops. Complement

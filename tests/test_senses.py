@@ -115,3 +115,69 @@ def test_a_sense_adds_no_vote_of_its_own(library: Library) -> None:
     score = {h["doc_id"]: h["score"] for h in before}
     assert [h["doc_id"] for h in after] == [recipe]
     assert after[0]["score"] == pytest.approx(score[recipe])
+
+
+# ------------------------ layer 2: a question for one of the small domains
+
+CAKE = "Apple cake for a crowd. " + "Stir, rest and serve warm. " * 12
+LOOPS = "Apple Loops, Apple Loops Utility, Apple Loops library. " * 8
+PAPER = "A study of distributed systems and their failure modes. " * 8
+
+
+@pytest.fixture()
+def shelves(con: sqlite3.Connection) -> Iterator[tuple[sqlite3.Connection, list[int]]]:
+    """Twenty research documents, four of them manuals full of Apple, and
+    three recipes in the kitchen that say apple cake once each."""
+    for i in range(16):
+        d = int(store.ingest_text(con, PAPER + f" part {i}.", title=f"P{i}")["doc_id"])
+        store.set_domains(con, d, ["research"])
+    for i in range(4):
+        d = int(store.ingest_text(con, LOOPS + f" v{i}.", title=f"Logic {i}")["doc_id"])
+        store.set_domains(con, d, ["research"])
+    recipes = []
+    for i in range(3):
+        d = int(store.ingest_text(con, CAKE + f" {i}.", title=f"Cake {i}")["doc_id"])
+        store.set_domains(con, d, ["kitchen"])
+        recipes.append(d)
+    yield con, recipes
+    retrieval.DOMAIN_PRIOR = True
+
+
+def _top(con: sqlite3.Connection, query: str) -> list[int]:
+    return [int(h["doc_id"]) for h in store.search(con, query, limit=10)]
+
+
+def test_a_small_domain_the_candidates_gather_in_gets_a_vote(
+    shelves: tuple[sqlite3.Connection, list[int]],
+) -> None:
+    con, recipes = shelves
+    retrieval.DOMAIN_PRIOR = False
+    before = _top(con, "apple cake")
+    retrieval.DOMAIN_PRIOR = True
+    after = _top(con, "apple cake")
+    assert set(after[:3]) == set(recipes)
+    # a preference, not a filter: what was found is still found
+    assert set(before) == set(after)
+
+
+def test_the_brand_s_own_question_keeps_its_manuals(
+    shelves: tuple[sqlite3.Connection, list[int]],
+) -> None:
+    """Three recipes out of thirty candidates would do; "Apple Loops"
+    gathers none of them, so nothing moves."""
+    con, recipes = shelves
+    retrieval.DOMAIN_PRIOR = False
+    before = _top(con, "Apple Loops")
+    retrieval.DOMAIN_PRIOR = True
+    assert _top(con, "Apple Loops") == before
+    assert not set(before[:4]) & set(recipes)
+
+
+def test_the_whole_library_is_no_small_domain(
+    shelves: tuple[sqlite3.Connection, list[int]],
+) -> None:
+    """Research is nearly every document, so however many of the
+    candidates are research, it earns no vote."""
+    con, _ = shelves
+    hits = store.search(con, "distributed systems failure", limit=10)
+    assert all("domain_rank" not in h for h in hits)
