@@ -56,9 +56,10 @@ revisit threshold, under "Decision thresholds" below.
 4. **Single writer.** *(enforced)* The service process, the door, is the only
    writer. The recurring passes (parse, titles, extract, embed, and the
    likely tier of entity resolution) are done by workers. A worker
-   fetches work and posts results through the door (`prax.work` hands
-   out and takes in, `prax.worker` does the work, `scripts/work.py` runs
-   it) and never opens the database. The door consumes its own drop
+   fetches work and posts results through the door (each step is one
+   object in `prax.steps`, its door half and its worker half together;
+   `prax.work` is the protocol they share, `prax.worker` the worker,
+   `scripts/work.py` runs it) and never opens the database. The door consumes its own drop
    folder and holds the vector delta indexes. Inside the door, reads
    use a connection per request thread and never take the store's lock
    (`store._reading`: a WAL snapshot and the busy-retry only). Writes

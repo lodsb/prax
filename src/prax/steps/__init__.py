@@ -54,3 +54,32 @@ READING_STEPS = {
     "formulas": "formulas",
     "polish": "polish",
 }
+
+
+# which module holds each step's object: loaded when a step is first asked
+# for, so the names above stay free of imports for the thin client
+_HOMES = {
+    "parse": "parse",
+    "titles": "writing",
+    "summaries": "writing",
+    "sections": "writing",
+    "vocabulary": "vocabulary",
+    "extract": "extract",
+    "promote": "extract",
+    "typing": "graph",
+    "resolve": "graph",
+    "adjudicate": "graph",
+    "embed": "embed",
+}
+
+
+def get(name: str):
+    """The step called ``name``: what the door hands out for it, what the
+    worker does with that, what the door takes in (``prax.steps.base.Step``).
+    """
+    if name not in STEPS:
+        raise ValueError(f"unknown step {name!r}; steps are {STEPS}")
+    import importlib
+
+    module = importlib.import_module(f"prax.steps.{_HOMES[name]}")
+    return module.REGISTERED[name]

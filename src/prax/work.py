@@ -42,22 +42,15 @@ from dataclasses import asdict
 from typing import Any
 
 from prax import (
-    config,
-    embeddings,
     extraction,
-    inbox,
     models,
-    ontology,
     pipeline,
+    steps,
     store,
-    summaries,
-    vocabulary,
 )
-from prax.parsers import queue
-from prax.steps import READING_STEPS, STEPS, WATCHED_STEPS
+from prax.steps import STEPS, WATCHED_STEPS
 
 LEASE_SECONDS = 900
-SECTIONS_BATCH = 3  # documents a batch: each is a book's worth of calls
 # a worker's "not yet" (the server it needs is loading or down) keeps the
 # item leased this long, so the next batches hold other work instead of
 # the same ten items again — the follow-ups of the first papers marker
@@ -71,113 +64,10 @@ ROLE_WORK = {
 }
 
 
-def _vision_is_free() -> bool:
-    """Whether a reading by the vision model costs nothing (a local
-    server): the readings the door asks for on its own are only those."""
-    return pipeline.vision_is_free()
-
-
-def _ask_reading(con: sqlite3.Connection, doc_id: int, extractor: str) -> bool:
-    """A reading request the door places for a capture — an image to
-    describe, figures to read — when the model is free and nobody asked
-    for one yet."""
-    meta = store.get_meta(con, doc_id)
-    if meta.get("reading"):
-        return False
-    store.request_reading(con, doc_id, extractor, by="door")
-    return True
-
-
-def _embed_batch(con: Any, model: str, limit: int, now: float) -> list[dict[str, Any]]:
-    """The next chunks to embed, without walking past the finished ones.
-
-    Two places to look. Above ``top``, the highest id when the walk began,
-    is what arrived since: a range the index answers at once, looked at
-    first. At or below it is the walk, which goes on below the lowest id
-    it handed out last time. When the walk reaches the bottom it looks
-    once more between there and ``top`` (what a lease let go, what a
-    crash forgot) and then begins again. A hand-out used to scan from the
-    top every time: 759 ms at the halfway mark of a re-embed, 1.2 M
-    finished rows walked each time (2026-09-25).
-    """
-    want = limit * 4
-
-    def free(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-        return [r for r in rows if _free("embed", r["chunk_id"], now)]
-
-    below, top = _embed_walk.get(model, (None, store.newest_chunk(con)))
-    # the range above the walk is a lookup; the counts that say "nothing
-    # pending" are asked only where a walk would begin, since a walk under
-    # way knows there is work
-    fresh = free(
-        store.pending_embeddings(con, model, limit=want, above=top, check=False)
-    )
-    walk: list[dict[str, Any]] = []
-    if len(fresh) < want:
-        start = below if below is not None else top + 1
-        walked = store.pending_embeddings(
-            con, model, limit=want, below=start, check=below is None
-        )
-        walk = free(walked)
-        if len(walked) < want and below is not None:
-            # the bottom: the stretch walked already, once, then a new walk
-            again = store.pending_embeddings(
-                con, model, limit=want, below=top + 1, above=below - 1, check=False
-            )
-            walk += free(again)
-            below = None
-    chosen = (fresh + walk)[:limit]
-    if not chosen:
-        # nothing to hand out: the walk is over, and what was taken in is
-        # written now rather than when the timer next looks
-        _embed_walk.pop(model, None)
-        save_if_due(model, force=True)
-        return []
-    walked_ids = [r["chunk_id"] for r in chosen if r["chunk_id"] <= top]
-    if walked_ids:
-        below = min(walked_ids)
-    _embed_walk[model] = (below, top)
-    return chosen
-
-
-SAVE_SECONDS = 30.0  # the delta is written at most this often while vectors arrive
-SAVE_VECTORS = 20_000  # or when this many have arrived since it was
-
-
-def save_if_due(model: str, *, force: bool = False) -> bool:
-    """Write the vector deltas when enough time or enough vectors have
-    passed since the last write, or when ``force`` and anything waits.
-
-    After every batch it rewrote the whole delta, which grows with the run:
-    31 MB at the halfway mark of a re-embed, the 10-17 s the door logged
-    as a slow POST (2026-09-25). What a door that is killed between two
-    writes loses, ``store.reconcile_unsaved`` gives back at start."""
-    waiting = _unsaved.get(model, 0)
-    if not waiting:
-        return False
-    every = config.number("door.vector_save_seconds", "PRAX_VECTOR_SAVE", SAVE_SECONDS)
-    last = _saved_at.setdefault(model, time.monotonic())
-    due = force or waiting >= SAVE_VECTORS or time.monotonic() - last >= every
-    if not due:
-        return False
-    store.save_vectors(model)
-    _unsaved[model] = 0
-    _saved_at[model] = time.monotonic()
-    return True
-
-
 SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
 _leases: dict[tuple[str, int], tuple[str, float]] = {}
-# where the embed hand-out is in its walk down the chunks, per model: the
-# lowest id it handed out (the next scan starts below it) and the highest
-# id there was when the walk began (anything above is new since, and is
-# looked for first, by a range the index answers at once)
-_embed_walk: dict[str, tuple[int | None, int]] = {}
-# vectors taken in since the delta was last written, and when that was
-_unsaved: dict[str, int] = {}
-_saved_at: dict[str, float] = {}
 # when a worker last asked for each step's work, since this door started.
 # A queue nobody asks about is the whole answer to "why is this pending"
 _asked: dict[str, str] = {}
@@ -314,19 +204,6 @@ def release_deferred(step: str, extractors: tuple[str, ...] = ()) -> int:
     return len(gone)
 
 
-def _named_in(con: sqlite3.Connection, entity_id: int) -> str:
-    """The title of a document that named this entity: context for a
-    model asked what English calls the thing, since a bare word can be
-    two things and the document says which."""
-    row = con.execute(
-        "SELECT d.title FROM edges x JOIN documents d ON d.id = x.source_doc"
-        " WHERE x.valid_to IS NULL AND (x.src = ? OR x.dst = ?) AND d.title IS NOT NULL"
-        " LIMIT 1",
-        (entity_id, entity_id),
-    ).fetchone()
-    return str(row["title"]) if row else ""
-
-
 def _free(step: str, item: int, now: float) -> bool:
     held = _leases.get((step, item))
     return held is None or held[1] < now
@@ -370,33 +247,6 @@ def leases() -> dict[str, int]:
     return out
 
 
-def _nothing_to_read(con: sqlite3.Connection, doc_id: int, req: dict[str, Any]) -> bool:
-    """Whether a figures request has nothing left for the vision model:
-    every figure it would read is read. Only the figures reading knows
-    this cheaply; every other reading is handed out as it stands."""
-    if req.get("extractor") != "figures":
-        return False
-    from prax import models
-
-    try:
-        spec = models.resolve("vision")
-    except Exception:  # noqa: BLE001 - a config error is not this queue's
-        return False
-    if spec is None:
-        return False
-    every = str(req.get("mode") or "") == "all"
-    return store.figures_to_read(con, doc_id, model=spec.runtime_name, every=every) == 0
-
-
-def _takes_previous(extractor: str) -> bool:
-    from prax import parsers
-
-    try:
-        return parsers.by_name(extractor).previous
-    except KeyError:
-        return False
-
-
 def _in_scope(con: sqlite3.Connection, doc_id: int, scope: str) -> bool:
     if scope == "all":
         return True
@@ -428,7 +278,10 @@ def hand_out(
     """A batch of work for ``step``, leased to ``worker``. A step whose
     model costs money offers nothing once the host's budget for the day
     or the month is spent (``prax.budget``); the reason comes back with
-    the empty batch, and the worker says it."""
+    the empty batch, and the worker says it. What the batch is, is the
+    step's (``prax.steps``)."""
+    from prax.steps.base import HandOut
+
     limit = _check(step, scope, limit)
     _asked[step] = store.now()
     from prax import budget
@@ -436,363 +289,11 @@ def hand_out(
     may, why = budget.allows(con, step)
     if not may:
         return {"step": step, "items": [], "lease_seconds": 0, "held": why}
-    now = time.monotonic()
-    if step in ("extract", "promote"):
-        onto = ontology.current()
-        if step == "promote":
-            # the flagged documents the promote step's model has not read
-            # (whatever the scope: a flag is explicit); images included,
-            # since the expensive pass reads the picture again first
-            try:
-                producer = extraction.current("promote").name
-            except RuntimeError:  # the step is off on this host
-                return {"step": step, "items": [], "lease_seconds": 0}
-            due = [
-                d["doc_id"]
-                for d in store.promoted_documents(con, producer=producer)
-                if not d["done"]
-            ]
-        else:
-            due = store.select_for_extraction(
-                con,
-                ontology_version=onto.version,
-                min_chars=pipeline.MIN_CHARS,
-                onto=onto,
-                sources=tuple(pipeline.CAPTURE_SOURCES)
-                if scope == "captures"
-                else None,
-                skip_mime_prefix="image/",
-            )
-        items = []
-        for doc_id in due:
-            if len(items) >= limit or not _free(step, doc_id, now):
-                continue
-            doc = extraction.build_input(con, doc_id)
-            item = {
-                "doc_id": doc_id,
-                "title": doc.title,
-                "header": doc.header,
-                "text": doc.text,
-                "domains": doc.domains,
-                "ontology_version": doc.ontology().version,
-            }
-            if step == "promote":
-                row = store.get_document(con, doc_id)
-                if row and (row["mime"] or "").startswith("image/"):
-                    path = row.get("original_path")
-                    item["image"] = {
-                        "original": f"/doc/{doc_id}/original",
-                        "filename": path.replace("\\", "/").rsplit("/", 1)[-1]
-                        if path
-                        else None,
-                        "previous": row["text"],
-                    }
-            items.append(item)
-        _lease(step, [i["doc_id"] for i in items], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    if step == "titles":
-        items = []
-        for doc_id, why in pipeline.titles_needed(con, untried_only=True):
-            if len(items) >= limit or not _free(step, doc_id, now):
-                continue
-            if not _in_scope(con, doc_id, scope):
-                continue
-            doc = store.get_document(con, doc_id, max_chars=60000)
-            if doc is None:
-                continue
-            items.append(
-                {
-                    "doc_id": doc_id,
-                    "why": why,
-                    "title": doc["title"] or "",
-                    "text": doc["text"],
-                    "filename": pipeline.file_name(doc),
-                    "mime": doc["mime"],
-                }
-            )
-        _lease(step, [i["doc_id"] for i in items], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    if step == "summaries":
-        # a summary written in another language than the document field,
-        # translated by the summaries model. No document is read: the
-        # summary itself is the whole input, which is why this is seconds
-        # of a local model and not a re-extraction
-        if models.resolve("summaries") is None:
-            return {"step": step, "items": [], "lease_seconds": 0}
-        items = []
-        for doc_id, lang in pipeline.summaries_needed(con, untried_only=True):
-            if len(items) >= limit or not _free(step, doc_id, now):
-                continue
-            if not _in_scope(con, doc_id, scope):
-                continue
-            meta = store.get_meta(con, doc_id)
-            # always from the summary as first written, where we kept it:
-            # translating a translation compounds the first one's mistakes
-            held = summaries.native(meta.get("summaries") or {})
-            summary = str(
-                held[1] if held and held[0] == lang else meta.get("summary") or ""
-            )
-            if not summary:
-                continue
-            row = store.get_document(con, doc_id, max_chars=0)
-            items.append(
-                {
-                    "doc_id": doc_id,
-                    "lang": lang,
-                    "summary": summary,
-                    "title": (row["title"] if row else "") or "",
-                }
-            )
-        _lease(step, [i["doc_id"] for i in items], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    if step == "vocabulary":
-        # entities named in the language of the document that named them,
-        # where English calls the thing something else. Over the graph,
-        # not over documents, so scope does not apply
-        if models.resolve("vocabulary") is None:
-            return {"step": step, "items": [], "lease_seconds": 0}
-        leased = tuple(i for (s, i) in _leases if s == step and not _free(step, i, now))
-        found = store.foreign_names(con, limit=limit, skip=leased)
-        # then the other way: the word a reader of another language would
-        # search for, where no document of theirs has printed it yet
-        if len(found) < limit:
-            found += store.unlabelled_names(
-                con,
-                vocabulary.label_languages(con),
-                limit=limit - len(found),
-                skip=leased + tuple(r["id"] for r in found),
-            )
-        items = [{**r, "context": _named_in(con, r["id"])} for r in found]
-        _lease(step, [i["id"] for i in items], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    if step == "sections":
-        # a long document's chapters, read one at a time. The whole
-        # document never goes to the model: a section does, and only the
-        # sections long enough to be chapters
-        if models.resolve("sections") is None:
-            return {"step": step, "items": [], "lease_seconds": 0}
-        # one item is a whole book, and a book is up to forty model calls:
-        # a batch of thirty was 1,200 of them before anything was posted,
-        # and the worker's heartbeat went stale inside it (2026-09-24)
-        limit = min(limit, SECTIONS_BATCH)
-        items = []
-        for doc_id in store.sections_needed(con, limit=limit * 4):
-            if len(items) >= limit or not _free(step, doc_id, now):
-                continue
-            if not _in_scope(con, doc_id, scope):
-                continue
-            row = store.get_document(con, doc_id, max_chars=0)
-            items.append(
-                {
-                    "doc_id": doc_id,
-                    "title": (row["title"] if row else "") or "",
-                    "sections": store.document_sections(con, doc_id),
-                }
-            )
-        _lease(step, [i["doc_id"] for i in items], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    if step == "typing":
-        # untyped review items to the typing model, a batch of items each;
-        # nothing without a model for the step
-        from prax import typing_pass
-
-        if models.resolve("typing") is None:
-            return {"step": step, "items": [], "lease_seconds": 0}
-        items = [
-            b
-            for b in typing_pass.hand_out(con, limit=limit * 2)
-            if all(_free(step, it["id"], now) for it in b["items"])
-        ][:limit]
-        _lease(step, [it["id"] for b in items for it in b["items"]], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    if step == "parse":
-        from prax import parsers
-
-        items = []
-        # requested readings first: a person asked, whatever the scope; the
-        # whole queue, oldest first — the status view's newest fifty hid
-        # the 228 marker requests behind the follow-ups placed after them
-        offered: set[int] = set()  # one reading a document a batch
-        # a reading that runs no model goes first, whenever it was asked
-        # for: it costs seconds of CPU, and it makes the pictures the
-        # expensive readings then read. Among equals, oldest first, so a
-        # burst of new requests never hides the ones behind it
-        requests = sorted(
-            store.reading_requests(con, limit=None, oldest_first=True),
-            key=lambda r: (r["extractor"] in READING_STEPS, r["id"]),
-        )
-        for req in requests:
-            doc_id = req["doc_id"]
-            if len(items) >= limit or not _free(step, doc_id, now):
-                continue
-            if doc_id in offered:
-                # its other readings wait their turn: two annotating
-                # readings of one document in a batch are computed from
-                # the same text, and the second would undo the first
-                continue
-            doc = store.get_document(con, doc_id, max_chars=0)
-            if doc is None:
-                continue
-            if _nothing_to_read(con, doc_id, req):
-                # every figure this model reads has been read: the request
-                # would cost a fetch, a parse and a round trip to come back
-                # "same". Half the queue was this on 2026-09-23
-                store.cancel_reading(con, doc_id)
-                continue
-            path = doc.get("original_path")
-            item = {
-                "doc_id": doc_id,
-                "mime": doc["mime"],
-                "filename": path.replace("\\", "/").rsplit("/", 1)[-1]
-                if path
-                else None,
-                "original": f"/doc/{doc_id}/original",
-                "old_len": doc["text_len"],
-                "extractor": req["extractor"],
-                "mode": req.get("mode"),
-                "force": True,
-            }
-            if doc["text_len"] and _takes_previous(req["extractor"]):
-                # the extractor works on the current text: a second reading
-                # of an image joins the first (vision.merge_readings), the
-                # figures' readings and references go into the parsed text
-                item["previous"] = store.get_document(con, doc_id)["text"]
-            items.append(item)
-            offered.add(doc_id)
-        waiting = list(inbox.pending_captures(con))
-        if scope == "all":
-            # the backlog pass also brings texts up to date: documents read
-            # by an extractor prax has revised since, a few per pass
-            waiting += [i for i in queue.stale(con, limit=limit) if i not in waiting]
-        for doc_id in waiting:
-            if len(items) >= limit or not _free(step, doc_id, now):
-                continue
-            if not _in_scope(con, doc_id, scope):
-                continue
-            doc = store.get_document(con, doc_id, max_chars=0)
-            if doc is None:
-                continue
-            named = doc["meta"].get("parser")  # a document may name its parser
-            exts = parsers.candidates(doc["mime"] or "", named)
-            if not exts:
-                # an image has no parser of its own: the vision model reads
-                # it, as a reading the door asks for when that is free
-                if (doc["mime"] or "").startswith("image/") and _vision_is_free():
-                    _ask_reading(con, doc_id, "vision")
-                continue
-            if any(queue._seen(doc["meta"], e.stamp) for e in exts):
-                # the chain was run and found nothing (a scan without a
-                # text layer): a reading asked for on its page — OCR, the
-                # vision model — is the way on, not another round
-                continue
-            path = doc.get("original_path")
-            items.append(
-                {
-                    "doc_id": doc_id,
-                    "mime": doc["mime"],
-                    "filename": path.replace("\\", "/").rsplit("/", 1)[-1]
-                    if path
-                    else None,
-                    "original": f"/doc/{doc_id}/original",
-                    "old_len": doc["text_len"],
-                    **({"extractor": named} if named else {}),
-                }
-            )
-        _lease(step, [i["doc_id"] for i in items], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    if step == "resolve":
-        # the likely tier of entity resolution: one type's names to a
-        # worker, which embeds them and posts the close pairs; a type is
-        # due when its pairs are older than LIKELY_DAYS or were never
-        # computed (the door never embeds: invariant 7)
-        from prax import resolution
-
-        emb = embeddings.current()
-        if emb is None:
-            return {"step": step, "type": None, "names": [], "lease_seconds": 0}
-        runs = store.candidate_runs(con)
-        cutoff = time.strftime(
-            "%Y-%m-%dT%H:%M:%SZ",
-            time.gmtime(time.time() - resolution.LIKELY_DAYS * 86400),
-        )
-        for i, t in enumerate(sorted(resolution.LIKELY_TYPES)):
-            if runs.get(t, "") >= cutoff or not _free(step, i, now):
-                continue
-            names = store.entity_names(con, t)
-            if len(names) < 2:
-                continue
-            _lease(step, [i], worker)
-            return {
-                "step": step,
-                "type": t,
-                "names": names,
-                "model": emb.name,
-                "threshold": resolution.LIKELY_THRESHOLD,
-                "lease_seconds": LEASE_SECONDS,
-            }
-        return {"step": step, "type": None, "names": [], "lease_seconds": 0}
-    if step == "adjudicate":
-        # the likely pairs nobody has decided, to a worker with the
-        # adjudicate step's model (a paid one: the worker spends only when
-        # told to); leased by the entity that would be dropped
-        from prax import resolution
-
-        if models.resolve("adjudicate") is None:
-            return {"step": step, "items": [], "lease_seconds": 0}
-        items = []
-        for c in resolution.plan(con).likely:
-            if len(items) >= limit or not _free(step, c.drop, now):
-                continue
-            items.append(
-                {
-                    "keep": c.keep,
-                    "drop": c.drop,
-                    "keep_name": c.keep_name,
-                    "drop_name": c.drop_name,
-                    "type": c.type,
-                    "score": round(c.score, 4),
-                }
-            )
-        _lease(step, [i["drop"] for i in items], worker)
-        return {"step": step, "items": items, "lease_seconds": LEASE_SECONDS}
-    # embed
-    emb = embeddings.current()
-    if emb is None or not store.vectors_available():
-        return {
-            "step": step,
-            "model": None,
-            "chunks": [],
-            "fields": [],
-            "lease_seconds": 0,
-        }
-    chunks = _embed_batch(con, emb.name, limit, now)
-    fields = [
-        r
-        for r in store.pending_document_embeddings(con, emb.name, limit=limit * 4)
-        if _free("embed-doc", r["doc_id"], now)
-    ][:limit]
-    _lease("embed", [r["chunk_id"] for r in chunks], worker)
-    _lease("embed-doc", [r["doc_id"] for r in fields], worker)
-    return {
-        "step": step,
-        "model": emb.name,
-        "dim": emb.dim,
-        "chunks": [
-            {"chunk_id": r["chunk_id"], "kind": r["kind"], "text": r["text"]}
-            for r in chunks
-        ],
-        "fields": [{"doc_id": r["doc_id"], "text": r["text"]} for r in fields],
-        "lease_seconds": LEASE_SECONDS,
-    }
+    h = HandOut(con, step, limit, scope, worker, time.monotonic())
+    return steps.get(step).hand_out(h)
 
 
 # ----------------------------------------------------------------- take in
-
-
-def _reading_step(extractor: str) -> str:
-    """The step a reading ran, for the ledger's row: the vision step for
-    a figure or a page, and the reading's own where it has one."""
-    return READING_STEPS.get(extractor, "vision")
 
 
 def _note_spend(
@@ -817,16 +318,6 @@ def _note_spend(
         budget.note(con, step, usage, doc_id=doc_id, run=run, model=model)
 
 
-def _extraction_from(data: dict[str, Any]) -> extraction.Extraction:
-    triples = [extraction.Triple(**t) for t in data.get("triples") or []]
-    return extraction.Extraction(
-        triples=triples,
-        unmapped=list(data.get("unmapped") or []),
-        summary=str(data.get("summary") or ""),
-        usage=dict(data.get("usage") or {}),
-    )
-
-
 def extraction_to_dict(ex: extraction.Extraction) -> dict[str, Any]:
     return {
         "summary": ex.summary,
@@ -843,302 +334,20 @@ def take_in(
     *,
     worker: str = "worker",
 ) -> dict[str, Any]:
-    """Apply a worker's results for ``step``; the leases go either way."""
+    """Apply a worker's results for ``step``; the leases go either way.
+    What applying them means is the step's (``prax.steps``)."""
+    from prax.steps.base import TakeIn
+
     if step not in STEPS:
         raise ValueError(f"unknown step {step!r}; steps are {STEPS}")
     results = payload.get("results") or []
     out: dict[str, Any] = {"applied": 0, "errors": [], "skipped": 0}
-    # "not yet": the item stays leased a while, the queue moves on
-    deferred = [int(r["doc_id"]) for r in results if r.get("defer")]
+    # "not yet": the item stays leased a while, the queue moves on. An
+    # item is a document, or for the vocabulary an entity
+    deferred = [int(r.get("doc_id", r.get("id"))) for r in results if r.get("defer")]
     if deferred:
         _lease(step, deferred, worker, seconds=DEFER_SECONDS)
         out["deferred"] = len(deferred)
         results = [r for r in results if not r.get("defer")]
-    if step in ("extract", "promote"):
-        extractor = str(payload.get("extractor") or worker)
-        prefix = "promote" if step == "promote" else "work"
-        run = payload.get("run") or f"{prefix}-{time.strftime('%Y%m%dT%H%M%S')}"
-        totals = extraction.ApplyReport()
-        for r in results:
-            doc_id = int(r["doc_id"])
-            _release(step, [doc_id])
-            if r.get("error"):
-                out["errors"].append({"doc_id": doc_id, "error": r["error"]})
-                with contextlib.suppress(Exception):  # the note is a nicety
-                    extraction.note_failure(
-                        con, doc_id, str(r["error"]), extractor=extractor
-                    )
-                continue
-            try:
-                ex = _extraction_from(r["extraction"])
-                _note_spend(con, step, ex.usage, doc_id=doc_id, run=run)
-                rep = extraction.apply(
-                    con,
-                    doc_id,
-                    ex,
-                    extractor=extractor,
-                    run=run,
-                )
-            except Exception as exc:  # noqa: BLE001 - one result must not stop the rest
-                out["errors"].append(
-                    {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
-                )
-                continue
-            for k in ("linked", "existing", "queued", "rejected", "retired"):
-                setattr(totals, k, getattr(totals, k) + getattr(rep, k))
-            out["applied"] += 1
-        out["report"] = {
-            k: getattr(totals, k)
-            for k in ("linked", "existing", "queued", "rejected", "retired")
-        }
-        return out
-    if step == "resolve":
-        from prax import resolution
-
-        etype = str(payload.get("type") or "")
-        if etype not in resolution.LIKELY_TYPES:
-            raise ValueError(
-                f"resolve takes a type among {sorted(resolution.LIKELY_TYPES)}"
-            )
-        emb = embeddings.current()
-        model = str(payload.get("model") or "")
-        if emb is None or model != emb.name:
-            theirs = emb.name if emb else None
-            raise ValueError(f"the door's names embed with {theirs}, not {model!r}")
-        pairs = [(int(a), int(b), float(s)) for a, b, s in (payload.get("pairs") or [])]
-        _release(step, [sorted(resolution.LIKELY_TYPES).index(etype)])
-        out["applied"] = store.replace_entity_candidates(
-            con, etype, pairs, producer=f"{model} via {worker}"
-        )
-        out["type"] = etype
-        return out
-    if step == "adjudicate":
-        from prax import resolution
-
-        model = str(payload.get("model") or worker)
-        items = list(payload.get("items") or [])
-        same = [bool(x) for x in (payload.get("same") or [])]
-        if len(same) != len(items):
-            raise ValueError("adjudicate takes one decision per item")
-        _release(step, [int(it["drop"]) for it in items])
-        _note_spend(con, step, payload.get("usage"))
-        rep = resolution.decide(con, items, resolution.DecidedAdjudicator(model, same))
-        out["applied"] = rep.merged_likely
-        out["declined"] = rep.declined
-        return out
-    if step == "typing":
-        from prax import typing_pass
-
-        model = str(payload.get("model") or worker)
-        run = payload.get("run") or f"typing-model-{time.strftime('%Y%m%dT%H%M%S')}"
-        for r in results:
-            _release(step, [it["id"] for it in r.get("items") or []])
-            _note_spend(con, step, r.get("usage"), run=run)
-        rep = typing_pass.take_in(con, results, model=model, run=run)
-        out["applied"] = rep.requests
-        out["report"] = {
-            "checked": rep.checked,
-            "linked": rep.linked,
-            "existing": rep.existing,
-            "dropped": rep.dropped,
-            "misfit": rep.misfit,
-            "unanswered": rep.unanswered,
-        }
-        return out
-    if step == "titles":
-        run = payload.get("run") or f"titles-{time.strftime('%Y%m%dT%H%M%S')}"
-        for r in results:
-            doc_id = int(r["doc_id"])
-            _release(step, [doc_id])
-            if r.get("error"):
-                out["errors"].append({"doc_id": doc_id, "error": r["error"]})
-                continue
-            if r.get("tried"):
-                pipeline._mark_tried(con, doc_id, run, str(r["tried"]))
-                out["skipped"] += 1
-                continue
-            try:
-                store.retitle(
-                    con,
-                    doc_id,
-                    str(r["title"]),
-                    source=str(r.get("source") or worker),
-                    run=run,
-                    confidence=r.get("confidence"),
-                )
-            except Exception as exc:  # noqa: BLE001
-                out["errors"].append(
-                    {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
-                )
-                continue
-            out["applied"] += 1
-        return out
-    if step == "summaries":
-        run = payload.get("run") or f"summaries-{time.strftime('%Y%m%dT%H%M%S')}"
-        for r in results:
-            doc_id = int(r["doc_id"])
-            _release(step, [doc_id])
-            if r.get("error"):
-                out["errors"].append({"doc_id": doc_id, "error": r["error"]})
-                continue
-            if r.get("tried"):
-                # the model could not translate it: the summary stays as it
-                # was written, and the document is not offered again
-                with contextlib.suppress(Exception):
-                    store.summary_tried(con, doc_id, run, str(r["tried"]))
-                out["skipped"] += 1
-                continue
-            try:
-                store.set_summary(
-                    con,
-                    doc_id,
-                    str(r["summary"]),
-                    lang=str(r.get("lang") or "") or None,
-                    source=str(r.get("source") or worker),
-                    run=run,
-                )
-            except Exception as exc:  # noqa: BLE001
-                out["errors"].append(
-                    {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
-                )
-                continue
-            out["applied"] += 1
-        return out
-    if step == "sections":
-        run = payload.get("run") or f"sections-{time.strftime('%Y%m%dT%H%M%S')}"
-        for r in results:
-            doc_id = int(r["doc_id"])
-            _release(step, [doc_id])
-            if r.get("error"):
-                out["errors"].append({"doc_id": doc_id, "error": r["error"]})
-                continue
-            try:
-                store.set_sections(
-                    con,
-                    doc_id,
-                    list(r.get("sections") or []),
-                    source=str(r.get("source") or worker),
-                    run=run,
-                )
-            except Exception as exc:  # noqa: BLE001
-                out["errors"].append(
-                    {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
-                )
-                continue
-            out["applied"] += 1
-        return out
-    if step == "vocabulary":
-        run = payload.get("run") or f"vocabulary-{time.strftime('%Y%m%dT%H%M%S')}"
-        actions_taken: dict[str, int] = {}
-        for r in results:
-            entity_id = int(r["id"])
-            _release(step, [entity_id])
-            if r.get("error"):
-                out["errors"].append({"id": entity_id, "error": r["error"]})
-                continue
-            try:
-                if r.get("into"):
-                    action = store.label_in_language(
-                        con,
-                        entity_id,
-                        str(r["name"]),
-                        lang=str(r["into"]),
-                        producer="vocabulary",
-                        run=run,
-                    )
-                elif r.get("changed"):
-                    got = store.name_in_english(
-                        con,
-                        entity_id,
-                        str(r["name"]),
-                        producer="vocabulary",
-                        run=run,
-                        confidence=str(r.get("confidence") or "INFERRED"),
-                    )
-                    action = str(got.get("action") or "?")
-                else:
-                    # already the word English uses: the pass says so with a
-                    # label, which is also what keeps it from being asked twice
-                    store.add_label(
-                        con,
-                        entity_id,
-                        str(r["name"]),
-                        lang="en",
-                        kind="pref",
-                        producer="vocabulary",
-                        run=run,
-                    )
-                    action = "kept"
-            except Exception as exc:  # noqa: BLE001
-                out["errors"].append(
-                    {"id": entity_id, "error": f"{type(exc).__name__}: {exc}"}
-                )
-                continue
-            actions_taken[action] = actions_taken.get(action, 0) + 1
-            out["applied"] += 1
-        out["actions"] = actions_taken
-        return out
-    if step == "parse":
-        actions: dict[str, int] = {}
-        for r in results:
-            doc_id = int(r["doc_id"])
-            _release(step, [doc_id])
-            stamp = str(r.get("extractor") or worker)
-            try:
-                action = queue.apply_parse(
-                    con,
-                    doc_id,
-                    stamp=stamp,
-                    text=r.get("text"),
-                    error=r.get("error"),
-                    seconds=float(r.get("seconds") or 0.0),
-                    force=bool(r.get("force")),
-                    keep_source=bool(r.get("keep_source")),
-                    pages=int(r["pages"]) if r.get("pages") else None,
-                )
-            except Exception as exc:  # noqa: BLE001
-                out["errors"].append(
-                    {"doc_id": doc_id, "error": f"{type(exc).__name__}: {exc}"}
-                )
-                continue
-            # what the reading paid for, if anything: the worker carries
-            # the tokens home (prax.usage) because it never writes itself
-            for model, tokens in (r.get("usage") or {}).items():
-                _note_spend(
-                    con,
-                    _reading_step(str(r.get("requested") or "")),
-                    tokens,
-                    doc_id=doc_id,
-                    model=str(model),
-                )
-            if r.get("requested"):
-                store.finish_reading(
-                    con, doc_id, outcome=action, stamp=stamp, error=r.get("error")
-                )
-            # the edges of the process graph: what the door asks to be read
-            # next (pipeline.follow_ups: the formulas of a marker read, the
-            # polish of an automatic transcript, the figures of a capture)
-            pipeline.follow_ups(con, doc_id, stamp=stamp, action=action)
-            actions[action] = actions.get(action, 0) + 1
-            out["applied"] += 1
-        out["actions"] = actions
-        return out
-    # embed
-    model = str(payload.get("model") or "")
-    emb = embeddings.current()
-    if emb is None or model != emb.name:
-        raise ValueError(
-            f"the door embeds with {emb.name if emb else None}, not {model!r}"
-        )
-    chunks = [(int(c), k, v) for c, k, v in (payload.get("chunks") or [])]
-    fields = [(int(d), v) for d, v in (payload.get("fields") or [])]
-    _release("embed", [c for c, _, _ in chunks])
-    _release("embed-doc", [d for d, _ in fields])
-    if chunks:
-        out["applied"] += store.store_embeddings(con, chunks, model)
-        _unsaved[model] = _unsaved.get(model, 0) + len(chunks)
-        save_if_due(model)
-    if fields:
-        out["applied"] += store.store_document_embeddings(con, fields, model)
-        store.save_document_vectors(model)
-    return out
+    t = TakeIn(con, step, payload, results, worker, out)
+    return steps.get(step).take_in(t)

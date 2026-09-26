@@ -130,8 +130,13 @@ failure a user can work around by adding a word.
 
 ### E. The structural work — last, and one stage each
 
-- [ ] **The Step object**, tests first: it is where a mistake costs a
-      batch of real work.
+- [x] **The Step object**, tests first (2026-09-27): `prax.steps` is a package, each
+      step one object with `hand_out`, `take_in` and `run`; `work.py` 1,144 → 360 lines,
+      `worker.py` 1,159 → 918. The worker passes of summaries, sections and
+      vocabulary were pinned first, and a test keeps the dispatchers free of
+      step names. Two bugs fell out: a local-model step with a paid model
+      leased its batch before refusing it, and a deferred vocabulary result
+      raised in the door.
 - [ ] **The store's module split**, after the Step object, since both
       touch the largest modules and the module order is an invariant that
       B will have made testable.

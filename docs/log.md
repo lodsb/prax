@@ -1546,3 +1546,28 @@ on.
       newer than the index files (`store.reconcile_unsaved`, by
       `contains`) and forgets the ones without a vector, so those chunks
       are embedded again.
+
+## 2026-09-27: stage E, the Step object
+
+- [x] **A step is one object.** The work protocol was three `if step ==`
+      chains: `work.hand_out` (363 lines), `work.take_in` (295) and
+      `worker.run_once` (267). Adding a step meant three edits in two
+      modules (the audit's finding 1). `prax.steps` is now a package. Its
+      `__init__` keeps the import-free names and adds `get(name)`, and one
+      module per family holds the objects: `parse`, `writing` (titles,
+      summaries, sections), `vocabulary`, `extract` (extract, promote),
+      `graph` (typing, resolve, adjudicate), `embed`. `prax.steps.base`
+      holds the three shapes that repeated: handing out documents,
+      taking results in one at a time, and a worker's pass over a local
+      model. `work.py` went from 1,144 lines to 360, `worker.py` from
+      1,159 to 918.
+- [x] **Tests first.** No test drove the worker passes of summaries,
+      sections or vocabulary through `run_once`; they were pinned against
+      the old code before anything moved. A test now fails if the door's
+      hand-out or take-in, or the worker's pass, names a step again.
+- [x] **Two bugs fell out of the move.** Titles, summaries, sections,
+      vocabulary and extract checked for a paid model only *after*
+      fetching, so a refused batch sat leased for fifteen minutes; every
+      step now refuses before it asks. A vocabulary result deferred
+      because the model server was not ready made the door read a
+      `doc_id` its entities do not have.

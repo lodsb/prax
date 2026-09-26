@@ -38,9 +38,9 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     work._leases.clear()
     work._asked.clear()
     # and where the embed hand-out is in its walk, and what it has not saved
-    work._embed_walk.clear()
-    work._unsaved.clear()
-    work._saved_at.clear()
+    from prax.steps import embed
+
+    embed.forget()
     return d
 
 
