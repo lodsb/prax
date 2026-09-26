@@ -1262,8 +1262,9 @@ def foreign_names(
     Every document behind it is in one language and that language is not
     English — a term that an English document also uses is that
     document's word, not a translation. And the name occurs nowhere in
-    the English half of the library (``vocabulary.in_english_text``),
-    which is the dictionary this uses instead of a rule per language.
+    the English half of the library as often as in the rest
+    (``vocabulary.in_english_text``), which is the dictionary this uses
+    instead of a rule per language.
 
     An entity a pass has already decided is passed over — a label under
     ``vocabulary`` — so a run picks up where the last one stopped. The
@@ -1274,9 +1275,10 @@ def foreign_names(
     an FTS lookup a name, and on an exhausted queue it was paid for every
     candidate on every ask: 87 seconds to answer "nothing", which is why
     this step could not be one a worker asks for by itself. The ruling is
-    monotone — a name that occurs in an English document will always
-    occur in one, since documents are retired and never deleted — so it
-    is worth keeping. An entity the corpus rules out is marked
+    kept although it is a judgement on the library as it stood: a rate
+    moves as documents arrive, but a word English documents use as often
+    as the others do does not become a German one by a few more recipes.
+    An entity the corpus rules out is marked
     ``vocabulary:corpus``, which is a truthful thing to say about it: the
     library's own text was asked, and this name is already the word the
     library uses.
@@ -1313,10 +1315,11 @@ def foreign_names(
     ).fetchall()
     out: list[dict[str, Any]] = []
     ruled_out: list[tuple[int, str]] = []
+    sizes = vocabulary.library_sizes(con)
     for r in rows:
         if r["id"] in skip:
             continue
-        if vocabulary.in_english_text(con, r["name"]):
+        if vocabulary.in_english_text(con, r["name"], sizes=sizes):
             ruled_out.append((int(r["id"]), str(r["name"])))
             continue
         out.append(

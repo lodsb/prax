@@ -138,3 +138,55 @@ and the side effect was the bridge.
 And with the bridge built, the question would arrive at `apple` — which in
 this library is Apple Inc. The three failures are one chain.
 
+
+## After the re-extraction (same day, evening)
+
+The two fixes from the stage were applied: extraction writes a name as
+the document prints it, and the watched vocabulary pass translates the
+common ones and keeps the printed word as a label. The 74 kitchen
+documents were re-extracted through the door (`POST /doc/{id}/extract`).
+
+**The box became edges without a new pass.** 1,029 live `calls_for`
+edges from kitchen documents; the apple recipe has sixteen ingredients,
+`apple` among them. The model reads the ingredient chunk well enough
+once it exists, so the "edges from the list's data, no model" idea in
+the plan is not needed for this. It chose craft's `made_of` rather than
+kitchen's `calls_for` for this one recipe (50 such edges in all), which
+the ontology allows, since a dish is a work and an ingredient a
+material. It is a wobble, not a fault.
+
+**The pass renamed 94 names that day, and one was wrong the
+interesting way.** `Apfel-auflauf`, a variant named in passing in an
+elderflower-lemon bake, came back as "elderflower lemon bake": the
+model took the document's title, given as context, for the answer.
+Asking the 81 German names again three ways on the same model:
+
+| context | wrong |
+|---|---|
+| the title (as it was) | 1 — the title taken for the answer |
+| the sentence the name was said in | 4 — named the dish around it: `koreanischer eintopf` → doenjang jjigae, `japanische Küche` → oyakodon |
+| none | 1 — `Djakkatou` → jackfruit, where the title had said Senegal |
+| the title, "which may be about something else: name this thing" | 0 |
+
+**The net let the commonest words out.** A name was ruled English if
+it occurred in *any* English document, and `Mehl` is in eight: a
+programming textbook, an operating-systems tutorial sheet. It is in
+eighteen German ones, out of a quarter as many. `Zucker`, `kartoffel`,
+`Eier`, `Salz` the same. Whose word it is is a rate, not an occurrence,
+and the test now compares the two (English documents per English
+document against the others per other document). Over the 4,103
+entities the old rule had ruled out, 979 would be candidates again: 59
+ingredients, and some 900 concepts and methods (`interrupts`, `SSH`,
+`microkernel`) that the German course material uses more often than
+the English half does. For those the model should hand the word back
+unchanged, at one local call each.
+
+**And the bridge has nothing to stand on for this word.** No entity in
+the library is called `Apfel`. Thirteen German documents contain the
+word, and one is a recipe, which mentions apples in passing. The route
+`Apfelkuchen` → `apfel` → `apple` works (`tests/test_printed.py`), and in
+this library no German document has named an apple for it to cross
+on. It is the attachment lesson a third time. The route is built from
+what the library holds, so a word no German document uses has no
+bridge until one does. Only a dictionary would change that, and "the
+library is the word list" is the choice not to have one.

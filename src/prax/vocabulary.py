@@ -14,13 +14,19 @@ translated and neither is `Einführung in die Softwaretechnik`; `Olivenöl`
 is.
 
 **Which names are not English** is answered by the library rather than by
-a list of German endings. A name that occurs in the text of an English
-document is an English name; one that occurs nowhere in the English half
-of the library is a candidate. FTS5 already indexes every chunk, so the
-test is one MATCH. It cost 7 ms a name when it was measured, it needs no
-rule per language, and it is wrong in a way that costs nothing: a rare
-English term nobody else wrote down (`extendible hashing`) becomes a
-candidate, and the model hands it back unchanged.
+a list of German endings. A name English documents use at least as often,
+document for document, as the rest of the library does is an English
+name; one they use less is a candidate. FTS5 already indexes every chunk,
+so the test is one MATCH. It needs no rule per language, and it is wrong
+in a way that costs nothing: a rare English term nobody else wrote down
+(`extendible hashing`) becomes a candidate, and the model hands it back
+unchanged.
+
+It was "occurs in any English document" until 2026-09-26, and that let
+out the commonest words of all: `Mehl` is in eight English documents (a
+programming textbook, an operating-systems tutorial sheet) and in
+eighteen German ones out of a quarter as many, so it was ruled English
+and never folded into `flour`. The rate is what says whose word it is.
 
 **The model decides**, and its answer is recorded as evidence, not as
 truth. The name it gives is a label with its language, producer and run
@@ -78,12 +84,35 @@ class Naming:
     usage: dict[str, Any] = field(default_factory=dict)
 
 
-def in_english_text(con: sqlite3.Connection, name: str) -> bool:
-    """Does this name occur in the text of an English document?
+# not prax's own pages: a briefing that says "Olivenöl sits beside olive
+# oil" is an English document containing the German word, and it took
+# Olivenöl out of the net that would have folded it. The library must not
+# be its own evidence
+_NOT_A_PAGE = "NOT EXISTS (SELECT 1 FROM pages p WHERE p.doc_id = d.id)"
 
-    The library as its own dictionary. A name nobody wrote in an English
-    document is the candidate; everything else is already the word
-    English uses, whatever it looks like.
+
+def library_sizes(con: sqlite3.Connection) -> tuple[int, int]:
+    """How many documents are in the library's language, and how many in
+    another one it knows. What a count of occurrences is divided by."""
+    row = con.execute(
+        "SELECT count(*) FILTER (WHERE lang = ?), count(*) FILTER (WHERE lang <> ?)"
+        " FROM (SELECT json_extract(d.meta, '$.lang') AS lang FROM documents d"
+        f" WHERE {_NOT_A_PAGE})",
+        (language.canonical(), language.canonical()),
+    ).fetchone()
+    return int(row[0] or 0), int(row[1] or 0)
+
+
+def in_english_text(
+    con: sqlite3.Connection, name: str, *, sizes: tuple[int, int] | None = None
+) -> bool:
+    """Is this name the library language's word, by the library's own use?
+
+    The library as its own dictionary: the share of English documents
+    that use the name, against the share of the others. A name English
+    documents never use is a candidate; one they use at least as often as
+    the rest is already the word English uses, whatever it looks like.
+    ``sizes`` is ``library_sizes``, for a caller asking about many names.
     """
     words = _WORD.findall(name)
     if not words or len(words) > MAX_WORDS:
@@ -92,21 +121,24 @@ def in_english_text(con: sqlite3.Connection, name: str) -> bool:
     match = " ".join(f'"{w}"' for w in words)  # the words in order
     try:
         row = con.execute(
-            "SELECT 1 FROM chunks_fts f JOIN chunks c ON c.id = f.rowid"
+            "SELECT count(DISTINCT d.id) FILTER (WHERE lang = ?),"
+            " count(DISTINCT d.id) FILTER (WHERE lang <> ?)"
+            " FROM (SELECT d.id, json_extract(d.meta, '$.lang') AS lang"
+            " FROM chunks_fts f JOIN chunks c ON c.id = f.rowid"
             " JOIN documents d ON d.id = c.doc_id"
-            " WHERE chunks_fts MATCH ?"
-            " AND json_extract(d.meta, '$.lang') = ?"
-            # not prax's own pages: a briefing that says "Olivenöl sits
-            # beside olive oil" is an English document containing the
-            # German word, and it took Olivenöl out of the net that would
-            # have folded it. The library must not be its own evidence
-            " AND NOT EXISTS (SELECT 1 FROM pages p WHERE p.doc_id = d.id)"
-            " LIMIT 1",
-            (match, canonical),
+            f" WHERE chunks_fts MATCH ? AND {_NOT_A_PAGE}) d",
+            (canonical, canonical, match),
         ).fetchone()
     except sqlite3.OperationalError:
         return True  # a name FTS cannot parse is not this pass's business
-    return row is not None
+    ours, theirs = int(row[0] or 0), int(row[1] or 0)
+    if not ours:
+        return False
+    if not theirs:
+        return True
+    n_ours, n_theirs = sizes or library_sizes(con)
+    # ours / n_ours >= theirs / n_theirs, without the division
+    return ours * max(n_theirs, 1) >= theirs * max(n_ours, 1)
 
 
 def parse(out: str) -> str | None:
@@ -151,10 +183,21 @@ def acceptable(name: str, given: str) -> str | None:
 def user_message(name: str, kind: str, *, context: str = "") -> str:
     """What the model is given: the name, what kind of thing it is, and
     where it was said, as sentences — a model handed labelled fields
-    fills the form in and returns the labels (``prax.summaries``)."""
+    fills the form in and returns the labels (``prax.summaries``).
+
+    The title says which of two things a bare word is, and it can also
+    be taken for the answer: `Apfel-auflauf`, a variant named in passing
+    in an elderflower-lemon bake, came back as "elderflower lemon bake".
+    Saying that the document may be about something else fixed it and
+    changed none of the other 80 names of that day for the worse; the
+    sentence the name was said in, tried instead, named the dish around
+    it four times out of 81 (2026-09-26)."""
     parts = [f"A {kind} is called “{name}”."]
     if context.strip():
-        parts.append(f"It was named in a document called “{context.strip()}”.")
+        parts.append(
+            f"It was named in a document called “{context.strip()}”, which may"
+            " be about something else: name this thing, not the document."
+        )
     parts.append("What does English call it?")
     return " ".join(parts)
 

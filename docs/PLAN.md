@@ -63,46 +63,34 @@ stage safe, or a thing a user would notice.
       Applied to the kitchen domain on the live store: **36 → 56 of 68
       (53% → 82%)**, the apple recipe among them. The other two change at
       the next full rechunk.
-- [ ] **The list is a box, not yet edges.** Nothing turns an
-      `ingredients` chunk's data into `calls_for` edges; extraction reads
-      the list as text through the model, and the model read "750g
-      apples" in the apple recipe the first time and wrote no `calls_for
-      apple`. So "re-extract the kitchen domain", as this item first said,
-      would not have built the bridge either. The data is already
-      structured — amount, unit, item, the line as written — so the edges
-      can come from it without a model, producer `ingredients`, the line
-      as evidence. What wants deciding first is the name: `apples` or
-      `apple`, and where the head noun ends in "caster sugar Finely
-      grated zest".
-- [ ] **The prevention dropped what the repair kept.** Since 2026-09-24
-      the extraction prompt writes a common noun in English, which is
-      right for the graph. But a new entity gets one label, its own name
-      (`store._entity_id`), and no field carries the word the document
-      printed — so a German recipe's "Äpfel" becomes `apple` with no
-      German label at all. The vocabulary pass, the repair it replaced,
-      left the German word behind as a label every time it renamed, and
-      that label is exactly what `Apfelkuchen` → `apfel` → `apple` stands
-      on. Every German document extracted since feeds the English graph
-      and adds nothing to the bridge between the languages (nine so far,
-      and every one after). The fix is in the extraction format — the
-      name as printed beside the canonical one, kept as an alternative
-      label in the document's language — which is a change to the prompt,
-      the line format and `store.link`, and wants deciding rather than
-      slipping in.
-- [ ] **And the three failures interlock.** With the bridge built,
-      `Apfelkuchen` reaches `apple` — and a bare `apple` in this library
-      is Logic Pro. The brand collision (left out of this stage as design
-      work) is then the last thing between the question and the recipe,
-      which is an argument for doing it next rather than never.
-- [ ] **And count what uses a mechanism.** The lesson of the apple
-      question is not the compound or the brand; it is that a route built
-      and measured on 2026-09-24 had almost nothing attached to it, and
-      that looks identical from outside to a route that does not work.
-      Whatever pass reports the measured invariants (B) should also
-      report how many documents have an ingredient list, how many
-      entities carry a label in a second language, how many have a
-      section summary — the attachment of each mechanism, not its
-      existence.
+- [x] **The list is a box, not yet edges** — it was not needed: once
+      the chunk exists the model reads it, and re-extracting the 74
+      kitchen documents gave 1,029 `calls_for` edges, `apple` among the
+      apple recipe's sixteen (plus 50 `made_of`, which the ontology
+      allows for a dish).
+- [x] **The prevention dropped what the repair kept** — names are
+      written as printed and translated once, by the watched
+      `vocabulary` step, which keeps the printed word as a label
+      (663d2df). Two faults in that step came up on the day's 94
+      renames and are fixed: the document title was taken for the
+      answer (`Apfel-auflauf` → "elderflower lemon bake"), and a name was
+      ruled English if any English document contained it, which let out
+      `Mehl`, `Zucker`, `Salz`. Now a rate
+      (`docs/eval/apfelkuchen-2026-09-26.md`, "After the re-extraction").
+- [ ] **Re-judge what the old rule ruled out.** 979 of the 4,103
+      entities marked `vocabulary:corpus` would be candidates under the
+      rate: 59 ingredients, ~900 concepts and methods the German course
+      material uses more than the English half does. Clearing the mark
+      puts them back in the queue, at one local call each (the model
+      hands an English word back unchanged). A data change: waits for
+      the word.
+- [x] **And count what uses a mechanism** — the `attachment` pass of
+      `prax maintain`. The apple question shows the lesson once more:
+      no German document in this library names an apple, so the route
+      from `Apfelkuchen` to `apple` is built and has nothing to cross
+      on. The route is only as good as the words the library holds.
+- [ ] **The brand collision** is then what stands between an English
+      "apple cake" and the Logic Pro manuals. Still design work.
 
 Brand polysemy (`apple` → Logic Pro manuals) is deliberately not here.
 It is design work with no obvious shape yet, and it is the one apple

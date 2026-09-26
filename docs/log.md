@@ -1496,3 +1496,29 @@ including the two explanations that died on the way.
 - [x] **The protocol, not the model, is the limit** — 331 chunks/s of
       capacity delivering 98. In `docs/PLAN.md`.
 
+
+## 2026-09-26: one German question, and what it was standing on
+
+The walk (stage A) and the invariant kinds (stage B) are recorded in
+`docs/PLAN.md` and `CLAUDE.md`. Stage C started from one question,
+"Apfelkuchen", which found no recipe and three reasons why
+(`docs/eval/apfelkuchen-2026-09-26.md`).
+
+- [x] German compounds split where the library knows both halves
+      (`prax.compounds`), MRR 4.33 → 4.83 on the 19 German questions.
+- [x] An ingredient list without a heading, found by what its lines say:
+      kitchen documents with a list 36 → 56 of 68.
+- [x] A name is written as printed and translated once, by the watched
+      `vocabulary` step, which keeps the printed word. A local model asked
+      to write both names on one line wrote neither (0 of 145). The 74
+      kitchen documents were re-extracted: 1,029 `calls_for` edges.
+- [x] The vocabulary step's two faults on the day's 94 renames: the
+      title taken for the answer (fixed by one clause, 1 → 0 wrong of 81),
+      and "any English document uses it" letting out `Mehl` (now a rate).
+- [ ] 979 entities the old rule ruled out wait for a re-judgement; the
+      brand collision is next.
+
+No German document in this library names an apple, so `Apfelkuchen`
+still does not reach the recipe by the graph. Every piece of the route is
+now in place and tested, and the library holds no word for it to cross
+on.
