@@ -7,6 +7,91 @@ Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
+## The order, agreed 2026-09-26
+
+Everything below is written up somewhere in this file or in
+`docs/audit/engineering-2026-09-25.md`. What was missing was an order,
+and the order is load-bearing rather than a preference — each stage is
+either a thing that might be broken now, a thing that makes the next
+stage safe, or a thing a user would notice.
+
+### A. Settle whether the surfer got worse — first, because it is the
+### only thing that may be worse today than last week
+
+- [ ] **What the surf sees when it walks changed under it.** `prax.surf`
+      took `store.traverse(...)[:WALK_EDGES]`, the first N edges by id,
+      and since 2026-09-25 passes `limit=WALK_EDGES` into traverse, which
+      spends the cap round-robin across relations. Same count, different
+      edges. The ask set's eight-step verdict fell to 42 against a
+      baseline range of 43–48 on the first run that exercised it
+      (`docs/eval/ask-equations-2026-09-26.md`), while every mechanical
+      number rose.
+
+      `--repeat 3` on that arm, and a run with the old slice beside it.
+      Hours, and it either clears the change or names the fix. Nothing
+      else should be built on top of an open question about whether the
+      graph half of `ask` regressed.
+
+### B. Make the invariants able to catch things — second, because it is
+### cheap and it protects everything after it
+
+- [ ] The four kinds, the tests, and the measured pass: "Name what kind
+      of invariant each one is", below. **Invariant 6 was breached for
+      months and no test could have failed**, which is the argument for
+      doing this before the refactors rather than after them: a
+      structural change is exactly when a silent breach gets introduced,
+      and three of the checks currently live in a scratch audit script
+      instead of the suite.
+
+### C. What a user actually notices — third, because the library is for
+### using
+
+- [ ] **German compounds** ("What one question in German found wrong",
+      below). 1,988 German documents, and for a compound query the
+      keyword half of the hybrid contributes *nothing*. A word list, not
+      a model.
+- [ ] **The ingredient bridge with nothing on it** — 38 ingredient lists
+      in ten thousand documents, and the one the user asked for was not
+      among them. Recognise a list without a heading, then re-extract the
+      kitchen domain.
+- [ ] **And count what uses a mechanism.** The lesson of the apple
+      question is not the compound or the brand; it is that a route built
+      and measured on 2026-09-24 had almost nothing attached to it, and
+      that looks identical from outside to a route that does not work.
+      Whatever pass reports the measured invariants (B) should also
+      report how many documents have an ingredient list, how many
+      entities carry a label in a second language, how many have a
+      section summary — the attachment of each mechanism, not its
+      existence.
+
+Brand polysemy (`apple` → Logic Pro manuals) is deliberately not here.
+It is design work with no obvious shape yet, and it is the one apple
+failure a user can work around by adding a word.
+
+### D. The two quadratics — fourth, because they cost hours whenever a
+### pass runs over the library and nothing else waits on them
+
+- [ ] The embed hand-out's cursor and the delta's save frequency ("The
+      embed pass redoes its finished work twice a batch", below). Both
+      small, both measured, and the re-embed that found them is done, so
+      there is no rush and no reason to leave them.
+
+### E. The structural work — last, and one stage each
+
+- [ ] **The Step object**, tests first: it is where a mistake costs a
+      batch of real work.
+- [ ] **The store's module split**, after the Step object, since both
+      touch the largest modules and the module order is an invariant that
+      B will have made testable.
+- [ ] **The reads outside the store**, which the split partly dissolves.
+- [ ] **The three names** (`fits`, `fits_for`, `read_for`), which ride
+      along with whatever touches them.
+
+The two things already written and not yet earned — communities as nodes,
+and a confidence that was measured — stay below all of this. Both are
+features rather than repairs, and both read better once the surf question
+is closed.
+
 ## Still open
 
 Items the record proposed and nothing has closed, gathered from where
