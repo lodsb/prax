@@ -33,6 +33,7 @@ here); the retrieval sets in tests/eval name titles instead.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
 import re
@@ -314,7 +315,17 @@ def report(
     return "\n".join(lines)
 
 
+def _say_what_it_can() -> None:
+    """A Windows console is cp1252 by default and the report holds
+    ticks. Losing a run to that is not acceptable, and writing ASCII
+    where a reader wants the table is not either."""
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(Exception):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
+    _say_what_it_can()
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--questions", type=Path, required=True)
     ap.add_argument(
@@ -389,7 +400,10 @@ def main() -> int:
             door, questions, steps, judge_rt, equations, repeat=max(1, a.repeat)
         )
     text = report(rows_by_steps, model, a.judge or "")
-    print("\n" + text)
+    # kept before it is shown: an hour of the model's work was lost on
+    # 2026-09-26 when printing a tick to a cp1252 console raised
+    # UnicodeEncodeError after the report was built and before it was
+    # written anywhere
     if a.json:
         a.json.write_text(
             json.dumps(rows_by_steps, indent=1, ensure_ascii=False), encoding="utf-8"
@@ -397,6 +411,8 @@ def main() -> int:
     if a.out:
         with open(a.out, "a", encoding="utf-8") as f:
             f.write("\n" + text + "\n")
+        print(f"written to {a.out}")
+    print("\n" + text)
     return 0
 
 
