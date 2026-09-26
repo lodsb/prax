@@ -212,16 +212,30 @@ def expand_query(con: sqlite3.Connection, query: str) -> list[list[str]]:
     by where the token is one of its other names. Tokens of nine or more
     characters, and digits, are never acronyms.
 
+    A compound the library has no term for is added as its halves
+    (`prax.compounds`): `Apfelkuchen` matches nothing where `Apfel` and
+    `Kuchen` each match, and German builds nouns that way. The halves are
+    alternatives beside the word, not instead of it, so a library that
+    holds the compound still ranks it first.
+
     The whole query is looked up as one name too, because a thing is
     often several words (`dünn besetzte Matrizen`) and no single token of
     it is the name.
     """
+    from prax import compounds
+
     terms: list[list[str]] = []
     for tok in _TOKEN.findall(query):
         alts = [tok.lower()]
         if 2 <= len(tok) <= 8 and tok.isalpha():
             alts += [e for e in acronym_expansions(con, tok) if e != tok.lower()]
         alts += [n.lower() for n in known_as(con, tok) if n.lower() not in alts]
+        for part in compounds.split(con, tok):
+            if part not in alts:
+                alts.append(part)
+            # and the half goes through the graph too, because that is the
+            # chain the whole thing is for: Apfelkuchen -> apfel -> apple
+            alts += [n.lower() for n in known_as(con, part) if n.lower() not in alts]
         terms.append(alts)
     whole = " ".join(_TOKEN.findall(query))
     if len(terms) > 1 and whole:
