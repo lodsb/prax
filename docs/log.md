@@ -1571,3 +1571,27 @@ on.
       step now refuses before it asks. A vocabulary result deferred
       because the model server was not ready made the door read a
       `doc_id` its entities do not have.
+
+## 2026-09-27: stage E, the store's module split
+
+- [x] **`documents` (2,739 lines) and `graph` (2,261) are packages of
+      parts.** The split follows each module's own call graph, read with
+      `ast`: a part uses only the parts before it, which the splitter
+      checked before writing anything. `documents`: meta, text, library,
+      domains, readings, reads. `graph`: edges, decisions, labels,
+      languages, context, traversal. Each package's `__init__` re-exports
+      every name, private ones included, so `from .documents import
+      _write_chunks` elsewhere in the store is unchanged, and declares an
+      `ORDER`. The largest file is now 681 lines.
+- [x] **The invariant test reads the parts.** It used to look only at
+      `name.py`, so a subpackage's files would have escaped it. Now every
+      file of a package must be in its `ORDER`, a part may import only
+      the parts before it, and no part may import a store module at or
+      after its package.
+- [x] **What reached inside had to move.** `store.repair` read
+      `_read_archive` through the documents module although it is base's.
+      Three tests reached through `store.documents` to names it had only
+      imported, and one patched `page_counts` on the package, where
+      `count_pages` no longer looks for it.
+- `retrieval` (1,837) and `repair` (1,460) stay whole. The line the api
+  was split at is two thousand, and neither has reached it.

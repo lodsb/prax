@@ -1,0 +1,94 @@
+"""The graph: entities, edges as evidence, and the review queue.
+
+Edges carry their provenance and are invalidated, never deleted (invariant
+8); every triple is validated against the composed ontology (invariant 9)
+and a misfit goes to the review queue instead of into the graph. Traversal
+walks canonical ids, so a merged alias and its survivor are one node.
+
+A package of parts, each importing only from the ones before it in
+``ORDER``; this module re-exports every name, so a caller outside writes
+``from .graph import name`` as before."""
+
+from __future__ import annotations
+
+ORDER = ("edges", "decisions", "labels", "languages", "context", "traversal")
+
+from .context import (  # noqa: F401
+    _CONFIDENCE_BY_RANK,
+    ASK_FACT_RELS_SKIPPED,
+    HUB_TYPES,
+    _doc_ids_by_title,
+    _docs_by_zotero_key,
+    document_context,
+    document_facts,
+    hub_graph,
+)
+from .decisions import (  # noqa: F401
+    _review_where,
+    candidate_runs,
+    count_review,
+    decide_candidates,
+    entity_candidates,
+    get_review,
+    list_review,
+    queue_review,
+    replace_entity_candidates,
+    resolve_review,
+    resolve_review_many,
+    retype_review,
+)
+from .edges import (  # noqa: F401
+    CONFIDENCE_LEVELS,
+    Edge,
+    _entity_id,
+    _subset_version_case,
+    backfill_provenance,
+    canonical_entity,
+    find_edges,
+    find_entities,
+    invalidate_edge,
+    link,
+    provenance_summary,
+    retire_reading,
+    retire_run,
+    select_for_extraction,
+)
+from .labels import (  # noqa: F401
+    PRINTED_MAX,
+    _display_name,
+    _label_from_merge,
+    _refresh_name,
+    add_label,
+    display_language,
+    entities_by_label,
+    entity_labels,
+    entity_names,
+    keep_printed,
+    merge_entities,
+    rename_display_language,
+    rename_entity,
+    unmerge_run,
+)
+from .languages import (  # noqa: F401
+    _mark_corpus_ruling,
+    _named_by_language,
+    corpus_rulings,
+    foreign_names,
+    label_in_language,
+    name_in_english,
+    unlabelled_names,
+    unmark_corpus_ruling,
+)
+from .traversal import (  # noqa: F401
+    EDGES,
+    MAX_HOPS,
+    MIN_DOCUMENTS,
+    NEIGHBOURS,
+    PER_TYPE,
+    _first_hop,
+    _neighbourhood_limits,
+    _second_hop,
+    _walk,
+    traverse,
+    traverse_map,
+)

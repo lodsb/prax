@@ -54,18 +54,68 @@ def _imports(path: Path) -> list[tuple[str, int]]:
     return out
 
 
+def _relative(path: Path) -> list[tuple[int, str, int]]:
+    """A file's relative imports: how many levels up, from what, the line."""
+    return [
+        (node.level, node.module or "", node.lineno)
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.ImportFrom) and node.level
+    ]
+
+
+def _declared_order(init: Path) -> tuple[str, ...]:
+    """A store subpackage's ``ORDER``, read without importing it."""
+    for node in ast.parse(init.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(t, ast.Name) and t.id == "ORDER" for t in node.targets
+        ):
+            return tuple(ast.literal_eval(node.value))
+    return ()
+
+
 def test_the_store_is_the_ten_modules_in_that_order() -> None:
     """Invariant 3. A module imports only from the ones before it, so the
-    package has no cycle and the order in CLAUDE.md is the real one."""
-    missing = [n for n in STORE_ORDER if not (SRC / "store" / f"{n}.py").exists()]
+    package has no cycle and the order in CLAUDE.md is the real one.
+
+    A module that grew past two thousand lines is a package of parts
+    (`documents`, `graph`) with an ``ORDER`` of its own: a part imports
+    only from the parts before it, and from the store's modules before its
+    package."""
+    store = SRC / "store"
+    missing = [
+        n
+        for n in STORE_ORDER
+        if not ((store / f"{n}.py").exists() or (store / n / "__init__.py").exists())
+    ]
     assert not missing, f"the store is missing {missing}"
 
     broken = []
     for i, name in enumerate(STORE_ORDER):
-        for dep, line in _imports(SRC / "store" / f"{name}.py"):
-            head = dep.split(".")[0]
-            if head in STORE_ORDER and STORE_ORDER.index(head) >= i:
-                broken.append(f"{name}.py:{line} imports {head}")
+        if (store / f"{name}.py").exists():
+            files: list[tuple[Path, int, str | None]] = [
+                (store / f"{name}.py", 1, None)
+            ]
+            order: tuple[str, ...] = ()
+        else:
+            order = _declared_order(store / name / "__init__.py")
+            on_disk = {p.stem for p in (store / name).glob("*.py")} - {"__init__"}
+            assert set(order) == on_disk, f"{name}: ORDER {order} but files {on_disk}"
+            files = [(store / name / f"{p}.py", 2, p) for p in order]
+            files.append((store / name / "__init__.py", 2, None))
+        for path, depth, part in files:
+            where = f"{path.relative_to(store)}"
+            for level, module, line in _relative(path):
+                head = module.split(".")[0]
+                if level == depth and head in STORE_ORDER:
+                    if STORE_ORDER.index(head) >= i:
+                        broken.append(f"{where}:{line} imports {head}")
+                elif (
+                    level == 1
+                    and depth == 2
+                    and part is not None
+                    and (head not in order or order.index(head) >= order.index(part))
+                ):
+                    broken.append(f"{where}:{line} imports {name}.{head}")
     assert not broken, "the store's module order is broken: " + "; ".join(broken)
 
 

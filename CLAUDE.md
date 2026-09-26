@@ -52,7 +52,11 @@ revisit threshold, under "Decision thresholds" below.
    `maintain`, `backup`. Its `__init__` re-exports every name, so a
    caller writes `store.<name>` and never imports a submodule. Inside
    the package, a module imports only from the ones before it in that
-   order.
+   order. A module past two thousand lines becomes a package of parts
+   with an `ORDER` of its own, a part importing only from the parts
+   before it: `documents` (meta, text, library, domains, readings,
+   reads) and `graph` (edges, decisions, labels, languages, context,
+   traversal).
 4. **Single writer.** *(enforced)* The service process, the door, is the only
    writer. The recurring passes (parse, titles, extract, embed, and the
    likely tier of entity resolution) are done by workers. A worker

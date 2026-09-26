@@ -137,7 +137,10 @@ failure a user can work around by adding a word.
       step names. Two bugs fell out: a local-model step with a paid model
       leased its batch before refusing it, and a deferred vocabulary result
       raised in the door.
-- [ ] **The store's module split**, after the Step object, since both
+- [x] (2026-09-27: `documents` and `graph`, the two past 2,000 lines, are packages of six
+      parts each with an `ORDER` the invariant test reads; the largest file is now 681
+      lines. `retrieval` (1,837) and `repair` (1,460) stay whole until they pass the
+      same line) **The store's module split**, after the Step object, since both
       touch the largest modules and the module order is an invariant that
       B will have made testable.
 - [ ] **The reads outside the store**, which the split partly dissolves.

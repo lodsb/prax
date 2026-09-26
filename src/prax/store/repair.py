@@ -34,7 +34,7 @@ from typing import Any
 
 from prax import glyphs
 
-from .base import _ASIDE, _NOW, _reading, now
+from .base import _ASIDE, _NOW, _read_archive, _reading, now
 from .documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
@@ -803,7 +803,7 @@ def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
         ).fetchone()
         if row is None or not row["text_hash"]:
             continue
-        text = docs._read_archive(row["text_hash"]).decode("utf-8")
+        text = _read_archive(row["text_hash"]).decode("utf-8")
         if not glyphs.damaged(text):
             continue
         docs.index_text(con, r["id"], text, text_source=row["src"])

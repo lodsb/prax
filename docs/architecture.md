@@ -294,9 +294,9 @@ carries it on the page.
 |---|---|---|
 | `prax.store` | the only door, a package of nine modules whose `__init__` re-exports every name (so callers keep writing `store.<name>`) | yes, the only one |
 | `store.base` | the connection, the lock and its retry, migrations, the content-addressed archive, the index files | yes |
-| `store.documents` | register, index_text, chunks, get, list, meta, domains, promotion, retiring, the document field | yes |
+| `store.documents` | a package of parts, in order: `meta` (meta, the document field, summary, title, sections), `text` (register, index_text, chunks, references, ingest), `library` (retiring, duplicates, captures), `domains` (domains, promotion, extraction stamps), `readings` (the readings queue, pages, figures), `reads` (get, list, chunks) | yes |
 | `store.retrieval` | acronym expansion and the match expression, BM25 and KNN over chunks and the field, fusion, rerank, the vector index and its delta, embedding bookkeeping | yes |
-| `store.graph` | entities, edges with their provenance, traversal, resolution, the review queue, selection for extraction, hubs, a document's facts and context | yes |
+| `store.graph` | a package of parts, in order: `edges` (entities and edges with their provenance, selection for extraction), `decisions` (the review queue, resolution candidates), `labels` (names, merges, the shown name), `languages` (the vocabulary step's store half), `context` (a document's facts and context, hubs), `traversal` | yes |
 | `store.pages` | pages and their revisions (documents too), project membership | yes |
 | `store.jobs` | what runs, heartbeats, reaping, the change stamp | yes |
 | `store.summary` | `stats`: what the store holds, counted for `prax status` | reads |

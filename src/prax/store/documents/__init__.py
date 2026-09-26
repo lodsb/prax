@@ -1,0 +1,143 @@
+"""Documents: taking one in, reading it back, and what is said about it.
+
+The two-step ingest of invariant 3 (``register`` archives the original and
+inserts the row, ``index_text`` stores the parsed text, chunks it and fills
+FTS), the meta a document carries (source, capture, domains, promotion,
+retirement, extraction stamps), and the document field — the few lines that
+say what a document *is*, which the search ranks as its own list.
+
+A package of parts, each importing only from the ones before it in
+``ORDER``; this module re-exports every name, so a caller outside writes
+``from .documents import name`` as before."""
+
+from __future__ import annotations
+
+ORDER = ("meta", "text", "library", "domains", "readings", "reads")
+
+from .domains import (  # noqa: F401
+    PROMOTE_WEIGHTS,
+    _check_domains,
+    _lens_changed,
+    _rule_matches,
+    _set_promote,
+    add_domain,
+    assign_domains,
+    document_domains,
+    documents_in_domain,
+    expected_version,
+    extracted_by,
+    promote,
+    promoted_documents,
+    promotion_candidates,
+    remove_domain,
+    request_extraction,
+    restamp_ontology,
+    set_domains,
+    unpromote,
+    unstamp_extraction,
+)
+from .library import (  # noqa: F401
+    DUPLICATE_THRESHOLD,
+    _join_duplicate,
+    capture_rank,
+    chunk_fingerprint,
+    dedupe_captures,
+    fingerprint_text,
+    is_retired,
+    live_captures_of,
+    note_recapture,
+    retire_document,
+    similarity,
+    unretire_document,
+)
+from .meta import (  # noqa: F401
+    _KIND_WORDS,
+    DOCTYPES,
+    SECTION_FIELD_CHARS,
+    _is_indexed,
+    _refresh_document_field,
+    _section_lines,
+    document_field,
+    document_sections,
+    get_meta,
+    is_indexed,
+    refresh_document_fields,
+    retitle,
+    sections_needed,
+    set_meta,
+    set_sections,
+    set_summary,
+    summary_tried,
+)
+from .readings import (  # noqa: F401
+    _EQ_REF,
+    _MODE_WORD,
+    MATHS_MIN_REFS,
+    MODES,
+    READINGS,
+    THIN_BYTES_PER_PAGE,
+    THIN_MIN_PAGES,
+    cancel_reading,
+    check_mode,
+    count_pages,
+    count_reading_requests,
+    document_has_figure,
+    equation_density,
+    figure_blob,
+    figures_to_read,
+    finish_reading,
+    finished_readings,
+    has_unread_formulas,
+    page_counts,
+    pending_readings,
+    reading_requests,
+    readings_done_since,
+    request_reading,
+    request_readings,
+    select_for_reading,
+    thin_documents,
+    uncounted_pages,
+    unreadable_documents,
+    waiting_readings,
+)
+from .reads import (  # noqa: F401
+    ANNOTATORS,
+    HEAD_CHARS,
+    NEARBY_AFTER,
+    NEARBY_BEFORE,
+    READABLE,
+    _chunk_shape,
+    _equation_head,
+    document_outline,
+    document_titles,
+    equations_near,
+    find_chunk,
+    formula_by_number,
+    get_chunk,
+    get_document,
+    list_chunks,
+    list_documents,
+    meta_index,
+    read_chunks,
+    select_documents,
+)
+from .text import (  # noqa: F401
+    _apply_reference_links,
+    _cleaned,
+    _reference_key,
+    _write_chunks,
+    archive_blob,
+    fill_text_lengths,
+    get_original,
+    index_text,
+    ingest_file,
+    ingest_text,
+    original_info,
+    rechunk,
+    reference_chunks,
+    register,
+    set_reference_links,
+    set_text_source,
+    text_hashes,
+    text_unchanged,
+)

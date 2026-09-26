@@ -485,13 +485,14 @@ def test_the_glyph_check_reads_a_text_once(
     """Each document's chunks are read once per text: a second check
     over an unchanged library consults the memo, a re-indexed text is
     read again, a retired document leaves the memo."""
-    from prax.store import documents, repair
+    from prax import glyphs
+    from prax.store import repair
 
     repair._glyphs_seen.clear()
     # a text indexed before prax.glyphs cleaned every text: the ligature
     # is in the artifact and the chunks
     with monkeypatch.context() as m:
-        m.setattr(documents.glyphs, "clean", lambda t: t)
+        m.setattr(glyphs, "clean", lambda t: t)
         bad = store.ingest_text(con, "a ﬁne ligature " * 10, title="lig")["doc_id"]
     ok = store.ingest_text(con, "plain words " * 10, title="ok")["doc_id"]
     assert [d["id"] for d in repair._glyph_documents(con)] == [bad]
@@ -517,7 +518,8 @@ def test_a_truncated_pdf_records_no_pages_rather_than_nagging(
     """A PDF MuPDF opens with no pages at all (a truncated download whose
     text came from somewhere else) records zero. It used to be skipped,
     so uncounted-pages listed it for ever and repaired nothing."""
-    from prax.store import documents as docs
+    # count_pages asks page_counts in its own part of the documents package
+    from prax.store.documents import readings as docs
 
     doc = store.register(con, b"%PDF-1.4 truncated", mime="application/pdf", title="t")[
         "doc_id"

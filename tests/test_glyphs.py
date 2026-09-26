@@ -41,7 +41,7 @@ def test_the_heal_pass_reindexes_the_old_texts(con: sqlite3.Connection) -> None:
     old = "The ﬁrst ﬁgure. " * 40
     con.execute(
         "UPDATE documents SET text_hash = ? WHERE id = ?",
-        (store.documents._archive_bytes(old.encode("utf-8")), doc_id),
+        (store._archive_bytes(old.encode("utf-8")), doc_id),
     )
     store.documents._write_chunks(con, doc_id, old)  # through the FTS triggers
     con.commit()

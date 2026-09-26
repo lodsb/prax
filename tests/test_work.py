@@ -632,7 +632,7 @@ def test_a_backlog_pass_re_reads_what_a_revised_extractor_would_read_differently
     )
     hist = store.get_meta(con, other)["parse_history"]
     assert hist[-1]["outcome"] == "upgraded" and len(hist[-1]["text_hash"]) == 64
-    old_text = store.documents._read_archive(hist[-1]["text_hash"])
+    old_text = store._read_archive(hist[-1]["text_hash"])
     assert old_text.decode("utf-8").startswith("Second words.")
 
 

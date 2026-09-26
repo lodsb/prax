@@ -1,0 +1,453 @@
+"""Reading documents and chunks back: one document, a list, a chunk and its
+neighbours, the equations near a place, an outline."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+from typing import Any
+
+from ..base import (
+    _TOKEN,
+    _like_prefix,
+    _read_archive,
+    _reading,
+)
+
+
+@_reading
+def select_documents(
+    con: sqlite3.Connection,
+    *,
+    pending: bool = False,
+    text_source_prefix: str | None = None,
+    title: str | None = None,
+    mime_prefix: str | None = None,
+    limit: int | None = None,
+) -> list[int]:
+    """Document ids for batch jobs, oldest first.
+
+    ``pending`` selects never-indexed documents (``parsed_at IS NULL``);
+    ``text_source_prefix`` selects indexed ones whose ``meta.text_source``
+    starts with the prefix (``"zotero-ft-cache"``, ``"pymupdf/"``);
+    ``title`` selects by a case-insensitive substring of the title. The
+    three are OR-ed when several are given. ``mime_prefix`` narrows any.
+    """
+    clauses: list[str] = []
+    args: list[Any] = []
+    if pending:
+        clauses.append("parsed_at IS NULL")
+    if text_source_prefix is not None:
+        clauses.append("json_extract(meta, '$.text_source') LIKE ? ESCAPE '!'")
+        args.append(_like_prefix(text_source_prefix))
+    if title:
+        clauses.append("title LIKE ? ESCAPE '!'")
+        args.append("%" + _like_prefix(title)[:-1] + "%")
+    if not clauses:
+        return []
+    sql = (
+        f"SELECT id FROM documents WHERE ({' OR '.join(clauses)})"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    )
+    if mime_prefix is not None:
+        sql += " AND mime LIKE ? ESCAPE '!'"
+        args.append(_like_prefix(mime_prefix))
+    sql += " ORDER BY id"
+    if limit is not None:
+        sql += " LIMIT ?"
+        args.append(limit)
+    return [r["id"] for r in con.execute(sql, args)]
+
+
+@_reading
+def meta_index(con: sqlite3.Connection, json_path: str) -> dict[str, int]:
+    """Map every value found at ``json_path`` in any document's meta to its id.
+
+    Array values are expanded, so ``"$.zotero.keys"`` yields one entry per
+    key. Lets importers decide what is already imported without re-reading
+    or re-hashing source files.
+    """
+    rows = con.execute(
+        "SELECT d.id AS id, j.value AS value"
+        " FROM documents d, json_each(json_extract(d.meta, ?)) j"
+        " WHERE json_extract(d.meta, ?) IS NOT NULL",
+        (json_path, json_path),
+    ).fetchall()
+    return {str(r["value"]): r["id"] for r in rows}
+
+
+@_reading
+def get_document(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    offset: int = 0,
+    max_chars: int | None = None,
+) -> dict[str, Any] | None:
+    """One document with its text read from the parsed-text artifact.
+
+    ``text`` is the window ``[offset, offset + max_chars)``; ``text_len`` and
+    ``truncated`` tell the caller whether more remains. With ``max_chars=0``
+    the artifact is not read when the row knows its length (every text
+    indexed since migration 15; the ``lengths`` maintain pass fills the
+    rest): the row alone, for the callers that want the row.
+    """
+    doc = con.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if not doc:
+        return None
+    out = dict(doc)
+    out["meta"] = json.loads(out["meta"]) if out["meta"] else {}
+    offset = max(0, offset)
+    known = doc["text_len"] if doc["text_hash"] else 0
+    if max_chars == 0 and known is not None:
+        out.update(
+            text="", text_len=int(known), offset=offset, truncated=offset < int(known)
+        )
+        return out
+    full = _read_archive(doc["text_hash"]).decode("utf-8") if doc["text_hash"] else ""
+    end = len(full) if max_chars is None else min(len(full), offset + max(0, max_chars))
+    out.update(
+        text=full[offset:end],
+        text_len=len(full),
+        offset=offset,
+        truncated=end < len(full),
+    )
+    return out
+
+
+ANNOTATORS = ("figures", "figure-refs", "formulas")  # readers that add to the text
+
+
+def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
+    """The structural fields of a chunk row, decoded (None for legacy
+    rows), and for a figure chunk the ``figure`` reference, so a hit or a
+    passage can show the image (``GET /doc/{id}/figure/{ref}``) beside
+    its reading."""
+    loc = json.loads(row["locator"]) if row["locator"] else {}
+    out = {
+        "kind": row["kind"],
+        "heading": json.loads(row["heading"]) if row["heading"] else [],
+        "page": loc.get("page"),
+        "time": loc.get("time"),  # seconds into a recording, a transcript's passage
+        "figure": None,
+    }
+    if row["kind"] == "figure" and "data" in row.keys() and row["data"]:  # noqa: SIM118 - a Row iterates values, not keys
+        try:
+            out["figure"] = json.loads(row["data"]).get("ref")
+        except (ValueError, AttributeError):
+            pass
+    return out
+
+
+@_reading
+def list_documents(
+    con: sqlite3.Connection,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    title: str | None = None,
+    source: str | None = None,
+    mime_prefix: str | None = None,
+    retired: bool = False,
+    domain: str | None = None,
+    tag: str | None = None,
+) -> dict[str, Any]:
+    """Documents without their text, newest first, for browsing.
+
+    ``title`` is a case-insensitive substring; ``source`` matches
+    ``meta.source``; ``mime_prefix`` a MIME type prefix; ``retired`` lists
+    the retired documents instead of the live ones; ``domain`` keeps the
+    documents of one ontology module (a document without a domain set is
+    in every module and stays, as in search); ``tag`` keeps the documents
+    carrying that tag (``project:synth``). Returns ``{"total", "items"}``
+    where each item carries the row, its decoded ``meta`` and its chunk
+    count.
+    """
+    clauses: list[str] = [
+        "json_extract(d.meta, '$.retired') IS " + ("NOT NULL" if retired else "NULL")
+    ]
+    args: list[Any] = []
+    if domain:
+        clauses.append(
+            "(json_extract(d.meta, '$.domains') IS NULL OR EXISTS"
+            " (SELECT 1 FROM json_each(d.meta, '$.domains') WHERE value = ?))"
+        )
+        args.append(domain)
+    if tag:
+        clauses.append(
+            "EXISTS (SELECT 1 FROM json_each(d.meta, '$.tags') WHERE value = ?)"
+        )
+        args.append(tag)
+    if title:
+        clauses.append("lower(d.title) LIKE ? ESCAPE '!'")
+        args.append("%" + _like_prefix(title.lower())[:-1] + "%")
+    if source:
+        clauses.append("json_extract(d.meta, '$.source') = ?")
+        args.append(source)
+    if mime_prefix:
+        clauses.append("d.mime LIKE ? ESCAPE '!'")
+        args.append(_like_prefix(mime_prefix))
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    total = con.execute(f"SELECT count(*) FROM documents d {where}", args).fetchone()[0]
+    rows = con.execute(
+        f"""
+        SELECT d.id, d.title, d.mime, d.source_url, d.added_at, d.parsed_at, d.meta,
+               (SELECT count(*) FROM chunks c WHERE c.doc_id = d.id) AS n_chunks
+        FROM documents d {where}
+        ORDER BY d.added_at DESC, d.id DESC LIMIT ? OFFSET ?
+        """,
+        (*args, max(1, min(limit, 500)), max(0, offset)),
+    ).fetchall()
+    items = []
+    for r in rows:
+        item = dict(r)
+        item["meta"] = json.loads(item["meta"]) if item["meta"] else {}
+        items.append(item)
+    return {"total": total, "items": items}
+
+
+@_reading
+def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """A document as its chunks in order, with text and structure (the
+    document view renders from this)."""
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE doc_id = ? ORDER BY seq",
+        (doc_id,),
+    ).fetchall()
+    out = []
+    for r in rows:
+        c = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+        c.update(_chunk_shape(r))
+        c["locator"] = json.loads(r["locator"]) if r["locator"] else None
+        c["data"] = json.loads(r["data"]) if r["data"] else None
+        out.append(c)
+    return out
+
+
+@_reading
+def read_chunks(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    after_seq: int = -1,
+    max_chars: int = 1500,
+    skip: set[int] | None = None,
+) -> list[dict[str, Any]]:
+    """The chunks that follow a point in a document, in order, as many as
+    fit ``max_chars`` (the first always): what "read on" means for a
+    passage, and the start of a document for ``after_seq=-1``. A figure a
+    model has read comes along, its description being its text; an unread
+    one does not (``READABLE``). ``skip`` leaves out chunk ids the caller
+    has read already, so a reader that comes back to a document keeps
+    making progress instead of meeting what it has seen. Each chunk
+    carries ``chunk_id``, ``seq``, ``text``, ``kind``, ``heading`` and
+    ``page``."""
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        f" FROM chunks WHERE doc_id = ? AND seq > ? AND {READABLE} ORDER BY seq",
+        (doc_id, after_seq),
+    )
+    out: list[dict[str, Any]] = []
+    used = 0
+    for r in rows:
+        if skip and r["chunk_id"] in skip:
+            continue
+        if out and used + len(r["text"]) > max_chars:
+            break
+        c = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+        c.update(_chunk_shape(r))
+        out.append(c)
+        used += len(r["text"])
+    return out
+
+
+# A figure a model has read carries its description in its own text, so
+# it reads like any other chunk; one nobody has read is an image line and
+# a caption, which is noise in a reading and a useless snippet in a hit.
+READABLE = (
+    "(kind != 'figure' OR json_array_length(json_extract(data, '$.readings')) > 0)"
+)
+
+
+@_reading
+def find_chunk(
+    con: sqlite3.Connection,
+    doc_id: int,
+    words: str,
+) -> dict[str, Any] | None:
+    """The chunk of one document that holds most of the words, a longer
+    word counting for more ("what", "is" and "a" carry no question); the
+    document's first chunk when none of them occurs in it, None when it
+    has no chunks. This is how a hit that matched on the document field
+    is opened somewhere, and how a reading lands on the part of a long
+    document that was asked for, without a MATCH over the whole index
+    filtered to one document (seconds per hit for a question full of
+    common words). An unread figure is never the answer (``READABLE``).
+    """
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        f" FROM chunks WHERE doc_id = ? AND {READABLE} ORDER BY seq",
+        (doc_id,),
+    ).fetchall()
+    if not rows:
+        return None
+    terms = {t.lower() for t in _TOKEN.findall(words)}
+    best, score = rows[0], 0
+    for r in rows:
+        found = terms & set(_TOKEN.findall(r["text"].lower()))
+        weight = sum(len(t) for t in found)
+        if weight > score:
+            best, score = r, weight
+    out = {k: best[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+    out.update(_chunk_shape(best))
+    return out
+
+
+NEARBY_BEFORE = 2  # equations named around a formula hit
+NEARBY_AFTER = 3
+HEAD_CHARS = 72
+
+
+def _equation_head(data: str | None, text: str) -> str:
+    """A few words naming an equation: its reading's first sentence, else
+    its LaTeX cut short."""
+    latex, reading = "", ""
+    if data:
+        try:
+            d = json.loads(data)
+            latex = str(d.get("latex") or "")
+            readings = d.get("readings") or []
+            reading = str(readings[0].get("text") or "") if readings else ""
+        except (ValueError, AttributeError):
+            pass
+    head = reading.split(". ")[0] if reading else latex or text.split("\n")[0]
+    head = " ".join(head.split())
+    return head if len(head) <= HEAD_CHARS else head[: HEAD_CHARS - 1].rstrip() + "…"
+
+
+def equations_near(
+    con: sqlite3.Connection,
+    chunk_id: int,
+    *,
+    before: int = NEARBY_BEFORE,
+    after: int = NEARBY_AFTER,
+) -> list[dict[str, Any]]:
+    """The numbered equations around a chunk in its document — the
+    neighbourhood a formula hit sits in, so a reader knows that the
+    kernel is the next equation after the integral it holds. Each has
+    its ``number`` (None when the paper gave it none), ``chunk_id``,
+    ``seq``, a ``head`` naming it, and ``here`` for the chunk itself."""
+    row = con.execute(
+        "SELECT doc_id, seq FROM chunks WHERE id = ?", (chunk_id,)
+    ).fetchone()
+    if row is None:
+        return []
+    rows = con.execute(
+        "SELECT id, seq, data, text FROM chunks WHERE doc_id = ? AND kind = 'formula'"
+        " ORDER BY seq",
+        (row["doc_id"],),
+    ).fetchall()
+    if len(rows) < 2:
+        return []
+    seqs = [r["seq"] for r in rows]
+    # the chunk itself when it is an equation, else the equations around its place
+    at = next((i for i, r in enumerate(rows) if r["id"] == chunk_id), None)
+    if at is None:
+        at = sum(1 for s_ in seqs if s_ < row["seq"])
+        lo, hi = max(0, at - before), min(len(rows), at + after)
+    else:
+        lo, hi = max(0, at - before), min(len(rows), at + after + 1)
+    out = []
+    for r in rows[lo:hi]:
+        number = None
+        if r["data"]:
+            try:
+                number = json.loads(r["data"]).get("number")
+            except (ValueError, AttributeError):
+                pass
+        out.append(
+            {
+                "chunk_id": r["id"],
+                "seq": r["seq"],
+                "number": number,
+                "head": _equation_head(r["data"], r["text"]),
+                "here": r["id"] == chunk_id,
+            }
+        )
+    return out
+
+
+def formula_by_number(
+    con: sqlite3.Connection, doc_id: int, number: str
+) -> dict[str, Any] | None:
+    """The formula chunk a paper calls ``(number)`` — how a reader opens
+    "equation (2)" the way the prose refers to it."""
+    rows = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE doc_id = ? AND kind = 'formula' ORDER BY seq",
+        (doc_id,),
+    ).fetchall()
+    want = number.strip("() ").lower()
+    for r in rows:
+        if not r["data"]:
+            continue
+        try:
+            got = json.loads(r["data"]).get("number")
+        except (ValueError, AttributeError):
+            continue
+        if got is not None and str(got).lower() == want:
+            out = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+            out.update(_chunk_shape(r))
+            return out
+    return None
+
+
+@_reading
+def document_outline(
+    con: sqlite3.Connection, doc_id: int, *, limit: int = 20
+) -> list[str]:
+    """The document's sections in order, as heading paths (" › " joined),
+    at most ``limit``: what to name when a reading of it found nothing."""
+    rows = con.execute(
+        "SELECT heading, MIN(seq) AS seq FROM chunks"
+        " WHERE doc_id = ? AND heading IS NOT NULL AND heading != '[]'"
+        " GROUP BY heading ORDER BY seq LIMIT ?",
+        (doc_id, max(1, limit)),
+    ).fetchall()
+    out = []
+    for r in rows:
+        path = json.loads(r["heading"])
+        if path:
+            out.append(" › ".join(path))
+    return out
+
+
+def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
+    """Titles by id, for naming documents in a result (unknown ids left
+    out; an untitled document is an empty string)."""
+    ids = list(dict.fromkeys(int(i) for i in doc_ids))
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    rows = con.execute(
+        f"SELECT id, title FROM documents WHERE id IN ({marks})", ids
+    ).fetchall()
+    return {r["id"]: r["title"] or "" for r in rows}
+
+
+@_reading
+def get_chunk(con: sqlite3.Connection, chunk_id: int) -> dict[str, Any] | None:
+    """One chunk in full: text, kind, heading, locator and table ``data``."""
+    r = con.execute(
+        "SELECT id AS chunk_id, doc_id, seq, text, kind, locator, heading, data"
+        " FROM chunks WHERE id = ?",
+        (chunk_id,),
+    ).fetchone()
+    if r is None:
+        return None
+    out = {k: r[k] for k in ("chunk_id", "doc_id", "seq", "text")}
+    out.update(_chunk_shape(r))
+    out["locator"] = json.loads(r["locator"]) if r["locator"] else None
+    out["data"] = json.loads(r["data"]) if r["data"] else None
+    return out
