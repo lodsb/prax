@@ -217,3 +217,13 @@ A three-word limit keeps out dish titles, which an earlier probe turned
 into literal translations nobody types ("Olivenpökellake-Dressing"). A
 wrong label adds one false route from a German word to an English
 entity. It changes no name, and `unmerge_run` takes a run back whole.
+
+**Applied, same evening.** The rejudge pass overturned the 979 rulings
+and the worker folded them (Zucker → sugar, Zwiebel → onion). The
+outward labels ran over the library in 109 passes of 200 at about 90
+s each: 22,382 German labels. `apple` now carries `Apfel`, and
+`Apfelkuchen` expands to `apfel`, `apple` and `kuchen`. With
+`domain=kitchen` the apple recipe is the **first hit**. Without a domain
+the whole first page is Apple Inc. (Logic manuals, a Power Mac). The
+bridge is built, and the brand collision is now the only thing between
+the question and the recipe.
