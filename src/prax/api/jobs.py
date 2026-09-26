@@ -563,6 +563,44 @@ def _start_backup(con: Any, dest: str | None, *, archive: bool) -> dict[str, Any
     return {"job": job.id, "dest": str(dest)}
 
 
+FIGURES_SLICE = 150  # documents a night: about three hours of the local model
+
+
+def _start_figures(con: Any, documents: int | None = None) -> dict[str, Any]:
+    """The figures backlog, a slice a night (``schedule: figures``).
+
+    13,070 captioned pictures in 1,984 documents had never been read on
+    2026-09-27, and asked for at once they would have stood in front of
+    every capture's parse for a day and a half: a reading that was asked
+    for goes first. So the clock asks for the next ``documents`` whose
+    pictures the vision model has not read, oldest first, and only when
+    the last slice is done and the model is free. A document whose
+    figures are captions with no picture behind them is not asked for:
+    no reading changes those, and they are half the figure chunks.
+    """
+    from prax import pipeline
+
+    n = int(documents or FIGURES_SLICE)  # schedule: figures: {documents: N}
+    with store.Job(con, "figures", note=f"a slice of {n}") as job:
+        spec = models.resolve("vision")
+        if spec is None or not pipeline.vision_is_free():
+            job.update(note="the vision model is off or paid: nothing asked")
+            return {"job": job.id, "requested": 0, "why": "vision model off or paid"}
+        waiting = int(store.waiting_readings(con).get("figures", 0) or 0)
+        if waiting:
+            job.update(note=f"{waiting} figure readings still waiting: nothing asked")
+            return {"job": job.id, "requested": 0, "waiting": waiting}
+        chosen = []
+        for doc_id in store.select_for_reading(con, unread_figures=True):
+            if store.figures_to_read(con, doc_id, model=spec.runtime_name) > 0:
+                chosen.append(doc_id)
+                if len(chosen) >= n:
+                    break
+        got = store.request_readings(con, chosen, "figures", by="clock")
+        job.update(note=f"asked for {got.get('requested', 0)} of {len(chosen)}")
+        return {"job": job.id, **got}
+
+
 @router.get("/stats")
 def stats(request: Request) -> dict[str, Any]:
     """What the store holds: documents, chunks, vectors, the graph, the

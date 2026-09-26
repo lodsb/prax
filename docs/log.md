@@ -1648,3 +1648,25 @@ on.
       suggests) all go through it. `senses` costs 34-61 ms after reading
       each sense's edges through its own index; the first version, an OR
       of the two ends, cost 200-400 ms.
+
+## 2026-09-27: stage F, what waited on a word
+
+- [x] **Twin documents:** 2 left of the 6 the plan named, both recent
+      re-downloads (ids 10334, 10335) of papers held since the first
+      import, 96% the same text. Retired into their keepers; the check
+      finds 0.
+- [x] **The seven promotions** had already been read: nothing waited,
+      nothing spent.
+- [x] **The unread figures are smaller than the plan said and now have
+      a clock.** The 55,607 counted every unread figure chunk. 46,930 of
+      those are captions with no picture behind them, which no reading
+      changes. What the vision model would actually read is 13,070
+      captioned pictures in 1,984 documents, plus 2,497 uncaptioned
+      ones, which the captioned pass leaves alone. At about 55 documents
+      an hour that is a day and a half of the card, and a reading that
+      was asked for goes before a capture's parse. So the door's clock
+      has a fourth entry, `schedule: figures`. At its hour it asks for
+      the next slice (150 documents here, about three hours) of
+      documents with a picture the current model has not read, and
+      nothing while the last slice waits or the model is paid. It is a
+      job like the others, so a restart does not run the night twice.

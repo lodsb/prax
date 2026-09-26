@@ -25,7 +25,7 @@ from prax import auth, config, embeddings, inbox, schedule, store
 
 from . import ask, capture, documents, graph, jobs, pages, process
 from ._base import _con, max_upload
-from .jobs import _start_backup, _start_maintain
+from .jobs import _start_backup, _start_figures, _start_maintain
 from .pages import _answering, _answering_lock, _start_questions
 
 __all__ = ["_answering", "_answering_lock", "_con", "app", "max_upload"]
@@ -94,6 +94,7 @@ def _clock(stop: threading.Event, every: float) -> None:
                         "questions": lambda o: _start_questions(
                             con, briefing=o.get("briefing", True)
                         ),
+                        "figures": lambda o: _start_figures(con, o.get("documents")),
                     },
                 )
             except Exception:

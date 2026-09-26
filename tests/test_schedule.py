@@ -200,3 +200,44 @@ def test_the_nightly_pass_happens_at_the_hour_and_once_a_day(
     assert scopes.count("all") == 1 and scopes[0] == "captures"
     assert passes[scopes.index("all")]["limit"] == 7
     assert scopes[-1] == "captures"
+
+
+def _pdf_with(con: sqlite3.Connection, name: str, figure: str) -> int:
+    doc = store.register(con, name.encode() * 3, mime="application/pdf", title=name)
+    store.index_text(con, doc["doc_id"], "# Pictures\n\n" + "Prose. " * 20 + figure)
+    return int(doc["doc_id"])
+
+
+def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A night's slice of the documents whose pictures the vision model has
+    not read, and nothing while the last slice waits: all of it at once
+    would stand in front of every capture's parse for a day and a half."""
+    from prax import models, pipeline
+    from prax.api.jobs import _start_figures
+
+    local = models.ModelSpec(
+        name="server", kind="openai", base_url="http://127.0.0.1:1/v1", model="v"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: local if s == "vision" else None)
+    monkeypatch.setattr(pipeline, "vision_is_free", lambda: True)
+    pictured = [
+        _pdf_with(con, f"paper {i}", f"\n\n![Fig. {i}. A rig.](figure:{'d' * 63}{i})\n")
+        for i in range(3)
+    ]
+    # a caption no picture stands behind: no reading will change it
+    _pdf_with(con, "captions", "\n\nFigure 3: a plot the extractor lost.\n")
+    got = _start_figures(con, 2)
+    assert got["requested"] == 2
+    assert set(store.waiting_readings(con)) == {"figures"}
+    # the next night, with that slice still waiting: nothing more
+    assert _start_figures(con, 2)["requested"] == 0
+    asked = {r["doc_id"] for r in store.reading_requests(con, limit=None)}
+    assert asked == set(pictured[:2])
+    assert store.last_job(con, "figures") is not None
+
+
+def test_the_figures_entry_is_one_the_clock_knows() -> None:
+    got = schedule.entries({"figures": {"at": "21:00", "documents": 150}})
+    assert [(e.name, e.options) for e in got] == [("figures", {"documents": 150})]

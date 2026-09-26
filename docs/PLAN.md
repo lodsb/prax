@@ -13,7 +13,8 @@ A–E below are done. This is what follows, in this order: first what
 waits only on a word, then the other half of the traverse question, then
 the precondition for communities, then two things a user notices.
 
-- [ ] **F. What waited on a word.** The six `twin-documents` (dry run,
+- [x] (2026-09-27: 2 twins retired, the promotions were already done, the
+      figures a nightly slice of 150 from the door's clock) **F. What waited on a word.** The six `twin-documents` (dry run,
       then the repair), the seven pending promotions (`--spend`, capped
       at the seven, roughly $1-3), and the unread figures started in
       slices that leave the parse queue its turn.
@@ -190,12 +191,12 @@ explains it.
       `ingredients` regions only arrive with a re-chunk (10,261
       documents; a chunk whose text did not change keeps its id and its
       vector). An overnight job.
-- [ ] **The unread figures** — 55,607 left of 93,158, sliced so a
+- [x] (F: `schedule: figures`, 150 documents a night) **The unread figures** — 55,607 left of 93,158, sliced so a
       request does not pre-empt the parse queue for days.
-- [ ] **The seven pending promotions** — `prax work --steps promote
+- [x] (F: none waiting on 2026-09-27) **The seven pending promotions** — `prax work --steps promote
       --spend -n 7`, roughly $1–3 on Sonnet 5; or the standing shape,
       `spend: true` on the worker role with `budget: {daily_usd: N}`.
-- [ ] **`twin-documents`** (6) — the repair retires documents.
+- [x] (F: 2 left, retired into their keepers) **`twin-documents`** (6) — the repair retires documents.
 - [ ] **The sections pass on the vector side.**
       `docs/eval/sections-2026-09-25.md` measured the keyword half —
       hit@10 0.087 to 0.130, MRR 0.048 to 0.077 — and says nothing about
@@ -310,7 +311,7 @@ recipe at once. Three independent failures, each wanting a different fix.
 - [ ] **taco and tacos are different searches** (`niggles.txt`).
 - [x] (stage D: the walk skips what it has passed) **The embed hand-out after a rechunk** — `GET /work/embed` and the
       backlog it leaves (`docs/log.md`, "The night of 2026-09-20").
-- [ ] **The figures backlog, and why it was not moving** — 3,692
+- [x] (F: the slice a night) **The figures backlog, and why it was not moving** — 3,692
       waiting (`docs/log.md`, 2026-09-24).
 
 ### The UI and the agent
