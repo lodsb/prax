@@ -15,10 +15,16 @@ before the prevention did. On a library starting today they find nothing,
 because the prevention is in the paths that create things rather than in
 a pass that follows behind:
 
-- **The extraction prompt says which language to write**, and which names
-  may be translated at all, built from the ontology's `naming:` key
-  rather than a list beside it. A new library never accumulates the split
-  the vocabulary pass had to repair here.
+- **A name is translated once, in one place, and the printed word is
+  kept.** The extraction prompt writes names as the document prints
+  them; the watched `vocabulary` step translates the ones the ontology's
+  `naming:` key calls common and keeps the printed word as a label. For
+  two days (2026-09-24 to -26) the prompt did the translating instead,
+  which looked like prevention and quietly dropped the label a German
+  query crosses on — the repair had a side effect the prevention did not
+  reproduce (`docs/eval/apfelkuchen-2026-09-26.md`). Because the step is
+  watched, it runs within a minute of the extraction, so a new library
+  still never accumulates the split.
 - **Every entity carries a label of its own name from birth**
   (`_entity_id`), so the identity design holds from document one rather
   than from migration 23. The labels are the truth about what a thing is

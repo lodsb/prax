@@ -1,11 +1,17 @@
 """The word a document printed, kept beside the name the graph writes.
 
-Since 2026-09-24 the extraction prompt writes a common noun in the
+From 2026-09-24 to -26 the extraction prompt wrote a common noun in the
 library's language, and a new entity got one label, its own name — so a
 German recipe's "Äpfel" became `apple` with no German label anywhere, and
 a German query had nothing to cross to the English documents on
-(``docs/eval/apfelkuchen-2026-09-26.md``). The vocabulary pass it replaced
-had left that word behind every time it renamed.
+(``docs/eval/apfelkuchen-2026-09-26.md``).
+
+The main route back is the prompt writing names as printed and the watched
+vocabulary pass translating them, which keeps the word by construction. A
+local model asked to write both names on one line wrote neither (0 of
+145) or, forced, wrote junk. What is tested here is the fallback: a model
+that translates anyway can still hand over the printed word, and it is
+kept.
 """
 
 from __future__ import annotations
@@ -121,9 +127,10 @@ def test_the_json_answer_carries_it_as_the_entity_s_as() -> None:
     assert "as" in entity["properties"] and entity["required"] == ["name", "type"]
 
 
-def test_the_prompt_asks_for_the_printed_word() -> None:
+def test_the_prompt_translates_no_name_and_the_format_keeps_a_fallback() -> None:
     prompt = extraction.system_prompt(ontology.current())
-    assert "give the printed word as well" in prompt
+    assert "never translate a name" in prompt
+    # the line format still offers the fields, for a model that does
     assert "src_as=<name as printed>" in lineformat.prompt_section()
 
 

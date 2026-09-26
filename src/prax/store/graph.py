@@ -815,16 +815,16 @@ def keep_printed(
     """Keep the word a document printed for a thing the graph names
     otherwise, as an alternative label in the document's language.
 
-    Since 2026-09-24 the extraction prompt writes a common noun in the
-    library's language, which is right for the graph and dropped
-    something: a new entity gets one label, its own name, so a German
-    recipe's "Äpfel" became `apple` with no German label anywhere. The
-    vocabulary pass it replaced had left the German word behind every
-    time it renamed, and that label is what a German query crosses to the
-    English documents on (`Apfelkuchen` -> `apfel` -> `apple`,
-    ``store.expand_query``). The prevention lost the repair's side effect,
-    and the side effect was the bridge
-    (``docs/eval/apfelkuchen-2026-09-26.md``).
+    The fallback, not the main route. From 2026-09-24 to -26 the
+    extraction prompt wrote a common noun in the library's language, and
+    a new entity got one label, its own name — so a German recipe's
+    "Äpfel" became `apple` with no German label anywhere, and that label
+    is what a German query crosses to the English documents on
+    (`Apfelkuchen` -> `apfel` -> `apple`, ``store.expand_query``). The
+    prompt now writes names as printed and the watched vocabulary pass
+    translates them, keeping the word by construction
+    (``docs/eval/apfelkuchen-2026-09-26.md``). This keeps it when a model
+    translates anyway and says so in the optional field.
 
     Nothing is written when the printed word is the name, is empty, or is
     too long to be a name. The entity is the one ``link`` landed on

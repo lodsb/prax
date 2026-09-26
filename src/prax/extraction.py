@@ -396,18 +396,20 @@ def system_prompt(
             " not support."
         ),
         (
-            # which types those are is the ontology's `naming:` key, not a
-            # list kept here: the same split decides what the vocabulary
-            # pass may fold across languages (prax.vocabulary)
-            f"Write {_written_in()} even where the document is not, for the summary"
-            f" and for the name of any {', '.join(sorted(onto.common_types))}: these"
-            " name a kind of thing, and every language has its own word for it. Every"
-            " other type names one particular thing — a person, an organization, a"
-            " title, a product, a place — so give its name exactly as the document"
-            " prints it, accents and all, and never translate it."
-            " Where you write a name in another language than the document prints"
-            " it, give the printed word as well, in the field the answer has for"
-            " it, and leave it out where the name is the one printed."
+            # Names are not translated here. From 2026-09-24 to -26 this rule
+            # asked for common names in the library's language, and a new
+            # entity then kept no trace of the word the document printed —
+            # which is the label a query in that language crosses on. The
+            # watched `vocabulary` step translates the common names instead
+            # (which types those are is the ontology's `naming:` key) and
+            # keeps the printed word as a label every time it does
+            # (docs/eval/apfelkuchen-2026-09-26.md). A model asked to write
+            # both names on one line wrote neither, or wrote junk.
+            f"Write the summary in {_written_in()} even where the document is not."
+            " Write every name as the document prints it, in the document's"
+            " language, accents and all — never translate a name; the library"
+            " puts the common ones into its own language afterwards and keeps"
+            " the word you wrote beside them."
         ),
         (
             "confidence: EXTRACTED when the text states it, INFERRED when it clearly"

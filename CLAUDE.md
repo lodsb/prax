@@ -128,10 +128,10 @@ revisit threshold, under "Decision thresholds" below.
    string in every language) or `common` (a kind of thing, which every
    language has its own word for). The nearest declaration wins, so a
    subtype may differ from its parent either way, and a type that says
-   nothing and inherits nothing is proper. It tells the prompt which
-   names to write in English and a vocabulary pass which entities may be
-   folded across languages; it says how names behave rather than what
-   types exist, so it bumps no version and re-extracts nothing.
+   nothing and inherits nothing is proper. It tells the vocabulary pass
+   which entities it may translate and fold across languages; it says how
+   names behave rather than what types exist, so it bumps no version and
+   re-extracts nothing.
    The words that say what a name *is* — which terms mean an
    organization, which name a type, which are not names at all — are
    `ontology/lexicon.yaml` beside the modules, not patterns in the
@@ -351,11 +351,22 @@ reference `docs/ask.md`.
   is keyed by language, so the German summary of a German document is
   kept rather than replaced by the English one, and `meta.summary_lang`
   says which language the canonical one is in (absent when the summary
-  is too short to place). The extraction prompt asks for English — for
-  the summary and for the name of every type the ontology marks
-  `naming: common` — and the `summaries` step (`prax.summaries`)
-  translates the ones written before it said so, with the local model
-  and no document read. Nothing translates a `proper` name.
+  is too short to place). The extraction prompt asks for the summary in
+  that language, and the `summaries` step (`prax.summaries`) translates
+  the ones written before it said so, with the local model and no
+  document read.
+- A name is written as the document prints it, and translated once, in
+  one place. The extraction prompt translates no name; the watched
+  `vocabulary` step (`prax.vocabulary`) puts a `naming: common` name
+  into the library's language and keeps the printed word as a label in
+  the document's language, which is what a query in that language
+  crosses on (`Apfel` -> `apple`). Nothing translates a `proper` name.
+  From 2026-09-24 to -26 the prompt translated common names itself and
+  the printed word was lost, and a local model asked to write both names
+  on one line wrote neither (`docs/eval/apfelkuchen-2026-09-26.md`); a
+  model that translates anyway can still hand the word over in an
+  optional field (`src_as`/`dst_as`, the JSON entity's `as`), which
+  `store.keep_printed` keeps.
 - Timestamps are UTC ISO-8601 strings to the second with `Z`, from
   `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.
 - Tests must not touch `data/`. Use tmp_path fixtures and set

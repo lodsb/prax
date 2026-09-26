@@ -92,12 +92,15 @@ def test_the_naming_key_bumps_no_version() -> None:
     assert ontology.current().version.startswith("core3+")
 
 
-def test_the_prompt_names_the_common_types() -> None:
+def test_the_prompt_writes_names_as_printed() -> None:
+    """Translation of the common names is the watched vocabulary pass's,
+    which keeps the printed word as a label; the prompt translates nothing
+    (it did from 2026-09-24 to -26, and the printed word was lost)."""
     from prax import extraction
 
     prompt = extraction.system_prompt(ontology.current())
-    assert "ingredient" in prompt
-    assert "never translate it" in prompt
+    assert "Write every name as the document prints it" in prompt
+    assert "never translate a name" in prompt
 
 
 # ----------------------------------------------------------- translation
@@ -377,6 +380,6 @@ def test_the_library_s_language_is_a_setting(monkeypatch: pytest.MonkeyPatch) ->
     assert language.canonical() == "fr"
     assert "French" in summaries.system()
     assert "French" in sections.system()
-    assert "Write French even where the document is not" in extraction.system_prompt(
+    assert "Write the summary in French even where" in extraction.system_prompt(
         ontology.current()
     )
