@@ -118,3 +118,23 @@ same day for being worse on both counts measured
 (`docs/eval/embedder-multilingual-2026-09-25.md`), and on this question
 the vector side found the recipe only for "apple cake" — the entity route
 was empty either way.
+
+## What stage C changed, and what it found under the answer
+
+Both fixes went in the same day. `Apfelkuchen` now splits into `apfel` +
+`kuchen` on the keyword side (`prax.compounds`), and the apple recipe has
+its ingredient list: a list without a heading is found by what its lines
+say, and the kitchen domain went from 36 lists of 68 to 56.
+
+The German question still does not reach the recipe, and the reason is
+not either fix. It is that the list is a box and not edges — nothing turns
+its data into `calls_for` — and, further back, that the extraction prompt
+now writes a common noun in English and keeps the German word nowhere. The
+vocabulary pass used to leave that word behind as a label whenever it
+renamed; the prompt that made the pass unnecessary also made the label
+disappear. The repair had a side effect the prevention did not reproduce,
+and the side effect was the bridge.
+
+And with the bridge built, the question would arrive at `apple` — which in
+this library is Apple Inc. The three failures are one chain.
+

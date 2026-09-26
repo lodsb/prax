@@ -45,17 +45,55 @@ stage safe, or a thing a user would notice.
       and three of the checks currently live in a scratch audit script
       instead of the suite.
 
-### C. What a user actually notices — third, because the library is for
-### using
+### C. What a user actually notices — the two parts done 2026-09-26,
+### and a design gap found under them
 
-- [ ] **German compounds** ("What one question in German found wrong",
-      below). 1,988 German documents, and for a compound query the
+- [x] **German compounds** — `prax.compounds`, the library as its word
+      list: a compound splits where both halves are terms the index holds,
+      and each half goes through the graph's labels (`Olivenoel` →
+      `oliven` → `olive oil`). No harm and a small gain on the 19 German
+      questions (hybrid MRR 4.33 → 4.83). ("What one question in German
+      found wrong", below.) 1,988 German documents, and for a compound query the
       keyword half of the hybrid contributes *nothing*. A word list, not
       a model.
-- [ ] **The ingredient bridge with nothing on it** — 38 ingredient lists
-      in ten thousand documents, and the one the user asked for was not
-      among them. Recognise a list without a heading, then re-extract the
-      kitchen domain.
+- [x] **An ingredient list without a heading** — measured over the
+      library with the real chunker: 20 of the 32 kitchen documents that
+      had none gained one, two outside the kitchen did (a cocktail
+      handbook under research, and one false alarm), none lost one.
+      Applied to the kitchen domain on the live store: **36 → 56 of 68
+      (53% → 82%)**, the apple recipe among them. The other two change at
+      the next full rechunk.
+- [ ] **The list is a box, not yet edges.** Nothing turns an
+      `ingredients` chunk's data into `calls_for` edges; extraction reads
+      the list as text through the model, and the model read "750g
+      apples" in the apple recipe the first time and wrote no `calls_for
+      apple`. So "re-extract the kitchen domain", as this item first said,
+      would not have built the bridge either. The data is already
+      structured — amount, unit, item, the line as written — so the edges
+      can come from it without a model, producer `ingredients`, the line
+      as evidence. What wants deciding first is the name: `apples` or
+      `apple`, and where the head noun ends in "caster sugar Finely
+      grated zest".
+- [ ] **The prevention dropped what the repair kept.** Since 2026-09-24
+      the extraction prompt writes a common noun in English, which is
+      right for the graph. But a new entity gets one label, its own name
+      (`store._entity_id`), and no field carries the word the document
+      printed — so a German recipe's "Äpfel" becomes `apple` with no
+      German label at all. The vocabulary pass, the repair it replaced,
+      left the German word behind as a label every time it renamed, and
+      that label is exactly what `Apfelkuchen` → `apfel` → `apple` stands
+      on. Every German document extracted since feeds the English graph
+      and adds nothing to the bridge between the languages (nine so far,
+      and every one after). The fix is in the extraction format — the
+      name as printed beside the canonical one, kept as an alternative
+      label in the document's language — which is a change to the prompt,
+      the line format and `store.link`, and wants deciding rather than
+      slipping in.
+- [ ] **And the three failures interlock.** With the bridge built,
+      `Apfelkuchen` reaches `apple` — and a bare `apple` in this library
+      is Logic Pro. The brand collision (left out of this stage as design
+      work) is then the last thing between the question and the recipe,
+      which is an argument for doing it next rather than never.
 - [ ] **And count what uses a mechanism.** The lesson of the apple
       question is not the compound or the brand; it is that a route built
       and measured on 2026-09-24 had almost nothing attached to it, and
