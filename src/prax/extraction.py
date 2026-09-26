@@ -233,7 +233,7 @@ def build_input(
         room = max(0, max_chars - used)
         room_bytes = max(0, max_bytes - used_bytes)
         if len(piece) > room or len(piece.encode("utf-8")) > room_bytes:
-            piece = models.fits(piece, chars=room, byts=room_bytes)
+            piece = models.trim_guessed(piece, chars=room, byts=room_bytes)
         if piece:
             parts.append(piece)
         used += len(piece) + 2

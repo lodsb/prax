@@ -137,7 +137,7 @@ class ServerNotReady(RuntimeError):
 # ------------------------------------------------------------------ file
 
 
-def fits(text: str, *, chars: int, byts: int) -> str:
+def trim_guessed(text: str, *, chars: int, byts: int) -> str:
     """As much of ``text`` as a model may be given: whichever of the
     character and the UTF-8 budget runs out first.
 
@@ -151,8 +151,11 @@ def fits(text: str, *, chars: int, byts: int) -> str:
     Cutting on a byte count alone would split a character, so the byte
     budget is applied by encoding, slicing and decoding what survives.
 
-    This is the guess. ``measure`` asks the server instead, and
-    ``fits_for`` uses the answer where there is one.
+    This is the guess, and the name says so: ``trim_measured`` asks the
+    server where it can count, and a step's own defaults over the two
+    belong to the step (``sections.budget``). They were ``fits``,
+    ``fits_for`` and ``read_for`` until 2026-09-27, three names that said
+    neither which was the guess nor whose defaults they were.
     """
     out = text[:chars]
     raw = out.encode("utf-8")
@@ -333,11 +336,13 @@ def price_of(runtime_name: str) -> tuple[float, float] | None:
 # -------------------------------------------------------------- runtimes
 
 
-def fits_for(runtime: Any, text: str, *, tokens: int, chars: int, byts: int) -> str:
+def trim_measured(
+    runtime: Any, text: str, *, tokens: int, chars: int, byts: int
+) -> str:
     """As much of ``text`` as fits in ``tokens``, measured if the runtime
     can measure and guessed otherwise.
 
-    The guess (``fits``) is a byte budget, which tracks a tokenizer well
+    The guess (``trim_guessed``) is a byte budget, which tracks a tokenizer well
     enough for a Latin or an Arabic script and is still a guess. Where the
     server can count — llama.cpp serves ``/tokenize`` — the count is a
     fact, and the difference is the difference between a slow pass and a
@@ -348,7 +353,7 @@ def fits_for(runtime: Any, text: str, *, tokens: int, chars: int, byts: int) -> 
     Narrows by halving rather than by arithmetic, because tokens per
     character is not constant within a text either.
     """
-    out = fits(text, chars=chars, byts=byts)
+    out = trim_guessed(text, chars=chars, byts=byts)
     for _ in range(6):
         got = measure(runtime, out)
         if got is None or got <= tokens:

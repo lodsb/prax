@@ -1615,3 +1615,13 @@ on.
       last commit's files it catches 34 of the old lines, and the
       `MATCH` clause catches the compound splitter's. Being allowed and
       counted is what let the number grow.
+
+## 2026-09-27: stage E, the three names
+
+- [x] `models.fits` → `models.trim_guessed`, `models.fits_for` →
+      `models.trim_measured`, `sections.read_for` → `sections.budget`.
+      The first two are a pair: cutting a text by a character and byte
+      budget, and cutting it by the server's own token count where it can
+      count. The third is the sections step's defaults over them. The old
+      names said neither which was the guess nor whose defaults they
+      were. Stage E is done.

@@ -157,27 +157,31 @@ def user_message(
         parts.append(f"The document is called “{title.strip()}”.")
     parts.append(f"This is its section “{heading}”. What is it about?")
     parts.append("")
-    parts.append(read_for(text, runtime=runtime))
+    parts.append(budget(text, runtime=runtime))
     return "\n".join(parts)
 
 
-def read_for(
+def budget(
     text: str,
     *,
     chars: int = READ_CHARS,
     byts: int = READ_BYTES,
     runtime: Any | None = None,
 ) -> str:
-    """As much of a section as the model can be given.
+    """As much of a section as the model can be given: the sections
+    step's budget, its own defaults over ``models.trim_guessed`` and
+    ``models.trim_measured``.
 
-    Measured against the server where it can count (``models.fits_for``),
+    Measured against the server where it can count (``models.trim_measured``),
     guessed from the UTF-8 length where it cannot.
     """
     from prax import models
 
     if runtime is None:
-        return models.fits(text, chars=chars, byts=byts)
-    return models.fits_for(runtime, text, tokens=READ_TOKENS, chars=chars, byts=byts)
+        return models.trim_guessed(text, chars=chars, byts=byts)
+    return models.trim_measured(
+        runtime, text, tokens=READ_TOKENS, chars=chars, byts=byts
+    )
 
 
 def summarize(

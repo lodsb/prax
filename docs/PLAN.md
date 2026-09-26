@@ -146,7 +146,8 @@ failure a user can work around by adding a word.
 - [x] (2026-09-27: 41 → 0; 30 store reads added, and a test fails on SQL
       naming a prax table outside the store; the Zotero importer's 9 read
       its source) **The reads outside the store**, which the split partly dissolves.
-- [ ] **The three names** (`fits`, `fits_for`, `read_for`), which ride
+- [x] (2026-09-27: `models.trim_guessed`, `models.trim_measured`,
+      `sections.budget`) **The three names** (`fits`, `fits_for`, `read_for`), which ride
       along with whatever touches them.
 
 The two things already written and not yet earned — communities as nodes,
@@ -317,7 +318,7 @@ What the day found missing is narrower, and in this order.
       estimate. A few dozen lines in `hostinfo`, shown by `prax status`
       and the jobs view.
 - [ ] **Ask the runtime what a text costs, rather than guessing.**
-      `models.fits` bounds a prompt by characters *and* UTF-8 bytes
+      `models.trim_guessed` bounds a prompt by characters *and* UTF-8 bytes
       because it has no way to ask how many tokens that is — a
       heuristic that works and is still a guess. llama.cpp serves
       `/tokenize`; a `runtime.measure(text)` would make it a fact. This
@@ -536,7 +537,8 @@ findings in the order they pay, and one that came out of writing it.
 
 ### Three names for one idea
 
-- [ ] **`models.fits`, `models.fits_for`, `sections.read_for`**, all
+- [x] (renamed 2026-09-27: `trim_guessed`, `trim_measured`, `sections.budget`)
+      **`models.fits`, `models.fits_for`, `sections.read_for`**, all
       added on 2026-09-25. The wrapper earns its place — the budget's
       defaults belong to the pass rather than to `models` — but nothing
       in the name says that. `sections.budget()` reads as what it is.

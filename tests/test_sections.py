@@ -221,11 +221,11 @@ def test_the_read_is_budgeted_in_bytes_as_well_as_characters() -> None:
     latin = "The quick brown fox. " * 900
     arabic = "هذا نص عربي طويل جدا للاختبار. " * 700
 
-    kept = sections.read_for(latin)
+    kept = sections.budget(latin)
     assert len(kept) == sections.READ_CHARS  # a Latin document pays nothing
     assert len(kept.encode("utf-8")) <= sections.READ_BYTES
 
-    kept = sections.read_for(arabic)
+    kept = sections.budget(arabic)
     assert len(kept) < sections.READ_CHARS  # the byte budget bit first
     assert len(kept.encode("utf-8")) <= sections.READ_BYTES
     assert kept  # and something survived
@@ -233,14 +233,14 @@ def test_the_read_is_budgeted_in_bytes_as_well_as_characters() -> None:
 
 def test_a_short_section_is_given_whole() -> None:
     text = "one paragraph, well under either budget."
-    assert sections.read_for(text) == text
+    assert sections.budget(text) == text
 
 
 def test_the_byte_cut_never_splits_a_character() -> None:
     """Slicing bytes can land inside a character; decoding must not raise
     or leave a replacement mark."""
     for n in range(20, 40):
-        got = sections.read_for("é" * 50, byts=n)
+        got = sections.budget("é" * 50, byts=n)
         assert "�" not in got
         assert got == "é" * (n // 2)
 
@@ -264,12 +264,12 @@ def test_the_read_is_measured_where_the_server_can_count() -> None:
     ran at about two tokens a character, which no byte budget knew."""
     text = "x" * 40_000
     heavy = _Counts(2.0)
-    got = sections.read_for(text, runtime=heavy)
+    got = sections.budget(text, runtime=heavy)
     assert heavy.asked  # it asked rather than assumed
     assert len(got) * 2.0 <= sections.READ_TOKENS * 1.05
 
     light = _Counts(0.25)  # Latin: the character budget binds first
-    got = sections.read_for(text, runtime=light)
+    got = sections.budget(text, runtime=light)
     assert len(got) == sections.READ_CHARS
 
 
@@ -280,4 +280,4 @@ def test_a_server_that_cannot_count_leaves_the_guess_alone() -> None:
         name = "mute"
 
     text = "x" * 40_000
-    assert sections.read_for(text, runtime=Mute()) == sections.read_for(text)
+    assert sections.budget(text, runtime=Mute()) == sections.budget(text)
