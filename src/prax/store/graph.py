@@ -1486,6 +1486,35 @@ def _mark_corpus_ruling(
     return len(ruled_out)
 
 
+def corpus_rulings(con: sqlite3.Connection) -> list[tuple[int, str]]:
+    """The entities the corpus ruled already the library's word
+    (``vocabulary:corpus``), with the name it ruled on."""
+    return [
+        (int(r[0]), str(r[1]))
+        for r in con.execute(
+            "SELECT DISTINCT l.entity_id, l.label FROM entity_labels l"
+            " JOIN entities e ON e.id = l.entity_id"
+            " WHERE l.producer = 'vocabulary:corpus' AND e.canonical_id IS NULL"
+        )
+    ]
+
+
+@_serialized
+def unmark_corpus_ruling(
+    con: sqlite3.Connection, overturned: list[tuple[int, str]]
+) -> int:
+    """Take back the corpus's ruling on these names, so the vocabulary
+    pass asks about them again: the label goes back to ``baseline``, which
+    is what it was before the ruling was recorded on it."""
+    con.executemany(
+        "UPDATE entity_labels SET producer = 'baseline'"
+        " WHERE entity_id = ? AND label = ? AND producer = 'vocabulary:corpus'",
+        overturned,
+    )
+    con.commit()
+    return len(overturned)
+
+
 @_serialized
 def replace_entity_candidates(
     con: sqlite3.Connection,

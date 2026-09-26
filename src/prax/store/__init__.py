@@ -199,6 +199,7 @@ from .graph import (  # noqa: F401
     backfill_provenance,
     candidate_runs,
     canonical_entity,
+    corpus_rulings,
     count_review,
     decide_candidates,
     display_language,
@@ -233,6 +234,7 @@ from .graph import (  # noqa: F401
     traverse,
     traverse_map,
     unlabelled_names,
+    unmark_corpus_ruling,
     unmerge_run,
 )
 from .jobs import (  # noqa: F401

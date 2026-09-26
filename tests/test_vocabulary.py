@@ -853,3 +853,31 @@ def test_a_refused_answer_still_converges(
     runtime = Runtime({"apple": "eine runde Frucht, die an Bäumen wächst und rot ist"})
     results = worker.do_vocabulary(items, runtime)
     assert results == [{"id": items[0]["id"], "name": "apple", "into": "de"}]
+
+
+def test_a_ruling_the_rate_overturns_goes_back_in_the_queue(
+    client: TestClient,
+) -> None:
+    """`Mehl` was ruled English on a programming textbook, and the ruling
+    was recorded, so a better test would never see it: `rejudge` asks
+    again."""
+    con = client.app.state.con
+    eid = _german_entity(con, client, "Olivenöl", "ingredient")
+    kept = _german_entity(con, client, "olive oil", "ingredient")
+    for i in range(2):
+        client.post("/ingest", json={"text": GERMAN + f" Teil {i}.", "title": f"R{i}"})
+    client.post("/ingest", json={"text": ENGLISH + " Olivenöl.", "title": "Tin"})
+    client.post("/ingest", json={"text": ENGLISH, "title": "Pasta"})
+    # recorded under the old test, both of them
+    for entity_id, name in ((eid, "Olivenöl"), (kept, "olive oil")):
+        con.execute(
+            "UPDATE entity_labels SET producer = 'vocabulary:corpus'"
+            " WHERE entity_id = ? AND label = ?",
+            (entity_id, name),
+        )
+    con.commit()
+    assert eid not in {r["id"] for r in store.foreign_names(con)}
+    got = store.maintain(con, only=["rejudge"])["rejudge"]
+    assert (got["rulings"], got["overturned"]) == (2, 1)
+    assert eid in {r["id"] for r in store.foreign_names(con)}
+    assert (kept, "olive oil") in store.corpus_rulings(con)

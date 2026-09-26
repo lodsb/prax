@@ -52,7 +52,14 @@ from .documents import (
     set_meta,
     set_reference_links,
 )
-from .graph import Edge, find_edges, link, retire_reading
+from .graph import (
+    Edge,
+    corpus_rulings,
+    find_edges,
+    link,
+    retire_reading,
+    unmark_corpus_ruling,
+)
 from .jobs import Job
 from .retrieval import fts_merge, replace_acronyms
 
@@ -72,7 +79,8 @@ PASSES = (
     "names",
     "attachment",
 )
-ON_REQUEST = ("rechunk",)  # a pass only when named: the nightly has no reason to
+# a pass only when named: the nightly has no reason to
+ON_REQUEST = ("rechunk", "rejudge")
 
 
 def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
@@ -766,6 +774,30 @@ def _rechunk(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"documents": len(ids), "chunks": chunks}
 
 
+def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The corpus's rulings asked again under the test as it stands.
+
+    Until 2026-09-26 a name was the library's word if any English
+    document used it, and `Mehl` was ruled English on a programming
+    textbook. The ruling is recorded so the pass need not ask twice, which
+    also means a better test never sees the names the old one let out.
+    This asks it again, and a name it overturns goes back in the queue.
+    On request only: it reads every ruled name, a minute or so.
+    """
+    from prax import vocabulary
+
+    rulings = corpus_rulings(con)
+    sizes = vocabulary.library_sizes(con)
+    overturned = []
+    for n, (entity_id, name) in enumerate(rulings, 1):
+        if not vocabulary.in_english_text(con, name, sizes=sizes):
+            overturned.append((entity_id, name))
+        if n % 500 == 0:
+            job.update(done=n, total=len(rulings), note=f"rejudge: {n}")
+    unmark_corpus_ruling(con, overturned)
+    return {"rulings": len(rulings), "overturned": len(overturned)}
+
+
 _RUN = {
     "acronyms": _acronyms,
     "fields": _fields,
@@ -780,6 +812,7 @@ _RUN = {
     "names": _names,
     "attachment": _attachment,
     "rechunk": _rechunk,
+    "rejudge": _rejudge,
 }
 
 
