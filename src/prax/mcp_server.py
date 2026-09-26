@@ -128,7 +128,7 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
 
 
 @mcp.tool()
-def traverse(entity: str, hops: int = 1) -> dict[str, Any]:
+def traverse(entity: str, hops: int = 1, type: str | None = None) -> dict[str, Any]:
     """Expand the knowledge graph 1-2 hops from a named entity.
 
     ``edges`` is the first hop: every fact the entity itself carries,
@@ -139,8 +139,16 @@ def traverse(entity: str, hops: int = 1) -> dict[str, Any]:
     per type so the papers do not crowd out the ideas, and ``left_out``
     counts the neighbours that did not fit. To go further, traverse a
     neighbour by name; there is no third hop.
+
+    A name can be several things (apple the ingredient, Apple the
+    company; a paper and the concept it is named after). Then one is
+    walked, the most connected, and ``senses`` lists them all with their
+    type, documents and domains; pass ``type`` to walk another.
     """
-    out = _guard(lambda: door().get_json("/traverse", {"entity": entity, "hops": hops}))
+    params: dict[str, Any] = {"entity": entity, "hops": hops}
+    if type:
+        params["type"] = type
+    out = _guard(lambda: door().get_json("/traverse", params))
     return out if isinstance(out, dict) else {"error": str(out)}
 
 

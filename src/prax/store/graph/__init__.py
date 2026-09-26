@@ -93,10 +93,13 @@ from .traversal import (  # noqa: F401
     MIN_DOCUMENTS,
     NEIGHBOURS,
     PER_TYPE,
+    _choose,
     _first_hop,
+    _kinds,
     _neighbourhood_limits,
     _second_hop,
     _walk,
+    senses,
     traverse,
     traverse_map,
 )

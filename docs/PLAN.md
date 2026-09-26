@@ -220,6 +220,15 @@ recipe at once. Three independent failures, each wanting a different fix.
 
 ### The graph
 
+- [x] **A name is not an identity** (2026-09-27): traverse walks one of the
+      things a name reaches and names the others (`senses`, `type`), in the
+      door, the MCP tool, the CLI, the UI and the surfer's walk.
+- [ ] **One thing in pieces** (`docs/eval/fractured-names-2026-09-27.md`):
+      75 missed same-type merges (casing, ß/ss), 34 subtype pairs, ~1,700
+      unrelated-type splits, mostly tool/method (640 names). A resolution
+      rule for which type pairs may name one thing, with a person deciding,
+      and a `heal` ailment that lists them. Apple Inc. is six entities.
+
 - [ ] **Compress what repeats in an edge list.** The cap
       (`docs/log.md`, 2026-09-25) bounded `traverse` at 70-78 KB, and
       left the repetition untouched: provenance is 30% of a fact list

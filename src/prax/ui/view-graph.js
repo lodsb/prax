@@ -122,7 +122,8 @@ class ForceGraph {
   async expand(key) {
     const n = this.nodes.get(key);
     n.expanded = true;
-    const edges = (await api("/traverse", { entity: n.name, hops: 1, limit: 0 })).edges;
+    // the node is one thing: its type says which, where its name is several
+    const edges = (await api("/traverse", { entity: n.name, hops: 1, limit: 0, type: n.type || "" })).edges;
     if (!n.expanded) return;  // folded while the fetch was in flight
     this.merge(edges, key);
     this.select(key);

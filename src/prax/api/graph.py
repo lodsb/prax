@@ -50,14 +50,20 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
 
 @router.get("/traverse")
 def traverse(
-    entity: str, request: Request, hops: int = 1, limit: int | None = None
+    entity: str,
+    request: Request,
+    hops: int = 1,
+    limit: int | None = None,
+    type: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: the edges, and what was left out.
 
     The second hop is a map rather than every edge in it, so the answer
-    says how many neighbours it did not carry (`store._second_hop`).
+    says how many neighbours it did not carry (`store._second_hop`). A
+    name that reaches several things walks one, the one of ``type`` or
+    else the most connected, and ``senses`` names them all.
     """
-    return store.traverse_map(_con(request), entity, hops, limit)
+    return store.traverse_map(_con(request), entity, hops, limit, type=type)
 
 
 @router.get("/ontology")

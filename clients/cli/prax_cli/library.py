@@ -346,7 +346,10 @@ def open_doc(door: Door, a: Any) -> int:
 
 
 def graph(door: Door, a: Any) -> int:
-    answer = door.get_json("/traverse", {"entity": a.entity, "hops": a.hops})
+    params = {"entity": a.entity, "hops": a.hops}
+    if getattr(a, "type", None):
+        params["type"] = a.type
+    answer = door.get_json("/traverse", params)
     if a.json:
         print(json.dumps(answer, indent=2))
         return 0
@@ -398,6 +401,17 @@ def graph(door: Door, a: Any) -> int:
             ]
         )
     out.table(rows, headers=["hop", "relation", "what", "how", "from"])
+    senses = answer.get("senses") or []
+    others = [s for s in senses if not s.get("walked")]
+    if others:
+        out.hint(
+            f"{a.entity!r} is also: "
+            + "; ".join(
+                f"{s['type']} ({out.plural(int(s.get('documents') or 0), 'document')})"
+                for s in others
+            )
+            + f". Walk one with --type {others[0]['type']}."
+        )
     if len(useful) > len(shown):
         out.hint(f"… {out.num(len(useful) - len(shown))} more (-n to see further)")
     if edges_left:

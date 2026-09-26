@@ -50,6 +50,8 @@ READ_CHARS = 1500  # what one "read" step returns
 FACTS = 20  # graph facts per "facts" step
 HIT_FACTS = 4  # graph facts shown with a search hit
 WALK_EDGES = 25
+# a walk's argument may say which thing it means: "apple (ingredient)"
+_TYPED = re.compile(r"^(.+?)\s*\(([a-z_]+)\)$")
 SECTIONS = 12  # sections named when a reading found nothing
 SIMILAR = 6
 NOTE_CHARS = 200
@@ -456,7 +458,19 @@ def do_walk(con: sqlite3.Connection, s: Surf, name: str) -> str:
     name = " ".join(name.split())
     if not name:
         return "walk takes an entity's name"
-    edges = store.traverse(con, name, hops=1, limit=WALK_EDGES)
+    # "apple (ingredient)": a name is several things, and the walk says
+    # which it took and what else there is
+    etype = None
+    typed = _TYPED.match(name)
+    if typed:
+        name, etype = typed.group(1).strip(), typed.group(2).strip()
+    found = store.traverse_map(con, name, 1, WALK_EDGES, type=etype)
+    edges = found["edges"]
+    others = [s for s in found.get("senses") or [] if not s.get("walked")]
+    if not edges and others:
+        return f"no {etype} called {name!r}; it names " + "; ".join(
+            f"walk: {name} ({x['type']})" for x in others
+        )
     if not edges:
         like = store.find_entities(con, name, limit=6)
         if not like:
@@ -480,6 +494,14 @@ def do_walk(con: sqlite3.Connection, s: Surf, name: str) -> str:
     lines = [f"{name}:"]
     for rel, items in by_rel.items():
         lines.append(f"- {rel}: " + "; ".join(dict.fromkeys(items)))
+    if others:
+        lines.append(
+            f"{name!r} names other things too: "
+            + "; ".join(
+                f"walk: {name} ({x['type']}), {x['documents']} documents"
+                for x in others
+            )
+        )
     if titles:
         lines.append(
             "documents behind these: "

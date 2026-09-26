@@ -4,6 +4,7 @@ are also about (invariant 6)."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any
 
@@ -163,22 +164,173 @@ def _second_hop(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:
 
 
 @_reading
+def senses(con: sqlite3.Connection, name: str) -> list[dict[str, Any]]:
+    """The things a name reaches, most connected first: each canonical
+    entity called ``name`` or answering to it as a label, with its
+    ``type``, its live ``edges``, the ``documents`` behind them and the
+    ``domains`` those are in (most first).
+
+    A name is not an identity. 3,739 names are held by more than one
+    entity, and most of those are a document beside its topic, the paper
+    *Timbre* and the concept (docs/eval/fractured-names-2026-09-27.md):
+    two things, which a walk from the name used to merge into one answer.
+    """
+    ids = [
+        int(r[0])
+        for r in con.execute(
+            "SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ?"
+            " UNION SELECT COALESCE(e.canonical_id, e.id)"
+            " FROM entity_labels l JOIN entities e ON e.id = l.entity_id"
+            " WHERE l.label = ? COLLATE NOCASE",
+            (name, name),
+        )
+    ]
+    out = []
+    for cid in ids:
+        row = con.execute(
+            "SELECT id, name, type FROM entities WHERE id = ?", (cid,)
+        ).fetchone()
+        if row is None:
+            continue
+        # its edges read once, each end through its own index: an OR of the
+        # two, asked again for the domains, was 200-400 ms in front of every
+        # walk of a well-connected name
+        group = [
+            int(r[0])
+            for r in con.execute(
+                "SELECT id FROM entities WHERE id = ? OR canonical_id = ?", (cid, cid)
+            )
+        ]
+        marks = ",".join("?" * len(group))
+        edges = {
+            int(r[0]): r[1]
+            for end in ("src", "dst")
+            for r in con.execute(
+                f"SELECT id, source_doc FROM edges WHERE {end} IN ({marks})"
+                " AND valid_to IS NULL",
+                group,
+            )
+        }
+        docs = sorted({d for d in edges.values() if d is not None})
+        domains = [
+            str(r[0])
+            for r in con.execute(
+                "SELECT j.value, count(*) FROM documents d,"
+                " json_each(d.meta, '$.domains') j"
+                " WHERE d.id IN (SELECT value FROM json_each(?))"
+                " GROUP BY 1 ORDER BY 2 DESC",
+                (json.dumps(docs),),
+            )
+        ]
+        out.append(
+            {
+                "id": int(row["id"]),
+                "name": str(row["name"]),
+                "type": str(row["type"]),
+                "edges": len(edges),
+                "documents": len(docs),
+                "domains": domains,
+            }
+        )
+    # a sense nothing says anything about is a name left over, not a thing
+    said = [x for x in out if x["edges"]] or out
+    return sorted(said, key=lambda x: (-x["edges"], x["id"]))
+
+
+def _kinds(found: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    """The senses gathered into the things they are: one type twice (a
+    merge resolution missed) or a type and its subtype (an author who is
+    a person) are one thing; unrelated types are two. Most connected
+    first."""
+    onto = ontology.current()
+
+    def related(a: str, b: str) -> bool:
+        return a == b or onto.is_a(a, b) or onto.is_a(b, a)
+
+    kinds: list[list[dict[str, Any]]] = []
+    for sense in found:
+        home = next(
+            (k for k in kinds if any(related(sense["type"], x["type"]) for x in k)),
+            None,
+        )
+        if home is None:
+            kinds.append([sense])
+        else:
+            home.append(sense)
+    return sorted(kinds, key=lambda k: -sum(x["edges"] for x in k))
+
+
+def _choose(
+    con: sqlite3.Connection, name: str, etype: str | None
+) -> tuple[list[int], list[dict[str, Any]]]:
+    """Which entities a walk from ``name`` starts at, and the senses to
+    report. The thing of ``etype`` when one is asked for, else the most
+    connected; the others are named, never merged in."""
+    kinds = _kinds(senses(con, name))
+    chosen: list[dict[str, Any]] | None = None
+    if etype:
+        onto = ontology.current()
+        chosen = next(
+            (
+                k
+                for k in kinds
+                if any(
+                    x["type"] == etype
+                    or onto.is_a(x["type"], etype)
+                    or onto.is_a(etype, x["type"])
+                    for x in k
+                )
+            ),
+            None,
+        )
+    elif kinds:
+        chosen = kinds[0]
+    report = []
+    for k in kinds:
+        lead = k[0]
+        report.append(
+            {
+                "name": lead["name"],
+                "type": lead["type"],
+                "types": sorted({x["type"] for x in k}),
+                "edges": sum(x["edges"] for x in k),
+                "documents": sum(x["documents"] for x in k),
+                "domains": list(dict.fromkeys(d for x in k for d in x["domains"]))[:3],
+                "walked": k is chosen,
+            }
+        )
+    return ([x["id"] for x in chosen] if chosen else []), report
+
+
+@_reading
 def traverse(
-    con: sqlite3.Connection, entity_name: str, hops: int = 1, limit: int | None = None
+    con: sqlite3.Connection,
+    entity_name: str,
+    hops: int = 1,
+    limit: int | None = None,
+    *,
+    type: str | None = None,
 ) -> list[dict[str, Any]]:
     """The entity's own edges: every currently-valid one, with its evidence.
 
     This is the first hop, which is a fact list — what the UI draws and
     what the surfer reads. ``hops`` beyond 1 does not add edges here,
     because the second hop is a different kind of thing; ask
-    ``traverse_map`` for it.
+    ``traverse_map`` for it. A name that reaches several things walks one
+    (``senses``): the one of ``type``, else the most connected.
     """
-    return [r for r in _walk(con, entity_name, hops, limit)[0] if int(r["hop"]) < 2]
+    ids, _ = _choose(con, entity_name, type)
+    return [r for r in _walk(con, ids, hops, limit)[0] if int(r["hop"]) < 2]
 
 
 @_reading
 def traverse_map(
-    con: sqlite3.Connection, entity_name: str, hops: int = 1, limit: int | None = None
+    con: sqlite3.Connection,
+    entity_name: str,
+    hops: int = 1,
+    limit: int | None = None,
+    *,
+    type: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: its own edges, the ideas around
     them, and how many of those did not fit.
@@ -190,19 +342,29 @@ def traverse_map(
     reach it and the number of documents that separately say so. A map
     that silently dropped the rest would be worse than a large one, so
     ``left_out`` counts the neighbours past the limits.
+
+    A name that reaches several things (`apple` the ingredient and Apple
+    the company) walks one, the one of ``type`` or else the most
+    connected, and ``senses`` names them all with the one walked marked:
+    never merged, and never one-sided without saying so. A name that
+    reaches one thing carries no ``senses``.
     """
-    rows, left_out = _walk(con, entity_name, hops, limit)
-    return {
+    ids, report = _choose(con, entity_name, type)
+    rows, left_out = _walk(con, ids, hops, limit)
+    out: dict[str, Any] = {
         "entity": entity_name,
         "hops": max(0, min(hops, MAX_HOPS)),
         "edges": [r for r in rows if int(r["hop"]) < 2],
         "neighbours": [r for r in rows if int(r["hop"]) >= 2],
         "left_out": left_out,
     }
+    if len(report) > 1 or (type and not ids):
+        out["senses"] = report
+    return out
 
 
 def _walk(
-    con: sqlite3.Connection, entity_name: str, hops: int, limit: int | None = None
+    con: sqlite3.Connection, start_ids: list[int], hops: int, limit: int | None = None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     hops = max(0, min(hops, MAX_HOPS))
     if limit is None:
@@ -218,14 +380,9 @@ def _walk(
         """
         WITH RECURSIVE
         start(cid) AS (
-            SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ?
-            UNION
-            -- a name the entity is known by is an entry too: after a
-            -- rename the document's own word is only a label, and a walk
-            -- from it would otherwise start nowhere
-            SELECT COALESCE(e.canonical_id, e.id)
-              FROM entity_labels l JOIN entities e ON e.id = l.entity_id
-             WHERE l.label = ? COLLATE NOCASE
+            -- the canonical entities the walk was asked to start at
+            -- (``_choose``: one thing a name reaches, not all of them)
+            SELECT value FROM json_each(?)
         ),
         walk(id, depth) AS (
             SELECT n.id, 0 FROM entities n
@@ -267,7 +424,7 @@ def _walk(
         WHERE e.valid_to IS NULL
         ORDER BY hop, e.id
         """,
-        (entity_name, entity_name, hops, hops),
+        (json.dumps(start_ids), hops, hops),
     ).fetchall()
     shaped, neighbours_left = _second_hop([dict(r) for r in rows])
     near = [r for r in shaped if int(r["hop"]) < 2]

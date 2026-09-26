@@ -97,7 +97,11 @@ revisit threshold, under "Decision thresholds" below.
    never landing on a document, ranked by how many documents separately
    say so, capped per type, with `left_out` counting what did not fit
    (`graph:` in prax.yaml; `docs/eval/traverse-neighbourhood-2026-09-25.md`
-   measured why: 3.4 MB to 76 KB). Keep
+   measured why: 3.4 MB to 76 KB). A name is not an identity: one that
+   reaches several things (apple the ingredient and the company, a paper
+   and the concept it is named after) walks one, the one of `type` or
+   else the most connected, and `senses` names them all (`store.senses`).
+   Keep
    responses small; Claude's context is the scarce resource.
 7. **Pi-class hardware target.** *(measured)* No dependency that needs more than
    1 GB of resident RAM in the serving path. Parsing (Docling) and

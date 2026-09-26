@@ -1625,3 +1625,26 @@ on.
       count. The third is the sections step's defaults over them. The old
       names said neither which was the guess nor whose defaults they
       were. Stage E is done.
+
+## 2026-09-27: a name is not an identity
+
+- [x] **Measured first** (`docs/eval/fractured-names-2026-09-27.md`).
+      3,739 names are held by more than one entity. About 2,000 are a
+      document beside its topic, which are two things. About 1,800 are
+      one thing in pieces: 75 missed same-type merges, 34 subtype pairs
+      and ~1,700 unrelated-type splits, mostly tool/method. The repair
+      belongs to resolution and waits.
+- [x] **Traverse walks one thing.** It seeded the walk with every entity
+      a name reached, whatever its type, and merged their edges.
+      `store.senses` now lists what a name reaches: canonical entity,
+      type, edges, documents, domains. Senses whose types are the same or
+      one a subtype of the other are gathered as one thing, which covers
+      the missed merges and the subtype pairs. When unrelated things
+      remain, one is walked (the one of `type`, else the most connected)
+      and `senses` names them all with the walked one marked: never
+      merged, and never one-sided without saying so. The door, the MCP
+      tool (`type`), the CLI (`--type`), the UI (a node's type) and the
+      surfer's walk (`walk: apple (ingredient)`, which its answer
+      suggests) all go through it. `senses` costs 34-61 ms after reading
+      each sense's edges through its own index; the first version, an OR
+      of the two ends, cost 200-400 ms.

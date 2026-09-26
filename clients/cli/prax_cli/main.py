@@ -310,6 +310,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument("entity", help="an entity name as the extraction wrote it")
     s.add_argument("--hops", type=int, default=1, choices=(1, 2))
+    s.add_argument(
+        "--type",
+        help="which of the things a name is to walk (ingredient, organization…)",
+    )
     s.add_argument("-n", "--limit", type=int, default=25, help="rows to print")
     s.set_defaults(func=library.graph, needs_door=True)
 
