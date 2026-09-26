@@ -1595,3 +1595,23 @@ on.
       `count_pages` no longer looks for it.
 - `retrieval` (1,837) and `repair` (1,460) stay whole. The line the api
   was split at is two thousand, and neither has reached it.
+
+## 2026-09-27: stage E, the reads outside the store
+
+- [x] **41 reads of prax's tables outside the store, now none.** It was
+      26 on 2026-09-22, 38 at the audit, 41 today. Nine more `execute`
+      calls are the Zotero importer reading its own read-only copy of
+      `zotero.sqlite`, whose tables are not prax's, so they stay. Each
+      of the rest became a store read for its question (30 in all: a
+      document's source and state, the capture lists, the summaries and
+      titles to check, the DOIs, the arrivals for a briefing, an
+      entity's name and degree, the entities a set of documents shares,
+      a term's documents, a phrase's languages). The caller keeps its
+      own judgement: whether a summary is acceptable, what a title
+      needs. Each read went in the store module the order allows.
+- [x] **A test holds the line.** It fails on SQL outside the store that
+      reads one of prax's seventeen tables, or any `MATCH ?`, since a
+      keyword query names its table in an f-string. Run against the
+      last commit's files it catches 34 of the old lines, and the
+      `MATCH` clause catches the compound splitter's. Being allowed and
+      counted is what let the number grow.

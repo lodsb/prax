@@ -114,12 +114,9 @@ def label_languages(con: sqlite3.Connection) -> tuple[str, ...]:
     canonical = language.canonical()
     if config.setting("graph.label_languages") is not None or chosen:
         return tuple(x for x in chosen if x != canonical)
-    counts = dict(
-        con.execute(
-            "SELECT json_extract(meta, '$.lang'), count(*) FROM documents"
-            " WHERE json_extract(meta, '$.lang') IS NOT NULL GROUP BY 1"
-        ).fetchall()
-    )
+    from prax import store
+
+    counts = store.documents_by_language(con)
     total = sum(counts.values()) or 1
     return tuple(
         x
@@ -137,23 +134,12 @@ class Naming:
     usage: dict[str, Any] = field(default_factory=dict)
 
 
-# not prax's own pages: a briefing that says "Olivenöl sits beside olive
-# oil" is an English document containing the German word, and it took
-# Olivenöl out of the net that would have folded it. The library must not
-# be its own evidence
-_NOT_A_PAGE = "NOT EXISTS (SELECT 1 FROM pages p WHERE p.doc_id = d.id)"
-
-
 def library_sizes(con: sqlite3.Connection) -> tuple[int, int]:
     """How many documents are in the library's language, and how many in
     another one it knows. What a count of occurrences is divided by."""
-    row = con.execute(
-        "SELECT count(*) FILTER (WHERE lang = ?), count(*) FILTER (WHERE lang <> ?)"
-        " FROM (SELECT json_extract(d.meta, '$.lang') AS lang FROM documents d"
-        f" WHERE {_NOT_A_PAGE})",
-        (language.canonical(), language.canonical()),
-    ).fetchone()
-    return int(row[0] or 0), int(row[1] or 0)
+    from prax import store
+
+    return store.language_split(con, language.canonical())
 
 
 def in_english_text(
@@ -172,19 +158,13 @@ def in_english_text(
         return True  # nothing to look up, or not a name
     canonical = language.canonical()
     match = " ".join(f'"{w}"' for w in words)  # the words in order
+    from prax import store
+
     try:
-        row = con.execute(
-            "SELECT count(DISTINCT d.id) FILTER (WHERE lang = ?),"
-            " count(DISTINCT d.id) FILTER (WHERE lang <> ?)"
-            " FROM (SELECT d.id, json_extract(d.meta, '$.lang') AS lang"
-            " FROM chunks_fts f JOIN chunks c ON c.id = f.rowid"
-            " JOIN documents d ON d.id = c.doc_id"
-            f" WHERE chunks_fts MATCH ? AND {_NOT_A_PAGE}) d",
-            (canonical, canonical, match),
-        ).fetchone()
+        # prax's own pages are left out: the library is not its own evidence
+        ours, theirs = store.phrase_languages(con, match, canonical)
     except sqlite3.OperationalError:
         return True  # a name FTS cannot parse is not this pass's business
-    ours, theirs = int(row[0] or 0), int(row[1] or 0)
     if not ours:
         return False
     if not theirs:

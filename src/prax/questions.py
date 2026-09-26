@@ -126,8 +126,7 @@ def _fingerprint(
         domain=options.get("domain"),
     )
     top = list(dict.fromkeys(int(h["doc_id"]) for h in hits))
-    since = con.execute("SELECT coalesce(max(id), 0) FROM documents").fetchone()[0]
-    return {"top": top, "since_id": int(since)}
+    return {"top": top, "since_id": store.newest_document(con)}
 
 
 def _hashes(con: sqlite3.Connection, ids: list[int]) -> dict[str, str]:
@@ -240,26 +239,12 @@ def _check(
             fresh[doc_id] = "ranks in the search now"
     sources = [int(d) for d in q.get("sources") or []]
     if sources:
-        marks = ",".join("?" * len(sources))
-        entities = [
-            r[0]
-            for r in con.execute(
-                f"SELECT DISTINCT dst FROM edges WHERE source_doc IN ({marks})"
-                " AND valid_to IS NULL",
-                tuple(sources),
-            )
-        ]
-        if entities:
-            emarks = ",".join("?" * len(entities))
-            for r in con.execute(
-                f"SELECT source_doc, count(DISTINCT dst) AS n FROM edges"
-                f" WHERE dst IN ({emarks}) AND valid_to IS NULL AND source_doc > ?"
-                " GROUP BY source_doc HAVING n >= ?",
-                (*entities, since, SHARED_ENTITIES),
-            ):
-                doc_id = int(r["source_doc"])
-                if doc_id != page.get("doc_id") and doc_id not in fresh:
-                    fresh[doc_id] = f"shares {r['n']} of the answer's entities"
+        entities = store.entities_of_documents(con, sources)
+        for doc_id, n in store.documents_sharing(
+            con, entities, after=since, at_least=SHARED_ENTITIES
+        ):
+            if doc_id != page.get("doc_id") and doc_id not in fresh:
+                fresh[doc_id] = f"shares {n} of the answer's entities"
     hashes = q.get("source_hashes") or {}
     now = store.text_hashes(con, [int(d) for d in hashes])
     reread = [
@@ -416,13 +401,9 @@ def block_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """The pages that hold ask blocks — found by their ``ask`` chunks, so
     a page saved with a block is one as soon as it is indexed — each
     read in full (``store.get_page``: text, meta, ``blocks``)."""
-    rows = con.execute(
-        "SELECT DISTINCT p.slug FROM chunks c JOIN pages p ON p.doc_id = c.doc_id"
-        " WHERE c.kind = 'ask' ORDER BY p.slug"
-    ).fetchall()
     out = []
-    for r in rows:
-        page = store.get_page(con, r["slug"])
+    for slug in store.pages_with_chunks_of(con, "ask"):
+        page = store.get_page(con, slug)
         if page is not None and page["blocks"]:
             out.append(page)
     return out
@@ -766,14 +747,8 @@ def briefing(
     until = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     if job is not None:
         job.update(note="briefing")
-    rows = con.execute(
-        "SELECT id, title, mime, meta FROM documents WHERE added_at > ?"
-        " AND added_at <= ? AND json_extract(meta, '$.retired') IS NULL"
-        " AND json_extract(meta, '$.page') IS NULL ORDER BY id",
-        (since, until),
-    ).fetchall()
     arrived = []
-    for r in rows:
+    for r in store.documents_added(con, since, until):
         meta = store.get_meta(con, r["id"])
         line = f"- [{r['title'] or 'document ' + str(r['id'])}](#doc/{r['id']})"
         bits = []

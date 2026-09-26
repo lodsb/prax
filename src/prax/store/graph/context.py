@@ -411,3 +411,98 @@ def hub_graph(
         "edges": edges,
         "links": links[:300],
     }
+
+
+@_reading
+def entity_named_in(con: sqlite3.Connection, entity_id: int) -> str:
+    """The title of a document that has a live edge about the entity."""
+    row = con.execute(
+        "SELECT d.title FROM edges x JOIN documents d ON d.id = x.source_doc"
+        " WHERE x.valid_to IS NULL AND (x.src = ? OR x.dst = ?)"
+        " AND d.title IS NOT NULL LIMIT 1",
+        (entity_id, entity_id),
+    ).fetchone()
+    return str(row["title"]) if row else ""
+
+
+@_reading
+def entities_of_documents(con: sqlite3.Connection, doc_ids: list[int]) -> list[int]:
+    """The entities the live edges of these documents point at."""
+    if not doc_ids:
+        return []
+    marks = ",".join("?" * len(doc_ids))
+    return [
+        int(r[0])
+        for r in con.execute(
+            f"SELECT DISTINCT dst FROM edges WHERE source_doc IN ({marks})"
+            " AND valid_to IS NULL",
+            tuple(doc_ids),
+        )
+    ]
+
+
+@_reading
+def documents_sharing(
+    con: sqlite3.Connection, entity_ids: list[int], *, after: int, at_least: int
+) -> list[tuple[int, int]]:
+    """``(doc_id, n)`` for the documents above id ``after`` whose live edges
+    point at ``at_least`` of these entities."""
+    if not entity_ids:
+        return []
+    marks = ",".join("?" * len(entity_ids))
+    return [
+        (int(r["source_doc"]), int(r["n"]))
+        for r in con.execute(
+            f"SELECT source_doc, count(DISTINCT dst) AS n FROM edges"
+            f" WHERE dst IN ({marks}) AND valid_to IS NULL AND source_doc > ?"
+            " GROUP BY source_doc HAVING n >= ?",
+            (*entity_ids, after, at_least),
+        )
+    ]
+
+
+@_reading
+def documents_as_pages(
+    con: sqlite3.Connection, doc_ids: list[int]
+) -> list[tuple[int, str, str | None]]:
+    """``(doc_id, title, page kind)``, the kind None for a document that is
+    not one of prax's pages."""
+    if not doc_ids:
+        return []
+    marks = ",".join("?" * len(doc_ids))
+    return [
+        (int(r["id"]), str(r["title"] or ""), r["kind"])
+        for r in con.execute(
+            f"SELECT d.id, d.title, p.kind FROM documents d LEFT JOIN pages p"
+            f" ON p.doc_id = d.id WHERE d.id IN ({marks})",
+            tuple(doc_ids),
+        )
+    ]
+
+
+@_reading
+def own_type(con: sqlite3.Connection, doc_id: int, title: str) -> str | None:
+    """The type the graph gave a document itself: the newest live edge of
+    the document whose source entity carries its title."""
+    row = con.execute(
+        "SELECT s.type FROM edges e JOIN entities s ON s.id = e.src"
+        " WHERE e.source_doc = ? AND s.name = ? AND e.valid_to IS NULL"
+        " ORDER BY e.id DESC LIMIT 1",
+        (doc_id, title),
+    ).fetchone()
+    return str(row[0]) if row else None
+
+
+@_reading
+def described_devices(con: sqlite3.Connection, doc_id: int, title: str) -> list[str]:
+    """The devices a document ``describes`` by its own live edges."""
+    return [
+        str(x[0])
+        for x in con.execute(
+            "SELECT DISTINCT t.name FROM edges e"
+            " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+            " WHERE e.source_doc = ? AND e.rel = 'describes' AND s.name = ?"
+            " AND t.type = 'device' AND e.valid_to IS NULL",
+            (doc_id, title),
+        )
+    ]

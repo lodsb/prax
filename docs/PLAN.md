@@ -143,7 +143,9 @@ failure a user can work around by adding a word.
       same line) **The store's module split**, after the Step object, since both
       touch the largest modules and the module order is an invariant that
       B will have made testable.
-- [ ] **The reads outside the store**, which the split partly dissolves.
+- [x] (2026-09-27: 41 → 0; 30 store reads added, and a test fails on SQL
+      naming a prax table outside the store; the Zotero importer's 9 read
+      its source) **The reads outside the store**, which the split partly dissolves.
 - [ ] **The three names** (`fits`, `fits_for`, `read_for`), which ride
       along with whatever touches them.
 
@@ -524,7 +526,7 @@ findings in the order they pay, and one that came out of writing it.
 
 ### The reads outside the store are growing, not shrinking
 
-- [ ] **26 on 2026-09-22, 38 now**, in 13 modules. The last pass left
+- [x] (41 → 0 on 2026-09-27, stage E) **26 on 2026-09-22, 38 now**, in 13 modules. The last pass left
       them with "worth doing when a module's query breaks on a schema
       change"; the count going up is the evidence that the answer was
       wrong. A store read per question is the cleaner surface. The

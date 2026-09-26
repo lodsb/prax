@@ -250,10 +250,7 @@ def leases() -> dict[str, int]:
 def _in_scope(con: sqlite3.Connection, doc_id: int, scope: str) -> bool:
     if scope == "all":
         return True
-    row = con.execute(
-        "SELECT json_extract(meta, '$.source') FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
-    return bool(row) and row[0] in pipeline.CAPTURE_SOURCES
+    return store.document_source(con, doc_id) in pipeline.CAPTURE_SOURCES
 
 
 def _check(step: str, scope: str, limit: int) -> int:

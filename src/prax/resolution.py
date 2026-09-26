@@ -106,19 +106,7 @@ TWIN_TYPES = ("concept", "method")
 
 
 def _entities(con: sqlite3.Connection, etype: str | None) -> list[dict[str, Any]]:
-    where = "WHERE canonical_id IS NULL" + (" AND type = ?" if etype else "")
-    args: tuple[Any, ...] = (etype,) if etype else ()
-    degree: dict[int, int] = defaultdict(int)
-    for col in ("src", "dst"):  # two indexed group-bys instead of an OR per entity
-        for r in con.execute(
-            f"SELECT {col} AS id, count(*) AS n FROM edges WHERE valid_to IS NULL"
-            f" GROUP BY {col}"
-        ):
-            degree[r["id"]] += r["n"]
-    rows = con.execute(
-        f"SELECT e.id, e.name, e.type FROM entities e {where} ORDER BY e.id", args
-    ).fetchall()
-    return [{**dict(r), "degree": degree.get(r["id"], 0)} for r in rows]
+    return store.entities_with_degree(con, etype)
 
 
 def _rank(e: dict[str, Any]) -> tuple[int, int, int, int]:

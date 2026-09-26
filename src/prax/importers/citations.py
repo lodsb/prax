@@ -264,15 +264,11 @@ class Report:
 
 def _library_dois(con: sqlite3.Connection) -> dict[str, str]:
     """DOI -> document title for every document that has one."""
-    rows = con.execute(
-        "SELECT title, json_extract(meta, '$.doi') AS doi FROM documents"
-        " WHERE json_extract(meta, '$.doi') IS NOT NULL AND title IS NOT NULL"
-    ).fetchall()
     out: dict[str, str] = {}
-    for r in rows:
-        d = normalize_doi(r["doi"])
+    for doi, title in store.document_dois(con):
+        d = normalize_doi(doi)
         if d:
-            out[d] = r["title"]
+            out[d] = title
     return out
 
 
@@ -284,15 +280,9 @@ def candidates(
     doi_only: bool = False,
 ) -> list[int]:
     """Documents to look up: not yet fetched, those with a DOI first."""
-    sql = "SELECT id FROM documents WHERE title IS NOT NULL"
-    if doi_only:
-        sql += " AND json_extract(meta, '$.doi') IS NOT NULL"
-    if not refresh:
-        sql += " AND json_extract(meta, '$.citations.fetched_at') IS NULL"
-    sql += " ORDER BY (json_extract(meta, '$.doi') IS NULL), id"
-    if limit is not None:
-        sql += f" LIMIT {int(limit)}"
-    return [r["id"] for r in con.execute(sql)]
+    return store.citation_candidates(
+        con, limit=limit, refresh=refresh, doi_only=doi_only
+    )
 
 
 def import_citations(

@@ -451,3 +451,311 @@ def get_chunk(con: sqlite3.Connection, chunk_id: int) -> dict[str, Any] | None:
     out["locator"] = json.loads(r["locator"]) if r["locator"] else None
     out["data"] = json.loads(r["data"]) if r["data"] else None
     return out
+
+
+# ------------------------------------------------ the questions other modules ask
+#
+# Each of these was a query in the module that needed it (the pipeline,
+# the inbox, the importers, the routes panel): 26 on 2026-09-22 and 38 three
+# days later, growing because a query written where it is needed is the
+# easy way. A store read per question is the one place a schema change has
+# to look (docs/audit/engineering-2026-09-25.md, finding 3).
+
+CAPTURE_SOURCES = ("upload", "capture", "inbox")
+
+
+@_reading
+def document_source(con: sqlite3.Connection, doc_id: int) -> str | None:
+    """Where a document came from (``meta.source``): a capture, an upload,
+    an import."""
+    row = con.execute(
+        "SELECT json_extract(meta, '$.source') FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    return row[0] if row else None
+
+
+@_reading
+def document_state(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
+    """What the routes panel reads a document's state from: its MIME type,
+    whether it has text, its meta, and how many characters its chunks
+    hold. None when there is no such document."""
+    row = con.execute(
+        "SELECT mime, text_hash, meta FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    chars = con.execute(
+        "SELECT coalesce(sum(length(text)), 0) FROM chunks WHERE doc_id = ?", (doc_id,)
+    ).fetchone()[0]
+    return {
+        "mime": row["mime"],
+        "text_hash": row["text_hash"],
+        "meta": json.loads(row["meta"] or "{}"),
+        "text_len": int(chars),
+    }
+
+
+@_reading
+def figure_and_formula_data(
+    con: sqlite3.Connection, doc_id: int
+) -> list[tuple[str, dict[str, Any]]]:
+    """``(kind, data)`` of a document's figure and formula chunks."""
+    return [
+        (str(r["kind"]), json.loads(r["data"]) if r["data"] else {})
+        for r in con.execute(
+            "SELECT kind, data FROM chunks"
+            " WHERE doc_id = ? AND kind IN ('figure', 'formula')",
+            (doc_id,),
+        )
+    ]
+
+
+@_reading
+def untexted_captures(con: sqlite3.Connection) -> list[int]:
+    """Captures the door only registered (PDFs, images), oldest first:
+    what a worker parses."""
+    marks = ",".join("?" * len(CAPTURE_SOURCES))
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT id FROM documents WHERE text_hash IS NULL"
+            " AND json_extract(meta, '$.retired') IS NULL"
+            f" AND json_extract(meta, '$.source') IN ({marks}) ORDER BY id",
+            CAPTURE_SOURCES,
+        )
+    ]
+
+
+@_reading
+def recent_captures(
+    con: sqlite3.Connection, *, limit: int = 50
+) -> list[dict[str, Any]]:
+    """The latest live captures, newest first: ``id, title, mime,
+    source_url, text_hash`` and ``meta``."""
+    marks = ",".join("?" * len(CAPTURE_SOURCES))
+    rows = con.execute(
+        "SELECT id, title, mime, source_url, text_hash, meta FROM documents"
+        f" WHERE json_extract(meta, '$.source') IN ({marks})"
+        " AND json_extract(meta, '$.retired') IS NULL"
+        " ORDER BY json_extract(meta, '$.capture.at') DESC, id DESC LIMIT ?",
+        (*CAPTURE_SOURCES, limit),
+    ).fetchall()
+    return [{**dict(r), "meta": json.loads(r["meta"] or "{}")} for r in rows]
+
+
+@_reading
+def previous_capture(con: sqlite3.Connection, url: str, *, exclude: int) -> int | None:
+    """The newest live document captured from ``url`` other than
+    ``exclude``."""
+    row = con.execute(
+        "SELECT id FROM documents WHERE source_url = ? AND id != ?"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id DESC LIMIT 1",
+        (url, exclude),
+    ).fetchone()
+    return row[0] if row else None
+
+
+@_reading
+def text_sources(con: sqlite3.Connection) -> list[tuple[int, str]]:
+    """``(doc_id, meta.text_source)`` for every live document with text,
+    oldest first: which extractor its text came from."""
+    return [
+        (int(r["id"]), str(r["src"] or ""))
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.text_source') AS src FROM documents"
+            " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+            " ORDER BY id"
+        )
+    ]
+
+
+def _summary_where(
+    untried_only: bool, ids: list[int] | None
+) -> tuple[str, tuple[Any, ...]]:
+    where = (
+        " WHERE json_extract(meta, '$.summary') IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    )
+    if untried_only:
+        where += " AND json_extract(meta, '$.summary_tried') IS NULL"
+    if ids is None:
+        return where, ()
+    return where + f" AND id IN ({','.join('?' * len(ids))})", tuple(ids)
+
+
+@_reading
+def summaries_in_other_languages(
+    con: sqlite3.Connection,
+    lang: str,
+    *,
+    untried_only: bool = False,
+    ids: list[int] | None = None,
+) -> list[tuple[int, str]]:
+    """``(doc_id, summary_lang)`` for the live documents whose summary is
+    placed in a language other than ``lang``."""
+    where, args = _summary_where(untried_only, ids)
+    return [
+        (int(r["id"]), str(r["lang"]))
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.summary_lang') AS lang FROM documents"
+            + where
+            + " AND json_extract(meta, '$.summary_lang') IS NOT NULL"
+            " AND json_extract(meta, '$.summary_lang') != ?",
+            (*args, lang),
+        )
+    ]
+
+
+@_reading
+def translated_summaries(
+    con: sqlite3.Connection,
+    lang: str,
+    *,
+    untried_only: bool = False,
+    ids: list[int] | None = None,
+) -> list[tuple[int, str, dict[str, Any]]]:
+    """``(doc_id, summary, summaries)`` for the live documents whose
+    summary is in ``lang`` and that keep summaries in other languages:
+    the ones a translation was made for."""
+    where, args = _summary_where(untried_only, ids)
+    return [
+        (int(r["id"]), str(r["summary"]), json.loads(r["held"] or "{}"))
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.summary') AS summary,"
+            " json_extract(meta, '$.summaries') AS held FROM documents"
+            + where
+            + " AND json_extract(meta, '$.summaries') IS NOT NULL"
+            " AND json_extract(meta, '$.summary_lang') = ?",
+            (*args, lang),
+        )
+    ]
+
+
+@_reading
+def title_rows(
+    con: sqlite3.Connection, ids: list[int] | None = None
+) -> list[dict[str, Any]]:
+    """``id, title, text_hash, meta`` of the live documents (or of
+    ``ids``), oldest first: what a title is judged from."""
+    sql = "SELECT id, title, text_hash, meta FROM documents"
+    args: tuple[Any, ...] = ()
+    if ids is not None:
+        sql += f" WHERE id IN ({','.join('?' * len(ids))})"
+        args = tuple(ids)
+    out = []
+    for r in con.execute(sql + " ORDER BY id", args):
+        meta = json.loads(r["meta"] or "{}")
+        if not meta.get("retired"):
+            out.append({**dict(r), "meta": meta})
+    return out
+
+
+@_reading
+def titled_documents(con: sqlite3.Connection) -> list[tuple[int, str]]:
+    """``(doc_id, title)`` of every document that has one."""
+    return [
+        (int(r["id"]), str(r["title"]))
+        for r in con.execute("SELECT id, title FROM documents WHERE title IS NOT NULL")
+    ]
+
+
+@_reading
+def document_dois(con: sqlite3.Connection) -> list[tuple[str, str]]:
+    """``(doi, title)`` as the documents carry them, for every titled
+    document with a DOI; normalising them is the caller's."""
+    return [
+        (str(r["doi"]), str(r["title"]))
+        for r in con.execute(
+            "SELECT title, json_extract(meta, '$.doi') AS doi FROM documents"
+            " WHERE json_extract(meta, '$.doi') IS NOT NULL AND title IS NOT NULL"
+        )
+    ]
+
+
+@_reading
+def citation_candidates(
+    con: sqlite3.Connection,
+    *,
+    limit: int | None = None,
+    refresh: bool = False,
+    doi_only: bool = False,
+) -> list[int]:
+    """Titled documents whose citations have not been fetched (all of them
+    with ``refresh``), those with a DOI first."""
+    sql = "SELECT id FROM documents WHERE title IS NOT NULL"
+    if doi_only:
+        sql += " AND json_extract(meta, '$.doi') IS NOT NULL"
+    if not refresh:
+        sql += " AND json_extract(meta, '$.citations.fetched_at') IS NULL"
+    sql += " ORDER BY (json_extract(meta, '$.doi') IS NULL), id"
+    args: tuple[Any, ...] = ()
+    if limit is not None:
+        sql += " LIMIT ?"
+        args = (int(limit),)
+    return [int(r["id"]) for r in con.execute(sql, args)]
+
+
+@_reading
+def document_by_zotero_key(con: sqlite3.Connection, key: str) -> int | None:
+    """The document a Zotero item key was imported as."""
+    row = con.execute(
+        "SELECT id FROM documents WHERE EXISTS"
+        " (SELECT 1 FROM json_each(meta, '$.zotero.keys') WHERE value = ?)"
+        " ORDER BY id LIMIT 1",
+        (key,),
+    ).fetchone()
+    return int(row[0]) if row else None
+
+
+@_reading
+def newest_document(con: sqlite3.Connection) -> int:
+    """The highest document id: the library's high-water mark."""
+    return int(con.execute("SELECT coalesce(max(id), 0) FROM documents").fetchone()[0])
+
+
+@_reading
+def documents_added(
+    con: sqlite3.Connection, since: str, until: str
+) -> list[dict[str, Any]]:
+    """``id, title, mime`` of the live documents added after ``since`` and
+    up to ``until``, pages left out, oldest first."""
+    return [
+        dict(r)
+        for r in con.execute(
+            "SELECT id, title, mime FROM documents WHERE added_at > ?"
+            " AND added_at <= ? AND json_extract(meta, '$.retired') IS NULL"
+            " AND json_extract(meta, '$.page') IS NULL ORDER BY id",
+            (since, until),
+        )
+    ]
+
+
+@_reading
+def documents_by_language(con: sqlite3.Connection) -> dict[str, int]:
+    """How many documents are in each language that is known."""
+    return {
+        str(r[0]): int(r[1])
+        for r in con.execute(
+            "SELECT json_extract(meta, '$.lang'), count(*) FROM documents"
+            " WHERE json_extract(meta, '$.lang') IS NOT NULL GROUP BY 1"
+        )
+    }
+
+
+# prax's own pages are not the library's evidence about its words: a
+# briefing that says "Olivenöl sits beside olive oil" is an English
+# document containing the German word
+NOT_A_PAGE = "NOT EXISTS (SELECT 1 FROM pages p WHERE p.doc_id = d.id)"
+
+
+@_reading
+def language_split(con: sqlite3.Connection, lang: str) -> tuple[int, int]:
+    """How many documents, prax's pages left out, are in ``lang`` and how
+    many in another language that is known."""
+    row = con.execute(
+        "SELECT count(*) FILTER (WHERE lang = ?), count(*) FILTER (WHERE lang <> ?)"
+        " FROM (SELECT json_extract(d.meta, '$.lang') AS lang FROM documents d"
+        f" WHERE {NOT_A_PAGE})",
+        (lang, lang),
+    ).fetchone()
+    return int(row[0] or 0), int(row[1] or 0)

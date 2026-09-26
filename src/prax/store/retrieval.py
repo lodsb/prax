@@ -1835,3 +1835,41 @@ def _similar_documents(
                 }
             )
     return out
+
+
+@_reading
+def term_documents(
+    con: sqlite3.Connection, term: str, *, cap: int, table: str = "chunks_fts"
+) -> int:
+    """How many rows of a keyword index hold ``term`` as a word, counted up
+    to ``cap`` and no further: whether the library uses a word is all the
+    compound splitter asks, and a common word would otherwise be counted
+    to the end."""
+    if table not in ("chunks_fts", "documents_fts"):
+        raise ValueError(f"no keyword index {table!r}")
+    row = con.execute(
+        f"SELECT COUNT(*) FROM (SELECT rowid FROM {table}"
+        f" WHERE {table} MATCH ? LIMIT ?)",
+        (f'"{term}"', cap),
+    ).fetchone()
+    return int(row[0])
+
+
+@_reading
+def phrase_languages(con: sqlite3.Connection, match: str, lang: str) -> tuple[int, int]:
+    """How many documents hold this MATCH expression in their chunks in
+    ``lang``, and how many in another language that is known, prax's own
+    pages left out. Raises ``sqlite3.OperationalError`` for an expression
+    the index cannot parse."""
+    from .documents.reads import NOT_A_PAGE
+
+    row = con.execute(
+        "SELECT count(DISTINCT d.id) FILTER (WHERE lang = ?),"
+        " count(DISTINCT d.id) FILTER (WHERE lang <> ?)"
+        " FROM (SELECT d.id, json_extract(d.meta, '$.lang') AS lang"
+        " FROM chunks_fts f JOIN chunks c ON c.id = f.rowid"
+        " JOIN documents d ON d.id = c.doc_id"
+        f" WHERE chunks_fts MATCH ? AND {NOT_A_PAGE}) d",
+        (lang, lang, match),
+    ).fetchone()
+    return int(row[0] or 0), int(row[1] or 0)

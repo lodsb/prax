@@ -128,9 +128,34 @@ def test_the_mcp_server_is_a_thin_proxy() -> None:
     assert asked <= {"prax.client"}, f"the proxy imports more than the client: {asked}"
 
 
+PRAX_TABLES = (
+    "acronyms|chunk_embeddings|chunks|chunks_fts|document_embeddings|documents"
+    "|documents_fts|edges|entities|entity_candidates|entity_labels|jobs"
+    "|page_revisions|pages|readings|review_queue|spend"
+)
+
+
+def test_no_module_outside_the_store_reads_prax_s_tables() -> None:
+    """Invariant 3, reads too: a question about the library is a store
+    read. They were allowed and counted, and the count went 26, 38, 41
+    (2026-09-22 to -27): a query written where it is needed is the easy
+    way, so only a test holds the line. The Zotero importer's own queries
+    read Zotero's tables, not these, and pass."""
+    # a keyword-index query names its table in an f-string as often as not;
+    # its MATCH does not change
+    reads = re.compile(rf"\b(FROM|JOIN)\s+({PRAX_TABLES})\b|\bMATCH\s+\?")
+    guilty: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        if "store" in path.parts:
+            continue
+        for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if reads.search(line) and not line.lstrip().startswith("#"):
+                guilty.append(f"{path.relative_to(SRC)}:{i}")
+    assert not guilty, "SQL reads outside prax.store: " + "; ".join(guilty)
+
+
 def test_no_module_outside_the_store_writes_to_sqlite() -> None:
-    """Invariant 3, the other half. Reads outside the store are allowed
-    and counted in `docs/audit/`; writes are not."""
+    """Invariant 3, the other half: no writes outside the store."""
     writes = re.compile(
         r"\b(INSERT\s+INTO|UPDATE\s+\w+\s+SET|DELETE\s+FROM)\b", re.IGNORECASE
     )

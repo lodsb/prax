@@ -18,7 +18,6 @@ vision step is a paid one), or a retired document.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import sqlite3
@@ -45,7 +44,7 @@ from prax.parsers import figures
 log = logging.getLogger("prax.pipeline")
 
 MIN_CHARS = 300  # less than this is a stub, a cover or an error page
-CAPTURE_SOURCES = ("capture", "upload", "inbox")
+CAPTURE_SOURCES = store.CAPTURE_SOURCES  # where a capture comes from
 FETCH = 512  # chunks per embedding batch
 Log = Callable[[str], None]
 
@@ -217,41 +216,20 @@ def summaries_needed(
     are left out, as a guess costs a model call; a pass that wants them
     again clears ``meta.summary_tried``.
     """
-    where = (
-        " WHERE json_extract(meta, '$.summary') IS NOT NULL"
-        " AND json_extract(meta, '$.retired') IS NULL"
-    )
-    if untried_only:
-        where += " AND json_extract(meta, '$.summary_tried') IS NULL"
-    args: tuple[Any, ...] = ()
-    if ids is not None:
-        where += f" AND id IN ({','.join('?' * len(ids))})"
-        args = tuple(ids)
+    lang = language.canonical()
     # two narrow questions rather than one pass over every summary: this
     # runs on every hand-out, and a worker asks every twenty seconds
-    out: list[tuple[int, str]] = [
-        (r["id"], str(r["lang"]))
-        for r in con.execute(
-            "SELECT id, json_extract(meta, '$.summary_lang') AS lang FROM documents"
-            + where
-            + " AND json_extract(meta, '$.summary_lang') IS NOT NULL"
-            " AND json_extract(meta, '$.summary_lang') != ?",
-            (*args, language.canonical()),
-        )
-    ]
+    out = store.summaries_in_other_languages(
+        con, lang, untried_only=untried_only, ids=ids
+    )
     # and the ones a translation has already been made for, which are only
     # the documents this pass has touched
-    for r in con.execute(
-        "SELECT id, json_extract(meta, '$.summary') AS summary,"
-        " json_extract(meta, '$.summaries') AS held FROM documents"
-        + where
-        + " AND json_extract(meta, '$.summaries') IS NOT NULL"
-        " AND json_extract(meta, '$.summary_lang') = ?",
-        (*args, language.canonical()),
+    for doc_id, summary, held in store.translated_summaries(
+        con, lang, untried_only=untried_only, ids=ids
     ):
-        native = summaries.native(json.loads(r["held"] or "{}"))
-        if native is not None and summaries.acceptable(r["summary"], native[1]):
-            out.append((r["id"], native[0]))  # translated, but not usably
+        native = summaries.native(held)
+        if native is not None and summaries.acceptable(summary, native[1]):
+            out.append((doc_id, native[0]))  # translated, but not usably
     return sorted(out)
 
 
@@ -266,15 +244,8 @@ def titles_needed(
     ``untried_only`` (the pipeline) documents a guess already failed on,
     and documents without text, are left out: a guess costs a model call."""
     out = []
-    sql = "SELECT id, title, text_hash, meta FROM documents"
-    args: tuple[Any, ...] = ()
-    if ids is not None:
-        sql += f" WHERE id IN ({','.join('?' * len(ids))})"
-        args = tuple(ids)
-    for r in con.execute(sql + " ORDER BY id", args):
-        meta = json.loads(r["meta"] or "{}")
-        if meta.get("retired"):
-            continue
+    for r in store.title_rows(con, ids):
+        meta = r["meta"]
         if untried_only and (meta.get("titles_tried") or not r["text_hash"]):
             continue  # a guess that failed before, or nothing to guess from
         why = titles.needs_title(r["title"], meta)
@@ -592,11 +563,7 @@ def _titles_step(con: sqlite3.Connection, out: dict[str, Any], log: Log | None) 
     chosen = [
         (i, why)
         for i, why in titles_needed(con, untried_only=True)
-        if con.execute(
-            "SELECT json_extract(meta, '$.source') FROM documents WHERE id = ?",
-            (i,),
-        ).fetchone()[0]
-        in CAPTURE_SOURCES
+        if store.document_source(con, i) in CAPTURE_SOURCES
     ]
     if spec is None:  # no model: only the recase rule can do anything
         chosen = [c for c in chosen if c[1] == "caps"]

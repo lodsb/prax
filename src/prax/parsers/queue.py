@@ -185,14 +185,9 @@ def stale(con: sqlite3.Connection, *, limit: int | None = None) -> list[int]:
     (``parsers.behind``): a re-read would produce something new, or say
     ``same`` and cost only the parse. Oldest first, retired ones left out."""
     out: list[int] = []
-    rows = con.execute(
-        "SELECT id, json_extract(meta, '$.text_source') AS src FROM documents"
-        " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
-        " ORDER BY id"
-    )
-    for r in rows:
-        if parsers.behind(r["src"] or "") is not None:
-            out.append(r["id"])
+    for doc_id, src in store.text_sources(con):
+        if parsers.behind(src) is not None:
+            out.append(doc_id)
             if limit and len(out) >= limit:
                 break
     return out

@@ -523,37 +523,14 @@ def _doc_titles(
     project; otherwise the type the graph gave the document itself (a
     paper, a manual), paper by default. ``device`` is what a studio
     document ``describes`` when that is one thing."""
-    if not ids:
-        return {}
-    marks = ",".join("?" * len(ids))
     out: dict[int, tuple[str, str, str | None]] = {}
-    for r in con.execute(
-        f"SELECT d.id, d.title, p.kind FROM documents d LEFT JOIN pages p"
-        f" ON p.doc_id = d.id WHERE d.id IN ({marks})",
-        tuple(ids),
-    ):
-        title = r["title"] or ""
-        if r["kind"]:
-            kind = "project" if r["kind"] == "project" else "page"
+    for doc_id, title, page_kind in store.documents_as_pages(con, sorted(ids)):
+        if page_kind:
+            kind = "project" if page_kind == "project" else "page"
         else:
-            own = con.execute(
-                "SELECT s.type FROM edges e JOIN entities s ON s.id = e.src"
-                " WHERE e.source_doc = ? AND s.name = ? AND e.valid_to IS NULL"
-                " ORDER BY e.id DESC LIMIT 1",
-                (r["id"], title),
-            ).fetchone()
-            kind = own[0] if own else "paper"
-        devices = [
-            x[0]
-            for x in con.execute(
-                "SELECT DISTINCT t.name FROM edges e"
-                " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
-                " WHERE e.source_doc = ? AND e.rel = 'describes' AND s.name = ?"
-                " AND t.type = 'device' AND e.valid_to IS NULL",
-                (r["id"], title),
-            )
-        ]
-        out[r["id"]] = (title, kind, devices[0] if len(devices) == 1 else None)
+            kind = store.own_type(con, doc_id, title) or "paper"
+        devices = store.described_devices(con, doc_id, title)
+        out[doc_id] = (title, kind, devices[0] if len(devices) == 1 else None)
     return out
 
 

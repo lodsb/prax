@@ -76,15 +76,12 @@ def _docs(con: sqlite3.Connection, term: str, table: str) -> int:
     """How many documents hold this term, through the index rather than a
     scan. 0 where the term is unknown, and 0 where the question cannot be
     asked — a library that will not answer is a library with no split."""
+    from prax import store
+
     try:
-        row = con.execute(
-            f"SELECT COUNT(*) FROM (SELECT rowid FROM {table}"
-            f" WHERE {table} MATCH ? LIMIT ?)",
-            (f'"{term}"', MIN_DOCS),
-        ).fetchone()
+        return store.term_documents(con, term, cap=MIN_DOCS, table=table)
     except sqlite3.Error:
         return 0
-    return int(row[0]) if row else 0
 
 
 def expand(

@@ -102,12 +102,7 @@ class Resolver:
 
     @classmethod
     def for_store(cls, con: sqlite3.Connection) -> Resolver:
-        titles = [
-            (r["id"], r["title"])
-            for r in con.execute(
-                "SELECT id, title FROM documents WHERE title IS NOT NULL"
-            )
-        ]
+        titles = store.titled_documents(con)
         return cls(store.meta_index(con, "$.zotero.keys"), titles)
 
     def expected(self, query: Query) -> set[int]:

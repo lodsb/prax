@@ -20,7 +20,6 @@ routes name.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Any
 
@@ -60,13 +59,8 @@ def _counts(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
         "formulas": 0,
         "formulas_read": 0,
     }
-    for row in con.execute(
-        "SELECT kind, data FROM chunks"
-        " WHERE doc_id = ? AND kind IN ('figure', 'formula')",
-        (doc_id,),
-    ):
-        data = json.loads(row["data"]) if row["data"] else {}
-        key = "figures" if row["kind"] == "figure" else "formulas"
+    for kind, data in store.figure_and_formula_data(con, doc_id):
+        key = "figures" if kind == "figure" else "formulas"
         out[key] += 1
         if key == "figures" and data.get("ref"):
             out["figures_with_picture"] += 1
@@ -101,23 +95,16 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     pending}``; ``action`` is what a button sends: ``{"kind": "reading",
     "extractor", "mode"}``, ``{"kind": "extract"}`` or
     ``{"kind": "promote"}``. Raises ``KeyError`` for no such document."""
-    row = con.execute(
-        "SELECT mime, text_hash, meta FROM documents WHERE id = ?", (doc_id,)
-    ).fetchone()
+    row = store.document_state(con, doc_id)
     if row is None:
         raise KeyError(f"no such document: {doc_id}")
-    meta = json.loads(row["meta"] or "{}")
+    meta = row["meta"]
     mime = row["mime"] or ""
     is_pdf = mime == "application/pdf"
     is_html = mime in ("text/html", "application/xhtml+xml")
     is_image = mime.startswith("image/")
     is_page = bool(meta.get("page"))
-    text_len = int(
-        con.execute(
-            "SELECT coalesce(sum(length(text)), 0) FROM chunks WHERE doc_id = ?",
-            (doc_id,),
-        ).fetchone()[0]
-    )
+    text_len = row["text_len"]
     counts = _counts(con, doc_id)
     reading = meta.get("reading") or None  # the last one, for the state line
     # what it waits for now: a document may wait for several readings

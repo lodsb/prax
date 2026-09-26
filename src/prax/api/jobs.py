@@ -296,13 +296,10 @@ def label(req: LabelReq, request: Request) -> dict[str, Any]:
         )
     except (ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc
-    row = con.execute(
-        "SELECT name FROM entities WHERE id = ?", (req.entity_id,)
-    ).fetchone()
     return {
         "entity": req.entity_id,
         "written": wrote,
-        "name": row["name"] if row else None,
+        "name": store.entity_name(con, req.entity_id),
     }
 
 

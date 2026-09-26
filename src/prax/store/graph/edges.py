@@ -468,3 +468,31 @@ def _subset_version_case(
         return "?", [whole]
     args.append(whole)
     return f"CASE json_extract(meta, '$.domains') {' '.join(whens)} ELSE ? END", args
+
+
+@_reading
+def entity_name(con: sqlite3.Connection, entity_id: int) -> str | None:
+    """The name an entity shows."""
+    row = con.execute("SELECT name FROM entities WHERE id = ?", (entity_id,)).fetchone()
+    return str(row["name"]) if row else None
+
+
+@_reading
+def entities_with_degree(
+    con: sqlite3.Connection, etype: str | None = None
+) -> list[dict[str, Any]]:
+    """``id, name, type, degree`` of every canonical entity (of ``etype``),
+    oldest first; ``degree`` counts its live edges either way."""
+    degree: dict[int, int] = {}
+    for col in ("src", "dst"):  # two indexed group-bys instead of an OR per entity
+        for r in con.execute(
+            f"SELECT {col} AS id, count(*) AS n FROM edges WHERE valid_to IS NULL"
+            f" GROUP BY {col}"
+        ):
+            degree[r["id"]] = degree.get(r["id"], 0) + r["n"]
+    where = "WHERE canonical_id IS NULL" + (" AND type = ?" if etype else "")
+    args: tuple[Any, ...] = (etype,) if etype else ()
+    rows = con.execute(
+        f"SELECT e.id, e.name, e.type FROM entities e {where} ORDER BY e.id", args
+    ).fetchall()
+    return [{**dict(r), "degree": degree.get(r["id"], 0)} for r in rows]

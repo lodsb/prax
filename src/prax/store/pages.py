@@ -488,3 +488,17 @@ def add_to_project(
         producer="page",
         run=slugify(project_slug),
     )
+
+
+@_reading
+def pages_with_chunks_of(con: sqlite3.Connection, kind: str) -> list[str]:
+    """The slugs of the pages that hold a chunk of ``kind`` (``ask``: the
+    pages with standing questions), in order."""
+    return [
+        str(r["slug"])
+        for r in con.execute(
+            "SELECT DISTINCT p.slug FROM chunks c JOIN pages p ON p.doc_id = c.doc_id"
+            " WHERE c.kind = ? ORDER BY p.slug",
+            (kind,),
+        )
+    ]

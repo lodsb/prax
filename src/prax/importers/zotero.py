@@ -740,13 +740,7 @@ class KnownKeys:
         pass  # the store has it now
 
     def get(self, key: str) -> int | None:
-        row = self.con.execute(
-            "SELECT id FROM documents WHERE EXISTS"
-            " (SELECT 1 FROM json_each(meta, '$.zotero.keys') WHERE value = ?)"
-            " ORDER BY id LIMIT 1",
-            (key,),
-        ).fetchone()
-        return int(row[0]) if row else None
+        return store.document_by_zotero_key(self.con, key)
 
 
 def apply(

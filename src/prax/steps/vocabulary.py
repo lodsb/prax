@@ -15,13 +15,7 @@ def named_in(con: Any, entity_id: int) -> str:
     """The title of a document that named this entity: context for a
     model asked what English calls the thing, since a bare word can be
     two things and the document says which."""
-    row = con.execute(
-        "SELECT d.title FROM edges x JOIN documents d ON d.id = x.source_doc"
-        " WHERE x.valid_to IS NULL AND (x.src = ? OR x.dst = ?) AND d.title IS NOT NULL"
-        " LIMIT 1",
-        (entity_id, entity_id),
-    ).fetchone()
-    return str(row["title"]) if row else ""
+    return store.entity_named_in(con, entity_id)
 
 
 class Vocabulary(ModelStep):

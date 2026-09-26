@@ -26,7 +26,6 @@ belongs to that domain; ``<name>.json`` next to a file is a sidecar with
 from __future__ import annotations
 
 import ipaddress
-import json
 import logging
 import re
 import socket
@@ -241,12 +240,7 @@ def _previous_capture(
 ) -> int | None:
     if not url:
         return None
-    row = con.execute(
-        "SELECT id FROM documents WHERE source_url = ? AND id != ?"
-        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id DESC LIMIT 1",
-        (url, exclude),
-    ).fetchone()
-    return row[0] if row else None
+    return store.previous_capture(con, url, exclude=exclude)
 
 
 def _same_page_as(
@@ -681,15 +675,7 @@ def pending_captures(con: sqlite3.Connection) -> list[int]:
     """Captures the door only registered (PDFs, images): what the batch
     host's watcher parses. The curated imports' own backlog is not
     included; a worker with ``--scope all`` is for that."""
-    return [
-        r[0]
-        for r in con.execute(
-            "SELECT id FROM documents WHERE text_hash IS NULL"
-            " AND json_extract(meta, '$.retired') IS NULL"
-            " AND json_extract(meta, '$.source') IN ('upload', 'capture', 'inbox')"
-            " ORDER BY id"
-        )
-    ]
+    return store.untexted_captures(con)
 
 
 # ------------------------------------------------------------- the list
@@ -705,16 +691,9 @@ def _tried(meta: dict[str, Any]) -> str | None:
 
 def recent(con: sqlite3.Connection, *, limit: int = 50) -> list[dict[str, Any]]:
     """The latest captures with their state: indexed, extracted, domains."""
-    rows = con.execute(
-        "SELECT id, title, mime, source_url, text_hash, meta FROM documents"
-        " WHERE json_extract(meta, '$.source') IN ('upload', 'capture', 'inbox')"
-        " AND json_extract(meta, '$.retired') IS NULL"
-        " ORDER BY json_extract(meta, '$.capture.at') DESC, id DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
     out = []
-    for r in rows:
-        meta = json.loads(r["meta"] or "{}")
+    for r in store.recent_captures(con, limit=limit):
+        meta = r["meta"]
         out.append(
             {
                 "doc_id": r["id"],

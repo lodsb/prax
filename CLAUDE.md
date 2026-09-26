@@ -40,10 +40,12 @@ revisit threshold, under "Decision thresholds" below.
    text. Parsed text is its own content-addressed artifact
    (`documents.text_hash`). Chunks are a disposable index derived from
    it and may be rebuilt at any time.
-3. **One door.** *(checked)* All mutations go through `prax.store`, which the
+3. **One door.** *(checked)* All mutations, and every read of prax's tables, go through `prax.store`, which the
    FastAPI app in `prax.api` uses. Capture inboxes, importers, cron jobs
    and the MCP server are all clients of that layer. No module writes to
-   SQLite directly except `prax.store`. Ingest is two steps: `register`
+   SQLite directly except `prax.store`, and none reads it either: a
+   question about the library is a store read (the Zotero importer
+   reads Zotero's copy, not these tables). Ingest is two steps: `register`
    archives the original and inserts the row; `index_text` stores the
    text artifact, chunks it and indexes it in FTS. Parsers call
    `index_text`. `ingest_text` composes both for plain text. The store
