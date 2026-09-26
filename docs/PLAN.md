@@ -7,6 +7,29 @@ Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
+## The order, agreed 2026-09-27
+
+A–E below are done. This is what follows, in this order: first what
+waits only on a word, then the other half of the traverse question, then
+the precondition for communities, then two things a user notices.
+
+- [ ] **F. What waited on a word.** The six `twin-documents` (dry run,
+      then the repair), the seven pending promotions (`--spend`, capped
+      at the seven, roughly $1-3), and the unread figures started in
+      slices that leave the parse queue its turn.
+- [ ] **G. One thing in pieces** (`docs/eval/fractured-names-2026-09-27.md`).
+      A `heal` ailment that lists them, merges for the safe classes (the
+      same type twice, a type and its subtype) under a run that
+      `unmerge_run` takes back, and a rule for which unrelated type pairs
+      may name one thing, measured before anything merges.
+- [ ] **H. The hub entities.** 164 of the 200 biggest hubs are papers,
+      and the biggest is a proceedings volume at degree 1,951: decide what
+      a container is and keep it out of the neighbourhoods.
+- [ ] **I. taco and tacos** are different searches: a plural folded on
+      the keyword side, measured on the eval set.
+- [ ] **J. One workflow for maintenance and healing**, where there are
+      five commands with five shapes (`niggles.txt`).
+
 ## The order, agreed 2026-09-26
 
 Everything below is written up somewhere in this file or in
@@ -163,7 +186,7 @@ explains it.
 
 ### Ready, and waiting only on a decision
 
-- [ ] **`prax maintain --rechunk`** — the `ad`, `comment` and
+- [x] (done 2026-09-26, 310 s, after stage D) **`prax maintain --rechunk`** — the `ad`, `comment` and
       `ingredients` regions only arrive with a re-chunk (10,261
       documents; a chunk whose text did not change keeps its id and its
       vector). An overnight job.
@@ -508,7 +531,7 @@ findings in the order they pay, and one that came out of writing it.
 
 ### A step is an object, not three if-chains
 
-- [ ] **`work.hand_out` (363 lines), `work.take_in` (295) and
+- [x] (stage E, 2026-09-27) **`work.hand_out` (363 lines), `work.take_in` (295) and
       `worker.run_once` (267) are the same dispatch written three times**,
       over the same step names, in two modules. Adding `sections` meant
       editing all three in the same order: its batch cap in one, its
@@ -527,7 +550,7 @@ findings in the order they pay, and one that came out of writing it.
 
 ### The store's modules outgrew the split that was already made
 
-- [ ] **`store/documents.py` is 2,739 lines and `store/graph.py` 2,044**,
+- [x] (stage E, 2026-09-27) **`store/documents.py` is 2,739 lines and `store/graph.py` 2,044**,
       against the 2,000 that made `prax.api` a package on 2026-09-22.
       `graph.py` splits along what it holds — entities, edges, labels,
       traversal — and `documents.py` along documents, chunks, the
@@ -555,7 +578,7 @@ findings in the order they pay, and one that came out of writing it.
 
 ### Name what kind of invariant each one is
 
-- [ ] **The ten invariants are held in four different ways, and the file
+- [x] (stage B, 2026-09-26) **The ten invariants are held in four different ways, and the file
       does not say which.** That matters because it decides what can
       catch a breach:
 
