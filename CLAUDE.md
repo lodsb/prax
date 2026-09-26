@@ -172,6 +172,12 @@ token the library defines as an acronym is expanded to its phrase on
 the keyword side; the `acronyms` table is built from "phrase (ACRONYM)"
 in the texts. The query's rare acronym-shaped terms get a rank list of
 their own (measured in `docs/eval/retrieval-acronyms-2026-09-12.md`).
+A word the graph adds to a query (through an entity's label) is
+searched only where the thing it names lives: its type's domains and
+the domains of the documents that say something about it. It is merged
+with the plain words by BM25 score, not given a list of its own, so it
+adds no vote (`store.expand_query_senses`; `Apfelkuchen` -> `apple`
+the ingredient, not the Logic manuals).
 An optional cross-encoder rerank (bge-reranker-v2-m3) runs over the
 fused top-N; benchmark it on the target hardware before enabling it by
 default. Graph traversal expands entry-point hits 1–2 hops. Complement

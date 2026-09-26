@@ -201,6 +201,26 @@ class Ontology:
         if not self._allowed(r.range, dst_type):
             raise ValueError(f"{rel!r} does not accept dst type {dst_type!r}")
 
+    def domains_of(self, type_name: str) -> frozenset[str] | None:
+        """The domains a thing of this type can be found in: the module
+        that declares the type and every module built on it (`material`
+        is craft's, so craft, kitchen and workshop). None for a core type,
+        or one no module declares, which is everywhere.
+
+        What a search uses to keep a word the graph added to a query
+        where its sense lives: `apple` reached through the ingredient is
+        a word for recipes, not for the Logic manuals, which name the
+        organization.
+        """
+        home = next(
+            (m.name for m in self.modules.values() if type_name in m.types), None
+        )
+        if home is None or home == CORE:
+            return None
+        return frozenset(
+            m.name for m in self.modules.values() if home in _closure(m, self.modules)
+        )
+
     def for_domains(self, domains: list[str] | set[str] | None) -> Ontology:
         """The core plus the named modules (and what they require): the
         ontology a document of those domains is extracted against. None

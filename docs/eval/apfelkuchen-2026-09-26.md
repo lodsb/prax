@@ -227,3 +227,37 @@ s each: 22,382 German labels. `apple` now carries `Apfel`, and
 the whole first page is Apple Inc. (Logic manuals, a Power Mac). The
 bridge is built, and the brand collision is now the only thing between
 the question and the recipe.
+
+## Layer 1: a word the graph added is searched where its sense lives
+
+The user typed `Apfelkuchen`, and prax added `apple` by way of the
+ingredient's German label. A word only the graph added is now searched
+only where the thing it names lives: its type's domains (ingredient:
+the kitchen), and the domains of the documents with an edge about it.
+What the user typed is searched everywhere, as before.
+
+Three shapes were tried against the 19 German questions (targets as
+before: the English question's top hit), every question's top ten, and
+five German kitchen questions. All runs were read-only on the live store.
+
+| shape | German found / MRR sum | top tens moved | Apfelkuchen first |
+|---|---|---|---|
+| off (before) | 9 / 4.58 | — | Logic Express manual |
+| scoped words as extra rank lists | 8 / 4.83 | 7 of 44 | apple recipe |
+| scoped by occurrence as well as type | 8 / 4.83 | 7 of 44 | apple recipe |
+| **merged by BM25 into the one keyword list** | **9 / 4.58** | **1 of 44** | cocktail with apple juice, the recipe second |
+
+Extra rank lists added a vote: every in-scope document that matched any
+word counted twice, and "Signalsynthese" lost its paper to other
+research documents. The paper was never out of scope. A term's BM25
+weight does not depend on the rest of the expression, so the merged list
+scores a chunk inside the scope as it scored before, and one outside
+as if the word had not been added. Only the Apple question moves.
+
+The cost is one lookup of where each added word lives, plus one scoped
+keyword search. A scope that is most of the library (research, about
+80%) is filtered after the ranking, drawn nine times deeper. Filtering
+inside the ranking joined every matched chunk first, which took 940 ms
+for "signal synthesis". A small one (kitchen) keeps the filter inside.
+Measured: +0 to +20 ms on most questions, +107 ms on "Signalsynthese",
+where `synthesis` has many edges to look through.

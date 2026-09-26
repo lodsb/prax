@@ -193,10 +193,17 @@ def known_as(con: sqlite3.Connection, text: str, *, limit: int = NAMED_AS) -> li
     (`docs/eval/retrieval-multilingual-2026-09-24.md`), because nothing
     tells FTS5 that Faltung and convolution are one word.
     """
+    return [name for _, name, _ in _named_as(con, text, limit=limit)]
+
+
+def _named_as(
+    con: sqlite3.Connection, text: str, *, limit: int = NAMED_AS
+) -> list[tuple[int, str, str]]:
+    """``known_as`` with the id and type of the thing each name belongs to."""
     return [
-        r[0]
+        (int(r[0]), str(r[1]), str(r[2]))
         for r in con.execute(
-            "SELECT DISTINCT e.name FROM entity_labels l"
+            "SELECT DISTINCT e.id, e.name, e.type FROM entity_labels l"
             " JOIN entities e ON e.id = l.entity_id"
             " WHERE l.label = ? COLLATE NOCASE AND e.canonical_id IS NULL"
             " AND lower(e.name) != lower(?) LIMIT ?",
@@ -205,7 +212,50 @@ def known_as(con: sqlite3.Connection, text: str, *, limit: int = NAMED_AS) -> li
     ]
 
 
+# A word the graph added to a query is searched only in the domains of the
+# thing it names (``expand_query_senses``). Off, every expansion is searched
+# everywhere, as before 2026-09-26: the switch the measurement flips.
+SENSES = True
+
+Scope = frozenset[str]
+
+
+def _lives_in(con: sqlite3.Connection, entity_id: int, etype: str) -> Scope | None:
+    """Where a thing's sense lives: its type's domains, and the domains of
+    the documents that say something about it. None is everywhere.
+
+    The type alone was too narrow. `synthesis` is a research method, and
+    the paper a German question about "Signalsynthese" wanted is in the
+    studio domain; a thing is where the library found it as well as where
+    its type is declared.
+    """
+    from prax import ontology
+
+    where = ontology.current().domains_of(etype)
+    if where is None:
+        return None
+    found: set[str] = set(where)
+    for (raw,) in con.execute(
+        "SELECT DISTINCT json_extract(d.meta, '$.domains') FROM documents d"
+        " WHERE d.id IN (SELECT source_doc FROM edges"
+        "  WHERE src = ? AND valid_to IS NULL"
+        "  UNION SELECT source_doc FROM edges WHERE dst = ? AND valid_to IS NULL)",
+        (entity_id, entity_id),
+    ):
+        if not raw:
+            return None  # a document of every module says it
+        found.update(json.loads(raw))
+    return frozenset(found)
+
+
 def expand_query(con: sqlite3.Connection, query: str) -> list[list[str]]:
+    """``expand_query_senses`` without the senses: every alternative."""
+    return expand_query_senses(con, query)[0]
+
+
+def expand_query_senses(
+    con: sqlite3.Connection, query: str
+) -> tuple[list[list[str]], dict[str, Scope]]:
     """The query as terms, each a list of alternatives: the token itself,
     the phrases the library defines it as (``[["adaa", "antiderivative
     antialiasing"], ["iir"]]``), and the name the graph knows the thing
@@ -221,30 +271,72 @@ def expand_query(con: sqlite3.Connection, query: str) -> list[list[str]]:
     The whole query is looked up as one name too, because a thing is
     often several words (`dünn besetzte Matrizen`) and no single token of
     it is the name.
+
+    **The senses** are the alternatives only the graph added, each with
+    the domains of the thing it names (``_lives_in``). The user
+    typed `Apfelkuchen`; the graph added `apple`, reached through the
+    ingredient, and a search that matched it everywhere filled its first
+    page with Logic manuals, which name the organization
+    (docs/eval/apfelkuchen-2026-09-26.md). A sense is searched only where
+    its thing lives. An alternative that also arrives another way (the
+    token itself, a phrase the library defines, a compound half) or
+    through a thing of a core type, which lives everywhere, is no sense.
     """
     from prax import compounds
+
+    plain: set[str] = set()
+    scoped: dict[str, set[str]] = {}
+
+    def by_graph(text: str, alts: list[str]) -> None:
+        for entity_id, name, etype in _named_as(con, text):
+            n = name.lower()
+            where = _lives_in(con, entity_id, etype)
+            if where is None:
+                plain.add(n)
+            else:
+                scoped.setdefault(n, set()).update(where)
+            if n not in alts:
+                alts.append(n)
 
     terms: list[list[str]] = []
     for tok in _TOKEN.findall(query):
         alts = [tok.lower()]
         if 2 <= len(tok) <= 8 and tok.isalpha():
             alts += [e for e in acronym_expansions(con, tok) if e != tok.lower()]
-        alts += [n.lower() for n in known_as(con, tok) if n.lower() not in alts]
+        plain.update(alts)
+        by_graph(tok, alts)
         for part in compounds.split(con, tok):
+            plain.add(part)
             if part not in alts:
                 alts.append(part)
             # and the half goes through the graph too, because that is the
             # chain the whole thing is for: Apfelkuchen -> apfel -> apple
-            alts += [n.lower() for n in known_as(con, part) if n.lower() not in alts]
+            by_graph(part, alts)
         terms.append(alts)
     whole = " ".join(_TOKEN.findall(query))
     if len(terms) > 1 and whole:
-        named = [n.lower() for n in known_as(con, whole)]
+        named: list[str] = []
+        by_graph(whole, named)
         if named:
             # one more term, OR-ed with the rest: a document using the
             # English name matches even though no single token did
             terms.append(named)
-    return terms
+    senses = {n: frozenset(w) for n, w in scoped.items() if n not in plain}
+    return terms, senses
+
+
+def _plain_terms(terms: list[list[str]], senses: dict[str, Scope]) -> list[list[str]]:
+    """The terms without the senses: what is searched everywhere."""
+    out = [[a for a in t if a not in senses] for t in terms]
+    return [t for t in out if t]
+
+
+def _sense_terms(
+    terms: list[list[str]], senses: dict[str, Scope], scope: Scope
+) -> list[list[str]]:
+    """The terms with the senses of one scope: what is searched there."""
+    out = [[a for a in t if a not in senses or senses[a] == scope] for t in terms]
+    return [t for t in out if t]
 
 
 def expanded_text(terms: list[list[str]]) -> str:
@@ -291,6 +383,40 @@ def _rare_terms(con: sqlite3.Connection, terms: list[list[str]]) -> list[list[st
 SEARCH_MODES = ("hybrid", "fts", "vec")
 
 
+WIDE_SCOPE = 0.5  # a scope holding this share of the documents is filtered after
+WIDE_DRAW = 3  # and the ranked list is drawn this many times deeper for it
+
+_SHARES: dict[tuple[Scope, int], float] = {}
+
+
+def _share(con: sqlite3.Connection, scope: Scope) -> float:
+    """The share of the library's documents a scope holds, remembered
+    while the library holds as many documents."""
+    total = int(con.execute("SELECT count(*) FROM documents").fetchone()[0] or 0)
+    key = (scope, total)
+    if key not in _SHARES:
+        where, args = _in_domains(scope)
+        n = con.execute(
+            f"SELECT count(*) FROM documents d WHERE 1 = 1{where}", args
+        ).fetchone()[0]
+        _SHARES[key] = (n or 0) / max(total, 1)
+    return _SHARES[key]
+
+
+def _in_domains(scope: Scope | None) -> tuple[str, tuple[str, ...]]:
+    """A WHERE clause keeping the documents of ``scope`` (and those with
+    no domain set, which are in every module), and its arguments."""
+    if not scope:
+        return "", ()
+    marks = ",".join("?" * len(scope))
+    clause = (
+        " AND (json_extract(d.meta, '$.domains') IS NULL OR EXISTS"
+        " (SELECT 1 FROM json_each(d.meta, '$.domains') j"
+        f" WHERE j.value IN ({marks})))"
+    )
+    return clause, tuple(sorted(scope))
+
+
 def _fts_search(
     con: sqlite3.Connection,
     query: str,
@@ -299,10 +425,14 @@ def _fts_search(
     *,
     snippets: bool = True,
     expr: str | None = None,
+    scope: Scope | None = None,
 ) -> list[dict[str, Any]]:
     """BM25 over chunks. ``snippets=False`` skips the snippet() call, which
     reads every matched chunk's text and dominates the cost of deep lists;
-    ``_fts_snippets`` fills them in for the few hits that survive fusion."""
+    ``_fts_snippets`` fills them in for the few hits that survive fusion.
+    ``scope`` keeps the chunks of documents in those domains, inside the
+    ranking: a sense like `apple` matches thousands of chunks elsewhere,
+    and a filter after the ranking would leave none."""
     expr = expr or _fts_query(query)
     if expr is None:
         return []
@@ -311,7 +441,15 @@ def _fts_search(
         if snippets
         else "substr(c.text, 1, 160)"
     )
-    if kind is None and not snippets:
+    where, where_args = _in_domains(scope)
+    # a scope that is most of the library is dense among the best matches:
+    # rank in the index, draw deeper, filter after. Inside the ranking it
+    # joined every matched chunk first, and "signal synthesis" scoped to
+    # research took 940 ms against 83 (2026-09-26). A small scope (the
+    # kitchen, where `apple` has thousands of chunks elsewhere) keeps the
+    # filter inside
+    wide = bool(scope) and _share(con, scope) >= WIDE_SCOPE
+    if kind is None and not snippets and (not scope or wide):
         # rank inside the keyword index alone, then join the survivors: the
         # joins to chunks and documents ran for every matched row before
         # the sort, and doubled a common query's cost (51 ms against 25 on
@@ -328,10 +466,11 @@ def _fts_search(
                   WHERE chunks_fts MATCH ? ORDER BY score LIMIT ?) f
             JOIN chunks c ON c.id = f.rowid
             JOIN documents d ON d.id = c.doc_id
-            WHERE 1 = 1 {_ASIDE}
+            WHERE 1 = 1 {_ASIDE}{where}
             ORDER BY f.score LIMIT ?
             """
-        args: tuple[Any, ...] = (expr, limit * 3, limit)
+        deeper = limit * (3 * WIDE_DRAW if wide else 3)
+        args: tuple[Any, ...] = (expr, deeper, *where_args, limit)
     else:
         # a kind asked for is a small share of the chunks (tables, figures),
         # so its filter has to sit inside the ranking; snippet() needs the
@@ -345,10 +484,14 @@ def _fts_search(
                    c.kind, c.locator, c.heading, c.data
             FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid
                             JOIN documents d ON d.id = c.doc_id
-            WHERE chunks_fts MATCH ? {kind_clause}
+            WHERE chunks_fts MATCH ? {kind_clause}{where}
             ORDER BY score LIMIT ?
             """
-        args = (expr, kind, limit) if kind is not None else (expr, limit)
+        args = (
+            (expr, kind, *where_args, limit)
+            if kind is not None
+            else (expr, *where_args, limit)
+        )
     rows = con.execute(sql, args).fetchall()
     out = []
     for r in rows:
@@ -424,21 +567,26 @@ def _vec_search(
 
 
 def _field_fts_search(
-    con: sqlite3.Connection, query: str, limit: int, expr: str | None = None
+    con: sqlite3.Connection,
+    query: str,
+    limit: int,
+    expr: str | None = None,
+    scope: Scope | None = None,
 ) -> list[dict[str, Any]]:
     """BM25 over the document field; hits carry no chunk yet."""
     expr = expr or _fts_query(query)
     if expr is None:
         return []
+    where, where_args = _in_domains(scope)
     rows = con.execute(
-        """
+        f"""
         SELECT f.rowid AS doc_id, d.title,
                snippet(documents_fts, 0, '[', ']', '…', 14) AS snippet,
                bm25(documents_fts) AS score
         FROM documents_fts f JOIN documents d ON d.id = f.rowid
-        WHERE documents_fts MATCH ? ORDER BY score LIMIT ?
+        WHERE documents_fts MATCH ?{where} ORDER BY score LIMIT ?
         """,
-        (expr, limit),
+        (expr, *where_args, limit),
     ).fetchall()
     return [_field_hit(r["doc_id"], r["title"], r["snippet"], r["score"]) for r in rows]
 
@@ -718,14 +866,27 @@ def _search_hits(
     # the keyword side without the stopwords (the embedder sees them all):
     # one OR expression for recall, one AND expression for the tier that
     # wants every term present (only when there is more than one term)
-    terms = expand_query(con, query)
+    terms, senses = expand_query_senses(con, query)
+    if not SENSES:
+        senses = {}
     keywords = keyword_terms(terms)
-    or_expr = _expr(keywords, all_terms=False)
-    and_expr = _expr(keywords, all_terms=True) if len(keywords) > 1 else None
+    # the senses are searched where they live, each scope a list of its
+    # own; what is left is searched everywhere, as it always was
+    plain = _plain_terms(keywords, senses) or keywords
+    scopes = sorted(set(senses.values()), key=sorted)
+    sensed = [
+        (scope, _expr(_sense_terms(keywords, senses, scope), all_terms=False))
+        for scope in scopes
+    ]
+    full_expr = _expr(keywords, all_terms=False)  # what a snippet marks
+    or_expr = _expr(plain, all_terms=False)
+    and_expr = _expr(plain, all_terms=True) if len(plain) > 1 else None
     if mode == "fts":  # the raw chunk list, expanded but not fused
-        hits = _fts_search(con, query, fetch + len(aside), kind, expr=or_expr)
+        hits = _fts_sensed(
+            con, query, fetch + len(aside), kind, or_expr, sensed, snippets=True
+        )
         hits = _without(hits, aside)
-        return _finish(con, hits, query, limit, doctype, expr=or_expr)
+        return _finish(con, hits, query, limit, doctype, expr=full_expr)
     depth = max(limit * 3, RRF_DEPTH)
     # keyword lists: any term (recall), optionally every term, and the rare
     # terms alone: "adaa iir" must not be decided by the thousands of chunks
@@ -736,7 +897,7 @@ def _search_hits(
     }
     took = _Took(timing)
     with took("fts"):
-        lists = [_fts_search(con, query, depth, kind, snippets=False, expr=or_expr)]
+        lists = [_fts_sensed(con, query, depth, kind, or_expr, sensed)]
     names = ["fts"]
     if and_expr and ALL_TERMS_WEIGHT > 0:
         with took("fts"):
@@ -744,7 +905,7 @@ def _search_hits(
                 _fts_search(con, query, depth, kind, snippets=False, expr=and_expr)
             )
         names.append("fts_all")
-    rare = _rare_terms(con, keywords) if RARE_TERMS_WEIGHT > 0 else []
+    rare = _rare_terms(con, plain) if RARE_TERMS_WEIGHT > 0 else []
     if rare and len(rare) == len(terms):
         # the whole query is rare tokens ("adaa"): the keyword list carries
         # the weight itself, vector neighbours of letters must not outvote it
@@ -757,11 +918,9 @@ def _search_hits(
         names.append("fts_rare")
     if not vectors_ready:
         if kind is None:  # hybrid without vectors: the field too
-            lists.append(_field_fts_search(con, query, depth, expr=or_expr))
-            names.append("field")
-            weights["field"] = _field_weight(query)
+            _field_lists(con, query, depth, or_expr, sensed, lists, names, weights)
         fused = _rrf([_without(x, aside) for x in lists], names, fetch, weights)
-        return _finish(con, fused, query, limit, doctype, expr=or_expr)
+        return _finish(con, fused, query, limit, doctype, expr=full_expr)
     assert emb is not None
     with took("embed"):
         vector = emb.embed_query(expanded_text(terms) if VEC_EXPAND else query)
@@ -772,22 +931,81 @@ def _search_hits(
             query,
             limit,
             doctype,
-            expr=or_expr,
+            expr=full_expr,
         )
     with took("vec"):
         lists.append(_vec_search(con, vector, depth, kind))
     names.append("vec")
     if kind is None:  # the field has no chunk kind to filter by
         with took("field"):
-            lists.append(_field_fts_search(con, query, depth, expr=or_expr))
-        names.append("field")
-        weights["field"] = _field_weight(query)
+            _field_lists(con, query, depth, or_expr, sensed, lists, names, weights)
         with took("dvec"):
             lists.append(_field_vec_search(con, emb.name, vector, depth))
         names.append("dvec")
     fused = _rrf([_without(x, aside) for x in lists], names, fetch, weights)
     with took("finish"):
-        return _finish(con, fused, query, limit, doctype, expr=or_expr)
+        return _finish(con, fused, query, limit, doctype, expr=full_expr)
+
+
+def _field_lists(
+    con: sqlite3.Connection,
+    query: str,
+    depth: int,
+    or_expr: str | None,
+    sensed: list[tuple[Scope, str | None]],
+    lists: list[list[dict[str, Any]]],
+    names: list[str],
+    weights: dict[str, float],
+) -> None:
+    """The document field's keyword list, its senses counted where they
+    live (``_by_score``)."""
+    hits = _field_fts_search(con, query, depth, expr=or_expr)
+    for scope, expr in sensed:
+        hits += _field_fts_search(con, query, depth, expr=expr, scope=scope)
+    lists.append(_by_score(hits, "doc_id", depth) if sensed else hits)
+    names.append("field")
+    weights["field"] = _field_weight(query)
+
+
+def _fts_sensed(
+    con: sqlite3.Connection,
+    query: str,
+    depth: int,
+    kind: str | None,
+    or_expr: str | None,
+    sensed: list[tuple[Scope, str | None]],
+    *,
+    snippets: bool = False,
+) -> list[dict[str, Any]]:
+    """The chunk keyword list, its senses counted where they live."""
+    hits = _fts_search(con, query, depth, kind, snippets=snippets, expr=or_expr)
+    for scope, expr in sensed:
+        hits += _fts_search(
+            con, query, depth, kind, snippets=snippets, expr=expr, scope=scope
+        )
+    return _by_score(hits, "chunk_id", depth) if sensed else hits
+
+
+def _by_score(hits: list[dict[str, Any]], key: str, depth: int) -> list[dict[str, Any]]:
+    """One keyword list out of the plain one and the scoped ones, by BM25,
+    each hit once at its best.
+
+    A term's BM25 weight does not depend on the rest of the expression, so
+    a chunk's score under the plain words and under the plain words with a
+    sense differ by what the sense adds. Merged, a chunk in the sense's
+    domains scores as it did before senses were scoped, and one outside
+    scores as if the graph had not added the word. As extra rank lists the
+    senses were extra votes instead: every document of the scope that
+    matched any word was counted twice, and a German question about signal
+    synthesis lost its paper to the other research documents
+    (2026-09-26)."""
+    seen: set[int] = set()
+    out = []
+    for h in sorted(hits, key=lambda h: h["score"]):
+        if h[key] not in seen:
+            seen.add(h[key])
+            out.append(h)
+    return out[:depth]
 
 
 ASIDE_PAGE_KINDS = ("question", "briefing")

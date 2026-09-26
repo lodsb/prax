@@ -97,6 +97,14 @@ stage safe, or a thing a user would notice.
       about 6 wrong (blackberry jam → Himbeermarmelade, cumin → Kümmel).
       Library-wide it offers 22,389, mostly research concepts: about 50
       minutes of the local model once the door runs it.
+- [x] **Layer 1 of the brand collision: a word the graph added is
+      searched where its sense lives.** "Apfelkuchen" without a domain:
+      the apple recipe second, after a cocktail with apple juice, and no
+      Logic manual on the first page. 43 of the 44 eval questions keep
+      their top ten; the German set is unchanged (9 found, 4.58).
+- [ ] **Layer 2: a word the user typed that the graph knows is
+      ambiguous** (an English "apple cake"): the other words of the query
+      choose the domain, as a soft preference. Measure it.
 - [ ] **The brand collision** is then what stands between an English
       "apple cake" and the Logic Pro manuals. Still design work.
 
