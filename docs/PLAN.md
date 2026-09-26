@@ -35,6 +35,41 @@ explains it.
       for the pass: a cheaper way into a long book than its chunks.
       `scripts/eval_ask.py` is the instrument.
 
+### What one question in German found wrong
+
+`docs/eval/apfelkuchen-2026-09-26.md`: "hast du ein rezept fuer
+apfelkuchen?" answered no, and the same question in English found the
+recipe at once. Three independent failures, each wanting a different fix.
+
+- [ ] **German compounds are one FTS token.** `Apfelkuchen` matches
+      nothing; `Apfel` and `Kuchen` each match. For a compound query the
+      keyword half of the hybrid contributes nothing at all, which is why
+      the German answer held a chickpea pan and an insertion sort. German
+      is 1,988 documents here and compounding is how the language builds
+      nouns. FTS5 takes a custom tokenizer and a splitter needs a word
+      list rather than a model, so this is the cheapest of the three.
+- [ ] **A common noun loses to a brand that owns the word.** `apple`
+      returns Logic Pro and Logic Express manuals — correctly, by BM25,
+      since they say it far more often. Even in English the fruit is
+      unreachable until "bars" disambiguates. prax handles one name
+      meaning two things in the *graph* (the `proposes` pass, the review
+      queue) and not at all in retrieval.
+- [ ] **An ingredient list without a heading is not recognised**, so the
+      cross-lingual bridge has nothing standing on it. `prax.ingredients`
+      cuts from a "Zutaten"/"Ingredients" heading; the Guardian writes its
+      quantities into the prose. The library has **38 `ingredients` chunks
+      in ten thousand documents**, and the recipe in question has none —
+      hence no `apple` ingredient entity, hence no German label to cross
+      from. The graph's only apples are Apple Macintosh, apple loops,
+      Apple Computer Inc., and `Holsapple`, `Scrapple` and `Applets`.
+
+      This is the one to take seriously, because nothing is broken. The
+      identity work of 2026-09-24 built the route and measured it
+      carrying 32 of 80 German queries to new documents. Almost nothing
+      is attached to it. **A mechanism that works and is unattached looks
+      exactly like one that does not work**, and the way to tell them
+      apart is to count what uses it — which no pass does.
+
 ### The graph
 
 - [ ] **Compress what repeats in an edge list.** The cap
