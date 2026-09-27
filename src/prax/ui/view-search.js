@@ -6,14 +6,18 @@
 
 // The ontology's modules, once per page load, for the domain selectors:
 // "every module" is the empty value, which the door reads as no filter.
+// Only an answer is kept: a page opened before the token was given would
+// otherwise hold an empty list until it is reloaded.
 let MODULES = null;
+let TYPE_PARENTS = {};  // each entity type's parent, for the graph's colours
 async function modules() {
   if (MODULES) return MODULES;
   try {
     const onto = await api("/ontology");
     MODULES = Object.keys(onto.modules || {}).filter((m) => m !== "core").sort();
+    TYPE_PARENTS = Object.fromEntries(Object.entries(onto.types || {}).map(([t, d]) => [t, d.parent]));
   } catch (err) {
-    MODULES = [];
+    return [];
   }
   return MODULES;
 }

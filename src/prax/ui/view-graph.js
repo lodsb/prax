@@ -16,9 +16,15 @@ const TYPE_COLORS = {
   claim: "#a0522d", tool: "#3b7a7a", venue: "#8a6d2f", dataset: "#5a5a8a",
   person: "#7a5c1e", organization: "#8a4b2f", document: "#2f5d8a", place: "#3f6b3f",
   event: "#7a3f6b", work: "#5a3f8a", page: "#2f7a8a", project: "#2f8a5a",
+  material: "#6b8a2f", technique: "#8a2f5d", spec: "#2f4b8a",
 };
 const nodeKey = (name, type) => type + "|" + name;
-const typeColor = (t) => TYPE_COLORS[t] || "#888";
+// a type without a colour of its own takes its nearest ancestor's: the
+// kitchen's ingredient is a material, its dish a work
+function typeColor(t) {
+  for (let i = 0; t && i < 8; i++, t = TYPE_PARENTS[t]) if (TYPE_COLORS[t]) return TYPE_COLORS[t];
+  return "#888";
+}
 
 class ForceGraph {
   // A canvas, not an SVG: five hundred nodes and their labels redraw in a
