@@ -2176,3 +2176,20 @@ on.
       megabytes a batch). A real run passes over a folder it finished
       while the folder's mtime stays; `--again` looks anyway. A dry run
       records no folder. A state file of the older shape is converted.
+
+## 2026-09-28: Q, the adjudicator's labels and a rule for "the same thing"
+
+- [x] **Answers by pair number.** The adjudicator answered forty pairs as
+      a list by position and padded a short list with False. It now names
+      each pair; a pair it does not answer is neither merged nor declined.
+      Asked again, Opus agreed with its recorded answers on 82%.
+- [x] **One rule** (`resolution.SAME_RULE`, the Review guide's rules of
+      thumb): a version, edition, narrower kind, part or tool is a
+      different thing. With it the local model settles 60% of the pairs
+      at 97% agreement with Opus (`docs/eval/confidence-2026-09-28.md`).
+- [x] **77 wrong merges split** through the door on the user's word:
+      68 conference editions folded into one another (seven ICASSPs into
+      2019, about thirty DAFx years), seven tools, x86-64 into x86. Found
+      as the merges whose names carry different numbers, judged by Opus
+      under the rule ($0.09), seven tidy-ups left alone.
+- Next: the gold sample, a person's decisions under the same rule.
