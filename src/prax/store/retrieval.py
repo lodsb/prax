@@ -811,8 +811,10 @@ def search(
 def _filter_domain(
     con: sqlite3.Connection, hits: list[dict[str, Any]], domain: str
 ) -> list[dict[str, Any]]:
-    """Keep hits whose document is in ``domain``; a document without a
-    domain set is in every module and stays."""
+    """Keep hits whose document is in ``domain`` or a module built on it
+    (``Ontology.within``); a document without a domain set is in every
+    module and stays."""
+    within = ontology.current().within(domain)
     ids = {h["doc_id"] for h in hits}
     if not ids:
         return hits
@@ -822,7 +824,7 @@ def _filter_domain(
         f" WHERE id IN ({marks})",
         tuple(ids),
     ).fetchall()
-    allowed = {r[0] for r in rows if not r[1] or domain in json.loads(r[1])}
+    allowed = {r[0] for r in rows if not r[1] or within & set(json.loads(r[1]))}
     return [h for h in hits if h["doc_id"] in allowed]
 
 

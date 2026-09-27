@@ -1794,3 +1794,19 @@ on.
   (16.6 GB working set, 1.7 GB left free), and Claude Code reaped a
   background wait under the pressure. The pages are file-backed and
   reclaimable; the same server stood at 15 GB free before the deletion.
+
+## 2026-09-27: stage K, browsing by module
+
+- [x] **A module holds the documents of the modules built on it.** The
+      browse list's module filter (and a search's) took only the
+      documents listed under that exact module, so "craft" showed its own
+      27 and none of the 68 kitchen or 35 workshop documents, which are
+      read against craft as well. `Ontology.within(domain)` names the
+      module and those built on it, and `list_documents` and a search's
+      `_filter_domain` both read it.
+- [x] **The unassigned documents alone:** `domain=unassigned` in
+      `GET /documents`, and a choice of that name in the browse list.
+      The documents no module was set for stay in every module, as
+      before; this shows them by themselves.
+- [x] **A module chosen filters at once**, without a second click on
+      Filter.

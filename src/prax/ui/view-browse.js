@@ -13,7 +13,7 @@ async function viewBrowse(p) {
     <input name="title" type="search" value="${esc(p.title || "")}" placeholder="title contains…">
     <input name="source" type="text" value="${esc(p.source || "")}" placeholder="source (zotero)">
     <input name="mime" type="text" value="${esc(p.mime || "")}" placeholder="mime (application/pdf)">
-    ${domainSelect(p.domain || "")}
+    ${domainSelect(p.domain || "", "domain", "ontology module", true)}
     <button>Filter</button>
   </form>
   <div id="browse-list"></div>`;
@@ -22,6 +22,8 @@ async function viewBrowse(p) {
     e.preventDefault();
     go("browse", "", Object.fromEntries(new FormData(form)));
   });
+  // a module chosen is a filter asked for: no second click on Filter
+  form.querySelector("select[name=domain]").addEventListener("change", () => form.requestSubmit());
   const list = document.getElementById("browse-list");
   try {
     const res = await api("/documents", { limit, offset, title: p.title, source: p.source, mime: p.mime, domain: p.domain || undefined });

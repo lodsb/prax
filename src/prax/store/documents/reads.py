@@ -139,6 +139,9 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     return out
 
 
+UNASSIGNED = "unassigned"  # the documents without a domain set, alone
+
+
 @_reading
 def list_documents(
     con: sqlite3.Connection,
@@ -157,8 +160,10 @@ def list_documents(
     ``title`` is a case-insensitive substring; ``source`` matches
     ``meta.source``; ``mime_prefix`` a MIME type prefix; ``retired`` lists
     the retired documents instead of the live ones; ``domain`` keeps the
-    documents of one ontology module (a document without a domain set is
-    in every module and stays, as in search); ``tag`` keeps the documents
+    documents of one ontology module and of the modules built on it (a
+    kitchen document is a craft document too; one without a domain set is
+    in every module and stays, as in search), or with ``unassigned`` the
+    documents without a domain set alone; ``tag`` keeps the documents
     carrying that tag (``project:synth``). Returns ``{"total", "items"}``
     where each item carries the row, its decoded ``meta`` and its chunk
     count.
@@ -167,12 +172,19 @@ def list_documents(
         "json_extract(d.meta, '$.retired') IS " + ("NOT NULL" if retired else "NULL")
     ]
     args: list[Any] = []
-    if domain:
+    if domain == UNASSIGNED:
+        # the documents no module was set for, which every module holds
+        clauses.append("json_extract(d.meta, '$.domains') IS NULL")
+    elif domain:
+        from prax import ontology
+
+        within = sorted(ontology.current().within(domain))
+        marks = ",".join("?" * len(within))
         clauses.append(
             "(json_extract(d.meta, '$.domains') IS NULL OR EXISTS"
-            " (SELECT 1 FROM json_each(d.meta, '$.domains') WHERE value = ?))"
+            f" (SELECT 1 FROM json_each(d.meta, '$.domains') WHERE value IN ({marks})))"
         )
-        args.append(domain)
+        args.extend(within)
     if tag:
         clauses.append(
             "EXISTS (SELECT 1 FROM json_each(d.meta, '$.tags') WHERE value = ?)"

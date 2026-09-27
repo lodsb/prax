@@ -18,9 +18,12 @@ async function modules() {
   return MODULES;
 }
 
-function domainSelect(selected, name = "domain", title = "ontology module") {
+// ``unassigned`` adds the choice of the documents no module was set for
+// (the browse list's; a search has no use for it)
+function domainSelect(selected, name = "domain", title = "ontology module", unassigned = false) {
   const opts = (MODULES || []).map((m) => `<option value="${esc(m)}" ${m === selected ? "selected" : ""}>${esc(m)}</option>`).join("");
-  return `<select name="${name}" title="${title}"><option value="" ${!selected ? "selected" : ""}>every module</option>${opts}</select>`;
+  const none = unassigned ? `<option value="unassigned" ${selected === "unassigned" ? "selected" : ""}>unassigned</option>` : "";
+  return `<select name="${name}" title="${title}"><option value="" ${!selected ? "selected" : ""}>every module</option>${opts}${none}</select>`;
 }
 
 function renderSearchForm(p) {

@@ -91,8 +91,9 @@ def documents(
     tag: str | None = None,
 ) -> dict[str, Any]:
     """Documents without text, newest first, filtered for browsing;
-    ``domain`` keeps one ontology module's documents, ``tag`` the
-    documents carrying a tag (``project:synth``)."""
+    ``domain`` keeps one ontology module's documents and those of the
+    modules built on it (``unassigned``: the documents no module was set
+    for), ``tag`` the documents carrying a tag (``project:synth``)."""
     return store.list_documents(
         _con(request),
         limit=limit,

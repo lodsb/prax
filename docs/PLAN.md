@@ -16,7 +16,8 @@ order: a bug a user sees first, then the graph views, then what the graph
 reads against, then the machine, then new ways in, then the features;
 the review of the lists a person decides goes last.
 
-- [ ] **K. Browse loses documents when only the module changes**, and
+- [x] (2026-09-27: a module holds the modules built on it; `unassigned`;
+      the select filters on change) **K. Browse loses documents when only the module changes**, and
       "unassigned" shows only a label (niggles.txt). A bug in the view or
       in `GET /documents`' domain filter; reproduce, test, fix.
 - [ ] **L. The graph by module, and a document's own graph.** The graph

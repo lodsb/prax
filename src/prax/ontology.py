@@ -201,6 +201,17 @@ class Ontology:
         if not self._allowed(r.range, dst_type):
             raise ValueError(f"{rel!r} does not accept dst type {dst_type!r}")
 
+    def within(self, domain: str) -> frozenset[str]:
+        """The modules whose documents are also documents of ``domain``:
+        the module and every module built on it. A kitchen document is
+        read against craft as well, so it is a craft document too; a
+        filter by craft that took only craft's own listed 27 of the 130."""
+        if domain not in self.modules:
+            return frozenset({domain})
+        return frozenset(
+            m.name for m in self.modules.values() if domain in _closure(m, self.modules)
+        )
+
     def domains_of(self, type_name: str) -> frozenset[str] | None:
         """The domains a thing of this type can be found in: the module
         that declares the type and every module built on it (`material`
