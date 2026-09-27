@@ -1,0 +1,467 @@
+{
+ "note": "77 merges split on 2026-09-28 from Opus's judgement under resolution.SAME_RULE, approved by the user and recorded through /graph/unmerge-entity, which signs 'human'. Not a person's decisions: leave them out of Q's gold sample.",
+ "entities": [
+  {
+   "entity": 8191,
+   "name": "ICASSP 2021 - 2021 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "was_merged_into": "2011 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 9078,
+   "name": "2009 IEEE International Conference on Acoustics, Speech and Signal Processing",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 10109,
+   "name": "2009 IEEE Workshop on Applications of Signal Processing to Audio and Acoustics",
+   "was_merged_into": "IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (WASPAA 2023)",
+   "type": "venue"
+  },
+  {
+   "entity": 10359,
+   "name": "2000 IEEE International Conference on Acoustics, Speech, and Signal Processing. Proceedings (Cat. No.00CH37100)",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 10728,
+   "name": "2008 IEEE International Conference on Acoustics, Speech and Signal Processing",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 11564,
+   "name": "2008 International Conference on Audio, Language and Image Processing",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 13388,
+   "name": "40th International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 13638,
+   "name": "2013 IEEE Workshop on Applications of Signal Processing to Audio and Acoustics",
+   "was_merged_into": "IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (WASPAA 2023)",
+   "type": "venue"
+  },
+  {
+   "entity": 14380,
+   "name": "2001 IEEE International Conference on Acoustics, Speech, and Signal Processing. Proceedings (Cat. No.01CH37221)",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 14694,
+   "name": "ICASSP 2022 - 2022 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 15607,
+   "name": "2013 IEEE International Conference on Acoustics, Speech and Signal Processing",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 16192,
+   "name": "2007 IEEE Conference on Computer Vision and Pattern Recognition",
+   "was_merged_into": "Proceedings IEEE Conference on Computer Vision and Pattern Recognition. CVPR 2000",
+   "type": "venue"
+  },
+  {
+   "entity": 34569,
+   "name": "2000 IEEE International Conference on Acoustics, Speech, and Signal Processing",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 38098,
+   "name": "2017 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "was_merged_into": "ICASSP 2019 - 2019 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP)",
+   "type": "venue"
+  },
+  {
+   "entity": 42378,
+   "name": "Proceedings of the working conference on Advanced visual interfaces - AVI '08",
+   "was_merged_into": "Proceedings of the working conference on Advanced visual interfaces - AVI '06",
+   "type": "venue"
+  },
+  {
+   "entity": 43588,
+   "name": "Proc. of the 6th Int. Conference on Digital Audio Effects (DAFx-03)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 43669,
+   "name": "Proc. of the 13th Int. Conference on Digital Audio Effects (DAFx-10)",
+   "was_merged_into": "Proc. of the 5th Int. Conference on Digital Audio Effects (DAFX-02)",
+   "type": "venue"
+  },
+  {
+   "entity": 43687,
+   "name": "Proc. of the 15th Int. Conference on Digital Audio Effects (DAFx-12)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 43704,
+   "name": "Proc. of the 16th Int. Conference on Digital Audio Effects (DAFx-13)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 44501,
+   "name": "Proceedings of the fourth international conference on Tangible, embedded, and embodied interaction - TEI '10",
+   "was_merged_into": "Proceedings of the 2nd international conference on Tangible and embedded interaction - TEI '08",
+   "type": "venue"
+  },
+  {
+   "entity": 47737,
+   "name": "x86-64 isa",
+   "was_merged_into": "x86 isa",
+   "type": "concept"
+  },
+  {
+   "entity": 49137,
+   "name": "Proceedings of the 17th annual ACM symposium on User interface software and technology",
+   "was_merged_into": "Proceedings of the 20th annual ACM symposium on User interface software and technology - UIST '07",
+   "type": "venue"
+  },
+  {
+   "entity": 49400,
+   "name": "Proceedings of the 19th International Conference on Digital Audio Effects (DAFx-16)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 49812,
+   "name": "Proceedings of the 10th annual ACM symposium on User interface software and technology - UIST '97",
+   "was_merged_into": "Proceedings of the 22nd annual ACM symposium on User interface software and technology - UIST '09",
+   "type": "venue"
+  },
+  {
+   "entity": 49837,
+   "name": "Proceedings of 1997 Workshop on Applications of Signal Processing to Audio and Acoustics",
+   "was_merged_into": "IEEE Workshop on Applications of Signal Processing to Audio and Acoustics (WASPAA 2023)",
+   "type": "venue"
+  },
+  {
+   "entity": 54279,
+   "name": "Proc. of the 10th Int. Conference on Digital Audio Effects (DAFx-07)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 54813,
+   "name": "Am2904",
+   "was_merged_into": "Am2910",
+   "type": "tool"
+  },
+  {
+   "entity": 56165,
+   "name": "Proceedings of the seventeen ACM international conference on Multimedia - MM '09",
+   "was_merged_into": "Proceedings of the 19th ACM international conference on Multimedia - MM '11",
+   "type": "venue"
+  },
+  {
+   "entity": 57739,
+   "name": "6th Int. Conference on Digital Audio Effects (DAFx-03)",
+   "was_merged_into": "Proceedings of the 2nd COST G-6 Workshop on Digital Audio Effects (DAFx99)",
+   "type": "venue"
+  },
+  {
+   "entity": 58740,
+   "name": "Proceedings of the International Working Conference on Advanced Visual Interfaces - AVI '12",
+   "was_merged_into": "Proceedings of the working conference on Advanced visual interfaces - AVI '06",
+   "type": "venue"
+  },
+  {
+   "entity": 59943,
+   "name": "Proceedings of the 2007 conference of the computer-human interaction special interest group (CHISIG) of Australia on Computer-human interaction: design: activities, artifacts and environments - OZCHI'",
+   "was_merged_into": "Proceedings of the 20th conference of the computer-human interaction special interest group (CHISIG) of Australia on Computer-human interaction: design: activities, artefacts and environments - OZCHI'",
+   "type": "venue"
+  },
+  {
+   "entity": 60035,
+   "name": "Proc. of the 15_th Int. Conference on Digital Audio Effects (DAFx-12)",
+   "was_merged_into": "Proc. of the 5th Int. Conference on Digital Audio Effects (DAFX-02)",
+   "type": "venue"
+  },
+  {
+   "entity": 60336,
+   "name": "Proceedings of the 23rd International Conference on Digital Audio Effects (DAFx-20)",
+   "was_merged_into": "Proceedings of the 29th International Conference on Digital Audio Effects (DAFx26)",
+   "type": "venue"
+  },
+  {
+   "entity": 60880,
+   "name": "Proceedings of the 25th International Conference on Digital Audio Effects (DAFx20in22)",
+   "was_merged_into": "Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19)",
+   "type": "venue"
+  },
+  {
+   "entity": 60968,
+   "name": "proceedings of the 25th international conference on digital audio effects (dafx20in22)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 61164,
+   "name": "2022 30th European Signal Processing Conference (EUSIPCO)",
+   "was_merged_into": "2018 26th European Signal Processing Conference (EUSIPCO)",
+   "type": "venue"
+  },
+  {
+   "entity": 61477,
+   "name": "12th International Society for Music Information Retrieval Conference (ISMIR 2011)",
+   "was_merged_into": "11th International Society for Music Information Retrieval Conference (ISMIR 2010)",
+   "type": "venue"
+  },
+  {
+   "entity": 72184,
+   "name": "-280 International Symposium on Prime Numbers",
+   "was_merged_into": "27th International Symposium on Prime Numbers",
+   "type": "venue"
+  },
+  {
+   "entity": 72604,
+   "name": "Proceedings of the International Computer Music Conference 1997",
+   "was_merged_into": "Proceedings of the International Computer Music Conference 2011",
+   "type": "venue"
+  },
+  {
+   "entity": 77459,
+   "name": "Silent Way ES-5 Controller",
+   "was_merged_into": "Silent Way ES-4 Controller",
+   "type": "method"
+  },
+  {
+   "entity": 80295,
+   "name": "m360 manager 5.1",
+   "was_merged_into": "M360 Manager",
+   "type": "tool"
+  },
+  {
+   "entity": 85372,
+   "name": "23rd Int. Society for Music Information Retrieval Conf.",
+   "was_merged_into": "26th Int. Society for Music Information Retrieval Conf.",
+   "type": "venue"
+  },
+  {
+   "entity": 85456,
+   "name": "Proc. of the 24th Int. Society for Music Information Retrieval Conf.",
+   "was_merged_into": "26th Int. Society for Music Information Retrieval Conf.",
+   "type": "venue"
+  },
+  {
+   "entity": 85469,
+   "name": "24th Int. Society for Music Information Retrieval Conf.",
+   "was_merged_into": "26th Int. Society for Music Information Retrieval Conf.",
+   "type": "venue"
+  },
+  {
+   "entity": 87172,
+   "name": "IEEE International Conference on Acoustics, Speech and Signal Processing, ICASSP 2019",
+   "was_merged_into": "1996 IEEE International Conference on Acoustics, Speech, and Signal Processing Conference Proceedings",
+   "type": "venue"
+  },
+  {
+   "entity": 87194,
+   "name": "19th International Conference on Digital Audio Effects (DAFx-16)",
+   "was_merged_into": "Proceedings of the 26th International Conference on Digital Audio Effects (DAFx23)",
+   "type": "venue"
+  },
+  {
+   "entity": 87522,
+   "name": "Proceedings of the 20th International Conference on Digital Audio Effects (DAFx-17)",
+   "was_merged_into": "Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19)",
+   "type": "venue"
+  },
+  {
+   "entity": 87603,
+   "name": "Proc. of the 14th Int. Conference on Digital Audio Effects (DAFx-11)",
+   "was_merged_into": "Proc. of the 18th Int. Conference on Digital Audio Effects (DAFx-15), Trondheim, Norway, Nov 30 - Dec 3, 2015",
+   "type": "venue"
+  },
+  {
+   "entity": 88018,
+   "name": "Int. Conference on Digital Audio Effects (DAFx’05)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 91959,
+   "name": "Proceedings of the 25th International Conference on Digital Audio Effects DAFx-2022, Vienna",
+   "was_merged_into": "Proc. of the 5th Int. Conference on Digital Audio Effects (DAFX-02)",
+   "type": "venue"
+  },
+  {
+   "entity": 92882,
+   "name": "5th Int. Conference on Digital Audio Effects (DAFX-02)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 95266,
+   "name": "Proceedings of the 28_th International Conference on Digital Audio Effects (DAFx25)",
+   "was_merged_into": "Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19)",
+   "type": "venue"
+  },
+  {
+   "entity": 95809,
+   "name": "Proceedings of the 17th annual ACM symposium on User interface software and technology - UIST '04",
+   "was_merged_into": "Proceedings of the 22nd annual ACM symposium on User interface software and technology - UIST '09",
+   "type": "venue"
+  },
+  {
+   "entity": 101251,
+   "name": "Proceedings of the 25th International Conference on Digital Audio Effects (DAFx 2022)",
+   "was_merged_into": "Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19)",
+   "type": "venue"
+  },
+  {
+   "entity": 101377,
+   "name": "25th International Conference on Digital Audio Effects (DAFx 2022)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 108793,
+   "name": "ASIO4ALL v2",
+   "was_merged_into": "ASIO4ALL",
+   "type": "tool"
+  },
+  {
+   "entity": 115155,
+   "name": "5/16″ socket driver",
+   "was_merged_into": "3/16″ socket driver",
+   "type": "tool"
+  },
+  {
+   "entity": 115986,
+   "name": "Proceedings of the 23rd International Conference on Digital Audio Effects (DAFx2021)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 122212,
+   "name": "Proceedings of the 27th International Conference on Digital Audio Effects (DAFx24)",
+   "was_merged_into": "Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19)",
+   "type": "venue"
+  },
+  {
+   "entity": 125766,
+   "name": "ex2.zip",
+   "was_merged_into": "ex3.zip",
+   "type": "tool"
+  },
+  {
+   "entity": 126110,
+   "name": "Proc. of the 17th Int. Conference on Digital Audio Effects (DAFx-14)",
+   "was_merged_into": "Proc. of the 14th International Conference on Digital Audio Effects (DAFx-11)",
+   "type": "venue"
+  },
+  {
+   "entity": 129243,
+   "name": "16th Int. Conference on Digital Audio Effects (DAFx-13)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 129413,
+   "name": "27th International Conference on Digital Audio Effects (DAFx24)",
+   "was_merged_into": "Proceedings of the 2nd COST G-6 Workshop on Digital Audio Effects (DAFx99)",
+   "type": "venue"
+  },
+  {
+   "entity": 129485,
+   "name": "26th International Conference on Digital Audio Effects (DAFx23)",
+   "was_merged_into": "Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19)",
+   "type": "venue"
+  },
+  {
+   "entity": 130952,
+   "name": "13th International Conference on Digital Audio Effects",
+   "was_merged_into": "Proc. of the 11th Int. Conference on Digital Audio Effects (DAFx-08)",
+   "type": "venue"
+  },
+  {
+   "entity": 131274,
+   "name": "International Conference on Digital Audio Effects (DAFx-20)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 131630,
+   "name": "wavefront al1402",
+   "was_merged_into": "wavefront al1401",
+   "type": "tool"
+  },
+  {
+   "entity": 131637,
+   "name": "xmos xs1-l8a-64",
+   "was_merged_into": "xmos xs1-l6a-64",
+   "type": "tool"
+  },
+  {
+   "entity": 131772,
+   "name": "16th Intl. Conf. Digital Audio Effects (DAFx-13)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 131809,
+   "name": "23rd International Conference on Digital Audio Effects (DAFx-20)",
+   "was_merged_into": "Proceedings of the 2nd COST G-6 Workshop on Digital Audio Effects (DAFx99)",
+   "type": "venue"
+  },
+  {
+   "entity": 133113,
+   "name": "ISMIR 2020 - 21st International Society for Music Information Retrieval",
+   "was_merged_into": "16th International Society for Music Information Retrieval Conference",
+   "type": "venue"
+  },
+  {
+   "entity": 133397,
+   "name": "15th Int. Conference on Digital Audio Effects (DAFx-12)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 134130,
+   "name": "13th Int. Conference on Digital Audio Effects (DAFx-10)",
+   "was_merged_into": "Proc. of the 8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "type": "venue"
+  },
+  {
+   "entity": 136077,
+   "name": "13th Int. Conference on Digital Audio Effects",
+   "was_merged_into": "Proc. of the 11th Int. Conference on Digital Audio Effects (DAFx-08)",
+   "type": "venue"
+  },
+  {
+   "entity": 136138,
+   "name": "8th Int. Conference on Digital Audio Effects (DAFx’05)",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  },
+  {
+   "entity": 137437,
+   "name": "DAFx 2025",
+   "was_merged_into": "DAFx 2022",
+   "type": "venue"
+  },
+  {
+   "entity": 137610,
+   "name": "Proceedings of the 22nd International Conference on Digital Audio Effects (DAFx-19), Birmingham, UK, September 2–6, 2019",
+   "was_merged_into": "Proceedings of the 28th International Conference on Digital Audio Effects (DAFx25)",
+   "type": "venue"
+  }
+ ]
+}

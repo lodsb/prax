@@ -166,3 +166,7 @@ Opus under the rule called 84 of them different; 77 are two things
 wrongly joined (68 venue editions, seven tools such as Am2904 and Am2910,
 x86-64 and x86). The other seven are a file name joined to its paper's
 title and two names garbled by an extractor, which the merge tidied.
+
+They were split through the door on 2026-09-28, which records each pair as
+decided "different" by a person. Opus chose them, so they are listed in
+`confidence-2026-09-28-splits.json` and stay out of the gold sample.
