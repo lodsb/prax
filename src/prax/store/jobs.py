@@ -372,6 +372,24 @@ def data_version(con: sqlite3.Connection) -> int:
 
 
 @_reading
+def running_of(
+    con: sqlite3.Connection, names: tuple[str, ...]
+) -> dict[str, Any] | None:
+    """The newest running job of one of these names: ``name``, ``done``,
+    ``total``, ``note``. What the UI's banner says while the door is busy
+    with a maintenance pass."""
+    if not names:
+        return None
+    marks = ",".join("?" * len(names))
+    row = con.execute(
+        f"SELECT name, done, total, note FROM jobs WHERE status = 'running'"
+        f" AND name IN ({marks}) ORDER BY started_at DESC LIMIT 1",
+        names,
+    ).fetchone()
+    return dict(row) if row else None
+
+
+@_reading
 def running_jobs(con: sqlite3.Connection) -> int:
     return int(
         con.execute("SELECT count(*) FROM jobs WHERE status = 'running'").fetchone()[0]

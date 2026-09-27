@@ -816,6 +816,17 @@ _RUN = {
 }
 
 
+def pass_notes() -> dict[str, str]:
+    """Each pass and the first sentence of what it does, from its own
+    docstring, for the Jobs view's list: said once, where the pass is."""
+    out = {}
+    for name, fn in _RUN.items():
+        # the docstring's markup is for the source, not the page
+        doc = " ".join((fn.__doc__ or "").replace("`", "").split())
+        out[name] = doc.split(". ")[0].rstrip(".") + "." if doc else ""
+    return out
+
+
 def maintain(
     con: sqlite3.Connection,
     *,

@@ -18,6 +18,7 @@ from prax import (
     hostinfo,
     models,
     ontology,
+    schedule,
     store,
     work,
 )
@@ -195,6 +196,8 @@ def changes(request: Request) -> dict[str, Any]:
         return {
             "stamp": f"{store.data_version(con)}-{request.app.state.writes}",
             "jobs": store.running_jobs(con),
+            # what the banner says while the door is busy with one
+            "maintenance": store.running_of(con, MAINTENANCE),
         }
 
 
@@ -606,6 +609,129 @@ def _start_backup(con: Any, dest: str | None, *, archive: bool) -> dict[str, Any
 
     threading.Thread(target=run, name="backup", daemon=True).start()
     return {"job": job.id, "dest": str(dest)}
+
+
+# the passes the store does to itself, as the jobs they run under: the
+# banner's list, and the Jobs view's (GET /maintenance)
+MAINTENANCE = ("maintain", "heal", "resolve", "backup", "figures", "questions")
+
+
+@router.get("/maintenance")
+def maintenance(request: Request) -> dict[str, Any]:
+    """Every pass the door runs on itself, in one shape: what it does,
+    when the clock runs it, how it went last, and how to start it now.
+
+    They were five commands with five shapes, and the UI could start none
+    of them (niggles.txt). ``start`` is the request that begins one, given
+    only where that is safe from a page: the passes are idempotent, a
+    resolve round and a heal are taken back by their run, and backup and
+    the rechunk are left to the command line, the one for its destination
+    and the other for its cost. The health panel lists the ailments."""
+    con = _con(request)
+    clock = {e.name: e for e in schedule.entries()}
+
+    def last(name: str) -> dict[str, Any] | None:
+        j = store.last_job(con, name)
+        if j is None:
+            return None
+        return {
+            "status": j["status"],
+            "started_at": j["started_at"],
+            "finished_at": j.get("finished_at"),
+            "note": j.get("note"),
+        }
+
+    def at(name: str) -> str | None:
+        e = clock.get(name)
+        return e.at.strftime("%H:%M") if e else None
+
+    notes = store.pass_notes()
+    passes: list[dict[str, Any]] = [
+        {
+            "name": "maintain",
+            "what": "every pass below that the nightly runs, one job",
+            "at": at("maintain"),
+            "last": last("maintain"),
+            "start": {"path": "/maintain", "body": {}},
+        }
+    ]
+    for name in (*store.PASSES, *store.ON_REQUEST):
+        passes.append(
+            {
+                "name": name,
+                "what": notes.get(name, ""),
+                "at": at("maintain") if name in store.PASSES else None,
+                # the nightly's passes run inside it; the others only asked for
+                "part_of": "maintain" if name in store.PASSES else None,
+                "on_request": name in store.ON_REQUEST,
+                "last": last("maintain") if name in store.ON_REQUEST else None,
+                "start": None
+                if name == "rechunk"
+                else {"path": "/maintain", "body": {"only": [name]}},
+            }
+        )
+    passes += [
+        {
+            "name": "resolve",
+            "what": "the safe merges: equal names in a type, a type and its"
+            " subtype, the concept/method twins; the likely pairs stay a"
+            " person's",
+            "at": at("resolve"),
+            "last": last("resolve"),
+            "start": {
+                "path": "/graph/resolve",
+                "body": {
+                    "apply": True,
+                    "twins": True,
+                    "subtypes": True,
+                    "likely": False,
+                },
+            },
+        },
+        {
+            "name": "figures",
+            "what": "a slice of the documents whose pictures the vision model"
+            " has not read",
+            "at": at("figures"),
+            "last": last("figures"),
+            "start": {"path": "/figures", "body": {}},
+        },
+        {
+            "name": "questions",
+            "what": "the standing questions asked again where the library"
+            " learned something, then the day's briefing",
+            "at": at("questions"),
+            "last": last("questions"),
+            "start": {"path": "/questions/run", "body": {}},
+        },
+        {
+            "name": "backup",
+            "what": "what cannot be rebuilt, copied to the backup path",
+            "at": at("backup"),
+            "last": last("backup"),
+            "start": None,
+        },
+        {
+            "name": "heal",
+            "what": "the recurring ailments, each repaired as a job: the health"
+            " panel lists them",
+            "at": None,
+            "last": last("heal"),
+            "start": None,
+            "where": "the health panel",
+        },
+    ]
+    return {"passes": passes, "running": store.running_of(con, MAINTENANCE)}
+
+
+class FiguresReq(BaseModel):
+    documents: int | None = None  # the slice; FIGURES_SLICE by default
+
+
+@router.post("/figures")
+def figures_start(req: FiguresReq, request: Request) -> dict[str, Any]:
+    """The figures slice now, as the clock asks for it at its hour."""
+    return _start_figures(_con(request), req.documents)
 
 
 FIGURES_SLICE = 150  # documents a night: about three hours of the local model

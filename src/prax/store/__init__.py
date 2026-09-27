@@ -315,6 +315,7 @@ from .jobs import (  # noqa: F401
     record_spend,
     release_vector_views,
     running_jobs,
+    running_of,
     spending,
     spent_usd,
 )
@@ -324,6 +325,7 @@ from .maintain import (  # noqa: F401
     bibliographies,
     link_references,
     maintain,
+    pass_notes,
 )
 from .pages import (  # noqa: F401
     _SLUG_CHARS,

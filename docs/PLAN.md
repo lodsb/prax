@@ -46,7 +46,8 @@ the precondition for communities, then two things a user notices.
 - [x] (2026-09-27: a rare word's forms the library uses, `compounds.forms`)
       **I. taco and tacos** are different searches: a plural folded on
       the keyword side, measured on the eval set.
-- [ ] **J. One workflow for maintenance and healing**, where there are
+- [x] (2026-09-27: `GET /maintenance`, the Passes table, the banner)
+      **J. One workflow for maintenance and healing**, where there are
       five commands with five shapes (`niggles.txt`).
 
 ## The order, agreed 2026-09-26
@@ -336,7 +337,7 @@ recipe at once. Three independent failures, each wanting a different fix.
 
 - [ ] **A document's own neighbourhood** — a link from a document to
       what it is connected to (`niggles.txt`).
-- [ ] **One workflow for maintenance and healing** (`niggles.txt`).
+- [x] (stage J) **One workflow for maintenance and healing** (`niggles.txt`).
 - [ ] **Sub-graph export / import** — the answer to "what if a repo's
       notes want to travel" (`docs/log.md`, "The night of 2026-09-20").
 - [ ] **A procedural graph for the surfer** (later; the reference is in

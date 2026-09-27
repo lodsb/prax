@@ -241,3 +241,42 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
 def test_the_figures_entry_is_one_the_clock_knows() -> None:
     got = schedule.entries({"figures": {"at": "21:00", "documents": 150}})
     assert [(e.name, e.options) for e in got] == [("figures", {"documents": 150})]
+
+
+# ------------------------------------------------- one workflow, stage J
+
+
+@pytest.fixture()
+def client() -> Any:
+    from prax.api import app
+
+    with TestClient(app) as c:
+        yield c
+
+
+def test_the_passes_are_one_list_with_a_start_where_it_is_safe(
+    client: TestClient,
+) -> None:
+    got = client.get("/maintenance").json()
+    by = {p["name"]: p for p in got["passes"]}
+    assert {"maintain", "resolve", "figures", "questions", "backup", "heal"} <= set(by)
+    assert set(store.PASSES) <= set(by)
+    assert by["acronyms"]["start"] == {
+        "path": "/maintain",
+        "body": {"only": ["acronyms"]},
+    }
+    assert by["acronyms"]["what"]  # from the pass's own docstring
+    # the rechunk's cost and backup's destination are the command line's
+    assert by["rechunk"]["start"] is None and by["backup"]["start"] is None
+    assert got["running"] is None
+
+
+def test_the_banner_names_the_pass_that_runs(client: TestClient) -> None:
+    con = client.app.state.con
+    assert client.get("/changes").json()["maintenance"] is None
+    job = store.Job(con, "maintain", note="rechunk", total=9962)
+    job.update(done=3400)
+    banner = client.get("/changes").json()["maintenance"]
+    assert (banner["name"], banner["done"], banner["total"]) == ("maintain", 3400, 9962)
+    store.job_finish(con, job.id, status="done")
+    assert client.get("/changes").json()["maintenance"] is None

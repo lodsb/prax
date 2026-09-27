@@ -176,6 +176,38 @@ async function healNow(button, checks) {
   } catch (err) { msg.textContent = err.message; button.disabled = false; }
 }
 
+// The passes the door runs on itself (GET /maintenance): what each does,
+// when the clock runs it, how it went last, and a button where starting it
+// from a page is safe. The ailments are the health panel's.
+function passLines(m) {
+  if (!m || !m.passes) return "";
+  const when = (s) => (s || "").replace("T", " ").slice(5, 16);
+  const rows = m.passes.map((p, i) => {
+    const last = p.part_of ? `<span class="muted">nightly, in ${esc(p.part_of)}</span>` : p.on_request ? `<span class="muted">on request</span>` : p.last ? `${esc(p.last.status)} ${when(p.last.finished_at || p.last.started_at)}` : "";
+    const start = p.start ? `<button type="button" class="linkish pass-start" data-i="${i}">run now</button>` : `<span class="muted">${p.where ? `in ${esc(p.where)}` : "from the command line"}</span>`;
+    return `<tr class="${p.part_of ? "muted" : ""}"><td>${p.part_of ? "&nbsp;&nbsp;" : ""}${esc(p.name)}</td><td>${esc(p.what || "")}</td><td>${esc(p.at || "")}</td><td>${last}</td><td>${start}</td></tr>`;
+  });
+  return `
+    <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Passes</h2>
+    <p class="muted">What the door does to itself, and when its clock does it (<code>schedule:</code> in prax.yaml). A pass started here is a job like any, listed above while it runs.</p>
+    <table class="doc-list"><thead><tr><th>pass</th><th>what it does</th><th>at</th><th>last</th><th></th></tr></thead><tbody>${rows.join("")}</tbody></table>
+    <p id="pass-msg" class="muted"></p>`;
+}
+
+function wirePasses(m) {
+  document.querySelectorAll(".pass-start").forEach((b) => b.addEventListener("click", async () => {
+    const p = m.passes[Number(b.dataset.i)];
+    const msg = document.getElementById("pass-msg");
+    b.disabled = true;
+    msg.textContent = `starting ${p.name}…`;
+    try {
+      const r = await post(p.start.path, p.start.body);
+      msg.textContent = `${p.name}: started${r.job ? ` (job ${r.job})` : ""}`;
+      setTimeout(() => render({ keepScroll: true }), 1500);
+    } catch (err) { msg.textContent = err.message; b.disabled = false; }
+  }));
+}
+
 async function viewJobs(p) {
   loading();
   let d, servers = [], readings = null, host = null, money = null;
@@ -184,6 +216,8 @@ async function viewJobs(p) {
   try { readings = await api("/readings", { limit: 20 }); } catch (_) { /* so is this one */ }
   try { host = await api("/up"); } catch (_) { /* no supervisor here, or an older door */ }
   try { money = await api("/spending", { days: 30 }); } catch (_) { /* an older door */ }
+  let passes = null;
+  try { passes = await api("/maintenance"); } catch (_) { /* an older door */ }
   const table = (rows) => `<table class="doc-list"><thead><tr><th>job</th><th>progress</th><th class="num">done</th><th>note</th><th>started</th><th>state</th><th>where</th></tr></thead><tbody>${rows.map(jobRow).join("")}</tbody></table>`;
   view.innerHTML = `
     <p class="muted">The passes announce themselves here: the worker's session, parsing, titles, extraction, embedding. A running job without a heartbeat for ten minutes is marked stale; one gone for half an hour is closed.</p>
@@ -196,8 +230,10 @@ async function viewJobs(p) {
     ${d.running.length ? table(d.running) : `<p class="muted">Nothing running. On the machine with the models: <code>scripts/work.py --watch</code> keeps captures moving.</p>`}
     <h2 style="font-size:1rem;margin:1.2rem 0 .3rem">Recent</h2>
     ${d.recent.length ? table(d.recent) : `<p class="muted">No finished jobs yet.</p>`}
+    ${passLines(passes)}
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">Health</h2>
     <div id="health"></div>`;
+  wirePasses(passes);
   fillHealth();
   checkHealth();
 }

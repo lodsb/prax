@@ -1743,3 +1743,24 @@ on.
       itself: "taco" and "tacos" now open with the same two documents,
       the tacos recipe first; "news" gets no forms, being common. The
       switch is `retrieval.INFLECT`.
+
+## 2026-09-27: stage J, one workflow for maintenance and healing
+
+- [x] **One list.** `GET /maintenance` gives every pass the door runs on
+      itself in one shape: what it does (its own docstring's first
+      sentence, `store.pass_notes`), when the clock runs it, how it went
+      last, and the request that starts it where starting it from a page
+      is safe. The idempotent passes, the resolve round, the figures
+      slice and the questions are; backup (its destination) and the
+      rechunk (its cost) are left to the command line, and the ailments
+      stay in the health panel, which already had its buttons. The Jobs
+      view shows it as the Passes table, with a run button per pass.
+      `POST /figures` starts the slice by hand too.
+- [x] **The banner.** `/changes`, which the UI polls every ten seconds,
+      names the running maintenance job (`store.running_of`), and the
+      header says it on every view, "maintenance: maintain 3,400 of
+      9,962", linking to Jobs. A page is slower while one runs, and the
+      reason is now on it.
+- One run of the full suite during stage I failed one test that seven
+  runs since have passed. Its name was not captured, and CI now prints
+  failures by name.

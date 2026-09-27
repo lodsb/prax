@@ -30,6 +30,18 @@ function setJobsBadge(n) {
   b.hidden = !n;
   b.textContent = n || "";
 }
+// While the door is busy with a maintenance pass, the header says which
+// and how far ("maintenance: rechunk 3,400 of 9,962"), on every view: a
+// page is slower then, and the reason should be on it.
+function setMaintenance(m) {
+  const b = document.getElementById("maintenance");
+  if (!b) return;
+  b.hidden = !m;
+  if (!m) return;
+  const far = m.total ? ` ${Number(m.done || 0).toLocaleString()} of ${Number(m.total).toLocaleString()}` : "";
+  b.textContent = `maintenance: ${m.name}${far}`;
+  b.title = m.note || "";
+}
 async function pollChanges() {
   if (document.visibilityState !== "visible") return;
   let d;
@@ -39,6 +51,7 @@ async function pollChanges() {
     d = await res.json();
   } catch (_) { return; }
   setJobsBadge(d.jobs);
+  setMaintenance(d.maintenance);
   const moved = lastStamp !== null && d.stamp !== lastStamp;
   lastStamp = d.stamp;
   if (moved && LIVE_VIEWS.has(route().name) && !typing()) {
