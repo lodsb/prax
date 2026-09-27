@@ -197,6 +197,46 @@ def test_a_decline_is_recorded_and_survives_the_next_computation(
     ).fetchone()[0] == len(decided)
 
 
+def test_an_answer_lands_on_the_pair_it_names() -> None:
+    """The adjudicator answered forty pairs as a list by position, padded
+    short lists with False, and so could put an answer on the wrong pair
+    (docs/eval/confidence-2026-09-28.md). An answer now names its pair;
+    one missing, out of range or contradicted is no answer."""
+    import json
+
+    text = json.dumps(
+        {
+            "answers": [
+                {"pair": 3, "same": True},
+                {"pair": 1, "same": False},
+                {"pair": 4, "same": True},
+                {"pair": 4, "same": False},
+                {"pair": 9, "same": True},
+            ]
+        }
+    )
+    assert resolution.answers_by_number(text, 5) == [False, None, True, None, None]
+
+
+def test_no_answer_is_neither_a_merge_nor_a_decline(
+    con: sqlite3.Connection,
+) -> None:
+    store.link(con, E("P", "paper", "about", "spatial audio", "concept"))
+    store.link(con, E("Q", "paper", "about", "spatial audio coding", "concept"))
+    assert _likely_computed(con, "concept", 0.7) >= 1
+    plan = resolution.plan(con)
+
+    class Silent:
+        name = "silent"
+
+        def decide(self, cands):
+            return [None for _ in cands]
+
+    report = resolution.apply(con, plan, adjudicator=Silent())
+    assert report.merged_likely == 0 and report.declined == 0
+    assert len(resolution.plan(con).likely) == len(plan.likely)  # asked again
+
+
 def test_likely_pairs_are_the_close_names_a_block_at_a_time() -> None:
     """The worker's computation: every pair at or above the threshold,
     the smaller id first, highest first, the same whatever the block —

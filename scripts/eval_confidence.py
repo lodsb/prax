@@ -9,6 +9,8 @@ store's):
     python scripts/eval_confidence.py build OUT   # the labelled pairs, read-only
     python scripts/eval_confidence.py ask OUT     # the local model, one token a pair
     python scripts/eval_confidence.py score OUT   # calibration, raw and fitted
+    python scripts/eval_confidence.py relabel OUT # Opus again, by pair number (paid)
+    python scripts/eval_confidence.py score OUT --against relabel
 
 **The labels are Opus 5's decisions of 2026-09-17**, not the truth. The
 declines are exact: ``entity_candidates.decided = 'different'`` (2,704
@@ -27,6 +29,11 @@ isotonic maps on half the pairs and measures Brier, ECE and the
 reliability table on the other half, and says how many pairs a threshold
 would settle without the paid model.
 
+``relabel`` asks the adjudicator again, forty pairs a call in a shuffled
+order, each answer naming its pair (``resolution.answers_by_number``),
+and says how its answers differ from the recorded ones. The recorded
+declines came from a list by position, padded when short.
+
 Opens the database read-only (``mode=ro``), like the other measurement
 scripts; writes nothing to the store.
 """
@@ -35,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sqlite3
 import sys
 import threading
@@ -200,11 +208,76 @@ def ask(out: Path, workers: int) -> None:
     print(f"done: {count[0]} asked in {time.time() - started:.0f} s")
 
 
-def score(out: Path, bins: int) -> None:
+def relabel(out: Path, model: str) -> None:
+    pairs = _read(out / "pairs.jsonl")
+    done = {a["id"] for a in _read(out / "relabels.jsonl")}
+    todo = [p for p in pairs if p["id"] not in done]
+    random.Random(7).shuffle(todo)
+    print(f"{len(todo)} of {len(pairs)} pairs to ask {model}", flush=True)
+    judge = resolution.ClaudeAdjudicator(model=model)
+    started = time.time()
+    step = judge.batch * 5
+    for start in range(0, len(todo), step):
+        part = todo[start : start + step]
+        same = judge.decide(
+            [
+                resolution.Candidate(0, 0, p["a"], p["b"], p["type"], "likely", 0.0)
+                for p in part
+            ]
+        )
+        with (out / "relabels.jsonl").open("a", encoding="utf-8") as f:
+            for p, yes in zip(part, same, strict=True):
+                f.write(json.dumps({"id": p["id"], "same": yes}) + "\n")
+        print(
+            f"{start + len(part)} asked, ${judge.cost:.2f},"
+            f" {time.time() - started:.0f} s",
+            flush=True,
+        )
+    compare(out)
+
+
+def compare(out: Path) -> None:
+    """The recorded labels against the ones asked again."""
     pairs = {p["id"]: p for p in _read(out / "pairs.jsonl")}
+    table: dict[tuple[int, Any], int] = {}
+    flipped: list[dict[str, Any]] = []
+    for a in _read(out / "relabels.jsonl"):
+        p = pairs[a["id"]]
+        new = a["same"]
+        key = (p["label"], None if new is None else int(new))
+        table[key] = table.get(key, 0) + 1
+        if new is not None and int(new) != p["label"]:
+            flipped.append({**p, "now": new})
+    print("\n| recorded | asked again: same | different | no answer |")
+    print("|---|---|---|---|")
+    for label, name in ((1, "same"), (0, "different")):
+        print(
+            f"| {name} | {table.get((label, 1), 0)} | {table.get((label, 0), 0)}"
+            f" | {table.get((label, None), 0)} |"
+        )
+    random.Random(7).shuffle(flipped)
+    for label, name in (
+        (0, "recorded different, now same"),
+        (1, "recorded same, now different"),
+    ):
+        some = [f for f in flipped if f["label"] == label][:15]
+        print(f"\n{name} (a sample):\n")
+        for f in some:
+            print(f'- [{f["type"]}] "{f["a"]}" vs "{f["b"]}"')
+
+
+def score(out: Path, bins: int, against: str = "recorded") -> None:
+    pairs = {p["id"]: p for p in _read(out / "pairs.jsonl")}
+    if against == "relabel":
+        kept = {}
+        for a in _read(out / "relabels.jsonl"):
+            if a["same"] is not None:
+                kept[a["id"]] = {**pairs[a["id"]], "label": int(a["same"])}
+        pairs = kept
     rows = [
         (a["p"], pairs[a["id"]]["label"], pairs[a["id"]])
         for a in _read(out / "answers.jsonl")
+        if a["id"] in pairs
     ]
     missing = sum(1 for p, _, _ in rows if p is None)
     rows = [r for r in rows if r[0] is not None]
@@ -280,21 +353,32 @@ def score(out: Path, bins: int) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("step", choices=("build", "ask", "score"))
+    ap.add_argument("step", choices=("build", "ask", "score", "relabel", "compare"))
     ap.add_argument("out", type=Path, help="a directory for the pairs and answers")
     ap.add_argument("--threshold", type=float, default=resolution.LIKELY_THRESHOLD)
     ap.add_argument(
         "--workers", type=int, default=2, help="requests at once (the server's slots)"
     )
     ap.add_argument("--bins", type=int, default=10)
+    ap.add_argument(
+        "--against",
+        choices=("recorded", "relabel"),
+        default="recorded",
+        help="score against the recorded labels or the ones asked again",
+    )
+    ap.add_argument("--model", default="claude-opus-5", help="relabel's adjudicator")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     if a.step == "build":
         build(a.out, a.threshold)
     elif a.step == "ask":
         ask(a.out, a.workers)
+    elif a.step == "relabel":
+        relabel(a.out, a.model)
+    elif a.step == "compare":
+        compare(a.out)
     else:
-        score(a.out, a.bins)
+        score(a.out, a.bins, a.against)
 
 
 if __name__ == "__main__":

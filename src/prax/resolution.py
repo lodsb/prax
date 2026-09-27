@@ -310,16 +310,19 @@ def _is_initials_only(name: str) -> bool:
 
 
 class Adjudicator(Protocol):
+    """Says of each candidate True (one thing), False (two) or None (no
+    answer: neither merged nor recorded, so it is asked again)."""
+
     name: str
 
-    def decide(self, candidates: list[Candidate]) -> list[bool]: ...
+    def decide(self, candidates: list[Candidate]) -> list[bool | None]: ...
 
 
 @dataclass
 class NoAdjudicator:
     name: str = "none"
 
-    def decide(self, candidates: list[Candidate]) -> list[bool]:
+    def decide(self, candidates: list[Candidate]) -> list[bool | None]:
         return [False] * len(candidates)
 
 
@@ -330,14 +333,17 @@ class StubAdjudicator:
     threshold: float = 0.97
     name: str = "stub"
 
-    def decide(self, candidates: list[Candidate]) -> list[bool]:
+    def decide(self, candidates: list[Candidate]) -> list[bool | None]:
         return [c.score >= self.threshold for c in candidates]
 
 
 @dataclass
 class ClaudeAdjudicator:
     """Asks Claude whether each pair names the same thing, in one call per
-    batch of candidates, with a structured yes/no list."""
+    batch of candidates. Each answer names its pair by number: a list of
+    booleans by position, padded when it came back short, put every
+    answer after a gap on the wrong pair (docs/eval/confidence-2026-09-28.md).
+    A pair without an answer is None."""
 
     model: str = "claude-opus-5"
     client: Any = None
@@ -353,59 +359,77 @@ class ClaudeAdjudicator:
         """What the calls so far cost, in USD, by the price table."""
         return extraction.cost_usd(self.model, self.usage)
 
-    def decide(self, candidates: list[Candidate]) -> list[bool]:
+    def decide(self, candidates: list[Candidate]) -> list[bool | None]:
         if self.client is None:
             import anthropic
 
             self.client = anthropic.Anthropic()
-        out: list[bool] = []
+        out: list[bool | None] = []
         for start in range(0, len(candidates), self.batch):
             part = candidates[start : start + self.batch]
             lines = "\n".join(
                 f'{i}. [{c.type}] "{c.keep_name}"  vs  "{c.drop_name}"'
-                for i, c in enumerate(part)
+                for i, c in enumerate(part, 1)
             )
             output_config: dict[str, Any] = {
-                "format": {
-                    "type": "json_schema",
-                    "schema": {
-                        "type": "object",
-                        "properties": {
-                            "same": {"type": "array", "items": {"type": "boolean"}}
-                        },
-                        "required": ["same"],
-                        "additionalProperties": False,
-                    },
-                }
+                "format": {"type": "json_schema", "schema": ANSWER_SCHEMA}
             }
             if extraction.supports_effort(self.model):
                 output_config["effort"] = "low"
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=4000,
+                max_tokens=6000,
                 output_config=output_config,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": (
-                            "For each numbered pair below, decide whether the two"
-                            " names refer to the same entity in a research library"
-                            " about audio and signal processing. Spelling variants,"
-                            " abbreviations and singular/plural are the same thing;"
-                            " different methods, people or concepts are not. Answer"
-                            " with a boolean per pair, in order.\n\n" + lines
-                        ),
-                    }
-                ],
+                messages=[{"role": "user", "content": ADJUDICATE + lines}],
             )
             for key in ("input_tokens", "output_tokens", "cache_read_input_tokens"):
                 got = getattr(response.usage, key, None) or 0
                 self.usage[key] = self.usage.get(key, 0) + int(got)
             text = next(b.text for b in response.content if b.type == "text")
-            same = json.loads(text)["same"]
-            same = list(same)[: len(part)] + [False] * (len(part) - len(same))
-            out.extend(bool(x) for x in same)
+            out.extend(answers_by_number(text, len(part)))
         return out
+
+
+ADJUDICATE = (
+    "For each numbered pair below, decide whether the two names refer to the"
+    " same entity in a personal library (research papers, manuals, recipes,"
+    " notes). Spelling variants, abbreviations and singular/plural are the"
+    " same thing; different methods, people or concepts are not. Answer every"
+    " pair, each with its number.\n\n"
+)
+ANSWER_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "answers": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "pair": {"type": "integer"},
+                    "same": {"type": "boolean"},
+                },
+                "required": ["pair", "same"],
+                "additionalProperties": False,
+            },
+        }
+    },
+    "required": ["answers"],
+    "additionalProperties": False,
+}
+
+
+def answers_by_number(text: str, n: int) -> list[bool | None]:
+    """The answers to pairs 1..n by the number each names. A pair named
+    twice with two answers, or not at all, has none."""
+    got: dict[int, bool | None] = {}
+    for a in json.loads(text).get("answers") or []:
+        try:
+            i, same = int(a["pair"]), bool(a["same"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if 1 <= i <= n:
+            got[i] = same if got.get(i, same) == same else None
+    return [got.get(i) for i in range(1, n + 1)]
 
 
 # ------------------------------------------------------------------ apply
@@ -453,6 +477,8 @@ def apply(
         decisions = (adjudicator or NoAdjudicator()).decide(p.likely)
         declined: list[tuple[int, int]] = []
         for c, yes in zip(p.likely, decisions, strict=True):
+            if yes is None:
+                continue  # no answer: left for the next round
             if yes:
                 try:
                     store.merge_entities(
@@ -502,11 +528,11 @@ class DecidedAdjudicator:
     """Decisions a worker already took, replayed on the door: the take-in
     of the adjudicate step."""
 
-    def __init__(self, name: str, same: list[bool]) -> None:
+    def __init__(self, name: str, same: list[bool | None]) -> None:
         self.name = name
         self.same = list(same)
 
-    def decide(self, candidates: list[Candidate]) -> list[bool]:
-        return self.same[: len(candidates)] + [False] * (
+    def decide(self, candidates: list[Candidate]) -> list[bool | None]:
+        return self.same[: len(candidates)] + [None] * (
             len(candidates) - len(self.same)
         )

@@ -198,7 +198,7 @@ class Adjudicate(Step):
 
         model = str(t.payload.get("model") or t.worker)
         items = list(t.payload.get("items") or [])
-        same = [bool(x) for x in (t.payload.get("same") or [])]
+        same = [None if x is None else bool(x) for x in t.payload.get("same") or []]
         if len(same) != len(items):
             raise ValueError("adjudicate takes one decision per item")
         t.release([int(it["drop"]) for it in items])
