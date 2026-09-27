@@ -540,9 +540,17 @@ What it would want, in order:
       not be an entity. A partition computed before that is decided
       will cluster around artifacts. This is the cheap part and it
       comes first.
+- [ ] *Optional:* **Leiden instead of Louvain.** Louvain can leave a
+      community internally disconnected (two pieces held together by a
+      node that has since moved away); Leiden guarantees connected
+      communities and usually finds a slightly better split. It needs
+      `igraph` and `leidenalg`, two compiled packages, where Louvain comes
+      with networkx. The change is `communities.partition`. Worth it only
+      if a region turns out to be two unrelated things, or if the
+      packages prove easy on the Pi-class host.
 
-Not started. It is a pass, a table and a staleness rule, so it wants its
-own stage rather than a corner of the traverse change.
+Built on 2026-09-27 as stage P (`docs/communities.md`): a pass, two
+tables, a staleness rule and a model step.
 
 ## A confidence that was measured, not written (planned, 2026-09-25)
 

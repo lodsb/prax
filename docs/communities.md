@@ -32,7 +32,11 @@ entities named in two documents or more take part (8,488 of 42,452 on
 2026-09-27). One named once is a detail of its document.
 
 **The partition** is Louvain (networkx, pure Python, no compiled
-dependency), seeded so the same graph gives the same answer. Level 0 is
+dependency), seeded so the same graph gives the same answer. Leiden is
+the better-known refinement: it guarantees that no community is
+internally disconnected, which Louvain does not. It needs two compiled
+packages (`igraph`, `leidenalg`), so it is an optional improvement in
+`docs/PLAN.md` rather than the default. Level 0 is
 its final pass: 24 regions, modularity 0.61. Level 1 splits each region
 of 200 members or more by Louvain again inside it: 153 parts. Louvain's
 own intermediate passes were not usable: 576 communities with a median
