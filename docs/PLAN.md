@@ -38,7 +38,9 @@ the review of the lists a person decides goes last.
       datasheets (pins, packages, electrical characteristics), grown from
       what the review queue holds for them, as studio was. A module for
       code waits for documents that need it.
-- [ ] **N. The card and the memory when nothing runs.** Unload the GPU
+- [x] (2026-09-27: `idle_minutes` and `trim` in `prax up`, deferrals as
+      demand, the holders in the Jobs view; howto 4b)
+      **N. The card and the memory when nothing runs.** Unload the GPU
       models after an idle while and load them when a queue asks (`prax
       up`'s swap exists; the plan's "let a queue ask for the card"), see
       who holds the card (the plan's "See who holds the card"), and the

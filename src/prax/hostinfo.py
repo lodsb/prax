@@ -231,6 +231,45 @@ def process_mb() -> int | None:
     return None
 
 
+def trim_working_set(pid: int) -> int | None:
+    """Ask Windows to take ``pid``'s pages out of its working set; the
+    megabytes it held before, or None where there is nothing to do.
+
+    A model server that maps its weights (llama-server's ``--load-mode
+    mmap``, chosen for the commit charge) touches every page while it
+    loads, and the file-backed pages stay in its working set afterwards
+    although the card holds the weights: 16.6 GB after a fresh load on
+    2026-09-27. Trimmed, the untouched pages go to the standby list (still
+    cached, counted as available) and what the server does use comes
+    back at once: 11.9 GB to 1.8 GB (the experts of the layers on the
+    CPU, the buffers), with the same tokens per second. Elsewhere the
+    page cache already behaves so."""
+    if sys.platform != "win32":
+        return None
+    kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    psapi: Any = ctypes.windll.psapi  # type: ignore[attr-defined]
+    kernel32.OpenProcess.restype = ctypes.c_void_p
+    handle = kernel32.OpenProcess(0x0100 | 0x0400 | 0x0010, False, int(pid))
+    if not handle:  # PROCESS_SET_QUOTA | QUERY_INFORMATION | VM_READ
+        return None
+    try:
+        pmc = _PROCESS_MEMORY_COUNTERS_EX()
+        pmc.cb = ctypes.sizeof(pmc)
+        held = None
+        if psapi.GetProcessMemoryInfo(
+            ctypes.c_void_p(handle), ctypes.byref(pmc), pmc.cb
+        ):
+            held = int(pmc.WorkingSetSize) // MB
+        minus_one = ctypes.c_size_t(-1)  # (SIZE_T)-1 twice: empty it
+        if not kernel32.SetProcessWorkingSetSizeEx(
+            ctypes.c_void_p(handle), minus_one, minus_one, 0
+        ):
+            return None
+        return held
+    finally:
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+
+
 # ---- Windows
 
 

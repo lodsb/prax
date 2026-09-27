@@ -86,9 +86,13 @@ SERVE_KEYS = (
 # every role may say which resource it competes for and what it needs of
 # it; the supervisor keeps one holder of a group when they do not fit
 GROUP_KEYS = ("group", "needs_vram_mb", "swap")
+# a model server may give the card back after a quiet while and come back
+# when work asks for it (``idle_minutes``), and have its working set
+# trimmed once it has loaded (``trim``, Windows; on by default)
+SERVER_KEYS = ("model", "idle_minutes", "trim", *GROUP_KEYS)
 ROLE_KEYS = {
-    "llama-server": ("model", *GROUP_KEYS),
-    "reranker": ("model", *GROUP_KEYS),
+    "llama-server": SERVER_KEYS,
+    "reranker": SERVER_KEYS,
     "marker": ("venv", "port", "ngl", "on_demand", *GROUP_KEYS),
     "door": ("host", "port", "ssl_certfile", "ssl_keyfile", *GROUP_KEYS),
     "worker": (
@@ -108,6 +112,7 @@ SWAP_WHEN = ("ask", "auto")  # who starts a swap: a person, or the supervisor
 BACK_WHEN = ("idle", "never")  # when the group goes back to what held it
 GROUP_QUIET = 90.0  # seconds of no work for the borrower before it goes back
 DEMAND_SECONDS = 20.0  # how often the supervisor asks the door what waits
+IDLE_POLL = 30.0  # how often an idle-watched server's /metrics is read
 
 
 def _s(items: list[Any]) -> str:
@@ -133,6 +138,12 @@ class Role:
     group: str | None = None
     needs_vram_mb: int | None = None
     swap: str = "ask"
+    # a model server's /metrics (activity), the minutes of none after which
+    # it is stopped until work asks for it (0: never), and whether its
+    # working set is trimmed once it has loaded
+    metrics: str | None = None
+    idle_minutes: float = 0.0
+    trim: bool = False
 
 
 # ------------------------------------------------------------- the model
@@ -392,6 +403,15 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
             with contextlib.suppress(OSError):  # the model file is what it maps
                 size = model_path(spec).stat().st_size
                 served.needs_vram_mb = max(1, int(size / (1 << 20)))
+            if dict(spec.serve).get("metrics", True) and served.health:
+                served.metrics = served.health.rsplit("/health", 1)[0] + "/metrics"
+            served.idle_minutes = max(0.0, float(opts.get("idle_minutes") or 0))
+            if served.idle_minutes and not served.metrics:
+                raise UpError(
+                    f"run.{name}.idle_minutes: the server's /metrics is how quiet"
+                    " is told (serve: metrics: false turns it off)"
+                )
+            served.trim = bool(opts.get("trim", sys.platform == "win32"))
             out.append(_grouped(served, opts))
         elif name == "marker":
             out.append(marker_role(opts))
@@ -819,6 +839,11 @@ class Supervisor:
         self.groups: dict[str, dict[str, Any]] = {}
         self.demand: dict[str, Any] = {}  # what the door says waits, per role
         self._demand_at = 0.0
+        # servers stopped for being quiet (``idle_minutes``), and per
+        # watched server the last activity count, when it last moved and
+        # when /metrics was last read
+        self.idled: set[str] = set()
+        self._activity: dict[str, dict[str, Any]] = {}
         self.started = _now()
         self.jobs: dict[str, _JobObject] = {}  # Windows: one per role, its tree
         self.paused.update(r.name for r in roles_ if r.on_demand)
@@ -923,7 +948,8 @@ class Supervisor:
         failures = 0
         while not self.stopping.is_set():
             if role.name in self.paused:
-                self._set(role.name, state="paused", pid=None, next=None)
+                state = "idle" if role.name in self.idled else "paused"
+                self._set(role.name, state=state, pid=None, next=None)
                 while role.name in self.paused and not self.stopping.wait(self.tick):
                     pass
                 failures = 0
@@ -940,6 +966,7 @@ class Supervisor:
                         ready = True
                         self._set(role.name, state="up")
                         self._say(f"{role.name}: up")
+                        self._loaded(role, proc)
                     if self.stopping.wait(self.tick):
                         break
                 if self.stopping.is_set():
@@ -1023,6 +1050,7 @@ class Supervisor:
                     self._say(f"no role named {one}")
                 elif one in self.paused:
                     self._say(f"{one}: asked to start")
+                    self.idled.discard(one)
                     self.paused.discard(one)
                 else:
                     self._say(f"{one}: not stopped")
@@ -1047,7 +1075,91 @@ class Supervisor:
                     self._say(f"no role named {name}")
                     continue
                 self.restart_now.add(name)
+                self.idled.discard(name)
                 self.paused.discard(name)  # a restart of a paused role starts it
+                proc = self.procs.get(name)
+                if proc is not None and proc.poll() is None:
+                    self._end(name, proc)
+
+    # -- a model server that has loaded, and one that has been quiet
+
+    def _loaded(self, role: Role, proc: subprocess.Popen[bytes]) -> None:
+        """A server has answered its first health check: its quiet is
+        counted from now, and its working set is trimmed (``trim``)."""
+        self._activity[role.name] = {
+            "count": None,
+            "moved": time.monotonic(),
+            "read": 0.0,
+        }
+        if not role.trim:
+            return
+        held = hostinfo.trim_working_set(proc.pid)
+        if held is not None:
+            self._say(f"{role.name}: working set trimmed ({held} MB before)")
+
+    def _server_activity(self, role: Role) -> float | None:
+        """How much the server has done so far (decode calls, and one for
+        each request in flight), from its /metrics; None when it does not
+        answer."""
+        try:
+            with urllib.request.urlopen(role.metrics or "", timeout=3) as r:
+                text = r.read().decode("utf-8", "replace")
+        except (urllib.error.URLError, OSError, ValueError):
+            return None
+        done = busy = 0.0
+        for line in text.splitlines():
+            name, _, value = line.partition(" ")
+            with contextlib.suppress(ValueError):
+                if name == "llamacpp:n_decode_total":
+                    done = float(value)
+                elif name == "llamacpp:requests_processing":
+                    busy = float(value)
+        return done + busy * 1e12 if busy else done  # in flight: always moved
+
+    def _idle(self) -> None:
+        """Every tick: a server with ``idle_minutes`` that has done nothing
+        for that long is stopped and marked idle; an idle one whose work
+        the door says waits (a worker's "not yet", an ask that found it
+        gone) is started again. Loading takes minutes, so the quiet time
+        is the hysteresis: the server stays until it has been unused for
+        as long again."""
+        watched = [r for r in self.roles if r.idle_minutes > 0]
+        if not watched:
+            return
+        self._ask_demand()
+        now = time.monotonic()
+        for role in watched:
+            name = role.name
+            if name in self.idled:
+                if int(self.demand.get(name, 0) or 0) > 0:
+                    self._say(f"{name}: work waits for it; loading again")
+                    self.idled.discard(name)
+                    self.paused.discard(name)
+                continue
+            with self.lock:
+                up = self.state[name]["state"] == "up"
+            seen = self._activity.get(name)
+            if not up or name in self.paused or seen is None:
+                continue
+            if any(name in loan.get("was_up", ()) for loan in self.groups.values()):
+                continue
+            if now - seen["read"] < IDLE_POLL:
+                continue
+            seen["read"] = now
+            count = self._server_activity(role)
+            if count is None:
+                continue
+            if count != seen["count"]:
+                seen["count"], seen["moved"] = count, now
+                continue
+            quiet = now - seen["moved"]
+            if quiet >= role.idle_minutes * 60:
+                self._say(
+                    f"{name}: nothing for {quiet / 60:.0f} min; stopped until"
+                    " work asks for it"
+                )
+                self.idled.add(name)
+                self.paused.add(name)
                 proc = self.procs.get(name)
                 if proc is not None and proc.poll() is None:
                     self._end(name, proc)
@@ -1266,6 +1378,7 @@ class Supervisor:
             while not self.stopping.is_set():
                 self._control()
                 self._groups()
+                self._idle()
                 ticks += 1
                 if ticks % 10 == 0:  # a heartbeat; every change writes it anyway
                     self._write_status()

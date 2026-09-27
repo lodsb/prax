@@ -530,3 +530,63 @@ def test_swap_says_when_a_role_has_no_group(data_dir: Path, tmp_path: Path) -> N
     assert any("not a role of a group" in line for line in said)
     sup._swap("nobody")
     assert sum("not a role of a group" in line for line in said) == 2
+
+
+def test_idle_and_trim_are_read_off_run(gpu_host: Path) -> None:
+    """A model server may give the card back after ``idle_minutes`` (its
+    /metrics says how quiet it is) and be trimmed once loaded."""
+    roles = up.roles({"llama-server": {"model": "big", "idle_minutes": 30}})
+    server = roles[0]
+    assert server.idle_minutes == 30
+    assert server.metrics == "http://127.0.0.1:8085/metrics"
+    assert server.trim is (sys.platform == "win32")
+    off = up.roles({"llama-server": {"model": "big", "trim": False}})[0]
+    assert off.idle_minutes == 0 and off.trim is False
+    with pytest.raises(up.UpError, match="unknown setting"):
+        up.roles({"door": {"idle_minutes": 5}})
+
+
+def test_a_quiet_server_stops_and_comes_back_when_work_asks(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing done for ``idle_minutes``: the server is stopped and shown
+    idle. The door saying work waits for it starts it again."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark, argv = child(tmp_path, "server", 60)
+    server = up.Role(
+        "llama-server",
+        argv,
+        health="http://127.0.0.1:1/health",
+        metrics="http://127.0.0.1:1/metrics",
+        idle_minutes=0.002,  # a tenth of a second
+    )
+    said: list[str] = []
+    sup = up.Supervisor([server], data_dir=data_dir, say=said.append, tick=0.05)
+    monkeypatch.setattr(up, "healthy", lambda url, timeout=3.0: True)
+    monkeypatch.setattr(up, "IDLE_POLL", 0.0)
+    monkeypatch.setattr(up.Supervisor, "_server_activity", lambda self, role: 7.0)
+    waiting: dict[str, int] = {}
+    monkeypatch.setattr(
+        up.Supervisor, "_ask_demand", lambda self: setattr(self, "demand", waiting)
+    )
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    try:
+        wait_for(lambda: runs_of(mark) >= 1)
+        wait_for(lambda: "llama-server" in sup.idled)
+        wait_for(
+            lambda: (
+                json.loads((up.run_dir(data_dir) / up.STATUS).read_text())["roles"][
+                    "llama-server"
+                ]["state"]
+                == "idle"
+            )
+        )
+        assert runs_of(mark) == 1  # stopped, not restarted
+        assert any("stopped until work asks" in line for line in said)
+        waiting["llama-server"] = 3
+        wait_for(lambda: runs_of(mark) >= 2)
+        assert any("work waits for it" in line for line in said)
+    finally:
+        up.stop(data_dir, wait=20)
+        thread.join(timeout=10)

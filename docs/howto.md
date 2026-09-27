@@ -2344,6 +2344,33 @@ next pass offers them at once instead of waiting out its ten minutes.
 Nothing here is required: a host whose roles fit together declares no
 group, and the supervisor never stops anything on its own.
 
+### A card given back when nothing uses it
+
+A desktop's card also draws the screen and runs the games. `idle_minutes`
+on a model server gives it back after that long with nothing asked of
+it, and brings it back when something is:
+
+      llama-server: {model: server-35b, group: card, idle_minutes: 30}
+
+Quiet is the server's own count (`/metrics`: decode calls, requests in
+flight), read every thirty seconds; the Jobs view and `prax up --status`
+show the role as `idle`. What loads it again is demand from the door
+(`GET /work/demand`). A worker whose step finds the server gone defers
+the item ("not yet", no error against the document), and the door counts
+it for the role serving that step's model. An `ask` that finds it gone
+counts too, and answers that the model is loading. A load takes a few
+minutes, which is why the quiet time is the hysteresis: nothing unloads
+a server that was used in the last half hour. `prax up --start
+llama-server` loads it at once.
+
+On Windows a server's working set is trimmed once it has loaded (`trim`,
+on by default there). With `--load-mode mmap` a fresh load leaves every
+page of the model file in the working set although the card holds the
+weights. On 2026-09-27 that was 11.9 GB; trimmed, it was 1.8 GB (the
+experts of the layers kept on the CPU, the buffers) at the same tokens
+per second, and the machine had 3.6 GB more available at once. `trim:
+false` keeps them.
+
 ### Models that cost money: the ledger and the budget
 
 A host whose steps are somebody's API has no card to run out of; it has

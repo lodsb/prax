@@ -197,7 +197,10 @@ function upPanel(u) {
       <div class="up-line muted">${members.map((m) => {
         const st = (roles[m] || {}).state || "?";
         const n = demand[m] || 0;
-        return `${esc(m)}: ${esc(st)}${n ? ` · ${n} waiting` : ""}`;
+        const shown = st === "idle"
+          ? `<span title="stopped after a quiet while (idle_minutes); work that asks for it loads it again, which takes a few minutes">idle, unloaded</span>`
+          : esc(st);
+        return `${esc(m)}: ${shown}${n ? ` · ${n} waiting` : ""}`;
       }).join(" · ")}${card ? ` · ${card}` : ""}</div>
       ${rates ? `<div class="up-line muted">${rates}</div>` : ""}
       <div class="up-acts">${members.map((m) => (roles[m] || {}).state === "up" || m === holder
@@ -208,9 +211,13 @@ function upPanel(u) {
   });
   const loose = Object.entries(roles).filter(([n]) => !grouped.has(n))
     .map(([n, r]) => `${esc(n)}: ${esc(r.state || "?")}`).join(" · ");
+  // who holds the card, by process: the totals cannot say (2026-09-25:
+  // the embedder crawled for a day beside a 20.8 GB llama-server)
+  const holders = (u.gpu_holders || []).map((h) => `${esc(h.name)} ${mb(h.mb)}`).join(" · ");
   return `<section class="up-panel">
     <h2 style="font-size:1rem;margin:1rem 0 .3rem">This host (prax up)</h2>
     ${lines.join("") || `<p class="muted">No role shares a resource with another (run: group:).</p>`}
+    ${holders ? `<p class="muted up-line">On the card: ${holders}</p>` : ""}
     ${loose ? `<p class="muted up-line">${loose}</p>` : ""}
     <p id="up-msg" class="muted"></p>
   </section>`;

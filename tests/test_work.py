@@ -1585,3 +1585,29 @@ def test_vectors_a_killed_door_had_not_written_are_embedded_again(
     assert got["forgotten"] == 2
     left = {r["chunk_id"] for r in store.pending_embeddings(con, emb.name)}
     assert left == set(ids[1:])
+
+
+def test_work_deferred_for_a_missing_server_is_demand_for_its_role(
+    con: Any, monkeypatch: pytest.MonkeyPatch, data_dir: Path
+) -> None:
+    """A worker's "not yet" (the server was not there) counts as work
+    waiting for the role serving that step's model, which is what brings
+    an idle server back (``prax up``'s ``idle_minutes``)."""
+    (data_dir / "prax.yaml").write_text(
+        "models:\n"
+        "  big: {kind: openai, base_url: 'http://127.0.0.1:8085/v1', model: q}\n"
+        "steps:\n  extract: {model: big}\n  titles: {model: none}\n"
+        "run:\n  llama-server: {model: big}\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(work, "_wanted", {})
+    assert work.role_of_step("extract") == "llama-server"
+    assert work.role_of_step("titles") is None
+    work.want("extract", [11, 12])
+    work.want("titles", [13])  # no server of prax up's: no demand
+    assert work.demand(con)["roles"]["llama-server"] == 2
+    monkeypatch.setattr(work, "DEFER_SECONDS", -1.0)  # long ago
+    work.want("extract", [14])
+    work._wanted.pop(("extract", 11))
+    work._wanted.pop(("extract", 12))
+    assert work.wanted_roles() == {}

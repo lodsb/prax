@@ -19,7 +19,9 @@ from pydantic import BaseModel
 from prax import ask as ask_mod
 from prax import (
     budget,
+    models,
     store,
+    work,
 )
 
 from ._base import _con
@@ -99,9 +101,22 @@ def ask(req: AskReq, request: Request) -> Any:
             return out
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+        except models.ServerNotReady as exc:
+            raise HTTPException(503, _asked_for_server(exc)) from exc
         except RuntimeError as exc:
             raise HTTPException(503, str(exc)) from exc
     return _ask_stream(req.question, kw)
+
+
+def _asked_for_server(exc: Exception) -> str:
+    """The model server was not there (loading, or unloaded after an idle
+    while): say so, and count the question as work waiting for it, which
+    is what brings an unloaded server back (``work.want``)."""
+    work.want("ask")
+    return (
+        f"the model is not loaded yet ({exc}); it has been asked for, and a"
+        " load takes a few minutes: ask again then"
+    )
 
 
 def _note_ask(con: Any, out: dict[str, Any]) -> None:
@@ -128,6 +143,8 @@ def _ask_stream(question: str, kw: dict[str, Any]) -> StreamingResponse:
         try:
             result = ask_mod.ask(con, question, on_event=events.put, stop=stop, **kw)
             events.put({"event": "answer", "result": result})
+        except models.ServerNotReady as exc:
+            events.put({"event": "error", "detail": _asked_for_server(exc)})
         except Exception as exc:  # noqa: BLE001 - the client gets the reason
             events.put({"event": "error", "detail": str(exc)})
         finally:

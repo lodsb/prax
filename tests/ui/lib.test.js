@@ -137,6 +137,15 @@ test("upPanel: the group's holder, what waits, and the buttons offered", () => {
   });
   assert.match(shared, /No role shares a resource/);
   assert.doesNotMatch(shared, /up-unswap/);
+  // who holds the card, and a server given back after a quiet while
+  const held = lib.upPanel({
+    up: { roles: { "llama-server": { state: "idle" }, marker: { state: "paused" } },
+          groups: { card: { members: ["llama-server", "marker"] } } },
+    demand: { roles: {} }, gpu: [],
+    gpu_holders: [{ pid: 1, name: "python", mb: 2250 }, { pid: 2, name: "dwm", mb: 800 }],
+  });
+  assert.match(held, /On the card: python 2\.2 GB · dwm 800 MB/);
+  assert.match(held, /llama-server: <span title="stopped after a quiet while[^"]*">idle, unloaded<\/span>/);
   // no supervisor on the host: no panel at all
   assert.equal(lib.upPanel(null), "");
   assert.equal(lib.upPanel({ up: null }), "");

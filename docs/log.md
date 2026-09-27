@@ -1873,3 +1873,32 @@ on.
       be read again. On the way: a person's change of an upload's domains
       marked its reading stale but not asked for, so a worker scoped to the
       captures never took it. `_lens_changed` now records it as `requested`.
+
+## 2026-09-27: stage N, the card and the memory when nothing runs
+
+- [x] **The mapped weights.** The 16.6 GB of the plan was llama-server's
+      working set after a fresh load: `--load-mode mmap` (kept for the
+      commit charge) leaves every page of the model file there although
+      the card holds the weights. One `SetProcessWorkingSetSizeEx(-1, -1)`
+      took it from 11.9 GB to 1.8 GB, and it stayed there: the experts of
+      the two layers on the CPU, and the buffers. Available memory went
+      from 5.2 to 8.8 GB. Before the trim the server's gauges said 1,859
+      prompt tokens/s and 81 generated; after it, 1,685 and 87.5 over two
+      minutes of extraction, the same. `hostinfo.trim_working_set`, and
+      `prax up` does it once a server answers its first health check
+      (`trim`, on by default on Windows).
+- [x] **The card back when nothing uses it.** `idle_minutes` on a model
+      server: the supervisor reads its `/metrics` every thirty seconds,
+      stops it after that long with no decode and no request in flight,
+      and shows it `idle`. It loads again when the door reports demand:
+      a worker's "not yet" (already a deferral, never an error, so a
+      worker does not give up over a sleeping server) now counts for the
+      role serving that step's model (`work.want`, `work.role_of_step`),
+      and so does an `ask` that found the server gone, which answers that
+      it is loading. The quiet time is the hysteresis the plan asked for:
+      the 35B takes minutes to load. 30 minutes on this host.
+- [x] **Who holds the card.** `holders()` was built on 2026-09-25 and
+      served by `/up`, but nothing showed it. The Jobs view now says
+      "On the card: llama-server 20.3 GB · waterfox 4.4 GB · dwm 2.5 GB".
+      prax's own share is llama-server and a 291 MB worker: unloading the
+      server is what frees the card.

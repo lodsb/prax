@@ -68,6 +68,10 @@ SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
 _leases: dict[tuple[str, int], tuple[str, float]] = {}
+# what was deferred because its model server was not there, until when:
+# the demand that brings an idle server back (``demand``, ``prax up``'s
+# ``idle_minutes``). An item leaves it when its result arrives
+_wanted: dict[tuple[str, int], float] = {}
 # when a worker last asked for each step's work, since this door started.
 # A queue nobody asks about is the whole answer to "why is this pending"
 _asked: dict[str, str] = {}
@@ -154,6 +158,42 @@ def who_runs(con: Any, step: str) -> dict[str, Any]:
 RATE_HOURS = 3  # the window a queue's rate is measured over
 
 
+def want(step: str, items: list[int] | None = None) -> None:
+    """Work of ``step`` waited for a model server that was not there (a
+    worker's "not yet", an ask that found it gone): it counts as demand
+    for the role that serves the step's model for ``DEFER_SECONDS``."""
+    until = time.monotonic() + DEFER_SECONDS
+    for i in items or [0]:
+        _wanted[(step, int(i))] = until
+
+
+def role_of_step(step: str) -> str | None:
+    """The role of ``prax up`` that serves ``step``'s model on this host
+    (``run.llama-server.model`` names it), or None."""
+    with contextlib.suppress(Exception):  # a step off, a file unreadable
+        spec = models.resolve(step)
+        run = models.load().get("run") or {}
+        for role in ("llama-server", "reranker"):
+            opts = run.get(role) or {}
+            if spec is not None and opts.get("model") == spec.name:
+                return role
+    return None
+
+
+def wanted_roles() -> dict[str, int]:
+    """How many deferred items wait on each role now."""
+    now = time.monotonic()
+    out: dict[str, int] = {}
+    for (step, i), until in list(_wanted.items()):
+        if until < now:
+            _wanted.pop((step, i), None)
+            continue
+        role = role_of_step(step)
+        if role:
+            out[role] = out.get(role, 0) + 1
+    return out
+
+
 def demand(con: Any) -> dict[str, Any]:
     """What waits, per extractor and per role of ``prax up``: the reading
     requests nobody has taken. A role with a count has work it cannot do
@@ -175,6 +215,8 @@ def demand(con: Any) -> dict[str, Any]:
         role: sum(readings.get(x, 0) for x in extractors)
         for role, extractors in ROLE_WORK.items()
     }
+    for role, n in wanted_roles().items():  # what found its server gone
+        roles[role] = roles.get(role, 0) + n
     since = (datetime.now(UTC) - timedelta(hours=RATE_HOURS)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
@@ -344,7 +386,11 @@ def take_in(
     deferred = [int(r.get("doc_id", r.get("id"))) for r in results if r.get("defer")]
     if deferred:
         _lease(step, deferred, worker, seconds=DEFER_SECONDS)
+        want(step, deferred)
         out["deferred"] = len(deferred)
         results = [r for r in results if not r.get("defer")]
+    for r in results:
+        with contextlib.suppress(TypeError, ValueError):
+            _wanted.pop((step, int(r.get("doc_id", r.get("id")))), None)
     t = TakeIn(con, step, payload, results, worker, out)
     return steps.get(step).take_in(t)

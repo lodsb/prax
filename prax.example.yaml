@@ -167,6 +167,9 @@ steps:
 # them at login. Leave out what this host does not run.
 # run:
 #   llama-server: {model: local-server}     # a models: entry with a serve: block
+#   #   idle_minutes: 30  the card back after this long with nothing asked of it;
+#   #                     a worker's "not yet" or an ask loads it again (howto 4b)
+#   #   trim: false       keep the mapped weights in the working set (Windows trims)
 #   # reranker: {model: ranker}             # a second server, serve: {reranker: true}
 #   # marker: {venv: /path/to/marker-venv, on_demand: true}   # PDF to LaTeX (howto 3h);
 #   #                                       #   ngl: 99 layers on the card; on demand: --start marker
