@@ -884,3 +884,64 @@ def vectors_release() -> dict[str, Any]:
     """Drop the door's memory-mapped index views so a batch job on this
     machine can replace the files; they reopen on the next query."""
     return {"released": store.release_vector_views()}
+
+
+# ---------------------------------------------------------------- tokens
+# The administrator's (a named token never reaches these: auth's
+# RESTRICTED_ROUTES does not name them).
+
+
+class TokenReq(BaseModel):
+    name: str
+    domains: list[str] | None = None  # the modules it sees; none: every one
+    personal: bool = False  # sees personal documents too
+
+
+@router.get("/tokens")
+def tokens(request: Request) -> dict[str, Any]:
+    """The named tokens, without their secrets."""
+    return {"tokens": store.list_tokens(_con(request))}
+
+
+@router.post("/tokens")
+def token_add(req: TokenReq, request: Request) -> dict[str, Any]:
+    """A new named token. The secret is in this answer and nowhere else."""
+    from prax import ontology
+
+    known = set(ontology.current().modules) | {store.UNASSIGNED}
+    unknown = sorted(set(req.domains or []) - known)
+    if unknown:
+        raise HTTPException(400, f"unknown modules: {', '.join(unknown)}")
+    try:
+        secret = store.add_token(
+            _con(request), req.name, domains=req.domains, personal=req.personal
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"name": req.name, "secret": secret}
+
+
+@router.delete("/tokens/{name}")
+def token_remove(name: str, request: Request) -> dict[str, Any]:
+    if not store.remove_token(_con(request), name):
+        raise HTTPException(404, "no such token")
+    return {"removed": name}
+
+
+class SensitivityReq(BaseModel):
+    state: str | None  # "personal", "suspected", or null: open
+
+
+@router.put("/doc/{doc_id}/sensitivity")
+def doc_sensitivity(
+    doc_id: int, req: SensitivityReq, request: Request
+) -> dict[str, Any]:
+    """Mark a document personal (hidden from the tokens that may not see
+    it), or open it again."""
+    try:
+        was = store.set_sensitivity(_con(request), doc_id, req.state)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"doc_id": doc_id, "state": req.state, "was": was}

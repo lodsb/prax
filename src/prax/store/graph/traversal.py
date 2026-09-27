@@ -10,7 +10,7 @@ from typing import Any
 
 from prax import config, ontology
 
-from ..base import _reading
+from ..base import VIEWER, _reading, hidden_documents
 from .communities import community_of
 
 MAX_HOPS = 2
@@ -186,6 +186,7 @@ def senses(con: sqlite3.Connection, name: str) -> list[dict[str, Any]]:
             (name, name),
         )
     ]
+    hidden = hidden_documents(con)
     out = []
     for cid in ids:
         row = con.execute(
@@ -212,6 +213,8 @@ def senses(con: sqlite3.Connection, name: str) -> list[dict[str, Any]]:
                 group,
             )
         }
+        # what a hidden document says is not there for this viewer
+        edges = {k: d for k, d in edges.items() if d not in hidden}
         docs = sorted({d for d in edges.values() if d is not None})
         domains = [
             str(r[0])
@@ -234,7 +237,9 @@ def senses(con: sqlite3.Connection, name: str) -> list[dict[str, Any]]:
             }
         )
     # a sense nothing says anything about is a name left over, not a thing
-    said = [x for x in out if x["edges"]] or out
+    said = [x for x in out if x["edges"]]
+    if VIEWER.get() is None:
+        said = said or out  # a restricted viewer never meets a name left over
     return sorted(said, key=lambda x: (-x["edges"], x["id"]))
 
 
@@ -435,7 +440,9 @@ def _walk(
         """,
         (json.dumps(start_ids), hops, hops),
     ).fetchall()
-    shaped, neighbours_left = _second_hop([dict(r) for r in rows])
+    hidden = hidden_documents(con)
+    seen = [dict(r) for r in rows if r["source_doc"] not in hidden]
+    shaped, neighbours_left = _second_hop(seen)
     near = [r for r in shaped if int(r["hop"]) < 2]
     far = [r for r in shaped if int(r["hop"]) >= 2]
     near, edges_left = _first_hop(near, limit)

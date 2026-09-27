@@ -30,6 +30,7 @@ from .base import (
     _delta_path,
     _doc_index_path,
     _get_vector,
+    _guards,
     _has_vectors,
     _index,
     _index_path,
@@ -37,7 +38,9 @@ from .base import (
     _knn,
     _open_index,
     _reading,
+    _scrubbed,
     _serialized,
+    hidden_documents,
     vectors_available,
 )
 from .documents import DOCTYPES, _chunk_shape, find_chunk
@@ -867,8 +870,9 @@ def _search_hits(
     fetch = limit * 4 if doctype else limit
     # the pages that are the model's own answers (a standing question, a
     # briefing) are never evidence: a question would find its own page
-    # first and the model would cite itself
-    aside = _aside_documents(con)
+    # first and the model would cite itself. Nor is what the viewer may not
+    # see (stage U): set aside the same way, before the lists are fused
+    aside = _aside_documents(con) | hidden_documents(con)
     # the query as terms with the library's own expansions of its acronyms;
     # the keyword side without the stopwords (the embedder sees them all):
     # one OR expression for recall, one AND expression for the tier that
@@ -1764,6 +1768,8 @@ CENTROID_CHUNKS = 64  # chunk vectors averaged for a document's similarity query
 CENTROID_MIN_CHARS = 120  # shorter chunks are headers and template lines
 
 
+@_guards("doc", list)
+@_scrubbed
 @_reading
 def similar_documents(
     con: sqlite3.Connection,

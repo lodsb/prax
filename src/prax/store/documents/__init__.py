@@ -16,6 +16,7 @@ ORDER = ("meta", "text", "library", "domains", "readings", "reads")
 
 from .domains import (  # noqa: F401
     PROMOTE_WEIGHTS,
+    SENSITIVITY,
     _check_domains,
     _lens_changed,
     _rule_matches,
@@ -33,6 +34,7 @@ from .domains import (  # noqa: F401
     request_extraction,
     restamp_ontology,
     set_domains,
+    set_sensitivity,
     unpromote,
     unstamp_extraction,
 )

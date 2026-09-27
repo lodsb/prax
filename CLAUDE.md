@@ -412,6 +412,21 @@ reference `docs/ask.md`.
   alternative label (`store.unlabelled_names`, `store.label_in_language`).
   That is the bridge when no document in that language has printed the
   word (`Apfelkuchen` -> `apfel` -> `apple`).
+- The wall (stage U): the library keeps everything, and a named token
+  (`prax token add`, the `tokens` table, only a secret's sha256 kept)
+  sees only what it is given: the modules it names, and no document whose
+  `sensitivity` is `suspected` or `personal` unless `--personal`.
+  `PRAX_TOKEN` is the administrator and sees all. The filter is in the
+  store, keyed by `store.VIEWER` (a context variable the door sets for a
+  named token's request and copies into any thread it starts): a read
+  that takes a document or a chunk is `@_guards`ed (hidden: as if absent),
+  a read of many rows filters them (`hidden_documents`, `@_scrubbed`), a
+  search sets hidden documents aside before fusion, the walk drops their
+  edges, and a write to one answers as for a missing document. A named
+  token may call only `auth.RESTRICTED_ROUTES`, the MCP tools' routes;
+  `tests/test_wall.py` walks every one of them and fails when one is
+  added without a case. A new read that takes a document id is guarded
+  the same way, or it is a leak.
 - Timestamps are UTC ISO-8601 strings to the second with `Z`, from
   `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.
 - Tests must not touch `data/`. Use tmp_path fixtures and set

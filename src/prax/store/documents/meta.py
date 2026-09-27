@@ -10,6 +10,7 @@ from typing import Any
 
 from ..base import (
     ASIDE_KINDS,
+    _guards,
     _reading,
     _serialized,
     now,
@@ -235,6 +236,7 @@ _KIND_WORDS = {
 }
 
 
+@_guards("doc", lambda: None)
 def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     """The retrieval field of a document, or None when it does not exist."""
     row = con.execute(

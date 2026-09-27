@@ -7,12 +7,25 @@ is gone or its heartbeat stopped (the door reaps).
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
+import secrets
 import sqlite3
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
 
-from .base import _INDEX_LOCK, _NOW, _indexes, _reading, _serialized, now
+from .base import (
+    _INDEX_LOCK,
+    _NOW,
+    UNASSIGNED,
+    Viewer,
+    _indexes,
+    _reading,
+    _serialized,
+    now,
+)
 
 # What runs on the batch host, for the door and the UI to show: each pass
 # is a row with a heartbeat; one that stops beating without finishing is
@@ -394,3 +407,96 @@ def running_jobs(con: sqlite3.Connection) -> int:
     return int(
         con.execute("SELECT count(*) FROM jobs WHERE status = 'running'").fetchone()[0]
     )
+
+
+# ---------------------------------------------------------------- tokens
+# Named API tokens beside the administrator's PRAX_TOKEN (stage U, the
+# wall). A token is a name, the modules it sees and whether it sees
+# personal documents; only the sha256 of its secret is kept. The door is
+# the only writer, so the lookup the middleware makes on every request is
+# served from memory and forgotten on every change.
+
+TOKEN_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,39}")
+_tokens: dict[str, dict[str, Any]] | None = None
+
+
+def _token_hash(secret: str) -> str:
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+
+@_serialized
+def add_token(
+    con: sqlite3.Connection,
+    name: str,
+    *,
+    domains: list[str] | None = None,
+    personal: bool = False,
+) -> str:
+    """A new named token; returns its secret, which is kept nowhere."""
+    global _tokens
+    if not TOKEN_NAME.fullmatch(name):
+        raise ValueError("a token name is lowercase letters, digits, - and _")
+    if con.execute("SELECT 1 FROM tokens WHERE name = ?", (name,)).fetchone():
+        raise ValueError(f"a token named {name!r} exists; remove it first")
+    secret = "prax_" + secrets.token_urlsafe(32)
+    con.execute(
+        "INSERT INTO tokens (name, hash, domains, personal) VALUES (?, ?, ?, ?)",
+        (
+            name,
+            _token_hash(secret),
+            json.dumps(sorted(set(domains))) if domains else None,
+            int(bool(personal)),
+        ),
+    )
+    con.commit()
+    _tokens = None
+    return secret
+
+
+@_reading
+def list_tokens(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The named tokens, without their secrets."""
+    return [
+        {
+            "name": r["name"],
+            "domains": json.loads(r["domains"]) if r["domains"] else None,
+            "personal": bool(r["personal"]),
+            "created_at": r["created_at"],
+        }
+        for r in con.execute(
+            "SELECT name, domains, personal, created_at FROM tokens ORDER BY name"
+        )
+    ]
+
+
+@_serialized
+def remove_token(con: sqlite3.Connection, name: str) -> bool:
+    global _tokens
+    cur = con.execute("DELETE FROM tokens WHERE name = ?", (name,))
+    con.commit()
+    _tokens = None
+    return cur.rowcount > 0
+
+
+@_reading
+def token_viewer(con: sqlite3.Connection, secret: str) -> Viewer | None:
+    """The viewer a named token's secret stands for, or None."""
+    global _tokens
+    if _tokens is None:
+        _tokens = {
+            str(r["hash"]): dict(r)
+            for r in con.execute("SELECT name, hash, domains, personal FROM tokens")
+        }
+    row = _tokens.get(_token_hash(secret))
+    if row is None:
+        return None
+    domains = None
+    if row["domains"]:
+        from prax import ontology
+
+        onto = ontology.current()
+        seen: set[str] = set()
+        for d in json.loads(row["domains"]):
+            seen |= set(onto.within(d)) if d != UNASSIGNED else {UNASSIGNED}
+        domains = frozenset(seen)
+    return Viewer(str(row["name"]), domains, bool(row["personal"]))

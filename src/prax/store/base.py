@@ -12,11 +12,14 @@ from __future__ import annotations
 
 import functools
 import hashlib
+import json
 import re
 import sqlite3
 import threading
 import time
 from collections.abc import Callable
+from contextvars import ContextVar
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
@@ -90,6 +93,7 @@ P = ParamSpec("P")
 
 
 R = TypeVar("R")
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 _depth = threading.local()
@@ -156,6 +160,139 @@ def _reading(fn: Callable[P, R]) -> Callable[P, R]:
     seventeen-second scan under the lock each worker cycle was what
     "loading takes ages" was."""
     return _guarded(fn, lock=False)
+
+
+# ---------------------------------------------------------------- the wall
+# Who is reading (stage U). The door sets the viewer for a request made
+# with a named token; none is set for the administrator's token, for the
+# door's own passes, for scripts and for tests, which see everything. A
+# restricted viewer does not see a document the owner marked personal (or
+# a rule suspects), nor one outside the modules its token is given, and
+# every read below that takes a document or a chunk, or returns rows of
+# them, answers as if such a document were not there.
+
+
+@dataclass(frozen=True)
+class Viewer:
+    name: str
+    # the modules it sees, with the ones built on them (``Ontology.within``)
+    # and ``unassigned`` for documents without a set; None: every module
+    domains: frozenset[str] | None = None
+    personal: bool = False  # sees documents marked or suspected personal
+
+
+VIEWER: ContextVar[Viewer | None] = ContextVar("prax_viewer", default=None)
+UNASSIGNED = "unassigned"
+
+
+def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
+    """The documents the current viewer may not see; empty for none."""
+    viewer = VIEWER.get()
+    if viewer is None:
+        return frozenset()
+    out: set[int] = set()
+    if not viewer.personal:
+        out |= {
+            int(r[0])
+            for r in con.execute(
+                "SELECT id FROM documents WHERE sensitivity IS NOT NULL"
+            )
+        }
+    if viewer.domains is not None:
+        for doc_id, raw in con.execute(
+            "SELECT id, json_extract(meta, '$.domains') FROM documents"
+        ):
+            held = set(json.loads(raw)) if raw else {UNASSIGNED}
+            if not held & viewer.domains:
+                out.add(int(doc_id))
+    return frozenset(out)
+
+
+def document_hidden(con: sqlite3.Connection, doc_id: int) -> bool:
+    """Whether the current viewer may not see this document."""
+    viewer = VIEWER.get()
+    if viewer is None:
+        return False
+    row = con.execute(
+        "SELECT sensitivity, json_extract(meta, '$.domains') FROM documents"
+        " WHERE id = ?",
+        (int(doc_id),),
+    ).fetchone()
+    if row is None:
+        return False  # not there at all: the read says so itself
+    if row[0] is not None and not viewer.personal:
+        return True
+    if viewer.domains is not None:
+        held = set(json.loads(row[1])) if row[1] else {UNASSIGNED}
+        return not held & viewer.domains
+    return False
+
+
+def chunk_hidden(con: sqlite3.Connection, chunk_id: int) -> bool:
+    if VIEWER.get() is None:
+        return False
+    row = con.execute("SELECT doc_id FROM chunks WHERE id = ?", (int(chunk_id),))
+    got = row.fetchone()
+    return got is not None and document_hidden(con, int(got[0]))
+
+
+def _guards(kind: str, empty: Callable[[], Any]) -> Callable[[F], F]:
+    """A read that takes one document (``kind`` "doc") or chunk ("chunk")
+    as its first argument after the connection answers ``empty()`` when
+    the current viewer may not see it: as if it were not there."""
+    hidden = document_hidden if kind == "doc" else chunk_hidden
+
+    def deco(fn: F) -> F:
+        @functools.wraps(fn)
+        def wrapper(con: sqlite3.Connection, key: int, *a: Any, **k: Any) -> Any:
+            if VIEWER.get() is not None and hidden(con, key):
+                return empty()
+            return fn(con, key, *a, **k)
+
+        return wrapper  # type: ignore[return-value]
+
+    return deco
+
+
+DOC_KEYS = ("doc_id", "source_doc")
+
+
+def scrub(value: Any, hidden: frozenset[int]) -> Any:
+    """``value`` with every dict in a list that names a hidden document
+    (by ``doc_id`` or ``source_doc``) taken out, at any depth; a dict keyed
+    by a hidden document id loses that key."""
+    if not hidden:
+        return value
+    if isinstance(value, list):
+        return [
+            scrub(v, hidden)
+            for v in value
+            if not (
+                isinstance(v, dict)
+                and any(v.get(k) in hidden for k in DOC_KEYS if v.get(k) is not None)
+            )
+        ]
+    if isinstance(value, dict):
+        return {
+            k: scrub(v, hidden)
+            for k, v in value.items()
+            if not (isinstance(k, int) and k in hidden)
+        }
+    return value
+
+
+def _scrubbed(fn: F) -> F:
+    """A read whose rows name documents (by ``doc_id`` or ``source_doc``)
+    loses the rows of documents the current viewer may not see."""
+
+    @functools.wraps(fn)
+    def wrapper(con: sqlite3.Connection, *a: Any, **k: Any) -> Any:
+        out = fn(con, *a, **k)
+        if VIEWER.get() is None:
+            return out
+        return scrub(out, hidden_documents(con))
+
+    return wrapper  # type: ignore[return-value]
 
 
 _local = threading.local()

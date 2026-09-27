@@ -7,7 +7,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ..base import _reading
+from ..base import _guards, _reading, _scrubbed, hidden_documents
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
 
 HUB_TYPES = ("concept", "method", "tool", "dataset")
@@ -52,6 +52,8 @@ def document_facts(
     relations from the document's entity, ``{doc_id: [{rel, name, type}]}``,
     at most ``limit`` per document, canonical entity names, ``cites``
     left out. The "what the library knows" part of an ask bundle."""
+    hidden = hidden_documents(con)
+    doc_ids = [i for i in doc_ids if i not in hidden]
     out: dict[int, list[dict[str, Any]]] = {i: [] for i in doc_ids}
     if not doc_ids:
         return out
@@ -80,6 +82,8 @@ def document_facts(
     return out
 
 
+@_guards("doc", lambda: None)
+@_scrubbed
 @_reading
 def document_context(
     con: sqlite3.Connection,

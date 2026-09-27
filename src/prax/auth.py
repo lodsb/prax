@@ -1,6 +1,8 @@
 """Bearer-token access control for the HTTP door.
 
-One shared secret, ``PRAX_TOKEN``. Every request must carry it, either as
+The administrator's secret is ``PRAX_TOKEN``; named tokens beside it
+(``prax token add``, stage U) see only what they are given. A request must
+carry one of them, either as
 ``Authorization: Bearer <token>`` (scripts, the extension, the agent over
 HTTP) or as the ``prax_session`` cookie the UI obtains from ``POST /session``
 so that plain links to originals work in a browser tab. The static UI files
@@ -19,6 +21,7 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+import re
 from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
@@ -57,6 +60,50 @@ def valid(candidate: str | None) -> bool:
     return hmac.compare_digest(candidate.encode(), expected.encode())
 
 
+# what a named token may call: the routes the MCP tools use (prax.mcp_server),
+# each filtered by the viewer in the store. Anything else is the
+# administrator's, so no route the wall does not cover is in reach.
+RESTRICTED_ROUTES = tuple(
+    (method, re.compile(pattern))
+    for method, pattern in (
+        ("GET", r"/search"),
+        ("GET", r"/get/\d+"),
+        ("GET", r"/chunk/\d+"),
+        ("GET", r"/traverse"),
+        ("GET", r"/documents"),
+        ("GET", r"/doc/\d+/context"),
+        ("GET", r"/page/[^/]+"),
+        ("PUT", r"/page/[^/]+"),
+        ("POST", r"/page/[^/]+/append"),
+        ("POST", r"/ask"),
+        ("POST", r"/link"),
+        ("PUT", r"/doc/\d+/domains"),
+        ("POST", r"/doc/\d+/promote"),
+        ("POST", r"/ingest"),
+        ("POST", r"/ingest/url"),
+        ("POST", r"/ingest/file"),
+    )
+)
+
+
+def restricted_may(request: Request) -> bool:
+    path = request.url.path
+    return any(
+        request.method == method and pattern.fullmatch(path)
+        for method, pattern in RESTRICTED_ROUTES
+    )
+
+
+def named_viewer(request: Request) -> object | None:
+    """The viewer of a named token the request carries, or None."""
+    candidate = presented(request)
+    if not candidate or not candidate.startswith("prax_"):
+        return None
+    from prax import store
+
+    return store.token_viewer(store.thread_connection(), candidate)
+
+
 def allowed(request: Request) -> bool:
     path = request.url.path
     if path in OPEN_PATHS or path.startswith(OPEN_PREFIXES):
@@ -71,6 +118,27 @@ async def middleware(
 ) -> Response:
     if allowed(request):
         return await call_next(request)
+    viewer = named_viewer(request)
+    if viewer is not None:
+        if not restricted_may(request):
+            log.warning(
+                "refused %s %s to token %s: not a route it may call",
+                request.method,
+                request.url.path,
+                getattr(viewer, "name", "?"),
+            )
+            return JSONResponse(
+                {"detail": "this token may not call that route"}, status_code=403
+            )
+        from prax import store
+
+        # every store read of this request answers for this viewer (the
+        # context is copied into the thread a handler runs in)
+        mark = store.VIEWER.set(viewer)  # type: ignore[arg-type]
+        try:
+            return await call_next(request)
+        finally:
+            store.VIEWER.reset(mark)
     reason = (
         "no token configured; only loopback clients are admitted"
         if token() is None

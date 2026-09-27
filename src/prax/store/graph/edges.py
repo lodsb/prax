@@ -11,7 +11,14 @@ from typing import Any
 
 from prax import ontology
 
-from ..base import _NOW, _like_prefix, _reading, _serialized
+from ..base import (
+    _NOW,
+    _like_prefix,
+    _reading,
+    _serialized,
+    document_hidden,
+    hidden_documents,
+)
 
 # the second hop is reached through exactly one)
 
@@ -70,14 +77,41 @@ def find_entities(
         """,
         (pattern, pattern, max(1, min(limit, 200))),
     ).fetchall()
+    hidden = hidden_documents(con)
     out = []
     for r in rows:
         row = dict(r)
+        if hidden and not _said_openly(con, int(row["id"]), hidden):
+            continue  # only documents the viewer may not see name it
         # the name itself matched: nothing to explain
         if pattern.strip("%") in row["name"].lower():
             row.pop("as", None)
         out.append(row)
     return out
+
+
+def _said_openly(
+    con: sqlite3.Connection, entity_id: int, hidden: frozenset[int]
+) -> bool:
+    """Whether a live edge of the entity (or of its aliases) comes from a
+    document the viewer may see, or from none."""
+    group = [
+        int(r[0])
+        for r in con.execute(
+            "SELECT id FROM entities WHERE id = ? OR canonical_id = ?",
+            (entity_id, entity_id),
+        )
+    ]
+    marks = ",".join("?" * len(group))
+    for end in ("src", "dst"):
+        for (doc,) in con.execute(
+            f"SELECT DISTINCT source_doc FROM edges WHERE {end} IN ({marks})"
+            " AND valid_to IS NULL",
+            group,
+        ):
+            if doc is None or doc not in hidden:
+                return True
+    return False
 
 
 @dataclass
@@ -148,6 +182,9 @@ def link(
     is stamped with that ontology's version unless one is given. ``evidence``
     is a short quote from ``source_doc`` that supports the edge.
     """
+    if source_doc is not None and document_hidden(con, source_doc):
+        # a restricted viewer writes to nothing it may not see: as if absent
+        raise ValueError(f"no such document: {source_doc}")
     if confidence not in CONFIDENCE_LEVELS:
         raise ValueError(f"confidence must be one of {CONFIDENCE_LEVELS}")
     onto = ontology.current()

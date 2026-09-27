@@ -13,6 +13,7 @@ from prax import ontology
 from ..base import (
     _reading,
     _serialized,
+    document_hidden,
     now,
 )
 from .meta import get_meta, set_meta
@@ -65,6 +66,9 @@ def set_domains(
     document again, first, and the new reading retires the old. A rule's
     or an importer's assignment leaves the stamp: the backlog pass
     re-selects a document whose subset's version moved in its own time."""
+    # a restricted viewer writes to nothing it may not see: as if absent
+    if document_hidden(con, doc_id):
+        raise KeyError(f"no such document: {doc_id}")
     meta = get_meta(con, doc_id)
     before = meta.get("domains")
     if domains is None:
@@ -306,10 +310,11 @@ def promote(
 ) -> dict[str, Any]:
     """Flag a document for the expensive pass. Returns the flag; a document
     already flagged keeps its first flag."""
-    if (
+    missing = (
         con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
         is None
-    ):
+    )
+    if missing or document_hidden(con, doc_id):  # hidden: as if absent
         raise KeyError(f"no such document: {doc_id}")
     flag = _set_promote(con, doc_id, by=by, reason=reason)
     con.commit()
@@ -500,3 +505,31 @@ def unstamp_extraction(con: sqlite3.Connection, doc_id: int, stamp: str) -> bool
         }
     set_meta(con, doc_id, meta)
     return True
+
+
+SENSITIVITY = ("suspected", "personal")
+
+
+@_serialized
+def set_sensitivity(
+    con: sqlite3.Connection, doc_id: int, state: str | None, *, by: str = "human"
+) -> str | None:
+    """Mark a document personal, suspected, or open again (None): the
+    ``sensitivity`` column a restricted viewer is kept from (stage U), and
+    the decision kept in ``meta.sensitivity`` with who made it and when.
+    Returns the state it had."""
+    if state is not None and state not in SENSITIVITY:
+        raise ValueError(f"sensitivity is one of {SENSITIVITY}, or none")
+    row = con.execute(
+        "SELECT sensitivity, meta FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"] or "{}")
+    meta["sensitivity"] = {"state": state, "by": by, "at": now()}
+    con.execute(
+        "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
+        (state, json.dumps(meta), doc_id),
+    )
+    con.commit()
+    return row["sensitivity"]

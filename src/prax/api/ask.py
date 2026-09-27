@@ -3,6 +3,7 @@ an answer on a page."""
 
 from __future__ import annotations
 
+import contextvars
 import json
 import queue
 import threading
@@ -151,7 +152,12 @@ def _ask_stream(question: str, kw: dict[str, Any]) -> StreamingResponse:
             con.close()
             events.put(None)
 
-    threading.Thread(target=run, name="prax-ask", daemon=True).start()
+    # the request's context goes with it: the viewer of a named token is in
+    # it, and a thread of its own would otherwise read unfiltered (stage U)
+    context = contextvars.copy_context()
+    threading.Thread(
+        target=context.run, args=(run,), name="prax-ask", daemon=True
+    ).start()
 
     def next_event() -> dict[str, Any] | None | bool:
         try:

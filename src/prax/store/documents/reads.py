@@ -9,9 +9,11 @@ from typing import Any
 
 from ..base import (
     _TOKEN,
+    _guards,
     _like_prefix,
     _read_archive,
     _reading,
+    hidden_documents,
 )
 
 
@@ -76,6 +78,7 @@ def meta_index(con: sqlite3.Connection, json_path: str) -> dict[str, int]:
     return {str(r["value"]): r["id"] for r in rows}
 
 
+@_guards("doc", lambda: None)
 @_reading
 def get_document(
     con: sqlite3.Connection,
@@ -172,6 +175,10 @@ def list_documents(
         "json_extract(d.meta, '$.retired') IS " + ("NOT NULL" if retired else "NULL")
     ]
     args: list[Any] = []
+    hidden = hidden_documents(con)
+    if hidden:  # what the viewer may not see is not listed, nor counted
+        clauses.append("d.id NOT IN (SELECT value FROM json_each(?))")
+        args.append(json.dumps(sorted(hidden)))
     if domain == UNASSIGNED:
         # the documents no module was set for, which every module holds
         clauses.append("json_extract(d.meta, '$.domains') IS NULL")
@@ -218,6 +225,7 @@ def list_documents(
     return {"total": total, "items": items}
 
 
+@_guards("doc", list)
 @_reading
 def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     """A document as its chunks in order, with text and structure (the
@@ -237,6 +245,7 @@ def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     return out
 
 
+@_guards("doc", list)
 @_reading
 def read_chunks(
     con: sqlite3.Connection,
@@ -282,6 +291,7 @@ READABLE = (
 )
 
 
+@_guards("doc", lambda: None)
 @_reading
 def find_chunk(
     con: sqlite3.Connection,
@@ -338,6 +348,7 @@ def _equation_head(data: str | None, text: str) -> str:
     return head if len(head) <= HEAD_CHARS else head[: HEAD_CHARS - 1].rstrip() + "…"
 
 
+@_guards("chunk", list)
 def equations_near(
     con: sqlite3.Connection,
     chunk_id: int,
@@ -390,6 +401,7 @@ def equations_near(
     return out
 
 
+@_guards("doc", lambda: None)
 def formula_by_number(
     con: sqlite3.Connection, doc_id: int, number: str
 ) -> dict[str, Any] | None:
@@ -415,6 +427,7 @@ def formula_by_number(
     return None
 
 
+@_guards("doc", list)
 @_reading
 def document_outline(
     con: sqlite3.Connection, doc_id: int, *, limit: int = 20
@@ -436,6 +449,8 @@ def document_outline(
 
 
 def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
+    hidden = hidden_documents(con)
+    doc_ids = [d for d in doc_ids if d not in hidden]
     """Titles by id, for naming documents in a result (unknown ids left
     out; an untitled document is an empty string)."""
     ids = list(dict.fromkeys(int(i) for i in doc_ids))
@@ -448,6 +463,7 @@ def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, st
     return {r["id"]: r["title"] or "" for r in rows}
 
 
+@_guards("chunk", lambda: None)
 @_reading
 def get_chunk(con: sqlite3.Connection, chunk_id: int) -> dict[str, Any] | None:
     """One chunk in full: text, kind, heading, locator and table ``data``."""

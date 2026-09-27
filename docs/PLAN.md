@@ -74,6 +74,37 @@ the review of the lists a person decides goes last.
       `docs/graph-files.md`; the plugin's session-end sync still open)
       **T. Sub-graph export / import**, as designed below: a feature,
       not a repair.
+- [x] (2026-09-28: `prax token`, migration 0029, `tests/test_wall.py`)
+      **U. Tokens and the wall** (niggles.txt, "closed domains";
+      2026-09-27). The library keeps everything, and a client sees only
+      what its token may. `PRAX_TOKEN` stays the administrator. Named
+      tokens (`prax token add NAME [--domains …] [--personal]`) are kept
+      as a hash in a `tokens` table; the secret is printed once. A token
+      says which modules it sees (every one by default) and whether it sees
+      personal documents (no by default). A document carries a
+      `sensitivity` column: `suspected`, `personal`, or none. The filter
+      sits in the store, keyed by the request's viewer, so `ask`, the
+      surfer and every read inherit it: a hidden document is absent from
+      search, get, chunks, lists, pages, context and the graph (an edge from
+      it is not there, nor an entity only it names). A restricted token
+      may call only the routes the MCP tools use; every other route answers
+      403, so no unfiltered route can be reached. A test walks every
+      allowed route with a hidden document.
+- [ ] **V. What is personal** (niggles.txt, "approximate domains"). Rules
+      in `prax.yaml` (`private:`, outside the repository: the owner's name
+      and other hints live there only): strong cues that mark a document
+      `suspected` alone (an IBAN, a bank statement, a rental contract, a
+      tax assessment), weak ones that count only together (a name with an
+      invoice word), paths. The rules run when a text is indexed, so a NAS
+      send closes personal files as they land, and as a `maintain` pass
+      over the library. They only ever suspect: a person confirms or
+      releases on the Review page's "personal?" tab, and a person's
+      decision is never overturned by a rule. The Zotero library holds
+      bank statements and contracts filed as research (2026-09-27: 15
+      "Kontoauszug", 8 "Mietvertrag", 71 with an IBAN), which is why the
+      mark is apart from the domain.
+- [ ] **W. The administrative side**, after U and V: the tokens, the
+      rules and the personal documents managed from the web interface.
 
 ## The order, agreed 2026-09-27
 

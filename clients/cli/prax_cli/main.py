@@ -19,7 +19,7 @@ import httpx
 from prax.client import Door, DoorError
 from prax.steps import STEPS, WATCHED_STEPS
 
-from . import importing, library, out, running
+from . import importing, library, out, running, tokens
 from . import up as up_cmd
 
 DEFAULT_DOOR = "http://127.0.0.1:8000"
@@ -842,6 +842,38 @@ def build_parser() -> argparse.ArgumentParser:
         description="A check-up when something feels wrong.",
     )
     s.set_defaults(func=running.doctor, needs_door=True)
+
+    s = sub.add_parser(
+        "token",
+        parents=[door_opts, as_json],
+        help="named API tokens: what another client (the MCP server) may see",
+        description=(
+            "Named tokens beside the administrator's PRAX_TOKEN. A named token"
+            " sees only the modules it is given and, unless --personal, no"
+            " document marked or suspected personal; it may call only the"
+            " routes the MCP tools use. The secret is printed once."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax token add mcp                  # every module, nothing personal\n"
+            "  prax token add kitchen-tablet --domain kitchen\n"
+            "  prax token list\n"
+            "  prax token remove mcp"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("action", choices=tokens.ACTIONS)
+    s.add_argument("name", nargs="?", help="the token's name (add, remove)")
+    s.add_argument(
+        "--domain",
+        action="append",
+        metavar="MODULE",
+        help="a module it sees (repeatable; default: every module)",
+    )
+    s.add_argument(
+        "--personal", action="store_true", help="it sees personal documents too"
+    )
+    s.set_defaults(func=tokens.token, needs_door=True)
 
     s = sub.add_parser(
         "export",

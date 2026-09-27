@@ -15,7 +15,7 @@ from typing import Any
 
 from prax import blocks, markup
 
-from .base import _read_archive, _reading, _serialized
+from .base import _read_archive, _reading, _serialized, document_hidden
 from .documents import _set_promote, get_meta, index_text, register, set_meta
 from .graph import Edge, find_edges, invalidate_edge, link, rename_entity
 
@@ -76,7 +76,7 @@ def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
         " FROM pages p JOIN documents d ON d.id = p.doc_id WHERE p.slug = ?",
         (slug,),
     ).fetchone()
-    if row is None:
+    if row is None or document_hidden(con, int(row["doc_id"])):
         return None
     meta = json.loads(row["meta"] or "{}")
     text = _read_archive(row["text_hash"]).decode("utf-8") if row["text_hash"] else ""
@@ -204,6 +204,9 @@ def write_page(
         " WHERE p.slug = ?",
         (slug,),
     ).fetchone()
+    if existing is not None and document_hidden(con, int(existing["doc_id"])):
+        # a restricted viewer writes to nothing it may not see: as if absent
+        raise KeyError(f"no page {slug!r}")
     created = existing is None
     if created:
         title = title or slug.replace("-", " ").capitalize()

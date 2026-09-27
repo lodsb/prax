@@ -2109,3 +2109,31 @@ on.
 - [x] **The archive's folders** (niggles.txt, "file cache"): 56,976 files
       in 256 folders, 177–263 each. No change; a threshold in CLAUDE.md
       (10,000 in one folder) says when a second level is due.
+
+## 2026-09-28: stage U, tokens and the wall
+
+- [x] **Named tokens** (`prax token add NAME [--domain M] [--personal]`,
+      `list`, `remove`; `POST/GET/DELETE /tokens`, the administrator's
+      only). Migration 0029: a `tokens` table keeping the sha256 of each
+      secret (`prax_` and 32 random bytes, printed once), the modules it
+      sees and whether it sees personal documents; and a `sensitivity`
+      column on documents (`suspected`, `personal`), set by
+      `PUT /doc/{id}/sensitivity`.
+- [x] **The filter is in the store**, keyed by the request's viewer
+      (`store.VIEWER`), so `ask`, the surfer and every read inherit it:
+      eleven reads that take a document or a chunk answer as if it were
+      absent; `list_documents` excludes and does not count; a search sets
+      hidden documents aside before the lists are fused, beside the
+      pages that are the model's own answers; the walk drops their edges,
+      so an entity only they name is not reached; `senses` and
+      `find_entities` do not name it; a write to one (a page over it, its
+      domains, a promotion, a link from it) answers "no such document".
+      The streamed `ask` ran on a thread of its own, which would have read
+      unfiltered: it now runs in a copy of the request's context.
+- [x] **A named token may call only the MCP tools' routes**
+      (`auth.RESTRICTED_ROUTES`); every other route answers 403.
+      `tests/test_wall.py` walks each allowed route with a personal
+      document and a personal page and checks that none shows them, and
+      fails when a route is allowed without being walked.
+- The owner's name and the rules for what is personal are stage V, in
+  `prax.yaml` only.
