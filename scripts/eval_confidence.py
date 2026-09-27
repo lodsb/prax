@@ -368,6 +368,7 @@ def main() -> None:
     )
     ap.add_argument("--model", default="claude-opus-5", help="relabel's adjudicator")
     a = ap.parse_args()
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # the tables print ≥
     a.out.mkdir(parents=True, exist_ok=True)
     if a.step == "build":
         build(a.out, a.threshold)

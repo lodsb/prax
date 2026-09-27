@@ -67,3 +67,56 @@ with Opus 93%" at a threshold is a floor, not the accuracy.
   decision about acting on a threshold needs: labels a person gave.
 - The adjudicator should answer each pair by its number, not by its
   position in a list, before it is used again.
+
+## Asked again, by pair number
+
+The adjudicator now names each pair it answers (`resolution.answers_by_number`),
+and a pair it does not answer is neither merged nor declined.
+`eval_confidence.py relabel` put the same 6,126 pairs to Opus 5 again, forty
+a call in a shuffled order: $3.18, fifteen minutes, every pair answered.
+
+| recorded | asked again: same | different |
+|---|---|---|
+| same | 2,978 | 444 |
+| different | 640 | 2,064 |
+
+Opus agrees with its recorded answers on 82% of the pairs. The spelling
+variants it had declined come back "same" (continuous wavelet transform and
+transformation, Wiener filtering), which fits the shift. But most of the
+changes either way are one boundary: a thing against a narrower one, a
+version, or a part (Fourier transform and DFT, Max/MSP and Max/MSP 5,
+Freesound and its API, spatial audio and spatial audio rendering). The
+question as asked does not decide those, and Opus decides them differently
+each time.
+
+Some recorded merges are plainly wrong, and they are in the graph: EUSIPCO
+2018 and 2022, ISMIR 2010 and 2011, TEI '08 and '10. Venue editions were
+folded into one another.
+
+The local model against the new labels:
+
+| map | Brier | ECE | agreement at 0.5 |
+|---|---|---|---|
+| raw | 0.102 | 0.047 | 0.863 |
+| Platt | 0.100 | 0.021 | 0.864 |
+| isotonic | 0.101 | 0.025 | 0.864 |
+
+| settle when (isotonic) | settled | agree with Opus |
+|---|---|---|
+| p ≥ 0.99 or ≤ 0.01 | 20.7% | 0.995 |
+| p ≥ 0.95 or ≤ 0.05 | 43.9% | 0.978 |
+| p ≥ 0.9 or ≤ 0.1 | 64.7% | 0.950 |
+
+Against labels that are not shifted, a threshold of 0.9 settles two pairs
+in three at 95% agreement, where it settled one in five before. Its
+strongest disagreements left are all the same boundary: "user modeling"
+and "user model", "digital delay" and "digital delay line".
+
+## What it means now
+
+- The shift was real, and it was not the whole story. The rest is a
+  question nobody has answered: is a version, an edition, a narrower
+  method or a part the same thing? A rule for that, written into the
+  question both models are asked, comes before the gold sample, or the
+  sample measures the vagueness again.
+- The venue editions merged into one another are to be found and undone.
