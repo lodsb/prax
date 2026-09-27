@@ -1714,6 +1714,22 @@ The ways in:
   while it runs, every `PRAX_INBOX_SCAN` seconds (20 by default; 0
   turns it off). Any file put there is registered through the store
   without another process.
+- **Another machine's tree** (a NAS, an old laptop):
+  `clients/send/prax_send.py`, one file that needs nothing but Python
+  (2.7 or 3). Copy it there and run it there:
+
+      export PRAX_TOKEN=…
+      python prax_send.py /volume1/papers --door http://prax:8000 --dry-run
+      python prax_send.py /volume1/papers --door http://prax:8000 --tags from:nas
+
+  It asks the door which files it already holds, by the hash of their
+  bytes (`POST /known`), and uploads only the others, PDFs and text
+  first. A second run hashes only what changed since (the hashes are
+  kept in `~/.prax_send.json`) and sends only what is new. Each new
+  document keeps where it came from as `meta.origin`, the host and the
+  path. Audio and video stay where they are
+  (`docs/media-by-reference.md`). The options are in
+  `clients/send/README.md`.
 
 **The worker** takes every capture the rest of the way. It asks the
 door for work, does it with the models of its own prax.yaml, and posts
@@ -1774,7 +1790,10 @@ refused goes to `inbox/failed/`. A folder that is not prax's own, such
 as a download folder or a project's PDFs, is uploaded with `prax add
 <folder> -r --domain research`. Every file under it is uploaded.
 Nothing is moved or removed, and a second run finds the files already
-known by hash. An uploaded PDF shows "pending" in the Inbox view until a
+known by hash. On a machine without prax installed, or for a large tree
+of which the door already holds most, `prax_send.py` does the same job:
+it asks before it sends, so a second run over ten thousand files costs
+ten requests, not ten thousand uploads. An uploaded PDF shows "pending" in the Inbox view until a
 worker has been over it, or "no text found" when every extractor tried
 and found none. The view refreshes itself while something is pending.
 

@@ -289,7 +289,7 @@ def parse(argv):
     p.add_option(
         "--state",
         default=os.path.join(os.path.expanduser("~"), ".prax_send.json"),
-        help="where the hashes are remembered ('' for nowhere)",
+        help="where the hashes are remembered (--state= for nowhere)",
     )
     p.add_option("--dry-run", action="store_true", help="say what would be sent")
     p.add_option("--insecure", action="store_true", help="accept any TLS certificate")

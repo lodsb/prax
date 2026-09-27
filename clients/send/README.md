@@ -28,9 +28,11 @@ What it does, in order:
    this machine's name (`--host`) and the file's path.
 
 `--domains` and `--tags` apply to every file. `--max-mb` (256, the door's
-default limit) skips larger files. `--insecure` accepts a self-signed
-certificate. A refused token stops the run at once (exit 2); a file that
-fails is counted and the run goes on (exit 1 at the end).
+default limit) skips larger files. `--state=` (empty, written as one
+argument, which PowerShell also passes on) keeps no hashes at all.
+`--insecure` accepts a self-signed certificate. A refused token stops the
+run at once (exit 2); a file that fails is counted and the run goes on
+(exit 1 at the end).
 
 Audio and video are not sent. How the library should hold a file too
 large to copy, by reference to where it lives, is written down in
