@@ -58,10 +58,10 @@ from prax import calibration as cal
 from prax import config, models, resolution
 
 QUESTION = (
-    "Decide whether the two names refer to the same entity in a research"
-    " library about audio and signal processing. Spelling variants,"
-    " abbreviations and singular/plural are the same thing; different"
-    " methods, people or concepts are not. Answer yes or no.\n\n"
+    "Decide whether the two names refer to the same entity in a personal"
+    " library (research papers, manuals, recipes, notes).\n\n"
+    + resolution.SAME_RULE
+    + "\nAnswer yes or no.\n\n"
 )
 
 

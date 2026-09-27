@@ -66,6 +66,9 @@ gives the folded name its own place in the graph again.
 
 ## Rules of thumb
 
+The models that decide pairs are given the same rules
+(`resolution.SAME_RULE`), so your decisions and theirs can be compared.
+
 The same thing:
 
 - spelling variants: *spatialisation* and *spatialization*,
@@ -74,16 +77,19 @@ The same thing:
 - an abbreviation and its full name: *NMF* and *non-negative matrix
   factorization*
 - the same name in another language: *Notenschrift* and *notation*
+- a name with filler words around it: *the Wiener filter method* and
+  *Wiener filter*
 
 Different things:
 
-- a general idea and a variant of it: *Kalman smoother* and *extended
-  Kalman smoother*
-- two editions or years of one event: the 23rd and the 26th ISMIR
+- a narrower idea and the general one: *extended Kalman smoother* and
+  *Kalman smoother*, *discrete Fourier transform* and *Fourier transform*
+- a version, edition or year: *Max/MSP 5* and *Max/MSP*, the 23rd and
+  the 26th ISMIR
+- a part or interface and the whole: *Freesound API* and *Freesound*
+- a task and a tool that does it: *beat tracking* and a *beat tracker*
 - two names that share all but one word: *ongoing costs* and *exit
   costs*
-- a thing and the tool that does it, when both matter: *beat tracking*
-  (the task) and a *beat tracker* (a program)
 
 When a merge would make a search for one name find documents about the
 other, and you would be surprised, they are different.

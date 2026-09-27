@@ -390,12 +390,28 @@ class ClaudeAdjudicator:
         return out
 
 
+# What "the same thing" means, for every judge of a pair: the paid model,
+# the local one, and the person on the Review page (docs/review.md, "Rules
+# of thumb", says the same). Asked without it, Opus decided a version or a
+# narrower method differently each time (docs/eval/confidence-2026-09-28.md).
+SAME_RULE = (
+    "The same thing: spelling variants; singular and plural; an abbreviation"
+    " and its full name; the same name in another language; a name with filler"
+    ' words around it ("the Wiener filter method" and "Wiener filter").\n'
+    "Different things: a narrower method, concept or kind and the broader one"
+    ' ("discrete Fourier transform" and "Fourier transform", "spatial audio'
+    ' rendering" and "spatial audio"); a version, edition or year and the thing'
+    ' or another edition ("Max/MSP 5" and "Max/MSP", "ISMIR 2010" and "ISMIR'
+    ' 2011"); a part or interface and the whole ("Freesound API" and'
+    ' "Freesound"); a task and a tool that does it ("beat tracking" and "beat'
+    ' tracker"); names that share all but one word ("preorder traversal" and'
+    ' "postorder traversal").\n'
+)
+
 ADJUDICATE = (
     "For each numbered pair below, decide whether the two names refer to the"
     " same entity in a personal library (research papers, manuals, recipes,"
-    " notes). Spelling variants, abbreviations and singular/plural are the"
-    " same thing; different methods, people or concepts are not. Answer every"
-    " pair, each with its number.\n\n"
+    " notes).\n\n" + SAME_RULE + "\nAnswer every pair, each with its number.\n\n"
 )
 ANSWER_SCHEMA: dict[str, Any] = {
     "type": "object",
