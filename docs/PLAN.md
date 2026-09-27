@@ -66,8 +66,10 @@ the review of the lists a person decides goes last.
       unmerge the door already has. Each decision is kept as a label, so
       the page also collects Q's gold sample, and it shows the merges Q
       found suspect.
-- [ ] **S. The door's `STATUS_BAD_STACK` exit** (below): a reproduction
-      before any fix, so open-ended.
+- [x] (2026-09-27: not reproduced natively; two unlocked index paths
+      and a third that saved over a mapped file found and closed,
+      `scripts/stress_vectors.py`) **S. The door's `STATUS_BAD_STACK`
+      exit** (below): a reproduction before any fix, so open-ended.
 - [ ] **T. Sub-graph export / import**, as designed below: a feature,
       not a repair.
 
@@ -732,9 +734,10 @@ findings in the order they pay, and one that came out of writing it.
 - Kùzu migration script (only if the entity threshold is crossed)
 - Complement / "blast-radius" SQL tools exposed via MCP
 - Karakeep or Linkwarden as an additional capture front-end feeding the inbox
-- [ ] The door exited once with `STATUS_BAD_STACK` (0xC0000028, a native
+- [x] The door exited once with `STATUS_BAD_STACK` (0xC0000028, a native
       unwind, 2026-09-19 23:38) while an embed post merged the 1.2 GB
       index and a search read it; `prax up` restarted it in a second.
       usearch suspected; the merge no longer holds the index lock for
-      its build. Watch `logs/up.log` for another.
+      its build. Watch `logs/up.log` for another. (2026-09-27, stage S:
+      four native exits in all, none since 2026-09-20; see the log.)
 

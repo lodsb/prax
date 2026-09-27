@@ -252,6 +252,16 @@ def _delta(path: Path) -> vectors.VectorIndex:
     return _open_index(_delta_path(path), writable=True)  # type: ignore[return-value]
 
 
+def _add_to_delta(path: Path, keys: list[int], vectors_: Any) -> None:
+    """Add vectors to the delta beside ``path``: the delta is looked up and
+    written under one hold of ``_INDEX_LOCK``. Looked up before the lock, it
+    could be the one a merge had just closed and replaced, and the add
+    failed on it (``TypeError`` on a closed index, reproduced twice in two
+    minutes by ``scripts/stress_vectors.py`` with a merge a second)."""
+    with _INDEX_LOCK:
+        _delta(path).add(keys, vectors_)
+
+
 def _knn(path: Path, vector: Any, k: int) -> list[tuple[int, float]]:
     """Nearest keys from the main view and the delta, merged by distance;
     a key in both takes the delta's (newer) place."""
@@ -272,14 +282,20 @@ def _knn(path: Path, vector: Any, k: int) -> list[tuple[int, float]]:
 
 
 def _get_vector(path: Path, key: int) -> Any:
-    dpath = _delta_path(path)
-    delta = _indexes.get((str(dpath), True))
-    if delta is None and dpath.exists():
-        delta = _delta(path)
-    if delta is not None and key in delta:
-        return delta.get(key)
-    main = _open_index(path, writable=False)
-    return main.get(key) if main is not None else None
+    """One vector, the delta's when it has it. Under ``_INDEX_LOCK`` like
+    every other use of an index: the delta is written in place by adds,
+    and a merge closes both indexes when it swaps the file. Unlocked, this
+    read raced both (the similar-documents column of a document page,
+    while a worker's embed posts arrived)."""
+    with _INDEX_LOCK:
+        dpath = _delta_path(path)
+        delta = _indexes.get((str(dpath), True))
+        if delta is None and dpath.exists():
+            delta = _delta(path)
+        if delta is not None and key in delta:
+            return delta.get(key)
+        main = _open_index(path, writable=False)
+        return main.get(key) if main is not None else None
 
 
 def _has_vectors(path: Path) -> bool:

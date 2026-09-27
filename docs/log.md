@@ -2018,3 +2018,43 @@ on.
       The vocabulary pass's merges are left out.
 - The page reads are indexed per edge end (a join on `id IN (src, dst)`
   took ten seconds a page): 2–3 s for a page of thirty.
+
+## 2026-09-27: stage S, the door's native exits
+
+- **What `logs/up.log` holds.** Four native exits of the door, none
+  since 2026-09-20: two access violations (0xC0000005) on 2026-09-17 at
+  03:20 and 03:30, and two `STATUS_BAD_STACK` (0xC0000028) on 2026-09-19
+  23:38 and 2026-09-20 01:58. The first pair is already explained
+  (this log, "`prax resolve`'s likely tier out of the door"). The door
+  embedded 130,000 names in-process with onnxruntime, and that work moved
+  to the worker the same evening. The second pair came during embed
+  merges with searches running. The merge stopped building under the
+  lock after it.
+- [x] **The reproduction** (`scripts/stress_vectors.py`). A child process
+      on a temporary store, so a native crash ends only it. One thread
+      adds to the delta the way an embed post does, readers take single
+      vectors the way the similar-documents column does, and a merge
+      runs every second. **No native crash**, over 3.6 million reads and
+      183 merges. **A Python race reproduced twice in two runs.** An add
+      looked up the delta before taking `_INDEX_LOCK`. When a merge swapped
+      the delta in between, the add hit the closed index (`TypeError`). In
+      the door that is an embed post failing with a 500.
+- [x] **Every use of an index now holds the lock.** `_add_to_delta` looks
+      the delta up and adds under one hold, and both `add_vectors` and
+      `add_document_vectors` call it. `_get_vector` reads under the lock;
+      it had read the delta while adds wrote it in place.
+      `compact_vectors` builds on a private copy and swaps under the lock,
+      like `_merge`. It had dropped the views and then saved over the
+      main file unlocked, so a search in between could map the file
+      before it was replaced. It also left its writable copy in the shared
+      table. Two runs of the stress test after the fix: no error, and the
+      writer ran the full two minutes (467 and 477 adds, against 77 and
+      132 before it died).
+- The cost: under the stress test's worst case, reads now wait behind
+  the merge gathering the delta. In the door a merge comes once per
+  50,000 vectors, and a document page reads about twenty.
+- Whether the native exits were these races cannot be shown: the reads
+  that raced only in Python need usearch to release the GIL to race
+  natively. What can be said is that no index is now touched outside
+  the lock, and `tests/test_vector_locks.py` keeps it so (the lock
+  counted, an add across a merge, four seconds of the stress test).

@@ -25,10 +25,10 @@ from .base import (
     _INDEX_LOCK,
     _NOW,
     _TOKEN,
+    _add_to_delta,
     _delta,
     _delta_path,
     _doc_index_path,
-    _drop_index_views,
     _get_vector,
     _has_vectors,
     _index,
@@ -1300,12 +1300,14 @@ def store_embeddings(
         raise RuntimeError("usearch is not installed; vectors cannot be stored")
     if not items:
         return 0
-    idx = _delta(_index_path(model))
     ids = [cid for cid, _, _ in items]
     import numpy as np
 
-    with _INDEX_LOCK:
-        idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, _, v in items]))
+    _add_to_delta(
+        _index_path(model),
+        ids,
+        np.vstack([np.asarray(v, dtype=np.float32) for _, _, v in items]),
+    )
     con.executemany(
         "INSERT INTO chunk_embeddings (chunk_id, model) VALUES (?, ?)"
         " ON CONFLICT(chunk_id) DO UPDATE SET model = excluded.model,"
@@ -1354,12 +1356,14 @@ def store_document_embeddings(
         raise RuntimeError("usearch is not installed; vectors cannot be stored")
     if not items:
         return 0
-    idx = _delta(_doc_index_path(model))
     import numpy as np
 
     ids = [d for d, _ in items]
-    with _INDEX_LOCK:
-        idx.add(ids, np.vstack([np.asarray(v, dtype=np.float32) for _, v in items]))
+    _add_to_delta(
+        _doc_index_path(model),
+        ids,
+        np.vstack([np.asarray(v, dtype=np.float32) for _, v in items]),
+    )
     con.executemany(
         "INSERT INTO document_embeddings (doc_id, model) VALUES (?, ?)"
         " ON CONFLICT(doc_id) DO UPDATE SET model = excluded.model,"
@@ -1695,10 +1699,20 @@ def _index_has(path: Path, ids: list[int]) -> list[int]:
 def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
     """Reconcile the index with the bookkeeping: drop keys whose chunk is
     gone, and forget bookkeeping rows whose vector is missing from the
-    index (so they get embedded again). Saves the index."""
-    _merge(_index_path(model))
-    idx = _index(model, writable=True)
-    assert idx is not None
+    index (so they get embedded again). Saves the index.
+
+    Built like a merge: a private copy loaded, changed and written beside
+    the main file outside ``_INDEX_LOCK``, and swapped in under it. It used
+    to drop the read views and then save over the file unlocked, so a
+    search in between could map the file again before it was replaced; and
+    its writable copy sat in the shared table where any thread found it."""
+    from prax import vectors as vectors_mod
+
+    from .base import VEC_DIM
+
+    path = _index_path(model)
+    _merge(path)
+    idx = vectors_mod.VectorIndex(path, VEC_DIM, writable=True)
     live = {r[0] for r in con.execute("SELECT id FROM chunks")}
     booked = {
         r[0]
@@ -1719,11 +1733,16 @@ def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
                 f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks})", part
             )
         con.commit()
-    _drop_index_views(model)
-    idx.save()
+    tmp = path.with_suffix(path.suffix + ".compacting")
+    idx.save_to(tmp)
     count = len(idx)
-    _indexes.pop((str(_index_path(model)), True), None)
-    idx.close()  # the writable copy is not kept around: the delta takes new vectors
+    idx.close()  # the private copy goes: the delta takes new vectors
+    with _INDEX_LOCK:
+        for key in [(str(path), False), (str(path), True)]:
+            view = _indexes.pop(key, None)
+            if view is not None:
+                view.close()
+        os.replace(tmp, path)
     return {"removed_stale": removed, "forgot_missing": len(missing), "count": count}
 
 
