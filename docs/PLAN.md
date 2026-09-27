@@ -24,7 +24,7 @@ the precondition for communities, then two things a user notices.
       same type twice, a type and its subtype) under a run that
       `unmerge_run` takes back, and a rule for which unrelated type pairs
       may name one thing, measured before anything merges.
-- [ ] **H. The hub entities.** 164 of the 200 biggest hubs are papers,
+- [x] (2026-09-27, see the log) **H. The hub entities.** 164 of the 200 biggest hubs are papers,
       and the biggest is a proceedings volume at degree 1,951: decide what
       a container is and keep it out of the neighbourhoods.
       *Measured 2026-09-27: not a container.* The volume's entity is 118
@@ -36,13 +36,14 @@ the precondition for communities, then two things a user notices.
       second hop nor the hub map lands on. So the fix is the titles:
       - [x] `titles.guess_title(not_title=…)`: the shared title is named to
             the model as not this one, and a guess of it is refused.
-      - [ ] a `shared` reason in `titles_needed` (a title three or more
+      - [x] a `shared` reason in `titles_needed` (a title three or more
             live documents carry), for the watched titles step;
-      - [ ] after a retitle away from a shared title, the document
+      - [x] after a retitle away from a shared title, the document
             extracted again, so its facts leave the shared entity (a new
             reading retires the old);
-      - [ ] applied, and the probe on the local model first. **Blocked:**
-            the local model's files are gone (below).
+      - [x] applied 2026-09-27 after the probe on the local model: 642
+            documents retitled by the first drain, the re-extractions
+            running on the standing worker.
 - [x] (2026-09-27: a rare word's forms the library uses, `compounds.forms`)
       **I. taco and tacos** are different searches: a plural folded on
       the keyword side, measured on the eval set.
@@ -283,7 +284,7 @@ recipe at once. Three independent failures, each wanting a different fix.
       where they could name `document`, so a captured page has to be
       read as a paper for an edge to fit. A version bump and a restamp,
       not a rules change.
-- [ ] **The hub entities** — 164 of the 200 biggest hubs are papers, and
+- [x] (stage H: shared titles) **The hub entities** — 164 of the 200 biggest hubs are papers, and
       the largest, `Proceedings of the International Conference…` at
       degree 1,951, is a container that should probably not be an entity
       at all. Cheap, and a precondition for communities.

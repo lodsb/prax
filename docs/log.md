@@ -1764,3 +1764,33 @@ on.
 - One run of the full suite during stage I failed one test that seven
   runs since have passed. Its name was not captured, and CI now prints
   failures by name.
+
+## 2026-09-27: stage H applied, once the model was back
+
+- The local model was fetched back (20.9 GB and the 0.9 GB projector,
+  the revision prax.yaml names, so its path did not change) and
+  llama-server started by a waiter once the download was whole.
+- **The probe first**, read-only, through the real selection and the
+  real `do_titles`: two documents from each of the ten biggest shared
+  titles. The NIME papers got their own titles, lecture and exercise
+  sheets a title saying which, and where the model found nothing usable
+  (exams, one survey held several times) the document is marked tried
+  and left. The step takes 585 documents in 78 titles, not all 1,820:
+  the rest have no text, were tried before, or carry a title a person
+  or a pass wrote, which the step does not touch.
+- **Applied.** The standing worker's scope is captures and these are
+  Zotero imports, so a one-off drain ran the titles step over
+  everything, 50 a pass: 642 retitled by the time of writing, each
+  retitle away from a shared title asking for a re-extraction, which
+  the standing worker takes (a requested extraction goes first,
+  whatever the scope). No document is titled like the volume any more.
+- **What it looks like halfway.** When the last document leaves a title,
+  `retitle` renames the entity after that document's new title, so the
+  volume's 1,696 edges from 114 documents sit for now on *SoundGrasp*,
+  the last paper retitled. Each re-extraction retires that document's
+  old reading, so they drain as the queue does (262 waiting at the time
+  of writing).
+- The first boot of the fetched model mapped the whole file into RAM
+  (16.6 GB working set, 1.7 GB left free), and Claude Code reaped a
+  background wait under the pressure. The pages are file-backed and
+  reclaimable; the same server stood at 15 GB free before the deletion.
