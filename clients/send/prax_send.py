@@ -76,6 +76,25 @@ SKIP_DIRS = {
     "node_modules",
     "__pycache__",
 }
+# a Windows profile copied by a backup: these are junctions on Windows, and
+# a tool that followed them wrote "Application Data" inside itself over and
+# over (798,470 folders of it on a NAS, 2026-09-28). Nothing to send there
+WINDOWS_PROFILE = {
+    "AppData",
+    "Application Data",
+    "Local Settings",
+    "Temporary Internet Files",
+    "INetCache",
+    "Cookies",
+    "NetHood",
+    "PrintHood",
+    "Recent",
+    "SendTo",
+    "Templates",
+    "Start Menu",
+}
+REPEATS = 3  # a folder name this many times in a row in a path is a loop
+MAX_DEPTH = 40
 MIME = {
     ".md": "text/markdown",
     ".markdown": "text/markdown",
@@ -228,31 +247,70 @@ def fs_text(path):
 # ---------------------------------------------------------------- the tree
 
 
-def walk(roots, exts, progress=None):
-    """Every file under the roots whose suffix is wanted, links not
-    followed, hidden files and NAS clutter left out, as ``(path, size)``.
-    With ``progress``, how far the walk has got."""
-    found = folders = total = 0
+def _looping(parts):
+    """Whether the end of a path repeats one folder name ``REPEATS`` times:
+    a junction a copy followed into itself."""
+    tail = parts[-REPEATS:]
+    return len(tail) == REPEATS and len(set(tail)) == 1
+
+
+def walk(roots, exts, skip=(), max_depth=MAX_DEPTH, progress=None, stats=None):
+    """The folders under the roots, each as ``(folder, [(path, size), ...])``
+    with the files whose suffix is wanted, links not followed. Left out:
+    hidden files and folders, a NAS's clutter, a copied Windows profile's
+    junk (``WINDOWS_PROFILE``), the names in ``skip``, a folder whose name
+    repeats ``REPEATS`` times at the end of its path, one reached twice (by
+    its device and inode), and anything deeper than ``max_depth``.
+    ``stats`` counts what was walked and what was left out."""
+    stats = stats if stats is not None else {}
+    for key in ("folders", "files", "bytes", "left_out"):
+        stats.setdefault(key, 0)
+    leave = SKIP_DIRS | WINDOWS_PROFILE | set(skip)
     for root in roots:
         root = os.path.abspath(root)
         if os.path.isfile(root):
             if os.path.splitext(root)[1].lower() in exts:
-                yield root, os.path.getsize(root)
+                yield os.path.dirname(root), [(root, os.path.getsize(root))]
             continue
+        base = len(root.rstrip(os.sep).split(os.sep))
+        visited = set()
         for here, dirs, files in os.walk(root):
-            folders += 1
+            stats["folders"] += 1
             if progress is not None:
                 progress.show(
-                    "walking: %d files (%s) in %d folders, now %s"
-                    % (found, human_bytes(total), folders, fs_text(here))
+                    "walking: %d folders, %d files (%s) so far, now %s"
+                    % (
+                        stats["folders"],
+                        stats["files"],
+                        human_bytes(stats["bytes"]),
+                        fs_text(here),
+                    )
                 )
-            dirs[:] = sorted(
-                d
-                for d in dirs
-                if not d.startswith(".")
-                and d not in SKIP_DIRS
-                and not os.path.islink(os.path.join(here, d))
-            )
+            try:
+                st = os.stat(here)
+                visited.add((st.st_dev, st.st_ino))
+            except OSError:
+                pass
+            parts = here.rstrip(os.sep).split(os.sep)
+            kept = []
+            for d in sorted(dirs):
+                full = os.path.join(here, d)
+                if d.startswith(".") or d in leave or os.path.islink(full):
+                    stats["left_out"] += 1
+                    continue
+                if _looping(parts + [d]) or len(parts) + 1 - base > max_depth:
+                    stats["left_out"] += 1
+                    continue
+                try:
+                    st = os.stat(full)
+                    if (st.st_dev, st.st_ino) in visited:
+                        stats["left_out"] += 1
+                        continue  # reached before by another way
+                except OSError:
+                    pass
+                kept.append(d)
+            dirs[:] = kept
+            wanted = []
             for name in sorted(files):
                 if name.startswith((".", "~$")):
                     continue
@@ -264,9 +322,11 @@ def walk(roots, exts, progress=None):
                         size = os.path.getsize(path)
                     except OSError:
                         size = 0  # gone, or unreadable: the hashing says which
-                    found += 1
-                    total += size
-                    yield path, size
+                    stats["files"] += 1
+                    stats["bytes"] += size
+                    wanted.append((path, size))
+            if wanted:
+                yield here, wanted
 
 
 def rank(path, exts):
@@ -277,22 +337,87 @@ def rank(path, exts):
 # ---------------------------------------------------------------- hashes
 
 
+def _mtime(folder):
+    try:
+        return int(os.stat(folder).st_mtime)
+    except OSError:
+        return None
+
+
 class State(object):
-    """The hashes of files already hashed, by path, size and mtime."""
+    """What earlier runs learned, kept as a journal of JSON lines that only
+    grows: a hashed file (``{"f": path, "s": size, "m": mtime, "h": sha256}``)
+    and a folder a real run finished (``{"d": folder, "m": mtime}``), each a
+    line written as it happens, the latest line for a path winning when the
+    journal is read. A tree of a million files would otherwise rewrite a
+    file of a hundred megabytes every batch; a run stopped hard loses at
+    most the line it was writing. A state file of the older single-document
+    shape is read and turned into a journal.
+    """
 
     def __init__(self, path):
         self.path = path
-        self.seen = {}
-        self.dirty = 0
+        self.seen = {}  # path -> [size, mtime, sha256]
+        # folders a real run sent in full, with their mtime then: passed over
+        # while the mtime stays (a file added or removed changes it)
+        self.done = {}
+        self.out = None
         if path and os.path.exists(path):
-            try:
-                with open(path) as f:
-                    self.seen = json.load(f).get("files", {})
-            except (IOError, OSError, ValueError):
-                self.seen = {}
+            self._read(path)
+
+    def _read(self, path):
+        try:
+            with open(path) as f:
+                head = f.read(1)
+                f.seek(0)
+                if head == "{" and not f.readline().rstrip().endswith("}"):
+                    f.seek(0)  # the older shape: one document, not lines
+                    kept = json.load(f)
+                    self.seen = kept.get("files", {})
+                    self.done = dict(kept.get("done") or {})
+                    self._rewrite()
+                    return
+                f.seek(0)
+                for line in f:
+                    try:
+                        item = json.loads(line)
+                    except ValueError:
+                        continue  # a line cut short by a stop: the rest holds
+                    if "f" in item:
+                        self.seen[item["f"]] = [item["s"], item["m"], item["h"]]
+                    elif "d" in item:
+                        self.done[item["d"]] = item["m"]
+        except (IOError, OSError, ValueError):
+            self.seen, self.done = {}, {}
+
+    def _rewrite(self):
+        """The journal written anew from what is held (once, on conversion)."""
+        tmp = self.path + ".tmp"
+        with open(tmp, "w") as f:
+            f.writelines(
+                json.dumps({"f": key, "s": size, "m": mtime, "h": digest}) + "\n"
+                for key, (size, mtime, digest) in self.seen.items()
+            )
+            f.writelines(
+                json.dumps({"d": key, "m": mtime}) + "\n"
+                for key, mtime in self.done.items()
+            )
+        if os.name == "nt" and os.path.exists(self.path):
+            os.remove(self.path)  # Python 2 on Windows cannot rename over
+        os.rename(tmp, self.path)
+
+    def _note(self, item):
+        if not self.path:
+            return
+        try:
+            if self.out is None:
+                self.out = open(self.path, "a")  # noqa: SIM115 - kept open for the run, closed by close()
+            self.out.write(json.dumps(item) + "\n")
+        except (IOError, OSError):
+            self.path = None  # nowhere to keep it: the run goes on without
 
     def hash_of(self, path, read=None):
-        """The sha256 of the file, from the cache when its size and mtime
+        """The sha256 of the file, from the journal when its size and mtime
         are what they were. ``read(n)`` is told of every block read, so a
         large file shows progress while it is hashed."""
         st = os.stat(path)
@@ -311,24 +436,32 @@ class State(object):
                     read(len(block))
         digest = h.hexdigest()
         self.seen[key] = [st.st_size, int(st.st_mtime), digest]
-        self.dirty += 1
-        if self.dirty >= 200:
-            self.save()
+        self._note({"f": key, "s": st.st_size, "m": int(st.st_mtime), "h": digest})
         return digest
 
+    def finished(self, folder):
+        """Whether a real run sent this folder in full, as it is now."""
+        was = self.done.get(fs_text(folder))
+        return was is not None and was == _mtime(folder)
+
+    def finish(self, folder):
+        key = fs_text(folder)
+        self.done[key] = _mtime(folder)
+        self._note({"d": key, "m": self.done[key]})
+
     def save(self):
-        if not self.path or not self.dirty:
-            return
-        tmp = self.path + ".tmp"
-        try:
-            with open(tmp, "w") as f:
-                json.dump({"version": VERSION, "files": self.seen}, f)
-            if os.path.exists(self.path) and os.name == "nt":
-                os.remove(self.path)  # Python 2 on Windows cannot rename over
-            os.rename(tmp, self.path)
-            self.dirty = 0
-        except (IOError, OSError):
-            pass
+        """The lines written so far on disk (a batch done, or the run)."""
+        if self.out is not None:
+            try:
+                self.out.flush()
+            except (IOError, OSError):
+                pass
+
+    def close(self):
+        self.save()
+        if self.out is not None:
+            self.out.close()
+            self.out = None
 
 
 # ---------------------------------------------------------------- the door
@@ -434,6 +567,24 @@ def parse(argv):
         help="where the hashes are remembered (--state= for nowhere)",
     )
     p.add_option("--dry-run", action="store_true", help="say what would be sent")
+    p.add_option(
+        "--skip",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="a folder name to leave out, wherever it is (repeatable)",
+    )
+    p.add_option(
+        "--max-depth",
+        type="int",
+        default=MAX_DEPTH,
+        help="folders deeper than this under a root are left out",
+    )
+    p.add_option(
+        "--again",
+        action="store_true",
+        help="look at the folders an earlier run finished, too",
+    )
     p.add_option("--insecure", action="store_true", help="accept any TLS certificate")
     p.add_option("--quiet", action="store_true", help="only the summary")
     p.add_option(
@@ -471,6 +622,12 @@ def exts_of(opts):
 
 
 def run(argv=None):
+    """Walk, hash, ask and send, a batch of folders at a time as the walk
+    finds them, so a tree of millions of files starts sending at once and
+    an interrupted run does not walk it all again: a real run records each
+    folder it finished (every file sent or already there) in the state
+    file, and the next run passes over those (``--again`` looks at them
+    too). A dry run records none."""
     global PROGRESS
     opts, roots = parse(sys.argv[1:] if argv is None else argv)
     exts = exts_of(opts)
@@ -478,41 +635,34 @@ def run(argv=None):
     state = State(opts.state or None)
     host = opts.host or socket.gethostname()
     limit = int(opts.max_mb * (1 << 20))
-    counts = {"seen": 0, "known": 0, "sent": 0, "duplicate": 0, "failed": 0, "large": 0}
+    counts = {
+        "seen": 0,
+        "known": 0,
+        "sent": 0,
+        "duplicate": 0,
+        "failed": 0,
+        "large": 0,
+        "done_before": 0,
+    }
+    walked = {}
     started = time.time()
     progress = PROGRESS = Progress(quiet=opts.quiet, every=opts.progress_every)
-    found = sorted(walk(roots, exts, progress), key=lambda f: rank(f[0], exts))
-    total_bytes = sum(size for _, size in found)
-    progress.clear()
-    say(
-        opts,
-        "%d files (%s) to look at under %s, found in %s"
-        % (
-            len(found),
-            human_bytes(total_bytes),
-            ", ".join(roots),
-            human_time(time.time() - started),
-        ),
-    )
-    batches = (len(found) + BATCH - 1) // BATCH
-    tally = {"bytes": 0, "read": 0, "cached": 0, "since": time.time(), "where": ""}
+    tally = {"bytes": 0, "read": 0, "cached": 0, "since": time.time()}
 
     def status(what, force=False):
-        done, elapsed = tally["bytes"], max(0.001, time.time() - tally["since"])
-        rate = tally["read"] / elapsed  # bytes actually read, not the cache's
-        left = total_bytes - done
-        eta = " | ~%s left" % human_time(left / rate) if rate > 0 and left > 0 else ""
+        elapsed = max(0.001, time.time() - tally["since"])
         progress.show(
-            "%s | %d/%d files | %s of %s | %d cached | %s/s%s"
+            "%s | %d folders walked, %d files looked at (%s), %d cached | %d %s"
+            " | %s/s"
             % (
                 what,
+                walked.get("folders", 0),
                 counts["seen"],
-                len(found),
-                human_bytes(done),
-                human_bytes(total_bytes),
+                human_bytes(tally["bytes"]),
                 tally["cached"],
-                human_bytes(rate),
-                eta,
+                counts["sent"],
+                "to send" if opts.dry_run else "sent",
+                human_bytes(tally["read"] / elapsed),
             ),
             force=force,
         )
@@ -520,13 +670,15 @@ def run(argv=None):
     def read(n):  # every block hashed: a large file shows it is moving
         tally["read"] += n
         tally["bytes"] += n
-        status("hashing, " + tally["where"])
+        status("hashing")
 
-    try:
-        for number, start in enumerate(range(0, len(found), BATCH), 1):
-            batch = []
-            where = tally["where"] = "batch %d/%d" % (number, batches)
-            for path, size in found[start : start + BATCH]:
+    def flush(folders):
+        """Hash, ask about and send the files of these folders; then mark
+        the folders finished whose every file went through."""
+        failed = set()
+        hashed = []
+        for folder, files in folders:
+            for path, size in sorted(files, key=lambda f: rank(f[0], exts)):
                 counts["seen"] += 1
                 try:
                     if size > limit:
@@ -539,56 +691,74 @@ def run(argv=None):
                     if tally["read"] == before:  # from the cache: nothing read
                         tally["cached"] += 1
                         tally["bytes"] += size
-                    batch.append((path, digest))
-                    status("hashing, " + where)
+                    hashed.append((folder, path, digest))
+                    status("hashing")
                 except (IOError, OSError) as exc:
                     counts["failed"] += 1
+                    failed.add(folder)
                     say(opts, "cannot read %s: %s" % (fs_text(path), exc))
-            if not batch:
+        held = set()
+        for start in range(0, len(hashed), BATCH):
+            status("asking the door", force=True)
+            held |= door.known(sorted({h for _, _, h in hashed[start : start + BATCH]}))
+        asked = set()
+        for folder, path, digest in hashed:
+            if digest in held or digest in asked:
+                counts["known"] += 1
                 continue
-            status("asking the door, " + where, force=True)
-            held = door.known(sorted({h for _, h in batch}))
-            asked = set()
-            new = []
-            for path, digest in batch:
-                if digest in held or digest in asked:
-                    continue
-                asked.add(digest)  # the same bytes twice in one tree: once
-                new.append((path, digest))
-            counts["known"] += len(batch) - len(new)
+            asked.add(digest)  # the same bytes twice in one tree: once
             if opts.dry_run:
-                for path, _ in new:
-                    counts["sent"] += 1
-                    say(opts, "would send %s" % fs_text(path))
+                counts["sent"] += 1
+                say(opts, "would send %s" % fs_text(path))
                 continue
-            for n, (path, digest) in enumerate(new, 1):
-                progress.show(
-                    "sending %d/%d of %s | %d sent so far"
-                    % (n, len(new), where, counts["sent"])
-                )
-                fields = {
-                    "by": "send",
-                    "domains": opts.domains,
-                    "tags": opts.tags,
-                    "origin": json.dumps({"host": host, "path": fs_text(path)}),
-                }
-                try:
-                    out = door.send(path, fields)
-                except HTTPError as exc:
-                    if exc.code in (401, 403):
-                        raise
-                    counts["failed"] += 1
-                    say(opts, "refused %s: HTTP %s" % (fs_text(path), exc.code))
-                    continue
-                except (URLError, IOError, OSError) as exc:
-                    counts["failed"] += 1
-                    say(opts, "could not send %s: %s" % (fs_text(path), exc))
-                    continue
-                if out.get("created") is False:
-                    counts["duplicate"] += 1
-                else:
-                    counts["sent"] += 1
-                say(opts, "sent %s -> doc %s" % (fs_text(path), out.get("doc_id")))
+            status("sending")
+            fields = {
+                "by": "send",
+                "domains": opts.domains,
+                "tags": opts.tags,
+                "origin": json.dumps({"host": host, "path": fs_text(path)}),
+            }
+            try:
+                out = door.send(path, fields)
+            except HTTPError as exc:
+                if exc.code in (401, 403):
+                    raise
+                counts["failed"] += 1
+                failed.add(folder)
+                say(opts, "refused %s: HTTP %s" % (fs_text(path), exc.code))
+                continue
+            except (URLError, IOError, OSError) as exc:
+                counts["failed"] += 1
+                failed.add(folder)
+                say(opts, "could not send %s: %s" % (fs_text(path), exc))
+                continue
+            if out.get("created") is False:
+                counts["duplicate"] += 1
+            else:
+                counts["sent"] += 1
+            say(opts, "sent %s -> doc %s" % (fs_text(path), out.get("doc_id")))
+        if not opts.dry_run:
+            for folder, _ in folders:
+                if folder not in failed:
+                    state.finish(folder)
+            state.save()
+
+    say(opts, "looking under %s" % ", ".join(roots))
+    try:
+        pending, waiting = [], 0
+        for folder, files in walk(
+            roots, exts, opts.skip, opts.max_depth, progress, walked
+        ):
+            if not opts.again and state.finished(folder):
+                counts["done_before"] += 1
+                continue
+            pending.append((folder, files))
+            waiting += len(files)
+            if waiting >= BATCH:
+                flush(pending)
+                pending, waiting = [], 0
+        if pending:
+            flush(pending)
     except HTTPError as exc:
         progress.done()
         print("the door refused: HTTP %s (the token?)" % exc.code, file=sys.stderr)
@@ -598,14 +768,18 @@ def run(argv=None):
         print("the door did not answer: %s" % exc, file=sys.stderr)
         return 2
     finally:
-        state.save()
+        state.close()
         PROGRESS = None
     progress.done()
     print(
         "%(seen)d looked at, %(known)d already there, %(sent)d " % counts
         + ("to send" if opts.dry_run else "sent")
         + ", %(duplicate)d the same as one there, %(large)d too large,"
-        " %(failed)d failed" % counts + " (%s)" % human_time(time.time() - started)
+        " %(failed)d failed"
+        % counts
+        + ", %d folders finished before" % counts["done_before"]
+        + ", %d folders left out" % walked.get("left_out", 0)
+        + " (%s)" % human_time(time.time() - started)
     )
     return 1 if counts["failed"] else 0
 

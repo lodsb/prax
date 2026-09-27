@@ -2158,3 +2158,21 @@ on.
 - DjVuLibre is not installed on the desktop yet: `winget install
   DjVuLibre.DjView` asks for an administrator's confirmation, which the
   session cannot give.
+
+## 2026-09-28: the sender on a NAS of five terabytes
+
+- [x] **A walk that ends.** A dry run over the whole NAS walked 798,470
+      folders and never finished: a copied Windows profile's
+      `Application Data` junction, followed by the backup into itself.
+      The walk now leaves out a profile's junk folders, a name repeated
+      three times in a row at the end of a path, a folder reached twice
+      (device and inode), anything below `--max-depth` (40), and names
+      given with `--skip`. The last line counts what was left out.
+- [x] **Sending as it walks.** Files go a batch of about 500 at a time,
+      PDFs first within the batch, so a large tree starts at once.
+- [x] **A run that can be stopped.** The state file is a journal of JSON
+      lines, one per file hashed and per folder finished, appended as it
+      happens (a million files would otherwise rewrite a hundred
+      megabytes a batch). A real run passes over a folder it finished
+      while the folder's mtime stays; `--again` looks anyway. A dry run
+      records no folder. A state file of the older shape is converted.

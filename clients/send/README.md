@@ -50,6 +50,33 @@ files on stdout stays clean to pipe or grep. `--quiet` turns it off.
     nohup python prax_send.py /volume1/papers --door http://prax:8000 > send.log 2>&1 &
     tail -f send.log
 
+## A large tree
+
+On a NAS of several terabytes the sender works a batch of folders at a
+time as it walks, so it starts sending at once. PDFs and text go first
+within each batch. A real run records each folder it finished in the
+state file, with the folder's modification time. The next run passes
+over those folders, unless a file was added or removed there since.
+Stop it with Ctrl-C whenever you like, and start it again later: it goes
+on where it was. `--again` looks at the finished folders too. A dry run
+records nothing.
+
+The state file is a journal: one short line per file hashed and per
+folder finished, written as it happens. A stop loses at most the line
+being written.
+
+Some folders are left out on purpose:
+
+- a copied Windows profile's junk (`AppData`, `Application Data`,
+  `Local Settings` and the like). A backup that followed those links
+  copied them into themselves, thousands of levels deep;
+- a folder whose name appears three times in a row in its path, which
+  is such a loop;
+- anything below `--max-depth` levels (40);
+- any folder named with `--skip NAME`, as often as you like.
+
+The last line of a run says how many folders were left out.
+
 Audio and video are not sent. How the library should hold a file too
 large to copy, by reference to where it lives, is written down in
 `docs/media-by-reference.md` and not built.

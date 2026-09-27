@@ -132,13 +132,24 @@ def test_the_sender_sends_what_the_door_lacks_and_nothing_twice(
     assert first["origin"]["host"] == "nas"
     assert first["origin"]["path"].endswith("copy.txt")
     assert "from:nas" in first.get("tags", [])
-    # a second run hashes nothing again and sends nothing
-    assert json.loads(state.read_text())["files"]
+    # a second run passes over the folder the first one finished
+    lines = [json.loads(x) for x in state.read_text().splitlines()]
+    assert any("h" in x for x in lines) and any("d" in x for x in lines)
     assert sender.run([*args, "--quiet"]) == 0
+    out = capsys.readouterr().out
+    assert "0 looked at" in out and "1 folders finished before" in out
+    # --again looks at it anyway, from the hash cache, and sends nothing
+    assert sender.run([*args, "--quiet", "--again"]) == 0
     assert "3 looked at, 3 already there, 0 sent" in capsys.readouterr().out
+    # a file added to a finished folder is looked at: the folder changed
+    (tree / "papers" / "three.txt").write_text("a third " * 40)
+    import os
+
+    os.utime(tree / "papers", (1, 1))  # a folder mtime that surely moved
+    assert sender.run([*args, "--quiet", "--dry-run"]) == 0
+    assert "1 to send" in capsys.readouterr().out
     # a wrong token stops at once, and says why
     token.write_text("wrong")
-    (tree / "papers" / "three.txt").write_text("a third " * 40)
     assert sender.run([*args, "--quiet"]) == 2
     assert "HTTP 401" in capsys.readouterr().err
 
@@ -216,6 +227,41 @@ def test_the_walk_keeps_sizes_and_says_where_it_is(tmp_path: Path) -> None:
     log = _Stream(tty=False)
     p = sender.Progress(stream=log, every=1)
     p.every = 0  # every folder, for the test
-    found = sorted(sender.walk([str(tmp_path)], [".pdf", ".txt"], p))
-    assert [size for _, size in found] == [100, 50]
-    assert "walking: " in log.text and "folders, now" in log.text
+    found = sorted(sender.walk([str(tmp_path)], [".pdf", ".txt"], progress=p))
+    assert [[size for _, size in files] for _, files in found] == [[50], [100]]
+    assert "walking: " in log.text and "so far, now" in log.text
+
+
+def test_the_walk_leaves_a_profile_loop_and_its_junk_out(tmp_path: Path) -> None:
+    """A backup of a Windows profile followed the "Application Data"
+    junction into itself: 798,470 folders on a NAS, and a walk that never
+    ended (2026-09-28)."""
+    sender = _sender()
+    loop = tmp_path / "home"
+    for name in ("Docs", "Docs", "Docs", "Docs"):
+        loop = loop / name
+    loop.mkdir(parents=True)
+    (loop / "deep.pdf").write_bytes(b"x")
+    (tmp_path / "home" / "Docs" / "paper.pdf").write_bytes(b"y")
+    (tmp_path / "home" / "Application Data" / "Application Data").mkdir(parents=True)
+    (tmp_path / "home" / "Application Data" / "junk.pdf").write_bytes(b"z")
+    (tmp_path / "home" / "Mine").mkdir()
+    (tmp_path / "home" / "Mine" / "own.pdf").write_bytes(b"w")
+    stats: dict[str, int] = {}
+    found = {
+        Path(path).name
+        for _, files in sender.walk(
+            [str(tmp_path)], [".pdf"], skip=["Mine"], stats=stats
+        )
+        for path, _ in files
+    }
+    # the third "Docs" in a row is a loop; the profile's junk and the named
+    # folder are left out
+    assert found == {"paper.pdf"}
+    assert stats["left_out"] >= 3
+    shallow = {
+        Path(path).name
+        for _, files in sender.walk([str(tmp_path)], [".pdf"], max_depth=1)
+        for path, _ in files
+    }
+    assert shallow == set()  # the pdfs are two folders down
