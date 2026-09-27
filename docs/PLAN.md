@@ -27,6 +27,22 @@ the precondition for communities, then two things a user notices.
 - [ ] **H. The hub entities.** 164 of the 200 biggest hubs are papers,
       and the biggest is a proceedings volume at degree 1,951: decide what
       a container is and keep it out of the neighbourhoods.
+      *Measured 2026-09-27: not a container.* The volume's entity is 118
+      NIME papers whose title (from each PDF's metadata, and in Zotero) is
+      the volume's name, merged by that name into one. 1,820 live documents
+      share a title with another: course names on exercise sheets, a LaTeX
+      template's sample title on 89. Most other paper hubs are long
+      documents, whose degree follows their length and which neither the
+      second hop nor the hub map lands on. So the fix is the titles:
+      - [x] `titles.guess_title(not_title=…)`: the shared title is named to
+            the model as not this one, and a guess of it is refused.
+      - [ ] a `shared` reason in `titles_needed` (a title three or more
+            live documents carry), for the watched titles step;
+      - [ ] after a retitle away from a shared title, the document
+            extracted again, so its facts leave the shared entity (a new
+            reading retires the old);
+      - [ ] applied, and the probe on the local model first. **Blocked:**
+            the local model's files are gone (below).
 - [ ] **I. taco and tacos** are different searches: a plural folded on
       the keyword side, measured on the eval set.
 - [ ] **J. One workflow for maintenance and healing**, where there are

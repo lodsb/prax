@@ -1700,3 +1700,24 @@ on.
       unrecorded merges of that round stay unrecorded; they were
       same-name merges, correct as made. The migration took 0.4 s on a
       copy.
+
+## 2026-09-27: stage H stopped, the local model is gone
+
+- The biggest hub is not a container. The entity *Proceedings of the
+  International Conference on New Interfaces for Musical Expression*
+  (degree 1,947, every edge outward) is 118 NIME papers whose title, in
+  each PDF's metadata and in Zotero, is the volume's name, merged into
+  one by that name. 1,820 live documents share a title with another.
+  The fix is to retitle them, with the shared title named to the model as
+  not this one (`not_title`, done) and a re-extraction after, so the facts
+  leave the shared entity (to do).
+- **The titles probe found the local model broken.** llama-server
+  answered `3333…` to every prompt (an empty string under the titles
+  step's newline stop). Restarted, it could not open its weights:
+  `~/.cache/huggingface/hub` is gone, the 35B GGUF and its `mmproj` with
+  it. `~/.cache` was last modified 2026-09-26 22:12 local time. Nothing
+  garbled reached the store: the model steps' own checks refused it, and
+  the last good output was in the 21:00 UTC hour. The embedder is in
+  `C:/prax-data/models` and was not touched, so search and embedding run.
+  llama-server is paused (`prax up --start llama-server` once the files
+  are back); every model step waits until then.

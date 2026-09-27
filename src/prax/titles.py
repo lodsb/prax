@@ -355,6 +355,7 @@ def user_message(
     filename: str | None,
     heading: str | None = None,
     pdf_title: str | None = None,
+    not_title: str | None = None,
 ) -> str:
     parts = []
     if filename:
@@ -363,6 +364,14 @@ def user_message(
         parts.append(f"First heading in the text: {heading}")
     if pdf_title:
         parts.append(f"Title in the PDF metadata (often wrong): {pdf_title}")
+    if not_title:
+        # a title many documents carry is the collection, the course or the
+        # template they came in: the running header, not this document
+        parts.append(
+            f"Not this title, which many other documents carry too: {not_title}"
+            " (the volume, course or template it came in; find the document's"
+            " own title, below that line)"
+        )
     parts += ["", "Beginning of the document:", "", head(text), "", "Title:"]
     return "\n".join(parts)
 
@@ -411,6 +420,15 @@ def acceptable(title: str, *, filename: str | None) -> bool:
     return not SECTION_HEADING.match(title) or len(title) > 40
 
 
+def _same_title(a: str, b: str) -> bool:
+    """Is one the other, or its start (a header printed longer or shorter
+    than the stored title)? Words of four letters or more, case aside."""
+    x = [w.casefold() for w in WORD.findall(a)]
+    y = [w.casefold() for w in WORD.findall(b)]
+    n = min(len(x), len(y))
+    return n >= 2 and x[:n] == y[:n]
+
+
 def guess_title(
     runtime: extraction.Runtime,
     text: str,
@@ -418,10 +436,17 @@ def guess_title(
     filename: str | None,
     heading: str | None = None,
     pdf_title: str | None = None,
+    not_title: str | None = None,
 ) -> Guess | None:
     out, usage = runtime.chat(
         SYSTEM,
-        user_message(text, filename=filename, heading=heading, pdf_title=pdf_title),
+        user_message(
+            text,
+            filename=filename,
+            heading=heading,
+            pdf_title=pdf_title,
+            not_title=not_title,
+        ),
         max_tokens=60,
         temperature=0.0,
         stop=["\n"],
@@ -429,5 +454,7 @@ def guess_title(
     title = parse(out)
     if title is None or not acceptable(title, filename=filename):
         return None
+    if not_title and _same_title(title, not_title):
+        return None  # the shared one again: the header, not the document
     title = tidy(title)
     return Guess(title=title, confidence=printed(title, text), usage=usage)

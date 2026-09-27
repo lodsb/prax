@@ -225,3 +225,40 @@ def test_init_db_refuses_a_newer_store(con: sqlite3.Connection) -> None:
     con.execute("PRAGMA user_version = 999")
     with pytest.raises(RuntimeError, match="schema version 999"):
         store.init_db(con)
+
+
+class _Answers:
+    """A titles model that gives one answer."""
+
+    name = "stub"
+
+    def __init__(self, answer: str) -> None:
+        self.answer = answer
+        self.asked: list[str] = []
+
+    def chat(self, system: str, user: str, **kw: object) -> tuple[str, dict]:
+        self.asked.append(user)
+        return self.answer, {}
+
+
+def test_a_title_many_documents_share_is_not_given_back() -> None:
+    """118 NIME papers carried the proceedings volume's name as their
+    title, and the volume's running header is the first line of each: a
+    guess of it again is refused, and the model is told which it is."""
+    shared = "Proceedings of the International Conference on New Interfaces"
+    text = (
+        "Proceedings of the International Conference on New Interfaces for"
+        " Musical Expression, 30 May - 1 June 2011, Oslo, Norway\n\n"
+        "# Nuvolet: 3D Gesture-driven Collaborative Audio Mosaicing\n\n"
+        + "We present Nuvolet. "
+        * 40
+    )
+    again = _Answers(
+        "Proceedings of the International Conference on New Interfaces for"
+        " Musical Expression"
+    )
+    assert titles.guess_title(again, text, filename=None, not_title=shared) is None
+    assert "Not this title" in again.asked[0]
+    own = _Answers("Nuvolet: 3D Gesture-driven Collaborative Audio Mosaicing")
+    got = titles.guess_title(own, text, filename=None, not_title=shared)
+    assert got is not None and got.title.startswith("Nuvolet")
