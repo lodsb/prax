@@ -652,7 +652,7 @@ kept apart, $2.59 with Opus 5, a tenth of a cent a decision.
 a process that opens the database file, for a host without a worker.
 
 **The review page decides the rest by hand** (Review, the tabs beside
-the queue of facts that did not fit):
+the queue of facts that did not fit; the guide is `docs/review.md`):
 
 - *same thing?* — the likely pairs nobody has decided (740 on
   2026-09-27), closest names first. Same folds the one with fewer edges
