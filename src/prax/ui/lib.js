@@ -222,6 +222,42 @@ function upPanel(u) {
     <p id="up-msg" class="muted"></p>
   </section>`;
 }
+// The regions of the library (GET /communities): the partition of the
+// topical entities the maintain pass rebuilds nightly, each named and
+// described by the communities step. A region without a name yet is
+// shown by its first members; a summary whose members moved says so.
+function regionName(c) {
+  return c.label || (c.members || []).slice(0, 3).join(", ") || `region ${c.id}`;
+}
+function regionList(list) {
+  if (!list || !list.length) return "";
+  const items = list.map((c) => `<li><a href="#graph?community=${c.id}">${esc(regionName(c))}</a>
+    <span class="muted">${c.size} things${c.summary_state === "stale" ? " · the summary predates its members" : ""}</span>
+    ${c.summary ? `<div class="muted">${esc(c.summary)}</div>` : ""}</li>`).join("");
+  return `<section class="regions"><h2 style="font-size:1rem;margin:1rem 0 .3rem">Regions of the library</h2><ul class="entities">${items}</ul></section>`;
+}
+function regionPage(c) {
+  if (!c) return `<p class="muted">No such region.</p>`;
+  const member = (m) => `<a href="#graph?entity=${encodeURIComponent(m.name)}&type=${encodeURIComponent(m.type)}">${esc(m.name)}</a> <span class="muted">${esc(m.type)}</span>`;
+  const up = c.parent != null ? `<p class="muted">Part of <a href="#graph?community=${c.parent}">region ${c.parent}</a>.</p>` : "";
+  const summary = c.summary
+    ? `<p>${esc(c.summary)}${c.summary_state === "stale" ? ` <span class="muted">(written before its members last moved)</span>` : ""}</p>`
+    : `<p class="muted">Not described yet: the communities step names it.</p>`;
+  const parts = (c.parts || []).length
+    ? `<h3 style="font-size:.95rem">Its parts</h3><ul class="entities">${c.parts.map((p) => `<li><a href="#graph?community=${p.id}">${esc(regionName(p))}</a> <span class="muted">${p.size} things</span></li>`).join("")}</ul>`
+    : "";
+  const docs = (c.documents || []).length
+    ? `<h3 style="font-size:.95rem">Documents naming most of it</h3><ul class="entities">${c.documents.map((d) => `<li><a href="#doc/${d.id}">${esc(d.title || `doc ${d.id}`)}</a> <span class="muted">${d.named} of its things</span></li>`).join("")}</ul>`
+    : "";
+  return `<div class="region">
+    <h2 style="font-size:1.1rem;margin:.5rem 0">${esc(regionName(c))} <span class="muted">· ${c.size} things</span></h2>
+    ${up}${summary}${parts}
+    <h3 style="font-size:.95rem">What it is made of</h3>
+    <ul class="entities">${(c.members || []).map((m) => `<li>${member(m)}</li>`).join("")}</ul>
+    ${docs}
+  </div>`;
+}
+
 // What the paid steps have cost, and what is left of the budget. A host
 // whose models are all local has an empty ledger and no limits, and the
 // panel says so in one line. Money is what was charged at the price of
@@ -324,5 +360,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

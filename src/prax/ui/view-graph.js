@@ -426,6 +426,7 @@ async function viewGraph(arg, p) {
   const entity = p.entity || arg || "";
   const domain = p.domain || "";
   const docId = p.doc || "";
+  const communityId = p.community || "";
   await modules();
   view.classList.add("wide");  // the canvas takes the page, like a document's text
   view.innerHTML = `
@@ -441,6 +442,13 @@ async function viewGraph(arg, p) {
   });
   const out = document.getElementById("graph-out");
   try {
+    if (communityId) {
+      // one region of the library: what it covers, its parts, its things
+      let got = null;
+      try { got = await api(`/communities/${encodeURIComponent(communityId)}`); } catch (_) { /* gone at a rebuild */ }
+      out.innerHTML = regionPage(got);
+      return;
+    }
     if (docId) {
       // one document's graph: what it says, its own entity's facts first
       const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
@@ -484,6 +492,13 @@ async function viewGraph(arg, p) {
       const overview = await api("/graph/overview", { limit: 30, domain: domain || undefined });
       if (!overview.nodes.length) { out.innerHTML = `<p class="muted">The graph is empty; run an extraction first.</p>`; return; }
       graph.merge(overview.edges, null, overview.nodes, overview.links);
+      if (!domain) {
+        // below the hubs, the regions they sit in
+        try {
+          const regions = (await api("/communities", { level: 0, limit: 40 })).communities;
+          out.insertAdjacentHTML("beforeend", regionList(regions));
+        } catch (_) { /* an older door */ }
+      }
       return;
     }
     if (!entity) {
@@ -509,7 +524,7 @@ async function viewGraph(arg, p) {
     const panel = document.getElementById("graph-panel");
     const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
     document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
-    const edges = (await api("/traverse", { entity, hops: 1, limit: 0 })).edges;
+    const edges = (await api("/traverse", { entity, hops: 1, limit: 0, type: p.type || "" })).edges;
     if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity.</p>`; return; }
     const first = edges.find((e) => e.src === entity || e.dst === entity);
     if (!first) { graph.merge(edges, null); return; }

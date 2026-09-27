@@ -101,6 +101,8 @@ revisit threshold, under "Decision thresholds" below.
    reaches several things (apple the ingredient and the company, a paper
    and the concept it is named after) walks one, the one of `type` or
    else the most connected, and `senses` names them all (`store.senses`).
+   `community` names the region of the library the entity is in, and the
+   part of it (`docs/communities.md`): a few dozen bytes.
    Keep
    responses small; Claude's context is the scarce resource.
 7. **Pi-class hardware target.** *(measured)* No dependency that needs more than

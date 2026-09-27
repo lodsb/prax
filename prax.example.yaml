@@ -80,6 +80,8 @@ steps:
     #                     #   (n_ctx of the model above, less ~2,200 of prompt)
   titles:
     model: local-server
+  communities:          # the regions of the library named and described
+    model: local-server   #   (docs/communities.md); none by default
   vision:
     model: sonnet
   typing:               # the review queue's untyped items (prax work --steps typing)

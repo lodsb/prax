@@ -153,6 +153,28 @@ test("upPanel: the group's holder, what waits, and the buttons offered", () => {
   assert.equal(lib.mb(512), "512 MB");
 });
 
+test("regionList and regionPage: the regions, named or by their members", () => {
+  const list = lib.regionList([
+    { id: 3, size: 132, label: "Everyday cooking", summary: "Onions and garlic.", summary_state: "fresh", members: ["salt"] },
+    { id: 4, size: 90, label: null, summary: null, summary_state: "none", members: ["wavelet", "spectrogram", "fft", "x"] },
+    { id: 5, size: 20, label: "Old", summary: "Once.", summary_state: "stale", members: [] },
+  ]);
+  assert.match(list, /href="#graph\?community=3">Everyday cooking<\/a>/);
+  assert.match(list, />wavelet, spectrogram, fft<\/a>/);  // unnamed: its first members
+  assert.match(list, /the summary predates its members/);
+  assert.equal(lib.regionList([]), "");
+  const page = lib.regionPage({
+    id: 7, level: 1, parent: 3, size: 12, label: "Soups", summary: "Broths.", summary_state: "fresh",
+    members: [{ id: 1, name: "onion", type: "ingredient" }], parts: [],
+    documents: [{ id: 42, title: "Dish 1", named: 4 }],
+  });
+  assert.match(page, /Part of <a href="#graph\?community=3">/);
+  assert.match(page, /href="#graph\?entity=onion&type=ingredient">onion<\/a>/);
+  assert.match(page, /href="#doc\/42">Dish 1<\/a> <span class="muted">4 of its things/);
+  assert.match(lib.regionPage({ id: 8, size: 9, members: [], parts: [], documents: [], summary: null }), /Not described yet/);
+  assert.match(lib.regionPage(null), /No such region/);
+});
+
 test("spendPanel: the budget bars, the ledger, and a host that spends nothing", () => {
   const paid = lib.spendPanel({
     budget: { limits: { daily_usd: 5, monthly_usd: 50 }, spent: { day: 1.234, month: 12.5 }, ok: true, why: "" },

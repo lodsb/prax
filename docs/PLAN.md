@@ -53,7 +53,8 @@ the review of the lists a person decides goes last.
       the door by hash whether it holds each file, and sends what it does
       not (PDFs and text first). Audio and video by reference rather than
       by copy is its own design question, written down, not built.
-- [ ] **P. Communities** (below, "A partition, and a way to keep it"):
+- [x] (2026-09-27: `docs/communities.md`; search and ask as ways in
+      are still open) **P. Communities** (below, "A partition, and a way to keep it"):
       the hub decision it waited on is H.
 - [ ] **Q. A confidence that was measured** (below).
 - [ ] **R. The lists a person decides, last:** a review page for the 741
@@ -521,19 +522,19 @@ entities instead. Nothing paid, nothing new to install.
 
 What it would want, in order:
 
-- [ ] **A partition, and a way to keep it.** Leiden over the live edges,
+- [x] **A partition, and a way to keep it.** Leiden over the live edges,
       folded to canonical entities. It is a derived index like chunks,
       so it may be rebuilt at any time; the question is what triggers a
       rebuild. Probably the `maintain` clock rather than every write.
-- [ ] **A summary per community**, written by the `sections` model over
+- [x] **A summary per community**, written by the `sections` model over
       the cluster's entities and their strongest edges, stamped with
       what it read so a moved partition makes it stale rather than
       wrong — the rule `meta.sections` already follows.
-- [ ] **A way in.** `traverse` names the community an entry point sits
+- [ ] (traverse and the graph view done; search and ask open) **A way in.** `traverse` names the community an entry point sits
       in; `search` may offer it as a hit of its own; `ask` gets a
       cheaper way in than chunks for a question about a region rather
       than a fact.
-- [ ] **A decision about the hubs first.** 164 of the 200 biggest hubs
+- [x] **A decision about the hubs first.** 164 of the 200 biggest hubs
       are papers, and the largest is `Proceedings of the International
       Conference…` at degree 1,951 — a container that should probably
       not be an entity. A partition computed before that is decided

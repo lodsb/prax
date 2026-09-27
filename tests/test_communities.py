@@ -7,11 +7,12 @@ from __future__ import annotations
 import sqlite3
 from collections import Counter
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import communities, store
+from prax import communities, models, store, worker
 
 SIGNAL = ["fourier transform", "wavelet", "spectrogram", "filter bank", "windowing"]
 KITCHEN = ["salt", "onion", "garlic", "olive oil", "butter"]
@@ -159,3 +160,70 @@ def test_the_door_lists_them(client: TestClient) -> None:
     one = client.get(f"/communities/{listed[0]['id']}").json()
     assert len(one["parts"]) == 1 and one["parts"][0]["parent"] == listed[0]["id"]
     assert client.get("/communities/99999").status_code == 404
+
+
+# ---------------------------------------------------------------- the words
+
+
+class Runtime:
+    """A model that answers the same, whatever it is asked."""
+
+    name = "stub"
+
+    def __init__(self, answer: str) -> None:
+        self.answer = answer
+        self.asked: list[str] = []
+
+    def chat(self, system: str, user: str, **kw: Any) -> tuple[str, dict[str, Any]]:
+        self.asked.append(user)
+        return self.answer, {}
+
+
+def test_a_name_and_what_it_covers_out_of_the_answer() -> None:
+    good = "Everyday cooking\nThis region covers onions, garlic and olive oil in soups."
+    assert communities.parse(good) == (
+        "Everyday cooking",
+        "Covers onions, garlic and olive oil in soups.",
+    )
+    assert (
+        communities.parse("**Kitchen**\n\nSalt, butter and garlic in stews and bakes.")[
+            0
+        ]
+        == "Kitchen"
+    )
+    assert communities.parse("Only a name") is None  # no summary
+    assert (
+        communities.parse("x" * 80 + "\nA long enough summary of the region.") is None
+    )
+    item = {
+        "region": "Signal analysis",
+        "members": [{"name": "wavelet", "type": "method"}],
+        "documents": [{"title": "Paper 1"}],
+    }
+    asked = communities.user_message(item)
+    assert "part of the region “Signal analysis”" in asked
+    assert "- wavelet (method)" in asked and "- Paper 1" in asked
+
+
+def test_the_regions_are_named_through_the_door(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    con = client.app.state.con
+    _library(con)
+    store.maintain(con, only=["communities"])
+    monkeypatch.setenv("PRAX_COMMUNITIES", "stub")
+    rt = Runtime(
+        "Everyday cooking\nOnions, garlic and olive oil, the base of most dishes."
+    )
+    monkeypatch.setattr(models, "runtime", lambda spec: rt)
+    door = worker.Door("http://testserver", client=client, name="test-worker")
+    first = worker.run_once(door, steps=("communities",), log_=lambda t: None)
+    assert first["communities"] == "2 named"  # the regions: parts wait for them
+    assert not any("part of the region" in q for q in rt.asked)
+    second = worker.run_once(door, steps=("communities",), log_=lambda t: None)
+    assert second["communities"] == "2 named"
+    assert all("part of the region “Everyday cooking”" in q for q in rt.asked[2:])
+    assert store.communities_to_summarize(con) == []
+    listed = client.get("/communities").json()["communities"]
+    assert {c["label"] for c in listed} == {"Everyday cooking"}
+    assert all(c["summary_state"] == "fresh" for c in listed)

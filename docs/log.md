@@ -1925,3 +1925,32 @@ on.
       file lives is a list of locations checked by re-hashing, and only
       the derived artifacts are copied. The recommendation is to name the
       location first and to proxy through the door later.
+
+## 2026-09-27: stage P, the regions of the library
+
+- [x] **The hub decision, made structurally.** The partition's nodes are
+      the topical kinds of thing; documents, people, organizations,
+      claims, specs, places and events are left out. The biggest hubs
+      were a university as a venue (725), the library's own author (513)
+      and papers. Left out, they do not need deciding one by one.
+- [x] **The partition** (`prax.communities`). Direct edges plus shared
+      documents, each document weighing the same (1/(m − 1) a pair), among
+      the 8,488 entities named in two documents or more. Louvain, seeded:
+      24 regions (modularity 0.61), and 153 parts from splitting each
+      region of 200 or more again. 3.3 s. The regions read right, from
+      synthesis and MIDI to the kitchen, 3D printing and the transistors.
+      networkx is now a declared dependency (it came transitively).
+- [x] **Kept across nights** (migration 0028, the `communities` pass of
+      `prax maintain`). A new community takes the id and summary of the
+      old one it overlaps by half; under 0.8 overlap the summary is
+      marked stale for the step to write again.
+- [x] **Named and described**: the `communities` step, on the local
+      model. It is given the forty heaviest members and the eight documents
+      naming most of them, and answers with a name and what the region
+      covers. Regions go first, and a part waits for its region's name.
+- [x] **The ways in**: `traverse`'s `community` key, `GET /communities`
+      and `/communities/{id}`, the regions listed under the graph view's
+      overview and `#graph?community=N`. The entity view now passes a
+      member's type on, so a link from a region walks the right sense.
+- [ ] Search and ask reading the regions: once the summaries exist, and
+      measured.

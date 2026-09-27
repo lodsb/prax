@@ -31,9 +31,11 @@ input and ``store.replace_communities`` keeps the answer."""
 from __future__ import annotations
 
 import itertools
+import re
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from typing import Any
 
 from prax import ontology
 
@@ -140,3 +142,82 @@ def partition(
 
 def jaccard(a: frozenset[int] | set[int], b: frozenset[int] | set[int]) -> float:
     return len(a & b) / len(a | b) if a or b else 1.0
+
+
+# ---------------------------------------------------------------- the words
+
+SHOW_MEMBERS = 40  # the members a summary is written from, by weight
+SHOW_DOCUMENTS = 8  # and the titles of the documents naming most of them
+MAX_LABEL = 60
+MAX_SUMMARY = 500
+
+_REGION_WORDS = re.compile(
+    r"^(?:this|the)\s+(?:region|cluster|community|group|area|part)\s+", re.IGNORECASE
+)
+
+
+def system() -> str:
+    """What the model is told: a name and what the region covers, in the
+    language the library is written in."""
+    from prax import language
+
+    into = language.name(language.canonical()) or "English"
+    return (
+        "You are shown what one region of a personal library is about: the"
+        " things named most in it, and the titles of documents in it. Give"
+        f" the region a name and say what it covers, in {into}. Answer with"
+        " the name alone on the first line, two to five words, then one to"
+        " three sentences on what the region covers, so a reader can tell"
+        " whether it is the part of the library they want. No preamble, no"
+        " labels, no list, no quotation marks. Name the subjects themselves;"
+        ' never write "this region" or "this cluster".'
+    )
+
+
+def user_message(item: dict[str, Any]) -> str:
+    """The region, as the door hands it out: its members by weight with
+    their kinds, the documents naming most of them, and for a part the
+    region it is in."""
+    lines = []
+    region = str(item.get("region") or "").strip()
+    if region:
+        lines.append(f"This is one part of the region “{region}”.")
+    lines.append("The things named most in it:")
+    for m in list(item.get("members") or [])[:SHOW_MEMBERS]:
+        lines.append(f"- {m['name']} ({m['type']})")
+    docs = list(item.get("documents") or [])[:SHOW_DOCUMENTS]
+    if docs:
+        lines.append("")
+        lines.append("Documents that name the most of them:")
+        lines.extend(f"- {d['title']}" for d in docs if d.get("title"))
+    lines.append("")
+    lines.append("What is this region called, and what does it cover?")
+    return "\n".join(lines)
+
+
+def parse(out: str) -> tuple[str, str] | None:
+    """The name and the summary out of what the model returned, or None
+    when it did not give both."""
+    from prax import answers
+
+    text = answers.strip_tokens(out or "")
+    lines = [ln for ln in text.splitlines() if ln.strip()]
+    if len(lines) < 2:
+        return None
+    label = answers.unwrap(lines[0]).strip().strip("#*").strip()
+    summary = answers.unwrap(" ".join(lines[1:]), sentence=True).strip()
+    summary = _REGION_WORDS.sub("", summary).strip()
+    if summary:
+        summary = summary[0].upper() + summary[1:]
+    if not label or len(label) > MAX_LABEL or len(summary) < 30:
+        return None
+    return label, summary[:MAX_SUMMARY].strip()
+
+
+def summarize(runtime: Any, item: dict[str, Any]) -> tuple[str, str] | None:
+    """One region named and described, or None when the model did not
+    manage it."""
+    out, _usage = runtime.chat(
+        system(), user_message(item), max_tokens=220, temperature=0.0
+    )
+    return parse(out)

@@ -190,4 +190,100 @@ class Sections(ModelStep):
         return f"{rep.get('applied', 0)} documents, {wrote} sections"
 
 
-REGISTERED = {s.name: s for s in (Titles(), Summaries(), Sections())}
+class Communities(ModelStep):
+    """The regions of the library named and described: each community of
+    the nightly partition without a summary, or with one its members have
+    moved away from (``prax.communities``). Over the graph, not over
+    documents, so scope does not apply."""
+
+    name = "communities"
+
+    def hand_out(self, h: HandOut) -> dict[str, Any]:
+        from prax import communities, work
+
+        if models.resolve("communities") is None:
+            return h.nothing()
+        leased = {i for (s, i) in work._leases if s == self.name and not h.free(i)}
+        wanted = [
+            c
+            for c in store.communities_to_summarize(h.con, limit=h.limit * 2)
+            if c not in leased
+        ][: h.limit]
+        items = []
+        for cid in wanted:
+            got = store.community(
+                h.con,
+                cid,
+                members=communities.SHOW_MEMBERS,
+                documents=communities.SHOW_DOCUMENTS,
+            )
+            if got is None:
+                continue
+            region = ""
+            if got["parent"] is not None:
+                # a part is described inside its region, so it waits until
+                # the region has a name (the next pass, as they go first)
+                parent = store.community(h.con, int(got["parent"]), members=1)
+                region = (parent or {}).get("label") or ""
+                if not region:
+                    continue
+            items.append(
+                {
+                    "id": cid,
+                    "region": region,
+                    "members": got["members"],
+                    "documents": got["documents"],
+                }
+            )
+        h.lease([i["id"] for i in items])
+        return h.batch(items)
+
+    def take_in(self, t: TakeIn) -> dict[str, Any]:
+        run = t.run()
+
+        def apply(cid: int, r: dict[str, Any]) -> None:
+            store.set_community_summary(
+                t.con,
+                cid,
+                label=str(r.get("label") or ""),
+                summary=str(r.get("summary") or ""),
+                source=str(r.get("source") or t.worker),
+                run=run,
+            )
+
+        t.each(apply, key="id")
+        return t.out
+
+    def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
+        from prax import communities, models, worker
+
+        results = []
+        for it in items:
+            if runtime is None:
+                break
+            try:
+                got = communities.summarize(runtime, it)
+            except models.ServerNotReady as exc:
+                worker._say(log, f"community {it['id']}: not yet - {exc}")
+                results.append({"id": it["id"], "defer": True})
+                continue
+            if got is None:
+                worker._say(log, f"community {it['id']}: no usable answer")
+                continue
+            label, summary = got
+            worker._say(log, f"community {it['id']}: {label}")
+            results.append(
+                {
+                    "id": it["id"],
+                    "label": label,
+                    "summary": summary,
+                    "source": runtime.name,
+                }
+            )
+        return results
+
+    def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
+        return f"{rep.get('applied', 0)} named"
+
+
+REGISTERED = {s.name: s for s in (Titles(), Summaries(), Sections(), Communities())}
