@@ -244,11 +244,20 @@ def titles_needed(
     ``untried_only`` (the pipeline) documents a guess already failed on,
     and documents without text, are left out: a guess costs a model call."""
     out = []
+    # a title many documents carry is the reason only where it was asked
+    # for: the watched titles step asks, and names it to the model
+    shared = store.shared_titles(con) if "shared" in reasons else set()
     for r in store.title_rows(con, ids):
         meta = r["meta"]
         if untried_only and (meta.get("titles_tried") or not r["text_hash"]):
             continue  # a guess that failed before, or nothing to guess from
         why = titles.needs_title(r["title"], meta)
+        if (
+            why is None
+            and r["title"] in shared
+            and meta.get("title_source") in (None, "zotero")
+        ):
+            why = "shared"
         if why in reasons:
             out.append((r["id"], why))
     return out

@@ -759,3 +759,24 @@ def language_split(con: sqlite3.Connection, lang: str) -> tuple[int, int]:
         (lang, lang),
     ).fetchone()
     return int(row[0] or 0), int(row[1] or 0)
+
+
+SHARED_TITLE = 3  # live documents carrying one title before it names none of them
+
+
+@_reading
+def shared_titles(con: sqlite3.Connection, *, at_least: int = SHARED_TITLE) -> set[str]:
+    """The titles ``at_least`` live documents with text carry: a volume's
+    name on 118 of its papers, a course's on its exercise sheets, a
+    template's sample title on 89 documents (2026-09-27). A title so many
+    different texts share names the collection they came in, and each
+    document's own entity, named by it, is merged with the others'."""
+    return {
+        str(r[0])
+        for r in con.execute(
+            "SELECT title FROM documents WHERE title IS NOT NULL"
+            " AND text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+            " GROUP BY title HAVING count(*) >= ?",
+            (at_least,),
+        )
+    }

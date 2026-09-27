@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import models, steps, store, summaries, work, worker
+from prax import models, pipeline, steps, store, summaries, work, worker
 
 DE = (
     "Dieses Dokument ist ein Verzeichnis von Herstellern und Zulieferern für"
@@ -189,3 +189,63 @@ def test_a_deferred_entity_is_held_like_a_deferred_document(
     rep = work.take_in(con, "vocabulary", {"results": [{"id": 7, "defer": True}]})
     assert rep["deferred"] == 1
     assert ("vocabulary", 7) in work._leases
+
+
+# ----------------------------------------- a title many documents share, stage H
+
+
+class Headings:
+    """A titles model that answers with the document's first heading."""
+
+    name = "stub-titles"
+
+    def chat(self, system: str, user: str, **kw: Any) -> tuple[str, dict[str, Any]]:
+        heading = next(
+            (
+                ln.split(":", 1)[1].strip()
+                for ln in user.splitlines()
+                if ln.startswith("First heading in the text:")
+            ),
+            "",
+        )
+        return heading, {}
+
+
+def test_a_title_many_documents_share_is_replaced_and_read_again(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """118 NIME papers carried their volume's name as their title, and the
+    one entity it named held all their facts."""
+    con = client.app.state.con
+    volume = "Proceedings of a Conference on New Interfaces 2011"
+    docs = []
+    for name in ("Nuvolet", "Tangible Loops", "Death and the Powers"):
+        text = (
+            f"{volume}\n\n# {name}: an interface\n\n"
+            + f"The {name} system is described here in some detail. " * 30
+        )
+        doc = client.post("/ingest", json={"text": text, "title": volume}).json()
+        docs.append(int(doc["doc_id"]))
+    alone = client.post(
+        "/ingest",
+        json={
+            "text": "# A title of its own\n\n" + "Other words. " * 60,
+            "title": "Own",
+        },
+    ).json()["doc_id"]
+    needed = dict(pipeline.titles_needed(con, untried_only=True, reasons=("shared",)))
+    assert set(needed) == set(docs) and alone not in needed
+    spec = models.ModelSpec(
+        name="server", kind="openai", base_url="http://127.0.0.1:1/v1", model="t"
+    )
+    monkeypatch.setattr(models, "resolve", lambda s: spec if s == "titles" else None)
+    monkeypatch.setattr(models, "runtime", lambda s: Headings())
+    out = worker.run_once(
+        _door(client), steps=("titles",), scope="all", log_=lambda t: None
+    )
+    assert out["titles"].startswith("3 retitled")
+    for d in docs:
+        meta = store.get_meta(con, d)
+        assert meta["title_history"][-1]["title"] == volume
+        assert meta["extraction_stale"]["requested"]
+    assert store.shared_titles(con) == set()

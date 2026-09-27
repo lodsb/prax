@@ -365,6 +365,8 @@ def do_titles(
                 filename=it.get("filename"),
                 heading=titles.first_heading(it["text"]),
                 pdf_title=None,
+                # many documents carry this one: the model is told it is not it
+                not_title=old if why == "shared" else None,
             )
         except models.ServerNotReady as exc:
             # the titles model's server is loading or down: deferred, like
@@ -385,6 +387,7 @@ def do_titles(
                     "title": guess.title,
                     "source": runtime.name,
                     "confidence": guess.confidence,
+                    "why": why,
                 }
             )
             _say(log_, f"title doc {doc_id}: {guess.title[:60]!r}")

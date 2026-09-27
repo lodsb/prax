@@ -14,6 +14,8 @@ from .base import HandOut, Log, ModelStep, TakeIn
 # one item is a whole book, and a book is up to forty model calls: a batch
 # of thirty was 1,200 of them before anything was posted, and the worker's
 # heartbeat went stale inside it (2026-09-24)
+TITLE_REASONS = ("empty", "filename", "zotero-auto", "caps")
+
 SECTIONS_BATCH = 3  # documents a batch: each is a book's worth of calls
 
 
@@ -35,7 +37,12 @@ class Titles(ModelStep):
                 "mime": doc["mime"],
             }
 
-        return h.documents(pipeline.titles_needed(h.con, untried_only=True), build)
+        # a title many documents share is a title to replace too: the NIME
+        # papers carried their volume's name, and one entity held them all
+        needed = pipeline.titles_needed(
+            h.con, untried_only=True, reasons=(*TITLE_REASONS, "shared")
+        )
+        return h.documents(needed, build)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         run = t.run()
@@ -44,7 +51,7 @@ class Titles(ModelStep):
             pipeline._mark_tried(t.con, doc_id, run, str(r["tried"]))
 
         def apply(doc_id: int, r: dict[str, Any]) -> None:
-            store.retitle(
+            got = store.retitle(
                 t.con,
                 doc_id,
                 str(r["title"]),
@@ -52,6 +59,11 @@ class Titles(ModelStep):
                 run=run,
                 confidence=r.get("confidence"),
             )
+            if got.get("changed") and r.get("why") == "shared":
+                # its facts sit on the entity the shared title named, with
+                # the other documents': a new reading puts them on its own
+                # and retires the old one, history kept
+                store.request_extraction(t.con, doc_id, by="titles")
 
         t.each(apply, tried=tried)
         return t.out
