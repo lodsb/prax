@@ -45,7 +45,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from prax import ask as ask_mod
-from prax import blocks, store
+from prax import blocks, mimes, store
 
 log = logging.getLogger("prax.questions")
 
@@ -756,7 +756,7 @@ def briefing(
             bits.append("video")
         elif r["mime"] == "application/pdf":
             bits.append("PDF")
-        elif (r["mime"] or "").startswith("image/"):
+        elif mimes.is_picture(r["mime"]):
             bits.append("image")
         elif r["mime"] in ("text/html", "application/xhtml+xml"):
             bits.append("web page")

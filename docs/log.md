@@ -2137,3 +2137,24 @@ on.
       fails when a route is allowed without being walked.
 - The owner's name and the rules for what is personal are stage V, in
   `prax.yaml` only.
+
+## 2026-09-28: DjVu
+
+- [x] **A parser for DjVu** (`parsers._djvu`, DjVuLibre's `djvutxt`,
+      `djvused`, `ddjvu`): the text layer page by page with the page
+      marks, pages without one rendered and read by the OCR engine the
+      scanned PDFs use, within the OCR budget. The page count is
+      `djvused`'s: a scanned last page and the end of `djvutxt`'s output
+      look the same, which a test caught.
+- [x] **A type that is a document** (`prax.mimes`): DjVu's registered
+      type is `image/vnd.djvu`, and six places read `image/*` as a
+      picture (no graph extraction, a vision reading, "image" in the
+      document field). They now ask `mimes.is_picture`.
+- [x] **The six DjVu files already in the library** were registered as
+      `application/octet-stream`: no MIME table has the type.
+      `untyped-documents`, a repairable heal ailment, gives a document so
+      taken in the type its name says, when a parser here reads it.
+- [x] **The NAS sender** sends `.djvu` and `.djv`.
+- DjVuLibre is not installed on the desktop yet: `winget install
+  DjVuLibre.DjView` asks for an administrator's confirmation, which the
+  session cannot give.

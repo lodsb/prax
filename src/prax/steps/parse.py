@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from prax import inbox, models, pipeline, store
+from prax import inbox, mimes, models, pipeline, store
 from prax.parsers import queue
 
 from . import READING_STEPS
@@ -142,7 +142,7 @@ class Parse(Step):
             if not exts:
                 # an image has no parser of its own: the vision model reads
                 # it, as a reading the door asks for when that is free
-                if (doc["mime"] or "").startswith("image/") and vision_is_free():
+                if mimes.is_picture(doc["mime"]) and vision_is_free():
                     ask_reading(h.con, doc_id, "vision")
                 continue
             if any(queue._seen(doc["meta"], e.stamp) for e in exts):

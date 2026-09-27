@@ -9,7 +9,7 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-from prax import ontology
+from prax import mimes, ontology
 
 from ..base import (
     _NOW,
@@ -436,8 +436,11 @@ def select_for_extraction(
     sql += f" AND ({failed} IS NULL OR {failed} != {want})"
     args.extend(want_args)
     if skip_mime_prefix:
-        sql += " AND coalesce(mime, '') NOT LIKE ? ESCAPE '!'"
+        # a DjVu book has an image type and is a document: extracted
+        kept = ",".join("?" * len(mimes.DOCUMENT_IMAGES))
+        sql += f" AND (coalesce(mime, '') NOT LIKE ? ESCAPE '!' OR mime IN ({kept}))"
         args.append(_like_prefix(skip_mime_prefix))
+        args.extend(mimes.DOCUMENT_IMAGES)
     if domain:
         sql += (
             " AND EXISTS (SELECT 1 FROM json_each(documents.meta, '$.domains')"

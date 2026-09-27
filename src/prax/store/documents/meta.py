@@ -8,6 +8,8 @@ import json
 import sqlite3
 from typing import Any
 
+from prax import mimes
+
 from ..base import (
     ASIDE_KINDS,
     _guards,
@@ -221,7 +223,7 @@ DOCTYPES: dict[str, str] = {
     "web": "d.mime IN ('text/html', 'application/xhtml+xml')"
     " AND json_extract(d.meta, '$.video') IS NULL",
     "video": "json_extract(d.meta, '$.video') IS NOT NULL",
-    "image": "d.mime LIKE 'image/%'",
+    "image": mimes.picture_sql("d.mime"),
     "text": "d.mime = 'text/plain'",
     "note": "json_extract(d.meta, '$.zotero.kind') = 'note'",
     "page": "json_extract(d.meta, '$.source') = 'wiki'",
@@ -255,8 +257,10 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
         return None  # a retired document has no retrieval field
     mime = row["mime"] or ""
     words: list[str] = []
-    if mime.startswith("image/"):
+    if mimes.is_picture(mime):
         words.append("image")
+    elif mime in mimes.DOCUMENT_IMAGES:
+        words.append("scanned document")
     elif mime in _KIND_WORDS:
         words.append(_KIND_WORDS[mime])
     z = meta.get("zotero") or {}
@@ -466,3 +470,14 @@ def sections_needed(
         (sec.MIN_DOCUMENT, max(1, limit)),
     ).fetchall()
     return [int(r["id"]) for r in rows]
+
+
+@_serialized
+def set_mime(con: sqlite3.Connection, doc_id: int, mime: str) -> None:
+    """Correct a document's type (one registered as unknown bytes whose
+    name says what it is); the parse queue then offers it to that type's
+    parser."""
+    cur = con.execute("UPDATE documents SET mime = ? WHERE id = ?", (mime, doc_id))
+    if cur.rowcount == 0:
+        raise KeyError(f"no such document: {doc_id}")
+    con.commit()

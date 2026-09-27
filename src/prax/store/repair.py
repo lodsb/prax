@@ -612,6 +612,38 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return [dict(r) for r in rows if not parsers.candidates((r["mime"] or "").strip())]
 
 
+UNTYPED = ("application/octet-stream", "")
+
+
+def _untyped_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents registered as unknown bytes whose file name says what they
+    are, and a parser here reads that: the machine that took them in had
+    no type for the name (six DjVu books on 2026-09-28, before prax named
+    the type itself)."""
+    from prax import parsers
+
+    out = []
+    for r in con.execute(
+        "SELECT id, title, original_path, mime FROM documents"
+        " WHERE text_hash IS NULL AND coalesce(mime, '') IN (?, ?)"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id LIMIT ?",
+        (*UNTYPED, CAP),
+    ):
+        name = r["original_path"] or r["title"] or ""
+        mime = parsers.guess_mime(name, fallback="")
+        if mime and mime not in UNTYPED and parsers.candidates(mime):
+            out.append({"id": r["id"], "title": r["title"], "mime": mime})
+    return out
+
+
+def _repair_untyped(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    from .documents import set_mime
+
+    for r in rows:
+        set_mime(con, int(r["id"]), str(r["mime"]))
+    return len(rows)
+
+
 def _extraction_failed(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents the extract step could not read under the current
     ontology (``meta.extraction_error``): a prompt the model's slot cannot
@@ -1273,6 +1305,16 @@ AILMENTS: tuple[Ailment, ...] = (
             " repair in the store"
         ),
         find=_unparsable_documents,
+    ),
+    Ailment(
+        name="untyped-documents",
+        what=(
+            "documents taken in as unknown bytes whose file name says what they"
+            " are (a .djvu before prax knew the type), which no parser was offered"
+        ),
+        fix="give each its type; the parse queue then reads it",
+        find=_untyped_documents,
+        repair=_repair_untyped,
     ),
     Ailment(
         name="extraction-failed",

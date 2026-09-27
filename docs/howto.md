@@ -374,6 +374,21 @@ and the `office` extractor appears. Without it those documents stay
 pending and say why. Python's MIME table misses `.docx` on some
 machines, so `prax.parsers.guess_mime` names the office types itself.
 
+DjVu files (`.djvu`, `.djv`, usually scanned books) need DjVuLibre,
+a program rather than a package: `winget install DjVuLibre.DjView` on
+Windows, `apt install djvulibre-bin` on the board, `brew install
+djvulibre` on a Mac. With it, the `djvu` extractor appears. It reads the
+text layer a scanned book usually carries (`djvutxt`), page by page, and
+counts the pages with `djvused`. A page without a text layer is rendered
+(`ddjvu`) and read by the same OCR engine as a scanned PDF, within
+`parse.ocr_max_pages`. Without DjVuLibre a DjVu file stays pending and
+says why. No MIME table knows the type, so prax names it
+(`image/vnd.djvu`), and `prax.mimes` says in one place that it is a
+document, not a picture: it is extracted into the graph, and the vision
+pass leaves it alone. A DjVu taken in before prax knew the type sits as
+unknown bytes; `prax heal --check untyped-documents --apply` gives it
+its type, and the parse queue reads it.
+
 Before switching the default extractor for a document class, run
 `scripts/compare_extractors.py` over a sample. Read the texts, not only
 the metrics table it writes.

@@ -209,6 +209,7 @@ from .documents import (  # noqa: F401
     select_for_reading,
     set_domains,
     set_meta,
+    set_mime,
     set_reference_links,
     set_sections,
     set_sensitivity,

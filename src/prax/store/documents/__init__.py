@@ -67,6 +67,7 @@ from .meta import (  # noqa: F401
     retitle,
     sections_needed,
     set_meta,
+    set_mime,
     set_sections,
     set_summary,
     summary_tried,

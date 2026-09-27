@@ -9,7 +9,7 @@ import contextlib
 import time
 from typing import Any
 
-from prax import extraction, models, ontology, pipeline, store
+from prax import extraction, mimes, models, ontology, pipeline, store
 
 from .base import HandOut, Pass, Step, TakeIn
 
@@ -148,7 +148,7 @@ class Promote(Extract):
     def item(self, h: HandOut, doc_id: int) -> dict[str, Any]:
         item = super().item(h, doc_id)
         row = store.get_document(h.con, doc_id)
-        if row and (row["mime"] or "").startswith("image/"):
+        if row and mimes.is_picture(row["mime"]):
             path = row.get("original_path")
             item["image"] = {
                 "original": f"/doc/{doc_id}/original",

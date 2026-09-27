@@ -23,7 +23,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from prax import models, store
+from prax import mimes, models, store
 from prax.config import ConfigError
 from prax.parsers.figures import UNCAPTIONED
 
@@ -102,7 +102,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     mime = row["mime"] or ""
     is_pdf = mime == "application/pdf"
     is_html = mime in ("text/html", "application/xhtml+xml")
-    is_image = mime.startswith("image/")
+    is_image = mimes.is_picture(mime)
     is_page = bool(meta.get("page"))
     text_len = row["text_len"]
     counts = _counts(con, doc_id)

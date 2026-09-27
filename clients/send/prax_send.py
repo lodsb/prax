@@ -58,6 +58,8 @@ DOCUMENTS = [
     ".odt",
     ".rtf",
     ".epub",
+    ".djvu",
+    ".djv",
     ".csv",
 ]
 IMAGES = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff"]
@@ -83,6 +85,8 @@ MIME = {
     ".odt": "application/vnd.oasis.opendocument.text",
     ".rtf": "application/rtf",
     ".epub": "application/epub+zip",
+    ".djvu": "image/vnd.djvu",
+    ".djv": "image/vnd.djvu",
     ".webp": "image/webp",
 }
 BATCH = 500  # hashes per question; the door takes up to 1000

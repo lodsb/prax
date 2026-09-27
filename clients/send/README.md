@@ -16,7 +16,7 @@ What it does, in order:
    lock files (`~$…`) and a NAS's own folders (`@eaDir`, `#recycle`,
    snapshots, `$RECYCLE.BIN`) are left out.
 2. Keeps the files the door can read: PDF, text, Markdown, HTML, Word,
-   ODT, RTF, EPUB, CSV (`--ext` for another list, `--images` to add
+   ODT, RTF, EPUB, DjVu, CSV (`--ext` for another list, `--images` to add
    pictures). PDFs go first, then text, then the rest.
 3. Hashes each file (sha256 of its bytes, which is what the store calls a
    document) and remembers the hash by path, size and modification time
