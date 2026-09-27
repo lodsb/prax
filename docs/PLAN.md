@@ -70,7 +70,9 @@ the review of the lists a person decides goes last.
       and a third that saved over a mapped file found and closed,
       `scripts/stress_vectors.py`) **S. The door's `STATUS_BAD_STACK`
       exit** (below): a reproduction before any fix, so open-ended.
-- [ ] **T. Sub-graph export / import**, as designed below: a feature,
+- [x] (2026-09-27: `prax export`, `prax import graph`,
+      `docs/graph-files.md`; the plugin's session-end sync still open)
+      **T. Sub-graph export / import**, as designed below: a feature,
       not a repair.
 
 ## The order, agreed 2026-09-27
@@ -405,8 +407,12 @@ recipe at once. Three independent failures, each wanting a different fix.
 - [ ] **A document's own neighbourhood** — a link from a document to
       what it is connected to (`niggles.txt`).
 - [x] (stage J) **One workflow for maintenance and healing** (`niggles.txt`).
-- [ ] **Sub-graph export / import** — the answer to "what if a repo's
+- [x] **Sub-graph export / import** — the answer to "what if a repo's
       notes want to travel" (`docs/log.md`, "The night of 2026-09-20").
+      (Stage T, `docs/graph-files.md`.)
+- [ ] **The plugin writes `.prax/graph.jsonl`** at session end, beside
+      `.prax-project`, with `prax export --project` (the last part of
+      T's design).
 - [ ] **A procedural graph for the surfer** (later; the reference is in
       `docs/log.md`, "After the mathematics").
 - [ ] **If the UI still feels slow from the MacBook** — the next suspect

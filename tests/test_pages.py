@@ -268,3 +268,20 @@ def test_renaming_a_page_takes_its_entity_and_edges_along(
         con, "ai-bubble", "# The AI bubble\n\nMore.", title="The AI bubble"
     )
     assert store.get_page(con, "ai-bubble")["revision"] == 3
+
+
+def test_a_project_page_linking_a_paper_synthesizes_it(con: sqlite3.Connection) -> None:
+    """A project page is a `project` in the graph, which `annotates` does not
+    take: its links are what it draws on, `synthesizes`."""
+    doc = int(store.ingest_text(con, "A paper. " * 30, title="WDF paper")["doc_id"])
+    store.write_page(
+        con, "project-synth", f"See [WDF paper](#doc/{doc}).", kind="project"
+    )
+    rels = {
+        r[0]
+        for r in con.execute(
+            "SELECT rel FROM edges WHERE source_doc = (SELECT doc_id FROM pages"
+            " WHERE slug = 'project-synth') AND valid_to IS NULL"
+        )
+    }
+    assert "synthesizes" in rels

@@ -6,6 +6,7 @@ stays as light as it is; this is the command around them."""
 from __future__ import annotations
 
 import json
+import sys
 from collections.abc import Iterable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -17,7 +18,16 @@ from . import out
 if TYPE_CHECKING:
     from prax.importers import feed
 
-WHAT = ("github", "chat", "links", "project", "claude", "citations", "zotero")
+WHAT = (
+    "github",
+    "chat",
+    "links",
+    "project",
+    "claude",
+    "citations",
+    "zotero",
+    "graph",
+)
 
 
 def import_(door: Door, a: Any) -> int:
@@ -35,8 +45,98 @@ def import_(door: Door, a: Any) -> int:
         return _citations(door, a)
     if a.what == "zotero":
         return _zotero(door, a)
+    if a.what == "graph":
+        return _graph(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
+
+
+def _graph(door: Door, a: Any) -> int:
+    """A piece of another library's graph (a ``prax export`` file) into this
+    one, as ``import:<name>``; the same name again replaces what the last
+    import of it linked."""
+    if len(a.files) != 1:
+        out.fail("prax import graph FILE --name SOURCE")
+        return 2
+    path = Path(a.files[0]).expanduser()
+    source = a.name or path.stem.removesuffix(".graph")
+    rep = door.post_bytes(
+        "/graph/import",
+        path.read_bytes(),
+        params={"source": source, "dry_run": "true" if a.dry_run else "false"},
+        content_type="application/x-ndjson",
+    )
+    if a.json:
+        print(json.dumps(rep, indent=1))
+        return 0
+    verb = "would link" if a.dry_run else "linked"
+    out.say(out.bold(f"import:{rep['source']}") + out.dim(f"   {rep['run']}"))
+    out.say(
+        f"  documents: {rep['documents']}, {rep['documents_held']} held here"
+        f" · edges: {rep['edges']}, {verb} {rep['linked']},"
+        f" {rep['queued']} to the review queue"
+        + (
+            f", {rep['ended_skipped']} ended ones left out"
+            if rep["ended_skipped"]
+            else ""
+        )
+    )
+    out.say(
+        f"  pages: {rep['pages_new']} new, {rep['pages_revised']} revised,"
+        f" {rep['pages_same']} the same"
+        + (
+            f", refused: {', '.join(rep['pages_refused'])}"
+            if rep["pages_refused"]
+            else ""
+        )
+        + (
+            f" · retired the last import's {rep['retired']} edges"
+            if rep["retired"]
+            else ""
+        )
+    )
+    if rep.get("ontology") and rep["ontology"] != rep.get("ontology_here"):
+        out.say(
+            out.dim(
+                f"  written against {rep['ontology']},"
+                f" read against {rep['ontology_here']}"
+            )
+        )
+    return 0
+
+
+def export(door: Door, a: Any) -> int:
+    """A piece of the graph as a file (``prax.graphio``)."""
+    params = {
+        k: v
+        for k, v in {
+            "project": a.project,
+            "domain": a.domain,
+            "tag": a.tag,
+            "entity": a.entity,
+            "type": a.type,
+            "hops": a.hops,
+            "history": "true" if a.history else None,
+        }.items()
+        if v not in (None, "")
+    }
+    if not ({"project", "domain", "tag", "entity"} & set(params)):
+        out.fail("what to export?", "--project, --domain, --tag or --entity")
+        return 2
+    data = door.get_bytes_with("/graph/export", params)
+    if a.output in (None, "-"):
+        sys.stdout.buffer.write(data)
+        return 0
+    target = Path(a.output).expanduser()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_bytes(data)
+    head = json.loads(data.split(b"\n", 1)[0])
+    counts = head.get("counts") or {}
+    out.say(
+        f"{target}: {counts.get('edges', 0)} edges from {counts.get('documents', 0)}"
+        f" documents, ontology {head.get('ontology')}"
+    )
+    return 0
 
 
 def _zotero(door: Door, a: Any) -> int:

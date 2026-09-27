@@ -38,9 +38,11 @@ from .communities import (  # noqa: F401
 )
 from .context import (  # noqa: F401
     _CONFIDENCE_BY_RANK,
+    _SUBGRAPH_EDGE,
     ASK_FACT_RELS_SKIPPED,
     DOCUMENT_EDGES,
     HUB_TYPES,
+    IDENTITY_META,
     MERGE_TYPES,
     SPELLING,
     _doc_ids_by_title,
@@ -52,13 +54,20 @@ from .context import (  # noqa: F401
     document_context,
     document_edges,
     document_facts,
+    document_identities,
     documents_as_pages,
+    documents_by_hash,
     documents_sharing,
     entities_of_documents,
+    entity_answering,
     entity_named_in,
     hub_graph,
+    labels_of_entities,
     merges_page,
     own_type,
+    page_slugs_of,
+    seed_documents,
+    subgraph_edges,
 )
 from .decisions import (  # noqa: F401
     _review_where,

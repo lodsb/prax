@@ -2058,3 +2058,35 @@ on.
   natively. What can be said is that no index is now touched outside
   the lock, and `tests/test_vector_locks.py` keeps it so (the lock
   counted, an add across a merge, four seconds of the stress test).
+
+## 2026-09-27: stage T, graph files
+
+- [x] **`prax.graphio`** (`docs/graph-files.md`), as designed on
+      2026-09-20. An export is what a project, a domain, a tag or an
+      entity reaches: its entities with their labels, the live edges with
+      every provenance column, the pages with all their revisions, and
+      the documents by identity (hash, ids, title, summary), with the
+      ontology's modules in the header. JSON lines with sorted keys in a
+      stable order, so a second export of an unchanged library differs
+      only in its timestamp. An import is `import:<name>` with a run per
+      file. It retires its last import first, links through `store.link`
+      with the origin in the evidence, queues what the ontology refuses,
+      and gives a page with other text a new revision with a note. It
+      rewrites a page's `#doc/N` links to this library's ids. A dry run
+      writes nothing.
+- [x] `GET /graph/export`, `POST /graph/import`, `prax export`,
+      `prax import graph FILE --name --dry-run`.
+- [x] **Found on the way: a project page could not link a document.**
+      A page's links become edges from the page's entity, and a project
+      page's entity is a `project`, which `annotates` does not accept, so
+      `write_page` failed. The ontology already had the relation:
+      `synthesizes` takes a project. A project page's links now use it,
+      like a synthesis page's. No version bump, since the ontology did not
+      change.
+- [x] **And: `prax import citations` refused to run** ("which files?"),
+      its own help's example included: the command-line check that
+      wants files did not know citations take none.
+- A page's own edges are not exported: importing the page makes them
+  again from its links, and exported as well they would be there twice.
+- [ ] The Claude Code plugin's session-end sync writing
+      `.prax/graph.jsonl`, the last part of the design.

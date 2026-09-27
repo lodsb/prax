@@ -646,6 +646,214 @@ def merges_page(
     }
 
 
+# ------------------------------------------ a sub-graph, for export (prax.graphio)
+
+
+@_reading
+def seed_documents(
+    con: sqlite3.Connection,
+    *,
+    project: str | None = None,
+    domain: str | None = None,
+    tag: str | None = None,
+) -> list[int]:
+    """The live documents a seed names: a project's (tagged
+    ``project:<name>``, and its page ``project-<name>``), a domain's (set
+    on the document; one without a set is in every module and is left
+    out here), or a tag's. Ascending ids."""
+    ids: set[int] = set()
+    live = " AND json_extract(d.meta, '$.retired') IS NULL"
+    for t in ([f"project:{project}"] if project else []) + ([tag] if tag else []):
+        ids |= {
+            int(r[0])
+            for r in con.execute(
+                "SELECT d.id FROM documents d WHERE EXISTS (SELECT 1 FROM"
+                " json_each(d.meta, '$.tags') WHERE value = ?)" + live,
+                (t,),
+            )
+        }
+    if project:
+        ids |= {
+            int(r[0])
+            for r in con.execute(
+                "SELECT doc_id FROM pages WHERE slug = ?", (f"project-{project}",)
+            )
+        }
+    if domain:
+        ids |= {
+            int(r[0])
+            for r in con.execute(
+                "SELECT d.id FROM documents d WHERE EXISTS (SELECT 1 FROM"
+                " json_each(d.meta, '$.domains') WHERE value = ?)" + live,
+                (domain,),
+            )
+        }
+    return sorted(ids)
+
+
+_SUBGRAPH_EDGE = """
+    SELECT x.id, s.name AS src, s.type AS src_type, x.rel, t.name AS dst,
+           t.type AS dst_type, x.confidence, x.evidence, x.producer, x.run,
+           x.ontology_version, x.valid_from, x.valid_to, x.ingested_at,
+           x.source_doc, d.hash AS source_hash
+    FROM edges x
+    JOIN entities s0 ON s0.id = x.src
+    JOIN entities t0 ON t0.id = x.dst
+    JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
+    JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
+    LEFT JOIN documents d ON d.id = x.source_doc
+"""
+
+
+@_reading
+def subgraph_edges(
+    con: sqlite3.Connection,
+    *,
+    doc_ids: list[int] | None = None,
+    edge_ids: list[int] | None = None,
+    history: bool = False,
+) -> list[dict[str, Any]]:
+    """The edges of those documents, or those edges, under the canonical
+    names, with every provenance column and the source document's hash
+    (its identity in another library). Live ones only unless ``history``.
+    In a stable order (source document hash, then the triple) so an export
+    diffs well."""
+    out: list[dict[str, Any]] = []
+    live = "" if history else " AND x.valid_to IS NULL"
+    for column, ids in (("x.source_doc", doc_ids), ("x.id", edge_ids)):
+        for start in range(0, len(ids or []), 500):
+            part = (ids or [])[start : start + 500]
+            marks = ",".join("?" * len(part))
+            out.extend(
+                dict(r)
+                for r in con.execute(
+                    _SUBGRAPH_EDGE + f" WHERE {column} IN ({marks})" + live, part
+                )
+            )
+    seen: dict[int, dict[str, Any]] = {int(e["id"]): e for e in out}
+    return sorted(
+        seen.values(),
+        key=lambda e: (
+            e["source_hash"] or "",
+            e["src_type"],
+            e["src"],
+            e["rel"],
+            e["dst_type"],
+            e["dst"],
+            e["valid_from"] or "",
+        ),
+    )
+
+
+@_reading
+def labels_of_entities(
+    con: sqlite3.Connection, names: list[tuple[str, str]]
+) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Each ``(name, type)`` entity's labels other than its own name: what
+    else it is called, and in which language."""
+    out: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for name, etype in names:
+        rows = con.execute(
+            "SELECT l.label, l.lang, l.kind FROM entities e"
+            " JOIN entity_labels l ON l.entity_id = e.id"
+            " WHERE e.name = ? AND e.type = ? AND e.canonical_id IS NULL"
+            " AND l.label != e.name AND l.was = 0 ORDER BY l.label, l.lang",
+            (name, etype),
+        ).fetchall()
+        if rows:
+            out[(name, etype)] = [
+                {"label": r["label"], "lang": r["lang"], "kind": r["kind"]}
+                for r in rows
+            ]
+    return out
+
+
+IDENTITY_META = ("doi", "arxiv", "isbn", "zotero", "domains", "tags", "lang")
+
+
+@_reading
+def document_identities(
+    con: sqlite3.Connection, doc_ids: list[int]
+) -> list[dict[str, Any]]:
+    """What another library needs to recognise these documents without
+    their bytes: the hash of the original, the title, the URL, the type,
+    the ids in ``meta`` (``IDENTITY_META``) and the summary. By hash."""
+    out = []
+    for start in range(0, len(doc_ids), 500):
+        part = doc_ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            "SELECT id, hash, title, source_url, mime, meta FROM documents"
+            f" WHERE id IN ({marks})",
+            part,
+        ):
+            meta = json.loads(r["meta"] or "{}")
+            kept = {k: meta[k] for k in IDENTITY_META if meta.get(k)}
+            if meta.get("summary"):
+                kept["summary"] = meta["summary"]
+            out.append(
+                {
+                    "id": r["id"],
+                    "hash": r["hash"],
+                    "title": r["title"],
+                    "source_url": r["source_url"],
+                    "mime": r["mime"],
+                    "meta": kept,
+                }
+            )
+    return sorted(out, key=lambda d: d["hash"])
+
+
+@_reading
+def entity_answering(con: sqlite3.Connection, name: str, etype: str) -> int | None:
+    """The canonical entity of this type that answers to ``name`` (its own
+    name, or a label only one entity of the type carries), or None. The
+    lookup ``store.link`` makes, without making one."""
+    row = con.execute(
+        "SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ? AND type = ?",
+        (name, etype),
+    ).fetchone()
+    if row is not None:
+        return int(row[0])
+    known = con.execute(
+        "SELECT DISTINCT e.id FROM entity_labels l JOIN entities e"
+        " ON e.id = l.entity_id WHERE l.label = ? COLLATE NOCASE"
+        " AND e.type = ? AND e.canonical_id IS NULL LIMIT 2",
+        (name, etype),
+    ).fetchall()
+    return int(known[0][0]) if len(known) == 1 else None
+
+
+@_reading
+def documents_by_hash(con: sqlite3.Connection, hashes: list[str]) -> dict[str, int]:
+    """This library's document for each of these original hashes it holds."""
+    out: dict[str, int] = {}
+    for start in range(0, len(hashes), 500):
+        part = hashes[start : start + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT hash, id FROM documents WHERE hash IN ({marks})", part
+        ):
+            out[str(r["hash"])] = int(r["id"])
+    return out
+
+
+@_reading
+def page_slugs_of(con: sqlite3.Connection, doc_ids: list[int]) -> list[str]:
+    """The slugs of those documents that are pages."""
+    out = []
+    for start in range(0, len(doc_ids), 500):
+        part = doc_ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        out.extend(
+            str(r[0])
+            for r in con.execute(
+                f"SELECT slug FROM pages WHERE doc_id IN ({marks})", part
+            )
+        )
+    return sorted(out)
+
+
 @_reading
 def entity_named_in(con: sqlite3.Connection, entity_id: int) -> str:
     """The title of a document that has a live edge about the entity."""

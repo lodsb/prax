@@ -264,8 +264,11 @@ def write_page(
         "SELECT title FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()[0]
     page_type = "project" if kind == "project" else "page"
-    # a synthesis draws on its sources; any other page annotates one document
-    source_rel = "synthesizes" if kind == "synthesis" else "annotates"
+    # a synthesis or a project draws on its sources; any other page
+    # annotates one document. A project page is a `project` in the graph,
+    # which `annotates` does not take: a project page linking a paper was
+    # refused outright until the graph-file tests wrote one (2026-09-27)
+    source_rel = "synthesizes" if kind in ("synthesis", "project") else "annotates"
     for target in annotates or []:
         t = con.execute(
             "SELECT title FROM documents WHERE id = ?", (target,)

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from prax import (
@@ -302,6 +302,73 @@ def graph_undecide(req: UndecideReq, request: Request) -> dict[str, Any]:
     con = _con(request)
     back = store.unmerge_run(con, req.run) if req.run else 0
     return {"undone": store.undecide_pair(con, req.keep, req.other), "entities": back}
+
+
+@router.get("/graph/export")
+def graph_export(
+    request: Request,
+    project: str | None = None,
+    domain: str | None = None,
+    tag: str | None = None,
+    entity: str | None = None,
+    type: str | None = None,
+    hops: int = 1,
+    history: bool = False,
+) -> Response:
+    """A piece of the graph as a file (``prax.graphio``): what a project,
+    a domain, a tag or an entity reaches, as JSON lines. Built whole here:
+    the request's connection belongs to its thread, and a streamed body is
+    read on another."""
+    from prax import graphio
+
+    seed = graphio.Seed(
+        project=project,
+        domain=domain,
+        tag=tag,
+        entity=entity,
+        type=type,
+        hops=hops,
+        history=history,
+    )
+    try:
+        body = "".join(graphio.export(_con(request), seed))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    name = project or domain or tag or entity or "graph"
+    return Response(
+        body,
+        media_type="application/x-ndjson",
+        headers={"Content-Disposition": f'attachment; filename="{name}.graph.jsonl"'},
+    )
+
+
+@router.post("/graph/import")
+async def graph_import(
+    request: Request, source: str, dry_run: bool = False
+) -> dict[str, Any]:
+    """An export read into this library as ``import:<source>`` (the body is
+    the file). A dry run says what would happen and writes nothing."""
+    from dataclasses import asdict
+
+    from prax import graphio
+
+    from ._base import max_upload
+
+    body = await request.body()
+    if len(body) > max_upload():
+        raise HTTPException(413, "file over door.max_upload_mb")
+    lines = body.decode("utf-8").splitlines()
+
+    def run() -> dict[str, Any]:
+        rep = graphio.import_lines(_con(request), lines, source=source, dry_run=dry_run)
+        return asdict(rep)
+
+    import anyio
+
+    try:
+        return await anyio.to_thread.run_sync(run)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 class UnmergeEntityReq(BaseModel):

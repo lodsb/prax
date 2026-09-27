@@ -211,7 +211,9 @@ def build_parser() -> argparse.ArgumentParser:
             " document each. citations: the citation network from OpenAlex or"
             " Crossref, fetched by the door for the documents not looked up yet."
             " zotero: a Zotero data directory, planned here over a copy of its"
-            " database, each document sent to the door. Every run skips what the"
+            " database, each document sent to the door. graph: a file from"
+            " `prax export`, read in as import:<name>; the same name again"
+            " replaces the last import of it. Every run skips what the"
             " library already has."
         ),
         epilog=(
@@ -224,7 +226,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  prax import project . --domain workshop --refresh\n"
             "  prax import claude . --since 2026-09-01 --dry-run\n"
             "  prax import citations --source crossref -n 50\n"
-            "  prax import zotero ~/Zotero --dry-run"
+            "  prax import zotero ~/Zotero --dry-run\n"
+            "  prax import graph synth.graph.jsonl --name synth --dry-run"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -841,6 +844,45 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=running.doctor, needs_door=True)
 
     s = sub.add_parser(
+        "export",
+        parents=[door_opts],
+        help="a piece of the graph as a file, for another library or a repository",
+        description=(
+            "What a project, a domain, a tag or an entity reaches: its entities,"
+            " the live edges with their provenance, the pages with their"
+            " revisions, and the documents by identity (hash, title, ids),"
+            " never their files. JSON lines in a stable order, so a copy kept"
+            " in git diffs line by line. `prax import graph FILE` reads it"
+            " into another library (docs/graph-files.md)."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax export --project synth -o .prax/graph.jsonl\n"
+            "  prax export --domain kitchen -o kitchen.graph.jsonl\n"
+            "  prax export --entity 'wave digital filter' --hops 2 -o wdf.graph.jsonl"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    seed = s.add_mutually_exclusive_group()
+    seed.add_argument(
+        "--project", metavar="NAME", help="a project's documents and page"
+    )
+    seed.add_argument("--domain", metavar="NAME", help="the documents of one module")
+    seed.add_argument("--tag", metavar="TAG", help="the documents carrying a tag")
+    seed.add_argument("--entity", metavar="NAME", help="an entity and its hops")
+    s.add_argument(
+        "--type",
+        metavar="TYPE",
+        help="the entity's type, when its name is several things",
+    )
+    s.add_argument("--hops", type=int, default=1, help="1 or 2 (--entity)")
+    s.add_argument("--history", action="store_true", help="ended edges too")
+    s.add_argument(
+        "-o", "--output", metavar="FILE", help="where to write (default: stdout)"
+    )
+    s.set_defaults(func=importing.export, needs_door=True)
+
+    s = sub.add_parser(
         "models",
         help="which model does which step, and fetch one",
         description="What prax.yaml resolves for each step.",
@@ -880,7 +922,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.command == "import":
         a.user = a.files[0] if a.what == "github" and a.files else None
-        if a.what not in ("github", "project", "claude") and not a.files:
+        if a.what not in ("github", "project", "claude", "citations") and not a.files:
             out.fail("which files?", f"prax import {a.what} FILE…")
             return 2
     if a.command == "models":  # "prax models fetch <name>" reads better than a flag

@@ -84,6 +84,24 @@ class Door:
     def delete_json(self, path: str) -> Any:
         return self._check(self.client.delete(path, headers=self.headers)).json()
 
+    def post_bytes(
+        self,
+        path: str,
+        data: bytes,
+        params: dict[str, Any] | None = None,
+        content_type: str = "application/octet-stream",
+    ) -> Any:
+        """A POST whose body is a file as it is (``/graph/import``)."""
+        headers = {**self.headers, "Content-Type": content_type}
+        return self._check(
+            self.client.post(path, content=data, params=params, headers=headers)
+        ).json()
+
+    def get_bytes_with(self, path: str, params: dict[str, Any]) -> bytes:
+        return self._check(
+            self.client.get(path, params=params, headers=self.headers)
+        ).content
+
     def get_bytes(self, path: str) -> bytes:
         return self._check(self.client.get(path, headers=self.headers)).content
 
