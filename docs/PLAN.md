@@ -648,7 +648,8 @@ to find out whether a local logprob predicts anything.
       exactly why the article's subject trains against outcomes — so
       expect to need Platt or isotonic scaling fitted on part of the
       pairs and measured on the rest.
-- [ ] **Read the full run.** It starts by itself when the re-read ends
+- [x] (2026-09-28: `docs/eval/confidence-2026-09-28.md`; isotonic ECE 0.022, agreement 0.80)
+      **Read the full run.** It starts by itself when the re-read ends
       (`confidence_after_reread.ps1` in the session scratchpad, the answers
       and `score.md` beside it). Its numbers go into
       `docs/eval/confidence-<date>.md`, with the pilot's.
@@ -657,6 +658,11 @@ to find out whether a local logprob predicts anything.
       and its short-time variant) are likely bad merges in the graph,
       whoever made them. They go on the review page (stage R) as merges to
       look at, and `POST /graph/unmerge` or a single split undoes one.
+- [ ] **The adjudicator answers by number, not by position.** The full
+      run found Opus "declining" plain spelling variants (cutoff /
+      cut-off, realtime / real-time): forty pairs a call answered as a
+      list of booleans, a short list padded with `False`, so one missing
+      answer shifts every later one. Each answer should name its pair.
 - [ ] **A gold sample first.** The pilot (200 pairs) found the local
       model right where the label was wrong, both ways. Opus kept apart
       LDR/LDRs and Gauss-Seidel/Gauß-Seidel, and the "same" labels hold
