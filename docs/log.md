@@ -1954,3 +1954,35 @@ on.
       member's type on, so a link from a region walks the right sense.
 - [ ] Search and ask reading the regions: once the summaries exist, and
       measured.
+
+## 2026-09-27: stage Q, a confidence that was measured (begun)
+
+- [x] **`prax.calibration`**: P(yes) from a token's top alternatives,
+      Brier, the reliability table, ECE, Platt's map and isotonic
+      regression, with no dependency. The tests showed two bugs before
+      they shipped. Newton's method ran away on inputs that take few values
+      (a = 10^10), so the step now halves until the loss falls. The
+      isotonic fit pooled a tie half gathered, putting one of 0.95's
+      decisions into 0.05's block, so ties are now grouped first.
+- [x] **`scripts/eval_confidence.py`** (build, ask, score; read-only on
+      the store, resumable). The labelled pairs are fewer than the plan
+      assumed. Weekly recomputation replaced 1,855 of the 4,559 recorded
+      declines, and the 3,683 merges predate migration 25's stamp. So the
+      set is the 2,704 declines left, plus the 3,422 merges of the likely
+      types that differ after normalization and pass the 0.92 name
+      cosine: 6,126 pairs.
+- [x] **The pilot, 200 pairs** (fitted on 100, measured on 100, so
+      rough). Raw: Brier 0.220, ECE 0.197, agreement 0.72. Overconfident:
+      said 0.986, agreed 86%; said 0.015, disagreed 24%. Platt: ECE 0.098.
+      Isotonic: Brier 0.191, agreement 0.76. A call takes about 6 s while
+      the re-read holds the server's slots, hence the full run waits for
+      it.
+- **What the pilot found instead.** Many of the strongest disagreements
+  are the label's error, not the local model's. "Different" by Opus:
+  LDR/LDRs, Gauss-Seidel/Gauß-Seidel iteration (local 0.999). "Same" in
+  the labels: preorder/postorder traversal, fractional Fourier transform
+  and its short-time variant, hidden semi-Markov and its autoregressive
+  form (local 0.000). Some of those may be reconstruction noise, but
+  either way they are wrong merges in the graph. So the verdict needs a
+  gold sample a person labels, and the "same" positives are worth a look
+  of their own: a merge folded two things into one.

@@ -56,7 +56,9 @@ the review of the lists a person decides goes last.
 - [x] (2026-09-27: `docs/communities.md`; search and ask as ways in
       are still open) **P. Communities** (below, "A partition, and a way to keep it"):
       the hub decision it waited on is H.
-- [ ] **Q. A confidence that was measured** (below).
+- [ ] **Q. A confidence that was measured** (below). (2026-09-27: the
+      tooling built, a pilot run, the full run queued behind the re-read;
+      the finding so far is that the labels need a gold sample.)
 - [ ] **R. The lists a person decides, last:** a review page for the 741
       likely merges and the 1,632 split names, with the merge and the
       unmerge the door already has.
@@ -590,6 +592,12 @@ to find out whether a local logprob predicts anything.
 - [ ] **Ask the local model the adjudicator's question** on those 8,242
       pairs, under a grammar that allows one token, and keep the
       logprob. A few hours of llama-server, nothing spent.
+      (2026-09-27: `scripts/eval_confidence.py`, `prax.calibration`. Only
+      6,126 of the pairs can be labelled: the 2,704 declines still
+      recorded, and 3,422 merges reconstructed from the unstamped merges
+      of the likely types, against Opus's 3,683. No grammar: the mass on
+      "yes" against "no" among the token's top ten. The full run starts
+      when the re-read ends.)
 - [ ] **Score it against the labels.** Reliability diagram and Brier
       score, not accuracy: the question is whether 0.8 means 0.8, not
       whether the argmax is right. Raw logprobs from an
@@ -597,6 +605,14 @@ to find out whether a local logprob predicts anything.
       exactly why the article's subject trains against outcomes — so
       expect to need Platt or isotonic scaling fitted on part of the
       pairs and measured on the rest.
+- [ ] **A gold sample first.** The pilot (200 pairs) found the local
+      model right where the label was wrong, both ways. Opus kept apart
+      LDR/LDRs and Gauss-Seidel/Gauß-Seidel, and the "same" labels hold
+      preorder/postorder traversal and the fractional Fourier transform
+      with its short-time variant. Agreement with Opus therefore measures
+      Opus's errors too. A few hundred pairs a person has labelled (the
+      review page of stage R can collect them) are what both models are
+      scored against before anything acts on a threshold.
 - [ ] **Then decide what it buys.** If it calibrates, the likely tier
       can act on a threshold and send only the uncertain middle to the
       paid model, which is where the money goes. If it does not, that is
