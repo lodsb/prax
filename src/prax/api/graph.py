@@ -191,9 +191,18 @@ def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
 
 @router.get("/graph/overview")
 def graph_overview(
-    request: Request, limit: int = 30, min_shared: int = 2
+    request: Request, limit: int = 30, min_shared: int = 2, domain: str | None = None
 ) -> dict[str, Any]:
     """The most connected concepts, methods, tools and datasets, the edges
     among them, and co-occurrence links (hubs sharing at least
-    ``min_shared`` source documents): what the graph view opens on."""
-    return store.hub_graph(_con(request), limit=limit, min_shared=min_shared)
+    ``min_shared`` source documents): what the graph view opens on.
+    ``domain`` draws one module's graph, from its documents alone."""
+    return store.hub_graph(
+        _con(request), limit=limit, min_shared=min_shared, domain=domain or None
+    )
+
+
+@router.get("/graph/document/{doc_id}")
+def graph_document(doc_id: int, request: Request) -> dict[str, Any]:
+    """What one document says, as edges the graph view draws."""
+    return {"doc_id": doc_id, "edges": store.document_edges(_con(request), doc_id)}

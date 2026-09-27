@@ -315,6 +315,7 @@ def hub_graph(
     limit: int = 30,
     types: tuple[str, ...] = HUB_TYPES,
     min_shared: int = 2,
+    domain: str | None = None,
 ) -> dict[str, Any]:
     """The most connected entities of the given types, the currently valid
     edges among them, and ``links``: pairs of hubs that share at least
@@ -324,15 +325,42 @@ def hub_graph(
     Every step walks the edge indexes: the ends of the live edges as one
     list, each end mapped to its canonical entity by primary key. A join
     on ``c.id = x.src OR c.id = x.dst`` can use neither index and took
-    two seconds on 126k edges; this takes a tenth of that."""
+    two seconds on 126k edges; this takes a tenth of that.
+
+    ``domain`` draws one module's graph: only what that module's documents
+    (and those of the modules built on it) say, and its own kinds of thing
+    among the hubs, the kitchen's ingredients and dishes beside the
+    concepts. The documents no module was set for are left out: they are
+    in every module, and would put the whole library back."""
     limit = max(1, min(limit, 200))
+    docs, docs_args = "", ()
+    if domain:
+        from prax import ontology
+
+        onto = ontology.current()
+        within = sorted(onto.within(domain))
+        own = {
+            t
+            for name in within
+            if name in onto.modules
+            for t in onto.modules[name].types
+            if t not in onto.self_types
+        }
+        types = tuple(sorted(set(types) | own))
+        dm = ",".join("?" * len(within))
+        docs = (
+            " AND source_doc IN (SELECT d.id FROM documents d WHERE EXISTS"
+            " (SELECT 1 FROM json_each(d.meta, '$.domains') j"
+            f" WHERE j.value IN ({dm})))"
+        )
+        docs_args = tuple(within)
     marks = ",".join("?" * len(types))
     nodes = con.execute(
         f"""
         WITH ends(id) AS (
-            SELECT src FROM edges WHERE valid_to IS NULL
+            SELECT src FROM edges WHERE valid_to IS NULL{docs}
             UNION ALL
-            SELECT dst FROM edges WHERE valid_to IS NULL
+            SELECT dst FROM edges WHERE valid_to IS NULL{docs}
         ),
         deg(cid, degree) AS (
             SELECT COALESCE(n.canonical_id, n.id), count(*)
@@ -342,7 +370,7 @@ def hub_graph(
         SELECT e.id, e.name, e.type, d.degree FROM deg d JOIN entities e ON e.id = d.cid
         WHERE e.type IN ({marks}) ORDER BY d.degree DESC, e.name LIMIT ?
         """,
-        (*types, limit),
+        (*docs_args, *docs_args, *types, limit),
     ).fetchall()
     ids = [r["id"] for r in nodes]
     if not ids:
@@ -370,9 +398,10 @@ def hub_graph(
             JOIN entities s ON s.id = COALESCE(a.canonical_id, a.id)
             JOIN entities t ON t.id = COALESCE(b.canonical_id, b.id)
             WHERE x.valid_to IS NULL AND x.src IN ({mm}) AND x.dst IN ({mm})
+            {docs.replace("source_doc", "x.source_doc")}
             ORDER BY x.id
             """,
-            (*members, *members),
+            (*members, *members, *docs_args),
         ).fetchall()
     ]
     # co-occurrence: which documents each hub (through any alias) appears in
@@ -383,9 +412,9 @@ def hub_graph(
             SELECT COALESCE(n.canonical_id, n.id), x.source_doc
             FROM edges x JOIN entities n ON n.id = x.{side}
             WHERE x.valid_to IS NULL AND x.source_doc IS NOT NULL
-              AND x.{side} IN ({mm})
+              AND x.{side} IN ({mm}){docs.replace("source_doc", "x.source_doc")}
             """,
-            members,
+            (*members, *docs_args),
         ):
             touch.setdefault(cid, set()).add(doc)
     by_id = {r["id"]: r for r in nodes}
@@ -411,6 +440,38 @@ def hub_graph(
         "edges": edges,
         "links": links[:300],
     }
+
+
+DOCUMENT_EDGES = 300  # a document's graph: a book says more than a page holds
+
+
+@_reading
+def document_edges(
+    con: sqlite3.Connection, doc_id: int, *, limit: int = DOCUMENT_EDGES
+) -> list[dict[str, Any]]:
+    """What one document says, as the graph view draws it: its live edges
+    in the shape ``traverse`` gives (canonical names, the evidence), its
+    own entity's first, at most ``limit``. The way from a document page
+    into the graph (niggles.txt: "per document maybe a link into its
+    subgraph")."""
+    rows = con.execute(
+        """
+        SELECT x.id AS edge_id, s.name AS src, s.type AS src_type, x.rel,
+               t.name AS dst, t.type AS dst_type, x.confidence, x.source_doc,
+               x.evidence, x.producer, x.run, 1 AS hop,
+               (s0.name = d.title) AS own
+        FROM edges x
+        JOIN documents d ON d.id = x.source_doc
+        JOIN entities s0 ON s0.id = x.src
+        JOIN entities t0 ON t0.id = x.dst
+        JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
+        JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
+        WHERE x.source_doc = ? AND x.valid_to IS NULL
+        ORDER BY own DESC, x.id LIMIT ?
+        """,
+        (doc_id, max(1, limit)),
+    ).fetchall()
+    return [{k: v for k, v in dict(r).items() if k != "own"} for r in rows]
 
 
 @_reading

@@ -16,11 +16,13 @@ ORDER = ("edges", "decisions", "labels", "languages", "context", "traversal")
 from .context import (  # noqa: F401
     _CONFIDENCE_BY_RANK,
     ASK_FACT_RELS_SKIPPED,
+    DOCUMENT_EDGES,
     HUB_TYPES,
     _doc_ids_by_title,
     _docs_by_zotero_key,
     described_devices,
     document_context,
+    document_edges,
     document_facts,
     documents_as_pages,
     documents_sharing,

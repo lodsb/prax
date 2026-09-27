@@ -20,7 +20,9 @@ the review of the lists a person decides goes last.
       the select filters on change) **K. Browse loses documents when only the module changes**, and
       "unassigned" shows only a label (niggles.txt). A bug in the view or
       in `GET /documents`' domain filter; reproduce, test, fix.
-- [ ] **L. The graph by module, and a document's own graph.** The graph
+- [x] (2026-09-27: `/graph/overview?domain=`, `/graph/document/{id}`,
+      a module select and a `graph` link on the document page)
+      **L. The graph by module, and a document's own graph.** The graph
       view filtered to one domain's entities, and a link from a document
       page into the graph seeded with that document's entities.
 - [ ] **M. What the graph reads against.** Ontology v9 (the relations a

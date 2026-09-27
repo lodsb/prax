@@ -418,6 +418,9 @@ function graphPanelUpdater(panel, graphOf) {
 async function viewGraph(arg, p) {
   const q = p.q || "";
   const entity = p.entity || arg || "";
+  const domain = p.domain || "";
+  const docId = p.doc || "";
+  await modules();
   view.classList.add("wide");  // the canvas takes the page, like a document's text
   view.innerHTML = `
   <form id="graph-form" class="search-form">
@@ -432,11 +435,34 @@ async function viewGraph(arg, p) {
   });
   const out = document.getElementById("graph-out");
   try {
+    if (docId) {
+      // one document's graph: what it says, its own entity's facts first
+      const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
+      const got = await api(`/graph/document/${encodeURIComponent(docId)}`);
+      out.innerHTML = `
+        <div class="graph-tools">
+          <span>What <a href="#doc/${esc(docId)}">doc ${esc(docId)}</a> says</span>
+          <span class="muted">· ${got.edges.length} facts · click a node to expand it across the library</span>
+          <button type="button" id="graph-fit" class="secondary">fit</button>
+        </div>
+        <div class="legend">${legend}</div>
+        <div class="graph-layout">
+          <div class="graph-canvas plate"><canvas></canvas></div>
+          <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
+        </div>`;
+      if (!got.edges.length) { document.getElementById("graph-panel").innerHTML = `<p class="muted">The graph records nothing from this document yet.</p>`; return; }
+      const panel = document.getElementById("graph-panel");
+      const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
+      document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
+      graph.merge(got.edges, null);
+      return;
+    }
     if (!entity && !q) {
       const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
       out.innerHTML = `
         <div class="graph-tools">
-          <span>Overview: the most connected concepts, methods, tools and datasets</span>
+          ${domainSelect(domain, "domain", "draw one module's graph")}
+          <span>${domain ? `The <b>${esc(domain)}</b> documents' graph: its most connected things` : "Overview: the most connected concepts, methods, tools and datasets"}</span>
           <span class="muted">· faint lines: hubs that share documents · click a node to expand it, click it again to fold it, double-click to open its neighbourhood</span>
           <button type="button" id="graph-fit" class="secondary">fit</button>
         </div>
@@ -448,7 +474,8 @@ async function viewGraph(arg, p) {
       const panel = document.getElementById("graph-panel");
       const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
       document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
-      const overview = await api("/graph/overview", { limit: 30 });
+      out.querySelector("select[name=domain]").addEventListener("change", (e) => go("graph", "", e.target.value ? { domain: e.target.value } : {}));
+      const overview = await api("/graph/overview", { limit: 30, domain: domain || undefined });
       if (!overview.nodes.length) { out.innerHTML = `<p class="muted">The graph is empty; run an extraction first.</p>`; return; }
       graph.merge(overview.edges, null, overview.nodes, overview.links);
       return;

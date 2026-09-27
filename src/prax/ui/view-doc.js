@@ -555,6 +555,7 @@ async function viewDoc(id, p) {
       <div class="doc-actions-group doc-actions-open">
         <a href="${originalHref(doc.id, firstPage)}" target="_blank" rel="noopener">open original ↗</a>
         <a href="/doc/${doc.id}/text" target="_blank" rel="noopener">raw text ↗</a>
+        <a href="#graph?doc=${doc.id}" title="what this document says, as a graph">graph</a>
         ${nFigures ? `<a href="#" id="figures" title="every picture of the document at a glance">${nFigures} figure${nFigures === 1 ? "" : "s"}…</a>` : ""}
       </div>
       </div>

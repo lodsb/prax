@@ -1810,3 +1810,22 @@ on.
       before; this shows them by themselves.
 - [x] **A module chosen filters at once**, without a second click on
       Filter.
+
+## 2026-09-27: stage L, the graph by module and by document
+
+- [x] **One module's graph.** `store.hub_graph(domain=)` draws the
+      overview from what that module's documents (and those of the
+      modules built on it, `Ontology.within`) say, and adds the module's
+      own kinds of thing to the hub types, so the kitchen opens on olive
+      oil, salt, onions and Dal Makhani rather than on concepts. The
+      documents no module was set for are left out here, unlike in a
+      browse or a search: they are in every module and would draw the
+      whole library back in. The graph view has a module select; on the
+      live store the kitchen overview takes 1.2 s, studio 0.4 s, the
+      unfiltered one 2.6 s as before.
+- [x] **A document's own graph.** `GET /graph/document/{id}`
+      (`store.document_edges`, at most `DOCUMENT_EDGES` = 300) returns
+      the document's live edges in traverse's shape, the facts about its
+      own entity first. The document page has a `graph` link to
+      `#graph?doc=N`, whose nodes expand across the library as any.
+      Document 10070: 21 edges.
