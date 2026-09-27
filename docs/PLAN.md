@@ -7,6 +7,45 @@ Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
+## The order, agreed 2026-09-27, second half (from niggles.txt)
+
+F–J below are done, and two niggles with them (taco/tacos is I, the
+maintenance workflow and its banner are J). What is left of niggles.txt,
+with the graph's correctness and the two held-back features, in this
+order: a bug a user sees first, then the graph views, then what the graph
+reads against, then the machine, then new ways in, then the features;
+the review of the lists a person decides goes last.
+
+- [ ] **K. Browse loses documents when only the module changes**, and
+      "unassigned" shows only a label (niggles.txt). A bug in the view or
+      in `GET /documents`' domain filter; reproduce, test, fix.
+- [ ] **L. The graph by module, and a document's own graph.** The graph
+      view filtered to one domain's entities, and a link from a document
+      page into the graph seeded with that document's entities.
+- [ ] **M. What the graph reads against.** Ontology v9 (the relations a
+      document takes name `paper` where any `document` should do), then
+      the decision on the 1,021 documents read against an older version
+      (a full re-run or a delta pass), then an `electronics` module for
+      datasheets (pins, packages, electrical characteristics), grown from
+      what the review queue holds for them, as studio was. A module for
+      code waits for documents that need it.
+- [ ] **N. The card and the memory when nothing runs.** Unload the GPU
+      models after an idle while and load them when a queue asks (`prax
+      up`'s swap exists; the plan's "let a queue ask for the card"), and
+      the 16.6 GB of mapped model pages a fresh load left in RAM on
+      2026-09-27.
+- [ ] **O. A portable sender for other machines.** One file, no
+      dependencies beyond what an old system has, that walks a tree, asks
+      the door by hash whether it holds each file, and sends what it does
+      not (PDFs and text first). Audio and video by reference rather than
+      by copy is its own design question, written down, not built.
+- [ ] **P. Communities** (below, "A partition, and a way to keep it"):
+      the hub decision it waited on is H.
+- [ ] **Q. A confidence that was measured** (below).
+- [ ] **R. The lists a person decides, last:** a review page for the 741
+      likely merges and the 1,632 split names, with the merge and the
+      unmerge the door already has.
+
 ## The order, agreed 2026-09-27
 
 A–E below are done. This is what follows, in this order: first what
