@@ -141,3 +141,31 @@ def test_the_sender_sends_what_the_door_lacks_and_nothing_twice(
     (tree / "papers" / "three.txt").write_text("a third " * 40)
     assert sender.run([*args, "--quiet"]) == 2
     assert "HTTP 401" in capsys.readouterr().err
+
+
+def test_a_name_that_is_not_utf8_becomes_text() -> None:
+    """A NAS share's Latin-1 file name reached Python 3 with its bad byte
+    as a lone surrogate, and printing it ended the run (2026-09-27)."""
+    sender = _sender()
+    for raw, text in (
+        (b"Aufgabe L\xe4nge.pdf", "Aufgabe Länge.pdf"),  # Latin-1 / cp1252
+        ("Grüße.pdf".encode(), "Grüße.pdf"),  # UTF-8, untouched
+        (b"caf\x80 menu.pdf", "caf€ menu.pdf"),  # cp1252 only
+        (b"\x81odd.pdf", "\x81odd.pdf"),  # not in cp1252: Latin-1
+    ):
+        name = raw.decode("utf-8", "surrogateescape")
+        got = sender.fs_text(name)
+        assert got == text
+        got.encode("utf-8")  # printable, sendable, storable
+
+
+def test_saying_a_name_never_ends_the_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    import io
+    import types
+
+    sender = _sender()
+    ascii_out = io.TextIOWrapper(io.BytesIO(), encoding="ascii", newline=chr(10))
+    monkeypatch.setattr(sender.sys, "stdout", ascii_out)
+    sender.say(types.SimpleNamespace(quiet=False), "would send Länge.pdf")
+    ascii_out.flush()
+    assert ascii_out.buffer.getvalue() == b"would send L?nge.pdf\n"

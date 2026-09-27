@@ -90,16 +90,55 @@ READ = 1 << 20
 
 
 def say(opts, text):
-    if not opts.quiet:
+    if opts.quiet:
+        return
+    try:
         print(text)
-        sys.stdout.flush()
+    except UnicodeEncodeError:  # a terminal that cannot show a character
+        enc = getattr(sys.stdout, "encoding", None) or "ascii"
+        print(text.encode(enc, "replace").decode(enc, "replace"))
+    sys.stdout.flush()
+
+
+# the encodings a file name that is not UTF-8 is tried in: the Windows and
+# Latin-1 code pages old NAS shares and Samba mounts are full of. Latin-1
+# decodes any byte, so it is last and always answers.
+LEGACY = ("cp1252", "latin-1")
+
+
+def _decode_name(raw):
+    """File name bytes as text: UTF-8 when they are, else a legacy code page."""
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        pass
+    for enc in LEGACY:
+        try:
+            return raw.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", "replace")
 
 
 def fs_text(path):
-    """A path as text, whatever the platform gives back."""
-    if PY2 and isinstance(path, str):
-        return path.decode(sys.getfilesystemencoding() or "utf-8", "replace")
-    return path
+    """A path as text that can be printed, sent and stored.
+
+    Python 3 hands a file name that is not UTF-8 over with each bad byte as
+    a lone surrogate (an "ä" written as the Latin-1 byte 0xE4 arrives as
+    "\\udce4"). The file opens fine under that name, but the text cannot be
+    printed or encoded, so the original bytes are taken back and decoded:
+    UTF-8 when they are, else the Windows or Latin-1 code page.
+    """
+    if PY2:
+        if isinstance(path, str):
+            return _decode_name(path)
+        return path
+    try:
+        path.encode("utf-8")
+        return path
+    except UnicodeEncodeError:
+        raw = path.encode("utf-8", "surrogateescape")
+        return _decode_name(raw)
 
 
 # ---------------------------------------------------------------- the tree
