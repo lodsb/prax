@@ -59,6 +59,9 @@ def _graph(door: Door, a: Any) -> int:
         out.fail("prax import graph FILE --name SOURCE")
         return 2
     path = Path(a.files[0]).expanduser()
+    if not path.is_file():  # else it reads as a door that is not there
+        out.fail(f"no such file: {path}")
+        return 2
     source = a.name or path.stem.removesuffix(".graph")
     rep = door.post_bytes(
         "/graph/import",
