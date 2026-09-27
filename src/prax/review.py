@@ -255,7 +255,7 @@ def _looks_person(name: str) -> bool:
 
 
 def decide_unmapped(
-    item: dict[str, Any], doc: tuple[str, ...] | None
+    item: dict[str, Any], doc: tuple[str, str, str | None] | None
 ) -> tuple[str, list[store.Edge], str | None]:
     """Rules for items without types: the relation the model named and the
     shape of the two names decide. Affiliation between a person and an
@@ -549,7 +549,7 @@ DEVICE_DST = {
 
 
 def _self_as_device(
-    item: dict[str, Any], doc: tuple[str, ...] | None
+    item: dict[str, Any], doc: tuple[str, str, str | None] | None
 ) -> list[store.Edge] | None:
     if not doc or len(doc) < 3 or not doc[2]:
         return None
@@ -598,7 +598,7 @@ def _self_document_type(onto: ontology.Ontology, rel: str, own: str) -> str:
 
 
 def decide(
-    item: dict[str, Any], doc: tuple[str, ...] | None
+    item: dict[str, Any], doc: tuple[str, str, str | None] | None
 ) -> tuple[str, list[store.Edge], str | None]:
     """What the rules say about one typed item: ``("link", edges, rule)``,
     ``("drop", [], rule)`` or ``("open", [], None)``. Pure; the ontology

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import itertools
 import re
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -81,7 +81,7 @@ def graph_of(
     docs = [set(d) for d in documents]
     count = Counter(e for d in docs for e in d)
     keep = {e for e, n in count.items() if n >= min_docs}
-    w: Counter[tuple[int, int]] = Counter()
+    w: dict[tuple[int, int], float] = defaultdict(float)
     for d in docs:
         members = sorted(d & keep)
         if len(members) < 2:

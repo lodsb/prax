@@ -642,7 +642,7 @@ def do_adjudicate(
     from prax import resolution
 
     if spec.kind == "claude":
-        judge: Any = resolution.ClaudeAdjudicator(model=spec.model)
+        judge: Any = resolution.ClaudeAdjudicator(model=spec.model or spec.name)
     else:
         judge = resolution.StubAdjudicator(threshold=1.0)  # a local model: later
     candidates = [

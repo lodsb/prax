@@ -722,16 +722,16 @@ def chunk(text: str) -> list[Chunk]:
             # chunk before it (a wrapped title), or is text before the first
             spans = references.entry_spans(el.text)
             if spans and not spans[0][2] and chunks and chunks[-1].kind == "reference":
-                last = chunks[-1]
+                prior = chunks[-1]
                 a, b, _ = spans[0]
                 chunks[-1] = Chunk(
                     "reference",
-                    text[last.char_start : el.start + b],
-                    last.char_start,
+                    text[prior.char_start : el.start + b],
+                    prior.char_start,
                     el.start + b,
-                    last.page,
-                    last.heading,
-                    parse_reference(text[last.char_start : el.start + b]),
+                    prior.page,
+                    prior.heading,
+                    parse_reference(text[prior.char_start : el.start + b]),
                 )
                 spans = spans[1:]
             if spans and not spans[0][2]:
@@ -837,7 +837,11 @@ def _assign_time_ends(chunks: list[Chunk]) -> None:
     same moment as its paragraph does not end it: the next later mark does)."""
     timed = [c for c in chunks if c.time is not None]
     for i, c in enumerate(timed):
-        later = next((d.time for d in timed[i + 1 :] if d.time > c.time), None)
+        now_ = c.time or 0.0  # every chunk here is timed
+        later = next(
+            (d.time for d in timed[i + 1 :] if d.time is not None and d.time > now_),
+            None,
+        )
         if later is not None:
             c.time_end = later
 

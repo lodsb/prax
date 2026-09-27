@@ -209,11 +209,12 @@ def rename_display_language(con: sqlite3.Connection) -> dict[str, int]:
         if n % 2000 == 0:
             con.commit()
     con.commit()
-    return {
+    out: dict[str, Any] = {
         "entities": len(rows),
         "renamed": moved,
         "language": display_language(),
     }
+    return out
 
 
 PRINTED_MAX = 120  # a printed name longer than this is a sentence

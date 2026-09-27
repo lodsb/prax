@@ -749,7 +749,7 @@ def _uncounted_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
     from prax.store import documents as docs
 
     ids = docs.uncounted_pages(con)  # all of them: the repair counts them all
-    out = []
+    out: list[Any] = []
     for start in range(0, len(ids), 500):
         part = ids[start : start + 500]
         marks = ",".join("?" * len(part))

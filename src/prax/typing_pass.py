@@ -192,7 +192,7 @@ def hand_out(con: Any, *, limit: int) -> list[dict[str, Any]]:
     """Up to ``limit`` batches for a worker: the items, their documents'
     titles and own types, and the domains the batch's ontology subset is
     made of (the worker rebuilds the prompt from those)."""
-    out = []
+    out: list[dict[str, Any]] = []
     for b in batches(con):
         if len(out) >= limit:
             break

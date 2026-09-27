@@ -281,7 +281,9 @@ class Answerer(Protocol):
     lines under a grammar for a local model (``prax.surf``). ``reading``
     is its default and largest reading budget in tokens."""
 
-    name: str
+    @property
+    def name(self) -> str: ...
+
     reading: tuple[int, int]
 
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]: ...

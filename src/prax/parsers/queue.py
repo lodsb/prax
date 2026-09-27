@@ -131,7 +131,8 @@ def parse_one(
     filename = path.replace("\\", "/").rsplit("/", 1)[-1] if path else None
     previous: str | None = None
     if doc["text_len"] and any(e.previous for e in exts):
-        previous = store.get_document(con, doc_id)["text"]
+        held = store.get_document(con, doc_id)
+        previous = held["text"] if held else None
     last_error: Exception | None = None
     for ext in exts:
         t0 = time.monotonic()

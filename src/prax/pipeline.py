@@ -576,7 +576,7 @@ def _titles_step(con: sqlite3.Connection, out: dict[str, Any], log: Log | None) 
     ]
     if spec is None:  # no model: only the recase rule can do anything
         chosen = [c for c in chosen if c[1] == "caps"]
-    if chosen and _paid(spec):
+    if chosen and spec is not None and _paid(spec):
         out["titles"] = f"skipped: the titles step is {spec.name} (paid)"
     elif chosen:
         runtime = models.runtime(spec) if spec else None

@@ -543,8 +543,8 @@ def refresh_blocks(
             b = next(x for x in found if x.id == b_id)
             print_ = _fingerprint(con, b.question, dict(b.options))
             kept = dict(asks.get(b_id) or {})
-            history = list(kept.get("history") or [])
-            history.append(
+            answered: list[dict[str, Any]] = list(kept.get("history") or [])
+            answered.append(
                 {
                     "revision": revision,
                     "at": now,
@@ -567,7 +567,7 @@ def refresh_blocks(
                 source_hashes=_hashes(con, docs),
                 top=print_["top"],
                 since_id=print_["since_id"],
-                history=history[-50:],
+                history=answered[-50:],
             )
             asks[b_id] = kept
             report[b_id] = {
@@ -656,8 +656,8 @@ def refresh_all(
     """Every question page checked and, when due, asked again, then every
     page with ask blocks; ``only`` names one page by slug, or one block
     as ``slug#id``. Returns per page what happened."""
-    slug_only, _, block_only = (only or "").partition("#")
-    slug_only = store.slugify(slug_only) if slug_only else None
+    slug_part, _, block_only = (only or "").partition("#")
+    slug_only = store.slugify(slug_part) if slug_part else None
     pages = question_pages(con)
     if slug_only:
         pages = [p for p in pages if p["slug"] == slug_only]

@@ -406,11 +406,11 @@ def compose(modules: list[Module]) -> Ontology:
                     reversed_aliases.add(alias)
     self_types: list[str] = []
     for m in modules:
-        for t in m.self_types:
-            if t not in types:
-                raise ValueError(f"module {m.name!r}: self type {t!r} is unknown")
-            if t not in self_types:
-                self_types.append(t)
+        for own in m.self_types:
+            if own not in types:
+                raise ValueError(f"module {m.name!r}: self type {own!r} is unknown")
+            if own not in self_types:
+                self_types.append(own)
     if len(modules) == 1 and modules[0].name == "main":
         version = modules[0].version
     else:

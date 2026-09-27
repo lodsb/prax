@@ -43,6 +43,8 @@ jobs:
         run: |
           ruff check .
           ruff format --check .
+      - name: mypy
+        run: mypy
       - name: pytest
         run: pytest -q -p no:cacheprovider
 

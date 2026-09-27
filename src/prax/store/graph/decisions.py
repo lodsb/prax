@@ -120,7 +120,7 @@ def queue_review(
         (source_doc, src, src_type, rel, dst, dst_type, evidence, reason, version),
     )
     con.commit()
-    return cur.lastrowid
+    return int(cur.lastrowid or 0)
 
 
 def _review_where(

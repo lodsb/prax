@@ -296,9 +296,10 @@ def _ocr_engine() -> Any:
     if gpu:
         params["EngineConfig.onnxruntime.use_dml"] = True
     rapidocr = importlib.import_module("rapidocr")
-    backend.ENGINE = rapidocr.RapidOCR(params=params) if params else None
-    backend._prax_choice = choice
-    return backend.ENGINE or backend.init_engine()
+    # the backend module keeps its engine in a global; prax sets it
+    setattr(backend, "ENGINE", rapidocr.RapidOCR(params=params) if params else None)  # noqa: B010
+    setattr(backend, "_prax_choice", choice)  # noqa: B010
+    return getattr(backend, "ENGINE", None) or backend.init_engine()
 
 
 def _ocr_pages(doc: Any, engine: Any, *, right_to_left: bool) -> str:
@@ -360,7 +361,7 @@ def _ocr_model_version(lang: str) -> str:
     import yaml
 
     rapidocr = importlib.import_module("rapidocr")
-    catalogue = Path(rapidocr.__file__).parent / "default_models.yaml"
+    catalogue = Path(str(rapidocr.__file__)).parent / "default_models.yaml"
     models = yaml.safe_load(catalogue.read_text(encoding="utf-8"))
     for version in ("PP-OCRv6", "PP-OCRv5", "PP-OCRv4", "PP-OCRv3"):
         names = models.get("onnxruntime", {}).get(version, {}).get("rec", {})
@@ -627,7 +628,7 @@ def _marker_scan_pictures(text: str, images: dict[str, str], scanned: set[int]) 
         if not m or int(m.group("page")) not in scanned:
             out.append(line)
             continue
-        b64 = images.get(m.group("name"))
+        b64 = images.get(m.group("name")) or ""
         try:
             ok = bool(b64) and bool(base64.b64decode(b64, validate=True))
         except (ValueError, binascii.Error):

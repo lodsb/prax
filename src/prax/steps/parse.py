@@ -116,7 +116,8 @@ class Parse(Step):
                 # the extractor works on the current text: a second reading
                 # of an image joins the first (vision.merge_readings), the
                 # figures' readings and references go into the parsed text
-                item["previous"] = store.get_document(h.con, doc_id)["text"]
+                held = store.get_document(h.con, doc_id)
+                item["previous"] = held["text"] if held else None
             items.append(item)
             offered.add(doc_id)
         waiting = list(inbox.pending_captures(h.con))

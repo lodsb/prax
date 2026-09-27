@@ -476,7 +476,8 @@ def _desc(onto: ontology.Ontology, name: str) -> str:
 
 
 class Extractor(Protocol):
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def extract(self, doc: DocumentInput) -> Extraction: ...
 

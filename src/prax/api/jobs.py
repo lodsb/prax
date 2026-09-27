@@ -593,8 +593,8 @@ def backup_start(req: BackupReq, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
-def _start_backup(con: Any, dest: str | None, *, archive: bool) -> dict[str, Any]:
-    dest = store.backup_target(dest)
+def _start_backup(con: Any, where: str | None, *, archive: bool) -> dict[str, Any]:
+    dest = store.backup_target(where)
     job = store.Job(con, "backup", note=str(dest))
 
     def run() -> None:

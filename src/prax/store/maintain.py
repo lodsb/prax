@@ -342,7 +342,7 @@ def link_references(
     by_doi = {v["doi"]: k for k, v in lib.items() if v["doi"]}
     by_arxiv = {v["arxiv"]: k for k, v in lib.items() if v["arxiv"]}
     bibs = bibliographies(con, ids=ids)
-    stats = Counter()
+    stats: Counter[str] = Counter()
     todo = []
     for doc_id, (text_hash, text) in bibs.items():
         stamp = get_meta(con, doc_id).get("references") or {}

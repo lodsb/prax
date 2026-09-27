@@ -374,7 +374,7 @@ def promoted_documents(
                 "domains": meta.get("domains"),
                 "done": bool(producer)
                 and extracted_by(
-                    meta, producer, ontology_version=expected_version(meta, onto)
+                    meta, producer or "", ontology_version=expected_version(meta, onto)
                 ),
             }
         )

@@ -592,8 +592,6 @@ def ready(spec: ModelSpec | None, *, fresh: float = READY_FRESH) -> dict[str, An
             out.update(_openai_ready(spec))
         elif spec.kind == "claude":
             out.update(_claude_ready(spec))
-        elif spec.kind == "gguf":
-            out.update(_gguf_ready(spec))
     _ready[spec.name] = (now, dict(out))
     return out
 
@@ -630,35 +628,6 @@ def _claude_ready(spec: ModelSpec) -> dict[str, Any]:
             "ok": False,
             "why": f"{spec.api_key_env} is not set in this process",
             "how": f"set {spec.api_key_env}, or point the step at a local model",
-        }
-    return {"ok": True, "why": "", "how": ""}
-
-
-def _gguf_ready(spec: ModelSpec) -> dict[str, Any]:
-    """A model loaded in the door's own process answers by the file being
-    there and the card having room for it."""
-    from prax import hostinfo
-
-    path = Path(str(spec.path or ""))
-    if not path.exists():
-        return {
-            "ok": False,
-            "why": f"{path.name or spec.name} is not on this host",
-            "how": "prax fetch, or point the step elsewhere",
-        }
-    need = int(path.stat().st_size / (1024 * 1024))
-    room = hostinfo.room(need)
-    if room["fits"] is False:
-        held = ", ".join(f"{h['name']} {h['mb']} MB" for h in room["free_by"][:3])
-        return {
-            "ok": True,  # it will load on the CPU rather than refuse
-            "why": "",
-            "how": "",
-            "warn": (
-                f"about {need} MB wanted, {room['free_mb']} free"
-                + (f"; {held} would have to give it up" if held else "")
-                + ": this will fall back rather than refuse"
-            ),
         }
     return {"ok": True, "why": "", "how": ""}
 

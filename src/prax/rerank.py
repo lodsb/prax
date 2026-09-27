@@ -72,7 +72,8 @@ def current_spec() -> ModelSpec | None:
 
 
 class Reranker(Protocol):
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def score(self, query: str, texts: list[str]) -> np.ndarray: ...
 

@@ -273,5 +273,9 @@ def merge_readings(fresh: str, previous: str) -> str:
     by = "; read again by ".join(m for m, _ in allr)
     parts = [head, "", f"*Image described by {by}.*"]
     for model, body in allr:
-        parts += ["", _SECTION.sub(lambda s, m=model: f"## {s.group(1)} ({m})", body)]
+
+        def heading(s: re.Match[str], m: str = model) -> str:
+            return f"## {s.group(1)} ({m})"
+
+        parts += ["", _SECTION.sub(heading, body)]
     return "\n".join(parts).rstrip() + "\n"

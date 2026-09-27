@@ -176,7 +176,7 @@ class Adjudicate(Step):
 
         if models.resolve("adjudicate") is None:
             return h.nothing()
-        items = []
+        items: list[dict[str, Any]] = []
         for c in resolution.plan(h.con).likely:
             if len(items) >= h.limit or not h.free(c.drop):
                 continue
@@ -190,7 +190,7 @@ class Adjudicate(Step):
                     "score": round(c.score, 4),
                 }
             )
-        h.lease([i["drop"] for i in items])
+        h.lease([int(i["drop"]) for i in items])
         return h.batch(items)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:

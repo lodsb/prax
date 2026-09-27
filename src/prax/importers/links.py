@@ -147,9 +147,10 @@ def _from_epoch(value: str | None) -> str | None:
         seconds = int(value)
     except ValueError:
         return None
-    if seconds > 1e11:  # milliseconds, or Chrome's microseconds since 1601
-        seconds = seconds / 1000 if seconds < 1e14 else seconds / 1e6 - 11644473600
-    return datetime.fromtimestamp(seconds, tz=UTC).strftime("%Y-%m-%d")
+    stamp = float(seconds)
+    if stamp > 1e11:  # milliseconds, or Chrome's microseconds since 1601
+        stamp = stamp / 1000 if stamp < 1e14 else stamp / 1e6 - 11644473600
+    return datetime.fromtimestamp(stamp, tz=UTC).strftime("%Y-%m-%d")
 
 
 def read_html(html: str, *, tags: list[str] | None = None) -> Iterator[Item]:

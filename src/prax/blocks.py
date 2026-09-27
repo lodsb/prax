@@ -104,7 +104,7 @@ def blocks(text: str) -> list[Block]:
     after the head line, and is filled like any."""
     text = text or ""
     heads = list(HEAD.finditer(text))
-    tails = {}
+    tails: dict[str, Any] = {}
     for m in TAIL.finditer(text):
         attrs, _ = _attrs(m.group("attrs"))
         if attrs.get("id"):

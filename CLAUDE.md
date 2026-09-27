@@ -173,6 +173,10 @@ revisit threshold, under "Decision thresholds" below.
   The answer is Kùzu (embedded) for the edges, not Neo4j.
 - SQLite write contention across capture sources. The answer is the
   single writer queue, not a new database.
+- One archive folder passes 10,000 files (`data/archive/<sha256[:2]>/`;
+  56,976 files in 256 folders, 177–263 each, on 2026-09-27). The answer
+  is a second level, `<sha256[:2]>/<sha256[2:4]>/`, moved once. More
+  levels cost inodes rather than saving them: every folder is one.
 
 The full reasoning behind each decision is in `docs/rationale.md`. The
 system as built, with the life of a document and of a query and a
@@ -232,7 +236,8 @@ reference `docs/ask.md`.
 - Python 3.11 or later, `pyproject.toml` with uv or pip, `pytest` for
   tests. The dev environment is a `.venv` in the repo root
   (`docs/howto.md`).
-- Type hints everywhere; `ruff` clean.
+- Type hints everywhere; `ruff` clean and `mypy` clean (its default mode,
+  `[tool.mypy]` in pyproject; strict mode is later, file by file).
 - Schema changes are numbered migrations in `src/prax/migrations/`
   (`NNNN_name.sql`, contiguous), applied by `store.init_db` and tracked
   in `PRAGMA user_version`. Never edit an applied migration; add a new

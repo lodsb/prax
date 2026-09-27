@@ -259,9 +259,9 @@ def plan(
         for e in ents:
             if e["type"] in TWIN_TYPES and e["id"] not in taken:
                 by_key[normalize(e["name"])].setdefault(e["type"], e)
-        for members in by_key.values():
-            if len(members) == 2:
-                keep, drop = members["method"], members["concept"]
+        for twin in by_key.values():
+            if len(twin) == 2:
+                keep, drop = twin["method"], twin["concept"]
                 out.twins.append(
                     Candidate(
                         keep["id"],

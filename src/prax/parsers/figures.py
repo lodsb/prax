@@ -301,7 +301,7 @@ def _anchor_line(lines: list[str], fig: Figure) -> int | None:
     if fig.page is not None:
         # the page's segment; the caption line inside it if there is one
         first, last = _page_span(lines, fig.page)
-        if first is None:
+        if first is None or last is None:  # both or neither
             return None
         key = _norm(fig.caption)[:40]
         if key and _CAPTION.match(fig.caption):
@@ -815,7 +815,7 @@ def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
         if max(im.size) > MAX_SIDE:
             im.thumbnail((MAX_SIDE, MAX_SIDE))
         if im.mode not in ("RGB", "RGBA", "L"):
-            im = im.convert("RGBA" if "A" in im.mode else "RGB")
+            im = im.convert("RGBA" if "A" in im.mode else "RGB")  # type: ignore[assignment]
         buf = io.BytesIO()
         if im.mode == "RGB":
             im.save(buf, "JPEG", quality=88)

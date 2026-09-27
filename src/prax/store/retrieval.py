@@ -453,7 +453,7 @@ def _fts_search(
     # research took 940 ms against 83 (2026-09-26). A small scope (the
     # kitchen, where `apple` has thousands of chunks elsewhere) keeps the
     # filter inside
-    wide = bool(scope) and _share(con, scope) >= WIDE_SCOPE
+    wide = scope is not None and bool(scope) and _share(con, scope) >= WIDE_SCOPE
     if kind is None and not snippets and (not scope or wide):
         # rank inside the keyword index alone, then join the survivors: the
         # joins to chunks and documents ran for every matched row before
@@ -1394,6 +1394,13 @@ def _save_delta(path: Path) -> dict[str, Any]:
     return _merge(path)  # a large delta, or no main file yet: outside the lock
 
 
+def _present(vector: Any) -> Any:
+    """A vector the index holds: a key it listed is there under the lock."""
+    if vector is None:
+        raise KeyError("a listed key without a vector")
+    return vector
+
+
 def _merge(path: Path) -> dict[str, Any]:
     """Fold the delta into the main file. The building — the main index
     loaded into memory, the delta's vectors added, the result written to a
@@ -1413,11 +1420,11 @@ def _merge(path: Path) -> dict[str, Any]:
     with _INDEX_LOCK:
         delta = _delta(path)
         keys = [int(k) for k in delta.all_keys()]
-        vecs = np.vstack([delta.get(k) for k in keys]) if keys else None
+        vecs = np.vstack([_present(delta.get(k)) for k in keys]) if keys else None
     taken = set(keys)
     # the build: a private in-memory copy of the main file, nobody's view
     main = vectors_mod.VectorIndex(path, VEC_DIM, writable=True)
-    if keys:
+    if keys and vecs is not None:
         main.add(keys, vecs)
     tmp = path.with_suffix(path.suffix + ".merging")
     main.save_to(tmp)
@@ -1433,7 +1440,9 @@ def _merge(path: Path) -> dict[str, Any]:
     with _INDEX_LOCK:
         delta = _delta(path)
         later = [int(k) for k in delta.all_keys() if int(k) not in taken]
-        later_vecs = np.vstack([delta.get(k) for k in later]) if later else None
+        later_vecs = (
+            np.vstack([_present(delta.get(k)) for k in later]) if later else None
+        )
         for key in [(str(path), False), (str(path), True), (str(dpath), True)]:
             idx = _indexes.pop(key, None)
             if idx is not None:
@@ -1441,7 +1450,7 @@ def _merge(path: Path) -> dict[str, Any]:
         os.replace(tmp, path)
         if dpath.exists():
             dpath.unlink()
-        if later:
+        if later and later_vecs is not None:
             fresh = _delta(path)  # a new, empty one
             fresh.add(later, later_vecs)
             fresh.save()
@@ -1839,15 +1848,15 @@ def _similar_documents(
     for ranked in lists:
         for rank, d in enumerate(ranked, 1):
             scores[d] = scores.get(d, 0.0) + 1.0 / (RRF_K + rank)
-    ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+    fused = sorted(scores.items(), key=lambda kv: -kv[1])
     if domain:  # a wider slice, then the module's documents, then the cut
-        ranked = [
+        fused = [
             (did, score)
-            for did, score in ranked[: max(limit * 5, 40)]
+            for did, score in fused[: max(limit * 5, 40)]
             if _filter_domain(con, [{"doc_id": did}], domain)
         ]
     out = []
-    for did, score in ranked[:limit]:
+    for did, score in fused[:limit]:
         d = con.execute(
             "SELECT title, mime FROM documents WHERE id = ?", (did,)
         ).fetchone()

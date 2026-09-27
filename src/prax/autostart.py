@@ -20,6 +20,12 @@ from pathlib import Path
 
 from prax import config, up
 
+
+def _uid() -> int:
+    """This user's id, for launchctl's gui/<uid> domain (macOS only)."""
+    return int(getattr(os, "getuid", lambda: 0)())
+
+
 LABEL = "io.github.lodsb.prax"
 TASK_PATH = "\\prax\\"
 TASK_NAME = "prax up"
@@ -263,7 +269,7 @@ def _install_macos(data_dir: Path) -> list[str]:
     up.logs_dir(data_dir).mkdir(parents=True, exist_ok=True)
     with open(path, "wb") as f:
         plistlib.dump(plist(data_dir), f)
-    domain = f"gui/{os.getuid()}"
+    domain = f"gui/{_uid()}"
     _run(["launchctl", "bootout", f"{domain}/{LABEL}"])  # an older copy, if any
     done = _run(["launchctl", "bootstrap", domain, str(path)])
     lines = [f"wrote {path}"]
@@ -278,6 +284,6 @@ def _uninstall_macos() -> list[str]:
     path = _plist_path()
     if not path.exists():
         return [f"no {path} to remove"]
-    _run(["launchctl", "bootout", f"gui/{os.getuid()}/{LABEL}"])
+    _run(["launchctl", "bootout", f"gui/{_uid()}/{LABEL}"])
     path.unlink()
     return [f"unloaded and removed {path}"]

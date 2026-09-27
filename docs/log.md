@@ -2090,3 +2090,22 @@ on.
   again from its links, and exported as well they would be there twice.
 - [ ] The Claude Code plugin's session-end sync writing
       `.prax/graph.jsonl`, the last part of the design.
+
+## 2026-09-27: the type hints, checked
+
+- [x] **mypy in CI, at zero** (niggles.txt, "type annotations"). The
+      hints were written but nothing read them: mypy's default mode found
+      70 errors in 32 files. None was a live bug. One was dead code: a
+      readiness check for a model `kind: gguf` that `models.KINDS` has
+      never allowed, reading a `ModelSpec.path` that does not exist.
+      `contextlib.suppress` would have hidden it had it ever run; it is
+      gone. Two were a race worth a guard: the parse hand-out and the
+      parse queue read `get_document(...)["text"]` of a document that
+      may have been retired in between. The rest were names reused for a
+      second type, the Protocols declaring `name` as a settable variable
+      where every implementation has a property, and annotations. Strict
+      mode (976) is later, file by file; the JavaScript's `@ts-check`
+      wants `typescript` from npm, a download, so it waits for a yes.
+- [x] **The archive's folders** (niggles.txt, "file cache"): 56,976 files
+      in 256 folders, 177–263 each. No change; a threshold in CLAUDE.md
+      (10,000 in one folder) says when a second level is due.

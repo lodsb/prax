@@ -173,7 +173,7 @@ def link(
         ),
     )
     con.commit()
-    return cur.lastrowid
+    return int(cur.lastrowid or 0)
 
 
 @_reading

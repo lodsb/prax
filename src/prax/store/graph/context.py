@@ -333,7 +333,7 @@ def hub_graph(
     concepts. The documents no module was set for are left out: they are
     in every module, and would put the whole library back."""
     limit = max(1, min(limit, 200))
-    docs, docs_args = "", ()
+    docs, docs_args = "", tuple[str, ...]()
     if domain:
         from prax import ontology
 
@@ -841,7 +841,7 @@ def documents_by_hash(con: sqlite3.Connection, hashes: list[str]) -> dict[str, i
 @_reading
 def page_slugs_of(con: sqlite3.Connection, doc_ids: list[int]) -> list[str]:
     """The slugs of those documents that are pages."""
-    out = []
+    out: list[str] = []
     for start in range(0, len(doc_ids), 500):
         part = doc_ids[start : start + 500]
         marks = ",".join("?" * len(part))
