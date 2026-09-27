@@ -9,6 +9,8 @@ import pytest
 
 from prax import extraction, store
 
+EVERY_MODULE = "core3+craft1+electronics1+kitchen2+research9+studio5+workshop2"
+
 
 def test_synthesis_page_draws_on_sources(con: sqlite3.Connection) -> None:
     a = store.ingest_text(con, "alpha " * 40, title="Paper A")["doc_id"]
@@ -44,7 +46,7 @@ def test_ontology_v5_organizations_and_mentions() -> None:
     from prax import ontology
 
     onto = ontology.current()
-    assert onto.version == "core3+craft1+kitchen2+research9+studio4+workshop2"
+    assert onto.version == EVERY_MODULE
     onto.check_edge("author", "affiliated_with", "organization")
     onto.check_edge("paper", "funded_by", "organization")
     onto.check_edge("tool", "developed_by", "author")

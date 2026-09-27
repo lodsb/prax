@@ -24,8 +24,11 @@
 # v4 (2026-09-13): `written_by` gone — it was core's `authored_by` under
 # another name, and core v2 has that for every kind of document; the
 # name stays as an alias.
+# v5 (2026-09-27, docs/ontology-electronics.md): `has_part` from a
+# component too (a system on module holds its processor, a chip its die
+# blocks), as the schematics asked. The electronics module builds on this.
 module: studio
-version: 4
+version: 5
 requires: [core]
 self_types: [manual, datasheet, schematic, article]
 
@@ -113,9 +116,11 @@ relation_types:
       For a device or a part use `describes`; for a way of doing
       something, craft's `applies`
   has_part:
-    domain: [device]
+    domain: [device, component]
     range: [component, device]
-    description: a component or sub-device the text says is inside or part of the device
+    description: >-
+      a component or sub-device the text says is inside or part of the
+      device or component (a board's processor, a module's flash)
   has_feature:
     domain: [device, component]
     range: [feature]

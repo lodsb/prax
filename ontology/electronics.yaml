@@ -1,0 +1,70 @@
+# prax ontology, electronics module: chips, boards and the paperwork of
+# circuits. Requires studio (device, component, manufacturer, standard,
+# spec, datasheet, schematic), and through it core. Studio says what a
+# piece of gear is and what it can do; this says what a circuit is made of
+# and what each part is.
+#
+# v1 (2026-09-27, docs/ontology-electronics.md): from the review queue of
+# the ten electronics documents the library held (one datasheet, five
+# schematics, four PCB-motor pages). The models wanted a schematic's parts
+# (has_part and covers from a schematic, refused 15 times) and a word for
+# what a part is (instance_of microcontroller, has_spec voltage regulator).
+# `package` is declared ahead of its evidence: no text here prints one yet,
+# and every chip datasheet does. Pins are deliberately not entities: VCC
+# and GND name a different pin on every chip, and a pinout is a table,
+# which a chunk's `data` holds.
+module: electronics
+version: 1
+requires: [studio]
+
+entity_types:
+  part_kind:
+    parent: concept
+    naming: common
+    description: >-
+      What kind of part a component is, as a generic word and never a part
+      number: microcontroller, voltage regulator, flash memory, audio
+      codec, operational amplifier, stepper motor driver, rotary encoder,
+      magnetic angle sensor, LED driver, system on module.
+  package:
+    parent: concept
+    naming: proper  # SOIC-8, QFN-56: a designation, not a word
+    description: >-
+      The physical housing a chip comes in, as the datasheet names it:
+      SOIC-8, TSSOP-20, QFN-56, SOT-23-5, TO-220, LQFP-64, DIP-8, 0603.
+      An ordering code's letters (the "DBVR" of TLV62568DBVR) are not a
+      package unless the text spells out which one they mean.
+
+relation_types:
+  shows_part:
+    domain: [schematic, datasheet]
+    range: [component, device]
+    description: >-
+      a part the circuit drawn in the schematic, or the reference design
+      in the datasheet, is made of: its bill of materials, by part number
+      as printed. A reference designator alone (R12, C3, U1) is not a
+      part. For the device the document is about use `describes`; for
+      what a build uses, workshop's `made_with`
+  serves_as:
+    domain: [component, device]
+    range: [part_kind]
+    description: >-
+      what kind of part it is: RP2040 serves_as microcontroller, W25Q32
+      serves_as flash memory, TLV62568 serves_as voltage regulator
+  in_package:
+    domain: [component]
+    range: [package]
+    description: the housing the part comes in, as the text names it
+
+type_aliases:
+  part_type: part_kind
+  component_type: part_kind
+  ic_package: package
+  chip_package: package
+
+relation_aliases:
+  functions_as: serves_as
+  acts_as: serves_as
+  packaged_in: in_package
+  has_package: in_package
+  shows_component: shows_part

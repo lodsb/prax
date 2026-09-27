@@ -9,6 +9,8 @@ import pytest
 
 from prax import config, ontology
 
+EVERY_MODULE = "core3+craft1+electronics1+kitchen2+research9+studio5+workshop2"
+
 CORE = """
 module: core
 version: 2
@@ -127,12 +129,13 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     assert set(o.modules) == {
         "core",
         "craft",
+        "electronics",
         "kitchen",
         "research",
         "studio",
         "workshop",
     }
-    assert o.version == "core3+craft1+kitchen2+research9+studio4+workshop2"
+    assert o.version == EVERY_MODULE
     assert set(o.self_types) == {
         "paper",
         "manual",
@@ -153,17 +156,14 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
         (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
-    assert (
-        ontology.current().version
-        == "core3+craft1+kitchen2+research9+studio4+workshop2"
-    )
+    assert ontology.current().version == EVERY_MODULE
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
         text.replace("version: 9", "version: 99", 1), encoding="utf-8"
     )
     assert (
         ontology.current().version
-        == "core3+craft1+kitchen2+research99+studio4+workshop2"
+        == "core3+craft1+electronics1+kitchen2+research99+studio5+workshop2"
     )
 
 
@@ -187,7 +187,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 
     workshop = o.for_domains(["workshop"])
     assert set(workshop.modules) == {"core", "craft", "studio", "workshop"}
-    assert workshop.version == "core3+craft1+studio4+workshop2"
+    assert workshop.version == "core3+craft1+studio5+workshop2"
     workshop.check_edge("build", "made_with", "component")  # studio's component
     workshop.check_edge("build", "made_with", "material")  # craft's material
     workshop.check_edge("build", "follows", "design")
@@ -209,7 +209,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 def test_studio_module() -> None:
     o = ontology.current()
     s = o.for_domains(["studio"])
-    assert set(s.modules) == {"core", "studio"} and s.version == "core3+studio4"
+    assert set(s.modules) == {"core", "studio"} and s.version == "core3+studio5"
     assert s.self_types == ("manual", "datasheet", "schematic", "article")
     assert "paper" not in s.types and "cites" not in s.relations
     assert s.is_a("device", "tool") and s.is_a("manufacturer", "organization")
@@ -295,3 +295,24 @@ def test_v9_a_document_where_a_paper_was_named() -> None:
     # what a claim or a tool takes stays as it was
     with pytest.raises(ValueError):
         o.check_edge("claim", "cites", "paper")
+
+
+def test_electronics_module() -> None:
+    """A circuit's parts, what each is and its package, on top of studio
+    (docs/ontology-electronics.md)."""
+    o = ontology.current()
+    e = o.for_domains(["electronics"])
+    assert set(e.modules) == {"core", "studio", "electronics"}
+    assert e.version == "core3+electronics1+studio5"
+    e.check_edge("schematic", "shows_part", "component")
+    e.check_edge("datasheet", "shows_part", "device")
+    e.check_edge("component", "serves_as", "part_kind")
+    e.check_edge("component", "in_package", "package")
+    e.check_edge("component", "has_part", "component")  # studio 5
+    assert e.canonical_relation("functions_as") == "serves_as"
+    with pytest.raises(ValueError):
+        e.check_edge("build", "shows_part", "component")  # workshop's made_with
+    # studio holds the module built on it, and a studio document is still
+    # read against studio alone
+    assert "electronics" in o.within("studio")
+    assert "part_kind" not in o.for_domains(["studio"]).types

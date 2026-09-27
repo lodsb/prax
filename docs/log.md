@@ -1847,3 +1847,24 @@ on.
       standing worker (scope captures) never draws them. At the 230 an
       hour measured this morning a full re-read is about 28 hours of the
       local model. The user's call.
+
+## 2026-09-27: stage M, the electronics module
+
+- [x] **Electronics 1, on top of studio** (`docs/ontology-electronics.md`).
+      It adds `part_kind` and `package`, and three relations: `shows_part`
+      (a schematic's or datasheet's bill of materials), `serves_as` (what
+      kind of part) and `in_package`. It is grown from the queue of the
+      library's ten electronics documents: a schematic's parts were
+      refused 15 times, and a part's kind was tried three ways.
+      `package` is declared ahead of its evidence, since no text here
+      prints one. Pins are not entities: "VCC" names a different pin on
+      every chip.
+- [x] **Studio 5:** `has_part` from a component too.
+- [x] **Migration 0027** moves the `studio4` stamps. The 61 documents read
+      against every module stay due, because they were never read against
+      electronics.
+- [ ] **The electronics documents' domains** (the user's call). Four are
+      tagged `studio` and so are read without electronics, and two
+      schematics are tagged `research`.
+- The user's order: the full re-read of the 6,412 `core1+research5`
+  documents follows once stage H's re-extractions are done.

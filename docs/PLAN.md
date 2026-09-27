@@ -26,7 +26,9 @@ the review of the lists a person decides goes last.
       view filtered to one domain's entities, and a link from a document
       page into the graph seeded with that document's entities.
 - [ ] **M. What the graph reads against.** (2026-09-27: v9 done,
-      `docs/ontology-v9.md`.) Ontology v9 (the relations a
+      `docs/ontology-v9.md`; electronics 1 and studio 5 done,
+      `docs/ontology-electronics.md`; the full re-read after stage H's
+      re-extractions, as the user decided.) Ontology v9 (the relations a
       document takes name `paper` where any `document` should do), then
       the decision on the documents read against an older version (a
       full re-run or a delta pass; the 1,021 of 2026-09-10 are 6,412
