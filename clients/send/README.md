@@ -1,7 +1,8 @@
 # prax_send
 
 One Python file that sends a tree of files from another machine to a
-prax door, only what the door does not hold yet. The standard library
+prax door (the service that holds your library), only what the door
+does not hold yet. The standard library
 only, Python 2.7 or 3. Copy it to a NAS, an old laptop or a server and
 run it there; nothing is installed and nothing on that machine changes.
 
@@ -33,6 +34,21 @@ argument, which PowerShell also passes on) keeps no hashes at all.
 `--insecure` accepts a self-signed certificate. A refused token stops the
 run at once (exit 2); a file that fails is counted and the run goes on
 (exit 1 at the end).
+
+While it runs you see where it is. It shows, in turn:
+
+- the files and folders found while it walks the tree
+- the files and bytes hashed, how many came from the cache, the speed
+  and the time left
+- each batch it asks about, and each file it sends
+
+In a terminal that is one line, updated in place. When the output goes
+to a log (a job under `nohup`), it writes the line every ten seconds
+instead (`--progress-every`). The progress goes to stderr, so the list of
+files on stdout stays clean to pipe or grep. `--quiet` turns it off.
+
+    nohup python prax_send.py /volume1/papers --door http://prax:8000 > send.log 2>&1 &
+    tail -f send.log
 
 Audio and video are not sent. How the library should hold a file too
 large to copy, by reference to where it lives, is written down in

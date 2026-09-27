@@ -169,3 +169,53 @@ def test_saying_a_name_never_ends_the_run(monkeypatch: pytest.MonkeyPatch) -> No
     sender.say(types.SimpleNamespace(quiet=False), "would send Länge.pdf")
     ascii_out.flush()
     assert ascii_out.buffer.getvalue() == b"would send L?nge.pdf\n"
+
+
+class _Stream:
+    """A stream that says whether it is a terminal, and keeps what it got."""
+
+    def __init__(self, tty: bool) -> None:
+        self.tty, self.text, self.encoding = tty, "", "utf-8"
+
+    def isatty(self) -> bool:
+        return self.tty
+
+    def write(self, text: str) -> None:
+        self.text += text
+
+    def flush(self) -> None:
+        pass
+
+
+def test_progress_is_one_line_in_a_terminal_and_timed_lines_in_a_log() -> None:
+    sender = _sender()
+    term = _Stream(tty=True)
+    p = sender.Progress(stream=term)
+    p.show("walking: 10 files", force=True)
+    p.show("walking: 20 files", force=True)
+    assert term.text == "\rwalking: 10 files\rwalking: 20 files"
+    p.clear()  # what say() does before a line of its own
+    assert term.text.endswith("\r" + " " * 17 + "\r")
+    log = _Stream(tty=False)
+    q = sender.Progress(stream=log, every=10)
+    q.show("hashing 1/2", force=True)
+    q.show("hashing 2/2")  # within ten seconds of the last: not written
+    lines = log.text.splitlines()
+    assert len(lines) == 1 and lines[0].endswith(" hashing 1/2")
+    quiet = _Stream(tty=True)
+    sender.Progress(quiet=True, stream=quiet).show("x", force=True)
+    assert quiet.text == ""
+    assert sender.human_bytes(1536) == "1.5 KB" and sender.human_time(125) == "2 min"
+
+
+def test_the_walk_keeps_sizes_and_says_where_it_is(tmp_path: Path) -> None:
+    sender = _sender()
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "one.pdf").write_bytes(b"x" * 100)
+    (tmp_path / "two.txt").write_text("y" * 50)
+    log = _Stream(tty=False)
+    p = sender.Progress(stream=log, every=1)
+    p.every = 0  # every folder, for the test
+    found = sorted(sender.walk([str(tmp_path)], [".pdf", ".txt"], p))
+    assert [size for _, size in found] == [100, 50]
+    assert "walking: " in log.text and "folders, now" in log.text

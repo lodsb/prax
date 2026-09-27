@@ -92,12 +92,92 @@ READ = 1 << 20
 def say(opts, text):
     if opts.quiet:
         return
+    if PROGRESS is not None:
+        PROGRESS.clear()  # a line of its own, not over the status
     try:
         print(text)
     except UnicodeEncodeError:  # a terminal that cannot show a character
         enc = getattr(sys.stdout, "encoding", None) or "ascii"
         print(text.encode(enc, "replace").decode(enc, "replace"))
     sys.stdout.flush()
+
+
+# ---------------------------------------------------------------- progress
+
+PROGRESS = None  # the run's Progress, which say() steps around
+
+
+def human_bytes(n):
+    for unit in ("B", "KB", "MB", "GB"):
+        if n < 1024 or unit == "GB":
+            return ("%d %s" if unit == "B" else "%.1f %s") % (n, unit)
+        n /= 1024.0
+    return "%.1f TB" % n
+
+
+def human_time(seconds):
+    seconds = int(seconds)
+    if seconds < 90:
+        return "%d s" % seconds
+    if seconds < 5400:
+        return "%d min" % round(seconds / 60.0)
+    return "%.1f h" % (seconds / 3600.0)
+
+
+class Progress(object):
+    """What the run is doing, on stderr so the lines on stdout stay clean.
+
+    In a terminal it is one status line, rewritten in place a few times a
+    second. Piped or logged (a NAS job under nohup), it is a line every
+    ``every`` seconds instead, so a log shows the run moving.
+    """
+
+    def __init__(self, quiet=False, every=10.0, stream=None):
+        self.stream = stream or sys.stderr
+        self.quiet = quiet
+        self.tty = bool(getattr(self.stream, "isatty", lambda: False)())
+        self.every = 0.25 if self.tty else max(1.0, every)
+        self.last = 0.0
+        self.shown = 0  # characters of the status line on screen
+
+    def width(self):
+        try:
+            import shutil
+
+            return max(40, shutil.get_terminal_size((100, 20)).columns - 1)
+        except (ImportError, AttributeError, ValueError, OSError):
+            return 99
+
+    def show(self, text, force=False):
+        if self.quiet:
+            return
+        now = time.time()
+        if not force and now - self.last < self.every:
+            return
+        self.last = now
+        if self.tty:
+            text = text[: self.width()]
+            pad = max(0, self.shown - len(text))
+            self._write("\r" + text + " " * pad)
+            self.shown = len(text)
+        else:
+            self._write(time.strftime("%H:%M:%S ") + text + "\n")
+
+    def clear(self):
+        if self.tty and self.shown:
+            self._write("\r" + " " * self.shown + "\r")
+            self.shown = 0
+
+    def done(self):
+        self.clear()
+
+    def _write(self, text):
+        try:
+            self.stream.write(text)
+        except UnicodeEncodeError:
+            enc = getattr(self.stream, "encoding", None) or "ascii"
+            self.stream.write(text.encode(enc, "replace").decode(enc, "replace"))
+        self.stream.flush()
 
 
 # the encodings a file name that is not UTF-8 is tried in: the Windows and
@@ -144,16 +224,24 @@ def fs_text(path):
 # ---------------------------------------------------------------- the tree
 
 
-def walk(roots, exts):
+def walk(roots, exts, progress=None):
     """Every file under the roots whose suffix is wanted, links not
-    followed, hidden files and NAS clutter left out."""
+    followed, hidden files and NAS clutter left out, as ``(path, size)``.
+    With ``progress``, how far the walk has got."""
+    found = folders = total = 0
     for root in roots:
         root = os.path.abspath(root)
         if os.path.isfile(root):
             if os.path.splitext(root)[1].lower() in exts:
-                yield root
+                yield root, os.path.getsize(root)
             continue
         for here, dirs, files in os.walk(root):
+            folders += 1
+            if progress is not None:
+                progress.show(
+                    "walking: %d files (%s) in %d folders, now %s"
+                    % (found, human_bytes(total), folders, fs_text(here))
+                )
             dirs[:] = sorted(
                 d
                 for d in dirs
@@ -168,7 +256,13 @@ def walk(roots, exts):
                 if os.path.islink(path):
                     continue
                 if os.path.splitext(name)[1].lower() in exts:
-                    yield path
+                    try:
+                        size = os.path.getsize(path)
+                    except OSError:
+                        size = 0  # gone, or unreadable: the hashing says which
+                    found += 1
+                    total += size
+                    yield path, size
 
 
 def rank(path, exts):
@@ -193,7 +287,10 @@ class State(object):
             except (IOError, OSError, ValueError):
                 self.seen = {}
 
-    def hash_of(self, path):
+    def hash_of(self, path, read=None):
+        """The sha256 of the file, from the cache when its size and mtime
+        are what they were. ``read(n)`` is told of every block read, so a
+        large file shows progress while it is hashed."""
         st = os.stat(path)
         key = fs_text(path)
         known = self.seen.get(key)
@@ -206,6 +303,8 @@ class State(object):
                 if not block:
                     break
                 h.update(block)
+                if read is not None:
+                    read(len(block))
         digest = h.hexdigest()
         self.seen[key] = [st.st_size, int(st.st_mtime), digest]
         self.dirty += 1
@@ -333,6 +432,13 @@ def parse(argv):
     p.add_option("--dry-run", action="store_true", help="say what would be sent")
     p.add_option("--insecure", action="store_true", help="accept any TLS certificate")
     p.add_option("--quiet", action="store_true", help="only the summary")
+    p.add_option(
+        "--progress-every",
+        type="float",
+        default=10.0,
+        metavar="SECONDS",
+        help="how often a progress line is written when not in a terminal",
+    )
     opts, roots = p.parse_args(argv)
     if not roots:
         p.error("which tree? (ROOT)")
@@ -361,6 +467,7 @@ def exts_of(opts):
 
 
 def run(argv=None):
+    global PROGRESS
     opts, roots = parse(sys.argv[1:] if argv is None else argv)
     exts = exts_of(opts)
     door = Door(opts.door, token_of(opts), insecure=opts.insecure)
@@ -369,35 +476,92 @@ def run(argv=None):
     limit = int(opts.max_mb * (1 << 20))
     counts = {"seen": 0, "known": 0, "sent": 0, "duplicate": 0, "failed": 0, "large": 0}
     started = time.time()
-    paths = sorted(walk(roots, exts), key=lambda path: rank(path, exts))
-    say(opts, "%d files to look at under %s" % (len(paths), ", ".join(roots)))
+    progress = PROGRESS = Progress(quiet=opts.quiet, every=opts.progress_every)
+    found = sorted(walk(roots, exts, progress), key=lambda f: rank(f[0], exts))
+    total_bytes = sum(size for _, size in found)
+    progress.clear()
+    say(
+        opts,
+        "%d files (%s) to look at under %s, found in %s"
+        % (
+            len(found),
+            human_bytes(total_bytes),
+            ", ".join(roots),
+            human_time(time.time() - started),
+        ),
+    )
+    batches = (len(found) + BATCH - 1) // BATCH
+    tally = {"bytes": 0, "read": 0, "cached": 0, "since": time.time(), "where": ""}
+
+    def status(what, force=False):
+        done, elapsed = tally["bytes"], max(0.001, time.time() - tally["since"])
+        rate = tally["read"] / elapsed  # bytes actually read, not the cache's
+        left = total_bytes - done
+        eta = " | ~%s left" % human_time(left / rate) if rate > 0 and left > 0 else ""
+        progress.show(
+            "%s | %d/%d files | %s of %s | %d cached | %s/s%s"
+            % (
+                what,
+                counts["seen"],
+                len(found),
+                human_bytes(done),
+                human_bytes(total_bytes),
+                tally["cached"],
+                human_bytes(rate),
+                eta,
+            ),
+            force=force,
+        )
+
+    def read(n):  # every block hashed: a large file shows it is moving
+        tally["read"] += n
+        tally["bytes"] += n
+        status("hashing, " + tally["where"])
+
     try:
-        for start in range(0, len(paths), BATCH):
+        for number, start in enumerate(range(0, len(found), BATCH), 1):
             batch = []
-            for path in paths[start : start + BATCH]:
+            where = tally["where"] = "batch %d/%d" % (number, batches)
+            for path, size in found[start : start + BATCH]:
                 counts["seen"] += 1
                 try:
-                    if os.path.getsize(path) > limit:
+                    if size > limit:
                         counts["large"] += 1
+                        tally["bytes"] += size
                         say(opts, "too large, left: %s" % fs_text(path))
                         continue
-                    batch.append((path, state.hash_of(path)))
+                    before = tally["read"]
+                    digest = state.hash_of(path, read)
+                    if tally["read"] == before:  # from the cache: nothing read
+                        tally["cached"] += 1
+                        tally["bytes"] += size
+                    batch.append((path, digest))
+                    status("hashing, " + where)
                 except (IOError, OSError) as exc:
                     counts["failed"] += 1
                     say(opts, "cannot read %s: %s" % (fs_text(path), exc))
             if not batch:
                 continue
+            status("asking the door, " + where, force=True)
             held = door.known(sorted({h for _, h in batch}))
             asked = set()
+            new = []
             for path, digest in batch:
                 if digest in held or digest in asked:
-                    counts["known"] += 1
                     continue
                 asked.add(digest)  # the same bytes twice in one tree: once
-                if opts.dry_run:
+                new.append((path, digest))
+            counts["known"] += len(batch) - len(new)
+            if opts.dry_run:
+                for path, _ in new:
                     counts["sent"] += 1
                     say(opts, "would send %s" % fs_text(path))
-                    continue
+                continue
+            for n, (path, digest) in enumerate(new, 1):
+                progress.show(
+                    "sending %d/%d of %s | %d sent so far"
+                    % (n, len(new), where, counts["sent"])
+                )
                 fields = {
                     "by": "send",
                     "domains": opts.domains,
@@ -422,18 +586,22 @@ def run(argv=None):
                     counts["sent"] += 1
                 say(opts, "sent %s -> doc %s" % (fs_text(path), out.get("doc_id")))
     except HTTPError as exc:
+        progress.done()
         print("the door refused: HTTP %s (the token?)" % exc.code, file=sys.stderr)
         return 2
     except URLError as exc:
+        progress.done()
         print("the door did not answer: %s" % exc, file=sys.stderr)
         return 2
     finally:
         state.save()
+        PROGRESS = None
+    progress.done()
     print(
         "%(seen)d looked at, %(known)d already there, %(sent)d " % counts
         + ("to send" if opts.dry_run else "sent")
         + ", %(duplicate)d the same as one there, %(large)d too large,"
-        " %(failed)d failed" % counts + " (%.0f s)" % (time.time() - started)
+        " %(failed)d failed" % counts + " (%s)" % human_time(time.time() - started)
     )
     return 1 if counts["failed"] else 0
 
