@@ -25,10 +25,14 @@ the review of the lists a person decides goes last.
       **L. The graph by module, and a document's own graph.** The graph
       view filtered to one domain's entities, and a link from a document
       page into the graph seeded with that document's entities.
-- [ ] **M. What the graph reads against.** Ontology v9 (the relations a
+- [ ] **M. What the graph reads against.** (2026-09-27: v9 done,
+      `docs/ontology-v9.md`.) Ontology v9 (the relations a
       document takes name `paper` where any `document` should do), then
-      the decision on the 1,021 documents read against an older version
-      (a full re-run or a delta pass), then an `electronics` module for
+      the decision on the documents read against an older version (a
+      full re-run or a delta pass; the 1,021 of 2026-09-10 are 6,412
+      stamped `core1+research5` now, none of them captures, so the
+      standing worker never draws them: about 28 hours of the local
+      model at 230 an hour), then an `electronics` module for
       datasheets (pins, packages, electrical characteristics), grown from
       what the review queue holds for them, as studio was. A module for
       code waits for documents that need it.

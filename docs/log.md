@@ -1829,3 +1829,21 @@ on.
       own entity first. The document page has a `graph` link to
       `#graph?doc=N`, whose nodes expand across the library as any.
       Document 10070: 21 edges.
+
+## 2026-09-27: stage M, ontology v9
+
+- [x] **A document where a paper was named** (`docs/ontology-v9.md`).
+      Research 8 to 9: `cites`, `defines`, `extends`, `contrasts`,
+      `supports`, `uses`, `proposes`, `funded_by`, and the far end of
+      `annotates` and `synthesizes` take any document; `advised_by` any
+      person. Only widened. On a snapshot the replay links 85 of the 895
+      typed items in the queue; the nightly `maintain` does it live.
+- [x] **Migration 0026** restamps the 2,292 `research8` readings. Its
+      pattern matches the version string alone: 1,033 of those metas were
+      written by `json_set`, which leaves no space after a colon, and a
+      pattern like 0018's would have left them due for a re-read.
+- [ ] **The older readings.** The "1,021 documents" of 2026-09-10 are
+      6,412 at `core1+research5` today. None is a capture, so the
+      standing worker (scope captures) never draws them. At the 230 an
+      hour measured this morning a full re-read is about 28 hours of the
+      local model. The user's call.

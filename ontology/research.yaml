@@ -34,8 +34,14 @@
 # kept saying for relations that exist: `is_about`, `proposed`, and the
 # reversed names `mentioned_in`, `discussed_in`, `used_in`, `used_by`,
 # `cited_by`, which flip the ends. No type or relation changed.
+# v9 (2026-09-27, docs/ontology-v9.md): a relation a document takes names
+# `document` where it named `paper`, so an article, a manual, a build or a
+# page fits where a paper did: `cites` (both ends), `defines`, `extends`,
+# `contrasts`, `supports`, `uses`, `proposes`, `funded_by`, and the far
+# end of `annotates` and `synthesizes`. `advised_by` between persons, not
+# authors only. Only widened: every v8 reading is valid under v9.
 module: research
-version: 8
+version: 9
 requires: [core]
 self_types: [paper]
 
@@ -94,10 +100,11 @@ entity_types:
 
 relation_types:
   cites:
-    domain: [paper, page, project]
-    range: [paper]
+    domain: [document]
+    range: [document]
     description: >-
-      the document names another paper by title; never by reference number
+      the document names another document (a paper, a book, an article)
+      by title; never by reference number
   written_at:
     domain: [document]
     range: [organization]
@@ -117,7 +124,7 @@ relation_types:
       tool, dataset — or the person, organization, place, event or work
       it studies; something discussed at length, not mentioned in passing
   defines:
-    domain: [paper, claim]
+    domain: [document, claim]
     range: [concept]
     description: the document gives the concept its definition
   implements:
@@ -125,14 +132,14 @@ relation_types:
     range: [concept, method]
     description: a tool or method realizes a concept or another method
   extends:
-    domain: [paper, method, concept, tool]
-    range: [method, concept, tool, paper]
+    domain: [document, method, concept, tool]
+    range: [method, concept, tool, document]
     description: >-
       the document, method, concept or tool builds on or generalizes a
-      method, concept, tool or an earlier paper
+      method, concept, tool or an earlier document
   contrasts:
-    domain: [paper, method, claim, tool]
-    range: [method, claim, paper, tool, concept]
+    domain: [document, method, claim, tool]
+    range: [method, claim, document, tool, concept]
     description: >-
       the document sets the two against each other (compared with,
       as opposed to); for claims that cannot both hold use contradicts
@@ -141,33 +148,33 @@ relation_types:
     range: [claim]
     description: two claims cannot both hold; a page argues against a claim
   supports:
-    domain: [claim, paper, page]
+    domain: [claim, document]
     range: [claim]
     description: evidence in favour of a claim; a page argues for it
   uses:
-    domain: [paper, method, tool]
+    domain: [document, method, tool]
     range: [dataset, tool, method, concept]
     description: >-
       the document, method or tool employs a dataset, tool, method or
       applies a concept
   proposes:
-    domain: [paper, author, page]
+    domain: [document, person]
     range: [method, tool, claim, concept]
     description: >-
       the document introduces the method, tool, claim or concept as its
       own contribution; or the text credits a named person with
       introducing it
   advised_by:
-    domain: [author]
-    range: [author]
+    domain: [person]
+    range: [person]
     description: doctoral or research supervision stated in the text
   annotates:
     domain: [page]
-    range: [paper, page]
+    range: [document]
     description: a page written about one document (a note, a commentary, an addendum)
   synthesizes:
     domain: [page, project]
-    range: [paper, page]
+    range: [document]
     description: >-
       a synthesis page draws on the document as one of its sources; the
       page's own claims then carry supports and contradicts edges from
@@ -182,7 +189,7 @@ relation_types:
       weakest relation: use it only when nothing stronger holds; never for
       something the document uses, cites or is substantially about
   funded_by:
-    domain: [paper, project]
+    domain: [document]
     range: [organization]
     description: a funder or grant programme acknowledged in the document
 

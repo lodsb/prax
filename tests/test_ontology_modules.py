@@ -132,7 +132,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "studio",
         "workshop",
     }
-    assert o.version == "core3+craft1+kitchen2+research8+studio4+workshop2"
+    assert o.version == "core3+craft1+kitchen2+research9+studio4+workshop2"
     assert set(o.self_types) == {
         "paper",
         "manual",
@@ -155,11 +155,11 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert (
         ontology.current().version
-        == "core3+craft1+kitchen2+research8+studio4+workshop2"
+        == "core3+craft1+kitchen2+research9+studio4+workshop2"
     )
     text = (d / "research.yaml").read_text(encoding="utf-8")
     (d / "research.yaml").write_text(
-        text.replace("version: 8", "version: 99", 1), encoding="utf-8"
+        text.replace("version: 9", "version: 99", 1), encoding="utf-8"
     )
     assert (
         ontology.current().version
@@ -203,7 +203,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     # reads the word as its own method
     assert o.canonical_type("technique") == "technique"
     assert o.for_domains(["research"]).canonical_type("technique") == "method"
-    assert o.for_domains(["research"]).version == "core3+research8"
+    assert o.for_domains(["research"]).version == "core3+research9"
 
 
 def test_studio_module() -> None:
@@ -276,3 +276,22 @@ def test_v8_admits_affiliation_beyond_persons() -> None:
     assert r.canonical_relation("used_in") == "uses" and r.is_reversed("used_in")
     assert o.canonical_relation("publisher_of") == "published_by"
     assert o.is_reversed("publisher_of") and o.is_reversed("contains")
+
+
+def test_v9_a_document_where_a_paper_was_named() -> None:
+    """A relation a document takes accepts every kind of document
+    (docs/ontology-v9.md): the review queue held an article citing, a
+    manual citing, a build using, where only a paper fitted."""
+    o = ontology.current()
+    o.check_edge("article", "cites", "manual")
+    o.check_edge("document", "cites", "document")
+    o.check_edge("build", "uses", "tool")
+    o.check_edge("document", "proposes", "method")
+    o.check_edge("person", "proposes", "concept")
+    o.check_edge("person", "advised_by", "author")
+    o.check_edge("page", "annotates", "recipe")
+    o.check_edge("page", "synthesizes", "article")
+    o.check_edge("article", "funded_by", "organization")
+    # what a claim or a tool takes stays as it was
+    with pytest.raises(ValueError):
+        o.check_edge("claim", "cites", "paper")
