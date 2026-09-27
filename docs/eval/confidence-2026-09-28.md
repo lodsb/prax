@@ -1,10 +1,10 @@
 # A measured confidence: the local model against the adjudicator
 
 2026-09-28. Stage Q (docs/PLAN.md). `scripts/eval_confidence.py` over
-6,126 labelled pairs: 2,704 declines recorded by Opus 5 on 2026-09-17,
-and 3,422 of its 3,683 merges reconstructed (the unstamped merges of the
-likely types that differ after normalization and pass the 0.92 name
-cosine). The local model (qwen3.6-35b, llama-server) was asked each pair
+6,126 labelled pairs. 2,704 are declines Opus 5 recorded on 2026-09-17.
+3,422 are its merges, reconstructed: the unstamped merges of the likely
+types that differ after normalization and pass the 0.92 name cosine
+(Opus made 3,683). The local model (qwen3.6-35b, llama-server) was asked each pair
 alone, in the adjudicator's words, for one token; P(yes) is the mass on
 "yes" against "no" among the top ten. All 6,126 answered, in 620 s at
 about ten pairs a second.
@@ -34,12 +34,19 @@ are within 0.06, and within 0.01 at the top.
 ## The labels
 
 The strongest disagreements are the label's error far more often than
-the model's. Where the local model said "same" at 1.000 and Opus
-"different": cutoff / cut-off frequency, realtime / real-time systems,
-parallelization / parallelisation, shifted NMF spelled -isation and
--ization, Synthesis ToolKit / Synthesis ToolKit (STK), infrared filter /
-IR filter, mu- and µ-recursive functions. Where the model said "different"
-at 0.000 and the labels "same": preorder / postorder traversal.
+the model's. The local model said "same" at 1.000, and Opus "different",
+for these:
+
+- cutoff / cut-off frequency
+- realtime / real-time systems
+- parallelization / parallelisation
+- shifted NMF spelled -isation and -ization
+- Synthesis ToolKit / Synthesis ToolKit (STK)
+- infrared filter / IR filter
+- mu- and µ-recursive functions
+
+The other way round, the model said "different" at 0.000 where the
+labels say "same": preorder / postorder traversal.
 
 Opus does not decline "cut-off frequency" against "cutoff frequency" one
 pair at a time. `ClaudeAdjudicator` asks forty pairs in one call for a
