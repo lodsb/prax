@@ -120,3 +120,49 @@ and "user model", "digital delay" and "digital delay line".
   question both models are asked, comes before the gold sample, or the
   sample measures the vagueness again.
 - The venue editions merged into one another are to be found and undone.
+
+## Asked with a rule
+
+`resolution.SAME_RULE` says what "the same thing" means. Spelling, plural,
+abbreviation, translation and filler words are the same. A narrower kind, a
+version or edition, a part or interface, a task and its tool, and names one
+word apart are not. The Review guide gives the person the same list. Both
+models were asked the 6,126 pairs again with it ($3.30 for Opus).
+
+With the rule, Opus says "same" to 2,949 pairs, not 3,618; it agrees with
+its answers without the rule on 88.7%. What it now keeps apart is mostly the
+narrower kind ("audio filter" and "digital audio filter", "zero-delay
+feedback" and "zero-delay feedback filter").
+
+The local model against Opus, both with the rule:
+
+| map | Brier | ECE | agreement at 0.5 |
+|---|---|---|---|
+| raw | 0.093 | 0.060 | 0.877 |
+| Platt | 0.085 | 0.019 | 0.885 |
+| isotonic | 0.085 | 0.018 | 0.884 |
+
+| settle when (isotonic) | settled | agree with Opus |
+|---|---|---|
+| p ≥ 0.99 or ≤ 0.01 | 33.0% | 0.993 |
+| p ≥ 0.95 or ≤ 0.05 | 43.0% | 0.989 |
+| p ≥ 0.9 or ≤ 0.1 | 60.0% | 0.972 |
+| p ≥ 0.8 or ≤ 0.2 | 71.5% | 0.960 |
+
+The rule makes the question decidable, and both models answer it more
+alike: at 0.9 the local model settles 60% of the pairs at 97% agreement.
+Its strongest disagreements left are "motif discovery" and "motif discovery
+method" (a filler word, which Opus called different), and a German name
+against its English one ("Bibliotheksbenutzer" and "library use"), which
+are different anyway.
+
+The gold sample is next: a person's decisions under the same rule, to say
+which of the two models is right where they differ.
+
+## The conference editions
+
+Of the 23,970 merges in the graph, 117 join names with different numbers.
+Opus under the rule called 84 of them different; 77 are two things
+wrongly joined (68 venue editions, seven tools such as Am2904 and Am2910,
+x86-64 and x86). The other seven are a file name joined to its paper's
+title and two names garbled by an extractor, which the merge tidied.
