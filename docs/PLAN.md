@@ -31,8 +31,9 @@ the review of the lists a person decides goes last.
       code waits for documents that need it.
 - [ ] **N. The card and the memory when nothing runs.** Unload the GPU
       models after an idle while and load them when a queue asks (`prax
-      up`'s swap exists; the plan's "let a queue ask for the card"), and
-      the 16.6 GB of mapped model pages a fresh load left in RAM on
+      up`'s swap exists; the plan's "let a queue ask for the card"), see
+      who holds the card (the plan's "See who holds the card"), and the
+      16.6 GB of mapped model pages a fresh load left in RAM on
       2026-09-27.
 - [ ] **O. A portable sender for other machines.** One file, no
       dependencies beyond what an old system has, that walks a tree, asks
@@ -45,6 +46,10 @@ the review of the lists a person decides goes last.
 - [ ] **R. The lists a person decides, last:** a review page for the 741
       likely merges and the 1,632 split names, with the merge and the
       unmerge the door already has.
+- [ ] **S. The door's `STATUS_BAD_STACK` exit** (below): a reproduction
+      before any fix, so open-ended.
+- [ ] **T. Sub-graph export / import**, as designed below: a feature,
+      not a repair.
 
 ## The order, agreed 2026-09-27
 
