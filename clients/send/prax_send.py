@@ -1,0 +1,403 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""prax_send: send a tree of files to a prax door, only what it lacks.
+
+One file, the standard library only, for Python 2.7 and 3: copy it to a
+NAS, an old laptop or a server and run it there. It walks the tree, hashes
+each file (sha256 of the bytes, the store's own identity for a document),
+asks the door in batches which hashes it already holds (POST /known), and
+uploads the rest (POST /ingest/file), PDFs and text first. Nothing on the
+sending machine is changed; the hashes are remembered in a state file, so
+a second run over the same tree hashes only what changed.
+
+    python prax_send.py /volume1/papers --door http://prax:8000
+    python prax_send.py ~/Documents --door https://prax.local:8443 \\
+        --domains research --tags from:nas --dry-run
+
+The token is PRAX_TOKEN in the environment, or --token-file (a file
+holding it); --token on the command line works too but shows in the
+process list. Each document keeps where it came from as meta.origin
+(this host's name and the file's path), which is how a file stays
+findable on the machine that has it.
+"""
+
+from __future__ import print_function
+
+import hashlib
+import json
+import mimetypes
+import optparse
+import os
+import socket
+import sys
+import time
+import uuid
+
+try:  # Python 3
+    from urllib.error import HTTPError, URLError
+    from urllib.request import Request, urlopen
+except ImportError:  # Python 2
+    from urllib2 import HTTPError, Request, URLError, urlopen
+
+PY2 = sys.version_info[0] == 2
+VERSION = "1"
+
+# what the door can read, in the order they are sent: PDFs and text first
+DOCUMENTS = [
+    ".pdf",
+    ".txt",
+    ".md",
+    ".markdown",
+    ".rst",
+    ".tex",
+    ".html",
+    ".htm",
+    ".xhtml",
+    ".docx",
+    ".doc",
+    ".odt",
+    ".rtf",
+    ".epub",
+    ".csv",
+]
+IMAGES = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff"]
+# a NAS's own clutter, and the usual hidden places
+SKIP_DIRS = {
+    "@eaDir",
+    "#recycle",
+    "#snapshot",
+    ".snapshot",
+    ".snapshots",
+    "$RECYCLE.BIN",
+    "System Volume Information",
+    "lost+found",
+    "node_modules",
+    "__pycache__",
+}
+MIME = {
+    ".md": "text/markdown",
+    ".markdown": "text/markdown",
+    ".rst": "text/plain",
+    ".tex": "text/plain",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".odt": "application/vnd.oasis.opendocument.text",
+    ".rtf": "application/rtf",
+    ".epub": "application/epub+zip",
+    ".webp": "image/webp",
+}
+BATCH = 500  # hashes per question; the door takes up to 1000
+READ = 1 << 20
+
+
+def say(opts, text):
+    if not opts.quiet:
+        print(text)
+        sys.stdout.flush()
+
+
+def fs_text(path):
+    """A path as text, whatever the platform gives back."""
+    if PY2 and isinstance(path, str):
+        return path.decode(sys.getfilesystemencoding() or "utf-8", "replace")
+    return path
+
+
+# ---------------------------------------------------------------- the tree
+
+
+def walk(roots, exts):
+    """Every file under the roots whose suffix is wanted, links not
+    followed, hidden files and NAS clutter left out."""
+    for root in roots:
+        root = os.path.abspath(root)
+        if os.path.isfile(root):
+            if os.path.splitext(root)[1].lower() in exts:
+                yield root
+            continue
+        for here, dirs, files in os.walk(root):
+            dirs[:] = sorted(
+                d
+                for d in dirs
+                if not d.startswith(".")
+                and d not in SKIP_DIRS
+                and not os.path.islink(os.path.join(here, d))
+            )
+            for name in sorted(files):
+                if name.startswith((".", "~$")):
+                    continue
+                path = os.path.join(here, name)
+                if os.path.islink(path):
+                    continue
+                if os.path.splitext(name)[1].lower() in exts:
+                    yield path
+
+
+def rank(path, exts):
+    """PDFs first, then text, then the rest, in the order of ``exts``."""
+    return (exts.index(os.path.splitext(path)[1].lower()), path)
+
+
+# ---------------------------------------------------------------- hashes
+
+
+class State(object):
+    """The hashes of files already hashed, by path, size and mtime."""
+
+    def __init__(self, path):
+        self.path = path
+        self.seen = {}
+        self.dirty = 0
+        if path and os.path.exists(path):
+            try:
+                with open(path) as f:
+                    self.seen = json.load(f).get("files", {})
+            except (IOError, OSError, ValueError):
+                self.seen = {}
+
+    def hash_of(self, path):
+        st = os.stat(path)
+        key = fs_text(path)
+        known = self.seen.get(key)
+        if known and known[0] == st.st_size and known[1] == int(st.st_mtime):
+            return known[2]
+        h = hashlib.sha256()
+        with open(path, "rb") as f:
+            while True:
+                block = f.read(READ)
+                if not block:
+                    break
+                h.update(block)
+        digest = h.hexdigest()
+        self.seen[key] = [st.st_size, int(st.st_mtime), digest]
+        self.dirty += 1
+        if self.dirty >= 200:
+            self.save()
+        return digest
+
+    def save(self):
+        if not self.path or not self.dirty:
+            return
+        tmp = self.path + ".tmp"
+        try:
+            with open(tmp, "w") as f:
+                json.dump({"version": VERSION, "files": self.seen}, f)
+            if os.path.exists(self.path) and os.name == "nt":
+                os.remove(self.path)  # Python 2 on Windows cannot rename over
+            os.rename(tmp, self.path)
+            self.dirty = 0
+        except (IOError, OSError):
+            pass
+
+
+# ---------------------------------------------------------------- the door
+
+
+class Door(object):
+    def __init__(self, url, token, insecure=False, timeout=600):
+        self.url = url.rstrip("/")
+        self.token = token
+        self.timeout = timeout
+        self.context = None
+        if insecure:
+            import ssl
+
+            if hasattr(ssl, "_create_unverified_context"):
+                self.context = ssl._create_unverified_context()
+
+    def _open(self, path, body, content_type):
+        req = Request(self.url + path, data=body)
+        req.add_header("Content-Type", content_type)
+        req.add_header("User-Agent", "prax_send/" + VERSION)
+        if self.token:
+            req.add_header("Authorization", "Bearer " + self.token)
+        kw = {"timeout": self.timeout}
+        if self.context is not None:
+            kw["context"] = self.context
+        resp = urlopen(req, **kw)
+        try:
+            return json.loads(resp.read().decode("utf-8"))
+        finally:
+            resp.close()
+
+    def known(self, hashes):
+        body = json.dumps({"hashes": hashes}).encode("utf-8")
+        return set(self._open("/known", body, "application/json")["known"])
+
+    def send(self, path, fields):
+        boundary = "prax" + uuid.uuid4().hex
+        name = os.path.basename(fs_text(path))
+        ext = os.path.splitext(name)[1].lower()
+        mime = MIME.get(ext) or mimetypes.guess_type(name)[0]
+        mime = mime or "application/octet-stream"
+        parts = []
+        for key in sorted(fields):
+            value = fields[key]
+            if value is None or value == "":
+                continue
+            parts.append(
+                (
+                    '--%s\r\nContent-Disposition: form-data; name="%s"\r\n\r\n'
+                    % (boundary, key)
+                ).encode("utf-8")
+                + value.encode("utf-8")
+                + b"\r\n"
+            )
+        quoted = name.replace("\\", "_").replace('"', "'")
+        with open(path, "rb") as f:
+            data = f.read()
+        parts.append(
+            (
+                '--%s\r\nContent-Disposition: form-data; name="file";'
+                ' filename="%s"\r\nContent-Type: %s\r\n\r\n' % (boundary, quoted, mime)
+            ).encode("utf-8")
+            + data
+            + b"\r\n"
+        )
+        body = b"".join(parts) + ("--%s--\r\n" % boundary).encode("utf-8")
+        return self._open(
+            "/ingest/file", body, "multipart/form-data; boundary=" + boundary
+        )
+
+
+# ---------------------------------------------------------------- the run
+
+
+def parse(argv):
+    p = optparse.OptionParser(
+        usage="%prog ROOT [ROOT ...] --door URL [options]",
+        description="Send the files under ROOT that the prax door does not hold yet.",
+        version=VERSION,
+    )
+    p.add_option("--door", default=os.environ.get("PRAX_DOOR"), help="the door's URL")
+    p.add_option("--token", default=None, help="the door's token (else PRAX_TOKEN)")
+    p.add_option("--token-file", default=None, help="a file holding the token")
+    p.add_option(
+        "--ext",
+        default=None,
+        help="the suffixes to send, comma-separated (default: %s)"
+        % ",".join(e[1:] for e in DOCUMENTS),
+    )
+    p.add_option("--images", action="store_true", help="send pictures as well")
+    p.add_option("--domains", default=None, help="ontology modules, comma-separated")
+    p.add_option("--tags", default=None, help="tags for every file, comma-separated")
+    p.add_option(
+        "--host",
+        default=None,
+        help="this machine's name in meta.origin (default: its hostname)",
+    )
+    p.add_option("--max-mb", type="float", default=256.0, help="skip larger files")
+    p.add_option(
+        "--state",
+        default=os.path.join(os.path.expanduser("~"), ".prax_send.json"),
+        help="where the hashes are remembered ('' for nowhere)",
+    )
+    p.add_option("--dry-run", action="store_true", help="say what would be sent")
+    p.add_option("--insecure", action="store_true", help="accept any TLS certificate")
+    p.add_option("--quiet", action="store_true", help="only the summary")
+    opts, roots = p.parse_args(argv)
+    if not roots:
+        p.error("which tree? (ROOT)")
+    if not opts.door:
+        p.error("which door? (--door or PRAX_DOOR)")
+    return opts, roots
+
+
+def token_of(opts):
+    if opts.token:
+        return opts.token
+    if opts.token_file:
+        with open(opts.token_file) as f:
+            return f.read().strip()
+    return os.environ.get("PRAX_TOKEN", "")
+
+
+def exts_of(opts):
+    if opts.ext:
+        wanted = ["." + e.strip().lower().lstrip(".") for e in opts.ext.split(",")]
+    else:
+        wanted = list(DOCUMENTS)
+    if opts.images:
+        wanted += [e for e in IMAGES if e not in wanted]
+    return wanted
+
+
+def run(argv=None):
+    opts, roots = parse(sys.argv[1:] if argv is None else argv)
+    exts = exts_of(opts)
+    door = Door(opts.door, token_of(opts), insecure=opts.insecure)
+    state = State(opts.state or None)
+    host = opts.host or socket.gethostname()
+    limit = int(opts.max_mb * (1 << 20))
+    counts = {"seen": 0, "known": 0, "sent": 0, "duplicate": 0, "failed": 0, "large": 0}
+    started = time.time()
+    paths = sorted(walk(roots, exts), key=lambda path: rank(path, exts))
+    say(opts, "%d files to look at under %s" % (len(paths), ", ".join(roots)))
+    try:
+        for start in range(0, len(paths), BATCH):
+            batch = []
+            for path in paths[start : start + BATCH]:
+                counts["seen"] += 1
+                try:
+                    if os.path.getsize(path) > limit:
+                        counts["large"] += 1
+                        say(opts, "too large, left: %s" % fs_text(path))
+                        continue
+                    batch.append((path, state.hash_of(path)))
+                except (IOError, OSError) as exc:
+                    counts["failed"] += 1
+                    say(opts, "cannot read %s: %s" % (fs_text(path), exc))
+            if not batch:
+                continue
+            held = door.known(sorted({h for _, h in batch}))
+            asked = set()
+            for path, digest in batch:
+                if digest in held or digest in asked:
+                    counts["known"] += 1
+                    continue
+                asked.add(digest)  # the same bytes twice in one tree: once
+                if opts.dry_run:
+                    counts["sent"] += 1
+                    say(opts, "would send %s" % fs_text(path))
+                    continue
+                fields = {
+                    "by": "send",
+                    "domains": opts.domains,
+                    "tags": opts.tags,
+                    "origin": json.dumps({"host": host, "path": fs_text(path)}),
+                }
+                try:
+                    out = door.send(path, fields)
+                except HTTPError as exc:
+                    if exc.code in (401, 403):
+                        raise
+                    counts["failed"] += 1
+                    say(opts, "refused %s: HTTP %s" % (fs_text(path), exc.code))
+                    continue
+                except (URLError, IOError, OSError) as exc:
+                    counts["failed"] += 1
+                    say(opts, "could not send %s: %s" % (fs_text(path), exc))
+                    continue
+                if out.get("created") is False:
+                    counts["duplicate"] += 1
+                else:
+                    counts["sent"] += 1
+                say(opts, "sent %s -> doc %s" % (fs_text(path), out.get("doc_id")))
+    except HTTPError as exc:
+        print("the door refused: HTTP %s (the token?)" % exc.code, file=sys.stderr)
+        return 2
+    except URLError as exc:
+        print("the door did not answer: %s" % exc, file=sys.stderr)
+        return 2
+    finally:
+        state.save()
+    print(
+        "%(seen)d looked at, %(known)d already there, %(sent)d " % counts
+        + ("to send" if opts.dry_run else "sent")
+        + ", %(duplicate)d the same as one there, %(large)d too large,"
+        " %(failed)d failed" % counts + " (%.0f s)" % (time.time() - started)
+    )
+    return 1 if counts["failed"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run())

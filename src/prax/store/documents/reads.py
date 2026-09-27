@@ -707,6 +707,28 @@ def citation_candidates(
     return [int(r["id"]) for r in con.execute(sql, args)]
 
 
+KNOWN_BATCH = 1000  # hashes one question may ask about
+
+
+@_reading
+def known_hashes(con: sqlite3.Connection, hashes: list[str]) -> list[str]:
+    """Which of these sha256 hashes of original bytes the store holds, a
+    retired document's too (its bytes are archived; sending them again
+    adds nothing). What a sender on another machine asks before it sends
+    (``prax_send.py``), so a tree of thousands of files costs a request
+    per thousand, not an upload each."""
+    wanted = sorted({h.lower() for h in hashes})[:KNOWN_BATCH]
+    if not wanted:
+        return []
+    marks = ",".join("?" * len(wanted))
+    return [
+        r[0]
+        for r in con.execute(
+            f"SELECT hash FROM documents WHERE hash IN ({marks})", wanted
+        )
+    ]
+
+
 @_reading
 def document_by_zotero_key(con: sqlite3.Connection, key: str) -> int | None:
     """The document a Zotero item key was imported as."""

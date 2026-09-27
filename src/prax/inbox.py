@@ -560,10 +560,13 @@ def ingest_upload(
     session: str | None = None,
     by: str | None = "upload",
     paper: dict[str, Any] | None = None,
+    origin: dict[str, Any] | None = None,
 ) -> Capture:
     """A file handed over the door (the UI's upload, a script). ``paper``
     is what the sender read off the page it came from (its DOI, arXiv
-    id, authors: ``paper_meta``)."""
+    id, authors: ``paper_meta``); ``origin`` where the file lives on the
+    machine that sent it (``{"host", "path"}``, from ``prax_send.py``),
+    kept as ``meta.origin``."""
     name = (filename or "").replace("\\", "/").rsplit("/", 1)[-1] or None
     if not mime or mime == "application/octet-stream":
         mime = parsers.guess_mime(name)
@@ -579,8 +582,17 @@ def ingest_upload(
         tags=tags,
         session=session,
         by=by,
-        extra_meta=paper_meta(paper) or None,
+        extra_meta={**(paper_meta(paper) or {}), **_origin(origin)} or None,
     )
+
+
+def _origin(origin: dict[str, Any] | None) -> dict[str, Any]:
+    """``meta.origin`` from what a sender said: the host and the path,
+    as strings, nothing else."""
+    if not isinstance(origin, dict):
+        return {}
+    kept = {k: str(origin[k])[:1024] for k in ("host", "path") if origin.get(k)}
+    return {"origin": kept} if kept else {}
 
 
 # ------------------------------------------------------------ the folder

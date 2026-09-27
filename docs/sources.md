@@ -297,6 +297,16 @@ any future front-end (Karakeep, Linkwarden) that can write files to a
 folder. The folder is prax's own, so removing what it consumed does not
 break invariant 10.
 
+### Another machine's tree: `prax_send.py`
+
+`clients/send/prax_send.py` is one file with no dependencies beyond the
+standard library (Python 2.7 or 3), for a NAS or an old machine: it walks
+a tree, asks the door which files it already holds by hash (`POST
+/known`), and uploads the rest through `POST /ingest/file`. Each new
+document records `meta.origin`, the sending host and the file's path. It
+sends documents, not audio or video: `docs/media-by-reference.md` is the
+design question for those. Usage is in `clients/send/README.md`.
+
 ## 4. The old zoetrope disk
 
 The hash inventory in `scripts/backfill.py` already reports duplicates

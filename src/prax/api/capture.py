@@ -4,6 +4,7 @@ door fetches; retiring; the inbox view."""
 from __future__ import annotations
 
 import json
+import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
@@ -16,6 +17,8 @@ from prax import (
 )
 
 from ._base import _capture_out, _con, _split, max_upload
+
+_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 router = APIRouter()
 
@@ -101,18 +104,21 @@ def ingest_file(
     session: Annotated[str | None, Form()] = None,
     by: Annotated[str | None, Form()] = None,
     paper: Annotated[str | None, Form()] = None,
+    origin: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
     """Upload a file: archived at once, text and HTML indexed at once,
     anything else parsed by the batch host. ``domains`` and ``tags`` are
     comma-separated; ``by`` says what sent it (the extension, a script);
     ``paper`` is JSON — what the sender read off the page the file came
-    from (doi, arxiv, authors, journal, date, pdf_url)."""
-    paper_info = None
-    if paper:
-        try:
-            paper_info = json.loads(paper)
-        except ValueError as exc:
-            raise HTTPException(400, f"paper must be JSON: {exc}") from exc
+    from (doi, arxiv, authors, journal, date, pdf_url); ``origin`` is
+    JSON too — where the file lives on the machine that sent it (host,
+    path; ``clients/send/prax_send.py``)."""
+    paper_info = origin_info = None
+    try:
+        paper_info = json.loads(paper) if paper else None
+        origin_info = json.loads(origin) if origin else None
+    except ValueError as exc:
+        raise HTTPException(400, f"paper and origin must be JSON: {exc}") from exc
     data = file.file.read(max_upload() + 1)  # chunked uploads carry no length
     if len(data) > max_upload():
         raise HTTPException(
@@ -131,10 +137,28 @@ def ingest_file(
             session=session,
             by=by or "upload",
             paper=paper_info if isinstance(paper_info, dict) else None,
+            origin=origin_info if isinstance(origin_info, dict) else None,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return _capture_out(cap)
+
+
+class KnownReq(BaseModel):
+    hashes: list[str]
+
+
+@router.post("/known")
+def known(req: KnownReq, request: Request) -> dict[str, Any]:
+    """Which of these sha256 hashes (of a file's bytes) the door already
+    holds: what a sender asks before it sends (``prax_send.py``). At most
+    ``store.KNOWN_BATCH`` a question."""
+    if len(req.hashes) > store.KNOWN_BATCH:
+        raise HTTPException(413, f"at most {store.KNOWN_BATCH} hashes a request")
+    bad = [h for h in req.hashes if not _SHA256.fullmatch(h.lower())]
+    if bad:
+        raise HTTPException(400, f"not a sha256 hex digest: {bad[0][:80]!r}")
+    return {"known": store.known_hashes(_con(request), req.hashes)}
 
 
 class IngestHtml(BaseModel):

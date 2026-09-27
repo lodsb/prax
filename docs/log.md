@@ -1902,3 +1902,26 @@ on.
       "On the card: llama-server 20.3 GB · waterfox 4.4 GB · dwm 2.5 GB".
       prax's own share is llama-server and a 291 MB worker: unloading the
       server is what frees the card.
+
+## 2026-09-27: stage O, a sender for other machines
+
+- [x] **`clients/send/prax_send.py`.** One file, the standard library only,
+      written for Python 2.7 and 3 (no Python 2 on this host to run it
+      under; the tests run it under 3.13). It walks a tree without
+      following links and leaves out hidden files and a NAS's own folders.
+      It puts PDFs and text first and hashes each file, remembering the
+      hash by path, size and mtime, so a second run hashes only what
+      changed. It asks the door which hashes it holds, 500 at a time, and
+      uploads the rest with where they came from. Tested end to end
+      against a door served by uvicorn with a token: a dry run, a run,
+      a second run that sends nothing, and a wrong token that stops the
+      run.
+- [x] **The door's side.** `POST /known` (`store.known_hashes`, at most
+      1,000 hashes a question, a retired document's too) and an `origin`
+      field on `/ingest/file`, kept as `meta.origin` (host and path, nothing
+      else).
+- [x] **Audio and video, written down, not built**
+      (`docs/media-by-reference.md`). The hash stays the identity, where a
+      file lives is a list of locations checked by re-hashing, and only
+      the derived artifacts are copied. The recommendation is to name the
+      location first and to proxy through the door later.

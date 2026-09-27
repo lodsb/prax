@@ -46,7 +46,9 @@ the review of the lists a person decides goes last.
       who holds the card (the plan's "See who holds the card"), and the
       16.6 GB of mapped model pages a fresh load left in RAM on
       2026-09-27.
-- [ ] **O. A portable sender for other machines.** One file, no
+- [x] (2026-09-27: `clients/send/prax_send.py`, `POST /known`,
+      `meta.origin`; `docs/media-by-reference.md`)
+      **O. A portable sender for other machines.** One file, no
       dependencies beyond what an old system has, that walks a tree, asks
       the door by hash whether it holds each file, and sends what it does
       not (PDFs and text first). Audio and video by reference rather than
