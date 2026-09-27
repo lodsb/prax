@@ -679,8 +679,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     s.add_argument(
         "--only",
-        help="a comma-separated subset of: acronyms, fields, domains, dedupe, review,"
-        " references, fts",
+        help="a comma-separated subset of the passes (the Jobs view and GET"
+        " /maintenance list them, with what each does), e.g. communities,review",
     )
     s.add_argument(
         "--rechunk",
