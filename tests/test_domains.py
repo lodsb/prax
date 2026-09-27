@@ -278,6 +278,12 @@ def test_a_domain_change_makes_the_extraction_stale(
         doc,
         later,
     ]
+    # a person's change is a reading asked for: a worker scoped to the
+    # captures takes this upload too
+    assert meta["extraction_stale"]["requested"]["by"] == "human"
+    assert store.select_for_extraction(
+        con, ontology_version=onto.version, onto=onto, sources=("capture",)
+    ) == [doc]
     # the next reading retires the old edges (history kept) and clears the mark
     extraction.apply(
         con, doc, extraction.Extraction(summary="t"), extractor="stub", run="r2"

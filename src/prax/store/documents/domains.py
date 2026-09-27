@@ -74,7 +74,7 @@ def set_domains(
         meta["domains"] = _check_domains(domains)
         meta["domains_by"] = by
     if meta.get("domains") != before and by in ("human", "agent"):
-        _lens_changed(meta)
+        _lens_changed(meta, by=by)
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
     )
@@ -82,14 +82,18 @@ def set_domains(
     return meta.get("domains")
 
 
-def _lens_changed(meta: dict[str, Any]) -> bool:
+def _lens_changed(meta: dict[str, Any], *, by: str) -> bool:
     """The document's domain set changed under an extraction made against
     the old set: the stamp goes to the history, ``meta.extraction_stale``
     says why, so the extract step selects the document before the
     backlog and ``extraction.apply`` retires the old reading (history
-    kept). Nothing when the reading already carries the new subset's
-    version (the set changed to one the same modules make up). True when
-    a stamp moved."""
+    kept). The change is a person's or an agent's, so it counts as a
+    reading asked for (``requested``), which a worker scoped to the
+    captures takes too: an upload re-tagged by hand otherwise waited for
+    a pass over everything (six electronics documents, 2026-09-27).
+    Nothing when the reading already carries the new subset's version
+    (the set changed to one the same modules make up). True when a stamp
+    moved."""
     gone = meta.get("extraction")
     if not gone:
         meta.pop("extraction_error", None)
@@ -107,6 +111,7 @@ def _lens_changed(meta: dict[str, Any]) -> bool:
         "run": gone.get("run"),
         "ontology_version": gone.get("ontology_version"),
         "domains_changed": True,
+        "requested": {"by": by, "at": now()},
     }
     return True
 

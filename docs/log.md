@@ -1868,3 +1868,8 @@ on.
       schematics are tagged `research`.
 - The user's order: the full re-read of the 6,412 `core1+research5`
   documents follows once stage H's re-extractions are done.
+- [x] **The six electronics documents tagged** (the user's word): `electronics`
+      on all six, `studio` on the two research schematics, and each asked to
+      be read again. On the way: a person's change of an upload's domains
+      marked its reading stale but not asked for, so a worker scoped to the
+      captures never took it. `_lens_changed` now records it as `requested`.
