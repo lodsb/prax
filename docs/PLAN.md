@@ -61,7 +61,9 @@ the review of the lists a person decides goes last.
       the finding so far is that the labels need a gold sample.)
 - [ ] **R. The lists a person decides, last:** a review page for the 741
       likely merges and the 1,632 split names, with the merge and the
-      unmerge the door already has.
+      unmerge the door already has. Each decision is kept as a label, so
+      the page also collects Q's gold sample, and it shows the merges Q
+      found suspect.
 - [ ] **S. The door's `STATUS_BAD_STACK` exit** (below): a reproduction
       before any fix, so open-ended.
 - [ ] **T. Sub-graph export / import**, as designed below: a feature,
@@ -605,6 +607,15 @@ to find out whether a local logprob predicts anything.
       exactly why the article's subject trains against outcomes — so
       expect to need Platt or isotonic scaling fitted on part of the
       pairs and measured on the rest.
+- [ ] **Read the full run.** It starts by itself when the re-read ends
+      (`confidence_after_reread.ps1` in the session scratchpad, the answers
+      and `score.md` beside it). Its numbers go into
+      `docs/eval/confidence-<date>.md`, with the pilot's.
+- [ ] **The wrong merges it points at.** Pairs labelled "same" that the
+      local model rejects near 0 (preorder/postorder traversal, a transform
+      and its short-time variant) are likely bad merges in the graph,
+      whoever made them. They go on the review page (stage R) as merges to
+      look at, and `POST /graph/unmerge` or a single split undoes one.
 - [ ] **A gold sample first.** The pilot (200 pairs) found the local
       model right where the label was wrong, both ways. Opus kept apart
       LDR/LDRs and Gauss-Seidel/Gauß-Seidel, and the "same" labels hold
