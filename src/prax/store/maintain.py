@@ -54,9 +54,11 @@ from .documents import (
 )
 from .graph import (
     Edge,
+    communities_input,
     corpus_rulings,
     find_edges,
     link,
+    replace_communities,
     retire_reading,
     unmark_corpus_ruling,
 )
@@ -78,6 +80,7 @@ PASSES = (
     "languages",
     "names",
     "attachment",
+    "communities",
 )
 # a pass only when named: the nightly has no reason to
 ON_REQUEST = ("rechunk", "rejudge")
@@ -798,6 +801,32 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"rulings": len(rulings), "overturned": len(overturned)}
 
 
+def _communities(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The regions of the library rebuilt: the topical entities partitioned
+    at two levels (``prax.communities``), each new community keeping the
+    id and summary of the old one it overlaps most, a summary whose
+    members moved marked stale for the summaries step. Seconds."""
+    from prax import communities
+
+    job.update(note="communities: the graph")
+    docs, direct = communities_input(con, communities.topical_types())
+    pairs = communities.graph_of(docs.values(), direct)
+    job.update(note=f"communities: partitioning {len(pairs)} pairs")
+    found = communities.partition(pairs)
+    run = f"communities-{now().replace(':', '').replace('-', '')}"
+    kept = replace_communities(con, found.regions, found.parts, found.weight, run=run)
+    return {
+        "entities": found.entities,
+        "pairs": found.pairs,
+        "modularity": found.modularity,
+        "regions": len(found.regions),
+        "parts": len(found.parts),
+        "carried": kept["carried"],
+        "stale": kept["stale"],
+        "new": kept["new"],
+    }
+
+
 _RUN = {
     "acronyms": _acronyms,
     "fields": _fields,
@@ -811,6 +840,7 @@ _RUN = {
     "languages": _languages,
     "names": _names,
     "attachment": _attachment,
+    "communities": _communities,
     "rechunk": _rechunk,
     "rejudge": _rejudge,
 }

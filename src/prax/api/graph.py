@@ -202,6 +202,32 @@ def graph_overview(
     )
 
 
+@router.get("/communities")
+def communities(
+    request: Request, level: int = 0, parent: int | None = None, limit: int = 100
+) -> dict[str, Any]:
+    """The regions of the library (level 0) or their parts (level 1, a
+    region's with ``parent``), largest first: label, size, the summary's
+    first sentence, the members that weigh most."""
+    return {
+        "communities": store.list_communities(
+            _con(request), level=level, parent=parent, limit=limit
+        )
+    }
+
+
+@router.get("/communities/{cid}")
+def community(
+    cid: int, request: Request, members: int = 30, documents: int = 10
+) -> dict[str, Any]:
+    """One region or part: its summary, members, parts and the documents
+    that name most of its members."""
+    got = store.community(_con(request), cid, members=members, documents=documents)
+    if got is None:
+        raise HTTPException(404, "no such community")
+    return got
+
+
 @router.get("/graph/document/{doc_id}")
 def graph_document(doc_id: int, request: Request) -> dict[str, Any]:
     """What one document says, as edges the graph view draws."""

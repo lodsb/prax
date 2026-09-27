@@ -57,7 +57,7 @@ revisit threshold, under "Decision thresholds" below.
    order. A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, text, library, domains, readings,
-   reads) and `graph` (edges, decisions, labels, languages, context,
+   reads) and `graph` (edges, decisions, labels, languages, context, communities,
    traversal).
 4. **Single writer.** *(enforced)* The service process, the door, is the only
    writer. The recurring passes (parse, titles, extract, embed, and the

@@ -11,6 +11,7 @@ from typing import Any
 from prax import config, ontology
 
 from ..base import _reading
+from .communities import community_of
 
 MAX_HOPS = 2
 
@@ -348,6 +349,11 @@ def traverse_map(
     connected, and ``senses`` names them all with the one walked marked:
     never merged, and never one-sided without saying so. A name that
     reaches one thing carries no ``senses``.
+
+    ``community`` names the region of the library the entity walked is in
+    and the part of it, with their labels and sizes (``prax.communities``):
+    a way from a fact to what region of the library it belongs to, a few
+    dozen bytes. Absent for an entity outside the partition.
     """
     ids, report = _choose(con, entity_name, type)
     rows, left_out = _walk(con, ids, hops, limit)
@@ -360,6 +366,9 @@ def traverse_map(
     }
     if len(report) > 1 or (type and not ids):
         out["senses"] = report
+    region = community_of(con, ids[0]) if ids else []
+    if region:
+        out["community"] = region
     return out
 
 

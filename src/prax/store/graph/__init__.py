@@ -11,8 +11,31 @@ A package of parts, each importing only from the ones before it in
 
 from __future__ import annotations
 
-ORDER = ("edges", "decisions", "labels", "languages", "context", "traversal")
+ORDER = (
+    "edges",
+    "decisions",
+    "labels",
+    "languages",
+    "context",
+    "communities",
+    "traversal",
+)
 
+from .communities import (  # noqa: F401
+    CARRY,
+    FRESH,
+    LIST_MEMBERS,
+    SUMMARY_MIN,
+    _members,
+    _summary_state,
+    communities_input,
+    communities_to_summarize,
+    community,
+    community_of,
+    list_communities,
+    replace_communities,
+    set_community_summary,
+)
 from .context import (  # noqa: F401
     _CONFIDENCE_BY_RANK,
     ASK_FACT_RELS_SKIPPED,
