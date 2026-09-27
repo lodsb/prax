@@ -6,8 +6,28 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from ..base import _reading, _serialized
+from ..base import _NOW, _reading, _serialized, now
 from .edges import _entity_id
+
+PERSON = "human"  # who a decision on the review page is signed by
+SPLIT = "split-names"  # the type a pair of two unrelated types is filed under
+
+
+def _record_pair(
+    con: sqlite3.Connection, x: int, y: int, *, same: bool, by: str, etype: str
+) -> None:
+    """A decided pair in ``entity_candidates``, whether or not a worker
+    proposed it: the likely tier does not ask again, and a person's
+    decisions are the gold labels a model's confidence is measured
+    against (docs/PLAN.md, Q)."""
+    a, b = (x, y) if x < y else (y, x)
+    con.execute(
+        "INSERT INTO entity_candidates (a, b, type, score, producer, at, decided,"
+        f" decided_by) VALUES (?, ?, ?, 0, ?, {_NOW}, ?, ?)"
+        " ON CONFLICT (a, b) DO UPDATE SET decided = excluded.decided,"
+        " decided_by = excluded.decided_by",
+        (a, b, etype, by, "same" if same else "different", by),
+    )
 
 
 @_serialized
@@ -392,6 +412,116 @@ def entities_by_label(con: sqlite3.Connection, label: str) -> list[int]:
             (label,),
         )
     ]
+
+
+@_serialized
+def decide_pair(
+    con: sqlite3.Connection,
+    keep: int,
+    other: int,
+    *,
+    same: bool,
+    by: str = PERSON,
+    across_types: bool = False,
+) -> dict[str, Any]:
+    """Answer "are these one thing?" for two entities. Same: ``other`` is
+    merged into ``keep``, under a run of its own that ``unmerge_run`` takes
+    back. Different: nothing moves. Either way the pair is recorded as
+    decided and signed (``_record_pair``). Two entities of unrelated types
+    (a split name) are filed under ``SPLIT``, and merge only with
+    ``across_types``."""
+    if keep == other:
+        raise ValueError("a pair needs two entities")
+    rows = {
+        int(r["id"]): r
+        for r in con.execute(
+            "SELECT id, type, canonical_id FROM entities WHERE id IN (?, ?)",
+            (keep, other),
+        )
+    }
+    if len(rows) != 2:
+        raise KeyError("no such entity")
+    kinds = {rows[keep]["type"], rows[other]["type"]}
+    etype = rows[keep]["type"] if len(kinds) == 1 else SPLIT
+    run = None
+    group = {int(rows[i]["canonical_id"] or i) for i in (keep, other)}
+    if same and len(group) == 1:
+        pass  # one thing already (a merge confirmed): the decision is recorded
+    elif same:
+        run = f"decide-{now().replace(':', '').replace('-', '')}-{other}"
+        merge_entities(
+            con, other, keep, across_types=across_types, producer=by, run=run
+        )
+    _record_pair(con, keep, other, same=same, by=by, etype=etype)
+    con.commit()
+    return {"keep": keep, "other": other, "same": same, "run": run}
+
+
+@_serialized
+def undecide_pair(con: sqlite3.Connection, x: int, y: int) -> bool:
+    """A decision taken back (a click undone): a pair a worker proposed is
+    open again, one only a decision made is gone. Whatever the decision
+    merged is ``unmerge_run``'s to take back; this is the record, so a
+    mistaken click does not stay in the gold sample."""
+    a, b = (x, y) if x < y else (y, x)
+    row = con.execute(
+        "SELECT producer, decided_by FROM entity_candidates WHERE a = ? AND b = ?",
+        (a, b),
+    ).fetchone()
+    if row is None or row["decided_by"] is None:
+        return False
+    if row["producer"] == row["decided_by"]:
+        con.execute("DELETE FROM entity_candidates WHERE a = ? AND b = ?", (a, b))
+    else:
+        con.execute(
+            "UPDATE entity_candidates SET decided = NULL, decided_by = NULL"
+            " WHERE a = ? AND b = ?",
+            (a, b),
+        )
+    con.commit()
+    return True
+
+
+@_serialized
+def unmerge_entity(
+    con: sqlite3.Connection, entity_id: int, *, by: str = PERSON
+) -> dict[str, Any]:
+    """Take one merge back: the entity stands on its own again, the label
+    its merge gave the survivor goes, and the pair is recorded as
+    different so nothing folds it again. For a merge no run can undo
+    alone: the adjudicated round of 2026-09-17 predates the stamp, and
+    ``unmerge_run`` would take the whole round."""
+    row = con.execute(
+        "SELECT id, type, canonical_id FROM entities WHERE id = ?", (entity_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such entity: {entity_id}")
+    survivor = row["canonical_id"]
+    if survivor is None:
+        raise ValueError("that entity is not merged into another")
+    kind = con.execute(
+        "SELECT type FROM entities WHERE id = ?", (survivor,)
+    ).fetchone()["type"]
+    con.execute(
+        "UPDATE entities SET canonical_id = NULL, merged_by = NULL,"
+        " merged_run = NULL WHERE id = ?",
+        (entity_id,),
+    )
+    con.execute(
+        "DELETE FROM entity_labels WHERE entity_id = ? AND from_entity = ?",
+        (survivor, entity_id),
+    )
+    _refresh_name(con, int(survivor))
+    _record_pair(
+        con,
+        int(survivor),
+        entity_id,
+        same=False,
+        by=by,
+        etype=row["type"] if row["type"] == kind else SPLIT,
+    )
+    con.commit()
+    return {"entity": entity_id, "from": int(survivor)}
 
 
 @_serialized

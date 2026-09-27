@@ -232,3 +232,87 @@ def community(
 def graph_document(doc_id: int, request: Request) -> dict[str, Any]:
     """What one document says, as edges the graph view draws."""
     return {"doc_id": doc_id, "edges": store.document_edges(_con(request), doc_id)}
+
+
+# ------------------------------------------------ the lists a person decides
+
+
+@router.get("/graph/candidates")
+def graph_candidates(
+    request: Request, type: str | None = None, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """The likely pairs nobody has decided, closest names first, each side
+    with its edges and a document naming it (the review page's "same
+    thing?" list)."""
+    return store.candidates_page(
+        _con(request), etype=type or None, offset=offset, limit=limit
+    )
+
+
+class DecideReq(BaseModel):
+    keep: int  # the one that stays, when they are the same
+    other: int
+    same: bool
+    across_types: bool = False  # a split name: a tool and a method one thing
+
+
+@router.post("/graph/decide")
+def graph_decide(req: DecideReq, request: Request) -> dict[str, Any]:
+    """A person's answer to "are these one thing?" (``store.decide_pair``):
+    same merges ``other`` into ``keep`` under a run of its own; either way
+    the pair is recorded, signed, and not asked again."""
+    try:
+        return store.decide_pair(
+            _con(request),
+            req.keep,
+            req.other,
+            same=req.same,
+            across_types=req.across_types,
+        )
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/graph/split-names")
+def graph_split_names(
+    request: Request, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """Names held by things of unrelated types that nobody has settled,
+    each part with its edges and a document naming it."""
+    return store.split_names_page(_con(request), offset=offset, limit=limit)
+
+
+@router.get("/graph/merges")
+def graph_merges(request: Request, offset: int = 0, limit: int = 30) -> dict[str, Any]:
+    """Merges worth a second look: one word apart, or a name folded into a
+    narrower one (``store.merges_page``)."""
+    return store.merges_page(_con(request), offset=offset, limit=limit)
+
+
+class UndecideReq(BaseModel):
+    keep: int
+    other: int
+    run: str | None = None  # what the decision merged, taken back first
+
+
+@router.post("/graph/undecide")
+def graph_undecide(req: UndecideReq, request: Request) -> dict[str, Any]:
+    """Take a decision back (a click undone): its merge, when it made one,
+    and its record, so a mistaken click does not stay a label."""
+    con = _con(request)
+    back = store.unmerge_run(con, req.run) if req.run else 0
+    return {"undone": store.undecide_pair(con, req.keep, req.other), "entities": back}
+
+
+class UnmergeEntityReq(BaseModel):
+    entity: int  # the merged entity that is a thing of its own
+
+
+@router.post("/graph/unmerge-entity")
+def graph_unmerge_entity(req: UnmergeEntityReq, request: Request) -> dict[str, Any]:
+    """Take one merge back (``store.unmerge_entity``) and record the pair as
+    different; for a merge no run can undo alone."""
+    try:
+        return store.unmerge_entity(_con(request), req.entity)
+    except (ValueError, KeyError) as exc:
+        raise HTTPException(400, str(exc)) from exc

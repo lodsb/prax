@@ -260,3 +260,21 @@ test("queueRate: how fast a queue moves, and how long that leaves", () => {
   const soon = { readings: { formulas: 40 }, rate: { formulas: 10 }, hours_left: { formulas: 4 } };
   assert.equal(lib.queueRate(soon, "formulas"), "40 waiting · 10/h · about 4 h left");
 });
+
+test("pairRow, splitRow, mergeRow: each button carries its decision", () => {
+  const side = (id, name, type, edges) => ({ id, name, type, edges, document: "A paper" });
+  const pair = lib.pairRow({ type: "method", score: 0.97, keep: side(1, "wavelet transform", "method", 9), other: side(2, "wavelet transformation", "method", 1) });
+  assert.match(pair, /data-act="same" data-keep="1" data-other="2">same, keep “wavelet transform”/);
+  assert.match(pair, /data-act="same" data-keep="2" data-other="1">same, keep “wavelet transformation”/);
+  assert.match(pair, /data-act="different"/);
+  assert.match(pair, /href="#graph\?entity=wavelet%20transform&type=method"/);
+  assert.match(pair, /in “A paper”/);
+  const split = lib.splitRow({ name: "SuperCollider", parts: [{ id: 5, type: "tool", edges: 65 }, { id: 6, type: "method", edges: 7 }] });
+  assert.match(split, /data-act="one" data-keep="5" data-type="tool" data-others="6">one thing: a tool/);
+  assert.match(split, /data-act="apart" data-ids="5,6">several things/);
+  const merge = lib.mergeRow({ why: "one word apart", by: null, alias: side(8, "postorder traversal", "method", 2), into: side(7, "preorder traversal", "method", 4) });
+  assert.match(merge, /one word apart · unsigned/);
+  assert.match(merge, /data-act="split" data-entity="8">wrong: split them/);
+  assert.match(merge, /data-act="same" data-keep="7" data-other="8">right/);
+  assert.equal(lib.mergeRow({ why: "narrower", alias: null, into: null }), "");
+});

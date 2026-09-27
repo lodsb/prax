@@ -41,7 +41,7 @@ from .documents import (
     retire_document,
     similarity,
 )
-from .graph import invalidate_edge, rename_entity, resolve_review
+from .graph import entity_named_in, invalidate_edge, rename_entity, resolve_review
 from .jobs import Job, job_finish
 
 # How many rows one pass looks at and repairs; a bigger mess is cleared by
@@ -307,6 +307,38 @@ def _split_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
         )
     found.sort(key=lambda f: -(f["edges"] + sum(a["edges"] for a in f["also"])))
     return found[:CAP]
+
+
+def split_names_page(
+    con: sqlite3.Connection, *, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """The names held by things of unrelated types (``split-names``) that a
+    person has not settled: a group every pair of which was kept apart is
+    left out, and one whose parts were merged is gone by itself. Each part
+    with a document naming it, for the review page."""
+    decided = {
+        (int(r[0]), int(r[1]))
+        for r in con.execute(
+            "SELECT a, b FROM entity_candidates WHERE decided = 'different'"
+        )
+    }
+    open_groups = []
+    for g in _split_names(con):
+        ids = [g["id"], *(a["id"] for a in g["also"])]
+        pairs = {(min(x, y), max(x, y)) for x in ids for y in ids if x != y}
+        if not pairs <= decided:
+            open_groups.append(g)
+    page = open_groups[max(0, offset) : max(0, offset) + max(1, min(limit, 200))]
+    items = []
+    for g in page:
+        parts = [
+            {"id": g["id"], "type": g["type"], "edges": g["edges"]},
+            *g["also"],
+        ]
+        for part in parts:
+            part["document"] = entity_named_in(con, int(part["id"]))
+        items.append({"name": g["name"], "parts": parts})
+    return {"total": len(open_groups), "items": items}
 
 
 def _container_citations(con: sqlite3.Connection) -> list[dict[str, Any]]:

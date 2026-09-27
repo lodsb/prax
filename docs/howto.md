@@ -651,6 +651,27 @@ kept apart, $2.59 with Opus 5, a tenth of a cent a decision.
 `scripts/resolve_entities.py --commit --adjudicate` does the same from
 a process that opens the database file, for a host without a worker.
 
+**The review page decides the rest by hand** (Review, the tabs beside
+the queue of facts that did not fit):
+
+- *same thing?* — the likely pairs nobody has decided (740 on
+  2026-09-27), closest names first. Same folds the one with fewer edges
+  into the other, under a run of its own. Different is never asked again.
+- *one name, several things* — the `split-names` list: one name held by
+  things of unrelated types. One thing keeps it as the type chosen and
+  folds the others in; several things keeps them apart.
+- *merges to check* — merges already made whose names are one word
+  apart (`preorder`/`postorder traversal`), or where a name was folded
+  into a narrower one (`Kalman smoother` into `extended Kalman
+  smoother`). Right marks it checked; wrong splits it
+  (`POST /graph/unmerge-entity`, one merge rather than a whole run).
+
+Every decision is a pair in `entity_candidates` signed `human`. That is
+what keeps it from being asked again. It is also the gold sample a
+model's confidence is measured against (docs/PLAN.md, Q). Undo takes
+back the merge and the record, so a slipped click is not left as a
+label.
+
 Sure merges need no model. They are equal names after normalization
 (case, accents, punctuation, plural, suffixes), and author initials
 that abbreviate exactly one full name. Likely merges are close by name

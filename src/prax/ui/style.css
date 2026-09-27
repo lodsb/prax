@@ -450,6 +450,15 @@ th { border-bottom: 1px solid var(--fg); }
 .review-form select { padding: .2rem .2rem; }
 .review-form button { padding: .3rem .6rem; }
 .review-item.done { opacity: .5; }
+/* the lists a person decides (view-decide.js): two sides, then the buttons */
+.decide-tabs { font-family: var(--font-ui); font-size: .9rem; margin: .2rem 0 .8rem; }
+.decide-row { border-bottom: 1px solid var(--line); padding: .7rem 0; }
+.decide-row.done .decide-pair { opacity: .5; }
+.decide-pair { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: flex-start; }
+.decide-side { flex: 1 1 14rem; min-width: 0; }
+.decide-arrow { align-self: center; font-size: .84rem; }
+.decide-acts { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: .35rem; }
+.decide-acts button { padding: .3rem .6rem; }
 
 /* --------------------------------------------------------------- ask */
 main.stage { max-width: 1400px; }

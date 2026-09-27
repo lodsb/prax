@@ -474,6 +474,178 @@ def document_edges(
     return [{k: v for k, v in dict(r).items() if k != "own"} for r in rows]
 
 
+def _sides(con: sqlite3.Connection, ids: list[int]) -> dict[int, dict[str, Any]]:
+    """Each entity with what a person needs to judge it: its name, type,
+    the live edges of it and its aliases, and a document naming it. The
+    edges are counted end by end through their indexes: a join on
+    ``id IN (src, dst)`` scanned every edge, ten seconds a page."""
+    out: dict[int, dict[str, Any]] = {}
+    for eid in dict.fromkeys(ids):
+        row = con.execute(
+            "SELECT id, name, type FROM entities WHERE id = ?", (eid,)
+        ).fetchone()
+        if row is None:
+            continue
+        group = [eid] + [
+            int(r[0])
+            for r in con.execute(
+                "SELECT id FROM entities WHERE canonical_id = ?", (eid,)
+            )
+        ]
+        marks = ",".join("?" * len(group))
+        edges = sum(
+            con.execute(
+                f"SELECT count(*) FROM edges WHERE valid_to IS NULL AND {side}"
+                f" IN ({marks})",
+                group,
+            ).fetchone()[0]
+            for side in ("src", "dst")
+        )
+        out[eid] = {
+            "id": eid,
+            "name": row["name"],
+            "type": row["type"],
+            "edges": int(edges),
+            "document": entity_named_in(con, eid),
+        }
+    return out
+
+
+@_reading
+def candidates_page(
+    con: sqlite3.Connection,
+    *,
+    etype: str | None = None,
+    offset: int = 0,
+    limit: int = 30,
+) -> dict[str, Any]:
+    """The likely pairs nobody has decided, closest names first, each
+    side with its edges and a document naming it: the review page's
+    "same thing?" list."""
+    where = (
+        " FROM entity_candidates c JOIN entities ea ON ea.id = c.a"
+        " JOIN entities eb ON eb.id = c.b WHERE c.decided IS NULL"
+        " AND ea.canonical_id IS NULL AND eb.canonical_id IS NULL"
+        + (" AND c.type = ?" if etype else "")
+    )
+    args: list[Any] = [etype] if etype else []
+    total = con.execute("SELECT count(*)" + where, args).fetchone()[0]
+    rows = con.execute(
+        "SELECT c.a, c.b, c.type, c.score"
+        + where
+        + " ORDER BY c.score DESC, c.a, c.b LIMIT ? OFFSET ?",
+        [*args, max(1, min(limit, 200)), max(0, offset)],
+    ).fetchall()
+    sides = _sides(con, [x for r in rows for x in (r["a"], r["b"])])
+    items = []
+    for r in rows:
+        a, b = sides.get(r["a"]), sides.get(r["b"])
+        if a and b:
+            # the one with more edges first: the one to keep, by default
+            first, second = (a, b) if a["edges"] >= b["edges"] else (b, a)
+            items.append(
+                {
+                    "type": r["type"],
+                    "score": round(float(r["score"]), 4),
+                    "keep": first,
+                    "other": second,
+                }
+            )
+    by_type = dict(
+        con.execute(
+            "SELECT c.type, count(*) FROM entity_candidates c"
+            " JOIN entities ea ON ea.id = c.a JOIN entities eb ON eb.id = c.b"
+            " WHERE c.decided IS NULL AND ea.canonical_id IS NULL"
+            " AND eb.canonical_id IS NULL GROUP BY c.type"
+        ).fetchall()
+    )
+    return {"total": int(total), "types": by_type, "items": items}
+
+
+MERGE_TYPES = ("concept", "method", "tool", "dataset", "venue")
+SPELLING = 0.8  # two words this alike (difflib) are one word spelled twice
+
+
+def _suspect(alias: str, into: str) -> str | None:
+    """Why a merge of these two names deserves a look, or None. Two shapes
+    were wrong in the confidence pilot (docs/PLAN.md, Q): a general name
+    folded into a variant of it (``Kalman smoother`` into ``extended
+    Kalman smoother``: one name's words a strict part of the other's),
+    and two names one word apart where the words are not one word spelled
+    twice (``preorder traversal``, ``postorder traversal``). Spelling
+    variants and translations share no such shape and are not listed."""
+    import difflib
+
+    from prax import resolution
+
+    x, y = resolution.normalize(alias).split(), resolution.normalize(into).split()
+    wx, wy = set(x), set(y)
+    if wx == wy:
+        return None
+    if wx < wy or wy < wx:
+        return "narrower"
+    # the rest shared: two one-word names that differ share nothing, and a
+    # translation is such a pair
+    if len(x) == len(y) >= 2 and len(wx - wy) == 1 and len(wy - wx) == 1:
+        (a,), (b,) = wx - wy, wy - wx
+        if difflib.SequenceMatcher(None, a, b).ratio() < SPELLING:
+            return "one word apart"
+    return None
+
+
+@_reading
+def merges_page(
+    con: sqlite3.Connection,
+    *,
+    offset: int = 0,
+    limit: int = 30,
+) -> dict[str, Any]:
+    """Merges worth a second look (``_suspect``), in the likely tier's
+    types, none a person has confirmed, none a translation (the vocabulary
+    pass's merges differ by design), one word apart first. What a
+    model doubts is the better order once measured (docs/PLAN.md, Q)."""
+    confirmed = {
+        (int(r[0]), int(r[1]))
+        for r in con.execute(
+            "SELECT a, b FROM entity_candidates WHERE decided = 'same'"
+            " AND decided_by = 'human'"
+        )
+    }
+    marks = ",".join("?" * len(MERGE_TYPES))
+    found = []
+    for r in con.execute(
+        "SELECT a.id, a.name, a.type, a.merged_by, a.merged_run, b.id AS into_id,"
+        " b.name AS into_name FROM entities a JOIN entities b ON b.id = a.canonical_id"
+        f" WHERE a.canonical_id IS NOT NULL AND a.type IN ({marks})"
+        " AND coalesce(a.merged_by, '') != 'vocabulary'",
+        MERGE_TYPES,
+    ):
+        pair = (min(r["id"], r["into_id"]), max(r["id"], r["into_id"]))
+        if pair in confirmed:
+            continue
+        why = _suspect(r["name"], r["into_name"])
+        if why:
+            found.append((why, r))
+    # one word apart first: the smaller list and the more often wrong (a
+    # sample of twenty: costs, traversals, MIDI files, archive calls)
+    found.sort(key=lambda t: (t[0] != "one word apart", t[1]["into_name"], t[1]["id"]))
+    page = found[max(0, offset) : max(0, offset) + max(1, min(limit, 200))]
+    sides = _sides(con, [x for _, r in page for x in (r["id"], r["into_id"])])
+    return {
+        "total": len(found),
+        "items": [
+            {
+                "why": why,
+                "by": r["merged_by"],
+                "run": r["merged_run"],
+                "alias": sides.get(r["id"]),
+                "into": sides.get(r["into_id"]),
+            }
+            for why, r in page
+        ],
+    }
+
+
 @_reading
 def entity_named_in(con: sqlite3.Connection, entity_id: int) -> str:
     """The title of a document that has a live edge about the entity."""

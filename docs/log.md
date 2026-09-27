@@ -1986,3 +1986,35 @@ on.
   either way they are wrong merges in the graph. So the verdict needs a
   gold sample a person labels, and the "same" positives are worth a look
   of their own: a merge folded two things into one.
+
+## 2026-09-27: stage R, the lists a person decides
+
+- [x] **Three tabs on the Review page**, beside the queue of facts:
+      *same thing?* (the 740 undecided likely pairs), *one name, several
+      things* (2,243 split names, grown with the re-read from 1,632), and
+      *merges to check*. Each side shows its type, the live edges of it
+      and its aliases, and a document naming it. Every button is one
+      decision.
+- [x] **Every decision is a signed pair** (`store.decide_pair`,
+      `entity_candidates` with `decided_by = 'human'`): the likely tier
+      never asks again, and the decisions are Q's gold sample. A merge
+      runs under a run of its own. A confirmed old merge is only
+      recorded. A split name merges across types only when told to.
+      `unmerge_entity` takes one merge back, which `unmerge_run` could
+      not do for the unsigned round of 2026-09-17 without taking the
+      whole round. `undecide_pair` takes a click back, merge and record
+      both, so a slip is not left as a label.
+- [x] **Which merges to check.** Ordering by least word overlap put the
+      right merges first: spelling variants, and the vocabulary pass's
+      translations, which share no word by design. The list is now two
+      shapes from Q's pilot. *One word apart* (911): the same length, one
+      word different, the two words not one spelled twice, and at least
+      one word shared, so a one-word translation is not listed. About a
+      third of a sample of twenty was wrong: ongoing/exit costs,
+      preorder/postorder traversal, MIDI standard/file, archive read
+      finish/close. *Narrower* (2,520): one name's words a strict part of
+      the other's; mixed, with discrete Fourier transform folded into
+      Fourier transform among the wrong ones. One word apart goes first.
+      The vocabulary pass's merges are left out.
+- The page reads are indexed per edge end (a join on `id IN (src, dst)`
+  took ten seconds a page): 2–3 s for a page of thirty.

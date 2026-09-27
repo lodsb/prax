@@ -258,6 +258,44 @@ function regionPage(c) {
   </div>`;
 }
 
+// The rows of the review page's decision lists (view-decide.js). A side
+// is an entity with its type, edges and a document naming it; each button
+// carries what its decision needs, so the view only posts it.
+function entitySide(e) {
+  if (!e) return `<span class="muted">(gone)</span>`;
+  const link = `#graph?entity=${encodeURIComponent(e.name)}&type=${encodeURIComponent(e.type)}`;
+  return `<div class="decide-side"><a href="${link}">${esc(e.name)}</a>
+    <span class="muted">${esc(e.type)} · ${e.edges} edges</span>
+    ${e.document ? `<div class="muted">in “${esc(e.document)}”</div>` : ""}</div>`;
+}
+function pairRow(it) {
+  const k = it.keep, o = it.other;
+  return `<article class="decide-row"><div class="decide-pair">${entitySide(k)}${entitySide(o)}</div>
+    <div class="decide-acts"><span class="muted">${esc(it.type)} · names ${it.score}</span>
+      <button type="button" data-act="same" data-keep="${k.id}" data-other="${o.id}">same, keep “${esc(k.name)}”</button>
+      <button type="button" class="secondary" data-act="same" data-keep="${o.id}" data-other="${k.id}">same, keep “${esc(o.name)}”</button>
+      <button type="button" class="secondary" data-act="different" data-keep="${k.id}" data-other="${o.id}">different</button>
+      <span class="decide-out muted"></span></div></article>`;
+}
+function splitRow(it) {
+  const ids = it.parts.map((p) => p.id);
+  const one = it.parts.map((p) => `<button type="button" class="secondary" data-act="one" data-keep="${p.id}" data-type="${esc(p.type)}" data-others="${ids.filter((i) => i !== p.id).join(",")}">one thing: a ${esc(p.type)}</button>`).join("");
+  return `<article class="decide-row"><h3 style="font-size:1rem;margin:.2rem 0">${esc(it.name)}</h3>
+    <div class="decide-pair">${it.parts.map((p) => entitySide({ ...p, name: it.name })).join("")}</div>
+    <div class="decide-acts">${one}
+      <button type="button" data-act="apart" data-ids="${ids.join(",")}">several things</button>
+      <span class="decide-out muted"></span></div></article>`;
+}
+function mergeRow(it) {
+  const a = it.alias, into = it.into;
+  if (!a || !into) return "";
+  return `<article class="decide-row"><div class="decide-pair">${entitySide(a)}<div class="decide-arrow muted">folded into</div>${entitySide(into)}</div>
+    <div class="decide-acts"><span class="muted">${esc(it.why)}${it.by ? ` · by ${esc(it.by)}` : " · unsigned"}</span>
+      <button type="button" data-act="same" data-keep="${into.id}" data-other="${a.id}">right</button>
+      <button type="button" class="secondary" data-act="split" data-entity="${a.id}">wrong: split them</button>
+      <span class="decide-out muted"></span></div></article>`;
+}
+
 // What the paid steps have cost, and what is left of the budget. A host
 // whose models are all local has an empty ledger and no limits, and the
 // panel says so in one line. Money is what was charged at the price of
@@ -360,5 +398,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

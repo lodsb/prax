@@ -59,7 +59,9 @@ the review of the lists a person decides goes last.
 - [ ] **Q. A confidence that was measured** (below). (2026-09-27: the
       tooling built, a pilot run, the full run queued behind the re-read;
       the finding so far is that the labels need a gold sample.)
-- [ ] **R. The lists a person decides, last:** a review page for the 741
+- [x] (2026-09-27: the three tabs of the Review page, `decide_pair`,
+      `unmerge_entity`, `undecide_pair`; howto "Entity resolution")
+      **R. The lists a person decides, last:** a review page for the 741
       likely merges and the 1,632 split names, with the merge and the
       unmerge the door already has. Each decision is kept as a label, so
       the page also collects Q's gold sample, and it shows the merges Q

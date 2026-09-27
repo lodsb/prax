@@ -41,8 +41,13 @@ from .context import (  # noqa: F401
     ASK_FACT_RELS_SKIPPED,
     DOCUMENT_EDGES,
     HUB_TYPES,
+    MERGE_TYPES,
+    SPELLING,
     _doc_ids_by_title,
     _docs_by_zotero_key,
+    _sides,
+    _suspect,
+    candidates_page,
     described_devices,
     document_context,
     document_edges,
@@ -52,6 +57,7 @@ from .context import (  # noqa: F401
     entities_of_documents,
     entity_named_in,
     hub_graph,
+    merges_page,
     own_type,
 )
 from .decisions import (  # noqa: F401
@@ -87,11 +93,15 @@ from .edges import (  # noqa: F401
     select_for_extraction,
 )
 from .labels import (  # noqa: F401
+    PERSON,
     PRINTED_MAX,
+    SPLIT,
     _display_name,
     _label_from_merge,
+    _record_pair,
     _refresh_name,
     add_label,
+    decide_pair,
     display_language,
     entities_by_label,
     entity_labels,
@@ -100,6 +110,8 @@ from .labels import (  # noqa: F401
     merge_entities,
     rename_display_language,
     rename_entity,
+    undecide_pair,
+    unmerge_entity,
     unmerge_run,
 )
 from .languages import (  # noqa: F401

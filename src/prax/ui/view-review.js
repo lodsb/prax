@@ -69,10 +69,11 @@ function reviewItem(it, onto) {
 }
 
 async function viewReview(p) {
+  if (p.list && DECIDE_LISTS[p.list]) return viewDecide(p);
   const limit = Number(p.limit || 30);
   const offset = Number(p.offset || 0);
   const filter = { rel: p.rel || "", unmapped: p.unmapped || "" };
-  view.innerHTML = `
+  view.innerHTML = `${decideTabs("")}
   <form id="review-filter" class="search-form">
     <input name="rel" type="search" value="${esc(filter.rel)}" placeholder="relation (cites, uses, …)">
     <select name="unmapped">
