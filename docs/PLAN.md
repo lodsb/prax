@@ -43,7 +43,8 @@ the precondition for communities, then two things a user notices.
             reading retires the old);
       - [ ] applied, and the probe on the local model first. **Blocked:**
             the local model's files are gone (below).
-- [ ] **I. taco and tacos** are different searches: a plural folded on
+- [x] (2026-09-27: a rare word's forms the library uses, `compounds.forms`)
+      **I. taco and tacos** are different searches: a plural folded on
       the keyword side, measured on the eval set.
 - [ ] **J. One workflow for maintenance and healing**, where there are
       five commands with five shapes (`niggles.txt`).
@@ -325,7 +326,7 @@ recipe at once. Three independent failures, each wanting a different fix.
       (`-n 600 --workers 3 --interval 1`).
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
-- [ ] **taco and tacos are different searches** (`niggles.txt`).
+- [x] (stage I) **taco and tacos are different searches** (`niggles.txt`).
 - [x] (stage D: the walk skips what it has passed) **The embed hand-out after a rechunk** — `GET /work/embed` and the
       backlog it leaves (`docs/log.md`, "The night of 2026-09-20").
 - [x] (F: the slice a night) **The figures backlog, and why it was not moving** — 3,692

@@ -188,7 +188,10 @@ searched only where the thing it names lives: its type's domains and
 the domains of the documents that say something about it. It is merged
 with the plain words by BM25 score, not given a list of its own, so it
 adds no vote (`store.expand_query_senses`; `Apfelkuchen` -> `apple`
-the ingredient, not the Logic manuals). A question for one of the small
+the ingredient, not the Logic manuals). A rare query word (under 50 documents) also
+matches the other forms of it the library uses, a plural or inflection
+ending added or taken off, and only forms in the word's own range
+(`compounds.forms`; taco and tacos). A question for one of the small
 domains (kitchen, studio, workshop, craft; research is nearly the whole
 library) is recognised by its own candidates: when three of the best
 thirty fused hits are in one, and they hold every word of the question

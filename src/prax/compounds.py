@@ -72,14 +72,16 @@ def split(
     return best
 
 
-def _docs(con: sqlite3.Connection, term: str, table: str) -> int:
+def _docs(
+    con: sqlite3.Connection, term: str, table: str, *, cap: int = MIN_DOCS
+) -> int:
     """How many documents hold this term, through the index rather than a
     scan. 0 where the term is unknown, and 0 where the question cannot be
     asked — a library that will not answer is a library with no split."""
     from prax import store
 
     try:
-        return store.term_documents(con, term, cap=MIN_DOCS, table=table)
+        return store.term_documents(con, term, cap=cap, table=table)
     except sqlite3.Error:
         return 0
 
@@ -100,4 +102,61 @@ def expand(
         parts = split(con, t, **kw)
         if parts:
             out[t] = parts
+    return out
+
+
+# the endings a plural or an inflection adds, in the languages this library
+# holds: taco/tacos, box/boxes, Tisch/Tische, Kartoffel/Kartoffeln,
+# Arbeit/Arbeiten, Kind/Kinder
+ENDINGS = ("s", "es", "e", "n", "en", "er")
+MIN_FORM = 4  # a word shorter than this has no forms worth asking for
+MAX_FORMS = 3  # forms a word, at most
+# a word in this many documents or more stands for itself: its forms only
+# reshuffled the ranking (a first try gave every word its forms, and 38 of
+# 39 eval questions moved, English MRR 0.392 to 0.371)
+RARE_FORM = 50
+# and a form must be in the word's own range: "robuste" is rare, and its
+# form "robust" is a common English word that pulled the English documents
+# into a German question and lost its paper
+FORM_RATIO = 10
+
+
+def forms(
+    con: sqlite3.Connection, word: str, *, table: str = "chunks_fts"
+) -> list[str]:
+    """The other forms of ``word`` the library uses: the word with a
+    plural or inflection ending added or taken off, kept where it is a
+    term of at least ``MIN_DOCS`` documents.
+
+    The keyword index folds case and accents and stems nothing, so "taco"
+    and "tacos" were two searches, and the recipe called "Tacos …" was
+    found for the first only through its vector (niggles.txt,
+    2026-09-23). A stemmer is one per language, and a rebuild of the
+    index: Porter is English and would mangle the German fifth of the
+    library. The library is the word list here as for a compound, so the
+    same rule serves both languages and asks nothing of a word the
+    library does not use in two forms.
+    """
+    low = word.lower()
+    if len(low) < MIN_FORM or not _WORD.fullmatch(low):
+        return []
+    own = _docs(con, low, table, cap=RARE_FORM)
+    if own >= RARE_FORM:
+        return []  # a word the library uses well needs no help
+    ceiling = max(RARE_FORM, FORM_RATIO * own)
+    seen = {low}
+    candidates = []
+    for end in ENDINGS:
+        candidates.append(low + end)
+        if low.endswith(end) and len(low) - len(end) >= MIN_PART:
+            candidates.append(low[: -len(end)])
+    out = []
+    for c in candidates:
+        if c in seen:
+            continue
+        seen.add(c)
+        if MIN_DOCS <= _docs(con, c, table, cap=ceiling) < ceiling:
+            out.append(c)
+            if len(out) >= MAX_FORMS:
+                break
     return out

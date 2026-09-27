@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import sqlite3
 
+import pytest
+
 from prax import compounds, store
 
 
@@ -89,3 +91,37 @@ def test_the_halves_reach_the_query_and_the_graph(con: sqlite3.Connection) -> No
     terms = store.expand_query(con, "Olivenkuchen")
     assert "oliven" in terms[0]  # the half
     assert "olive oil" in terms[0]  # and what the graph calls it
+
+
+# ------------------------------------------------ a word's other forms, stage I
+
+
+def test_a_rare_word_gains_the_forms_the_library_uses(con: sqlite3.Connection) -> None:
+    """ "taco" and "tacos" were two searches (niggles.txt)."""
+    _stock(con, "taco")
+    _stock(con, "tacos")
+    assert compounds.forms(con, "taco") == ["tacos"]
+    assert compounds.forms(con, "tacos") == ["taco"]
+    terms = store.expand_query(con, "taco")
+    assert "tacos" in terms[0]
+
+
+def test_a_word_the_library_uses_well_stands_for_itself(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(compounds, "RARE_FORM", 4)
+    _stock(con, "filter", n=5)
+    _stock(con, "filters")
+    assert compounds.forms(con, "filter") == []
+
+
+def test_a_form_far_commoner_than_the_word_is_not_its_form(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ "robuste" is rare and "robust" is a common English word: taking it
+    pulled English documents into a German question."""
+    monkeypatch.setattr(compounds, "RARE_FORM", 4)
+    monkeypatch.setattr(compounds, "FORM_RATIO", 1)
+    _stock(con, "robuste", n=3)
+    _stock(con, "robust", n=6)
+    assert compounds.forms(con, "robuste") == []

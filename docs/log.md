@@ -1721,3 +1721,25 @@ on.
   `C:/prax-data/models` and was not touched, so search and embedding run.
   llama-server is paused (`prax up --start llama-server` once the files
   are back); every model step waits until then.
+
+## 2026-09-27: stage I, taco and tacos
+
+- [x] **A rare word also matches its other forms**, where the library
+      uses them: a plural or inflection ending (`s`, `es`, `e`, `n`,
+      `en`, `er`) added or taken off, kept where the form is a term of
+      three documents or more (`compounds.forms`). The library is the
+      word list, as for a compound; no stemmer per language, and no
+      rebuild of the index. Measured on the eval set, read-only, three
+      shapes:
+      | rule | English found / MRR | German found / MRR | top tens moved |
+      |---|---|---|---|
+      | off | 13 / 0.392 | 7 / 0.122 | — |
+      | every word | 12 / 0.371 | 6 / 0.137 | 38 of 39 |
+      | a word under 50 documents | 13 / 0.392 | 6 / 0.144 | 14 |
+      | …and a form in its range (under 10× the word's, or 50) | 13 / 0.392 | 6 / 0.141 | 12 |
+      English does not move at all under the last rule. The German side
+      trades one paper lost just past rank 10 (it was 9th: "robuste"
+      gains "robusten" and "robustes") for a higher MRR. The niggle
+      itself: "taco" and "tacos" now open with the same two documents,
+      the tacos recipe first; "news" gets no forms, being common. The
+      switch is `retrieval.INFLECT`.

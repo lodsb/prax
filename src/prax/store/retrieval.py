@@ -216,6 +216,8 @@ def _named_as(
 # thing it names (``expand_query_senses``). Off, every expansion is searched
 # everywhere, as before 2026-09-26: the switch the measurement flips.
 SENSES = True
+# A query word also matches its other forms the library uses (``compounds.forms``).
+INFLECT = True
 
 Scope = frozenset[str]
 
@@ -303,6 +305,9 @@ def expand_query_senses(
         alts = [tok.lower()]
         if 2 <= len(tok) <= 8 and tok.isalpha():
             alts += [e for e in acronym_expansions(con, tok) if e != tok.lower()]
+        if INFLECT:
+            # the forms of the word the library also uses: taco and tacos
+            alts += [f for f in compounds.forms(con, tok) if f not in alts]
         plain.update(alts)
         by_graph(tok, alts)
         for part in compounds.split(con, tok):
