@@ -19,6 +19,8 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
 SRC = Path(__file__).resolve().parents[1] / "src" / "prax"
 
 # invariant 3: the store is a package of ten modules in this order, and a
@@ -183,3 +185,33 @@ def test_the_zotero_importer_opens_its_source_read_only() -> None:
     assert opens, "the importer no longer opens a database; check this test"
     for call in opens:
         assert "mode=ro" in call, f"the importer opens its source writable: {call[:90]}"
+
+
+def test_a_file_with_a_shebang_is_executable_in_git() -> None:
+    """Ruff's EXE001 fails CI on Linux for a script with a shebang that git
+    does not mark executable, and Windows has no bit for ruff to see here
+    (2026-09-28). Git keeps the mode on every system, so ask git."""
+    import shutil
+    import subprocess
+
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("no git")
+    root = Path(__file__).resolve().parents[1]
+    listed = subprocess.run(
+        [git, "ls-files", "-s", "--", "*.py"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listed.returncode != 0:
+        pytest.skip("not a git checkout")
+    wrong = []
+    for line in listed.stdout.splitlines():
+        mode, _, rest = line.partition(" ")
+        path = rest.split("\t", 1)[-1]
+        f = root / path
+        if f.is_file() and f.read_bytes()[:2] == b"#!" and mode != "100755":
+            wrong.append(path)
+    assert wrong == [], f"git update-index --chmod=+x {' '.join(wrong)}"
