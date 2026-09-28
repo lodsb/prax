@@ -505,7 +505,15 @@ def reread(door: Door, a: Any) -> int:
         return 0
     what = a.extractor + (f" ({a.mode})" if a.mode else "")
     if r["dry_run"]:
-        out.say(f"{out.num(r['selected'])} documents would be asked for {what}")
+        skipped = int(r.get("skipped") or 0)
+        out.say(
+            f"{out.num(r['requested'])} documents would be asked for {what}"
+            + (
+                f"; {out.num(skipped)} of the selection it does not read"
+                if skipped
+                else ""
+            )
+        )
         return 0
     out.say(
         f"asked for {what} on {out.num(r['requested'])} of {r['selected']} documents"

@@ -440,9 +440,12 @@ def request_readings(
     *,
     mode: str | None = None,
     by: str = "human",
+    dry_run: bool = False,
 ) -> dict[str, int]:
     """A reading request on each of ``ids`` (``request_reading``); a
-    document the extractor does not read is skipped and counted."""
+    document the extractor does not read is skipped and counted. A
+    ``dry_run`` counts the same way and asks for nothing: its count once
+    took the RTF files an OCR would skip (271 where 92 PDFs were meant)."""
     from prax import parsers
 
     check_mode(extractor, mode)
@@ -457,7 +460,8 @@ def request_readings(
         if row is None or not parsers.by_name(extractor).accepts(row["mime"] or ""):
             skipped += 1
             continue
-        request_reading(con, doc_id, extractor, mode=mode, by=by)
+        if not dry_run:
+            request_reading(con, doc_id, extractor, mode=mode, by=by)
         requested += 1
     return {"selected": len(ids), "requested": requested, "skipped": skipped}
 

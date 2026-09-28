@@ -262,15 +262,13 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    if req.dry_run:
-        return {"selected": len(ids), "requested": 0, "skipped": 0, "dry_run": True}
     try:
         counts = store.request_readings(
-            con, ids, req.extractor, mode=req.mode, by=req.by
+            con, ids, req.extractor, mode=req.mode, by=req.by, dry_run=req.dry_run
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return {**counts, "dry_run": False}
+    return {**counts, "dry_run": req.dry_run}
 
 
 @router.delete("/doc/{doc_id}/reading")

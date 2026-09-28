@@ -884,7 +884,8 @@ def test_readings_asked_for_a_selection_at_once(
         "/readings/bulk",
         json={"extractor": "pymupdf4llm-ocr", "unreadable": True, "dry_run": True},
     ).json()
-    assert dry == {"selected": 1, "requested": 0, "skipped": 0, "dry_run": True}
+    # a dry run counts what it would ask for, and asks for nothing
+    assert dry == {"selected": 1, "requested": 1, "skipped": 0, "dry_run": True}
     assert not store.pending_readings(con, scan.doc_id)
     done = client.post(
         "/readings/bulk", json={"extractor": "pymupdf4llm-ocr", "unreadable": True}
