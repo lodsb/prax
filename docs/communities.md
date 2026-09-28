@@ -96,9 +96,9 @@ described inside it ("one part of the region “Everyday cooking”").
   that region holds half their weight. Its part comes too, when the part
   holds nine tenths of its region's parts. The search page shows it above
   the hits, and the MCP tool asks for it. Measured in
-  `docs/eval/regions-2026-09-28.md`: right for 88% of the queries it is
+  `docs/eval/regions-2026-09-28.md`: right for 92% of the queries it is
   shown for. Matching the query's words against the summaries was right
-  half the time.
+  under half the time.
 
 Not yet: `ask` reading a region's summary for a question about a region
 rather than a fact. It wants a measurement of its own.

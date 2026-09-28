@@ -6,8 +6,8 @@ in", docs/PLAN.md): the measurement ``prax.graph.regions`` waits on before
     python scripts/eval_regions.py [--queries tests/eval/queries-library.yaml]
 
 The right region of a query is where its expected documents live: the
-region (and the part) most of their entities belong to, weighed by how
-central each entity is to it. Two ways of finding it are scored:
+region (and the part) most of their entities belong to, each counted
+once. Two ways of finding it are scored:
 
 - ``text``: the query's vector against each region's name, summary and
   heaviest members;
@@ -125,7 +125,7 @@ def weights(con: sqlite3.Connection, docs: list[int]) -> dict[int, Counter[int]]
         f" WHERE e.valid_to IS NULL AND e.source_doc IN ({marks})",
         docs,
     ):
-        out[int(r["level"])][int(r["community_id"])] += float(r["weight"])
+        out[int(r["level"])][int(r["community_id"])] += 1.0  # one entity, one vote
     return out
 
 

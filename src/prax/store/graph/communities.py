@@ -342,14 +342,15 @@ def regions_for_matching(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 # Where a search's hits live ("A way in", docs/PLAN.md): the region and the
-# part most of their entities belong to, weighed by how central each is to
-# it, shown when the best one holds this share of the weight. Measured on
+# part most of their entities belong to, each entity counted once (weighed
+# by how central it was, one hub such as "Mac OS X" outvoted a recipe's
+# ingredients), shown when the best one holds this share of them. Measured on
 # the library's 62 queries (scripts/eval_regions.py,
-# docs/eval/regions-2026-09-28.md): at half the weight the region is right
-# for 88% of the 81% of queries it is shown for; the part, among its
-# region's parts, only at nine tenths (88% of 26%). Matching the query's
-# own words against the regions' names and summaries was right half the
-# time and is not used.
+# docs/eval/regions-2026-09-28.md): at half of them the region is right
+# for 92% of the 82% of queries it is shown for; the part, among its
+# region's parts, only at nine tenths (87% of 24%). Matching the query's
+# own words against the regions' names and summaries was right under half
+# the time and is not used.
 REGION_HITS = 5
 REGION_SHARE = 0.5
 PART_SHARE = 0.9
@@ -381,7 +382,7 @@ def regions_of(
     ):
         level = weight.setdefault(int(r["level"]), {})
         cid = int(r["community_id"])
-        level[cid] = level.get(cid, 0.0) + float(r["weight"])
+        level[cid] = level.get(cid, 0.0) + 1.0  # one entity, one vote
 
     def top(
         level: int, need: float, parent: int | None = None

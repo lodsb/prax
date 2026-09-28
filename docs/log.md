@@ -2360,8 +2360,10 @@ on.
 - [x] **Measured before shown** (`scripts/eval_regions.py`,
       `docs/eval/regions-2026-09-28.md`). The query's words against the
       regions' names and summaries: right 50%, no threshold that helps.
-      Where the hits live: right 82%, and 88% of the 81% of queries shown
-      at half the weight. A part, among its region's parts, is shown only
-      at nine tenths (88% of 26%).
+      Where the hits live, each entity counted once: right 81%, and 92% of
+      the 82% of queries shown at half of them. A part, among its region's
+      parts, only at nine tenths (87% of 24%). Weighing entities by how
+      central they are let one hub outvote a recipe ("Apfelkuchen"
+      showed the audio software region), and was worse throughout.
 - [x] **The personal review is done** by the user: 402 personal, 3
       released, none left suspected.
