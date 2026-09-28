@@ -93,6 +93,19 @@ WINDOWS_PROFILE = {
     "Templates",
     "Start Menu",
 }
+# a backed-up system drive: the operating system's own help, licences and
+# update files, 48 of them in the first NAS run (2026-09-28)
+SYSTEM_DIRS = {
+    "Windows",
+    "Program Files",
+    "Program Files (x86)",
+    "ProgramData",
+    "$Recycle.Bin",
+    "System Volume Information",
+}
+# a program on a Mac is a folder: its credits, readmes and help files came
+# over by the hundred from a copied profile (2026-09-28)
+BUNDLES = (".app", ".bundle", ".framework", ".plugin", ".component", ".vst", ".vst3")
 REPEATS = 3  # a folder name this many times in a row in a path is a loop
 MAX_DEPTH = 40
 MIME = {
@@ -258,14 +271,15 @@ def walk(roots, exts, skip=(), max_depth=MAX_DEPTH, progress=None, stats=None):
     """The folders under the roots, each as ``(folder, [(path, size), ...])``
     with the files whose suffix is wanted, links not followed. Left out:
     hidden files and folders, a NAS's clutter, a copied Windows profile's
-    junk (``WINDOWS_PROFILE``), the names in ``skip``, a folder whose name
+    junk (``WINDOWS_PROFILE``), a system drive's own folders (``SYSTEM_DIRS``),
+    a Mac program's bundle (``BUNDLES``), the names in ``skip``, a folder whose name
     repeats ``REPEATS`` times at the end of its path, one reached twice (by
     its device and inode), and anything deeper than ``max_depth``.
     ``stats`` counts what was walked and what was left out."""
     stats = stats if stats is not None else {}
     for key in ("folders", "files", "bytes", "left_out"):
         stats.setdefault(key, 0)
-    leave = SKIP_DIRS | WINDOWS_PROFILE | set(skip)
+    leave = SKIP_DIRS | WINDOWS_PROFILE | SYSTEM_DIRS | set(skip)
     for root in roots:
         root = os.path.abspath(root)
         if os.path.isfile(root):
@@ -295,7 +309,12 @@ def walk(roots, exts, skip=(), max_depth=MAX_DEPTH, progress=None, stats=None):
             kept = []
             for d in sorted(dirs):
                 full = os.path.join(here, d)
-                if d.startswith(".") or d in leave or os.path.islink(full):
+                if (
+                    d.startswith(".")
+                    or d in leave
+                    or d.lower().endswith(BUNDLES)
+                    or os.path.islink(full)
+                ):
                     stats["left_out"] += 1
                     continue
                 if _looping(parts + [d]) or len(parts) + 1 - base > max_depth:

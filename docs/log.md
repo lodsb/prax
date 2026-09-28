@@ -2193,3 +2193,12 @@ on.
       as the merges whose names carry different numbers, judged by Opus
       under the rule ($0.09), seven tidy-ups left alone.
 - Next: the gold sample, a person's decisions under the same rule.
+- [x] **The rule revised with the user:** a product's versions and a
+      conference's editions are one thing (the library keeps the series);
+      a word that changes the kind of thing named makes two; synonyms are
+      one only within a field. 69 of the 77 splits merged again. Against
+      the user's 218 decisions the local model agrees 80%, Opus 78%: the
+      paid tier is no closer to the person than the local model.
+- [x] **The NAS dump:** 2,921 documents, 1,789 of them RTF help and
+      credit files from copied programs. The sender now leaves out a
+      system drive's folders and a Mac program's bundle.

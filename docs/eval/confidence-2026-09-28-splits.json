@@ -1,5 +1,5 @@
 {
- "note": "77 merges split on 2026-09-28 from Opus's judgement under resolution.SAME_RULE, approved by the user and recorded through /graph/unmerge-entity, which signs 'human'. Not a person's decisions: leave them out of Q's gold sample.",
+ "note": "77 merges split on 2026-09-28 from Opus's judgement under resolution.SAME_RULE, approved by the user and recorded through /graph/unmerge-entity, which signs 'human'. Not a person's decisions: leave them out of Q's gold sample. The same evening the rule was revised with the user (a product's versions and a conference's editions are one thing) and 69 of them were merged again through /graph/decide, signed 'human' too: still not a person's decisions.",
  "entities": [
   {
    "entity": 8191,

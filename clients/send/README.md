@@ -70,6 +70,10 @@ Some folders are left out on purpose:
 - a copied Windows profile's junk (`AppData`, `Application Data`,
   `Local Settings` and the like). A backup that followed those links
   copied them into themselves, thousands of levels deep;
+- a backed-up system drive's own folders (`Windows`, `Program Files`,
+  `ProgramData`, the recycle bin);
+- a program on a Mac, which is a folder (`Name.app`, and plug-in
+  bundles such as `.component` and `.vst`): its credits and help files;
 - a folder whose name appears three times in a row in its path, which
   is such a loop;
 - anything below `--max-depth` levels (40);

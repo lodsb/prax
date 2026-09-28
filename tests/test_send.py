@@ -245,6 +245,10 @@ def test_the_walk_leaves_a_profile_loop_and_its_junk_out(tmp_path: Path) -> None
     (tmp_path / "home" / "Docs" / "paper.pdf").write_bytes(b"y")
     (tmp_path / "home" / "Application Data" / "Application Data").mkdir(parents=True)
     (tmp_path / "home" / "Application Data" / "junk.pdf").write_bytes(b"z")
+    (tmp_path / "home" / "Windows" / "Help").mkdir(parents=True)
+    (tmp_path / "home" / "Windows" / "Help" / "system.pdf").write_bytes(b"s")
+    (tmp_path / "home" / "Synth.app" / "Contents").mkdir(parents=True)
+    (tmp_path / "home" / "Synth.app" / "Contents" / "Credits.pdf").write_bytes(b"c")
     (tmp_path / "home" / "Mine").mkdir()
     (tmp_path / "home" / "Mine" / "own.pdf").write_bytes(b"w")
     stats: dict[str, int] = {}
@@ -258,7 +262,7 @@ def test_the_walk_leaves_a_profile_loop_and_its_junk_out(tmp_path: Path) -> None
     # the third "Docs" in a row is a loop; the profile's junk and the named
     # folder are left out
     assert found == {"paper.pdf"}
-    assert stats["left_out"] >= 3
+    assert stats["left_out"] >= 5
     shallow = {
         Path(path).name
         for _, files in sender.walk([str(tmp_path)], [".pdf"], max_depth=1)
