@@ -58,6 +58,15 @@ Thanks for the pointers, I will try the DK method next week.
 """
 
 
+def test_plain_never_reads_a_page() -> None:
+    """A page trafilatura finds nothing in is a failed parse: plain decoding
+    it would index its markup (a bot check, a PDF viewer's frame)."""
+    plain = parsers.by_name("plain")
+    assert not plain.accepts("text/html")
+    assert plain.accepts("text/plain") and plain.accepts("text/markdown")
+    assert "plain" not in [e.name for e in parsers.candidates("text/html")]
+
+
 def test_plain_fences_code_regions_inside_prose() -> None:
     out = parsers.by_name("plain")(FORUM_NOTE.encode())
     lines = out.split("\n")

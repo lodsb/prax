@@ -384,6 +384,59 @@ def test_ingest_url_fetches(
         inbox.check_url("file:///etc/passwd")
 
 
+AKAMAI = (
+    b'<!DOCTYPE html><html><head><meta http-equiv="refresh" content="5;'
+    b" URL='/2504-4990/5/3/59?bm-verify=AAQAAAAO'\" /><title>&nbsp;</title>"
+    b"</head></html>"
+)
+
+
+def test_a_bot_check_is_refused_not_kept(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A site that answers the server with its bot check gives no document:
+    the fetch failed (2026-09-28, an MDPI article came back as Akamai's
+    page and was indexed as its markup)."""
+
+    def fake_fetch(url: str, *, timeout: float = 0) -> tuple[bytes, str, str]:
+        return AKAMAI, "text/html", "https://www.mdpi.com/2504-4990/5/3/59"
+
+    monkeypatch.setattr(inbox, "fetch_url", fake_fetch)
+    before = store.list_documents(con)["total"]
+    with pytest.raises(inbox.BotCheck, match="Akamai"):
+        inbox.ingest_url(con, "https://doi.org/10.3390/make5030059")
+    assert store.list_documents(con)["total"] == before
+    assert inbox.bot_check(PAGE.encode()) is None
+    # a long article that quotes a mark is a page
+    assert inbox.bot_check(b"<p>bm-verify</p>" + b"x" * 40_000) is None
+
+
+def test_a_fetched_file_is_named_by_what_its_url_says(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An arXiv PDF carries its id (meta and a stand-in title the titles
+    pass replaces), a DOI link its DOI, an escaped file name is decoded."""
+
+    def fake_fetch(url: str, *, timeout: float = 0) -> tuple[bytes, str, str]:
+        return b"%PDF-1.4 " + url.encode(), "application/pdf", url
+
+    monkeypatch.setattr(inbox, "fetch_url", fake_fetch)
+    a = inbox.ingest_url(con, "https://arxiv.org/pdf/2102.07396")
+    d = store.get_document(con, a.doc_id, max_chars=0)
+    assert d["title"] == "arXiv:2102.07396" and d["meta"]["arxiv"] == "2102.07396"
+    assert d["original_path"] == "2102.07396"
+    old = inbox.ingest_url(con, "https://arxiv.org/pdf/cs/0110053v1")
+    assert store.get_meta(con, old.doc_id)["arxiv"] == "cs/0110053"
+    f = inbox.ingest_url(con, "https://example.org/a/Annif%20DIY%20indexing.pdf")
+    assert store.get_document(con, f.doc_id, max_chars=0)["title"] == (
+        "Annif DIY indexing.pdf"
+    )
+    assert inbox.url_ids("https://doi.org/10.3390/make5030059") == {
+        "doi": "10.3390/make5030059"
+    }
+    assert inbox.url_ids("https://example.org/abs/2102.07396") == {}
+
+
 def test_the_door_does_not_fetch_private_addresses(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

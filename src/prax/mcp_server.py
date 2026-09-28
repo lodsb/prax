@@ -95,7 +95,13 @@ def search(
     on what it covers, and its part when that is as clear; ``traverse``
     and the graph go on from there.
     """
-    params: dict[str, Any] = {"q": query, "limit": limit, "mode": mode, "regions": True}
+    params: dict[str, Any] = {
+        "q": query,
+        "limit": limit,
+        "mode": mode,
+        "regions": True,
+        "brief": True,
+    }
     for k, v in (
         ("kind", kind),
         ("rerank", rerank),
@@ -122,11 +128,14 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
     """Fetch one document by id (ids come from search results).
 
     Text is windowed: ``text_len`` and ``truncated`` say whether more
-    remains; call again with a larger ``offset`` to page.
+    remains; call again with a larger ``offset`` to page. ``meta`` holds
+    what the document is and where it belongs (source, domains, language,
+    summary, ids, authors), not the history of how it was read.
     """
     return _guard(
         lambda: door().get_json(
-            f"/get/{doc_id}", {"offset": offset, "max_chars": max_chars}
+            f"/get/{doc_id}",
+            {"offset": offset, "max_chars": max_chars, "brief": True},
         )
     )
 
@@ -418,7 +427,10 @@ def capture_url(
 ) -> dict[str, Any]:
     """Fetch a web page or file by URL and keep it: a page is indexed at
     once, a PDF waits for the worker. ``domains`` names the ontology
-    modules it belongs to (e.g. ["research"])."""
+    modules it belongs to (e.g. ["research"]). Pass ``title`` when you
+    know it: a file otherwise carries its file name or arXiv id until
+    the titles pass reads one. A site that answers the server with a bot
+    check is an error, not a document."""
     return _guard(
         lambda: door().post_json(
             "/ingest/url",

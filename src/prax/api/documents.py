@@ -25,8 +25,14 @@ router = APIRouter()
 
 @router.get("/get/{doc_id}")
 def get(
-    doc_id: int, request: Request, offset: int = 0, max_chars: int | None = None
+    doc_id: int,
+    request: Request,
+    offset: int = 0,
+    max_chars: int | None = None,
+    brief: bool = False,
 ) -> dict[str, Any]:
+    """One document and a window of its text; ``brief`` is what an agent
+    reads (``store.brief_document``: the meta without its histories)."""
     con = _con(request)
     doc = store.get_document(con, doc_id, offset=offset, max_chars=max_chars)
     if doc is None:
@@ -34,7 +40,7 @@ def get(
     # what it is waiting to be read by: a list since migration 21, and
     # `meta.reading` is the last reading that finished
     doc["pending"] = store.pending_readings(con, doc_id)
-    return doc
+    return store.brief_document(doc) if brief else doc
 
 
 @router.get("/search")
@@ -48,10 +54,13 @@ def search(
     doctype: str | None = None,
     domain: str | None = None,
     regions: bool = False,
+    brief: bool = False,
 ) -> list[dict[str, Any]]:
     """The hits; with ``regions`` first, when most of the first hits'
     entities live in one region of the library, that region and its part
-    as an item of their own (``kind: "region"``): where the results are."""
+    as an item of their own (``kind: "region"``): where the results are.
+    ``brief`` leaves out the ranks and the empty fields (``store.brief_hit``),
+    which an agent does not read."""
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
     con = _con(request)
@@ -69,6 +78,8 @@ def search(
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    if brief:
+        hits = [store.brief_hit(h) for h in hits]
     if regions and hits:
         first = [int(h["doc_id"]) for h in hits[: store.REGION_HITS]]
         where = store.regions_of(con, first)

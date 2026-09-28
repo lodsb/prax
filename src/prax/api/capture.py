@@ -272,7 +272,7 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
     except OSError as exc:  # urllib errors: unreachable, 403, 404, timeout
         why = str(exc)
-        if "403" in why or "401" in why:
+        if "403" in why or "401" in why or isinstance(exc, inbox.BotCheck):
             why += (
                 " (the site refused the server; the browser extension fetches"
                 " with your own session when it may read all sites)"

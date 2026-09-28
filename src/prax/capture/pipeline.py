@@ -230,7 +230,13 @@ def summaries_needed(
 def titles_needed(
     con: sqlite3.Connection,
     *,
-    reasons: tuple[str, ...] = ("empty", "filename", "zotero-auto", "caps"),
+    reasons: tuple[str, ...] = (
+        "empty",
+        "filename",
+        "identifier",
+        "zotero-auto",
+        "caps",
+    ),
     ids: list[int] | None = None,
     untried_only: bool = False,
 ) -> list[tuple[int, str]]:

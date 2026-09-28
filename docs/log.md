@@ -2386,3 +2386,41 @@ on.
 - [x] **Back to the top**: a button once a document is a screen down.
 - Screenshots from a throwaway door: the dialog, a click on "personal"
   (the state written, the button gone), and the button after scrolling.
+
+## 2026-09-29: what the MCP client stumbled on
+
+Found while searching the library for the classification research
+(`docs/PLAN.md`) and capturing 23 papers through `capture_url`.
+
+- [x] **A bot check is not a document.** MDPI answered the door with
+      Akamai's bot check. Trafilatura found no main content and `plain`
+      indexed the page's markup as document 13338 (retired). Now
+      `inbox.ingest_url` refuses a page of under 32 KB that carries a
+      known bot check's mark (`BOT_CHECK_MARKS`: Akamai, Cloudflare,
+      Imperva, HUMAN, DataDome) with `BotCheck`, a failed fetch (502
+      with the extension hint), and `plain` no longer takes `text/html`
+      (`Extractor.excludes`): a page nothing reads is a failed parse.
+      Four older documents hold the same kind of markup, SingleFile
+      snapshots of a PDF viewer's tab (PLAN, "The UI and the agent").
+- [x] **A capture is named by what its URL says.** An arXiv PDF was
+      titled `0110053` or `2102.07396`, which `needs_title` did not
+      flag, so the titles pass would have kept it. Now the capture keeps
+      `meta.arxiv` (or `meta.doi` from a `doi.org` link), stands in
+      `arXiv:<id>` as the title, decodes an escaped file name
+      (`Annif%20DIY…`), and `needs_title` answers `identifier` for a
+      title that is only an arXiv id or a number of five digits or more.
+- [x] **The agent reads the brief form.** `GET /get?brief=true` keeps
+      `BRIEF_META` (what the document is and where it belongs) and drops
+      the histories and hashes; `GET /search?brief=true` drops the ranks
+      and empty fields. The MCP `get` and `search` ask for it; the UI
+      reads the full form. Measured on live documents: `get` with no text
+      3,840 -> 880 bytes (doc 5463), 2,297 -> 787 (a new capture); ten
+      search hits 4,963 -> 3,703.
+- [x] **An MCP server keeps the code it started with.** Howto 5 now says
+      to reconnect it after a change. The previous session's server
+      predated the region line by hours.
+- Seen, not changed: a query about a machine-learning method gets the
+      region "Music Emotion and Feature Analysis", because that is where
+      the library's machine-learning papers are. Right for this library,
+      and a reminder that the region line says where hits live, not what
+      the query is about.

@@ -118,6 +118,54 @@ def get_document(
     return out
 
 
+# What an agent reads of a document's meta (``GET /get?brief=true``, the
+# MCP tool): what it is and where it belongs. The histories of its parses,
+# titles and extractions, its summaries in every language and the Zotero
+# record are the UI's; they were three kilobytes before the text.
+BRIEF_META = (
+    "source",
+    "domains",
+    "tags",
+    "collections",
+    "lang",
+    "summary",
+    "pages",
+    "doi",
+    "arxiv",
+    "creators",
+    "paper",
+    "origin",
+    "video",
+    "retired",
+)
+BRIEF_ROW_DROP = ("hash", "text_hash", "parsed_at")
+# what a search hit carries for the UI's "why this hit" line, and an
+# agent never reads (``GET /search?brief=true``)
+HIT_RANKS = ("score", "fts_rank", "vec_rank", "field_rank", "dvec_rank")
+
+
+def brief_document(doc: dict[str, Any]) -> dict[str, Any]:
+    """A ``get_document`` result as an agent reads it: the meta cut to
+    ``BRIEF_META``, the capture to who and when, the Zotero record to its
+    keys, and the row without the hashes."""
+    out = {k: v for k, v in doc.items() if k not in BRIEF_ROW_DROP}
+    meta = doc.get("meta") or {}
+    brief = {k: meta[k] for k in BRIEF_META if meta.get(k) not in (None, [], {}, "")}
+    cap = meta.get("capture") or {}
+    if cap:
+        brief["capture"] = {k: cap[k] for k in ("at", "by") if cap.get(k)}
+    keys = (meta.get("zotero") or {}).get("keys")
+    if keys:
+        brief["zotero"] = keys
+    out["meta"] = brief
+    return out
+
+
+def brief_hit(hit: dict[str, Any]) -> dict[str, Any]:
+    """A search hit without its ranks and empty fields."""
+    return {k: v for k, v in hit.items() if k not in HIT_RANKS and v is not None}
+
+
 ANNOTATORS = ("figures", "figure-refs", "formulas")  # readers that add to the text
 
 

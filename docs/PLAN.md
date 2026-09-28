@@ -489,6 +489,13 @@ recipe at once. Three independent failures, each wanting a different fix.
       is named in `docs/log.md`, "The night of 2026-09-20".
 - [ ] **Resource-aware swapping in `prax up`** — only if marker re-reads
       become routine (`docs/log.md`, "After the mathematics").
+- [ ] **The extension sends a PDF viewer's tab as a snapshot.** A tab
+      showing `arxiv.org/pdf/…` or IEEE's `stamp.jsp` is saved by
+      SingleFile as the viewer's frame, not the PDF: four documents
+      (9539, 9574, 9741, 10112) hold only the frame's markup. The
+      extension should send the PDF the frame shows, as it does for a
+      tab whose URL ends in `.pdf`. Since 2026-09-29 such a page no
+      longer falls back to plain text, so it waits as a failed parse.
 
 ### The backfill
 

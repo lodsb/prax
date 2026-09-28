@@ -2659,7 +2659,15 @@ Claude Code. A tool called while the door is down answers `{"error":
 `append_page`, `ingest`, `capture_url` and `ingest_file` (a file on
 the machine running Claude Code, uploaded to the door). What the agent
 writes is stamped `agent`: edges' producer, pages' author, domain sets,
-promotions.
+promotions. `get` and `search` ask the door for the brief form
+(`brief=true`). A document's `meta` comes without the histories of how
+it was read. A hit comes without its ranks.
+
+The server is started once per Claude Code session and keeps the code it
+started with. After a change to `prax.mcp_server`, run `/mcp` and
+reconnect `prax`, or start a new session. A change to the door needs
+only the door restarted. On 2026-09-28 a session's searches lacked the
+region line, which the door had been returning for hours.
 
 For every other project, the plugin (`clients/claude-plugin/`,
 `docs/claude-workflow.md`) registers the server at user scope. It adds

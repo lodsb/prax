@@ -38,6 +38,12 @@ FILE_EXT = re.compile(
     re.IGNORECASE,
 )
 ZOTERO_AUTO = re.compile(r"(^unknown -|- no title\b|^no title\b)", re.IGNORECASE)
+# a name that is only an identifier: an arXiv id (new or old style, as a
+# capture of its URL names the file), or a long number
+IDENTIFIER = re.compile(
+    r"^(?:arxiv:\s*)?(?:\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7}|\d{5,})(?:v\d+)?$",
+    re.IGNORECASE,
+)
 JUNK_PDF_META = re.compile(
     r"(microsoft (word|powerpoint)|powerpoint|\.(docx?|dvi|indb|pptx?|tex|qxd|fm)$"
     r"|^untitled|^\s*$|^\d+$)",
@@ -242,8 +248,9 @@ ACRONYMS = {
 
 def needs_title(title: str | None, meta: dict[str, Any] | None = None) -> str | None:
     """Why a title should be replaced, or None: ``empty``, ``filename``,
-    ``zotero-auto`` (an ``Unknown - No Title`` name) or ``caps``. A title the
-    pass or a person already wrote (``meta.title_source``) is kept."""
+    ``identifier`` (``arXiv:2102.07396``, ``0110053``), ``zotero-auto`` (an
+    ``Unknown - No Title`` name) or ``caps``. A title the pass or a person
+    already wrote (``meta.title_source``) is kept."""
     meta = meta or {}
     src = meta.get("title_source")
     if src and src != "zotero":
@@ -253,6 +260,8 @@ def needs_title(title: str | None, meta: dict[str, Any] | None = None) -> str | 
         return "empty"
     if HASH_PREFIX.match(t) or FILE_EXT.search(t):
         return "filename"
+    if IDENTIFIER.match(t):
+        return "identifier"
     if ZOTERO_AUTO.search(t):
         return "zotero-auto"
     if len(t) > 20 and t == t.upper() and re.search(r"[A-Z]{4}", t):

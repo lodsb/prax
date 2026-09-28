@@ -29,7 +29,7 @@ time, so the serving path never loads them):
 |                 |                 | tables; no dependency                         |
 | office          | .doc .rtf .odt  | LibreOffice converts to .docx, then as above; |
 |                 |                 | needs LibreOffice installed                   |
-| plain           | text/*          | decode as UTF-8; a source file (by extension, |
+| plain           | text/* but HTML | decode as UTF-8; a source file (by extension, |
 |                 |                 | else Magika) becomes one fenced code block;   |
 |                 |                 | code regions inside prose are fenced          |
 | figures         | .pdf .html      | the vision model reads every figure the text   |
@@ -344,7 +344,16 @@ REGISTRY: list[Extractor] = [
         version_of=_djvu_version,
         previous=True,  # a long scan in windows: the pages read before stay
     ),
-    Extractor("plain", ("text/",), _plain, revision=3, hints=True),
+    Extractor(
+        "plain",
+        ("text/",),
+        _plain,
+        revision=3,
+        hints=True,
+        # a page trafilatura finds nothing in is a failed parse, never its
+        # markup as text (a bot check, a PDF viewer's frame: 2026-09-29)
+        excludes=("text/html",),
+    ),
     Extractor(
         "vision",
         ("image/",),

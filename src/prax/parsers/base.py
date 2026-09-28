@@ -31,8 +31,12 @@ class Extractor:
     covers: tuple[tuple[str, int], ...] = ()
     # the version when it is not a package of this process (a server's)
     version_of: Callable[[], str] | None = None
+    # exact types a prefix in ``mimes`` would take and this one must not
+    excludes: tuple[str, ...] = ()
 
     def accepts(self, mime: str) -> bool:
+        if mime in self.excludes:
+            return False
         return any(
             mime == m or (m.endswith("/") and mime.startswith(m)) for m in self.mimes
         )

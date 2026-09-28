@@ -17,7 +17,7 @@ from .base import HandOut, Log, ModelStep, TakeIn, say
 # one item is a whole book, and a book is up to forty model calls: a batch
 # of thirty was 1,200 of them before anything was posted, and the worker's
 # heartbeat went stale inside it (2026-09-24)
-TITLE_REASONS = ("empty", "filename", "zotero-auto", "caps")
+TITLE_REASONS = ("empty", "filename", "identifier", "zotero-auto", "caps")
 
 SECTIONS_BATCH = 3  # documents a batch: each is a book's worth of calls
 

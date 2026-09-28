@@ -197,6 +197,52 @@ def fetch_url(url: str, *, timeout: float = FETCH_TIMEOUT) -> tuple[bytes, str, 
         return data, ctype or "application/octet-stream", resp.geturl()
 
 
+class BotCheck(OSError):
+    """The site answered the server with a bot check, not the page: a
+    fetch that failed, like a 403, and never a document."""
+
+
+# What a bot check's page carries, by the service that serves it. Matched
+# only on a small page (BOT_CHECK_MAX_BYTES): an article may well quote one.
+BOT_CHECK_MARKS = (
+    ("bm-verify", "Akamai"),
+    ("_cf_chl_opt", "Cloudflare"),
+    ("challenge-platform", "Cloudflare"),
+    ("<title>just a moment", "Cloudflare"),
+    ("_incapsula_resource", "Imperva"),
+    ("px-captcha", "HUMAN"),
+    ("captcha-delivery.com", "DataDome"),
+    ("checking your browser before accessing", "a bot check"),
+)
+BOT_CHECK_MAX_BYTES = 32 * 1024
+
+
+def bot_check(data: bytes) -> str | None:
+    """The service whose bot check this page is, or None for a page."""
+    if len(data) > BOT_CHECK_MAX_BYTES:
+        return None
+    low = data.decode("utf-8", errors="replace").lower()
+    return next((who for mark, who in BOT_CHECK_MARKS if mark in low), None)
+
+
+_ARXIV_URL = re.compile(
+    r"^https?://(?:www\.|export\.)?arxiv\.org/(?:abs|pdf)/"
+    r"(?P<id>\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7})(?:v\d+)?(?:\.pdf)?/?$",
+    re.IGNORECASE,
+)
+_DOI_URL = re.compile(r"^https?://(?:dx\.)?doi\.org/(?P<doi>10\.\S+)$", re.IGNORECASE)
+
+
+def url_ids(url: str) -> dict[str, str]:
+    """What a URL says the document is: an arXiv id (``/abs/`` or
+    ``/pdf/``) or a DOI (``doi.org``), as ``paper_meta`` keys them."""
+    if m := _ARXIV_URL.match(url):
+        return {"arxiv": m.group("id")}
+    if m := _DOI_URL.match(url):
+        return {"doi": urllib.parse.unquote(m.group("doi"))}
+    return {}
+
+
 # ------------------------------------------------------------ registering
 
 
@@ -490,24 +536,33 @@ def ingest_url(
 ) -> Capture:
     """Fetch a URL server-side (bookmarklet, share target, MCP, an
     importer) and keep what came back: a page, a PDF, anything. ``note``
-    is what the sender said about it (``meta.capture.note``)."""
+    is what the sender said about it (``meta.capture.note``). A bot check
+    in place of the page is refused (``BotCheck``); an arXiv id or a DOI
+    the URL names is kept, and stands in as the title of a file until the
+    titles pass reads one."""
     check_url(url)
     data, ctype, final = fetch_url(url)
     mime = "text/html" if ctype in HTML_TYPES else ctype
-    name = urllib.parse.urlsplit(final).path.rsplit("/", 1)[-1] or None
-    extra: dict[str, Any] = {}
+    if mime in HTML_TYPES and (who := bot_check(data)):
+        raise BotCheck(f"{final} answered with {who}'s bot check, not the page")
+    name = urllib.parse.unquote(urllib.parse.urlsplit(final).path.rsplit("/", 1)[-1])
+    extra: dict[str, Any] = {**url_ids(url), **url_ids(final)}
     if canonical_url(url) != canonical_url(final):
         extra["requested_url"] = url
     if note:
         extra["capture_note"] = note
+    if mime in HTML_TYPES:
+        title = title or html_title(data)
+    elif not title:
+        title = f"arXiv:{extra['arxiv']}" if "arxiv" in extra else name or None
     return ingest_bytes(
         con,
         data,
         mime=mime,
         source="capture",
-        title=title or (html_title(data) if mime in HTML_TYPES else name),
+        title=title,
         source_url=final,
-        original_path=name if mime not in HTML_TYPES else None,
+        original_path=(name or None) if mime not in HTML_TYPES else None,
         domains=domains,
         tags=tags,
         session=session,

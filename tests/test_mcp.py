@@ -98,6 +98,27 @@ def test_ingest_search_get() -> None:
     assert page["text"] == "hello" and page["truncated"]
 
 
+def test_get_and_search_are_brief(proxied: TestClient) -> None:
+    """What the agent reads leaves out what only the UI reads: the meta's
+    histories and the hashes of a document, the ranks and empty fields of a
+    hit. The door still answers the UI in full."""
+    meta = {"parse_history": [{"extractor": "plain/1"}], "lang": "en"}
+    r = proxied.post(
+        "/ingest", json={"text": "brief tools read little", "title": "b", "meta": meta}
+    ).json()
+    full = proxied.get(f"/get/{r['doc_id']}").json()
+    assert "hash" in full and "parse_history" in full["meta"]
+    doc = call("get", doc_id=r["doc_id"])
+    assert "hash" not in doc and "text_hash" not in doc
+    assert doc["meta"] == {"lang": "en"} and doc["text"]
+    hit = call("search", query="brief tools")[-1]
+    assert hit["doc_id"] == r["doc_id"]
+    assert not {"score", "fts_rank", "vec_rank"} & set(hit)
+    assert None not in hit.values()
+    ui = proxied.get("/search", params={"q": "brief tools"}).json()[-1]
+    assert "score" in ui
+
+
 def test_get_unknown_returns_error() -> None:
     assert "error" in call("get", doc_id=999)
 

@@ -114,8 +114,11 @@ from .readings import (  # noqa: F401
 )
 from .reads import (  # noqa: F401
     ANNOTATORS,
+    BRIEF_META,
+    BRIEF_ROW_DROP,
     CAPTURE_SOURCES,
     HEAD_CHARS,
+    HIT_RANKS,
     KNOWN_BATCH,
     NEARBY_AFTER,
     NEARBY_BEFORE,
@@ -126,6 +129,8 @@ from .reads import (  # noqa: F401
     _chunk_shape,
     _equation_head,
     _summary_where,
+    brief_document,
+    brief_hit,
     citation_candidates,
     document_by_zotero_key,
     document_dois,
