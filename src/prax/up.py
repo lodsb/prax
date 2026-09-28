@@ -699,6 +699,9 @@ class _JobObject:
 
     def __init__(self) -> None:
         self.handle: Any = None
+        # kernel32, declared here: on Linux mypy reads the Windows branch
+        # below as unreachable and could not tell the attribute's type
+        self._k32: Any = None
         if sys.platform != "win32":
             return
         import ctypes
@@ -769,7 +772,7 @@ class _JobObject:
     def assign(self, proc: subprocess.Popen[bytes]) -> bool:
         if self.handle is None:
             return False
-        return bool(self._k32.AssignProcessToJobObject(self.handle, int(proc._handle)))  # type: ignore[attr-defined]
+        return bool(self._k32.AssignProcessToJobObject(self.handle, int(proc._handle)))  # type: ignore[attr-defined,unused-ignore]
 
     def terminate(self) -> bool:
         """End every process in the job: the role's tree, not just its root
