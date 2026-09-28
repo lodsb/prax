@@ -305,12 +305,13 @@ function splitRow(it) {
 // came from, and the cues (the owner's name is only ever "name").
 function suspectRow(it) {
   const cues = (it.cues || []).map((c) => esc(c.replace(/^(strong|weak): /, ""))).join(" · ");
+  const marked = it.state === "personal";
   return `<article class="decide-row"><div class="decide-pair"><div class="decide-side">
       <a href="#doc/${it.id}">${esc(it.title || `doc ${it.id}`)}</a>
       <span class="muted">${esc(it.mime || "")}${it.added_at ? ` · ${esc(String(it.added_at).slice(0, 10))}` : ""}</span>
       ${it.path ? `<div class="muted">${esc(it.path)}</div>` : ""}</div></div>
-    <div class="decide-acts"><span class="muted">${cues || "no cue"}</span>
-      <button type="button" data-act="personal" data-doc="${it.id}">personal</button>
+    <div class="decide-acts"><span class="muted">${marked ? `marked ${esc(String(it.decided || "").slice(0, 10))}${cues ? " · " : ""}` : ""}${cues || (marked ? "" : "no cue")}</span>
+      ${marked ? "" : `<button type="button" data-act="personal" data-doc="${it.id}">personal</button>`}
       <button type="button" class="secondary" data-act="open" data-doc="${it.id}">not personal</button>
       <span class="decide-out muted"></span></div></article>`;
 }
@@ -397,6 +398,60 @@ function regionLine(where) {
   const about = where.region.summary ? `<div class="muted">${esc(where.region.summary)}</div>` : "";
   return `<p class="region-line"><span class="muted">mostly in</span> ${link(where.region)}${part}
     <span class="muted">· ${Math.round(where.region.share * 100)}% of what the first hits are about</span>${about}</p>`;
+}
+// The document page's "properties…" dialog (view-doc.js): where a
+// document came from, what it is, where it belongs and who may see it,
+// with the administrative changes beside what they change.
+function propertiesHtml(doc) {
+  const m = doc.meta || {};
+  const cap = m.capture || {};
+  const origin = m.origin || {};
+  const zot = m.zotero || {};
+  const sens = m.sensitivity || {};
+  const ext = m.extraction || {};
+  const when = (s) => (s ? esc(String(s).slice(0, 16).replace("T", " ")) : "");
+  const row = (k, v) => (v || v === 0 ? `<tr><th>${esc(k)}</th><td>${v}</td></tr>` : "");
+  const list = (xs) => (xs && xs.length ? xs.map(esc).join(", ") : "");
+  const state = doc.sensitivity || "open";
+  const stateWord = { personal: "personal", suspected: "suspected personal", open: "open" }[state] || esc(state);
+  const decided = sens.at ? `, by ${sens.by === "human" ? "you" : esc(sens.by || "?")} on ${when(sens.at)}` : "";
+  const cues = ((m.private || {}).cues || []).map((c) => esc(c.replace(/^(strong|weak): /, ""))).join(" · ");
+  const buttons = [
+    state !== "personal" ? `<button type="button" data-props="personal">personal</button>` : "",
+    state !== "open" ? `<button type="button" class="secondary" data-props="open">not personal</button>` : "",
+  ].join(" ");
+  const section = (title, rows) => (rows.trim() ? `<section class="route-group"><h3>${title}</h3><table class="props">${rows}</table></section>` : "");
+  return `<h2>Properties</h2>
+  <p class="muted process-title">${esc(doc.title || "(untitled)")} · doc ${doc.id}</p>
+  ${section("Where it came from", [
+    row("source", esc(m.source || "")),
+    row("sent by", cap.by ? `${esc(cap.by)}${cap.at ? ` on ${when(cap.at)}` : ""}` : ""),
+    row("from", origin.path ? `${esc(origin.host || "")}${origin.host ? ":" : ""}${esc(origin.path)}` : ""),
+    row("file", esc(doc.original_path || "")),
+    row("address", doc.source_url ? `<a href="${esc(doc.source_url)}" target="_blank" rel="noopener">${esc(doc.source_url)}</a>` : ""),
+    row("Zotero", list(zot.keys)),
+    row("added", when(doc.added_at)),
+  ].join(""))}
+  ${section("What it is", [
+    row("type", esc(doc.mime || "")),
+    row("pages", m.pages),
+    row("language", esc(m.lang || "")),
+    row("text", m.text_source ? `${esc(m.text_source)}, ${(doc.text_len || 0).toLocaleString()} characters, read ${when(doc.parsed_at)}` : ""),
+    row("graph", ext.extractor ? `read by ${esc(ext.extractor)} against ${esc(ext.ontology_version || "?")}${ext.at ? ` on ${when(ext.at)}` : ""}` : ""),
+    row("original", doc.hash ? `<code>${esc(doc.hash.slice(0, 16))}…</code>` : ""),
+  ].join(""))}
+  ${section("Where it belongs", [
+    row("domains", m.domains ? `${list(m.domains)}${m.domains_by ? ` <span class="muted">(${esc(m.domains_by)})</span>` : ""}` : "every module"),
+    row("tags", list(m.tags)),
+    row("collections", list(m.collections)),
+  ].join(""))}
+  <section class="route-group"><h3>Who may see it</h3>
+    <p>${stateWord}${decided}. ${state === "open" ? "Every token that may read its domains sees it." : "Only the administrator and tokens that may see personal documents see it."}</p>
+    ${cues ? `<p class="muted">what the rules found: ${cues}</p>` : ""}
+    <p class="props-acts">${buttons} <span class="props-out muted"></span></p>
+  </section>
+  ${m.retired ? `<p class="error">retired on ${when(m.retired.at)}: ${esc(m.retired.reason || "")}</p>` : ""}
+  <div class="dialog-actions"><button type="button" class="secondary props-close">Close</button></div>`;
 }
 function mergeRow(it) {
   const a = it.alias, into = it.into;
@@ -510,5 +565,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

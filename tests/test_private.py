@@ -150,6 +150,13 @@ def test_a_person_decides_and_the_rules_never_overrule_it(
     client.put(f"/doc/{other}/sensitivity", json={"state": "personal"})
     assert _state(con, other) == "personal"
     assert client.get("/documents/suspected").json()["total"] == 0
+    # the marked ones have a list of their own, where one is opened again
+    marked = client.get("/documents/suspected", params={"state": "personal"}).json()
+    assert marked["total"] == 1 and marked["items"][0]["id"] == other
+    assert marked["items"][0]["state"] == "personal" and marked["items"][0]["decided"]
+    assert (
+        client.get("/documents/suspected", params={"state": "open"}).status_code == 400
+    )
     # an unchanged rule reads again only what showed no cue, and marks nothing
     assert store.maintain(con, only=["private"])["private"]["suspected"] == 0
     assert "private" not in _meta(con, paper_of(con))

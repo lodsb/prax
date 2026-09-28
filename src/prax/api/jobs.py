@@ -962,12 +962,17 @@ def private_rules(request: Request) -> dict[str, Any]:
 
 @router.get("/documents/suspected")
 def documents_suspected(
-    request: Request, offset: int = 0, limit: int = 30
+    request: Request, offset: int = 0, limit: int = 30, state: str = "suspected"
 ) -> dict[str, Any]:
     """The documents the personal-document rules suspect and no person has
     decided about, with their cues (``store.suspected_page``): the Review
     page's "personal?" list. A decision is ``PUT /doc/{id}/sensitivity``."""
-    return store.suspected_page(_con(request), offset=offset, limit=limit)
+    try:
+        return store.suspected_page(
+            _con(request), state=state, offset=offset, limit=limit
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 class SensitivityReq(BaseModel):

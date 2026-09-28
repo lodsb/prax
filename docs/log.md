@@ -2367,3 +2367,22 @@ on.
       showed the audio software region), and was worse throughout.
 - [x] **The personal review is done** by the user: 402 personal, 3
       released, none left suspected.
+- [x] **Ask with the region's summary, measured and left off**
+      (`scripts/eval_ask_regions.py`): over the 21 named regions an
+      answer named 0.25 of the region's heaviest members with it, 0.24
+      without; 8 broader, 5 narrower. The flag (`regions`) stays a choice.
+
+## 2026-09-28: the document page, from the niggles
+
+- [x] **Every personal document in one list**: the Admin page's "marked
+      personal" tab (`GET /documents/suspected?state=personal`), the last
+      marked first, each with "not personal".
+- [x] **properties…** on a document's page, beside process…: where it came
+      from (source, who sent it, the NAS path, the address), what it is
+      (type, pages, language, the text's source, the graph's reading),
+      where it belongs (domains and by whom, tags, collections), and who
+      may see it (the state, who decided and when, the rules' cues) with
+      personal and not personal. Built from what `/get` already carries.
+- [x] **Back to the top**: a button once a document is a screen down.
+- Screenshots from a throwaway door: the dialog, a click on "personal"
+  (the state written, the button gone), and the button after scrolling.

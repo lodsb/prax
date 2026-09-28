@@ -355,3 +355,31 @@ test("regionLine: where the search hits live, above them", () => {
   assert.equal(lib.regionLine(null), "");
   assert.doesNotMatch(lib.regionLine({ region: { id: 1, label: "A", share: 0.5 }, part: null }), /›/);
 });
+
+test("propertiesHtml: where it came from, what it is, where it belongs, who may see it", () => {
+  const doc = { id: 7, title: "Rechnung Mai", mime: "application/pdf", hash: "abcdef0123456789abcdef", added_at: "2026-09-28T00:40:00Z",
+    parsed_at: "2026-09-28T01:00:00Z", text_len: 1234, original_path: null, source_url: null, sensitivity: "personal",
+    meta: { source: "upload", capture: { by: "send" }, origin: { host: "nas", path: "/volume1/admin/Rechnung.pdf" }, lang: "de",
+      text_source: "pymupdf4llm/1.28.2-r2", domains: ["research"], domains_by: "rule", tags: ["bills"],
+      sensitivity: { state: "personal", by: "human", at: "2026-09-28T20:00:00Z" }, private: { cues: ["weak: rechnung", "name"] } } };
+  const html = lib.propertiesHtml(doc);
+  assert.match(html, /nas:\/volume1\/admin\/Rechnung.pdf/);
+  assert.match(html, /pymupdf4llm\/1.28.2-r2, 1,234 characters/);
+  assert.match(html, /research <span class="muted">\(rule\)<\/span>/);
+  assert.match(html, /personal, by you on 2026-09-28 20:00/);
+  assert.match(html, /what the rules found: rechnung · name/);
+  assert.match(html, /data-props="open">not personal/);
+  assert.doesNotMatch(html, /data-props="personal"/);
+  const open = lib.propertiesHtml({ id: 8, title: "Paper", sensitivity: null, meta: {} });
+  assert.match(open, /every module/);
+  assert.match(open, /open\. Every token/);
+  assert.match(open, /data-props="personal">personal/);
+  assert.doesNotMatch(open, /data-props="open"/);
+});
+
+test("suspectRow for a document marked personal: when, and only the way back", () => {
+  const row = lib.suspectRow({ id: 3, title: "Kontoauszug", state: "personal", decided: "2026-09-28T20:00:00Z", cues: ["strong: kontoauszug"] });
+  assert.match(row, /marked 2026-09-28 · kontoauszug/);
+  assert.doesNotMatch(row, /data-act="personal"/);
+  assert.match(row, /data-act="open" data-doc="3">not personal/);
+});

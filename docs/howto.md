@@ -2317,8 +2317,11 @@ paperwork, such as an MCP client on another machine:
 The **Admin** page of the web interface does the same: its "tokens" tab
 lists them with when each was last used, makes one (the secret shown
 once) and revokes one. Its "personal?" tab shows the rules in force above
-the documents they suspect, and its "clean up" tab takes clutter out in
-bulk (`docs/review.md`).
+the documents they suspect, "marked personal" lists every document marked
+so, and "clean up" takes clutter out in bulk (`docs/review.md`). A
+document's own page has **properties…**: where it came from (the source,
+who sent it, the NAS path), what it is, its domains and tags, and who may
+see it, with personal and not personal beside that.
 
 A named token sees only the modules it is given, and no document marked
 personal or suspected personal unless it was made with `--personal`. It

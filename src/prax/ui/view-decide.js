@@ -12,6 +12,8 @@ const DECIDE_LISTS = {
     about: "One name held by things of unrelated types. One thing: keep it as one of the types and fold the others in. Several things: kept apart." },
   personal: { path: "/documents/suspected", title: "personal?", render: suspectRow, admin: true,
     about: "Documents the rules in prax.yaml (private:) think are personal: a named token that may not see personal documents does not see these. Personal: kept from those tokens for good. Not personal: open again, and the rules never mark it again." },
+  marked: { path: "/documents/suspected", params: { state: "personal" }, title: "marked personal", render: suspectRow, admin: true,
+    about: "Every document marked personal, the last marked first: kept from every token that may not see personal documents. Not personal opens one again, and the rules never mark it again." },
   cleanup: { title: "clean up", view: (p) => viewCleanup(p), admin: true,
     about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
@@ -41,7 +43,7 @@ async function viewDecide(p) {
   }
   const box = document.getElementById("decide-list");
   let res;
-  try { res = await api(list.path, { offset, limit }); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { res = await api(list.path, { ...(list.params || {}), offset, limit }); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
   const page = (o) => list.admin
     ? `#admin?${new URLSearchParams({ tab: p.list, offset: o })}`
     : `#review?${new URLSearchParams({ list: p.list, offset: o })}`;

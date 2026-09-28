@@ -562,6 +562,7 @@ async function viewDoc(id, p) {
       <div class="doc-actions-zone doc-actions-group doc-actions-edit">
         ${pageMeta ? `<a href="#" id="page-edit">edit page</a>` : `<a href="#" id="add-note">add a note</a>`}
         <a href="#" id="domains" title="which ontology modules this document is read against">domains…</a>
+        <a href="#" id="properties" title="where it came from, what it is, where it belongs, who may see it">properties…</a>
         ${pageMeta ? "" : `<a href="#" id="process" title="what has been done to this document and what can be asked for: OCR, the vision model over its pages or figures, marker, the graph again, the expensive model">process…</a>`}
         ${pageMeta || !meta.promote ? "" : `<a href="#" id="unpromote" title="take the promote flag off">un-promote</a>`}
         ${meta.question ? (askingPage ? ASKING : `<a href="#" id="ask-again" title="ask the question again now, whatever is new">ask again</a>`) : ""}
@@ -638,6 +639,8 @@ async function viewDoc(id, p) {
   });
   const proc = document.getElementById("process");
   if (proc) proc.addEventListener("click", (e) => { e.preventDefault(); openProcess(doc); });
+  const props = document.getElementById("properties");
+  if (props) props.addEventListener("click", (e) => { e.preventDefault(); openProperties(doc.id); });
   const cancelReading = document.getElementById("reading-cancel");
   if (cancelReading) cancelReading.addEventListener("click", async (e) => {
     e.preventDefault();
@@ -885,3 +888,57 @@ function renderContext(ctx) {
   const body = parts.filter(Boolean).join("");
   return body || `<p class="muted">Nothing connects this document yet: no extraction, no citations, no neighbours.</p>`;
 }
+
+
+// The "properties…" dialog: the document's provenance and state
+// (propertiesHtml in lib.js) and the administrative changes beside what
+// they change. Made once, like the process dialog; its clicks are caught
+// on the dialog.
+const PROPS = document.createElement("dialog");
+PROPS.id = "properties-dialog";
+document.body.appendChild(PROPS);
+let propsDoc = null;
+let propsTouched = false;
+async function openProperties(id) {
+  let doc;
+  try { doc = await api(`/get/${id}`, { max_chars: 0 }); } catch (err) { setStatus(err.message); return; }
+  propsDoc = doc;
+  PROPS.innerHTML = propertiesHtml(doc);
+  if (!PROPS.open) PROPS.showModal();
+}
+PROPS.addEventListener("click", async (e) => {
+  if (e.target.closest(".props-close")) { PROPS.close(); return; }
+  const btn = e.target.closest("button[data-props]");
+  if (!btn || !propsDoc) return;
+  btn.disabled = true;
+  try {
+    await post(`/doc/${propsDoc.id}/sensitivity`, { state: btn.dataset.props === "personal" ? "personal" : null }, "PUT");
+    propsTouched = true;
+    openProperties(propsDoc.id);
+  } catch (err) {
+    btn.disabled = false;
+    const out = PROPS.querySelector(".props-out");
+    if (out) out.textContent = err.message;
+  }
+});
+PROPS.addEventListener("close", () => {
+  if (propsTouched) render({ keepScroll: true });
+  propsDoc = null;
+  propsTouched = false;
+});
+
+// Back to the top of a long document: a button that shows once the page
+// is a screen down, on the document view only.
+const TO_TOP = document.createElement("button");
+TO_TOP.type = "button";
+TO_TOP.className = "to-top secondary";
+TO_TOP.textContent = "↑ top";
+TO_TOP.title = "back to the top of the document";
+TO_TOP.hidden = true;
+document.body.appendChild(TO_TOP);
+TO_TOP.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+function toTopShown() {
+  TO_TOP.hidden = !(location.hash.startsWith("#doc/") && window.scrollY > window.innerHeight);
+}
+window.addEventListener("scroll", toTopShown, { passive: true });
+window.addEventListener("hashchange", toTopShown);

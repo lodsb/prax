@@ -100,5 +100,6 @@ described inside it ("one part of the region “Everyday cooking”").
   shown for. Matching the query's words against the summaries was right
   under half the time.
 
-Not yet: `ask` reading a region's summary for a question about a region
-rather than a fact. It wants a measurement of its own.
+- `ask` can carry the region's summary (`regions`), and does not by
+  default: over the 21 named regions an answer named 0.25 of the region's
+  heaviest members with it and 0.24 without (the same write-up).

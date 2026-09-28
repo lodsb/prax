@@ -62,6 +62,11 @@ from and the cues that made it suspect. Your name appears as "name".
 A suspected document is already hidden from those tokens, so nothing
 leaks while it waits for you.
 
+The tab beside it, **marked personal**, lists every document you marked,
+the last first, with **not personal** to open one again. On a document's
+own page, **properties…** shows the same state, what the rules found and
+the same two buttons.
+
 ## Clean up (on the Admin page)
 
 A sent folder brings along what nobody wanted: a copied Windows drive's

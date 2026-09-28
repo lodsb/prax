@@ -7,6 +7,7 @@
 const ADMIN_TABS = [
   ["tokens", "tokens"],
   ["personal", "personal?"],
+  ["marked", "marked personal"],
   ["cleanup", "clean up"],
 ];
 
@@ -20,6 +21,7 @@ function adminTabs(current) {
 async function viewAdmin(p) {
   const tab = p.tab || "tokens";
   if (tab === "personal") return viewDecide({ ...p, list: "personal" });
+  if (tab === "marked") return viewDecide({ ...p, list: "marked" });
   if (tab === "cleanup") return viewCleanup(p);
   return viewTokens(p);
 }

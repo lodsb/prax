@@ -248,8 +248,8 @@ mark { background: var(--mark); color: inherit; padding: 0 .1rem; }
 .lost { color: var(--faint); font-size: .8em; vertical-align: .1em; }
 
 /* settings */
-dialog#settings, dialog#process-dialog { border: 0; background: var(--panel); color: var(--fg); padding: 1.2rem 1.5rem 1rem; min-width: 19rem; }
-dialog#settings::backdrop, dialog#process-dialog::backdrop { background: rgba(0, 0, 0, .35); }
+dialog#settings, dialog#process-dialog, dialog#properties-dialog { border: 0; background: var(--panel); color: var(--fg); padding: 1.2rem 1.5rem 1rem; min-width: 19rem; }
+dialog#settings::backdrop, dialog#process-dialog::backdrop, dialog#properties-dialog::backdrop { background: rgba(0, 0, 0, .35); }
 dialog#settings h2 { margin: 0 0 .2rem; font-size: 1.05rem; font-weight: 600; letter-spacing: -.02em; }
 dialog#settings label { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin: .7rem 0; }
 dialog#settings input[type="number"] { width: 4.5rem; }
@@ -291,12 +291,12 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 .waiting-note code { font-size: .8rem; }
 
 /* process…: the routes from a document, grouped, a button each */
-dialog#process-dialog { max-width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; }
-dialog#process-dialog h2 { margin: 0 0 .2rem; font-size: 1.05rem; font-weight: 600; letter-spacing: -.02em; }
-dialog#process-dialog .process-title { margin: 0 0 .3rem; font-size: .9rem; }
+dialog#process-dialog, dialog#properties-dialog { max-width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; }
+dialog#process-dialog h2, dialog#properties-dialog h2 { margin: 0 0 .2rem; font-size: 1.05rem; font-weight: 600; letter-spacing: -.02em; }
+dialog#process-dialog .process-title, dialog#properties-dialog .process-title { margin: 0 0 .3rem; font-size: .9rem; }
 dialog#process-dialog .process-state, dialog#process-dialog .process-waiting, dialog#process-dialog .process-foot { font-size: .8rem; margin: .2rem 0; }
 dialog#process-dialog .process-foot { margin-top: .9rem; }
-dialog#process-dialog .route-group h3 { margin: 1rem 0 .3rem; font-size: .84rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+dialog#process-dialog .route-group h3, dialog#properties-dialog .route-group h3 { margin: 1rem 0 .3rem; font-size: .84rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
 dialog#process-dialog .route { display: grid; grid-template-columns: 14rem 1fr; gap: .2rem .9rem; align-items: start; padding: .35rem 0; border-top: 1px solid var(--line); font-size: .86rem; }
 dialog#process-dialog .route-act { display: flex; flex-direction: column; gap: .3rem; align-items: flex-start; }
 dialog#process-dialog .route-go { padding: .3rem .6rem; text-align: left; font-size: .8rem; letter-spacing: .01em; text-transform: none; font-weight: 600; background: none; color: var(--fg); border-color: var(--fg); }
@@ -563,3 +563,17 @@ a.moment { font-variant-numeric: tabular-nums; }
 .reading-line { font-size: .84rem; margin: -.2rem 0 .8rem; }
 .ctx-domain select { font-size: .7rem; text-transform: none; letter-spacing: 0; margin-left: .4rem; padding: 0 .2rem; }
 h2 { font-weight: 600; letter-spacing: -.015em; }
+
+/* back to the top of a long document (view-doc.js) */
+.to-top {
+  position: fixed;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  z-index: 20;
+}
+.to-top[hidden] { display: none; }
+
+/* the properties dialog's rows */
+table.props { border-collapse: collapse; width: 100%; table-layout: fixed; }
+table.props th { width: 7.5rem; text-align: left; font-weight: normal; color: var(--prax-dim); padding: .15rem .8rem .15rem 0; vertical-align: top; white-space: nowrap; border: 0; }
+table.props td { padding: .15rem 0; overflow-wrap: anywhere; border: 0; }

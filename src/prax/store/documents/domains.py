@@ -537,20 +537,34 @@ def set_sensitivity(
 
 @_reading
 def suspected_page(
-    con: sqlite3.Connection, *, offset: int = 0, limit: int = 30
+    con: sqlite3.Connection,
+    *,
+    state: str = "suspected",
+    offset: int = 0,
+    limit: int = 30,
 ) -> dict[str, Any]:
-    """The documents the rules suspect and no person has decided about,
-    with the cues that made them suspect: the Review page's "personal?"
-    list, strong cues first."""
-    where = " FROM documents WHERE sensitivity = 'suspected'"
-    total = con.execute("SELECT count(*)" + where).fetchone()[0]
+    """The documents of one sensitivity, with the cues the rules found in
+    them. ``suspected``: what the rules suspect and no person has decided
+    about, strong cues first (the Admin page's "personal?" list).
+    ``personal``: every document a person marked personal, the last marked
+    first (its "marked personal" list, where one is opened again)."""
+    if state not in SENSITIVITY:
+        raise ValueError(f"state is one of {SENSITIVITY}")
+    where = " FROM documents WHERE sensitivity = ?"
+    total = con.execute("SELECT count(*)" + where, (state,)).fetchone()[0]
+    order = (
+        " ORDER BY (json_extract(meta, '$.private.cues') LIKE '%strong:%'"
+        " OR json_extract(meta, '$.private.cues') LIKE '%path:%') DESC,"
+        " added_at DESC, id DESC"
+        if state == "suspected"
+        else " ORDER BY json_extract(meta, '$.sensitivity.at') DESC, id DESC"
+    )
     rows = con.execute(
         "SELECT id, title, mime, added_at, original_path, meta"
         + where
-        + " ORDER BY (json_extract(meta, '$.private.cues') LIKE '%strong:%'"
-        " OR json_extract(meta, '$.private.cues') LIKE '%path:%') DESC,"
-        " added_at DESC, id DESC LIMIT ? OFFSET ?",
-        (max(1, min(limit, 200)), max(0, offset)),
+        + order
+        + " LIMIT ? OFFSET ?",
+        (state, max(1, min(limit, 200)), max(0, offset)),
     ).fetchall()
     items = []
     for r in rows:
@@ -564,6 +578,8 @@ def suspected_page(
                 "path": str((meta.get("origin") or {}).get("path") or "")
                 or r["original_path"],
                 "cues": (meta.get("private") or {}).get("cues") or [],
+                "state": state,
+                "decided": (meta.get("sensitivity") or {}).get("at"),
             }
         )
     return {"total": int(total), "items": items}
