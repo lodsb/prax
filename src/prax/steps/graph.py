@@ -174,11 +174,16 @@ class Adjudicate(Step):
     def hand_out(self, h: HandOut) -> dict[str, Any]:
         from prax import resolution
 
-        if models.resolve("adjudicate") is None:
+        spec = models.resolve("adjudicate")
+        if spec is None:
             return h.nothing()
+        # a pair a model has put a number on and left is a person's now
+        scored = set() if spec.paid else store.scored_pairs(h.con)
         items: list[dict[str, Any]] = []
         for c in resolution.plan(h.con).likely:
             if len(items) >= h.limit or not h.free(c.drop):
+                continue
+            if (min(c.keep, c.drop), max(c.keep, c.drop)) in scored:
                 continue
             items.append(
                 {
@@ -203,6 +208,19 @@ class Adjudicate(Step):
             raise ValueError("adjudicate takes one decision per item")
         t.release([int(it["drop"]) for it in items])
         work._note_spend(t.con, self.name, t.payload.get("usage"))
+        probabilities = list(t.payload.get("p") or [])
+        if probabilities:
+            if len(probabilities) != len(items):
+                raise ValueError("adjudicate takes one probability per item")
+            store.score_candidates(
+                t.con,
+                [
+                    (int(it["keep"]), int(it["drop"]), float(p))
+                    for it, p in zip(items, probabilities, strict=True)
+                    if p is not None
+                ],
+                by=model,
+            )
         rep = resolution.decide(
             t.con, items, resolution.DecidedAdjudicator(model, same)
         )
@@ -225,9 +243,10 @@ class Adjudicate(Step):
             return None
         p.note(f"adjudicating {len(items)} likely pairs")
         rep = p.post(self.name, worker.do_adjudicate(items, spec))
+        left = len(items) - int(rep.get("applied", 0)) - int(rep.get("declined", 0))
         return (
             f"{rep.get('applied', 0)} merged, {rep.get('declined', 0)} kept apart"
-            f" of {len(items)} pairs"
+            f", {left} left for a person, of {len(items)} pairs"
         )
 
 

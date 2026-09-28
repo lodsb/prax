@@ -82,6 +82,8 @@ from .decisions import (  # noqa: F401
     resolve_review,
     resolve_review_many,
     retype_review,
+    score_candidates,
+    scored_pairs,
 )
 from .edges import (  # noqa: F401
     CONFIDENCE_LEVELS,

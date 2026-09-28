@@ -652,12 +652,34 @@ both.
 
 The likely tier is listed for you. Only an adjudicator merges it: the
 `adjudicate` step of the worker, whose model is `steps.adjudicate` in
-`prax.yaml`. That is a Claude model and paid, so the step runs only
-with `--spend` (or `spend: true` under `run.worker`), and only when
-named in `--steps`:
+`prax.yaml`. Both kinds of model get the same rule for what "the same
+thing" means (`resolution.SAME_RULE`, the review guide's rules of thumb).
+
+**A local model** (an `openai` server such as `server-35b`) answers each
+pair with one token. Its probability, mapped by a fit on your own
+decisions, merges a pair when it is `settle` sure (0.9 by default),
+keeps it apart when it is as sure of no, and otherwise leaves it on the
+review page with the number beside it. It is free, so the worker runs it
+without `--spend`:
+
+    steps:
+      adjudicate: {model: server-35b, settle: 0.9, platt: {a: 0.79, b: -0.24}}
+
+The fit comes from the review page's decisions:
+
+    python scripts/eval_confidence.py gold OUT     # your decisions, read-only
+    python scripts/eval_confidence.py ask OUT      # the local model's number for each
+    python scripts/eval_confidence.py platt OUT    # how often it agrees, and the fit
+
+Measured 2026-09-28 on 221 decisions: at 0.9 the local model settled 40%
+of the pairs and agreed with 87 of 89 (`docs/eval/confidence-2026-09-28.md`).
+
+**A Claude model** is paid, so the step runs only with `--spend` (or
+`spend: true` under `run.worker`), and only when named in `--steps`:
 
     prax work --steps adjudicate --spend     # the likely pairs to the adjudicate model, once
 
+It agreed with the same decisions less often than the local model (78%).
 Each pair is one line of a forty-line question. A yes is a merge. A no
 is recorded on the pair (`entity_candidates.decided`), so the next
 week's computation of its type does not ask again. The worker says

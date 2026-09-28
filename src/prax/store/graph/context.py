@@ -535,7 +535,7 @@ def candidates_page(
     args: list[Any] = [etype] if etype else []
     total = con.execute("SELECT count(*)" + where, args).fetchone()[0]
     rows = con.execute(
-        "SELECT c.a, c.b, c.type, c.score"
+        "SELECT c.a, c.b, c.type, c.score, c.p_same"
         + where
         + " ORDER BY c.score DESC, c.a, c.b LIMIT ? OFFSET ?",
         [*args, max(1, min(limit, 200)), max(0, offset)],
@@ -551,6 +551,7 @@ def candidates_page(
                 {
                     "type": r["type"],
                     "score": round(float(r["score"]), 4),
+                    "p_same": None if r["p_same"] is None else round(r["p_same"], 3),
                     "keep": first,
                     "other": second,
                 }

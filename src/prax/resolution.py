@@ -453,6 +453,95 @@ def answers_by_number(text: str, n: int) -> list[bool | None]:
     return [got.get(i) for i in range(1, n + 1)]
 
 
+LOCAL_QUESTION = (
+    "Decide whether the two names refer to the same entity in a personal"
+    " library (research papers, manuals, recipes, notes).\n\n"
+    + SAME_RULE
+    + "\nAnswer yes or no.\n\n"
+)
+SETTLE = 0.9  # a calibrated probability this sure either way decides the pair
+
+
+def local_prompt(etype: str, a: str, b: str) -> str:
+    """The one-pair question the local model answers with one token; the
+    confidence experiment asks it in the same words."""
+    return LOCAL_QUESTION + f'[{etype}] "{a}"  vs  "{b}"'
+
+
+@dataclass
+class LocalAdjudicator:
+    """The adjudicator's question to a local model, one pair a call and one
+    token an answer: P(yes) from the token's top alternatives
+    (``calibration.yes_probability``), mapped by Platt's fit on a person's
+    decisions, decides a pair when it is ``settle`` sure either way and
+    leaves it to a person otherwise (None). Measured against 221 of a
+    person's decisions, 0.9 settled 40% of the pairs and agreed with 97.8%
+    of them; Opus agreed with 78% overall (docs/eval/confidence-2026-09-28.md).
+    ``probabilities`` holds the calibrated number of every pair asked."""
+
+    base_url: str
+    model: str
+    platt: tuple[float, float] | None = None  # (a, b); raw P(yes) without
+    settle: float = SETTLE
+    slots: int = 2
+    timeout: float = 120.0
+    probabilities: list[float | None] = field(default_factory=list)
+
+    @property
+    def name(self) -> str:
+        return f"{self.model} (calibrated, {self.settle:g})"
+
+    def probability(self, c: Candidate) -> float | None:
+        import urllib.request
+
+        from prax import calibration
+
+        body = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": local_prompt(c.type, c.keep_name, c.drop_name),
+                }
+            ],
+            "max_tokens": 1,
+            "temperature": 0,
+            "logprobs": True,
+            "top_logprobs": 10,
+        }
+        req = urllib.request.Request(
+            self.base_url.rstrip("/") + "/chat/completions",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            got = json.loads(urllib.request.urlopen(req, timeout=self.timeout).read())
+            top = got["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
+        except (OSError, ValueError, KeyError, IndexError, TypeError):
+            return None  # no answer: the pair is left, and asked again
+        raw = calibration.yes_probability([(t["token"], t["logprob"]) for t in top])
+        if raw is None:
+            return None
+        if self.platt is None:
+            return raw
+        return calibration.Platt(*self.platt)(raw)
+
+    def decide(self, candidates: list[Candidate]) -> list[bool | None]:
+        from concurrent.futures import ThreadPoolExecutor
+
+        with ThreadPoolExecutor(max_workers=max(1, self.slots)) as pool:
+            self.probabilities = list(pool.map(self.probability, candidates))
+        return [self.settled(p) for p in self.probabilities]
+
+    def settled(self, p: float | None) -> bool | None:
+        """Same, different, or left to a person."""
+        if p is not None and p >= self.settle:
+            return True
+        if p is not None and p <= round(1 - self.settle, 9):
+            return False
+        return None
+
+
 # ------------------------------------------------------------------ apply
 
 

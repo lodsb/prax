@@ -68,6 +68,39 @@ def decide_candidates(
     return n
 
 
+@_serialized
+def score_candidates(
+    con: sqlite3.Connection, scores: list[tuple[int, int, float]], *, by: str
+) -> int:
+    """A model's calibrated probability that each pair is one thing, kept
+    on the undecided pair: the adjudicate step does not hand a scored pair
+    out again, and the review page can show the number."""
+    before = con.total_changes
+    con.executemany(
+        "UPDATE entity_candidates SET p_same = ?, p_by = ?"
+        " WHERE a = ? AND b = ? AND decided IS NULL",
+        [
+            (float(p), by, min(int(x), int(y)), max(int(x), int(y)))
+            for x, y, p in scores
+        ],
+    )
+    n = con.total_changes - before
+    con.commit()
+    return n
+
+
+@_reading
+def scored_pairs(con: sqlite3.Connection) -> set[tuple[int, int]]:
+    """The undecided pairs a model has already put a number on."""
+    return {
+        (int(r[0]), int(r[1]))
+        for r in con.execute(
+            "SELECT a, b FROM entity_candidates"
+            " WHERE decided IS NULL AND p_same IS NOT NULL"
+        )
+    }
+
+
 def entity_candidates(
     con: sqlite3.Connection, etype: str | None = None
 ) -> list[dict[str, Any]]:

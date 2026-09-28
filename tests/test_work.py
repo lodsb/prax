@@ -399,7 +399,9 @@ def test_the_adjudicate_step_spends_only_when_told_and_records_its_decisions(
     out = worker.run_once(
         _door(client), steps=("adjudicate",), spend=True, log_=said.append
     )
-    assert out["adjudicate"] == "1 merged, 1 kept apart of 2 pairs"
+    assert out["adjudicate"] == (
+        "1 merged, 1 kept apart, 0 left for a person, of 2 pairs"
+    )
     assert resolution.plan(con).likely == []
     merged = con.execute(
         "SELECT count(*) FROM entities WHERE canonical_id IS NOT NULL"
@@ -412,6 +414,84 @@ def test_the_adjudicate_step_spends_only_when_told_and_records_its_decisions(
         == "claude-opus-5"
     )
     assert client.get("/work/adjudicate").json()["items"] == []  # nothing left
+
+
+def test_a_local_adjudicator_settles_the_sure_pairs_and_leaves_the_rest(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local model's calibrated probability decides a pair it is sure
+    about and leaves the middle to a person: the number is kept on the
+    pair, which the step does not hand out again, and the review page
+    shows it. Free, so no --spend (docs/eval/confidence-2026-09-28.md)."""
+    from prax import models, resolution
+
+    con = client.app.state.con
+    for paper, concept in (
+        ("P", "granular synthesis"),
+        ("Q", "granular synthesis method"),
+        ("R", "spatial audio"),
+        ("S", "spatial audio coding"),
+    ):
+        store.link(
+            con,
+            store.Edge(paper, "paper", "about", concept, "concept"),
+            source_doc=None,
+            producer="test",
+        )
+    monkeypatch.setattr(resolution, "LIKELY_THRESHOLD", 0.7)
+    work._leases.clear()
+    worker.run_once(_door(client), steps=("resolve",), log_=lambda t: None)
+    assert len(resolution.plan(con).likely) == 2
+    spec = models.ModelSpec(
+        name="srv", kind="openai", base_url="http://127.0.0.1:1/v1", model="q"
+    )
+    monkeypatch.setattr(
+        models, "resolve", lambda s: spec if s == "adjudicate" else None
+    )
+    monkeypatch.setattr(
+        models,
+        "settings",
+        lambda s: (
+            {"settle": 0.9, "platt": {"a": 1.0, "b": 0.0}} if s == "adjudicate" else {}
+        ),
+    )
+    asked: list[str] = []
+
+    def probability(self, c):  # the server's answer, without a server
+        asked.append(c.keep_name)
+        return 0.97 if "granular" in c.keep_name else 0.5
+
+    monkeypatch.setattr(resolution.LocalAdjudicator, "probability", probability)
+    out = worker.run_once(_door(client), steps=("adjudicate",), log_=lambda t: None)
+    assert out["adjudicate"] == (
+        "1 merged, 0 kept apart, 1 left for a person, of 2 pairs"
+    )
+    left = con.execute(
+        "SELECT decided, p_same, p_by FROM entity_candidates WHERE p_same IS NOT NULL"
+    ).fetchall()
+    # both keep their number; the merged one left the plan by its merge
+    assert sorted(r["p_same"] for r in left) == [0.5, 0.97]
+    assert {r["p_by"] for r in left} == {"q (calibrated, 0.9)"}
+    # the middle is a person's now: not handed out again, shown on the page
+    assert client.get("/work/adjudicate").json()["items"] == []
+    page = store.candidates_page(con)
+    assert [i["p_same"] for i in page["items"]] == [0.5]
+    assert len(asked) == 2
+
+
+def test_the_local_adjudicator_settles_by_its_threshold() -> None:
+    from prax import resolution
+
+    judge = resolution.LocalAdjudicator(base_url="http://x", model="q", settle=0.9)
+    assert [judge.settled(p) for p in (0.95, 0.9, 0.5, 0.1, 0.02, None)] == [
+        True,
+        True,
+        None,
+        False,
+        False,
+        None,
+    ]
+    assert "Answer yes or no" in resolution.local_prompt("tool", "a", "b")
 
 
 def test_a_title_whose_server_is_down_is_deferred_not_the_whole_pass(

@@ -11,6 +11,9 @@ store's):
     python scripts/eval_confidence.py score OUT   # calibration, raw and fitted
     python scripts/eval_confidence.py relabel OUT # Opus again, by pair number (paid)
     python scripts/eval_confidence.py score OUT --against relabel
+    python scripts/eval_confidence.py gold OUT    # a person's decisions, read-only
+    python scripts/eval_confidence.py ask OUT
+    python scripts/eval_confidence.py platt OUT   # the fit for steps.adjudicate
 
 **The labels are Opus 5's decisions of 2026-09-17**, not the truth. The
 declines are exact: ``entity_candidates.decided = 'different'`` (2,704
@@ -56,13 +59,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from prax import calibration as cal
 from prax import config, models, resolution
-
-QUESTION = (
-    "Decide whether the two names refer to the same entity in a personal"
-    " library (research papers, manuals, recipes, notes).\n\n"
-    + resolution.SAME_RULE
-    + "\nAnswer yes or no.\n\n"
-)
 
 
 def _ro() -> sqlite3.Connection:
@@ -169,7 +165,7 @@ def ask(out: Path, workers: int) -> None:
             "messages": [
                 {
                     "role": "user",
-                    "content": QUESTION + f'[{p["type"]}] "{p["a"]}"  vs  "{p["b"]}"',
+                    "content": resolution.local_prompt(p["type"], p["a"], p["b"]),
                 }
             ],
             "max_tokens": 1,
@@ -206,6 +202,86 @@ def ask(out: Path, workers: int) -> None:
     with ThreadPoolExecutor(max_workers=workers) as pool:
         list(pool.map(one, todo))
     print(f"done: {count[0]} asked in {time.time() - started:.0f} s")
+
+
+SPLITS = (
+    Path(__file__).resolve().parents[1] / "docs/eval/confidence-2026-09-28-splits.json"
+)
+
+
+def gold(out: Path) -> None:
+    """The pairs a person decided on the review page, as labelled pairs;
+    the splits and merges an assistant made through the same routes (signed
+    "human" too) are left out by the list kept beside the write-up."""
+    skip = {
+        e["entity"] for e in json.loads(SPLITS.read_text(encoding="utf-8"))["entities"]
+    }
+    con = _ro()
+    rows = [
+        r
+        for r in con.execute(
+            """SELECT c.a, c.b, c.type, c.decided, ea.name AS an, eb.name AS bn
+            FROM entity_candidates c
+            JOIN entities ea ON ea.id = c.a JOIN entities eb ON eb.id = c.b
+            WHERE c.decided_by = 'human'"""
+        )
+        if r["a"] not in skip and r["b"] not in skip
+    ]
+    (out / "pairs.jsonl").write_text(
+        "".join(
+            json.dumps(
+                {
+                    "id": i,
+                    "type": r["type"],
+                    "a": r["an"],
+                    "b": r["bn"],
+                    "label": int(r["decided"] == "same"),
+                    "cosine": 0.0,
+                }
+            )
+            + "\n"
+            for i, r in enumerate(rows)
+        ),
+        encoding="utf-8",
+    )
+    same = sum(1 for r in rows if r["decided"] == "same")
+    print(f"{len(rows)} decisions ({same} same) in {out / 'pairs.jsonl'}")
+
+
+def platt(out: Path, folds: int = 5) -> None:
+    """Platt's map scored by cross-validation (each pair by a fit that did
+    not see it), what each threshold settles, and the fit on every pair:
+    the ``platt`` and ``settle`` of ``steps.adjudicate`` in prax.yaml."""
+    pairs = {p["id"]: p for p in _read(out / "pairs.jsonl")}
+    rows = [a for a in _read(out / "answers.jsonl") if a["p"] is not None]
+    p = [a["p"] for a in rows]
+    y = [pairs[a["id"]]["label"] for a in rows]
+    order = list(range(len(p)))
+    random.Random(3).shuffle(order)
+    q = [0.0] * len(p)
+    for k in range(folds):
+        held = set(order[k::folds])
+        fit = cal.fit_platt(
+            [p[i] for i in order if i not in held],
+            [y[i] for i in order if i not in held],
+        )
+        for i in held:
+            q[i] = fit(p[i])
+    for name, v in (("raw", p), ("platt, cross-validated", q)):
+        agree = sum((vi >= 0.5) == bool(yi) for vi, yi in zip(v, y, strict=True))
+        print(
+            f"{name}: agreement {agree / len(y):.3f}, Brier {cal.brier(v, y):.3f},"
+            f" ECE {cal.ece(v, y, 5):.3f}"
+        )
+    print("\n| settle | settled | agree |\n|---|---|---|")
+    for cut in (0.95, 0.9, 0.85, 0.8):
+        sure = [
+            (qi, yi) for qi, yi in zip(q, y, strict=True) if qi >= cut or qi <= 1 - cut
+        ]
+        ok = sum(1 for qi, yi in sure if (qi >= 0.5) == bool(yi))
+        print(f"| {cut} | {len(sure) / len(y):.0%} | {ok}/{len(sure)} |")
+    fit = cal.fit_platt(p, y)
+    print(f"\nsteps.adjudicate.platt: {{a: {fit.a:.4f}, b: {fit.b:.4f}}}")
 
 
 def relabel(out: Path, model: str) -> None:
@@ -353,7 +429,9 @@ def score(out: Path, bins: int, against: str = "recorded") -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("step", choices=("build", "ask", "score", "relabel", "compare"))
+    ap.add_argument(
+        "step", choices=("build", "ask", "score", "relabel", "compare", "gold", "platt")
+    )
     ap.add_argument("out", type=Path, help="a directory for the pairs and answers")
     ap.add_argument("--threshold", type=float, default=resolution.LIKELY_THRESHOLD)
     ap.add_argument(
@@ -378,6 +456,10 @@ def main() -> None:
         relabel(a.out, a.model)
     elif a.step == "compare":
         compare(a.out)
+    elif a.step == "gold":
+        gold(a.out)
+    elif a.step == "platt":
+        platt(a.out)
     else:
         score(a.out, a.bins, a.against)
 

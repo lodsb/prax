@@ -658,7 +658,7 @@ The adjudicated round recorded 3,683 merges and 4,559 declines: a
 labelled outcome set of 8,242 decisions, which is exactly what is needed
 to find out whether a local logprob predicts anything.
 
-- [ ] **Ask the local model the adjudicator's question** on those 8,242
+- [x] **Ask the local model the adjudicator's question** on those 8,242
       pairs, under a grammar that allows one token, and keep the
       logprob. A few hours of llama-server, nothing spent.
       (2026-09-27: `scripts/eval_confidence.py`, `prax.calibration`. Only
@@ -667,7 +667,7 @@ to find out whether a local logprob predicts anything.
       of the likely types, against Opus's 3,683. No grammar: the mass on
       "yes" against "no" among the token's top ten. The full run starts
       when the re-read ends.)
-- [ ] **Score it against the labels.** Reliability diagram and Brier
+- [x] **Score it against the labels.** Reliability diagram and Brier
       score, not accuracy: the question is whether 0.8 means 0.8, not
       whether the argmax is right. Raw logprobs from an
       instruction-tuned model are famously not calibrated, which is
@@ -679,17 +679,17 @@ to find out whether a local logprob predicts anything.
       (`confidence_after_reread.ps1` in the session scratchpad, the answers
       and `score.md` beside it). Its numbers go into
       `docs/eval/confidence-<date>.md`, with the pilot's.
-- [ ] **The wrong merges it points at.** Pairs labelled "same" that the
+- [x] (2026-09-28: 117 merges with different numbers judged; the rule then made editions one thing) **The wrong merges it points at.** Pairs labelled "same" that the
       local model rejects near 0 (preorder/postorder traversal, a transform
       and its short-time variant) are likely bad merges in the graph,
       whoever made them. They go on the review page (stage R) as merges to
       look at, and `POST /graph/unmerge` or a single split undoes one.
-- [ ] **The adjudicator answers by number, not by position.** The full
+- [x] (2026-09-28) **The adjudicator answers by number, not by position.** The full
       run found Opus "declining" plain spelling variants (cutoff /
       cut-off, realtime / real-time): forty pairs a call answered as a
       list of booleans, a short list padded with `False`, so one missing
       answer shifts every later one. Each answer should name its pair.
-- [ ] **A gold sample first.** The pilot (200 pairs) found the local
+- [x] (2026-09-28: 221 decisions) **A gold sample first.** The pilot (200 pairs) found the local
       model right where the label was wrong, both ways. Opus kept apart
       LDR/LDRs and Gauss-Seidel/Gauß-Seidel, and the "same" labels hold
       preorder/postorder traversal and the fractional Fourier transform
@@ -697,7 +697,7 @@ to find out whether a local logprob predicts anything.
       Opus's errors too. A few hundred pairs a person has labelled (the
       review page of stage R can collect them) are what both models are
       scored against before anything acts on a threshold.
-- [ ] **Then decide what it buys.** If it calibrates, the likely tier
+- [x] (2026-09-28: the local model at 0.9, the middle to a person, no paid tier; `resolution.LocalAdjudicator`) **Then decide what it buys.** If it calibrates, the likely tier
       can act on a threshold and send only the uncertain middle to the
       paid model, which is where the money goes. If it does not, that is
       a finding worth writing down and the paid tier stays as it is.

@@ -170,3 +170,32 @@ title and two names garbled by an extractor, which the merge tidied.
 They were split through the door on 2026-09-28, which records each pair as
 decided "different" by a person. Opus chose them, so they are listed in
 `confidence-2026-09-28-splits.json` and stay out of the gold sample.
+
+## Against a person
+
+The user decided 221 pairs on the Review page under the rule. The rule was
+revised with them on the way. A product's versions and a conference's
+editions are one thing. A word that changes the kind of thing named (a
+phenomenon and its method, a method and its implementation) makes two. Both models were
+scored against those decisions (`eval_confidence.py gold`, `ask`, `platt`;
+the assistant's own splits and merges left out).
+
+| judge | agrees with the person |
+|---|---|
+| Opus 5, with the rule | 0.78 |
+| local model, raw | 0.81 |
+| local model, Platt, cross-validated | 0.81 (ECE 0.031) |
+
+| local model settles when (Platt) | settled | agrees |
+|---|---|---|
+| p ≥ 0.95 or ≤ 0.05 | 30% | 66 of 67 |
+| p ≥ 0.9 or ≤ 0.1 | 40% | 87 of 89 |
+| p ≥ 0.85 or ≤ 0.15 | 48% | 103 of 107 |
+| p ≥ 0.8 or ≤ 0.2 | 57% | 115 of 125 |
+
+The paid model is no closer to the person than the local one. So the
+likely tier goes to the local model (`resolution.LocalAdjudicator`), not
+to Opus. It settles a pair at 0.9 either way and leaves the rest on the
+Review page with its number (`entity_candidates.p_same`, migration 30). The two models agree with each other more (0.88) than either
+agrees with the person. The person's answers are not all on one line
+either, and that is the ceiling of a question this soft.

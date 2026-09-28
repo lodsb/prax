@@ -643,8 +643,18 @@ def do_adjudicate(
 
     if spec.kind == "claude":
         judge: Any = resolution.ClaudeAdjudicator(model=spec.model or spec.name)
+    elif spec.kind == "openai" and spec.base_url:
+        opts = models.settings("adjudicate")
+        platt = opts.get("platt") or None
+        judge = resolution.LocalAdjudicator(
+            base_url=spec.base_url,
+            model=spec.model or spec.name,
+            platt=(float(platt["a"]), float(platt["b"])) if platt else None,
+            settle=float(opts.get("settle") or resolution.SETTLE),
+            slots=int(opts.get("slots") or 2),
+        )
     else:
-        judge = resolution.StubAdjudicator(threshold=1.0)  # a local model: later
+        judge = resolution.StubAdjudicator(threshold=1.0)
     candidates = [
         resolution.Candidate(
             int(it["keep"]),
@@ -659,6 +669,8 @@ def do_adjudicate(
     ]
     same = judge.decide(candidates)
     out: dict[str, Any] = {"items": items, "same": same, "model": judge.name}
+    if getattr(judge, "probabilities", None):
+        out["p"] = judge.probabilities
     usage = getattr(judge, "usage", None)
     if usage:
         out["usage"] = dict(usage)

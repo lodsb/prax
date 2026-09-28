@@ -120,7 +120,10 @@ class WorkIn(BaseModel):
     type: str | None = None  # resolve: the entity type the pairs are of
     pairs: list[list[Any]] | None = None  # resolve: [a, b, cosine]
     items: list[dict[str, Any]] | None = None  # adjudicate: the pairs handed out
-    same: list[bool] | None = None  # adjudicate: one decision per item
+    # adjudicate: one decision per item, None for a pair left to a person,
+    # and a local model's calibrated probability per item
+    same: list[bool | None] | None = None
+    p: list[float | None] | None = None
 
 
 @router.post("/work/{step}")

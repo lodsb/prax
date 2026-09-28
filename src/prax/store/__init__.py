@@ -338,6 +338,8 @@ from .graph import (  # noqa: F401
     retire_reading,
     retire_run,
     retype_review,
+    score_candidates,
+    scored_pairs,
     seed_documents,
     select_for_extraction,
     senses,
