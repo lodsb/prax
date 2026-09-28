@@ -226,6 +226,16 @@ def test_what_cannot_be_a_document_is_named_and_retired(
         "doc_id"
     ]
     page = store.register(con, b"<br />\n<html>...", mime="application/pdf")["doc_id"]
+    # a link filed as the RTF it pointed at, and an ownCloud server's
+    # encrypted copy of a document (2026-09-28, from the NAS)
+    rtf_link = store.register(
+        con, b"IntxLNK\x01S\x00N\x00B\x00o\x00x", mime="application/rtf"
+    )["doc_id"]
+    sealed = store.register(
+        con,
+        b"HBEGIN:oc_encryption_module:OC_DEFAULT_MODULE:cipher:AES-256-CTR:HEND",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )["doc_id"]
     # a real PDF, unread so far, is not judged by its emptiness
     real = store.register(
         con, b"%PDF-1.4\n" + b"1 0 obj << >> endobj\n" * 5, mime="application/pdf"
@@ -234,12 +244,13 @@ def test_what_cannot_be_a_document_is_named_and_retired(
         a["name"]: a for a in store.health(con, only=["not-documents"])["ailments"]
     }
     rows = found["not-documents"]["examples"]
-    assert [r["id"] for r in rows] == [fork, zeros, link, page]
+    assert [r["id"] for r in rows] == [fork, zeros, link, page, rtf_link, sealed]
+    assert rows[5]["why"] == "encrypted by an ownCloud server, not readable"
     assert rows[0]["why"].startswith("a macOS resource fork")
     assert rows[1]["why"] == "zeros where the file should be"
     assert rows[3]["why"] == "no PDF header in the first kilobyte"
     done = store.heal(con, only=["not-documents"])
-    assert done["not-documents"] == {"found": 4, "repaired": 4}
+    assert done["not-documents"] == {"found": 6, "repaired": 6}
     assert store.get_meta(con, fork)["retired"]["reason"].startswith("not a document")
     assert store.get_meta(con, real).get("retired") is None
     assert store.health(con, only=["not-documents"])["ailments"][0]["count"] == 0

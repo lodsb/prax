@@ -484,6 +484,8 @@ _FORKS = {
     b"\x00\x05\x16\x07": "a macOS resource fork (._file), not the file",
     b"IntxLNK": "a link a copy made into a file (Cygwin's), not the file",
     b"MZ": "a program, not a document",
+    # an ownCloud server's encrypted copy: readable with the server's key only
+    b"HBEGIN:oc_encryption_module": "encrypted by an ownCloud server, not readable",
 }
 
 
@@ -506,16 +508,17 @@ def _not_a_document(mime: str, head: bytes) -> str | None:
 
 def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Live documents whose original cannot be what its type says (a
-    resource fork, a shortcut, an empty file, a PDF without a header):
-    registered from a folder that held them beside the real files; no
-    extractor will ever read them."""
+    resource fork, a link copied as a file, an empty file, a PDF without a
+    header): registered from a folder that held them beside the real files;
+    no extractor will ever read them. Every type without text, not PDFs
+    only: a copied Cygwin link was filed as the RTF it pointed at."""
     from .base import _archive_path
 
     out = []
     for r in con.execute(
         "SELECT id, hash, mime, title FROM documents"
         " WHERE json_extract(meta, '$.retired') IS NULL AND text_hash IS NULL"
-        "   AND mime IN ('application/pdf') ORDER BY id"
+        " ORDER BY id"
     ):
         try:
             with open(_archive_path(r["hash"]), "rb") as f:
