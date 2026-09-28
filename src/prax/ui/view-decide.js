@@ -10,6 +10,8 @@ const DECIDE_LISTS = {
     about: "Pairs whose names are close by embedding that the local model was not sure about (its number is beside each). Same: the one with fewer edges folds into the other (a run of its own; undo takes it back). Different: never asked again." },
   names: { path: "/graph/split-names", title: "one name, several things", render: splitRow,
     about: "One name held by things of unrelated types. One thing: keep it as one of the types and fold the others in. Several things: kept apart." },
+  personal: { path: "/documents/suspected", title: "personal?", render: suspectRow,
+    about: "Documents the rules in prax.yaml (private:) think are personal: a named token that may not see personal documents does not see these. Personal: kept from those tokens for good. Not personal: open again, and the rules never mark it again." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -74,6 +76,9 @@ async function decideAct(button) {
         done.push([ids[i], ids[j], ""]);
       }
       said = `several things, kept apart · ${undoButton(done)}`;
+    } else if (d.act === "personal" || d.act === "open") {
+      await post(`/doc/${Number(d.doc)}/sensitivity`, { state: d.act === "personal" ? "personal" : null }, "PUT");
+      said = d.act === "personal" ? "personal: kept from the restricted tokens" : "not personal: open";
     } else if (d.act === "split") {
       await post("/graph/unmerge-entity", { entity: Number(d.entity) });
       said = "split: it stands on its own again";

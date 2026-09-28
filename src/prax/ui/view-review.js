@@ -8,9 +8,9 @@
 // dropped, marked as an ontology gap, or linked as an edge after fixing its
 // types or relation with the current ontology's choices.
 
-async function post(path, body) {
+async function post(path, body, method = "POST") {
   setStatus("…");
-  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   setStatus("");
   if (res.status === 401) { askForToken(); throw new Error("access token required"); }
   const data = await res.json().catch(() => ({}));

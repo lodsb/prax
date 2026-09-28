@@ -432,7 +432,15 @@ reference `docs/ask.md`.
   token may call only `auth.RESTRICTED_ROUTES`, the MCP tools' routes;
   `tests/test_wall.py` walks every one of them and fails when one is
   added without a case. A new read that takes a document id is guarded
-  the same way, or it is a leak.
+  the same way, or it is a leak. What is personal (stage V) is suspected
+  by rules and decided by a person: `prax.private` (defaults) plus
+  `private:` in prax.yaml (the owner's names and private paths, which
+  live there and never in the repository), run by `store.suspect` when a
+  text is indexed and by the `private` pass of `prax maintain`. A rule
+  only ever sets `suspected` on an open document no person has decided
+  about (`meta.sensitivity.by == "human"`), and keeps its cues in
+  `meta.private`; the Review page's "personal?" tab is the person's
+  answer (`GET /documents/suspected`, `PUT /doc/{id}/sensitivity`).
 - Timestamps are UTC ISO-8601 strings to the second with `Z`, from
   `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.
 - Tests must not touch `data/`. Use tmp_path fixtures and set

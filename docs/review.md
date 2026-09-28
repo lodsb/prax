@@ -5,9 +5,9 @@ wrong. Two names for one thing stay apart. Two different things get
 folded into one. The Review page is where you fix that by hand. Open it
 from the menu at the top of the web interface.
 
-The page has four tabs. The first holds the facts the reader could not
-place. The other three ask you one question each: are these the same
-thing?
+The page has five tabs. The first holds the facts the reader could not
+place. Three ask you whether two names are the same thing. The last asks
+whether a document is personal.
 
 ## Facts that did not fit
 
@@ -45,6 +45,20 @@ Perception* is a concept in two papers and a journal in a third.
   is one piece of software, however a paper described it.
 - **Several things** keeps them apart. Choose this for *Music
   Perception*: the journal and the field are two different things.
+
+## Personal?
+
+Documents that rules think are personal: a bank statement, an invoice
+with your name on it, anything from a folder you named in `prax.yaml`
+(`docs/howto.md`, "Who sees what"). Each row shows where the document came
+from and the cues that made it suspect. Your name appears as "name".
+
+- **Personal** keeps it from every token that may not see personal
+  documents, for good.
+- **Not personal** opens it again, and the rules never mark it again.
+
+A suspected document is already hidden from those tokens, so nothing
+leaks while it waits for you.
 
 ## Merges to check
 

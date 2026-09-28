@@ -2298,6 +2298,53 @@ the clean answer when the board is reached that way. Neither is worth
 doing for a LAN with only your own devices on it. Either is, the day
 the door is reachable from a network you do not run.
 
+## 4½. Who sees what: named tokens and personal documents
+
+The library keeps everything: papers, and also bank statements, contracts
+and invoices. `PRAX_TOKEN` is the administrator and sees all of it. A
+**named token** sees less. Give one to anything that should not see your
+paperwork, such as an MCP client on another machine:
+
+    prax token add laptop --domain research --domain studio   # the secret is printed once
+    prax token add assistant --personal                       # every module, personal documents too
+    prax token list
+    prax token remove laptop
+
+A named token sees only the modules it is given, and no document marked
+personal or suspected personal unless it was made with `--personal`. It
+may call only the routes the MCP tools use. Only a hash of its secret is
+kept.
+
+**What is personal** is decided in two steps. Rules *suspect* a document,
+and a person decides on the Review page's "personal?" tab. The rules run
+when a text is indexed, so a statement sent from the NAS is closed off as
+it lands, and nightly over the library (`prax maintain --only private`).
+They look at the title, the paths a document came from and the first
+5,000 characters of its text:
+
+- a **strong** word marks a document alone: *Kontoauszug*, *payslip*,
+  *Mietvertrag*, *Steuerbescheid*, *Einkommensteuer*;
+- a **weak** one counts only with a second: an invoice word, an insurance
+  word, your name, an IBAN whose check digits add up, an identity
+  document. *Rechnung* alone is a paper on calculus; *Rechnung* and your
+  name is a bill. Synonyms count once;
+- a **path** marks everything that came from under it.
+
+The defaults are in `prax.private`. Your own additions go in `prax.yaml`,
+and only there, because your name must never reach the repository:
+
+    private:
+      names: [Jane Example]          # a weak cue each, found in file names too
+      paths: [/volume1/admin/]       # everything that came from under these
+      strong: [Nebenkostenabrechnung]
+      weak: [Kaution]
+
+A document is shown to you with the cues that made it suspect. Your name
+is shown as "name", never spelled out. **Personal** keeps it from the
+restricted tokens for good. **Not personal** opens it again. The rules
+never overrule either answer, and a changed rule reads the rest of the
+library again at the next nightly pass.
+
 ## 4a. The `prax` command
 
 One command for the everyday work, the same one wherever the door is:

@@ -294,3 +294,13 @@ test("pairRow shows the local model's number; sameRule folds the rule above the 
   assert.match(rule, /<h4>kitchen<\/h4><ul><li>different: a dish and a variant of it/);
   assert.equal(lib.sameRule({ same: [] }), "");
 });
+
+test("suspectRow: the cues, where it came from, and the two decisions", () => {
+  const row = lib.suspectRow({ id: 7, title: "Rechnung Mai", mime: "application/pdf", added_at: "2026-09-28T00:40:00Z",
+    path: "/mnt/nas/admin/Rechnung.pdf", cues: ["weak: rechnung", "name"] });
+  assert.match(row, /href="#doc\/7">Rechnung Mai/);
+  assert.match(row, /rechnung · name/);
+  assert.match(row, /\/mnt\/nas\/admin\/Rechnung.pdf/);
+  assert.match(row, /data-act="personal" data-doc="7">personal/);
+  assert.match(row, /data-act="open" data-doc="7">not personal/);
+});

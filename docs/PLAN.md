@@ -106,7 +106,7 @@ the review of the lists a person decides goes last.
       may call only the routes the MCP tools use; every other route answers
       403, so no unfiltered route can be reached. A test walks every
       allowed route with a hidden document.
-- [ ] **V. What is personal** (niggles.txt, "approximate domains"). Rules
+- [x] (2026-09-28: `prax.private`, `store.suspect`, the `private` pass, the "personal?" tab; 238 of 12,974 suspected in the dry run) **V. What is personal** (niggles.txt, "approximate domains"). Rules
       in `prax.yaml` (`private:`, outside the repository: the owner's name
       and other hints live there only): strong cues that mark a document
       `suspected` alone (an IBAN, a bank statement, a rental contract, a

@@ -47,6 +47,7 @@ SECTIONS = (
     "run",  # what `prax up` keeps alive on this host (prax.up)
     "budget",  # daily_usd, monthly_usd: what the paid steps may spend (prax.budget)
     "schedule",  # the door's clock: maintain and backup at their hours (prax.schedule)
+    "private",  # what looks personal (prax.private); the owner's names live here only
 )
 
 

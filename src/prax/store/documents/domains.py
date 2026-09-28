@@ -533,3 +533,37 @@ def set_sensitivity(
     )
     con.commit()
     return row["sensitivity"]
+
+
+@_reading
+def suspected_page(
+    con: sqlite3.Connection, *, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """The documents the rules suspect and no person has decided about,
+    with the cues that made them suspect: the Review page's "personal?"
+    list, strong cues first."""
+    where = " FROM documents WHERE sensitivity = 'suspected'"
+    total = con.execute("SELECT count(*)" + where).fetchone()[0]
+    rows = con.execute(
+        "SELECT id, title, mime, added_at, original_path, meta"
+        + where
+        + " ORDER BY (json_extract(meta, '$.private.cues') LIKE '%strong:%'"
+        " OR json_extract(meta, '$.private.cues') LIKE '%path:%') DESC,"
+        " added_at DESC, id DESC LIMIT ? OFFSET ?",
+        (max(1, min(limit, 200)), max(0, offset)),
+    ).fetchall()
+    items = []
+    for r in rows:
+        meta = json.loads(r["meta"] or "{}")
+        items.append(
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "mime": r["mime"],
+                "added_at": r["added_at"],
+                "path": str((meta.get("origin") or {}).get("path") or "")
+                or r["original_path"],
+                "cues": (meta.get("private") or {}).get("cues") or [],
+            }
+        )
+    return {"total": int(total), "items": items}

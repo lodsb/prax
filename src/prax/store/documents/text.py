@@ -8,7 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
-from prax import chunking, glyphs, language
+from prax import chunking, config, glyphs, language
 
 from ..base import (
     _NOW,
@@ -20,6 +20,7 @@ from ..base import (
     _read_archive,
     _reading,
     _serialized,
+    now,
 )
 from .meta import _is_indexed, _refresh_document_field, get_meta
 
@@ -97,6 +98,8 @@ def index_text(
         )
     _refresh_document_field(con, doc_id)
     con.commit()
+    # a bank statement from the NAS is closed off as it lands (stage V)
+    suspect(con, doc_id, text)
     return {"doc_id": doc_id, "text_hash": text_hash, "n_chunks": n_chunks}
 
 
@@ -421,3 +424,72 @@ def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None
         "title": row["title"],
         "original_path": row["original_path"],
     }
+
+
+def _person_decided(meta: dict[str, Any]) -> bool:
+    """Whether a person has said what this document is, either way: the
+    rules never overrule that."""
+    return (meta.get("sensitivity") or {}).get("by") == "human"
+
+
+@_serialized
+def suspect(
+    con: sqlite3.Connection,
+    doc_id: int,
+    text: str | None = None,
+    *,
+    rules: Any = None,
+) -> list[str] | None:
+    """The personal-document rules over one document (stage V,
+    ``prax.private``): the cues it shows, and, when they are enough, the
+    document marked ``suspected`` with them in ``meta.private``. Only an
+    open document no person has decided about is looked at (None
+    otherwise); ``meta.private.rules`` records which rules looked at a
+    document with cues, so the nightly pass does not read it again. ``text`` is the text
+    when the caller has it; otherwise the head of the artifact is read."""
+    from prax import private
+
+    rules = rules or private.rules()
+    row = con.execute(
+        "SELECT sensitivity, title, original_path, source_url, text_hash, meta"
+        " FROM documents WHERE id = ?",
+        (doc_id,),
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"] or "{}")
+    if row["sensitivity"] is not None or _person_decided(meta):
+        return None
+    if text is None and row["text_hash"]:
+        path = config.archive_dir() / row["text_hash"][:2] / row["text_hash"]
+        try:
+            with path.open(encoding="utf-8", errors="replace") as fh:
+                text = fh.read(rules.head)
+        except OSError:
+            text = ""
+    paths = [
+        row["original_path"] or "",
+        row["source_url"] or "",
+        str((meta.get("origin") or {}).get("path") or ""),
+    ]
+    cues = rules.cues(row["title"] or "", paths, text or "")
+    if not cues:
+        # nothing to keep: a document with no cue carries no mark, and the
+        # nightly pass reads it again (a file read, no write)
+        return cues
+    meta["private"] = {
+        "rules": rules.stamp(),
+        "cues": cues,
+        "at": now(),
+        "read": bool(text) or bool(row["text_hash"]),
+    }
+    state = None
+    if rules.suspect(cues):
+        state = "suspected"
+        meta["sensitivity"] = {"state": state, "by": "rules", "at": now()}
+    con.execute(
+        "UPDATE documents SET sensitivity = ?, meta = ? WHERE id = ?",
+        (state, json.dumps(meta), doc_id),
+    )
+    con.commit()
+    return cues

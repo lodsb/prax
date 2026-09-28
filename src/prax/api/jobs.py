@@ -931,6 +931,16 @@ def token_remove(name: str, request: Request) -> dict[str, Any]:
     return {"removed": name}
 
 
+@router.get("/documents/suspected")
+def documents_suspected(
+    request: Request, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """The documents the personal-document rules suspect and no person has
+    decided about, with their cues (``store.suspected_page``): the Review
+    page's "personal?" list. A decision is ``PUT /doc/{id}/sensitivity``."""
+    return store.suspected_page(_con(request), offset=offset, limit=limit)
+
+
 class SensitivityReq(BaseModel):
     state: str | None  # "personal", "suspected", or null: open
 

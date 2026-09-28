@@ -2218,3 +2218,26 @@ on.
       its package suffix). The models are asked with it, and the Review
       page shows it above the pairs along with the local model's number.
       Measured again with the file's wording: 38% settled, 82 of 84.
+
+## 2026-09-28: stage V, what is personal
+
+- [x] **Rules that suspect** (`prax.private`): strong words alone, weak
+      ones (grouped by meaning, so "Rechnung" and "invoice" are one) in
+      pairs, paths alone. The owner's names and private paths go in
+      `private:` in prax.yaml only. Measured read-only over 12,974
+      documents: 274 at first. Then an IBAN alone (a donation box on a
+      web page), "Personalausweis" alone (an exam leaflet), password and
+      serial-number words (manuals and exercise sheets) were weakened or
+      dropped: 238, of which a sample of 30 held about 25 plainly
+      personal ones.
+- [x] **Run when a text is indexed and nightly** (`store.suspect`, the
+      `private` maintain pass); never over a person's decision, the cues
+      kept in `meta.private`, a document with no cue left unmarked.
+- [x] **The "personal?" tab** of the Review page, `GET /documents/suspected`.
+- [x] **The owner's name was in the repository** as an example of a
+      proper name in three docs, two modules and a test, since
+      2026-09-24 and pushed. Replaced with a public name (Clara Schumann)
+      and an invented one. The history still holds it.
+- [x] **A section of prax.yaml the running door did not know** made it
+      answer 500 for some minutes: `private:` was added to the file before
+      the code knew the section. The order is code first, then the file.

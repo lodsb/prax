@@ -35,6 +35,7 @@ from .domains import (  # noqa: F401
     restamp_ontology,
     set_domains,
     set_sensitivity,
+    suspected_page,
     unpromote,
     unstamp_extraction,
 )
@@ -153,6 +154,7 @@ from .reads import (  # noqa: F401
 from .text import (  # noqa: F401
     _apply_reference_links,
     _cleaned,
+    _person_decided,
     _reference_key,
     _write_chunks,
     archive_blob,
@@ -167,6 +169,7 @@ from .text import (  # noqa: F401
     register,
     set_reference_links,
     set_text_source,
+    suspect,
     text_hashes,
     text_unchanged,
 )

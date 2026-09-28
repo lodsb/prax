@@ -51,6 +51,7 @@ from .documents import (
     refresh_document_fields,
     set_meta,
     set_reference_links,
+    suspect,
 )
 from .graph import (
     Edge,
@@ -78,6 +79,7 @@ PASSES = (
     "fts",
     "lengths",
     "languages",
+    "private",
     "names",
     "attachment",
     "communities",
@@ -668,6 +670,36 @@ def _lengths(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"filled": fill_text_lengths(con)}
 
 
+def _private(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The personal-document rules (``prax.private``, stage V) over every
+    open document no person has decided about and these rules have not
+    looked at: a new rule in prax.yaml reads the library again, an
+    unchanged one what arrived and what showed no cue (a file read and no
+    write each). A document with no text yet is
+    looked at by its title and paths, and again once it is read."""
+    from prax import private
+
+    rules = private.rules()
+    stamp = rules.stamp()
+    rows = con.execute(
+        "SELECT id FROM documents WHERE sensitivity IS NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+        " AND coalesce(json_extract(meta, '$.sensitivity.by'), '') != 'human'"
+        " AND (coalesce(json_extract(meta, '$.private.rules'), '') != ?"
+        "  OR (text_hash IS NOT NULL AND json_extract(meta, '$.private.read') IS NULL))"
+        " ORDER BY id",
+        (stamp,),
+    ).fetchall()
+    suspected = 0
+    for n, r in enumerate(rows, 1):
+        cues = suspect(con, int(r["id"]), rules=rules)
+        if cues is not None and rules.suspect(cues):
+            suspected += 1
+        if n % 200 == 0:
+            job.update(done=n, total=len(rows), note=f"private: {n} of {len(rows)}")
+    return {"looked_at": len(rows), "suspected": suspected, "rules": stamp}
+
+
 def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The language of every document that does not say yet
     (``prax.language`` over the head of its text artifact), and of every
@@ -838,6 +870,7 @@ _RUN = {
     "fts": _fts,
     "lengths": _lengths,
     "languages": _languages,
+    "private": _private,
     "names": _names,
     "attachment": _attachment,
     "communities": _communities,

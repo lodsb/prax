@@ -301,6 +301,19 @@ function splitRow(it) {
       <button type="button" data-act="apart" data-ids="${ids.join(",")}">several things</button>
       <span class="decide-out muted"></span></div></article>`;
 }
+// A document the personal-document rules suspect: what it is, where it
+// came from, and the cues (the owner's name is only ever "name").
+function suspectRow(it) {
+  const cues = (it.cues || []).map((c) => esc(c.replace(/^(strong|weak): /, ""))).join(" · ");
+  return `<article class="decide-row"><div class="decide-pair"><div class="decide-side">
+      <a href="#doc/${it.id}">${esc(it.title || `doc ${it.id}`)}</a>
+      <span class="muted">${esc(it.mime || "")}${it.added_at ? ` · ${esc(String(it.added_at).slice(0, 10))}` : ""}</span>
+      ${it.path ? `<div class="muted">${esc(it.path)}</div>` : ""}</div></div>
+    <div class="decide-acts"><span class="muted">${cues || "no cue"}</span>
+      <button type="button" data-act="personal" data-doc="${it.id}">personal</button>
+      <button type="button" class="secondary" data-act="open" data-doc="${it.id}">not personal</button>
+      <span class="decide-out muted"></span></div></article>`;
+}
 function mergeRow(it) {
   const a = it.alias, into = it.into;
   if (!a || !into) return "";
@@ -413,5 +426,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, suspectRow, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }
