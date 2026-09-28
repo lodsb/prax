@@ -38,6 +38,7 @@ class AskReq(BaseModel):
     steps: int | None = None  # surfing steps before the answer; 0: one shot
     tokens: int | None = None  # the reading budget of the steps
     stream: bool = False  # the trail as it happens, one JSON line per event
+    regions: bool = False  # the region the passages come from, with its summary
 
 
 class SaveReq(BaseModel):
@@ -90,6 +91,7 @@ def ask(req: AskReq, request: Request) -> Any:
         "history": req.history,
         "steps": max(0, steps or 0),
         "tokens": req.tokens,
+        "regions": req.regions,
     }
     if not req.stream:
         try:

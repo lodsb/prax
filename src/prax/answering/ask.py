@@ -143,6 +143,9 @@ class Bundle:
     facts: dict[int, list[dict[str, Any]]] = field(default_factory=dict)
     history: list[dict[str, str]] = field(default_factory=list)  # earlier turns
     note: str = ""  # a word to the model beside the question, not searched for
+    # the region of the library the passages come from ("A way in"): its
+    # name, its summary and its parts, for a question about a region
+    region: dict[str, Any] | None = None
 
     def as_message(self) -> str:
         n = len(self.passages)
@@ -177,6 +180,20 @@ class Bundle:
         if lines:
             parts += ["", "What the library's graph records about these documents:"]
             parts += lines
+        if self.region:
+            r = self.region
+            parts += [
+                "",
+                (
+                    "The region of the library these passages come from (the"
+                    " library's own map of itself: say what it covers when the"
+                    " question asks about the whole field, but cite only the"
+                    " passages):"
+                ),
+                f"{r['label']}: {r['summary']}",
+            ]
+            if r.get("parts"):
+                parts.append("Its parts: " + "; ".join(r["parts"]) + ".")
         return "\n".join(parts) + "\n"
 
     def to_dict(self) -> dict[str, Any]:
@@ -185,6 +202,7 @@ class Bundle:
             "passages": [p.to_dict() for p in self.passages],
             "facts": {str(k): v for k, v in self.facts.items()},
             "turns_before": len(self.history),
+            "region": self.region,
         }
 
 
@@ -223,12 +241,15 @@ def gather(
     passage_chars: int = PASSAGE_CHARS,
     history: list[dict[str, str]] | None = None,
     note: str = "",
+    regions: bool = False,
 ) -> Bundle:
     """The context for a question: one passage per document from the
     hybrid search (the matched chunk, or the document field for a hit that
     came from the field alone) and the graph facts about those documents.
     ``history`` (earlier turns) rides along for the model and widens the
-    search when the question leans on it."""
+    search when the question leans on it. With ``regions``, the region of
+    the library most of the first passages live in comes along with its
+    summary (``store.regions_of``), for a question about a whole field."""
     bundle = Bundle(question=question.strip(), history=list(history or []), note=note)
     if not bundle.question:
         return bundle
@@ -269,6 +290,18 @@ def gather(
         )
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))
     bundle.facts = store.document_facts(con, ids, limit=FACTS_PER_DOC)
+    if regions and ids:
+        where = store.regions_of(con, ids[: store.REGION_HITS])
+        whole = store.community(con, where["region"]["id"]) if where else None
+        if whole and whole.get("summary"):
+            bundle.region = {
+                "id": whole["id"],
+                "label": whole["label"],
+                "summary": whole["summary"],
+                "parts": [
+                    c["label"] for c in whole.get("parts") or [] if c.get("label")
+                ],
+            }
     return bundle
 
 
@@ -546,6 +579,7 @@ def ask(
     on_event: Any = None,
     stop: Any = None,
     note: str = "",
+    regions: bool = False,
 ) -> dict[str, Any]:
     """Gather, then answer with ``answerer`` (None: the bundle alone, the
     caller's model answers). ``history`` is the conversation so far, as
@@ -582,6 +616,7 @@ def ask(
         doctype=doctype,
         history=clean_history(history),
         note=note,
+        regions=regions,
     )
     out = bundle.to_dict()
     out.update(answer=None, model=None, citations=[], usage={}, seconds=0.0)

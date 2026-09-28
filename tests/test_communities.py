@@ -201,6 +201,36 @@ def test_a_search_says_where_its_hits_live(client: TestClient) -> None:
     assert store.regions_of(con, dishes + papers, share=0.99) is None
 
 
+def test_ask_can_bring_the_region_its_passages_come_from(
+    con: sqlite3.Connection,
+) -> None:
+    """With ``regions`` the bundle carries the region most of its passages
+    live in, its summary and its parts, marked as the library's map for
+    the model to describe and not to cite; without, nothing changes."""
+    from prax.answering import ask
+
+    _library(con)
+    store.maintain(con, only=["communities"])
+    kitchen = next(c for c in store.list_communities(con) if "garlic" in c["members"])
+    store.set_community_summary(
+        con,
+        kitchen["id"],
+        label="Everyday cooking",
+        summary="Onions and garlic in soups.",
+        source="t",
+    )
+    plain = ask.gather(con, "Dish")
+    assert (
+        plain.region is None and "The region of the library" not in plain.as_message()
+    )
+    bundle = ask.gather(con, "Dish", regions=True)
+    assert bundle.region is not None and bundle.region["label"] == "Everyday cooking"
+    said = bundle.as_message()
+    assert "The region of the library these passages come from" in said
+    assert "Everyday cooking: Onions and garlic in soups." in said
+    assert bundle.to_dict()["region"]["id"] == kitchen["id"]
+
+
 # ---------------------------------------------------------------- the words
 
 
