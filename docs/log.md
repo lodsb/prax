@@ -2241,3 +2241,20 @@ on.
 - [x] **A section of prax.yaml the running door did not know** made it
       answer 500 for some minutes: `private:` was added to the file before
       the code knew the section. The order is code first, then the file.
+
+## 2026-09-28: the embedder off the card
+
+- [x] **A driver fault lost the worker's embedder.** At 11:11:15, four
+      minutes after llama-server came up beside it, the NVIDIA driver
+      logged a GPU error (`nvlddmkm`, event 153), and every embed pass
+      failed with "the GPU device instance has been suspended" until the
+      worker restarted. The card sharing of `prax up` decides between
+      llama-server and marker; the worker's DirectML session is counted by
+      nothing. The embedder now builds its session again once when
+      DirectML loses the card (`ml.embeddings._lost_device`).
+- [x] **The CPU is faster anyway.** 1,000 chunks of the library (668
+      characters each), with llama-server and the worker busy: 21.1 a
+      second on the CPU, 1.5 on DirectML. The int8 model is built for the
+      CPU. `embeddings.providers: [CPUExecutionProvider]` in this host's
+      prax.yaml; the card is llama-server's alone, as the allocation
+      assumes.
