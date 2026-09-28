@@ -457,3 +457,43 @@ def test_a_label_can_be_added_by_hand(con: sqlite3.Connection) -> None:
     assert {x["label"] for x in german} == {"Knollensellerie", "celeriac"}
     assert next(x for x in german if x["label"] == "Knollensellerie")["kind"] == "pref"
     assert store.entities_by_label(con, "knollensellerie") == [entity]
+
+
+def test_the_sameness_rule_is_data_beside_the_modules() -> None:
+    """What "the same thing" means lives in ontology/sameness.yaml, one copy
+    for every judge; a module's cases join for its own types, and the file
+    stays out of the ontology's version like the lexicon."""
+    from prax import ontology
+
+    rule = ontology.parse_sameness(
+        """
+version: 3
+same:
+  - case: a product and a version of it
+    examples: [[Ableton Live, Ableton Live 7]]
+different:
+  - case: a task and a tool that does it
+modules:
+  kitchen:
+    different:
+      - case: a dish and a variant of it
+        examples: [[Lasagne, vegane Lasagne]]
+"""
+    )
+    plain = rule.rule()
+    assert plain == (
+        'The same thing: a product and a version of it ("Ableton Live" and'
+        ' "Ableton Live 7").\nDifferent things: a task and a tool that does it.\n'
+    )
+    assert "Lasagne" not in plain
+    assert '("Lasagne" and "vegane Lasagne")' in rule.rule(["kitchen"])
+    assert rule.as_dict()["modules"]["kitchen"]["different"][0]["examples"] == [
+        ["Lasagne", "vegane Lasagne"]
+    ]
+    # the file in the repository: out of the version, and asked with
+    assert "sameness" not in ontology.current().version
+    assert "sameness" not in ontology.current().modules
+    assert ontology.sameness().same
+    assert "Ableton Live 7" in resolution.local_prompt("tool", "a", "b")
+    assert "Lasagne" in resolution.same_rule(["recipe"])
+    assert "Lasagne" not in resolution.same_rule(["method"])

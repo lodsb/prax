@@ -38,6 +38,7 @@ experiments).
 from __future__ import annotations
 
 import functools
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -447,13 +448,15 @@ def parse(text: str) -> Ontology:
 
 
 LEXICON = "lexicon"  # a file beside the modules that is not one of them
+SAMENESS = "sameness"  # nor is this one: what "the same thing" means
+BESIDE = (LEXICON, SAMENESS)
 
 
 def load_dir(directory: Path) -> Ontology:
     # the lexicon is words *about* the types, not types: composed as a
     # module it would join the version string, and every document would
     # look unread against the new version
-    files = sorted(f for f in directory.glob("*.yaml") if f.stem != LEXICON)
+    files = sorted(f for f in directory.glob("*.yaml") if f.stem not in BESIDE)
     if not files:
         raise ValueError(f"no ontology modules in {directory}")
     return compose(
@@ -513,6 +516,94 @@ def parse_lexicon(text: str) -> Lexicon:
     )
 
 
+@dataclass(frozen=True)
+class Case:
+    """One kind of pair, as the rule states it, with its examples."""
+
+    text: str
+    examples: tuple[tuple[str, str], ...] = ()
+
+    def said(self) -> str:
+        if not self.examples:
+            return self.text
+        pairs = ", ".join(f'"{a}" and "{b}"' for a, b in self.examples)
+        return f"{self.text} ({pairs})"
+
+
+@dataclass(frozen=True)
+class Sameness:
+    """What "the same thing" means for a likely pair: the cases that are
+    one thing and those that are two, for every pair, and a module's own
+    cases for the pairs of its types (``ontology/sameness.yaml``). Every
+    judge is given the same text: the local model, the paid one, and the
+    person on the Review page."""
+
+    version: str = "0"
+    same: tuple[Case, ...] = ()
+    different: tuple[Case, ...] = ()
+    # module -> (its same cases, its different cases)
+    modules: tuple[tuple[str, tuple[Case, ...], tuple[Case, ...]], ...] = ()
+
+    def cases(self, modules: Iterable[str] = ()) -> tuple[list[Case], list[Case]]:
+        """The same and the different cases for pairs of these modules."""
+        wanted = set(modules)
+        same, different = list(self.same), list(self.different)
+        for name, s, d in self.modules:
+            if name in wanted:
+                same += s
+                different += d
+        return same, different
+
+    def rule(self, modules: Iterable[str] = ()) -> str:
+        """The rule as two lines of a question to a model."""
+        same, different = self.cases(modules)
+        return (
+            "The same thing: " + "; ".join(c.said() for c in same) + ".\n"
+            "Different things: " + "; ".join(c.said() for c in different) + ".\n"
+        )
+
+    def as_dict(self) -> dict[str, Any]:
+        """The whole rule for a reader: the Review page shows it."""
+
+        def cases(cs: tuple[Case, ...]) -> list[dict[str, Any]]:
+            return [
+                {"case": c.text, "examples": [list(e) for e in c.examples]} for c in cs
+            ]
+
+        return {
+            "version": self.version,
+            "same": cases(self.same),
+            "different": cases(self.different),
+            "modules": {
+                name: {"same": cases(s), "different": cases(d)}
+                for name, s, d in self.modules
+            },
+        }
+
+
+def parse_sameness(text: str) -> Sameness:
+    data = yaml.safe_load(text) or {}
+
+    def cases(section: Any) -> tuple[Case, ...]:
+        return tuple(
+            Case(
+                str(c["case"]),
+                tuple((str(e[0]), str(e[1])) for e in c.get("examples") or []),
+            )
+            for c in section or []
+        )
+
+    return Sameness(
+        version=str(data.get("version") or "0"),
+        same=cases(data.get("same")),
+        different=cases(data.get("different")),
+        modules=tuple(
+            (str(name), cases((m or {}).get("same")), cases((m or {}).get("different")))
+            for name, m in (data.get("modules") or {}).items()
+        ),
+    )
+
+
 def path() -> Path:
     return Path(config.setting("ontology.dir", "PRAX_ONTOLOGY", config.ONTOLOGY_PATH))
 
@@ -546,3 +637,24 @@ def lexicon() -> Lexicon:
     """The words beside the types; re-parsed only when the file changes."""
     p = path()
     return _load_lexicon(p, _stamp(p))
+
+
+@functools.lru_cache(maxsize=4)
+def _load_sameness(p: Path, stamp: tuple[Any, ...]) -> Sameness:
+    f = (p / f"{SAMENESS}.yaml") if p.is_dir() else p.with_name(f"{SAMENESS}.yaml")
+    if not f.exists():
+        return Sameness()
+    return parse_sameness(f.read_text(encoding="utf-8"))
+
+
+def sameness() -> Sameness:
+    """What "the same thing" means; re-parsed only when the file changes."""
+    p = path()
+    return _load_sameness(p, _stamp(p))
+
+
+def modules_of(etype: str) -> set[str]:
+    """The modules a type belongs to: its own and its ancestors'."""
+    onto = current()
+    names = [etype, *onto.ancestors(etype)] if etype in onto.types else []
+    return {onto.types[n].module for n in names if n in onto.types}

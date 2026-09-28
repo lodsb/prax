@@ -7,7 +7,7 @@
 
 const DECIDE_LISTS = {
   pairs: { path: "/graph/candidates", title: "same thing?", render: pairRow,
-    about: "Pairs whose names are close by embedding. Same: the one with fewer edges folds into the other (a run of its own; undo takes it back). Different: never asked again." },
+    about: "Pairs whose names are close by embedding that the local model was not sure about (its number is beside each). Same: the one with fewer edges folds into the other (a run of its own; undo takes it back). Different: never asked again." },
   names: { path: "/graph/split-names", title: "one name, several things", render: splitRow,
     about: "One name held by things of unrelated types. One thing: keep it as one of the types and fold the others in. Several things: kept apart." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
@@ -27,7 +27,10 @@ async function viewDecide(p) {
   const limit = Number(p.limit || 30);
   const offset = Number(p.offset || 0);
   view.innerHTML = `${decideTabs(p.list)}<p class="muted">${esc(list.about)}</p>
-    <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+    <div id="decide-rule"></div><div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+  if (p.list === "pairs") {
+    api("/graph/sameness").then((r) => { document.getElementById("decide-rule").innerHTML = sameRule(r); }).catch(() => {});
+  }
   const box = document.getElementById("decide-list");
   let res;
   try { res = await api(list.path, { offset, limit }); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }

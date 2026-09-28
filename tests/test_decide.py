@@ -172,6 +172,9 @@ def test_the_door_serves_the_lists_and_takes_the_decisions(client: TestClient) -
     page = client.get("/graph/candidates", params={"type": "method"}).json()
     assert page["total"] == 2
     item = page["items"][0]
+    assert item["p_same"] is None  # no model has put a number on it
+    rule = client.get("/graph/sameness").json()
+    assert rule["same"] and rule["different"] and "kitchen" in rule["modules"]
     got = client.post(
         "/graph/decide",
         json={"keep": item["keep"]["id"], "other": item["other"]["id"], "same": True},

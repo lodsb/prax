@@ -30,6 +30,7 @@ import re
 import sqlite3
 import unicodedata
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -380,7 +381,12 @@ class ClaudeAdjudicator:
                 model=self.model,
                 max_tokens=6000,
                 output_config=output_config,
-                messages=[{"role": "user", "content": ADJUDICATE + lines}],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": adjudicate_prompt({c.type for c in part}) + lines,
+                    }
+                ],
             )
             for key in ("input_tokens", "output_tokens", "cache_read_input_tokens"):
                 got = getattr(response.usage, key, None) or 0
@@ -390,34 +396,26 @@ class ClaudeAdjudicator:
         return out
 
 
-# What "the same thing" means, for every judge of a pair: the paid model,
-# the local one, and the person on the Review page (docs/review.md, "Rules
-# of thumb", says the same). Asked without it, Opus decided a version or a
-# narrower method differently each time (docs/eval/confidence-2026-09-28.md).
-SAME_RULE = (
-    "The same thing: spelling variants; singular and plural; an abbreviation"
-    " and its full name; the same name in another language; a product and a"
-    ' version of it ("Ableton Live" and "Ableton Live 7"); a conference or'
-    " journal and one of its editions or years, since the library keeps the"
-    ' series ("ISMIR 2010" and "ISMIR 2011"); synonyms, but only when both'
-    " names clearly belong to the same field.\n"
-    "Different things: a narrower method, concept or kind and the broader one"
-    ' ("discrete Fourier transform" and "Fourier transform", "spatial audio'
-    ' rendering" and "spatial audio"); a word that changes what kind of thing'
-    ' is named: a phenomenon and the method for it ("coupling" and "coupling'
-    ' method"), a method and its algorithm or implementation, a term and the'
-    ' abbreviation as a sign ("ibidem" and "ibidem abbreviation"); two'
-    " different conferences or journals, even in one joint volume; a part or"
-    ' interface and the whole ("Freesound API" and "Freesound"); a task and a'
-    ' tool that does it ("beat tracking" and "beat tracker"); names that share'
-    ' all but one word ("preorder traversal" and "postorder traversal").\n'
-)
+def same_rule(types: Iterable[str] = ()) -> str:
+    """What "the same thing" means, for pairs of these types: the rule of
+    ``ontology/sameness.yaml`` with the cases of the types' modules. Every
+    judge is given it, and the Review page shows it."""
+    modules: set[str] = set()
+    for t in types:
+        modules |= ontology.modules_of(t)
+    return ontology.sameness().rule(modules)
 
-ADJUDICATE = (
-    "For each numbered pair below, decide whether the two names refer to the"
-    " same entity in a personal library (research papers, manuals, recipes,"
-    " notes).\n\n" + SAME_RULE + "\nAnswer every pair, each with its number.\n\n"
-)
+
+def adjudicate_prompt(types: Iterable[str] = ()) -> str:
+    return (
+        "For each numbered pair below, decide whether the two names refer to the"
+        " same entity in a personal library (research papers, manuals, recipes,"
+        " notes).\n\n"
+        + same_rule(types)
+        + "\nAnswer every pair, each with its number.\n\n"
+    )
+
+
 ANSWER_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
@@ -453,19 +451,19 @@ def answers_by_number(text: str, n: int) -> list[bool | None]:
     return [got.get(i) for i in range(1, n + 1)]
 
 
-LOCAL_QUESTION = (
-    "Decide whether the two names refer to the same entity in a personal"
-    " library (research papers, manuals, recipes, notes).\n\n"
-    + SAME_RULE
-    + "\nAnswer yes or no.\n\n"
-)
 SETTLE = 0.9  # a calibrated probability this sure either way decides the pair
 
 
 def local_prompt(etype: str, a: str, b: str) -> str:
     """The one-pair question the local model answers with one token; the
     confidence experiment asks it in the same words."""
-    return LOCAL_QUESTION + f'[{etype}] "{a}"  vs  "{b}"'
+    return (
+        "Decide whether the two names refer to the same entity in a personal"
+        " library (research papers, manuals, recipes, notes).\n\n"
+        + same_rule([etype])
+        + "\nAnswer yes or no.\n\n"
+        + f'[{etype}] "{a}"  vs  "{b}"'
+    )
 
 
 @dataclass

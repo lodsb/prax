@@ -66,35 +66,24 @@ gives the folded name its own place in the graph again.
 
 ## Rules of thumb
 
-The models that decide pairs are given the same rules
-(`resolution.SAME_RULE`), so your decisions and theirs can be compared.
+The rules are in `ontology/sameness.yaml`, and the "Same thing?" tab
+shows them above the pairs under **What counts as the same thing**. The
+models that decide pairs are asked with the same file, so your decisions
+and theirs can be compared. In short:
 
-The same thing:
+- **the same:** spelling, singular and plural, an abbreviation and its
+  full name, another language, a product and its versions, a conference
+  and its editions, and synonyms within one field;
+- **different:** a narrower idea and the general one, a phenomenon and
+  the method for it, a method and its implementation, a part and the
+  whole, a task and its tool, and names one word apart.
 
-- spelling variants: *spatialisation* and *spatialization*,
-  *Gauss-Seidel* and *Gauß-Seidel*
-- singular and plural: *LDR* and *LDRs*
-- an abbreviation and its full name: *NMF* and *non-negative matrix
-  factorization*
-- the same name in another language: *Notenschrift* and *notation*
-- a product and a version of it: *Ableton Live* and *Ableton Live 7*
-- a conference or journal and one of its editions: the 23rd and the 26th
-  ISMIR. The library keeps the series, not the year.
-- synonyms, but only within one field: *sound signal* and *audio signal*
-  in signal processing, not in biology
+A domain adds its own cases: a dish and a variant of it are two recipes,
+a device and its manual are two things.
 
-Different things:
-
-- a narrower idea and the general one: *extended Kalman smoother* and
-  *Kalman smoother*, *discrete Fourier transform* and *Fourier transform*
-- a word that changes what kind of thing is named: *coupling* and a
-  *coupling method* (a phenomenon and the method for it), a method and its
-  algorithm or implementation, *ibidem* and the abbreviation *ibid.*
-- two different conferences, even printed in one joint volume: ICMC and SMC
-- a part or interface and the whole: *Freesound API* and *Freesound*
-- a task and a tool that does it: *beat tracking* and a *beat tracker*
-- two names that share all but one word: *ongoing costs* and *exit
-  costs*
+To change a rule, edit the file. The local model's numbers move when the
+wording does, so measure it again afterwards (`docs/howto.md`, "Entity
+resolution").
 
 When a merge would make a search for one name find documents about the
 other, and you would be surprised, they are different.

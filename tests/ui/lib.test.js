@@ -278,3 +278,19 @@ test("pairRow, splitRow, mergeRow: each button carries its decision", () => {
   assert.match(merge, /data-act="same" data-keep="7" data-other="8">right/);
   assert.equal(lib.mergeRow({ why: "narrower", alias: null, into: null }), "");
 });
+
+test("pairRow shows the local model's number; sameRule folds the rule above the pairs", () => {
+  const side = (id, name) => ({ id, name, type: "method", edges: 1 });
+  const pair = lib.pairRow({ type: "method", score: 0.95, p_same: 0.734, keep: side(1, "windowing"), other: side(2, "windowing techniques") });
+  assert.match(pair, /model: 73% same/);
+  assert.doesNotMatch(lib.pairRow({ type: "method", score: 0.95, p_same: null, keep: side(1, "a"), other: side(2, "b") }), /model:/);
+  const rule = lib.sameRule({
+    same: [{ case: "a product and a version of it", examples: [["Ableton Live", "Ableton Live 7"]] }],
+    different: [{ case: "a task and a tool that does it", examples: [] }],
+    modules: { kitchen: { same: [], different: [{ case: "a dish and a variant of it", examples: [["Lasagne", "vegane Lasagne"]] }] } },
+  });
+  assert.match(rule, /<summary>What counts as the same thing<\/summary>/);
+  assert.match(rule, /a product and a version of it <span class="muted">\(Ableton Live · Ableton Live 7\)/);
+  assert.match(rule, /<h4>kitchen<\/h4><ul><li>different: a dish and a variant of it/);
+  assert.equal(lib.sameRule({ same: [] }), "");
+});

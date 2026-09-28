@@ -56,14 +56,14 @@ the review of the lists a person decides goes last.
 - [x] (2026-09-27: `docs/communities.md`; search and ask as ways in
       are still open) **P. Communities** (below, "A partition, and a way to keep it"):
       the hub decision it waited on is H.
-- [ ] **Q. A confidence that was measured** (below). (2026-09-27: the
+- [x] **Q. A confidence that was measured** (below; `confidence` as a number on edges is still open there). (2026-09-27: the
       tooling built, a pilot run, the full run queued behind the re-read;
       the finding so far is that the labels need a gold sample.
       2026-09-28: the adjudicator answers by pair number; with one rule
       for sameness the local model settles 60% of the pairs at 97%
       agreement with Opus; 77 wrong merges split. Open: the gold sample,
       the user's Review round under the rule, then the thresholds.)
-- [ ] **Q2. The rule for "the same thing" as data**, after the Review
+- [x] (2026-09-28: `ontology/sameness.yaml`, `ontology.sameness()`, `GET /graph/sameness`, the Review page shows it and each pair's number) **Q2. The rule for "the same thing" as data**, after the Review
       round. `resolution.SAME_RULE` (the models' question) and the Review
       guide's rules of thumb say the same in two copies. Move it to
       `ontology/sameness.yaml` beside `lexicon.yaml`: the cases that are

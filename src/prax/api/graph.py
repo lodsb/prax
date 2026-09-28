@@ -249,6 +249,15 @@ def graph_candidates(
     )
 
 
+@router.get("/graph/sameness")
+def graph_sameness() -> dict[str, Any]:
+    """What "the same thing" means (``ontology/sameness.yaml``): the rule
+    the models are asked with, for the person deciding the same pairs."""
+    from prax import ontology
+
+    return ontology.sameness().as_dict()
+
+
 class DecideReq(BaseModel):
     keep: int  # the one that stays, when they are the same
     other: int

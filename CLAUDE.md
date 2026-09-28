@@ -155,6 +155,12 @@ revisit threshold, under "Decision thresholds" below.
    what a typing rule guesses and never what the ontology accepts, and
    the loader keeps the file out of the composed modules so it cannot
    join the version string.
+   What "the same thing" means for two entities is
+   `ontology/sameness.yaml` beside it, in the same way: the cases that are
+   one thing and those that are two, and a module's own cases for its
+   types. Every judge of a likely pair is given it (the local model, the
+   paid one, and the Review page, `GET /graph/sameness`), and a change to
+   its wording is measured again (`steps.adjudicate.platt`).
    Growing a module is its version bump. Renaming or removing a type is
    a data migration. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.

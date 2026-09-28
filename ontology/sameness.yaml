@@ -1,0 +1,79 @@
+# What "the same thing" means: the rule every judge of a likely pair is
+# given. The local model and the paid one are asked with it
+# (`prax.resolution`), and the person on the Review page reads it there
+# (GET /graph/sameness). One copy, so the three cannot drift apart. It was
+# two until 2026-09-28: a constant in the code and a list in
+# docs/review.md.
+#
+# Agreed with the user on 2026-09-28 against 221 of their own decisions
+# (docs/eval/confidence-2026-09-28.md). Asked without a rule, Opus
+# decided a version or a narrower method differently each time.
+#
+# `same` and `different` hold for every pair. A module's own cases join
+# them when the pair's type belongs to that module or inherits from one
+# of its types, so a recipe pair is judged with the kitchen's examples.
+#
+# Like the lexicon, it bumps no module version: it changes how a pair is
+# judged, never what types exist. The loader keeps it out of the composed
+# modules. A change to the wording moves the local model's numbers, so it
+# is measured again afterwards (`eval_confidence.py gold`, `ask`, `platt`)
+# and `steps.adjudicate.platt` in prax.yaml refitted.
+version: 1
+
+same:
+  - case: spelling variants
+  - case: singular and plural
+  - case: an abbreviation and its full name
+  - case: the same name in another language
+  - case: a product and a version of it
+    examples:
+      - [Ableton Live, Ableton Live 7]
+  - case: a conference or journal and one of its editions or years, since the library keeps the series
+    examples:
+      - [ISMIR 2010, ISMIR 2011]
+  - case: synonyms, but only when both names clearly belong to the same field
+
+different:
+  - case: a narrower method, concept or kind and the broader one
+    examples:
+      - [discrete Fourier transform, Fourier transform]
+      - [spatial audio rendering, spatial audio]
+  - case: a phenomenon and the method for it
+    examples:
+      - [coupling, coupling method]
+  - case: a method and its algorithm or implementation
+  - case: a term and its abbreviation as a sign
+    examples:
+      - [ibidem, ibidem abbreviation]
+  - case: two different conferences or journals, even in one joint volume
+  - case: a part or interface and the whole
+    examples:
+      - [Freesound API, Freesound]
+  - case: a task and a tool that does it
+    examples:
+      - [beat tracking, beat tracker]
+  - case: names that share all but one word
+    examples:
+      - [preorder traversal, postorder traversal]
+
+modules:
+  kitchen:
+    different:
+      - case: a dish and a variant of it
+        examples:
+          - [Lasagne, vegane Lasagne]
+  studio:
+    different:
+      - case: a device and its manual
+        examples:
+          - [Minimoog Model D, Minimoog Model D manual]
+      - case: a device and an expansion or module for it
+  electronics:
+    same:
+      - case: a part and the same part with a package or grade suffix
+        examples:
+          - [TL072, TL072CP]
+    different:
+      - case: two parts of one family
+        examples:
+          - [NE5532, NE5534]

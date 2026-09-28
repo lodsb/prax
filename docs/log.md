@@ -2202,3 +2202,19 @@ on.
 - [x] **The NAS dump:** 2,921 documents, 1,789 of them RTF help and
       credit files from copied programs. The sender now leaves out a
       system drive's folders and a Mac program's bundle.
+
+## 2026-09-28: stage Q settled, Q2 the rule as data
+
+- [x] **The local model adjudicates** (`resolution.LocalAdjudicator`):
+      one token a pair, Platt's fit on the user's 221 decisions, a pair
+      settled at 0.9 either way and the rest left on the Review page with
+      its number (`entity_candidates.p_same`, migration 30). At 0.9 it
+      settled 40% and agreed with 87 of 89; Opus agreed with 78% overall,
+      so the paid tier is off. A dry run over the 479 open pairs: 53
+      merges, 82 kept apart, 344 left.
+- [x] **Q2:** the rule is `ontology/sameness.yaml`, beside the lexicon
+      and out of the version string, with a module's own cases for its
+      types (a dish and its variant, a device and its manual, a part and
+      its package suffix). The models are asked with it, and the Review
+      page shows it above the pairs along with the local model's number.
+      Measured again with the file's wording: 38% settled, 82 of 84.

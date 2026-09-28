@@ -270,12 +270,27 @@ function entitySide(e) {
 }
 function pairRow(it) {
   const k = it.keep, o = it.other;
+  // the local model's calibrated probability, when it asked and left the pair
+  const p = it.p_same == null ? "" : ` · model: ${Math.round(it.p_same * 100)}% same`;
   return `<article class="decide-row"><div class="decide-pair">${entitySide(k)}${entitySide(o)}</div>
-    <div class="decide-acts"><span class="muted">${esc(it.type)} · names ${it.score}</span>
+    <div class="decide-acts"><span class="muted">${esc(it.type)} · names ${it.score}${p}</span>
       <button type="button" data-act="same" data-keep="${k.id}" data-other="${o.id}">same, keep “${esc(k.name)}”</button>
       <button type="button" class="secondary" data-act="same" data-keep="${o.id}" data-other="${k.id}">same, keep “${esc(o.name)}”</button>
       <button type="button" class="secondary" data-act="different" data-keep="${k.id}" data-other="${o.id}">different</button>
       <span class="decide-out muted"></span></div></article>`;
+}
+// What "the same thing" means (GET /graph/sameness), folded above the
+// pairs: the rule the models are asked with, so a person decides by it too.
+function sameRule(r) {
+  if (!r || !(r.same || []).length) return "";
+  const cases = (cs) => cs.map((c) => `<li>${esc(c.case)}${(c.examples || []).length
+    ? ` <span class="muted">(${c.examples.map(([a, b]) => `${esc(a)} · ${esc(b)}`).join("; ")})</span>` : ""}</li>`).join("");
+  const mods = Object.entries(r.modules || {}).map(([name, m]) =>
+    `<h4>${esc(name)}</h4><ul>${cases(m.same || []).replace(/<li>/g, "<li>same: ")}${cases(m.different || []).replace(/<li>/g, "<li>different: ")}</ul>`).join("");
+  return `<details class="same-rule"><summary>What counts as the same thing</summary>
+    <div class="decide-pair"><div><h4>The same</h4><ul>${cases(r.same)}</ul></div>
+    <div><h4>Different</h4><ul>${cases(r.different || [])}</ul></div></div>
+    ${mods ? `<p class="muted">And for the pairs of one domain:</p>${mods}` : ""}</details>`;
 }
 function splitRow(it) {
   const ids = it.parts.map((p) => p.id);
@@ -398,5 +413,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }
