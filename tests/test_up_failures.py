@@ -36,7 +36,7 @@ def test_the_supervisor_ended_by_the_os_takes_its_children_with_it(
         textwrap.dedent(
             f"""
             from pathlib import Path
-            from prax import up
+            from prax.host import up
             up.Supervisor(
                 [up.Role("kid", {argv!r})], data_dir=Path({str(data_dir)!r}), tick=0.05
             ).run()
