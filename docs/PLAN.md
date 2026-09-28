@@ -58,7 +58,23 @@ the review of the lists a person decides goes last.
       the hub decision it waited on is H.
 - [ ] **Q. A confidence that was measured** (below). (2026-09-27: the
       tooling built, a pilot run, the full run queued behind the re-read;
-      the finding so far is that the labels need a gold sample.)
+      the finding so far is that the labels need a gold sample.
+      2026-09-28: the adjudicator answers by pair number; with one rule
+      for sameness the local model settles 60% of the pairs at 97%
+      agreement with Opus; 77 wrong merges split. Open: the gold sample,
+      the user's Review round under the rule, then the thresholds.)
+- [ ] **Q2. The rule for "the same thing" as data**, after the Review
+      round. `resolution.SAME_RULE` (the models' question) and the Review
+      guide's rules of thumb say the same in two copies. Move it to
+      `ontology/sameness.yaml` beside `lexicon.yaml`: the cases that are
+      the same and those that are different, each with examples, and a
+      module's own examples in its words (kitchen: a vegan variant is
+      another dish; studio: a synth and its manual). `prax.ontology`
+      loads it, the question is built from it with the examples of the
+      pair's modules, the Review page shows it from the door, and
+      `docs/review.md` points to it. Like the lexicon it stays out of the
+      version string: it changes how a pair is judged, not what exists.
+      Not `prax.yaml`: every host serving a library judges alike.
 - [x] (2026-09-27: the three tabs of the Review page, `decide_pair`,
       `unmerge_entity`, `undecide_pair`; howto "Entity resolution")
       **R. The lists a person decides, last:** a review page for the 741
