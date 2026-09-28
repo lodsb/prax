@@ -39,6 +39,9 @@ WATCHED_STEPS = (
     "extract",
     "embed",
     "resolve",
+    # free with a local model since 2026-09-28; a paid one is skipped with a
+    # note, and the default (none) says nothing
+    "adjudicate",
 )
 
 # the rest: named on the command line, and the paid ones want --spend

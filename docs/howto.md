@@ -659,8 +659,8 @@ thing" means (`resolution.SAME_RULE`, the review guide's rules of thumb).
 pair with one token. Its probability, mapped by a fit on your own
 decisions, merges a pair when it is `settle` sure (0.9 by default),
 keeps it apart when it is as sure of no, and otherwise leaves it on the
-review page with the number beside it. It is free, so the worker runs it
-without `--spend`:
+review page with the number beside it. It is free, so a watching worker
+runs it with its other passes, without `--spend`:
 
     steps:
       adjudicate: {model: server-35b, settle: 0.9, platt: {a: 0.79, b: -0.24}}
