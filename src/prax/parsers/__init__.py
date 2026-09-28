@@ -322,7 +322,13 @@ REGISTRY: list[Extractor] = [
     ),
     Extractor("docx", (DOCX_MIME,), _docx),
     Extractor("odt", ("application/vnd.oasis.opendocument.text",), _odt),
-    Extractor("rtf", ("application/rtf", "text/rtf"), _rtf, "striprtf"),
+    Extractor(
+        "rtf",
+        ("application/rtf", "text/rtf"),
+        _rtf,
+        "striprtf",
+        revision=2,  # r2 a Mac's CJK, Hebrew and Thai character sets read
+    ),
     Extractor(
         "office",
         ("application/msword",),

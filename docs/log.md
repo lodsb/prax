@@ -2333,3 +2333,19 @@ on.
       is; a reading of the same extractor queued while pages wait. The
       unique index of the readings is on pending requests only, so the
       next window queues once the one before has finished.
+
+## 2026-09-28: what "unreadable" was
+
+- [x] **The 312 unreadable documents were mostly not scans.** 306 came
+      from the NAS. 157 were RTF files of a few hundred bytes (a Mac
+      program's `Credits.rtf`), read correctly and too short to count; 86
+      PDFs are real scans (OCR candidates, about 210 pages); 12 PDFs are
+      broken and 2 encrypted; 8 Word, 13 OpenDocument and 5 "RTF" files
+      are empty, not what they say, or Cygwin links copied as files (the
+      `not-documents` ailment names these now as what they are).
+- [x] **24 Mac RTF files failed whole** on "unknown encoding:
+      mac_japanese": a Mac names its Japanese, Chinese, Korean, Hebrew or
+      Thai font's character set by its own name, and Python has no codec
+      of that name. Each is mapped to its nearest kin (Shift-JIS, Big5,
+      EUC-KR, …); the RTF extractor is revision 2, so the parse queue reads
+      them again, and the rest of the RTFs come back "same".

@@ -157,3 +157,16 @@ def test_office_without_libreoffice_is_simply_not_offered(
     assert (
         parsers.candidates("application/vnd.oasis.opendocument.text")[0].name == "odt"
     )
+
+
+def test_a_mac_rtf_with_a_japanese_font_is_read() -> None:
+    """A Mac names its Japanese font's character set ``\\fcharset78``, which
+    striprtf asks Python for as ``mac_japanese``, a codec Python has not:
+    24 files of a copied Mac failed whole (2026-09-28). Shift-JIS reads it."""
+    rtf = (
+        b"{\\rtf1\\mac\\ansicpg10000\\cocoartf102"
+        b"{\\fonttbl\\f0\\fnil\\fcharset78 HiraKakuPro-W3;}"
+        b"\\f0 \\'82\\'b1\\'82\\'f1\\'82\\'c9\\'82\\'bf\\'82\\'cd RealNetworks licence}"
+    )
+    out = parsers._rtf(rtf)
+    assert out.startswith("こんにちは") and "RealNetworks" in out

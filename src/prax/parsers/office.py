@@ -5,6 +5,7 @@ LibreOffice.
 
 from __future__ import annotations
 
+import codecs
 import re
 import shutil
 import subprocess
@@ -256,11 +257,39 @@ def _odt(data: bytes) -> str:
     return _join_blocks(_odt_blocks(body))
 
 
+# A Mac's RTF names the character set of its Japanese, Chinese, Korean,
+# Hebrew or Thai fonts by the Mac's own name, and striprtf asks Python for a
+# codec of that name, which Python has not: 24 files of a copied Mac failed
+# whole on "unknown encoding: mac_japanese" (2026-09-28). Each is close kin
+# of a codec Python has.
+_MAC_CODECS = {
+    "mac_japanese": "shift_jis",
+    "mac_chinesetrad": "big5",
+    "mac_korean": "euc_kr",
+    "mac_hebrew": "iso8859_8",
+    "mac_chinesesimp": "gb2312",
+    "mac_rumanian": "mac_romanian",
+    "mac_ukrainian": "mac_cyrillic",
+    "mac_thai": "cp874",
+}
+
+
+def _mac_codec(name: str) -> codecs.CodecInfo | None:
+    alias = _MAC_CODECS.get(name.lower().replace("-", "_"))
+    return codecs.lookup(alias) if alias else None
+
+
+_MAC_CODECS_REGISTERED: list[bool] = []
+
+
 def _rtf(data: bytes) -> str:
     """Rich Text as plain text: striprtf reads the control words, keeps the
     words; RTF carries little structure worth a heading."""
     from striprtf.striprtf import rtf_to_text
 
+    if not _MAC_CODECS_REGISTERED:
+        codecs.register(_mac_codec)
+        _MAC_CODECS_REGISTERED.append(True)
     text = data.decode("cp1252", "replace")
     if not text.lstrip().startswith("{\\rtf"):
         raise ValueError("not an RTF file")

@@ -482,7 +482,7 @@ def _repair_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
 # Windows shortcut, a program, a run of zeros a broken download leaves.
 _FORKS = {
     b"\x00\x05\x16\x07": "a macOS resource fork (._file), not the file",
-    b"IntxLNK": "a Windows shortcut, not the file",
+    b"IntxLNK": "a link a copy made into a file (Cygwin's), not the file",
     b"MZ": "a program, not a document",
 }
 
