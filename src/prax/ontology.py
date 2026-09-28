@@ -141,7 +141,7 @@ class Ontology:
 
         A proper name belongs to one particular thing — a person, a
         publisher, a product, a title — and is the same string in every
-        language: *Niklas Klügel* is not translated, and neither is
+        language: *Clara Schumann* is not translated, and neither is
         *Einführung in die Softwaretechnik*. A common name is the name of
         a kind of thing, which every language has its own word for:
         *Olivenöl* and *olive oil* are one ingredient, *Virtualisierung*

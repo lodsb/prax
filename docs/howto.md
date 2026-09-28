@@ -901,7 +901,7 @@ and its 92 edges.
 Which names may be folded at all is the ontology's `naming:` key: a
 `common` type names a kind of thing, which every language has its own
 word for, and a `proper` one names a particular thing whose name is the
-same string everywhere. `Niklas Klügel` is never translated.
+same string everywhere. `Clara Schumann` is never translated.
 
 Which names are not English is asked of the **library**, not of a rule
 per language: a name that occurs in the text of an English document is

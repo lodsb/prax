@@ -212,7 +212,7 @@ already writes English about 95% of the time, so asking for the
 document's own words would mean re-extracting the library to *undo* what
 it mostly gets right. The prompt asks for English instead — and says
 which names that applies to, from the ontology's `naming:` key rather
-than a list beside it, so a common noun translates and `Niklas Klügel`
+than a list beside it, so a common noun translates and `Clara Schumann`
 never does. The document's own word is kept as a label in its own
 language, so nothing is lost and a German search still reaches the
 entity. The stragglers were a pass, not a re-extraction.

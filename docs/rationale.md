@@ -572,7 +572,7 @@ The rule has to live with the types because two passes need the same
 answer — the extraction prompt, which says what to write, and the
 vocabulary pass, which says what may be folded. A list in either would
 drift from the other. And it has to distinguish a kind from a
-particular: translating `Niklas Klügel` is a worse mistake than leaving
+particular: translating `Clara Schumann` is a worse mistake than leaving
 `Virtualisierung`, so a type that says nothing is proper.
 
 **Cost.** A prompt change, a pass over the stragglers (273 summaries,

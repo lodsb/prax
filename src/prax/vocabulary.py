@@ -9,7 +9,7 @@ of what `prax.summaries` fixes for the document field.
 Only some names may be folded this way, and the ontology says which:
 a type whose `naming:` is `common` names a *kind* of thing, which every
 language has its own word for, and a `proper` one names a particular
-thing whose name is the same string everywhere. `Niklas Klügel` is not
+thing whose name is the same string everywhere. `Clara Schumann` is not
 translated and neither is `Einführung in die Softwaretechnik`; `Olivenöl`
 is.
 

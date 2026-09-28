@@ -111,7 +111,7 @@ def test_an_author_of_the_same_name_is_left_alone(client: TestClient) -> None:
     """A name under a document type and an author is a different
     question — the relation has no room for it, and it stays open."""
     con = client.app.state.con
-    title = "Niklas Klügel"
+    title = "Jane Example"
     doc = _paper(client, title)
     _entity(con, title, "paper", doc)
     _entity(con, title, "author", doc)
