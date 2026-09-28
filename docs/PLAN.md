@@ -131,6 +131,19 @@ the review of the lists a person decides goes last.
       original stays in the archive.
 - [ ] **W. The administrative side**, after U and V: the tokens, the
       rules and the personal documents managed from the web interface.
+- [ ] **Y. OCR in windows**, after W (the user's order, 2026-09-28). A
+      scan past `parse.ocr_max_pages` (60) is refused today and read only
+      by a one-off run with a higher budget: 71 PDFs were, and four DjVu
+      books (190 to 746 pages) still have no text. Instead each pass reads
+      what has text (the text layer, and the pages OCR'd before, which the
+      page marks show) and OCRs the next window of pages without it. The
+      door stores and indexes the text so far, so a book is searchable as
+      it goes, and queues the next window while pages remain. The
+      document says how far it is (`meta`, "OCR: 180 of 746 pages"). Both
+      PDF and DjVu, which share the OCR engine. The parse protocol grows a
+      "pages still to go" in a result. Then the 1,663 PDFs with under
+      2,000 characters of text are worth a look for scans nobody asked to
+      read.
 
 ## The order, agreed 2026-09-27
 
