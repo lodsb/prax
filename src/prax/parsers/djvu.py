@@ -40,7 +40,9 @@ def djvu_tool(name: str) -> str | None:
 
 
 def _djvu_version() -> str:
-    tool = djvu_tool("djvutxt")
+    # djvused names the release in its help ("DJVUSED --- DjVuLibre-3.5.29");
+    # djvutxt refuses --help, so the stamp said "unknown" (2026-09-28)
+    tool = djvu_tool("djvused") or djvu_tool("djvutxt")
     if tool is None:
         return "missing"
     out = subprocess.run(
