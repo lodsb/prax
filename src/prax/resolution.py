@@ -396,16 +396,21 @@ class ClaudeAdjudicator:
 # narrower method differently each time (docs/eval/confidence-2026-09-28.md).
 SAME_RULE = (
     "The same thing: spelling variants; singular and plural; an abbreviation"
-    " and its full name; the same name in another language; a name with filler"
-    ' words around it ("the Wiener filter method" and "Wiener filter").\n'
+    " and its full name; the same name in another language; a product and a"
+    ' version of it ("Ableton Live" and "Ableton Live 7"); a conference or'
+    " journal and one of its editions or years, since the library keeps the"
+    ' series ("ISMIR 2010" and "ISMIR 2011"); synonyms, but only when both'
+    " names clearly belong to the same field.\n"
     "Different things: a narrower method, concept or kind and the broader one"
     ' ("discrete Fourier transform" and "Fourier transform", "spatial audio'
-    ' rendering" and "spatial audio"); a version, edition or year and the thing'
-    ' or another edition ("Max/MSP 5" and "Max/MSP", "ISMIR 2010" and "ISMIR'
-    ' 2011"); a part or interface and the whole ("Freesound API" and'
-    ' "Freesound"); a task and a tool that does it ("beat tracking" and "beat'
-    ' tracker"); names that share all but one word ("preorder traversal" and'
-    ' "postorder traversal").\n'
+    ' rendering" and "spatial audio"); a word that changes what kind of thing'
+    ' is named: a phenomenon and the method for it ("coupling" and "coupling'
+    ' method"), a method and its algorithm or implementation, a term and the'
+    ' abbreviation as a sign ("ibidem" and "ibidem abbreviation"); two'
+    " different conferences or journals, even in one joint volume; a part or"
+    ' interface and the whole ("Freesound API" and "Freesound"); a task and a'
+    ' tool that does it ("beat tracking" and "beat tracker"); names that share'
+    ' all but one word ("preorder traversal" and "postorder traversal").\n'
 )
 
 ADJUDICATE = (

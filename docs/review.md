@@ -77,15 +77,20 @@ The same thing:
 - an abbreviation and its full name: *NMF* and *non-negative matrix
   factorization*
 - the same name in another language: *Notenschrift* and *notation*
-- a name with filler words around it: *the Wiener filter method* and
-  *Wiener filter*
+- a product and a version of it: *Ableton Live* and *Ableton Live 7*
+- a conference or journal and one of its editions: the 23rd and the 26th
+  ISMIR. The library keeps the series, not the year.
+- synonyms, but only within one field: *sound signal* and *audio signal*
+  in signal processing, not in biology
 
 Different things:
 
 - a narrower idea and the general one: *extended Kalman smoother* and
   *Kalman smoother*, *discrete Fourier transform* and *Fourier transform*
-- a version, edition or year: *Max/MSP 5* and *Max/MSP*, the 23rd and
-  the 26th ISMIR
+- a word that changes what kind of thing is named: *coupling* and a
+  *coupling method* (a phenomenon and the method for it), a method and its
+  algorithm or implementation, *ibidem* and the abbreviation *ibid.*
+- two different conferences, even printed in one joint volume: ICMC and SMC
 - a part or interface and the whole: *Freesound API* and *Freesound*
 - a task and a tool that does it: *beat tracking* and a *beat tracker*
 - two names that share all but one word: *ongoing costs* and *exit
