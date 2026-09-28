@@ -54,7 +54,10 @@ revisit threshold, under "Decision thresholds" below.
    `maintain`, `backup`. Its `__init__` re-exports every name, so a
    caller writes `store.<name>` and never imports a submodule. Inside
    the package, a module imports only from the ones before it in that
-   order. A module past two thousand lines becomes a package of parts
+   order. At the top of a module the store imports only what is below
+   it (config, `text`, `ml`, `graph.ontology`); a pass that needs a
+   step's logic calls up inside a function (`tests/test_invariants.py`).
+   A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, text, library, domains, readings,
    reads) and `graph` (edges, decisions, labels, languages, context, communities,

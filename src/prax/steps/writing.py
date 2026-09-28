@@ -9,9 +9,10 @@ from typing import Any
 
 from prax import models, store
 from prax.capture import pipeline
-from prax.writing import summaries
+from prax.text import language
+from prax.writing import sections, summaries, titles
 
-from .base import HandOut, Log, ModelStep, TakeIn
+from .base import HandOut, Log, ModelStep, TakeIn, say
 
 # one item is a whole book, and a book is up to forty model calls: a batch
 # of thirty was 1,200 of them before anything was posted, and the worker's
@@ -71,9 +72,8 @@ class Titles(ModelStep):
         return t.out
 
     def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
-        from prax import worker
 
-        return worker.do_titles(items, runtime, log_=log)
+        return do_titles(items, runtime, log_=log)
 
     def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
         return f"{rep.get('applied', 0)} retitled, {rep.get('skipped', 0)} left"
@@ -135,9 +135,8 @@ class Summaries(ModelStep):
         return t.out
 
     def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
-        from prax import worker
 
-        return worker.do_summaries(items, runtime, log_=log)
+        return do_summaries(items, runtime, log_=log)
 
     def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
         return f"{rep.get('applied', 0)} translated, {rep.get('skipped', 0)} left"
@@ -183,9 +182,8 @@ class Sections(ModelStep):
         return t.out
 
     def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
-        from prax import worker
 
-        return worker.do_sections(items, runtime, log_=log)
+        return do_sections(items, runtime, log_=log)
 
     def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
         wrote = sum(len(r.get("sections") or []) for r in results)
@@ -258,7 +256,7 @@ class Communities(ModelStep):
         return t.out
 
     def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
-        from prax import models, worker
+        from prax import models
         from prax.graph import communities
 
         results = []
@@ -268,14 +266,14 @@ class Communities(ModelStep):
             try:
                 got = communities.summarize(runtime, it)
             except models.ServerNotReady as exc:
-                worker._say(log, f"community {it['id']}: not yet - {exc}")
+                say(log, f"community {it['id']}: not yet - {exc}")
                 results.append({"id": it["id"], "defer": True})
                 continue
             if got is None:
-                worker._say(log, f"community {it['id']}: no usable answer")
+                say(log, f"community {it['id']}: no usable answer")
                 continue
             label, summary = got
-            worker._say(log, f"community {it['id']}: {label}")
+            say(log, f"community {it['id']}: {label}")
             results.append(
                 {
                     "id": it["id"],
@@ -291,3 +289,144 @@ class Communities(ModelStep):
 
 
 REGISTERED = {s.name: s for s in (Titles(), Summaries(), Sections(), Communities())}
+
+
+# ------------------------------------------------ the worker's half
+
+
+def do_titles(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    results = []
+    for it in items:
+        doc_id, why, old = it["doc_id"], it["why"], it.get("title") or ""
+        if why == "caps":
+            results.append(
+                {"doc_id": doc_id, "title": titles.recase(old), "source": "recase"}
+            )
+            continue
+        if runtime is None or not (it.get("text") or "").strip():
+            results.append(
+                {
+                    "doc_id": doc_id,
+                    "tried": "no titles model" if runtime is None else "no text",
+                }
+            )
+            continue
+        try:
+            guess = titles.guess_title(
+                runtime,
+                it["text"],
+                filename=it.get("filename"),
+                heading=titles.first_heading(it["text"]),
+                pdf_title=None,
+                # many documents carry this one: the model is told it is not it
+                not_title=old if why == "shared" else None,
+            )
+        except models.ServerNotReady as exc:
+            # the titles model's server is loading or down: deferred, like
+            # a reading; the pass goes on with the rest and posts them
+            say(log_, f"title doc {doc_id}: not yet — {exc}")
+            results.append({"doc_id": doc_id, "defer": True})
+            continue
+        if guess is None:
+            results.append({"doc_id": doc_id, "tried": "no usable guess"})
+        elif guess.confidence == "low":
+            results.append(
+                {"doc_id": doc_id, "tried": f"unconfirmed: {guess.title[:80]}"}
+            )
+        else:
+            results.append(
+                {
+                    "doc_id": doc_id,
+                    "title": guess.title,
+                    "source": runtime.name,
+                    "confidence": guess.confidence,
+                    "why": why,
+                }
+            )
+            say(log_, f"title doc {doc_id}: {guess.title[:60]!r}")
+    return results
+
+
+def do_summaries(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each summary translated into the language the document field is
+    written in. Nothing reads the document: the summary is the input."""
+    results = []
+    for it in items:
+        doc_id, lang = it["doc_id"], it.get("lang")
+        if runtime is None:
+            results.append({"doc_id": doc_id, "tried": "no summaries model"})
+            continue
+        try:
+            got = summaries.translate(
+                runtime,
+                str(it.get("summary") or ""),
+                lang=lang,
+                title=str(it.get("title") or ""),
+            )
+        except models.ServerNotReady as exc:
+            say(log_, f"summary doc {doc_id}: not yet — {exc}")
+            results.append({"doc_id": doc_id, "defer": True})
+            continue
+        if got is None:
+            results.append({"doc_id": doc_id, "tried": f"no usable {lang} translation"})
+            continue
+        results.append(
+            {
+                "doc_id": doc_id,
+                "summary": got.text,
+                "lang": language.canonical(),
+                "source": runtime.name,
+            }
+        )
+        say(log_, f"summary doc {doc_id} ({lang}): {got.text[:60]!r}")
+    return results
+
+
+def do_sections(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each of a document's chapters read in turn.
+
+    A document with no section long enough to be a chapter comes back
+    with an empty list, which is an answer: the door records it against
+    the text it was read from, and the document is not offered again
+    until that text changes.
+    """
+    results = []
+    for it in items:
+        doc_id = it["doc_id"]
+        done: list[dict[str, Any]] = []
+        deferred = False
+        for part in it.get("sections") or []:
+            if runtime is None:
+                break
+            try:
+                got = sections.summarize(
+                    runtime,
+                    str(part.get("heading") or ""),
+                    str(part.get("text") or ""),
+                    title=str(it.get("title") or ""),
+                )
+            except models.ServerNotReady as exc:
+                say(log_, f"sections doc {doc_id}: not yet - {exc}")
+                deferred = True
+                break
+            if got is not None:
+                done.append(got.as_meta())
+        if deferred:
+            results.append({"doc_id": doc_id, "defer": True})
+            continue
+        results.append(
+            {
+                "doc_id": doc_id,
+                "sections": done,
+                "source": runtime.name if runtime else "none",
+            }
+        )
+        if done:
+            say(log_, f"sections doc {doc_id}: {len(done)} sections")
+    return results

@@ -6,9 +6,10 @@ from __future__ import annotations
 from typing import Any
 
 from prax import models, store
+from prax.graph import vocabulary
 from prax.graph import vocabulary as words
 
-from .base import HandOut, Log, ModelStep, TakeIn
+from .base import HandOut, Log, ModelStep, TakeIn, say
 
 
 def named_in(con: Any, entity_id: int) -> str:
@@ -84,9 +85,8 @@ class Vocabulary(ModelStep):
         return t.out
 
     def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
-        from prax import worker
 
-        return worker.do_vocabulary(items, runtime, log_=log)
+        return do_vocabulary(items, runtime, log_=log)
 
     def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
         errors = rep.get("errors") or []
@@ -96,3 +96,53 @@ class Vocabulary(ModelStep):
 
 
 REGISTERED = {"vocabulary": Vocabulary()}
+
+
+# ------------------------------------------------ the worker's half
+
+
+def do_vocabulary(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each name asked of the model: what does English call this thing?
+
+    The commonest answer is the name it was given — a rare English term
+    nobody else in the library wrote down looks foreign to the candidate
+    net and is handed back unchanged, which costs the call and nothing
+    else.
+    """
+    results = []
+    for it in items:
+        entity_id, name = it["id"], str(it.get("name") or "")
+        into = it.get("into")
+        if runtime is None or not name:
+            if not into:  # no model, no word in another language
+                results.append({"id": entity_id, "name": name, "changed": False})
+            continue
+        try:
+            got = vocabulary.rename(
+                runtime,
+                name,
+                str(it.get("type") or "concept"),
+                context=str(it.get("context") or ""),
+                into=into,
+            )
+        except models.ServerNotReady as exc:
+            say(log_, f"name {entity_id}: not yet — {exc}")
+            results.append({"id": entity_id, "defer": True})
+            continue
+        if into:
+            # a refused answer writes the name as it is: the pass has asked,
+            # and a label in the language is what says so
+            said = got.name if got is not None else name
+            results.append({"id": entity_id, "name": said, "into": into})
+            if said != name:
+                say(log_, f"name {entity_id}: {name!r} in {into} is {said!r}")
+            continue
+        if got is None:
+            results.append({"id": entity_id, "name": name, "changed": False})
+            continue
+        results.append({"id": entity_id, "name": got.name, "changed": got.changed})
+        if got.changed:
+            say(log_, f"name {entity_id}: {name!r} -> {got.name!r}")
+    return results

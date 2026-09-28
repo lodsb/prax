@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from prax import models, steps, store, work, worker
 from prax.capture import inbox
 from prax.ml import embeddings
+from prax.steps import parse as step_parse
 
 
 def pending_one(con: Any, doc_id: int) -> dict[str, Any]:
@@ -1200,24 +1201,24 @@ def test_no_reading_spends_without_being_asked(
     `figures` and `formulas` walked past it and read 30 figures with
     claude-sonnet-5 on 2026-09-23.
     """
-    from prax import models, worker
+    from prax import models
 
     monkeypatch.setenv("PRAX_VISION", "claude-sonnet-5")
     monkeypatch.setenv("PRAX_FORMULAS", "claude-sonnet-5")
     models.reset()
     for name in ("vision", "vision-pages", "figures", "formulas"):
-        exts, refused = worker._requested({"extractor": name, "mime": "image/png"})
+        exts, refused = step_parse._requested({"extractor": name, "mime": "image/png"})
         assert exts == [], f"{name} ran a paid model unasked"
         assert refused and "(paid)" in refused and "--spend" in refused
     # with --spend the same request goes through
-    exts, refused = worker._requested(
+    exts, refused = step_parse._requested(
         {"extractor": "figures", "mime": "application/pdf"}, spend=True
     )
     assert refused is None and exts
     # and a local model needs no asking at all
     monkeypatch.setenv("PRAX_VISION", "none")
     models.reset()
-    exts, refused = worker._requested({"extractor": "figures", "mime": "image/png"})
+    exts, refused = step_parse._requested({"extractor": "figures", "mime": "image/png"})
     assert refused is None or "(paid)" not in refused
 
 

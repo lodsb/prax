@@ -7,14 +7,16 @@ from __future__ import annotations
 
 import contextlib
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
-from prax import models, store
+from prax import models, store, work
 from prax.capture import pipeline
+from prax.client import Door
 from prax.graph import extraction, ontology
 from prax.text import mimes
 
-from .base import HandOut, Pass, Step, TakeIn
+from .base import HandOut, Log, Pass, Step, TakeIn, say
 
 REPORTED = ("linked", "existing", "queued", "rejected", "retired")
 
@@ -101,10 +103,9 @@ class Extract(Step):
         return None
 
     def work(self, p: Pass, items: list[dict[str, Any]]) -> tuple[Any, list[Any]]:
-        from prax import worker
 
         ext = extraction.current("extract")
-        return ext, worker.do_extract(items, ext, workers=p.workers, log_=p.log)
+        return ext, do_extract(items, ext, workers=p.workers, log_=p.log)
 
     def run(self, p: Pass) -> str | None:
         refused = self.refusal(p)
@@ -171,12 +172,101 @@ class Promote(Extract):
         return None
 
     def work(self, p: Pass, items: list[dict[str, Any]]) -> tuple[Any, list[Any]]:
-        from prax import worker
 
         spec = models.resolve("promote")
         assert spec is not None
         ext = extraction.current("promote")
-        return ext, worker.do_promote(p.door, items, ext, spec, log_=p.log)
+        return ext, do_promote(p.door, items, ext, spec, log_=p.log)
 
 
 REGISTERED = {s.name: s for s in (Extract(), Promote())}
+
+
+# ------------------------------------------------ the worker's half
+
+
+def do_extract(
+    items: list[dict[str, Any]],
+    ext: extraction.Extractor,
+    *,
+    workers: int = 1,
+    log_: Log | None = None,
+) -> list[dict[str, Any]]:
+    def one(it: dict[str, Any]) -> dict[str, Any]:
+        doc = extraction.DocumentInput(
+            it["doc_id"],
+            it.get("title") or "",
+            it.get("header") or "",
+            it.get("text") or "",
+            it.get("domains"),
+        )
+        try:
+            result = ext.extract(doc)
+            if not result.triples and result.usage.get("dropped_lines"):
+                result = ext.extract(doc)
+            say(log_, f"extract doc {it['doc_id']}: {len(result.triples)} triples")
+            return {
+                "doc_id": it["doc_id"],
+                "extraction": work.extraction_to_dict(result),
+            }
+        except models.ServerNotReady as exc:
+            # the model server is loading or down: not the document's
+            # fault, no error recorded against it; deferred, so the door
+            # leaves it leased a while and hands out other work meanwhile
+            say(log_, f"extract doc {it['doc_id']}: not yet — {exc}")
+            return {"doc_id": it["doc_id"], "defer": True}
+        except Exception as exc:  # noqa: BLE001
+            return {"doc_id": it["doc_id"], "error": f"{type(exc).__name__}: {exc}"}
+
+    if workers > 1 and isinstance(ext, extraction.LocalExtractor):
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            return [r for r in pool.map(one, items) if r]
+    return [r for r in (one(it) for it in items) if r]
+
+
+def do_promote(
+    door: Door,
+    items: list[dict[str, Any]],
+    ext: extraction.Extractor,
+    spec: models.ModelSpec,
+    *,
+    log_: Log | None = None,
+) -> list[dict[str, Any]]:
+    """The expensive pass over flagged documents: a promoted image is
+    first described again by the promote model (a Claude one; a server
+    that cannot see leaves the reading as it is), the reading posted as a
+    parse result so the document carries it, and the extraction reads
+    that; then the extraction, as for the extract step."""
+    from prax.parsers import vision
+
+    for it in items:
+        image = it.get("image")
+        if not image or spec.kind != "claude":
+            continue
+        try:
+            data = door.get_bytes(image["original"])
+            text = vision.describe(
+                data,
+                filename=image.get("filename"),
+                model=spec.model,
+                previous=image.get("previous"),
+            )
+        except Exception as exc:  # noqa: BLE001 - the extraction still runs
+            say(log_, f"promote doc {it['doc_id']}: reading failed: {exc}")
+            continue
+        door.post_json(
+            "/work/parse",
+            {
+                "results": [
+                    {
+                        "doc_id": it["doc_id"],
+                        "extractor": f"vision/1+{spec.runtime_name}",
+                        "text": text,
+                        "force": True,
+                    }
+                ]
+            },
+        )
+        it["text"] = text
+        say(log_, f"promote doc {it['doc_id']}: read again by {spec.runtime_name}")
+    return do_extract(items, ext, workers=1, log_=log_)

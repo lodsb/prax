@@ -11,7 +11,7 @@ from prax import models, store
 from prax.ml import embeddings
 from prax.work import LEASE_SECONDS
 
-from .base import HandOut, Pass, Step, TakeIn, paid_refusal
+from .base import HandOut, Log, Pass, Step, TakeIn, paid_refusal, say
 
 
 class Typing(Step):
@@ -55,7 +55,6 @@ class Typing(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        from prax import worker
 
         spec = models.resolve("typing")
         if spec is None:
@@ -67,7 +66,7 @@ class Typing(Step):
         if not items:
             return None
         p.note(f"{self.name}: {len(items)} items", total=len(items), done=0)
-        results = worker.do_typing(items, models.runtime(spec), log_=p.log)
+        results = do_typing(items, models.runtime(spec), log_=p.log)
         rep = p.post(
             self.name,
             {
@@ -145,7 +144,6 @@ class Resolve(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        from prax import worker
 
         emb = embeddings.current()
         if emb is None:
@@ -159,7 +157,7 @@ class Resolve(Step):
                 f" this worker with {emb.name}"
             )
         p.note(f"resolving {len(batch['names'])} {batch['type']} names")
-        rep = p.post(self.name, worker.do_resolve(batch, emb))
+        rep = p.post(self.name, do_resolve(batch, emb))
         return (
             f"{batch['type']}: {rep.get('applied', 0)} likely pairs"
             f" among {len(batch['names'])} names"
@@ -232,7 +230,6 @@ class Adjudicate(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        from prax import worker
 
         spec = models.resolve("adjudicate")
         if spec is None:
@@ -245,7 +242,7 @@ class Adjudicate(Step):
         if not items:
             return None
         p.note(f"adjudicating {len(items)} likely pairs")
-        rep = p.post(self.name, worker.do_adjudicate(items, spec))
+        rep = p.post(self.name, do_adjudicate(items, spec))
         left = len(items) - int(rep.get("applied", 0)) - int(rep.get("declined", 0))
         return (
             f"{rep.get('applied', 0)} merged, {rep.get('declined', 0)} kept apart"
@@ -254,3 +251,91 @@ class Adjudicate(Step):
 
 
 REGISTERED = {s.name: s for s in (Typing(), Resolve(), Adjudicate())}
+
+
+# ------------------------------------------------ the worker's half
+
+
+def do_typing(
+    items: list[dict[str, Any]], runtime: Any, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each handed-out batch to the typing model: the prompt rebuilt from
+    the items and their documents, the answer posted as it came."""
+    from prax.graph import typing_pass
+
+    results = []
+    for it in items:
+        b = typing_pass.batch_of(it)
+        try:
+            text, usage = runtime.chat(
+                typing_pass.system_prompt(b.onto),
+                typing_pass.user_prompt(b),
+                max_tokens=40 * len(b.items) + 50,
+            )
+            results.append({**it, "text": text, "usage": usage})
+            say(log_, f"typing: {len(b.items)} items answered")
+        except Exception as exc:  # noqa: BLE001
+            results.append({**it, "error": f"{type(exc).__name__}: {exc}"})
+    return results
+
+
+def do_adjudicate(
+    items: list[dict[str, Any]], spec: models.ModelSpec
+) -> dict[str, Any]:
+    """Ask the adjudicate step's model about the likely pairs the door
+    handed out; the decisions go back with what they cost."""
+    from prax.graph import resolution
+
+    if spec.kind == "claude":
+        judge: Any = resolution.ClaudeAdjudicator(model=spec.model or spec.name)
+    elif spec.kind == "openai" and spec.base_url:
+        opts = models.settings("adjudicate")
+        platt = opts.get("platt") or None
+        judge = resolution.LocalAdjudicator(
+            base_url=spec.base_url,
+            model=spec.model or spec.name,
+            platt=(float(platt["a"]), float(platt["b"])) if platt else None,
+            settle=float(opts.get("settle") or resolution.SETTLE),
+            slots=int(opts.get("slots") or 2),
+        )
+    else:
+        judge = resolution.StubAdjudicator(threshold=1.0)
+    candidates = [
+        resolution.Candidate(
+            int(it["keep"]),
+            int(it["drop"]),
+            str(it.get("keep_name") or ""),
+            str(it.get("drop_name") or ""),
+            str(it.get("type") or ""),
+            "likely",
+            float(it.get("score") or 0.0),
+        )
+        for it in items
+    ]
+    same = judge.decide(candidates)
+    out: dict[str, Any] = {"items": items, "same": same, "model": judge.name}
+    if getattr(judge, "probabilities", None):
+        out["p"] = judge.probabilities
+    usage = getattr(judge, "usage", None)
+    if usage:
+        out["usage"] = dict(usage)
+        out["cost"] = round(judge.cost, 4)
+    return out
+
+
+def do_resolve(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
+    """The likely tier of entity resolution for one type: embed the names
+    the door handed out, find the close pairs, and post them."""
+    from prax.graph import resolution
+
+    names = [(int(i), str(n)) for i, n in (batch.get("names") or [])]
+    pairs = resolution.likely_pairs(
+        names,
+        emb,
+        threshold=float(batch.get("threshold") or resolution.LIKELY_THRESHOLD),
+    )
+    return {
+        "type": batch["type"],
+        "model": emb.name,
+        "pairs": [[a, b, round(s, 4)] for a, b, s in pairs],
+    }

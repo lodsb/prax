@@ -12,7 +12,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import store, work, worker
+from prax import store, work
+from prax.steps import writing as step_writing
 from prax.writing import sections
 
 
@@ -178,7 +179,7 @@ def test_the_step_reads_a_book_and_the_door_keeps_it(
     assert [i["doc_id"] for i in batch["items"]] == [doc]
     assert len(batch["items"][0]["sections"]) == 3
 
-    results = worker.do_sections(
+    results = step_writing.do_sections(
         batch["items"], Runtime("Delay lines and the algorithms built on them.")
     )
     rep = client.post("/work/sections", json={"results": results}).json()
@@ -200,7 +201,9 @@ def test_a_document_the_model_could_not_read_is_not_asked_again(
     monkeypatch.setenv("PRAX_SECTIONS", "stub")
     doc = _book(client, chapters=2, size=35000)
     batch = client.get("/work/sections", params={"scope": "all"}).json()
-    results = worker.do_sections(batch["items"], Runtime("no"))  # too short to keep
+    results = step_writing.do_sections(
+        batch["items"], Runtime("no")
+    )  # too short to keep
     client.post("/work/sections", json={"results": results})
     assert store.get_meta(con, doc)["sections"]["items"] == []
     work._leases.clear()

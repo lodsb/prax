@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from prax.graph import ontology
+from prax.steps import writing as step_writing
 from prax.writing import summaries
 
 # two summaries of the length a real one has: the detector says nothing
@@ -187,7 +188,7 @@ def test_the_step_translates_and_the_door_keeps_both(
     """Hand-out, worker, take-in: the door stays the only writer."""
     from fastapi.testclient import TestClient
 
-    from prax import store, work, worker
+    from prax import store, work
 
     monkeypatch.setenv("PRAX_SUMMARIES", "stub")
     work._leases.clear()
@@ -207,7 +208,7 @@ def test_the_step_translates_and_the_door_keeps_both(
         assert [i["doc_id"] for i in batch["items"]] == [doc_id]
         assert batch["items"][0]["lang"] == "de"
 
-        results = worker.do_summaries(batch["items"], Runtime(EN))
+        results = step_writing.do_summaries(batch["items"], Runtime(EN))
         rep = client.post("/work/summaries", json={"results": results}).json()
         assert rep["applied"] == 1
 
@@ -226,7 +227,7 @@ def test_a_summary_the_model_cannot_translate_is_not_handed_out_again(
 ) -> None:
     from fastapi.testclient import TestClient
 
-    from prax import store, work, worker
+    from prax import store, work
 
     monkeypatch.setenv("PRAX_SUMMARIES", "stub")
     work._leases.clear()
@@ -242,7 +243,7 @@ def test_a_summary_the_model_cannot_translate_is_not_handed_out_again(
         store.set_meta(con, doc_id, meta)
 
         batch = client.get("/work/summaries", params={"scope": "all"}).json()
-        results = worker.do_summaries(batch["items"], Runtime(DE))  # unchanged
+        results = step_writing.do_summaries(batch["items"], Runtime(DE))  # unchanged
         assert results[0]["tried"]
         rep = client.post("/work/summaries", json={"results": results}).json()
         assert rep["skipped"] == 1
@@ -298,7 +299,7 @@ def test_a_translation_not_good_enough_is_asked_for_again(
     repair of rows: the summary as first written is still there."""
     from fastapi.testclient import TestClient
 
-    from prax import store, work, worker
+    from prax import store, work
     from prax.capture import pipeline
 
     monkeypatch.setenv("PRAX_SUMMARIES", "stub")
@@ -316,7 +317,7 @@ def test_a_translation_not_good_enough_is_asked_for_again(
 
         # a batch that went through before the check knew about labels
         batch = client.get("/work/summaries", params={"scope": "all"}).json()
-        results = worker.do_summaries(batch["items"], Runtime(ECHOED))
+        results = step_writing.do_summaries(batch["items"], Runtime(ECHOED))
         # the worker refuses it now, so put it in the way the door did then
         store.set_summary(con, doc_id, ECHOED, lang="en", source="test")
         assert store.get_meta(con, doc_id)["summary_lang"] == "en"
@@ -328,7 +329,7 @@ def test_a_translation_not_good_enough_is_asked_for_again(
         again = client.get("/work/summaries", params={"scope": "all"}).json()
         assert again["items"][0]["summary"] == DE
 
-        results = worker.do_summaries(again["items"], Runtime(EN))
+        results = step_writing.do_summaries(again["items"], Runtime(EN))
         client.post("/work/summaries", json={"results": results})
         assert store.get_meta(con, doc_id)["summary"] == EN
         assert pipeline.summaries_needed(con) == []

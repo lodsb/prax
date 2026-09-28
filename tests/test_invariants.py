@@ -130,6 +130,38 @@ def test_the_mcp_server_is_a_thin_proxy() -> None:
     assert asked <= {"prax.client"}, f"the proxy imports more than the client: {asked}"
 
 
+STORE_MAY_STAND_ON = ("prax.config", "prax.text", "prax.ml", "prax.graph.ontology")
+
+
+def test_the_store_stands_only_on_what_is_below_it() -> None:
+    """The store is the door (invariant 3), not the bottom layer: a pass
+    that must touch the tables and needs the graph's or a parser's logic
+    (replaying the review queue, healing a document's type) lives in it and
+    calls up, inside a function. At the top of a module it may import only
+    what is below it: the configuration, text, the models' files and
+    indexes, and the ontology. Anything else there would be an import
+    cycle waiting for the day both ends load first (the engineering pass
+    of 2026-09-28 counted a dozen lazy calls up, and no top-level one)."""
+    reaching: list[str] = []
+    for path in sorted((SRC / "store").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            names: list[str] = []
+            if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                if node.module == "prax":
+                    names = [f"prax.{a.name}" for a in node.names]
+                elif node.module.startswith("prax."):
+                    names = [f"{node.module}.{a.name}" for a in node.names]
+            elif isinstance(node, ast.Import):
+                names = [a.name for a in node.names if a.name.startswith("prax.")]
+            for name in names:
+                if not name.startswith(STORE_MAY_STAND_ON) and not name.startswith(
+                    "prax.store"
+                ):
+                    reaching.append(f"{path.relative_to(SRC)}:{node.lineno} {name}")
+    assert not reaching, "the store imports upward at the top: " + "; ".join(reaching)
+
+
 def test_the_text_package_stands_on_nothing_of_prax() -> None:
     """``prax.text`` holds the shapes of text: markup, chunks, what a region
     of a page is. The engineering pass of 2026-09-28 gathered them because

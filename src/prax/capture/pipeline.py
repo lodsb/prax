@@ -478,10 +478,6 @@ def embed_pending(
 # ----------------------------------------------------------- the pipeline
 
 
-def _paid(spec: models.ModelSpec | None) -> bool:
-    return spec is not None and spec.paid
-
-
 def captures_ready(con: sqlite3.Connection, onto: ontology.Ontology) -> list[int]:
     """Captures with text that the current ontology has not read yet, worth
     reading: not an image, not retired, at least ``MIN_CHARS`` of text."""
@@ -571,7 +567,7 @@ def _titles_step(con: sqlite3.Connection, out: dict[str, Any], log: Log | None) 
     ]
     if spec is None:  # no model: only the recase rule can do anything
         chosen = [c for c in chosen if c[1] == "caps"]
-    if chosen and spec is not None and _paid(spec):
+    if chosen and spec is not None and spec.paid:
         out["titles"] = f"skipped: the titles step is {spec.name} (paid)"
     elif chosen:
         runtime = models.runtime(spec) if spec else None
@@ -588,7 +584,7 @@ def _extract_step(
     spec = models.resolve("extract")
     onto = ontology.current()
     ids = captures_ready(con, onto)
-    if ids and (spec is None or _paid(spec)):
+    if ids and (spec is None or spec.paid):
         out["extract"] = (
             f"skipped: {len(ids)} documents wait; the extract step is"
             f" {spec.name if spec else 'not configured'}" + (" (paid)" if spec else "")

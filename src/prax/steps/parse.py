@@ -4,15 +4,23 @@ files the text and asks for what follows (``pipeline.follow_ups``)."""
 
 from __future__ import annotations
 
-from typing import Any
+import contextlib
+import os
+import threading
+import time
+from collections.abc import Callable, Iterator
+from typing import Any, Self
 
-from prax import models, store
+from prax import models, parsers, store
+from prax import steps as steps_mod
 from prax.capture import inbox, pipeline
-from prax.parsers import queue
+from prax.client import Door
+from prax.ml import usage
+from prax.parsers import figures, queue
 from prax.text import mimes
 
 from . import READING_STEPS
-from .base import HandOut, Pass, Step, TakeIn
+from .base import HandOut, Log, Pass, Step, TakeIn, say
 
 
 def vision_is_free() -> bool:
@@ -220,7 +228,6 @@ class Parse(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        from prax import worker
 
         items = p.fetch(self.name).get("items") or []
         if not items:
@@ -231,7 +238,7 @@ class Parse(Step):
         # neither reaps the session nor re-leases the book being read
         tally: dict[str, Any] = {"applied": 0, "actions": {}}
         ids = [int(it["doc_id"]) for it in items]
-        with worker._Beating(p.door, p.session, "parse", ids) as beating:
+        with _Beating(p.door, p.session, "parse", ids) as beating:
 
             def landed(rs: list[dict[str, Any]]) -> None:
                 rep = p.post("parse", {"results": rs})
@@ -240,8 +247,272 @@ class Parse(Step):
                     tally["actions"][k] = tally["actions"].get(k, 0) + int(v)
                 beating.landed([int(r["doc_id"]) for r in rs])
 
-            worker.do_parse(p.door, items, log_=p.log, landed=landed, spend=p.spend)
+            do_parse(p.door, items, log_=p.log, landed=landed, spend=p.spend)
         return f"{tally['applied']} parsed {tally['actions'] or ''}"
 
 
 REGISTERED = {"parse": Parse()}
+
+
+# ------------------------------------------------ the worker's half
+
+
+def _requested(
+    it: dict[str, Any], *, spend: bool = False
+) -> tuple[list[Any], str | None]:
+    """The extractors to try for an item: a requested reading names one
+    (and is refused when its model would cost money and ``spend`` was not
+    given, so nobody's click spends unasked — the request stays on the
+    document with that reason); otherwise the candidates for the type.
+
+    What a reading costs is the step's model it runs
+    (``store.READING_STEPS``), never the reading's own name: `figures`
+    and `vision-pages` are the vision step as much as `vision` is, and
+    keying on the name let them past this guard until 2026-09-23.
+    """
+    name = it.get("extractor")
+    if not name:
+        return parsers.candidates(it.get("mime") or ""), None
+    try:
+        ext = parsers.by_name(name)
+    except KeyError as exc:
+        return [], str(exc)
+    step = steps_mod.READING_STEPS.get(name)
+    if step and not spend:
+        spec = models.resolve(step)
+        if spec is not None and spec.paid:
+            return [], (
+                f"the {step} step is {spec.name if spec else 'none'} (paid):"
+                " run it with --spend as the promote step, or point the step"
+                " at a local server"
+            )
+    if ext.check is None and not ext.available():
+        return [], f"{name} is not installed on this worker"
+    return [ext], None  # a server that is not up says so itself: NotYet
+
+
+def do_parse(
+    door: Door,
+    items: list[dict[str, Any]],
+    *,
+    log_: Log | None = None,
+    landed: Callable[[list[dict[str, Any]]], None] | None = None,
+    spend: bool = False,
+) -> list[dict[str, Any]]:
+    """Every item through its extractor chain. ``landed`` is called with
+    each document's results as soon as it is done — the caller posts them
+    then, so a batch of books lands one book at a time and not when the
+    last one is read."""
+    results: list[dict[str, Any]] = []
+
+    def done(*rs: dict[str, Any]) -> None:
+        results.extend(rs)
+        if landed is not None:
+            landed(list(rs))
+
+    for it in items:
+        doc_id = it["doc_id"]
+        usage.clear()  # what this document's readings pay for, and nothing before
+        exts, refused = _requested(it, spend=spend)
+        if not exts:
+            done(
+                {
+                    "doc_id": doc_id,
+                    "extractor": it.get("extractor") or "none",
+                    "error": refused or "no extractor for this type",
+                    "requested": it.get("extractor"),
+                }
+            )
+            continue
+        try:
+            data = door.get_bytes(it["original"])
+        except Exception as exc:  # noqa: BLE001
+            done(
+                {"doc_id": doc_id, "extractor": exts[0].stamp, "error": f"fetch: {exc}"}
+            )
+            continue
+        pages = _page_count(data)  # a fact of the original, for the door's record
+        last = None
+        tried: list[
+            dict[str, Any]
+        ] = []  # the chain's earlier attempts, posted with the outcome
+        for ext in exts:
+            t0 = time.monotonic()
+            try:
+                with (
+                    _mode(ext.name, it.get("mode")),
+                    figures.fetching(
+                        lambda ref, d=door, i=doc_id: _figure_from_door(d, i, ref)
+                    ),
+                ):
+                    stamp = ext.stamp
+                    text = ext(
+                        data, filename=it.get("filename"), previous=it.get("previous")
+                    ).strip()
+            except (parsers.NotYet, models.ServerNotReady) as exc:
+                # the server it reads through is loading or down: not the
+                # document's fault; deferred, so the door leaves it leased a
+                # while and hands out other work meanwhile
+                say(log_, f"parse doc {doc_id}: not yet — {exc}")
+                done(*tried, {"doc_id": doc_id, "defer": True})
+                break
+            except Exception as exc:  # noqa: BLE001
+                last = (ext.stamp, f"{type(exc).__name__}: {exc}")
+                if ext is not exts[-1]:
+                    # the chain goes on; the door records this attempt too,
+                    # so it can see the chain was run and not hand the
+                    # document out again (a scan refused by the first
+                    # extractor, empty for the fallback, came back every
+                    # cycle otherwise)
+                    tried.append(
+                        {
+                            "doc_id": doc_id,
+                            "extractor": ext.stamp,
+                            "error": last[1],
+                            "pages": pages,
+                        }
+                    )
+                continue
+            done(
+                *tried,
+                {
+                    "doc_id": doc_id,
+                    "extractor": stamp,
+                    "text": text,
+                    "seconds": round(time.monotonic() - t0, 2),
+                    "force": bool(it.get("force")),
+                    "requested": it.get("extractor"),
+                    "keep_source": ext.annotates,
+                    "pages": pages,
+                    # what the reading paid for, for the door's ledger
+                    "usage": usage.take(),
+                },
+            )
+            pictures = len(figures.DATA_IMAGE.findall(text))
+            words = len(figures.DATA_IMAGE.sub("", text)) if pictures else len(text)
+            say(
+                log_,
+                f"parse doc {doc_id}: {words} chars"
+                + (f" + {pictures} pictures to file" if pictures else "")
+                + f" ({stamp})",
+            )
+            break
+        else:
+            done(
+                *tried,
+                {
+                    "doc_id": doc_id,
+                    "extractor": last[0] if last else exts[0].stamp,
+                    "error": last[1] if last else "failed",
+                    "requested": it.get("extractor"),
+                    "pages": pages,
+                },
+            )
+    return results
+
+
+BEAT_SECONDS = 300  # a third of the door's lease: the beat renews what is held
+
+
+class _Beating:
+    """A heartbeat beside a long batch: every ``BEAT_SECONDS`` the session
+    is beaten (so the door does not reap it for silence) and the leases of
+    the items still in flight are renewed (so the door does not hand them
+    out again while a book is being read). ``landed(ids)`` takes items out
+    of flight as their results are posted."""
+
+    def __init__(
+        self, door: Door, session: int | None, step: str, items: list[int]
+    ) -> None:
+        self.door = door
+        self.session = session
+        self.step = step
+        self.in_flight = set(items)
+        self.done = 0
+        self.total = len(items)
+        self.lock = threading.Lock()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+
+    def landed(self, ids: list[int]) -> None:
+        with self.lock:
+            self.in_flight.difference_update(ids)
+            self.done = self.total - len(self.in_flight)
+        self.beat()
+
+    def beat(self) -> None:
+        if self.session is None:
+            return
+        with self.lock:
+            body = {
+                "done": self.done,
+                "total": self.total,
+                "renew": {"step": self.step, "items": sorted(self.in_flight)},
+            }
+        with contextlib.suppress(Exception):  # a missed beat is not a failed batch
+            self.door.post_json(f"/work/session/{self.session}", body)
+
+    def _run(self) -> None:
+        while not self.stop.wait(BEAT_SECONDS):
+            self.beat()
+
+    def __enter__(self) -> Self:
+        self.thread.start()
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.stop.set()
+        self.thread.join(timeout=5)
+
+
+def _figure_from_door(door: Door, doc_id: int, ref: str) -> tuple[bytes, str] | None:
+    """A figure the original does not hold (a filed picture of a scanned
+    page): the door serves it out of its archive."""
+    try:
+        data = door.get_bytes(f"/doc/{doc_id}/figure/{ref}")
+    except Exception:  # noqa: BLE001 - not there: the reading skips it
+        return None
+    return (data, figures.media_of(data)) if data else None
+
+
+def _page_count(data: bytes) -> int | None:
+    """How many pages a PDF has, or None for anything else (and for a PDF
+    pymupdf cannot open: the extractor will say so in its own words)."""
+    if data[:5] != b"%PDF-":
+        return None
+    try:
+        import pymupdf
+
+        with pymupdf.open(stream=data, filetype="pdf") as doc:
+            return int(doc.page_count)
+    except Exception:  # noqa: BLE001
+        return None
+
+
+_MODE_SETTINGS = {
+    "vision-pages": "PRAX_VISION_PAGES",
+    "figures": "PRAX_FIGURES",
+    "pymupdf4llm-ocr": "PRAX_OCR_LANGUAGE",
+    "marker": "PRAX_MARKER_MODE",
+    "formulas": "PRAX_FORMULA_READINGS",
+}
+
+
+@contextlib.contextmanager
+def _mode(extractor: str, mode: str | None) -> Iterator[None]:
+    """The requested mode as the extractor's setting for one call
+    (``vision-pages``: every page or the scans; ``figures``: every image
+    or the captioned ones; OCR: the recognizer's language)."""
+    variable = _MODE_SETTINGS.get(extractor)
+    if not mode or variable is None:
+        yield
+        return
+    before = os.environ.get(variable)
+    os.environ[variable] = mode
+    try:
+        yield
+    finally:
+        if before is None:
+            os.environ.pop(variable, None)
+        else:
+            os.environ[variable] = before

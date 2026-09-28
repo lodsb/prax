@@ -163,7 +163,6 @@ class Embed(Step):
         return t.out
 
     def run(self, p: Pass) -> str | None:
-        from prax import worker
 
         emb = embeddings.current()
         if emb is None:
@@ -177,8 +176,30 @@ class Embed(Step):
                 f" this worker with {emb.name}"
             )
         p.note(f"embedding {len(got['chunks'])} chunks")
-        rep = p.post(self.name, worker.do_embed(got, emb))
+        rep = p.post(self.name, do_embed(got, emb))
         return f"{rep.get('applied', 0)} vectors"
 
 
 REGISTERED = {"embed": Embed()}
+
+
+# ------------------------------------------------ the worker's half
+
+
+def do_embed(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
+    chunks = batch.get("chunks") or []
+    fields = batch.get("fields") or []
+    out: dict[str, Any] = {"model": emb.name, "chunks": [], "fields": []}
+    if chunks:
+        vecs = emb.embed([c["text"] for c in chunks])
+        out["chunks"] = [
+            [c["chunk_id"], c["kind"], [float(x) for x in v]]
+            for c, v in zip(chunks, vecs, strict=True)
+        ]
+    if fields:
+        vecs = emb.embed([f["text"] for f in fields])
+        out["fields"] = [
+            [f["doc_id"], [float(x) for x in v]]
+            for f, v in zip(fields, vecs, strict=True)
+        ]
+    return out

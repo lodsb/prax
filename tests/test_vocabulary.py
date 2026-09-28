@@ -9,8 +9,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import store, work, worker
+from prax import store, work
 from prax.graph import vocabulary
+from prax.steps import vocabulary as step_vocabulary
 
 GERMAN = "Dieses Rezept braucht Olivenöl und Knoblauch für die Pfanne. " * 6
 ENGLISH = "This recipe needs olive oil and garlic for the pan. " * 6
@@ -259,7 +260,7 @@ def test_an_entity_the_pass_has_seen_is_not_offered_twice(
     assert batch["items"][0]["type"] == "ingredient"
     assert models  # the step is on
 
-    results = worker.do_vocabulary(
+    results = step_vocabulary.do_vocabulary(
         batch["items"], Runtime({"Knoblauchzehen": "garlic"})
     )
     rep = client.post("/work/vocabulary", json={"results": results}).json()
@@ -276,7 +277,7 @@ def test_a_name_kept_as_english_is_not_asked_again(
     _german_entity(con, client, "extendible hashing", "concept")
     monkeypatch.setenv("PRAX_VOCABULARY", "stub")
     batch = client.get("/work/vocabulary").json()
-    results = worker.do_vocabulary(batch["items"], Runtime())  # says nothing
+    results = step_vocabulary.do_vocabulary(batch["items"], Runtime())  # says nothing
     rep = client.post("/work/vocabulary", json={"results": results}).json()
     assert rep["actions"] == {"kept": 1}
     work._leases.clear()
@@ -833,7 +834,7 @@ def test_the_step_asks_the_other_way_when_nothing_is_foreign(
         ("apple", "de"),
     ]
     runtime = Runtime({"Knoblauchzehen": "garlic", "apple": "Apfel"})
-    results = worker.do_vocabulary(items, runtime)
+    results = step_vocabulary.do_vocabulary(items, runtime)
     assert "What does German call it?" in runtime.asked[1]
     rep = client.post("/work/vocabulary", json={"results": results}).json()
     assert rep["actions"] == {"renamed": 1, "labelled": 1}
@@ -852,7 +853,7 @@ def test_a_refused_answer_still_converges(
     _german_entity(con, client, "Olivenöl", "ingredient")
     items = store.unlabelled_names(con, ("de",))
     runtime = Runtime({"apple": "eine runde Frucht, die an Bäumen wächst und rot ist"})
-    results = worker.do_vocabulary(items, runtime)
+    results = step_vocabulary.do_vocabulary(items, runtime)
     assert results == [{"id": items[0]["id"], "name": "apple", "into": "de"}]
 
 

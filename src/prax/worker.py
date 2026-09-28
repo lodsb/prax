@@ -15,32 +15,22 @@ the Jobs view shows it wherever it runs.
 
 from __future__ import annotations
 
-import contextlib
 import json
 import logging
 import os
 import re
-import threading
 import time
-from collections.abc import Callable, Iterator
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Self
+from typing import Any
 
-from prax import models, parsers, work
 from prax import steps as steps_mod
 from prax.capture import drop
 from prax.client import Door
-from prax.graph import extraction, vocabulary
 from prax.host import hostinfo
-from prax.ml import embeddings, usage
-from prax.parsers import figures
-from prax.text import language
-from prax.writing import sections, summaries, titles
+from prax.steps.base import Log, say
 
 log = logging.getLogger("prax.worker")
-Log = Callable[[str], None]
 STEPS = steps_mod.STEPS
 # passes that fail in a row before the worker stops and lets the
 # supervisor start one with the current code (2026-09-24: 519 identical).
@@ -68,657 +58,6 @@ def _kind_of_trouble(exc: BaseException) -> str:
 
 
 # ------------------------------------------------------------------ steps
-
-
-def _requested(
-    it: dict[str, Any], *, spend: bool = False
-) -> tuple[list[Any], str | None]:
-    """The extractors to try for an item: a requested reading names one
-    (and is refused when its model would cost money and ``spend`` was not
-    given, so nobody's click spends unasked — the request stays on the
-    document with that reason); otherwise the candidates for the type.
-
-    What a reading costs is the step's model it runs
-    (``store.READING_STEPS``), never the reading's own name: `figures`
-    and `vision-pages` are the vision step as much as `vision` is, and
-    keying on the name let them past this guard until 2026-09-23.
-    """
-    name = it.get("extractor")
-    if not name:
-        return parsers.candidates(it.get("mime") or ""), None
-    try:
-        ext = parsers.by_name(name)
-    except KeyError as exc:
-        return [], str(exc)
-    step = steps_mod.READING_STEPS.get(name)
-    if step and not spend:
-        spec = models.resolve(step)
-        if _paid(spec):
-            return [], (
-                f"the {step} step is {spec.name if spec else 'none'} (paid):"
-                " run it with --spend as the promote step, or point the step"
-                " at a local server"
-            )
-    if ext.check is None and not ext.available():
-        return [], f"{name} is not installed on this worker"
-    return [ext], None  # a server that is not up says so itself: NotYet
-
-
-def do_parse(
-    door: Door,
-    items: list[dict[str, Any]],
-    *,
-    log_: Log | None = None,
-    landed: Callable[[list[dict[str, Any]]], None] | None = None,
-    spend: bool = False,
-) -> list[dict[str, Any]]:
-    """Every item through its extractor chain. ``landed`` is called with
-    each document's results as soon as it is done — the caller posts them
-    then, so a batch of books lands one book at a time and not when the
-    last one is read."""
-    results: list[dict[str, Any]] = []
-
-    def done(*rs: dict[str, Any]) -> None:
-        results.extend(rs)
-        if landed is not None:
-            landed(list(rs))
-
-    for it in items:
-        doc_id = it["doc_id"]
-        usage.clear()  # what this document's readings pay for, and nothing before
-        exts, refused = _requested(it, spend=spend)
-        if not exts:
-            done(
-                {
-                    "doc_id": doc_id,
-                    "extractor": it.get("extractor") or "none",
-                    "error": refused or "no extractor for this type",
-                    "requested": it.get("extractor"),
-                }
-            )
-            continue
-        try:
-            data = door.get_bytes(it["original"])
-        except Exception as exc:  # noqa: BLE001
-            done(
-                {"doc_id": doc_id, "extractor": exts[0].stamp, "error": f"fetch: {exc}"}
-            )
-            continue
-        pages = _page_count(data)  # a fact of the original, for the door's record
-        last = None
-        tried: list[
-            dict[str, Any]
-        ] = []  # the chain's earlier attempts, posted with the outcome
-        for ext in exts:
-            t0 = time.monotonic()
-            try:
-                with (
-                    _mode(ext.name, it.get("mode")),
-                    figures.fetching(
-                        lambda ref, d=door, i=doc_id: _figure_from_door(d, i, ref)
-                    ),
-                ):
-                    stamp = ext.stamp
-                    text = ext(
-                        data, filename=it.get("filename"), previous=it.get("previous")
-                    ).strip()
-            except (parsers.NotYet, models.ServerNotReady) as exc:
-                # the server it reads through is loading or down: not the
-                # document's fault; deferred, so the door leaves it leased a
-                # while and hands out other work meanwhile
-                _say(log_, f"parse doc {doc_id}: not yet — {exc}")
-                done(*tried, {"doc_id": doc_id, "defer": True})
-                break
-            except Exception as exc:  # noqa: BLE001
-                last = (ext.stamp, f"{type(exc).__name__}: {exc}")
-                if ext is not exts[-1]:
-                    # the chain goes on; the door records this attempt too,
-                    # so it can see the chain was run and not hand the
-                    # document out again (a scan refused by the first
-                    # extractor, empty for the fallback, came back every
-                    # cycle otherwise)
-                    tried.append(
-                        {
-                            "doc_id": doc_id,
-                            "extractor": ext.stamp,
-                            "error": last[1],
-                            "pages": pages,
-                        }
-                    )
-                continue
-            done(
-                *tried,
-                {
-                    "doc_id": doc_id,
-                    "extractor": stamp,
-                    "text": text,
-                    "seconds": round(time.monotonic() - t0, 2),
-                    "force": bool(it.get("force")),
-                    "requested": it.get("extractor"),
-                    "keep_source": ext.annotates,
-                    "pages": pages,
-                    # what the reading paid for, for the door's ledger
-                    "usage": usage.take(),
-                },
-            )
-            pictures = len(figures.DATA_IMAGE.findall(text))
-            words = len(figures.DATA_IMAGE.sub("", text)) if pictures else len(text)
-            _say(
-                log_,
-                f"parse doc {doc_id}: {words} chars"
-                + (f" + {pictures} pictures to file" if pictures else "")
-                + f" ({stamp})",
-            )
-            break
-        else:
-            done(
-                *tried,
-                {
-                    "doc_id": doc_id,
-                    "extractor": last[0] if last else exts[0].stamp,
-                    "error": last[1] if last else "failed",
-                    "requested": it.get("extractor"),
-                    "pages": pages,
-                },
-            )
-    return results
-
-
-BEAT_SECONDS = 300  # a third of the door's lease: the beat renews what is held
-
-
-class _Beating:
-    """A heartbeat beside a long batch: every ``BEAT_SECONDS`` the session
-    is beaten (so the door does not reap it for silence) and the leases of
-    the items still in flight are renewed (so the door does not hand them
-    out again while a book is being read). ``landed(ids)`` takes items out
-    of flight as their results are posted."""
-
-    def __init__(
-        self, door: Door, session: int | None, step: str, items: list[int]
-    ) -> None:
-        self.door = door
-        self.session = session
-        self.step = step
-        self.in_flight = set(items)
-        self.done = 0
-        self.total = len(items)
-        self.lock = threading.Lock()
-        self.stop = threading.Event()
-        self.thread = threading.Thread(target=self._run, daemon=True)
-
-    def landed(self, ids: list[int]) -> None:
-        with self.lock:
-            self.in_flight.difference_update(ids)
-            self.done = self.total - len(self.in_flight)
-        self.beat()
-
-    def beat(self) -> None:
-        if self.session is None:
-            return
-        with self.lock:
-            body = {
-                "done": self.done,
-                "total": self.total,
-                "renew": {"step": self.step, "items": sorted(self.in_flight)},
-            }
-        with contextlib.suppress(Exception):  # a missed beat is not a failed batch
-            self.door.post_json(f"/work/session/{self.session}", body)
-
-    def _run(self) -> None:
-        while not self.stop.wait(BEAT_SECONDS):
-            self.beat()
-
-    def __enter__(self) -> Self:
-        self.thread.start()
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self.stop.set()
-        self.thread.join(timeout=5)
-
-
-def _figure_from_door(door: Door, doc_id: int, ref: str) -> tuple[bytes, str] | None:
-    """A figure the original does not hold (a filed picture of a scanned
-    page): the door serves it out of its archive."""
-    try:
-        data = door.get_bytes(f"/doc/{doc_id}/figure/{ref}")
-    except Exception:  # noqa: BLE001 - not there: the reading skips it
-        return None
-    return (data, figures.media_of(data)) if data else None
-
-
-def _page_count(data: bytes) -> int | None:
-    """How many pages a PDF has, or None for anything else (and for a PDF
-    pymupdf cannot open: the extractor will say so in its own words)."""
-    if data[:5] != b"%PDF-":
-        return None
-    try:
-        import pymupdf
-
-        with pymupdf.open(stream=data, filetype="pdf") as doc:
-            return int(doc.page_count)
-    except Exception:  # noqa: BLE001
-        return None
-
-
-_MODE_SETTINGS = {
-    "vision-pages": "PRAX_VISION_PAGES",
-    "figures": "PRAX_FIGURES",
-    "pymupdf4llm-ocr": "PRAX_OCR_LANGUAGE",
-    "marker": "PRAX_MARKER_MODE",
-    "formulas": "PRAX_FORMULA_READINGS",
-}
-
-
-@contextlib.contextmanager
-def _mode(extractor: str, mode: str | None) -> Iterator[None]:
-    """The requested mode as the extractor's setting for one call
-    (``vision-pages``: every page or the scans; ``figures``: every image
-    or the captioned ones; OCR: the recognizer's language)."""
-    variable = _MODE_SETTINGS.get(extractor)
-    if not mode or variable is None:
-        yield
-        return
-    before = os.environ.get(variable)
-    os.environ[variable] = mode
-    try:
-        yield
-    finally:
-        if before is None:
-            os.environ.pop(variable, None)
-        else:
-            os.environ[variable] = before
-
-
-def do_titles(
-    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
-) -> list[dict[str, Any]]:
-    results = []
-    for it in items:
-        doc_id, why, old = it["doc_id"], it["why"], it.get("title") or ""
-        if why == "caps":
-            results.append(
-                {"doc_id": doc_id, "title": titles.recase(old), "source": "recase"}
-            )
-            continue
-        if runtime is None or not (it.get("text") or "").strip():
-            results.append(
-                {
-                    "doc_id": doc_id,
-                    "tried": "no titles model" if runtime is None else "no text",
-                }
-            )
-            continue
-        try:
-            guess = titles.guess_title(
-                runtime,
-                it["text"],
-                filename=it.get("filename"),
-                heading=titles.first_heading(it["text"]),
-                pdf_title=None,
-                # many documents carry this one: the model is told it is not it
-                not_title=old if why == "shared" else None,
-            )
-        except models.ServerNotReady as exc:
-            # the titles model's server is loading or down: deferred, like
-            # a reading; the pass goes on with the rest and posts them
-            _say(log_, f"title doc {doc_id}: not yet — {exc}")
-            results.append({"doc_id": doc_id, "defer": True})
-            continue
-        if guess is None:
-            results.append({"doc_id": doc_id, "tried": "no usable guess"})
-        elif guess.confidence == "low":
-            results.append(
-                {"doc_id": doc_id, "tried": f"unconfirmed: {guess.title[:80]}"}
-            )
-        else:
-            results.append(
-                {
-                    "doc_id": doc_id,
-                    "title": guess.title,
-                    "source": runtime.name,
-                    "confidence": guess.confidence,
-                    "why": why,
-                }
-            )
-            _say(log_, f"title doc {doc_id}: {guess.title[:60]!r}")
-    return results
-
-
-def do_summaries(
-    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
-) -> list[dict[str, Any]]:
-    """Each summary translated into the language the document field is
-    written in. Nothing reads the document: the summary is the input."""
-    results = []
-    for it in items:
-        doc_id, lang = it["doc_id"], it.get("lang")
-        if runtime is None:
-            results.append({"doc_id": doc_id, "tried": "no summaries model"})
-            continue
-        try:
-            got = summaries.translate(
-                runtime,
-                str(it.get("summary") or ""),
-                lang=lang,
-                title=str(it.get("title") or ""),
-            )
-        except models.ServerNotReady as exc:
-            _say(log_, f"summary doc {doc_id}: not yet — {exc}")
-            results.append({"doc_id": doc_id, "defer": True})
-            continue
-        if got is None:
-            results.append({"doc_id": doc_id, "tried": f"no usable {lang} translation"})
-            continue
-        results.append(
-            {
-                "doc_id": doc_id,
-                "summary": got.text,
-                "lang": language.canonical(),
-                "source": runtime.name,
-            }
-        )
-        _say(log_, f"summary doc {doc_id} ({lang}): {got.text[:60]!r}")
-    return results
-
-
-def do_sections(
-    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
-) -> list[dict[str, Any]]:
-    """Each of a document's chapters read in turn.
-
-    A document with no section long enough to be a chapter comes back
-    with an empty list, which is an answer: the door records it against
-    the text it was read from, and the document is not offered again
-    until that text changes.
-    """
-    results = []
-    for it in items:
-        doc_id = it["doc_id"]
-        done: list[dict[str, Any]] = []
-        deferred = False
-        for part in it.get("sections") or []:
-            if runtime is None:
-                break
-            try:
-                got = sections.summarize(
-                    runtime,
-                    str(part.get("heading") or ""),
-                    str(part.get("text") or ""),
-                    title=str(it.get("title") or ""),
-                )
-            except models.ServerNotReady as exc:
-                _say(log_, f"sections doc {doc_id}: not yet - {exc}")
-                deferred = True
-                break
-            if got is not None:
-                done.append(got.as_meta())
-        if deferred:
-            results.append({"doc_id": doc_id, "defer": True})
-            continue
-        results.append(
-            {
-                "doc_id": doc_id,
-                "sections": done,
-                "source": runtime.name if runtime else "none",
-            }
-        )
-        if done:
-            _say(log_, f"sections doc {doc_id}: {len(done)} sections")
-    return results
-
-
-def do_vocabulary(
-    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
-) -> list[dict[str, Any]]:
-    """Each name asked of the model: what does English call this thing?
-
-    The commonest answer is the name it was given — a rare English term
-    nobody else in the library wrote down looks foreign to the candidate
-    net and is handed back unchanged, which costs the call and nothing
-    else.
-    """
-    results = []
-    for it in items:
-        entity_id, name = it["id"], str(it.get("name") or "")
-        into = it.get("into")
-        if runtime is None or not name:
-            if not into:  # no model, no word in another language
-                results.append({"id": entity_id, "name": name, "changed": False})
-            continue
-        try:
-            got = vocabulary.rename(
-                runtime,
-                name,
-                str(it.get("type") or "concept"),
-                context=str(it.get("context") or ""),
-                into=into,
-            )
-        except models.ServerNotReady as exc:
-            _say(log_, f"name {entity_id}: not yet — {exc}")
-            results.append({"id": entity_id, "defer": True})
-            continue
-        if into:
-            # a refused answer writes the name as it is: the pass has asked,
-            # and a label in the language is what says so
-            said = got.name if got is not None else name
-            results.append({"id": entity_id, "name": said, "into": into})
-            if said != name:
-                _say(log_, f"name {entity_id}: {name!r} in {into} is {said!r}")
-            continue
-        if got is None:
-            results.append({"id": entity_id, "name": name, "changed": False})
-            continue
-        results.append({"id": entity_id, "name": got.name, "changed": got.changed})
-        if got.changed:
-            _say(log_, f"name {entity_id}: {name!r} -> {got.name!r}")
-    return results
-
-
-def do_extract(
-    items: list[dict[str, Any]],
-    ext: extraction.Extractor,
-    *,
-    workers: int = 1,
-    log_: Log | None = None,
-) -> list[dict[str, Any]]:
-    def one(it: dict[str, Any]) -> dict[str, Any]:
-        doc = extraction.DocumentInput(
-            it["doc_id"],
-            it.get("title") or "",
-            it.get("header") or "",
-            it.get("text") or "",
-            it.get("domains"),
-        )
-        try:
-            result = ext.extract(doc)
-            if not result.triples and result.usage.get("dropped_lines"):
-                result = ext.extract(doc)
-            _say(log_, f"extract doc {it['doc_id']}: {len(result.triples)} triples")
-            return {
-                "doc_id": it["doc_id"],
-                "extraction": work.extraction_to_dict(result),
-            }
-        except models.ServerNotReady as exc:
-            # the model server is loading or down: not the document's
-            # fault, no error recorded against it; deferred, so the door
-            # leaves it leased a while and hands out other work meanwhile
-            _say(log_, f"extract doc {it['doc_id']}: not yet — {exc}")
-            return {"doc_id": it["doc_id"], "defer": True}
-        except Exception as exc:  # noqa: BLE001
-            return {"doc_id": it["doc_id"], "error": f"{type(exc).__name__}: {exc}"}
-
-    if workers > 1 and isinstance(ext, extraction.LocalExtractor):
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            return [r for r in pool.map(one, items) if r]
-    return [r for r in (one(it) for it in items) if r]
-
-
-def do_promote(
-    door: Door,
-    items: list[dict[str, Any]],
-    ext: extraction.Extractor,
-    spec: models.ModelSpec,
-    *,
-    log_: Log | None = None,
-) -> list[dict[str, Any]]:
-    """The expensive pass over flagged documents: a promoted image is
-    first described again by the promote model (a Claude one; a server
-    that cannot see leaves the reading as it is), the reading posted as a
-    parse result so the document carries it, and the extraction reads
-    that; then the extraction, as for the extract step."""
-    from prax.parsers import vision
-
-    for it in items:
-        image = it.get("image")
-        if not image or spec.kind != "claude":
-            continue
-        try:
-            data = door.get_bytes(image["original"])
-            text = vision.describe(
-                data,
-                filename=image.get("filename"),
-                model=spec.model,
-                previous=image.get("previous"),
-            )
-        except Exception as exc:  # noqa: BLE001 - the extraction still runs
-            _say(log_, f"promote doc {it['doc_id']}: reading failed: {exc}")
-            continue
-        door.post_json(
-            "/work/parse",
-            {
-                "results": [
-                    {
-                        "doc_id": it["doc_id"],
-                        "extractor": f"vision/1+{spec.runtime_name}",
-                        "text": text,
-                        "force": True,
-                    }
-                ]
-            },
-        )
-        it["text"] = text
-        _say(log_, f"promote doc {it['doc_id']}: read again by {spec.runtime_name}")
-    return do_extract(items, ext, workers=1, log_=log_)
-
-
-def do_typing(
-    items: list[dict[str, Any]], runtime: Any, *, log_: Log | None = None
-) -> list[dict[str, Any]]:
-    """Each handed-out batch to the typing model: the prompt rebuilt from
-    the items and their documents, the answer posted as it came."""
-    from prax.graph import typing_pass
-
-    results = []
-    for it in items:
-        b = typing_pass.batch_of(it)
-        try:
-            text, usage = runtime.chat(
-                typing_pass.system_prompt(b.onto),
-                typing_pass.user_prompt(b),
-                max_tokens=40 * len(b.items) + 50,
-            )
-            results.append({**it, "text": text, "usage": usage})
-            _say(log_, f"typing: {len(b.items)} items answered")
-        except Exception as exc:  # noqa: BLE001
-            results.append({**it, "error": f"{type(exc).__name__}: {exc}"})
-    return results
-
-
-def do_adjudicate(
-    items: list[dict[str, Any]], spec: models.ModelSpec
-) -> dict[str, Any]:
-    """Ask the adjudicate step's model about the likely pairs the door
-    handed out; the decisions go back with what they cost."""
-    from prax.graph import resolution
-
-    if spec.kind == "claude":
-        judge: Any = resolution.ClaudeAdjudicator(model=spec.model or spec.name)
-    elif spec.kind == "openai" and spec.base_url:
-        opts = models.settings("adjudicate")
-        platt = opts.get("platt") or None
-        judge = resolution.LocalAdjudicator(
-            base_url=spec.base_url,
-            model=spec.model or spec.name,
-            platt=(float(platt["a"]), float(platt["b"])) if platt else None,
-            settle=float(opts.get("settle") or resolution.SETTLE),
-            slots=int(opts.get("slots") or 2),
-        )
-    else:
-        judge = resolution.StubAdjudicator(threshold=1.0)
-    candidates = [
-        resolution.Candidate(
-            int(it["keep"]),
-            int(it["drop"]),
-            str(it.get("keep_name") or ""),
-            str(it.get("drop_name") or ""),
-            str(it.get("type") or ""),
-            "likely",
-            float(it.get("score") or 0.0),
-        )
-        for it in items
-    ]
-    same = judge.decide(candidates)
-    out: dict[str, Any] = {"items": items, "same": same, "model": judge.name}
-    if getattr(judge, "probabilities", None):
-        out["p"] = judge.probabilities
-    usage = getattr(judge, "usage", None)
-    if usage:
-        out["usage"] = dict(usage)
-        out["cost"] = round(judge.cost, 4)
-    return out
-
-
-def do_resolve(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
-    """The likely tier of entity resolution for one type: embed the names
-    the door handed out, find the close pairs, and post them."""
-    from prax.graph import resolution
-
-    names = [(int(i), str(n)) for i, n in (batch.get("names") or [])]
-    pairs = resolution.likely_pairs(
-        names,
-        emb,
-        threshold=float(batch.get("threshold") or resolution.LIKELY_THRESHOLD),
-    )
-    return {
-        "type": batch["type"],
-        "model": emb.name,
-        "pairs": [[a, b, round(s, 4)] for a, b, s in pairs],
-    }
-
-
-def do_embed(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
-    chunks = batch.get("chunks") or []
-    fields = batch.get("fields") or []
-    out: dict[str, Any] = {"model": emb.name, "chunks": [], "fields": []}
-    if chunks:
-        vecs = emb.embed([c["text"] for c in chunks])
-        out["chunks"] = [
-            [c["chunk_id"], c["kind"], [float(x) for x in v]]
-            for c, v in zip(chunks, vecs, strict=True)
-        ]
-    if fields:
-        vecs = emb.embed([f["text"] for f in fields])
-        out["fields"] = [
-            [f["doc_id"], [float(x) for x in v]]
-            for f, v in zip(fields, vecs, strict=True)
-        ]
-    return out
-
-
-def _paid(spec: models.ModelSpec | None) -> bool:
-    """Whether running this step costs money (``ModelSpec.paid``): a
-    Claude model, or any model the file prices — an OpenAI-shaped
-    endpoint at somebody else's API is paid too, and used not to be."""
-    return spec is not None and spec.paid
-
-
-def _say(logger: Log | None, text: str) -> None:
-    if logger:
-        logger(text)
-    else:
-        log.info(text)
 
 
 # ------------------------------------------------------------------- pass
@@ -749,7 +88,7 @@ def run_once(
         if line is None:
             continue
         out[step] = line
-        _say(log_, f"{step}: {line}")
+        say(log_, f"{step}: {line}")
     return out
 
 
@@ -795,7 +134,7 @@ def push_folder(
         try:
             door.upload(path, fields)
         except Exception as exc:  # noqa: BLE001
-            _say(log_, f"{path.name}: {exc}")
+            say(log_, f"{path.name}: {exc}")
             counts["failed"] += 1
             drop.fail(folder, item)
             continue
@@ -845,13 +184,13 @@ def watch(
             },
         )["job_id"]
     except Exception as exc:  # noqa: BLE001
-        _say(log_, f"no session job: {exc}")
+        say(log_, f"no session job: {exc}")
     try:
         while True:
             for folder in folders or []:
                 c = push_folder(door, folder, domains=domains, log_=log_)
                 if c["sent"] or c["failed"]:
-                    _say(log_, f"{folder}: {c}")
+                    say(log_, f"{folder}: {c}")
             try:
                 done = run_once(
                     door,
@@ -866,7 +205,7 @@ def watch(
                 now = datetime.now().astimezone()
                 if night and schedule.due(night, now, last_night):
                     last_night = now
-                    _say(
+                    say(
                         log_,
                         f"the nightly pass: {nightly_limit} a step over everything",
                     )
@@ -891,7 +230,7 @@ def watch(
                     )
             except Exception as exc:  # a bad pass is outlived; a repeated one is not
                 trouble = f"{type(exc).__name__}: {exc}"
-                _say(log_, f"pass failed: {trouble}")
+                say(log_, f"pass failed: {trouble}")
                 kind = _kind_of_trouble(exc)
                 # a bad pass is worth outliving; the same bad pass over and
                 # over is not. A worker started before a change to
@@ -903,7 +242,7 @@ def watch(
                 same = same + 1 if kind == last_trouble else 1
                 last_trouble = kind
                 if not once and same >= GIVE_UP_AFTER:
-                    _say(
+                    say(
                         log_,
                         f"the same failure {same} times: stopping so the"
                         " supervisor starts a worker that has read the"
@@ -922,4 +261,4 @@ def watch(
                     f"/work/session/{session}", {"status": "done", "note": "stopped"}
                 )
             except Exception as exc:  # noqa: BLE001
-                _say(log_, f"could not close the session job: {exc}")
+                say(log_, f"could not close the session job: {exc}")

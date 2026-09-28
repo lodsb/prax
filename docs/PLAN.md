@@ -735,19 +735,22 @@ beside five packages.
 
 Found and left, each its own decision:
 
-- **The store reaches up, lazily.** `store` imports `writing`
-  (`documents/meta.py`, `repair.py`), `parsers` (`readings.py`,
-  `repair.py`), `models` (`maintain.py`) and `wall.private`
-  (`documents/text.py`, `maintain.py`) inside functions. The store is
-  meant to be the bottom layer. Each of these is a pass that runs a
-  step's logic from inside the door. Moving them would mean a pass
-  object in the layer above that the store calls back, which is more
-  structure than four call sites need today. Worth doing when a fifth
-  appears.
-- **`steps` imports `worker` lazily** in every family: a step's worker
-  half calls the worker's `do_*` functions. By design (invariant 4, "its
-  door half and its worker half together"), but `worker.py` (933 lines)
-  is mostly those `do_*` functions, which belong in their step's module.
+- [x] (2026-09-28: the rule stated and held by
+      `test_the_store_stands_only_on_what_is_below_it`) **The store
+      reaches up, lazily.** Twelve calls from inside functions to
+      `writing`, `parsers`, `models`, `wall`, and the graph beyond the
+      ontology. Moving them out would fight invariant 3: a pass that must
+      touch the tables and needs a step's logic lives in the store. So the
+      store is the door, not the bottom layer. At the top of a module it
+      imports only config, `text`, `ml` and `graph.ontology`; above that
+      only inside a function. An import at the top would be a cycle.
+- [x] (2026-09-28: `worker.py` 933 lines to 274) **`steps` imported
+      `worker` lazily** in every family, for the `do_*` functions. They
+      live in their step's module now (`steps/parse.py` has the reading
+      chain and its heartbeat), as invariant 4 says a step is one object
+      with both halves; `worker.py` is the loop, the drop folder and the
+      give-up counter, and `steps.base.say` the line a pass writes. The
+      two copies of `_paid` are `ModelSpec.paid`.
 - **`text.compounds` asks the store** for the forms a word takes, and
   only the store uses it. It is retrieval, not text; it waits for
   `store/retrieval.py` (1,916 lines) to split at 2,000 as invariant 3

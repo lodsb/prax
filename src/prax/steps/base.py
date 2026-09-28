@@ -15,6 +15,7 @@ pass over a local model.
 
 from __future__ import annotations
 
+import logging
 import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -166,9 +167,7 @@ class Pass:
             )
 
     def say(self, text: str) -> None:
-        from prax import worker
-
-        worker._say(self.log, text)
+        say(self.log, text)
 
 
 class Step:
@@ -222,3 +221,14 @@ class ModelStep(Step):
         stamp = time.strftime("%Y%m%dT%H%M%S")
         rep = p.post(self.name, {"results": results, "run": f"{self.name}-{stamp}"})
         return self.report(rep, results)
+
+
+_log = logging.getLogger("prax.worker")
+
+
+def say(logger: Log | None, text: str) -> None:
+    """A line of a worker's pass: to the caller's logger, or the worker's."""
+    if logger:
+        logger(text)
+    else:
+        _log.info(text)
