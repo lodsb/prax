@@ -2436,3 +2436,28 @@ Found while searching the library for the classification research
       which a query's rare terms add.
 - [x] **The research is read and the design written**: PLAN, "What a
       document is, and what it is about", stage Z.
+
+## 2026-09-29: stage Z, step 1: the genres and the tab to label them
+
+- [x] **`ontology/genres.yaml`**, beside the lexicon and the sameness
+      rule and out of the version string: eight levels (informational,
+      instructional, opinion, persuasion, narrative, interactive,
+      personal, code) and 27 genres under them, each with one line of
+      description. A level is a label of its own, for a document no genre
+      of it fits. `ontology.genres()` loads it; `parse_genres` refuses a
+      label named twice.
+- [x] **A person's genres are the gold sample.** `store.set_genres`
+      (`meta.genres: [{genre, p: 1.0}]`, `genres_by: human`,
+      `genres_at`), a skip for a document that cannot be placed
+      (`genres_skip`), and `store.genre_sample`, a new part of the
+      documents package (`documents/genres.py`). The open sample takes
+      each source in turn (NAS, Zotero, the extension, the rest) in an
+      order fixed by the id's hash, so the NAS dump does not fill it; each
+      item says its source, so a library-wide estimate can weigh them
+      back.
+- [x] **The Review page's "genre" tab**: ten documents a page, each with
+      its summary and the opening of its text, the vocabulary as
+      checkboxes, save and can't tell, and "labelled" for a correction.
+      Screenshotted on a throwaway door with four invented documents: a
+      save and a skip, each row saying what was done.
+- The labelling itself is the user's: about 150.

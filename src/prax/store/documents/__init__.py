@@ -12,7 +12,7 @@ A package of parts, each importing only from the ones before it in
 
 from __future__ import annotations
 
-ORDER = ("meta", "text", "library", "domains", "readings", "reads")
+ORDER = ("meta", "text", "library", "domains", "genres", "readings", "reads")
 
 from .domains import (  # noqa: F401
     PROMOTE_WEIGHTS,
@@ -39,6 +39,15 @@ from .domains import (  # noqa: F401
     suspected_page,
     unpromote,
     unstamp_extraction,
+)
+from .genres import (  # noqa: F401
+    _GENRE_LABELLED,
+    _GENRE_OPEN,
+    _GENRE_SOURCE,
+    GENRE_OPENING,
+    _genre_item,
+    genre_sample,
+    set_genres,
 )
 from .library import (  # noqa: F401
     DUPLICATE_THRESHOLD,

@@ -59,8 +59,8 @@ revisit threshold, under "Decision thresholds" below.
    step's logic calls up inside a function (`tests/test_invariants.py`).
    A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
-   before it: `documents` (meta, text, library, domains, readings,
-   reads) and `graph` (edges, decisions, labels, languages, context, communities,
+   before it: `documents` (meta, text, library, domains, genres,
+   readings, reads) and `graph` (edges, decisions, labels, languages, context, communities,
    traversal).
 4. **Single writer.** *(enforced)* The service process, the door, is the only
    writer. The recurring passes (parse, titles, extract, embed, and the
@@ -166,6 +166,13 @@ revisit threshold, under "Decision thresholds" below.
    types. Every judge of a likely pair is given it (the local model, the
    paid one, and the Review page, `GET /graph/sameness`), and a change to
    its wording is measured again (`steps.adjudicate.platt`).
+   What a document *is* is `ontology/genres.yaml`, the third file beside
+   them, also out of the version string. It holds levels (what a text
+   does: informational, instructional, opinion…) and the genres under
+   them (paper, datasheet, essay…). A person's genres come from the
+   Review page's "genre" tab (`store.set_genres`, `store.genre_sample`)
+   and are kept as `meta.genres` with `genres_by: human`. They are the
+   gold sample stage Z of `docs/PLAN.md` measures against.
    Growing a module is its version bump. Renaming or removing a type is
    a data migration. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.

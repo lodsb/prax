@@ -1,0 +1,74 @@
+# What a document is: its genre, beside what it is about (its topics, the
+# regions of the graph). Stage Z of docs/PLAN.md, "What a document is, and
+# what it is about".
+#
+# Two levels, after the web-register taxonomy of CORE (library docs 13320
+# and 13321): a main level says what the text does, a genre under it says
+# what form it takes. A document may have several genres, and a document
+# that fits no genre of a level may carry the level alone ("instructional",
+# when it is neither a manual nor a tutorial nor any other named here).
+# Every label, level or genre, is unique across the file.
+#
+# Each carries one line of description: the person labelling reads it on
+# the Review page's "genre" tab, and the genres step gives it to the model
+# (a label described in context classifies better than a bare name; Gen-Z,
+# doc 13336).
+#
+# Like the lexicon and the sameness rule, it bumps no module version: it
+# says what a document is, never what types exist in the graph. The
+# loader keeps it out of the composed modules. A change to the wording
+# moves the model's numbers, so it is measured again on the gold sample.
+version: 1
+
+levels:
+  informational:
+    description: explains or reports what is known about something
+    genres:
+      paper: a research article with its method and results (journal, conference, preprint)
+      thesis: a doctoral, master's or bachelor's thesis
+      book: a book or a chapter of one (a monograph, a textbook, a handbook)
+      lecture: lecture notes, slides, a course script or an exercise sheet
+      report: a technical report, a white paper, a project's documentation
+      reference: an encyclopedia or wiki entry, a glossary, a standard or specification
+      news: a report of current events
+  instructional:
+    description: tells the reader how to use, build or do something
+    genres:
+      manual: a user or service manual for a device or a program
+      datasheet: a component's datasheet or application note
+      schematic: a circuit diagram or a board layout
+      recipe: a recipe for a dish or a drink
+      tutorial: a step-by-step guide, a how-to, a walkthrough
+  opinion:
+    description: argues a view of the writer's own
+    genres:
+      essay: an essay, a column, a commentary or an op-ed
+      review: a review of a product, a book, a record or another work
+      blog: a personal blog post
+  persuasion:
+    description: sells or promotes something
+    genres:
+      advertisement: an advertisement, a product or shop page, a press release
+  narrative:
+    description: tells what happened
+    genres:
+      story: fiction, a story, a novel or a part of one
+      biography: a life, a portrait, an obituary
+      history: an account of past events
+  interactive:
+    description: people talking with each other
+    genres:
+      forum: a forum thread, a mailing-list archive, a comment section
+      qa: questions and answers, an FAQ
+      interview: an interview or a transcribed conversation
+  personal:
+    description: the owner's own papers and correspondence
+    genres:
+      letter: a letter or an e-mail
+      invoice: an invoice, a receipt, a bank or account statement
+      contract: a contract, an insurance policy, terms and conditions
+      form: a form, an application, a certificate
+  code:
+    description: program text or its configuration
+    genres:
+      source: source code, a script, a notebook, a configuration file

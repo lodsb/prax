@@ -315,6 +315,29 @@ function suspectRow(it) {
       <button type="button" class="secondary" data-act="open" data-doc="${it.id}">not personal</button>
       <span class="decide-out muted"></span></div></article>`;
 }
+// The Review page's "genre" tab (stage Z): a document as a labeller reads
+// it (title, where it came from, summary, the opening of its text) and the
+// vocabulary of ontology/genres.yaml as checkboxes, a level before its
+// genres. A document may take several; "can't tell" takes it out of the
+// sample. The checked boxes are its genres so far, when it has some.
+function genreRow(it, vocab) {
+  const have = new Set(it.genres || []);
+  const box = (name, about, level) => `<label class="genre-choice${level ? " genre-level" : ""}" title="${esc(about || "")}">
+      <input type="checkbox" name="genre" value="${esc(name)}"${have.has(name) ? " checked" : ""}> ${esc(name)}</label>`;
+  const levels = (vocab.levels || []).map((lv) => `<div class="genre-levels">${box(lv.name, lv.description, true)}
+      <span class="genre-kids">${(lv.genres || []).map((g) => box(g.name, g.description, false)).join("")}</span></div>`).join("");
+  const opening = String(it.opening || "").trim();
+  const where = it.where ? ` · ${esc(it.where)}` : "";
+  return `<article class="decide-row genre-row" data-doc="${it.id}">
+    <div class="decide-side"><a href="#doc/${it.id}">${esc(it.title || `doc ${it.id}`)}</a>
+      <span class="muted genre-from">${esc(it.source || "")}${it.lang ? ` · ${esc(it.lang)}` : ""} · ${esc(it.mime || "")}${where}</span>
+      ${it.summary ? `<p>${esc(it.summary)}</p>` : `<p class="muted">No summary yet.</p>`}
+      ${opening ? `<details><summary>the opening of the text</summary><pre class="genre-opening">${esc(opening)}</pre></details>` : ""}</div>
+    <form class="genre-form">${levels}
+      <div class="decide-acts"><button type="submit">save</button>
+        <button type="button" class="secondary" data-genre-skip="1">can't tell</button>
+        <span class="decide-out muted">${it.genres_by === "human" ? `labelled ${esc(String(it.genres_at || "").slice(0, 10))}` : ""}</span></div></form></article>`;
+}
 // The clean-up tab (view-cleanup in view-decide.js): the rules as links,
 // a folder of one's own, what a rule would take, and what was taken.
 function cleanupRules(rules, current, folder) {
@@ -565,5 +588,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

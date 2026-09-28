@@ -5,8 +5,9 @@ wrong. Two names for one thing stay apart. Two different things get
 folded into one. The Review page is where you fix that by hand. Open it
 from the menu at the top of the web interface.
 
-The page has four tabs. The first holds the facts the reader could not
-place. The other three ask you whether two names are the same thing.
+The page has five tabs. The first holds the facts the reader could not
+place. Three ask you whether two names are the same thing. The **genre**
+tab asks what a document is.
 Whether a document is personal, and what should not be in the library at
 all, are on the **Admin** page (its tabs "personal?" and "clean up"),
 beside the tokens that decide who may read what.
@@ -107,6 +108,32 @@ kinds of risky merge.
 
 **Right** keeps the merge and marks it as checked. **Wrong: split them**
 gives the folded name its own place in the graph again.
+
+## Genre
+
+Here you say what a document is: a paper, a datasheet, an opinion essay,
+a recipe. prax will learn to guess this for the whole library. Its
+guesses are measured against your answers. So a hundred and fifty
+careful answers are worth more than a thousand quick ones.
+
+Each document shows its title, where it came from, its summary and, when
+you open it, the beginning of its text. Beside it are the genres, a
+level in bold (what the text does: *informational*, *instructional*,
+*opinion*…) and the genres under it (what form it takes). Hover over one
+to read what it means.
+
+- Tick every genre that fits. A blog post that walks you through a
+  build and argues for one way of doing it is both *blog* and
+  *tutorial*.
+- When nothing under a level fits, tick the level alone. A company's
+  page on how to recycle their product is *instructional*, and none of
+  its genres.
+- **Save** keeps your answer. You can change it later under
+  **labelled**.
+- **Can't tell** sets the document aside, and it won't come back.
+
+The documents come from each source in turn (the NAS, Zotero, the
+browser extension, the rest), so the sample covers all of them.
 
 ## Rules of thumb
 

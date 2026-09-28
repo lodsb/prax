@@ -72,6 +72,46 @@ def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+# ---------------------------------------------------------------- genres
+
+
+@router.get("/genres")
+def genres() -> dict[str, Any]:
+    """What a document may be (``ontology/genres.yaml``): the levels and
+    their genres, each with its line of description."""
+    return ontology.genres().as_dict()
+
+
+@router.get("/documents/genre-sample")
+def genre_sample(
+    request: Request, state: str = "open", offset: int = 0, limit: int = 10
+) -> dict[str, Any]:
+    """The documents to label on the Review page's "genre" tab (``open``),
+    or the ones a person labelled, the last first (``labelled``)."""
+    try:
+        return store.genre_sample(
+            _con(request), state=state, offset=offset, limit=limit
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class GenresReq(BaseModel):
+    genres: list[str] | None = None  # None with skip false: take them back
+    skip: bool = False  # the person could not place it
+
+
+@router.put("/doc/{doc_id}/genres")
+def put_genres(doc_id: int, req: GenresReq, request: Request) -> dict[str, Any]:
+    """A person's genres for a document: the gold sample of stage Z."""
+    try:
+        return store.set_genres(_con(request), doc_id, req.genres, skip=req.skip)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 # --------------------------------------------------------------- promote
 
 

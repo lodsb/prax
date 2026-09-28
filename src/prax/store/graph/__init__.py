@@ -28,6 +28,8 @@ from .communities import (  # noqa: F401
     PART_SHARE,
     REGION_HITS,
     REGION_MEMBERS,
+    REGION_PLACED,
+    REGION_PLACED_MIN,
     REGION_SHARE,
     SUMMARY_MIN,
     _members,

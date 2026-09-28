@@ -16,6 +16,8 @@ const DECIDE_LISTS = {
     about: "Every document marked personal, the last marked first: kept from every token that may not see personal documents. Not personal opens one again, and the rules never mark it again." },
   cleanup: { title: "clean up", view: (p) => viewCleanup(p), admin: true,
     about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
+  genre: { title: "genre", view: (p) => viewGenres(p),
+    about: "What each document is, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits, a level alone when no genre of it does. The documents come from each source in turn. About 150 is the aim." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -153,5 +155,54 @@ async function viewCleanup(p) {
       out.textContent = `retired ${r.retired} (${r.edges_ended} facts ended, ${r.edges_moved} moved to a first copy) as ${r.run}`;
       document.getElementById("cleanup-runs").innerHTML = cleanupRuns((await api("/cleanup")).runs);
     } catch (err) { go.disabled = false; out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+  });
+}
+
+
+// The genre tab: ten documents at a time, each with the vocabulary as
+// checkboxes. Save writes the person's genres (PUT /doc/{id}/genres), can't
+// tell takes the document out of the sample; the row says what was done
+// and may be changed again. "labelled" lists the labels so far, the last
+// first, for a correction.
+async function viewGenres(p) {
+  const list = DECIDE_LISTS.genre;
+  const state = p.state === "labelled" ? "labelled" : "open";
+  const limit = 10;
+  const offset = Number(p.offset || 0);
+  const link = (s, label) => s === state ? `<b>${label}</b>` : `<a href="#review?${new URLSearchParams({ list: "genre", state: s })}">${label}</a>`;
+  view.innerHTML = `${decideTabs("genre")}<p class="muted">${esc(list.about)}</p>
+    <p>${link("open", "to label")} · ${link("labelled", "labelled")} <span id="genre-count" class="muted"></span></p>
+    <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
+  const box = document.getElementById("decide-list");
+  let vocab, res;
+  try {
+    [vocab, res] = await Promise.all([api("/genres"), api("/documents/genre-sample", { state, offset, limit })]);
+  } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  document.getElementById("genre-count").textContent = ` — ${res.labelled} labelled, ${res.skipped} set aside${state === "open" ? `, ${res.total.toLocaleString()} to go` : ""}`;
+  const page = (o) => `#review?${new URLSearchParams({ list: "genre", state, offset: o })}`;
+  const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
+    ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
+  box.innerHTML = res.items.length
+    ? res.items.map((it) => genreRow(it, vocab)).join("") + pager
+    : `<p class="muted">Nothing ${state === "open" ? "left to label" : "labelled yet"}.</p>`;
+  box.querySelectorAll(".genre-row").forEach((row) => {
+    const form = row.querySelector(".genre-form");
+    const out = row.querySelector(".decide-out");
+    const send = async (body) => {
+      form.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try {
+        const r = await post(`/doc/${row.dataset.doc}/genres`, body, "PUT");
+        out.textContent = r.skipped ? "set aside" : `saved: ${r.genres.join(", ")}`;
+        row.classList.add("done");
+      } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+      form.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+    };
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const genres = [...form.querySelectorAll("input[name=genre]:checked")].map((c) => c.value);
+      if (!genres.length) { out.textContent = "tick at least one, or can't tell"; return; }
+      send({ genres });
+    });
+    form.querySelector("[data-genre-skip]").addEventListener("click", () => send({ skip: true }));
   });
 }

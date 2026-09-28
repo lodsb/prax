@@ -279,7 +279,9 @@ Built only when measured to be needed.
 **Stages, in order:**
 
 1. `ontology/genres.yaml`, the Review page's genre tab, and the user's
-   gold sample (about 150).
+   gold sample (about 150). (2026-09-29: the file, the tab, `GET
+   /genres`, `GET /documents/genre-sample`, `PUT /doc/{id}/genres`
+   built; the labelling is the user's.)
 2. The genres step, the three methods and the two inputs measured on the
    gold sample (`scripts/eval_genres.py`, `docs/eval/genres-*.md`).
 3. The calibration, `meta.genres`, the genres on the properties dialog

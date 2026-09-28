@@ -383,3 +383,25 @@ test("suspectRow for a document marked personal: when, and only the way back", (
   assert.doesNotMatch(row, /data-act="personal"/);
   assert.match(row, /data-act="open" data-doc="3">not personal/);
 });
+
+test("genreRow: the document as a labeller reads it, the vocabulary as boxes, its genres ticked", () => {
+  const vocab = { levels: [
+    { name: "instructional", description: "tells how", genres: [{ name: "datasheet", description: "a part's sheet" }, { name: "manual", description: "a manual" }] },
+    { name: "opinion", description: "argues", genres: [{ name: "essay", description: "an essay" }] },
+  ] };
+  const it = { id: 5, title: "TL072 <dual op-amp>", source: "nas", lang: "en", mime: "application/pdf", where: "/nas/tl072.pdf",
+    summary: "A datasheet.", opening: "TL07x Low-Noise JFET-Input", genres: ["datasheet"], genres_by: "human", genres_at: "2026-09-29T10:00:00Z" };
+  const html = lib.genreRow(it, vocab);
+  assert.match(html, /TL072 &lt;dual op-amp&gt;/);
+  assert.match(html, /nas · en · application\/pdf · \/nas\/tl072.pdf/);
+  assert.match(html, /value="datasheet" checked/);
+  assert.doesNotMatch(html, /value="manual" checked/);
+  assert.match(html, /genre-level"[^>]*title="tells how"/);
+  assert.match(html, /the opening of the text/);
+  assert.match(html, /labelled 2026-09-29/);
+  const bare = lib.genreRow({ id: 6, title: null, genres: [] }, vocab);
+  assert.match(bare, /doc 6/);
+  assert.match(bare, /No summary yet/);
+  assert.doesNotMatch(bare, /checked/);
+  assert.doesNotMatch(bare, /the opening of the text/);
+});
