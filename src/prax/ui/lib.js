@@ -388,6 +388,16 @@ function privateRules(r) {
     <div><h4>Weak</h4><p>${(r.weak || []).map((g) => g.map(esc).join(" / ")).join("; ")}</p></div></div>
     <h4>From prax.yaml</h4>${extra.length ? `<ul>${extra.map((x) => `<li>${x}</li>`).join("")}</ul>` : '<p class="muted">nothing added</p>'}</details>`;
 }
+// Above the search hits: the region of the library most of them live in
+// (GET /search?regions=true), and its part when that is as clear.
+function regionLine(where) {
+  if (!where || !where.region) return "";
+  const link = (c) => `<a href="#graph?community=${c.id}">${esc(c.label)}</a>`;
+  const part = where.part ? ` › ${link(where.part)}` : "";
+  const about = where.region.summary ? `<div class="muted">${esc(where.region.summary)}</div>` : "";
+  return `<p class="region-line"><span class="muted">mostly in</span> ${link(where.region)}${part}
+    <span class="muted">· ${Math.round(where.region.share * 100)}% of what the first hits are about</span>${about}</p>`;
+}
 function mergeRow(it) {
   const a = it.alias, into = it.into;
   if (!a || !into) return "";
@@ -500,5 +510,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

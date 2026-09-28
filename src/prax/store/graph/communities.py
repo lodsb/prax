@@ -310,3 +310,116 @@ def set_community_summary(
     )
     con.commit()
     return cur.rowcount > 0
+
+
+REGION_MEMBERS = 30  # the members a region is described by for matching a query
+
+
+@_reading
+def regions_for_matching(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Every described region and part, with what a query is matched
+    against (``prax.graph.regions``): the name, the summary, the members
+    that weigh most, and the stamp of the partition, so a cached index
+    knows when to be built again."""
+    out = []
+    for r in con.execute(
+        "SELECT id, level, parent, size, label, summary, run FROM communities"
+        " WHERE label IS NOT NULL AND summary IS NOT NULL ORDER BY level, size DESC"
+    ).fetchall():
+        out.append(
+            {
+                "id": r["id"],
+                "level": r["level"],
+                "parent": r["parent"],
+                "size": r["size"],
+                "label": r["label"],
+                "summary": r["summary"],
+                "run": r["run"],
+                "members": [m["name"] for m in _members(con, r["id"], REGION_MEMBERS)],
+            }
+        )
+    return out
+
+
+# Where a search's hits live ("A way in", docs/PLAN.md): the region and the
+# part most of their entities belong to, weighed by how central each is to
+# it, shown when the best one holds this share of the weight. Measured on
+# the library's 62 queries (scripts/eval_regions.py,
+# docs/eval/regions-2026-09-28.md): at half the weight the region is right
+# for 88% of the 81% of queries it is shown for; the part, among its
+# region's parts, only at nine tenths (88% of 26%). Matching the query's
+# own words against the regions' names and summaries was right half the
+# time and is not used.
+REGION_HITS = 5
+REGION_SHARE = 0.5
+PART_SHARE = 0.9
+
+
+@_reading
+def regions_of(
+    con: sqlite3.Connection,
+    doc_ids: list[int],
+    *,
+    share: float = REGION_SHARE,
+    part_share: float = PART_SHARE,
+) -> dict[str, Any] | None:
+    """The region and the part of the library these documents' entities
+    belong to most, each with its share of their weight, when the region
+    holds at least ``share`` of it; the part, among the region's parts, when
+    it holds ``part_share`` of theirs.
+    None when no region holds that much: the hits are spread."""
+    if not doc_ids:
+        return None
+    marks = ",".join("?" * len(doc_ids))
+    weight: dict[int, dict[int, float]] = {0: {}, 1: {}}
+    for r in con.execute(
+        "SELECT m.level, m.community_id, m.weight FROM edges e"
+        " JOIN entities x ON x.id IN (e.src, e.dst)"
+        " JOIN entity_communities m ON m.entity_id = coalesce(x.canonical_id, x.id)"
+        f" WHERE e.valid_to IS NULL AND e.source_doc IN ({marks})",
+        list(doc_ids),
+    ):
+        level = weight.setdefault(int(r["level"]), {})
+        cid = int(r["community_id"])
+        level[cid] = level.get(cid, 0.0) + float(r["weight"])
+
+    def top(
+        level: int, need: float, parent: int | None = None
+    ) -> dict[str, Any] | None:
+        counts = weight.get(level) or {}
+        if parent is not None:
+            # a part of the region shown, never one of another region
+            own = {
+                int(r[0])
+                for r in con.execute(
+                    "SELECT id FROM communities WHERE parent = ?", (parent,)
+                )
+            }
+            counts = {c: w for c, w in counts.items() if c in own}
+        if not counts:
+            return None
+        cid = max(counts, key=lambda c: counts[c])
+        held = counts[cid] / sum(counts.values())
+        if held < need:
+            return None
+        row = con.execute(
+            "SELECT id, label, size, summary FROM communities WHERE id = ?", (cid,)
+        ).fetchone()
+        if row is None or not row["label"]:
+            return None
+        return {
+            "id": row["id"],
+            "label": row["label"],
+            "size": row["size"],
+            "share": round(held, 2),
+            "summary": (row["summary"] or "").split(". ")[0][:200] or None,
+        }
+
+    region = top(0, share)
+    if region is None:
+        return None
+    return {
+        "kind": "region",
+        "region": region,
+        "part": top(1, part_share, region["id"]),
+    }

@@ -346,3 +346,12 @@ test("tokensTable, tokenSecret, privateRules: the admin page", () => {
   assert.match(rules, /2 names \(a weak cue each\)/);
   assert.match(rules, /everything under \/coredata\/verwaltung\//);
 });
+
+test("regionLine: where the search hits live, above them", () => {
+  const line = lib.regionLine({ kind: "region", region: { id: 3, label: "Everyday cooking", share: 0.72, summary: "Onions and garlic" }, part: { id: 9, label: "Soups" } });
+  assert.match(line, /mostly in<\/span> <a href="#graph\?community=3">Everyday cooking<\/a> › <a href="#graph\?community=9">Soups<\/a>/);
+  assert.match(line, /72% of what the first hits are about/);
+  assert.match(line, /Onions and garlic/);
+  assert.equal(lib.regionLine(null), "");
+  assert.doesNotMatch(lib.regionLine({ region: { id: 1, label: "A", share: 0.5 }, part: null }), /›/);
+});

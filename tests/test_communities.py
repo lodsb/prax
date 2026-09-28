@@ -163,6 +163,44 @@ def test_the_door_lists_them(client: TestClient) -> None:
     assert client.get("/communities/99999").status_code == 404
 
 
+def test_a_search_says_where_its_hits_live(client: TestClient) -> None:
+    """ "A way in": with ``regions`` a search opens with the region most of
+    its first hits' entities live in, when it holds half their weight
+    (docs/eval/regions-2026-09-28.md). The part is given only when it holds
+    nine tenths of the region's parts; a search without the flag is the
+    list of hits it always was."""
+    con = client.app.state.con
+    _library(con)
+    store.maintain(con, only=["communities"])
+    kitchen = next(c for c in store.list_communities(con) if "garlic" in c["members"])
+    store.set_community_summary(
+        con,
+        kitchen["id"],
+        label="Everyday cooking",
+        summary="Onions. Garlic.",
+        source="t",
+    )
+    plain = client.get("/search", params={"q": "Dish"}).json()
+    assert plain and all("doc_id" in h for h in plain)
+    got = client.get("/search", params={"q": "Dish", "regions": True}).json()
+    where = got[0]
+    assert where["kind"] == "region" and where["region"]["id"] == kitchen["id"]
+    assert (
+        where["region"]["label"] == "Everyday cooking"
+        and where["region"]["share"] >= 0.5
+    )
+    assert where["region"]["summary"] == "Onions"
+    assert [h["doc_id"] for h in got[1:]] == [h["doc_id"] for h in plain]
+    # a region without a name is not shown; nor is one the hits are spread over
+    dishes = [h["doc_id"] for h in plain if h["title"].startswith("Dish")]
+    papers = [
+        int(r[0])
+        for r in con.execute("SELECT id FROM documents WHERE title LIKE 'Paper%'")
+    ]
+    assert store.regions_of(con, papers) is None  # its region has no name yet
+    assert store.regions_of(con, dishes + papers, share=0.99) is None
+
+
 # ---------------------------------------------------------------- the words
 
 

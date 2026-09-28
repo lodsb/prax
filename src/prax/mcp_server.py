@@ -89,9 +89,13 @@ def search(
     documents of one ontology module (``research``, ``studio``; documents
     without a domain set are in every module); ``doctype`` keeps pdf,
     web, image, text, note or page documents. Fetch a hit in full with
-    ``get_chunk``.
+    ``get_chunk``. When most of the first hits live in one region of the
+    library, the list opens with it as an item of its own
+    (``kind: "region"``): its name, how much of the hits it holds, a line
+    on what it covers, and its part when that is as clear; ``traverse``
+    and the graph go on from there.
     """
-    params: dict[str, Any] = {"q": query, "limit": limit, "mode": mode}
+    params: dict[str, Any] = {"q": query, "limit": limit, "mode": mode, "regions": True}
     for k, v in (
         ("kind", kind),
         ("rerank", rerank),

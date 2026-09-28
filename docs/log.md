@@ -2349,3 +2349,19 @@ on.
       of that name. Each is mapped to its nearest kin (Shift-JIS, Big5,
       EUC-KR, …); the RTF extractor is revision 2, so the parse queue reads
       them again, and the rest of the RTFs come back "same".
+
+## 2026-09-28: a way in, search
+
+- [x] **A search says where its hits live** (`GET /search?regions=true`,
+      `store.regions_of`): the region most of its first five hits'
+      entities live in opens the list as an item of its own, with its part
+      when the part is as clear. The search page shows it above the hits;
+      the MCP tool asks for it.
+- [x] **Measured before shown** (`scripts/eval_regions.py`,
+      `docs/eval/regions-2026-09-28.md`). The query's words against the
+      regions' names and summaries: right 50%, no threshold that helps.
+      Where the hits live: right 82%, and 88% of the 81% of queries shown
+      at half the weight. A part, among its region's parts, is shown only
+      at nine tenths (88% of 26%).
+- [x] **The personal review is done** by the user: 402 personal, 3
+      released, none left suspected.

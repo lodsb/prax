@@ -47,12 +47,17 @@ def search(
     rerank: bool | None = None,
     doctype: str | None = None,
     domain: str | None = None,
+    regions: bool = False,
 ) -> list[dict[str, Any]]:
+    """The hits; with ``regions`` first, when most of the first hits'
+    entities live in one region of the library, that region and its part
+    as an item of their own (``kind: "region"``): where the results are."""
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
+    con = _con(request)
     try:
-        return store.search(
-            _con(request),
+        hits = store.search(
+            con,
             q,
             limit,
             kind=kind,
@@ -64,6 +69,12 @@ def search(
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    if regions and hits:
+        first = [int(h["doc_id"]) for h in hits[: store.REGION_HITS]]
+        where = store.regions_of(con, first)
+        if where is not None:
+            return [where, *hits]
+    return hits
 
 
 @router.get("/chunk/{chunk_id}")

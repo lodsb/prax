@@ -614,7 +614,7 @@ What it would want, in order:
       the cluster's entities and their strongest edges, stamped with
       what it read so a moved partition makes it stale rather than
       wrong — the rule `meta.sections` already follows.
-- [ ] (traverse and the graph view done; search and ask open) **A way in.** `traverse` names the community an entry point sits
+- [ ] (traverse, the graph view and search done, 2026-09-28: `docs/eval/regions-2026-09-28.md`; ask open, it wants its own measurement) **A way in.** `traverse` names the community an entry point sits
       in; `search` may offer it as a hit of its own; `ask` gets a
       cheaper way in than chunks for a question about a region rather
       than a fact.

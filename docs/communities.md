@@ -91,7 +91,14 @@ described inside it ("one part of the region “Everyday cooking”").
 - The graph view lists the regions below the overview, and
   `#graph?community=N` shows one.
 
-Not yet: `search` offering a region as a hit of its own, and `ask`
-reading a region's summary for a question about a region rather than a
-fact. Both want the summaries to exist first, and a measurement of
-whether they help.
+- `search` with `regions` opens with the region most of its first five
+  hits' entities live in, as an item of its own (`kind: "region"`), when
+  that region holds half their weight. Its part comes too, when the part
+  holds nine tenths of its region's parts. The search page shows it above
+  the hits, and the MCP tool asks for it. Measured in
+  `docs/eval/regions-2026-09-28.md`: right for 88% of the queries it is
+  shown for. Matching the query's words against the summaries was right
+  half the time.
+
+Not yet: `ask` reading a region's summary for a question about a region
+rather than a fact. It wants a measurement of its own.

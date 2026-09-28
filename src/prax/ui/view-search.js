@@ -65,9 +65,12 @@ async function viewSearch(p) {
   if (!p.q) return;
   const results = document.getElementById("results");
   try {
-    const hits = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, domain: p.domain || undefined, limit: p.limit || settings().search_limit });
+    const got = await api("/search", { q: p.q, mode: p.mode || "hybrid", kind: p.kind, doctype: p.doctype, domain: p.domain || undefined, limit: p.limit || settings().search_limit, regions: true });
+    // where the results live, when most of them live in one region
+    const where = got.length && got[0].kind === "region" ? got[0] : null;
+    const hits = where ? got.slice(1) : got;
     if (!hits.length) { results.innerHTML = `<p class="muted">No hits.</p>`; return; }
-    results.innerHTML = hits.map((h) => {
+    results.innerHTML = regionLine(where) + hits.map((h) => {
       const page = h.page ? `p. ${h.page}` : (h.time != null ? `at ${fmtTime(h.time)}` : "");
       const sides = [];
       if (h.fts_rank !== undefined) {
