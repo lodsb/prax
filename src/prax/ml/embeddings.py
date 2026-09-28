@@ -164,7 +164,16 @@ class OnnxEmbedder:
         feed: dict[str, np.ndarray] = {"input_ids": ids, "attention_mask": mask}
         if "token_type_ids" in self._inputs:
             feed["token_type_ids"] = np.zeros_like(ids)
-        hidden = self._session.run(None, feed)[0]  # (batch, tokens, dim)
+        try:
+            hidden = self._session.run(None, feed)[0]  # (batch, tokens, dim)
+        except Exception as exc:
+            if not _lost_device(exc):
+                raise
+            # the card was reset under the session (a driver reset, a model
+            # loaded beside it): the session stays broken, so a new one, once
+            self._session = None
+            self._resolve()
+            hidden = self._session.run(None, feed)[0]
         if self.spec.pooling == "mean":
             m = mask[..., None].astype(np.float32)
             pooled = (hidden * m).sum(axis=1) / np.maximum(m.sum(axis=1), 1e-9)
@@ -193,6 +202,17 @@ class OnnxEmbedder:
 
     def embed_query(self, text: str) -> np.ndarray:
         return self.embed([self.spec.query_prefix + text])[0]
+
+
+# DirectML's words for a card it lost: DXGI_ERROR_DEVICE_REMOVED, _HUNG and
+# _RESET. "The GPU device instance has been suspended" failed every embed
+# pass of a worker after llama-server reloaded beside it (2026-09-28).
+_LOST = ("887a0005", "887a0006", "887a0007", "device instance has been suspended")
+
+
+def _lost_device(exc: BaseException) -> bool:
+    said = str(exc).lower()
+    return any(word in said for word in _LOST)
 
 
 def _env_list(name: str) -> list[str]:

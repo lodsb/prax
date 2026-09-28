@@ -368,3 +368,43 @@ def test_the_door_embeds_a_query_on_the_cpu_and_the_worker_batches_where_told(
     # the test embedder is the same either way
     monkeypatch.setenv("PRAX_EMBED", "hash")
     assert embeddings.serving().name == embeddings.current().name == "hash-test"
+
+
+def test_a_session_that_lost_its_card_is_built_again_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DirectML's session stays broken once the card is reset under it,
+    and every embed pass of a worker failed until the worker restarted
+    (887A0005, 2026-09-28). One new session, then the run again; any other
+    error is the caller's."""
+
+    class Encoding:
+        ids = (1, 2)
+        attention_mask = (1, 1)
+
+    class Session:
+        def __init__(self, fail: str | None) -> None:
+            self.fail = fail
+
+        def run(self, _outputs, feed):
+            if self.fail:
+                raise RuntimeError(self.fail)
+            return [np.ones((len(feed["input_ids"]), 2, 4), dtype=np.float32)]
+
+    spec = embeddings.MODELS[next(iter(embeddings.MODELS))]
+    emb = embeddings.OnnxEmbedder(spec)
+    built: list[int] = []
+
+    def resolve(self) -> None:
+        built.append(1)
+        self._session = Session(None)
+
+    monkeypatch.setattr(embeddings.OnnxEmbedder, "_resolve", resolve)
+    lost = "887A0005 The GPU device instance has been suspended."
+    emb._session = Session(lost)
+    out = emb._run([Encoding()])
+    assert out.shape == (1, 4) and built == [1]
+    emb._session = Session("some other failure")
+    with pytest.raises(RuntimeError, match="some other failure"):
+        emb._run([Encoding()])
+    assert built == [1]
