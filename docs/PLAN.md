@@ -144,6 +144,151 @@ the review of the lists a person decides goes last.
       "pages still to go" in a result. Then the 1,663 PDFs with under
       2,000 characters of text are worth a look for scans nobody asked to
       read.
+- [ ] **Z. What a document is, and what it is about** (below, planned
+      2026-09-29): a genre for every document, several where it is
+      several, with a confidence measured against the user's own labels;
+      the topics it belongs to from the graph; and the domains of the
+      2,748 documents without one derived from both by rules. The
+      research is in the library (docs 13315–13337).
+
+## What a document is, and what it is about (planned, 2026-09-29)
+
+**The problem.** A domain is the set of ontology modules a document is
+read against, and the one rule that sets it is `source: zotero →
+research`. The 2,748 documents without a domain are mostly the NAS dump of 2026-09-28. Among them are datasheets and
+electronics books that belong in `electronics`, and political,
+sociological and opinion pieces that fit no module. What the extraction already says about them is thin. It types the document itself as one of a module's `self_types`. For
+1,377 of them that is the fallback `document`, for 590 there is none,
+and the rest are `paper` (248), `build` (219), `article` (142) and
+`manual` (102), counted read-only on 2026-09-28. The self type answers "what may
+this document be in the ontology", which is not the question.
+
+**Two axes, both multi-label.** Genre and topic are separate questions.
+Pang et al. (doc 2194) treat genre and subjectivity apart from topic.
+Doc 1459 finds that experts, crowds and machines agree on some genres
+and not others, and concludes that several facets beat one taxonomy. A document may be several
+of each: a blog post that is a how-to and an opinion, a book on
+electronics and on music. In the formal sense of doc 879, a document
+gets a set of labels Y ⊆ L, each with its own probability.
+
+**The genre vocabulary** is `ontology/genres.yaml`, beside the lexicon and the sameness rule. Like them it stays out of the
+version string, because it says what a document is, not what exists in
+the graph. Two levels,
+after the web-register taxonomy of CORE (docs 13320, 13321: eight main
+registers, sub-registers under them, a document that fits no sub-register
+keeps the main one). The main levels, with their genres:
+
+- informational: paper, thesis, book, lecture notes, reference entry,
+  news report;
+- instructional: manual, datasheet, schematic, recipe, tutorial;
+- opinion: essay, column, review, blog post;
+- persuasion: advertisement, product page;
+- narrative: story, biography, report of events;
+- interactive: forum thread, Q&A, comments;
+- personal and administrative: letter, invoice, contract, form;
+- code.
+
+Each genre carries one line of description: a label
+described in context classifies better than a bare name (Gen-Z, doc
+13336).
+
+**Gold before model.** A "genre" tab on the Review page shows a
+document (title, summary, source, the opening of its text) and takes
+the user's genres. Before any model runs, the user labels about 150,
+drawn across sources (NAS, Zotero, captures, the extension). Genre is
+ambiguous even for people: CORE needed two of four annotators to agree,
+and hybrid texts are where classifiers fail most (doc 13320). So the
+gold sample is the measure, and the confidence rests on it, as for the
+local adjudicator (stage Q).
+
+**The genres step** is a worker step on the local model, like titles and
+summaries. It reads the title, the summary, the section summaries when
+there are any, the source and host, and the first 2,000 characters.
+TnT-LLM (doc 13322) summarises before labelling because a summary
+normalises length and variety, and prax has the summaries already. But
+genre is a matter of form as much as content, which a summary may
+lose, hence the opening. Summary-only against summary-plus-opening is
+the first measurement. Three ways of getting several labels, measured
+on the gold sample, the best kept:
+
+1. a list the grammar allows, first genre first;
+2. the same list with the token probabilities of every generation
+   step, each genre scored by its highest probability over the steps.
+   An LLM suppresses all but one label at each step, and the first
+   step's distribution does not predict the final set. The maximum over
+   steps improves F1 and the fit to people's answers at no extra cost
+   (doc 13331);
+3. a yes or no per genre, over the five nearest by vector.
+
+The order of the genres in the prompt is shuffled per document: the
+recency and majority biases of a prompt shift a model's labels (doc
+13327). For scale: ChatGPT reached micro F1 0.74 on English genre
+identification, 5–7 points above a classifier fine-tuned on 1,700
+labelled texts (doc 13319). Expect the local model near that, not above.
+
+**The confidence** is a Platt fit per genre on the gold sample, as `resolution.LocalAdjudicator` does for pairs (doc 13328 on
+calibration). Under a threshold a genre is kept but acts on nothing.
+Stored as `meta.genres: [{genre, p}]`, with the run and the model, so
+`retire_run` has something to retire. A person's genres on a document
+are `by: human` and never overwritten. Confident genre words join the
+document field (`document_field`, beside "PDF document"), so a search for
+"datasheet for the TL072" finds the datasheet first.
+
+**Topics** come from the graph, which already has them: the regions and
+parts of stage P. `meta.regions: [{id, share}]` is written by the
+communities pass for every document with facts, counted the way
+`regions_of` counts a search's hits, and keeps each region over a
+quarter. A document with no facts yet takes the regions of its nearest
+documents by document vector, a Rocchio-style vote (doc 5463): a
+region's profile is its documents. Region ids change when the partition
+is recomputed, so nothing stores a region id as a decision.
+
+**Domains** are derived by rules, in the one place they already live
+(`domains:` in prax.yaml, `store.assign_domains`), with two new match
+keys:
+
+- `genre: datasheet` (p over the threshold): `→ [electronics]`;
+- `facts: kitchen`: at least half of the document's typed facts are of
+  one module's types. A document without a domain is extracted against
+  every module, so its own facts say which module it reads as, and
+  this outlives a recomputed partition.
+
+Every run is a dry run first, counted per rule, and applied on the
+user's word. A set a person chose (`domains_by: human`) is never
+touched, as now. A document may match several rules and take their
+union, since domains are a set.
+
+**What it does not do.** No model decides a domain directly. A domain
+changes what a document is read against, so a wrong one costs an
+extraction. A genre or a fact share with a measured confidence is a
+reason a rule can name. A `society` module (politics, economy,
+opinion) is decided after this runs. The count to take: the documents whose
+genre is opinion or news and whose facts are mostly core types. The
+review queue's items for them say what types they ask for. The region "Civilization Collapse and
+Systemic Risk" (232 documents) is where they gather now.
+
+**Later, if the board needs it.** The board runs no model (invariant 7).
+A capture landing there waits for the worker, as a title does. If that
+is too slow, a logistic regression per genre over the document vectors,
+trained on the model's labels, can serve on the board. Classifiers
+trained on LLM labels perform comparably to those trained on people's
+(doc 13329), and choosing which documents the teacher labels cuts its
+cost further (doc 13330). SetFit (doc 13325) is the heavier option.
+Built only when measured to be needed.
+
+**Stages, in order:**
+
+1. `ontology/genres.yaml`, the Review page's genre tab, and the user's
+   gold sample (about 150).
+2. The genres step, the three methods and the two inputs measured on the
+   gold sample (`scripts/eval_genres.py`, `docs/eval/genres-*.md`).
+3. The calibration, `meta.genres`, the genres on the properties dialog
+   and as a Browse filter, the document field.
+4. `meta.regions` from the communities pass, and the vector vote for
+   documents without facts.
+5. The `genre` and `facts` match keys, a dry run over the 2,748
+   documents without a domain, then the user's word.
+6. The `society` decision, measured.
 
 ## The order, agreed 2026-09-27
 

@@ -199,6 +199,14 @@ def test_a_search_says_where_its_hits_live(client: TestClient) -> None:
     ]
     assert store.regions_of(con, papers) is None  # its region has no name yet
     assert store.regions_of(con, dishes + papers, share=0.99) is None
+    # one placed hit among documents with no facts yet names no region
+    fresh = [
+        store.ingest_text(con, f"a new paper {i}", title=f"New {i}")["doc_id"]
+        for i in range(3)
+    ]
+    assert store.regions_of(con, dishes[:1] + fresh) is None
+    assert store.regions_of(con, dishes[:1]) is not None  # a search of one hit
+    assert store.regions_of(con, dishes[:2] + fresh[:1]) is not None
 
 
 def test_ask_can_bring_the_region_its_passages_come_from(

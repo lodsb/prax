@@ -162,8 +162,13 @@ def brief_document(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def brief_hit(hit: dict[str, Any]) -> dict[str, Any]:
-    """A search hit without its ranks and empty fields."""
-    return {k: v for k, v in hit.items() if k not in HIT_RANKS and v is not None}
+    """A search hit without its ranks (``HIT_RANKS`` and any other
+    ``*_rank`` a rank list of its own adds) and empty fields."""
+    return {
+        k: v
+        for k, v in hit.items()
+        if k not in HIT_RANKS and not k.endswith("_rank") and v is not None
+    }
 
 
 ANNOTATORS = ("figures", "figure-refs", "formulas")  # readers that add to the text

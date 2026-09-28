@@ -354,6 +354,12 @@ def regions_for_matching(con: sqlite3.Connection) -> list[dict[str, Any]]:
 REGION_HITS = 5
 REGION_SHARE = 0.5
 PART_SHARE = 0.9
+# how many of the documents asked about must have facts in the partition
+# before their region is named: a search whose first hits are new papers
+# with no facts yet was named by the one old hit among them, at a share of
+# 1.0 (2026-09-29, "Annif" -> "Music Theory and Composition")
+REGION_PLACED = 0.5
+REGION_PLACED_MIN = 2
 
 
 @_reading
@@ -363,23 +369,29 @@ def regions_of(
     *,
     share: float = REGION_SHARE,
     part_share: float = PART_SHARE,
+    placed: float = REGION_PLACED,
 ) -> dict[str, Any] | None:
     """The region and the part of the library these documents' entities
     belong to most, each with its share of their weight, when the region
     holds at least ``share`` of it; the part, among the region's parts, when
     it holds ``part_share`` of theirs.
-    None when no region holds that much: the hits are spread."""
+    None when no region holds that much: the hits are spread. None too
+    when fewer than ``placed`` of the documents (and fewer than
+    ``REGION_PLACED_MIN``) have a fact in the partition: the rest say
+    nothing, and one document is not where the hits live."""
     if not doc_ids:
         return None
     marks = ",".join("?" * len(doc_ids))
     weight: dict[int, dict[int, float]] = {0: {}, 1: {}}
+    voters: set[int] = set()
     for r in con.execute(
-        "SELECT m.level, m.community_id, m.weight FROM edges e"
+        "SELECT e.source_doc, m.level, m.community_id, m.weight FROM edges e"
         " JOIN entities x ON x.id IN (e.src, e.dst)"
         " JOIN entity_communities m ON m.entity_id = coalesce(x.canonical_id, x.id)"
         f" WHERE e.valid_to IS NULL AND e.source_doc IN ({marks})",
         list(doc_ids),
     ):
+        voters.add(int(r["source_doc"]))
         level = weight.setdefault(int(r["level"]), {})
         cid = int(r["community_id"])
         level[cid] = level.get(cid, 0.0) + 1.0  # one entity, one vote
@@ -416,6 +428,12 @@ def regions_of(
             "summary": (row["summary"] or "").split(". ")[0][:200] or None,
         }
 
+    distinct = len(set(doc_ids))
+    if (
+        len(voters) < min(REGION_PLACED_MIN, distinct)
+        or len(voters) < placed * distinct
+    ):
+        return None
     region = top(0, share)
     if region is None:
         return None

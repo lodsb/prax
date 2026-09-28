@@ -2424,3 +2424,15 @@ Found while searching the library for the classification research
       the library's machine-learning papers are. Right for this library,
       and a reminder that the region line says where hits live, not what
       the query is about.
+- [x] **A region is named by enough of the hits.** A search whose first
+      hits were new papers with no facts yet was named by the one old hit
+      among them, at a share of 1.0 ("Annif" -> "Music Theory and
+      Composition"). `regions_of` now names a region only when at least
+      half of the documents asked about, and at least two, have a fact in
+      the partition (`REGION_PLACED`, `REGION_PLACED_MIN`). Measured again
+      with `scripts/eval_regions.py`: shown 84%, right 92% at 0.5, as
+      before (82%, 92%), so the queries of the eval lose nothing.
+- [x] **Every rank is left out of a brief hit**, `fts_rare_rank` too,
+      which a query's rare terms add.
+- [x] **The research is read and the design written**: PLAN, "What a
+      document is, and what it is about", stage Z.
