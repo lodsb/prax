@@ -17,8 +17,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-from prax import chunking, config, embeddings, ontology
-from prax import rerank as rerank_mod
+from prax import config
+from prax.graph import ontology
+from prax.ml import embeddings
+from prax.ml import rerank as rerank_mod
+from prax.text import chunking
 
 from .base import (
     _ASIDE,
@@ -234,7 +237,7 @@ def _lives_in(con: sqlite3.Connection, entity_id: int, etype: str) -> Scope | No
     studio domain; a thing is where the library found it as well as where
     its type is declared.
     """
-    from prax import ontology
+    from prax.graph import ontology
 
     where = ontology.current().domains_of(etype)
     if where is None:
@@ -268,7 +271,7 @@ def expand_query_senses(
     characters, and digits, are never acronyms.
 
     A compound the library has no term for is added as its halves
-    (`prax.compounds`): `Apfelkuchen` matches nothing where `Apfel` and
+    (`prax.text.compounds`): `Apfelkuchen` matches nothing where `Apfel` and
     `Kuchen` each match, and German builds nouns that way. The halves are
     alternatives beside the word, not instead of it, so a library that
     holds the compound still ranks it first.
@@ -287,7 +290,7 @@ def expand_query_senses(
     token itself, a phrase the library defines, a compound half) or
     through a thing of a core type, which lives everywhere, is no sense.
     """
-    from prax import compounds
+    from prax.text import compounds
 
     plain: set[str] = set()
     scoped: dict[str, set[str]] = {}
@@ -784,7 +787,7 @@ def search(
     ``GET /doc/{doc_id}/figure/{figure}``); ``kind`` filters to one kind.
 
     ``rerank`` rescores the top ``RERANK_DEPTH`` hits with the configured
-    cross-encoder (``prax.rerank``; None follows ``PRAX_RERANK``, which is
+    cross-encoder (``prax.ml.rerank``; None follows ``PRAX_RERANK``, which is
     off by default) and adds ``rerank_score``.
     """
     if kind is not None and kind not in chunking.KINDS:
@@ -1416,7 +1419,7 @@ def _merge(path: Path) -> dict[str, Any]:
     arrived during the build kept in a fresh delta."""
     import numpy as np
 
-    from prax import vectors as vectors_mod
+    from prax.ml import vectors as vectors_mod
 
     from .base import VEC_DIM
 
@@ -1719,7 +1722,7 @@ def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
     to drop the read views and then save over the file unlocked, so a
     search in between could map the file again before it was replaced; and
     its writable copy sat in the shared table where any thread found it."""
-    from prax import vectors as vectors_mod
+    from prax.ml import vectors as vectors_mod
 
     from .base import VEC_DIM
 

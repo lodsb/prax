@@ -6,7 +6,7 @@
     python scripts/resolve_entities.py --commit --adjudicate  # ask Claude on the rest
     python scripts/resolve_entities.py --type author --dry-run
 
-Merges are recorded as ``entities.canonical_id`` (prax.resolution); nothing
+Merges are recorded as ``entities.canonical_id`` (prax.graph.resolution); nothing
 is deleted and ``traverse`` follows the pointers. Sure candidates are equal
 after normalization or an initials form of the same author name; likely
 candidates are close by name embedding and need an adjudicator.
@@ -20,7 +20,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import config, models, resolution, store
+from prax import config, models, store
+from prax.graph import resolution
 
 
 def main() -> int:

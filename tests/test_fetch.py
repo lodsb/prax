@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from prax import fetch
+from prax.ml import fetch
 
 PAYLOAD = bytes(range(256)) * 40  # 10 KB, distinct at every offset
 

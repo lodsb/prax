@@ -112,7 +112,7 @@ place.
 `ontology/` holds the entity and relation types the graph accepts, one
 module per domain: `core.yaml`, `research.yaml`, `studio.yaml`,
 `craft.yaml`, `kitchen.yaml`, `workshop.yaml`. The format is in
-`src/prax/ontology.py`. Each module has a `version`.
+`src/prax/graph/ontology.py`. Each module has a `version`.
 
 Two things beside the types are data too, and neither bumps a version,
 because neither changes what the ontology accepts:
@@ -383,7 +383,7 @@ counts the pages with `djvused`. A page without a text layer is rendered
 (`ddjvu`) and read by the same OCR engine as a scanned PDF, within
 `parse.ocr_max_pages`. Without DjVuLibre a DjVu file stays pending and
 says why. No MIME table knows the type, so prax names it
-(`image/vnd.djvu`), and `prax.mimes` says in one place that it is a
+(`image/vnd.djvu`), and `prax.text.mimes` says in one place that it is a
 document, not a picture: it is extracted into the graph, and the vision
 pass leaves it alone. A DjVu taken in before prax knew the type sits as
 unknown bytes; `prax heal --check untyped-documents --apply` gives it
@@ -489,7 +489,7 @@ reading (`vision.merge_readings`).
 
 ## 3c. Chunks
 
-`prax.chunking` turns each text artifact into structure-aware chunks
+`prax.text.chunking` turns each text artifact into structure-aware chunks
 (rationale R13): sections of paragraphs, whole tables with their
 caption and a parsed grid, figure captions, code blocks. Each chunk
 has a heading path and a locator (character range and page). Search
@@ -504,14 +504,14 @@ did not change keeps its id and its vector.
 
 ## 3d. Embeddings and hybrid search
 
-`prax.embeddings` runs bge-small-en-v1.5 (384-d) through onnxruntime.
+`prax.ml.embeddings` runs bge-small-en-v1.5 (384-d) through onnxruntime.
 The model files are fetched once into `<data dir>/models/` on first
-use (`prax.fetch`: plain HTTPS from the Hugging Face hub, resumable).
+use (`prax.ml.fetch`: plain HTTPS from the Hugging Face hub, resumable).
 A copy in an old Hugging Face cache is taken from there.
 `PRAX_OFFLINE=1` refuses to download. `python scripts/fetch_model.py
 --embed` fetches ahead of time. Vectors live in `<data
 dir>/vectors-<model>.usearch`, a memory-mapped HNSW index
-(`prax.vectors`), with the bookkeeping in `chunk_embeddings`. Search is
+(`prax.ml.vectors`), with the bookkeeping in `chunk_embeddings`. Search is
 hybrid by default. It falls back to FTS when there is no index file,
 no usearch, or `PRAX_EMBED=0`.
 
@@ -594,7 +594,7 @@ tier were tried and left off.
 
 ## 3e. Graph extraction (Stage 3)
 
-`prax.extraction` sends each document's metadata header and the first
+`prax.graph.extraction` sends each document's metadata header and the first
 12,000 characters of its text to the model, with a JSON schema
 generated from the composed ontology. It writes the returned triples
 through `store.link`, each with a confidence and a quoted evidence
@@ -626,7 +626,7 @@ Settings: `PRAX_EXTRACT_MODEL` (default `claude-opus-5`),
 tests, `PRAX_EXTRACT=<name>` for an `openai` model of `prax.yaml`
 (section 3h: llama-server on this or another machine). The local path
 asks for tab-separated lines instead of JSON, under a grammar that
-bounds the output to 20 triples (`prax.lineformat`). The extractor name
+bounds the output to 20 triples (`prax.graph.lineformat`). The extractor name
 stamped on documents is then `<model>@<host>`, and its cost is zero.
 Bumping the ontology version re-selects every document. Review the
 queue in the UI's Review tab (section 3g) or with `store.list_review`
@@ -820,7 +820,7 @@ decision.
 ### What language a document is in
 
 `meta.lang` holds an ISO 639-1 code, written when the text is indexed
-(`prax.language`) and filled in for everything older by the `languages`
+(`prax.text.language`) and filled in for everything older by the `languages`
 pass of `prax maintain`, which reads only documents that do not say
 yet. The document page shows it beside the text stamp.
 
@@ -946,7 +946,7 @@ writes, at the end of a page with some document above it. A paper's
 "Discussion", and a tutorial whose last section is about writing
 comments, are the document's own.
 
-An advertisement is a run of pieces (`prax.furniture`). There are three
+An advertisement is a run of pieces (`prax.text.furniture`). There are three
 ways in. One piece says outright that it was paid for: "today's
 sponsor", "paid promotion", a German page's "Anzeige" on its own line.
 Or it names a sponsor and makes an offer beside it, which is a code, a
@@ -960,7 +960,7 @@ sponsor's slides.
 A recipe's ingredient list is the other way round: one chunk because
 four fragments say nothing, and not set aside at all. `data` holds the
 servings and every line with its amount, unit and note
-(`prax.ingredients`); the line as written is kept beside them.
+(`prax.text.ingredients`); the line as written is kept beside them.
 
 All three are the chunker's, so they arrive with a re-chunk. One
 document at a time from its page ("process… → Chunk the text again",
@@ -1046,7 +1046,7 @@ A model's misfits are systematic:
   ("the manual has this feature", moved onto the device the document
   describes).
 
-The door applies the rules in `prax.review.apply_typing_rules` to a document's
+The door applies the rules in `prax.graph.review.apply_typing_rules` to a document's
 items right after its extraction. Over the whole queue they are the
 `review` pass of `prax maintain` (3n), which the nightly task runs: a
 replay against the current ontology first, then the rules.
@@ -1083,7 +1083,7 @@ re-read (placeholder names, a cited "document" that is a paper, a
 listed "person" who is the author, venues, cited titles) linked 3,091
 and dropped 3,390 of 25,827. Research v6 and a replay took 6,680 more.
 
-What no rule can decide goes to a model (`prax.typing_pass`): an item
+What no rule can decide goes to a model (`prax.graph.typing_pass`): an item
 with no types at all, or "X about Y" with nothing but the names. A
 batch of two dozen items is sent with the document's title, its own
 type and the ontology subset it is read against, and answered as `<n>:
@@ -1187,7 +1187,7 @@ papers support or contradict. Pages are extracted and embedded like any
 document, so a topic page's concepts enter the graph. The extractor's
 header carries `Kind: page` or `Kind: project`.
 
-Two kinds of page keep themselves (`prax.questions`, `docs/ask.md`
+Two kinds of page keep themselves (`prax.answering.questions`, `docs/ask.md`
 "Standing questions"). A `question` page holds an answer the door asks
 again when the library learns something about it: a document that
 arrived since ranks for the question, or shares two of the answer's
@@ -1269,11 +1269,11 @@ and a line under `run:`. `prax up` starts it (4b): the port from
 loaded, which takes three minutes for the 35B when cold, and *up* once
 its `/health` says so. Its output is in `<data
 dir>/logs/llama-server.log`. The command line prax builds is
-`prax.up.llama_argv`: `--flash-attn on`, the KV cache at `q8_0`,
+`prax.host.up.llama_argv`: `--flash-attn on`, the KV cache at `q8_0`,
 `--n-gpu-layers 999`, `--load-mode mmap`, thinking off, `--metrics`, no
 web UI. `serve.extra` appends arguments of your own.
 
-The grammar-constrained line format (`prax.lineformat`) needs a server
+The grammar-constrained line format (`prax.graph.lineformat`) needs a server
 that honours the `grammar` field. llama-server does; vLLM does not.
 Thinking is off unless `serve.thinking: true`. That matters for models
 that think by default (Qwen3.x, Gemma 4), because thinking tokens
@@ -1490,7 +1490,7 @@ What the asking model may do, what it may not, what each move costs
 and how to steer it is in [`docs/ask.md`](ask.md). This section is how
 to set it up.
 
-`prax.ask` turns a question into a bundle: one passage per document
+`prax.answering.ask` turns a question into a bundle: one passage per document
 from the hybrid search, plus what the graph records about those
 documents. It hands the bundle to a model that answers with `[n]`
 citations. Which model is the host's choice:
@@ -1526,7 +1526,7 @@ it runs the host's model.
 
 **Surfing.** A model that answers does not have to take the first
 search's eight passages as they come. With `steps` the model works the
-library first (`prax.surf`). `steps` comes from the composer's
+library first (`prax.answering.surf`). `steps` comes from the composer's
 "steps", `prax ask --steps`, or the request's `steps`; the host's
 default is `steps.ask.steps` in `prax.yaml`, 8 out of the box, and 0
 is the one-shot answer. Each step the model writes a note and one
@@ -1681,7 +1681,7 @@ the model lives in the server's process, not the door's (invariant 7).
 ## 3l. Captures: uploads, sent pages, fetched URLs, the drop folder
 
 Everything that is not a curated import comes in as a capture
-(`prax.inbox`). `meta.source` says how (`upload`, `capture`, `inbox`).
+(`prax.capture.inbox`). `meta.source` says how (`upload`, `capture`, `inbox`).
 `meta.capture` says when and in which send. The domain set comes from
 the request, the folder, or the `domains:` rules in prax.yaml. Text and
 HTML are searchable at once, because trafilatura is light enough for
@@ -1865,7 +1865,7 @@ job whose process is gone or whose heartbeat stopped half an hour ago.
 The rows are bookkeeping; nothing reads them to decide what to do.
 
 The same view shows what the door's host has left: free RAM and commit
-headroom (`prax.hostinfo`, no dependency). The worker's heartbeat
+headroom (`prax.host.hostinfo`, no dependency). The worker's heartbeat
 carries its own footprint, under a gigabyte between passes. Commit is
 the number to watch on a Windows batch host. A GPU model server charges
 system commit for the VRAM it fills: a 22 GB model is 22 GB of commit
@@ -2089,7 +2089,7 @@ entities you still want to look at, stays alone.
 | `unpolished-transcripts` | videos whose transcript is the automatic one as it came, the polish not written yet (captured before the step existed, or while its model was away) | a report with an offer: polish all of them (`prax reread --extractor polish --unpolished`) |
 | `stale-extractions` | documents whose extraction was made from a text a later read has replaced (marker over a pymupdf4llm text, OCR over a scan). The graph speaks of a text that is gone | moves the stamp aside so the extract step selects them again. The old reading's edges are retired when the new one is applied. A replacing read does this on the way in now; these are from before |
 | `stale-jobs` | a job still marked running whose heartbeat stopped a day ago (the door reaps its own host within minutes) | closes them as failed |
-| `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.glyphs`). Boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned. Chunks with unchanged text keep their vectors |
+| `unmapped-glyphs` | a text still holding ligature glyphs (ﬁ, ﬂ) or Symbol-font code points (=, ∈, α as private-use characters) from before every text was cleaned on the way in (`prax.text.glyphs`). Boxes on screen, words search cannot match | re-indexes each from its own artifact, cleaned. Chunks with unchanged text keep their vectors |
 | `extraction-failed` | documents the extract step could not read under the current ontology: a prompt the model's slot cannot hold even after the cut, or a server error. The error is kept in `meta.extraction_error`, and the passes leave them out until the ontology moves or a reading succeeds | forgets the errors that were the model server's (loading, down, refused), so those are selected again. A prompt no slot holds stays |
 | `stale-parses` | documents read by an extractor prax has revised since. A re-read would produce something new, or say `same` | moves the stamp where an annotation in the history already made the revision's change (figure references placed). The rest the backlog pass reads a few at a time, or `--upgrade` at once (3l¾) |
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
@@ -2141,7 +2141,7 @@ by `prax maintain` on request:
 | `domains` | the domain set of every document nobody assigned by hand, from the `domains:` rules in `prax.yaml` (3e). Nothing without rules |
 | `dedupe` | the duplicate captures of one page, retired as duplicates of the keeper. A union: their facts, tags, domains and stamps join the keeper's first (3l). Row and file kept |
 | `review` | the review queue: a replay against the current ontology (a typed item it accepts now becomes an edge), then the typing rules over every open item (3e). What the door does for one document after its extraction, for the whole queue |
-| `references` | the citations a document's own reference list makes to documents in the library (3f). The entries under a References/Bibliography heading are read by rules (`prax.references`) and matched against the document field by title, creators and year. The `cites` edges are `EXTRACTED` by a printed DOI or arXiv id, `INFERRED` by a title match with the score in the evidence, `AMBIGUOUS` for each of several candidates within the margin (twins in the library). A document is read once per text (`meta.references`); a re-read retires the earlier edges. Measured in `docs/eval/references-2026-09-20.md` |
+| `references` | the citations a document's own reference list makes to documents in the library (3f). The entries under a References/Bibliography heading are read by rules (`prax.text.references`) and matched against the document field by title, creators and year. The `cites` edges are `EXTRACTED` by a printed DOI or arXiv id, `INFERRED` by a title match with the score in the evidence, `AMBIGUOUS` for each of several candidates within the margin (twins in the library). A document is read once per text (`meta.references`); a re-read retires the earlier edges. Measured in `docs/eval/references-2026-09-20.md` |
 | `fts` | the keyword index's segments merged a little (FTS5's `merge`, up to a minute). Every batch of chunks leaves a segment behind, and a term spread over two dozen of them is read from two dozen places when the cache is cold |
 | `lengths` | `documents.text_len`, the length of each text artifact, for the texts indexed before the column existed (migration 15). Each artifact read once; nothing after that. Until it has run, a request for such a document's row alone reads the artifact, as before |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c). The nightly has no reason to |
@@ -2330,7 +2330,7 @@ They look at the title, the paths a document came from and the first
   name is a bill. Synonyms count once;
 - a **path** marks everything that came from under it.
 
-The defaults are in `prax.private`. Your own additions go in `prax.yaml`,
+The defaults are in `prax.wall.private`. Your own additions go in `prax.yaml`,
 and only there, because your name must never reach the repository:
 
     private:
@@ -2441,7 +2441,7 @@ an evening of six commands (3h). `group:` says they compete:
     prax up --status           # who holds it, and what waits for whom
 
 What the supervisor does with that: it reads the cards
-(`nvidia-smi`, `prax.hostinfo.gpu`) and what each role needs — a
+(`nvidia-smi`, `prax.host.hostinfo.gpu`) and what each role needs — a
 served model needs what its file takes, marker 5 GB unless `ngl: 0`
 puts it on the CPU, `needs_vram_mb:` says otherwise. When the borrower
 fits beside what is there, nothing is stopped and both run. When it
@@ -2519,7 +2519,7 @@ local model.
 
 A reading counts too, and used not to. The worker never writes to the
 store, so what a reading paid travels home with its result. The client
-records the tokens as it calls (`prax.usage`) and the worker takes them
+records the tokens as it calls (`prax.ml.usage`) and the worker takes them
 when the document is done. The door writes the row, under the step the
 reading ran and the model the worker says it used. That last part
 matters. A worker started against another configuration runs another

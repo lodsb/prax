@@ -8,7 +8,8 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import extraction, models, store
+from prax import models, store
+from prax.graph import extraction
 
 
 def test_promote_and_unpromote(con: sqlite3.Connection) -> None:

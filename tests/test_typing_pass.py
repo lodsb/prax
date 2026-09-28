@@ -7,7 +7,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from prax import store, typing_pass
+from prax import store
+from prax.graph import typing_pass
 
 
 class FakeModel:

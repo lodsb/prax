@@ -18,7 +18,7 @@ let askConfig = null;
 // sends the earlier ones along (the door searches in their neighbourhood
 // and the model sees them), "New ask" starts over, and a reload shows the
 // conversation instead of asking again.
-const ASK_KEY = "prax.ask";
+const ASK_KEY = "prax.answering.ask";
 
 function askSession() {
   try { return JSON.parse(sessionStorage.getItem(ASK_KEY) || "null") || { turns: [] }; }

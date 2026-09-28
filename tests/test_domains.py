@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import config, extraction, ontology, store
+from prax import config, store
+from prax.graph import extraction, ontology
 
 FAMILY = """
 module: family

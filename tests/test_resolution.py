@@ -7,7 +7,9 @@ import sqlite3
 
 import pytest
 
-from prax import embeddings, resolution, store
+from prax import store
+from prax.graph import resolution
+from prax.ml import embeddings
 
 E = store.Edge
 
@@ -463,7 +465,7 @@ def test_the_sameness_rule_is_data_beside_the_modules() -> None:
     """What "the same thing" means lives in ontology/sameness.yaml, one copy
     for every judge; a module's cases join for its own types, and the file
     stays out of the ontology's version like the lexicon."""
-    from prax import ontology
+    from prax.graph import ontology
 
     rule = ontology.parse_sameness(
         """

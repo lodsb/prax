@@ -10,11 +10,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from prax import (
-    blocks,
-    questions,
-    store,
-)
+from prax import store
+from prax.answering import questions
+from prax.text import blocks
 
 from ._base import _con
 

@@ -10,7 +10,9 @@ from typing import Any
 
 import pytest
 
-from prax import extraction, ontology, store
+from prax import store
+from prax.graph import extraction, ontology
+from prax.ml import pricing
 
 PAPER = (
     "# Correlated Tensor Factorization for Audio Source Separation\n\n"
@@ -215,7 +217,7 @@ def test_claude_extractor_params_and_response_parsing(con: sqlite3.Connection) -
     out = extraction.ClaudeExtractor.from_message(message)
     assert out.triples[0].dst == "source separation" and out.summary == "A paper."
     assert out.usage["cache_read_input_tokens"] == 800
-    assert 0 < extraction.cost_usd("claude-opus-5", out.usage) < 0.01
+    assert 0 < pricing.cost_usd("claude-opus-5", out.usage) < 0.01
     refused = SimpleNamespace(
         stop_reason="refusal", content=[], usage=None, stop_details="x"
     )

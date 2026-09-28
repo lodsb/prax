@@ -1,6 +1,6 @@
 # The regions of the library
 
-2026-09-27. Stage P. `prax.communities` computes the regions,
+2026-09-27. Stage P. `prax.graph.communities` computes the regions,
 `store.graph.communities` keeps them, the `communities` pass of
 `prax maintain` rebuilds them nightly, and the `communities` step names
 and describes them with the local model.

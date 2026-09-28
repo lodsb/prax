@@ -1,4 +1,4 @@
-"""DjVu documents: an image type that is a document (``prax.mimes``), read
+"""DjVu documents: an image type that is a document (``prax.text.mimes``), read
 by its own parser (``parsers._djvu``, DjVuLibre's ``djvutxt``)."""
 
 from __future__ import annotations
@@ -9,7 +9,8 @@ from typing import Any
 
 import pytest
 
-from prax import markup, mimes, parsers, store
+from prax import parsers, store
+from prax.text import markup, mimes
 
 
 def test_a_djvu_file_is_a_document_not_a_picture() -> None:

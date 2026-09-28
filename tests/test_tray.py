@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from prax import autostart, tray
+from prax.host import autostart, tray
 
 UP = {
     "pid": 1,

@@ -39,7 +39,8 @@ NATIVE = {
 def child(seconds: float, readers: int, merge_every: float, size: int) -> None:
     import numpy as np
 
-    from prax import store, vectors
+    from prax import store
+    from prax.ml import vectors
     from prax.store import base, retrieval
 
     model = "stress"

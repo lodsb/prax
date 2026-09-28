@@ -8,13 +8,9 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from prax import (
-    models,
-    ontology,
-    routes,
-    store,
-    work,
-)
+from prax import models, store, work
+from prax.capture import routes
+from prax.graph import ontology
 
 from ._base import _con
 
@@ -103,7 +99,7 @@ def doc_routes(doc_id: int, request: Request) -> dict[str, Any]:
     """The document's state and the routes from it: what has been done to
     its text, figures, formulas and graph, and what can be asked for,
     with the model each step resolves to on this host and whether it
-    costs money (``prax.routes``). The UI's "process…" dialog."""
+    costs money (``prax.capture.routes``). The UI's "process…" dialog."""
     try:
         return routes.routes_for(_con(request), doc_id)
     except KeyError as exc:

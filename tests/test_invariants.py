@@ -130,6 +130,26 @@ def test_the_mcp_server_is_a_thin_proxy() -> None:
     assert asked <= {"prax.client"}, f"the proxy imports more than the client: {asked}"
 
 
+def test_the_text_package_stands_on_nothing_of_prax() -> None:
+    """``prax.text`` holds the shapes of text: markup, chunks, what a region
+    of a page is. The engineering pass of 2026-09-28 gathered them because
+    they import nothing of prax at the top of a module, which is what lets
+    the store, the parsers and a client all read them. A module that needs
+    the store or the models belongs elsewhere; a function may still reach
+    for one lazily (compounds asks the store which forms a word takes)."""
+    reaching: list[str] = []
+    for path in sorted((SRC / "text").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.ImportFrom) and node.level == 0:
+                module = node.module or ""
+                if module == "prax" or (
+                    module.startswith("prax.") and not module.startswith("prax.text")
+                ):
+                    reaching.append(f"{path.name}:{node.lineno} {module}")
+    assert not reaching, "prax.text imports prax at the top: " + "; ".join(reaching)
+
+
 PRAX_TABLES = (
     "acronyms|chunk_embeddings|chunks|chunks_fts|document_embeddings|documents"
     "|documents_fts|edges|entities|entity_candidates|entity_labels|jobs"

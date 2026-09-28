@@ -2,7 +2,7 @@
 
 After the local model read the whole library (`docs/eval/extractors-local-
 2026-09-11.md`) the review queue held 20,000 items. The typed ones were
-handled by rules (`prax.review.apply_typing_rules`, howto 3e); the unmapped
+handled by rules (`prax.graph.review.apply_typing_rules`, howto 3e); the unmapped
 ones say what the ontology could not hold. Counted by the relation the
 model named:
 

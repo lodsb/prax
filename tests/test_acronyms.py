@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from prax import acronyms, store
+from prax import store
+from prax.text import acronyms
 
 
 def test_find_keeps_definitions_whose_letters_are_initials() -> None:

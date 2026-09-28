@@ -69,7 +69,7 @@ the review of the lists a person decides goes last.
       `ontology/sameness.yaml` beside `lexicon.yaml`: the cases that are
       the same and those that are different, each with examples, and a
       module's own examples in its words (kitchen: a vegan variant is
-      another dish; studio: a synth and its manual). `prax.ontology`
+      another dish; studio: a synth and its manual). `prax.graph.ontology`
       loads it, the question is built from it with the examples of the
       pair's modules, the Review page shows it from the door, and
       `docs/review.md` points to it. Like the lexicon it stays out of the
@@ -106,7 +106,7 @@ the review of the lists a person decides goes last.
       may call only the routes the MCP tools use; every other route answers
       403, so no unfiltered route can be reached. A test walks every
       allowed route with a hidden document.
-- [x] (2026-09-28: `prax.private`, `store.suspect`, the `private` pass, the "personal?" tab; 238 of 12,974 suspected in the dry run) **V. What is personal** (niggles.txt, "approximate domains"). Rules
+- [x] (2026-09-28: `prax.wall.private`, `store.suspect`, the `private` pass, the "personal?" tab; 238 of 12,974 suspected in the dry run) **V. What is personal** (niggles.txt, "approximate domains"). Rules
       in `prax.yaml` (`private:`, outside the repository: the owner's name
       and other hints live there only): strong cues that mark a document
       `suspected` alone (an IBAN, a bank statement, a rental contract, a
@@ -186,7 +186,7 @@ stage safe, or a thing a user would notice.
 
 ### A. Settle whether the surfer got worse — done 2026-09-26, cleared
 
-- [x] **What the surf sees when it walks changed under it.** `prax.surf`
+- [x] **What the surf sees when it walks changed under it.** `prax.answering.surf`
       took `store.traverse(...)[:WALK_EDGES]`, the first N edges by id,
       and since 2026-09-25 passes `limit=WALK_EDGES` into traverse, which
       spends the cap round-robin across relations. Same count, different
@@ -218,7 +218,7 @@ stage safe, or a thing a user would notice.
 ### C. What a user actually notices — the two parts done 2026-09-26,
 ### and a design gap found under them
 
-- [x] **German compounds** — `prax.compounds`, the library as its word
+- [x] **German compounds** — `prax.text.compounds`, the library as its word
       list: a compound splits where both halves are terms the index holds,
       and each half goes through the graph's labels (`Olivenoel` →
       `oliven` → `olive oil`). No harm and a small gain on the 19 German
@@ -372,7 +372,7 @@ recipe at once. Three independent failures, each wanting a different fix.
       meaning two things in the *graph* (the `proposes` pass, the review
       queue) and not at all in retrieval.
 - [x] (stage C) **An ingredient list without a heading is not recognised**, so the
-      cross-lingual bridge has nothing standing on it. `prax.ingredients`
+      cross-lingual bridge has nothing standing on it. `prax.text.ingredients`
       cuts from a "Zutaten"/"Ingredients" heading; the Guardian writes its
       quantities into the prose. The library has **38 `ingredients` chunks
       in ten thousand documents**, and the recipe in question has none —
@@ -489,7 +489,7 @@ Not a new service. `prax up` already is one: roles it keeps alive,
 `up.swap(data_dir, to, back_when="idle")`, which is the marker evening.
 What the day found missing is narrower, and in this order.
 
-- [ ] **See who holds the card.** `prax.hostinfo` reads `nvidia-smi`,
+- [ ] **See who holds the card.** `prax.host.hostinfo` reads `nvidia-smi`,
       which gives totals: prax could say the card was at 23.7 of
       24.5 GB and not say by whom. Under WDDM per-process VRAM is a
       performance counter, `\GPU Process Memory(*)\Dedicated Usage`,
@@ -661,7 +661,7 @@ to find out whether a local logprob predicts anything.
 - [x] **Ask the local model the adjudicator's question** on those 8,242
       pairs, under a grammar that allows one token, and keep the
       logprob. A few hours of llama-server, nothing spent.
-      (2026-09-27: `scripts/eval_confidence.py`, `prax.calibration`. Only
+      (2026-09-27: `scripts/eval_confidence.py`, `prax.graph.calibration`. Only
       6,126 of the pairs can be labelled: the 2,704 declines still
       recorded, and 3,422 merges reconstructed from the unstamped merges
       of the likely types, against Opus's 3,683. No grammar: the mass on
@@ -710,6 +710,53 @@ to find out whether a local logprob predicts anything.
 
 Deliberately after the current run of work: it is a measurement with a
 possible change behind it, not a change.
+
+## The engineering pass of 2026-09-28: packages
+
+Asked for by the user: "a lot of separate source code files that may be
+moved to (sub)packages". There were 52 modules at the top of `prax`,
+beside five packages.
+
+- [x] **45 modules into 8 packages** by what they are about: `text`,
+      `graph`, `writing`, `answering`, `ml`, `capture`, `host`, `wall`
+      (CLAUDE.md, "The layout"). Moved with `git mv`, the imports
+      rewritten by their syntax tree, the dotted names and paths in the
+      docs rewritten too, except `docs/log.md` and `docs/eval/`, which
+      record what things were called when they were written. Seven
+      modules stay at the top: the foundations and the protocol the
+      invariants name.
+- [x] **What a call costs is `prax.ml.pricing`,** not
+      `prax.graph.extraction`: the price table, the cache shares,
+      `cost_usd` and `supports_effort` were used by asking, surfing, the
+      pipeline, resolution, the budget and the model registry, and made
+      each of them import the extraction.
+- [x] **`prax.text` stands on nothing of prax** at module level, and a
+      test holds it.
+
+Found and left, each its own decision:
+
+- **The store reaches up, lazily.** `store` imports `writing`
+  (`documents/meta.py`, `repair.py`), `parsers` (`readings.py`,
+  `repair.py`), `models` (`maintain.py`) and `wall.private`
+  (`documents/text.py`, `maintain.py`) inside functions. The store is
+  meant to be the bottom layer. Each of these is a pass that runs a
+  step's logic from inside the door. Moving them would mean a pass
+  object in the layer above that the store calls back, which is more
+  structure than four call sites need today. Worth doing when a fifth
+  appears.
+- **`steps` imports `worker` lazily** in every family: a step's worker
+  half calls the worker's `do_*` functions. By design (invariant 4, "its
+  door half and its worker half together"), but `worker.py` (933 lines)
+  is mostly those `do_*` functions, which belong in their step's module.
+- **`text.compounds` asks the store** for the forms a word takes, and
+  only the store uses it. It is retrieval, not text; it waits for
+  `store/retrieval.py` (1,916 lines) to split at 2,000 as invariant 3
+  says, and goes there.
+- **Code in a package's `__init__`:** `parsers/__init__.py` is 1,706
+  lines of parsing. The registry would stay there, and the PDF, office
+  and web parsers would each get a module of their own.
+- **Large modules:** `store/repair.py` 1,625, `host/up.py` 1,435. Neither
+  is tangled. Both are long lists of the same shape (ailments, roles).
 
 ## The engineering pass of 2026-09-25, as work
 

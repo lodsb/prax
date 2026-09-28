@@ -7,7 +7,9 @@ from __future__ import annotations
 import contextlib
 from typing import Any
 
-from prax import models, pipeline, store, summaries
+from prax import models, store
+from prax.capture import pipeline
+from prax.writing import summaries
 
 from .base import HandOut, Log, ModelStep, TakeIn
 
@@ -193,13 +195,14 @@ class Sections(ModelStep):
 class Communities(ModelStep):
     """The regions of the library named and described: each community of
     the nightly partition without a summary, or with one its members have
-    moved away from (``prax.communities``). Over the graph, not over
+    moved away from (``prax.graph.communities``). Over the graph, not over
     documents, so scope does not apply."""
 
     name = "communities"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        from prax import communities, work
+        from prax import work
+        from prax.graph import communities
 
         if models.resolve("communities") is None:
             return h.nothing()
@@ -255,7 +258,8 @@ class Communities(ModelStep):
         return t.out
 
     def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
-        from prax import communities, models, worker
+        from prax import models, worker
+        from prax.graph import communities
 
         results = []
         for it in items:

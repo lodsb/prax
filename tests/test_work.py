@@ -15,7 +15,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import embeddings, inbox, models, steps, store, work, worker
+from prax import models, steps, store, work, worker
+from prax.capture import inbox
+from prax.ml import embeddings
 
 
 def pending_one(con: Any, doc_id: int) -> dict[str, Any]:
@@ -289,7 +291,7 @@ def test_the_resolve_step_computes_the_likely_pairs_off_the_door(
     (and crashed it at 138,000 of them): now the door hands a type's
     names to a worker, the worker embeds them and posts the close pairs,
     and the plan reads those. A type is due once a week."""
-    from prax import resolution
+    from prax.graph import resolution
 
     con = client.app.state.con
     for paper, concept in (
@@ -351,7 +353,8 @@ def test_the_adjudicate_step_spends_only_when_told_and_records_its_decisions(
     worker (paid: --spend), the decisions come back as merges and
     recorded declines, and the script that opened the database file for
     this is no longer the way."""
-    from prax import models, resolution
+    from prax import models
+    from prax.graph import resolution
 
     con = client.app.state.con
     for paper, concept in (
@@ -423,7 +426,8 @@ def test_a_local_adjudicator_settles_the_sure_pairs_and_leaves_the_rest(
     about and leaves the middle to a person: the number is kept on the
     pair, which the step does not hand out again, and the review page
     shows it. Free, so no --spend (docs/eval/confidence-2026-09-28.md)."""
-    from prax import models, resolution
+    from prax import models
+    from prax.graph import resolution
 
     con = client.app.state.con
     for paper, concept in (
@@ -480,7 +484,7 @@ def test_a_local_adjudicator_settles_the_sure_pairs_and_leaves_the_rest(
 
 
 def test_the_local_adjudicator_settles_by_its_threshold() -> None:
-    from prax import resolution
+    from prax.graph import resolution
 
     judge = resolution.LocalAdjudicator(base_url="http://x", model="q", settle=0.9)
     assert [judge.settled(p) for p in (0.95, 0.9, 0.5, 0.1, 0.02, None)] == [
@@ -1111,7 +1115,8 @@ def test_an_extraction_whose_server_is_down_is_not_a_failure_of_the_document(
     selection under this ontology. The worker posts nothing for a server
     that is not ready; and the errors already recorded that way are
     forgotten by the extraction-failed repair — the others kept."""
-    from prax import extraction, models
+    from prax import models
+    from prax.graph import extraction
 
     con = client.app.state.con
     a = client.post(
@@ -1371,7 +1376,7 @@ def test_the_door_asks_for_the_crops_of_a_pdf_itself(
     """A caption with no picture behind it is a figure drawn in vector
     paths. Rendering it runs no model, so the door asks for it after any
     PDF parse, beside whatever else is waiting."""
-    from prax import pipeline
+    from prax.capture import pipeline
 
     doc = store.register(con, b"%PDF-1.4 fake", mime="application/pdf")["doc_id"]
     store.index_text(

@@ -7,7 +7,7 @@ measurements here are of the live store on that day.
 
 > **What became of it, 2026-09-24.** The language row was built and run
 > over the library (1,435 names decided; `docs/log.md` and
-> `prax.vocabulary`), and building it settled two of the guesses below
+> `prax.graph.vocabulary`), and building it settled two of the guesses below
 > the other way round. **The library-as-dictionary proposal was wrong in
 > the form written here** and right in another: a miner of
 > "Knollensellerie (celeriac)" glosses yields almost nothing, but asking
@@ -34,7 +34,7 @@ them apart is most of the design.
 | surface | `Short-Time Fourier Transform` / `short-time fourier transform` | a deterministic key | done (`resolution.normalize`, tier 1a) |
 | subtype | `Ann Author` as `person` and as `author` | the ontology's hierarchy | done 2026-09-23 (tier 1c) |
 | morphological | `audio unit` / `audio units`, `taco` / `tacos` | a stemmer, per language | half done |
-| language | `Olivenöl` / `olive oil` | the library as the dictionary, then a model | done 2026-09-24 (`prax.vocabulary`) |
+| language | `Olivenöl` / `olive oil` | the library as the dictionary, then a model | done 2026-09-24 (`prax.graph.vocabulary`) |
 | polysemy | the paper *Variational Mode Decomposition* and the method | **not a merge** | open, an ontology question |
 
 ### What the live graph held
@@ -128,7 +128,7 @@ multilingual study and the single highest-value change here.
 
 **The library as its own dictionary.** ~~A bilingual library defines
 its own terms in passing: "Knollensellerie (celeriac)", "Faltung
-(convolution)". `prax.acronyms` already mines "phrase (ACRONYM)" out of
+(convolution)". `prax.text.acronyms` already mines "phrase (ACRONYM)" out of
 every text; the same miner with a different shape yields translation
 pairs with a document behind each one.~~
 
@@ -185,7 +185,7 @@ that an alias carried no language, no source and no confidence.
                   source_doc, producer, run, confidence, at)
 
 A merge writes the folded name as a label of the survivor, with the
-language `prax.language` reads off it and the producer and run that
+language `prax.text.language` reads off it and the producer and run that
 decided the merge. Two things hold now that did not. A German name
 reaches the English entity it belongs to (`entities_by_label`), which is
 where the cross-language work will land its findings. And a round of

@@ -1,4 +1,4 @@
-"""The regions of the library as the store keeps them (``prax.communities``
+"""The regions of the library as the store keeps them (``prax.graph.communities``
 computes them): what the partition reads, the rebuild that keeps ids and
 summaries across nights, and the reads that name an entity's region."""
 
@@ -63,7 +63,7 @@ def replace_communities(
     summary; the summary is marked stale when the overlap is under
     ``FRESH``, so the summaries step writes it again. Returns what
     happened, per level."""
-    from prax.communities import jaccard
+    from prax.graph.communities import jaccard
 
     old: dict[int, dict[str, Any]] = {}
     for r in con.execute(

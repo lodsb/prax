@@ -29,7 +29,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from prax import usage
+from prax.ml import usage
 
 DEFAULT_MODEL = "claude-sonnet-5"  # Haiku misread a schematic; Sonnet read it
 MAX_BYTES = 5 * 1024 * 1024  # the API's limit per image

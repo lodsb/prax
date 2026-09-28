@@ -8,7 +8,10 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import embeddings, extraction, pipeline, store
+from prax import store
+from prax.capture import pipeline
+from prax.graph import extraction
+from prax.ml import embeddings
 
 
 def test_job_lifecycle_and_listing(con: sqlite3.Connection) -> None:
@@ -71,7 +74,7 @@ def test_extract_documents_with_the_stub(con: sqlite3.Connection) -> None:
 def test_process_captures_is_careful(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from prax import inbox
+    from prax.capture import inbox
 
     monkeypatch.setenv("PRAX_EXTRACT", "stub")
     monkeypatch.setenv("PRAX_TITLES", "none")

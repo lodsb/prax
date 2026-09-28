@@ -8,11 +8,8 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
-from prax import (
-    ontology,
-    review,
-    store,
-)
+from prax import store
+from prax.graph import ontology, review
 
 from ._base import _con
 
@@ -253,7 +250,7 @@ def graph_candidates(
 def graph_sameness() -> dict[str, Any]:
     """What "the same thing" means (``ontology/sameness.yaml``): the rule
     the models are asked with, for the person deciding the same pairs."""
-    from prax import ontology
+    from prax.graph import ontology
 
     return ontology.sameness().as_dict()
 
@@ -324,11 +321,11 @@ def graph_export(
     hops: int = 1,
     history: bool = False,
 ) -> Response:
-    """A piece of the graph as a file (``prax.graphio``): what a project,
+    """A piece of the graph as a file (``prax.graph.graphio``): what a project,
     a domain, a tag or an entity reaches, as JSON lines. Built whole here:
     the request's connection belongs to its thread, and a streamed body is
     read on another."""
-    from prax import graphio
+    from prax.graph import graphio
 
     seed = graphio.Seed(
         project=project,
@@ -359,7 +356,7 @@ async def graph_import(
     the file). A dry run says what would happen and writes nothing."""
     from dataclasses import asdict
 
-    from prax import graphio
+    from prax.graph import graphio
 
     from ._base import max_upload
 

@@ -434,7 +434,7 @@ def test_an_extraction_of_a_replaced_text_is_found_and_unstamped(
     that unstamps on the way in): the ailment names the document, the
     repair moves the stamp aside so the extract step selects it again; an
     annotating read after the extraction is not damage."""
-    from prax import extraction, ontology
+    from prax.graph import extraction, ontology
     from prax.parsers import queue
 
     body = "# A paper on reverb\n\n" + "Feedback delay networks make reverb. " * 40
@@ -485,11 +485,11 @@ def test_the_glyph_check_reads_a_text_once(
     """Each document's chunks are read once per text: a second check
     over an unchanged library consults the memo, a re-indexed text is
     read again, a retired document leaves the memo."""
-    from prax import glyphs
     from prax.store import repair
+    from prax.text import glyphs
 
     repair._glyphs_seen.clear()
-    # a text indexed before prax.glyphs cleaned every text: the ligature
+    # a text indexed before prax.text.glyphs cleaned every text: the ligature
     # is in the artifact and the chunks
     with monkeypatch.context() as m:
         m.setattr(glyphs, "clean", lambda t: t)

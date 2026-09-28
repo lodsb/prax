@@ -8,8 +8,8 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import auth
 from prax.api import app
+from prax.wall import auth
 
 REMOTE = ("100.64.0.9", 40000)  # a Tailscale-looking address
 

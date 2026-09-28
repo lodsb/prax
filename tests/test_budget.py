@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import budget, config, models, store, work
+from prax import config, models, store, work
+from prax.ml import budget, pricing
 
 
 def _paid_host(data_dir: Path, *, daily: float = 0.0, monthly: float = 0.0) -> None:
@@ -148,32 +149,32 @@ def test_the_claude_prices_and_the_cache_shares(data_dir: Path) -> None:
     """The published table (2026-09-22), a dated model id priced as its
     model, an unknown one at Opus rates, and the two models whose cache
     reads are cheaper than a tenth."""
-    from prax import extraction
 
     million = {"input_tokens": 1_000_000, "output_tokens": 100_000}
-    assert extraction.price("claude-sonnet-5") == (2.0, 10.0)
-    assert extraction.price("claude-haiku-4-5-20251001") == (1.0, 5.0)  # dated
-    assert extraction.price("claude-opus-5-5") == (4.0, 20.0)
-    assert extraction.price("claude-opus-4-1") == (15.0, 75.0)
-    assert extraction.price("claude-something-new") == (5.0, 25.0)  # Opus rates
-    assert extraction.price("qwen@127.0.0.1:8080") == (0.0, 0.0)
-    assert extraction.cost_usd("claude-sonnet-5", million) == pytest.approx(3.0)
+    assert pricing.price("claude-sonnet-5") == (2.0, 10.0)
+    assert pricing.price("claude-haiku-4-5-20251001") == (1.0, 5.0)  # dated
+    assert pricing.price("claude-opus-5-5") == (4.0, 20.0)
+    assert pricing.price("claude-opus-4-1") == (15.0, 75.0)
+    assert pricing.price("claude-something-new") == (5.0, 25.0)  # Opus rates
+    assert pricing.price("qwen@127.0.0.1:8080") == (0.0, 0.0)
+    assert pricing.cost_usd("claude-sonnet-5", million) == pytest.approx(3.0)
     # a cache read is a tenth of the input price, and less on two models
     cached = {"input_tokens": 0, "cache_read_input_tokens": 1_000_000}
-    assert extraction.cost_usd("claude-sonnet-5", cached) == pytest.approx(0.2)
-    assert extraction.cost_usd("claude-opus-5-5", cached) == pytest.approx(0.2)
-    assert extraction.cost_usd("claude-fable-5-1", cached) == pytest.approx(0.25)
+    assert pricing.cost_usd("claude-sonnet-5", cached) == pytest.approx(0.2)
+    assert pricing.cost_usd("claude-opus-5-5", cached) == pytest.approx(0.2)
+    assert pricing.cost_usd("claude-fable-5-1", cached) == pytest.approx(0.25)
     # a write is a quarter more than the input price (the five-minute cache)
     written = {"input_tokens": 0, "cache_creation_input_tokens": 1_000_000}
-    assert extraction.cost_usd("claude-sonnet-5", written) == pytest.approx(2.5)
+    assert pricing.cost_usd("claude-sonnet-5", written) == pytest.approx(2.5)
 
 
 def test_a_reading_by_a_paid_model_reaches_the_ledger(data_dir: Path) -> None:
     """A worker does the reading and never writes to the store, so what
-    it paid travels home with the result (``prax.usage``) and the door
+    it paid travels home with the result (``prax.ml.usage``) and the door
     writes the row. Until 2026-09-23 the tokens were dropped and 30
     figures were read by Claude for nothing the ledger could show."""
-    from prax import usage, work
+    from prax import work
+    from prax.ml import usage
 
     _paid_host(data_dir)
     con = store.connect()

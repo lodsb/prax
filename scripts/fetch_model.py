@@ -19,7 +19,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import embeddings, fetch, models, rerank
+from prax import models
+from prax.ml import embeddings, fetch, rerank
 
 
 def _progress() -> object:

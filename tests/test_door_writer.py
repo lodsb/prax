@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import config, inbox, store
+from prax import config, store
+from prax.capture import inbox
 
 
 def test_thread_connections_are_per_thread(con: store.sqlite3.Connection) -> None:

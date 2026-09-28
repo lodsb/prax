@@ -23,7 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import extraction, ontology, store
+from prax import store
+from prax.graph import extraction, ontology
 
 
 def reference(con: store.sqlite3.Connection, doc_id: int) -> set[tuple[str, str]]:

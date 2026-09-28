@@ -12,7 +12,8 @@ from collections.abc import Iterator
 
 import pytest
 
-from prax import ontology, store
+from prax import store
+from prax.graph import ontology
 from prax.store import retrieval
 
 RECIPE = (

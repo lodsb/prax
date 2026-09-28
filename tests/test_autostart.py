@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from prax import autostart, up
+from prax.host import autostart, up
 
 
 @pytest.fixture()

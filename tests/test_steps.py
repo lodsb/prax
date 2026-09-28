@@ -18,7 +18,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import models, pipeline, steps, store, summaries, work, worker
+from prax import models, steps, store, work, worker
+from prax.capture import pipeline
+from prax.writing import summaries
 
 DE = (
     "Dieses Dokument ist ein Verzeichnis von Herstellern und Zulieferern für"

@@ -13,15 +13,10 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from prax import (
-    embeddings,
-    hostinfo,
-    models,
-    ontology,
-    schedule,
-    store,
-    work,
-)
+from prax import models, store, work
+from prax.graph import ontology
+from prax.host import hostinfo, schedule
+from prax.ml import embeddings
 
 from ._base import _con, _split
 
@@ -387,7 +382,7 @@ class ResolveReq(BaseModel):
 
 @router.post("/graph/resolve")
 def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
-    """Entity resolution (``prax.resolution``): the plan and, with
+    """Entity resolution (``prax.graph.resolution``): the plan and, with
     ``apply``, a job that merges what is safe.
 
     The tiers: sure (equal after normalization, an initials form of one
@@ -400,7 +395,7 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     adjudicator's, and stay in the plan. Merges are pointers
     (``entities.canonical_id``): nothing is deleted.
     """
-    from prax import resolution
+    from prax.graph import resolution
 
     con = _con(request)
     plan = resolution.plan(con, etype=req.type, likely=req.likely)
@@ -443,7 +438,7 @@ def _start_resolve(
     merges a traverse from a name then showed as several things
     (docs/eval/fractured-names-2026-09-27.md). Each round is one run,
     which ``unmerge_run`` takes back."""
-    from prax import resolution
+    from prax.graph import resolution
 
     if plan is None:
         plan = resolution.plan(con, likely=False)
@@ -752,7 +747,7 @@ def _start_figures(con: Any, documents: int | None = None) -> dict[str, Any]:
     figures are captions with no picture behind them is not asked for:
     no reading changes those, and they are half the figure chunks.
     """
-    from prax import pipeline
+    from prax.capture import pipeline
 
     n = int(documents or FIGURES_SLICE)  # schedule: figures: {documents: N}
     with store.Job(con, "figures", note=f"a slice of {n}") as job:
@@ -786,9 +781,9 @@ def stats(request: Request) -> dict[str, Any]:
 def spending(request: Request, days: int = 30, limit: int = 20) -> dict[str, Any]:
     """What the paid steps have cost: the budget and what is left of it
     today and this month, then the ledger by step, by model and call by
-    call over the last ``days`` (``prax.budget``, ``store.spending``).
+    call over the last ``days`` (``prax.ml.budget``, ``store.spending``).
     A host with only local models has an empty ledger and no limits."""
-    from prax import budget
+    from prax.ml import budget
 
     con = _con(request)
     since = (datetime.now(UTC) - timedelta(days=max(1, min(days, 365)))).strftime(
@@ -807,7 +802,8 @@ def up_state(request: Request) -> dict[str, Any]:
     """What ``prax up`` is running on this host, what each group's
     resource is doing, what waits for the roles that are down, and the
     cards' memory: everything the Jobs view needs to offer a swap."""
-    from prax import config, hostinfo, up
+    from prax import config
+    from prax.host import hostinfo, up
 
     state = up.status(config.data_dir())
     return {
@@ -835,7 +831,8 @@ def up_command(req: UpCommand, request: Request) -> dict[str, Any]:
     a supervisor is there to read it. A swap also lets the deferred
     readings of that role go, so the worker offers them at once instead
     of waiting out its ten minutes."""
-    from prax import config, up
+    from prax import config
+    from prax.host import up
 
     if req.cmd not in ("start", "stop", "restart", "swap", "unswap"):
         raise HTTPException(400, "cmd must be start, stop, restart, swap or unswap")
@@ -909,7 +906,7 @@ def tokens(request: Request) -> dict[str, Any]:
 @router.post("/tokens")
 def token_add(req: TokenReq, request: Request) -> dict[str, Any]:
     """A new named token. The secret is in this answer and nowhere else."""
-    from prax import ontology
+    from prax.graph import ontology
 
     known = set(ontology.current().modules) | {store.UNASSIGNED}
     unknown = sorted(set(req.domains or []) - known)

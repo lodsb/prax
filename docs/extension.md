@@ -2,7 +2,7 @@
 
 Built (`clients/browser-extension/`, 2026-09-12). One Manifest V3
 codebase for Firefox, Waterfox and Chrome, tested by hand in Waterfox
-first. The door it talks to is `prax.inbox` (howto 3l). `POST
+first. The door it talks to is `prax.capture.inbox` (howto 3l). `POST
 /ingest/html` takes a page as the browser rendered it, `POST
 /ingest/url` a bare URL. Both take a domain set, tags and a
 capture-session id.

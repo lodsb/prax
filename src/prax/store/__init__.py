@@ -30,8 +30,11 @@ from __future__ import annotations
 import json  # noqa: F401 - store.json is part of the surface
 import sqlite3  # noqa: F401 - callers type against store.sqlite3
 
-from prax import chunking, config, embeddings, ontology, vectors  # noqa: F401
-from prax import rerank as rerank_mod  # noqa: F401
+from prax import config  # noqa: F401
+from prax.graph import ontology  # noqa: F401
+from prax.ml import embeddings, vectors  # noqa: F401
+from prax.ml import rerank as rerank_mod  # noqa: F401
+from prax.text import chunking  # noqa: F401
 
 from .backup import (  # noqa: F401
     MANIFEST,

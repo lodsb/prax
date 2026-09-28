@@ -327,7 +327,7 @@ function mergeRow(it) {
 // What the paid steps have cost, and what is left of the budget. A host
 // whose models are all local has an empty ledger and no limits, and the
 // panel says so in one line. Money is what was charged at the price of
-// the moment (prax.budget), not an estimate of the invoice.
+// the moment (prax.ml.budget), not an estimate of the invoice.
 function usd(n) {
   const v = Number(n || 0);
   return v && v < 0.01 ? `${(v * 100).toFixed(2)} ¢` : `$${v.toFixed(2)}`;

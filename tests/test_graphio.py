@@ -1,4 +1,4 @@
-"""A piece of the graph as a file and back (``prax.graphio``): export
+"""A piece of the graph as a file and back (``prax.graph.graphio``): export
 from one library, import into another, import again."""
 
 from __future__ import annotations
@@ -9,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from prax import graphio, store
+from prax import store
+from prax.graph import graphio
 
 PAPER = "Wave digital filters. " * 40
 

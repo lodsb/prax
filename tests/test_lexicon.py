@@ -1,6 +1,6 @@
 """The words that say what a name is are data beside the types.
 
-They were regular expressions in `prax.review`, invisible to the
+They were regular expressions in `prax.graph.review`, invisible to the
 ontology they describe (`docs/stratification.md`, stratum C).
 """
 
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from prax import ontology, review
+from prax.graph import ontology, review
 
 
 def test_the_lexicon_loads_beside_the_modules() -> None:

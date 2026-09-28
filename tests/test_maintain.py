@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import config, inbox, store
+from prax import config, store
+from prax.capture import inbox
 
 
 def test_the_pass_rebuilds_what_is_derived(

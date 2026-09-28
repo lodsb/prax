@@ -18,7 +18,8 @@ from typing import Any
 
 import pytest
 
-from prax import ontology, store
+from prax import store
+from prax.graph import ontology
 from prax.importers import zotero
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zotero"

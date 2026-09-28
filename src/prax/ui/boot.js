@@ -15,10 +15,10 @@ let uploading = false;  // an upload batch in flight: the inbox view must not be
 // The last upload's summary, shown until dismissed or the next one: in
 // sessionStorage, so the view's re-renders and a reload of the tab keep it.
 function inboxReport() {
-  try { return sessionStorage.getItem("prax.inbox-report") || ""; } catch (_) { return ""; }
+  try { return sessionStorage.getItem("prax.capture.inbox-report") || ""; } catch (_) { return ""; }
 }
 function keepInboxReport(html) {
-  try { html ? sessionStorage.setItem("prax.inbox-report", html) : sessionStorage.removeItem("prax.inbox-report"); } catch (_) { /* no storage */ }
+  try { html ? sessionStorage.setItem("prax.capture.inbox-report", html) : sessionStorage.removeItem("prax.capture.inbox-report"); } catch (_) { /* no storage */ }
 }
 function typing() {
   const el = document.activeElement;

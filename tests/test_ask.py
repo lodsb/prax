@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import ask, config, store
+from prax import config, store
+from prax.answering import ask
 
 
 def _library(con: sqlite3.Connection) -> tuple[int, int]:

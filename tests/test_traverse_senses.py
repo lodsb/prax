@@ -14,7 +14,8 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import store, surf
+from prax import store
+from prax.answering import surf
 
 
 @pytest.fixture()

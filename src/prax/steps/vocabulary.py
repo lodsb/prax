@@ -1,12 +1,12 @@
 """The vocabulary step: one name per thing, whatever language the
-document was in, and the word the other way (``prax.vocabulary``)."""
+document was in, and the word the other way (``prax.graph.vocabulary``)."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from prax import models, store
-from prax import vocabulary as words
+from prax.graph import vocabulary as words
 
 from .base import HandOut, Log, ModelStep, TakeIn
 

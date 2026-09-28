@@ -1,4 +1,4 @@
-"""The routes from a document (``prax.routes``): what has been done to
+"""The routes from a document (``prax.capture.routes``): what has been done to
 it and what can be asked for, the extraction request, and the door's
 endpoints behind the "process…" dialog."""
 
@@ -10,7 +10,9 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import extraction, models, ontology, routes, store
+from prax import models, store
+from prax.capture import routes
+from prax.graph import extraction, ontology
 
 FIG_A = "a" * 64
 FIG_B = "b" * 64

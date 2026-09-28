@@ -27,8 +27,9 @@ from typing import Any
 
 import yaml
 
-from prax import config, embeddings, store
+from prax import config, store
 from prax.importers import zotero
+from prax.ml import embeddings
 from prax.parsers import queue
 
 QUERIES = config.REPO_ROOT / "tests" / "eval" / "queries.yaml"

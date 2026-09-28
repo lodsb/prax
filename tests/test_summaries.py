@@ -7,7 +7,8 @@ from typing import Any
 
 import pytest
 
-from prax import ontology, summaries
+from prax.graph import ontology
+from prax.writing import summaries
 
 # two summaries of the length a real one has: the detector says nothing
 # about six words, which is a property this file also tests
@@ -96,7 +97,7 @@ def test_the_prompt_writes_names_as_printed() -> None:
     """Translation of the common names is the watched vocabulary pass's,
     which keeps the printed word as a label; the prompt translates nothing
     (it did from 2026-09-24 to -26, and the printed word was lost)."""
-    from prax import extraction
+    from prax.graph import extraction
 
     prompt = extraction.system_prompt(ontology.current())
     assert "Write every name as the document prints it" in prompt
@@ -297,7 +298,8 @@ def test_a_translation_not_good_enough_is_asked_for_again(
     repair of rows: the summary as first written is still there."""
     from fastapi.testclient import TestClient
 
-    from prax import pipeline, store, work, worker
+    from prax import store, work, worker
+    from prax.capture import pipeline
 
     monkeypatch.setenv("PRAX_SUMMARIES", "stub")
     work._leases.clear()
@@ -371,7 +373,9 @@ def test_heal_takes_the_label_off_a_stored_summary(
 def test_the_library_s_language_is_a_setting(monkeypatch: pytest.MonkeyPatch) -> None:
     """English by default and not a constant: the two passes, the
     extraction prompt and the sections prompt all read `graph.language`."""
-    from prax import extraction, language, sections
+    from prax.graph import extraction
+    from prax.text import language
+    from prax.writing import sections
 
     assert language.canonical() == "en"
     assert "English" in summaries.system()

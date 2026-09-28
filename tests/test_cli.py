@@ -248,7 +248,7 @@ def test_import_links_dry_run_then_for_real(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    from prax import inbox
+    from prax.capture import inbox
 
     page = "<html><head><title>WDF</title></head><body><p>{}</p></body></html>"
 

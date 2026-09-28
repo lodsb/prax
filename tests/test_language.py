@@ -8,7 +8,8 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import language, store
+from prax import store
+from prax.text import language
 
 
 @pytest.fixture()

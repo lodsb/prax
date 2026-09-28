@@ -1,6 +1,6 @@
 import pytest
 
-from prax import hostinfo
+from prax.host import hostinfo
 
 
 def test_memory_numbers_are_sane() -> None:

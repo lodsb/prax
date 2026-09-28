@@ -7,7 +7,8 @@ import sqlite3
 
 import pytest
 
-from prax import compounds, store
+from prax import store
+from prax.text import compounds
 
 
 def _stock(con: sqlite3.Connection, word: str, n: int = 4) -> None:

@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from prax import review, store
+from prax import store
+from prax.graph import review
 
 
 def _queue(

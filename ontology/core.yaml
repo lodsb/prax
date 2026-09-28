@@ -3,7 +3,7 @@
 # this one and subtypes it: an author is a person, a paper is a document.
 # Keep it SMALL; a subtype is accepted wherever its parent is allowed, so
 # relations declared here on person hold for authors. Format:
-# src/prax/ontology.py. Bump `version` when a type or relation changes.
+# src/prax/graph/ontology.py. Bump `version` when a type or relation changes.
 #
 # `naming:` says whether a type's names are `proper` (one particular
 # thing: a person, a publisher, a product, a title — the same string in

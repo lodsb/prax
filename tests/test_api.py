@@ -8,12 +8,12 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import ontology
 from prax.api import app
+from prax.graph import ontology
 
 
 def ontology_version_now() -> str:
-    from prax import ontology
+    from prax.graph import ontology
 
     return ontology.current().version
 
@@ -652,7 +652,8 @@ def test_the_door_reports_what_waits_and_writes_a_swap(
     import json
     import os
 
-    from prax import config, up, work
+    from prax import config, work
+    from prax.host import up
 
     pdf = client.post(
         "/ingest/file",

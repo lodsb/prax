@@ -1,11 +1,11 @@
 # The words that say what a name is, and the words that say a name is not
 # one. Data, beside the types they are about, rather than regular
-# expressions in `prax.review` — which is where they lived until
+# expressions in `prax.graph.review` — which is where they lived until
 # 2026-09-24, invisible to the ontology they describe, so growing
 # research.yaml grew nothing here and nothing said it should
 # (docs/stratification.md, stratum C).
 #
-# `prax.ontology.lexicon()` loads this; `prax.review` builds its patterns
+# `prax.graph.ontology.lexicon()` loads this; `prax.graph.review` builds its patterns
 # from it. A `stem` matches from the start of a word onwards, so
 # "universit" catches university, universities and Universität. A `word`
 # must be the whole word: "mit" is MIT and not Smith, which is the

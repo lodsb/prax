@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 from test_up import CHILD, PY, child, runs_of, wait_for
 
-from prax import up
+from prax.host import up
 
 
 def pids_of(mark: Path) -> list[int]:

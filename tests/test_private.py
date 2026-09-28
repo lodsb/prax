@@ -11,7 +11,8 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import auth, private, store
+from prax import store
+from prax.wall import auth, private
 
 RULES = private.Rules(names=("Jane Example",), paths=("/volume1/admin/",))
 

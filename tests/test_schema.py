@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from prax import config, ontology, store
+from prax import config, store
+from prax.graph import ontology
 
 # ------------------------------------------------------------- migrations
 

@@ -13,7 +13,7 @@ import re
 import sqlite3
 from typing import Any
 
-from prax import blocks, markup
+from prax.text import blocks, markup
 
 from .base import _read_archive, _reading, _serialized, document_hidden
 from .documents import _set_promote, get_meta, index_text, register, set_meta
@@ -26,9 +26,9 @@ from .graph import Edge, find_edges, invalidate_edge, link, rename_entity
 # documents are edges. An agent never overwrites human text: ``write_page``
 # refuses an agent revision over a human one unless told to; ``append_page``
 # adds a section instead, ``fill_blocks`` replaces the interiors of the
-# page's ask blocks (``prax.blocks``) and nothing outside them. A
+# page's ask blocks (``prax.text.blocks``) and nothing outside them. A
 # ``question`` page is a standing question the door keeps answered
-# (``prax.questions``), a ``briefing`` the day's page of what arrived;
+# (``prax.answering.questions``), a ``briefing`` the day's page of what arrived;
 # both are the agent's, a person adds sections under them.
 
 PAGE_KINDS = ("addendum", "project", "synthesis", "topic", "question", "briefing")
@@ -388,7 +388,7 @@ def fill_blocks(
     note: str | None = None,
     release: set[str] | None = None,
 ) -> dict[str, Any]:
-    """Replace the interiors of a page's ask blocks (``prax.blocks``), by
+    """Replace the interiors of a page's ask blocks (``prax.text.blocks``), by
     id, as one agent revision; nothing outside the blocks changes, so a
     person's text needs no ``force``. A block edited by hand since the
     door wrote it is left as it is and reported ``held`` unless its id is

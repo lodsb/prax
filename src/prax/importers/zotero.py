@@ -36,7 +36,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
-from prax import ontology, store
+from prax import store
+from prax.graph import ontology
 
 TEXT_SOURCE = "zotero-ft-cache"
 FT_CACHE = ".zotero-ft-cache"

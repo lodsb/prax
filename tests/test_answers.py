@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from prax import answers
+from prax.text import answers
 
 
 @pytest.mark.parametrize(

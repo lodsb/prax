@@ -11,7 +11,7 @@ hand), the duplicate captures of one page, and the review queue's two
 rule passes (a replay against the current ontology, then the typing
 rules — what the door does for one document right after its extraction,
 here for the whole queue), and the citations a document's own reference
-list makes to documents in the library (``prax.references``: the entries
+list makes to documents in the library (``prax.text.references``: the entries
 read by rules, matched by title, creators and year with a score —
 ``cites`` edges with the score as their confidence and evidence, for
 the four documents in five that have no DOI for Crossref to answer).
@@ -38,7 +38,8 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
-from prax import acronyms, config, references
+from prax import config
+from prax.text import acronyms, references
 
 from .base import _reading, now
 from .documents import (
@@ -90,7 +91,7 @@ ON_REQUEST = ("rechunk", "rejudge")
 
 def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """Every text artifact read once for its "phrase (ACRONYM)" definitions
-    (``prax.acronyms``); the table replaced. Minutes over a large library."""
+    (``prax.text.acronyms``); the table replaced. Minutes over a large library."""
     counts: Counter[tuple[str, str]] = Counter()
     rows = con.execute(
         "SELECT id, text_hash FROM documents WHERE text_hash IS NOT NULL"
@@ -156,7 +157,7 @@ def _review(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The review queue against the current ontology (``review.replay``:
     a typed item the ontology accepts now becomes an edge), then the
     typing rules over every open item (``review.apply_typing_rules``)."""
-    from prax import review
+    from prax.graph import review
 
     job.update(note="review: replay against the ontology")
     replayed = review.replay(con)
@@ -510,8 +511,8 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     than not is worse than no rule
     (`docs/eval/typing-rules-2026-09-24.md`).
     """
-    from prax import ontology
-    from prax.resolution import SELF_KINDS
+    from prax.graph import ontology
+    from prax.graph.resolution import SELF_KINDS
 
     onto = ontology.current()
     proposes = onto.relations.get("proposes")
@@ -671,13 +672,13 @@ def _lengths(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 
 
 def _private(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
-    """The personal-document rules (``prax.private``, stage V) over every
+    """The personal-document rules (``prax.wall.private``, stage V) over every
     open document no person has decided about and these rules have not
     looked at: a new rule in prax.yaml reads the library again, an
     unchanged one what arrived and what showed no cue (a file read and no
     write each). A document with no text yet is
     looked at by its title and paths, and again once it is read."""
-    from prax import private
+    from prax.wall import private
 
     rules = private.rules()
     stamp = rules.stamp()
@@ -702,7 +703,7 @@ def _private(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 
 def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The language of every document that does not say yet
-    (``prax.language`` over the head of its text artifact), and of every
+    (``prax.text.language`` over the head of its text artifact), and of every
     summary that does not say yet.
 
     Cheap and idempotent: a document with ``meta.lang`` is passed over, so
@@ -711,7 +712,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     tells the ``summaries`` step which of them are not in the language the
     document field is written in.
     """
-    from prax import language
+    from prax.text import language
 
     rows = con.execute(
         "SELECT id, text_hash FROM documents WHERE text_hash IS NOT NULL"
@@ -819,7 +820,7 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     This asks it again, and a name it overturns goes back in the queue.
     On request only: it reads every ruled name, a minute or so.
     """
-    from prax import vocabulary
+    from prax.graph import vocabulary
 
     rulings = corpus_rulings(con)
     sizes = vocabulary.library_sizes(con)
@@ -835,10 +836,10 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 
 def _communities(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The regions of the library rebuilt: the topical entities partitioned
-    at two levels (``prax.communities``), each new community keeping the
+    at two levels (``prax.graph.communities``), each new community keeping the
     id and summary of the old one it overlaps most, a summary whose
     members moved marked stale for the summaries step. Seconds."""
-    from prax import communities
+    from prax.graph import communities
 
     job.update(note="communities: the graph")
     docs, direct = communities_input(con, communities.topical_types())

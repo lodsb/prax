@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from prax import extraction, lineformat, ontology, store
+from prax import store
+from prax.graph import extraction, lineformat, ontology
 
 T = extraction.Triple
 SEP = lineformat.SEP

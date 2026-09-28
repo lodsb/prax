@@ -10,11 +10,9 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
-from prax import (
-    inbox,
-    ontology,
-    store,
-)
+from prax import store
+from prax.capture import inbox
+from prax.graph import ontology
 
 from ._base import _capture_out, _con, _split, max_upload
 

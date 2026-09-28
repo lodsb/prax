@@ -279,7 +279,7 @@ are open, without any intermediate service.
   time; the API is bound to the private network's interface only. CORS
   allows the extension origin.
 
-The server side exists (`prax.inbox`, howto 3l): `POST /ingest/html`
+The server side exists (`prax.capture.inbox`, howto 3l): `POST /ingest/html`
 and `POST /ingest/url` as described, captures with `meta.capture
 {at, session, by}`, canonical URLs and `meta.previous_capture`, a domain
 set per capture, CORS for the extension's origin through

@@ -26,7 +26,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import inbox, worker
+from prax import worker
+from prax.capture import inbox
 
 
 def main() -> int:

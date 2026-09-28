@@ -1,7 +1,7 @@
 # Graph files: a piece of the graph, exported and imported
 
 `prax export` writes what a seed reaches as one file. `prax import graph`
-reads such a file into another library. The code is `prax.graphio`; the
+reads such a file into another library. The code is `prax.graph.graphio`; the
 door's routes are `GET /graph/export` and `POST /graph/import`.
 
     prax export --project synth -o .prax/graph.jsonl

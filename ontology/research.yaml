@@ -5,7 +5,7 @@
 # types, bump `version`. Edges keep the version they were written under.
 #
 # v1 (2026-09-09): descriptions rewritten as instructions for the extractor
-# (prax.extraction builds its prompt from this file); `venue` added so
+# (prax.graph.extraction builds its prompt from this file); `venue` added so
 # publication context has a home; `cites` requires a title the paper names.
 # v2 (2026-09-10): from the review queue after 1,021 extracted documents
 # (docs/ontology-v2.md): `uses`, `about`, `extends` and `proposes` widened

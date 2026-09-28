@@ -38,7 +38,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from prax import markup
+from prax.text import markup
 
 MIN_HTML_BYTES = 4_000  # smaller inline images are icons
 BIG_HTML_BYTES = 40_000  # a photo, caption or not
@@ -49,7 +49,7 @@ MAX_PDF_REPEATS = 3  # an image placed on more pages than this is a logo
 MAX_FIGURES = 60  # per document
 MAX_SIDE = 1600  # pixels, for the vision model
 _CAPTION = re.compile(r"^\W*(fig\.?|figure|abb\.?|abbildung)\s*\d+", re.IGNORECASE)
-# the page a line belongs to, as pymupdf4llm marks it (prax.chunking)
+# the page a line belongs to, as pymupdf4llm marks it (prax.text.chunking)
 _PAGE_MARK = markup.PAGE_MARK
 # a caption *line*, which is stricter than _CAPTION: the number is
 # followed by a delimiter, so "Figure 2 shows a recorded performance" —

@@ -44,10 +44,10 @@ SECTIONS = (
     "graph",  # language: which of a thing's names this host shows
     "paths",  # models (where fetched model files go), backup, llama_server
     "sources",  # what the importers need: github user and token
-    "run",  # what `prax up` keeps alive on this host (prax.up)
-    "budget",  # daily_usd, monthly_usd: what the paid steps may spend (prax.budget)
-    "schedule",  # the door's clock: maintain and backup at their hours (prax.schedule)
-    "private",  # what looks personal (prax.private); the owner's names live here only
+    "run",  # what `prax up` keeps alive on this host (prax.host.up)
+    "budget",  # daily_usd, monthly_usd: what the paid steps may spend (prax.ml.budget)
+    "schedule",  # the door's clock: maintain and backup (prax.host.schedule)
+    "private",  # what looks personal (prax.wall.private); the owner's names
 )
 
 

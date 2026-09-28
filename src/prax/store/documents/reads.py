@@ -183,7 +183,7 @@ def list_documents(
         # the documents no module was set for, which every module holds
         clauses.append("json_extract(d.meta, '$.domains') IS NULL")
     elif domain:
-        from prax import ontology
+        from prax.graph import ontology
 
         within = sorted(ontology.current().within(domain))
         marks = ",".join("?" * len(within))

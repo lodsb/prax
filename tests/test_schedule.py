@@ -11,7 +11,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import config, schedule, store, worker
+from prax import config, store, worker
+from prax.host import schedule
 
 
 def test_entries_read_the_hours() -> None:
@@ -214,8 +215,9 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
     """A night's slice of the documents whose pictures the vision model has
     not read, and nothing while the last slice waits: all of it at once
     would stand in front of every capture's parse for a day and a half."""
-    from prax import models, pipeline
+    from prax import models
     from prax.api.jobs import _start_figures
+    from prax.capture import pipeline
 
     local = models.ModelSpec(
         name="server", kind="openai", base_url="http://127.0.0.1:1/v1", model="v"

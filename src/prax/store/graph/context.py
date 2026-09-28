@@ -339,7 +339,7 @@ def hub_graph(
     limit = max(1, min(limit, 200))
     docs, docs_args = "", tuple[str, ...]()
     if domain:
-        from prax import ontology
+        from prax.graph import ontology
 
         onto = ontology.current()
         within = sorted(onto.within(domain))
@@ -581,7 +581,7 @@ def _suspect(alias: str, into: str) -> str | None:
     variants and translations share no such shape and are not listed."""
     import difflib
 
-    from prax import resolution
+    from prax.graph import resolution
 
     x, y = resolution.normalize(alias).split(), resolution.normalize(into).split()
     wx, wy = set(x), set(y)
@@ -651,7 +651,7 @@ def merges_page(
     }
 
 
-# ------------------------------------------ a sub-graph, for export (prax.graphio)
+# -------------------------------------- a sub-graph, for export (prax.graph.graphio)
 
 
 @_reading

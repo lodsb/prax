@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Whether the local model's probability for "are these one thing?"
 predicts the adjudicator's answer (docs/PLAN.md, "A confidence that was
-measured, not written"; ``prax.calibration``).
+measured, not written"; ``prax.graph.calibration``).
 
 Three steps, each resumable, into a directory of its own (never the
 store's):
@@ -57,8 +57,9 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import calibration as cal
-from prax import config, models, resolution
+from prax import config, models
+from prax.graph import calibration as cal
+from prax.graph import resolution
 
 
 def _ro() -> sqlite3.Connection:
@@ -102,7 +103,7 @@ def build(out: Path, threshold: float) -> None:
         if r["type"] in resolution.LIKELY_TYPES
         and resolution.normalize(r["canon"]) != resolution.normalize(r["alias"])
     ]
-    from prax import embeddings
+    from prax.ml import embeddings
 
     emb = embeddings.current()
     if emb is None:

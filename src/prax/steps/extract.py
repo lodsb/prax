@@ -9,7 +9,10 @@ import contextlib
 import time
 from typing import Any
 
-from prax import extraction, mimes, models, ontology, pipeline, store
+from prax import models, store
+from prax.capture import pipeline
+from prax.graph import extraction, ontology
+from prax.text import mimes
 
 from .base import HandOut, Pass, Step, TakeIn
 

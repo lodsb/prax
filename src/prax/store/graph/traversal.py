@@ -8,7 +8,8 @@ import json
 import sqlite3
 from typing import Any
 
-from prax import config, ontology
+from prax import config
+from prax.graph import ontology
 
 from ..base import VIEWER, _reading, hidden_documents
 from .communities import community_of
@@ -356,7 +357,7 @@ def traverse_map(
     reaches one thing carries no ``senses``.
 
     ``community`` names the region of the library the entity walked is in
-    and the part of it, with their labels and sizes (``prax.communities``):
+    and the part of it, with their labels and sizes (``prax.graph.communities``):
     a way from a fact to what region of the library it belongs to, a few
     dozen bytes. Absent for an entity outside the partition.
     """

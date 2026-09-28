@@ -16,7 +16,8 @@ from typing import Any
 import pytest
 from prax_cli import main as cli
 
-from prax import config, models, up
+from prax import config, models
+from prax.host import up
 
 PY = sys.executable
 
@@ -170,7 +171,7 @@ def test_a_server_beyond_loopback_asks_for_its_key(
     assert argv[argv.index("--api-key") + 1] == "s3cret"
     assert argv[argv.index("--host") + 1] == "192.168.1.20"
     monkeypatch.delenv("PRAX_TEST_LLAMA_KEY")
-    with caplog.at_level("WARNING", logger="prax.up"):
+    with caplog.at_level("WARNING", logger="prax.host.up"):
         argv = up.llama_argv(lan)
     assert "--api-key" not in argv and "without an api key" in caplog.text
     assert "--api-key" not in up.llama_argv(spec)  # loopback: nothing to ask

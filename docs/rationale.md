@@ -132,7 +132,7 @@ threshold below had been set at 1 M vectors; the wall arrived at
 0.86 M.
 
 *Decision (2026-09-08).* The vector store is a usearch HNSW file per
-model next to `prax.db` (`prax.vectors`). The serving path memory-maps
+model next to `prax.db` (`prax.ml.vectors`). The serving path memory-maps
 it, so the process holds only the pages it touches. The batch job
 rebuilds and appends it and saves it atomically. SQLite keeps the
 bookkeeping (`chunk_embeddings`) and nothing else about vectors, which
@@ -322,7 +322,7 @@ directory onto an SSD attached to the board.
 **Decision.** The schema is a sequence of numbered SQL migrations under
 `src/prax/migrations/`, applied by `store.init_db` and recorded in
 SQLite's `user_version`. The ontology is versioned YAML loaded by
-`prax.ontology`; `store.link` validates every edge against it and
+`prax.graph.ontology`; `store.link` validates every edge against it and
 stamps the version. Anything a source knows that has no column yet goes
 into `documents.meta` as JSON.
 
@@ -432,7 +432,7 @@ second server.
 kinds later), a `locator` (for text artifacts a character range plus
 page, with the invariant `chunk.text == artifact[start:end]`), the
 section `heading` path, and for tables a parsed grid in `data`. The
-chunker (`prax.chunking`) parses the Markdown artifact into elements
+chunker (`prax.text.chunking`) parses the Markdown artifact into elements
 and groups paragraphs by section up to a target size. Tables, figure
 captions and code blocks are chunks of their own. Only over-long
 paragraphs fall back to fixed windows. `search` reports kind, heading
@@ -461,7 +461,7 @@ documents is worth running. Legacy rows keep NULL structure until
 
 **Decision (2026-09-21),** after the survey in `research.md` ("Living
 answers and mixed pages"). The standing question (2026-09-21,
-`prax.questions`) is a page that *is* one question. Research mostly
+`prax.answering.questions`) is a page that *is* one question. Research mostly
 happens on a page of one's own: notes, links to documents, and a few
 questions one wants kept current. The block is that: a region of a
 person's page the door keeps answered, with everything around it the
@@ -534,7 +534,7 @@ REPLACE against new hits, outside generation) and a contradiction scan
 over `argues` edges. That is the mechanism that makes a re-ask cheap
 and honest, one stage further, once the block exists to hang it on.
 
-**As built (2026-09-21).** `prax.blocks` is the grammar and the rewrite
+**As built (2026-09-21).** `prax.text.blocks` is the grammar and the rewrite
 alone, with no store and no model. The hash in the tail is of the
 door's own text, with the keep regions and the edge whitespace left
 out. An editor's trailing newline and a remark in a keep region are
@@ -605,7 +605,7 @@ a candidate, and the model hands it back unchanged.
 
 The same reasoning had already been tried the other way and failed. The
 first proposal was to mine "Knollensellerie (celeriac)" glosses the way
-`prax.acronyms` mines "phrase (ACRONYM)": over 300 German documents it
+`prax.text.acronyms` mines "phrase (ACRONYM)": over 300 German documents it
 found 2,348 parentheticals and almost no translations. The corpus is a
 good dictionary for *membership* and a poor one for *equivalence*.
 

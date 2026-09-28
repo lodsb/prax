@@ -138,7 +138,7 @@ chooses them by hand.
 Five steps, each one green on its own, in this order. None of them
 changes what the store holds; they change who owns a pattern.
 
-### 1. `prax.markup` — the artifact's grammar, written once ✅
+### 1. `prax.text.markup` — the artifact's grammar, written once ✅
 
 One module that both *writes* and *matches* every mark prax puts in a
 text: the page mark, a figure line and its reference, `*Read by …*`, a
@@ -153,7 +153,7 @@ The test is the one the current code cannot pass: for each mark, what the
 writer emits is what the matcher matches. Today nothing checks that, and
 the page mark exists in seven places.
 
-*Done 2026-09-24.* `prax.markup` holds the page mark, the figure line
+*Done 2026-09-24.* `prax.text.markup` holds the page mark, the figure line
 and its inlined form, the reading line, the Markdown heading, the table
 separator, the display formula and its number, the section headings, and
 the document link — each as a matcher *and* a writer. Eleven definitions
@@ -172,7 +172,7 @@ One thing measuring caught: `titles.head` matched the page mark
 a behaviour difference, so the unanchored form is kept as its own name
 rather than quietly tightened inside a refactor.
 
-### 2. `prax.answers` — what a model said, cleaned ✅
+### 2. `prax.text.answers` — what a model said, cleaned ✅
 
 One `clean()` that takes the preamble, the fence, the quotation marks,
 the trailing full stop, a reflected label and a `<tool_call>` tail off an
@@ -184,7 +184,7 @@ is the caller's business, *what the model wrapped it in* is not.
 The test is every failure any of the nine has met, in one file. There are
 about fifteen, and they are already written down across seven test files.
 
-*Done 2026-09-24.* `prax.answers` holds `unwrap`, `first_line`,
+*Done 2026-09-24.* `prax.text.answers` holds `unwrap`, `first_line`,
 `strip_tokens` and `is_label_line`, and 27 cases in one file — every
 failure the seven modules had met separately, plus two the pooling found:
 `Here's` has no space before the `'s`, and a label can end at a quote
@@ -207,7 +207,7 @@ tool:
   cues: [software, library, plugin, …]
 ```
 
-`prax.ontology` loads them the way it loads types, and they carry the
+`prax.graph.ontology` loads them the way it loads types, and they carry the
 module's version, so growing a lexicon is a version bump like growing a
 type. `review.py` keeps the *logic* — which cue wins, what to do when
 none does — and stops holding the knowledge.
@@ -219,7 +219,7 @@ that is code cannot.
 *Done 2026-09-24.* `ontology/lexicon.yaml`: the organization cues, the
 top-level ones, the words that name a type, and the three kinds of
 non-name (matched whole, a vague start, a start that is never a thing).
-`prax.ontology.lexicon()` loads it; `prax.review` builds its patterns
+`prax.graph.ontology.lexicon()` loads it; `prax.graph.review` builds its patterns
 from it and keeps only the logic and the one thing a word list cannot
 say, which is a *shape* — `_PERSON` is two to five capitalized words, not
 a vocabulary.

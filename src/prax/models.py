@@ -107,7 +107,7 @@ class ModelSpec:
     paid_: bool | None = None
     params: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
     # how `prax up` starts the server for this model (openai kind, on this
-    # machine): the slots, the projector, what stays in RAM (prax.up)
+    # machine): the slots, the projector, what stays in RAM (prax.host.up)
     serve: tuple[tuple[str, Any], ...] = field(default_factory=tuple)
 
     @property
@@ -710,7 +710,7 @@ class ClaudeRuntime:
             import anthropic
 
             self.client = anthropic.Anthropic(timeout=_CLAUDE_TIMEOUT, max_retries=3)
-        from prax.extraction import supports_effort
+        from prax.ml.pricing import supports_effort
 
         params: dict[str, Any] = {
             "model": self.model,

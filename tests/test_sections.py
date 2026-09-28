@@ -12,7 +12,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import sections, store, work, worker
+from prax import store, work, worker
+from prax.writing import sections
 
 
 class Runtime:

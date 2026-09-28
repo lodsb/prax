@@ -3,7 +3,7 @@ section, the advertising, and a recipe's ingredient list."""
 
 from __future__ import annotations
 
-from prax import chunking, furniture, ingredients
+from prax.text import chunking, furniture, ingredients
 
 SPONSOR_READ = """# How a transformer works
 

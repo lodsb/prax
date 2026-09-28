@@ -7,7 +7,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from prax import config, embeddings, store
+from prax import config, store
+from prax.ml import embeddings
 from prax.work import LEASE_SECONDS
 
 from .base import HandOut, Pass, Step, TakeIn

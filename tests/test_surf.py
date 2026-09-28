@@ -10,7 +10,8 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import ask, store, surf
+from prax import store
+from prax.answering import ask, surf
 
 
 def _library(con: sqlite3.Connection) -> tuple[int, int, int]:

@@ -7,7 +7,8 @@ import sqlite3
 
 import pytest
 
-from prax import extraction, store
+from prax import store
+from prax.graph import extraction
 
 EVERY_MODULE = "core3+craft1+electronics1+kitchen2+research9+studio5+workshop2"
 
@@ -43,7 +44,7 @@ def test_synthesis_page_draws_on_sources(con: sqlite3.Connection) -> None:
 
 
 def test_ontology_v5_organizations_and_mentions() -> None:
-    from prax import ontology
+    from prax.graph import ontology
 
     onto = ontology.current()
     assert onto.version == EVERY_MODULE
@@ -64,7 +65,7 @@ def test_ontology_v5_organizations_and_mentions() -> None:
 
 
 def test_ontology_v4_lets_pages_argue() -> None:
-    from prax import ontology
+    from prax.graph import ontology
 
     onto = ontology.current()
     onto.check_edge("page", "supports", "claim")
@@ -229,7 +230,7 @@ def test_extraction_input_names_the_page_kind(con: sqlite3.Connection) -> None:
     paper = store.ingest_text(con, "t", title="P")["doc_id"]
     assert "Kind:" not in extraction.build_input(con, paper).header
     assert "page or project entity" in extraction.system_prompt(
-        __import__("prax.ontology", fromlist=["current"]).current()
+        __import__("prax.graph.ontology", fromlist=["current"]).current()
     )
 
 

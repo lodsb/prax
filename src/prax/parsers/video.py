@@ -36,8 +36,8 @@ import json
 import re
 from typing import Any
 
-from prax.chunking import format_time
 from prax.parsers import figures
+from prax.text.chunking import format_time
 
 META_NAME = "prax-video"
 _META = re.compile(rb'<meta\s+name="prax-video"', re.IGNORECASE)

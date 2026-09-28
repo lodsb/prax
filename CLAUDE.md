@@ -129,7 +129,7 @@ revisit threshold, under "Decision thresholds" below.
    schematic's parts, what kind of part each is, its package) on top of
    it. `craft.yaml` holds what making shares, with `kitchen.yaml`
    (recipes) and `workshop.yaml` (builds) on top of it. A family module
-   comes later. `prax.ontology` loads and composes the modules. Names
+   comes later. `prax.graph.ontology` loads and composes the modules. Names
    are unique across modules. A subtype passes wherever its parent is
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
@@ -221,7 +221,7 @@ explicit SQL tools, never retrieval. User-supplied search strings are
 never passed to FTS5 MATCH raw; `prax.store` builds the match
 expression.
 
-`ask` (`prax.ask`) is the same search plus generation. A bounded bundle
+`ask` (`prax.answering.ask`) is the same search plus generation. A bounded bundle
 (one passage per document, plus the graph's facts about it) goes to a
 model chosen per host (`PRAX_ASK`: a local GGUF, Claude, or none, in
 which case the caller's model answers). Answers cite passage numbers,
@@ -229,7 +229,7 @@ which are resolved to chunk ids, and are kept on pages. A synthesis
 page `synthesizes` its sources and may argue claims (ontology v4). v5
 adds organizations (affiliation, funding, who built a tool) and the
 weak `mentions` relation, both grown from the review queue's evidence.
-With steps the model surfs before it answers (`prax.surf`): a bounded
+With steps the model surfs before it answers (`prax.answering.surf`): a bounded
 loop of the door's own reads (search again, read on or into a document
 by words, facts, walk, similar, drop) under a per-step grammar for
 local models. Two budgets, steps and tokens of reading, are clamped to
@@ -239,6 +239,23 @@ reference `docs/ask.md`.
 
 ## Conventions
 
+- The layout (the engineering pass of 2026-09-28). The top of `prax`
+  holds the foundations and the protocol the invariants name: `config`,
+  `models`, `client`, `work`, `worker`, `mcp_server`, and `evaluation`
+  for the scripts. Everything else lives in a package that says what it
+  is about: `store`, `api`, `steps`, `parsers` and `importers` as
+  before, and `text` (the shapes of text: markup, chunks, a page's
+  regions, language, what a model wrapped its answer in; it imports
+  nothing of prax at module level, `tests/test_invariants.py`), `graph`
+  (the ontology, extraction, review, resolution and its calibration,
+  vocabulary, communities, graph files), `writing` (titles, summaries,
+  sections), `answering` (ask, surf, questions), `ml` (the embedder,
+  reranker and vector index, model files, pricing, budget, usage),
+  `capture` (the inbox, drop folders, the pipeline, a document's routes),
+  `host` (`prax up`, autostart, the tray, the door's clock, the machine's
+  memory) and `wall` (tokens and what is personal). A new module goes
+  into the package whose sentence it fits, and a package's `__init__`
+  re-exports nothing: a caller writes `from prax.text import markup`.
 - Python 3.11 or later, `pyproject.toml` with uv or pip, `pytest` for
   tests. The dev environment is a `.venv` in the repo root
   (`docs/howto.md`).
@@ -251,7 +268,7 @@ reference `docs/ask.md`.
   A new source adds keys there before it earns a column.
 - Chunks are addressable regions: `kind`, `locator` (character range
   plus page; `chunk.text == artifact[start:end]` always), `heading`
-  path, table `data`. Chunking lives in `prax.chunking`, and chunks are
+  path, table `data`. Chunking lives in `prax.text.chunking`, and chunks are
   disposable: change the chunker, then run `prax maintain --rechunk`.
   New media add a kind and a locator shape, never a new table for
   chunks (rationale R13), and only when the region is stored or located
@@ -274,26 +291,26 @@ reference `docs/ask.md`.
   like a reference. Its comment section is one `comment` chunk, from
   the `## Comments` heading the HTML parser writes at the end of a page
   of some size. Its advertising is an `ad` chunk per run
-  (`prax.furniture`: a sponsor's mark with an offer beside it, reaching
+  (`prax.text.furniture`: a sponsor's mark with an offer beside it, reaching
   over the pieces that name the same brand). Both stay in the artifact,
   out of the vectors, out of a search unless asked for by kind, out of
   what an extraction reads, and folded in the document view.
 - A recipe's ingredient list is one `ingredients` chunk, from its
   "Zutaten" or "Ingredients" heading to the last of its lists, with the
   servings and every line's amount, unit and note in `data`
-  (`prax.ingredients`). Not set aside: an ingredient is what a search
+  (`prax.text.ingredients`). Not set aside: an ingredient is what a search
   for one should find. The line as written is always kept, so a later
   pass can answer "the same for six people".
 - An entry of a reference list (under a References/Bibliography
   heading) is a `reference` chunk. Its `data` holds what it names
-  (number, surnames, year, title, a printed id; `prax.references`) and,
+  (number, surnames, year, title, a printed id; `prax.text.references`) and,
   once the `references` pass of `prax maintain` has matched it, the
   library document it cites (`data.cited`). The links are kept on the
   document as `meta.references.links`, so a rechunk puts them back.
   Reference chunks are never embedded and stay out of a search unless
   asked for by kind (`store.ASIDE_KINDS`).
 - An ask block of a page is a standing question between `<!-- prax:ask
-  id=q1 "…" -->` and `<!-- /prax:ask id=q1 -->`. `prax.blocks` is the
+  id=q1 "…" -->` and `<!-- /prax:ask id=q1 -->`. `prax.text.blocks` is the
   grammar: the tail's hash of the door's text, `held` when a hand was
   in the interior, `prax:keep` regions carried over. The block is one
   `ask` chunk from head to tail, set aside like a reference, so an
@@ -333,21 +350,21 @@ reference `docs/ask.md`.
   growing (519 passes in three hours, 2026-09-24).
 - What a host *runs* is configuration too. `run:` names which of
   prax's roles (llama-server, a reranker, the door, the worker) this
-  host keeps alive, and `prax up` (`prax.up`) keeps them so. The
+  host keeps alive, and `prax up` (`prax.host.up`) keeps them so. The
   operating system's only job is one login entry that starts `prax up`
-  (`prax.autostart`). On a desktop the tray icon of `prax.tray` goes
+  (`prax.host.autostart`). On a desktop the tray icon of `prax.host.tray` goes
   with it: an optional extra and a client of the supervisor's status
   and command files, never a second supervisor. The timed passes are
-  the door's own clock (`schedule:`, `prax.schedule`) and the worker's
+  the door's own clock (`schedule:`, `prax.host.schedule`) and the worker's
   `nightly` hour, never a cron or scheduler entry per pass. No shell
   script derives the process model a second time.
-- The format prax writes into a text is `prax.markup`, which both emits
+- The format prax writes into a text is `prax.text.markup`, which both emits
   a mark and matches it: the page mark, a figure line and its inlined
   form, a reading, a heading, a table separator, a display formula and
   its number, the `## Figures` and `## Comments` sections, a
   `[title](#doc/N)` link. A module that reads the format imports it and
   never writes the pattern again; it imports nothing of prax itself.
-- What a model wrapped its answer in is `prax.answers` — a fence, a
+- What a model wrapped its answer in is `prax.text.answers` — a fence, a
   preamble, a label the message used, quotes, a chat token. What a
   *good* answer looks like stays with the caller that asked.
 - A long document says what its parts are about: `meta.sections`,
@@ -359,7 +376,7 @@ reference `docs/ask.md`.
   characters in one FTS row. Not chunks: a chunk's text *is* its region
   of the artifact, and a generated sentence is not.
 - A document says what language it is in: `meta.lang`, an ISO 639-1
-  code written by `prax.language` when the text is indexed, and filled
+  code written by `prax.text.language` when the text is indexed, and filled
   in for older documents by the `languages` pass of `prax maintain`.
   The detector is `py3langid` narrowed to the languages the host
   expects (`parse.languages`), with a stopword count as the fallback
@@ -383,7 +400,7 @@ reference `docs/ask.md`.
   `entities.name` is still the identity; making it a display label is
   `docs/stratification.md` step 5, to be done whole.
 - The library is written in one language, `graph.language` (English by
-  default, `prax.language.canonical`): its summaries, the common names in
+  default, `prax.text.language.canonical`): its summaries, the common names in
   its graph, and what the graph shows. One setting rather than two,
   because a library has one language the way it has one ontology. The
   extraction prompt, the summaries pass, the vocabulary pass and the
@@ -396,12 +413,12 @@ reference `docs/ask.md`.
   kept rather than replaced by the English one, and `meta.summary_lang`
   says which language the canonical one is in (absent when the summary
   is too short to place). The extraction prompt asks for the summary in
-  that language, and the `summaries` step (`prax.summaries`) translates
+  that language, and the `summaries` step (`prax.writing.summaries`) translates
   the ones written before it said so, with the local model and no
   document read.
 - A name is written as the document prints it, and translated once, in
   one place. The extraction prompt translates no name; the watched
-  `vocabulary` step (`prax.vocabulary`) puts a `naming: common` name
+  `vocabulary` step (`prax.graph.vocabulary`) puts a `naming: common` name
   into the library's language and keeps the printed word as a label in
   the document's language, which is what a query in that language
   crosses on (`Apfel` -> `apple`). Nothing translates a `proper` name.
@@ -433,7 +450,7 @@ reference `docs/ask.md`.
   `tests/test_wall.py` walks every one of them and fails when one is
   added without a case. A new read that takes a document id is guarded
   the same way, or it is a leak. What is personal (stage V) is suspected
-  by rules and decided by a person: `prax.private` (defaults) plus
+  by rules and decided by a person: `prax.wall.private` (defaults) plus
   `private:` in prax.yaml (the owner's names and private paths, which
   live there and never in the repository), run by `store.suspect` when a
   text is indexed and by the `private` pass of `prax maintain`. A rule

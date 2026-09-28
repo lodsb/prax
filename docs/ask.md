@@ -2,7 +2,7 @@
 
 `ask` answers a question from the library, with citations. On a host
 that has a model, it is a loop: the model works the library for a few
-steps, then writes from what it kept (`prax.surf`, `prax.ask`). This
+steps, then writes from what it kept (`prax.answering.surf`, `prax.answering.ask`). This
 page is the reference for what that model may do, what it may not,
 what each move costs, and how to steer it. Setup is in
 `docs/howto.md` section 3i. The reasons for the design are in
@@ -281,7 +281,7 @@ whose agent part you edited is left alone.
 
 | To change | Touch |
 |---|---|
-| what a move returns, or add one | a `do_<action>` in `prax.surf` over a store read, the action in `SYSTEM` and `grammar`, a word for it in the UI's `STEP_WORDS` and the CLI's `_STEP_WORDS` |
+| what a move returns, or add one | a `do_<action>` in `prax.answering.surf` over a store read, the action in `SYSTEM` and `grammar`, a word for it in the UI's `STEP_WORDS` and the CLI's `_STEP_WORDS` |
 | how the model is told to work | `surf.SYSTEM` |
 | what the answer is written from | `ask.SYSTEM`, `ask.Bundle.as_message` |
 | the budgets and their ceilings | `surf.STEPS`, `surf.reading_bounds`, `steps.ask` in `prax.yaml` |

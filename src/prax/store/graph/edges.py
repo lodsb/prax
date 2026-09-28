@@ -9,7 +9,8 @@ import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
-from prax import mimes, ontology
+from prax.graph import ontology
+from prax.text import mimes
 
 from ..base import (
     _NOW,

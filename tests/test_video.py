@@ -14,8 +14,9 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import chunking, parsers, store, work
+from prax import parsers, store, work
 from prax.parsers import video
+from prax.text import chunking
 
 
 @pytest.fixture()

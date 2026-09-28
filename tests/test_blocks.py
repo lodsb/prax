@@ -11,7 +11,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import ask, blocks, chunking, questions, store
+from prax import store
+from prax.answering import ask, questions
+from prax.text import blocks, chunking
 
 PAGE = """# FDN notes
 

@@ -72,7 +72,7 @@ def test_plain_fences_code_regions_inside_prose() -> None:
     assert "return BP;" in fenced and "Thanks for the pointers" not in fenced
     assert lines[0] == "Line and Newton method" and lines[-2].startswith("Thanks")
     # the chunker keeps the fenced region as one code chunk
-    from prax import chunking
+    from prax.text import chunking
 
     kinds = [(c.kind, c.text[:20]) for c in chunking.chunk(out)]
     assert [k for k, _ in kinds] == ["text", "code", "text"], kinds

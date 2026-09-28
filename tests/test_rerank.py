@@ -8,7 +8,8 @@ import sqlite3
 import numpy as np
 import pytest
 
-from prax import embeddings, evaluation, rerank, store
+from prax import evaluation, store
+from prax.ml import embeddings, rerank
 
 
 @pytest.fixture(autouse=True)

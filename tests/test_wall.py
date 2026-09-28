@@ -14,7 +14,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import auth, store
+from prax import store
+from prax.wall import auth
 
 ADMIN = "admin-secret"
 

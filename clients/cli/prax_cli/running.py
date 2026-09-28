@@ -275,8 +275,8 @@ def _paid_note(a: Any) -> str:
 def work(a: Any) -> int:
     """Do the model work the door hands out: parse, titles, extract, embed."""
     try:
-        from prax import inbox as inbox_mod
         from prax import worker
+        from prax.capture import inbox as inbox_mod
     except ImportError as exc:  # the thin install has no parsers or embedder
         out.fail(f"this machine cannot do the work: {exc}")
         out.hint('Install what a worker needs: pip install "prax[work]"')
@@ -363,7 +363,7 @@ def models(a: Any) -> int:
     from prax import models as models_mod
 
     if a.fetch:
-        from prax import fetch
+        from prax.ml import fetch
 
         spec = models_mod.spec(a.fetch)
         if spec is None:
@@ -764,7 +764,7 @@ def doctor(door: Door, a: Any) -> int:
         )
     )
     try:
-        from prax import hostinfo
+        from prax.host import hostinfo
 
         mem = hostinfo.memory()
         if mem.get("ram_total_mb"):

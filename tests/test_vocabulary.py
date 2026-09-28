@@ -9,7 +9,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import store, vocabulary, work, worker
+from prax import store, work, worker
+from prax.graph import vocabulary
 
 GERMAN = "Dieses Rezept braucht Olivenöl und Knoblauch für die Pfanne. " * 6
 ENGLISH = "This recipe needs olive oil and garlic for the pan. " * 6

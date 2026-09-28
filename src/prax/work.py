@@ -41,13 +41,9 @@ import time
 from dataclasses import asdict
 from typing import Any
 
-from prax import (
-    extraction,
-    models,
-    pipeline,
-    steps,
-    store,
-)
+from prax import models, steps, store
+from prax.capture import pipeline
+from prax.graph import extraction
 from prax.steps import STEPS, WATCHED_STEPS
 
 LEASE_SECONDS = 900
@@ -102,8 +98,8 @@ def who_runs(con: Any, step: str) -> dict[str, Any]:
 
     The Promote view and the process dialog say all this, rather than
     leaving a document at "pending" with no account of itself."""
-    from prax import budget
     from prax.config import ConfigError
+    from prax.ml import budget
 
     out: dict[str, Any] = {
         "step": step,
@@ -132,7 +128,7 @@ def who_runs(con: Any, step: str) -> dict[str, Any]:
             out["how"] = verdict["how"]
             return out
     if step == "embed":
-        from prax import embeddings
+        from prax.ml import embeddings
 
         verdict = embeddings.ready()
         out["model"] = verdict["model"]
@@ -316,14 +312,14 @@ def hand_out(
 ) -> dict[str, Any]:
     """A batch of work for ``step``, leased to ``worker``. A step whose
     model costs money offers nothing once the host's budget for the day
-    or the month is spent (``prax.budget``); the reason comes back with
+    or the month is spent (``prax.ml.budget``); the reason comes back with
     the empty batch, and the worker says it. What the batch is, is the
     step's (``prax.steps``)."""
     from prax.steps.base import HandOut
 
     limit = _check(step, scope, limit)
     _asked[step] = store.now()
-    from prax import budget
+    from prax.ml import budget
 
     may, why = budget.allows(con, step)
     if not may:
@@ -351,7 +347,7 @@ def _note_spend(
     this host's config resolves the step to — a worker started against
     another config is exactly how an unrecorded bill happens — so the
     reported name is what the row carries."""
-    from prax import budget
+    from prax.ml import budget
 
     with contextlib.suppress(Exception):  # a ledger row is never worth an error
         budget.note(con, step, usage, doc_id=doc_id, run=run, model=model)

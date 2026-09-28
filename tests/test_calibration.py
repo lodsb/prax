@@ -1,5 +1,5 @@
 """The calibration maths the confidence experiment rests on
-(``prax.calibration``)."""
+(``prax.graph.calibration``)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import random
 
 import pytest
 
-from prax import calibration as cal
+from prax.graph import calibration as cal
 
 
 def test_yes_is_the_share_of_yes_and_no_in_the_top_tokens() -> None:

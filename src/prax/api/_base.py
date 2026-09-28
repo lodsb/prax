@@ -8,7 +8,8 @@ from typing import Any
 
 from fastapi import Request
 
-from prax import config, inbox, store
+from prax import config, store
+from prax.capture import inbox
 
 
 def _con(request: Request) -> Any:

@@ -21,8 +21,10 @@ import pytest
 from fastapi.testclient import TestClient
 from test_parsers import AMBRITS_PDF
 
-from prax import chunking, config, parsers, store, up
+from prax import config, parsers, store
+from prax.host import up
 from prax.parsers import figures, queue
+from prax.text import chunking
 
 needs_pymupdf = pytest.mark.skipif(
     importlib.util.find_spec("pymupdf") is None, reason="pymupdf not installed"

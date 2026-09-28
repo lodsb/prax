@@ -9,7 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from prax import config, extraction, lineformat, models, ontology, store
+from prax import config, models, store
+from prax.graph import extraction, lineformat, ontology
+from prax.ml import pricing
 
 T = extraction.Triple
 SEP = lineformat.SEP
@@ -184,7 +186,7 @@ def test_local_extractor_prompts_with_lines_and_applies(
     meta = store.get_meta(con, doc_id)
     assert meta["extraction"]["extractor"] == "local:fake-7b"
     assert meta["summary"] == "A paper about grains."
-    assert extraction.cost_usd(ext.name, result.usage) == 0.0
+    assert pricing.cost_usd(ext.name, result.usage) == 0.0
 
 
 def test_local_extractor_names_the_document_and_apply_drops_reference_numbers(
@@ -239,7 +241,7 @@ def test_current_local_extractor_from_the_file(
     ext = extraction.current()
     assert isinstance(ext, extraction.LocalExtractor)
     assert ext.name == "q@127.0.0.1:1"  # nothing loaded, nothing called
-    assert extraction.price(ext.name) == (0.0, 0.0)
+    assert pricing.price(ext.name) == (0.0, 0.0)
 
 
 def test_identifier_names_become_printed_names() -> None:

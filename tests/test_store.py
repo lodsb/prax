@@ -230,8 +230,8 @@ def test_index_text_survives_lone_surrogates(con: sqlite3.Connection) -> None:
 
 
 def test_chunk_windows() -> None:
-    """The fixed-window fallback lives in prax.chunking now (long paragraphs)."""
-    from prax import chunking
+    """The fixed-window fallback lives in prax.text.chunking now (long paragraphs)."""
+    from prax.text import chunking
 
     assert chunking.windows("") == []
     assert chunking.windows("x" * chunking.WINDOW) == [(0, chunking.WINDOW)]

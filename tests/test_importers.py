@@ -16,7 +16,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import inbox
+from prax.capture import inbox
 from prax.client import Door
 from prax.importers import chats, feed, github, links
 

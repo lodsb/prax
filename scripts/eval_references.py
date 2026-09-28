@@ -3,7 +3,7 @@
 
 Reads only. For every document with a bibliography (chunks under a
 References/Bibliography heading), the entries are split and parsed
-(``prax.references``), each one matched against the library: an id
+(``prax.text.references``), each one matched against the library: an id
 (DOI, arXiv) when printed, else the document-field index's candidates
 (``documents_fts``: title, creators, venue) scored by ``similarity``.
 
@@ -36,8 +36,8 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from prax import references as refs
 from prax import store
+from prax.text import references as refs
 
 HEADINGS = ("references", "bibliography", "literatur", "works cited", "literature")
 _TOKEN = re.compile(r"[^\W\d_]{3,}", re.UNICODE)

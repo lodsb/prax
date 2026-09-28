@@ -109,7 +109,7 @@ def _graph(door: Door, a: Any) -> int:
 
 
 def export(door: Door, a: Any) -> int:
-    """A piece of the graph as a file (``prax.graphio``)."""
+    """A piece of the graph as a file (``prax.graph.graphio``)."""
     params = {
         k: v
         for k, v in {

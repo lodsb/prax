@@ -172,7 +172,7 @@ def get_job(con: sqlite3.Connection, job_id: int) -> dict[str, Any] | None:
 
 def last_job(con: sqlite3.Connection, name: str) -> dict[str, Any] | None:
     """The newest job of that name, running or not: the clock's memory
-    (``prax.schedule``)."""
+    (``prax.host.schedule``)."""
     row = con.execute(
         "SELECT * FROM jobs WHERE name = ? ORDER BY started_at DESC, id DESC LIMIT 1",
         (name,),
@@ -492,7 +492,7 @@ def token_viewer(con: sqlite3.Connection, secret: str) -> Viewer | None:
         return None
     domains = None
     if row["domains"]:
-        from prax import ontology
+        from prax.graph import ontology
 
         onto = ontology.current()
         seen: set[str] = set()

@@ -14,7 +14,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import config, inbox, ontology, parsers, store
+from prax import config, parsers, store
+from prax.capture import inbox
+from prax.graph import ontology
 
 needs_trafilatura = pytest.mark.skipif(
     not parsers.by_name("trafilatura").available(), reason="trafilatura not installed"
@@ -653,7 +655,7 @@ def test_retiring_a_duplicate_joins_its_facts_to_the_keeper(
 def test_a_paper_s_ids_travel_with_its_file_and_fill_in_a_document_that_lacks_them(
     client: TestClient,
 ) -> None:
-    from prax import inbox
+    from prax.capture import inbox
 
     assert inbox.paper_meta(
         {

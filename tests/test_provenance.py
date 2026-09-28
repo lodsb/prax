@@ -7,7 +7,8 @@ import sqlite3
 
 import pytest
 
-from prax import extraction, review, store
+from prax import store
+from prax.graph import extraction, review
 
 E = store.Edge
 T = extraction.Triple

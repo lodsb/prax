@@ -97,7 +97,7 @@ The two that matter for prax are the 384-dimension ones, because
 claims the best retrieval quality of any open multilingual embedder
 under 100 M parameters, and ships ONNX and OpenVINO weights for CPU
 inference. `multilingual-e5-small` is nine points behind it. It is also
-**already registered in `prax.embeddings.MODELS`**, with its repo, its
+**already registered in `prax.ml.embeddings.MODELS`**, with its repo, its
 ONNX files, mean pooling and the `query: ` prefix. It costs three to
 four times bge-small's compute per chunk, which the module's own comment
 already records.

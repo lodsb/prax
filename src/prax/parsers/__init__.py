@@ -71,8 +71,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from prax import config, markup, mimes
+from prax import config
 from prax.parsers import figures
+from prax.text import markup, mimes
 
 
 @dataclass(frozen=True)

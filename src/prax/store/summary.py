@@ -10,7 +10,8 @@ import json
 import sqlite3
 from typing import Any
 
-from prax import config, ontology
+from prax import config
+from prax.graph import ontology
 
 from .base import _reading
 from .documents import DOCTYPES

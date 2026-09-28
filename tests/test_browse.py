@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from prax import ontology, store
+from prax import store
+from prax.graph import ontology
 
 
 def _doc(con: sqlite3.Connection, title: str, domains: list[str] | None) -> int:

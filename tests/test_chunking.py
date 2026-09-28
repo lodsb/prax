@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from prax import chunking, parsers, store
+from prax import parsers, store
+from prax.text import chunking
 
 FIXTURE = Path(__file__).parent / "fixtures" / "zotero"
 

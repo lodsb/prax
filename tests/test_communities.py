@@ -1,5 +1,5 @@
 """The regions of the library: topical entities partitioned at two levels,
-kept across rebuilds, named by traverse (``prax.communities``,
+kept across rebuilds, named by traverse (``prax.graph.communities``,
 docs/communities.md)."""
 
 from __future__ import annotations
@@ -12,7 +12,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import communities, models, store, worker
+from prax import models, store, worker
+from prax.graph import communities
 
 SIGNAL = ["fourier transform", "wavelet", "spectrogram", "filter bank", "windowing"]
 KITCHEN = ["salt", "onion", "garlic", "olive oil", "butter"]

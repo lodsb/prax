@@ -17,13 +17,9 @@ from fastapi.responses import (
 )
 from pydantic import BaseModel
 
-from prax import ask as ask_mod
-from prax import (
-    budget,
-    models,
-    store,
-    work,
-)
+from prax import models, store, work
+from prax.answering import ask as ask_mod
+from prax.ml import budget
 
 from ._base import _con
 
@@ -61,7 +57,7 @@ def ask_config() -> dict[str, Any]:
 def ask(req: AskReq, request: Request) -> Any:
     """Passages and graph facts for a question, and an answer citing them
     when a backend is configured. With ``steps`` the model surfs first
-    (``prax.surf``): the budgets default to the host's and are clamped
+    (``prax.answering.surf``): the budgets default to the host's and are clamped
     to what the model holds; the result carries the trail. ``stream``
     answers with one JSON object per line as it goes — ``step`` events,
     ``answering``, then ``answer`` with the result (or ``error``) — for a
@@ -121,7 +117,7 @@ def _asked_for_server(exc: Exception) -> str:
 
 
 def _note_ask(con: Any, out: dict[str, Any]) -> None:
-    """What an answer cost, into the ledger (``prax.budget``): the ask
+    """What an answer cost, into the ledger (``prax.ml.budget``): the ask
     step's own model, the usage the answerer reported."""
     import contextlib
 

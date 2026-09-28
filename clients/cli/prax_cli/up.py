@@ -1,4 +1,4 @@
-"""``prax up``: keep this host's processes running (``prax.up``)."""
+"""``prax up``: keep this host's processes running (``prax.host.up``)."""
 
 from __future__ import annotations
 
@@ -43,7 +43,7 @@ def _groups_lines(state: dict) -> list[str]:
 
 
 def show_status(data_dir: Path) -> int:
-    from prax import up
+    from prax.host import up
 
     snap = up.status(data_dir)
     if snap is None:
@@ -87,7 +87,8 @@ def show_status(data_dir: Path) -> int:
 
 
 def up(a: Any) -> int:
-    from prax import config, up
+    from prax import config
+    from prax.host import up
 
     data_dir = _data_dir(a)
     try:
@@ -150,7 +151,7 @@ def up(a: Any) -> int:
             out.say(f"asked prax up to restart {a.restart}")
             return 0
         if a.install or a.uninstall:
-            from prax import autostart
+            from prax.host import autostart
 
             if a.uninstall:
                 lines = autostart.uninstall()
@@ -175,7 +176,7 @@ def up(a: Any) -> int:
             )
             return 0
         if getattr(a, "tray", False):
-            from prax import tray as tray_mod
+            from prax.host import tray as tray_mod
 
             return tray_mod.run(data_dir, supervise=True)
         up.attach_log(data_dir)
@@ -190,8 +191,9 @@ def up(a: Any) -> int:
 
 def tray(a: Any) -> int:
     """``prax tray``: an icon beside the supervisor running here."""
-    from prax import config, up
-    from prax import tray as tray_mod
+    from prax import config
+    from prax.host import tray as tray_mod
+    from prax.host import up
 
     data_dir = _data_dir(a)
     try:

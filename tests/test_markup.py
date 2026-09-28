@@ -10,9 +10,10 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from prax import chunking, markup, titles
 from prax.parsers import figures, formulas
 from prax.store import pages
+from prax.text import chunking, markup
+from prax.writing import titles
 
 
 def test_the_page_mark_a_parser_writes_is_the_one_a_reader_matches() -> None:

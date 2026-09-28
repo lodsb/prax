@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from prax import embeddings, evaluation, parsers, store
+from prax import evaluation, parsers, store
+from prax.ml import embeddings
 
 needs_pymupdf = pytest.mark.skipif(
     not parsers.by_name("pymupdf4llm").available(), reason="pymupdf4llm not installed"

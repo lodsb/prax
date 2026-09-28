@@ -21,7 +21,11 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from prax import auth, config, embeddings, inbox, schedule, store
+from prax import config, store
+from prax.capture import inbox
+from prax.host import schedule
+from prax.ml import embeddings
+from prax.wall import auth
 
 from . import ask, capture, documents, graph, jobs, pages, process
 from ._base import _con, max_upload

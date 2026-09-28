@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from prax import glyphs, store
+from prax import store
+from prax.text import glyphs
 
 
 def test_ligatures_and_symbol_font_code_points_become_letters() -> None:

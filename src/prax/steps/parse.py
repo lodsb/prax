@@ -6,8 +6,10 @@ from __future__ import annotations
 
 from typing import Any
 
-from prax import inbox, mimes, models, pipeline, store
+from prax import models, store
+from prax.capture import inbox, pipeline
 from prax.parsers import queue
+from prax.text import mimes
 
 from . import READING_STEPS
 from .base import HandOut, Pass, Step, TakeIn
@@ -182,7 +184,7 @@ class Parse(Step):
                 pages=int(r["pages"]) if r.get("pages") else None,
             )
             # what the reading paid for, if anything: the worker carries the
-            # tokens home (prax.usage) because it never writes itself
+            # tokens home (prax.ml.usage) because it never writes itself
             for model, tokens in (r.get("usage") or {}).items():
                 work._note_spend(
                     t.con,

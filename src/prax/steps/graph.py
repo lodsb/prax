@@ -7,7 +7,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from prax import embeddings, models, store
+from prax import models, store
+from prax.ml import embeddings
 from prax.work import LEASE_SECONDS
 
 from .base import HandOut, Pass, Step, TakeIn, paid_refusal
@@ -20,7 +21,7 @@ class Typing(Step):
     name = "typing"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        from prax import typing_pass
+        from prax.graph import typing_pass
 
         if models.resolve("typing") is None:
             return h.nothing()
@@ -33,7 +34,8 @@ class Typing(Step):
         return h.batch(items)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
-        from prax import typing_pass, work
+        from prax import work
+        from prax.graph import typing_pass
 
         model = str(t.payload.get("model") or t.worker)
         run = t.run("typing-model")
@@ -92,7 +94,7 @@ class Resolve(Step):
     name = "resolve"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        from prax import resolution
+        from prax.graph import resolution
 
         emb = embeddings.current()
         if emb is None:
@@ -120,7 +122,7 @@ class Resolve(Step):
         return {"step": self.name, "type": None, "names": [], "lease_seconds": 0}
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
-        from prax import resolution
+        from prax.graph import resolution
 
         etype = str(t.payload.get("type") or "")
         if etype not in resolution.LIKELY_TYPES:
@@ -172,7 +174,7 @@ class Adjudicate(Step):
     name = "adjudicate"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        from prax import resolution
+        from prax.graph import resolution
 
         spec = models.resolve("adjudicate")
         if spec is None:
@@ -199,7 +201,8 @@ class Adjudicate(Step):
         return h.batch(items)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
-        from prax import resolution, work
+        from prax import work
+        from prax.graph import resolution
 
         model = str(t.payload.get("model") or t.worker)
         items = list(t.payload.get("items") or [])

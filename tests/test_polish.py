@@ -13,7 +13,8 @@ import pytest
 from fastapi.testclient import TestClient
 from test_video import META, PAGE
 
-from prax import models, pipeline, store
+from prax import models, store
+from prax.capture import pipeline
 from prax.parsers import ExtractionError, polish
 
 

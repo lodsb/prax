@@ -11,8 +11,9 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import chunking, config, models, parsers, store
+from prax import config, models, parsers, store
 from prax.parsers import formulas
+from prax.text import chunking
 
 PAPER = """\
 # An Improved Diode Clipper Model

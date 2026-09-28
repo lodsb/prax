@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from prax import inbox, store
+from prax import store
+from prax.capture import inbox
 
 
 def _plan(con: sqlite3.Connection, sql: str, *args: object) -> str:

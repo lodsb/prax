@@ -32,7 +32,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from prax import glyphs
+from prax.text import glyphs
 
 from .base import _ASIDE, _NOW, _read_archive, _reading, now
 from .documents import (
@@ -263,7 +263,7 @@ def _split_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
     which merges them on the door's clock; a document beside its topic is
     two things and is not listed. The biggest part first, with the others
     and their edges (docs/eval/fractured-names-2026-09-27.md)."""
-    from prax import ontology
+    from prax.graph import ontology
 
     onto = ontology.current()
 
@@ -351,7 +351,7 @@ def _container_citations(con: sqlite3.Connection) -> list[dict[str, Any]]:
     names no work. One volume collected 733 of these here and became the
     largest node in the library
     (``docs/eval/traverse-neighbourhood-2026-09-25.md``). The prompt now
-    asks for the individual work (``prax.extraction``), so a library
+    asks for the individual work (``prax.graph.extraction``), so a library
     started today grows none; this is what predates the prompt.
 
     Only the citation ends. The container is **not** retyped: 38 of the
@@ -360,7 +360,7 @@ def _container_citations(con: sqlite3.Connection) -> list[dict[str, Any]]:
     a blanket retype would have ended 3,844 of them. The words are the
     ontology's (``lexicon.by_type``), not a pattern here.
     """
-    from prax import ontology
+    from prax.graph import ontology
 
     lex = ontology.lexicon()
     found = []
@@ -812,7 +812,7 @@ def _labelled_summaries(con: sqlite3.Connection) -> list[dict[str, Any]]:
     is usually right. ``summaries.parse`` is what takes the label off, so
     the mend costs no model call.
     """
-    from prax import summaries
+    from prax.writing import summaries
 
     rows = con.execute(
         "SELECT id, title, json_extract(meta, '$.summary') AS summary"
@@ -837,8 +837,8 @@ def _repair_labelled_summaries(
     con: sqlite3.Connection, rows: list[dict[str, Any]]
 ) -> int:
     """The label taken off every one of them, not only the rows shown."""
-    from prax import summaries
     from prax.store import documents as docs
+    from prax.writing import summaries
 
     n = 0
     for r in _labelled_summaries(con):
@@ -904,7 +904,7 @@ _glyphs_seen: dict[int, tuple[str, bool]] = {}
 
 def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents whose text still holds ligature or Symbol-font code
-    points: indexed before ``prax.glyphs`` cleaned every text. Each
+    points: indexed before ``prax.text.glyphs`` cleaned every text. Each
     document's chunks are read once per text (``_glyphs_seen``)."""
     out = []
     live: set[int] = set()
@@ -1526,7 +1526,7 @@ AILMENTS: tuple[Ailment, ...] = (
             " every text was cleaned: boxes on screen, words search cannot match"
         ),
         fix=(
-            "re-index each from its own text, cleaned (prax.glyphs); unchanged"
+            "re-index each from its own text, cleaned (prax.text.glyphs); unchanged"
             " chunks keep their vectors"
         ),
         find=_glyph_documents,

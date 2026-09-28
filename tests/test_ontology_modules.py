@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from prax import config, ontology
+from prax import config
+from prax.graph import ontology
 
 EVERY_MODULE = "core3+craft1+electronics1+kitchen2+research9+studio5+workshop2"
 

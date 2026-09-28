@@ -1,6 +1,6 @@
 """Formula readings: a model says in words what a display equation is.
 
-A display equation is a ``formula`` chunk (``prax.chunking``): its LaTeX
+A display equation is a ``formula`` chunk (``prax.text.chunking``): its LaTeX
 and the number the prose refers to it by. The LaTeX itself embeds to
 noise and a person searching says "the diode equation", not
 ``\\frac{a-b}{2R}``, so, as a figure gets a reading from the vision model,
@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from prax import chunking, markup
+from prax.text import chunking, markup
 
 SYSTEM = """\
 You read one display equation from a document in a personal research

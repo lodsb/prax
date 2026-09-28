@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from prax import embeddings, store
+from prax import store
+from prax.ml import embeddings
 
 needs_usearch = pytest.mark.skipif(
     not store.vectors_available(), reason="usearch not installed"
@@ -94,7 +95,7 @@ def test_a_vector_that_arrives_during_a_merge_is_kept(
 ) -> None:
     """The merge builds the new main file outside the index lock; a vector
     added to the delta meanwhile lands in a fresh delta, searchable."""
-    from prax import vectors
+    from prax.ml import vectors
     from prax.store import retrieval
 
     monkeypatch.setenv("PRAX_EMBED", "hash")

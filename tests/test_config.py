@@ -92,7 +92,7 @@ def test_a_number_that_is_not_one_is_refused(data_dir: Path) -> None:
 def test_the_embedder_and_the_index_read_their_settings(
     written: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from prax import embeddings, vectors
+    from prax.ml import embeddings, vectors
 
     embeddings._build.cache_clear()
     monkeypatch.setenv("PRAX_EMBED", "hash")  # nothing is downloaded in a test

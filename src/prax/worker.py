@@ -28,24 +28,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Self
 
-from prax import (
-    drop,
-    embeddings,
-    extraction,
-    hostinfo,
-    language,
-    models,
-    parsers,
-    sections,
-    summaries,
-    titles,
-    usage,
-    vocabulary,
-    work,
-)
+from prax import models, parsers, work
 from prax import steps as steps_mod
+from prax.capture import drop
 from prax.client import Door
+from prax.graph import extraction, vocabulary
+from prax.host import hostinfo
+from prax.ml import embeddings, usage
 from prax.parsers import figures
+from prax.text import language
+from prax.writing import sections, summaries, titles
 
 log = logging.getLogger("prax.worker")
 Log = Callable[[str], None]
@@ -616,7 +608,7 @@ def do_typing(
 ) -> list[dict[str, Any]]:
     """Each handed-out batch to the typing model: the prompt rebuilt from
     the items and their documents, the answer posted as it came."""
-    from prax import typing_pass
+    from prax.graph import typing_pass
 
     results = []
     for it in items:
@@ -639,7 +631,7 @@ def do_adjudicate(
 ) -> dict[str, Any]:
     """Ask the adjudicate step's model about the likely pairs the door
     handed out; the decisions go back with what they cost."""
-    from prax import resolution
+    from prax.graph import resolution
 
     if spec.kind == "claude":
         judge: Any = resolution.ClaudeAdjudicator(model=spec.model or spec.name)
@@ -681,7 +673,7 @@ def do_adjudicate(
 def do_resolve(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
     """The likely tier of entity resolution for one type: embed the names
     the door handed out, find the close pairs, and post them."""
-    from prax import resolution
+    from prax.graph import resolution
 
     names = [(int(i), str(n)) for i, n in (batch.get("names") or [])]
     pairs = resolution.likely_pairs(
@@ -833,7 +825,7 @@ def watch(
     whole library follows the regular one once that hour has passed each
     day: the backlog and the stale texts, ``nightly_limit`` documents a
     step, the same steps."""
-    from prax import schedule
+    from prax.host import schedule
 
     night = schedule.parse_hour(nightly) if nightly else None
     # the nightly pass is at its hour: a worker (re)started after it — prax

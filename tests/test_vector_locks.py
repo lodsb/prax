@@ -16,7 +16,8 @@ from typing import Self
 import numpy as np
 import pytest
 
-from prax import config, vectors
+from prax import config
+from prax.ml import vectors
 from prax.store import base, retrieval
 
 pytestmark = pytest.mark.skipif(not vectors.available(), reason="usearch not installed")

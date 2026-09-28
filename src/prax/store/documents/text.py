@@ -8,7 +8,8 @@ import json
 import sqlite3
 from typing import Any
 
-from prax import chunking, config, glyphs, language
+from prax import config
+from prax.text import chunking, glyphs, language
 
 from ..base import (
     _NOW,
@@ -68,7 +69,7 @@ def index_text(
     ``text_source`` names what produced the text (an extractor stamp such as
     ``"pymupdf4llm/0.0.27"`` or ``"zotero-ft-cache"``) and is written to
     ``meta.text_source`` in the same transaction. So is ``meta.lang``, the
-    language the text is in (``prax.language``), which nothing recorded
+    language the text is in (``prax.text.language``), which nothing recorded
     before and every side of retrieval had to guess.
     """
     exists = con.execute("SELECT 1 FROM documents WHERE id = ?", (doc_id,)).fetchone()
@@ -109,7 +110,7 @@ def _cleaned(text: str) -> str:
     functions and the FTS tokenizer; lone surrogates (MuPDF, broken fonts)
     cannot be encoded at all — neither carries content; ligature and
     Symbol-font code points become the letters they stand for
-    (``prax.glyphs``)."""
+    (``prax.text.glyphs``)."""
     return glyphs.clean(_SURROGATE.sub("�", text.replace("\x00", "")))
 
 
@@ -159,7 +160,7 @@ def set_text_source(con: sqlite3.Connection, doc_id: int, stamp: str) -> None:
 
 
 def _write_chunks(con: sqlite3.Connection, doc_id: int, text: str) -> int:
-    """Replace a document's chunks with structure-aware ones (prax.chunking).
+    """Replace a document's chunks with structure-aware ones (prax.text.chunking).
 
     A chunk whose text is unchanged keeps its id, and with it its vector
     (``chunk_embeddings`` is keyed by the id): a re-read that adds a figure
@@ -441,13 +442,13 @@ def suspect(
     rules: Any = None,
 ) -> list[str] | None:
     """The personal-document rules over one document (stage V,
-    ``prax.private``): the cues it shows, and, when they are enough, the
+    ``prax.wall.private``): the cues it shows, and, when they are enough, the
     document marked ``suspected`` with them in ``meta.private``. Only an
     open document no person has decided about is looked at (None
     otherwise); ``meta.private.rules`` records which rules looked at a
     document with cues, so the nightly pass does not read it again. ``text`` is the text
     when the caller has it; otherwise the head of the artifact is read."""
-    from prax import private
+    from prax.wall import private
 
     rules = rules or private.rules()
     row = con.execute(

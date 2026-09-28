@@ -8,7 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
-from prax import mimes
+from prax.text import mimes
 
 from ..base import (
     ASIDE_KINDS,
@@ -81,11 +81,11 @@ def set_summary(
     ``meta.summaries`` holds every summary we have keyed by language, so
     translating a German summary into English never loses the German one;
     ``meta.summary`` is the one the document field indexes, which is
-    English wherever an English one exists (``prax.summaries``). The field
+    English wherever an English one exists (``prax.writing.summaries``). The field
     is refreshed, so the new summary is searchable and the document vector
     is embedded again.
     """
-    from prax import summaries
+    from prax.writing import summaries
 
     text = text.strip()
     if not text:
@@ -382,9 +382,9 @@ def document_sections(
     A chapter in a book, a major section in a manual. Only where there is
     enough of it to be worth a sentence: a document whose headings carry
     a paragraph each is a paper, and its own summary already covers it
-    (``prax.sections``).
+    (``prax.writing.sections``).
     """
-    from prax import sections as sec
+    from prax.writing import sections as sec
 
     floor = sec.MIN_SECTION if min_chars is None else min_chars
     rows = con.execute(
@@ -454,7 +454,7 @@ def sections_needed(
 ) -> list[int]:
     """Long documents whose sections nobody has read, or has read from a
     text that has since been replaced. Longest first: a book gains most."""
-    from prax import sections as sec
+    from prax.writing import sections as sec
 
     rows = con.execute(
         "SELECT id FROM documents WHERE text_len >= ?"

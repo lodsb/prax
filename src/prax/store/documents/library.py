@@ -8,7 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
-from prax import chunking
+from prax.text import chunking
 
 from ..base import (
     _NOW,

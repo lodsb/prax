@@ -5,7 +5,7 @@ surnames, year, title and ids, and a score against a library document."""
 
 from __future__ import annotations
 
-from prax import references as refs
+from prax.text import references as refs
 
 IEEE = """- [1] D. Turnbull, L. Barrington, and G. Lanckriet, “Five approaches to collecting tags for music,” in _Proceedings of the 9th International Conference on Music Information Retrieval_ , (Philadelphia, USA), pp. 225–230, 2008.
 

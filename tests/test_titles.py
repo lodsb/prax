@@ -7,8 +7,9 @@ import sqlite3
 
 import pytest
 
-from prax import store, titles
+from prax import store
 from prax.importers import zotero
+from prax.writing import titles
 
 
 @pytest.mark.parametrize(

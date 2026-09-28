@@ -10,8 +10,9 @@ import sqlite3
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import chunking, parsers, store
+from prax import parsers, store
 from prax.parsers import figures, queue
+from prax.text import chunking
 
 needs_pymupdf = pytest.mark.skipif(
     not parsers.by_name("pymupdf4llm").available(), reason="pymupdf4llm not installed"

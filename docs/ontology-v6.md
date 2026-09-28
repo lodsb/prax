@@ -6,7 +6,7 @@
 ## The evidence
 
 After the v5 re-read of the whole library (2026-09-12) the review queue
-held 25,827 open items. A second batch of typing rules (`prax.review`,
+held 25,827 open items. A second batch of typing rules (`prax.graph.review`,
 commit 1cfd1ac) linked 3,091 and dropped 3,390 — placeholder names, a
 cited "document" that is a paper, a listed "person" who is the author,
 the document published in a venue-shaped thing. What stayed open said,

@@ -6,7 +6,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from prax import ontology
+from prax.graph import ontology
 
 from ..base import _reading, _serialized
 from .decisions import queue_review
@@ -52,7 +52,7 @@ def name_in_english(
     Everything this writes carries ``producer`` and ``run``, so a round
     is undoable whole (``unmerge_run``).
     """
-    from prax import language
+    from prax.text import language
 
     english = " ".join(english.split())
     if not english:
@@ -219,7 +219,7 @@ def foreign_names(
     library's own text was asked, and this name is already the word the
     library uses.
     """
-    from prax import vocabulary
+    from prax.graph import vocabulary
 
     common = sorted(ontology.current().common_types)
     if not common:
@@ -299,7 +299,8 @@ def unlabelled_names(
     type. A label in the language, whoever wrote it, takes the entity
     out, so the pass converges on its own answers.
     """
-    from prax import language, vocabulary
+    from prax.graph import vocabulary
+    from prax.text import language
 
     common = sorted(ontology.current().common_types)
     if not common or not langs:
@@ -376,7 +377,7 @@ def label_in_language(
     ``add_label`` otherwise moves a language-less label of the same text
     into ``lang``, and an English name would become a German one.
     """
-    from prax import language
+    from prax.text import language
 
     row = con.execute("SELECT name FROM entities WHERE id = ?", (entity_id,)).fetchone()
     if row is None:

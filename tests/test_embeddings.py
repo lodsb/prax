@@ -13,7 +13,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from prax import embeddings, store
+from prax import store
+from prax.ml import embeddings
 
 needs_usearch = pytest.mark.skipif(
     not store.vectors_available(), reason="usearch not installed"
@@ -346,7 +347,7 @@ def test_the_door_embeds_a_query_on_the_cpu_and_the_worker_batches_where_told(
     (never behind the card's other work), the worker's batches on the
     providers embeddings.providers names."""
     pytest.importorskip("onnxruntime")
-    from prax import embeddings
+    from prax.ml import embeddings
 
     for k in ("PRAX_EMBED", "PRAX_EMBED_PROVIDERS", "PRAX_DOOR_EMBED_PROVIDERS"):
         monkeypatch.delenv(k, raising=False)
