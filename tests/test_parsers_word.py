@@ -148,7 +148,7 @@ def test_an_old_doc_goes_through_libreoffice(tmp_path: Path) -> None:
 def test_office_without_libreoffice_is_simply_not_offered(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(parsers, "soffice_path", lambda: None)
+    monkeypatch.setattr(parsers.office, "soffice_path", lambda: None)
     assert parsers.candidates("application/msword") == []
     with pytest.raises(RuntimeError, match="LibreOffice is not installed"):
         parsers.by_name("office")(b"anything", filename="x.doc")

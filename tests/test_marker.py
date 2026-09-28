@@ -183,11 +183,11 @@ def test_the_default_chain_never_probes_markers_server(
     waiting document and GET /work/parse took thirteen seconds. The cheap
     tests come first, and a probe's answer serves a few seconds."""
     probes = []
-    monkeypatch.setattr(parsers, "_marker_up", lambda: probes.append(1) or False)
+    monkeypatch.setattr(parsers.marker, "_marker_up", lambda: probes.append(1) or False)
     chain = [e.name for e in parsers.candidates("application/pdf")]
     assert "marker" not in chain and probes == []
     # asked for by name it is probed, once per few seconds
-    monkeypatch.setattr(parsers, "_marker_up", parsers.__dict__["_marker_up"])
+    monkeypatch.setattr(parsers.marker, "_marker_up", parsers.__dict__["_marker_up"])
     parsers._marker_probes.clear()
     monkeypatch.setenv("PRAX_MARKER_URL", "http://127.0.0.1:9")
     calls = []

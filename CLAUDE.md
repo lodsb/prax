@@ -246,8 +246,8 @@ reference `docs/ask.md`.
   holds the foundations and the protocol the invariants name: `config`,
   `models`, `client`, `work`, `worker`, `mcp_server`, and `evaluation`
   for the scripts. Everything else lives in a package that says what it
-  is about: `store`, `api`, `steps`, `parsers` and `importers` as
-  before, and `text` (the shapes of text: markup, chunks, a page's
+  is about: `store`, `api`, `steps`, `parsers` (its extractors in parts by
+  what they read, with an `ORDER`) and `importers` as before, and `text` (the shapes of text: markup, chunks, a page's
   regions, language, what a model wrapped its answer in; it imports
   nothing of prax at module level, `tests/test_invariants.py`), `graph`
   (the ontology, extraction, review, resolution and its calibration,

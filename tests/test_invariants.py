@@ -121,6 +121,22 @@ def test_the_store_is_the_ten_modules_in_that_order() -> None:
     assert not broken, "the store's module order is broken: " + "; ".join(broken)
 
 
+def test_the_parsers_parts_import_only_the_ones_before_them() -> None:
+    """``parsers/__init__.py`` was 1,706 lines of parsing until the
+    engineering pass of 2026-09-28 cut it into parts by what they read; the
+    ``ORDER`` it declares is the one they keep, so there is no cycle."""
+    parsers = SRC / "parsers"
+    order = _declared_order(parsers / "__init__.py")
+    assert order, "parsers/__init__.py declares no ORDER"
+    broken = []
+    for k, part in enumerate(order):
+        for level, module, line in _relative(parsers / f"{part}.py"):
+            head = module.split(".")[0]
+            if level == 1 and head in order and order.index(head) >= k:
+                broken.append(f"{part}.py:{line} imports {head}")
+    assert not broken, "the parsers' order is broken: " + "; ".join(broken)
+
+
 def test_the_mcp_server_is_a_thin_proxy() -> None:
     """Invariant 5. It makes one HTTP call per tool and must not reach
     into the store or the app — `tests/test_mcp.py` checks what a live

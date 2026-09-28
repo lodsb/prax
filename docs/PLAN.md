@@ -755,9 +755,12 @@ Found and left, each its own decision:
   only the store uses it. It is retrieval, not text; it waits for
   `store/retrieval.py` (1,916 lines) to split at 2,000 as invariant 3
   says, and goes there.
-- **Code in a package's `__init__`:** `parsers/__init__.py` is 1,706
-  lines of parsing. The registry would stay there, and the PDF, office
-  and web parsers would each get a module of their own.
+- [x] (2026-09-28: `__init__.py` 1,706 lines to 437) **Code in a
+      package's `__init__`:** the parsers are parts by what they read
+      (`base`, `code`, `pdf`, `marker`, `web`, `readings`, `office`,
+      `djvu`) with an `ORDER` a test holds; the `__init__` keeps the
+      registry and re-exports every name. A test that replaces a parser's
+      helper replaces it on its part now.
 - **Large modules:** `store/repair.py` 1,625, `host/up.py` 1,435. Neither
   is tangled. Both are long lists of the same shape (ailments, roles).
 

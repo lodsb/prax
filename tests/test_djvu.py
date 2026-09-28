@@ -25,7 +25,7 @@ def _tools(monkeypatch: pytest.MonkeyPatch, *, ddjvu: bool = False) -> None:
     have = {"djvutxt": "djvutxt", "djvused": "djvused"}
     if ddjvu:
         have["ddjvu"] = "ddjvu"
-    monkeypatch.setattr(parsers, "djvu_tool", lambda name: have.get(name))
+    monkeypatch.setattr(parsers.djvu, "djvu_tool", lambda name: have.get(name))
 
 
 def _djvutxt(monkeypatch: pytest.MonkeyPatch, pages: list[str]) -> list[list[str]]:
@@ -40,7 +40,7 @@ def _djvutxt(monkeypatch: pytest.MonkeyPatch, pages: list[str]) -> list[list[str
         body = "\f".join(pages) + "\f"
         return subprocess.CompletedProcess(argv, 0, body.encode(), b"")
 
-    monkeypatch.setattr(parsers.subprocess, "run", run)
+    monkeypatch.setattr(parsers.djvu.subprocess, "run", run)
     return calls
 
 
@@ -56,7 +56,7 @@ def test_the_text_layer_page_by_page(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_without_djvulibre_it_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(parsers, "djvu_tool", lambda name: None)
+    monkeypatch.setattr(parsers.djvu, "djvu_tool", lambda name: None)
     with pytest.raises(parsers.ExtractionError, match="DjVuLibre is not installed"):
         parsers._djvu(b"AT&TFORM")
     assert parsers.for_mime(mimes.DJVU) is None  # not offered where it cannot run

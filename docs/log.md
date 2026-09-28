@@ -2280,3 +2280,21 @@ on.
       token cannot reach `/documents/suspected` compared a path with a
       tuple of (method, pattern) pairs and was always true. It asks the
       patterns now, as the clean-up's test does.
+
+## 2026-09-28: the engineering follow-ups
+
+- [x] **The store's layering is a rule, not a move.** Its twelve calls up
+      are passes that must touch the tables (invariant 3) and need a step's
+      logic. At the top of a module it imports only config, `text`, `ml`
+      and `graph.ontology`, and a test holds that.
+- [x] **Each step's worker half is in its step module.** `worker.py` went
+      from 933 lines to 274: the loop, the drop folder, the give-up
+      counter. The reading chain and its heartbeat are `steps/parse.py`.
+      Two copies of `_paid` became `ModelSpec.paid`.
+- [x] **The parsers are parts.** `parsers/__init__.py` went from 1,706
+      lines to 437. The cut moved one decorator across a section boundary:
+      `@functools.cache` left `djvu_tool` and landed on `soffice_path`,
+      which lint and types both passed. Caught by reading the boundary,
+      then every boundary checked. Tests that replaced `parsers.djvu_tool`
+      or `parsers._marker_up` replace them on the part now; on the package
+      they would have stopped testing without failing.
