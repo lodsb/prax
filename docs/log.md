@@ -2318,3 +2318,18 @@ on.
 - Screenshots of the three tabs from a throwaway door on an empty store:
   the token table, the suspected statement under its folded rules, the
   clean-up rules.
+
+## 2026-09-28: stage Y, OCR in windows
+
+- [x] **A long scan is read a window a pass.** Past `parse.ocr_max_pages`
+      (60) a scan was refused: 71 PDFs were read by one-off runs with a
+      higher budget, and four DjVu books of 190 to 746 pages had no text.
+      Now both OCR readers (`djvu`, `pymupdf4llm-ocr`) take the current
+      text, keep the pages it has (by their page marks), OCR the next 60
+      without, and return a `parsers.Partial` saying how many pages wait.
+- [x] **The door asks for the next window** (`queue.continue_windows`,
+      from both parse paths): the text so far stored and indexed, so the
+      book is searchable from the first window; `meta.ocr` says how far it
+      is; a reading of the same extractor queued while pages wait. The
+      unique index of the readings is on pending requests only, so the
+      next window queues once the one before has finished.

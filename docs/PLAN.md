@@ -131,7 +131,7 @@ the review of the lists a person decides goes last.
       original stays in the archive.
 - [x] (2026-09-28: the Admin page, tabs tokens / personal? / clean up; `GET /private/rules`; a token's last use kept hourly; the rules shown, not edited: prax.yaml stays the one place) **W. The administrative side**, after U and V: the tokens, the
       rules and the personal documents managed from the web interface.
-- [ ] **Y. OCR in windows**, after W (the user's order, 2026-09-28). A
+- [x] (2026-09-28: `parsers.Partial`, both OCR readers windowed, `queue.continue_windows`, `store.note_ocr_progress`) **Y. OCR in windows**, after W (the user's order, 2026-09-28). A
       scan past `parse.ocr_max_pages` (60) is refused today and read only
       by a one-off run with a higher budget: 71 PDFs were, and four DjVu
       books (190 to 746 pages) still have no text. Instead each pass reads

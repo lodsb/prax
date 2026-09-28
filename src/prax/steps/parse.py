@@ -205,6 +205,17 @@ class Parse(Step):
                 store.finish_reading(
                     t.con, doc_id, outcome=action, stamp=stamp, error=r.get("error")
                 )
+            if not r.get("error"):
+                # a long scan read in windows: its progress, and the next
+                # window asked for while pages wait (after the one just
+                # finished, which would otherwise swallow the request)
+                queue.continue_windows(
+                    t.con,
+                    doc_id,
+                    stamp=stamp,
+                    pages_left=r.get("pages_left"),
+                    pages=r.get("pages_total"),
+                )
             # the edges of the process graph: what the door asks to be read
             # next (pipeline.follow_ups: the formulas of a marker read, the
             # polish of an automatic transcript, the figures of a capture)
@@ -346,9 +357,10 @@ def do_parse(
                     ),
                 ):
                     stamp = ext.stamp
-                    text = ext(
+                    got = ext(
                         data, filename=it.get("filename"), previous=it.get("previous")
-                    ).strip()
+                    )
+                    text = got.strip()
             except (parsers.NotYet, models.ServerNotReady) as exc:
                 # the server it reads through is loading or down: not the
                 # document's fault; deferred, so the door leaves it leased a
@@ -386,6 +398,9 @@ def do_parse(
                     "pages": pages,
                     # what the reading paid for, for the door's ledger
                     "usage": usage.take(),
+                    # a long scan read in windows: the pages still to go
+                    "pages_left": getattr(got, "pages_left", None),
+                    "pages_total": getattr(got, "pages", None),
                 },
             )
             pictures = len(figures.DATA_IMAGE.findall(text))

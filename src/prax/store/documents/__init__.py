@@ -99,6 +99,7 @@ from .readings import (  # noqa: F401
     finish_reading,
     finished_readings,
     has_unread_formulas,
+    note_ocr_progress,
     page_counts,
     pending_readings,
     reading_requests,

@@ -7,7 +7,9 @@ import importlib.metadata
 import importlib.util
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Self
+
+from prax.text import markup
 
 
 @dataclass(frozen=True)
@@ -89,3 +91,50 @@ class NotYet(ExtractionError):
     loading its model, or is not up — and the document is not at fault:
     the worker leaves the request waiting and says so, instead of
     recording an error against the document."""
+
+
+# ------------------------------------------------------------ pages
+# A scanned book is read in windows (stage Y): each pass keeps the pages
+# that have text, OCRs the next ``parse.ocr_max_pages`` of the ones without,
+# and says how many are still to go. The page marks in the text
+# (``markup.page_break``, pymupdf4llm's own) are what say which is which.
+
+EMPTY_PAGE = 20  # fewer characters than this and a page has no text worth it
+
+
+class Partial(str):
+    """A text read in part: the OCR reached some of the pages without a
+    text layer, and ``pages_left`` of them wait for the next window. The
+    door stores and indexes what there is and asks for the next."""
+
+    pages_left: int
+    pages: int
+
+    def __new__(cls, text: str, *, pages_left: int, pages: int) -> Self:
+        made = super().__new__(cls, text)
+        made.pages_left = pages_left
+        made.pages = pages
+        return made
+
+
+def pages_by_mark(text: str) -> dict[int, str]:
+    """A text's pages by number: what stands before each page mark. A
+    text without marks is one page, the first."""
+    out: dict[int, str] = {}
+    start = 0
+    for m in markup.PAGE_MARK_ANY.finditer(text):
+        out[int(m.group("page"))] = text[start : m.start()].strip()
+        start = m.end()
+    if not out and text.strip():
+        out[1] = text.strip()
+    return out
+
+
+def join_pages(pages: list[str]) -> str:
+    """Pages back into one text, each followed by its mark."""
+    return "".join(f"{t.strip()}{markup.page_break(n)}" for n, t in enumerate(pages, 1))
+
+
+def empty_pages(pages: list[str]) -> list[int]:
+    """The indexes of the pages with no text worth the name."""
+    return [i for i, t in enumerate(pages) if len(t.strip()) < EMPTY_PAGE]

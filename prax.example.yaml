@@ -122,7 +122,8 @@ steps:
 #   providers: []              # [PRAX_RERANK_PROVIDERS]
 
 # parse:
-#   ocr_max_pages: 60          # [PRAX_OCR_MAX_PAGES] budget of the OCR extractor
+#   ocr_max_pages: 60          # [PRAX_OCR_MAX_PAGES] pages the OCR reads a pass; a
+#                              #   longer scan is read in windows (stage Y)
 #   ocr_language: ch           # [PRAX_OCR_LANGUAGE] the recognizer's script: ch
 #                              #   (Chinese and English), en, latin, arabic,
 #                              #   cyrillic, devanagari, japan, korean, el, th…

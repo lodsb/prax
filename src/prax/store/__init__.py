@@ -189,6 +189,7 @@ from .documents import (  # noqa: F401
     live_captures_of,
     meta_index,
     newest_document,
+    note_ocr_progress,
     note_recapture,
     original_info,
     page_counts,

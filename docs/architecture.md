@@ -519,7 +519,7 @@ Nothing here opens the database file.
 | `embeddings.variant`, `.providers`, `.threads` | onnxruntime precision, providers, threads |
 | `vectors.dtype`, `vectors.ef`, `vectors.serve` [`PRAX_VEC_SERVE`] | index precision (`f16`, `i8`), search expansion, and whether the door maps the main file (`view`, the board's) or loads it (`memory`: 2.7 GB resident for 1.4 M f16 vectors, 3 s to load, never given up to another job's reads — a heal or a marker evening evicts a mapped index and the next search pays seconds of page faults) |
 | `parse.max_layout_mb`, `.layout_window` | layout analysis: the file size above which the plain extractor reads instead, and the pages per pass — a long document window by window, through pymupdf4llm and through marker's server alike |
-| `parse.ocr_max_pages` | page budget of the OCR extractor |
+| `parse.ocr_max_pages` | the pages the OCR reads a pass; a longer scan is read in windows, the door asking for the next while pages wait (`meta.ocr`) |
 | `parse.ocr_language`, `.ocr_gpu` | the OCR recognizer's script (`ch`, `en`, `latin`, `arabic`, `cyrillic`…; part of the text-source stamp) and whether it runs on DirectML |
 | `parse.figures` [`PRAX_FIGURES`] | which figures the `figures` extractor reads: `captioned` (default; a PDF image no caption claims is often decoration) or `all` |
 | `parse.marker_url` [`PRAX_MARKER_URL`], `parse.marker_mode` [`PRAX_MARKER_MODE`] | marker's server for the `marker` extractor (the `marker` role of `prax up`); `fast` or `balanced` |

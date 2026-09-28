@@ -35,6 +35,7 @@ READINGS = (
     "formulas",
     "polish",
     "pymupdf4llm-ocr",
+    "djvu",  # the next window of a long scan (stage Y)
     "docling",
     "marker",
     "trafilatura",
@@ -670,3 +671,28 @@ def waiting_readings(con: sqlite3.Connection) -> dict[str, int]:
         " GROUP BY 1 ORDER BY 2 DESC, 1"
     ).fetchall()
     return {str(name or "?"): int(n) for name, n in rows}
+
+
+@_serialized
+def note_ocr_progress(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    extractor: str,
+    pages: int,
+    left: int,
+) -> dict[str, Any]:
+    """How far the OCR of a long scan has come (stage Y), on the document
+    as ``meta.ocr``: the extractor, the pages, how many still wait, and
+    when the last window ended. While pages wait, the next window is asked
+    for as a reading of the same extractor; the last window leaves the
+    record with nothing left, which is what the document page shows."""
+    meta = get_meta(con, doc_id)
+    meta["ocr"] = {"extractor": extractor, "pages": pages, "left": left, "at": now()}
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
+    if left > 0:
+        request_reading(con, doc_id, extractor, by="ocr-window")
+    return meta["ocr"]

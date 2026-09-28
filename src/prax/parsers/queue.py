@@ -137,14 +137,15 @@ def parse_one(
     for ext in exts:
         t0 = time.monotonic()
         try:
-            text = ext(data, filename=filename, previous=previous).strip()
+            got = ext(data, filename=filename, previous=previous)
+            text = got.strip()
         except Exception as exc:  # noqa: BLE001 - recorded; the next candidate is tried
             last_error = exc
             apply_parse(
                 con, doc_id, stamp=ext.stamp, error=f"{type(exc).__name__}: {exc}"
             )
             continue
-        return apply_parse(
+        action = apply_parse(
             con,
             doc_id,
             stamp=ext.stamp,
@@ -153,6 +154,14 @@ def parse_one(
             force=force,
             keep_source=ext.annotates,
         )
+        continue_windows(
+            con,
+            doc_id,
+            stamp=ext.stamp,
+            pages_left=getattr(got, "pages_left", None),
+            pages=getattr(got, "pages", None),
+        )
+        return action
     assert last_error is not None
     raise last_error
 
@@ -311,3 +320,27 @@ def run(
             log(n, doc_id, action)
     report.seconds = time.monotonic() - t0
     return report
+
+
+def continue_windows(
+    con: Any,
+    doc_id: int,
+    *,
+    stamp: str,
+    pages_left: int | None,
+    pages: int | None,
+) -> dict[str, Any] | None:
+    """After a window of a long scan's OCR (stage Y): the progress on the
+    document, and the next window asked for while pages wait. A text read
+    whole says nothing (None); the last window records none left, so a
+    document once read in windows says it was read to the end."""
+    if pages_left is None:
+        if not (store.get_meta(con, doc_id) or {}).get("ocr"):
+            return None
+        pages_left = 0
+    parts = parsers.stamp_parts(stamp)
+    if parts is None:
+        return None
+    return store.note_ocr_progress(
+        con, doc_id, extractor=parts[0], pages=int(pages or 0), left=int(pages_left)
+    )

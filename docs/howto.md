@@ -193,7 +193,8 @@ the desktop, never on the serving host.
     # re-extract everything Zotero's cache produced, HTML first: a reading
     # request on each, drained by the worker (3l¾)
     prax reread --extractor trafilatura --text-source zotero-ft-cache --mime text/html
-    # scans: OCR is explicit and bounded (PRAX_OCR_MAX_PAGES, default 60)
+    # scans: OCR is explicit and reads PRAX_OCR_MAX_PAGES (60) pages a pass;
+    # a longer scan comes back for the next window by itself
     prax reread --extractor pymupdf4llm-ocr --unreadable
     # scans read as their cover: a text layer on the front matter only, under
     # 100 bytes a page over five pages or more (the `thin-texts` ailment; the
@@ -380,8 +381,11 @@ Windows, `apt install djvulibre-bin` on the board, `brew install
 djvulibre` on a Mac. With it, the `djvu` extractor appears. It reads the
 text layer a scanned book usually carries (`djvutxt`), page by page, and
 counts the pages with `djvused`. A page without a text layer is rendered
-(`ddjvu`) and read by the same OCR engine as a scanned PDF, within
-`parse.ocr_max_pages`. Without DjVuLibre a DjVu file stays pending and
+(`ddjvu`) and read by the same OCR engine as a scanned PDF,
+`parse.ocr_max_pages` pages a pass. A longer scan is read in windows: each
+pass keeps the pages read before, reads the next window, and the door asks
+for the next one while pages wait. The document is searchable from the first
+window on, and `meta.ocr` says how far it is (the pages, how many are left). Without DjVuLibre a DjVu file stays pending and
 says why. No MIME table knows the type, so prax names it
 (`image/vnd.djvu`), and `prax.text.mimes` says in one place that it is a
 document, not a picture: it is extracted into the graph, and the vision
@@ -2095,7 +2099,7 @@ entities you still want to look at, stays alone.
 | `documents-without-an-extractor` | something waiting for text of a kind nothing here can read | a report: install what reads it (3b) or retire it |
 | `not-documents` | originals that cannot be what their type says: a macOS resource fork (`._file`), a Windows shortcut, a program, an empty file, a PDF without its header. Registered from a folder that held them beside the real files | retires them (row and bytes stay). The unreadable list is the scans again |
 | `uncounted-pages` | PDFs with text whose page count no parse recorded (read before the worker kept `meta.pages`). `thin-texts` cannot weigh them | opens each PDF once and writes its count. Needs pymupdf on the door. A check never opens a file; ten thousand of them took 200 s |
-| `thin-texts` | PDFs of five pages or more with under 100 bytes of text a page: scans whose text layer is the cover's, read as if it were the book (a Google Books scan whose only text is its usage page) | a report, with an offer on the panel: OCR over all of them (`prax reread --extractor pymupdf4llm-ocr --thin`; `parse.ocr_max_pages` must cover the longest) |
+| `thin-texts` | PDFs of five pages or more with under 100 bytes of text a page: scans whose text layer is the cover's, read as if it were the book (a Google Books scan whose only text is its usage page) | a report, with an offer on the panel: OCR over all of them (`prax reread --extractor pymupdf4llm-ocr --thin`; a scan longer than `parse.ocr_max_pages` is read in windows, one pass after another) |
 | `unreadable-documents` | documents every extractor here has tried and found no text in (scans without a text layer). They wait and are not tried again | a report, with two offers on the panel: OCR over all of them, or the vision model over their scanned pages (`prax reread --unreadable --extractor …`). Or retire them |
 | `chunks-without-vectors` | the current model has no vector for them | a report: run a worker |
 

@@ -12,9 +12,15 @@ import subprocess
 from pathlib import Path
 
 from prax import config
-from prax.text import markup
 
-from .base import ExtractionError
+from .base import (
+    EMPTY_PAGE,
+    ExtractionError,
+    Partial,
+    empty_pages,
+    join_pages,
+    pages_by_mark,
+)
 from .pdf import _RIGHT_TO_LEFT, _ocr_engine, _ocr_language, _ocr_rows
 
 
@@ -55,14 +61,17 @@ def _djvu_version() -> str:
 DJVU_OCR_SCALE = 50  # percent of a page's full resolution: 300-600 dpi scans
 
 
-def _djvu(data: bytes) -> str:
+def _djvu(data: bytes, *, previous: str | None = None) -> str:
     """A DjVu document's text, page by page (``djvutxt``): the text layer a
     scanned book usually carries, with the page marks between pages so the
     chunker knows every line's page. A page without a text layer is
     rendered (``ddjvu``) and read by the OCR engine the scanned PDFs use,
-    within ``parse.ocr_max_pages``. DjVuLibre is a program, not a package:
-    installed where the door parses (winget ``DjVuLibre.DjView``, apt
-    ``djvulibre-bin``, brew ``djvulibre``)."""
+    ``parse.ocr_max_pages`` pages a pass: a scan of 746 pages is read in
+    windows, the pages read before kept from ``previous`` (the current
+    text), and the text comes back as a ``Partial`` while pages wait.
+    DjVuLibre is a program, not a package: installed where the door parses
+    (winget ``DjVuLibre.DjView``, apt ``djvulibre-bin``, brew
+    ``djvulibre``)."""
     djvutxt = djvu_tool("djvutxt")
     if djvutxt is None:
         raise ExtractionError("DjVuLibre is not installed here (djvutxt)")
@@ -89,14 +98,22 @@ def _djvu(data: bytes) -> str:
             pages = (pages + [""] * count)[:count]
         elif pages and not pages[-1].strip():
             pages = pages[:-1]
-        empty = [i for i, t in enumerate(pages) if len(t.strip()) < 20]
-        if empty:
-            pages = _djvu_ocr(src, pages, empty)
-    out: list[str] = []
-    for number, text in enumerate(pages, 1):
-        out.append(text.strip())
-        out.append(markup.page_break(number))
-    return "".join(out)
+        # a page read in an earlier window keeps what it was read as
+        held = pages_by_mark(previous or "")
+        pages = [
+            held.get(n, "") if len(held.get(n, "").strip()) >= EMPTY_PAGE else text
+            for n, text in enumerate(pages, 1)
+        ]
+        empty = empty_pages(pages)
+        budget = config.whole("parse.ocr_max_pages", "PRAX_OCR_MAX_PAGES", 60)
+        window = empty[:budget]
+        if window and djvu_tool("ddjvu") is not None:
+            pages = _djvu_ocr(src, pages, window)
+            left = len(empty) - len(window)
+        else:
+            left = 0  # nothing to read, or nothing to read it with
+    text = join_pages(pages)
+    return Partial(text, pages_left=left, pages=len(pages)) if left else text
 
 
 def _djvu_pages(src: Path) -> int | None:
@@ -111,26 +128,18 @@ def _djvu_pages(src: Path) -> int | None:
     return int(text) if done.returncode == 0 and text.isdigit() else None
 
 
-def _djvu_ocr(src: Path, pages: list[str], empty: list[int]) -> list[str]:
-    """The pages without a text layer, read from their pictures."""
+def _djvu_ocr(src: Path, pages: list[str], window: list[int]) -> list[str]:
+    """These pages (by index), read from their pictures."""
     ddjvu = djvu_tool("ddjvu")
     if ddjvu is None:
         return pages  # the text layer is what there is
-    budget = config.whole("parse.ocr_max_pages", "PRAX_OCR_MAX_PAGES", 60)
-    if len(empty) > budget:
-        if len(empty) == len(pages):
-            raise ExtractionError(
-                f"{len(empty)} pages without a text layer exceeds the OCR budget"
-                f" of {budget} (PRAX_OCR_MAX_PAGES)"
-            )
-        return pages  # a few scanned pages in a text document: left as they are
     import numpy as np
     from PIL import Image
 
     engine = _ocr_engine()
     lang = _ocr_language()
     out = list(pages)
-    for i in empty:
+    for i in window:
         image = src.with_name(f"page-{i + 1}.tif")
         subprocess.run(
             [

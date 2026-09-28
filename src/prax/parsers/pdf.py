@@ -15,7 +15,13 @@ from prax import config
 from prax.parsers import figures
 from prax.text import markup
 
-from .base import ExtractionError
+from .base import (
+    ExtractionError,
+    Partial,
+    empty_pages,
+    join_pages,
+    pages_by_mark,
+)
 
 # ---------------------------------------------------------------- backends
 
@@ -164,29 +170,20 @@ def _ocr_engine() -> Any:
     return getattr(backend, "ENGINE", None) or backend.init_engine()
 
 
-def _ocr_pages(doc: Any, engine: Any, *, right_to_left: bool) -> str:
-    """The document as text, page by page: a page with a text layer as
-    MuPDF reads it, a scanned page as the recognizer's lines in reading
-    order, and pymupdf4llm's page markers between pages so the chunker
-    knows the page of every line. For scripts the OCR font cannot write;
-    no layout analysis, which a scanned book rarely has to give."""
+def _ocr_page(page: Any, engine: Any, *, right_to_left: bool) -> str:
+    """One page's picture read by the recognizer: its lines in reading
+    order. For scripts the OCR font cannot write; no layout analysis,
+    which a scanned book rarely has to give."""
     import numpy as np
 
-    out: list[str] = []
-    for page in doc:
-        text = page.get_text().strip()
-        if len(text) < 20:  # no text layer worth the name: read the picture
-            pix = page.get_pixmap(dpi=150)
-            img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
-                pix.h, pix.w, pix.n
-            )[:, :, :3]
-            result = engine(img)
-            boxes = [] if result.boxes is None else list(result.boxes)
-            texts = [] if result.txts is None else list(result.txts)
-            text = "\n".join(_ocr_rows(boxes, texts, right_to_left=right_to_left))
-        out.append(text)
-        out.append(markup.page_break(page.number + 1))
-    return "".join(out)
+    pix = page.get_pixmap(dpi=150)
+    img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(pix.h, pix.w, pix.n)[
+        :, :, :3
+    ]
+    result = engine(img)
+    boxes = [] if result.boxes is None else list(result.boxes)
+    texts = [] if result.txts is None else list(result.txts)
+    return "\n".join(_ocr_rows(boxes, texts, right_to_left=right_to_left))
 
 
 def _ocr_rows(boxes: list[Any], texts: list[str], *, right_to_left: bool) -> list[str]:
@@ -232,28 +229,48 @@ def _ocr_model_version(lang: str) -> str:
     raise ExtractionError(f"RapidOCR ships no recognizer for {lang!r}")
 
 
-def _pymupdf4llm_ocr(data: bytes) -> str:
+def _pymupdf4llm_ocr(data: bytes, *, previous: str | None = None) -> str:
     """Markdown with RapidOCR on pages that have no text layer.
 
-    OCR costs seconds per page on a CPU, so documents above
-    ``PRAX_OCR_MAX_PAGES`` (default 60) are refused with ``ExtractionError``
-    and left for a deliberate run with a higher budget. The recognizer's
-    language and device are settings (``parse.ocr_language``,
-    ``parse.ocr_gpu``); the language is part of the text-source stamp.
+    OCR costs seconds per page on a CPU, so a pass reads at most
+    ``parse.ocr_max_pages`` (60) pages without a text layer: a longer scan
+    is read in windows (stage Y). The pages with text come from
+    ``previous`` (the current text, the pages read before included) or,
+    the first time, from pymupdf4llm without OCR; the next window of the
+    empty ones is read; the text comes back as a ``Partial`` while pages
+    wait, and the door asks for the next window. The recognizer's language
+    and device are settings (``parse.ocr_language``, ``parse.ocr_gpu``);
+    the language is part of the text-source stamp.
     """
     pymupdf4llm = importlib.import_module("pymupdf4llm")
     budget = config.whole("parse.ocr_max_pages", "PRAX_OCR_MAX_PAGES", 60)
     with _pymupdf_open(data) as doc:
-        if doc.page_count > budget:
-            raise ExtractionError(
-                f"{doc.page_count} pages exceeds the OCR budget of {budget}"
-                " (PRAX_OCR_MAX_PAGES)"
-            )
-        engine = _ocr_engine()
-        lang = _ocr_language()
-        if lang in _OWN_OCR_SCRIPTS:
-            return _ocr_pages(doc, engine, right_to_left=lang in _RIGHT_TO_LEFT)
-        return pymupdf4llm.to_markdown(doc, use_ocr=True, page_separators=True)
+        count = doc.page_count
+        held = pages_by_mark(previous or "")
+        if not held:
+            held = pages_by_mark(pymupdf4llm.to_markdown(doc, page_separators=True))
+        pages = [held.get(n, "") for n in range(1, count + 1)]
+        empty = empty_pages(pages)
+        window = empty[:budget]
+        if window:
+            engine = _ocr_engine()
+            lang = _ocr_language()
+            if lang in _OWN_OCR_SCRIPTS:
+                for i in window:
+                    pages[i] = _ocr_page(
+                        doc[i], engine, right_to_left=lang in _RIGHT_TO_LEFT
+                    )
+            else:
+                read = pages_by_mark(
+                    pymupdf4llm.to_markdown(
+                        doc, pages=window, use_ocr=True, page_separators=True
+                    )
+                )
+                for i in window:
+                    pages[i] = read.get(i + 1, pages[i])
+    text = join_pages(pages)
+    left = len(empty) - len(window)
+    return Partial(text, pages_left=left, pages=count) if left else text
 
 
 def _vision_pages_mode() -> str:

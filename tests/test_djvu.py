@@ -62,12 +62,69 @@ def test_without_djvulibre_it_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
     assert parsers.for_mime(mimes.DJVU) is None  # not offered where it cannot run
 
 
-def test_a_scan_past_the_ocr_budget_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_long_scan_is_read_in_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stage Y: a scan past the OCR budget was refused, and four DjVu books
+    of 190 to 746 pages waited without text (2026-09-28). Now each pass
+    reads the next window of pages without text, keeps what the passes
+    before read, and says how many pages wait."""
     _tools(monkeypatch, ddjvu=True)
     monkeypatch.setenv("PRAX_OCR_MAX_PAGES", "2")
-    _djvutxt(monkeypatch, ["", "", ""])  # three pages, no text layer at all
-    with pytest.raises(parsers.ExtractionError, match="OCR budget"):
-        parsers._djvu(b"AT&TFORM")
+    _djvutxt(monkeypatch, ["", "", "", "", ""])  # five pages, no text layer
+    read: list[int] = []
+
+    def ocr(src: Any, pages: list[str], window: list[int]) -> list[str]:
+        out = list(pages)
+        for i in window:
+            read.append(i + 1)
+            out[i] = f"the words OCR found on page {i + 1} of the scan"
+        return out
+
+    monkeypatch.setattr(parsers.djvu, "_djvu_ocr", ocr)
+    first = parsers._djvu(b"AT&TFORM")
+    assert isinstance(first, parsers.Partial)
+    assert (first.pages_left, first.pages) == (3, 5) and read == [1, 2]
+    assert "page 2 of the scan" in first and "page 3 of the scan" not in first
+    second = parsers._djvu(b"AT&TFORM", previous=str(first))
+    assert second.pages_left == 1 and read == [1, 2, 3, 4]
+    assert "page 1 of the scan" in second  # kept, not read again
+    last = parsers._djvu(b"AT&TFORM", previous=str(second))
+    assert not isinstance(last, parsers.Partial) and read == [1, 2, 3, 4, 5]
+    assert parsers.pages_by_mark(last)[5] == "the words OCR found on page 5 of the scan"
+
+
+def test_the_door_asks_for_the_next_window_while_pages_wait(
+    con: sqlite3.Connection,
+) -> None:
+    from prax.parsers import queue
+
+    doc = int(
+        store.register(con, b"AT&TFORM a scan", mime=mimes.DJVU, title="A scan")[
+            "doc_id"
+        ]
+    )
+    store.index_text(con, doc, "the words OCR found on the first pages " * 20)
+    got = queue.continue_windows(con, doc, stamp="djvu/3.5.29", pages_left=3, pages=5)
+    assert got is not None and got["left"] == 3 and got["extractor"] == "djvu"
+    waiting = [r for r in store.reading_requests(con, limit=None) if r["doc_id"] == doc]
+    assert [r["extractor"] for r in waiting] == ["djvu"]
+    assert waiting[0]["by"] == "ocr-window"
+    # the window is done: its reading finishes, and the last one leaves none
+    store.finish_reading(con, doc, outcome="created", stamp="djvu/3.5.29")
+    done = queue.continue_windows(
+        con, doc, stamp="djvu/3.5.29", pages_left=None, pages=None
+    )
+    assert done is not None and done["left"] == 0
+    assert not [
+        r for r in store.reading_requests(con, limit=None) if r["doc_id"] == doc
+    ]
+    # a text read whole, of a document never read in windows, says nothing
+    other = int(store.register(con, b"AT&TFORM other", mime=mimes.DJVU)["doc_id"])
+    assert (
+        queue.continue_windows(
+            con, other, stamp="djvu/3.5.29", pages_left=None, pages=None
+        )
+        is None
+    )
 
 
 def test_a_djvu_book_is_extracted_like_any_document(con: sqlite3.Connection) -> None:

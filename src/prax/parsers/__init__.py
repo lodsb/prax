@@ -14,7 +14,8 @@ time, so the serving path never loads them):
 | pymupdf4llm     | application/pdf | MuPDF, Markdown with headings and tables      |
 | pymupdf         | application/pdf | MuPDF plain text; 40x faster, no structure    |
 | pymupdf4llm-ocr | application/pdf | as pymupdf4llm plus RapidOCR on scanned pages;|
-|                 |                 | explicit only, page budget PRAX_OCR_MAX_PAGES |
+|                 |                 | explicit only, PRAX_OCR_MAX_PAGES pages a pass|
+|                 |                 | (a longer scan in windows)                    |
 | docling         | application/pdf | IBM Docling layout + table models; explicit   |
 |                 |                 | only, seconds per page                        |
 | trafilatura     | text/html       | article Markdown, boilerplate stripped, code  |
@@ -77,9 +78,14 @@ ORDER = ("base", "code", "pdf", "marker", "web", "readings", "office", "djvu")
 
 from . import djvu, office
 from .base import (  # noqa: F401
+    EMPTY_PAGE,
     ExtractionError,
     Extractor,
     NotYet,
+    Partial,
+    empty_pages,
+    join_pages,
+    pages_by_mark,
 )
 from .code import (  # noqa: F401
     _CODE_LINE_END,
@@ -160,7 +166,7 @@ from .pdf import (  # noqa: F401
     _ocr_gpu,
     _ocr_language,
     _ocr_model_version,
-    _ocr_pages,
+    _ocr_page,
     _ocr_rows,
     _ocr_variant,
     _pymupdf,
@@ -230,6 +236,7 @@ REGISTRY: list[Extractor] = [
         "pymupdf4llm",
         explicit_only=True,
         variant=_ocr_variant,  # the language is in the stamp
+        previous=True,  # a long scan in windows: the pages read before stay
     ),
     Extractor("docling", ("application/pdf",), _docling, "docling", explicit_only=True),
     Extractor(
@@ -329,6 +336,7 @@ REGISTRY: list[Extractor] = [
         _djvu,
         check=lambda: djvu.djvu_tool("djvutxt") is not None,
         version_of=_djvu_version,
+        previous=True,  # a long scan in windows: the pages read before stay
     ),
     Extractor("plain", ("text/",), _plain, revision=3, hints=True),
     Extractor(
