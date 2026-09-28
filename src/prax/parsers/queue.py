@@ -335,9 +335,12 @@ def continue_windows(
     whole says nothing (None); the last window records none left, so a
     document once read in windows says it was read to the end."""
     if pages_left is None:
-        if not (store.get_meta(con, doc_id) or {}).get("ocr"):
+        # the last window comes back as a plain text: nothing left, and the
+        # page count the windows before recorded
+        was = (store.get_meta(con, doc_id) or {}).get("ocr")
+        if not was:
             return None
-        pages_left = 0
+        pages_left, pages = 0, pages or was.get("pages")
     parts = parsers.stamp_parts(stamp)
     if parts is None:
         return None

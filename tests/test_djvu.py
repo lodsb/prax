@@ -113,7 +113,7 @@ def test_the_door_asks_for_the_next_window_while_pages_wait(
     done = queue.continue_windows(
         con, doc, stamp="djvu/3.5.29", pages_left=None, pages=None
     )
-    assert done is not None and done["left"] == 0
+    assert done is not None and done["left"] == 0 and done["pages"] == 5
     assert not [
         r for r in store.reading_requests(con, limit=None) if r["doc_id"] == doc
     ]
