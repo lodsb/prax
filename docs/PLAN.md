@@ -119,6 +119,16 @@ the review of the lists a person decides goes last.
       bank statements and contracts filed as research (2026-09-27: 15
       "Kontoauszug", 8 "Mietvertrag", 71 with an IBAN), which is why the
       mark is apart from the domain.
+- [ ] **X. Cleaning up in bulk**, after V, from the NAS dump of
+      2026-09-28. A set of documents chosen by rule, shown before anything
+      happens, retired in one go and restored in one go. The rules to try
+      first, counted read-only on what arrived before any is built: the
+      origin path (`meta.origin`, what the sender records), no text or a
+      few lines of it, the usual clutter (licences, readmes, driver and
+      installer notes, generated reports), near-duplicates the checksum
+      does not catch (one title, nearly one text). The personal documents
+      of V are confirmed in the same view. Retiring stays what it is: the
+      original stays in the archive.
 - [ ] **W. The administrative side**, after U and V: the tokens, the
       rules and the personal documents managed from the web interface.
 
