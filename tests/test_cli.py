@@ -451,3 +451,20 @@ def test_questions_are_listed_and_asked_again(
     assert run("questions", "--ask", "my-notes#q1", "--release") == 0
     assert "1 of 1 asked again" in capsys.readouterr().out
     assert "Stub answer" in door.get("/page/my-notes").json()["text"]
+
+
+def test_a_retyped_document_is_shown_by_its_title() -> None:
+    """The untyped-documents heal lists single documents, not a count per
+    type, and the table printed "None documents" for each (2026-09-28)."""
+    from prax_cli import running
+
+    line = running._example_line(
+        "untyped-documents",
+        {"id": 7, "title": "Computer_approximations.djvu", "mime": "image/vnd.djvu"},
+    )
+    assert "Computer_approximations.djvu" in line and "doc 7" in line
+    assert "None" not in line
+    counted = running._example_line(
+        "x", {"mime": "application/pdf", "documents": 3, "first_id": 1}
+    )
+    assert "3 documents" in counted

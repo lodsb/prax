@@ -462,6 +462,9 @@ def _example_line(name: str, row: dict[str, Any]) -> str:
         if row.get("source_doc"):
             parts.append(f"doc {row['source_doc']}")
         return " · ".join(parts)
+    if "mime" in row and "documents" not in row:  # one document, retyped
+        title = (row.get("title") or f"doc {row.get('id')}")[:60]
+        return f"{title!r} · doc {row.get('id')} · {row['mime']}"
     if "mime" in row:
         return (
             f"{row['mime']} · {row.get('documents')} documents"
