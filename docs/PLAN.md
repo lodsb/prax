@@ -25,7 +25,7 @@ the review of the lists a person decides goes last.
       **L. The graph by module, and a document's own graph.** The graph
       view filtered to one domain's entities, and a link from a document
       page into the graph seeded with that document's entities.
-- [ ] **M. What the graph reads against.** (2026-09-27: v9 done,
+- [x] (2026-09-28: counted: every extracted document is read against its modules' current versions, 8,878 of them `core3+research9`; the 1,114 without one wait for their first extraction) **M. What the graph reads against.** (2026-09-27: v9 done,
       `docs/ontology-v9.md`; electronics 1 and studio 5 done,
       `docs/ontology-electronics.md`; the full re-read after stage H's
       re-extractions, as the user decided.) Ontology v9 (the relations a
@@ -418,7 +418,7 @@ recipe at once. Three independent failures, each wanting a different fix.
       once per edge. A dictionary would take a bounded 70 KB to a
       bounded 40 without dropping anything. Worth doing when something
       needs the room, not before.
-- [ ] **Ontology v9** — the relations a document takes name `paper`
+- [x] (2026-09-27, `docs/ontology-v9.md`) **Ontology v9** — the relations a document takes name `paper`
       where they could name `document`, so a captured page has to be
       read as a paper for an edge to fit. A version bump and a restamp,
       not a rules change.
@@ -426,7 +426,7 @@ recipe at once. Three independent failures, each wanting a different fix.
       the largest, `Proceedings of the International Conference…` at
       degree 1,951, is a container that should probably not be an entity
       at all. Cheap, and a precondition for communities.
-- [ ] **Decide full re-run versus delta pass** for the 1,021 documents
+- [x] (2026-09-27: the full re-read, as the user decided) **Decide full re-run versus delta pass** for the 1,021 documents
       extracted against an older ontology version
       (`docs/log.md`, Stage 3).
 - [ ] **Entity ailments worth adding to `prax heal`** when they show up:
