@@ -114,7 +114,10 @@ def test_a_statement_is_suspected_as_it_is_indexed(client: TestClient) -> None:
     page = client.get("/documents/suspected").json()
     assert page["total"] == 1 and page["items"][0]["cues"] == ["strong: kontoauszug"]
     # a restricted token may not see the list at all
-    assert "/documents/suspected" not in auth.RESTRICTED_ROUTES
+    assert not any(
+        m == "GET" and pattern.fullmatch("/documents/suspected")
+        for m, pattern in auth.RESTRICTED_ROUTES
+    )
 
 
 def test_a_person_decides_and_the_rules_never_overrule_it(

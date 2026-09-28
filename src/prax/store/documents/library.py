@@ -8,11 +8,12 @@ import json
 import sqlite3
 from typing import Any
 
-from prax.text import chunking
+from prax.text import chunking, clutter
 
 from ..base import (
     _NOW,
     _read_archive,
+    _reading,
     _serialized,
     now,
 )
@@ -303,3 +304,195 @@ def dedupe_captures(
         report["retired"] += len(gone)
         report["kept_apart"] += len(apart)
     return report
+
+
+# ------------------------------------------------------------ clean-up
+# Stage X: a set of documents chosen by a rule (``prax.text.clutter``),
+# shown before anything happens, retired in one go under a run name and
+# restored in one go by it. Retiring stays what it is: the row, the
+# original and the text stay.
+
+
+def _origin(row: sqlite3.Row) -> str:
+    meta = json.loads(row["meta"] or "{}")
+    return str((meta.get("origin") or {}).get("path") or row["original_path"] or "")
+
+
+def cleanup_set(
+    con: sqlite3.Connection, rule: str, *, folder: str | None = None
+) -> list[tuple[int, int | None]]:
+    """The live documents a clean-up rule picks, each with the document it
+    duplicates (``same-text``) or None, in id order."""
+    if rule not in clutter.RULES:
+        raise ValueError(f"rule is one of {sorted(clutter.RULES)}")
+    if rule == "folder" and len((folder or "").strip("/")) < 3:
+        raise ValueError("a folder rule needs a folder")
+    rows = con.execute(
+        "SELECT id, title, original_path, text_hash, text_len, meta FROM documents"
+        " WHERE json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ).fetchall()
+    if rule == "same-text":
+        first: dict[str, int] = {}
+        out: list[tuple[int, int | None]] = []
+        for r in rows:
+            if not r["text_hash"] or (r["text_len"] or 0) < 300:
+                continue  # a scan's empty page is the same text as many
+            keeper = first.setdefault(r["text_hash"], int(r["id"]))
+            if keeper != r["id"]:
+                out.append((int(r["id"]), keeper))
+        return out
+    if rule == "folder":
+        want = (folder or "").replace("\\", "/")
+        return [
+            (int(r["id"]), None) for r in rows if want in _origin(r).replace("\\", "/")
+        ]
+    return [
+        (int(r["id"]), None)
+        for r in rows
+        if rule in clutter.kinds(_origin(r), r["title"] or "")
+    ]
+
+
+@_reading
+def cleanup_preview(
+    con: sqlite3.Connection,
+    rule: str,
+    *,
+    folder: str | None = None,
+    limit: int = 30,
+) -> dict[str, Any]:
+    """What a clean-up would take, before it does: how many documents, the
+    facts they carry, how many are suspected or marked personal, and a
+    sample with where each came from."""
+    picked = cleanup_set(con, rule, folder=folder)
+    ids = [i for i, _ in picked]
+    edges = personal = 0
+    for start in range(0, len(ids), 500):
+        part = ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        edges += con.execute(
+            "SELECT count(*) FROM edges WHERE valid_to IS NULL"
+            f" AND source_doc IN ({marks})",
+            part,
+        ).fetchone()[0]
+        personal += con.execute(
+            "SELECT count(*) FROM documents WHERE sensitivity IS NOT NULL"
+            f" AND id IN ({marks})",
+            part,
+        ).fetchone()[0]
+    step = max(1, len(picked) // max(1, limit))
+    sample = picked[::step][:limit]
+    items = []
+    for doc_id, keeper in sample:
+        r = con.execute(
+            "SELECT id, title, mime, original_path, meta FROM documents WHERE id = ?",
+            (doc_id,),
+        ).fetchone()
+        items.append(
+            {
+                "id": doc_id,
+                "title": r["title"],
+                "mime": r["mime"],
+                "path": _origin(r),
+                "duplicate_of": keeper,
+            }
+        )
+    return {
+        "rule": rule,
+        "about": clutter.RULES[rule],
+        "folder": folder,
+        "total": len(picked),
+        "edges": edges,
+        "personal": personal,
+        "items": items,
+    }
+
+
+@_serialized
+def retire_set(
+    con: sqlite3.Connection,
+    rule: str,
+    *,
+    folder: str | None = None,
+    by: str = "human",
+) -> dict[str, Any]:
+    """Retire every document a rule picks, under one run name: a duplicate
+    as a duplicate (what it holds moves to the first copy), the rest
+    plainly. Each keeps the facts it ended, by id, so ``restore_set``
+    reopens exactly those."""
+    picked = cleanup_set(con, rule, folder=folder)
+    run = f"cleanup-{now().replace(':', '').replace('-', '')}-{rule}"
+    reason = f"clean-up: {clutter.RULES[rule]}" + (f" ({folder})" if folder else "")
+    retired = edges = moved = 0
+    for doc_id, keeper in picked:
+        ended = [
+            int(r[0])
+            for r in con.execute(
+                "SELECT id FROM edges WHERE source_doc = ? AND valid_to IS NULL",
+                (doc_id,),
+            )
+        ]
+        got = retire_document(con, doc_id, reason=reason, duplicate_of=keeper, by=by)
+        meta = get_meta(con, doc_id)
+        meta["retired"]["run"] = run
+        if keeper is None:
+            meta["retired"]["ended"] = ended
+        con.execute(
+            "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+        )
+        con.commit()
+        retired += 1
+        edges += int(got["edges"])
+        moved += int(got.get("moved_edges") or 0)
+    return {
+        "run": run,
+        "rule": rule,
+        "retired": retired,
+        "edges_ended": edges,
+        "edges_moved": moved,
+    }
+
+
+@_reading
+def cleanup_runs(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The clean-ups done, newest first: what a restore can take back."""
+    rows = con.execute(
+        "SELECT json_extract(meta, '$.retired.run') AS run,"
+        " min(json_extract(meta, '$.retired.at')) AS at,"
+        " min(json_extract(meta, '$.retired.reason')) AS reason, count(*) AS n"
+        " FROM documents WHERE json_extract(meta, '$.retired.run') IS NOT NULL"
+        " GROUP BY run ORDER BY at DESC"
+    ).fetchall()
+    return [
+        {"run": r["run"], "at": r["at"], "reason": r["reason"], "documents": r["n"]}
+        for r in rows
+    ]
+
+
+@_serialized
+def restore_set(con: sqlite3.Connection, run: str) -> dict[str, Any]:
+    """Bring back every document a clean-up retired, with the facts it
+    ended: an undo of the clean-up's own invalidation, so the ended edges
+    are reopened rather than extracted again. A duplicate comes back
+    without what moved to its first copy, which keeps it."""
+    rows = con.execute(
+        "SELECT id FROM documents WHERE json_extract(meta, '$.retired.run') = ?",
+        (run,),
+    ).fetchall()
+    if not rows:
+        raise KeyError(f"no clean-up named {run}")
+    restored = reopened = 0
+    for r in rows:
+        doc_id = int(r["id"])
+        ended = list((get_meta(con, doc_id).get("retired") or {}).get("ended") or [])
+        unretire_document(con, doc_id)
+        for start in range(0, len(ended), 500):
+            part = ended[start : start + 500]
+            reopened += con.execute(
+                "UPDATE edges SET valid_to = NULL WHERE source_doc = ? AND id IN"
+                f" ({','.join('?' * len(part))})",
+                [doc_id, *part],
+            ).rowcount
+        con.commit()
+        restored += 1
+    return {"run": run, "restored": restored, "edges_reopened": reopened}

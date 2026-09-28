@@ -12,6 +12,8 @@ const DECIDE_LISTS = {
     about: "One name held by things of unrelated types. One thing: keep it as one of the types and fold the others in. Several things: kept apart." },
   personal: { path: "/documents/suspected", title: "personal?", render: suspectRow,
     about: "Documents the rules in prax.yaml (private:) think are personal: a named token that may not see personal documents does not see these. Personal: kept from those tokens for good. Not personal: open again, and the rules never mark it again." },
+  cleanup: { title: "clean up", view: (p) => viewCleanup(p),
+    about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -26,6 +28,7 @@ function decideTabs(current) {
 
 async function viewDecide(p) {
   const list = DECIDE_LISTS[p.list];
+  if (list.view) return list.view(p);
   const limit = Number(p.limit || 30);
   const offset = Number(p.offset || 0);
   view.innerHTML = `${decideTabs(p.list)}<p class="muted">${esc(list.about)}</p>
@@ -98,4 +101,50 @@ async function decideAct(button) {
     out.innerHTML = `<span class="error">${esc(err.message)}</span>`;
     row.querySelectorAll("button").forEach((b) => { b.disabled = false; });
   }
+}
+
+// Stage X: a rule picks a set, the page shows it, one click retires it
+// (a second one confirms), and a past clean-up comes back with one click.
+async function viewCleanup(p) {
+  const list = DECIDE_LISTS.cleanup;
+  view.innerHTML = `${decideTabs("cleanup")}<p class="muted">${esc(list.about)}</p>
+    <div id="cleanup-rules">${listPlaceholder("cleanup-rules")}</div>
+    <div id="cleanup-preview"></div><div id="cleanup-runs"></div>`;
+  let info;
+  try { info = await api("/cleanup"); } catch (err) {
+    document.getElementById("cleanup-rules").innerHTML = `<p class="error">${esc(err.message)}</p>`; return;
+  }
+  document.getElementById("cleanup-rules").innerHTML = cleanupRules(info.rules, p.rule, p.folder);
+  document.getElementById("cleanup-runs").innerHTML = cleanupRuns(info.runs);
+  const form = document.getElementById("cleanup-folder");
+  if (form) form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    location.hash = `#review?${new URLSearchParams({ list: "cleanup", rule: "folder", folder: form.folder.value.trim() })}`;
+  });
+  document.querySelectorAll("button[data-restore]").forEach((b) => b.addEventListener("click", async () => {
+    b.disabled = true;
+    try {
+      const r = await post("/cleanup-restore", { run: b.dataset.restore });
+      b.replaceWith(Object.assign(document.createElement("span"), { className: "muted", textContent: `restored ${r.restored}, ${r.edges_reopened} facts reopened` }));
+    } catch (err) { b.disabled = false; b.insertAdjacentHTML("afterend", ` <span class="error">${esc(err.message)}</span>`); }
+  }));
+  if (!p.rule) return;
+  const box = document.getElementById("cleanup-preview");
+  box.innerHTML = listPlaceholder("cleanup-preview");
+  let res;
+  try { res = await api(`/cleanup/${encodeURIComponent(p.rule)}`, { folder: p.folder }); } catch (err) {
+    box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return;
+  }
+  box.innerHTML = cleanupPreview(res);
+  const go = box.querySelector("button[data-retire]");
+  if (go) go.addEventListener("click", async () => {
+    if (!go.dataset.sure) { go.dataset.sure = "1"; go.textContent = `yes, retire ${res.total} documents`; return; }
+    go.disabled = true;
+    const out = box.querySelector(".decide-out");
+    try {
+      const r = await post(`/cleanup/${encodeURIComponent(res.rule)}`, { folder: res.folder });
+      out.textContent = `retired ${r.retired} (${r.edges_ended} facts ended, ${r.edges_moved} moved to a first copy) as ${r.run}`;
+      document.getElementById("cleanup-runs").innerHTML = cleanupRuns((await api("/cleanup")).runs);
+    } catch (err) { go.disabled = false; out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
+  });
 }

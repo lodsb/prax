@@ -74,6 +74,53 @@ def unretire(doc_id: int, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.get("/cleanup")
+def cleanup_runs(request: Request) -> dict[str, Any]:
+    """The clean-up rules, and the clean-ups done (what a restore takes)."""
+    from prax.text import clutter
+
+    return {"rules": clutter.RULES, "runs": store.cleanup_runs(_con(request))}
+
+
+@router.get("/cleanup/{rule}")
+def cleanup_preview(
+    rule: str, request: Request, folder: str | None = None, limit: int = 30
+) -> dict[str, Any]:
+    """What a clean-up rule would retire, before it does (stage X)."""
+    try:
+        return store.cleanup_preview(
+            _con(request), rule, folder=folder, limit=max(1, min(limit, 200))
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class CleanupReq(BaseModel):
+    folder: str | None = None
+
+
+@router.post("/cleanup/{rule}")
+def cleanup_retire(rule: str, req: CleanupReq, request: Request) -> dict[str, Any]:
+    """Retire every document the rule picks, under one run name."""
+    try:
+        return store.retire_set(_con(request), rule, folder=req.folder)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class RestoreReq(BaseModel):
+    run: str
+
+
+@router.post("/cleanup-restore")
+def cleanup_restore(req: RestoreReq, request: Request) -> dict[str, Any]:
+    """Bring a clean-up's documents back, with the facts it ended."""
+    try:
+        return store.restore_set(_con(request), req.run)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
 @router.get("/captures")
 def captures(url: str, request: Request) -> list[dict[str, Any]]:
     """The live captures of one URL (canonicalised here), oldest first:

@@ -119,7 +119,7 @@ the review of the lists a person decides goes last.
       bank statements and contracts filed as research (2026-09-27: 15
       "Kontoauszug", 8 "Mietvertrag", 71 with an IBAN), which is why the
       mark is apart from the domain.
-- [ ] **X. Cleaning up in bulk**, after V, from the NAS dump of
+- [x] (2026-09-28: `prax.text.clutter`, `store.retire_set` / `restore_set`, the Review page's "clean up" tab; measured: 238 system and clutter documents, 55 copies, 896 help files kept) **X. Cleaning up in bulk**, after V, from the NAS dump of
       2026-09-28. A set of documents chosen by rule, shown before anything
       happens, retired in one go and restored in one go. The rules to try
       first, counted read-only on what arrived before any is built: the

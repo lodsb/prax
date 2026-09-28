@@ -304,3 +304,21 @@ test("suspectRow: the cues, where it came from, and the two decisions", () => {
   assert.match(row, /data-act="personal" data-doc="7">personal/);
   assert.match(row, /data-act="open" data-doc="7">not personal/);
 });
+
+test("cleanupRules, cleanupPreview, cleanupRuns: a set shown before it goes, and the way back", () => {
+  const rules = lib.cleanupRules({ system: "from a system folder", names: "a licence by its name", folder: "under a folder" }, "names", "");
+  assert.match(rules, /<a href="#review\?list=cleanup&amp;rule=system">from a system folder<\/a>|<a href="#review\?list=cleanup&rule=system">from a system folder<\/a>/);
+  assert.match(rules, /<b>a licence by its name<\/b>/);
+  assert.doesNotMatch(rules, /under a folder<\/a>/);
+  assert.match(rules, /id="cleanup-folder"/);
+  const preview = lib.cleanupPreview({ rule: "same-text", about: "the same text", folder: null, total: 55, edges: 308, personal: 8,
+    items: [{ id: 9, title: "Paper copy", path: "/nas/b/paper.pdf", duplicate_of: 4 }] });
+  assert.match(preview, /55 documents · 308 facts · 8 marked or suspected personal · a sample of 1/);
+  assert.match(preview, /a copy of doc 4/);
+  assert.match(preview, /data-retire="1">retire 55 documents/);
+  assert.match(lib.cleanupPreview({ rule: "help", about: "help", total: 0, edges: 0, personal: 0, items: [] }), /nothing to retire/);
+  const runs = lib.cleanupRuns([{ run: "cleanup-20260928T1200Z-system", at: "2026-09-28T12:00:00Z", reason: "clean-up: system", documents: 238 }]);
+  assert.match(runs, /238 documents · 2026-09-28 12:00/);
+  assert.match(runs, /data-restore="cleanup-20260928T1200Z-system">restore/);
+  assert.equal(lib.cleanupRuns([]), "");
+});

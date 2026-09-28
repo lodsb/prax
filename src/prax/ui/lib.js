@@ -314,6 +314,36 @@ function suspectRow(it) {
       <button type="button" class="secondary" data-act="open" data-doc="${it.id}">not personal</button>
       <span class="decide-out muted"></span></div></article>`;
 }
+// The clean-up tab (view-cleanup in view-decide.js): the rules as links,
+// a folder of one's own, what a rule would take, and what was taken.
+function cleanupRules(rules, current, folder) {
+  const link = (key, about) => key === current
+    ? `<b>${esc(about)}</b>`
+    : `<a href="#review?${new URLSearchParams({ list: "cleanup", rule: key })}">${esc(about)}</a>`;
+  const named = Object.entries(rules || {}).filter(([k]) => k !== "folder").map(([k, a]) => `<li>${link(k, a)}</li>`).join("");
+  return `<ul class="entities">${named}</ul>
+    <form id="cleanup-folder" class="search-form" autocomplete="off">
+      <label for="cleanup-folder-input">Everything from under a folder</label>
+      <input id="cleanup-folder-input" name="folder" placeholder="coredata/backups/old_users" value="${esc(folder || "")}">
+      <button>look</button></form>`;
+}
+function cleanupPreview(res) {
+  if (!res) return "";
+  const rows = (res.items || []).map((it) => `<li><a href="#doc/${it.id}">${esc(it.title || `doc ${it.id}`)}</a>
+    <span class="muted">${esc(it.path || "")}${it.duplicate_of ? ` · a copy of doc ${it.duplicate_of}` : ""}</span></li>`).join("");
+  const personal = res.personal ? ` · ${res.personal} marked or suspected personal` : "";
+  return `<article class="decide-row"><h3 style="font-size:1rem;margin:.2rem 0">${esc(res.about)}${res.folder ? `: ${esc(res.folder)}` : ""}</h3>
+    <p class="muted">${res.total.toLocaleString()} documents · ${res.edges.toLocaleString()} facts${personal}${res.total > (res.items || []).length ? ` · a sample of ${(res.items || []).length}` : ""}</p>
+    <ul class="entities">${rows}</ul>
+    <div class="decide-acts">${res.total ? `<button type="button" data-retire="1">retire ${res.total} documents</button>` : `<span class="muted">nothing to retire</span>`}
+      <span class="decide-out muted"></span></div></article>`;
+}
+function cleanupRuns(runs) {
+  if (!(runs || []).length) return "";
+  return `<h3 style="font-size:.95rem">Clean-ups done</h3><ul class="entities">${runs.map((r) =>
+    `<li>${esc(r.reason || r.run)} <span class="muted">· ${r.documents} documents · ${esc(String(r.at || "").slice(0, 16).replace("T", " "))}</span>
+      <button type="button" class="secondary" data-restore="${esc(r.run)}">restore</button></li>`).join("")}</ul>`;
+}
 function mergeRow(it) {
   const a = it.alias, into = it.into;
   if (!a || !into) return "";
@@ -426,5 +456,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, suspectRow, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

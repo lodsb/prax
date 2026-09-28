@@ -2258,3 +2258,25 @@ on.
       CPU. `embeddings.providers: [CPUExecutionProvider]` in this host's
       prax.yaml; the card is llama-server's alone, as the allocation
       assumes.
+
+## 2026-09-28: stage X, cleaning up in bulk
+
+- [x] **Counted before built**, read-only over 12,977 documents. A copied
+      system or program folder, or a licence/EULA/readme/credits file
+      name: 238 documents, 1,154 facts. The same text under two originals:
+      55. A program's help files: 896, 3,695 facts, mostly SuperCollider's.
+      The user keeps these: "not really junk, more like noisy data". Under
+      300 characters of text: 969, but these are scans without a text
+      layer, which need a reading rather than a clean-up. The name rule
+      first matched titles ("a (very) brief history"); it reads the file
+      name only now.
+- [x] **A set, shown, retired, restored** (`store.cleanup_preview`,
+      `retire_set`, `restore_set`; `GET/POST /cleanup/{rule}`,
+      `POST /cleanup-restore`): a run name on every document it retired,
+      a copy retired as a duplicate so what it knew moves to the first
+      copy, and the ids of the facts each ended kept, so a restore reopens
+      exactly those. The "clean up" tab of the Review page.
+- [x] **A test that tested nothing.** Stage V's check that a restricted
+      token cannot reach `/documents/suspected` compared a path with a
+      tuple of (method, pattern) pairs and was always true. It asks the
+      patterns now, as the clean-up's test does.

@@ -5,9 +5,10 @@ wrong. Two names for one thing stay apart. Two different things get
 folded into one. The Review page is where you fix that by hand. Open it
 from the menu at the top of the web interface.
 
-The page has five tabs. The first holds the facts the reader could not
-place. Three ask you whether two names are the same thing. The last asks
-whether a document is personal.
+The page has six tabs. The first holds the facts the reader could not
+place. Three ask you whether two names are the same thing. One asks
+whether a document is personal, and the last clears out what should not
+be in the library at all.
 
 ## Facts that did not fit
 
@@ -59,6 +60,29 @@ from and the cues that made it suspect. Your name appears as "name".
 
 A suspected document is already hidden from those tokens, so nothing
 leaks while it waits for you.
+
+## Clean up
+
+A sent folder brings along what nobody wanted: a copied Windows drive's
+licence files, the credits inside every Mac program, a paper saved
+twice. This tab takes such things out in one go. Pick a rule:
+
+- **from a system or program folder** of a copied drive (`Windows`,
+  `Program Files`, the inside of a Mac `.app`);
+- **a licence, EULA, readme, credits or changelog** by its file name;
+- **a program's help files**, such as SuperCollider's. These are
+  reference material, so look before you retire them;
+- **the same text as another document**: the copy is kept as one, and
+  what it knew moves to the first copy;
+- **everything from under a folder** you name.
+
+The page shows how many documents the rule picks, how many facts they
+carry, how many are personal, and a sample with where each came from.
+**Retire** takes them out of search and the graph, after a second click
+to confirm. The original and the text stay in the archive.
+
+Every clean-up is listed under **Clean-ups done**. **Restore** brings its
+documents back, and with them the facts they had.
 
 ## Merges to check
 
