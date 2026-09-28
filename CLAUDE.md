@@ -459,7 +459,7 @@ reference `docs/ask.md`.
   text is indexed and by the `private` pass of `prax maintain`. A rule
   only ever sets `suspected` on an open document no person has decided
   about (`meta.sensitivity.by == "human"`), and keeps its cues in
-  `meta.private`; the Review page's "personal?" tab is the person's
+  `meta.private`; the Admin page's "personal?" tab is the person's
   answer (`GET /documents/suspected`, `PUT /doc/{id}/sensitivity`).
 - Timestamps are UTC ISO-8601 strings to the second with `Z`, from
   `store.now()` (`_NOW` in SQL). One shape, so they sort as moments.

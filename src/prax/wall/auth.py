@@ -101,7 +101,11 @@ def named_viewer(request: Request) -> object | None:
         return None
     from prax import store
 
-    return store.token_viewer(store.thread_connection(), candidate)
+    con = store.thread_connection()
+    viewer = store.token_viewer(con, candidate)
+    if viewer is not None:
+        store.note_token_use(con, viewer.name)
+    return viewer
 
 
 def allowed(request: Request) -> bool:

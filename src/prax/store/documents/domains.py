@@ -567,3 +567,17 @@ def suspected_page(
             }
         )
     return {"total": int(total), "items": items}
+
+
+@_reading
+def sensitivity_counts(con: sqlite3.Connection) -> dict[str, int]:
+    """How many documents are suspected personal, marked personal by a
+    person, and released by a person: the admin page's summary."""
+    row = con.execute(
+        "SELECT"
+        " sum(sensitivity = 'suspected'),"
+        " sum(sensitivity = 'personal'),"
+        " sum(sensitivity IS NULL AND json_extract(meta, '$.sensitivity.by') = 'human')"
+        " FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
+    ).fetchone()
+    return {"suspected": row[0] or 0, "personal": row[1] or 0, "released": row[2] or 0}

@@ -2298,3 +2298,23 @@ on.
       then every boundary checked. Tests that replaced `parsers.djvu_tool`
       or `parsers._marker_up` replace them on the part now; on the package
       they would have stopped testing without failing.
+
+## 2026-09-28: stage W, the administrative side
+
+- [x] **An Admin page** beside Jobs, three tabs. *Tokens*: the named ones
+      with their modules, whether they see personal documents, when made
+      and when last used; a form that makes one and shows its secret once;
+      revoke in two clicks. *Personal?*: the rules in force (defaults and
+      what prax.yaml adds, the owner's names counted and never spelled
+      out) folded above the suspected documents, moved from Review.
+      *Clean up*: moved from Review too. An old `#review?list=personal`
+      link lands there.
+- [x] **A token's last use** was a column nothing wrote. It is written
+      when a named token reads, at most once an hour per token, because
+      the lookup is on every request and a write there would take the
+      store's lock on every read.
+- [x] **The rules are shown, not edited.** The door does not write
+      prax.yaml; the file stays the one place they change.
+- Screenshots of the three tabs from a throwaway door on an empty store:
+  the token table, the suspected statement under its folded rules, the
+  clean-up rules.

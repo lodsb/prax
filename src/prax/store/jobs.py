@@ -12,6 +12,7 @@ import json
 import re
 import secrets
 import sqlite3
+import time
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
@@ -462,9 +463,11 @@ def list_tokens(con: sqlite3.Connection) -> list[dict[str, Any]]:
             "domains": json.loads(r["domains"]) if r["domains"] else None,
             "personal": bool(r["personal"]),
             "created_at": r["created_at"],
+            "last_used": r["last_used"],
         }
         for r in con.execute(
-            "SELECT name, domains, personal, created_at FROM tokens ORDER BY name"
+            "SELECT name, domains, personal, created_at, last_used FROM tokens"
+            " ORDER BY name"
         )
     ]
 
@@ -476,6 +479,29 @@ def remove_token(con: sqlite3.Connection, name: str) -> bool:
     con.commit()
     _tokens = None
     return cur.rowcount > 0
+
+
+# a token's last use is written at most this often: the lookup is on every
+# request, and a write on every read would put the store's lock on it
+TOKEN_USE_EVERY = 3600.0
+_token_used: dict[str, float] = {}
+
+
+def note_token_use(con: sqlite3.Connection, name: str) -> bool:
+    """Record that a named token was used, once an hour at most: what the
+    admin page shows to say which tokens can go."""
+    now_m = time.monotonic()
+    if now_m - _token_used.get(name, float("-inf")) < TOKEN_USE_EVERY:
+        return False
+    _token_used[name] = now_m
+    _write_token_use(con, name)
+    return True
+
+
+@_serialized
+def _write_token_use(con: sqlite3.Connection, name: str) -> None:
+    con.execute(f"UPDATE tokens SET last_used = {_NOW} WHERE name = ?", (name,))
+    con.commit()
 
 
 @_reading

@@ -307,7 +307,7 @@ test("suspectRow: the cues, where it came from, and the two decisions", () => {
 
 test("cleanupRules, cleanupPreview, cleanupRuns: a set shown before it goes, and the way back", () => {
   const rules = lib.cleanupRules({ system: "from a system folder", names: "a licence by its name", folder: "under a folder" }, "names", "");
-  assert.match(rules, /<a href="#review\?list=cleanup&amp;rule=system">from a system folder<\/a>|<a href="#review\?list=cleanup&rule=system">from a system folder<\/a>/);
+  assert.match(rules, /<a href="#admin\?tab=cleanup&rule=system">from a system folder<\/a>/);
   assert.match(rules, /<b>a licence by its name<\/b>/);
   assert.doesNotMatch(rules, /under a folder<\/a>/);
   assert.match(rules, /id="cleanup-folder"/);
@@ -321,4 +321,28 @@ test("cleanupRules, cleanupPreview, cleanupRuns: a set shown before it goes, and
   assert.match(runs, /238 documents · 2026-09-28 12:00/);
   assert.match(runs, /data-restore="cleanup-20260928T1200Z-system">restore/);
   assert.equal(lib.cleanupRuns([]), "");
+});
+
+test("tokensTable, tokenSecret, privateRules: the admin page", () => {
+  const table = lib.tokensTable({ tokens: [
+    { name: "laptop", domains: ["research", "studio"], personal: false, created_at: "2026-09-28T10:00:00Z", last_used: "2026-09-28T11:30:00Z" },
+    { name: "assistant", domains: null, personal: true, created_at: "2026-09-28T10:00:00Z", last_used: null },
+  ], modules: ["core", "research", "studio", "unassigned"] });
+  assert.match(table, /<b>laptop<\/b><\/td>\s*<td>research, studio<\/td>/);
+  assert.match(table, /every module/);
+  assert.match(table, /sees personal/);
+  assert.match(table, /2026-09-28 11:30/);
+  assert.match(table, />never</);
+  assert.match(table, /data-revoke="assistant">revoke/);
+  assert.match(table, /<input type="checkbox" name="domain" value="unassigned"> unassigned/);
+  assert.match(lib.tokensTable({ tokens: [], modules: [] }), /No named tokens yet/);
+  const secret = lib.tokenSecret("laptop", "prax_abc");
+  assert.match(secret, /shown this once/);
+  assert.match(secret, /<pre>prax_abc<\/pre>/);
+  const rules = lib.privateRules({ strong: ["kontoauszug"], weak: [["rechnung", "invoice"]], weak_needed: 2, head: 5000,
+    added: { strong: [], weak: [], paths: ["/coredata/verwaltung/"], names: 2 }, documents: { suspected: 404, personal: 3, released: 1 } });
+  assert.match(rules, /404 suspected, 3 personal, 1 released by you/);
+  assert.match(rules, /rechnung \/ invoice/);
+  assert.match(rules, /2 names \(a weak cue each\)/);
+  assert.match(rules, /everything under \/coredata\/verwaltung\//);
 });

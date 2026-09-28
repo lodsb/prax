@@ -129,7 +129,7 @@ the review of the lists a person decides goes last.
       does not catch (one title, nearly one text). The personal documents
       of V are confirmed in the same view. Retiring stays what it is: the
       original stays in the archive.
-- [ ] **W. The administrative side**, after U and V: the tokens, the
+- [x] (2026-09-28: the Admin page, tabs tokens / personal? / clean up; `GET /private/rules`; a token's last use kept hourly; the rules shown, not edited: prax.yaml stays the one place) **W. The administrative side**, after U and V: the tokens, the
       rules and the personal documents managed from the web interface.
 - [ ] **Y. OCR in windows**, after W (the user's order, 2026-09-28). A
       scan past `parse.ocr_max_pages` (60) is refused today and read only

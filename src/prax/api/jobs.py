@@ -899,8 +899,14 @@ class TokenReq(BaseModel):
 
 @router.get("/tokens")
 def tokens(request: Request) -> dict[str, Any]:
-    """The named tokens, without their secrets."""
-    return {"tokens": store.list_tokens(_con(request))}
+    """The named tokens, without their secrets, and the modules one may be
+    given (the admin page's form)."""
+    from prax.graph import ontology
+
+    return {
+        "tokens": store.list_tokens(_con(request)),
+        "modules": [*sorted(ontology.current().modules), store.UNASSIGNED],
+    }
 
 
 @router.post("/tokens")
@@ -926,6 +932,32 @@ def token_remove(name: str, request: Request) -> dict[str, Any]:
     if not store.remove_token(_con(request), name):
         raise HTTPException(404, "no such token")
     return {"removed": name}
+
+
+@router.get("/private/rules")
+def private_rules(request: Request) -> dict[str, Any]:
+    """The personal-document rules in force (stage V): the defaults, what
+    ``private:`` in prax.yaml adds, and what they have marked. The owner's
+    names are counted, never shown: the page may be on a screen others see.
+    Edited in prax.yaml, which the door does not write."""
+    from prax import config
+    from prax.wall import private
+
+    rules = private.rules()
+    return {
+        "strong": list(private.STRONG),
+        "weak": [list(g) for g in private.WEAK],
+        "added": {
+            "strong": config.words("private.strong"),
+            "weak": config.words("private.weak"),
+            "paths": list(rules.paths),
+            "names": len(rules.names),
+        },
+        "weak_needed": rules.weak_needed,
+        "head": rules.head,
+        "stamp": rules.stamp(),
+        "documents": store.sensitivity_counts(_con(request)),
+    }
 
 
 @router.get("/documents/suspected")

@@ -5,10 +5,11 @@ wrong. Two names for one thing stay apart. Two different things get
 folded into one. The Review page is where you fix that by hand. Open it
 from the menu at the top of the web interface.
 
-The page has six tabs. The first holds the facts the reader could not
-place. Three ask you whether two names are the same thing. One asks
-whether a document is personal, and the last clears out what should not
-be in the library at all.
+The page has four tabs. The first holds the facts the reader could not
+place. The other three ask you whether two names are the same thing.
+Whether a document is personal, and what should not be in the library at
+all, are on the **Admin** page (its tabs "personal?" and "clean up"),
+beside the tokens that decide who may read what.
 
 ## Facts that did not fit
 
@@ -47,7 +48,7 @@ Perception* is a concept in two papers and a journal in a third.
 - **Several things** keeps them apart. Choose this for *Music
   Perception*: the journal and the field are two different things.
 
-## Personal?
+## Personal? (on the Admin page)
 
 Documents that rules think are personal: a bank statement, an invoice
 with your name on it, anything from a folder you named in `prax.yaml`
@@ -61,7 +62,7 @@ from and the cues that made it suspect. Your name appears as "name".
 A suspected document is already hidden from those tokens, so nothing
 leaks while it waits for you.
 
-## Clean up
+## Clean up (on the Admin page)
 
 A sent folder brings along what nobody wanted: a copied Windows drive's
 licence files, the credits inside every Mac program, a paper saved

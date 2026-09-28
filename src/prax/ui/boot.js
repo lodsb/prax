@@ -64,7 +64,7 @@ setInterval(pollChanges, 10000);
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") pollChanges(); });
 pollChanges();
 
-const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages, promote: viewPromote, inbox: viewInbox, jobs: viewJobs };
+const views = { search: viewSearch, ask: viewAsk, browse: viewBrowse, review: viewReview, pages: viewPages, promote: viewPromote, inbox: viewInbox, jobs: viewJobs, admin: viewAdmin };
 
 async function render(opts) {
   const r = route();

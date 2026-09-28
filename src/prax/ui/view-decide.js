@@ -10,9 +10,9 @@ const DECIDE_LISTS = {
     about: "Pairs whose names are close by embedding that the local model was not sure about (its number is beside each). Same: the one with fewer edges folds into the other (a run of its own; undo takes it back). Different: never asked again." },
   names: { path: "/graph/split-names", title: "one name, several things", render: splitRow,
     about: "One name held by things of unrelated types. One thing: keep it as one of the types and fold the others in. Several things: kept apart." },
-  personal: { path: "/documents/suspected", title: "personal?", render: suspectRow,
+  personal: { path: "/documents/suspected", title: "personal?", render: suspectRow, admin: true,
     about: "Documents the rules in prax.yaml (private:) think are personal: a named token that may not see personal documents does not see these. Personal: kept from those tokens for good. Not personal: open again, and the rules never mark it again." },
-  cleanup: { title: "clean up", view: (p) => viewCleanup(p),
+  cleanup: { title: "clean up", view: (p) => viewCleanup(p), admin: true,
     about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
@@ -23,7 +23,7 @@ function decideTabs(current) {
     ? `<b>${esc(label)}</b>`
     : `<a href="#review${key ? `?list=${key}` : ""}">${esc(label)}</a>`;
   return `<nav class="decide-tabs">${[tab("", "facts that did not fit"),
-    ...Object.entries(DECIDE_LISTS).map(([k, l]) => tab(k, l.title))].join(" · ")}</nav>`;
+    ...Object.entries(DECIDE_LISTS).filter(([, l]) => !l.admin).map(([k, l]) => tab(k, l.title))].join(" · ")}</nav>`;
 }
 
 async function viewDecide(p) {
@@ -31,15 +31,20 @@ async function viewDecide(p) {
   if (list.view) return list.view(p);
   const limit = Number(p.limit || 30);
   const offset = Number(p.offset || 0);
-  view.innerHTML = `${decideTabs(p.list)}<p class="muted">${esc(list.about)}</p>
+  view.innerHTML = `${list.admin ? adminTabs(p.list) : decideTabs(p.list)}<p class="muted">${esc(list.about)}</p>
     <div id="decide-rule"></div><div id="decide-list">${listPlaceholder("decide-list")}</div>`;
   if (p.list === "pairs") {
     api("/graph/sameness").then((r) => { document.getElementById("decide-rule").innerHTML = sameRule(r); }).catch(() => {});
   }
+  if (p.list === "personal") {
+    api("/private/rules").then((r) => { document.getElementById("decide-rule").innerHTML = privateRules(r); }).catch(() => {});
+  }
   const box = document.getElementById("decide-list");
   let res;
   try { res = await api(list.path, { offset, limit }); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-  const page = (o) => `#review?${new URLSearchParams({ list: p.list, offset: o })}`;
+  const page = (o) => list.admin
+    ? `#admin?${new URLSearchParams({ tab: p.list, offset: o })}`
+    : `#review?${new URLSearchParams({ list: p.list, offset: o })}`;
   const pager = `<div class="pager"><span class="muted">${res.total.toLocaleString()} to decide · ${res.items.length ? offset + 1 : 0}–${Math.min(offset + limit, res.total)}</span>
     ${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
     ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
@@ -107,7 +112,7 @@ async function decideAct(button) {
 // (a second one confirms), and a past clean-up comes back with one click.
 async function viewCleanup(p) {
   const list = DECIDE_LISTS.cleanup;
-  view.innerHTML = `${decideTabs("cleanup")}<p class="muted">${esc(list.about)}</p>
+  view.innerHTML = `${adminTabs("cleanup")}<p class="muted">${esc(list.about)}</p>
     <div id="cleanup-rules">${listPlaceholder("cleanup-rules")}</div>
     <div id="cleanup-preview"></div><div id="cleanup-runs"></div>`;
   let info;
@@ -119,7 +124,7 @@ async function viewCleanup(p) {
   const form = document.getElementById("cleanup-folder");
   if (form) form.addEventListener("submit", (e) => {
     e.preventDefault();
-    location.hash = `#review?${new URLSearchParams({ list: "cleanup", rule: "folder", folder: form.folder.value.trim() })}`;
+    location.hash = `#admin?${new URLSearchParams({ tab: "cleanup", rule: "folder", folder: form.folder.value.trim() })}`;
   });
   document.querySelectorAll("button[data-restore]").forEach((b) => b.addEventListener("click", async () => {
     b.disabled = true;

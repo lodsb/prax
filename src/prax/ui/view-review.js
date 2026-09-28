@@ -69,6 +69,10 @@ function reviewItem(it, onto) {
 }
 
 async function viewReview(p) {
+  if (p.list && DECIDE_LISTS[p.list] && DECIDE_LISTS[p.list].admin) {
+    location.replace(`#admin?tab=${p.list}`);  // moved to the admin page (stage W)
+    return;
+  }
   if (p.list && DECIDE_LISTS[p.list]) return viewDecide(p);
   const limit = Number(p.limit || 30);
   const offset = Number(p.offset || 0);

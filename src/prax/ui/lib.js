@@ -319,7 +319,7 @@ function suspectRow(it) {
 function cleanupRules(rules, current, folder) {
   const link = (key, about) => key === current
     ? `<b>${esc(about)}</b>`
-    : `<a href="#review?${new URLSearchParams({ list: "cleanup", rule: key })}">${esc(about)}</a>`;
+    : `<a href="#admin?${new URLSearchParams({ tab: "cleanup", rule: key })}">${esc(about)}</a>`;
   const named = Object.entries(rules || {}).filter(([k]) => k !== "folder").map(([k, a]) => `<li>${link(k, a)}</li>`).join("");
   return `<ul class="entities">${named}</ul>
     <form id="cleanup-folder" class="search-form" autocomplete="off">
@@ -343,6 +343,50 @@ function cleanupRuns(runs) {
   return `<h3 style="font-size:.95rem">Clean-ups done</h3><ul class="entities">${runs.map((r) =>
     `<li>${esc(r.reason || r.run)} <span class="muted">· ${r.documents} documents · ${esc(String(r.at || "").slice(0, 16).replace("T", " "))}</span>
       <button type="button" class="secondary" data-restore="${esc(r.run)}">restore</button></li>`).join("")}</ul>`;
+}
+// The admin page (view-admin.js): the named tokens, the form that makes
+// one, the secret shown once, and the personal-document rules in force.
+function tokensTable(res) {
+  const tokens = (res && res.tokens) || [];
+  const rows = tokens.map((t) => `<tr><td><b>${esc(t.name)}</b></td>
+    <td>${t.domains ? t.domains.map(esc).join(", ") : '<span class="muted">every module</span>'}</td>
+    <td>${t.personal ? "sees personal" : '<span class="muted">no personal</span>'}</td>
+    <td class="muted">${esc(String(t.created_at || "").slice(0, 10))}</td>
+    <td class="muted">${t.last_used ? esc(String(t.last_used).slice(0, 16).replace("T", " ")) : "never"}</td>
+    <td><button type="button" class="secondary" data-revoke="${esc(t.name)}">revoke</button></td></tr>`).join("");
+  const table = tokens.length
+    ? `<table class="entities"><thead><tr><th>name</th><th>modules</th><th>personal</th><th>made</th><th>last used</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    : `<p class="muted">No named tokens yet.</p>`;
+  const modules = ((res && res.modules) || []).map((m) =>
+    `<label><input type="checkbox" name="domain" value="${esc(m)}"> ${esc(m)}</label>`).join(" ");
+  return `${table}
+    <form id="token-form-add" class="search-form" autocomplete="off">
+      <label for="token-name">A new token</label>
+      <input id="token-name" name="name" placeholder="laptop" pattern="[a-z0-9][a-z0-9_-]{0,39}" required>
+      <div class="muted">${modules} <span>(none ticked: every module)</span></div>
+      <label><input type="checkbox" name="personal"> may see personal documents</label>
+      <button>make it</button> <span class="error msg"></span></form>`;
+}
+function tokenSecret(name, secret) {
+  return `<article class="decide-row"><b>${esc(name)}</b>: its secret, shown this once and kept nowhere.
+    Copy it into the client that uses it (PRAX_TOKEN there).
+    <pre>${esc(secret)}</pre></article>`;
+}
+function privateRules(r) {
+  if (!r) return "";
+  const d = r.documents || {};
+  const added = r.added || {};
+  const extra = [
+    added.names ? `${added.names} name${added.names === 1 ? "" : "s"} (a weak cue each)` : "",
+    ...(added.paths || []).map((x) => `everything under ${esc(x)}`),
+    ...(added.strong || []).map((x) => `strong: ${esc(x)}`),
+    ...(added.weak || []).map((x) => `weak: ${esc(x)}`),
+  ].filter(Boolean);
+  return `<details class="same-rule"><summary>The rules: ${d.suspected || 0} suspected, ${d.personal || 0} personal, ${d.released || 0} released by you</summary>
+    <p class="muted">A strong word marks a document alone; weak ones count only ${r.weak_needed} together (words that say one thing count once); a path marks everything under it. The rules read the title, the paths and the first ${r.head} characters, and never overrule your answer. Edit them in prax.yaml, under private:.</p>
+    <div class="decide-pair"><div><h4>Strong</h4><p>${(r.strong || []).map(esc).join(", ")}</p></div>
+    <div><h4>Weak</h4><p>${(r.weak || []).map((g) => g.map(esc).join(" / ")).join("; ")}</p></div></div>
+    <h4>From prax.yaml</h4>${extra.length ? `<ul>${extra.map((x) => `<li>${x}</li>`).join("")}</ul>` : '<p class="muted">nothing added</p>'}</details>`;
 }
 function mergeRow(it) {
   const a = it.alias, into = it.into;
@@ -456,5 +500,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

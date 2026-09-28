@@ -2310,13 +2310,19 @@ paperwork, such as an MCP client on another machine:
     prax token list
     prax token remove laptop
 
+The **Admin** page of the web interface does the same: its "tokens" tab
+lists them with when each was last used, makes one (the secret shown
+once) and revokes one. Its "personal?" tab shows the rules in force above
+the documents they suspect, and its "clean up" tab takes clutter out in
+bulk (`docs/review.md`).
+
 A named token sees only the modules it is given, and no document marked
 personal or suspected personal unless it was made with `--personal`. It
 may call only the routes the MCP tools use. Only a hash of its secret is
 kept.
 
 **What is personal** is decided in two steps. Rules *suspect* a document,
-and a person decides on the Review page's "personal?" tab. The rules run
+and a person decides on the Admin page's "personal?" tab. The rules run
 when a text is indexed, so a statement sent from the NAS is closed off as
 it lands, and nightly over the library (`prax maintain --only private`).
 They look at the title, the paths a document came from and the first
@@ -2339,7 +2345,9 @@ and only there, because your name must never reach the repository:
       strong: [Nebenkostenabrechnung]
       weak: [Kaution]
 
-A document is shown to you with the cues that made it suspect. Your name
+The Admin page shows the rules in force, the defaults and what
+`prax.yaml` adds, and counts your names without spelling them; it does
+not edit them. A document is shown to you with the cues that made it suspect. Your name
 is shown as "name", never spelled out. **Personal** keeps it from the
 restricted tokens for good. **Not personal** opens it again. The rules
 never overrule either answer, and a changed rule reads the rest of the
