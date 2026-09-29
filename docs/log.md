@@ -2500,3 +2500,29 @@ Found while searching the library for the classification research
 - [x] **Its fix**: `load_dir` composes only a file that says it is a module
       (`module:`, `entity_types` or `relation_types`), so a file the
       running code has no name for is never read as one.
+
+## 2026-09-29: the gold sample, labelled by a model and checked by a person
+
+- [x] **A model labels, a person checks.** The user: "don't you think you
+      are capable of tagging the genre properly and only report the
+      inconclusive ones to me?" `set_genres` takes `by`, `p` per label and
+      a `note`; a model never writes over a person, and a person's save
+      keeps the model's labels as `meta.genres_model`. The tab's "to
+      check" list shows a model's labels, the least sure first.
+- [x] **141 documents labelled by Claude** from the open sample (title,
+      source, summary, the opening of the text), 11 set aside: two bot-check
+      pages captured as articles (9532, 9529, retired), seven with no text
+      to label, two by the user.
+- **Measured against the user's 19, labelled blind:** with levels set
+      aside, the same genre set on 9, at least one genre in common on 16.
+      Six of the ten differences were one habit: "blog" beside "essay" for
+      a Medium post, where the user reads it as an essay. Every subject
+      Claude gave, the user gave too, but only half of the user's
+      subjects were Claude's: the user labels broadly.
+- [x] **What it changed.** A label brings its level (`Facet.implied`), as
+      the user ticked them. The vocabularies grew by what the 160 found
+      missing: genres `article`, `notes`, `coursework`, and a `lyrical`
+      level (`lyrics`, `score`); the subject `religion` (genres 2,
+      subjects 2). Claude's labels were revised to match: no "blog" beside
+      "essay", broader subjects, the new genres where they fit.
+

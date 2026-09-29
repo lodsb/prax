@@ -97,8 +97,10 @@ def test_a_persons_genres_are_the_gold(con: sqlite3.Connection) -> None:
 def test_subjects_go_with_the_genres(con: sqlite3.Connection) -> None:
     d = _doc(con, "Why the welfare state was built, and why it is dismantled.")
     got = store.set_genres(con, d, ["essay"], subjects=["sociology", "politics"])
-    assert got["subjects"] == ["politics", "sociology"]
+    # a subject brings its group
+    assert got["subjects"] == ["society", "politics", "sociology"]
     assert store.get_meta(con, d)["subjects"] == [
+        {"subject": "society", "p": 1.0},
         {"subject": "politics", "p": 1.0},
         {"subject": "sociology", "p": 1.0},
     ]
@@ -110,7 +112,7 @@ def test_subjects_go_with_the_genres(con: sqlite3.Connection) -> None:
         )  # a genre, not a subject
     store.set_genres(con, d, ["essay"], subjects=["philosophy"])
     item = store.genre_sample(con, state="labelled")["items"][0]
-    assert item["subjects"] == ["philosophy"]
+    assert item["subjects"] == ["society", "philosophy"]
 
 
 def test_the_sample_takes_each_source_in_turn(con: sqlite3.Connection) -> None:
@@ -134,7 +136,7 @@ def test_the_sample_takes_each_source_in_turn(con: sqlite3.Connection) -> None:
     assert zot[0] not in {it["id"] for it in after["items"]}
     done = store.genre_sample(con, state="labelled")
     assert [it["id"] for it in done["items"]] == [zot[0]]
-    assert done["items"][0]["genres"] == ["paper"]
+    assert done["items"][0]["genres"] == ["informational", "paper"]
     assert ext in {it["id"] for it in after["items"]}
     with pytest.raises(ValueError):
         store.genre_sample(con, state="everything")
@@ -161,8 +163,8 @@ def test_the_door_serves_the_genre_tab(client: TestClient) -> None:
     r = client.put(
         f"/doc/{doc_id}/genres", json={"genres": ["essay"], "subjects": ["ecology"]}
     )
-    assert r.status_code == 200 and r.json()["genres"] == ["essay"]
-    assert r.json()["subjects"] == ["ecology"]
+    assert r.status_code == 200 and r.json()["genres"] == ["opinion", "essay"]
+    assert r.json()["subjects"] == ["society", "ecology"]
     r = client.put(f"/doc/{doc_id}/genres", json={"genres": ["essay"]})
     assert r.status_code == 200 and r.json()["subjects"] == []
     assert (
@@ -174,9 +176,12 @@ def test_the_door_serves_the_genre_tab(client: TestClient) -> None:
     labelled = client.get(
         "/documents/genre-sample", params={"state": "labelled"}
     ).json()
-    assert labelled["labelled"] == 1 and labelled["items"][0]["genres"] == ["essay"]
+    assert labelled["labelled"] == 1
+    assert labelled["items"][0]["genres"] == ["opinion", "essay"]
     meta = client.get(f"/get/{doc_id}", params={"max_chars": 0}).json()["meta"]
-    assert json.dumps(meta["genres"]) == '[{"genre": "essay", "p": 1.0}]'
+    assert json.dumps(meta["genres"]) == (
+        '[{"genre": "opinion", "p": 1.0}, {"genre": "essay", "p": 1.0}]'
+    )
 
 
 def test_a_yaml_file_that_is_not_a_module_is_never_composed(tmp_path: Path) -> None:
@@ -260,17 +265,42 @@ def test_a_models_labels_wait_for_a_person(con: sqlite3.Connection) -> None:
     assert [it["id"] for it in check["items"]] == [unsure, sure]
     assert check["to_check"] == 2 and check["labelled"] == 0
     first = check["items"][0]
-    assert first["p"] == {"essay": 0.55, "blog": 0.4, "ecology": 0.9}
+    # a level a model did not name takes its surest label's probability
+    assert first["p"] == {
+        "opinion": 0.55,
+        "essay": 0.55,
+        "blog": 0.4,
+        "society": 0.9,
+        "ecology": 0.9,
+    }
     assert first["note"] == "essay or blog post" and first["genres_by"] == "claude"
     assert store.genre_sample(con)["total"] == 0  # labelled by someone: not open
     store.set_genres(con, unsure, ["blog"], subjects=["ecology", "politics"])
     m = store.get_meta(con, unsure)
-    assert m["genres_by"] == "human" and m["genres"] == [{"genre": "blog", "p": 1.0}]
+    assert m["genres_by"] == "human"
+    assert m["genres"] == [{"genre": "opinion", "p": 1.0}, {"genre": "blog", "p": 1.0}]
     assert m["genres_model"]["by"] == "claude"
-    assert [g["genre"] for g in m["genres_model"]["genres"]] == ["essay", "blog"]
+    assert [g["genre"] for g in m["genres_model"]["genres"]] == [
+        "opinion",
+        "essay",
+        "blog",
+    ]
     assert "genres_note" not in m
     with pytest.raises(ValueError, match="person labelled"):
         store.set_genres(con, unsure, ["essay"], by="claude")
     after = store.genre_sample(con, state="check")
     assert [it["id"] for it in after["items"]] == [sure]
     assert after["labelled"] == 1 and after["to_check"] == 1
+
+
+def test_a_label_brings_its_level() -> None:
+    g = ontology.genres()
+    assert g.implied(["paper", "datasheet"]) == [
+        "informational",
+        "paper",
+        "instructional",
+        "datasheet",
+    ]
+    assert g.implied(["opinion"]) == ["opinion"]  # a level alone stays alone
+    assert ontology.subjects().implied(["religion"]) == ["society", "religion"]
+    assert {"article", "notes", "coursework", "lyrics", "score"} <= set(g.labels())

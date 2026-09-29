@@ -92,6 +92,9 @@ def set_genres(
     particular). ``skip``: the person could not place it, and it leaves
     the sample. ``genres=None`` without ``skip`` takes all of it back.
 
+    A label under a level brings its level with it (``Facet.implied``):
+    "paper" is "informational" too, "politics" is "society".
+
     ``by`` is ``human`` for a person, else the model that labelled it,
     whose ``p`` gives each label's probability (1.0 where it names none)
     and ``note`` its reason in a line. A model's labels never replace a
@@ -125,10 +128,25 @@ def set_genres(
     if skip:
         meta["genres_skip"] = now()
     elif genres is not None:
-        labels = ontology.genres().check(genres)
-        if not labels:
+        gv, sv = ontology.genres(), ontology.subjects()
+        if not gv.check(genres):
             raise ValueError("no genre given: skip the document instead")
-        about = ontology.subjects().check(subjects or [])
+        # a genre is its level too, a subject its group: added here, with
+        # the probability of the surest label under it when a model gave
+        # none of its own
+        labels = gv.implied(genres)
+        about = sv.implied(subjects or [])
+        for facet, chosen in ((gv, labels), (sv, about)):
+            for level in chosen:
+                if level in sure or facet.level_of(level) != level:
+                    continue
+                under = [
+                    sure.get(x, 1.0)
+                    for x in chosen
+                    if x != level and facet.level_of(x) == level
+                ]
+                if under:
+                    sure[level] = max(under)
         meta["genres"] = [
             {"genre": g, "p": 1.0 if human else sure.get(g, 1.0)} for g in labels
         ]

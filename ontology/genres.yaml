@@ -18,7 +18,7 @@
 # says what a document is, never what types exist in the graph. The
 # loader keeps it out of the composed modules. A change to the wording
 # moves the model's numbers, so it is measured again on the gold sample.
-version: 1
+version: 2
 
 levels:
   informational:
@@ -31,6 +31,9 @@ levels:
       report: a technical report, a white paper, a project's documentation
       reference: an encyclopedia or wiki entry, a glossary, a standard or specification
       news: a report of current events
+      article: a magazine article or feature, neither news nor opinion
+      notes: a notebook, lab or build notes, a log of measurements
+      coursework: a student's homework, an exam or what is said at one
   instructional:
     description: tells the reader how to use, build or do something
     genres:
@@ -68,6 +71,11 @@ levels:
       invoice: an invoice, a receipt, a bank or account statement
       contract: a contract, an insurance policy, terms and conditions
       form: a form, an application, a certificate
+  lyrical:
+    description: words and music to be sung, played or recited
+    genres:
+      lyrics: song lyrics, poems, a collection of either
+      score: sheet music, a songbook, a lead sheet or tablature
   code:
     description: program text or its configuration
     genres:

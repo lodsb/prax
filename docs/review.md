@@ -132,6 +132,8 @@ The two lists answer different questions. An op-ed on migration is an
 - Tick every genre that fits. A blog post that walks you through a
   build and argues for one way of doing it is both *blog* and
   *tutorial*.
+- The level in bold comes with a genre: tick *paper*, and the document
+  is *informational* too. The same goes for a subject and its group.
 - When nothing under a level fits, tick the level alone. A company's
   page on how to recycle their product is *instructional*, and none of
   its genres.
@@ -144,6 +146,12 @@ The two lists answer different questions. An op-ed on migration is an
 
 The documents come from each source in turn (the NAS, Zotero, the
 browser extension, the rest), so the sample covers all of them.
+
+**To check** holds documents a model has labelled for you, the least
+sure first, with each label's probability and a line saying why. Save
+the ones that are right as they are, change the ticks on the ones that
+are not, then save. Either way the labels become yours, and the model's
+are kept beside them so its agreement with you can be measured.
 
 ## Rules of thumb
 

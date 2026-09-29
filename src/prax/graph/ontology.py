@@ -671,6 +671,15 @@ class Facet:
             given.add(label)
         return [x for x in known if x in given]
 
+    def implied(self, labels: Iterable[str]) -> list[str]:
+        """The labels with the level of each one added: a label under a
+        level is that level too, as a person ticks it (2026-09-29: the
+        user ticked "informational" beside "paper" throughout). In the
+        vocabulary's order; a ValueError names an unknown label."""
+        given = self.check(labels)
+        levels = {lv for x in given if (lv := self.level_of(x))}
+        return self.check([*given, *levels])
+
     def as_dict(self) -> dict[str, Any]:
         """The vocabulary for a reader: the Review page shows it."""
         return {

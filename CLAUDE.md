@@ -176,7 +176,10 @@ revisit threshold, under "Decision thresholds" below.
    load them as a `Facet`. A person's labels come from the Review page's
    "genre" tab (`store.set_genres`, `store.genre_sample`) and are kept
    as `meta.genres` and `meta.subjects` with `genres_by: human`. They
-   are the gold sample stage Z of `docs/PLAN.md` measures against.
+   are the gold sample stage Z of `docs/PLAN.md` measures against. A
+   label brings its level (`Facet.implied`: "paper" is "informational"
+   too). A model may label first (`by: claude`, a probability per label);
+   a person's save keeps the model's as `meta.genres_model`.
    Growing a module is its version bump. Renaming or removing a type is
    a data migration. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.

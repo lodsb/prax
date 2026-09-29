@@ -17,7 +17,7 @@ const DECIDE_LISTS = {
   cleanup: { title: "clean up", view: (p) => viewCleanup(p), admin: true,
     about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
   genre: { title: "genre", view: (p) => viewGenres(p),
-    about: "What each document is and what it is about, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits and every subject it is about, a level alone when nothing under it does. A subject may be left out. The documents come from each source in turn. About 150 is the aim." },
+    about: "What each document is and what it is about, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits and every subject it is about; the level in bold comes with them. Tick a level alone when nothing under it fits. A subject may be left out. \"to check\" holds a model's labels, the least sure first: save them as they are, or change the ticks first. The documents come from each source in turn. About 150 is the aim." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };

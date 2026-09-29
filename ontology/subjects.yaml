@@ -14,7 +14,7 @@
 #
 # Out of the version string like the lexicon: it says what a document is
 # about, never what types exist in the graph.
-version: 1
+version: 2
 
 levels:
   society:
@@ -30,6 +30,7 @@ levels:
       law: law, rights, regulation, licences
       education: teaching, learning, universities and their administration
       language: languages and linguistics
+      religion: religion, faith, scripture, mythology
   arts:
     description: making and studying art
     genres:
