@@ -435,7 +435,21 @@ function regionLine(where) {
 // The document page's "properties…" dialog (view-doc.js): where a
 // document came from, what it is, where it belongs and who may see it,
 // with the administrative changes beside what they change.
-function propertiesHtml(doc) {
+// A document's genres or subjects for the properties dialog: the labels
+// under a level (a level shows only when nothing under it was given), a
+// model's with its probability, and who gave them. ``levels`` is the set
+// of level and group names from GET /genres; without it every label shows.
+function labelList(items, key, m, levels) {
+  if (!items || !items.length) return "";
+  const lv = levels || new Set();
+  const leaves = items.filter((x) => !lv.has(x[key]));
+  const shown = leaves.length ? leaves : items;
+  const byModel = m.genres_by && m.genres_by !== "human";
+  const one = (x) => `${esc(x[key])}${byModel && x.p != null ? ` <span class="muted">${Math.round(x.p * 100)}%</span>` : ""}`;
+  const who = m.genres_by === "human" ? "you" : esc(m.genres_by || "?");
+  return `${shown.map(one).join(", ")} <span class="muted">(${who})</span>`;
+}
+function propertiesHtml(doc, levels) {
   const m = doc.meta || {};
   const cap = m.capture || {};
   const origin = m.origin || {};
@@ -466,6 +480,8 @@ function propertiesHtml(doc) {
     row("added", when(doc.added_at)),
   ].join(""))}
   ${section("What it is", [
+    row("genres", labelList(m.genres, "genre", m, levels)),
+    row("about", labelList(m.subjects, "subject", m, levels)),
     row("type", esc(doc.mime || "")),
     row("pages", m.pages),
     row("language", esc(m.lang || "")),
@@ -598,5 +614,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

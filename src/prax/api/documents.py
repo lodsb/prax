@@ -111,11 +111,14 @@ def documents(
     retired: bool = False,
     domain: str | None = None,
     tag: str | None = None,
+    genre: str | None = None,
+    subject: str | None = None,
 ) -> dict[str, Any]:
     """Documents without text, newest first, filtered for browsing;
     ``domain`` keeps one ontology module's documents and those of the
     modules built on it (``unassigned``: the documents no module was set
-    for), ``tag`` the documents carrying a tag (``project:synth``)."""
+    for), ``tag`` the documents carrying a tag (``project:synth``),
+    ``genre`` and ``subject`` the documents labelled so (stage Z)."""
     return store.list_documents(
         _con(request),
         limit=limit,
@@ -126,6 +129,8 @@ def documents(
         retired=retired,
         domain=domain or None,
         tag=tag or None,
+        genre=genre or None,
+        subject=subject or None,
     )
 
 

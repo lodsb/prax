@@ -321,7 +321,12 @@ Built only when measured to be needed.
    (`steps.writing.Genres`) and off; turning it on is the user's word.
    Jeff 0.8B measured on the CPU overnight; Kev not yet.)
 3. The calibration, `meta.genres`, the genres on the properties dialog
-   and as a Browse filter, the document field.
+   and as a Browse filter, the document field. (2026-09-29: calibration
+   and `meta.genres` in the step; the properties dialog shows genres and
+   subjects with who gave them and a model's probabilities; Browse
+   filters by genre and subject, a level naming everything under it. The
+   document field waits: it changes what search ranks, so it goes in
+   with `scripts/eval_retrieval.py` before and after.)
 4. `meta.regions` from the communities pass, and the vector vote for
    documents without facts.
 5. The `genre` and `facts` match keys, a dry run over the 2,748

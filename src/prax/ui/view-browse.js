@@ -8,12 +8,15 @@ async function viewBrowse(p) {
   const limit = Number(p.limit || 50);
   const offset = Number(p.offset || 0);
   await modules();
+  const vocab = await labelVocab();
   view.innerHTML = `
   <form id="browse-form" class="search-form">
     <input name="title" type="search" value="${esc(p.title || "")}" placeholder="title contains…">
     <input name="source" type="text" value="${esc(p.source || "")}" placeholder="source (zotero)">
     <input name="mime" type="text" value="${esc(p.mime || "")}" placeholder="mime (application/pdf)">
     ${domainSelect(p.domain || "", "domain", "ontology module", true)}
+    ${labelSelect(vocab, "genre", p.genre || "", "every genre")}
+    ${labelSelect(vocab && vocab.subjects, "subject", p.subject || "", "every subject")}
     <button>Filter</button>
   </form>
   <div id="browse-list"></div>`;
@@ -23,10 +26,10 @@ async function viewBrowse(p) {
     go("browse", "", Object.fromEntries(new FormData(form)));
   });
   // a module chosen is a filter asked for: no second click on Filter
-  form.querySelector("select[name=domain]").addEventListener("change", () => form.requestSubmit());
+  form.querySelectorAll("select").forEach((s) => s.addEventListener("change", () => form.requestSubmit()));
   const list = document.getElementById("browse-list");
   try {
-    const res = await api("/documents", { limit, offset, title: p.title, source: p.source, mime: p.mime, domain: p.domain || undefined });
+    const res = await api("/documents", { limit, offset, title: p.title, source: p.source, mime: p.mime, domain: p.domain || undefined, genre: p.genre || undefined, subject: p.subject || undefined });
     const rows = res.items.map((d) => `
       <tr>
         <td><a href="#doc/${d.id}">${esc(d.title || "(untitled)")}</a></td>
@@ -51,3 +54,22 @@ async function viewBrowse(p) {
     list.innerHTML = `<p class="error">${esc(err.message)}</p>`;
   }
 }
+
+// The genre and subject vocabularies (GET /genres), fetched once; null
+// when the door has none, and the selects are then left out.
+let LABEL_VOCAB;
+async function labelVocab() {
+  if (LABEL_VOCAB === undefined) {
+    try { LABEL_VOCAB = await api("/genres"); } catch { LABEL_VOCAB = null; }
+  }
+  return LABEL_VOCAB;
+}
+// A select of a facet's labels, each level before the labels under it.
+function labelSelect(facet, name, selected, all) {
+  if (!facet || !(facet.levels || []).length) return "";
+  const opt = (v, text) => `<option value="${esc(v)}" ${v === selected ? "selected" : ""}>${text}</option>`;
+  const opts = facet.levels.map((lv) => opt(lv.name, esc(lv.name))
+    + (lv.genres || []).map((g) => opt(g.name, `&nbsp;&nbsp;${esc(g.name)}`)).join("")).join("");
+  return `<select name="${name}" title="${esc(all)}">${opt("", esc(all))}${opts}</select>`;
+}
+

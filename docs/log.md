@@ -2562,4 +2562,11 @@ Found while searching the library for the classification research
       13341) served on the CPU from a scratch environment, run overnight on
       the same 78 through `--decision`. 75 s a document on the summary,
       204 s with the opening, on the CPU.
+- [x] **Step 3, the reading side**: the properties dialog shows a
+      document's genres and subjects (the labels under a level, a model's
+      with its probability, and who gave them; the level names come from
+      `GET /genres`, not a copy in the UI), and Browse filters by genre and
+      subject (`GET /documents?genre=&subject=`; a level names every
+      document labelled under it). The document field waits for a
+      retrieval measurement.
 

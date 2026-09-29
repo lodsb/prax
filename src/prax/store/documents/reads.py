@@ -210,6 +210,8 @@ def list_documents(
     retired: bool = False,
     domain: str | None = None,
     tag: str | None = None,
+    genre: str | None = None,
+    subject: str | None = None,
 ) -> dict[str, Any]:
     """Documents without their text, newest first, for browsing.
 
@@ -220,7 +222,9 @@ def list_documents(
     kitchen document is a craft document too; one without a domain set is
     in every module and stays, as in search), or with ``unassigned`` the
     documents without a domain set alone; ``tag`` keeps the documents
-    carrying that tag (``project:synth``). Returns ``{"total", "items"}``
+    carrying that tag (``project:synth``); ``genre`` and ``subject`` the
+    documents labelled so, by a person or a model (a level names every
+    document labelled under it). Returns ``{"total", "items"}``
     where each item carries the row, its decoded ``meta`` and its chunk
     count.
     """
@@ -250,6 +254,16 @@ def list_documents(
             "EXISTS (SELECT 1 FROM json_each(d.meta, '$.tags') WHERE value = ?)"
         )
         args.append(tag)
+    for field, key, value in (
+        ("genres", "genre", genre),
+        ("subjects", "subject", subject),
+    ):
+        if value:
+            clauses.append(
+                f"EXISTS (SELECT 1 FROM json_each(d.meta, '$.{field}')"
+                f" WHERE json_extract(value, '$.{key}') = ?)"
+            )
+            args.append(value)
     if title:
         clauses.append("lower(d.title) LIKE ? ESCAPE '!'")
         args.append("%" + _like_prefix(title.lower())[:-1] + "%")

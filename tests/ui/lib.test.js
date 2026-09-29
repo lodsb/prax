@@ -423,3 +423,17 @@ test("genreRow for a model's labels: its probabilities and reason, the unsure ma
   const mine = lib.genreRow({ id: 9, title: "Collapse", genres: ["essay"], genres_by: "human", p: { essay: 1 } }, vocab);
   assert.doesNotMatch(mine, /genre-p|Labelled by/);
 });
+
+test("labelList: the labels under a level, a model's with its probability, and who gave them", () => {
+  const levels = new Set(["informational", "technology"]);
+  const mine = { genres_by: "human" };
+  assert.equal(lib.labelList([{ genre: "informational", p: 1 }, { genre: "paper", p: 1 }], "genre", mine, levels), 'paper <span class="muted">(you)</span>');
+  const model = { genres_by: "qwen@host" };
+  assert.equal(lib.labelList([{ subject: "technology", p: 0.9 }, { subject: "audio", p: 0.72 }], "subject", model, levels),
+    'audio <span class="muted">72%</span> <span class="muted">(qwen@host)</span>');
+  assert.match(lib.labelList([{ genre: "informational", p: 1 }], "genre", mine, levels), /^informational/); // a level alone shows
+  assert.equal(lib.labelList([], "genre", mine, levels), "");
+  const html = lib.propertiesHtml({ id: 3, title: "P", meta: { genres_by: "human", genres: [{ genre: "paper", p: 1 }] } }, levels);
+  assert.match(html, /<th>genres<\/th><td>paper/);
+});
+

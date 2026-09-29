@@ -307,3 +307,17 @@ def test_a_label_brings_its_level() -> None:
     assert g.implied(["opinion"]) == ["opinion"]  # a level alone stays alone
     assert ontology.subjects().implied(["religion"]) == ["society", "religion"]
     assert {"article", "notes", "coursework", "lyrics", "score"} <= set(g.labels())
+
+
+def test_browse_filters_by_genre_and_subject(con: sqlite3.Connection) -> None:
+    a = _doc(con, "A paper on reverberation.")
+    b = _doc(con, "An essay on collapse.")
+    store.set_genres(con, a, ["paper"], subjects=["audio"])
+    store.set_genres(
+        con, b, ["essay"], subjects=["ecology"], by="claude", p={"essay": 0.8}
+    )
+    ids = lambda **kw: [d["id"] for d in store.list_documents(con, **kw)["items"]]
+    assert ids(genre="paper") == [a]
+    assert ids(genre="opinion") == [b]  # a level names what is under it
+    assert ids(subject="technology") == [a]
+    assert ids(genre="paper", subject="ecology") == []

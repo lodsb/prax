@@ -899,11 +899,18 @@ PROPS.id = "properties-dialog";
 document.body.appendChild(PROPS);
 let propsDoc = null;
 let propsTouched = false;
+let labelLevels = null; // the level and group names, fetched once (GET /genres)
 async function openProperties(id) {
   let doc;
   try { doc = await api(`/get/${id}`, { max_chars: 0 }); } catch (err) { setStatus(err.message); return; }
+  if (!labelLevels) {
+    try {
+      const v = await api("/genres");
+      labelLevels = new Set([...(v.levels || []), ...((v.subjects || {}).levels || [])].map((l) => l.name));
+    } catch { labelLevels = null; }
+  }
   propsDoc = doc;
-  PROPS.innerHTML = propertiesHtml(doc);
+  PROPS.innerHTML = propertiesHtml(doc, labelLevels);
   if (!PROPS.open) PROPS.showModal();
 }
 PROPS.addEventListener("click", async (e) => {
