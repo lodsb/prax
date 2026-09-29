@@ -181,7 +181,8 @@ keeps the main one). The main levels, with their genres:
 - informational: paper, thesis, book, lecture notes, reference entry,
   news report;
 - instructional: manual, datasheet, schematic, recipe, tutorial;
-- opinion: essay, column, review, blog post;
+- opinion: essay, column, review ("blog" was dropped in version 3: a
+  venue, not a form);
 - persuasion: advertisement, product page;
 - narrative: story, biography, report of events;
 - interactive: forum thread, Q&A, comments;

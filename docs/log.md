@@ -2525,4 +2525,17 @@ Found while searching the library for the classification research
       level (`lyrics`, `score`); the subject `religion` (genres 2,
       subjects 2). Claude's labels were revised to match: no "blog" beside
       "essay", broader subjects, the new genres where they fit.
+- **Blind agreement, measured on 30** (the user's first 19 and 11 more,
+      each labelled by Claude without seeing theirs): genres F1 0.59,
+      subjects F1 0.64, levels F1 0.69. The 39 of 40 on the "to check"
+      list was the pre-ticked boxes speaking; those checks stay training
+      data, not a measure. The sharp forms agree (paper 9 of 10, recipe,
+      book, lecture, letter, news); the disagreement is web writing, where
+      "blog" was in one set only 8 times.
+- [x] **Genres 3: "blog" dropped** (a venue, not a form), and essay (argues
+      a view), article (explains or reports without arguing) and news
+      (current events) described by what the text does. Claude's labels
+      carrying "blog" became essay or article by content. Domain rules
+      are to key on the sharp genres and the levels, where agreement is
+      good.
 

@@ -52,7 +52,7 @@ def test_a_label_is_named_once() -> None:
 
 def test_check_keeps_the_vocabulary_order_and_refuses_the_unknown() -> None:
     g = ontology.genres()
-    assert g.check(["blog", "tutorial", "blog"]) == ["tutorial", "blog"]
+    assert g.check(["review", "tutorial", "review"]) == ["tutorial", "review"]
     with pytest.raises(ValueError, match="unknown label"):
         g.check(["pamphlet"])
 
@@ -255,11 +255,11 @@ def test_a_models_labels_wait_for_a_person(con: sqlite3.Connection) -> None:
     store.set_genres(
         con,
         unsure,
-        ["essay", "blog"],
+        ["essay", "review"],
         subjects=["ecology"],
         by="claude",
-        p={"essay": 0.55, "blog": 0.4, "ecology": 0.9},
-        note="essay or blog post",
+        p={"essay": 0.55, "review": 0.4, "ecology": 0.9},
+        note="essay or review",
     )
     check = store.genre_sample(con, state="check")
     assert [it["id"] for it in check["items"]] == [unsure, sure]
@@ -269,21 +269,24 @@ def test_a_models_labels_wait_for_a_person(con: sqlite3.Connection) -> None:
     assert first["p"] == {
         "opinion": 0.55,
         "essay": 0.55,
-        "blog": 0.4,
+        "review": 0.4,
         "society": 0.9,
         "ecology": 0.9,
     }
-    assert first["note"] == "essay or blog post" and first["genres_by"] == "claude"
+    assert first["note"] == "essay or review" and first["genres_by"] == "claude"
     assert store.genre_sample(con)["total"] == 0  # labelled by someone: not open
-    store.set_genres(con, unsure, ["blog"], subjects=["ecology", "politics"])
+    store.set_genres(con, unsure, ["review"], subjects=["ecology", "politics"])
     m = store.get_meta(con, unsure)
     assert m["genres_by"] == "human"
-    assert m["genres"] == [{"genre": "opinion", "p": 1.0}, {"genre": "blog", "p": 1.0}]
+    assert m["genres"] == [
+        {"genre": "opinion", "p": 1.0},
+        {"genre": "review", "p": 1.0},
+    ]
     assert m["genres_model"]["by"] == "claude"
     assert [g["genre"] for g in m["genres_model"]["genres"]] == [
         "opinion",
         "essay",
-        "blog",
+        "review",
     ]
     assert "genres_note" not in m
     with pytest.raises(ValueError, match="person labelled"):

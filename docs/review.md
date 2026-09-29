@@ -129,9 +129,10 @@ The two lists answer different questions. An op-ed on migration is an
 *essay* about *politics*. A sociological study is a *paper* about
 *sociology*. A datasheet is a *datasheet* about *electronics*.
 
-- Tick every genre that fits. A blog post that walks you through a
-  build and argues for one way of doing it is both *blog* and
-  *tutorial*.
+- Tick every genre that fits. A post that walks you through a build
+  and argues for one way of doing it is both *tutorial* and *essay*.
+  Where a text was published does not decide its genre: a blog post is
+  an *essay* when it argues, an *article* when it explains or reports.
 - The level in bold comes with a genre: tick *paper*, and the document
   is *informational* too. The same goes for a subject and its group.
 - When nothing under a level fits, tick the level alone. A company's

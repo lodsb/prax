@@ -18,7 +18,11 @@
 # says what a document is, never what types exist in the graph. The
 # loader keeps it out of the composed modules. A change to the wording
 # moves the model's numbers, so it is measured again on the gold sample.
-version: 2
+# Version 3 (2026-09-29) dropped "blog": it names where a text was
+# published, not what it does, and it was where the user and Claude
+# disagreed most (in one of the two sets 8 times in 30 blind labels). A
+# blog post is an essay, an article or a tutorial by what it does.
+version: 3
 
 levels:
   informational:
@@ -30,8 +34,8 @@ levels:
       lecture: lecture notes, slides, a course script or an exercise sheet
       report: a technical report, a white paper, a project's documentation
       reference: an encyclopedia or wiki entry, a glossary, a standard or specification
-      news: a report of current events
-      article: a magazine article or feature, neither news nor opinion
+      news: reports current events, as they happen
+      article: explains or reports without arguing a view (a magazine feature, a company's technical article)
       notes: a notebook, lab or build notes, a log of measurements
       coursework: a student's homework, an exam or what is said at one
   instructional:
@@ -45,9 +49,8 @@ levels:
   opinion:
     description: argues a view of the writer's own
     genres:
-      essay: an essay, a column, a commentary or an op-ed
+      essay: argues a view of the writer's own (a column, a commentary, an op-ed, most opinion blog posts)
       review: a review of a product, a book, a record or another work
-      blog: a personal blog post
   persuasion:
     description: sells or promotes something
     genres:
