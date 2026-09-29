@@ -450,7 +450,8 @@ def parse(text: str) -> Ontology:
 LEXICON = "lexicon"  # a file beside the modules that is not one of them
 SAMENESS = "sameness"  # nor is this one: what "the same thing" means
 GENRES = "genres"  # nor this: what a document is (stage Z)
-BESIDE = (LEXICON, SAMENESS, GENRES)
+SUBJECTS = "subjects"  # nor this: what a document is about, in a person's words
+BESIDE = (LEXICON, SAMENESS, GENRES, SUBJECTS)
 
 
 def load_dir(directory: Path) -> Ontology:
@@ -607,8 +608,9 @@ def parse_sameness(text: str) -> Sameness:
 
 @dataclass(frozen=True)
 class Level:
-    """A main level of the genres (what a text does) and the genres under
-    it (what form it takes), each with its line of description."""
+    """A level of a facet and the labels under it, each with its line of
+    description: for the genres, what a text does and the forms it takes;
+    for the subjects, a field and the subjects in it."""
 
     name: str
     description: str
@@ -616,11 +618,13 @@ class Level:
 
 
 @dataclass(frozen=True)
-class Genres:
-    """What a document is (``ontology/genres.yaml``): the labels a person
-    gives on the Review page's "genre" tab and the genres step gives by
-    model. A label is a genre or a level alone, for a document that fits
-    no genre of its level."""
+class Facet:
+    """A vocabulary a document is labelled with, in two levels: what it is
+    (``ontology/genres.yaml``) or what it is about
+    (``ontology/subjects.yaml``). The labels a person gives on the Review
+    page's "genre" tab and a model gives later. A label is one under a
+    level, or a level alone, for a document that fits none under it. The
+    YAML names the labels under a level ``genres`` in both files."""
 
     version: str = "0"
     levels: tuple[Level, ...] = ()
@@ -647,7 +651,7 @@ class Genres:
         given = set()
         for label in labels:
             if label not in known:
-                raise ValueError(f"unknown genre {label!r}; the genres are {known}")
+                raise ValueError(f"unknown label {label!r}; the labels are {known}")
             given.add(label)
         return [x for x in known if x in given]
 
@@ -666,21 +670,21 @@ class Genres:
         }
 
 
-def parse_genres(text: str) -> Genres:
+def parse_facet(text: str, *, name: str = GENRES) -> Facet:
     data = yaml.safe_load(text) or {}
     levels: list[Level] = []
     seen: set[str] = set()
-    for name, body in (data.get("levels") or {}).items():
+    for level, body in (data.get("levels") or {}).items():
         body = body or {}
-        genres = tuple(
+        under = tuple(
             (str(g), str(d or "")) for g, d in (body.get("genres") or {}).items()
         )
-        for label in (str(name), *(g for g, _ in genres)):
+        for label in (str(level), *(g for g, _ in under)):
             if label in seen:
-                raise ValueError(f"genres.yaml names {label!r} twice")
+                raise ValueError(f"{name}.yaml names {label!r} twice")
             seen.add(label)
-        levels.append(Level(str(name), str(body.get("description") or ""), genres))
-    return Genres(version=str(data.get("version") or "0"), levels=tuple(levels))
+        levels.append(Level(str(level), str(body.get("description") or ""), under))
+    return Facet(version=str(data.get("version") or "0"), levels=tuple(levels))
 
 
 def path() -> Path:
@@ -732,18 +736,24 @@ def sameness() -> Sameness:
     return _load_sameness(p, _stamp(p))
 
 
-@functools.lru_cache(maxsize=4)
-def _load_genres(p: Path, stamp: tuple[Any, ...]) -> Genres:
-    f = (p / f"{GENRES}.yaml") if p.is_dir() else p.with_name(f"{GENRES}.yaml")
+@functools.lru_cache(maxsize=8)
+def _load_facet(p: Path, stamp: tuple[Any, ...], name: str) -> Facet:
+    f = (p / f"{name}.yaml") if p.is_dir() else p.with_name(f"{name}.yaml")
     if not f.exists():
-        return Genres()
-    return parse_genres(f.read_text(encoding="utf-8"))
+        return Facet()
+    return parse_facet(f.read_text(encoding="utf-8"), name=name)
 
 
-def genres() -> Genres:
+def genres() -> Facet:
     """What a document may be; re-parsed only when the file changes."""
     p = path()
-    return _load_genres(p, _stamp(p))
+    return _load_facet(p, _stamp(p), GENRES)
+
+
+def subjects() -> Facet:
+    """What a document may be about; re-parsed only when the file changes."""
+    p = path()
+    return _load_facet(p, _stamp(p), SUBJECTS)
 
 
 def modules_of(etype: str) -> set[str]:

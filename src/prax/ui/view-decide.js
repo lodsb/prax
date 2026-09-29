@@ -17,7 +17,7 @@ const DECIDE_LISTS = {
   cleanup: { title: "clean up", view: (p) => viewCleanup(p), admin: true,
     about: "Documents picked by a rule, shown before anything happens, retired in one go and restored in one go. Retiring keeps the original and the text; search and the graph pass the document by." },
   genre: { title: "genre", view: (p) => viewGenres(p),
-    about: "What each document is, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits, a level alone when no genre of it does. The documents come from each source in turn. About 150 is the aim." },
+    about: "What each document is and what it is about, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits and every subject it is about, a level alone when nothing under it does. A subject may be left out. The documents come from each source in turn. About 150 is the aim." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -192,7 +192,7 @@ async function viewGenres(p) {
       form.querySelectorAll("button").forEach((b) => { b.disabled = true; });
       try {
         const r = await post(`/doc/${row.dataset.doc}/genres`, body, "PUT");
-        out.textContent = r.skipped ? "set aside" : `saved: ${r.genres.join(", ")}`;
+        out.textContent = r.skipped ? "set aside" : `saved: ${r.genres.join(", ")}${r.subjects.length ? ` · about ${r.subjects.join(", ")}` : ""}`;
         row.classList.add("done");
       } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
       form.querySelectorAll("button").forEach((b) => { b.disabled = false; });
@@ -200,8 +200,9 @@ async function viewGenres(p) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const genres = [...form.querySelectorAll("input[name=genre]:checked")].map((c) => c.value);
-      if (!genres.length) { out.textContent = "tick at least one, or can't tell"; return; }
-      send({ genres });
+      const subjects = [...form.querySelectorAll("input[name=subject]:checked")].map((c) => c.value);
+      if (!genres.length) { out.textContent = "tick at least one genre, or can't tell"; return; }
+      send({ genres, subjects });
     });
     form.querySelector("[data-genre-skip]").addEventListener("click", () => send({ skip: true }));
   });

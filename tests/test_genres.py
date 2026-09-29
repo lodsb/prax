@@ -29,12 +29,23 @@ def test_the_genres_load_beside_the_modules() -> None:
 
 def test_the_genres_are_not_a_module() -> None:
     onto = ontology.current()
-    assert "genres" not in onto.modules and "genres" not in onto.version
+    for beside in ("genres", "subjects"):
+        assert beside not in onto.modules and beside not in onto.version
+
+
+def test_the_subjects_load_and_share_no_label_with_the_genres() -> None:
+    """A label says one thing: "opinion" is a genre, "politics" a subject,
+    and a model or a rule never has to ask which file a word came from."""
+    subj = ontology.subjects()
+    assert subj.version != "0"
+    assert subj.level_of("politics") == "society"
+    assert {"philosophy", "sociology", "music", "electronics"} <= set(subj.labels())
+    assert not set(subj.labels()) & set(ontology.genres().labels())
 
 
 def test_a_label_is_named_once() -> None:
-    with pytest.raises(ValueError, match="twice"):
-        ontology.parse_genres(
+    with pytest.raises(ValueError, match="genres.yaml names .essay. twice"):
+        ontology.parse_facet(
             "levels:\n  opinion: {genres: {essay: x}}\n  other: {genres: {essay: y}}"
         )
 
@@ -42,7 +53,7 @@ def test_a_label_is_named_once() -> None:
 def test_check_keeps_the_vocabulary_order_and_refuses_the_unknown() -> None:
     g = ontology.genres()
     assert g.check(["blog", "tutorial", "blog"]) == ["tutorial", "blog"]
-    with pytest.raises(ValueError, match="unknown genre"):
+    with pytest.raises(ValueError, match="unknown label"):
         g.check(["pamphlet"])
 
 
@@ -61,6 +72,7 @@ def test_a_persons_genres_are_the_gold(con: sqlite3.Connection) -> None:
     assert got == {
         "doc_id": d,
         "genres": ["instructional", "tutorial"],
+        "subjects": [],
         "skipped": False,
     }
     m = store.get_meta(con, d)
@@ -69,7 +81,7 @@ def test_a_persons_genres_are_the_gold(con: sqlite3.Connection) -> None:
         {"genre": "tutorial", "p": 1.0},
     ]
     assert m["genres_by"] == "human" and m["genres_at"]
-    with pytest.raises(ValueError, match="unknown genre"):
+    with pytest.raises(ValueError, match="unknown label"):
         store.set_genres(con, d, ["pamphlet"])
     with pytest.raises(ValueError, match="skip"):
         store.set_genres(con, d, [])
@@ -80,6 +92,25 @@ def test_a_persons_genres_are_the_gold(con: sqlite3.Connection) -> None:
     assert not {"genres", "genres_skip"} & set(store.get_meta(con, d))
     with pytest.raises(KeyError):
         store.set_genres(con, 99999, ["paper"])
+
+
+def test_subjects_go_with_the_genres(con: sqlite3.Connection) -> None:
+    d = _doc(con, "Why the welfare state was built, and why it is dismantled.")
+    got = store.set_genres(con, d, ["essay"], subjects=["sociology", "politics"])
+    assert got["subjects"] == ["politics", "sociology"]
+    assert store.get_meta(con, d)["subjects"] == [
+        {"subject": "politics", "p": 1.0},
+        {"subject": "sociology", "p": 1.0},
+    ]
+    assert store.set_genres(con, d, ["invoice"])["subjects"] == []  # may be none
+    assert "subjects" not in store.get_meta(con, d)
+    with pytest.raises(ValueError, match="unknown label"):
+        store.set_genres(
+            con, d, ["essay"], subjects=["essay"]
+        )  # a genre, not a subject
+    store.set_genres(con, d, ["essay"], subjects=["philosophy"])
+    item = store.genre_sample(con, state="labelled")["items"][0]
+    assert item["subjects"] == ["philosophy"]
 
 
 def test_the_sample_takes_each_source_in_turn(con: sqlite3.Connection) -> None:
@@ -120,14 +151,20 @@ def client(data_dir: Path) -> Iterator[TestClient]:
 def test_the_door_serves_the_genre_tab(client: TestClient) -> None:
     vocab = client.get("/genres").json()
     assert vocab["levels"][0]["name"] == "informational"
+    assert vocab["subjects"]["levels"][0]["name"] == "society"
     d = client.post(
         "/ingest", json={"text": "An essay on collapse.", "title": "e"}
     ).json()
     doc_id = d["doc_id"]
     sample = client.get("/documents/genre-sample", params={"limit": 5}).json()
     assert [it["id"] for it in sample["items"]] == [doc_id]
-    r = client.put(f"/doc/{doc_id}/genres", json={"genres": ["essay"]})
+    r = client.put(
+        f"/doc/{doc_id}/genres", json={"genres": ["essay"], "subjects": ["ecology"]}
+    )
     assert r.status_code == 200 and r.json()["genres"] == ["essay"]
+    assert r.json()["subjects"] == ["ecology"]
+    r = client.put(f"/doc/{doc_id}/genres", json={"genres": ["essay"]})
+    assert r.status_code == 200 and r.json()["subjects"] == []
     assert (
         client.put(f"/doc/{doc_id}/genres", json={"genres": ["x"]}).status_code == 400
     )

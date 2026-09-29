@@ -2461,3 +2461,12 @@ Found while searching the library for the classification research
       Screenshotted on a throwaway door with four invented documents: a
       save and a skip, each row saying what was done.
 - The labelling itself is the user's: about 150.
+- [x] **Subjects beside the genres** (the user, on the tab: "I am
+      missing philosophic/political/sociological genres/tags"). They are
+      topics, not forms, so a second vocabulary, `ontology/subjects.yaml`:
+      four fields (society, arts, technology, everyday) and 24 subjects,
+      drafted from the regions the library has and the fields the user
+      named. Labelled in the same row as the genres, as `meta.subjects`;
+      may be empty, a genre may not. `ontology.Facet` loads both files.
+      A test holds that no label is in both, which found `history` (a
+      subject; the genre is now `chronicle`).

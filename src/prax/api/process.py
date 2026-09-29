@@ -78,8 +78,10 @@ def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
 @router.get("/genres")
 def genres() -> dict[str, Any]:
     """What a document may be (``ontology/genres.yaml``): the levels and
-    their genres, each with its line of description."""
-    return ontology.genres().as_dict()
+    their genres, each with its line of description; and under
+    ``subjects`` what it may be about (``ontology/subjects.yaml``), in the
+    same shape."""
+    return {**ontology.genres().as_dict(), "subjects": ontology.subjects().as_dict()}
 
 
 @router.get("/documents/genre-sample")
@@ -98,14 +100,18 @@ def genre_sample(
 
 class GenresReq(BaseModel):
     genres: list[str] | None = None  # None with skip false: take them back
+    subjects: list[str] | None = None  # what it is about; may be none
     skip: bool = False  # the person could not place it
 
 
 @router.put("/doc/{doc_id}/genres")
 def put_genres(doc_id: int, req: GenresReq, request: Request) -> dict[str, Any]:
-    """A person's genres for a document: the gold sample of stage Z."""
+    """A person's genres and subjects for a document: the gold sample of
+    stage Z."""
     try:
-        return store.set_genres(_con(request), doc_id, req.genres, skip=req.skip)
+        return store.set_genres(
+            _con(request), doc_id, req.genres, subjects=req.subjects, skip=req.skip
+        )
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:

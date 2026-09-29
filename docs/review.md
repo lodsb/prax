@@ -7,7 +7,7 @@ from the menu at the top of the web interface.
 
 The page has five tabs. The first holds the facts the reader could not
 place. Three ask you whether two names are the same thing. The **genre**
-tab asks what a document is.
+tab asks what a document is and what it is about.
 Whether a document is personal, and what should not be in the library at
 all, are on the **Admin** page (its tabs "personal?" and "clean up"),
 beside the tokens that decide who may read what.
@@ -117,10 +117,17 @@ guesses are measured against your answers. So a hundred and fifty
 careful answers are worth more than a thousand quick ones.
 
 Each document shows its title, where it came from, its summary and, when
-you open it, the beginning of its text. Beside it are the genres, a
-level in bold (what the text does: *informational*, *instructional*,
-*opinion*…) and the genres under it (what form it takes). Hover over one
-to read what it means.
+you open it, the beginning of its text. Beside it are two lists. **What
+it is** holds the genres: a level in bold (what the text does:
+*informational*, *instructional*, *opinion*…) and the genres under it
+(what form it takes). **What it is about** holds the subjects: a field
+in bold (*society*, *arts*, *technology*, *everyday*) and the subjects
+in it (*philosophy*, *politics*, *electronics*, *cooking*…). Hover over
+one to read what it means.
+
+The two lists answer different questions. An op-ed on migration is an
+*essay* about *politics*. A sociological study is a *paper* about
+*sociology*. A datasheet is a *datasheet* about *electronics*.
 
 - Tick every genre that fits. A blog post that walks you through a
   build and argues for one way of doing it is both *blog* and
@@ -128,6 +135,9 @@ to read what it means.
 - When nothing under a level fits, tick the level alone. A company's
   page on how to recycle their product is *instructional*, and none of
   its genres.
+- Tick every subject the document is about. You may leave the subjects
+  empty: an invoice is about nothing in particular. A genre is always
+  needed.
 - **Save** keeps your answer. You can change it later under
   **labelled**.
 - **Can't tell** sets the document aside, and it won't come back.

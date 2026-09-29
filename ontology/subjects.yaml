@@ -1,0 +1,55 @@
+# What a document is about, in a person's words: the subjects, beside its
+# genres (what it is; genres.yaml). Stage Z of docs/PLAN.md. The graph's
+# regions say what a document is about too, but they are found, named and
+# renamed by the communities pass; these are a fixed vocabulary a person
+# labels with, and a domain rule can name.
+#
+# The same shape as genres.yaml: groups, and the subjects under them, each
+# with one line of description; a group alone is a label for a document
+# that is about the group's field but none of its subjects. Drafted
+# 2026-09-29 from the regions the library has (audio and music, computing,
+# the collapse and systemic-risk reading, recipes, making) and the fields
+# the user asked for (philosophy, politics, sociology). Every label is
+# unique across the file and never one of genres.yaml's.
+#
+# Out of the version string like the lexicon: it says what a document is
+# about, never what types exist in the graph.
+version: 1
+
+levels:
+  society:
+    description: how people live together, govern and think
+    genres:
+      philosophy: philosophy, ethics, epistemology, the philosophy of mind or of science
+      politics: politics, government, policy, political theory, geopolitics
+      sociology: society, culture, social structures and movements
+      economics: the economy, markets, finance, work, technology's economic effects
+      ecology: the environment, climate, resources, collapse and systemic risk
+      history: the past of anything, as history
+      psychology: the mind, cognition, perception, emotion, behaviour
+      law: law, rights, regulation, licences
+      education: teaching, learning, universities and their administration
+      language: languages and linguistics
+  arts:
+    description: making and studying art
+    genres:
+      music: music, its theory, composition, performance and study
+      art: visual art, design, media, film, literature
+  technology:
+    description: how things are computed, built and made to work
+    genres:
+      audio: sound, acoustics, signal processing, synthesis, audio software
+      computing: software, programming, systems, networks, the web
+      ai: machine learning, artificial intelligence, language models
+      mathematics: mathematics, statistics, theoretical computer science
+      science: physics, chemistry, biology, the other natural sciences
+      electronics: circuits, components, instruments, embedded hardware
+      interaction: human-computer interaction, interfaces, instruments to play
+      information: libraries, documents, retrieval, knowledge organisation
+  everyday:
+    description: the household and the hands
+    genres:
+      cooking: food, recipes, drinks
+      making: 3D printing, woodwork, crafts, building things
+      health: health, medicine, the body
+      affairs: the owner's own affairs (money, insurance, housing, work papers)

@@ -399,6 +399,13 @@ test("genreRow: the document as a labeller reads it, the vocabulary as boxes, it
   assert.match(html, /genre-level"[^>]*title="tells how"/);
   assert.match(html, /the opening of the text/);
   assert.match(html, /labelled 2026-09-29/);
+  assert.doesNotMatch(html, /what it is about/);  // no subjects in this vocabulary
+  const both = lib.genreRow({ ...it, subjects: ["politics"] }, { ...vocab,
+    subjects: { levels: [{ name: "society", description: "people", genres: [{ name: "politics", description: "policy" }, { name: "sociology", description: "society" }] }] } });
+  assert.match(both, /what it is about/);
+  assert.match(both, /name="subject" value="politics" checked/);
+  assert.doesNotMatch(both, /name="subject" value="sociology" checked/);
+  assert.match(both, /name="genre" value="datasheet" checked/);
   const bare = lib.genreRow({ id: 6, title: null, genres: [] }, vocab);
   assert.match(bare, /doc 6/);
   assert.match(bare, /No summary yet/);

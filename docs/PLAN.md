@@ -254,6 +254,14 @@ are `by: human` and never overwritten. Confident genre words join the
 document field (`document_field`, beside "PDF document"), so a search for
 "datasheet for the TL072" finds the datasheet first.
 
+**Subjects** are what a document is about in a person's words
+(`ontology/subjects.yaml`: society, arts, technology, everyday, and the
+subjects in each, philosophy, politics and sociology among them). The
+user asked for them on 2026-09-29, when the genres had no place for
+political or philosophical writing: that is a topic, not a form. They
+are labelled with the genres, in the same row, and the model assigns
+them the same way. A domain rule can name one (`subject: politics`).
+
 **Topics** come from the graph, which already has them: the regions and
 parts of stage P. `meta.regions: [{id, share}]` is written by the
 communities pass for every document with facts, counted the way
@@ -301,7 +309,8 @@ Built only when measured to be needed.
 1. `ontology/genres.yaml`, the Review page's genre tab, and the user's
    gold sample (about 150). (2026-09-29: the file, the tab, `GET
    /genres`, `GET /documents/genre-sample`, `PUT /doc/{id}/genres`
-   built; the labelling is the user's.)
+   built; `ontology/subjects.yaml` beside it, labelled in the same row;
+   the labelling is the user's.)
 2. The genres step, the three methods and the two inputs measured on the
    gold sample (`scripts/eval_genres.py`, `docs/eval/genres-*.md`), and
    Jeff and Kev beside them (the side-quest above).

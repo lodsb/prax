@@ -1,11 +1,14 @@
-"""What a document is: its genres (stage Z, ``ontology/genres.yaml``).
+"""What a document is and what it is about: its genres
+(``ontology/genres.yaml``) and its subjects (``ontology/subjects.yaml``),
+stage Z.
 
-A person's genres are the gold sample the genres step is measured and
-calibrated against. They are written on the Review page's "genre" tab and
-kept in ``meta.genres`` as ``[{"genre", "p"}]`` with ``meta.genres_by``
-naming who wrote them. A person's are ``by: human``, ``p`` 1.0, and no
-model overwrites them. A document a person could not place is
-``meta.genres_skip`` and leaves the sample.
+A person's labels are the gold sample the genres step is measured and
+calibrated against. They are written on the Review page's "genre" tab, in
+one act for both facets, and kept in ``meta.genres`` as ``[{"genre",
+"p"}]`` and ``meta.subjects`` as ``[{"subject", "p"}]``, with
+``meta.genres_by`` naming who labelled the document. A person's are
+``by: human``, ``p`` 1.0, and no model overwrites them. A document a
+person could not place is ``meta.genres_skip`` and leaves the sample.
 """
 
 from __future__ import annotations
@@ -56,16 +59,19 @@ def set_genres(
     doc_id: int,
     genres: list[str] | None,
     *,
+    subjects: list[str] | None = None,
     by: str = "human",
     skip: bool = False,
 ) -> dict[str, Any]:
-    """A person's genres for a document (``by: human``), checked against
-    ``ontology.genres()``. ``skip``: the person could not place it, and it
-    leaves the sample. ``genres=None`` without ``skip`` takes both back."""
+    """A person's genres and subjects for a document (``by: human``),
+    checked against ``ontology.genres()`` and ``ontology.subjects()``. A
+    genre is required; subjects may be none (an invoice is about nothing
+    in particular). ``skip``: the person could not place it, and it leaves
+    the sample. ``genres=None`` without ``skip`` takes all of it back."""
     if document_hidden(con, doc_id):
         raise KeyError(f"no such document: {doc_id}")
     meta = get_meta(con, doc_id)
-    for key in ("genres", "genres_by", "genres_at", "genres_skip"):
+    for key in ("genres", "subjects", "genres_by", "genres_at", "genres_skip"):
         meta.pop(key, None)
     if skip:
         meta["genres_skip"] = now()
@@ -73,7 +79,10 @@ def set_genres(
         labels = ontology.genres().check(genres)
         if not labels:
             raise ValueError("no genre given: skip the document instead")
+        about = ontology.subjects().check(subjects or [])
         meta["genres"] = [{"genre": g, "p": 1.0} for g in labels]
+        if about:
+            meta["subjects"] = [{"subject": x, "p": 1.0} for x in about]
         meta["genres_by"] = by
         meta["genres_at"] = now()
     con.execute(
@@ -83,6 +92,7 @@ def set_genres(
     return {
         "doc_id": doc_id,
         "genres": [g["genre"] for g in meta.get("genres") or []],
+        "subjects": [x["subject"] for x in meta.get("subjects") or []],
         "skipped": bool(meta.get("genres_skip")),
     }
 
@@ -106,6 +116,7 @@ def _genre_item(row: sqlite3.Row, opening: int) -> dict[str, Any]:
         "summary": meta.get("summary"),
         "opening": text,
         "genres": [g.get("genre") for g in meta.get("genres") or []],
+        "subjects": [x.get("subject") for x in meta.get("subjects") or []],
         "genres_by": meta.get("genres_by"),
         "genres_at": meta.get("genres_at"),
     }

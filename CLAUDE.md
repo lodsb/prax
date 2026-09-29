@@ -169,10 +169,14 @@ revisit threshold, under "Decision thresholds" below.
    What a document *is* is `ontology/genres.yaml`, the third file beside
    them, also out of the version string. It holds levels (what a text
    does: informational, instructional, opinion…) and the genres under
-   them (paper, datasheet, essay…). A person's genres come from the
-   Review page's "genre" tab (`store.set_genres`, `store.genre_sample`)
-   and are kept as `meta.genres` with `genres_by: human`. They are the
-   gold sample stage Z of `docs/PLAN.md` measures against.
+   them (paper, datasheet, essay…). What it is *about*, in a person's
+   words, is `ontology/subjects.yaml` in the same shape (society:
+   philosophy, politics, sociology…; technology: audio, electronics…),
+   no label in both files. `ontology.genres()` and `ontology.subjects()`
+   load them as a `Facet`. A person's labels come from the Review page's
+   "genre" tab (`store.set_genres`, `store.genre_sample`) and are kept
+   as `meta.genres` and `meta.subjects` with `genres_by: human`. They
+   are the gold sample stage Z of `docs/PLAN.md` measures against.
    Growing a module is its version bump. Renaming or removing a type is
    a data migration. Extraction emits triples only against the current
    version; misfits go to a review queue, not into the graph.

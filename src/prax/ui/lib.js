@@ -317,15 +317,19 @@ function suspectRow(it) {
 }
 // The Review page's "genre" tab (stage Z): a document as a labeller reads
 // it (title, where it came from, summary, the opening of its text) and the
-// vocabulary of ontology/genres.yaml as checkboxes, a level before its
-// genres. A document may take several; "can't tell" takes it out of the
-// sample. The checked boxes are its genres so far, when it has some.
+// vocabularies as checkboxes, a level before the labels under it: what it
+// is (ontology/genres.yaml) and what it is about (ontology/subjects.yaml).
+// A document may take several of each; "can't tell" takes it out of the
+// sample. The checked boxes are its labels so far, when it has some.
 function genreRow(it, vocab) {
-  const have = new Set(it.genres || []);
-  const box = (name, about, level) => `<label class="genre-choice${level ? " genre-level" : ""}" title="${esc(about || "")}">
-      <input type="checkbox" name="genre" value="${esc(name)}"${have.has(name) ? " checked" : ""}> ${esc(name)}</label>`;
-  const levels = (vocab.levels || []).map((lv) => `<div class="genre-levels">${box(lv.name, lv.description, true)}
+  const facet = (f, field, have) => {
+    const box = (name, about, level) => `<label class="genre-choice${level ? " genre-level" : ""}" title="${esc(about || "")}">
+      <input type="checkbox" name="${field}" value="${esc(name)}"${have.has(name) ? " checked" : ""}> ${esc(name)}</label>`;
+    return ((f || {}).levels || []).map((lv) => `<div class="genre-levels">${box(lv.name, lv.description, true)}
       <span class="genre-kids">${(lv.genres || []).map((g) => box(g.name, g.description, false)).join("")}</span></div>`).join("");
+  };
+  const levels = `<h4 class="genre-facet">what it is</h4>${facet(vocab, "genre", new Set(it.genres || []))}
+    ${vocab.subjects ? `<h4 class="genre-facet">what it is about</h4>${facet(vocab.subjects, "subject", new Set(it.subjects || []))}` : ""}`;
   const opening = String(it.opening || "").trim();
   const where = it.where ? ` · ${esc(it.where)}` : "";
   return `<article class="decide-row genre-row" data-doc="${it.id}">

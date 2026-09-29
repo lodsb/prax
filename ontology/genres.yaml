@@ -54,7 +54,7 @@ levels:
     genres:
       story: fiction, a story, a novel or a part of one
       biography: a life, a portrait, an obituary
-      history: an account of past events
+      chronicle: an account of past events, a report of what happened when
   interactive:
     description: people talking with each other
     genres:
