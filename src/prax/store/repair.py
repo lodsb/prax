@@ -32,6 +32,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from prax.graph import ontology
 from prax.text import glyphs
 
 from .base import _ASIDE, _NOW, _read_archive, _reading, now
@@ -1164,9 +1165,77 @@ def _repair_jobs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     return done
 
 
+# A composed version names its modules, each with its own version
+# ("core3+research9"). A name there that is a file beside the modules
+# (genres, subjects, the lexicon) was a door reading that file as a module
+# before it knew its name: 2026-09-29, "+genres1" and "+subjects1".
+_VERSION_PART = re.compile(r"(?P<name>[a-z_]+)(?P<version>\d+)")
+
+
+def _without_stray(version: str) -> str | None:
+    """The version without the parts that name no module, or None when
+    every part names one."""
+    parts = version.split("+")
+    kept = [
+        p
+        for p in parts
+        if not (
+            (m := _VERSION_PART.fullmatch(p)) and m.group("name") in ontology.BESIDE
+        )
+    ]
+    return "+".join(kept) if len(kept) < len(parts) else None
+
+
+def _stray_version_modules(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for table, live in (
+        ("edges", "valid_to IS NULL"),
+        ("review_queue", "resolved_at IS NULL"),
+    ):
+        for version, n in con.execute(
+            f"SELECT ontology_version, count(*) FROM {table}"
+            f" WHERE {live} AND ontology_version LIKE '%+%'"
+            " GROUP BY ontology_version"
+        ):
+            right = _without_stray(str(version))
+            if right is not None:
+                rows.append(
+                    {"table": table, "version": version, "right": right, "count": n}
+                )
+    return rows
+
+
+def _repair_stray_versions(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    done = 0
+    for r in rows:
+        live = "valid_to IS NULL" if r["table"] == "edges" else "resolved_at IS NULL"
+        cur = con.execute(
+            f"UPDATE {r['table']} SET ontology_version = ?"
+            f" WHERE ontology_version = ? AND {live}",
+            (r["right"], r["version"]),
+        )
+        done += cur.rowcount
+    con.commit()
+    return done
+
+
 # --------------------------------------------------------------- the list
 
 AILMENTS: tuple[Ailment, ...] = (
+    Ailment(
+        name="stray-version-modules",
+        what=(
+            "live facts and open review items whose ontology version names a"
+            " file beside the modules (genres, subjects, the lexicon) as if it"
+            " were one: a door started before the file existed read it so"
+        ),
+        fix=(
+            "take that name out of the version; the fact is the same, only its"
+            " stamp was wrong (a retired fact keeps its history)"
+        ),
+        find=_stray_version_modules,
+        repair=_repair_stray_versions,
+    ),
     Ailment(
         name="container-citations",
         what=(

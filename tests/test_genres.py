@@ -191,3 +191,42 @@ def test_a_yaml_file_that_is_not_a_module_is_never_composed(tmp_path: Path) -> N
     onto = ontology.load_dir(tmp_path)
     assert "tomorrow" not in onto.modules and "tomorrow" not in onto.version
     assert onto.version == ontology.current().version
+
+
+def test_heal_takes_a_stray_module_out_of_a_version(con: sqlite3.Connection) -> None:
+    """The live facts and open review items a door stamped with "+genres1"
+    are restamped; a retired fact and a resolved item keep their history."""
+    d = _doc(con, "A paper about reverberation and its delay networks.")
+    right = ontology.current().version
+    wrong = right + "+genres1"
+    for name, valid_to in (("a", None), ("b", "2026-09-29T00:00:00Z")):
+        con.execute("INSERT INTO entities (name, type) VALUES (?, 'concept')", (name,))
+    a, b = [r[0] for r in con.execute("SELECT id FROM entities ORDER BY id")]
+    for dst, valid_to in ((b, None), (a, "2026-09-29T00:00:00Z")):
+        con.execute(
+            "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
+            " ontology_version, producer, valid_to)"
+            " VALUES (?, ?, 'mentions', 'EXTRACTED', ?, ?, 't', ?)",
+            (a, dst, d, wrong, valid_to),
+        )
+    for resolved in (None, "2026-09-29T00:00:00Z"):
+        con.execute(
+            "INSERT INTO review_queue (source_doc, src, rel, dst, reason,"
+            " ontology_version, resolved_at) VALUES (?, 'x', 'r', 'y', 'misfit', ?, ?)",
+            (d, wrong, resolved),
+        )
+    con.commit()
+    found = store.health(con, only=["stray-version-modules"])["ailments"][0]
+    assert found["count"] == 2 and found["examples"][0]["right"] == right
+    out = store.heal(con, only=["stray-version-modules"])
+    assert out["stray-version-modules"] == {"found": 2, "repaired": 2}
+    versions = [
+        r[0] for r in con.execute("SELECT ontology_version FROM edges ORDER BY id")
+    ]
+    assert versions == [right, wrong]
+    reviews = [
+        r[0]
+        for r in con.execute("SELECT ontology_version FROM review_queue ORDER BY id")
+    ]
+    assert reviews == [right, wrong]
+    assert not store.health(con, only=["stray-version-modules"])["ailments"][0]["count"]
