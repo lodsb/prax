@@ -386,7 +386,7 @@ def test_a_session_that_lost_its_card_is_built_again_once(
         def __init__(self, fail: str | None) -> None:
             self.fail = fail
 
-        def run(self, _outputs, feed):
+        def run(self, _outputs, feed, _options=None):
             if self.fail:
                 raise RuntimeError(self.fail)
             return [np.ones((len(feed["input_ids"]), 2, 4), dtype=np.float32)]
@@ -408,3 +408,24 @@ def test_a_session_that_lost_its_card_is_built_again_once(
     with pytest.raises(RuntimeError, match="some other failure"):
         emb._run([Encoding()])
     assert built == [1]
+
+
+def test_the_arena_modes() -> None:
+    """``embeddings.arena``: ``shrink`` (the default) keeps the CPU arena for
+    a batch and gives it back after, ``keep`` holds it for good, ``off`` has
+    none (measured 2026-09-30: keep held 2.3 GB for the process's life)."""
+    ort = pytest.importorskip("onnxruntime")
+    from prax.ml import embeddings
+
+    assert embeddings.ARENA == "shrink"
+    on, run = embeddings.arena_options(ort, "shrink")
+    assert (
+        on
+        and run.get_run_config_entry("memory.enable_memory_arena_shrinkage") == "cpu:0"
+    )
+    on, run = embeddings.arena_options(ort, "keep")
+    assert on
+    on, _ = embeddings.arena_options(ort, "off")
+    assert not on
+    with pytest.raises(ValueError, match="arena"):
+        embeddings.arena_options(ort, "sometimes")

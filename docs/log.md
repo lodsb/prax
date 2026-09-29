@@ -2570,3 +2570,27 @@ Found while searching the library for the classification research
       document labelled under it). The document field waits for a
       retrieval measurement.
 
+
+## 2026-09-30: what an idle door holds
+
+- **The question** (the user): why does 32 GB run low when nothing else
+  is happening? Measured idle: 23.2 GB committed; the door 3.97 GB
+  private of which 2.80 GB paged out, the worker 2.48 GB and 1.65 GB.
+  Not Python and not SQLite: ONNX Runtime's CPU arena, which grows to the
+  largest batch the embedder has run and never gives it back.
+- [x] **Measured** on 2,000 chunks of the library, a process a condition,
+      three runs each (`scratchpad/bench_arena.py`):
+
+      | arena | chunks/s | query | peak | kept |
+      |---|---|---|---|---|
+      | keep (ONNX's default, prax's until today) | 24.0 | 3.0 ms | +2.43 GB | +2.29 GB |
+      | shrink after every batch | 22.0 | 3.0 ms | +1.39 GB | +0.03 GB |
+      | off | 17.6 | 3.0 ms | +1.08 GB | +0.05 GB |
+
+- [x] **`embeddings.arena`** (`PRAX_EMBED_ARENA`), default `shrink`:
+      8% of the worker's embedding speed for the 2.3 GB each of the door
+      and the worker held. prax's embedder as built, measured again: 22.2
+      chunks/s, 3 ms a query, 30 MB kept.
+- The low-memory stops of 2026-09-29 were the side-quest on top of this
+      (Jeff on the CPU, Kev's training spilling from the card into RAM,
+      llama-server's 19 GB mapped model), not prax at rest.

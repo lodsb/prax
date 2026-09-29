@@ -101,6 +101,28 @@ def _normalize(x: np.ndarray) -> np.ndarray:
 
 # ------------------------------------------------------------------- onnx
 
+# What ONNX Runtime does with the CPU memory a batch needed
+# (``embeddings.arena``): ``keep`` it for the next batch (its default, and
+# prax's until 2026-09-30), ``shrink`` it back after every batch, or
+# ``off``, no arena at all. Measured on 2,000 chunks of the library,
+# three runs each (docs/log.md, 2026-09-30): keep 24.0 chunks/s and 2.3 GB
+# held by the process for good; shrink 22.0 chunks/s and 30 MB held; off
+# 17.6 chunks/s and 50 MB. A query takes 3 ms in all three. The door and
+# the worker each kept their 2.3 GB, idle, for days.
+ARENAS = ("shrink", "keep", "off")
+ARENA = "shrink"
+
+
+def arena_options(ort: Any, mode: str) -> tuple[bool, Any]:
+    """(whether the session has a CPU arena, the run options a batch runs
+    with) for an ``embeddings.arena`` mode."""
+    if mode not in ARENAS:
+        raise ValueError(f"embeddings.arena is one of {ARENAS}, not {mode!r}")
+    run = ort.RunOptions()
+    if mode == "shrink":
+        run.add_run_config_entry("memory.enable_memory_arena_shrinkage", "cpu:0")
+    return mode != "off", run
+
 
 @dataclass
 class OnnxEmbedder:
@@ -112,6 +134,7 @@ class OnnxEmbedder:
     _session: Any = field(default=None, init=False, repr=False)
     _tokenizer: Any = field(default=None, init=False, repr=False)
     _inputs: set[str] = field(default_factory=set, init=False, repr=False)
+    _run_options: Any = field(default=None, init=False, repr=False)
 
     @property
     def name(self) -> str:
@@ -147,6 +170,8 @@ class OnnxEmbedder:
         )
         if threads:
             opts.intra_op_num_threads = threads
+        mode = str(config.setting("embeddings.arena", "PRAX_EMBED_ARENA", ARENA))
+        opts.enable_cpu_mem_arena, self._run_options = arena_options(ort, mode)
         self._session = ort.InferenceSession(path, opts, providers=providers)
         self._inputs = {i.name for i in self._session.get_inputs()}
         tok = tokenizers.Tokenizer.from_file(
@@ -165,7 +190,7 @@ class OnnxEmbedder:
         if "token_type_ids" in self._inputs:
             feed["token_type_ids"] = np.zeros_like(ids)
         try:
-            hidden = self._session.run(None, feed)[0]  # (batch, tokens, dim)
+            hidden = self._session.run(None, feed, self._run_options)[0]
         except Exception as exc:
             if not _lost_device(exc):
                 raise
@@ -173,7 +198,7 @@ class OnnxEmbedder:
             # loaded beside it): the session stays broken, so a new one, once
             self._session = None
             self._resolve()
-            hidden = self._session.run(None, feed)[0]
+            hidden = self._session.run(None, feed, self._run_options)[0]
         if self.spec.pooling == "mean":
             m = mask[..., None].astype(np.float32)
             pooled = (hidden * m).sum(axis=1) / np.maximum(m.sum(axis=1), 1e-9)

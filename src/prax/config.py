@@ -33,7 +33,7 @@ SECTIONS = (
     "models",  # named models (prax.models)
     "steps",  # which model does which step (prax.models)
     "domains",  # rules giving documents their ontology modules
-    "embeddings",  # model, variant, providers, threads
+    "embeddings",  # model, variant, providers, threads, arena
     "vectors",  # dtype, ef
     "rerank",  # model, variant, providers
     "parse",  # ocr_max_pages, max_layout_mb, layout_window
