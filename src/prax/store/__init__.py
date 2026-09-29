@@ -118,6 +118,7 @@ from .documents import (  # noqa: F401
     PROMOTE_WEIGHTS,
     READABLE,
     READINGS,
+    RULE_FACTS_MIN,
     RULE_FACTS_SHARE,
     RULE_LABEL_P,
     SECTION_FIELD_CHARS,

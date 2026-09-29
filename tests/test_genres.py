@@ -363,9 +363,11 @@ def test_domain_rules_name_genres_subjects_and_facts(con: sqlite3.Connection) ->
     )
     counts = store.fact_modules(con, cake)
     assert counts["kitchen"] == 3 and counts["*"] == 4
+    few = {"match": {"facts": "kitchen"}, "domains": ["kitchen"]}
+    assert store.domains_dry_run(con, [few])["rules"][0]["count"] == 0  # 4 < min 5
     rules = [
         {"match": {"genre": "datasheet"}, "domains": ["electronics"]},
-        {"match": {"facts": "kitchen"}, "domains": ["kitchen"]},
+        {"match": {"facts": "kitchen", "min": 3}, "domains": ["kitchen"]},
         {"match": {"genre": "essay"}, "domains": ["research"]},  # 0.4 < 0.5
         {"match": {"genre": "essay", "p": 0.3}, "domains": ["research"]},
     ]

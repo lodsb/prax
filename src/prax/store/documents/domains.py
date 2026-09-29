@@ -206,6 +206,10 @@ RULE_LABEL_P = 0.5
 # how much of a document's typed facts one module must hold for a
 # ``facts:`` rule, when the rule says not
 RULE_FACTS_SHARE = 0.5
+# and how many entities at least: two or three facts decide nothing (the
+# dry run of 2026-09-29 put a CV and a test file in the kitchen on two
+# and four)
+RULE_FACTS_MIN = 5
 
 
 def _has_label(meta: dict[str, Any], field: str, key: str, want: str, p: float) -> bool:
@@ -260,7 +264,10 @@ def _rule_matches(
             return False
         counts = fact_modules(con, int(doc["id"]))
         share = float(m.get("share", RULE_FACTS_SHARE))
-        if not counts["*"] or counts.get(str(m["facts"]), 0) / counts["*"] < share:
+        least = int(m.get("min", RULE_FACTS_MIN))
+        if counts["*"] < max(1, least):
+            return False
+        if counts.get(str(m["facts"]), 0) / counts["*"] < share:
             return False
     if "source" in m and meta.get("source") != m["source"]:
         return False
@@ -332,7 +339,8 @@ def assign_domains(
     subject, facts}, domains: [...]}``; a rule without ``match`` is the
     default. ``genre`` and ``subject`` name a label the document carries
     with at least ``p`` (``RULE_LABEL_P``); ``facts`` a module that holds at
-    least ``share`` of the entities its facts name (``fact_modules``).
+    least ``share`` of the entities its facts name (``fact_modules``), when
+    they are ``min`` or more (``RULE_FACTS_MIN``).
     Documents whose set a person wrote by hand (``domains_by: human``) are
     never touched. Returns counts per rule index and ``unmatched``."""
     counts: dict[str, int] = {"unmatched": 0}
