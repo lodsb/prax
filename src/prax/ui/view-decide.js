@@ -166,25 +166,25 @@ async function viewCleanup(p) {
 // first, for a correction.
 async function viewGenres(p) {
   const list = DECIDE_LISTS.genre;
-  const state = p.state === "labelled" ? "labelled" : "open";
+  const state = ["labelled", "check"].includes(p.state) ? p.state : "open";
   const limit = 10;
   const offset = Number(p.offset || 0);
   const link = (s, label) => s === state ? `<b>${label}</b>` : `<a href="#review?${new URLSearchParams({ list: "genre", state: s })}">${label}</a>`;
   view.innerHTML = `${decideTabs("genre")}<p class="muted">${esc(list.about)}</p>
-    <p>${link("open", "to label")} · ${link("labelled", "labelled")} <span id="genre-count" class="muted"></span></p>
+    <p>${link("check", "to check")} · ${link("open", "to label")} · ${link("labelled", "labelled")} <span id="genre-count" class="muted"></span></p>
     <div id="decide-list">${listPlaceholder("decide-list")}</div>`;
   const box = document.getElementById("decide-list");
   let vocab, res;
   try {
     [vocab, res] = await Promise.all([api("/genres"), api("/documents/genre-sample", { state, offset, limit })]);
   } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
-  document.getElementById("genre-count").textContent = ` — ${res.labelled} labelled, ${res.skipped} set aside${state === "open" ? `, ${res.total.toLocaleString()} to go` : ""}`;
+  document.getElementById("genre-count").textContent = ` — ${res.to_check} to check, ${res.labelled} labelled, ${res.skipped} set aside${state === "open" ? `, ${res.total.toLocaleString()} to go` : ""}`;
   const page = (o) => `#review?${new URLSearchParams({ list: "genre", state, offset: o })}`;
   const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
     ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
   box.innerHTML = res.items.length
     ? res.items.map((it) => genreRow(it, vocab)).join("") + pager
-    : `<p class="muted">Nothing ${state === "open" ? "left to label" : "labelled yet"}.</p>`;
+    : `<p class="muted">Nothing ${{ open: "left to label", check: "left to check", labelled: "labelled yet" }[state]}.</p>`;
   box.querySelectorAll(".genre-row").forEach((row) => {
     const form = row.querySelector(".genre-form");
     const out = row.querySelector(".decide-out");

@@ -322,9 +322,14 @@ function suspectRow(it) {
 // A document may take several of each; "can't tell" takes it out of the
 // sample. The checked boxes are its labels so far, when it has some.
 function genreRow(it, vocab) {
+  const model = it.genres_by && it.genres_by !== "human";
+  const sure = (name) => {
+    const p = model ? (it.p || {})[name] : null;
+    return p == null ? "" : ` <span class="genre-p${p < 0.7 ? " unsure" : ""}">${Math.round(p * 100)}%</span>`;
+  };
   const facet = (f, field, have) => {
     const box = (name, about, level) => `<label class="genre-choice${level ? " genre-level" : ""}" title="${esc(about || "")}">
-      <input type="checkbox" name="${field}" value="${esc(name)}"${have.has(name) ? " checked" : ""}> ${esc(name)}</label>`;
+      <input type="checkbox" name="${field}" value="${esc(name)}"${have.has(name) ? " checked" : ""}> ${esc(name)}${have.has(name) ? sure(name) : ""}</label>`;
     return ((f || {}).levels || []).map((lv) => `<div class="genre-levels">${box(lv.name, lv.description, true)}
       <span class="genre-kids">${(lv.genres || []).map((g) => box(g.name, g.description, false)).join("")}</span></div>`).join("");
   };
@@ -336,6 +341,7 @@ function genreRow(it, vocab) {
     <div class="decide-side"><a href="#doc/${it.id}">${esc(it.title || `doc ${it.id}`)}</a>
       <span class="muted genre-from">${esc(it.source || "")}${it.lang ? ` · ${esc(it.lang)}` : ""} · ${esc(it.mime || "")}${where}</span>
       ${it.summary ? `<p>${esc(it.summary)}</p>` : `<p class="muted">No summary yet.</p>`}
+      ${model ? `<p class="genre-model">Labelled by ${esc(it.genres_by)}${it.note ? `: ${esc(it.note)}` : ""}. Save if it is right, or change the ticks first.</p>` : ""}
       ${opening ? `<details><summary>the opening of the text</summary><pre class="genre-opening">${esc(opening)}</pre></details>` : ""}</div>
     <form class="genre-form">${levels}
       <div class="decide-acts"><button type="submit">save</button>

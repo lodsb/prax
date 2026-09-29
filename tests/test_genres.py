@@ -230,3 +230,47 @@ def test_heal_takes_a_stray_module_out_of_a_version(con: sqlite3.Connection) -> 
     ]
     assert reviews == [right, wrong]
     assert not store.health(con, only=["stray-version-modules"])["ailments"][0]["count"]
+
+
+def test_a_models_labels_wait_for_a_person(con: sqlite3.Connection) -> None:
+    """A model labels first (``by: claude``, a probability each); the "to
+    check" list shows the least sure first; a person's save keeps the
+    model's labels beside it, and a model never writes over a person."""
+    sure = _doc(con, "TL072 datasheet: pinout, electrical characteristics.")
+    unsure = _doc(con, "Notes on the collapse of complex societies, part two.")
+    store.set_genres(
+        con,
+        sure,
+        ["datasheet"],
+        subjects=["electronics"],
+        by="claude",
+        p={"datasheet": 0.97, "electronics": 0.95},
+        note="a part's datasheet",
+    )
+    store.set_genres(
+        con,
+        unsure,
+        ["essay", "blog"],
+        subjects=["ecology"],
+        by="claude",
+        p={"essay": 0.55, "blog": 0.4, "ecology": 0.9},
+        note="essay or blog post",
+    )
+    check = store.genre_sample(con, state="check")
+    assert [it["id"] for it in check["items"]] == [unsure, sure]
+    assert check["to_check"] == 2 and check["labelled"] == 0
+    first = check["items"][0]
+    assert first["p"] == {"essay": 0.55, "blog": 0.4, "ecology": 0.9}
+    assert first["note"] == "essay or blog post" and first["genres_by"] == "claude"
+    assert store.genre_sample(con)["total"] == 0  # labelled by someone: not open
+    store.set_genres(con, unsure, ["blog"], subjects=["ecology", "politics"])
+    m = store.get_meta(con, unsure)
+    assert m["genres_by"] == "human" and m["genres"] == [{"genre": "blog", "p": 1.0}]
+    assert m["genres_model"]["by"] == "claude"
+    assert [g["genre"] for g in m["genres_model"]["genres"]] == ["essay", "blog"]
+    assert "genres_note" not in m
+    with pytest.raises(ValueError, match="person labelled"):
+        store.set_genres(con, unsure, ["essay"], by="claude")
+    after = store.genre_sample(con, state="check")
+    assert [it["id"] for it in after["items"]] == [sure]
+    assert after["labelled"] == 1 and after["to_check"] == 1

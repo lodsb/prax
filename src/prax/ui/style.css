@@ -588,4 +588,7 @@ table.props td { padding: .15rem 0; overflow-wrap: anywhere; border: 0; }
 .genre-choice { white-space: nowrap; font-size: .9rem; }
 .genre-level { font-weight: 600; }
 .genre-facet { font-size: .8rem; font-weight: normal; text-transform: uppercase; letter-spacing: .08em; color: var(--muted, inherit); margin: .4rem 0 .25rem; }
+.genre-p { font-size: .75rem; color: var(--muted, inherit); }
+.genre-p.unsure { color: var(--key, inherit); font-weight: 600; }
+.genre-model { font-size: .9rem; border-left: 2px solid var(--key, currentColor); padding-left: .6rem; }
 .genre-opening { white-space: pre-wrap; max-height: 16rem; overflow: auto; font-size: .8rem; }

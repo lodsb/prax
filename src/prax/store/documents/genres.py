@@ -9,6 +9,13 @@ one act for both facets, and kept in ``meta.genres`` as ``[{"genre",
 ``meta.genres_by`` naming who labelled the document. A person's are
 ``by: human``, ``p`` 1.0, and no model overwrites them. A document a
 person could not place is ``meta.genres_skip`` and leaves the sample.
+
+A model may label the sample first (``by: claude``, each label with its
+``p`` and a line of ``genres_note``), so the person checks rather than
+labels: the "to check" list shows the least sure first. A model never
+writes over a person's labels. When the person saves over a model's, the
+model's are kept as ``meta.genres_model``, which is what measures how
+often the model and the person agree.
 """
 
 from __future__ import annotations
@@ -41,16 +48,30 @@ _GENRE_SOURCE = (
     " WHEN json_extract(meta, '$.capture.by') = 'extension' THEN 'extension'"
     " ELSE coalesce(json_extract(meta, '$.source'), 'other') END"
 )
-# the open documents: text to read, not retired, not a wiki page, and no
-# person has labelled or skipped them
+# the open documents: text to read, not retired, not a wiki page, and
+# nobody, person or model, has labelled or skipped them
 _GENRE_OPEN = (
     " FROM documents WHERE text_hash IS NOT NULL"
     " AND json_extract(meta, '$.retired') IS NULL"
     " AND coalesce(json_extract(meta, '$.source'), '') != 'wiki'"
-    " AND coalesce(json_extract(meta, '$.genres_by'), '') != 'human'"
+    " AND json_extract(meta, '$.genres_by') IS NULL"
     " AND json_extract(meta, '$.genres_skip') IS NULL"
 )
 _GENRE_LABELLED = " FROM documents WHERE json_extract(meta, '$.genres_by') = 'human'"
+# labelled by a model and not yet by a person: the "to check" list
+_GENRE_CHECK = (
+    " FROM documents WHERE json_extract(meta, '$.genres_by') IS NOT NULL"
+    " AND json_extract(meta, '$.genres_by') != 'human'"
+    " AND json_extract(meta, '$.retired') IS NULL"
+)
+# how sure the model was of a document: its least sure label, genre or
+# subject; the list shows the least sure first
+_GENRE_SURE = (
+    "min(coalesce((SELECT min(json_extract(value, '$.p'))"
+    " FROM json_each(json_extract(meta, '$.genres'))), 1),"
+    " coalesce((SELECT min(json_extract(value, '$.p'))"
+    " FROM json_each(json_extract(meta, '$.subjects'))), 1))"
+)
 
 
 @_serialized
@@ -62,17 +83,45 @@ def set_genres(
     subjects: list[str] | None = None,
     by: str = "human",
     skip: bool = False,
+    p: dict[str, float] | None = None,
+    note: str | None = None,
 ) -> dict[str, Any]:
-    """A person's genres and subjects for a document (``by: human``),
-    checked against ``ontology.genres()`` and ``ontology.subjects()``. A
-    genre is required; subjects may be none (an invoice is about nothing
-    in particular). ``skip``: the person could not place it, and it leaves
-    the sample. ``genres=None`` without ``skip`` takes all of it back."""
+    """A document's genres and subjects, checked against
+    ``ontology.genres()`` and ``ontology.subjects()``. A genre is
+    required; subjects may be none (an invoice is about nothing in
+    particular). ``skip``: the person could not place it, and it leaves
+    the sample. ``genres=None`` without ``skip`` takes all of it back.
+
+    ``by`` is ``human`` for a person, else the model that labelled it,
+    whose ``p`` gives each label's probability (1.0 where it names none)
+    and ``note`` its reason in a line. A model's labels never replace a
+    person's (ValueError). A person's labels over a model's keep the
+    model's as ``meta.genres_model``."""
     if document_hidden(con, doc_id):
         raise KeyError(f"no such document: {doc_id}")
     meta = get_meta(con, doc_id)
-    for key in ("genres", "subjects", "genres_by", "genres_at", "genres_skip"):
+    human = by == "human"
+    if not human and meta.get("genres_by") == "human":
+        raise ValueError("a person labelled this document: a model does not relabel it")
+    before = meta.get("genres_by")
+    if human and before and before != "human" and meta.get("genres"):
+        meta["genres_model"] = {
+            "by": before,
+            "at": meta.get("genres_at"),
+            "genres": meta.get("genres"),
+            "subjects": meta.get("subjects") or [],
+            "note": meta.get("genres_note"),
+        }
+    for key in (
+        "genres",
+        "subjects",
+        "genres_by",
+        "genres_at",
+        "genres_skip",
+        "genres_note",
+    ):
         meta.pop(key, None)
+    sure = {k: max(0.0, min(1.0, float(v))) for k, v in (p or {}).items()}
     if skip:
         meta["genres_skip"] = now()
     elif genres is not None:
@@ -80,11 +129,17 @@ def set_genres(
         if not labels:
             raise ValueError("no genre given: skip the document instead")
         about = ontology.subjects().check(subjects or [])
-        meta["genres"] = [{"genre": g, "p": 1.0} for g in labels]
+        meta["genres"] = [
+            {"genre": g, "p": 1.0 if human else sure.get(g, 1.0)} for g in labels
+        ]
         if about:
-            meta["subjects"] = [{"subject": x, "p": 1.0} for x in about]
+            meta["subjects"] = [
+                {"subject": x, "p": 1.0 if human else sure.get(x, 1.0)} for x in about
+            ]
         meta["genres_by"] = by
         meta["genres_at"] = now()
+        if note and not human:
+            meta["genres_note"] = " ".join(note.split())[:300]
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
     )
@@ -119,6 +174,11 @@ def _genre_item(row: sqlite3.Row, opening: int) -> dict[str, Any]:
         "subjects": [x.get("subject") for x in meta.get("subjects") or []],
         "genres_by": meta.get("genres_by"),
         "genres_at": meta.get("genres_at"),
+        "p": {
+            **{g["genre"]: g.get("p") for g in meta.get("genres") or []},
+            **{x["subject"]: x.get("p") for x in meta.get("subjects") or []},
+        },
+        "note": meta.get("genres_note"),
     }
 
 
@@ -137,11 +197,12 @@ def genre_sample(
     another (the NAS, Zotero, the extension, the other captures) and, within
     a source, in an order fixed by the id's hash, so the page reads the same
     on every visit and the sample spreads over each source. ``labelled``:
-    the person's labels, the last first, where one is corrected. Each item
-    carries its summary and the opening of its text. ``labelled`` and
-    ``skipped`` count what the person has done so far."""
-    if state not in ("open", "labelled"):
-        raise ValueError("state is open or labelled")
+    the person's labels, the last first, where one is corrected.
+    ``check``: a model's labels no person has looked at, the least sure
+    first. Each item carries its summary and the opening of its text.
+    ``labelled``, ``to_check`` and ``skipped`` count what is done so far."""
+    if state not in ("open", "labelled", "check"):
+        raise ValueError("state is open, check or labelled")
     limit = max(1, min(limit, 50))
     offset = max(0, offset)
     cols = (
@@ -159,6 +220,13 @@ def genre_sample(
             + ") ORDER BY turn, source LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
+    elif state == "check":
+        where = _GENRE_CHECK
+        total = con.execute("SELECT count(*)" + where).fetchone()[0]
+        rows = con.execute(
+            f"SELECT {cols}" + where + f" ORDER BY {_GENRE_SURE}, id LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
     else:
         where = _GENRE_LABELLED
         total = con.execute("SELECT count(*)" + where).fetchone()[0]
@@ -171,11 +239,13 @@ def genre_sample(
         ).fetchall()
     done = con.execute(
         "SELECT sum(json_extract(meta, '$.genres_by') = 'human'),"
-        " sum(json_extract(meta, '$.genres_skip') IS NOT NULL) FROM documents"
+        " sum(json_extract(meta, '$.genres_skip') IS NOT NULL),"
+        " sum(json_extract(meta, '$.genres_by') != 'human') FROM documents"
     ).fetchone()
     return {
         "total": int(total),
         "labelled": int(done[0] or 0),
         "skipped": int(done[1] or 0),
+        "to_check": int(done[2] or 0),
         "items": [_genre_item(r, opening) for r in rows],
     }

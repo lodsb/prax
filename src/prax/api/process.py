@@ -102,6 +102,9 @@ class GenresReq(BaseModel):
     genres: list[str] | None = None  # None with skip false: take them back
     subjects: list[str] | None = None  # what it is about; may be none
     skip: bool = False  # the person could not place it
+    by: str = "human"  # or the model that labelled it
+    p: dict[str, float] | None = None  # a model's probability per label
+    note: str | None = None  # a model's reason, in a line
 
 
 @router.put("/doc/{doc_id}/genres")
@@ -110,7 +113,14 @@ def put_genres(doc_id: int, req: GenresReq, request: Request) -> dict[str, Any]:
     stage Z."""
     try:
         return store.set_genres(
-            _con(request), doc_id, req.genres, subjects=req.subjects, skip=req.skip
+            _con(request),
+            doc_id,
+            req.genres,
+            subjects=req.subjects,
+            skip=req.skip,
+            by=req.by,
+            p=req.p,
+            note=req.note,
         )
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc

@@ -412,3 +412,14 @@ test("genreRow: the document as a labeller reads it, the vocabulary as boxes, it
   assert.doesNotMatch(bare, /checked/);
   assert.doesNotMatch(bare, /the opening of the text/);
 });
+
+test("genreRow for a model's labels: its probabilities and reason, the unsure marked", () => {
+  const vocab = { levels: [{ name: "opinion", description: "argues", genres: [{ name: "essay", description: "e" }, { name: "blog", description: "b" }] }] };
+  const html = lib.genreRow({ id: 9, title: "Collapse", genres: ["essay", "blog"], genres_by: "claude",
+    p: { essay: 0.55, blog: 0.9 }, note: "an essay on a blog" }, vocab);
+  assert.match(html, /Labelled by claude: an essay on a blog/);
+  assert.match(html, /essay <span class="genre-p unsure">55%<\/span>/);
+  assert.match(html, /blog <span class="genre-p">90%<\/span>/);
+  const mine = lib.genreRow({ id: 9, title: "Collapse", genres: ["essay"], genres_by: "human", p: { essay: 1 } }, vocab);
+  assert.doesNotMatch(mine, /genre-p|Labelled by/);
+});
