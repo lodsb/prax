@@ -16,8 +16,11 @@ ORDER = ("meta", "text", "library", "domains", "genres", "readings", "reads")
 
 from .domains import (  # noqa: F401
     PROMOTE_WEIGHTS,
+    RULE_FACTS_SHARE,
+    RULE_LABEL_P,
     SENSITIVITY,
     _check_domains,
+    _has_label,
     _lens_changed,
     _rule_matches,
     _set_promote,
@@ -25,8 +28,10 @@ from .domains import (  # noqa: F401
     assign_domains,
     document_domains,
     documents_in_domain,
+    domains_dry_run,
     expected_version,
     extracted_by,
+    fact_modules,
     promote,
     promoted_documents,
     promotion_candidates,

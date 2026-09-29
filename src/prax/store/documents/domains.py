@@ -199,11 +199,69 @@ def documents_in_domain(con: sqlite3.Connection, domain: str) -> list[int]:
     ]
 
 
-def _rule_matches(rule: dict[str, Any], doc: dict[str, Any]) -> bool:
+# How sure a label must be for a rule to name it, when the rule says not:
+# a person's labels are 1.0, a model's carry their calibrated probability
+# (stage Z; docs/eval/genres-2026-09-29.md)
+RULE_LABEL_P = 0.5
+# how much of a document's typed facts one module must hold for a
+# ``facts:`` rule, when the rule says not
+RULE_FACTS_SHARE = 0.5
+
+
+def _has_label(meta: dict[str, Any], field: str, key: str, want: str, p: float) -> bool:
+    return any(
+        x.get(key) == want and float(x.get("p", 1.0)) >= p
+        for x in meta.get(field) or []
+    )
+
+
+def fact_modules(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
+    """How many of the distinct entities a document's live facts name
+    belong to each module other than core, by their type: what a
+    document reads as. A document without a domain set is read against
+    every module, so its facts say which one it fits."""
+    counts: dict[str, int] = {}
+    for (etype,) in con.execute(
+        "SELECT DISTINCT x.id || ':' || x.type FROM edges e"
+        " JOIN entities x ON x.id IN (e.src, e.dst)"
+        " WHERE e.source_doc = ? AND e.valid_to IS NULL",
+        (doc_id,),
+    ):
+        t = str(etype).split(":", 1)[1]
+        for module in ontology.modules_of(t) - {ontology.CORE}:
+            counts[module] = counts.get(module, 0) + 1
+    counts["*"] = con.execute(
+        "SELECT count(DISTINCT x.id) FROM edges e"
+        " JOIN entities x ON x.id IN (e.src, e.dst)"
+        " WHERE e.source_doc = ? AND e.valid_to IS NULL",
+        (doc_id,),
+    ).fetchone()[0]
+    return counts
+
+
+def _rule_matches(
+    rule: dict[str, Any],
+    doc: dict[str, Any],
+    con: sqlite3.Connection | None = None,
+) -> bool:
     meta = doc["meta"]
     m = rule.get("match") or {}
     if not m:
         return True
+    p = float(m.get("p", RULE_LABEL_P))
+    if "genre" in m and not _has_label(meta, "genres", "genre", str(m["genre"]), p):
+        return False
+    if "subject" in m and not _has_label(
+        meta, "subjects", "subject", str(m["subject"]), p
+    ):
+        return False
+    if "facts" in m:
+        if con is None or "id" not in doc:
+            return False
+        counts = fact_modules(con, int(doc["id"]))
+        share = float(m.get("share", RULE_FACTS_SHARE))
+        if not counts["*"] or counts.get(str(m["facts"]), 0) / counts["*"] < share:
+            return False
     if "source" in m and meta.get("source") != m["source"]:
         return False
     if "mime" in m and not (doc["mime"] or "").startswith(m["mime"]):
@@ -223,6 +281,42 @@ def _rule_matches(rule: dict[str, Any], doc: dict[str, Any]) -> bool:
     return True
 
 
+@_reading
+def domains_dry_run(
+    con: sqlite3.Connection, rules: list[dict[str, Any]], *, examples: int = 8
+) -> dict[str, Any]:
+    """What ``assign_domains`` would do with these rules to the documents
+    without a domain set, written nowhere: per rule, how many documents it
+    takes (first match wins) and a few of their titles."""
+    for rule in rules:
+        _check_domains(list(rule.get("domains") or []))
+    taken: list[dict[str, Any]] = [{"count": 0, "examples": []} for _ in rules]
+    unmatched = 0
+    for r in con.execute(
+        "SELECT id, title, mime, original_path, meta FROM documents"
+        " WHERE json_extract(meta, '$.domains') IS NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    ).fetchall():
+        doc = {
+            "id": r["id"],
+            "mime": r["mime"],
+            "original_path": r["original_path"],
+            "meta": json.loads(r["meta"] or "{}"),
+        }
+        for i, rule in enumerate(rules):
+            if _rule_matches(rule, doc, con):
+                taken[i]["count"] += 1
+                if len(taken[i]["examples"]) < examples:
+                    taken[i]["examples"].append({"id": r["id"], "title": r["title"]})
+                break
+        else:
+            unmatched += 1
+    return {
+        "rules": [{**rule, **t} for rule, t in zip(rules, taken, strict=True)],
+        "unmatched": unmatched,
+    }
+
+
 @_serialized
 def assign_domains(
     con: sqlite3.Connection,
@@ -234,10 +328,13 @@ def assign_domains(
 ) -> dict[str, int]:
     """Give every document without a domain set (all of them with ``force``;
     only ``ids`` when given) the domains of the first rule it matches. A
-    rule is ``{match: {source, mime, path, collection, tag}, domains:
-    [...]}``; a rule without ``match`` is the default. Documents whose set
-    a person wrote by hand (``domains_by: human``) are never touched.
-    Returns counts per rule index and ``unmatched``."""
+    rule is ``{match: {source, mime, path, collection, tag, genre,
+    subject, facts}, domains: [...]}``; a rule without ``match`` is the
+    default. ``genre`` and ``subject`` name a label the document carries
+    with at least ``p`` (``RULE_LABEL_P``); ``facts`` a module that holds at
+    least ``share`` of the entities its facts name (``fact_modules``).
+    Documents whose set a person wrote by hand (``domains_by: human``) are
+    never touched. Returns counts per rule index and ``unmatched``."""
     counts: dict[str, int] = {"unmatched": 0}
     for rule in rules:
         _check_domains(list(rule.get("domains") or []))
@@ -253,9 +350,14 @@ def assign_domains(
         args = tuple(ids)
     for r in con.execute(sql, args).fetchall():
         meta = json.loads(r["meta"] or "{}")
-        doc = {"mime": r["mime"], "original_path": r["original_path"], "meta": meta}
+        doc = {
+            "id": r["id"],
+            "mime": r["mime"],
+            "original_path": r["original_path"],
+            "meta": meta,
+        }
         for i, rule in enumerate(rules):
-            if _rule_matches(rule, doc):
+            if _rule_matches(rule, doc, con):
                 key = f"rule {i}"
                 counts[key] = counts.get(key, 0) + 1
                 if commit:

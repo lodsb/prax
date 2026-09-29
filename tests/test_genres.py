@@ -321,3 +321,64 @@ def test_browse_filters_by_genre_and_subject(con: sqlite3.Connection) -> None:
     assert ids(genre="opinion") == [b]  # a level names what is under it
     assert ids(subject="technology") == [a]
     assert ids(genre="paper", subject="ecology") == []
+
+
+def _facts(con: sqlite3.Connection, doc: int, typed: list[tuple[str, str]]) -> None:
+    ids = []
+    for name, etype in typed:
+        cur = con.execute(
+            "INSERT INTO entities (name, type) VALUES (?, ?)", (f"{name} {doc}", etype)
+        )
+        ids.append(cur.lastrowid)
+    for dst in ids[1:]:
+        con.execute(
+            "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
+            " ontology_version, producer) VALUES (?, ?, 'mentions', 'EXTRACTED', ?,"
+            " 'v', 't')",
+            (ids[0], dst, doc),
+        )
+    con.commit()
+
+
+def test_domain_rules_name_genres_subjects_and_facts(con: sqlite3.Connection) -> None:
+    """Stage Z, step 5: a rule may name a genre or a subject (at a
+    probability) or the module a document's facts mostly belong to; the
+    dry run counts what the rules would assign and writes nothing."""
+    sheet = _doc(con, "TL072 datasheet.")
+    cake = _doc(con, "Apfelkuchen: Mehl, Äpfel, Butter.")
+    essay = _doc(con, "An essay on collapse.")
+    store.set_genres(con, sheet, ["datasheet"], subjects=["electronics"])
+    store.set_genres(
+        con, essay, ["essay"], subjects=["ecology"], by="claude", p={"essay": 0.4}
+    )
+    _facts(
+        con,
+        cake,
+        [
+            ("Apfelkuchen", "recipe"),
+            ("Äpfel", "ingredient"),
+            ("Mehl", "ingredient"),
+            ("Oma", "person"),
+        ],
+    )
+    counts = store.fact_modules(con, cake)
+    assert counts["kitchen"] == 3 and counts["*"] == 4
+    rules = [
+        {"match": {"genre": "datasheet"}, "domains": ["electronics"]},
+        {"match": {"facts": "kitchen"}, "domains": ["kitchen"]},
+        {"match": {"genre": "essay"}, "domains": ["research"]},  # 0.4 < 0.5
+        {"match": {"genre": "essay", "p": 0.3}, "domains": ["research"]},
+    ]
+    before = {d: store.get_meta(con, d).get("domains") for d in (sheet, cake, essay)}
+    dry = store.domains_dry_run(con, rules)
+    assert [r["count"] for r in dry["rules"]] == [1, 1, 0, 1]
+    assert dry["rules"][0]["examples"][0]["id"] == sheet
+    assert {
+        d: store.get_meta(con, d).get("domains") for d in (sheet, cake, essay)
+    } == before
+    with pytest.raises(ValueError):
+        store.domains_dry_run(con, [{"match": {"genre": "x"}, "domains": ["nope"]}])
+    store.assign_domains(con, rules)
+    assert store.get_meta(con, sheet)["domains"] == ["electronics"]
+    assert store.get_meta(con, cake)["domains"] == ["kitchen"]
+    assert store.get_meta(con, essay)["domains"] == ["research"]

@@ -72,6 +72,24 @@ def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+class DryRunReq(BaseModel):
+    rules: list[dict[str, Any]] | None = None  # None: the rules in prax.yaml
+
+
+@router.post("/domains/dry-run")
+def domains_dry_run(req: DryRunReq, request: Request) -> dict[str, Any]:
+    """What a set of domain rules would assign to the documents without a
+    domain, written nowhere (stage Z, step 5). Without rules, the ones in
+    prax.yaml (``domains:``)."""
+    rules = (
+        req.rules if req.rules is not None else list(models.load().get("domains") or [])
+    )
+    try:
+        return store.domains_dry_run(_con(request), rules)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 # ---------------------------------------------------------------- genres
 
 
