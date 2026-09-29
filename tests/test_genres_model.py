@@ -80,3 +80,106 @@ def test_the_list_is_held_to_the_vocabulary() -> None:
             return "datasheet, instructional", {}
 
     assert gw.listed(Fake(), "doc", G, about=False) == ["instructional", "datasheet"]
+
+
+def test_label_asks_what_the_list_proposes_and_keeps_the_likely(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The list proposes, each proposal and its level is asked, and a
+    calibrated probability under ``keep`` is dropped."""
+    G, S = ontology.genres(), ontology.subjects()
+    monkeypatch.setattr(
+        gw,
+        "listed",
+        lambda rt, doc, facet, about: ["electronics"] if about else ["datasheet"],
+    )
+    asked: list[str] = []
+
+    def fake(base_url: str, model: str, document: str, q: str) -> float | None:
+        asked.append(q)
+        return 0.9 if "datasheet" in q or "electronics" in q else 0.2
+
+    monkeypatch.setattr(gw, "ask", fake)
+    got = gw.label(None, "http://x/v1", "m", "doc", G, S, slots=1)
+    assert got == {"g": {"datasheet": 0.9}, "s": {"electronics": 0.9}}
+    assert len(asked) == 4  # datasheet, instructional, electronics, technology
+    # a Platt map that lowers labels drops the datasheet under keep
+    low = {"genres labels": [1.0, -5.0]}
+    got = gw.label(None, "http://x/v1", "m", "doc", G, S, platt=low, slots=1)
+    assert got["g"] == {} and got["s"] == {"electronics": 0.9}
+
+
+def test_calibrated_reads_the_map_of_the_labels_kind() -> None:
+    G = ontology.genres()
+    maps = {"genres levels": {"a": 1.0, "b": 0.0}, "genres labels": [2.0, 0.0]}
+    assert gw.calibrated(0.7, "informational", G, "genres", maps) == pytest.approx(0.7)
+    assert gw.calibrated(0.7, "paper", G, "genres", maps) > 0.8
+    assert gw.calibrated(0.7, "paper", G, "genres", None) == 0.7
+
+
+def test_the_step_labels_through_the_door(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hand-out, worker, take-in: the open documents go out with their
+    view, the model's labels come back with the run, a document with no
+    genre kept is not handed out again, and a person's labels are never
+    handed out or written over."""
+    from fastapi.testclient import TestClient
+
+    from prax import store, work
+    from prax.api import app
+    from prax.steps import writing as step_writing
+
+    monkeypatch.setenv("PRAX_GENRES", "stub")
+    work._leases.clear()
+    with TestClient(app) as client:
+        con = client.app.state.con
+
+        def doc(text: str, title: str) -> int:
+            return int(
+                client.post("/ingest", json={"text": text, "title": title}).json()[
+                    "doc_id"
+                ]
+            )
+
+        paper = doc("We propose a reverb. Results show it works. " * 30, "A reverb")
+        nothing = doc("lorem ipsum " * 50, "Lorem")
+        mine = doc("A recipe for apple cake. " * 30, "Apfelkuchen")
+        store.set_genres(con, mine, ["recipe"], subjects=["cooking"])
+
+        batch = client.get("/work/genres", params={"scope": "all"}).json()
+        ids = sorted(i["doc_id"] for i in batch["items"])
+        assert ids == sorted([paper, nothing])
+        assert batch["items"][0]["view"].startswith("Title: ")
+
+        answers = {
+            paper: {"g": {"paper": 0.92}, "s": {"audio": 0.7}},
+            nothing: {"g": {}, "s": {}},
+        }
+        monkeypatch.setattr(
+            step_writing.genres,
+            "label",
+            lambda rt, base, model, view, G, S, **kw: answers[
+                paper if "reverb" in view else nothing
+            ],
+        )
+
+        class Runtime:
+            base_url = "http://x/v1"
+            model = "m"
+            name = "m@x"
+
+        results = step_writing.do_genres(batch["items"], Runtime())
+        rep = client.post("/work/genres", json={"results": results}).json()
+        assert rep["applied"] == 1 and rep["skipped"] == 1
+
+        m = store.get_meta(con, paper)
+        assert m["genres_by"] == "m@x" and m["genres_run"].startswith("genres-")
+        assert m["genres"] == [
+            {"genre": "informational", "p": 0.92},
+            {"genre": "paper", "p": 0.92},
+        ]
+        assert m["subjects"][-1] == {"subject": "audio", "p": 0.7}
+        assert store.get_meta(con, nothing)["genres_tried"]["why"] == "no genre kept"
+        assert store.get_meta(con, mine)["genres_by"] == "human"
+        work._leases.clear()
+        again = client.get("/work/genres", params={"scope": "all"}).json()
+        assert again["items"] == []

@@ -85,6 +85,7 @@ def set_genres(
     skip: bool = False,
     p: dict[str, float] | None = None,
     note: str | None = None,
+    run: str | None = None,
 ) -> dict[str, Any]:
     """A document's genres and subjects, checked against
     ``ontology.genres()`` and ``ontology.subjects()``. A genre is
@@ -122,6 +123,8 @@ def set_genres(
         "genres_at",
         "genres_skip",
         "genres_note",
+        "genres_run",
+        "genres_tried",
     ):
         meta.pop(key, None)
     sure = {k: max(0.0, min(1.0, float(v))) for k, v in (p or {}).items()}
@@ -158,6 +161,8 @@ def set_genres(
         meta["genres_at"] = now()
         if note and not human:
             meta["genres_note"] = " ".join(note.split())[:300]
+        if run and not human:
+            meta["genres_run"] = run
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
     )
@@ -168,6 +173,31 @@ def set_genres(
         "subjects": [x["subject"] for x in meta.get("subjects") or []],
         "skipped": bool(meta.get("genres_skip")),
     }
+
+
+@_reading
+def genres_needed(con: sqlite3.Connection, *, limit: int = 50) -> list[int]:
+    """The documents the genres step labels next: the open ones
+    (``_GENRE_OPEN``) a pass has not tried without result, the newest
+    first, so a capture is labelled on the night it arrives."""
+    rows = con.execute(
+        "SELECT id" + _GENRE_OPEN + " AND json_extract(meta, '$.genres_tried') IS NULL"
+        " ORDER BY id DESC LIMIT ?",
+        (max(1, limit),),
+    ).fetchall()
+    return [int(r[0]) for r in rows]
+
+
+@_serialized
+def genres_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> None:
+    """A pass asked and kept no genre: the document is not handed out
+    again until its labels are taken back (``set_genres`` with None)."""
+    meta = get_meta(con, doc_id)
+    meta["genres_tried"] = {"run": run, "why": why[:200], "at": now()}
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+    con.commit()
 
 
 def _genre_item(row: sqlite3.Row, opening: int) -> dict[str, Any]:

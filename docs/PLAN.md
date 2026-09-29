@@ -314,7 +314,12 @@ Built only when measured to be needed.
    the labelling is the user's.)
 2. The genres step, the three methods and the two inputs measured on the
    gold sample (`scripts/eval_genres.py`, `docs/eval/genres-*.md`), and
-   Jeff and Kev beside them (the side-quest above).
+   Jeff and Kev beside them (the side-quest above). (2026-09-29: measured,
+   `docs/eval/genres-2026-09-29.md`: listed, then asked, on the summary and
+   the opening, genres F1 0.60 blind against Claude's 0.64, subjects 0.58
+   against 0.64, about 2.5 s a document. The step is built
+   (`steps.writing.Genres`) and off; turning it on is the user's word.
+   Jeff 0.8B measured on the CPU overnight; Kev not yet.)
 3. The calibration, `meta.genres`, the genres on the properties dialog
    and as a Browse filter, the document field.
 4. `meta.regions` from the communities pass, and the vector vote for

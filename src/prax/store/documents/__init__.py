@@ -41,12 +41,16 @@ from .domains import (  # noqa: F401
     unstamp_extraction,
 )
 from .genres import (  # noqa: F401
+    _GENRE_CHECK,
     _GENRE_LABELLED,
     _GENRE_OPEN,
     _GENRE_SOURCE,
+    _GENRE_SURE,
     GENRE_OPENING,
     _genre_item,
     genre_sample,
+    genres_needed,
+    genres_tried,
     set_genres,
 )
 from .library import (  # noqa: F401

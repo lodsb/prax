@@ -2539,3 +2539,27 @@ Found while searching the library for the classification research
       are to key on the sharp genres and the levels, where agreement is
       good.
 
+## 2026-09-29: stage Z, step 2: the local model says what a document is
+
+- [x] **`prax.writing.genres`**: the view a model reads (title, source,
+      language, summary, section summaries, the first 2,000 characters),
+      one yes/no question a label with P(yes) from the answer token (the
+      local adjudicator's way), the document before the question so
+      llama-server reuses its prefix, and a list of labels under a grammar.
+- [x] **Measured** (`scripts/eval_genres.py`,
+      `docs/eval/genres-2026-09-29.md`) against the user's 78 labels, the 30
+      blind ones as the measure. Best and cheapest: the list proposes, the
+      proposed labels and their levels are asked and calibrated, kept at
+      0.3. Genres F1 0.60 blind (Claude, as a second reader, 0.64), subjects
+      0.58 (0.64), 0.69 and 0.78 on the checked 48. Calibration takes the
+      expected calibration error from 0.07 to 0.01. About 2.5 s a document,
+      nine hours for the open 12,400.
+- [x] **The step**, `steps.writing.Genres`: named only, and off until
+      `steps.genres.model` names a model; the Platt maps and `keep` in
+      prax.yaml. It labels the documents nobody has labelled, the newest
+      first, stamps the run, and never writes over a person.
+- **Side-quest**: Jeff 0.8B (a Jev-format decision model, library doc
+      13341) served on the CPU from a scratch environment, run overnight on
+      the same 78 through `--decision`. 75 s a document on the summary,
+      204 s with the opening, on the CPU.
+

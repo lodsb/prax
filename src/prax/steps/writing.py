@@ -9,8 +9,9 @@ from typing import Any
 
 from prax import models, store
 from prax.capture import pipeline
+from prax.graph import ontology
 from prax.text import language
-from prax.writing import sections, summaries, titles
+from prax.writing import genres, sections, summaries, titles
 
 from .base import HandOut, Log, ModelStep, TakeIn, say
 
@@ -288,7 +289,75 @@ class Communities(ModelStep):
         return f"{rep.get('applied', 0)} named"
 
 
-REGISTERED = {s.name: s for s in (Titles(), Summaries(), Sections(), Communities())}
+class Genres(ModelStep):
+    """What a document is and what it is about (stage Z of docs/PLAN.md):
+    the genres step's local model lists the labels that fit, is asked
+    about each and its level, and the answers are calibrated by the Platt
+    maps fitted on a person's labels (``steps.genres.platt``;
+    ``writing.genres.label``). The door stores what is kept at
+    ``steps.genres.keep`` as the model's labels, with the run, beside and
+    never over a person's. Off until prax.yaml names a model for it."""
+
+    name = "genres"
+
+    def hand_out(self, h: HandOut) -> dict[str, Any]:
+        if models.resolve("genres") is None:
+            return h.nothing()
+
+        def build(doc_id: int) -> dict[str, Any] | None:
+            doc = store.get_document(h.con, doc_id, max_chars=genres.OPENING + 200)
+            if doc is None:
+                return None
+            meta = doc.get("meta") or {}
+            where = (
+                (meta.get("origin") or {}).get("path")
+                or doc.get("source_url")
+                or doc.get("original_path")
+            )
+            return {
+                "doc_id": doc_id,
+                "view": genres.view(
+                    doc.get("title"), meta, doc.get("text") or "", where=where
+                ),
+            }
+
+        return h.documents(store.genres_needed(h.con, limit=500), build)
+
+    def take_in(self, t: TakeIn) -> dict[str, Any]:
+        run = t.run()
+
+        def tried(doc_id: int, r: dict[str, Any]) -> None:
+            store.genres_tried(t.con, doc_id, run, str(r["tried"]))
+
+        def apply(doc_id: int, r: dict[str, Any]) -> str:
+            g, s = dict(r.get("g") or {}), dict(r.get("s") or {})
+            try:
+                store.set_genres(
+                    t.con,
+                    doc_id,
+                    list(g),
+                    subjects=list(s),
+                    by=str(r.get("by") or t.worker),
+                    p={**g, **s},
+                    run=run,
+                )
+            except ValueError:
+                return "left to a person"  # a person labelled it meanwhile
+            return "labelled"
+
+        t.out["actions"] = t.each(apply, tried=tried)
+        return t.out
+
+    def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
+        return do_genres(items, runtime, log_=log)
+
+    def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
+        return f"{rep.get('applied', 0)} labelled, {rep.get('skipped', 0)} left"
+
+
+REGISTERED = {
+    s.name: s for s in (Titles(), Summaries(), Sections(), Communities(), Genres())
+}
 
 
 # ------------------------------------------------ the worker's half
@@ -429,4 +498,55 @@ def do_sections(
         )
         if done:
             say(log_, f"sections doc {doc_id}: {len(done)} sections")
+    return results
+
+
+def do_genres(
+    items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each document's genres and subjects from the genres step's local
+    model (``writing.genres.label``), calibrated by ``steps.genres.platt``.
+    A document with no genre kept is tried and not handed out again; a
+    server that is not answering defers the rest of the batch."""
+    base_url = getattr(runtime, "base_url", None)
+    model = getattr(runtime, "model", None)
+    if runtime is None or not base_url or not model:
+        why = (
+            "no genres model"
+            if runtime is None
+            else "the genres step wants a local model"
+        )
+        return [{"doc_id": it["doc_id"], "tried": why} for it in items]
+    opts = models.settings("genres")
+    platt = opts.get("platt") or None
+    keep = float(opts.get("keep") or genres.KEEP)
+    G, S = ontology.genres(), ontology.subjects()
+    results: list[dict[str, Any]] = []
+    for n, it in enumerate(items):
+        try:
+            got = genres.label(
+                runtime,
+                base_url,
+                model,
+                it["view"],
+                G,
+                S,
+                platt=platt,
+                keep=keep,
+                slots=int(opts.get("slots") or 2),
+            )
+        except models.ServerNotReady as exc:
+            say(log_, f"genres: not yet — {exc}")
+            results += [{"doc_id": x["doc_id"], "defer": True} for x in items[n:]]
+            break
+        except Exception as exc:  # noqa: BLE001 - one document must not stop the rest
+            results.append(
+                {"doc_id": it["doc_id"], "error": f"{type(exc).__name__}: {exc}"}
+            )
+            continue
+        if not got["g"]:
+            results.append({"doc_id": it["doc_id"], "tried": "no genre kept"})
+            continue
+        results.append({"doc_id": it["doc_id"], "by": runtime.name, **got})
+        say(log_, f"genres doc {it['doc_id']}: {sorted(got['g'])} / {sorted(got['s'])}")
     return results

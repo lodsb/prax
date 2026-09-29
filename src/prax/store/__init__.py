@@ -93,9 +93,11 @@ from .base import (  # noqa: F401
 )
 from .documents import (  # noqa: F401
     _EQ_REF,
+    _GENRE_CHECK,
     _GENRE_LABELLED,
     _GENRE_OPEN,
     _GENRE_SOURCE,
+    _GENRE_SURE,
     _KIND_WORDS,
     _MODE_WORD,
     ANNOTATORS,
@@ -183,6 +185,8 @@ from .documents import (  # noqa: F401
     finished_readings,
     formula_by_number,
     genre_sample,
+    genres_needed,
+    genres_tried,
     get_chunk,
     get_document,
     get_meta,

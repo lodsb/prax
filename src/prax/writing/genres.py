@@ -30,6 +30,13 @@ tokens is measured (`scripts/eval_genres.py`).
 
 The alternative measured beside it, `listed`, asks for the labels as one
 list under a grammar: one call, no probabilities.
+
+**What the step does** (`label`) is both, as measured best and cheapest
+(docs/eval/genres-2026-09-29.md): the list proposes, and only the
+proposed labels and their levels are asked, calibrated by the Platt maps
+fitted on a person's labels (``steps.genres.platt`` in prax.yaml) and
+kept at ``KEEP``. About two seconds a document where asking every label
+top-down took seven, and the same F1.
 """
 
 from __future__ import annotations
@@ -45,6 +52,7 @@ from prax.graph import calibration
 from prax.graph.ontology import Facet
 
 OPENING = 2000  # characters of the text the model reads
+KEEP = 0.3  # a proposed label this likely, calibrated, is kept
 SECTIONS = 6  # section summaries at most
 GATE = 0.2  # a level this likely has the labels under it asked
 TIMEOUT = 120.0
@@ -171,6 +179,65 @@ def probabilities(
         g for lv in facet.levels if out.get(lv.name, 0.0) >= gate for g, _ in lv.genres
     ]
     out.update(run(under))
+    return out
+
+
+def calibrated(
+    p: float, label: str, facet: Facet, name: str, platt: Mapping[str, Any] | None
+) -> float:
+    """A raw P(yes) through the facet's Platt map for its kind (``"genres
+    levels"``, ``"subjects labels"``, …); raw where the file has none."""
+    kind = "levels" if facet.level_of(label) == label else "labels"
+    m = (platt or {}).get(f"{name} {kind}")
+    if not m:
+        return p
+    a, b = (
+        (float(m[0]), float(m[1]))
+        if isinstance(m, list | tuple)
+        else (
+            float(m["a"]),
+            float(m["b"]),
+        )
+    )
+    return calibration.Platt(a, b)(p)
+
+
+def label(
+    runtime: Any,
+    base_url: str,
+    model: str,
+    document: str,
+    G: Facet,
+    S: Facet,
+    *,
+    platt: Mapping[str, Any] | None = None,
+    keep: float = KEEP,
+    slots: int = 2,
+) -> dict[str, dict[str, float]]:
+    """A document's genres (``g``) and subjects (``s``) with their
+    calibrated probabilities: the labels the list proposes, and their
+    levels, each asked and kept at ``keep``."""
+    out: dict[str, dict[str, float]] = {}
+    for key, facet, name, about in (
+        ("g", G, "genres", False),
+        ("s", S, "subjects", True),
+    ):
+        proposed = facet.implied(listed(runtime, document, facet, about=about))
+        said = _descriptions(facet)
+        with ThreadPoolExecutor(max_workers=max(1, slots)) as pool:
+            raw = list(
+                pool.map(
+                    lambda x, f=facet, a=about, d=said: ask(
+                        base_url, model, document, question(f, x, d[x], about=a)
+                    ),
+                    proposed,
+                )
+            )
+        out[key] = {
+            x: round(q, 3)
+            for x, p in zip(proposed, raw, strict=True)
+            if p is not None and (q := calibrated(p, x, facet, name, platt)) >= keep
+        }
     return out
 
 

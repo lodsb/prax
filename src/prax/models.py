@@ -67,6 +67,7 @@ STEPS = (
     "typing",
     "formulas",
     "polish",
+    "genres",
 )
 STEP_DEFAULTS = {
     "extract": "claude-opus-5",
@@ -77,6 +78,7 @@ STEP_DEFAULTS = {
     "vocabulary": "none",  # an entity named in another language, put into English
     "sections": "none",  # what a long document's chapters are about
     "communities": "none",  # the regions of the library named and described
+    "genres": "none",  # what a document is and is about (stage Z): off until chosen
     "vision": "claude-sonnet-5",
     "adjudicate": "none",
     "typing": "none",  # the model typing pass over the review queue

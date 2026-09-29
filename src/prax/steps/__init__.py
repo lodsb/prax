@@ -27,6 +27,7 @@ STEPS = (
     "embed",
     "resolve",
     "adjudicate",
+    "genres",
 )
 
 # what a worker asks for unless the run names its steps
@@ -69,6 +70,7 @@ _HOMES = {
     "summaries": "writing",
     "sections": "writing",
     "communities": "writing",
+    "genres": "writing",
     "vocabulary": "vocabulary",
     "extract": "extract",
     "promote": "extract",

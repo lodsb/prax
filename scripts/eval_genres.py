@@ -19,6 +19,18 @@ the summary alone, and the summary with the opening of the text.
   (level or label), fitted on four fifths of the documents and applied to
   the fifth, in turn.
 - ``list``: the labels as one list under a grammar (``listed``).
+- ``hybrid``: the list proposes, the calibrated yes/no disposes: a listed
+  label is kept when its probability is at least a threshold (or was not
+  asked), and a label the list left out when it is 0.8 or more. What the
+  genres step would cost: one list and the questions of its labels.
+
+``--decision URL`` adds a decision model that speaks Jev's request format
+(Jeff, Kev; library docs 10307, 13341, 13342): the document as the
+``state``, every label a ``noul`` question in one request, calibrated like
+the yes/no answers. ``--decision-name`` names it in the tables.
+
+``--reuse FILE`` takes the yes/no answers of an earlier ``--out`` instead
+of asking again.
 
 Scored per label, micro-averaged: precision, recall and F1 for the genres
 and the subjects (the labels under a level), and for the levels. A
@@ -133,14 +145,20 @@ def calibrated(
     probs: dict[int, dict[str, dict[str, float]]],
     G: ontology.Facet,
     S: ontology.Facet,
-) -> tuple[dict[int, dict[str, set[str]]], dict[str, Any]]:
-    """Platt per facet and kind, fitted out of fold; the labels at 0.5."""
+) -> tuple[
+    dict[int, dict[str, set[str]]],
+    dict[str, Any],
+    dict[int, dict[str, dict[str, float]]],
+]:
+    """Platt per facet and kind, fitted out of fold; the labels at 0.5,
+    and every calibrated probability."""
     ids = [d["id"] for d in docs if d["id"] in probs]
     rng = random.Random(7)
     rng.shuffle(ids)
     fold = {i: k % FOLDS for k, i in enumerate(ids)}
     truth = {d["id"]: d for d in docs}
     said: dict[int, dict[str, set[str]]] = {i: {"g": set(), "s": set()} for i in ids}
+    cal: dict[int, dict[str, dict[str, float]]] = {i: {"g": {}, "s": {}} for i in ids}
     raw_all: list[tuple[float, int]] = []
     cal_all: list[tuple[float, int]] = []
     for key, facet in (("g", G), ("s", S)):
@@ -173,19 +191,74 @@ def calibrated(
                     )
                 for p, y, i, x in test:
                     q = platt(p)
+                    cal[i][key][x] = q
                     raw_all.append((p, y))
                     cal_all.append((q, y))
                     if q >= 0.5:
                         said[i][key].add(x)
     rp, ry = [p for p, _ in raw_all], [y for _, y in raw_all]
     cp, cy = [p for p, _ in cal_all], [y for _, y in cal_all]
-    return said, {
-        "ece raw": round(calibration.ece(rp, ry), 3),
-        "ece calibrated": round(calibration.ece(cp, cy), 3),
-        "brier raw": round(calibration.brier(rp, ry), 3),
-        "brier calibrated": round(calibration.brier(cp, cy), 3),
-        "questions": len(rp),
+    return (
+        said,
+        {
+            "ece raw": round(calibration.ece(rp, ry), 3),
+            "ece calibrated": round(calibration.ece(cp, cy), 3),
+            "brier raw": round(calibration.brier(rp, ry), 3),
+            "brier calibrated": round(calibration.brier(cp, cy), 3),
+            "questions": len(rp),
+        },
+        cal,
+    )
+
+
+def platt_all(
+    docs: list[dict[str, Any]],
+    probs: dict[int, dict[str, dict[str, float]]],
+    G: ontology.Facet,
+    S: ontology.Facet,
+) -> dict[str, list[float]]:
+    """The Platt maps fitted on every labelled document: what the genres
+    step reads from prax.yaml (``steps.genres.platt``)."""
+    truth = {d["id"]: d for d in docs}
+    out = {}
+    for key, facet, name in (("g", G, "genres"), ("s", S, "subjects")):
+        for kind, part in ((0, "levels"), (1, "labels")):
+            pts = [
+                (p, int(x in truth[i][key]))
+                for i, pr in probs.items()
+                if i in truth and not (key == "s" and not truth[i]["s"])
+                for x, p in pr[key].items()
+                if (facet.level_of(x) == x) == (kind == 0)
+            ]
+            if len({y for _, y in pts}) < 2:
+                continue
+            m = calibration.fit_platt([p for p, _ in pts], [y for _, y in pts])
+            out[f"{name} {part}"] = [round(m.a, 4), round(m.b, 4)]
+    return out
+
+
+def decide(
+    url: str, document: str, facet: ontology.Facet, *, about: bool, model: str
+) -> dict[str, float]:
+    """Every label of a facet as one yes/no question to a Jev-format
+    decision model, in one request over one reading of the document."""
+    import urllib.request
+
+    said = {
+        x: d for lv in facet.levels for x, d in ((lv.name, lv.description), *lv.genres)
     }
+    questions = {
+        x: {"type": "noul", "instructions": gw.question(facet, x, said[x], about=about)}
+        for x in facet.labels()
+    }
+    body = {"model": model, "state": document, "questions": questions}
+    req = urllib.request.Request(
+        url.rstrip("/") + "/v1/systemone",
+        data=json.dumps(body).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    got = json.loads(urllib.request.urlopen(req, timeout=600).read())
+    return {x: float(v["noul"]) for x, v in got["answers"].items() if "noul" in v}
 
 
 def main() -> None:
@@ -194,6 +267,11 @@ def main() -> None:
     ap.add_argument("--out", type=Path, help="every answer, as JSON lines")
     ap.add_argument("--claude", type=Path, nargs="*", default=[])
     ap.add_argument("--methods", default="yesno,list")
+    ap.add_argument("--reuse", type=Path, help="yes/no answers of an earlier --out")
+    ap.add_argument("--decision", help="a Jev-format decision model's URL")
+    ap.add_argument("--decision-name", default="decision model")
+    ap.add_argument("--decision-model", default="jeff-latest")
+    ap.add_argument("--views", default=",".join(VIEWS), help="which views to read")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     spec = models.resolve("extract")  # the genres step's own model once it exists
@@ -208,10 +286,19 @@ def main() -> None:
     blind = [d for d in docs if d["blind"]]
     print(f"{len(docs)} labelled documents, {len(blind)} of them blind\n")
 
+    reused: dict[tuple[int, str], dict[str, dict[str, float]]] = {}
+    if a.reuse:
+        for line in a.reuse.read_text(encoding="utf-8").splitlines():
+            row = json.loads(line)
+            if "yesno" in row:
+                reused[(int(row["id"]), row["view"])] = row["yesno"]
     results: dict[str, dict[int, dict[str, set[str]]]] = {}
     extra: dict[str, dict[str, Any]] = {}
     seconds: dict[str, float] = defaultdict(float)
+    fitted: dict[str, dict[str, list[float]]] = {}
     for vname, opening in VIEWS.items():
+        if vname not in a.views.split(","):
+            continue
         views = {
             d["id"]: gw.view(
                 d["title"], d["meta"], d["text"], opening=opening, where=d["where"]
@@ -221,6 +308,9 @@ def main() -> None:
         if "yesno" in a.methods:
             probs: dict[int, dict[str, dict[str, float]]] = {}
             for n, d in enumerate(docs, 1):
+                if (d["id"], vname) in reused:
+                    probs[d["id"]] = reused[(d["id"], vname)]
+                    continue
                 t0 = time.monotonic()
                 probs[d["id"]] = {
                     "g": gw.probabilities(
@@ -245,9 +335,53 @@ def main() -> None:
                 i: {k: {x for x, p in v.items() if p >= 0.5} for k, v in pr.items()}
                 for i, pr in probs.items()
             }
-            said, cal = calibrated(docs, probs, G, S)
+            said, cal_stats, cal = calibrated(docs, probs, G, S)
             results[f"yesno calibrated, {vname}"] = said
-            extra[f"yesno, {vname}"] = cal
+            extra[f"yesno, {vname}"] = cal_stats
+        if a.decision:
+            dprobs: dict[int, dict[str, dict[str, float]]] = {}
+            for n, d in enumerate(docs, 1):
+                t0 = time.monotonic()
+                dprobs[d["id"]] = {
+                    "g": decide(
+                        a.decision,
+                        views[d["id"]],
+                        G,
+                        about=False,
+                        model=a.decision_model,
+                    ),
+                    "s": decide(
+                        a.decision,
+                        views[d["id"]],
+                        S,
+                        about=True,
+                        model=a.decision_model,
+                    ),
+                }
+                seconds[f"{a.decision_name}, {vname}"] += time.monotonic() - t0
+                if a.out:
+                    with a.out.open("a", encoding="utf-8") as f:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "id": d["id"],
+                                    "view": vname,
+                                    a.decision_name: dprobs[d["id"]],
+                                }
+                            )
+                            + "\n"
+                        )
+                print(
+                    f"\r {a.decision_name} {vname}: {n}/{len(docs)}", end="", flush=True
+                )
+            print()
+            results[f"{a.decision_name} raw, {vname}"] = {
+                i: {k: {x for x, p in v.items() if p >= 0.5} for k, v in pr.items()}
+                for i, pr in dprobs.items()
+            }
+            dsaid, dstats, _ = calibrated(docs, dprobs, G, S)
+            results[f"{a.decision_name} calibrated, {vname}"] = dsaid
+            extra[f"{a.decision_name}, {vname}"] = dstats
         if "list" in a.methods:
             lists: dict[int, dict[str, set[str]]] = {}
             for n, d in enumerate(docs, 1):
@@ -261,9 +395,37 @@ def main() -> None:
                     ),
                 }
                 seconds[f"list, {vname}"] += time.monotonic() - t0
+                if a.out:
+                    with a.out.open("a", encoding="utf-8") as f:
+                        row = {k: sorted(v) for k, v in lists[d["id"]].items()}
+                        f.write(
+                            json.dumps({"id": d["id"], "view": vname, "list": row})
+                            + "\n"
+                        )
                 print(f"\r list {vname}: {n}/{len(docs)}", end="", flush=True)
             print()
             results[f"list, {vname}"] = lists
+            if "yesno" in a.methods:
+                for keep in (0.3, 0.5):
+                    hybrid: dict[int, dict[str, set[str]]] = {}
+                    for i, listed in lists.items():
+                        hybrid[i] = {}
+                        for key, facet in (("g", G), ("s", S)):
+                            q = cal.get(i, {}).get(key, {})
+                            chosen = {x for x in listed[key] if q.get(x, 1.0) >= keep}
+                            chosen |= {x for x, v in q.items() if v >= 0.8}
+                            hybrid[i][key] = set(facet.implied(chosen))
+                    results[f"hybrid {keep:g}, {vname}"] = hybrid
+                # what the genres step does: only the listed labels asked
+                lean: dict[int, dict[str, set[str]]] = {}
+                for i, listed in lists.items():
+                    lean[i] = {}
+                    for key, facet in (("g", G), ("s", S)):
+                        q = cal.get(i, {}).get(key, {})
+                        chosen = {x for x in listed[key] if q.get(x, 1.0) >= 0.3}
+                        lean[i][key] = set(facet.implied(chosen))
+                results[f"listed, then asked, 0.3, {vname}"] = lean
+                fitted[vname] = platt_all(docs, probs, G, S)
 
     for path in a.claude:
         for k, v in json.loads(path.read_text(encoding="utf-8")).items():
@@ -289,8 +451,11 @@ def main() -> None:
             )
             print(f"| {name} | {cells} |")
     print("\n### calibration of the yes/no answers (out of fold)\n")
-    for name, cal in extra.items():
-        print(f"- {name}: {cal}")
+    for name, stats in extra.items():
+        print(f"- {name}: {stats}")
+    print("\n### Platt maps fitted on every labelled document (a, b)\n")
+    for vname, maps in fitted.items():
+        print(f"- {vname}: {maps}")
     print("\n### seconds a document\n")
     for name, s in seconds.items():
         print(f"- {name}: {s / max(1, len(docs)):.1f}")
