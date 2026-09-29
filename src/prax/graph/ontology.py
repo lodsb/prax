@@ -459,10 +459,26 @@ def load_dir(directory: Path) -> Ontology:
     # module it would join the version string, and every document would
     # look unread against the new version
     files = sorted(f for f in directory.glob("*.yaml") if f.stem not in BESIDE)
-    if not files:
+    texts = [(f.stem, f.read_text(encoding="utf-8")) for f in files]
+    # and a file that does not say it is one is not a module either. A
+    # door started before a file beside the modules was written knew no
+    # name for it, read it as a module, and stamped 883 edges with
+    # "+genres1" or "+subjects1" (2026-09-29); a module names itself
+    texts = [(stem, text) for stem, text in texts if _is_module(text)]
+    if not texts:
         raise ValueError(f"no ontology modules in {directory}")
-    return compose(
-        [parse_module(f.read_text(encoding="utf-8"), name=f.stem) for f in files]
+    return compose([parse_module(text, name=stem) for stem, text in texts])
+
+
+def _is_module(text: str) -> bool:
+    """Whether a YAML file in the ontology directory is a module: it
+    names itself (``module:``) or declares types or relations."""
+    try:
+        data = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return True  # a broken module is an error to see, not a file to skip
+    return isinstance(data, dict) and any(
+        k in data for k in ("module", "entity_types", "relation_types")
     )
 
 

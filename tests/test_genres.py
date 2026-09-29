@@ -177,3 +177,17 @@ def test_the_door_serves_the_genre_tab(client: TestClient) -> None:
     assert labelled["labelled"] == 1 and labelled["items"][0]["genres"] == ["essay"]
     meta = client.get(f"/get/{doc_id}", params={"max_chars": 0}).json()["meta"]
     assert json.dumps(meta["genres"]) == '[{"genre": "essay", "p": 1.0}]'
+
+
+def test_a_yaml_file_that_is_not_a_module_is_never_composed(tmp_path: Path) -> None:
+    """A file beside the modules that the running code has no name for
+    (as genres.yaml was to a door started before it) is not read as a
+    module: it would join the version string (2026-09-29, 883 edges)."""
+    for f in Path(ontology.path()).glob("*.yaml"):
+        (tmp_path / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    (tmp_path / "tomorrow.yaml").write_text(
+        "version: 1\nlevels:\n  x: {description: y}\n", encoding="utf-8"
+    )
+    onto = ontology.load_dir(tmp_path)
+    assert "tomorrow" not in onto.modules and "tomorrow" not in onto.version
+    assert onto.version == ontology.current().version

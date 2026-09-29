@@ -135,11 +135,13 @@ from .labels import (  # noqa: F401
     unmerge_run,
 )
 from .languages import (  # noqa: F401
+    _ENTITY_DOCS,
     _mark_corpus_ruling,
     _named_by_language,
     corpus_rulings,
     foreign_names,
     label_in_language,
+    languages_by_entity,
     name_in_english,
     unlabelled_names,
     unmark_corpus_ruling,

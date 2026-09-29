@@ -262,6 +262,7 @@ from .documents import (  # noqa: F401
 )
 from .graph import (  # noqa: F401
     _CONFIDENCE_BY_RANK,
+    _ENTITY_DOCS,
     _SUBGRAPH_EDGE,
     ASK_FACT_RELS_SKIPPED,
     CARRY,
@@ -351,6 +352,7 @@ from .graph import (  # noqa: F401
     keep_printed,
     label_in_language,
     labels_of_entities,
+    languages_by_entity,
     link,
     list_communities,
     list_review,

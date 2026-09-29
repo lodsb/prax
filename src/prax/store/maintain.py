@@ -764,19 +764,26 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     con.commit()
     # the labels that never got one. A name is one to three words, under
     # the detector's floor, so `language.detect` says nothing for nearly
-    # all of them; the document that named the entity knows
-    from .graph import _named_by_language
+    # all of them; the document that named the entity knows. All entities
+    # at once, and a commit every thousand labels: asked label by label it
+    # held the write lock for 76 minutes and no capture could land
+    # (2026-09-29). A label no single language names stays unplaced and
+    # is looked at again the next night, which now costs seconds.
+    from .graph import languages_by_entity
 
+    known = languages_by_entity(con)
     placed = 0
     for r in con.execute(
         "SELECT id, entity_id FROM entity_labels WHERE lang IS NULL"
     ).fetchall():
-        code = _named_by_language(con, r["entity_id"])
+        code = known.get(int(r["entity_id"]))
         if code:
             con.execute(
                 "UPDATE entity_labels SET lang = ? WHERE id = ?", (code, r["id"])
             )
             placed += 1
+            if placed % 1000 == 0:
+                con.commit()
     con.commit()
 
     return {

@@ -2470,3 +2470,33 @@ Found while searching the library for the classification research
       may be empty, a genre may not. `ontology.Facet` loads both files.
       A test holds that no label is in both, which found `history` (a
       subject; the genre is now `chronicle`).
+
+## 2026-09-29: the night the sends stopped
+
+- **What the user saw**: documents sent at night did not arrive. Every
+  write to the store waited, and a sender gave up.
+- **The cause**: the nightly `languages` pass (03:30) ended in a loop over
+  every entity label without a language, 78,931 of them, one query each.
+  `src = ? OR dst = ?` in one condition kept SQLite off both edge indexes
+  and scanned the table, 58 ms a label, and the loop committed only at the
+  end: 76 minutes of an open write transaction. A write in the door took
+  the store's lock and waited on SQLite behind it, so everything queued.
+  In the loop since 2026-09-24. It never finished in time before a
+  restart, so its labels stayed unplaced and it began again every night.
+  `py-spy dump` of the door found it (`_named_by_language` from
+  `_languages`).
+- [x] **The fix**: `languages_by_entity`, every entity's single language in
+      one pass over the edges (0.7 s on the live store, agreeing with the
+      per-entity answer on 300 sampled labels; it places 45,212 of the
+      78,931), a commit every thousand labels, and `_named_by_language` as
+      a union of the two index ranges.
+- **And one of my own**: a door started before `genres.yaml`, and later
+  `subjects.yaml`, existed read each as an ontology module with no types,
+  and stamped what it wrote with `+genres1` or `+subjects1` (883 edges,
+  183 review items; twelve hand-outs failed on the minute `subjects.yaml`
+  did not parse). The 848 extraction edges among them were retired when
+  the version came back and the documents were read again; 35 typing-rule
+  edges and the 183 review items still carry the wrong string.
+- [x] **Its fix**: `load_dir` composes only a file that says it is a module
+      (`module:`, `entity_types` or `relation_types`), so a file the
+      running code has no name for is never read as one.

@@ -12,18 +12,44 @@ from ..base import _reading, _serialized
 from .decisions import queue_review
 from .labels import add_label, merge_entities
 
+# The documents of an entity's live edges, one side at a time: ``src = ?
+# OR dst = ?`` in one condition kept SQLite off both indexes and scanned
+# the edges table, 58 ms an entity; the union reads two index ranges.
+_ENTITY_DOCS = (
+    "SELECT source_doc FROM edges WHERE src = ? AND valid_to IS NULL"
+    " UNION SELECT source_doc FROM edges WHERE dst = ? AND valid_to IS NULL"
+)
+
 
 def _named_by_language(con: sqlite3.Connection, entity_id: int) -> str | None:
     """The language of a document that named this entity, where they all
     agree. Two languages naming one thing say nothing about the name."""
     rows = con.execute(
-        "SELECT DISTINCT json_extract(d.meta, '$.lang') AS lang FROM edges x"
-        " JOIN documents d ON d.id = x.source_doc"
-        " WHERE x.valid_to IS NULL AND (x.src = ? OR x.dst = ?)"
+        "SELECT DISTINCT json_extract(d.meta, '$.lang') AS lang FROM documents d"
+        f" WHERE d.id IN ({_ENTITY_DOCS})"
         " AND json_extract(d.meta, '$.lang') IS NOT NULL LIMIT 3",
         (entity_id, entity_id),
     ).fetchall()
     return str(rows[0]["lang"]) if len(rows) == 1 else None
+
+
+def languages_by_entity(con: sqlite3.Connection) -> dict[int, str]:
+    """``_named_by_language`` for every entity at once: the entities whose
+    live edges come from documents of one language, and that language. One
+    pass over the edges, where asking entity by entity was 79,000 queries
+    and 76 minutes of a held write lock (2026-09-29)."""
+    rows = con.execute(
+        "SELECT ent, min(lang) AS lang FROM ("
+        " SELECT x.src AS ent, json_extract(d.meta, '$.lang') AS lang"
+        " FROM edges x JOIN documents d ON d.id = x.source_doc"
+        " WHERE x.valid_to IS NULL"
+        " UNION ALL"
+        " SELECT x.dst, json_extract(d.meta, '$.lang')"
+        " FROM edges x JOIN documents d ON d.id = x.source_doc"
+        " WHERE x.valid_to IS NULL"
+        ") WHERE lang IS NOT NULL GROUP BY ent HAVING count(DISTINCT lang) = 1"
+    ).fetchall()
+    return {int(r["ent"]): str(r["lang"]) for r in rows}
 
 
 @_serialized
