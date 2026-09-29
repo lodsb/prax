@@ -220,6 +220,26 @@ on the gold sample, the best kept:
    (doc 13331);
 3. a yes or no per genre, over the five nearest by vector.
 
+**A side-quest: the decision models.** Jev (TypeSafe, a closed API)
+answers several questions about one text as probabilities read from the
+model rather than written by it (doc 10307 reverse-engineers it). Two
+open models take the same request format (`state`, `questions`, each a
+`choice`, a `noul` yes/no or a `score`). Jeff (github.com/firelex/jeff)
+is Qwen3.5 0.8B and 2B and a Gemma, fine-tuned in full, one fitted
+temperature. Kev (github.com/jaredpalmer/kev) is a rank-16 LoRA and a
+pointer head on Qwen3.5 0.8B, 4B and 9B, or Qwen3.8 27B, one temperature
+per checkpoint. A yes/no per genre over one shared reading of the
+document is method 3 without a generation per genre, which is why they
+are worth measuring. Measured as a fourth candidate on the same gold sample
+and inputs, Jeff-2B and Kev-4B first. Jeff-2B's 4.2 GB fits on the card
+beside llama-server's 20 GB; Kev-4B takes the card from it (`prax up
+--swap`). Open questions the measurement answers: how they read
+500–700 tokens (their benchmarks used about 200), and how far their own
+temperature is from a fit on the user's labels. Both need PyTorch and
+transformers, an optional extra for the worker, never the serving path.
+Jev itself is not a candidate: it would send the library's text to a
+company's API.
+
 The order of the genres in the prompt is shuffled per document: the
 recency and majority biases of a prompt shift a model's labels (doc
 13327). For scale: ChatGPT reached micro F1 0.74 on English genre
@@ -283,7 +303,8 @@ Built only when measured to be needed.
    /genres`, `GET /documents/genre-sample`, `PUT /doc/{id}/genres`
    built; the labelling is the user's.)
 2. The genres step, the three methods and the two inputs measured on the
-   gold sample (`scripts/eval_genres.py`, `docs/eval/genres-*.md`).
+   gold sample (`scripts/eval_genres.py`, `docs/eval/genres-*.md`), and
+   Jeff and Kev beside them (the side-quest above).
 3. The calibration, `meta.genres`, the genres on the properties dialog
    and as a Browse filter, the document field.
 4. `meta.regions` from the communities pass, and the vector vote for
