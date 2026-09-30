@@ -274,6 +274,13 @@ def test_a_models_labels_wait_for_a_person(con: sqlite3.Connection) -> None:
         "ecology": 0.9,
     }
     assert first["note"] == "essay or review" and first["genres_by"] == "claude"
+    # "ruled": the ones a domain rule placed, not by hand or by source alone
+    assert store.genre_sample(con, state="ruled")["total"] == 0
+    store.set_domains(con, sure, ["studio"], by="rule")
+    store.set_domains(con, unsure, ["studio"], by="human")
+    assert [it["id"] for it in store.genre_sample(con, state="ruled")["items"]] == [
+        sure
+    ]
     assert store.genre_sample(con)["total"] == 0  # labelled by someone: not open
     store.set_genres(con, unsure, ["review"], subjects=["ecology", "politics"])
     m = store.get_meta(con, unsure)

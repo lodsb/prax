@@ -107,7 +107,9 @@ def genre_sample(
     request: Request, state: str = "open", offset: int = 0, limit: int = 10
 ) -> dict[str, Any]:
     """The documents to label on the Review page's "genre" tab (``open``),
-    or the ones a person labelled, the last first (``labelled``)."""
+    a model's labels to check (``check``, and ``ruled`` for those a domain
+    rule placed), or the ones a person labelled, the last first
+    (``labelled``)."""
     try:
         return store.genre_sample(
             _con(request), state=state, offset=offset, limit=limit

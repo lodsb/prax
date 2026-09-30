@@ -64,6 +64,13 @@ _GENRE_CHECK = (
     " AND json_extract(meta, '$.genres_by') != 'human'"
     " AND json_extract(meta, '$.retired') IS NULL"
 )
+# of those, the ones a domain rule placed by their labels: a rule set the
+# domains, and not the Zotero one, which goes by the source alone. A wrong
+# label there put the document in the wrong modules
+_GENRE_RULED = (
+    _GENRE_CHECK + " AND json_extract(meta, '$.domains_by') = 'rule'"
+    " AND coalesce(json_extract(meta, '$.source'), '') != 'zotero'"
+)
 # how sure the model was of a document: its least sure label, genre or
 # subject; the list shows the least sure first
 _GENRE_SURE = (
@@ -289,10 +296,12 @@ def genre_sample(
     on every visit and the sample spreads over each source. ``labelled``:
     the person's labels, the last first, where one is corrected.
     ``check``: a model's labels no person has looked at, the least sure
-    first. Each item carries its summary and the opening of its text.
+    first; ``ruled``: the same for the documents a domain rule placed by
+    those labels, where a wrong one costs the most. Each item carries its
+    summary and the opening of its text.
     ``labelled``, ``to_check`` and ``skipped`` count what is done so far."""
-    if state not in ("open", "labelled", "check"):
-        raise ValueError("state is open, check or labelled")
+    if state not in ("open", "labelled", "check", "ruled"):
+        raise ValueError("state is open, check, ruled or labelled")
     limit = max(1, min(limit, 50))
     offset = max(0, offset)
     cols = (
@@ -310,8 +319,8 @@ def genre_sample(
             + ") ORDER BY turn, source LIMIT ? OFFSET ?",
             (limit, offset),
         ).fetchall()
-    elif state == "check":
-        where = _GENRE_CHECK
+    elif state in ("check", "ruled"):
+        where = _GENRE_CHECK if state == "check" else _GENRE_RULED
         total = con.execute("SELECT count(*)" + where).fetchone()[0]
         rows = con.execute(
             f"SELECT {cols}" + where + f" ORDER BY {_GENRE_SURE}, id LIMIT ? OFFSET ?",
