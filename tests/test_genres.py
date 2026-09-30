@@ -384,3 +384,39 @@ def test_domain_rules_name_genres_subjects_and_facts(con: sqlite3.Connection) ->
     assert store.get_meta(con, sheet)["domains"] == ["electronics"]
     assert store.get_meta(con, cake)["domains"] == ["kitchen"]
     assert store.get_meta(con, essay)["domains"] == ["research"]
+
+
+def test_a_rule_may_name_a_piece_of_the_documents_origin(
+    con: sqlite3.Connection,
+) -> None:
+    """``origin`` matches the path a document had where it came from (the
+    sender's ``meta.origin.path``), any piece of it, ignoring case."""
+    help_file = _doc(
+        con,
+        "SinOsc.ar(freq, phase) a sine oscillator.",
+        origin={"host": "nas", "path": "/home/me/SuperCollider/Help/SinOsc.help.rtf"},
+    )
+    other = _doc(
+        con, "A letter.", origin={"host": "nas", "path": "/home/me/letters/a.doc"}
+    )
+    bare = _doc(con, "No origin at all.")
+    rule = {"match": {"origin": [".HELP.rtf", "/quarks/"]}, "domains": ["studio"]}
+    assert store.domains_dry_run(con, [rule])["rules"][0]["count"] == 1
+    store.assign_domains(con, [rule])
+    assert store.get_meta(con, help_file)["domains"] == ["studio"]
+    assert "domains" not in store.get_meta(con, other)
+    assert "domains" not in store.get_meta(con, bare)
+
+
+def test_a_rule_with_a_key_the_door_does_not_know_is_refused(
+    con: sqlite3.Connection,
+) -> None:
+    """An unknown ``match`` key is refused, never ignored: ignored, it made
+    the rule match every document (2026-09-30)."""
+    d = _doc(con, "Anything at all.")
+    rule = {"match": {"orgin": ".help.rtf"}, "domains": ["studio"]}
+    with pytest.raises(ValueError, match="orgin"):
+        store.domains_dry_run(con, [rule])
+    with pytest.raises(ValueError, match="orgin"):
+        store.assign_domains(con, [rule])
+    assert "domains" not in store.get_meta(con, d)

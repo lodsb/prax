@@ -998,8 +998,18 @@ document itself is a `paper` where the research module is loaded and a
 grows, not when any module does.
 
 Sets come from rules in `prax.yaml`. The first match wins. A rule
-without `match` is the default. `match` keys are `source`, `mime`,
-`path`, `collection` and `tag`:
+without `match` is the default. The `match` keys:
+- `source`, `mime`, `path` (the start of the file's path), `collection`
+  and `tag`;
+- `origin`: a piece of the path the document had where it came from,
+  such as a NAS folder or a file ending. A list means any of them;
+- `genre` and `subject`: a label at `p` or more (0.5 by default);
+- `facts`: the module holding most of what the document's facts name.
+
+A key the door does not know is refused, never ignored. An ignored key
+would make the rule match every document. After a new key, restart the
+door before running the pass (`prax up --restart door`), and check the
+dry run first (`POST /domains/dry-run`):
 
     domains:
       - match: {collection: Family}

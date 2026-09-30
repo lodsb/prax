@@ -243,6 +243,38 @@ def fact_modules(con: sqlite3.Connection, doc_id: int) -> dict[str, int]:
     return counts
 
 
+# what a rule's ``match`` may say: a key this code does not know is refused,
+# never ignored (a door older than the ``origin`` key read a rule of it as
+# "anything", and gave 1,292 documents studio, 2026-09-30)
+RULE_KEYS = frozenset(
+    {"source", "mime", "path", "origin", "collection", "tag"}
+    | {"genre", "subject", "p", "facts", "share", "min"}
+)
+
+
+def _check_rule(rule: dict[str, Any]) -> None:
+    unknown = set(rule.get("match") or {}) - RULE_KEYS
+    if unknown:
+        raise ValueError(
+            f"a domain rule matches on {sorted(unknown)}, which this door does"
+            f" not know; the keys are {sorted(RULE_KEYS)}"
+        )
+    _check_domains(list(rule.get("domains") or []))
+
+
+def _origin_has(doc: dict[str, Any], want: Any) -> bool:
+    """Whether the path the document had where it came from (the sender's
+    ``meta.origin.path``, else ``original_path``) holds one of these
+    pieces, ignoring case: a folder's name, a file's ending."""
+    origin = doc["meta"].get("origin")
+    path = (origin.get("path") if isinstance(origin, dict) else None) or doc.get(
+        "original_path"
+    )
+    path = str(path or "").replace("\\", "/").lower()
+    pieces = want if isinstance(want, list) else [want]
+    return bool(path) and any(str(x).lower() in path for x in pieces)
+
+
 def _rule_matches(
     rule: dict[str, Any],
     doc: dict[str, Any],
@@ -277,6 +309,8 @@ def _rule_matches(
         str(m["path"]).lower()
     ):
         return False
+    if "origin" in m and not _origin_has(doc, m["origin"]):
+        return False
     if "collection" in m:
         names = [c.lower() for c in meta.get("collections") or []]
         if str(m["collection"]).lower() not in names:
@@ -296,7 +330,7 @@ def domains_dry_run(
     without a domain set, written nowhere: per rule, how many documents it
     takes (first match wins) and a few of their titles."""
     for rule in rules:
-        _check_domains(list(rule.get("domains") or []))
+        _check_rule(rule)
     taken: list[dict[str, Any]] = [{"count": 0, "examples": []} for _ in rules]
     unmatched = 0
     for r in con.execute(
@@ -335,17 +369,19 @@ def assign_domains(
 ) -> dict[str, int]:
     """Give every document without a domain set (all of them with ``force``;
     only ``ids`` when given) the domains of the first rule it matches. A
-    rule is ``{match: {source, mime, path, collection, tag, genre,
+    rule is ``{match: {source, mime, path, origin, collection, tag, genre,
     subject, facts}, domains: [...]}``; a rule without ``match`` is the
-    default. ``genre`` and ``subject`` name a label the document carries
-    with at least ``p`` (``RULE_LABEL_P``); ``facts`` a module that holds at
-    least ``share`` of the entities its facts name (``fact_modules``), when
-    they are ``min`` or more (``RULE_FACTS_MIN``).
+    default. ``origin`` is a piece (or a list of pieces, any one) of the
+    path the document had where it came from (``_origin_has``). ``genre``
+    and ``subject`` name a label the document carries with at least ``p``
+    (``RULE_LABEL_P``); ``facts`` a module that holds at least ``share`` of
+    the entities its facts name (``fact_modules``), when they are ``min``
+    or more (``RULE_FACTS_MIN``).
     Documents whose set a person wrote by hand (``domains_by: human``) are
     never touched. Returns counts per rule index and ``unmatched``."""
     counts: dict[str, int] = {"unmatched": 0}
     for rule in rules:
-        _check_domains(list(rule.get("domains") or []))
+        _check_rule(rule)
     sql = (
         "SELECT id, mime, original_path, meta FROM documents"
         " WHERE coalesce(json_extract(meta, '$.domains_by'), '') != 'human'"
