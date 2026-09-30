@@ -180,6 +180,11 @@ class Surf:
     def kept(self) -> list[ask.Passage]:
         return [p for p in self.passages if p.n not in self.dropped]
 
+    def add_usage(self, usage: dict[str, Any]) -> None:
+        """A call's token counts added to the surf's."""
+        for k, v in usage.items():
+            self.usage[k] = self.usage.get(k, 0) + int(v)
+
     def live(self) -> list[int]:
         return [p.n for p in self.kept]
 
@@ -573,9 +578,19 @@ def grammar(s: Surf) -> str:
     )
 
 
-_ACTION = re.compile(
-    r"^(search|read|facts|walk|similar|drop|answer)\b\s*:?\s*(.*)$", re.IGNORECASE
-)
+# What a step may do, each to its handler: what it brings back, and the
+# passages it added. The one place the actions are named; "answer" ends
+# the surf and has no handler.
+Handler = Callable[[sqlite3.Connection, Surf, str], tuple[str, list[int]]]
+DO: dict[str, Handler] = {
+    "search": do_search,
+    "read": do_read,
+    "facts": lambda con, s, arg: (do_facts(con, s, arg), []),
+    "walk": lambda con, s, arg: (do_walk(con, s, arg), []),
+    "similar": lambda con, s, arg: (do_similar(con, s, arg), []),
+    "drop": lambda con, s, arg: (do_drop(s, arg), []),
+}
+_ACTION = re.compile(rf"^({'|'.join([*DO, 'answer'])})\b\s*:?\s*(.*)$", re.IGNORECASE)
 
 
 def parse(text: str) -> tuple[str, str, str]:
@@ -659,13 +674,12 @@ def run(
         except Exception as exc:  # noqa: BLE001 - answer from what was read
             record(Step(len(s.steps), "error"), f"the model failed: {exc}", [], t)
             break
-        for k, v in usage.items():
-            s.usage[k] = s.usage.get(k, 0) + int(v)
-        note, action, arg = parse(text)
+        s.add_usage(usage)
+        said, action, arg = parse(text)
         s.steps_left -= 1
-        step = Step(len(s.steps), action, arg, note)
+        step = Step(len(s.steps), action, arg, said)
         if action == "answer":
-            s.log += [f"Step {step.n} · note: {note}", "answer", ""]
+            s.log += [f"Step {step.n} · note: {said}", "answer", ""]
             record(step, "enough read", [], t)
             break
         added = []
@@ -677,22 +691,12 @@ def run(
                 f"step {s.barren[key]} asked that and it brought nothing;"
                 " ask something else"
             )
-        elif action == "search":
-            result, added = do_search(con, s, arg)
-        elif action == "read":
-            result, added = do_read(con, s, arg)
-        elif action == "facts":
-            result = do_facts(con, s, arg)
-        elif action == "walk":
-            result = do_walk(con, s, arg)
-        elif action == "similar":
-            result = do_similar(con, s, arg)
         else:
-            result = do_drop(s, arg)
+            result, added = DO[action](con, s, arg)
         if not added:
             s.barren.setdefault(key, step.n)
         line = f"{action}: {arg}" if arg else action
-        s.log += [f"Step {step.n} · note: {note}", line, s.spend(result), ""]
+        s.log += [f"Step {step.n} · note: {said}", line, s.spend(result), ""]
         record(step, result, added, t)
 
     kept = s.kept
@@ -706,8 +710,7 @@ def run(
         con, list(dict.fromkeys(p.doc_id for p in kept)), limit=ask.FACTS_PER_DOC
     )
     text, usage = answerer.answer(bundle)
-    for k, v in usage.items():
-        s.usage[k] = s.usage.get(k, 0) + int(v)
+    s.add_usage(usage)
     return _result(s, answerer, text, t0, bundle)
 
 
