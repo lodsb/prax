@@ -349,7 +349,7 @@ a.cite { text-decoration: none; border-bottom: 1px dotted currentColor; }
 .domain-chips { display: inline-flex; gap: .3rem; flex-wrap: wrap; }
 .domain-chip { padding: 0 .35rem; border: 1px solid var(--line); font-size: .74rem; color: var(--muted); text-decoration: none; }
 .domain-chip:hover { color: var(--accent); border-color: var(--accent); }
-.domain-none { font-size: .74rem; }
+.domain-none { font-size: .74rem; white-space: nowrap; }
 
 /* --------------------------------------------------------- document */
 .doc-head h1 { font-size: 1.5rem; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; margin: 0 0 .3rem; }

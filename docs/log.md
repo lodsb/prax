@@ -2655,3 +2655,26 @@ Found while searching the library for the classification research
       programming books, Linux), 178 paperwork (invoices, contracts,
       forms, applications; 112 already suspected personal), 117 with no
       labels (tiny files, briefings), about 70 society and economics.
+
+## 2026-09-30: computing and society, and the domains in the UI
+
+- **`computing` v1** on top of studio: a program is a kind of device and a
+      library a kind of component, so a manual `describes` a program and
+      studio's features, standards and versions hold for software; its
+      own words are the language code is written in, what it depends on
+      and runs on, and the functions and commands it provides. Rules in
+      the host's prax.yaml (`subject: computing`, `subject: ai`, a
+      computing paper to research and computing) gave 406 documents the
+      domain. Left out after the dry run: `information` and `interaction`
+      (forms, glossaries, an accounting file).
+- **`society` v1**, for later: theories, polities, laws and essays, and
+      who argues for or against what. No rule assigns it yet.
+- **Without a domain: 350**, the paperwork, the unlabelled small files
+      and the argued texts society will take.
+- **The domains in the UI**: a search hit, a Browse row and the document
+      page show a document's domains as links that filter by them; the
+      graph's entity view has the module choice the overview had, and it
+      holds for every expansion (`GET /traverse?domain=`, the MCP
+      `traverse` too). Both new modules changed the whole ontology's
+      version, so the documents without a set are read again, like the
+      406.
