@@ -6,14 +6,13 @@ it counts belongs to another module, which is why it sits on top of them.
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from typing import Any
 
 from prax import config
 from prax.graph import ontology
 
-from .base import _reading
+from .base import _reading, decode_domains
 from .documents import DOCTYPES
 from .jobs import running_jobs
 from .retrieval import vec_status
@@ -61,7 +60,7 @@ def stats(con: sqlite3.Connection) -> dict[str, Any]:
         "SELECT json_extract(meta, '$.domains'), count(*) FROM documents"
         " WHERE json_extract(meta, '$.retired') IS NULL GROUP BY 1"
     ):
-        names = json.loads(raw) if raw else None
+        names = decode_domains(raw)
         if not names:
             unset += n
             continue

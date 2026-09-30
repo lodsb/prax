@@ -14,6 +14,7 @@ from ..base import (
     _reading,
     _serialized,
     document_hidden,
+    domain_clause,
     now,
 )
 from .meta import get_meta, set_meta
@@ -85,7 +86,7 @@ def set_domains(
         raise KeyError(f"no such document: {doc_id}")
     meta = get_meta(con, doc_id)
     before = meta.get("domains")
-    if domains is None:
+    if not domains:  # an empty set is no set: every module
         meta.pop("domains", None)
         meta.pop("domains_by", None)
     else:
@@ -206,8 +207,9 @@ def documents_in_domain(con: sqlite3.Connection, domain: str) -> list[int]:
     return [
         r[0]
         for r in con.execute(
-            "SELECT d.id FROM documents d, json_each(d.meta, '$.domains') j"
-            " WHERE j.value = ? ORDER BY d.id",
+            "SELECT d.id FROM documents d WHERE 1 = 1"
+            + domain_clause([domain], unset=False)[0]
+            + " ORDER BY d.id",
             (domain,),
         )
     ]

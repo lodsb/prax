@@ -17,7 +17,7 @@ import re
 import sqlite3
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -186,6 +186,50 @@ VIEWER: ContextVar[Viewer | None] = ContextVar("prax_viewer", default=None)
 UNASSIGNED = "unassigned"
 
 
+# Which documents belong to a domain, said once. Every caller names the
+# modules it means (one domain, or it and the modules built on it:
+# ``Ontology.within``) and whether a document with no set counts: it is
+# read against every module, so a search keeps it, while a module's own
+# graph leaves it out or the whole library would come back. An empty
+# list is no set.
+
+
+def decode_domains(raw: str | None) -> list[str] | None:
+    """A document's ``meta.domains`` as stored (JSON) to its list, None
+    for no set."""
+    if not raw:
+        return None
+    got = json.loads(raw)
+    return list(got) if got else None
+
+
+def holds_domain(raw: str | None, names: Iterable[str], *, unset: bool) -> bool:
+    """Whether a document whose ``meta.domains`` is ``raw`` belongs to one
+    of ``names``; one with no set belongs when ``unset``."""
+    held = decode_domains(raw)
+    if held is None:
+        return unset
+    return not set(held).isdisjoint(names)
+
+
+def domain_clause(
+    names: Iterable[str], *, unset: bool, alias: str = "d"
+) -> tuple[str, list[str]]:
+    """The SQL of ``holds_domain`` for a query over ``documents <alias>``:
+    `` AND (…)`` and its arguments. No names and not ``unset`` keeps
+    nothing."""
+    wanted = sorted(set(names))
+    parts: list[str] = []
+    if unset:
+        parts.append(f"coalesce(json_array_length({alias}.meta, '$.domains'), 0) = 0")
+    if wanted:
+        parts.append(
+            f"EXISTS (SELECT 1 FROM json_each({alias}.meta, '$.domains')"
+            f" WHERE value IN ({','.join('?' * len(wanted))}))"
+        )
+    return f" AND ({' OR '.join(parts) or '0'})", wanted
+
+
 def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
     """The documents the current viewer may not see; empty for none."""
     viewer = VIEWER.get()
@@ -200,11 +244,11 @@ def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
             )
         }
     if viewer.domains is not None:
+        unset = UNASSIGNED in viewer.domains
         for doc_id, raw in con.execute(
             "SELECT id, json_extract(meta, '$.domains') FROM documents"
         ):
-            held = set(json.loads(raw)) if raw else {UNASSIGNED}
-            if not held & viewer.domains:
+            if not holds_domain(raw, viewer.domains, unset=unset):
                 out.add(int(doc_id))
     return frozenset(out)
 
@@ -224,8 +268,8 @@ def document_hidden(con: sqlite3.Connection, doc_id: int) -> bool:
     if row[0] is not None and not viewer.personal:
         return True
     if viewer.domains is not None:
-        held = set(json.loads(row[1])) if row[1] else {UNASSIGNED}
-        return not held & viewer.domains
+        unset = UNASSIGNED in viewer.domains
+        return not holds_domain(row[1], viewer.domains, unset=unset)
     return False
 
 

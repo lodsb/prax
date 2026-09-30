@@ -18,6 +18,7 @@ from ..base import (
     _reading,
     _serialized,
     document_hidden,
+    domain_clause,
     hidden_documents,
 )
 
@@ -442,12 +443,10 @@ def select_for_extraction(
         sql += f" AND (coalesce(mime, '') NOT LIKE ? ESCAPE '!' OR mime IN ({kept}))"
         args.append(_like_prefix(skip_mime_prefix))
         args.extend(mimes.DOCUMENT_IMAGES)
-    if domain:
-        sql += (
-            " AND EXISTS (SELECT 1 FROM json_each(documents.meta, '$.domains')"
-            " WHERE value = ?)"
-        )
-        args.append(domain)
+    if domain:  # the documents assigned to that module, and only those
+        clause, held = domain_clause([domain], unset=False, alias="documents")
+        sql += clause
+        args.extend(held)
     if min_chars > 0:
         sql += (
             " AND (SELECT coalesce(sum(length(text)), 0) FROM chunks"

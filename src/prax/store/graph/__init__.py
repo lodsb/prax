@@ -153,6 +153,7 @@ from .traversal import (  # noqa: F401
     NEIGHBOURS,
     PER_TYPE,
     _choose,
+    _domain_documents,
     _first_hop,
     _kinds,
     _neighbourhood_limits,

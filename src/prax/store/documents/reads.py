@@ -9,10 +9,12 @@ from typing import Any
 
 from ..base import (
     _TOKEN,
+    UNASSIGNED,
     _guards,
     _like_prefix,
     _read_archive,
     _reading,
+    domain_clause,
     hidden_documents,
 )
 
@@ -195,9 +197,6 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     return out
 
 
-UNASSIGNED = "unassigned"  # the documents without a domain set, alone
-
-
 @_reading
 def list_documents(
     con: sqlite3.Connection,
@@ -236,19 +235,15 @@ def list_documents(
     if hidden:  # what the viewer may not see is not listed, nor counted
         clauses.append("d.id NOT IN (SELECT value FROM json_each(?))")
         args.append(json.dumps(sorted(hidden)))
-    if domain == UNASSIGNED:
-        # the documents no module was set for, which every module holds
-        clauses.append("json_extract(d.meta, '$.domains') IS NULL")
-    elif domain:
+    if domain:
+        # a module holds its own, those of the modules built on it and the
+        # documents no module was set for; "unassigned" is those alone
         from prax.graph import ontology
 
-        within = sorted(ontology.current().within(domain))
-        marks = ",".join("?" * len(within))
-        clauses.append(
-            "(json_extract(d.meta, '$.domains') IS NULL OR EXISTS"
-            f" (SELECT 1 FROM json_each(d.meta, '$.domains') WHERE value IN ({marks})))"
-        )
-        args.extend(within)
+        names = () if domain == UNASSIGNED else ontology.current().within(domain)
+        clause, more = domain_clause(names, unset=True)
+        clauses.append(clause.removeprefix(" AND "))
+        args.extend(more)
     if tag:
         clauses.append(
             "EXISTS (SELECT 1 FROM json_each(d.meta, '$.tags') WHERE value = ?)"

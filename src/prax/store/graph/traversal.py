@@ -11,7 +11,7 @@ from typing import Any
 from prax import config
 from prax.graph import ontology
 
-from ..base import VIEWER, _reading, hidden_documents
+from ..base import VIEWER, _reading, domain_clause, hidden_documents
 from .communities import community_of
 
 MAX_HOPS = 2
@@ -392,13 +392,8 @@ def _domain_documents(
         return None
     from prax.graph import ontology
 
-    within = sorted(ontology.current().within(domain))
-    rows = con.execute(
-        "SELECT d.id FROM documents d WHERE EXISTS (SELECT 1 FROM"
-        " json_each(d.meta, '$.domains') j"
-        f" WHERE j.value IN ({','.join('?' * len(within))}))",
-        within,
-    )
+    clause, args = domain_clause(ontology.current().within(domain), unset=False)
+    rows = con.execute(f"SELECT d.id FROM documents d WHERE 1 = 1{clause}", args)
     return frozenset(int(r[0]) for r in rows)
 
 

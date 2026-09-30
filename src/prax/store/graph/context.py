@@ -7,7 +7,7 @@ import json
 import sqlite3
 from typing import Any
 
-from ..base import _guards, _reading, _scrubbed, hidden_documents
+from ..base import _guards, _reading, _scrubbed, domain_clause, hidden_documents
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
 
 HUB_TYPES = ("concept", "method", "tool", "dataset")
@@ -351,13 +351,10 @@ def hub_graph(
             if t not in onto.self_types
         }
         types = tuple(sorted(set(types) | own))
-        dm = ",".join("?" * len(within))
-        docs = (
-            " AND source_doc IN (SELECT d.id FROM documents d WHERE EXISTS"
-            " (SELECT 1 FROM json_each(d.meta, '$.domains') j"
-            f" WHERE j.value IN ({dm})))"
-        )
-        docs_args = tuple(within)
+        # the documents no module was set for are left out (see above)
+        clause, held = domain_clause(within, unset=False)
+        docs = f" AND source_doc IN (SELECT d.id FROM documents d WHERE 1 = 1{clause})"
+        docs_args = tuple(held)
     marks = ",".join("?" * len(types))
     nodes = con.execute(
         f"""
@@ -688,8 +685,9 @@ def seed_documents(
         ids |= {
             int(r[0])
             for r in con.execute(
-                "SELECT d.id FROM documents d WHERE EXISTS (SELECT 1 FROM"
-                " json_each(d.meta, '$.domains') WHERE value = ?)" + live,
+                "SELECT d.id FROM documents d WHERE 1 = 1"
+                + domain_clause([domain], unset=False)[0]
+                + live,
                 (domain,),
             )
         }

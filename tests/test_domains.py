@@ -408,3 +408,31 @@ def test_the_door_says_when_a_domain_change_means_a_reread(client: TestClient) -
         "domains": ["family"],
         "reread": True,  # still waiting for the pass
     }
+
+
+def test_which_documents_belong_to_a_domain_is_said_once(
+    con: sqlite3.Connection,
+) -> None:
+    """``holds_domain`` and ``domain_clause`` agree: a set holding one of
+    the names belongs, no set (or an empty one) belongs only when asked,
+    and an empty set is stored as no set."""
+    assert store.holds_domain('["studio"]', {"studio", "computing"}, unset=False)
+    assert not store.holds_domain('["kitchen"]', {"studio"}, unset=True)
+    assert store.holds_domain(None, {"studio"}, unset=True)
+    assert not store.holds_domain("[]", {"studio"}, unset=False)
+    assert store.decode_domains("[]") is None
+    sheet = int(store.ingest_text(con, "A datasheet.", title="sheet")["doc_id"])
+    loose = int(store.ingest_text(con, "Nothing set.", title="loose")["doc_id"])
+    store.set_domains(con, sheet, ["studio"])
+    store.set_domains(con, loose, [])
+    assert "domains" not in store.get_meta(con, loose)
+
+    def members(names: list[str], unset: bool) -> set[int]:
+        clause, args = store.domain_clause(names, unset=unset)
+        rows = con.execute(f"SELECT d.id FROM documents d WHERE 1 = 1{clause}", args)
+        return {int(r[0]) for r in rows} & {sheet, loose}
+
+    assert members(["studio"], False) == {sheet}
+    assert members(["studio"], True) == {sheet, loose}
+    assert members([], True) == {loose}
+    assert members([], False) == set()

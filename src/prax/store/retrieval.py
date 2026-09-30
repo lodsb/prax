@@ -43,7 +43,9 @@ from .base import (
     _reading,
     _scrubbed,
     _serialized,
+    domain_clause,
     hidden_documents,
+    holds_domain,
     vectors_available,
 )
 from .documents import DOCTYPES, _chunk_shape, find_chunk
@@ -419,13 +421,8 @@ def _in_domains(scope: Scope | None) -> tuple[str, tuple[str, ...]]:
     no domain set, which are in every module), and its arguments."""
     if not scope:
         return "", ()
-    marks = ",".join("?" * len(scope))
-    clause = (
-        " AND (json_extract(d.meta, '$.domains') IS NULL OR EXISTS"
-        " (SELECT 1 FROM json_each(d.meta, '$.domains') j"
-        f" WHERE j.value IN ({marks})))"
-    )
-    return clause, tuple(sorted(scope))
+    clause, args = domain_clause(scope, unset=True)
+    return clause, tuple(args)
 
 
 def _fts_search(
@@ -830,7 +827,7 @@ def _filter_domain(
         f" WHERE id IN ({marks})",
         tuple(ids),
     ).fetchall()
-    allowed = {r[0] for r in rows if not r[1] or within & set(json.loads(r[1]))}
+    allowed = {r[0] for r in rows if holds_domain(r[1], within, unset=True)}
     return [h for h in hits if h["doc_id"] in allowed]
 
 
