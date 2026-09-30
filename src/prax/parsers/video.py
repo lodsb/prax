@@ -39,7 +39,6 @@ from typing import Any
 from prax.parsers import figures
 from prax.text.chunking import format_time
 
-META_NAME = "prax-video"
 _META = re.compile(rb'<meta\s+name="prax-video"', re.IGNORECASE)
 
 

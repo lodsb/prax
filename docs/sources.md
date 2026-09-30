@@ -309,11 +309,11 @@ design question for those. Usage is in `clients/send/README.md`.
 
 ## 4. The old zoetrope disk
 
-The hash inventory in `scripts/backfill.py` already reports duplicates
-across the disk. In Stage 1 it gains `--commit`, which registers each unique
-file through the store with `meta.original_path` preserved. Run against a
-copy, review the dedupe report, then commit. Files that also exist in the
-Zotero import dedupe automatically by hash.
+It goes in the way a NAS does, through the portable sender
+(`clients/send/prax_send.py`, section 3): the door keeps the path each
+file had, and a file the library already holds (from Zotero, or sent
+twice) is the same original by hash. The stage 1 stub that only
+inventoried the disk (`scripts/backfill.py`) was retired on 2026-09-30.
 
 ## 5. Later front-ends
 

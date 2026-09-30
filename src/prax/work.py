@@ -42,7 +42,6 @@ from dataclasses import asdict
 from typing import Any
 
 from prax import models, steps, store
-from prax.capture import pipeline
 from prax.graph import extraction
 from prax.steps import STEPS, WATCHED_STEPS
 
@@ -288,7 +287,7 @@ def leases() -> dict[str, int]:
 def _in_scope(con: sqlite3.Connection, doc_id: int, scope: str) -> bool:
     if scope == "all":
         return True
-    return store.document_source(con, doc_id) in pipeline.CAPTURE_SOURCES
+    return store.document_source(con, doc_id) in store.CAPTURE_SOURCES
 
 
 def _check(step: str, scope: str, limit: int) -> int:

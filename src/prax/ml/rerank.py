@@ -24,7 +24,6 @@ from __future__ import annotations
 import functools
 import importlib
 import json
-import os
 import re
 import urllib.request
 from dataclasses import dataclass, field
@@ -216,11 +215,6 @@ class StubReranker:
             hits = sum(w in q for w in words)
             out.append(hits / (len(words) + 1) if words else 0.0)
         return np.asarray(out, dtype=np.float32)
-
-
-def _env_list(name: str) -> list[str]:
-    raw = os.environ.get(name, "")
-    return [p.strip() for p in raw.split(",") if p.strip()]
 
 
 @functools.lru_cache(maxsize=2)

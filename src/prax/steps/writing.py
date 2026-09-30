@@ -52,7 +52,7 @@ class Titles(ModelStep):
         run = t.run()
 
         def tried(doc_id: int, r: dict[str, Any]) -> None:
-            pipeline._mark_tried(t.con, doc_id, run, str(r["tried"]))
+            pipeline.mark_tried(t.con, doc_id, run, str(r["tried"]))
 
         def apply(doc_id: int, r: dict[str, Any]) -> None:
             got = store.retitle(

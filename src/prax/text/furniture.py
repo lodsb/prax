@@ -36,12 +36,6 @@ _COMMENT_HEADING = re.compile(
     r"replies|antworten)\s*(\(\d+\))?\s*$",
     re.IGNORECASE,
 )
-# a section that says what it is
-_AD_HEADING = re.compile(
-    r"^\s*(advertisement|advertising|sponsored( content| by)?|promotion|"
-    r"werbung|anzeige|werbeanzeige)\b",
-    re.IGNORECASE,
-)
 _URL = re.compile(
     r"https?://\S+|\b(?:[a-z0-9-]+\.)+"
     r"(?:com|net|org|io|co|shop|store|de|tv|me|app|ai|gg|link|xyz)\b(?:/\S*)?",
@@ -114,11 +108,6 @@ NEAR = 200  # characters between the offer and the link that takes it up
 def is_comment_heading(title: str) -> bool:
     """Whether a heading opens the comment section."""
     return bool(_COMMENT_HEADING.match(title or ""))
-
-
-def is_ad_heading(title: str) -> bool:
-    """Whether a heading says the section under it was paid for."""
-    return bool(_AD_HEADING.match(title or ""))
 
 
 def _brand(text: str) -> str | None:

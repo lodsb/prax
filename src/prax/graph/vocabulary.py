@@ -54,7 +54,6 @@ LABEL_WORDS = 3
 # a language the library's documents are written in this much of is one a
 # reader of it asks in, and worth a label for every common name
 LABEL_SHARE = 0.05
-LOOK_AT = 200  # chunks of a name's occurrences to look through, at most
 
 _WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
 # what a model says when it has nothing to change, in the words it uses

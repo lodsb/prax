@@ -11,7 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from prax import models, store, work
-from prax.capture import pipeline
 from prax.client import Door
 from prax.graph import extraction, ontology
 from prax.text import mimes
@@ -19,6 +18,8 @@ from prax.text import mimes
 from .base import HandOut, Log, Pass, Step, TakeIn, say
 
 REPORTED = ("linked", "existing", "queued", "rejected", "retired")
+# less text than this is a stub, a cover or an error page: not extracted
+MIN_CHARS = 300
 
 
 def extraction_from(data: dict[str, Any]) -> extraction.Extraction:
@@ -39,9 +40,9 @@ class Extract(Step):
         return store.select_for_extraction(
             h.con,
             ontology_version=onto.version,
-            min_chars=pipeline.MIN_CHARS,
+            min_chars=MIN_CHARS,
             onto=onto,
-            sources=tuple(pipeline.CAPTURE_SOURCES) if h.scope == "captures" else None,
+            sources=tuple(store.CAPTURE_SOURCES) if h.scope == "captures" else None,
             skip_mime_prefix="image/",
         )
 

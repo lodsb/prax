@@ -35,7 +35,6 @@ from __future__ import annotations
 import functools
 import hashlib
 import importlib
-import os
 import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol
@@ -238,11 +237,6 @@ _LOST = ("887a0005", "887a0006", "887a0007", "device instance has been suspended
 def _lost_device(exc: BaseException) -> bool:
     said = str(exc).lower()
     return any(word in said for word in _LOST)
-
-
-def _env_list(name: str) -> list[str]:
-    raw = os.environ.get(name, "")
-    return [p.strip() for p in raw.split(",") if p.strip()]
 
 
 # ------------------------------------------------------------------- test

@@ -35,8 +35,6 @@ import re
 _PAGE_MARK = r"--- end of page\.page_number=(?P<page>\d+) ---"
 # matched against one line at a time
 PAGE_MARK = re.compile(rf"^{_PAGE_MARK}\s*$")
-# and against a whole text, for a caller taking every mark out of one
-PAGE_MARK_LINE = re.compile(rf"^{_PAGE_MARK}\s*$", re.MULTILINE)
 # unanchored, for a caller that clears the marks out of a text whose lines
 # it has not kept: `titles.head` collapses the text before it reads it
 PAGE_MARK_ANY = re.compile(_PAGE_MARK)
@@ -106,7 +104,6 @@ def read_by_pattern(kind: str) -> re.Pattern[str]:
 
 # a Markdown heading: the hashes and what follows them
 HEADING = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<text>.*?)\s*$")
-HEADING_MULTILINE = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<text>.*?)\s*$", re.MULTILINE)
 # the separator row of a Markdown table, which is what makes it a table
 TABLE_SEP = re.compile(r"^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$")
 

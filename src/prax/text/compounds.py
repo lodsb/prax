@@ -28,7 +28,6 @@ from typing import Any
 MIN_WORD = 8  # a compound shorter than this is not worth splitting
 MIN_PART = 3  # neither half may be shorter than this
 MIN_DOCS = 3  # …and each must be a word the library uses, not a typo
-MAX_PARTS = 2  # two halves only: three is a guess, and rarely needed
 # what German glues between the halves ("Arbeitszimmer", "Zwetschgenröster")
 LINKS = ("", "s", "n", "es", "en", "er")
 

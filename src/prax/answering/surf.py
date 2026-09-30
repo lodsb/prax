@@ -63,7 +63,6 @@ OVERHEAD_TOKENS = 2200  # the system prompt, the question, the step lines, the a
 MIN_TOKENS = 1000
 LOCAL_TOKENS = 4000  # the default reading budget of a local model
 CLAUDE_TOKENS = (16_000, 60_000)  # Claude's default and ceiling (cost, not context)
-ACTIONS = ("search", "read", "facts", "walk", "similar", "drop", "answer")
 
 Event = Callable[[dict[str, Any]], None]
 
