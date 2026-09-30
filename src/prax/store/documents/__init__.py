@@ -87,6 +87,7 @@ from .library import (  # noqa: F401
 from .meta import (  # noqa: F401
     _KIND_WORDS,
     DOCTYPES,
+    HISTORY_KEEP,
     HISTORY_TAIL,
     SECTION_FIELD_CHARS,
     _history_key,

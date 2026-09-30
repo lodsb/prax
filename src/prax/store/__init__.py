@@ -113,6 +113,7 @@ from .documents import (  # noqa: F401
     DUPLICATE_THRESHOLD,
     GENRE_OPENING,
     HEAD_CHARS,
+    HISTORY_KEEP,
     HISTORY_TAIL,
     HIT_RANKS,
     KNOWN_BATCH,

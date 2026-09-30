@@ -42,9 +42,12 @@ from prax.graph import ontology
 from prax.ml import embeddings
 from prax.text import acronyms, language, references
 
-from .base import _reading, archive_path, now, vectors_available
+from .base import _reading, _serialized, archive_path, now, vectors_available
 from .documents import (
+    HISTORY_KEEP,
+    _put_meta,
     assign_domains,
+    bounded_histories,
     dedupe_captures,
     fill_text_lengths,
     get_meta,
@@ -94,6 +97,7 @@ PASSES = (
     "names",
     "attachment",
     "communities",
+    "histories",
 )
 # a pass only when named: the nightly has no reason to
 ON_REQUEST = ("rechunk", "rejudge", "vectors")
@@ -844,6 +848,36 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"rulings": len(rulings), "overturned": len(overturned)}
 
 
+def _histories(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The parse and extraction histories held to ``HISTORY_KEEP`` entries
+    (``bounded_histories``), for documents written before the bound or by
+    a writer that sets one key. Reads only the documents past it."""
+    rows = con.execute(
+        "SELECT id FROM documents"
+        " WHERE json_array_length(meta, '$.parse_history') > ?"
+        "    OR json_array_length(meta, '$.extraction_history') > ?",
+        (HISTORY_KEEP, HISTORY_KEEP),
+    ).fetchall()
+    return {"documents": _bound_histories(con, [int(r[0]) for r in rows])}
+
+
+@_serialized
+def _bound_histories(con: sqlite3.Connection, ids: list[int]) -> dict[str, int]:
+    # a document past the bound may hold only entries its readers need:
+    # read every night, changed never
+    dropped: Counter[str] = Counter()
+    changed = 0
+    for doc_id in ids:
+        meta = get_meta(con, doc_id)
+        gone = bounded_histories(meta, HISTORY_KEEP)
+        if gone:
+            dropped.update(gone)
+            changed += 1
+            _put_meta(con, doc_id, meta)
+    con.commit()
+    return {"read": len(ids), "changed": changed, **dropped}
+
+
 def _vectors(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The embedder's vector files: both deltas merged, and the chunk index
     rid of the vectors of chunks that are gone, built anew when they are a
@@ -905,6 +939,7 @@ _RUN = {
     "rechunk": _rechunk,
     "rejudge": _rejudge,
     "vectors": _vectors,
+    "histories": _histories,
 }
 
 

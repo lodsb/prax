@@ -8,6 +8,7 @@ models and takes minutes); everything else runs on every checkout with the
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sqlite3
 from pathlib import Path
@@ -835,3 +836,24 @@ def test_a_bounded_history_keeps_what_its_readers_ask() -> None:
     assert versions == {"v0", "v1", "v2"}
     # a history shorter than the bound is left as it is
     assert store.bounded_histories({"parse_history": [first]}, 20) == {}
+
+
+def test_a_history_is_held_to_its_bound(con: sqlite3.Connection) -> None:
+    """Every write of a document's meta holds its histories to
+    ``HISTORY_KEEP``; the ``histories`` pass trims one written before,
+    here by a writer that sets the key alone."""
+    doc = int(store.ingest_text(con, "A book.", title="book")["doc_id"])
+    refusal = {"extractor": "djvu/1.0", "error": "refused"}
+    meta = store.get_meta(con, doc)
+    meta["parse_history"] = [refusal] * 60
+    store.set_meta(con, doc, meta)
+    assert len(store.get_meta(con, doc)["parse_history"]) == store.HISTORY_KEEP
+    con.execute(
+        "UPDATE documents SET meta = json_set(meta, '$.parse_history', json(?))"
+        " WHERE id = ?",
+        (json.dumps([refusal] * 60), doc),
+    )
+    con.commit()
+    out = store.maintain(con, only=["histories"])["histories"]
+    assert out["documents"]["parse_history"] == 60 - store.HISTORY_KEEP
+    assert len(store.get_meta(con, doc)["parse_history"]) == store.HISTORY_KEEP

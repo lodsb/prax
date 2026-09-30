@@ -21,6 +21,9 @@ from ..base import (
 # the last attempts of one extractor a parse history always keeps: what
 # parsers.queue.seen counts refusals in a row over
 HISTORY_TAIL = 5
+# the entries a history keeps besides those its readers need (the user,
+# 2026-09-30); every write of a document's meta holds it to that
+HISTORY_KEEP = 20
 
 
 def _history_key(key: str, entry: dict[str, Any]) -> tuple[Any, ...]:
@@ -94,6 +97,7 @@ def _put_meta(con: sqlite3.Connection, doc_id: int, meta: dict[str, Any]) -> Non
     read-modify-write of every store function that changes a key of it.
     It refreshes nothing; a caller that changes what the document field
     indexes (title, kind, summary) refreshes it itself."""
+    bounded_histories(meta, HISTORY_KEEP)
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
     )
@@ -113,6 +117,7 @@ def set_meta(
     Importers use this to merge provenance when a known hash turns up again
     under another source record.
     """
+    bounded_histories(meta, HISTORY_KEEP)
     cur = con.execute(
         "UPDATE documents SET meta = ?, title = COALESCE(?, title),"
         " source_url = COALESCE(?, source_url) WHERE id = ?",
