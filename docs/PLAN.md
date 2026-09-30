@@ -681,6 +681,23 @@ recipe at once. Three independent failures, each wanting a different fix.
       is named in `docs/log.md`, "The night of 2026-09-20".
 - [ ] **Resource-aware swapping in `prax up`** — only if marker re-reads
       become routine (`docs/log.md`, "After the mathematics").
+- [ ] **An open mode for `ask`** (experimental; the user, 2026-09-30).
+      Today both prompts pin the model to the passages ("use only the
+      numbered passages… you have no other knowledge", under 250
+      words), so `ask` finds and cites and never builds. An open mode
+      keeps the search and the surfing (they gather the datasheet, the
+      paper, the earlier note) and answers with a second prompt: cite the
+      library's passages [n] where they are used, and otherwise use the
+      model's own knowledge, write code, derive, compare, at the length
+      the task needs, saying which part is which. `mode: grounded | open`
+      on `POST /ask`, a toggle beside the model in the UI. Four things to
+      get right. What is cited and what is the model's own must stay apart
+      in the answer. A page kept from an open answer is marked
+      (`meta.page.open`), so a later search never takes it for the
+      library's evidence. The local 35B codes common things decently,
+      Claude (`backend: claude`, paid) much better. There is no
+      run-and-test loop, so real work in a codebase stays with Claude Code
+      and prax over MCP. About a day with the tests.
 - [ ] **The extension sends a PDF viewer's tab as a snapshot.** A tab
       showing `arxiv.org/pdf/…` or IEEE's `stamp.jsp` is saved by
       SingleFile as the viewer's frame, not the PDF: four documents
