@@ -22,8 +22,10 @@ def normalize(name: str, *, plural: bool = True) -> str:
     """Case-, accent- and punctuation-insensitive key; name suffixes dropped;
     with ``plural`` a trailing ``s`` on the last word is dropped too (for
     concepts and methods, never for people)."""
-    s = unicodedata.normalize("NFKD", name)
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    s = name
+    if not s.isascii():  # ASCII has no accents to take off: the same key
+        s = unicodedata.normalize("NFKD", s)
+        s = "".join(ch for ch in s if not unicodedata.combining(ch))
     s = _PUNCT.sub(" ", s.lower())
     words = [w for w in _SPACES.split(s) if w and w not in SUFFIXES]
     if plural and words and len(words[-1]) > 4 and words[-1].endswith("s"):
