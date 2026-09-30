@@ -277,3 +277,38 @@ def test_post_json_tells_a_server_not_ready_from_a_bad_request(
     )
     with pytest.raises(RuntimeError, match="HTTP 400"):
         models.post_json("http://127.0.0.1:1/v1/chat/completions", {}, None)
+
+
+def test_a_yes_or_no_question_reads_the_first_tokens_alternatives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``top_logprobs``: one token asked for, its alternatives read; a
+    server that is down raises ServerNotReady for the caller to defer, and
+    the two judges that ask (genres, resolution) do what they each do."""
+    from prax.graph import resolution
+    from prax.writing import genres
+
+    seen: dict[str, Any] = {}
+
+    def answers(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
+        seen.update(url=url, body=body)
+        top = [{"token": "yes", "logprob": -0.1}, {"token": "no", "logprob": -2.4}]
+        return {"choices": [{"logprobs": {"content": [{"top_logprobs": top}]}}]}
+
+    monkeypatch.setattr(models, "post_json", answers)
+    got = models.top_logprobs("http://gpu/v1/", "q", [{"role": "user", "content": "?"}])
+    assert got == [("yes", -0.1), ("no", -2.4)]
+    assert seen["url"] == "http://gpu/v1/chat/completions"
+    assert seen["body"]["max_tokens"] == 1 and seen["body"]["top_logprobs"] == 10
+    assert genres.ask("http://gpu/v1", "q", "a text", "a paper?") > 0.8
+    assert seen["body"]["cache_prompt"] is True
+
+    def down(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]:
+        raise models.ServerNotReady("not answering")
+
+    monkeypatch.setattr(models, "post_json", down)
+    with pytest.raises(models.ServerNotReady):
+        genres.ask("http://gpu/v1", "q", "a text", "a paper?")
+    judge = resolution.LocalAdjudicator(base_url="http://gpu/v1", model="q")
+    pair = resolution.Candidate(1, 2, "a", "b", "tool", "likely", 0.9)
+    assert judge.probability(pair) is None  # left, and asked again

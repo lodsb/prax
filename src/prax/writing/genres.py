@@ -42,12 +42,11 @@ top-down took seven, and the same F1.
 from __future__ import annotations
 
 import json
-import urllib.error
-import urllib.request
 from collections.abc import Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+from prax import models
 from prax.graph import calibration
 from prax.graph.ontology import Facet
 
@@ -55,7 +54,6 @@ OPENING = 2000  # characters of the text the model reads
 KEEP = 0.3  # a proposed label this likely, calibrated, is kept
 SECTIONS = 6  # section summaries at most
 GATE = 0.2  # a level this likely has the labels under it asked
-TIMEOUT = 120.0
 
 SYSTEM = (
     "You classify the documents of a personal research library. Read the"
@@ -116,37 +114,18 @@ def _descriptions(facet: Facet) -> dict[str, str]:
 
 def ask(base_url: str, model: str, document: str, q: str) -> float | None:
     """P(yes) for one question about one document, or None when the
-    server gave no answer to read."""
-    body = {
-        "model": model,
-        "messages": [
+    answer gave nothing to read. A server that is down or loading raises
+    ``models.ServerNotReady``: the step defers the rest of its batch."""
+    top = models.top_logprobs(
+        base_url,
+        model,
+        [
             {"role": "system", "content": SYSTEM},
             {"role": "user", "content": f"{document}\n\nQuestion: {q}\nAnswer:"},
         ],
-        "max_tokens": 1,
-        "temperature": 0,
-        "logprobs": True,
-        "top_logprobs": 10,
-        "cache_prompt": True,
-    }
-    req = urllib.request.Request(
-        base_url.rstrip("/") + "/chat/completions",
-        data=json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"},
+        cache_prompt=True,
     )
-    try:
-        got = json.loads(urllib.request.urlopen(req, timeout=TIMEOUT).read())
-        top = got["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
-    except (
-        OSError,
-        ValueError,
-        KeyError,
-        IndexError,
-        TypeError,
-        urllib.error.URLError,
-    ):
-        return None
-    return calibration.yes_probability([(t["token"], t["logprob"]) for t in top])
+    return None if top is None else calibration.yes_probability(top)
 
 
 def probabilities(

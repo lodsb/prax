@@ -484,7 +484,6 @@ class LocalAdjudicator:
     platt: tuple[float, float] | None = None  # (a, b); raw P(yes) without
     settle: float = SETTLE
     slots: int = 2
-    timeout: float = 120.0
     probabilities: list[float | None] = field(default_factory=list)
 
     @property
@@ -492,34 +491,17 @@ class LocalAdjudicator:
         return f"{self.model} (calibrated, {self.settle:g})"
 
     def probability(self, c: Candidate) -> float | None:
-        import urllib.request
-
+        from prax import models
         from prax.graph import calibration
 
-        body = {
-            "model": self.model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": local_prompt(c.type, c.keep_name, c.drop_name),
-                }
-            ],
-            "max_tokens": 1,
-            "temperature": 0,
-            "logprobs": True,
-            "top_logprobs": 10,
-        }
-        req = urllib.request.Request(
-            self.base_url.rstrip("/") + "/chat/completions",
-            data=json.dumps(body).encode(),
-            headers={"Content-Type": "application/json"},
-        )
+        prompt = local_prompt(c.type, c.keep_name, c.drop_name)
         try:
-            got = json.loads(urllib.request.urlopen(req, timeout=self.timeout).read())
-            top = got["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
-        except (OSError, ValueError, KeyError, IndexError, TypeError):
+            top = models.top_logprobs(
+                self.base_url, self.model, [{"role": "user", "content": prompt}]
+            )
+        except (models.ServerNotReady, RuntimeError, OSError, ValueError):
             return None  # no answer: the pair is left, and asked again
-        raw = calibration.yes_probability([(t["token"], t["logprob"]) for t in top])
+        raw = None if top is None else calibration.yes_probability(top)
         if raw is None:
             return None
         if self.platt is None:

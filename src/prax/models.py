@@ -505,6 +505,32 @@ def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]
         raise ServerNotReady(f"{url}: connection lost ({exc})") from exc
 
 
+def top_logprobs(
+    base_url: str, model: str, messages: list[dict[str, str]], **extra: Any
+) -> list[tuple[str, float]] | None:
+    """The first answer token's alternatives with their log probabilities,
+    for a one-token question (yes or no) to an OpenAI-style server: what a
+    calibrated judge reads its probability from. None when the answer
+    carries none. A server that is down or loading raises
+    ``ServerNotReady`` (``post_json``), so a step can defer rather than
+    count the silence as an answer."""
+    body = {
+        "model": model,
+        "messages": messages,
+        "max_tokens": 1,
+        "temperature": 0,
+        "logprobs": True,
+        "top_logprobs": 10,
+        **extra,
+    }
+    got = post_json(base_url.rstrip("/") + "/chat/completions", body, None)
+    try:
+        top = got["choices"][0]["logprobs"]["content"][0]["top_logprobs"]
+        return [(str(t["token"]), float(t["logprob"])) for t in top]
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+
+
 # ------------------------------------------------------- server status
 
 STATUS_TIMEOUT = 1.5  # a status call must not hold the door's request thread
