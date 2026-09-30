@@ -1,0 +1,122 @@
+# prax ontology, computing module: software and the writing about it.
+# Programs, libraries, languages, the functions and commands they
+# provide, and the manuals, references, tutorials, books and source files
+# about them. Requires studio: a program is a kind of device and a library
+# a kind of component, so what studio says of gear holds for software
+# unchanged: a manual `describes` a program, a program `has_feature`, it
+# `conforms_to` a protocol or file format (studio's `standard`), it
+# `succeeds` its older version, it is `compatible_with` another, and core's
+# `developed_by` names who wrote it.
+#
+# The line to studio: studio is the gear and its paperwork, and audio
+# software stays there (a synthesizer plug-in's manual, SuperCollider's
+# help). Computing is software as software: operating systems, languages,
+# libraries, servers, the web. A document that is both carries both
+# domains, as a paper about software carries research too.
+#
+# v1 (2026-09-30): written for the 390 NAS documents about software that
+# had no domain (Linux guides, programming books, library references,
+# source files), before any document had been read against it. The review
+# queue of the first reads says what is missing. Left out until it asks:
+# versions as things of their own (`succeeds` and the name carry them),
+# licences, and bugs or issues.
+module: computing
+version: 1
+requires: [studio]
+self_types: [manual, article, source_code]
+
+entity_types:
+  program:
+    parent: device
+    description: >-
+      A piece of software by name, with its version when the text gives
+      one: an application, a command-line tool, a server or service, an
+      operating system, a programming environment. Emacs, Apache httpd,
+      grep, PostgreSQL 9.6, Linux, macOS, Calibre. A program is never a
+      concept.
+  code_library:
+    parent: component
+    description: >-
+      A library, framework, toolkit, module or plug-in that code builds on
+      or a program loads, by name: zlib, Boost.Spirit, LittleCMS, JUCE,
+      numpy, Qt, React.
+  programming_language:
+    parent: concept
+    naming: proper  # C++, Python: a name, not a word
+    description: >-
+      A programming, scripting, query, markup or shader language: C, C++,
+      Python, SQL, sclang, LaTeX, HTML, GLSL.
+  symbol:
+    parent: feature
+    naming: proper
+    description: >-
+      A class, function, method, command, option, variable or system call,
+      named the way code writes it: malloc, SynthDef, git rebase, --verbose,
+      std::vector. It belongs to the program, library or language that
+      provides it.
+  source_code:
+    parent: document
+    description: >-
+      A file of source code, a script or a code listing, named by its file
+      name or title. Only the document being extracted; code the text only
+      names is a program or a code library.
+
+relation_types:
+  written_in:
+    domain: [program, code_library, source_code]
+    range: [programming_language]
+    description: the language the program, library or source file is written in
+  depends_on:
+    domain: [program, code_library, source_code]
+    range: [code_library, program]
+    description: >-
+      a library or program this one needs, links against, imports or calls
+      out to, as the text states it
+  runs_on:
+    domain: [program, code_library]
+    range: [program, device]
+    description: >-
+      the operating system, runtime or hardware the software runs on, as
+      the text says: Linux, Windows, the JVM, a Raspberry Pi
+  provides:
+    domain: [program, code_library, programming_language]
+    range: [symbol]
+    description: >-
+      a class, function, command or option the program, library or
+      language provides. For code this is the relation to use;
+      `has_feature` stays for a device's modes and controls
+
+type_aliases:
+  application: program
+  app: program
+  operating_system: program
+  os: program
+  server: program
+  service: program
+  daemon: program
+  command_line_tool: program
+  framework: code_library
+  toolkit: code_library
+  plugin: code_library
+  dependency: code_library
+  language: programming_language
+  scripting_language: programming_language
+  class: symbol
+  function: symbol
+  command: symbol
+  system_call: symbol
+  script: source_code
+  listing: source_code
+  source_file: source_code
+
+relation_aliases:
+  implemented_in: written_in
+  coded_in: written_in
+  links_against: depends_on
+  imports: depends_on
+  uses_library: depends_on
+  runs_under: runs_on
+  supports_platform: runs_on
+  platform: runs_on
+  exposes: provides
+  offers: provides

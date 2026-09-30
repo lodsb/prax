@@ -1,0 +1,112 @@
+# prax ontology, society module: the writing about how people live
+# together. Philosophy, politics, sociology, economics and history as
+# argued: the theories and schools of thought, the states, parties and
+# movements that act, the laws and treaties they make, and the essays,
+# treatises and books that argue about them. Requires core: its thinkers
+# are persons, its institutions organizations, its periods and wars
+# events, its classics works or documents.
+#
+# The line to research: research is the scientific paper and its
+# methods; society is the argument about society. A paper in sociology
+# carries both domains.
+#
+# v1 (2026-09-30): written ahead of its documents, so that the argued part
+# of the library (Kant, Marx, political economy, some seventy NAS
+# documents on 2026-09-30) has a module to be read against once rules
+# assign it. No rule assigns it yet. Left out until a review queue asks:
+# claims and counter-claims (research's `claim` reaches them where both
+# are loaded), dates and periods, and economic figures.
+module: society
+version: 1
+requires: [core]
+self_types: [essay]
+
+entity_types:
+  theory:
+    parent: concept
+    naming: common
+    description: >-
+      A theory, doctrine, ideology or school of thought, as a body of ideas:
+      critical theory, historical materialism, liberalism, utilitarianism,
+      the categorical imperative. Lowercase unless it is a proper name.
+  polity:
+    parent: organization
+    description: >-
+      A state, government, party, movement, union or public body acting in
+      the text: the European Union, the SPD, the Bundestag, the labour
+      movement, the International Monetary Fund.
+  legal_act:
+    parent: document
+    naming: proper
+    description: >-
+      A law, treaty, constitution, regulation or court ruling by its name:
+      the Basic Law, the GDPR, the Treaty of Versailles, Brown v. Board of
+      Education.
+  essay:
+    parent: document
+    description: >-
+      An essay, treatise, pamphlet, book or article arguing about society,
+      named by its title. Only the document being extracted; a book it
+      names is a work or a document.
+
+relation_types:
+  advocates:
+    domain: [person, organization, document]
+    range: [theory]
+    description: >-
+      the person, group or text argues for or stands in this theory or
+      school of thought (a thinker's position, a party's ideology, an
+      essay's thesis)
+  opposes:
+    domain: [person, organization, document]
+    range: [theory, person, organization]
+    description: >-
+      the person, group or text argues against this theory, thinker or
+      group, as the text says
+  influenced_by:
+    domain: [person, theory]
+    range: [person, theory, work]
+    description: >-
+      the thinker or theory draws on, continues or answers another thinker,
+      theory or classic work
+  enacted_by:
+    domain: [legal_act]
+    range: [polity, organization]
+    description: the body that made, signed or ruled the law, treaty or ruling
+  regulates:
+    domain: [legal_act]
+    range: [concept, organization, polity]
+    description: what the law, treaty or ruling governs or applies to
+
+type_aliases:
+  ideology: theory
+  doctrine: theory
+  school_of_thought: theory
+  philosophy: theory
+  state: polity
+  government: polity
+  party: polity
+  political_party: polity
+  movement: polity
+  law: legal_act
+  treaty: legal_act
+  statute: legal_act
+  regulation: legal_act
+  ruling: legal_act
+  constitution: legal_act
+  treatise: essay
+  pamphlet: essay
+
+relation_aliases:
+  argues_for: advocates
+  champions: advocates
+  defends: advocates
+  argues_against: opposes
+  criticizes: opposes
+  critiques: opposes
+  inspired_by: influenced_by
+  draws_on: influenced_by
+  responds_to: influenced_by
+  passed_by: enacted_by
+  signed_by: enacted_by
+  governs: regulates

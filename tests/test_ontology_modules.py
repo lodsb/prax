@@ -10,7 +10,9 @@ import pytest
 from prax import config
 from prax.graph import ontology
 
-EVERY_MODULE = "core3+craft1+electronics1+kitchen2+research9+studio5+workshop2"
+EVERY_MODULE = (
+    "core3+computing1+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
+)
 
 CORE = """
 module: core
@@ -129,10 +131,12 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     o = ontology.current()
     assert set(o.modules) == {
         "core",
+        "computing",
         "craft",
         "electronics",
         "kitchen",
         "research",
+        "society",
         "studio",
         "workshop",
     }
@@ -145,7 +149,14 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "article",
         "recipe",
         "build",
+        "source_code",
+        "essay",
     }
+    # software is gear to studio's relations: a manual describes a program
+    assert o.is_a("program", "device") and o.is_a("symbol", "feature")
+    o.check_edge("manual", "describes", "program")
+    o.check_edge("program", "written_in", "programming_language")
+    o.check_edge("essay", "advocates", "theory")
     assert o.is_a("author", "person") and o.is_a("paper", "document")
     assert o.is_a("venue", "organization")
     o.check_edge("author", "affiliated_with", "organization")
@@ -164,7 +175,8 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert (
         ontology.current().version
-        == "core3+craft1+electronics1+kitchen2+research99+studio5+workshop2"
+        == "core3+computing1+craft1+electronics1+kitchen2+research99"
+        "+society1+studio5+workshop2"
     )
 
 
