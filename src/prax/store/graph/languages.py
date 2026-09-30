@@ -450,10 +450,14 @@ def label_in_language(
     if row is None:
         raise ValueError(f"no entity {entity_id}")
     name = str(row["name"])
+    # not over a row the name already has in that language: the move would
+    # break the one-label-per-language index, and the pass asked about the
+    # entity again every cycle (179263, 2026-09-30)
     con.execute(
         "UPDATE entity_labels SET lang = ? WHERE entity_id = ? AND label = ?"
-        " AND lang IS NULL",
-        (language.canonical(), entity_id, name),
+        " AND lang IS NULL AND NOT EXISTS (SELECT 1 FROM entity_labels o"
+        " WHERE o.entity_id = ? AND o.label = ? AND o.lang = ?)",
+        (language.canonical(), entity_id, name, entity_id, name, language.canonical()),
     )
     same = label.strip().casefold() == name.casefold()
     add_label(

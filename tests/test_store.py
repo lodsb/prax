@@ -436,3 +436,88 @@ def test_adopt_vectors_claims_nothing_from_a_model_with_no_index(
         "documents": 0,
         "missing": 0,
     }
+
+
+def test_a_failed_store_call_takes_back_its_writes_and_lets_the_lock_go(
+    data_dir: Path,
+) -> None:
+    """A store function that fails half way (an IntegrityError after a
+    write) is atomic: its write is undone and the connection holds no
+    transaction, so another connection writes at once. Left open, the
+    failed call's lock held every other writer of the door for 200 s a
+    time, and the next commit saved its half (2026-09-30)."""
+    import sqlite3
+
+    from prax.store.base import _serialized
+
+    a = store.connect()
+    store.init_db(a)
+    b = store.connect()
+    b.execute("PRAGMA busy_timeout = 200")
+
+    @_serialized
+    def half(con: sqlite3.Connection) -> None:
+        con.execute(
+            "INSERT INTO acronyms (acronym, expansion, docs) VALUES ('X', 'x y', 1)"
+        )
+        con.execute(
+            "INSERT INTO acronyms (acronym, expansion, docs) VALUES ('X', 'x y', 1)"
+        )
+
+    with pytest.raises(sqlite3.IntegrityError):
+        half(a)
+    assert not a.in_transaction
+    assert a.execute("SELECT count(*) FROM acronyms").fetchone()[0] == 0
+    b.execute("INSERT INTO acronyms (acronym, expansion, docs) VALUES ('Y', 'y z', 1)")
+    b.commit()
+
+    # work an earlier call left uncommitted survives a later failure
+    @_serialized
+    def pending(con: sqlite3.Connection) -> None:
+        con.execute(
+            "INSERT INTO acronyms (acronym, expansion, docs) VALUES ('P', 'p q', 1)"
+        )
+
+    pending(a)
+    with pytest.raises(sqlite3.IntegrityError):
+        half(a)
+    a.commit()
+    got = {r[0] for r in a.execute("SELECT acronym FROM acronyms")}
+    assert got == {"Y", "P"}
+    a.close()
+    b.close()
+
+
+def test_a_label_already_held_in_the_librarys_language_is_not_moved_onto(
+    con: sqlite3.Connection,
+) -> None:
+    """``label_in_language``: an entity with its name as an English
+    preferred label and again without a language (entity 179263) no
+    longer fails the one-label-per-language index."""
+    store.link(
+        con,
+        store.Edge("A manual", "paper", "about", "Authorization Wizard", "concept"),
+    )
+    eid = con.execute(
+        "SELECT id FROM entities WHERE name = 'Authorization Wizard'"
+    ).fetchone()[0]
+    # the live entity's labels: its name as the English preferred one, and
+    # again without a language (what resolution had written)
+    con.execute("DELETE FROM entity_labels WHERE entity_id = ?", (eid,))
+    con.executemany(
+        "INSERT INTO entity_labels (entity_id, label, lang, kind, producer)"
+        " VALUES (?, 'Authorization Wizard', ?, ?, ?)",
+        [(eid, "en", "pref", "vocabulary"), (eid, None, "alt", "resolution")],
+    )
+    con.commit()
+    assert (
+        store.label_in_language(con, eid, "Autorisierungsassistent", lang="de")
+        == "labelled"
+    )
+    labels = {
+        (r[0], r[1])
+        for r in con.execute(
+            "SELECT label, lang FROM entity_labels WHERE entity_id = ?", (eid,)
+        )
+    }
+    assert ("Autorisierungsassistent", "de") in labels

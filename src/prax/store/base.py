@@ -10,6 +10,7 @@ opened and cached here.
 
 from __future__ import annotations
 
+import contextlib
 import functools
 import hashlib
 import json
@@ -111,6 +112,19 @@ class _NoLock:
         return None
 
 
+def _take_back(con: sqlite3.Connection, mark: str | None) -> None:
+    """Undo a failed call's writes: to its savepoint when the transaction
+    held earlier work, else the whole transaction, which was its own."""
+    if mark is None:
+        con.rollback()
+        return
+    try:
+        con.execute(f"ROLLBACK TO {mark}")
+        con.execute(f"RELEASE {mark}")
+    except sqlite3.Error:
+        con.rollback()  # the savepoint went with a commit inside the call
+
+
 def _guarded(fn: Callable[P, R], *, lock: bool) -> Callable[P, R]:
     """The retry that both guards share: across processes (the door, a
     backlog pass on one database) SQLite's busy handler waits
@@ -123,10 +137,29 @@ def _guarded(fn: Callable[P, R], *, lock: bool) -> Callable[P, R]:
         with _LOCK if lock else _NoLock():
             depth = getattr(_depth, "n", 0)
             _depth.n = depth + 1
+            con = next((a for a in args if isinstance(a, sqlite3.Connection)), None)
+            # the outermost call is atomic: when it fails, what it wrote is
+            # taken back and the write lock let go. Left open, a failed
+            # statement's transaction held the lock against every other
+            # connection until a later commit, which then saved the failed
+            # call's half too: a label the vocabulary pass could not write
+            # kept the door's writers waiting 200 s a time (2026-09-30).
+            # Work an earlier call left uncommitted is kept: the call runs
+            # inside a savepoint then.
+            outer = depth == 0 and con is not None
+            mark = None
+            if outer and con is not None and con.in_transaction:
+                mark = f"prax_call_{id(con)}_{time.monotonic_ns()}"
+                con.execute(f"SAVEPOINT {mark}")
             try:
                 for attempt in range(LOCK_RETRIES):
                     try:
-                        return fn(*args, **kwargs)
+                        got = fn(*args, **kwargs)
+                        if mark and con is not None and con.in_transaction:
+                            # gone when the call committed and began again
+                            with contextlib.suppress(sqlite3.OperationalError):
+                                con.execute(f"RELEASE {mark}")
+                        return got
                     except sqlite3.OperationalError as exc:
                         if (
                             depth
@@ -134,13 +167,15 @@ def _guarded(fn: Callable[P, R], *, lock: bool) -> Callable[P, R]:
                             or attempt == LOCK_RETRIES - 1
                         ):
                             raise
-                        con = next(
-                            (a for a in args if isinstance(a, sqlite3.Connection)), None
-                        )
                         if con is not None:
                             con.rollback()
+                            mark = None  # the rollback took the savepoint too
                         time.sleep(0.3 * (attempt + 1))
                 raise AssertionError("unreachable")
+            except BaseException:
+                if outer and con is not None and con.in_transaction:
+                    _take_back(con, mark)
+                raise
             finally:
                 _depth.n = depth
 
