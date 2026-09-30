@@ -92,8 +92,10 @@ nothing.
       - Run on the live store the same evening (docs/log.md): the
         histories capped at 20, `prax maintain vectors`, a `VACUUM` at 4 KB
         pages.
-      - The user's decisions: how long a resolved review item is
-        kept; deleting the e5 indexes (1.04 GB) and `prax-before-heal.db`
+      - Resolved review items are kept 30 days (`REVIEW_KEEP_DAYS`, the
+        user), then the nightly `review` pass deletes them; the first go
+        on 2026-10-08.
+      - The user's decisions: deleting the e5 indexes (1.04 GB) and `prax-before-heal.db`
         (1.7 GB); the entity threshold of CLAUDE.md as a traverse time.
       - Open from AC: the four documents that hold only a PDF viewer
         (9539, 9574, 9741, 10112) wait for their tabs to be sent again.

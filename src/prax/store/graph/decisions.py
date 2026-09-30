@@ -252,6 +252,27 @@ def retype_review(
     con.commit()
 
 
+# how long a resolved review item is kept (the user, 2026-09-30): a month
+# to reopen a drop clicked by mistake. A linked item's record is its
+# edge, and a dropped one was mostly superseded by a later reading
+REVIEW_KEEP_DAYS = 30
+
+
+@_serialized
+def forget_resolved_reviews(
+    con: sqlite3.Connection, *, days: int = REVIEW_KEEP_DAYS
+) -> int:
+    """Delete the review items resolved more than ``days`` ago; the open
+    ones are never touched. Returns how many went."""
+    cur = con.execute(
+        "DELETE FROM review_queue WHERE resolved_at IS NOT NULL"
+        " AND resolved_at < strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)",
+        (f"-{int(days)} days",),
+    )
+    con.commit()
+    return int(cur.rowcount)
+
+
 def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> None:
     """Close a review item: ``linked`` (written as an edge by hand),
     ``dropped`` or ``ontology`` (the ontology grew to fit it)."""

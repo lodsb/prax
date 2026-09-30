@@ -222,3 +222,31 @@ def test_reference_chunks_carry_their_links_and_stay_out_of_search(
     chunks = store.list_chunks(con, citing)
     ref_rows = [c for c in chunks if c["kind"] == "reference"]
     assert ref_rows[0]["data"]["cited"]["doc_id"] == cited
+
+
+def test_resolved_review_items_are_kept_a_month(con: sqlite3.Connection) -> None:
+    """The review pass deletes the items resolved more than
+    ``REVIEW_KEEP_DAYS`` ago; recent ones and open ones stay."""
+    ids = [
+        store.queue_review(
+            con,
+            src="a",
+            src_type=None,
+            rel="cites",
+            dst=f"b{i}",
+            dst_type=None,
+            reason="test",
+        )
+        for i in range(3)
+    ]
+    store.resolve_review(con, ids[0], "dropped")
+    store.resolve_review(con, ids[1], "linked")
+    con.execute(
+        "UPDATE review_queue SET resolved_at = '2026-01-01T00:00:00Z' WHERE id = ?",
+        (ids[0],),
+    )
+    con.commit()
+    out = store.maintain(con, only=["review"])["review"]
+    assert out["forgotten"] == 1
+    left = {r[0] for r in con.execute("SELECT id FROM review_queue")}
+    assert left == {ids[1], ids[2]}

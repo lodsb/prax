@@ -63,6 +63,7 @@ from .graph import (
     communities_input,
     corpus_rulings,
     find_edges,
+    forget_resolved_reviews,
     in_english_text,
     languages_by_entity,
     library_sizes,
@@ -170,7 +171,8 @@ def _dedupe(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 def _review(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The review queue against the current ontology (``review.replay``:
     a typed item the ontology accepts now becomes an edge), then the
-    typing rules over every open item (``review.apply_typing_rules``)."""
+    typing rules over every open item (``review.apply_typing_rules``),
+    then the items resolved more than ``REVIEW_KEEP_DAYS`` ago deleted."""
     from prax.graph import review
 
     job.update(note="review: replay against the ontology")
@@ -192,6 +194,7 @@ def _review(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             "still_open": typed.still_open,
             "run": typed.run,
         },
+        "forgotten": forget_resolved_reviews(con),
     }
 
 
