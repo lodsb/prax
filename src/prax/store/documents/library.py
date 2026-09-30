@@ -17,7 +17,7 @@ from ..base import (
     _serialized,
     now,
 )
-from .meta import _refresh_document_field, get_meta
+from .meta import _put_meta, _refresh_document_field, get_meta
 from .text import _write_chunks
 
 # A document that should not be found any more (a duplicate capture, a
@@ -78,9 +78,7 @@ def retire_document(
         " WHERE source_doc = ? AND resolution IS NULL",
         (doc_id,),
     ).rowcount
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
     return {
         "doc_id": doc_id,
@@ -150,9 +148,7 @@ def _join_duplicate(
             "was": doc_id,
         }
     )
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(theirs), keeper)
-    )
+    _put_meta(con, keeper, theirs)
     return {"moved_edges": moved_edges, "moved_items": moved_items}
 
 
@@ -163,9 +159,7 @@ def unretire_document(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     re-reads it."""
     meta = get_meta(con, doc_id)
     meta.pop("retired", None)
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     n = 0
     row = con.execute(
         "SELECT text_hash FROM documents WHERE id = ?", (doc_id,)
@@ -251,9 +245,7 @@ def note_recapture(
             "by": by,
         }
     )
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
 
 
@@ -437,9 +429,7 @@ def retire_set(
         meta["retired"]["run"] = run
         if keeper is None:
             meta["retired"]["ended"] = ended
-        con.execute(
-            "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-        )
+        _put_meta(con, doc_id, meta)
         con.commit()
         retired += 1
         edges += int(got["edges"])

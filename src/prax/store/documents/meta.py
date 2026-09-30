@@ -41,6 +41,16 @@ def get_meta(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     return json.loads(row["meta"]) if row["meta"] else {}
 
 
+def _put_meta(con: sqlite3.Connection, doc_id: int, meta: dict[str, Any]) -> None:
+    """Write a document's meta back, inside the caller's transaction: the
+    read-modify-write of every store function that changes a key of it.
+    It refreshes nothing; a caller that changes what the document field
+    indexes (title, kind, summary) refreshes it itself."""
+    con.execute(
+        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
+    )
+
+
 @_serialized
 def set_meta(
     con: sqlite3.Connection,
@@ -99,9 +109,7 @@ def set_summary(
     meta.pop("summary_tried", None)  # it worked this time
     meta["summary_source"] = source
     meta["summary_run"] = run
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     changed = _refresh_document_field(con, doc_id)
     con.commit()
     return {
@@ -440,9 +448,7 @@ def set_sections(
         "at": now(),
         "items": sections,
     }
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     changed = _refresh_document_field(con, doc_id)
     con.commit()
     return {"doc_id": doc_id, "sections": len(sections), "field": changed}

@@ -16,7 +16,7 @@ from ..base import (
     archive_path,
     now,
 )
-from .meta import DOCTYPES, get_meta, set_meta
+from .meta import DOCTYPES, _put_meta, get_meta, set_meta
 
 # A reading request: a person (or an agent) asks for a named extractor on
 # one document — the vision model over its scanned pages, a second reading
@@ -482,10 +482,7 @@ def cancel_reading(
     if not extractor:  # the old single slot, for a document read before m21
         meta = get_meta(con, doc_id)
         if meta.pop("reading", None):
-            con.execute(
-                "UPDATE documents SET meta = ? WHERE id = ?",
-                (json.dumps(meta), doc_id),
-            )
+            _put_meta(con, doc_id, meta)
             dropped += 1
     con.commit()
     return dropped > 0
@@ -554,9 +551,7 @@ def finish_reading(
         "error": error,
         "finished_at": finished,
     }
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
 
 
@@ -693,9 +688,7 @@ def note_ocr_progress(
     record with nothing left, which is what the document page shows."""
     meta = get_meta(con, doc_id)
     meta["ocr"] = {"extractor": extractor, "pages": pages, "left": left, "at": now()}
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
     if left > 0:
         request_reading(con, doc_id, extractor, by="ocr-window")

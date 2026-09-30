@@ -89,6 +89,7 @@ from .meta import (  # noqa: F401
     DOCTYPES,
     SECTION_FIELD_CHARS,
     _is_indexed,
+    _put_meta,
     _refresh_document_field,
     _section_lines,
     document_field,

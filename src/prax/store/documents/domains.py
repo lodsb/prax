@@ -17,7 +17,7 @@ from ..base import (
     domain_clause,
     now,
 )
-from .meta import get_meta, set_meta
+from .meta import _put_meta, get_meta, set_meta
 
 # Which ontology modules a document is read against (``meta.domains``): the
 # research papers see the research module, the family photos the family
@@ -94,9 +94,7 @@ def set_domains(
         meta["domains_by"] = by
     if meta.get("domains") != before and by in ("human", "agent"):
         _lens_changed(meta, by=by)
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
     return meta.get("domains")
 
@@ -171,9 +169,7 @@ def request_extraction(
             "at": now(),
         },
     }
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
     return meta["extraction_stale"]
 
@@ -423,10 +419,7 @@ def assign_domains(
                 if commit:
                     meta["domains"] = list(rule["domains"])
                     meta["domains_by"] = "rule"
-                    con.execute(
-                        "UPDATE documents SET meta = ? WHERE id = ?",
-                        (json.dumps(meta), r["id"]),
-                    )
+                    _put_meta(con, r["id"], meta)
                 break
         else:
             counts["unmatched"] += 1
@@ -456,9 +449,7 @@ def _set_promote(
         "reason": reason,
         "at": now(),
     }
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     return meta["promote"]
 
 
@@ -488,9 +479,7 @@ def unpromote(con: sqlite3.Connection, doc_id: int) -> bool:
     meta = get_meta(con, doc_id)
     if not meta.pop("promote", None):
         return False
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
     return True
 
@@ -633,10 +622,7 @@ def restamp_ontology(
         if changed:
             n += 1
             if commit:
-                con.execute(
-                    "UPDATE documents SET meta = ? WHERE id = ?",
-                    (json.dumps(meta), r["id"]),
-                )
+                _put_meta(con, r["id"], meta)
     if commit:
         con.commit()
     return n

@@ -22,7 +22,7 @@ from ..base import (
     archive_path,
     now,
 )
-from .meta import _is_indexed, _refresh_document_field, get_meta
+from .meta import _is_indexed, _put_meta, _refresh_document_field, get_meta
 
 
 @_serialized
@@ -314,9 +314,7 @@ def set_reference_links(
     stamp = dict(meta.get("references") or {})
     stamp["links"] = links
     meta["references"] = stamp
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     n = _apply_reference_links(con, doc_id, links)
     con.commit()
     return n

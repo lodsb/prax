@@ -33,7 +33,7 @@ from ..base import (
     document_hidden,
     now,
 )
-from .meta import get_meta
+from .meta import _put_meta, get_meta
 
 GENRE_OPENING = 1500  # characters of the text a labeller reads beside the summary
 
@@ -163,9 +163,7 @@ def set_genres(
             meta["genres_note"] = " ".join(note.split())[:300]
         if run and not human:
             meta["genres_run"] = run
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
     return {
         "doc_id": doc_id,
@@ -240,9 +238,7 @@ def genres_tried(con: sqlite3.Connection, doc_id: int, run: str, why: str) -> No
     again until its labels are taken back (``set_genres`` with None)."""
     meta = get_meta(con, doc_id)
     meta["genres_tried"] = {"run": run, "why": why[:200], "at": now()}
-    con.execute(
-        "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
-    )
+    _put_meta(con, doc_id, meta)
     con.commit()
 
 
