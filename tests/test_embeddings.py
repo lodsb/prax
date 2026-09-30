@@ -280,9 +280,18 @@ def test_reindex_leaves_stale_keys_that_queries_skip_and_compact_removes(
     hits = store.search(con, "feedback delay reverberation", mode="vec")
     assert old_chunk not in {h["chunk_id"] for h in hits}
     rec = store.compact_vectors(con, "hash-test")
-    assert rec == {"removed_stale": 1, "forgot_missing": 0, "count": 2}
+    # one slot of three removed, past COMPACT_REBUILD: the graph built anew
+    assert {k: rec[k] for k in ("removed_stale", "forgot_missing", "count")} == {
+        "removed_stale": 1,
+        "forgot_missing": 0,
+        "count": 2,
+    }
+    assert rec["rebuilt"]
+    hits = store.search(con, "pitch tracking", mode="vec")  # the new graph answers
+    assert hits and old_chunk not in {h["chunk_id"] for h in hits}
     _embed_all(con)
     assert store.vec_status(con)["index"]["count"] == 3
+    assert not store.compact_vectors(con, "hash-test", rebuild=False)["rebuilt"]
 
 
 @needs_usearch
@@ -458,3 +467,14 @@ def test_nothing_pending_is_remembered_until_it_is_not(
     second = int(store.ingest_text(con, "A note on delay.", title="two")["doc_id"])
     more = [c["chunk_id"] for c in store.list_chunks(con, second)]
     assert {p["chunk_id"] for p in store.pending_embeddings(con, "m")} == set(more)
+
+
+@needs_usearch
+def test_the_vectors_pass_merges_and_compacts(con: sqlite3.Connection) -> None:
+    """``prax maintain vectors``, on request: the deltas merged, nothing
+    stale here, so nothing rebuilt."""
+    _load(con)
+    _embed_all(con)
+    assert "vectors" in store.ON_REQUEST and "vectors" not in store.PASSES
+    out = store.maintain(con, only=["vectors"])["vectors"]
+    assert out["count"] == 3 and out["removed_stale"] == 0 and not out["rebuilt"]

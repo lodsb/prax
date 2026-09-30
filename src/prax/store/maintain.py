@@ -39,9 +39,10 @@ from collections.abc import Callable
 from typing import Any
 
 from prax.graph import ontology
+from prax.ml import embeddings
 from prax.text import acronyms, language, references
 
-from .base import _reading, archive_path, now
+from .base import _reading, archive_path, now, vectors_available
 from .documents import (
     assign_domains,
     dedupe_captures,
@@ -69,7 +70,12 @@ from .graph import (
     unmark_corpus_ruling,
 )
 from .jobs import Job
-from .retrieval import fts_merge, replace_acronyms
+from .retrieval import (
+    compact_vectors,
+    fts_merge,
+    merge_vectors,
+    replace_acronyms,
+)
 
 Log = Callable[[str], None]
 
@@ -90,7 +96,7 @@ PASSES = (
     "communities",
 )
 # a pass only when named: the nightly has no reason to
-ON_REQUEST = ("rechunk", "rejudge")
+ON_REQUEST = ("rechunk", "rejudge", "vectors")
 
 
 def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
@@ -838,6 +844,23 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"rulings": len(rulings), "overturned": len(overturned)}
 
 
+def _vectors(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The embedder's vector files: both deltas merged, and the chunk index
+    rid of the vectors of chunks that are gone, built anew when they are a
+    tenth of it (``compact_vectors``). On request only: it rewrites a file
+    of a gigabyte or more, minutes when the graph is rebuilt."""
+    emb = embeddings.current()
+    if emb is None or not vectors_available():
+        return {"skipped": "no embedder or no usearch"}
+    job.update(note=f"vectors: merging {emb.name}")
+    merged = merge_vectors(emb.name)
+    job.update(note=f"vectors: compacting {emb.name}")
+    return {
+        "merged": {k: v.get("merged", 0) for k, v in merged.items()},
+        **compact_vectors(con, emb.name),
+    }
+
+
 def _communities(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The regions of the library rebuilt: the topical entities partitioned
     at two levels (``prax.graph.communities``), each new community keeping the
@@ -881,6 +904,7 @@ _RUN = {
     "communities": _communities,
     "rechunk": _rechunk,
     "rejudge": _rejudge,
+    "vectors": _vectors,
 }
 
 

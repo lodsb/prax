@@ -13,6 +13,7 @@ import contextlib
 import json
 import os
 import sqlite3
+import threading
 import time
 from pathlib import Path
 from typing import Any
@@ -1402,21 +1403,29 @@ def store_document_embeddings(
 
 
 DELTA_MERGE_AT = 50_000  # vectors in the delta before a merge is due
+# or as many as the main file holds, once past this: the document index
+# (13,000 vectors) never reached fifty thousand, and its delta outgrew the
+# main file unmerged from 2026-09-12 (docs/research-database-layout.md)
+DELTA_MERGE_MIN = 1_000
 
 
 def _save_delta(path: Path) -> dict[str, Any]:
     """Write the delta beside ``path`` (small, nobody maps it) and merge it
-    into the main file when it has grown past ``DELTA_MERGE_AT``."""
+    into the main file when it has grown past ``DELTA_MERGE_AT``, or past
+    the size of the main file itself (``DELTA_MERGE_MIN`` at least)."""
     with _INDEX_LOCK:
         delta = _delta(path)
         delta.save()
-        due = len(delta) >= DELTA_MERGE_AT or not path.exists()
+        main = _open_index(path, writable=False) if path.exists() else None
+        held = len(main) if main is not None else 0
+        due = main is None or len(delta) >= min(
+            DELTA_MERGE_AT, max(held, DELTA_MERGE_MIN)
+        )
         if not due:
-            main = _open_index(path, writable=False)
             return {
-                "count": (len(main) if main is not None else 0) + len(delta),
+                "count": held + len(delta),
                 "delta": len(delta),
-                "bytes": path.stat().st_size if path.exists() else 0,
+                "bytes": path.stat().st_size,
             }
     return _merge(path)  # a large delta, or no main file yet: outside the lock
 
@@ -1428,7 +1437,18 @@ def _present(vector: Any) -> Any:
     return vector
 
 
+# one build of a main file at a time: a merge that ran while a compaction
+# built from the file before it would be undone by the compaction's swap.
+# Not the index lock, which a search takes: a build takes minutes
+_BUILD_LOCK = threading.RLock()
+
+
 def _merge(path: Path) -> dict[str, Any]:
+    with _BUILD_LOCK:
+        return _merge_now(path)
+
+
+def _merge_now(path: Path) -> dict[str, Any]:
     """Fold the delta into the main file. The building — the main index
     loaded into memory, the delta's vectors added, the result written to a
     file beside it — happens outside the index lock: a 1.2 GB file with
@@ -1727,8 +1747,21 @@ def _index_has(path: Path, ids: list[int]) -> list[int]:
     return [int(x) for x in want[found]]
 
 
+COMPACT_REBUILD = 0.1  # the share of removed slots past which the graph is built anew
+
+
 @_serialized
-def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
+def _forget_embeddings(con: sqlite3.Connection, chunk_ids: list[int]) -> None:
+    for i in range(0, len(chunk_ids), 500):
+        part = chunk_ids[i : i + 500]
+        marks = ",".join("?" * len(part))
+        con.execute(f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks})", part)
+    con.commit()
+
+
+def compact_vectors(
+    con: sqlite3.Connection, model: str, *, rebuild: bool | None = None
+) -> dict[str, Any]:
     """Reconcile the index with the bookkeeping: drop keys whose chunk is
     gone, and forget bookkeeping rows whose vector is missing from the
     index (so they get embedded again). Saves the index.
@@ -1737,42 +1770,55 @@ def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
     the main file outside ``_INDEX_LOCK``, and swapped in under it. It used
     to drop the read views and then save over the file unlocked, so a
     search in between could map the file again before it was replaced; and
-    its writable copy sat in the shared table where any thread found it."""
+    its writable copy sat in the shared table where any thread found it.
 
+    A removed key keeps its slot, so when the removed ones are more than
+    ``COMPACT_REBUILD`` of the file the graph is built anew
+    (``VectorIndex.rebuild``; ``rebuild`` says so either way). Minutes, and
+    outside the store's lock: only forgetting the missing rows writes.
+    A vector stored during the build is in the delta, and is not missing."""
     path = _index_path(model)
-    _merge(path)
-    idx = vectors_mod.VectorIndex(path, VEC_DIM, writable=True)
-    live = {r[0] for r in con.execute("SELECT id FROM chunks")}
-    booked = {
-        r[0]
-        for r in con.execute(
-            "SELECT chunk_id FROM chunk_embeddings WHERE model = ?", (model,)
-        )
-    }
-    keys = {int(k) for k in idx.all_keys()}
-    stale = keys - live
-    removed = idx.remove(stale)
-    missing = booked - keys
-    if missing:
-        ids = list(missing)
-        for i in range(0, len(ids), 500):
-            part = ids[i : i + 500]
-            marks = ",".join("?" * len(part))
-            con.execute(
-                f"DELETE FROM chunk_embeddings WHERE chunk_id IN ({marks})", part
+    with _BUILD_LOCK:
+        _merge(path)
+        booked = {
+            r[0]
+            for r in con.execute(
+                "SELECT chunk_id FROM chunk_embeddings WHERE model = ?", (model,)
             )
-        con.commit()
-    tmp = path.with_suffix(path.suffix + ".compacting")
-    idx.save_to(tmp)
-    count = len(idx)
-    idx.close()  # the private copy goes: the delta takes new vectors
-    with _INDEX_LOCK:
-        for key in [(str(path), False), (str(path), True)]:
-            view = _indexes.pop(key, None)
-            if view is not None:
-                view.close()
-        os.replace(tmp, path)
-    return {"removed_stale": removed, "forgot_missing": len(missing), "count": count}
+        }
+        with _INDEX_LOCK:
+            arrived = {int(k) for k in _delta(path).all_keys()}
+        idx = vectors_mod.VectorIndex(path, VEC_DIM, writable=True)
+        live = {r[0] for r in con.execute("SELECT id FROM chunks")}
+        keys = {int(k) for k in idx.all_keys()}
+        removed = idx.remove(keys - live)
+        again = (
+            rebuild
+            if rebuild is not None
+            else bool(keys) and removed / len(keys) >= COMPACT_REBUILD
+        )
+        if again:
+            idx.rebuild()
+        missing = sorted(booked - keys - arrived)
+        if missing:
+            _forget_embeddings(con, missing)
+        tmp = path.with_suffix(path.suffix + ".compacting")
+        idx.save_to(tmp)
+        count = len(idx)
+        idx.close()  # the private copy goes: the delta takes new vectors
+        with _INDEX_LOCK:
+            for key in [(str(path), False), (str(path), True)]:
+                view = _indexes.pop(key, None)
+                if view is not None:
+                    view.close()
+            os.replace(tmp, path)
+    return {
+        "removed_stale": removed,
+        "forgot_missing": len(missing),
+        "count": count,
+        "rebuilt": bool(again),
+        "bytes": path.stat().st_size,
+    }
 
 
 CONTEXT_LIMIT = 8
