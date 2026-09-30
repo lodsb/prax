@@ -589,58 +589,92 @@ def windows(
 # --------------------------------------------------------------- chunking
 
 
-def chunk(text: str) -> list[Chunk]:
-    """Split a text artifact into structure-aware chunks (see module doc)."""
-    chunks: list[Chunk] = []
-    heading: list[tuple[int, str]] = []  # (level, title) stack
-    pending: list[_Element] = []  # paragraphs of the text chunk being built
-    kind_of_text = "text"  # "comment" inside a comment section
+class _Chunker:
+    """What ``chunk`` keeps while it walks a text's elements: the chunks so
+    far, the heading path, the paragraphs of the text chunk being built,
+    and whether they are prose or a comment section. One method a kind of
+    element."""
 
-    def path() -> list[str]:
-        return [t for _, t in heading]
+    def __init__(self, text: str) -> None:
+        self.text = text
+        self.chunks: list[Chunk] = []
+        self.heading: list[tuple[int, str]] = []  # (level, title) stack
+        self.pending: list[_Element] = []  # paragraphs of the text chunk
+        self.kind_of_text = "text"  # "comment" inside a comment section
 
-    def flush() -> None:
-        nonlocal pending
-        kind = kind_of_text
+    def path(self) -> list[str]:
+        return [t for _, t in self.heading]
+
+    def add(
+        self,
+        kind: str,
+        start: int,
+        end: int,
+        page: int | None,
+        data: Any = None,
+        *,
+        time: int | None = None,
+    ) -> None:
+        """A chunk over ``text[start:end]`` under the current heading."""
+        self.chunks.append(
+            Chunk(
+                kind,
+                self.text[start:end],
+                start,
+                end,
+                page,
+                self.path(),
+                data,
+                time=time,
+            )
+        )
+
+    def flush(self) -> None:
+        """The pending paragraphs as a text chunk (or a comment's); one too
+        long for a chunk is cut into windows."""
+        pending, kind = self.pending, self.kind_of_text
         if not pending:
             return
         start, end = pending[0].start, pending[-1].end
         page = pending[0].page  # a chunk may span pages; it is filed under its first
         # and under its first time mark, when its paragraphs carry any
         time = next((e.time for e in pending if e.time is not None), None)
-        body = text[start:end]
+        body = self.text[start:end]
         if len(body) > MAX_CHARS and (len(pending) == 1 or kind == "comment"):
             cut = line_windows(body) if kind == "comment" else windows(body)
             for ws, we in cut:
-                chunks.append(
+                self.chunks.append(
                     Chunk(
                         kind,
                         body[ws:we],
                         start + ws,
                         start + we,
                         page,
-                        path(),
+                        self.path(),
                         time=time,
                     )
                 )
         else:
-            chunks.append(Chunk(kind, body, start, end, page, path(), time=time))
-        pending = []
+            self.chunks.append(
+                Chunk(kind, body, start, end, page, self.path(), time=time)
+            )
+        self.pending = []
 
-    def maybe_merge_small_tail() -> None:
+    def merge_small_tail(self) -> None:
         """A tiny trailing text chunk at a boundary joins its predecessor when
         both are plain text under the same heading and the same page."""
+        chunks = self.chunks
         if len(chunks) >= 2:
             a, b = chunks[-2], chunks[-1]
             if (
-                a.kind == b.kind == kind_of_text
+                a.kind == b.kind == self.kind_of_text
                 and a.heading == b.heading
                 and len(b.text) < MIN_CHARS
                 and len(a.text) + len(b.text) <= MAX_CHARS
             ):
                 chunks[-2] = Chunk(
                     a.kind,
-                    text[a.char_start : b.char_end],
+                    self.text[a.char_start : b.char_end],
                     a.char_start,
                     b.char_end,
                     a.page,
@@ -649,6 +683,132 @@ def chunk(text: str) -> list[Chunk]:
                 )
                 chunks.pop()
 
+    def boundary(self) -> None:
+        """What ends the text chunk being built: flushed, and a small tail
+        merged back."""
+        self.flush()
+        self.merge_small_tail()
+
+    def region(
+        self, el: _Element, region: tuple[str, int, Any], last_el: _Element
+    ) -> None:
+        """A region of its own (a recipe's ingredients…): one chunk."""
+        kind, _last, data = region
+        self.boundary()
+        start, end = el.start, last_el.end
+        if kind == "ingredients":
+            data = ingredients.parse(self.text[start:end])
+        self.add(kind, start, end, el.page, data, time=el.time)
+
+    def page(self) -> None:
+        # a substantial chunk ends with its page; a small one (a running
+        # header, a sentence cut by the break) carries on into the next
+        pending = self.pending
+        if pending and pending[-1].end - pending[0].start >= MIN_CHARS:
+            self.boundary()
+
+    def heading_(self, el: _Element) -> None:
+        self.boundary()
+        while self.heading and self.heading[-1][0] >= el.level:
+            self.heading.pop()
+        self.heading.append((el.level, el.text))
+
+    def ask(self, el: _Element) -> None:
+        self.boundary()
+        assert el.block is not None
+        self.add("ask", el.start, el.end, el.page, ask_data(el.block, self.text))
+
+    def in_bibliography(self) -> bool:
+        return bool(self.heading) and references.is_bibliography_heading(
+            self.heading[-1][1]
+        )
+
+    def references(self, el: _Element) -> None:
+        """The reference list: one chunk per entry, over the artifact's own
+        characters; a piece that opens no entry continues the chunk before
+        it (a wrapped title), or is text before the first."""
+        text, chunks = self.text, self.chunks
+        spans = references.entry_spans(el.text)
+        if spans and not spans[0][2] and chunks and chunks[-1].kind == "reference":
+            prior = chunks[-1]
+            a, b, _ = spans[0]
+            chunks[-1] = Chunk(
+                "reference",
+                text[prior.char_start : el.start + b],
+                prior.char_start,
+                el.start + b,
+                prior.page,
+                prior.heading,
+                parse_reference(text[prior.char_start : el.start + b]),
+            )
+            spans = spans[1:]
+        if spans and not spans[0][2]:
+            self.pending.append(el)  # prose under the heading, before any entry
+            return
+        self.flush()
+        for a, b, _ in spans:
+            start, end = el.start + a, el.start + b
+            self.add("reference", start, end, el.page, parse_reference(text[start:end]))
+
+    def para(self, el: _Element, nxt: _Element | None) -> None:
+        pending = self.pending
+        if (
+            pending
+            and (pending[-1].end - pending[0].start) + len(el.text) > TARGET_CHARS
+        ):
+            self.flush()
+        # a "Table N" caption right before a table belongs to the table
+        if (
+            nxt is not None
+            and nxt.kind == "table"
+            and _TABLE_CAPTION.match(el.text.strip())
+        ):
+            self.flush()
+            self.pending = [el]  # picked up by the table branch
+            return
+        self.pending.append(el)
+
+    def table(self, el: _Element, els: list[_Element], idx: int) -> None:
+        pending = self.pending
+        caption_before = (
+            pending
+            if pending
+            and _TABLE_CAPTION.match(pending[0].text.strip())
+            and len(pending) == 1
+            else []
+        )
+        if not caption_before:
+            self.flush()
+        start = caption_before[0].start if caption_before else el.start
+        end = el.end
+        self.pending = []
+        nxt = els[idx + 1] if idx + 1 < len(els) else None
+        if (
+            nxt is not None
+            and nxt.kind == "para"
+            and _TABLE_CAPTION.match(nxt.text.strip())
+        ):
+            # a caption after the table is the table's too; the element is
+            # consumed in place, so the walk passes over it as a blank
+            end = nxt.end
+            els[idx + 1] = _Element("blank", nxt.start, nxt.end, "")
+        self.add("table", start, end, el.page, parse_table(el.text))
+
+    def block(self, el: _Element) -> None:
+        """A figure, a code block or a display formula: a chunk of its own,
+        with what it is of in ``data``."""
+        self.flush()
+        data = None
+        if el.kind == "figure":
+            data = parse_figure(el.text)
+        elif el.kind == "formula":
+            data = parse_formula(el.text)
+        self.add(el.kind, el.start, el.end, el.page, data, time=el.time)
+
+
+def chunk(text: str) -> list[Chunk]:
+    """Split a text artifact into structure-aware chunks (see module doc)."""
+    ck = _Chunker(text)
     els = _elements(text)
     regions = _regions(els)
     skip_to, comments_until = 0, -1
@@ -660,176 +820,38 @@ def chunk(text: str) -> list[Chunk]:
             # the section is chunked like text, block by block, under the
             # comment kind: every piece of it is one, headings and avatars
             # included, and a long section stays addressable
-            flush()
-            maybe_merge_small_tail()
+            ck.boundary()
             comments_until = region[1]
-            kind_of_text = "comment"
+            ck.kind_of_text = "comment"
         elif region is not None:
-            kind, last, data = region
-            flush()
-            maybe_merge_small_tail()
-            start, end = el.start, els[last].end
-            body = text[start:end]
-            if kind == "ingredients":
-                data = ingredients.parse(body)
-            chunks.append(
-                Chunk(kind, body, start, end, el.page, path(), data, time=el.time)
-            )
-            skip_to = last + 1
+            ck.region(el, region, els[region[1]])
+            skip_to = region[1] + 1
             continue
         if idx <= comments_until and el.kind != "page":
             el = _Element("para", el.start, el.end, el.text, page=el.page)
-        if el.kind == "page":
-            # a substantial chunk ends with its page; a small one (a running
-            # header, a sentence cut by the break) carries on into the next
-            if pending and pending[-1].end - pending[0].start >= MIN_CHARS:
-                flush()
-                maybe_merge_small_tail()
-            continue
         if el.kind == "code" and len(el.text) < MIN_CODE_CHARS:
             el = _Element("para", el.start, el.end, el.text, page=el.page)
             el.time = _time_of("para", el.text)
-        if el.kind == "heading":
-            flush()
-            maybe_merge_small_tail()
-            while heading and heading[-1][0] >= el.level:
-                heading.pop()
-            heading.append((el.level, el.text))
-            continue
-        if el.kind == "ask":
-            flush()
-            maybe_merge_small_tail()
-            assert el.block is not None
-            chunks.append(
-                Chunk(
-                    "ask",
-                    text[el.start : el.end],
-                    el.start,
-                    el.end,
-                    el.page,
-                    path(),
-                    ask_data(el.block, text),
-                )
-            )
-            continue
-        if (
-            el.kind == "para"
-            and heading
-            and references.is_bibliography_heading(heading[-1][1])
-        ):
-            # the reference list: one chunk per entry, over the artifact's
-            # own characters; a piece that opens no entry continues the
-            # chunk before it (a wrapped title), or is text before the first
-            spans = references.entry_spans(el.text)
-            if spans and not spans[0][2] and chunks and chunks[-1].kind == "reference":
-                prior = chunks[-1]
-                a, b, _ = spans[0]
-                chunks[-1] = Chunk(
-                    "reference",
-                    text[prior.char_start : el.start + b],
-                    prior.char_start,
-                    el.start + b,
-                    prior.page,
-                    prior.heading,
-                    parse_reference(text[prior.char_start : el.start + b]),
-                )
-                spans = spans[1:]
-            if spans and not spans[0][2]:
-                pending.append(el)  # prose under the heading, before any entry
-                continue
-            flush()
-            for a, b, _ in spans:
-                start, end = el.start + a, el.start + b
-                chunks.append(
-                    Chunk(
-                        "reference",
-                        text[start:end],
-                        start,
-                        end,
-                        el.page,
-                        path(),
-                        parse_reference(text[start:end]),
-                    )
-                )
-            continue
-        if el.kind == "para":
-            if (
-                pending
-                and (pending[-1].end - pending[0].start) + len(el.text) > TARGET_CHARS
-            ):
-                flush()
-            # a "Table N" caption right before a table belongs to the table
-            nxt = els[idx + 1] if idx + 1 < len(els) else None
-            if (
-                nxt is not None
-                and nxt.kind == "table"
-                and _TABLE_CAPTION.match(el.text.strip())
-            ):
-                flush()
-                pending = [el]  # picked up by the table branch
-                continue
-            pending.append(el)
-            continue
-        if el.kind == "table":
-            caption_before = (
-                pending
-                if pending
-                and _TABLE_CAPTION.match(pending[0].text.strip())
-                and len(pending) == 1
-                else []
-            )
-            if not caption_before:
-                flush()
-            start = caption_before[0].start if caption_before else el.start
-            end = el.end
-            pending = []
-            nxt = els[idx + 1] if idx + 1 < len(els) else None
-            if (
-                nxt is not None
-                and nxt.kind == "para"
-                and _TABLE_CAPTION.match(nxt.text.strip())
-            ):
-                end = nxt.end
-                els[idx + 1] = _Element("blank", nxt.start, nxt.end, "")  # consumed
-            chunks.append(
-                Chunk(
-                    "table",
-                    text[start:end],
-                    start,
-                    end,
-                    el.page,
-                    path(),
-                    parse_table(el.text),
-                )
-            )
-            continue
-        if el.kind in ("figure", "code", "formula"):
-            flush()
-            data = None
-            if el.kind == "figure":
-                data = parse_figure(el.text)
-            elif el.kind == "formula":
-                data = parse_formula(el.text)
-            chunks.append(
-                Chunk(
-                    el.kind,
-                    text[el.start : el.end],
-                    el.start,
-                    el.end,
-                    el.page,
-                    path(),
-                    data,
-                    time=el.time,
-                )
-            )
-            continue
-        # blank (consumed caption): nothing
-    flush()
-    maybe_merge_small_tail()
-    _assign_time_ends(chunks)
-    for c in chunks:
+        if el.kind == "page":
+            ck.page()
+        elif el.kind == "heading":
+            ck.heading_(el)
+        elif el.kind == "ask":
+            ck.ask(el)
+        elif el.kind == "para" and ck.in_bibliography():
+            ck.references(el)
+        elif el.kind == "para":
+            ck.para(el, els[idx + 1] if idx + 1 < len(els) else None)
+        elif el.kind == "table":
+            ck.table(el, els, idx)
+        elif el.kind in ("figure", "code", "formula"):
+            ck.block(el)
+        # blank (a consumed caption): nothing
+    ck.boundary()
+    _assign_time_ends(ck.chunks)
+    for c in ck.chunks:
         assert c.text == text[c.char_start : c.char_end]
-    return chunks
+    return ck.chunks
 
 
 def _assign_time_ends(chunks: list[Chunk]) -> None:
