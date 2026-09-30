@@ -2637,3 +2637,21 @@ Found while searching the library for the classification research
       decision, widened to computing.
 - **The extension's popup** names the way a tab goes before it is sent
       (`lib.route`, 3631912).
+- **SuperCollider's documentation** in the NAS backups (535 help files and
+      class-library pages, which the labeller calls computing) → studio,
+      by a new rule key: `origin`, a piece of the path the document had
+      where it came from (35f0daf). The first run of that rule went to a
+      door that had not yet restarted onto the new code. It ignored the
+      key it did not know, so the rule matched everything, and 998
+      documents (the open ones and retired ones) got studio for a few
+      minutes, and the worker re-read a few of them against it. The sets
+      were put back through the door (`PUT /doc/{id}/domains` with
+      `by: rule`), and an unknown key is now refused, not ignored.
+- **Assigning a set re-reads**: a document's extraction is held to its
+      subset's version, so the 1,466 new sets put 1,429 documents in the
+      extract backlog (the local model, about six a minute). That is the
+      design, and it was not said before the rules ran.
+- **Left without a domain: 757**. 390 computing (manuals, reference,
+      programming books, Linux), 178 paperwork (invoices, contracts,
+      forms, applications; 112 already suspected personal), 117 with no
+      labels (tiny files, briefings), about 70 society and economics.
