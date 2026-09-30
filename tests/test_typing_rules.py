@@ -623,3 +623,56 @@ def test_the_shapes_the_queue_kept_coming_back_with() -> None:
         item("Author not listed", "person", "authored_by", "A Manual", "paper"), doc
     )
     assert a == "drop" and rule == "placeholder-name"
+
+
+def test_the_documents_own_venue_citation_and_institution() -> None:
+    """``published_in``, ``cites`` and an affiliation of the document itself
+    (``written_at``): the three rules nothing covered until the rule table
+    (2026-09-30), and "references" is the cites rule's."""
+    title = "A Study of Granular Synthesis in Real Time Systems"
+    doc = (title, "paper")
+    item = lambda src, rel, dst: {
+        "src": src,
+        "src_type": None,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": None,
+        "reason": "",
+    }
+    a, edges, rule = review.decide_unmapped(
+        item(title, "published_in", "Journal of the Audio Engineering Society"), doc
+    )
+    assert (a, rule, edges[0].rel, edges[0].dst_type) == (
+        "link",
+        "published_in",
+        "published_in",
+        "venue",
+    )
+    for said in ("cites", "references"):
+        a, edges, rule = review.decide_unmapped(
+            item("this paper", said, "Reverberation Algorithms for Small Rooms"), doc
+        )
+        assert (a, rule, edges[0].src, edges[0].dst_type) == (
+            "link",
+            "cites-title",
+            title,
+            "paper",
+        )
+    a, edges, rule = review.decide_unmapped(
+        item(title, "affiliation", "Stanford University"), doc
+    )
+    assert (a, rule, edges[0].rel) == ("link", "written_at", "written_at")
+    # a person is no venue
+    assert review.decide_unmapped(item(title, "published_in", "Ann Author"), doc)[
+        0
+    ] == ("open")
+
+
+def test_a_relation_is_read_by_one_rule() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="two rules"):
+        review._rule_table(
+            (lambda u: review._OPEN, ("cites",)), (lambda u: review._OPEN, ("cites",))
+        )
+    assert review.UNMAPPED_RULES["references"] is review.UNMAPPED_RULES["cites"]

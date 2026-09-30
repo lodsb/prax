@@ -20,6 +20,7 @@ from __future__ import annotations
 import functools
 import re
 import sqlite3
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -255,14 +256,201 @@ def _looks_person(name: str) -> bool:
     )
 
 
+Decision = tuple[str, list[store.Edge], str | None]
+_OPEN: Decision = ("open", [], None)
+
+
+@dataclass(frozen=True)
+class _Unmapped:
+    """What the rules for an untyped item read: its two names and relation,
+    the document's title and own type, and whether the source is the
+    document itself."""
+
+    item: dict[str, Any]
+    src: str
+    dst: str
+    title: str
+    own: str
+
+    @property
+    def is_self(self) -> bool:
+        return bool(self.title) and self.src == self.title
+
+    @property
+    def self_type(self) -> str:
+        """The source's type when it is the document, else a paper."""
+        return self.own if self.is_self else "paper"
+
+
+def _link(rule: str, *edges: store.Edge) -> Decision:
+    return "link", list(edges), rule
+
+
+def _affiliation(u: _Unmapped) -> Decision:
+    src, dst = u.src, u.dst
+    # the document itself and an institution: written there
+    if u.is_self and not _looks_person(dst) and _looks_venue(dst):
+        return _link(
+            "written_at", store.Edge(src, u.own, "written_at", dst, "organization")
+        )
+    # two institutions "affiliated": the smaller is part of the larger
+    if not u.is_self and _inside(src, dst):
+        return _link(
+            "affiliation->part_of",
+            store.Edge(src, "organization", "part_of", dst, "organization"),
+        )
+    # exactly one side is a person; the other is the institution
+    ps, pd = _looks_person(src), _looks_person(dst)
+    if ps and not pd:
+        return _link(
+            "affiliation",
+            store.Edge(src, "author", "affiliated_with", dst, "organization"),
+        )
+    if pd and not ps:
+        return _link(
+            "affiliation",
+            store.Edge(dst, "author", "affiliated_with", src, "organization"),
+        )
+    return _OPEN
+
+
+def _located(u: _Unmapped) -> Decision:
+    # an organization and a place: nothing else is located anywhere
+    if (
+        not u.is_self
+        and _looks_org(u.src)
+        and not _looks_person(u.dst)
+        and len(u.dst) >= 3
+    ):
+        return _link(
+            "located_in",
+            store.Edge(u.src, "organization", "located_in", u.dst, "place"),
+        )
+    return _OPEN
+
+
+def _published_by(u: _Unmapped) -> Decision:
+    if u.is_self and not _looks_person(u.dst) and _looks_venue(u.dst):
+        return _link(
+            "published_by",
+            store.Edge(u.src, u.own, "published_by", u.dst, "organization"),
+        )
+    return _OPEN
+
+
+def _part_of(u: _Unmapped) -> Decision:
+    # a lab in a university, a subsidiary in a group: both organizations
+    if not u.is_self and _inside(u.src, u.dst):
+        return _link(
+            "part_of-organizations",
+            store.Edge(u.src, "organization", "part_of", u.dst, "organization"),
+        )
+    return _OPEN
+
+
+def _published_in(u: _Unmapped) -> Decision:
+    # the document itself, in something that is not a person
+    if u.is_self and not _looks_person(u.dst) and _looks_venue(u.dst):
+        return _link(
+            "published_in", store.Edge(u.src, u.own, "published_in", u.dst, "venue")
+        )
+    return _OPEN
+
+
+def _cites(u: _Unmapped) -> Decision:
+    # the document itself citing something shaped like a work's title
+    if u.is_self and _looks_title(u.dst):
+        return _link("cites-title", store.Edge(u.src, u.own, "cites", u.dst, "paper"))
+    return _OPEN
+
+
+def _advised(u: _Unmapped) -> Decision:
+    if _looks_person(u.src) and _looks_person(u.dst):
+        return _link(
+            "advised_by", store.Edge(u.src, "author", "advised_by", u.dst, "author")
+        )
+    return _OPEN
+
+
+def _authored(u: _Unmapped) -> Decision:
+    a, b = (u.src, u.dst) if _looks_person(u.dst) else (u.dst, u.src)
+    if _looks_person(b) and not _looks_person(a) and len(a) > 12:
+        return _link("authored_by", store.Edge(a, "paper", "authored_by", b, "author"))
+    return _OPEN
+
+
+def _funded(u: _Unmapped) -> Decision:
+    if (_looks_org(u.dst) or _ACRONYM.match(u.dst)) and not _looks_person(u.src):
+        return _link(
+            "funded_by",
+            store.Edge(u.src, u.self_type, "funded_by", u.dst, "organization"),
+        )
+    return _OPEN
+
+
+def _developed(u: _Unmapped) -> Decision:
+    # "Waves Audio" reads like two names; the organization's words win
+    if _looks_org(u.dst):
+        return _link(
+            "developed_by",
+            store.Edge(u.src, "tool", "developed_by", u.dst, "organization"),
+        )
+    if _looks_person(u.dst):
+        return _link(
+            "developed_by", store.Edge(u.src, "tool", "developed_by", u.dst, "author")
+        )
+    return _OPEN
+
+
+def _mentions(u: _Unmapped) -> Decision:
+    said = ontology.lexicon().type_of(u.item.get("reason") or "")
+    if said and (u.is_self or u.src == u.item["src"]):
+        return _link(
+            "mentions", store.Edge(u.src, u.self_type, "mentions", u.dst, said)
+        )
+    return _OPEN
+
+
+def _rule_table(
+    *rules: tuple[Callable[[_Unmapped], Decision], tuple[str, ...]],
+) -> dict[str, Callable[[_Unmapped], Decision]]:
+    """Each relation a model says, to the one rule that reads it. A word in
+    two rules is refused: the first would take it and the second never
+    run ("references" sat under both cites and mentions until 2026-09-30)."""
+    table: dict[str, Callable[[_Unmapped], Decision]] = {}
+    for rule, words in rules:
+        for w in words:
+            if w in table:
+                raise ValueError(f"{w!r} is read by two rules")
+            table[w] = rule
+    return table
+
+
+UNMAPPED_RULES = _rule_table(
+    (_affiliation, ("affiliation", "affiliated_with", "affiliated with")),
+    (_located, ("located_in", "located_at", "based_in", "location")),
+    (_published_by, ("published_by", "publisher", "issued_by")),
+    (_part_of, ("part_of", "is_part_of", "member_of", "belongs_to", "division_of")),
+    (_published_in, ("published_in", "published in", "appeared_in", "venue")),
+    # a work a document names is cited, so "references" is this rule's
+    (_cites, ("cites", "references", "cited")),
+    (_advised, ("advised_by", "supervised_by", "advisor", "supervisor")),
+    (_authored, ("author", "author_of", "authored_by", "authors", "written_by")),
+    (_funded, ("funded_by", "funding", "supported_by")),
+    (_developed, ("developed_by", "created_by", "made_by", "built_by")),
+    (_mentions, ("mentions", "discusses", "names")),
+)
+
+
 def decide_unmapped(
     item: dict[str, Any], doc: tuple[str, str, str | None] | None
-) -> tuple[str, list[store.Edge], str | None]:
+) -> Decision:
     """Rules for items without types: the relation the model named and the
-    shape of the two names decide. Affiliation between a person and an
-    organization, supervision between two people, authorship between a
-    title and a person, funding and development towards an organization,
-    and a mention whose reason names what kind of thing it is."""
+    shape of the two names decide (``UNMAPPED_RULES``). Affiliation between
+    a person and an organization, supervision between two people,
+    authorship between a title and a person, funding and development
+    towards an organization, and a mention whose reason names what kind
+    of thing it is."""
     if (edges := _self_as_device(item, doc)) is not None:
         return "link", edges, "self-as-device"
     src, dst, rel = item["src"], item["dst"], (item["rel"] or "").lower()
@@ -275,135 +463,10 @@ def decide_unmapped(
         return "drop", [], "no-relation"
     if rel in ATTRIBUTES:
         return "drop", [], "attribute-not-relation"
-    is_self = bool(title) and src == title
-    if rel in ("affiliation", "affiliated_with", "affiliated with"):
-        # the document itself and an institution: written there
-        if is_self and not _looks_person(dst) and _looks_venue(dst):
-            return (
-                "link",
-                [store.Edge(src, own, "written_at", dst, "organization")],
-                "written_at",
-            )
-        # two institutions "affiliated": the smaller is part of the larger
-        if not is_self and _inside(src, dst):
-            return (
-                "link",
-                [store.Edge(src, "organization", "part_of", dst, "organization")],
-                "affiliation->part_of",
-            )
-        # exactly one side is a person; the other is the institution
-        ps, pd = _looks_person(src), _looks_person(dst)
-        if ps and not pd and not _looks_person(dst):
-            return (
-                "link",
-                [store.Edge(src, "author", "affiliated_with", dst, "organization")],
-                "affiliation",
-            )
-        if pd and not ps:
-            return (
-                "link",
-                [store.Edge(dst, "author", "affiliated_with", src, "organization")],
-                "affiliation",
-            )
-        return "open", [], None
-    if rel in ("located_in", "located_at", "based_in", "location"):
-        # an organization and a place: nothing else is located anywhere
-        if not is_self and _looks_org(src) and not _looks_person(dst) and len(dst) >= 3:
-            return (
-                "link",
-                [store.Edge(src, "organization", "located_in", dst, "place")],
-                "located_in",
-            )
-        return "open", [], None
-    if rel in ("published_by", "publisher", "issued_by"):
-        if is_self and not _looks_person(dst) and _looks_venue(dst):
-            return (
-                "link",
-                [store.Edge(src, own, "published_by", dst, "organization")],
-                "published_by",
-            )
-        return "open", [], None
-    if rel in ("part_of", "is_part_of", "member_of", "belongs_to", "division_of"):
-        # a lab in a university, a subsidiary in a group: both organizations
-        if not is_self and _inside(src, dst):
-            return (
-                "link",
-                [store.Edge(src, "organization", "part_of", dst, "organization")],
-                "part_of-organizations",
-            )
-        return "open", [], None
-    if rel in ("published_in", "published in", "appeared_in", "venue"):
-        # the document itself, in something that is not a person
-        if is_self and not _looks_person(dst) and _looks_venue(dst):
-            return (
-                "link",
-                [store.Edge(src, own, "published_in", dst, "venue")],
-                "published_in",
-            )
-        return "open", [], None
-    if rel in ("cites", "references", "cited"):
-        # the document itself citing something shaped like a work's title
-        if is_self and _looks_title(dst):
-            return (
-                "link",
-                [store.Edge(src, own, "cites", dst, "paper")],
-                "cites-title",
-            )
-        return "open", [], None
-    if rel in ("advised_by", "supervised_by", "advisor", "supervisor"):
-        if _looks_person(src) and _looks_person(dst):
-            return (
-                "link",
-                [store.Edge(src, "author", "advised_by", dst, "author")],
-                "advised_by",
-            )
-        return "open", [], None
-    if rel in ("author", "author_of", "authored_by", "authors", "written_by"):
-        a, b = (src, dst) if _looks_person(dst) else (dst, src)
-        if _looks_person(b) and not _looks_person(a) and len(a) > 12:
-            return (
-                "link",
-                [store.Edge(a, "paper", "authored_by", b, "author")],
-                "authored_by",
-            )
-        return "open", [], None
-    if (
-        rel in ("funded_by", "funding", "supported_by")
-        and (_looks_org(dst) or _ACRONYM.match(dst))
-        and not _looks_person(src)
-    ):
-        st = own if title and src == title else "paper"
-        return (
-            "link",
-            [store.Edge(src, st, "funded_by", dst, "organization")],
-            "funded_by",
-        )
-    if rel in ("developed_by", "created_by", "made_by", "built_by"):
-        if _looks_org(dst):  # "Waves Audio" reads like two names; the org words win
-            return (
-                "link",
-                [store.Edge(src, "tool", "developed_by", dst, "organization")],
-                "developed_by",
-            )
-        if _looks_person(dst):
-            return (
-                "link",
-                [store.Edge(src, "tool", "developed_by", dst, "author")],
-                "developed_by",
-            )
-        return "open", [], None
-    # "references" is the cites rule's, above: a work named is cited
-    if rel in ("mentions", "discusses", "names"):
-        said = ontology.lexicon().type_of(item.get("reason") or "")
-        if said and (title and src == title or src == item["src"]):
-            st = own if title and src == title else "paper"
-            return (
-                "link",
-                [store.Edge(src, st, "mentions", dst, said)],
-                "mentions",
-            )
-        return "open", [], None
-    return "open", [], None
+    rule = UNMAPPED_RULES.get(rel)
+    if rule is None:
+        return _OPEN
+    return rule(_Unmapped(item, src, dst, title, own))
 
 
 _MALFORMED = re.compile(
