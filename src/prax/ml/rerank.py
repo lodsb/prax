@@ -195,7 +195,8 @@ def post_json(url: str, body: dict[str, Any], timeout: float) -> dict[str, Any]:
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return json.loads(resp.read().decode("utf-8"))
+        got: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+    return got
 
 
 _WORD = re.compile(r"\w+")

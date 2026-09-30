@@ -10,6 +10,7 @@ the board: `prax --door http://board:8000 status`.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import os
 import sys
 from typing import Any
@@ -991,10 +992,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except BrokenPipeError:
         # `prax show 12 | head`: the reader went away, which is not news
-        try:
+        with contextlib.suppress(OSError):
             sys.stdout.close()
-        except OSError:
-            pass
         os._exit(0)
     except OSError as exc:
         if getattr(exc, "errno", None) == 22 and sys.platform == "win32":

@@ -3,6 +3,7 @@ neighbours, the equations near a place, an outline."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 from typing import Any
@@ -192,10 +193,8 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
         "figure": None,
     }
     if row["kind"] == "figure" and "data" in row.keys() and row["data"]:  # noqa: SIM118 - a Row iterates values, not keys
-        try:
+        with contextlib.suppress(ValueError, AttributeError):
             out["figure"] = json.loads(row["data"]).get("ref")
-        except (ValueError, AttributeError):
-            pass
     return out
 
 
@@ -448,10 +447,8 @@ def equations_near(
     for r in rows[lo:hi]:
         number = None
         if r["data"]:
-            try:
+            with contextlib.suppress(ValueError, AttributeError):
                 number = json.loads(r["data"]).get("number")
-            except (ValueError, AttributeError):
-                pass
         out.append(
             {
                 "chunk_id": r["id"],

@@ -272,7 +272,7 @@ async def _count_writes(request: Request, call_next: Any) -> Any:
 from fastapi.middleware.cors import CORSMiddleware
 
 EXTENSION_ORIGINS = r"^(chrome|moz|safari-web)-extension://.+$"
-_cors = [o for o in config.words("door.cors_origins", "PRAX_CORS_ORIGINS")]
+_cors = list(config.words("door.cors_origins", "PRAX_CORS_ORIGINS"))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors,

@@ -62,12 +62,49 @@ pythonpath = ["src", "clients/cli"]
 files = ["src/prax"]
 ignore_missing_imports = true
 
+# strict mode, package by package (the engineering pass of 2026-09-30): the
+# first batch, which met it with six explicit returns. A module here stays
+# strict; the rest joins as it gets there. mypy has no per-module "strict",
+# so these are the flags it is made of.
+[[tool.mypy.overrides]]
+module = [
+    "prax.text.*",
+    "prax.writing.*",
+    "prax.wall.*",
+    "prax.ml.*",
+    "prax.config",
+    "prax.worker",
+    "prax.host.schedule",
+    "prax.steps.base",
+]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+disallow_any_generics = true
+disallow_subclassing_any = true
+check_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+strict_equality = true
+extra_checks = true
+
 [tool.ruff]
 line-length = 88
 
 [tool.ruff.lint]
-extend-select = ["E501"]
+# pyupgrade, bugbear, simplify and comprehensions besides the defaults; and a
+# ceiling on a function's complexity, at the worst there was after the
+# engineering pass of 2026-09-30 (video.parse): nothing grows past it
+extend-select = ["E501", "UP", "B", "SIM", "C4", "C90"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 21
 
 [tool.ruff.lint.per-file-ignores]
 # runs on old machines too (Python 2.7 and 3): the Python 3 idioms stay out
-"clients/send/prax_send.py" = ["UP"]
+"clients/send/prax_send.py" = ["UP", "SIM105"]
+# the ceiling is the package's: a command line's main and a measurement
+# script are one long argument parser by nature
+"clients/**" = ["C901"]
+"scripts/**" = ["C901"]

@@ -789,7 +789,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         "read": len(rows),
         "unsure": unsure,
         "labels_placed": placed,
-        **{k: v for k, v in found.most_common()},
+        **dict(found.most_common()),
         "summaries_read": len(written),
         "summaries_to_translate": sum(
             v for k, v in said.items() if k != language.canonical()

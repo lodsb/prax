@@ -72,7 +72,7 @@ def test_the_map_ranks_by_independent_documents(con: sqlite3.Connection) -> None
     docs = [_paper(con, n) for n in range(1, 5)]
     for n, doc in enumerate(docs, 1):
         _link(con, f"Paper {n}", "paper", "about", "convolution", "method", doc=doc)
-    for n, doc in zip((1, 2, 3), docs[:3]):
+    for n, doc in zip((1, 2, 3), docs[:3], strict=False):
         _link(con, f"Paper {n}", "paper", "about", "well attested", "concept", doc=doc)
     for rel in ("about", "uses", "proposes", "mentions"):
         _link(con, "Paper 4", "paper", rel, "one source", "concept", doc=docs[3])

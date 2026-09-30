@@ -537,7 +537,7 @@ def refresh_blocks(
             release=set(fills) if release else None,
         )
         revision = written["revision"]
-        for b_id, (result, docs, seen) in results.items():
+        for b_id, (_result, docs, seen) in results.items():
             if written["report"].get(b_id) != "filled":
                 report[b_id] = {"filled": False, "why": written["report"].get(b_id)}
                 continue

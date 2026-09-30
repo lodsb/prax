@@ -49,7 +49,7 @@ def test_new_migration_applies_once(
 ) -> None:
     mig = tmp_path / "migrations"
     mig.mkdir()
-    for n, path in store.migrations():
+    for _n, path in store.migrations():
         (mig / path.name).write_bytes(path.read_bytes())
     latest = store.migrations()[-1][0]
     (mig / f"{latest + 1:04}_add_notes.sql").write_text(

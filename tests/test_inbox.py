@@ -685,7 +685,7 @@ def test_retiring_a_duplicate_joins_its_facts_to_the_keeper(
         con, dup, reason="duplicate capture", duplicate_of=keeper
     )
     assert gone["moved_edges"] == 1 and gone["edges"] == 1 and gone["moved_items"] == 1
-    live = [e for e in store.traverse(con, "Article", hops=1)]
+    live = list(store.traverse(con, "Article", hops=1))
     assert {(e["rel"], e["dst"], e["source_doc"]) for e in live} == {
         ("about", "reverb", keeper),
         ("uses", "feedback delay network", keeper),

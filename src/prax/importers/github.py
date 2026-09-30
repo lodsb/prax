@@ -18,6 +18,7 @@ writes to GitHub (invariant 10).
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import time
 import urllib.error
@@ -82,10 +83,8 @@ class GitHub:
         status, headers, body = self.fetch(url, self._headers(accept))
         low = {k.lower(): v for k, v in headers.items()}
         if "x-ratelimit-remaining" in low:
-            try:
+            with contextlib.suppress(ValueError):
                 self.remaining = int(low["x-ratelimit-remaining"])
-            except ValueError:
-                pass
         if status == 403 and self.remaining == 0:
             reset = low.get("x-ratelimit-reset")
             wait = ""

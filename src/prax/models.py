@@ -268,11 +268,8 @@ def resolve(step: str) -> ModelSpec | None:
         chosen = (load().get("steps", {}).get(step) or {}).get("model")
         source = "prax.yaml"
     if chosen is None:
-        model_id = os.environ.get(f"PRAX_{step.upper()}_MODEL")
-        if model_id:  # the legacy way of naming a Claude model for a step
-            chosen = model_id
-        else:
-            chosen = STEP_DEFAULTS[step]
+        # PRAX_<STEP>_MODEL: the legacy way of naming a Claude model for a step
+        chosen = os.environ.get(f"PRAX_{step.upper()}_MODEL") or STEP_DEFAULTS[step]
         source = "default"
     if chosen == "claude":  # legacy PRAX_ASK=claude
         chosen = os.environ.get(f"PRAX_{step.upper()}_MODEL") or _claude_default(step)

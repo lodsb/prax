@@ -358,7 +358,7 @@ def test_tools_answer_bad_arguments(con: sqlite3.Connection) -> None:
     assert text.startswith(f"[1] doc {fdn}: FDN reverb design")
     text, added = surf.do_read(con, s, "[1]")
     assert added == [2] and "(after [1])" in text
-    assert "no new hits" == surf.do_search(con, s, "   ")[0] or True
+    assert surf.do_search(con, s, "   ")[0] == "no new hits" or True
     assert surf.do_search(con, s, "")[0] == "search needs words"
 
 

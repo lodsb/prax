@@ -204,7 +204,7 @@ def test_heal_takes_a_stray_module_out_of_a_version(con: sqlite3.Connection) -> 
     d = _doc(con, "A paper about reverberation and its delay networks.")
     right = ontology.current().version
     wrong = right + "+genres1"
-    for name, valid_to in (("a", None), ("b", "2026-09-29T00:00:00Z")):
+    for name in ("a", "b"):
         con.execute("INSERT INTO entities (name, type) VALUES (?, 'concept')", (name,))
     a, b = [r[0] for r in con.execute("SELECT id FROM entities ORDER BY id")]
     for dst, valid_to in ((b, None), (a, "2026-09-29T00:00:00Z")):

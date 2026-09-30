@@ -154,12 +154,14 @@ class Pass:
     log: Log | None = None
 
     def fetch(self, step: str, **params: Any) -> dict[str, Any]:
-        return self.door.get_json(
+        got: dict[str, Any] = self.door.get_json(
             f"/work/{step}", {"limit": self.limit, "scope": self.scope, **params}
         )
+        return got
 
     def post(self, step: str, body: dict[str, Any]) -> dict[str, Any]:
-        return self.door.post_json(f"/work/{step}", body)
+        got: dict[str, Any] = self.door.post_json(f"/work/{step}", body)
+        return got
 
     def note(self, text: str, **extra: Any) -> None:
         """A line on the worker's session, where the Jobs view shows it."""

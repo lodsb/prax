@@ -95,7 +95,8 @@ class Embedder(Protocol):
 
 def _normalize(x: np.ndarray) -> np.ndarray:
     norms = np.linalg.norm(x, axis=1, keepdims=True)
-    return (x / np.maximum(norms, 1e-12)).astype(np.float32)
+    unit: np.ndarray = (x / np.maximum(norms, 1e-12)).astype(np.float32)
+    return unit
 
 
 # ------------------------------------------------------------------- onnx
@@ -225,7 +226,8 @@ class OnnxEmbedder:
         return out
 
     def embed_query(self, text: str) -> np.ndarray:
-        return self.embed([self.spec.query_prefix + text])[0]
+        row: np.ndarray = self.embed([self.spec.query_prefix + text])[0]
+        return row
 
 
 # DirectML's words for a card it lost: DXGI_ERROR_DEVICE_REMOVED, _HUNG and
@@ -264,7 +266,8 @@ class HashEmbedder:
         return _normalize(out)
 
     def embed_query(self, text: str) -> np.ndarray:
-        return self.embed([text])[0]
+        row: np.ndarray = self.embed([text])[0]
+        return row
 
 
 # ---------------------------------------------------------------- current
