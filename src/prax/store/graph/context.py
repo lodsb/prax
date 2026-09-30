@@ -353,7 +353,7 @@ def hub_graph(
         }
         types = tuple(sorted(set(types) | own))
         # the documents no module was set for are left out (see above)
-        clause, held = domain_clause(within, unset=False)
+        clause, held = domain_clause(con, within, unset=False)
         docs = f" AND source_doc IN (SELECT d.id FROM documents d WHERE 1 = 1{clause})"
         docs_args = tuple(held)
     marks = ",".join("?" * len(types))
@@ -681,13 +681,11 @@ def seed_documents(
             )
         }
     if domain:
+        clause, args = domain_clause(con, [domain], unset=False)
         ids |= {
             int(r[0])
             for r in con.execute(
-                "SELECT d.id FROM documents d WHERE 1 = 1"
-                + domain_clause([domain], unset=False)[0]
-                + live,
-                (domain,),
+                f"SELECT d.id FROM documents d WHERE 1 = 1{clause}{live}", args
             )
         }
     return sorted(ids)

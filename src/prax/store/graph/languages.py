@@ -295,20 +295,33 @@ def foreign_names(
     if not common:
         return []
     marks = ",".join("?" * len(common))
+    # a document's language is read once, from the index on it, and not
+    # out of its `meta` for every edge; the entities a document in another
+    # language speaks of come first, and only their edges are counted
+    # (the join of every live edge to its document's `meta` cost 877 ms
+    # on a copy, 2026-09-30)
     rows = con.execute(
         f"""
+        WITH doc_lang(id, lang) AS MATERIALIZED (
+            SELECT id, json_extract(meta, '$.lang') FROM documents
+             WHERE json_extract(meta, '$.lang') IS NOT NULL),
+        named(ent) AS (
+            SELECT src FROM edges JOIN doc_lang l ON l.id = source_doc
+             WHERE valid_to IS NULL AND l.lang NOT LIKE '%en%'
+             UNION
+            SELECT dst FROM edges JOIN doc_lang l ON l.id = source_doc
+             WHERE valid_to IS NULL AND l.lang NOT LIKE '%en%')
         SELECT e.id, e.name, e.type, count(DISTINCT x.doc) AS docs,
                count(*) AS edges,
                group_concat(DISTINCT x.lang) AS langs
           FROM entities e
-          JOIN (SELECT src AS ent, source_doc AS doc,
-                       json_extract(d.meta, '$.lang') AS lang
-                  FROM edges JOIN documents d ON d.id = source_doc
-                 WHERE valid_to IS NULL
+          JOIN (SELECT src AS ent, source_doc AS doc, l.lang
+                  FROM edges LEFT JOIN doc_lang l ON l.id = source_doc
+                 WHERE valid_to IS NULL AND src IN named
                  UNION ALL
-                SELECT dst, source_doc, json_extract(d.meta, '$.lang')
-                  FROM edges JOIN documents d ON d.id = source_doc
-                 WHERE valid_to IS NULL) x ON x.ent = e.id
+                SELECT dst, source_doc, l.lang
+                  FROM edges LEFT JOIN doc_lang l ON l.id = source_doc
+                 WHERE valid_to IS NULL AND dst IN named) x ON x.ent = e.id
          WHERE e.canonical_id IS NULL AND e.type IN ({marks})
            AND NOT EXISTS (SELECT 1 FROM entity_labels l
                             WHERE l.entity_id = e.id
@@ -377,19 +390,20 @@ def unlabelled_names(
     canonical = language.canonical()
     out: list[dict[str, Any]] = []
     for lang in langs:
+        # the documents in the library's language through the index on
+        # it, not each edge's document's `meta` read (2026-09-30)
         rows = con.execute(
             f"""
+            WITH own(id) AS (SELECT id FROM documents
+                              WHERE json_extract(meta, '$.lang') = ?)
             SELECT e.id, e.name, e.type, count(*) AS edges
               FROM entities e
               JOIN (SELECT src AS ent FROM edges x
-                      JOIN documents d ON d.id = x.source_doc
-                     WHERE x.valid_to IS NULL
-                       AND json_extract(d.meta, '$.lang') = ?
+                     WHERE x.valid_to IS NULL AND x.source_doc IN own
                      UNION ALL
                     SELECT dst FROM edges x
-                      JOIN documents d ON d.id = x.source_doc
-                     WHERE x.valid_to IS NULL
-                       AND json_extract(d.meta, '$.lang') = ?) x ON x.ent = e.id
+                     WHERE x.valid_to IS NULL AND x.source_doc IN own) x
+                ON x.ent = e.id
              WHERE e.canonical_id IS NULL AND e.type IN ({marks})
                AND length(e.name) - length(replace(e.name, ' ', '')) < ?
                AND NOT EXISTS (SELECT 1 FROM entity_labels l
@@ -399,7 +413,6 @@ def unlabelled_names(
              LIMIT ?
             """,
             (
-                canonical,
                 canonical,
                 *common,
                 LABEL_WORDS,

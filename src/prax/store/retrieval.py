@@ -409,7 +409,7 @@ def _share(con: sqlite3.Connection, scope: Scope) -> float:
     total = int(con.execute("SELECT count(*) FROM documents").fetchone()[0] or 0)
     key = (scope, total)
     if key not in _SHARES:
-        where, args = _in_domains(scope)
+        where, args = _in_domains(con, scope)
         n = con.execute(
             f"SELECT count(*) FROM documents d WHERE 1 = 1{where}", args
         ).fetchone()[0]
@@ -417,12 +417,14 @@ def _share(con: sqlite3.Connection, scope: Scope) -> float:
     return _SHARES[key]
 
 
-def _in_domains(scope: Scope | None) -> tuple[str, tuple[str, ...]]:
+def _in_domains(
+    con: sqlite3.Connection, scope: Scope | None
+) -> tuple[str, tuple[str, ...]]:
     """A WHERE clause keeping the documents of ``scope`` (and those with
     no domain set, which are in every module), and its arguments."""
     if not scope:
         return "", ()
-    clause, args = domain_clause(scope, unset=True)
+    clause, args = domain_clause(con, scope, unset=True)
     return clause, tuple(args)
 
 
@@ -450,7 +452,7 @@ def _fts_search(
         if snippets
         else "substr(c.text, 1, 160)"
     )
-    where, where_args = _in_domains(scope)
+    where, where_args = _in_domains(con, scope)
     # a scope that is most of the library is dense among the best matches:
     # rank in the index, draw deeper, filter after. Inside the ranking it
     # joined every matched chunk first, and "signal synthesis" scoped to
@@ -586,7 +588,7 @@ def _field_fts_search(
     expr = expr or _fts_query(query)
     if expr is None:
         return []
-    where, where_args = _in_domains(scope)
+    where, where_args = _in_domains(con, scope)
     rows = con.execute(
         f"""
         SELECT f.rowid AS doc_id, d.title,

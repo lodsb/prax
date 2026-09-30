@@ -423,16 +423,20 @@ def test_which_documents_belong_to_a_domain_is_said_once(
     assert store.decode_domains("[]") is None
     sheet = int(store.ingest_text(con, "A datasheet.", title="sheet")["doc_id"])
     loose = int(store.ingest_text(con, "Nothing set.", title="loose")["doc_id"])
+    both = int(store.ingest_text(con, "A synth recipe.", title="both")["doc_id"])
     store.set_domains(con, sheet, ["studio"])
     store.set_domains(con, loose, [])
+    store.set_domains(con, both, ["kitchen", "studio"])
     assert "domains" not in store.get_meta(con, loose)
 
     def members(names: list[str], unset: bool) -> set[int]:
-        clause, args = store.domain_clause(names, unset=unset)
+        clause, args = store.domain_clause(con, names, unset=unset)
         rows = con.execute(f"SELECT d.id FROM documents d WHERE 1 = 1{clause}", args)
-        return {int(r[0]) for r in rows} & {sheet, loose}
+        return {int(r[0]) for r in rows} & {sheet, loose, both}
 
-    assert members(["studio"], False) == {sheet}
-    assert members(["studio"], True) == {sheet, loose}
+    assert members(["studio"], False) == {sheet, both}
+    assert members(["kitchen"], False) == {both}
+    assert members(["studio"], True) == {sheet, loose, both}
+    assert members(["research"], False) == set()
     assert members([], True) == {loose}
     assert members([], False) == set()

@@ -200,13 +200,11 @@ def documents_in_domain(con: sqlite3.Connection, domain: str) -> list[int]:
     """Documents whose domain set names ``domain`` (documents without a set
     are in every module but are not listed here: a re-run per domain means
     the documents that were assigned to it)."""
+    clause, args = domain_clause(con, [domain], unset=False)
     return [
         r[0]
         for r in con.execute(
-            "SELECT d.id FROM documents d WHERE 1 = 1"
-            + domain_clause([domain], unset=False)[0]
-            + " ORDER BY d.id",
-            (domain,),
+            f"SELECT d.id FROM documents d WHERE 1 = 1{clause} ORDER BY d.id", args
         )
     ]
 

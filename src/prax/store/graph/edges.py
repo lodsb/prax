@@ -444,14 +444,16 @@ def select_for_extraction(
         args.append(_like_prefix(skip_mime_prefix))
         args.extend(mimes.DOCUMENT_IMAGES)
     if domain:  # the documents assigned to that module, and only those
-        clause, held = domain_clause([domain], unset=False, alias="documents")
+        clause, held = domain_clause(con, [domain], unset=False, alias="documents")
         sql += clause
         args.extend(held)
     if min_chars > 0:
-        sql += (
-            " AND (SELECT coalesce(sum(length(text)), 0) FROM chunks"
-            "      WHERE chunks.doc_id = documents.id) >= ?"
-        )
+        # the chunks' text is never longer than the whole text, so the
+        # column rules out the short ones for free; the sum over the
+        # chunks is taken below, for candidates in order, until the limit
+        # is filled (for every candidate before the sort it cost 1.5 s
+        # after an ontology bump, 2026-09-30)
+        sql += " AND text_len >= ?"
         args.append(min_chars)
     if mime_prefix:
         sql += " AND mime LIKE ? ESCAPE '!'"
@@ -461,24 +463,39 @@ def select_for_extraction(
     # someone cared enough to re-read it, and the graph speaks of a text
     # that is gone until it is read again
     sql += " ORDER BY json_extract(meta, '$.extraction_stale') IS NULL, id"
-    if limit is not None:
-        sql += " LIMIT ?"
-        args.append(limit)
-    if sources is None:
-        return [r["id"] for r in con.execute(base + sql, args)]
+
+    def enough(doc_id: int) -> bool:
+        if min_chars <= 0:
+            return True
+        held = con.execute(
+            "SELECT coalesce(sum(length(text)), 0) FROM chunks WHERE doc_id = ?",
+            (doc_id,),
+        ).fetchone()[0]
+        return int(held) >= min_chars
+
     # a scope of sources (the captures): the source index answers it. A
     # document whose reading a person asked for is due whatever its
     # source, like a promote flag; it goes first, from its own partial
     # index (an OR of the two turned the source index into a scan)
     asked = " AND json_extract(meta, '$.extraction_stale.requested') IS NOT NULL"
-    marks = ",".join("?" * len(sources))
+    marks = ",".join("?" * len(sources or ()))
     by_source = f" AND json_extract(meta, '$.source') IN ({marks})"
-    out = [r["id"] for r in con.execute(base + asked + sql, args)]
-    seen = set(out)
-    for r in con.execute(base + by_source + sql, [*sources, *args]):
-        if r["id"] not in seen:
-            out.append(r["id"])
-    return out[:limit] if limit is not None else out
+    queries = (
+        [(base + sql, args)]
+        if sources is None
+        else [(base + asked + sql, args), (base + by_source + sql, [*sources, *args])]
+    )
+    out: list[int] = []
+    seen: set[int] = set()
+    for query, query_args in queries:
+        for (doc_id,) in con.execute(query, query_args).fetchall():
+            if doc_id in seen or not enough(doc_id):
+                continue
+            seen.add(doc_id)
+            out.append(doc_id)
+            if limit is not None and len(out) >= limit:
+                return out
+    return out
 
 
 def _subset_version_case(

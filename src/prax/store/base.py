@@ -248,21 +248,47 @@ def holds_domain(raw: str | None, names: Iterable[str], *, unset: bool) -> bool:
 
 
 def domain_clause(
-    names: Iterable[str], *, unset: bool, alias: str = "d"
+    con: sqlite3.Connection,
+    names: Iterable[str],
+    *,
+    unset: bool,
+    alias: str = "d",
 ) -> tuple[str, list[str]]:
     """The SQL of ``holds_domain`` for a query over ``documents <alias>``:
     `` AND (…)`` and its arguments. No names and not ``unset`` keeps
-    nothing."""
-    wanted = sorted(set(names))
+    nothing.
+
+    The store holds a dozen distinct domain sets. They are read first
+    through ``idx_documents_domains``, and the query keeps the documents
+    whose set is one of those that hold a name, found through the same
+    index once. Reading each document's set with ``json_each`` cost a
+    search scoped to a domain 550 ms (docs/research-database-layout.md)."""
+    wanted = set(names)
+    held: list[str] = []
+    none: list[str] = []  # an empty list stored is no set too
+    for (raw,) in con.execute(
+        "SELECT DISTINCT json_extract(meta, '$.domains') FROM documents"
+        " WHERE json_extract(meta, '$.domains') IS NOT NULL"
+    ):
+        decoded = decode_domains(raw)
+        if decoded is None:
+            none.append(raw)
+        elif wanted and not wanted.isdisjoint(decoded):
+            held.append(raw)
+    sets = held + (none if unset else [])
     parts: list[str] = []
-    if unset:
-        parts.append(f"coalesce(json_array_length({alias}.meta, '$.domains'), 0) = 0")
-    if wanted:
+    if sets:
         parts.append(
-            f"EXISTS (SELECT 1 FROM json_each({alias}.meta, '$.domains')"
-            f" WHERE value IN ({','.join('?' * len(wanted))}))"
+            "json_extract(meta, '$.domains') IN (" + ",".join("?" * len(sets)) + ")"
         )
-    return f" AND ({' OR '.join(parts) or '0'})", wanted
+    if unset:
+        parts.append("json_extract(meta, '$.domains') IS NULL")
+    if not parts:
+        return " AND 0", []
+    return (
+        f" AND {alias}.id IN (SELECT id FROM documents WHERE {' OR '.join(parts)})",
+        sets,
+    )
 
 
 def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:

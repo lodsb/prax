@@ -391,7 +391,7 @@ def _domain_documents(
     if not domain:
         return None
 
-    clause, args = domain_clause(ontology.current().within(domain), unset=False)
+    clause, args = domain_clause(con, ontology.current().within(domain), unset=False)
     rows = con.execute(f"SELECT d.id FROM documents d WHERE 1 = 1{clause}", args)
     return frozenset(int(r[0]) for r in rows)
 

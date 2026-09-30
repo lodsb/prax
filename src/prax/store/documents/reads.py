@@ -241,7 +241,7 @@ def list_documents(
         # documents no module was set for; "unassigned" is those alone
 
         names = () if domain == UNASSIGNED else ontology.current().within(domain)
-        clause, more = domain_clause(names, unset=True)
+        clause, more = domain_clause(con, names, unset=True)
         clauses.append(clause.removeprefix(" AND "))
         args.extend(more)
     if tag:
