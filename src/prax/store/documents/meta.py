@@ -18,6 +18,54 @@ from ..base import (
     now,
 )
 
+# the last attempts of one extractor a parse history always keeps: what
+# parsers.queue.seen counts refusals in a row over
+HISTORY_TAIL = 5
+
+
+def _history_key(key: str, entry: dict[str, Any]) -> tuple[Any, ...]:
+    """What makes two entries of a history the same fact for its readers:
+    an extractor and what came of it (``parsers.queue.seen``), a producer
+    and the ontology it read under (``extracted_by``)."""
+    if key == "parse_history":
+        return (entry.get("extractor"), entry.get("outcome"), entry.get("error"))
+    return (entry.get("extractor"), entry.get("ontology_version"))
+
+
+def bounded_histories(meta: dict[str, Any], keep: int) -> dict[str, int]:
+    """Drop from ``meta.parse_history`` and ``meta.extraction_history`` the
+    entries no reader needs, in place, and say how many went of each.
+
+    Kept: the last ``keep`` entries, the newest entry of each kind
+    (``_history_key``), every entry that holds a text's hash (the only
+    record of where an earlier text is in the archive), and the last
+    ``HISTORY_TAIL`` attempts of each extractor. What goes are the repeats
+    a loop writes: a book refused 902 times holds one refusal after it."""
+    dropped: dict[str, int] = {}
+    for key in ("parse_history", "extraction_history"):
+        history = meta.get(key)
+        if not isinstance(history, list) or len(history) <= keep:
+            continue
+        wanted = set(range(max(0, len(history) - keep), len(history)))
+        newest: dict[tuple[Any, ...], int] = {}
+        tails: dict[Any, list[int]] = {}
+        for i, entry in enumerate(history):
+            if not isinstance(entry, dict):
+                wanted.add(i)
+                continue
+            if entry.get("text_hash"):
+                wanted.add(i)
+            newest[_history_key(key, entry)] = i
+            if key == "parse_history":
+                tails.setdefault(entry.get("extractor"), []).append(i)
+        wanted |= set(newest.values())
+        for positions in tails.values():
+            wanted |= set(positions[-HISTORY_TAIL:])
+        if len(wanted) < len(history):
+            meta[key] = [e for i, e in enumerate(history) if i in wanted]
+            dropped[key] = len(history) - len(wanted)
+    return dropped
+
 
 def _is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
     row = con.execute(

@@ -734,6 +734,25 @@ def test_a_budget_refusal_is_not_an_attempt() -> None:
     assert queue.seen(empty, stamp)
 
 
+def test_a_refusal_repeated_is_an_attempt() -> None:
+    """A refusal that may pass next time (the OCR budget, a fetch that
+    failed) is tried again, but not for ever: after ``REFUSALS`` in a row
+    under one stamp the document has been seen. A book was handed out 897
+    times in 14 hours (2026-09-28)."""
+    from prax.parsers import queue
+
+    stamp = "djvu/1.0"
+    budget = {"extractor": stamp, "error": "281 pages exceeds the OCR budget of 60"}
+    fetch = {"extractor": stamp, "error": "fetch: 503"}
+    other = {"extractor": "pymupdf/1.0", "error": "fetch: 503"}
+    again = queue.REFUSALS - 1
+    assert not queue.seen({"parse_history": [budget] * again}, stamp)
+    assert queue.seen({"parse_history": [budget] * queue.REFUSALS}, stamp)
+    assert queue.seen({"parse_history": [fetch, budget] * queue.REFUSALS}, stamp)
+    # another extractor's refusals are not this one's
+    assert not queue.seen({"parse_history": [fetch] * again + [other] * 9}, stamp)
+
+
 def test_the_ocr_language_is_a_setting_and_part_of_the_stamp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -789,3 +808,30 @@ def test_ocr_rows_follow_the_page_and_the_script() -> None:
         "fourth third",
     ]
     assert parsers._ocr_rows([], [], right_to_left=False) == []
+
+
+def test_a_bounded_history_keeps_what_its_readers_ask() -> None:
+    """``bounded_histories`` drops the repeats a loop writes and keeps what
+    ``seen``, ``extracted_by`` and a text's hash need."""
+    from prax.parsers import queue
+
+    stamp, other = "djvu/1.0", "pymupdf/1.0"
+    first = {"extractor": other, "outcome": "created", "text_hash": "ab" * 32}
+    empty = {"extractor": "vision-pages/1", "outcome": "empty"}
+    refusal = {"extractor": stamp, "error": "281 pages exceeds the OCR budget of 60"}
+    meta = {
+        "parse_history": [first, empty] + [dict(refusal) for _ in range(900)],
+        "extraction_history": [
+            {"extractor": "qwen", "ontology_version": f"v{i % 3}", "at": str(i)}
+            for i in range(40)
+        ],
+    }
+    dropped = store.bounded_histories(meta, 20)
+    parse = meta["parse_history"]
+    assert dropped == {"parse_history": 880, "extraction_history": 20}
+    assert parse[:2] == [first, empty] and len(parse) == 22
+    assert queue.seen(meta, stamp) and queue.seen(meta, "vision-pages/1")
+    versions = {e["ontology_version"] for e in meta["extraction_history"]}
+    assert versions == {"v0", "v1", "v2"}
+    # a history shorter than the bound is left as it is
+    assert store.bounded_histories({"parse_history": [first]}, 20) == {}

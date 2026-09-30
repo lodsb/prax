@@ -69,24 +69,33 @@ def _record(
     return meta
 
 
+# refusals in a row after which an extractor has seen a document, whatever
+# they said: the exceptions below are for a refusal that may pass next
+# time, and a DjVu book the OCR budget refused was handed out 897 times in
+# 14 hours when it did not (2026-09-28)
+REFUSALS = store.HISTORY_TAIL  # which a bounded history always keeps
+
+
 def seen(meta: dict[str, Any], stamp: str) -> bool:
     """True if this extractor version already tried the document and the
     result was kept, empty or an error: re-running would repeat that. An
     ``upgraded``/``created`` entry changes ``text_source``, so such documents
     leave the selection by themselves. A refusal for the OCR page budget is
     not an attempt — nothing was read — so a run with a bigger budget gets
-    another go; nor is a worker that could not fetch the original."""
+    another go; nor is a worker that could not fetch the original. Either
+    stops counting as a pass once it is the last ``REFUSALS`` attempts."""
+    history = [h for h in meta.get("parse_history", []) if h.get("extractor") == stamp]
+    last = history[-REFUSALS:]
+    if len(last) == REFUSALS and all("error" in h for h in last):
+        return True
     return any(
-        h.get("extractor") == stamp
-        and (
-            h.get("outcome") in ("kept", "empty")
-            or (
-                "error" in h
-                and "OCR budget" not in str(h.get("error") or "")
-                and not str(h.get("error") or "").startswith("fetch:")
-            )
+        h.get("outcome") in ("kept", "empty")
+        or (
+            "error" in h
+            and "OCR budget" not in str(h.get("error") or "")
+            and not str(h.get("error") or "").startswith("fetch:")
         )
-        for h in meta.get("parse_history", [])
+        for h in history
     )
 
 
