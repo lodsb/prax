@@ -676,3 +676,36 @@ def test_a_relation_is_read_by_one_rule() -> None:
             (lambda u: review._OPEN, ("cites",)), (lambda u: review._OPEN, ("cites",))
         )
     assert review.UNMAPPED_RULES["references"] is review.UNMAPPED_RULES["cites"]
+
+
+def test_computings_misfits_become_its_relations() -> None:
+    """A document "covering" a program, a library or a symbol is the
+    manual of it (``describes``: a subtype of device or component counts);
+    a symbol that "provides" its library is written the wrong way round."""
+    doc = ("SuperCollider Help", "manual")
+    item = lambda src, st, rel, dst, dt: {
+        "src": src,
+        "src_type": st,
+        "rel": rel,
+        "dst": dst,
+        "dst_type": dt,
+    }
+    for dt in ("program", "code_library", "symbol"):
+        a, edges, rule = review.decide(
+            item("A reference", "manual", "covers", "SynthDef", dt), doc
+        )
+        assert (a, rule, edges[0].rel, edges[0].dst_type) == (
+            "link",
+            "covers->describes",
+            "describes",
+            dt,
+        )
+    a, edges, rule = review.decide(
+        item("SynthDef", "symbol", "provides", "SuperCollider", "program"), doc
+    )
+    assert (a, rule) == ("link", "flip-provides")
+    assert (edges[0].src, edges[0].rel, edges[0].dst) == (
+        "SuperCollider",
+        "provides",
+        "SynthDef",
+    )

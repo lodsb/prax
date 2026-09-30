@@ -143,7 +143,7 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core3+computing1+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
+   (`core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that

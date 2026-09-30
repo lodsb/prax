@@ -20,8 +20,17 @@
 # queue of the first reads says what is missing. Left out until it asks:
 # versions as things of their own (`succeeds` and the name carry them),
 # licences, and bugs or issues.
+# v2 (2026-09-30): what the first reads of 389 documents queued (1,853
+# items). A programming language is a `standard` (studio): a document
+# `names` or `covers` it and a program `conforms_to` it, as it does a file
+# format; 26 items named a language in passing and could not. A symbol is
+# a `component`, a named part of a program or library: a reference page
+# `describes` it and a document `names` it, which 88 items did; `provides`
+# stays the relation from its program. Two review rules came with it:
+# `covers` a program or library is `describes`, and a symbol that
+# "provides" its library is the library providing it.
 module: computing
-version: 1
+version: 2
 requires: [studio]
 self_types: [manual, article, source_code]
 
@@ -41,19 +50,19 @@ entity_types:
       or a program loads, by name: zlib, Boost.Spirit, LittleCMS, JUCE,
       numpy, Qt, React.
   programming_language:
-    parent: concept
+    parent: standard  # studio's: what a program speaks, like a file format
     naming: proper  # C++, Python: a name, not a word
     description: >-
       A programming, scripting, query, markup or shader language: C, C++,
       Python, SQL, sclang, LaTeX, HTML, GLSL.
   symbol:
-    parent: feature
+    parent: component  # a named part of a program or library
     naming: proper
     description: >-
       A class, function, method, command, option, variable or system call,
       named the way code writes it: malloc, SynthDef, git rebase, --verbose,
       std::vector. It belongs to the program, library or language that
-      provides it.
+      provides it; a reference page describes it.
   source_code:
     parent: document
     description: >-
@@ -83,8 +92,8 @@ relation_types:
     range: [symbol]
     description: >-
       a class, function, command or option the program, library or
-      language provides. For code this is the relation to use;
-      `has_feature` stays for a device's modes and controls
+      language provides. For code this is the relation to use, never
+      `has_feature` or `has_part`, which are a device's
 
 type_aliases:
   application: program

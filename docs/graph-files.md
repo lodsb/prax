@@ -35,7 +35,7 @@ repository diffs line by line. The first line is the header:
 | `format` | `prax-graph/1`; an import refuses any other |
 | `exported_at` | UTC, `store.now()` |
 | `seed` | the options that chose it |
-| `ontology` | the composed version, e.g. `core3+computing1+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2` |
+| `ontology` | the composed version, e.g. `core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2` |
 | `modules` | each ontology module's YAML, as text |
 | `counts` | `documents`, `edges` |
 

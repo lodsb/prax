@@ -11,7 +11,7 @@ from prax import config
 from prax.graph import ontology
 
 EVERY_MODULE = (
-    "core3+computing1+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
+    "core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
 )
 
 CORE = """
@@ -153,7 +153,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         "essay",
     }
     # software is gear to studio's relations: a manual describes a program
-    assert o.is_a("program", "device") and o.is_a("symbol", "feature")
+    assert o.is_a("program", "device") and o.is_a("symbol", "component")
     o.check_edge("manual", "describes", "program")
     o.check_edge("program", "written_in", "programming_language")
     o.check_edge("essay", "advocates", "theory")
@@ -175,7 +175,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert (
         ontology.current().version
-        == "core3+computing1+craft1+electronics1+kitchen2+research99"
+        == "core3+computing2+craft1+electronics1+kitchen2+research99"
         "+society1+studio5+workshop2"
     )
 

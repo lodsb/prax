@@ -679,9 +679,21 @@ def _written_backwards(
             "flip-authored_by", store.Edge(dst, "paper", "authored_by", src, "author")
         )
     # a manual "covering" a device is the manual of it (studio's describes;
-    # covers is for a concept or a standard)
-    if rel == "covers" and dt in ("device", "component") and onto.is_a(st, "document"):
+    # covers is for a concept or a standard). A subtype counts: a program is
+    # a device and a library or a symbol a component (computing)
+    if (
+        rel == "covers"
+        and (onto.is_a(dt, "device") or onto.is_a(dt, "component"))
+        and onto.is_a(st, "document")
+    ):
         return _link("covers->describes", store.Edge(src, st, "describes", dst, dt))
+    # a symbol "provides" the library it belongs to: said the other way round
+    if (
+        rel == "provides"
+        and st == "symbol"
+        and dt in ("program", "code_library", "programming_language")
+    ):
+        return _link("flip-provides", store.Edge(dst, dt, "provides", src, "symbol"))
     if rel == "calls_for" and st == "ingredient" and dt in ("dish", "recipe"):
         return _link(
             "flip-calls_for", store.Edge(dst, dt, "calls_for", src, "ingredient")

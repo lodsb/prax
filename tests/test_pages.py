@@ -11,7 +11,7 @@ from prax import store
 from prax.graph import extraction
 
 EVERY_MODULE = (
-    "core3+computing1+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
+    "core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
 )
 
 
