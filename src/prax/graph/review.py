@@ -662,12 +662,107 @@ def _self_document_type(onto: ontology.Ontology, rel: str, own: str) -> str:
     return "paper" if "paper" in kinds else own
 
 
-def decide(
-    item: dict[str, Any], doc: tuple[str, str, str | None] | None
-) -> tuple[str, list[store.Edge], str | None]:
+def _written_backwards(
+    onto: ontology.Ontology, src: str, st: str, rel: str, dst: str, dt: str
+) -> Decision | None:
+    """The shapes a model writes the wrong way round or under a near name,
+    decided before the document's own type is looked at: the author
+    "authored_by" the paper, the ingredient "calls_for" the dish, the
+    organization "affiliated_with" a person or a paper, a manual "covering"
+    a device."""
+    if (
+        rel == "authored_by"
+        and st in ("author", "person")
+        and dt in ("paper", "document")
+    ):
+        return _link(
+            "flip-authored_by", store.Edge(dst, "paper", "authored_by", src, "author")
+        )
+    # a manual "covering" a device is the manual of it (studio's describes;
+    # covers is for a concept or a standard)
+    if rel == "covers" and dt in ("device", "component") and onto.is_a(st, "document"):
+        return _link("covers->describes", store.Edge(src, st, "describes", dst, dt))
+    if rel == "calls_for" and st == "ingredient" and dt in ("dish", "recipe"):
+        return _link(
+            "flip-calls_for", store.Edge(dst, dt, "calls_for", src, "ingredient")
+        )
+    if rel != "affiliated_with" or st != "organization":
+        return None
+    if dt in ("person", "author"):
+        return _link(
+            "flip-affiliated_with",
+            store.Edge(dst, "author", "affiliated_with", src, "organization"),
+        )
+    if dt in ("paper", "document"):
+        return _link(
+            "flip-affiliated_with->written_at",
+            store.Edge(dst, dt, "written_at", src, "organization"),
+        )
+    if dt == "organization":
+        # one inside the other is part_of, either way round (v7's rule for
+        # untyped items); two peers are affiliated, which v8 admits
+        if _inside(src, dst):
+            return _link(
+                "affiliation->part_of",
+                store.Edge(src, "organization", "part_of", dst, "organization"),
+            )
+        if _inside(dst, src):
+            return _link(
+                "affiliation->part_of",
+                store.Edge(dst, "organization", "part_of", src, "organization"),
+            )
+        return _link(
+            "affiliation-between-organizations",
+            store.Edge(src, "organization", "affiliated_with", dst, "organization"),
+        )
+    return None
+
+
+def _authors(
+    src: str, rel: str, st: str, dst: str, dt: str, title: str, own: str
+) -> Decision | None:
+    """authored_by written backwards, or with authors on both ends: every
+    author is the document's."""
+    if rel != "authored_by" or st != "author":
+        return None
+    if title and dst == title and (dt == own or _looks_person(src)):
+        return _link(
+            "flip-authored_by", store.Edge(title, own, "authored_by", src, "author")
+        )
+    if dt == "author" and title:
+        names = [src] if src == dst else [src, dst]
+        return (
+            "link",
+            [store.Edge(title, own, "authored_by", n, "author") for n in names],
+            "authors-both-ends",
+        )
+    return None
+
+
+def _by_table(src: str, st: str, rel: str, dst: str, dt: str) -> Decision | None:
+    """What ``RETYPE``, ``REMAP`` and ``DROP`` say of the (relation, types)."""
+    if (rel, st, dt) in RETYPE and not (
+        rel == "cites" and len(dst) < 12 and len(dst.split()) < 2
+    ):  # a one-word "document" is not a paper we can name
+        st2, dt2 = RETYPE[(rel, st, dt)]
+        rel2 = REMAP.get((rel, st2, dt2), rel)
+        return _link(
+            f"retype-{rel}-{st}-{dt}" + (f"->{rel2}" if rel2 != rel else ""),
+            store.Edge(src, st2, rel2, dst, dt2),
+        )
+    if (rel, st, dt) in REMAP:
+        new = REMAP[(rel, st, dt)]
+        return _link(f"{rel}->{new}", store.Edge(src, st, new, dst, dt))
+    if (rel, st, dt) in DROP or (rel, st, "*") in DROP:
+        return "drop", [], f"drop-{rel}-{st}-{dt}"
+    return None
+
+
+def decide(item: dict[str, Any], doc: tuple[str, str, str | None] | None) -> Decision:
     """What the rules say about one typed item: ``("link", edges, rule)``,
     ``("drop", [], rule)`` or ``("open", [], None)``. Pure; the ontology
-    check happens in ``apply_typing_rules``."""
+    check happens in ``apply_typing_rules``. The rules run in this order,
+    and the first that decides wins."""
     src, dst = item["src"], item["dst"]
     rel, st, dt = item["rel"], item["src_type"], item["dst_type"]
     onto = ontology.current()
@@ -682,125 +777,28 @@ def decide(
     if rel == "unknown":
         return "drop", [], "no-relation"
     title, own = (doc or ("", "paper"))[:2]
-    rule = None
     if (edges := _self_as_device(item, doc)) is not None:
         return "link", edges, "self-as-device"
-    # written backwards: the author "authored_by" the paper, the
-    # organization "affiliated_with" the person
-    if (
-        rel == "authored_by"
-        and st in ("author", "person")
-        and dt
-        in (
-            "paper",
-            "document",
-        )
-    ):
-        return (
-            "link",
-            [store.Edge(dst, "paper", "authored_by", src, "author")],
-            "flip-authored_by",
-        )
-    # a manual "covering" a device is the manual of it (studio's describes;
-    # covers is for a concept or a standard)
-    if rel == "covers" and dt in ("device", "component") and onto.is_a(st, "document"):
-        return (
-            "link",
-            [store.Edge(src, st, "describes", dst, dt)],
-            "covers->describes",
-        )
-    if rel == "calls_for" and st == "ingredient" and dt in ("dish", "recipe"):
-        return (
-            "link",
-            [store.Edge(dst, dt, "calls_for", src, "ingredient")],
-            "flip-calls_for",
-        )
-    if rel == "affiliated_with" and st == "organization" and dt in ("person", "author"):
-        return (
-            "link",
-            [store.Edge(dst, "author", "affiliated_with", src, "organization")],
-            "flip-affiliated_with",
-        )
-    if (
-        rel == "affiliated_with"
-        and st == "organization"
-        and dt in ("paper", "document")
-    ):
-        return (
-            "link",
-            [store.Edge(dst, dt, "written_at", src, "organization")],
-            "flip-affiliated_with->written_at",
-        )
-    if rel == "affiliated_with" and st == dt == "organization":
-        # one inside the other is part_of, either way round (v7's rule for
-        # untyped items); two peers are affiliated, which v8 admits
-        if _inside(src, dst):
-            return (
-                "link",
-                [store.Edge(src, "organization", "part_of", dst, "organization")],
-                "affiliation->part_of",
-            )
-        if _inside(dst, src):
-            return (
-                "link",
-                [store.Edge(dst, "organization", "part_of", src, "organization")],
-                "affiliation->part_of",
-            )
-        return (
-            "link",
-            [store.Edge(src, "organization", "affiliated_with", dst, "organization")],
-            "affiliation-between-organizations",
-        )
+    if (d := _written_backwards(onto, src, st, rel, dst, dt)) is not None:
+        return d
     # the document under a wrong type: it is itself, in the shape the
     # relation wants it (a recipe where a recipe is asked for)
+    rule = None
     if _names_document(src, title):
         want = _self_document_type(onto, rel, own)
         if want != st:
             st, rule = want, "self-name"
-    # authored_by written backwards, or with authors on both ends
-    if rel == "authored_by" and st == "author":
-        if title and dst == title and (dt == own or _looks_person(src)):
-            return (
-                "link",
-                [store.Edge(title, own, "authored_by", src, "author")],
-                "flip-authored_by",
-            )
-        if dt == "author" and title:
-            names = [src] if src == dst else [src, dst]
-            return (
-                "link",
-                [store.Edge(title, own, "authored_by", n, "author") for n in names],
-                "authors-both-ends",
-            )
+    if (d := _authors(src, rel, st, dst, dt, title, own)) is not None:
+        return d
     if " ".join(src.lower().split()) == " ".join(dst.lower().split()):
-        return (
-            "drop",
-            [],
-            "self-edge",
-        )  # after the authored_by rules: both ends an author
-    if (rel, st, dt) in RETYPE and not (
-        rel == "cites" and len(dst) < 12 and len(dst.split()) < 2
-    ):  # a one-word "document" is not a paper we can name
-        st2, dt2 = RETYPE[(rel, st, dt)]
-        rel2 = REMAP.get((rel, st2, dt2), rel)
-        return (
-            "link",
-            [store.Edge(src, st2, rel2, dst, dt2)],
-            f"retype-{rel}-{st}-{dt}" + (f"->{rel2}" if rel2 != rel else ""),
-        )
-    if (rel, st, dt) in REMAP:
-        return (
-            "link",
-            [store.Edge(src, st, REMAP[(rel, st, dt)], dst, dt)],
-            f"{rel}->{REMAP[(rel, st, dt)]}",
-        )
-    if (rel, st, dt) in DROP or (rel, st, "*") in DROP:
-        return "drop", [], f"drop-{rel}-{st}-{dt}"
+        return "drop", [], "self-edge"  # after the authored_by rules
+    if (d := _by_table(src, st, rel, dst, dt)) is not None:
+        return d
     if rule == "self-name":
-        return "link", [store.Edge(src, st, rel, dst, dt)], rule
+        return _link(rule, store.Edge(src, st, rel, dst, dt))
     if aliased:  # under its canonical name (and way round) as it stands
-        return "link", [store.Edge(src, st, rel, dst, dt)], f"alias-{item['rel']}"
-    return "open", [], None
+        return _link(f"alias-{item['rel']}", store.Edge(src, st, rel, dst, dt))
+    return _OPEN
 
 
 def apply_typing_rules(
