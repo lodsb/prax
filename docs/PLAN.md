@@ -33,6 +33,11 @@ nothing.
       repository as a page snapshot where the starred-repository
       importer's shape would do better. Both are under "The UI and the
       agent".
+- [ ] (2026-10-01: packs, `docs/packs.md`: a field's ontology, readers, kinds, steps, tools,
+      models and extra in one package under `src/prax/packs/`; first the registries, then
+      maths as the first pack) **AD0. Packs.** The user, 2026-10-01: "should we have
+      something like modules for these domain/infrastructure fields?" Packs live in
+      the repository.
 - [ ] (2026-09-30: planned, `docs/symbolic-maths.md`: 17,417 formulas in 243 documents; SymPy's ANTLR parser reads 81% and about 36% plausibly faithfully; three steps and five operations; the build waits on the user's choices) **AD. Symbolic maths, planned as a stage** (niggles.txt,
       2026-09-30). A display equation is a `formula` chunk with its LaTeX
       in `data` since marker. SymPy's LaTeX parser can turn it into an
