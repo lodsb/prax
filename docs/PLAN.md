@@ -7,6 +7,72 @@ Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
+## The order after Z, agreed 2026-09-30
+
+Stage Z ends the lettered order below. After it come the close of Z,
+two features used every day, and a stage that is planned before it is
+built. Then the experiment, and last a phase of research that builds
+nothing.
+
+- [ ] **AA. Close Z.** The re-extraction of 2026-09-30 reads about 3,200
+      documents against their new domains. When it is through:
+      - the review queue of the 406 `computing` documents is what
+        `computing` v2 grows from, as studio grew (the module's header
+        says what was left out on purpose);
+      - the edges per document before and after, per domain, say whether
+        a narrower subset read better or worse;
+      - the labeller's mistakes on those documents, corrected on the
+        Review page's genre tab, go back into its training
+        (`scripts/train_labeller.py`);
+      - two decisions of the user: rules for `society`, and step 4
+        (`meta.regions`, a nightly pass that writes every document).
+- [ ] **AB. An open mode for `ask`** (below, under "The UI and the
+      agent"; experimental). About a day with the tests.
+- [ ] **AC. Two extension fixes.** A PDF viewer's tab is sent as the
+      viewer's frame (four documents hold only its markup), and a GitHub
+      repository as a page snapshot where the starred-repository
+      importer's shape would do better. Both are under "The UI and the
+      agent".
+- [ ] **AD. Symbolic maths, planned as a stage** (niggles.txt,
+      2026-09-30). A display equation is a `formula` chunk with its LaTeX
+      in `data` since marker. SymPy's LaTeX parser can turn it into an
+      expression kept beside it. `ask` and the surfer could then use a
+      maths tool (simplify, substitute, check two equations are the same,
+      solve) in a sandbox. The plan says first how many documents carry
+      formulas worth it, which parser reads marker's LaTeX, and what
+      "plug things together" asks of the tool in practice. Built only
+      after the user has read the plan.
+- [ ] **AE. The distilled surfer.** A small local model trained on the
+      large model's search-and-read trails. Its plan is kept outside the
+      repository. It needs a question set and a training run of a few
+      hours on the card.
+- [ ] **AF. Research, three questions** (the user, 2026-09-30). Each ends
+      in a document under `docs/` with a proposal and what it would
+      cost. Nothing is built before the user has read it.
+      - *Condensed knowledge.* What besides the graph's claims holds
+        knowledge in a form a model can combine: formulas as expressions
+        (AD), tables and a datasheet's parameters as values, a
+        definition as a term with its conditions, a procedure as steps.
+        What the literature and the tools do (knowledge compilation,
+        semantic parsing of papers, notebooks as knowledge), measured
+        against what the library holds.
+      - *The database layout.* Whether the schema still fits after 30
+        migrations: what `documents.meta` carries that has earned a
+        column or an index (67 keys read by name), the size and the
+        indexes of `edges` and `chunks` against the queries that are
+        slow, `readings` and `jobs` as they grow, and the thresholds of
+        CLAUDE.md ("Decision thresholds") against today's numbers. Read
+        on a copy of the store, never the live one.
+      - *Other kinds of knowledge in the graph.* How code (a
+        repository's modules, what calls what, which library a program
+        uses), music (a score, a piece's form, harmony, a MIDI file) and
+        sound (a sample, what it sounds like, an embedding of it)
+        would be represented: as ontology modules on the existing
+        tables, as new chunk kinds and locators (rationale R13), or as
+        something the tables cannot hold. What exists for each (tree-
+        sitter and call graphs, music21 and MusicXML, CLAP-like audio
+        embeddings) and what the library already holds of each.
+
 ## The order, agreed 2026-09-27, second half (from niggles.txt)
 
 F–J below are done, and two niggles with them (taco/tacos is I, the
