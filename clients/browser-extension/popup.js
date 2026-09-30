@@ -127,6 +127,7 @@ async function main() {
   // it the active tab is still read (activeTab), but the snapshot cannot
   // fetch a page's images cross-origin and a background tab cannot be read.
   await showSitesButton();
+  showRoute();
   try { const s = await api.storage.local.get(["server", "token"]); await showSelection(lib.normalizeServer(s.server), s.token || ""); } catch (_) { /* no selection section */ }
   $("send-tab").addEventListener("click", async () => {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });
@@ -185,6 +186,19 @@ async function showSelection(server, token) {
     const r = await api.runtime.sendMessage({ type: "append", tabId: tab.id, slug: pick.value, title: pick.options[pick.selectedIndex].textContent.replace(/ \([a-z]+\)$/, "") });
     $("msg").textContent = r && r.error ? r.error : lib.describeResult(r || {});
   });
+}
+
+/* How the tab in front will go, when it is not an ordinary page: a video's
+   transcript, a paper's PDF, a PDF fetched with the session (lib.route,
+   asked of the background, which sends by the same answer). */
+async function showRoute() {
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+  let way = lib.route(tab.url, {});
+  try { way = (await api.runtime.sendMessage({ type: "route", tabId: tab.id })) || way; } catch (_) { /* the URL's answer */ }
+  const el = $("route");
+  el.textContent = way.label ? `this tab: ${way.label}` : "";
+  el.hidden = !way.label;
 }
 
 async function showSitesButton() {

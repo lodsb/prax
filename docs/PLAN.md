@@ -705,6 +705,14 @@ recipe at once. Three independent failures, each wanting a different fix.
       extension should send the PDF the frame shows, as it does for a
       tab whose URL ends in `.pdf`. Since 2026-09-29 such a page no
       longer falls back to plain text, so it waits as a failed parse.
+- [ ] **The extension sends a GitHub repository as a page snapshot.**
+      The popup says so (`lib.route`, 2026-09-30). The importer for
+      starred repositories (`prax.importers.github`, a client) writes a
+      better document: the README under a header of the repository's
+      details (description, language, topics, licence). The route could
+      send a repository in that shape, through a door route that takes
+      one repository's URL. The popup's line changes with it. A small
+      stage with its own tests.
 
 ### The backfill
 

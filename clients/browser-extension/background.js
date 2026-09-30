@@ -708,28 +708,39 @@ async function captureVideo(tab, opts, cfg, common) {
   return { tabId: tab.id, url, title: info.title || common.title, mode: "video", note, ...data };
 }
 
+/* What only the tab can tell about how it goes (lib.route): a player with
+   captions, and the paper its citation tags name. */
+async function tabHints(tab) {
+  if (!lib.capturable(tab.url)) return {};
+  const video = !!lib.videoOfUrl(tab.url) || await probeVideo(tab.id);
+  return { video, paper: await readPaper(tab.id) };
+}
+
 async function captureTab(tab, opts, cfg) {
   // an internal page (the Add-ons Manager, about:…, a file) cannot be read
   // by an extension: say so before trying
-  if (!lib.capturable(tab.url)) return { tabId: tab.id, url: tab.url, title: tab.title || null, error: "this kind of page cannot be read" };
-  if (lib.videoOfUrl(tab.url) || await probeVideo(tab.id)) {
+  const hints = await tabHints(tab);
+  let way = lib.route(tab.url, hints);
+  if (way.kind === "skip") return { tabId: tab.id, url: tab.url, title: tab.title || null, error: way.label };
+  if (way.label) await setProgress({ note: way.label });
+  if (way.kind === "video") {
     const common = { url: tab.url, title: tab.title || null, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session };
     const v = await captureVideo(tab, opts, cfg, common);
     if (v) return v;
+    way = lib.route(tab.url, { ...hints, video: false }); // not a video page after all
   }
   // a scholarly page names its paper in its citation_* tags (arXiv, the
   // publishers, the preprint servers): the PDF it points at is fetched
   // with this browser's session and uploaded with the ids and authors,
   // the page's own snapshot only when that fails; a page with ids and
   // no PDF goes as a snapshot carrying the ids
-  const paper = lib.capturable(tab.url) ? await readPaper(tab.id) : null;
-  if (paper && paper.pdf_url && !lib.looksLikePdf(tab.url, null)) {
+  const paper = hints.paper;
+  if (way.kind === "paper") {
     const commonP = { url: tab.url, title: paper.title || tab.title || null, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session, paper };
     try {
       const blob = await fetchPdf(new URL(paper.pdf_url, tab.url).href);
       const data = await uploadFile(blob, lib.pdfFileName(paper.pdf_url), commonP, cfg);
-      const ids = [paper.doi ? `doi ${paper.doi}` : null, paper.arxiv ? `arXiv ${paper.arxiv}` : null].filter(Boolean).join(", ");
-      return { tabId: tab.id, url: tab.url, title: commonP.title, mode: "file", note: `the paper's PDF from the page's citation tags${ids ? ` (${ids})` : ""}`, ...data };
+      return { tabId: tab.id, url: tab.url, title: commonP.title, mode: "file", note: way.label, ...data };
     } catch (err) { log("warn", "the page's PDF could not be fetched; the page goes instead", paper.pdf_url, err); }
   }
   const read = await readTab(tab.id);
@@ -739,7 +750,7 @@ async function captureTab(tab, opts, cfg) {
   if (p.mode === "skip") return { tabId: tab.id, url, title, error: p.reason };
   const common = { url, title, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session, ...(paper ? { paper } : {}) };
   if (p.mode === "html") {
-    const note = (read.snapshot ? "snapshot with images and styles" : (read.note || "plain DOM")) + (paper && (paper.doi || paper.arxiv) ? ` (${[paper.doi ? `doi ${paper.doi}` : null, paper.arxiv ? `arXiv ${paper.arxiv}` : null].filter(Boolean).join(", ")})` : "");
+    const note = (read.snapshot ? "snapshot with images and styles" : (read.note || "plain DOM")) + (lib.paperIds(paper) ? ` (${lib.paperIds(paper)})` : "");
     const data = await door("/ingest/html", { ...common, html: read.html, mode: read.snapshot ? "snapshot" : "dom", note }, cfg);
     return { tabId: tab.id, url, title, mode: "html", note, ...data };
   }
@@ -1076,6 +1087,11 @@ api.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === "append") {
     // the selection of a tab onto a page (the popup's picker; the test bed)
     api.tabs.get(msg.tabId).then((tab) => appendSelection(tab, msg.slug, msg.text || "", msg.title || "")).then(sendResponse, (err) => sendResponse({ error: err.message }));
+    return true;
+  }
+  if (msg.type === "route") {
+    // which way the tab would go, for the popup to say before it is sent
+    api.tabs.get(msg.tabId).then(async (tab) => lib.route(tab.url, await tabHints(tab))).then(sendResponse, (err) => sendResponse({ error: err.message }));
     return true;
   }
   if (msg.type === "selection") {

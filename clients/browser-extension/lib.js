@@ -41,6 +41,50 @@
     return { mode: "html" };
   }
 
+  /** A paper's printed ids, for a note: "doi 10.1/x, arXiv 2401.1". */
+  function paperIds(paper) {
+    if (!paper) return "";
+    return [paper.doi ? `doi ${paper.doi}` : null, paper.arxiv ? `arXiv ${paper.arxiv}` : null].filter(Boolean).join(", ");
+  }
+
+  /** A GitHub repository's page: {owner, repo}, else null. */
+  function githubRepoOf(url) {
+    let u;
+    try { u = new URL(url); } catch (_) { return null; }
+    if (u.hostname.replace(/^www\./, "") !== "github.com") return null;
+    const [owner, repo] = u.pathname.split("/").filter(Boolean);
+    const reserved = /^(orgs|settings|marketplace|explore|topics|features|login|notifications|search|sponsors|collections|trending|about|pricing)$/i;
+    return owner && repo && !reserved.test(owner) ? { owner, repo: repo.replace(/\.git$/, "") } : null;
+  }
+
+  /** Which way a tab goes to the door, and a line that says so, before it
+      is sent: the popup shows the line, and the background sends by the
+      kind, so the two cannot disagree. `hints` is what only the tab can
+      tell: `video` (a player with captions; undefined leaves it to the
+      URL) and `paper` (its citation tags, lib.paperOf). An ordinary page
+      has no line. */
+  function route(url, hints) {
+    const h = hints || {};
+    if (!capturable(url)) return { kind: "skip", label: "this kind of page cannot be read" };
+    const yt = videoOfUrl(url);
+    const video = h.video !== undefined ? !!h.video : !!yt;
+    if (video) {
+      return yt
+        ? { kind: "video", label: "YouTube video: the transcript, with a frame every so often" }
+        : { kind: "video", label: "a video with captions: the transcript, with a frame every so often" };
+    }
+    const paper = h.paper || null;
+    const ids = paperIds(paper);
+    if (paper && paper.pdf_url && !looksLikePdf(url, null)) {
+      return { kind: "paper", label: `a paper: its PDF from the page's citation tags${ids ? ` (${ids})` : ""}` };
+    }
+    if (looksLikePdf(url, null)) return { kind: "pdf", label: "a PDF: fetched with your session and uploaded" };
+    const repo = githubRepoOf(url);
+    if (repo) return { kind: "page", label: `GitHub repository ${repo.owner}/${repo.repo}: a snapshot of the page (no repository importer in the extension yet)` };
+    if (ids) return { kind: "page", label: `a page naming its paper (${ids}): a snapshot carrying the ids` };
+    return { kind: "page", label: null };
+  }
+
   function byteLength(s) {
     if (typeof TextEncoder !== "undefined") return new TextEncoder().encode(s).length;
     return Buffer.byteLength(s, "utf8");
@@ -363,5 +407,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection, parseWebVtt, parseSiteRules, domainsFor };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, route, paperIds, githubRepoOf, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection, parseWebVtt, parseSiteRules, domainsFor };
 });

@@ -192,3 +192,29 @@ test("parseSiteRules and domainsFor: a host, its subdomains, the defaults otherw
   assert.deepEqual(lib.domainsFor(rules, "nope", ["x"]), ["x"]);
   assert.deepEqual(lib.parseSiteRules(""), []);
 });
+
+test("route: the way a tab goes, and the line the popup shows for it", () => {
+  assert.deepEqual(lib.route("about:blank"), { kind: "skip", label: "this kind of page cannot be read" });
+  assert.equal(lib.route("https://www.youtube.com/watch?v=abc123").kind, "video");
+  assert.match(lib.route("https://youtu.be/abc123").label, /^YouTube video/);
+  // the tab knows better than the URL: a player that is not there
+  assert.equal(lib.route("https://www.youtube.com/watch?v=abc123", { video: false }).kind, "page");
+  assert.match(lib.route("https://x.org/talk", { video: true }).label, /^a video with captions/);
+  const paper = { pdf_url: "/pdf/2401.1", doi: "10.1/x", arxiv: "2401.1" };
+  assert.deepEqual(lib.route("https://arxiv.org/abs/2401.1", { paper }), {
+    kind: "paper", label: "a paper: its PDF from the page's citation tags (doi 10.1/x, arXiv 2401.1)",
+  });
+  // a tab that is the PDF itself goes as the PDF, not by its tags
+  assert.equal(lib.route("https://x.org/a.pdf", { paper }).kind, "pdf");
+  assert.match(lib.route("https://x.org/p", { paper: { doi: "10.1/x" } }).label, /naming its paper \(doi 10\.1\/x\)/);
+  assert.match(lib.route("https://github.com/owner/tool/tree/main").label, /^GitHub repository owner\/tool: a snapshot/);
+  assert.deepEqual(lib.route("https://example.org/a", {}), { kind: "page", label: null });
+});
+
+test("githubRepoOf: a repository's pages, not GitHub's own", () => {
+  assert.deepEqual(lib.githubRepoOf("https://github.com/a/b.git"), { owner: "a", repo: "b" });
+  assert.deepEqual(lib.githubRepoOf("https://www.github.com/a/b/blob/main/x.py"), { owner: "a", repo: "b" });
+  for (const u of ["https://github.com/a", "https://github.com/settings/tokens", "https://github.com/orgs/x/people", "https://gitlab.com/a/b", "nonsense"]) {
+    assert.equal(lib.githubRepoOf(u), null, u);
+  }
+});

@@ -75,6 +75,17 @@ uploads the bytes to `/ingest/file`. Only when that comes back as
 something else, such as a login page, or fails, does it post the URL to
 `/ingest/url` for the door to fetch.
 
+**Which way a tab goes.** The popup names the way under the buttons
+before anything is sent, whenever it is not an ordinary page:
+- a YouTube video, or a video with captions: the transcript, with a
+  frame every so often;
+- a paper page: its PDF from the citation tags, with the ids;
+- a PDF: fetched with the browser's session;
+- a GitHub repository: for now a snapshot of the page.
+
+The popup's line and the background's choice come from one function,
+`lib.route`, so they cannot disagree. An ordinary page gets no line.
+
 **Send all tabs in this window.** The same, tab by tab, under one
 capture-session id (`<timestamp>-<4 random chars>`). So "the tabs I
 saved on Tuesday" is a query over `meta.capture.session`. Closing each
