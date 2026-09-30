@@ -348,35 +348,23 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
     )
 
 
-def compose(modules: list[Module]) -> Ontology:
-    """Merge modules into one ontology, checking names, parents, domains
-    and requirements. A single unnamed module keeps its plain version."""
-    by_name = {m.name: m for m in modules}
-    types: dict[str, EntityType] = {}
-    relations: dict[str, Relation] = {}
-    type_aliases: dict[str, str] = {}
-    relation_aliases: dict[str, str] = {}
-    reversed_aliases: set[str] = set()
-    for m in modules:
-        for req in m.requires:
-            if req not in by_name:
-                raise ValueError(
-                    f"module {m.name!r} requires {req!r}, which is not loaded"
-                )
-        for n, t in m.types.items():
-            if n in types:
-                raise ValueError(
-                    f"entity type {n!r} is declared by both {types[n].module!r}"
-                    f" and {m.name!r}"
-                )
-            types[n] = t
-        for n, r in m.relations.items():
-            if n in relations:
-                raise ValueError(
-                    f"relation {n!r} is declared by both {relations[n].module!r}"
-                    f" and {m.name!r}"
-                )
-            relations[n] = r
+def _declare(
+    into: dict[str, Any], what: str, module: str, found: dict[str, Any]
+) -> None:
+    """One module's types or relations into the composed set; a name two
+    modules declare is refused."""
+    for n, x in found.items():
+        if n in into:
+            raise ValueError(
+                f"{what} {n!r} is declared by both {into[n].module!r} and {module!r}"
+            )
+        into[n] = x
+
+
+def _check_references(
+    types: dict[str, EntityType], relations: dict[str, Relation]
+) -> None:
+    """Every parent and every relation's domain and range name a type."""
     for t in types.values():
         if t.parent and t.parent not in types:
             raise ValueError(f"type {t.name!r} has unknown parent {t.parent!r}")
@@ -387,28 +375,67 @@ def compose(modules: list[Module]) -> Ontology:
                 raise ValueError(
                     f"relation {r.name!r} {side} names unknown types {unknown}"
                 )
-    # An alias may not shadow a name its own module or a required module
-    # declares. When two independent modules meet (research and studio
-    # both loaded) and one's alias names the other's relation, the
-    # declared name wins and the alias is left out.
+
+
+def _aliases(
+    what: str,
+    aliases: dict[str, str],
+    declared: dict[str, Any],
+    visible: set[str],
+    into: dict[str, str],
+) -> list[str]:
+    """One module's aliases of types or relations into the composed set.
+
+    An alias may not shadow a name its own module or a required module
+    declares. When two independent modules meet (research and studio both
+    loaded) and one's alias names the other's declared name, the declared
+    name wins and the alias is left out. Returns the aliases taken."""
+    taken = []
+    for alias, target in aliases.items():
+        if target not in declared or (
+            alias in declared and declared[alias].module in visible
+        ):
+            raise ValueError(f"{what} alias {alias!r} -> {target!r} is not valid")
+        if alias not in declared:
+            into[alias] = target
+            taken.append(alias)
+    return taken
+
+
+def _version(modules: list[Module]) -> str:
+    """The modules' versions joined, core first (``core3+research9``); a
+    single unnamed module keeps its plain version."""
+    if len(modules) == 1 and modules[0].name == "main":
+        return modules[0].version
+    ordered = sorted(modules, key=lambda m: (m.name != CORE, m.name))
+    return "+".join(f"{m.name}{m.version}" for m in ordered)
+
+
+def compose(modules: list[Module]) -> Ontology:
+    """Merge modules into one ontology, checking names, parents, domains
+    and requirements."""
+    by_name = {m.name: m for m in modules}
+    types: dict[str, EntityType] = {}
+    relations: dict[str, Relation] = {}
+    for m in modules:
+        for req in m.requires:
+            if req not in by_name:
+                raise ValueError(
+                    f"module {m.name!r} requires {req!r}, which is not loaded"
+                )
+        _declare(types, "entity type", m.name, m.types)
+        _declare(relations, "relation", m.name, m.relations)
+    _check_references(types, relations)
+    type_aliases: dict[str, str] = {}
+    relation_aliases: dict[str, str] = {}
+    reversed_aliases: set[str] = set()
     for m in modules:
         visible = _closure(m, by_name)
-        for alias, target in m.type_aliases.items():
-            if target not in types or (
-                alias in types and types[alias].module in visible
-            ):
-                raise ValueError(f"type alias {alias!r} -> {target!r} is not valid")
-            if alias not in types:
-                type_aliases[alias] = target
-        for alias, target in m.relation_aliases.items():
-            if target not in relations or (
-                alias in relations and relations[alias].module in visible
-            ):
-                raise ValueError(f"relation alias {alias!r} -> {target!r} is not valid")
-            if alias not in relations:
-                relation_aliases[alias] = target
-                if alias in m.reversed_aliases:
-                    reversed_aliases.add(alias)
+        _aliases("type", m.type_aliases, types, visible, type_aliases)
+        taken = _aliases(
+            "relation", m.relation_aliases, relations, visible, relation_aliases
+        )
+        reversed_aliases |= {a for a in taken if a in m.reversed_aliases}
     self_types: list[str] = []
     for m in modules:
         for own in m.self_types:
@@ -416,13 +443,8 @@ def compose(modules: list[Module]) -> Ontology:
                 raise ValueError(f"module {m.name!r}: self type {own!r} is unknown")
             if own not in self_types:
                 self_types.append(own)
-    if len(modules) == 1 and modules[0].name == "main":
-        version = modules[0].version
-    else:
-        ordered = sorted(modules, key=lambda m: (m.name != CORE, m.name))
-        version = "+".join(f"{m.name}{m.version}" for m in ordered)
     return Ontology(
-        version=version,
+        version=_version(modules),
         modules={m.name: m for m in modules},
         types=types,
         relations=relations,
