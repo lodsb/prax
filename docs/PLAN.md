@@ -73,7 +73,7 @@ nothing.
         sitter and call graphs, music21 and MusicXML, CLAP-like audio
         embeddings) and what the library already holds of each.
 
-- [ ] **AG. The infrastructure the research found** (the user,
+- [x] **AG. The infrastructure the research found** (the user,
       2026-09-30: before any feature from the research, after the
       surfer's pilot and what is open of AA to AD).
       `docs/research-database-layout.md` has the measurements and the
@@ -99,8 +99,9 @@ nothing.
         `prax-before-heal.db` deleted (2.7 GB); the entity threshold of
         CLAUDE.md is now a walk time, measured by `prax heal`
         (`slow-graph-walks`).
-      - Open from AC: the four documents that hold only a PDF viewer
-        (9539, 9574, 9741, 10112) wait for their tabs to be sent again.
+      - From AC, done 2026-09-30: the three IEEE papers sent again as
+        PDFs (13369 to 13371, read by the worker); the arXiv one was in
+        the library already (13339).
 
 ## The order, agreed 2026-09-27, second half (from niggles.txt)
 
