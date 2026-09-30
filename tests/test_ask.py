@@ -345,3 +345,70 @@ def test_a_follow_up_carries_the_conversation(con: sqlite3.Connection) -> None:
     # a long, self-contained follow-up searches on its own words
     long = ask.clean_history([{"question": "q", "answer": "a"}] * 10)
     assert len(long) == ask.HISTORY_TURNS
+
+
+class _Recorder(FakeRuntime):
+    """FakeRuntime that keeps the length budget each answer was given."""
+
+    def chat(self, system: str, user: str, **kw: object) -> tuple[str, dict[str, int]]:
+        self.calls.append({"system": system, "max_tokens": kw.get("max_tokens")})
+        return "Delay matrices [1]; my own derivation follows.", {
+            "input_tokens": 10,
+            "output_tokens": 10,
+        }
+
+
+def test_an_open_answer_uses_the_library_and_the_models_own_knowledge(
+    con: sqlite3.Connection,
+) -> None:
+    """``mode="open"``: the same passages, the open prompt and a larger
+    budget; an answer even when the search finds nothing; a page it is kept
+    on is marked and never taken as the library's evidence again."""
+    _library(con)
+    rt = _Recorder()
+    local = ask.LocalAnswerer(rt)
+    grounded = ask.ask(con, "reverb methods", answerer=local)
+    opened = ask.ask(con, "reverb methods", answerer=local, mode="open")
+    assert rt.calls[0]["system"] == ask.SYSTEM
+    assert rt.calls[1]["system"] == ask.OPEN_SYSTEM
+    assert rt.calls[1]["max_tokens"] == ask.OPEN_TOKENS > rt.calls[0]["max_tokens"]
+    assert grounded["mode"] == "grounded" and opened["mode"] == "open"
+    assert opened["passages"] and opened["citations"][0]["n"] == 1
+    # nothing found: a grounded ask has nothing to say, an open one answers
+    assert ask.ask(con, "zzqx", answerer=local)["answer"] is None
+    assert ask.ask(con, "zzqx", answerer=local, mode="open")["answer"]
+    with pytest.raises(ValueError, match="grounded or open"):
+        ask.ask(con, "reverb", answerer=local, mode="loose")
+    # kept on a page: marked, said so, and out of the evidence
+    saved = ask.save(con, opened, "reverb-open", create="synthesis")
+    page = store.get_page(con, "reverb-open")
+    assert "An open answer" in page["text"]
+    assert store.get_meta(con, saved["doc_id"])["page"]["open"] is True
+    hits = store.search(con, "delay matrices my own derivation", 10)
+    assert saved["doc_id"] in {h["doc_id"] for h in hits}  # a search finds it
+    again = ask.ask(con, "delay matrices my own derivation", answerer=local)
+    assert saved["doc_id"] not in {p["doc_id"] for p in again["passages"]}
+
+
+def test_the_door_takes_the_mode(client: TestClient) -> None:
+    client.post(
+        "/ingest", json={"text": "Feedback delay networks. " * 30, "title": "FDN"}
+    )
+    r = client.post(
+        "/ask", json={"question": "delay networks", "steps": 0, "mode": "open"}
+    )
+    assert r.status_code == 200 and r.json()["mode"] == "open"
+    assert r.json()["answer"].endswith("And my own.")
+    bad = client.post("/ask", json={"question": "x", "mode": "free"})
+    assert bad.status_code == 400
+
+
+def test_a_surfed_open_answer_comes_even_from_an_empty_search(
+    con: sqlite3.Connection,
+) -> None:
+    stub = ask.StubAnswerer()
+    grounded = ask.ask(con, "zzqx nothing", answerer=stub, steps=3)
+    opened = ask.ask(con, "zzqx nothing", answerer=stub, steps=3, mode="open")
+    assert grounded["answer"] is None and grounded["mode"] == "grounded"
+    assert opened["answer"].endswith("And my own.") and opened["mode"] == "open"
+    assert "trail" in opened

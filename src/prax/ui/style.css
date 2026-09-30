@@ -482,6 +482,7 @@ main.stage { max-width: 1400px; }
 .answer a.cite { display: inline-block; padding: 0 .35em; margin: 0 .05em; background: var(--highlight); color: var(--accent); font-family: var(--font-ui); font-size: .78em; font-weight: 600; line-height: 1.5; text-decoration: none; }
 .answer a.cite:hover { background: var(--accent); color: var(--bg); }
 .turn-meta { display: flex; gap: .9rem; flex-wrap: wrap; font-size: .8rem; margin-top: .55rem; color: var(--faint); }
+.turn-open { color: var(--accent); }
 .turn-pending { animation: pulse 1.4s ease-in-out infinite; }
 .trail { margin: .3rem 0 .6rem; padding-left: 1.6rem; font-size: .84rem; line-height: 1.4; color: var(--faint); }
 .trail li { margin: .15rem 0; }

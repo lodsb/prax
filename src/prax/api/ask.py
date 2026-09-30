@@ -39,6 +39,7 @@ class AskReq(BaseModel):
     tokens: int | None = None  # the reading budget of the steps
     stream: bool = False  # the trail as it happens, one JSON line per event
     regions: bool = False  # the region the passages come from, with its summary
+    mode: str = "grounded"  # or open: the model's own knowledge beside the passages
 
 
 class SaveReq(BaseModel):
@@ -64,7 +65,11 @@ def ask(req: AskReq, request: Request) -> Any:
     ``answering``, then ``answer`` with the result (or ``error``) — for a
     client that shows the trail while the model works. Generation runs
     outside the store lock; a local model answers in tens of seconds, a
-    surf in a minute or two."""
+    surf in a minute or two. ``mode: open`` answers past the library too
+    (``ask.OPEN_SYSTEM``): the passages cited where used, the rest the
+    model's own, said so."""
+    if req.mode not in ask_mod.MODES:
+        raise HTTPException(400, f"mode is {' or '.join(ask_mod.MODES)}")
     try:
         answerer = (
             ask_mod.answerer_named(req.backend) if req.backend else ask_mod.current()
@@ -92,6 +97,7 @@ def ask(req: AskReq, request: Request) -> Any:
         "steps": max(0, steps or 0),
         "tokens": req.tokens,
         "regions": req.regions,
+        "mode": req.mode,
     }
     if not req.stream:
         try:

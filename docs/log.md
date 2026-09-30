@@ -2777,3 +2777,24 @@ Left for later, in `docs/PLAN.md`:
       would cut them off from the code that reads them.
 - The typed shapes for hits, meta and jobs.
 - The next strict batch.
+
+## 2026-09-30: an open mode for ask (stage AB)
+
+`ask` answered from the passages alone: its prompt pins the model to
+them, under 250 words. The open mode keeps the search and the surfing
+and answers with a second prompt, `ask.OPEN_SYSTEM`. The model cites
+the passages where it uses them. Beyond them it may explain, derive,
+compare and write code, and it says where the library is silent. The
+budget is 3,000 tokens (`ask.OPEN_TOKENS`). An open answer comes even
+when the search finds nothing.
+
+- `mode: grounded | open` on `POST /ask` (400 for anything else), on
+      `ask.ask` and `surf.run`, in the result, and in the MCP `ask` tool
+      with `answer=True`. The Ask view has an "open" box, and an open
+      answer is labelled so.
+- A page an open answer is kept on starts that section with "An open
+      answer" and carries `meta.page.open` (`store.mark_open_answer`).
+      `ask.evidence` drops such pages from what the one-shot gather and
+      the surfer's search take as passages. A plain search still finds
+      them.
+- The reference is `docs/ask.md`, "Grounded and open".

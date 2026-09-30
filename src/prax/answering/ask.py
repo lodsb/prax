@@ -62,6 +62,28 @@ them ("that method", "the second one"); answer the new question in their
 light, but cite only the passages numbered below it, never an earlier
 turn's."""
 
+# The open mode (docs/ask.md): the same search and surfing, and an answer
+# that may go past the library. The passages are cited where they are
+# used; the rest is the model's own, and the answer says which is which.
+# A page kept from it is marked, so it is never taken as evidence later.
+OPEN_SYSTEM = """\
+You answer a question for someone whose personal research library is searched
+for you: numbered passages from it and the graph's facts about their
+documents are given below the question. Use them where they bear on the
+question and cite them in square brackets, like [2] or [1][3], right after
+what they support; cite nothing else and never invent a number. Beyond
+them you may use your own knowledge: explain, derive, compare, write code,
+at the length the task needs. Keep the two apart. What rests on a passage
+carries its citation; what is your own carries none, and where the library
+says nothing on a point, say that the answer there is your own. When the
+passages and your knowledge disagree, say so and give both. Write equations
+in LaTeX between $$ on a line of their own and code in fenced blocks with
+the language named. Answer in Markdown, without a heading, and name
+documents by their titles. When earlier turns are given, answer the new
+question in their light, but cite only the passages numbered below it."""
+OPEN_TOKENS = 3000  # an open answer may explain and write code
+MODES = ("grounded", "open")
+
 HISTORY_TURNS = 6  # what a follow-up carries along, at most
 HISTORY_CHARS = 1500  # of each earlier answer
 _FOLLOW_UP = re.compile(
@@ -146,6 +168,19 @@ class Bundle:
     # the region of the library the passages come from ("A way in"): its
     # name, its summary and its parts, for a question about a region
     region: dict[str, Any] | None = None
+    # grounded: the passages alone; open: the model's own knowledge beside
+    # them (``OPEN_SYSTEM``)
+    mode: str = "grounded"
+
+    @property
+    def system(self) -> str:
+        """The prompt the answer is asked with, by the mode."""
+        return OPEN_SYSTEM if self.mode == "open" else SYSTEM
+
+    def answer_tokens(self, grounded: int) -> int:
+        """The answer's length budget: ``grounded`` for a grounded answer,
+        the open mode's own otherwise."""
+        return OPEN_TOKENS if self.mode == "open" else grounded
 
     def as_message(self) -> str:
         n = len(self.passages)
@@ -203,6 +238,7 @@ class Bundle:
             "facts": {str(k): v for k, v in self.facts.items()},
             "turns_before": len(self.history),
             "region": self.region,
+            "mode": self.mode,
         }
 
 
@@ -217,6 +253,15 @@ def clean_history(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
         if q and a:
             turns.append({"question": q, "answer": a})
     return turns[-HISTORY_TURNS:]
+
+
+def evidence(
+    con: sqlite3.Connection, hits: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The hits that may be passages: a page kept from an open answer holds
+    the model's own knowledge and is never the library's evidence."""
+    marked = store.open_answer_documents(con, [int(h["doc_id"]) for h in hits])
+    return [h for h in hits if int(h["doc_id"]) not in marked]
 
 
 def search_query(question: str, history: list[dict[str, str]]) -> str:
@@ -256,7 +301,7 @@ def gather(
     # hybrid search fuses at document level; the FTS-only fallback does not,
     # so one passage per document is enforced here and the search over-fetches
     query = search_query(bundle.question, bundle.history)
-    hits = store.search(con, query, limit * 3, doctype=doctype)
+    hits = evidence(con, store.search(con, query, limit * 3, doctype=doctype))
     seen: set[int] = set()
     for h in hits:
         if h["doc_id"] in seen or len(bundle.passages) >= limit:
@@ -369,9 +414,9 @@ class LocalAnswerer:
 
     def _answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
         return self.runtime.chat(
-            SYSTEM,
+            bundle.system,
             bundle.as_message(),
-            max_tokens=self.max_tokens,
+            max_tokens=bundle.answer_tokens(self.max_tokens),
             temperature=self.temperature,
             repeat_penalty=self.repeat_penalty,
         )
@@ -411,7 +456,9 @@ class ClaudeAnswerer:
         return got
 
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
-        return self._chat(SYSTEM, bundle.as_message(), 2 * ANSWER_TOKENS)
+        return self._chat(
+            bundle.system, bundle.as_message(), bundle.answer_tokens(2 * ANSWER_TOKENS)
+        )
 
     def step(
         self, system: str, user: str, *, grammar: str | None = None
@@ -434,8 +481,9 @@ class StubAnswerer:
 
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
         cite = "[1]" if bundle.passages else ""
+        own = " And my own." if bundle.mode == "open" else ""
         return (
-            f"Stub answer to '{bundle.question}' {cite}.".replace(" .", "."),
+            f"Stub answer to '{bundle.question}' {cite}.".replace(" .", ".") + own,
             {"input_tokens": len(bundle.as_message()) // 4, "output_tokens": 12},
         )
 
@@ -564,6 +612,7 @@ def ask(
     stop: Any = None,
     note: str = "",
     regions: bool = False,
+    mode: str = "grounded",
 ) -> dict[str, Any]:
     """Gather, then answer with ``answerer`` (None: the bundle alone, the
     caller's model answers). ``history`` is the conversation so far, as
@@ -575,7 +624,11 @@ def ask(
     (``prax.answering.surf.run``: that many steps, ``tokens`` of reading, each step
     an ``on_event``, ``stop`` an event that ends the surf early). The
     store is only held while gathering; the model runs outside the
-    lock."""
+    lock. ``mode`` is ``grounded`` (the passages alone) or ``open`` (the
+    model's own knowledge beside them, and an answer even when the search
+    finds nothing)."""
+    if mode not in MODES:
+        raise ValueError(f"mode is {' or '.join(MODES)}, not {mode!r}")
     if steps > 0 and answerer is not None:
         from prax.answering import surf
 
@@ -592,6 +645,7 @@ def ask(
             on_event=on_event,
             stop=stop,
             note=note,
+            mode=mode,
         )
     bundle = gather(
         con,
@@ -602,9 +656,10 @@ def ask(
         note=note,
         regions=regions,
     )
+    bundle.mode = mode
     out = bundle.to_dict()
     out.update(answer=None, model=None, citations=[], usage={}, seconds=0.0)
-    if answerer is None or not bundle.passages:
+    if answerer is None or (not bundle.passages and mode != "open"):
         return out
     t0 = time.monotonic()
     text, usage = answerer.answer(bundle)
@@ -687,6 +742,27 @@ def save(
     kept as the seed of a write-up across its sources."""
     section, docs = section_of(result)
     model = result.get("model") or "?"
+    if result.get("mode") == "open":
+        section = (
+            "*An open answer: the model's own knowledge beside the library's"
+            " cited passages. Not the library's evidence.*\n\n" + section
+        )
+        saved = _save(con, result, slug, section, docs, model, heading, create)
+        store.mark_open_answer(con, int(saved["doc_id"]))
+        return saved
+    return _save(con, result, slug, section, docs, model, heading, create)
+
+
+def _save(
+    con: sqlite3.Connection,
+    result: dict[str, Any],
+    slug: str,
+    section: str,
+    docs: list[int],
+    model: str,
+    heading: str | None,
+    create: str | None,
+) -> dict[str, Any]:
     if create and store.get_page(con, store.slugify(slug)) is None:
         title = heading or result.get("question") or slug
         text = f"# {title}\n\n{section}\n"

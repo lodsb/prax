@@ -25,6 +25,28 @@ when the passages it kept answer the question. The answer is then
 written with the one-shot prompt over those passages. A citation
 therefore always points at something the model read.
 
+## Grounded and open
+
+**Grounded** (`mode: grounded`, the default). The answer uses only the
+passages and the graph facts it was given, and cites them
+(`ask.SYSTEM`). When they do not answer the question, it says so. An
+answer is at most about 700 tokens locally and 1,400 with Claude.
+
+**Open** (`mode: open`; the "open" box in the Ask view, `mode` on
+`POST /ask`, `mode="open"` with `answer=True` in the MCP `ask` tool).
+The search and the surfing are the same. The answer is written with
+`ask.OPEN_SYSTEM`. It cites the passages where it uses them and may go
+past them with the model's own knowledge: explain, derive, compare,
+write code. What is the model's own carries no citation, and the
+answer says so where the library is silent. It may be up to 3,000
+tokens (`ask.OPEN_TOKENS`). An open answer comes even when the search
+finds nothing.
+
+A page an open answer is kept on starts that section with "An open
+answer" and carries `meta.page.open`. A search still finds the page.
+`ask` and the surfer never take it as a passage (`ask.evidence`), so
+the model's own words never come back as the library's evidence.
+
 ## The moves
 
 Each step is two lines: a note and one action. The note says what the
@@ -70,8 +92,9 @@ link.
 - **Spend money.** The model is the one configured for the `ask` step,
   which is the host's choice. A local model costs time only. Claude
   costs what the run costs and is never chosen for you.
-- **Leave the library.** No web, no fetching, no other store. What is
-  not in prax cannot be found by asking prax.
+- **Leave the library** while it looks. No web, no fetching, no other
+  store. What is not in prax cannot be found by asking prax. An open
+  answer may add what the model knows, but no step fetches anything.
 - **Look at a picture.** It reads a figure's description when a vision
   model has written one (`docs/howto.md` 3b, the `unread-figures`
   ailment). It never sees pixels.

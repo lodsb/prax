@@ -508,3 +508,29 @@ def pages_with_chunks_of(con: sqlite3.Connection, kind: str) -> list[str]:
             (kind,),
         )
     ]
+
+
+@_serialized
+def mark_open_answer(con: sqlite3.Connection, doc_id: int) -> None:
+    """Mark a page as holding an open answer of ``ask`` (``meta.page.open``):
+    the model's own knowledge beside the library's passages. A later
+    search still finds the page; ``ask`` and the surfer never take it as
+    the library's evidence. The mark stays with the page's revisions."""
+    meta = get_meta(con, doc_id)
+    meta["page"] = {**(meta.get("page") or {}), "open": True}
+    set_meta(con, doc_id, meta)
+
+
+@_reading
+def open_answer_documents(con: sqlite3.Connection, doc_ids: list[int]) -> set[int]:
+    """Which of these documents are pages marked as open answers."""
+    ids = sorted({int(i) for i in doc_ids})
+    if not ids:
+        return set()
+    rows = con.execute(
+        "SELECT id FROM documents WHERE id IN"
+        f" ({','.join('?' * len(ids))})"
+        " AND json_extract(meta, '$.page.open') = 1",
+        ids,
+    )
+    return {int(r[0]) for r in rows}

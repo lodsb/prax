@@ -214,6 +214,7 @@ def ask(
     answer: bool = False,
     history: list[dict[str, str]] | None = None,
     steps: int | None = None,
+    mode: str = "grounded",
 ) -> dict[str, Any]:
     """The context for answering a question from the library: one numbered
     passage per document from the hybrid search (best chunk, with chunk
@@ -228,9 +229,13 @@ def ask(
     keeps pdf, web, image, text, note or page documents. ``history`` is
     the conversation so far as ``[{question, answer}, …]``: a follow-up
     ("and the second method?") searches in the earlier question's
-    neighbourhood and the model sees the earlier turns.
+    neighbourhood and the model sees the earlier turns. ``mode="open"``
+    with ``answer=True`` lets the host's model answer past the library:
+    the passages cited where used, the rest its own knowledge, said so.
     """
     body: dict[str, Any] = {"question": question, "limit": limit, "doctype": doctype}
+    if mode != "grounded":
+        body["mode"] = mode
     if history:
         body["history"] = history
     if steps is not None:

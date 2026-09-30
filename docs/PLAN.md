@@ -26,7 +26,7 @@ nothing.
         (`scripts/train_labeller.py`);
       - two decisions of the user: rules for `society`, and step 4
         (`meta.regions`, a nightly pass that writes every document).
-- [ ] **AB. An open mode for `ask`** (below, under "The UI and the
+- [x] (2026-09-30: `ask.OPEN_SYSTEM`, `mode` on `POST /ask`, the Ask view's "open" box, `meta.page.open`; docs/ask.md "Grounded and open") **AB. An open mode for `ask`** (below, under "The UI and the
       agent"; experimental). About a day with the tests.
 - [ ] **AC. Two extension fixes.** A PDF viewer's tab is sent as the
       viewer's frame (four documents hold only its markup), and a GitHub
@@ -747,7 +747,7 @@ recipe at once. Three independent failures, each wanting a different fix.
       is named in `docs/log.md`, "The night of 2026-09-20".
 - [ ] **Resource-aware swapping in `prax up`** — only if marker re-reads
       become routine (`docs/log.md`, "After the mathematics").
-- [ ] **An open mode for `ask`** (experimental; the user, 2026-09-30).
+- [x] (2026-09-30, stage AB) **An open mode for `ask`** (experimental; the user, 2026-09-30).
       Today both prompts pin the model to the passages ("use only the
       numbered passages… you have no other knowledge", under 250
       words), so `ask` finds and cites and never builds. An open mode

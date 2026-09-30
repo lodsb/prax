@@ -64,6 +64,7 @@ function renderComposer(p) {
       <label>passages <input name="limit" type="number" min="1" max="20" value="${esc(p.limit || settings().ask_limit)}" title="passages per search"></label>
       <label>steps <input name="steps" type="number" min="0" max="${steps.max}" value="${esc(p.steps != null ? p.steps : steps.default)}" title="how many steps the model surfs before answering (search again, read on, walk the graph, drop); 0 answers from the first search alone"></label>
       <label>reading <input name="tokens" type="number" min="1000" max="${reading.max}" step="500" value="${esc(p.tokens || reading.default)}" title="how much the steps may read, in tokens (at most ${reading.max} for this model)"></label>
+      <label class="tick" title="open: the model may go past the library, with its own knowledge, derivations and code; what rests on the library stays cited, and a page it is kept on is never taken as the library's evidence"><input name="open" type="checkbox" ${p.open ? "checked" : ""}> open</label>
       <span id="ask-count"></span>
       <button type="button" id="ask-new" class="composer-new" hidden title="forget this conversation">New ask</button>
     </div>
@@ -105,6 +106,7 @@ function renderTurn(t, i) {
   else body = `<p class="muted">${passages.length ? "No model answered; the sources beside are what a model would have been given." : "No passages found."}</p>${renderTrail(t)}`;
   const meta = (t.pending || t.error) ? "" : `
     <div class="turn-meta muted">
+      ${t.mode === "open" && t.answer ? `<span class="turn-open" title="the model's own knowledge beside the cited passages">open answer</span>` : ""}
       ${t.model ? `<span>${esc(t.model)}${t.steps ? ` · ${t.steps} step${t.steps === 1 ? "" : "s"}` : ""} · ${t.seconds} s${t.cost_usd ? ` · $${t.cost_usd.toFixed(4)}` : ""} · ${(t.usage || {}).input_tokens || 0} in / ${(t.usage || {}).output_tokens || 0} out</span>` : ""}
       <button type="button" class="linkish turn-sources-link">${passages.length} source${passages.length === 1 ? "" : "s"}${cited.size ? `, ${cited.size} cited` : ""}</button>
       ${t.answer ? `<button type="button" class="linkish turn-keep-link">keep on page…</button>` : ""}
@@ -275,7 +277,9 @@ async function viewAsk(p) {
     };
     if (steps !== null) body.steps = steps;
     if (opts.tokens) body.tokens = Number(opts.tokens);
-    turn.asked_with = { steps: body.steps, tokens: body.tokens, doctype: body.doctype, limit: body.limit, backend: body.backend };
+    // open: past the library too (the checkbox, or open=1 in the link)
+    if (opts.open === true || opts.open === "1" || opts.open === "on") body.mode = "open";
+    turn.asked_with = { steps: body.steps, tokens: body.tokens, doctype: body.doctype, limit: body.limit, backend: body.backend, mode: body.mode };
     let r;
     try {
       if (!surfing) {
@@ -323,7 +327,7 @@ async function viewAsk(p) {
     box.value = "";
     autosize();
     if (location.hash !== "#ask") history.replaceState(null, "", "#ask");  // a reload shows the conversation, not a re-ask
-    ask(question, { backend: form.backend.value, doctype: form.doctype.value, limit: form.limit.value, steps: form.steps.value, tokens: form.tokens.value });
+    ask(question, { backend: form.backend.value, doctype: form.doctype.value, limit: form.limit.value, steps: form.steps.value, tokens: form.tokens.value, open: form.open.checked });
   });
   form.backend.addEventListener("change", () => {
     // the reading budget's ceiling is the chosen model's

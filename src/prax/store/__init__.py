@@ -461,6 +461,8 @@ from .pages import (  # noqa: F401
     get_page,
     linked_documents,
     list_pages,
+    mark_open_answer,
+    open_answer_documents,
     page_blocks,
     page_revision_text,
     page_titles,

@@ -164,6 +164,7 @@ class Surf:
     steps_left: int
     tokens_left: int
     note: str = ""  # beside the question, for the model only
+    mode: str = "grounded"  # or open: the model's own knowledge beside
     passages: list[ask.Passage] = field(default_factory=list)
     seq: dict[int, int] = field(default_factory=dict)  # passage n -> where to read on
     dropped: set[int] = field(default_factory=set)  # passage numbers
@@ -278,7 +279,7 @@ def do_search(con: sqlite3.Connection, s: Surf, query: str) -> tuple[str, list[i
     query = " ".join(query.split())
     if not query:
         return "search needs words", []
-    hits = store.search(con, query, s.limit * 3, doctype=s.doctype)
+    hits = ask.evidence(con, store.search(con, query, s.limit * 3, doctype=s.doctype))
     dropped_docs = {p.doc_id for p in s.passages if p.n in s.dropped}
     blocks: list[str] = []
     added: list[int] = []
@@ -629,6 +630,7 @@ def run(
     on_event: Event | None = None,
     stop: threading.Event | None = None,
     note: str = "",
+    mode: str = "grounded",
 ) -> dict[str, Any]:
     """Surf, then answer. Step 0 is the door's own search of the question
     (what the one-shot ask starts from); the model's steps follow, up to
@@ -644,6 +646,7 @@ def run(
         history=history,
         doctype=doctype,
         note=note,
+        mode=mode,
         limit=max(1, min(limit, 20)),
         steps_left=steps,
         tokens_left=tokens,
@@ -662,7 +665,7 @@ def run(
     result, added = do_search(con, s, s.query)
     s.log += [f"Step 0 · search: {s.query}", s.spend(result), ""]
     record(Step(0, "search", s.query), result, added, t)
-    if not s.passages:
+    if not s.passages and mode != "open":
         return _result(s, answerer, None, t0)  # nothing to surf from
 
     while s.steps_left > 0 and s.tokens_left * 4 > HIT_CHARS:
@@ -700,11 +703,11 @@ def run(
         record(step, result, added, t)
 
     kept = s.kept
-    if not kept or (stop is not None and stop.is_set()):
+    if (not kept and mode != "open") or (stop is not None and stop.is_set()):
         return _result(s, answerer, None, t0)
     emit({"event": "answering", "model": answerer.name, "passages": len(kept)})
     bundle = ask.Bundle(
-        question=s.question, passages=kept, history=history, note=s.note
+        question=s.question, passages=kept, history=history, note=s.note, mode=mode
     )
     bundle.facts = store.document_facts(
         con, list(dict.fromkeys(p.doc_id for p in kept)), limit=ask.FACTS_PER_DOC
@@ -756,7 +759,11 @@ def _result(
 
     if bundle is None:
         bundle = ask.Bundle(
-            question=s.question, passages=s.kept, history=s.history, note=s.note
+            question=s.question,
+            passages=s.kept,
+            history=s.history,
+            note=s.note,
+            mode=s.mode,
         )
     out = bundle.to_dict()
     out.update(
