@@ -30,14 +30,6 @@ def _sender() -> ModuleType:
     return module
 
 
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
-
-
 def test_the_door_says_which_hashes_it_holds(client: TestClient) -> None:
     got = client.post(
         "/ingest/file", files={"file": ("a.txt", b"alpha " * 50, "text/plain")}

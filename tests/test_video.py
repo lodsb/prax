@@ -9,7 +9,6 @@ import base64
 import io
 import json
 import sqlite3
-from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,14 +16,6 @@ from fastapi.testclient import TestClient
 from prax import parsers, store, work
 from prax.parsers import video
 from prax.text import chunking
-
-
-@pytest.fixture()
-def client(data_dir: object) -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def _jpeg(color: tuple[int, int, int]) -> bytes:

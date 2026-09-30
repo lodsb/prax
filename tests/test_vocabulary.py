@@ -3,7 +3,6 @@ the door does with it."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -33,15 +32,6 @@ class Runtime:
             if given in user:
                 return answer, {"input_tokens": 8, "output_tokens": 4}
         return "", {"input_tokens": 8, "output_tokens": 1}
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    work._leases.clear()
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 # ------------------------------------------------------------ the answer

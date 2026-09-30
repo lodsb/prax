@@ -4,21 +4,12 @@ through the store's own rules — an edge is ended, never deleted."""
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
-
-
-@pytest.fixture()
-def client(data_dir: object) -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def _link(con: sqlite3.Connection, src: str, dst: str, rel: str = "extends") -> int:

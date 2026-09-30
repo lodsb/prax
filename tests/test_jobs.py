@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -32,14 +31,6 @@ def test_job_lifecycle_and_listing(con: sqlite3.Connection) -> None:
     )
     con.commit()
     assert store.list_jobs(con)["running"][0]["stale"]
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def test_changes_stamp_moves_on_writes(client: TestClient) -> None:

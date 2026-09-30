@@ -9,21 +9,11 @@ document beside its topic, which are two things too
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
 
-import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
 from prax.answering import surf
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def _edge(con: sqlite3.Connection, e: store.Edge, doc: int | None = None) -> None:

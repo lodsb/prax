@@ -8,6 +8,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 
 from prax import store, work
 
@@ -50,3 +51,14 @@ def con(data_dir: Path) -> Iterator[store.sqlite3.Connection]:
     store.init_db(c)
     yield c
     c.close()
+
+
+@pytest.fixture()
+def client(data_dir: Path) -> Iterator[TestClient]:
+    """The door as a test client, on this test's data directory. A file
+    that needs the door otherwise (a token, the stub answerer) defines its
+    own ``client``, which takes precedence."""
+    from prax.api import app
+
+    with TestClient(app) as c:
+        yield c

@@ -5,7 +5,6 @@ reading is in ``test_djvu.py``)."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -63,14 +62,6 @@ def test_a_scanned_pdf_is_read_in_windows(monkeypatch: pytest.MonkeyPatch) -> No
     pages = parsers.pages_by_mark(last)
     assert pages[2] == "the words the recognizer found on page 2"  # kept
     assert pages[4] == "the words the recognizer found on page 4"
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def test_a_window_through_the_door_asks_for_the_next(client: TestClient) -> None:

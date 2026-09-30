@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -69,14 +68,6 @@ def test_prax_yaml_adds_to_the_rules(tmp_path, monkeypatch: pytest.MonkeyPatch) 
     rules = private.rules()
     assert rules.names == ("Jane Example",) and rules.weak_needed == 3
     assert ("kaution",) in {tuple(w.lower() for w in g) for g in rules.weak}
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def _meta(con: sqlite3.Connection, doc_id: int) -> dict:

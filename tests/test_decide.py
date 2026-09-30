@@ -6,7 +6,6 @@ measured against (docs/PLAN.md, Q)."""
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
@@ -156,14 +155,6 @@ def test_a_split_name_is_kept_apart_or_merged_across_types(
         "SELECT type FROM entity_candidates WHERE decided_by = 'human'"
     ).fetchall()
     assert {k[0] for k in kinds} == {store.SPLIT}
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def test_the_door_serves_the_lists_and_takes_the_decisions(client: TestClient) -> None:

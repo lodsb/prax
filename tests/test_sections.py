@@ -6,7 +6,6 @@ the document field therefore says nothing about the middle of it.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -27,15 +26,6 @@ class Runtime:
     def chat(self, system: str, user: str, **kw: Any) -> tuple[str, dict[str, Any]]:
         self.asked.append(user)
         return self.answer, {"input_tokens": 100, "output_tokens": 30}
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    work._leases.clear()
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def _book(client: TestClient, chapters: int = 3, size: int = 5000) -> int:

@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import sqlite3
 from collections import Counter
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -142,14 +141,6 @@ def test_a_rebuild_keeps_ids_and_summaries_and_says_when_they_moved(
     assert "paprika" in moved["members"]
     assert moved["id"] == kitchen["id"] and moved["summary_state"] == "stale"
     assert kitchen["id"] in store.communities_to_summarize(con)
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def test_the_door_lists_them(client: TestClient) -> None:

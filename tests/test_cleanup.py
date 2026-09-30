@@ -6,9 +6,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterator
 
-import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
@@ -30,14 +28,6 @@ def test_the_rules_read_a_path_and_a_file_name() -> None:
     # a title with "history" in it is a book, and only the file name counts
     assert clutter.kinds("", "Financialism: a (very) brief history") == set()
     assert clutter.kinds("/nas/papers/licensing_of_music.pdf") == set()
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
 
 
 def _doc(con: sqlite3.Connection, path: str, text: str, title: str) -> int:

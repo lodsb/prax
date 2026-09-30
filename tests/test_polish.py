@@ -6,7 +6,6 @@ door after a video capture, and by the heal for the ones it missed."""
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -16,15 +15,6 @@ from test_video import META, PAGE
 from prax import models, store
 from prax.capture import pipeline
 from prax.parsers import ExtractionError, polish
-
-
-@pytest.fixture()
-def client(data_dir: object) -> Iterator[TestClient]:
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
-
 
 RAW = """# A Talk
 

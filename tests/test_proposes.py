@@ -3,21 +3,9 @@ after it are two things, and the edge between them is what was missing."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-
-import pytest
 from fastapi.testclient import TestClient
 
-from prax import store, work
-
-
-@pytest.fixture()
-def client() -> Iterator[TestClient]:
-    work._leases.clear()
-    from prax.api import app
-
-    with TestClient(app) as c:
-        yield c
+from prax import store
 
 
 def _paper(
