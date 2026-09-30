@@ -8,18 +8,30 @@ from __future__ import annotations
 import contextlib
 import time
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from typing import Any
 
-from prax import models, store, work
+from prax import models, store
 from prax.client import Door
 from prax.graph import extraction, ontology
 from prax.text import mimes
 
+from . import leases
 from .base import HandOut, Log, Pass, Step, TakeIn, say
 
 REPORTED = ("linked", "existing", "queued", "rejected", "retired")
 # less text than this is a stub, a cover or an error page: not extracted
 MIN_CHARS = 300
+
+
+def extraction_to_dict(ex: extraction.Extraction) -> dict[str, Any]:
+    """What a worker posts of an extraction, and ``extraction_from`` reads."""
+    return {
+        "summary": ex.summary,
+        "triples": [asdict(t) for t in ex.triples],
+        "unmapped": ex.unmapped,
+        "usage": ex.usage,
+    }
 
 
 def extraction_from(data: dict[str, Any]) -> extraction.Extraction:
@@ -65,8 +77,6 @@ class Extract(Step):
         return h.documents(due, lambda d: self.item(h, d), scoped=False)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
-        from prax import work
-
         extractor = str(t.payload.get("extractor") or t.worker)
         run = t.run("promote" if self.name == "promote" else "work")
         totals = extraction.ApplyReport()
@@ -82,7 +92,7 @@ class Extract(Step):
                 continue
             try:
                 ex = extraction_from(r["extraction"])
-                work._note_spend(t.con, self.name, ex.usage, doc_id=doc_id, run=run)
+                leases.note_spend(t.con, self.name, ex.usage, doc_id=doc_id, run=run)
                 rep = extraction.apply(t.con, doc_id, ex, extractor=extractor, run=run)
             except Exception as exc:  # noqa: BLE001 - one result must not stop the rest
                 t.out["errors"].append(
@@ -208,7 +218,7 @@ def do_extract(
             say(log_, f"extract doc {it['doc_id']}: {len(result.triples)} triples")
             return {
                 "doc_id": it["doc_id"],
-                "extraction": work.extraction_to_dict(result),
+                "extraction": extraction_to_dict(result),
             }
         except models.ServerNotReady as exc:
             # the model server is loading or down: not the document's

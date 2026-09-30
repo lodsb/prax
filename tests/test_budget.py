@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from prax import config, models, store, work
 from prax.ml import budget, pricing
+from prax.steps import leases
 
 
 def _paid_host(data_dir: Path, *, daily: float = 0.0, monthly: float = 0.0) -> None:
@@ -110,7 +111,7 @@ def test_the_budget_holds_the_paid_work_once_it_is_spent(
     assert budget.allows(con, "extract")[0] is False
     _paid_host(data_dir)
     assert budget.allows(con, "extract") == (True, "")
-    work._release("extract", [doc])  # the first hand-out leased it
+    leases.release("extract", [doc])  # the first hand-out leased it
     again = work.hand_out(con, "extract", limit=5, scope="all")
     assert [it["doc_id"] for it in again["items"]] == [doc]
 

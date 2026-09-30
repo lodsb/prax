@@ -9,6 +9,7 @@ from prax import models, store
 from prax.graph import vocabulary
 from prax.graph import vocabulary as words
 
+from . import leases
 from .base import HandOut, Log, ModelStep, TakeIn, say
 
 
@@ -28,11 +29,9 @@ class Vocabulary(ModelStep):
     name = "vocabulary"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        from prax import work
-
         if models.resolve("vocabulary") is None:
             return h.nothing()
-        leased = tuple(i for (s, i) in work._leases if s == self.name and not h.free(i))
+        leased = tuple(sorted(leases.leased(self.name)))
         found = store.foreign_names(h.con, limit=h.limit, skip=leased)
         if len(found) < h.limit:
             found += store.unlabelled_names(

@@ -11,6 +11,7 @@ from prax import models, store
 from prax.ml import embeddings
 from prax.work import LEASE_SECONDS
 
+from . import leases
 from .base import HandOut, Log, Pass, Step, TakeIn, paid_refusal, say
 
 
@@ -34,14 +35,13 @@ class Typing(Step):
         return h.batch(items)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
-        from prax import work
         from prax.graph import typing_pass
 
         model = str(t.payload.get("model") or t.worker)
         run = t.run("typing-model")
         for r in t.results:
             t.release([it["id"] for it in r.get("items") or []])
-            work._note_spend(t.con, self.name, r.get("usage"), run=run)
+            leases.note_spend(t.con, self.name, r.get("usage"), run=run)
         rep = typing_pass.take_in(t.con, t.results, model=model, run=run)
         t.out["applied"] = rep.requests
         t.out["report"] = {
@@ -199,7 +199,6 @@ class Adjudicate(Step):
         return h.batch(items)
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
-        from prax import work
         from prax.graph import resolution
 
         model = str(t.payload.get("model") or t.worker)
@@ -208,7 +207,7 @@ class Adjudicate(Step):
         if len(same) != len(items):
             raise ValueError("adjudicate takes one decision per item")
         t.release([int(it["drop"]) for it in items])
-        work._note_spend(t.con, self.name, t.payload.get("usage"))
+        leases.note_spend(t.con, self.name, t.payload.get("usage"))
         probabilities = list(t.payload.get("p") or [])
         if probabilities:
             if len(probabilities) != len(items):

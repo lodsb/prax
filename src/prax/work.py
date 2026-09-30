@@ -38,19 +38,20 @@ from __future__ import annotations
 import contextlib
 import sqlite3
 import time
-from dataclasses import asdict
 from typing import Any
 
 from prax import models, steps, store
-from prax.graph import extraction
 from prax.steps import STEPS, WATCHED_STEPS
+from prax.steps.leases import (  # noqa: F401 - the table's names, as callers knew them
+    DEFER_SECONDS,
+    LEASE_SECONDS,
+    _leases,
+    leases,
+    release_deferred,
+    renew,
+)
+from prax.steps.leases import lease as _lease
 
-LEASE_SECONDS = 900
-# a worker's "not yet" (the server it needs is loading or down) keeps the
-# item leased this long, so the next batches hold other work instead of
-# the same ten items again — the follow-ups of the first papers marker
-# read once starved the 228 behind them
-DEFER_SECONDS = 600
 # which role of ``prax up`` a reading waits for: what the door reports as
 # demand (``GET /work/demand``) so the supervisor can give it the card
 ROLE_WORK = {
@@ -62,7 +63,6 @@ ROLE_WORK = {
 SCOPES = ("captures", "all")
 MAX_LIMIT = 200
 
-_leases: dict[tuple[str, int], tuple[str, float]] = {}
 # what was deferred because its model server was not there, until when:
 # the demand that brings an idle server back (``demand``, ``prax up``'s
 # ``idle_minutes``). An item leaves it when its result arrives
@@ -225,71 +225,6 @@ def demand(con: Any) -> dict[str, Any]:
     return {"readings": readings, "roles": roles, "rate": rate, "hours_left": left}
 
 
-def release_deferred(step: str, extractors: tuple[str, ...] = ()) -> int:
-    """Forget the "not yet" deferrals of a step, so the next hand-out
-    offers those items again: what the door does when the server they
-    waited for has just been given the card. Returns how many were
-    released."""
-    now = time.monotonic()
-    gone = [
-        key
-        for key, (_worker, until) in list(_leases.items())
-        if key[0] == step and until > now
-    ]
-    for key in gone:
-        _leases.pop(key, None)
-    return len(gone)
-
-
-def _free(step: str, item: int, now: float) -> bool:
-    held = _leases.get((step, item))
-    return held is None or held[1] < now
-
-
-def _lease(
-    step: str, items: list[int], worker: str, seconds: float = LEASE_SECONDS
-) -> None:
-    until = time.monotonic() + seconds
-    for i in items:
-        _leases[(step, i)] = (worker, until)
-
-
-def _release(step: str, items: list[int]) -> None:
-    for i in items:
-        _leases.pop((step, i), None)
-
-
-def renew(step: str, items: list[int], worker: str) -> int:
-    """The worker holding those items keeps them another ``LEASE_SECONDS``:
-    a book takes marker longer than one lease, and the worker beats while
-    it reads. An item leased to another worker, or free, is left alone.
-    Returns how many were renewed."""
-    n = 0
-    until = time.monotonic() + LEASE_SECONDS
-    for i in items:
-        held = _leases.get((step, i))
-        if held is not None and held[0] == worker:
-            _leases[(step, i)] = (worker, until)
-            n += 1
-    return n
-
-
-def leases() -> dict[str, int]:
-    """How many items are out per step (for the status view)."""
-    now = time.monotonic()
-    out: dict[str, int] = {}
-    for (step, _), (_, until) in _leases.items():
-        if until >= now:
-            out[step] = out.get(step, 0) + 1
-    return out
-
-
-def _in_scope(con: sqlite3.Connection, doc_id: int, scope: str) -> bool:
-    if scope == "all":
-        return True
-    return store.document_source(con, doc_id) in store.CAPTURE_SOURCES
-
-
 def _check(step: str, scope: str, limit: int) -> int:
     if step not in STEPS:
         raise ValueError(f"unknown step {step!r}; steps are {STEPS}")
@@ -328,37 +263,6 @@ def hand_out(
 
 
 # ----------------------------------------------------------------- take in
-
-
-def _note_spend(
-    con: sqlite3.Connection,
-    step: str,
-    usage: dict[str, Any] | None,
-    *,
-    doc_id: int | None = None,
-    run: str | None = None,
-    model: str | None = None,
-) -> None:
-    """What a worker's paid call cost, into the ledger. The worker never
-    writes to the store; the door records what comes back through it.
-
-    ``model`` is what the worker says it ran, which is not always what
-    this host's config resolves the step to — a worker started against
-    another config is exactly how an unrecorded bill happens — so the
-    reported name is what the row carries."""
-    from prax.ml import budget
-
-    with contextlib.suppress(Exception):  # a ledger row is never worth an error
-        budget.note(con, step, usage, doc_id=doc_id, run=run, model=model)
-
-
-def extraction_to_dict(ex: extraction.Extraction) -> dict[str, Any]:
-    return {
-        "summary": ex.summary,
-        "triples": [asdict(t) for t in ex.triples],
-        "unmapped": ex.unmapped,
-        "usage": ex.usage,
-    }
 
 
 def take_in(

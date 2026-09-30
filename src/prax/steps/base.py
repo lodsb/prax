@@ -21,7 +21,9 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import models, work
+from prax import models
+
+from . import leases
 
 Log = Callable[[str], None]
 
@@ -38,17 +40,17 @@ class HandOut:
     now: float
 
     def free(self, item: int, step: str | None = None) -> bool:
-        return work._free(step or self.step, item, self.now)
+        return leases.free(step or self.step, item, self.now)
 
     def lease(self, items: list[int], step: str | None = None) -> None:
-        work._lease(step or self.step, items, self.worker)
+        leases.lease(step or self.step, items, self.worker)
 
     def batch(self, items: list[dict[str, Any]], **extra: Any) -> dict[str, Any]:
         """The answer: the items, and how long they are leased."""
         return {
             "step": self.step,
             "items": items,
-            "lease_seconds": work.LEASE_SECONDS,
+            "lease_seconds": leases.LEASE_SECONDS,
             **extra,
         }
 
@@ -74,7 +76,7 @@ class HandOut:
             doc_id = c[0] if isinstance(c, tuple) else c
             if len(items) >= cap or not self.free(doc_id):
                 continue
-            if scoped and not work._in_scope(self.con, doc_id, self.scope):
+            if scoped and not leases.in_scope(self.con, doc_id, self.scope):
                 continue
             item = build(c)
             if item is not None:
@@ -101,7 +103,7 @@ class TakeIn:
         return str(self.payload.get("run") or f"{prefix or self.step}-{stamp}")
 
     def release(self, items: list[int], step: str | None = None) -> None:
-        work._release(step or self.step, items)
+        leases.release(step or self.step, items)
 
     def each(
         self,

@@ -13,6 +13,7 @@ from prax.graph import ontology
 from prax.text import language
 from prax.writing import genres, sections, summaries, titles
 
+from . import leases
 from .base import HandOut, Log, ModelStep, TakeIn, say
 
 # one item is a whole book, and a book is up to forty model calls: a batch
@@ -200,12 +201,11 @@ class Communities(ModelStep):
     name = "communities"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        from prax import work
         from prax.graph import communities
 
         if models.resolve("communities") is None:
             return h.nothing()
-        leased = {i for (s, i) in work._leases if s == self.name and not h.free(i)}
+        leased = leases.leased(self.name)
         wanted = [
             c
             for c in store.communities_to_summarize(h.con, limit=h.limit * 2)

@@ -18,7 +18,7 @@ from prax.ml import usage
 from prax.parsers import figures, queue
 from prax.text import mimes
 
-from . import READING_STEPS
+from . import READING_STEPS, leases
 from .base import HandOut, Log, Pass, Step, TakeIn, say
 
 
@@ -139,9 +139,7 @@ class Parse(Step):
         for doc_id in waiting:
             if len(items) >= h.limit or not h.free(doc_id):
                 continue
-            from prax import work
-
-            if not work._in_scope(h.con, doc_id, h.scope):
+            if not leases.in_scope(h.con, doc_id, h.scope):
                 continue
             doc = store.get_document(h.con, doc_id, max_chars=0)
             if doc is None:
@@ -175,7 +173,6 @@ class Parse(Step):
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         """A reading's error is its outcome here, which ``apply_parse``
         records, rather than a result to set aside."""
-        from prax import work
 
         def apply(doc_id: int, r: dict[str, Any]) -> str:
             stamp = str(r.get("extractor") or t.worker)
@@ -193,7 +190,7 @@ class Parse(Step):
             # what the reading paid for, if anything: the worker carries the
             # tokens home (prax.ml.usage) because it never writes itself
             for model, tokens in (r.get("usage") or {}).items():
-                work._note_spend(
+                leases.note_spend(
                     t.con,
                     reading_step(str(r.get("requested") or "")),
                     tokens,

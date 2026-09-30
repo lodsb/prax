@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from prax import config, models, steps, store, work, worker
 from prax.capture import inbox
 from prax.ml import embeddings
+from prax.steps import leases
 from prax.steps import parse as step_parse
 
 
@@ -193,7 +194,7 @@ def test_a_beat_renews_the_leases_its_worker_holds(
     ).json()
     assert r["renewed"] == 0 and work._leases[("extract", doc)][1] == held_until
     # the holder's does, for a whole lease again
-    monkeypatch.setattr(work, "LEASE_SECONDS", 5000)
+    monkeypatch.setattr(leases, "LEASE_SECONDS", 5000)
     r = client.post(
         f"/work/session/{job}",
         json={"done": 0, "renew": {"step": "extract", "items": [doc]}},
