@@ -90,6 +90,83 @@ def _promote_done(meta: dict[str, Any]) -> bool:
     )
 
 
+class _RouteList:
+    """The routes from one document as they are listed: each with its
+    model, whether it can run on this host, and whether it is waiting
+    already (and why nothing has taken it)."""
+
+    def __init__(
+        self,
+        con: sqlite3.Connection,
+        meta: dict[str, Any],
+        models_of: dict[str, dict[str, Any] | None],
+        pending_now: list[dict[str, Any]],
+    ) -> None:
+        self.con = con
+        self.meta = meta
+        self.models_of = models_of
+        self.pending_now = pending_now
+        self.stale = meta.get("extraction_stale") or None
+        self.promote = meta.get("promote") or None
+        self.routes: list[dict[str, Any]] = []
+        self._why: dict[str, str] = {}  # one answer per kind, asked at most once
+
+    def why_pending(self, kind: str) -> str:
+        if kind not in self._why:
+            from prax import work
+
+            self._why[kind] = work.who_runs(self.con, _ASKED_BY[kind])["why"]
+        return self._why[kind]
+
+    def waiting(self, action: dict[str, Any]) -> bool:
+        """Whether what the route would ask for is asked for already."""
+        if action["kind"] == "reading":
+            # the same extractor, and the same mode where the route names one
+            return any(
+                r["extractor"] == action["extractor"]
+                and (action["mode"] is None or r["mode"] == action["mode"])
+                for r in self.pending_now
+            )
+        if action["kind"] == "extract":
+            return bool(self.stale and self.stale.get("requested"))
+        if action["kind"] == "promote":
+            return bool(self.promote) and not _promote_done(self.meta)
+        return False
+
+    def add(
+        self,
+        rid: str,
+        group: str,
+        label: str,
+        detail: str,
+        action: dict[str, Any],
+        *,
+        step: str | None = None,
+        available: bool = True,
+        note: str = "",
+    ) -> None:
+        model = self.models_of[step] if step else None
+        if step and model is None:
+            available = False
+            note = note or f"no model for the {step} step on this host (prax.yaml)"
+        pending = self.waiting(action)
+        self.routes.append(
+            {
+                "id": rid,
+                "group": group,
+                "label": label,
+                "detail": detail,
+                "action": action,
+                "model": model["name"] if model else None,
+                "paid": bool(model and model["paid"]),
+                "available": available,
+                "note": note,
+                "pending": pending,
+                "why": self.why_pending(action["kind"]) if pending else "",
+            }
+        )
+
+
 def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     """The document's state and the routes from it. Each route is
     ``{id, group, label, detail, action, model, paid, available, note,
@@ -126,14 +203,6 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     )
 
     models_of = {step: _model(step) for step in _STEPS}
-    why_of: dict[str, str] = {}  # one answer per kind, asked at most once
-
-    def why_pending(kind: str) -> str:
-        if kind not in why_of:
-            from prax import work
-
-            why_of[kind] = work.who_runs(con, _ASKED_BY[kind])["why"]
-        return why_of[kind]
 
     state: dict[str, Any] = {
         "mime": mime,
@@ -163,50 +232,8 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
         "models": models_of,
     }
 
-    routes: list[dict[str, Any]] = []
-
-    def add(
-        rid: str,
-        group: str,
-        label: str,
-        detail: str,
-        action: dict[str, Any],
-        *,
-        step: str | None = None,
-        available: bool = True,
-        note: str = "",
-    ) -> None:
-        model = models_of[step] if step else None
-        if step and model is None:
-            available = False
-            note = note or f"no model for the {step} step on this host (prax.yaml)"
-        pending = False
-        if action["kind"] == "reading":
-            # the same extractor, and the same mode where the route names one
-            pending = any(
-                r["extractor"] == action["extractor"]
-                and (action["mode"] is None or r["mode"] == action["mode"])
-                for r in pending_now
-            )
-        elif action["kind"] == "extract":
-            pending = bool(stale and stale.get("requested"))
-        elif action["kind"] == "promote":
-            pending = bool(promote) and not _promote_done(meta)
-        routes.append(
-            {
-                "id": rid,
-                "group": group,
-                "label": label,
-                "detail": detail,
-                "action": action,
-                "model": model["name"] if model else None,
-                "paid": bool(model and model["paid"]),
-                "available": available,
-                "note": note,
-                "pending": pending,
-                "why": why_pending(action["kind"]) if pending else "",
-            }
-        )
+    listed = _RouteList(con, meta, models_of, pending_now)
+    routes, add = listed.routes, listed.add
 
     if is_page:
         return {"doc_id": doc_id, "state": state, "routes": routes}
