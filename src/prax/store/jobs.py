@@ -17,6 +17,8 @@ from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
 
+from prax.graph import ontology
+
 from .base import (
     _INDEX_LOCK,
     _NOW,
@@ -518,8 +520,6 @@ def token_viewer(con: sqlite3.Connection, secret: str) -> Viewer | None:
         return None
     domains = None
     if row["domains"]:
-        from prax.graph import ontology
-
         onto = ontology.current()
         seen: set[str] = set()
         for d in json.loads(row["domains"]):

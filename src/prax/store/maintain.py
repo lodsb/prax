@@ -38,7 +38,8 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
-from prax.text import acronyms, references
+from prax.graph import ontology
+from prax.text import acronyms, language, references
 
 from .base import _reading, archive_path, now
 from .documents import (
@@ -58,7 +59,9 @@ from .graph import (
     communities_input,
     corpus_rulings,
     find_edges,
+    languages_by_entity,
     link,
+    rename_display_language,
     replace_communities,
     retire_reading,
     unmark_corpus_ruling,
@@ -510,7 +513,6 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     than not is worse than no rule
     (`docs/eval/typing-rules-2026-09-24.md`).
     """
-    from prax.graph import ontology
     from prax.graph.resolution import SELF_KINDS
 
     onto = ontology.current()
@@ -657,7 +659,6 @@ def _names(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     two have drifted — a pass that gave an entity a preferred name in
     another language, or a host that changed which language it shows.
     """
-    from .graph import rename_display_language
 
     job.update(note="names from the labels")
     return rename_display_language(con)
@@ -711,7 +712,6 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     tells the ``summaries`` step which of them are not in the language the
     document field is written in.
     """
-    from prax.text import language
 
     rows = con.execute(
         "SELECT id, text_hash FROM documents WHERE text_hash IS NOT NULL"
@@ -768,7 +768,6 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     # held the write lock for 76 minutes and no capture could land
     # (2026-09-29). A label no single language names stays unplaced and
     # is looked at again the next night, which now costs seconds.
-    from .graph import languages_by_entity
 
     known = languages_by_entity(con)
     placed = 0

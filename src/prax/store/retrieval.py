@@ -21,13 +21,15 @@ from prax import config
 from prax.graph import ontology
 from prax.ml import embeddings
 from prax.ml import rerank as rerank_mod
-from prax.text import chunking
+from prax.ml import vectors as vectors_mod
+from prax.text import chunking, compounds
 
 from .base import (
     _ASIDE,
     _INDEX_LOCK,
     _NOW,
     _TOKEN,
+    VEC_DIM,
     _add_to_delta,
     _delta,
     _delta_path,
@@ -49,6 +51,7 @@ from .base import (
     vectors_available,
 )
 from .documents import DOCTYPES, _chunk_shape, find_chunk
+from .documents.reads import NOT_A_PAGE
 
 RERANK_DEPTH = 30  # hits rescored when reranking is on (rerank.depth)
 
@@ -239,7 +242,6 @@ def _lives_in(con: sqlite3.Connection, entity_id: int, etype: str) -> Scope | No
     studio domain; a thing is where the library found it as well as where
     its type is declared.
     """
-    from prax.graph import ontology
 
     where = ontology.current().domains_of(etype)
     if where is None:
@@ -292,7 +294,6 @@ def expand_query_senses(
     token itself, a phrase the library defines, a compound half) or
     through a thing of a core type, which lives everywhere, is no sense.
     """
-    from prax.text import compounds
 
     plain: set[str] = set()
     scoped: dict[str, set[str]] = {}
@@ -1416,10 +1417,6 @@ def _merge(path: Path) -> dict[str, Any]:
     arrived during the build kept in a fresh delta."""
     import numpy as np
 
-    from prax.ml import vectors as vectors_mod
-
-    from .base import VEC_DIM
-
     dpath = _delta_path(path)
     with _INDEX_LOCK:
         delta = _delta(path)
@@ -1719,9 +1716,6 @@ def compact_vectors(con: sqlite3.Connection, model: str) -> dict[str, int]:
     to drop the read views and then save over the file unlocked, so a
     search in between could map the file again before it was replaced; and
     its writable copy sat in the shared table where any thread found it."""
-    from prax.ml import vectors as vectors_mod
-
-    from .base import VEC_DIM
 
     path = _index_path(model)
     _merge(path)
@@ -1902,7 +1896,6 @@ def phrase_languages(con: sqlite3.Connection, match: str, lang: str) -> tuple[in
     ``lang``, and how many in another language that is known, prax's own
     pages left out. Raises ``sqlite3.OperationalError`` for an expression
     the index cannot parse."""
-    from .documents.reads import NOT_A_PAGE
 
     row = con.execute(
         "SELECT count(DISTINCT d.id) FILTER (WHERE lang = ?),"

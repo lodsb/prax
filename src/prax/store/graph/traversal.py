@@ -390,7 +390,6 @@ def _domain_documents(
     None for no domain (everything)."""
     if not domain:
         return None
-    from prax.graph import ontology
 
     clause, args = domain_clause(ontology.current().within(domain), unset=False)
     rows = con.execute(f"SELECT d.id FROM documents d WHERE 1 = 1{clause}", args)

@@ -7,6 +7,8 @@ import json
 import sqlite3
 from typing import Any
 
+from prax.graph import ontology
+
 from ..base import _guards, _reading, _scrubbed, domain_clause, hidden_documents
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
 
@@ -339,8 +341,6 @@ def hub_graph(
     limit = max(1, min(limit, 200))
     docs, docs_args = "", tuple[str, ...]()
     if domain:
-        from prax.graph import ontology
-
         onto = ontology.current()
         within = sorted(onto.within(domain))
         own = {

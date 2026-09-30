@@ -214,6 +214,35 @@ def test_the_store_stands_only_on_what_is_below_it() -> None:
     assert not reaching, "the store imports upward at the top: " + "; ".join(reaching)
 
 
+def test_an_import_inside_a_store_function_is_a_call_up() -> None:
+    """The other half: an import placed inside a function is for reaching
+    up (a parser, the graph's passes, the wall). One that reaches down, to
+    what the top may import anyway, only hides the module's dependencies
+    (36 of the 60 on 2026-09-30, one module importing its sibling twelve
+    times)."""
+    hiding: list[str] = []
+    for path in sorted((SRC / "store").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for fn in ast.walk(tree):
+            if not isinstance(fn, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            for node in ast.walk(fn):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                if node.level:
+                    names = [f"prax.store.{node.module or ''}"]
+                elif node.module == "prax":
+                    names = [f"prax.{a.name}" for a in node.names]
+                else:
+                    names = [f"{node.module}.{a.name}" for a in node.names]
+                for name in names:
+                    if name.startswith((*STORE_MAY_STAND_ON, "prax.store")):
+                        hiding.append(f"{path.relative_to(SRC)}:{node.lineno} {name}")
+    assert not hiding, "an import below the store, inside a function: " + "; ".join(
+        hiding
+    )
+
+
 def test_the_text_package_stands_on_nothing_of_prax() -> None:
     """``prax.text`` holds the shapes of text: markup, chunks, what a region
     of a page is. The engineering pass of 2026-09-28 gathered them because

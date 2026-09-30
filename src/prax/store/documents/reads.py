@@ -7,6 +7,8 @@ import json
 import sqlite3
 from typing import Any
 
+from prax.graph import ontology
+
 from ..base import (
     _TOKEN,
     UNASSIGNED,
@@ -238,7 +240,6 @@ def list_documents(
     if domain:
         # a module holds its own, those of the modules built on it and the
         # documents no module was set for; "unassigned" is those alone
-        from prax.graph import ontology
 
         names = () if domain == UNASSIGNED else ontology.current().within(domain)
         clause, more = domain_clause(names, unset=True)

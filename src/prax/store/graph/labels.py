@@ -6,6 +6,8 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from prax.text import language
+
 from ..base import _NOW, _reading, _serialized, now
 from .edges import _entity_id
 
@@ -93,7 +95,6 @@ def _label_from_merge(
     confidence: str | None,
 ) -> None:
     """The duplicate's name, kept as a label of the survivor."""
-    from prax.text import language
 
     row = con.execute(
         "SELECT name FROM entities WHERE id = ?", (duplicate_id,)
@@ -121,7 +122,6 @@ def display_language() -> str:
     is written in (`prax.text.language.canonical`, `graph.language` in
     prax.yaml). The graph in German for a German reader, one node either
     way — the point of the label table."""
-    from prax.text import language
 
     return language.canonical()
 
@@ -134,7 +134,6 @@ def _display_name(con: sqlite3.Connection, entity_id: int) -> str | None:
     made by something that bypassed ``_entity_id`` — the caller then
     leaves the name it has.
     """
-    from prax.text import language
 
     want = display_language()
     rows = con.execute(

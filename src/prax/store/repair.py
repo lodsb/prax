@@ -35,11 +35,13 @@ from typing import Any
 from prax.graph import ontology
 from prax.text import glyphs
 
-from .base import _ASIDE, _NOW, _read_archive, _reading, now
+from . import documents as docs
+from .base import _ASIDE, _NOW, _read_archive, _reading, archive_path, now
 from .documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
     retire_document,
+    set_mime,
     similarity,
 )
 from .graph import entity_named_in, invalidate_edge, rename_entity, resolve_review
@@ -264,7 +266,6 @@ def _split_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
     which merges them on the door's clock; a document beside its topic is
     two things and is not listed. The biggest part first, with the others
     and their edges (docs/eval/fractured-names-2026-09-27.md)."""
-    from prax.graph import ontology
 
     onto = ontology.current()
 
@@ -361,7 +362,6 @@ def _container_citations(con: sqlite3.Connection) -> list[dict[str, Any]]:
     a blanket retype would have ended 3,844 of them. The words are the
     ontology's (``lexicon.by_type``), not a pattern here.
     """
-    from prax.graph import ontology
 
     lex = ontology.lexicon()
     found = []
@@ -513,7 +513,6 @@ def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     header): registered from a folder that held them beside the real files;
     no extractor will ever read them. Every type without text, not PDFs
     only: a copied Cygwin link was filed as the RTF it pointed at."""
-    from .base import archive_path
 
     out = []
     for r in con.execute(
@@ -641,7 +640,6 @@ def _untyped_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def _repair_untyped(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
-    from .documents import set_mime
 
     for r in rows:
         set_mime(con, int(r["id"]), str(r["mime"]))
@@ -681,7 +679,6 @@ def _repair_extraction_failed(
     refused), so the extract step selects those documents again; an
     error the document caused (a prompt no slot holds) stays, as the
     ailment says."""
-    from prax.store import documents as docs
 
     done = 0
     for r in rows:
@@ -755,7 +752,6 @@ def _unread_formulas(con: sqlite3.Connection) -> list[dict[str, Any]]:
 def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents every extractor has tried and found no text in
     (``documents.unreadable_documents``), with what the last attempt said."""
-    from prax.store import documents as docs
 
     ids = docs.unreadable_documents(con, limit=CAP)
     if not ids:
@@ -782,7 +778,6 @@ def _unreadable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
 def _uncounted_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """PDFs with text and no page count in their metadata: parsed before
     the worker recorded one. ``thin-texts`` cannot weigh them."""
-    from prax.store import documents as docs
 
     ids = docs.uncounted_pages(con)  # all of them: the repair counts them all
     out: list[Any] = []
@@ -802,7 +797,6 @@ def _uncounted_pages(con: sqlite3.Connection) -> list[dict[str, Any]]:
 def _repair_uncounted_pages(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     """Count them all (not only the rows shown): each PDF opened once,
     ``meta.pages`` written. Nothing where pymupdf is not installed."""
-    from prax.store import documents as docs
 
     return docs.count_pages(con, docs.uncounted_pages(con))
 
@@ -841,7 +835,6 @@ def _repair_labelled_summaries(
     con: sqlite3.Connection, rows: list[dict[str, Any]]
 ) -> int:
     """The label taken off every one of them, not only the rows shown."""
-    from prax.store import documents as docs
     from prax.writing import summaries
 
     n = 0
@@ -864,7 +857,6 @@ def _repair_labelled_summaries(
 def _thin_texts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """PDFs read as if their cover were the book
     (``documents.thin_documents``): the longest first."""
-    from prax.store import documents as docs
 
     rows = docs.thin_documents(con, limit=CAP)
     if not rows:
@@ -884,7 +876,6 @@ def _thin_texts(con: sqlite3.Connection) -> list[dict[str, Any]]:
 def _unpolished_transcripts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Videos with an automatic transcript the polish has not written:
     captured before the step existed, or while its model was away."""
-    from prax.store import documents as docs
 
     ids = docs.select_for_reading(con, unpolished=True, limit=CAP)
     if not ids:
@@ -936,7 +927,6 @@ def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
 def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     """Re-index the document from its own artifact, cleaned: chunks whose
     text did not change keep their vectors."""
-    from prax.store import documents as docs
 
     done = 0
     for r in rows:
@@ -985,7 +975,6 @@ def _stale_parses(con: sqlite3.Connection) -> list[dict[str, Any]]:
 def _repair_stale_parses(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     """Move the stamp where an annotation already made the revision's
     change; the others wait for the backlog pass."""
-    from prax.store import documents as docs
 
     done = 0
     for r in rows:
@@ -1008,7 +997,6 @@ def _stale_extractions(con: sqlite3.Connection) -> list[dict[str, Any]]:
     reader that is not an annotator, after ``extraction.at``): the graph
     speaks of a text that is gone, and the extract step does not know.
     From before the rule (2026-09-17) that unstamps on the way in."""
-    from prax.store import documents as docs
 
     not_annotator = " AND ".join(
         f"json_extract(h.value, '$.extractor') NOT LIKE '{a}/%'"
@@ -1047,7 +1035,6 @@ def _repair_stale_extractions(
 ) -> int:
     """Move the stamp aside so the extract step reads the new text; the
     old reading's edges go when the new one is applied."""
-    from prax.store import documents as docs
 
     return sum(
         1 for r in rows if docs.unstamp_extraction(con, r["id"], str(r["read_by"]))
