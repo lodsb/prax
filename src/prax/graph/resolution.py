@@ -68,7 +68,7 @@ class Candidate:
     keep_name: str
     drop_name: str
     type: str
-    tier: str  # sure | likely
+    tier: str  # sure | subtype | twins | likely
     score: float  # 1.0 for sure, cosine similarity for likely
 
 
@@ -135,52 +135,49 @@ def likely_pairs(
     return sorted(((a, b, s) for (a, b), s in found.items()), key=lambda t: -t[2])
 
 
-def plan(
-    con: sqlite3.Connection,
-    *,
-    etype: str | None = None,
-    likely: bool = True,
-) -> Plan:
-    """Candidate merges among unmerged entities, without writing anything:
-    the sure ones and the twins from the names, the likely ones from the
-    pairs a worker left (``store.entity_candidates``; the threshold was
-    the worker's, handed out with the names)."""
-    ents = _entities(con, etype)
-    out = Plan()
-    taken: set[int] = set()
+Entity = dict[str, Any]
 
-    # tier 1a: equal normalized names within a type
-    groups: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+
+def _sure(keep: Entity, drop: Entity, etype: str, tier: str = "sure") -> Candidate:
+    return Candidate(
+        keep["id"], drop["id"], keep["name"], drop["name"], etype, tier, 1.0
+    )
+
+
+def _equal_names(ents: list[Entity], taken: set[int]) -> list[Candidate]:
+    """Tier 1a: equal normalized names within a type; the best ranked
+    survives."""
+    groups: dict[tuple[str, str], list[Entity]] = defaultdict(list)
     for e in ents:
         key = normalize(e["name"], plural=e["type"] != "author")
         groups[(e["type"], key)].append(e)
+    out: list[Candidate] = []
     for (t, _), members in groups.items():
         if len(members) < 2:
             continue
         members.sort(key=_rank, reverse=True)
-        keep = members[0]
         for drop in members[1:]:
-            out.sure.append(
-                Candidate(
-                    keep["id"], drop["id"], keep["name"], drop["name"], t, "sure", 1.0
-                )
-            )
+            out.append(_sure(members[0], drop, t))
             taken.add(drop["id"])
+    return out
 
-    # tier 1c: one name under a type and its subtype. The ontology says an
-    # author is a person, a paper is a document, a venue is an organization;
-    # the extractor reaches for the general type when a document does not
-    # make the specific one plain, and the two are one thing. The specific
-    # side survives, because it says more and the general is implied.
+
+def _subtypes(ents: list[Entity], taken: set[int]) -> list[Candidate]:
+    """Tier 1c: one name under a type and its subtype. The ontology says an
+    author is a person, a paper is a document, a venue is an organization;
+    the extractor reaches for the general type when a document does not
+    make the specific one plain, and the two are one thing. The specific
+    side survives, because it says more and the general is implied."""
     onto = ontology.current()
-    by_plain: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    by_plain: dict[str, list[Entity]] = defaultdict(list)
     for e in ents:
         if e["id"] not in taken and e["type"] not in SELF_KINDS:
             by_plain[normalize(e["name"], plural=False)].append(e)
+    out: list[Candidate] = []
     for members in by_plain.values():
         if len(members) < 2:
             continue
-        by_type: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        by_type: dict[str, list[Entity]] = defaultdict(list)
         for e in members:
             by_type[e["type"]].append(e)
         for specific, kin in by_type.items():
@@ -192,96 +189,106 @@ def plan(
                 for drop in others:
                     if drop["id"] in taken or drop["id"] == keep["id"]:
                         continue
-                    out.subtypes.append(
-                        Candidate(
-                            keep["id"],
-                            drop["id"],
-                            keep["name"],
-                            drop["name"],
-                            f"{general}→{specific}",
-                            "subtype",
-                            1.0,
-                        )
-                    )
+                    out.append(_sure(keep, drop, f"{general}→{specific}", "subtype"))
                     taken.add(drop["id"])
+    return out
 
-    # tier 1b: authors by initials form (J. O. Smith == Julius O. Smith)
-    by_initials: dict[tuple[str, ...], list[dict[str, Any]]] = defaultdict(list)
+
+def _initials(ents: list[Entity], taken: set[int]) -> list[Candidate]:
+    """Tier 1b: authors by initials form (J. O. Smith == Julius O. Smith),
+    only where one full name has abbreviations and nothing else shares
+    them: two different full names with the same initials are not sure.
+    The full name survives, whatever the edge counts."""
+    by_initials: dict[tuple[str, ...], list[Entity]] = defaultdict(list)
     for e in ents:
         if e["type"] != "author" or e["id"] in taken:
             continue
         form = initials_form(e["name"])
         if form:
             by_initials[form].append(e)
-    for form, members in by_initials.items():
+    out: list[Candidate] = []
+    for members in by_initials.values():
         if len(members) < 2:
             continue
-        # only merge when one member is an abbreviation of another, i.e. the
-        # normalized names differ only by given names being initials
         full = [m for m in members if not _is_initials_only(m["name"])]
         short = [m for m in members if _is_initials_only(m["name"])]
         if len(full) != 1 or not short:
-            continue  # two different full names sharing initials: not sure
-        keep = full[0]  # the full name survives regardless of edge counts
+            continue
         for drop in short:
-            out.sure.append(
-                Candidate(
-                    keep["id"],
-                    drop["id"],
-                    keep["name"],
-                    drop["name"],
-                    "author",
-                    "sure",
-                    1.0,
-                )
-            )
+            out.append(_sure(full[0], drop, "author"))
             taken.add(drop["id"])
+    return out
 
-    # tier 1c: the same name as a concept and as a method; the method survives
-    if etype is None or etype in TWIN_TYPES:
-        by_key: dict[str, dict[str, dict[str, Any]]] = defaultdict(dict)
-        for e in ents:
-            if e["type"] in TWIN_TYPES and e["id"] not in taken:
-                by_key[normalize(e["name"])].setdefault(e["type"], e)
-        for twin in by_key.values():
-            if len(twin) == 2:
-                keep, drop = twin["method"], twin["concept"]
-                out.twins.append(
-                    Candidate(
-                        keep["id"],
-                        drop["id"],
-                        keep["name"],
-                        drop["name"],
-                        "method",
-                        "twins",
-                        1.0,
-                    )
-                )
-                taken.add(drop["id"])
 
-    # tier 2: close by name embedding — the pairs a worker computed and
-    # posted, read back with both entities still unmerged and not taken
-    if likely:
-        by_id = {e["id"]: e for e in ents}
-        for row in store.entity_candidates(con, etype):
-            if row["type"] not in LIKELY_TYPES:
-                continue
-            a, b = by_id.get(row["a"]), by_id.get(row["b"])
-            if a is None or b is None or a["id"] in taken or b["id"] in taken:
-                continue
-            keep, drop = _survivor(a, b)
-            out.likely.append(
-                Candidate(
-                    keep["id"],
-                    drop["id"],
-                    keep["name"],
-                    drop["name"],
-                    row["type"],
-                    "likely",
-                    float(row["score"]),
-                )
+def _twins(ents: list[Entity], taken: set[int]) -> list[Candidate]:
+    """Tier 1c: the same name as a concept and as a method; the method
+    survives."""
+    by_key: dict[str, dict[str, Entity]] = defaultdict(dict)
+    for e in ents:
+        if e["type"] in TWIN_TYPES and e["id"] not in taken:
+            by_key[normalize(e["name"])].setdefault(e["type"], e)
+    out: list[Candidate] = []
+    for twin in by_key.values():
+        if len(twin) == 2:
+            out.append(_sure(twin["method"], twin["concept"], "method", "twins"))
+            taken.add(twin["concept"]["id"])
+    return out
+
+
+def _likely(
+    con: sqlite3.Connection,
+    ents: list[Entity],
+    etype: str | None,
+    taken: set[int],
+) -> list[Candidate]:
+    """Tier 2: close by name embedding — the pairs a worker computed and
+    posted, read back with both entities still unmerged and not taken;
+    the closest first."""
+    by_id = {e["id"]: e for e in ents}
+    out: list[Candidate] = []
+    for row in store.entity_candidates(con, etype):
+        if row["type"] not in LIKELY_TYPES:
+            continue
+        a, b = by_id.get(row["a"]), by_id.get(row["b"])
+        if a is None or b is None or a["id"] in taken or b["id"] in taken:
+            continue
+        keep, drop = _survivor(a, b)
+        out.append(
+            Candidate(
+                keep["id"],
+                drop["id"],
+                keep["name"],
+                drop["name"],
+                row["type"],
+                "likely",
+                float(row["score"]),
             )
-    out.likely.sort(key=lambda c: -c.score)
+        )
+    out.sort(key=lambda c: -c.score)
+    return out
+
+
+def plan(
+    con: sqlite3.Connection,
+    *,
+    etype: str | None = None,
+    likely: bool = True,
+) -> Plan:
+    """Candidate merges among unmerged entities, without writing anything:
+    the sure ones and the twins from the names, the likely ones from the
+    pairs a worker left (``store.entity_candidates``; the threshold was
+    the worker's, handed out with the names). The tiers run in this
+    order, and an entity one tier takes is not offered to the next."""
+    ents = _entities(con, etype)
+    taken: set[int] = set()
+    out = Plan()
+    out.sure = _equal_names(ents, taken)
+    out.subtypes = _subtypes(ents, taken)
+    out.sure += _initials(ents, taken)
+    if etype is None or etype in TWIN_TYPES:
+        out.twins = _twins(ents, taken)
+    if likely:
+        out.likely = _likely(con, ents, etype, taken)
     return out
 
 
