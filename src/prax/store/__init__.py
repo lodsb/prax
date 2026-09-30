@@ -191,6 +191,7 @@ from .documents import (  # noqa: F401
     finished_readings,
     formula_by_number,
     genre_sample,
+    genre_training,
     genres_needed,
     genres_tried,
     get_chunk,

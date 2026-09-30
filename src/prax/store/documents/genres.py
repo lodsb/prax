@@ -176,6 +176,52 @@ def set_genres(
 
 
 @_reading
+def genre_training(
+    con: sqlite3.Connection, *, opening: int = GENRE_OPENING + 700
+) -> list[dict[str, Any]]:
+    """Every labelled document for training the small model
+    (`scripts/train_labeller.py`): its title, meta, the opening of its
+    text, who labelled it (``by``), whether it is a person's blind label
+    (``blind``: labelled with nothing ticked in front of them, the measure
+    a model is never trained on), and its labels at 0.5 or more."""
+    out = []
+    for r in con.execute(
+        "SELECT id, title, meta, text_hash, source_url, original_path FROM documents"
+        " WHERE json_extract(meta, '$.genres_by') IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ).fetchall():
+        meta = json.loads(r["meta"] or "{}")
+        text = ""
+        if r["text_hash"]:
+            try:
+                text = _read_archive(r["text_hash"]).decode("utf-8", "replace")[
+                    :opening
+                ]
+            except (OSError, KeyError):
+                text = ""
+        by = meta.get("genres_by")
+        keep = lambda xs, key: [
+            x[key] for x in xs or [] if float(x.get("p", 1.0)) >= 0.5
+        ]
+        out.append(
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "meta": meta,
+                "text": text,
+                "where": (meta.get("origin") or {}).get("path")
+                or r["source_url"]
+                or r["original_path"],
+                "by": by,
+                "blind": by == "human" and not meta.get("genres_model"),
+                "g": keep(meta.get("genres"), "genre"),
+                "s": keep(meta.get("subjects"), "subject"),
+            }
+        )
+    return out
+
+
+@_reading
 def genres_needed(con: sqlite3.Connection, *, limit: int = 50) -> list[int]:
     """The documents the genres step labels next: the open ones
     (``_GENRE_OPEN``) a pass has not tried without result, the newest

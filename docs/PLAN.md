@@ -319,7 +319,11 @@ Built only when measured to be needed.
    the opening, genres F1 0.60 blind against Claude's 0.64, subjects 0.58
    against 0.64, about 2.5 s a document. The step is built
    (`steps.writing.Genres`) and off; turning it on is the user's word.
-   Jeff 0.8B measured on the CPU overnight; Kev not yet.)
+   Jeff 0.8B and Kev-4B measured on the card 2026-09-30. The small
+   labeller built the same day: bge-small fine-tuned on the teacher's
+   and the person's labels, `steps.genres.method: small`, about 30
+   minutes for the library on the CPU; `docs/howto.md`, "What a document
+   is". Switching it on is the user's word.)
 3. The calibration, `meta.genres`, the genres on the properties dialog
    and as a Browse filter, the document field. (2026-09-29: calibration
    and `meta.genres` in the step; the properties dialog shows genres and

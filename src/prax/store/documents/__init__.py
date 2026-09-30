@@ -55,6 +55,7 @@ from .genres import (  # noqa: F401
     GENRE_OPENING,
     _genre_item,
     genre_sample,
+    genre_training,
     genres_needed,
     genres_tried,
     set_genres,

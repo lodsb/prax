@@ -116,6 +116,36 @@ def genre_sample(
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.get("/genres/training")
+def genre_training(request: Request) -> dict[str, Any]:
+    """Every labelled document with the view a model reads
+    (``writing.genres.view``), who labelled it and whether it is a blind
+    label: what `scripts/train_labeller.py` trains and measures on."""
+    from prax.writing import genres as gw
+
+    rows = store.genre_training(_con(request))
+    items = [
+        {
+            "id": r["id"],
+            "view": gw.view(r["title"], r["meta"], r["text"], where=r["where"]),
+            "by": r["by"],
+            "blind": r["blind"],
+            "g": r["g"],
+            "s": r["s"],
+        }
+        for r in rows
+    ]
+    return {
+        "genres": ontology.genres().labels(),
+        "subjects": ontology.subjects().labels(),
+        "versions": {
+            "genres": ontology.genres().version,
+            "subjects": ontology.subjects().version,
+        },
+        "items": items,
+    }
+
+
 class GenresReq(BaseModel):
     genres: list[str] | None = None  # None with skip false: take them back
     subjects: list[str] | None = None  # what it is about; may be none

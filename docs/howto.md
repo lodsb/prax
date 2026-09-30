@@ -1038,6 +1038,48 @@ changed or one of its modules grew, the same producer's earlier reading
 is retired as the new one is applied (`store.retire_reading`, history
 kept). Other producers' edges stay.
 
+### What a document is: genres, subjects and the small labeller
+
+A document can carry genres (what it is: a paper, a datasheet, an essay)
+and subjects (what it is about: politics, audio, cooking), from
+`ontology/genres.yaml` and `ontology/subjects.yaml`. You label them on the Review page's "genre" tab, and the genres step
+labels the rest. Two
+ways, chosen with `steps.genres.method` in `prax.yaml`:
+
+- `llm`: the local model lists the labels that fit and is asked about
+  each, calibrated by the Platt maps in `steps.genres.platt`. About 3 s a
+  document on the 4090, and it needs llama-server.
+- `small`: the small labeller, bge-small fine-tuned on your labels and
+  the local model's. Milliseconds a document on the CPU, no llama-server.
+  On your blind labels it reads subjects best of all (F1 0.66) and genres
+  about as well as the local model (0.575 against 0.60, `docs/eval/genres-2026-09-29.md`).
+
+The small labeller is trained, not downloaded. It needs the `train`
+extra, and for a GPU PyTorch's CUDA build:
+
+    pip install torch --index-url https://download.pytorch.org/whl/cu126
+    pip install -e ".[train]"
+    python scripts/train_labeller.py --extra teacher.jsonl --activate
+
+It fetches every labelled document from prax, trains on all but
+your blind labels, and prints its F1 on those. `--extra` adds labels the
+local model gave to documents nobody labelled (a JSON line each with
+`view`, `g` and `s`). The run lands in `models/labeller/<run>/` in the data directory.
+`--activate` makes it the one the step uses
+(`models/labeller/CURRENT`), and only after the exported model gave the
+same probabilities as the trained one. Five epochs take under a minute
+on the 4090 and some minutes on the CPU (`--device cpu` when the card is
+busy). Train again when your labels grow.
+
+Then, in `prax.yaml`:
+
+    steps:
+      genres:
+        method: small
+
+and `prax work --steps genres` labels the documents nobody has labelled,
+newest first. Your own labels are never overwritten.
+
 ### Typing rules over the queue
 
 A model's misfits are systematic:

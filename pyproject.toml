@@ -34,6 +34,7 @@ embed = ["usearch>=2.12", "onnxruntime", "tokenizers", "numpy"]  # Stage 2; Wind
 serve = ["prax[embed]"]                       # the door on the board: the core plus vectors for hybrid search; nothing else
 work = ["prax[embed,ingest]"]                 # the worker on the machine with the models: parse, titles, extract, embed
 tray = ["pystray>=0.19", "pillow"]           # the tray icon of `prax up --tray` on a desktop
+train = ["torch>=2.8", "transformers>=5.17,<6", "onnx>=1.17"]  # scripts/train_labeller.py only, never the door or the worker; a GPU wants PyTorch's CUDA build (docs/howto.md, "The small labeller")
 dev = ["pytest>=8", "ruff", "mypy>=1.10", "types-PyYAML"]
 
 [project.scripts]

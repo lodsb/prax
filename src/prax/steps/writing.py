@@ -296,12 +296,17 @@ class Genres(ModelStep):
     maps fitted on a person's labels (``steps.genres.platt``;
     ``writing.genres.label``). The door stores what is kept at
     ``steps.genres.keep`` as the model's labels, with the run, beside and
-    never over a person's. Off until prax.yaml names a model for it."""
+    never over a person's. Off until prax.yaml names a model for it.
+
+    ``steps.genres.method: small`` labels with the small trained model
+    instead (`prax.ml.labeller`, the run ``models/labeller/CURRENT``
+    names): milliseconds a document on the CPU, no llama-server, and on
+    only once a run has been trained and made current."""
 
     name = "genres"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        if models.resolve("genres") is None:
+        if not genres_on():
             return h.nothing()
 
         def build(doc_id: int) -> dict[str, Any] | None:
@@ -501,13 +506,59 @@ def do_sections(
     return results
 
 
+def genres_method() -> str:
+    """``llm`` (the local model, list then ask) or ``small`` (the trained
+    labeller); ``steps.genres.method``."""
+    method = str(models.settings("genres").get("method") or "llm")
+    if method not in ("llm", "small"):
+        raise ValueError(f"steps.genres.method is llm or small, not {method!r}")
+    return method
+
+
+def genres_on() -> bool:
+    """Whether the genres step has something to label with."""
+    if genres_method() == "small":
+        from prax.ml import labeller
+
+        return labeller.current_run() is not None
+    return models.resolve("genres") is not None
+
+
+def do_small_genres(
+    items: list[dict[str, Any]], *, log_: Log | None = None
+) -> list[dict[str, Any]]:
+    """Each document's genres and subjects from the small labeller, kept at
+    its threshold (or ``steps.genres.keep``)."""
+    from prax.ml import labeller
+
+    model = labeller.current()
+    if model is None:
+        return [{"doc_id": it["doc_id"], "tried": "no labeller"} for it in items]
+    keep = float(models.settings("genres").get("keep") or model.threshold)
+    G, S = ontology.genres(), ontology.subjects()
+    probs = model.predict([it["view"] for it in items])
+    results: list[dict[str, Any]] = []
+    for it, p in zip(items, probs, strict=True):
+        g = {x: v for x, v in p.items() if v >= keep and x in G.labels()}
+        s = {x: v for x, v in p.items() if v >= keep and x in S.labels()}
+        if not g:
+            results.append({"doc_id": it["doc_id"], "tried": "no genre kept"})
+            continue
+        results.append({"doc_id": it["doc_id"], "by": model.name, "g": g, "s": s})
+    say(log_, f"genres: {len(items)} documents by {model.name}")
+    return results
+
+
 def do_genres(
     items: list[dict[str, Any]], runtime: Any | None, *, log_: Log | None = None
 ) -> list[dict[str, Any]]:
     """Each document's genres and subjects from the genres step's local
-    model (``writing.genres.label``), calibrated by ``steps.genres.platt``.
-    A document with no genre kept is tried and not handed out again; a
-    server that is not answering defers the rest of the batch."""
+    model (``writing.genres.label``), calibrated by ``steps.genres.platt``,
+    or from the small labeller (``steps.genres.method: small``). A document
+    with no genre kept is tried and not handed out again; a server that is
+    not answering defers the rest of the batch."""
+    if genres_method() == "small":
+        return do_small_genres(items, log_=log_)
     base_url = getattr(runtime, "base_url", None)
     model = getattr(runtime, "model", None)
     if runtime is None or not base_url or not model:

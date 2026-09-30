@@ -2594,3 +2594,24 @@ Found while searching the library for the classification research
 - The low-memory stops of 2026-09-29 were the side-quest on top of this
       (Jeff on the CPU, Kev's training spilling from the card into RAM,
       llama-server's 19 GB mapped model), not prax at rest.
+
+## 2026-09-30: the small labeller, built in
+
+- [x] **`prax.ml.labeller`**: bge-small fine-tuned with one output a genre
+      or subject, run with what prax already has (onnxruntime, tokenizers,
+      numpy), the arena setting of the embedder. A run is a directory
+      under `models/labeller/`; `CURRENT` names the one in use.
+- [x] **`scripts/train_labeller.py`** (the `train` extra: PyTorch,
+      transformers, onnx): fetches every labelled document from
+      `GET /genres/training`, trains on all but the person's blind labels
+      (the person's others three times), exports the encoder to ONNX, and
+      activates the run only when the export gives what PyTorch gave.
+- [x] **`steps.genres.method: small`** labels with it; `llm` stays the
+      teacher. Off: prax.yaml does not choose it yet.
+- **The first run** (`labeller-20260930T020624`), on the teacher's 1,429
+      documents, Claude's 93 and the person's 48: 42 s on the 4090 with
+      llama-server paused for it (on the CPU an epoch took over 15
+      minutes). Blind F1: genres 0.585, levels 0.742, subjects 0.619,
+      groups 0.769, the same to four decimals after the export. Through
+      prax on the CPU: 7.1 documents a second, the open 12,400 in about 29
+      minutes; 47 MB kept, 128 MB of model.
