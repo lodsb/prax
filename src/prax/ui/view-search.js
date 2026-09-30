@@ -86,6 +86,7 @@ async function viewSearch(p) {
           ${badge(h.kind)}
           <span>${headingPath(h.heading)}</span>
           <span>${esc(page)}</span>
+          ${domainChips(h.domains, (d) => `#search?${new URLSearchParams({ ...p, domain: d })}`, true)}
           <span class="muted">${sides.map(esc).join(" · ")}</span>
           <a href="${originalHref(h.doc_id, h.page)}" target="_blank" rel="noopener">original ↗</a>
         </div>

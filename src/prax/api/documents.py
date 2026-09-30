@@ -60,7 +60,8 @@ def search(
     entities live in one region of the library, that region and its part
     as an item of their own (``kind: "region"``): where the results are.
     ``brief`` leaves out the ranks and the empty fields (``store.brief_hit``),
-    which an agent does not read."""
+    which an agent does not read; without it each hit says its
+    ``domains`` (None: every module)."""
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
     con = _con(request)
@@ -80,6 +81,10 @@ def search(
         raise HTTPException(400, str(exc)) from exc
     if brief:
         hits = [store.brief_hit(h) for h in hits]
+    else:  # the UI shows each hit's domains; an agent asks with domain=
+        sets = store.domains_of(con, [int(h["doc_id"]) for h in hits])
+        for h in hits:
+            h["domains"] = sets.get(int(h["doc_id"]))
     if regions and hits:
         first = [int(h["doc_id"]) for h in hits[: store.REGION_HITS]]
         where = store.regions_of(con, first)

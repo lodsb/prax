@@ -603,6 +603,15 @@ function ingredientsBox(data) {
   return `<div class="ingredients-box">${serves}${groups.map(group).join("")}</div>`;
 }
 
+// A document's domains as small links, each to the view it came from
+// narrowed to that domain (`href(domain)`); none set reads "every module"
+// only where `quiet` is false, so a list of hits stays short.
+function domainChips(domains, href, quiet) {
+  if (!domains || !domains.length) return quiet ? "" : '<span class="muted domain-none" title="no domain set: read against every module">every module</span>';
+  return `<span class="domain-chips" title="the ontology modules this document is read against">${domains.map((d) =>
+    `<a class="domain-chip" href="${esc(href(d))}">${esc(d)}</a>`).join("")}</span>`;
+}
+
 // Why a queue is not moving: what the door says about the step nobody
 // is asking for (`work.who_runs`). Empty when the work is in hand, so a
 // view can render it unconditionally.
@@ -614,5 +623,5 @@ function waitingNote(w, pending) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate };
 }

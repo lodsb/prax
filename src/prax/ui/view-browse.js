@@ -36,6 +36,7 @@ async function viewBrowse(p) {
         <td class="muted">${esc((d.meta.creators || []).slice(0, 2).map((c) => c.name).join(", "))}</td>
         <td class="muted">${esc(d.meta.date || "")}</td>
         <td class="muted">${esc(d.mime || "")}</td>
+        <td>${domainChips(d.meta.domains, (m) => `#browse?${new URLSearchParams({ ...p, domain: m, offset: 0 })}`, false)}</td>
         <td class="num">${d.n_chunks}</td>
         <td class="muted">${esc((d.added_at || "").slice(0, 10))}</td>
       </tr>`).join("");
@@ -47,7 +48,7 @@ async function viewBrowse(p) {
       </div>`;
     list.innerHTML = pager + `
       <table class="doc-list">
-        <thead><tr><th>Title</th><th>Creators</th><th>Date</th><th>Type</th><th>Chunks</th><th>Added</th></tr></thead>
+        <thead><tr><th>Title</th><th>Creators</th><th>Date</th><th>Type</th><th>Domains</th><th>Chunks</th><th>Added</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>` + pager;
   } catch (err) {

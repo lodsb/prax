@@ -52,15 +52,19 @@ def traverse(
     hops: int = 1,
     limit: int | None = None,
     type: str | None = None,
+    domain: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: the edges, and what was left out.
 
     The second hop is a map rather than every edge in it, so the answer
     says how many neighbours it did not carry (`store._second_hop`). A
     name that reaches several things walks one, the one of ``type`` or
-    else the most connected, and ``senses`` names them all.
+    else the most connected, and ``senses`` names them all. ``domain``
+    keeps what that module's documents say.
     """
-    return store.traverse_map(_con(request), entity, hops, limit, type=type)
+    return store.traverse_map(
+        _con(request), entity, hops, limit, type=type, domain=domain or None
+    )
 
 
 @router.get("/ontology")

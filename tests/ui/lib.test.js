@@ -437,3 +437,11 @@ test("labelList: the labels under a level, a model's with its probability, and w
   assert.match(html, /<th>genres<\/th><td>paper/);
 });
 
+
+test("domainChips: a link per domain; none set says every module unless quiet", () => {
+  const html = lib.domainChips(["studio", "a&b"], (d) => `#browse?domain=${d}`, false);
+  assert.match(html, /href="#browse\?domain=studio">studio<\/a>/);
+  assert.match(html, />a&amp;b<\/a>/);
+  assert.match(lib.domainChips(null, () => "", false), /every module/);
+  assert.equal(lib.domainChips([], () => "", true), "");
+});

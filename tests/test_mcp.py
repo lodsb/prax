@@ -141,6 +141,8 @@ def test_link_and_traverse(proxied: TestClient) -> None:
     two = call("traverse", entity="A", hops=2)
     assert {(e["src"], e["dst"]) for e in two["edges"]} == {("A", "B")}
     assert [n["name"] for n in two["neighbours"]] == ["C"]
+    # an agent's facts come from no document, so no module's walk has them
+    assert call("traverse", entity="A", domain="research")["edges"] == []
 
 
 def test_link_bad_confidence_returns_error() -> None:

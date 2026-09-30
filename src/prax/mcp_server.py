@@ -141,7 +141,9 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
 
 
 @mcp.tool()
-def traverse(entity: str, hops: int = 1, type: str | None = None) -> dict[str, Any]:
+def traverse(
+    entity: str, hops: int = 1, type: str | None = None, domain: str | None = None
+) -> dict[str, Any]:
     """Expand the knowledge graph 1-2 hops from a named entity.
 
     ``edges`` is the first hop: every fact the entity itself carries,
@@ -157,10 +159,15 @@ def traverse(entity: str, hops: int = 1, type: str | None = None) -> dict[str, A
     company; a paper and the concept it is named after). Then one is
     walked, the most connected, and ``senses`` lists them all with their
     type, documents and domains; pass ``type`` to walk another.
+
+    ``domain`` (a module: research, studio, computing…) keeps what that
+    module's documents say, as ``search(domain=)`` does.
     """
     params: dict[str, Any] = {"entity": entity, "hops": hops}
     if type:
         params["type"] = type
+    if domain:
+        params["domain"] = domain
     out = _guard(lambda: door().get_json("/traverse", params))
     return out if isinstance(out, dict) else {"error": str(out)}
 

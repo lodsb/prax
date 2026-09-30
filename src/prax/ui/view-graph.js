@@ -129,7 +129,7 @@ class ForceGraph {
     const n = this.nodes.get(key);
     n.expanded = true;
     // the node is one thing: its type says which, where its name is several
-    const edges = (await api("/traverse", { entity: n.name, hops: 1, limit: 0, type: n.type || "" })).edges;
+    const edges = (await api("/traverse", { entity: n.name, hops: 1, limit: 0, type: n.type || "", domain: GRAPH_DOMAIN || undefined })).edges;
     if (!n.expanded) return;  // folded while the fetch was in flight
     this.merge(edges, key);
     this.select(key);
@@ -368,7 +368,7 @@ class ForceGraph {
     });
     c.addEventListener("dblclick", (e) => {
       const n = this.hit(...at(e));
-      if (n) go("graph", "", { entity: n.name });
+      if (n) go("graph", "", GRAPH_DOMAIN ? { entity: n.name, domain: GRAPH_DOMAIN } : { entity: n.name });
     });
     c.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -421,10 +421,16 @@ function graphPanelUpdater(panel, graphOf) {
   };
 }
 
+// The module the graph is drawn from, if one was chosen: the overview's
+// hubs, an entity's walk and every expansion keep to its documents
+// (GET /traverse?domain=), until the choice is cleared.
+let GRAPH_DOMAIN = "";
+
 async function viewGraph(arg, p) {
   const q = p.q || "";
   const entity = p.entity || arg || "";
   const domain = p.domain || "";
+  GRAPH_DOMAIN = domain;
   const docId = p.doc || "";
   const communityId = p.community || "";
   await modules();
@@ -512,7 +518,8 @@ async function viewGraph(arg, p) {
     const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
     out.innerHTML = `
       <div class="graph-tools">
-        <span>Neighbourhood of <b>${esc(entity)}</b></span>
+        ${domainSelect(domain, "domain", "only what one module's documents say")}
+        <span>Neighbourhood of <b>${esc(entity)}</b>${domain ? ` in the <b>${esc(domain)}</b> documents` : ""}</span>
         <span class="muted">· click a node to expand it, click it again to fold it · drag to pan, wheel to zoom · dashed edges are inferred or ambiguous</span>
         <button type="button" id="graph-fit" class="secondary">fit</button>
       </div>
@@ -524,8 +531,14 @@ async function viewGraph(arg, p) {
     const panel = document.getElementById("graph-panel");
     const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
     document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
-    const edges = (await api("/traverse", { entity, hops: 1, limit: 0, type: p.type || "" })).edges;
-    if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity.</p>`; return; }
+    out.querySelector("select[name=domain]").addEventListener("change", (e) => {
+      const next = { entity };
+      if (p.type) next.type = p.type;
+      if (e.target.value) next.domain = e.target.value;
+      go("graph", "", next);
+    });
+    const edges = (await api("/traverse", { entity, hops: 1, limit: 0, type: p.type || "", domain: domain || undefined })).edges;
+    if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity${domain ? ` in the ${esc(domain)} documents` : ""}.</p>`; return; }
     const first = edges.find((e) => e.src === entity || e.dst === entity);
     if (!first) { graph.merge(edges, null); return; }
     const start = graph.node(entity, first.src === entity ? first.src_type : first.dst_type, null);

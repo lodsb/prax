@@ -338,6 +338,7 @@ def traverse_map(
     limit: int | None = None,
     *,
     type: str | None = None,
+    domain: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: its own edges, the ideas around
     them, and how many of those did not fit.
@@ -360,9 +361,13 @@ def traverse_map(
     and the part of it, with their labels and sizes (``prax.graph.communities``):
     a way from a fact to what region of the library it belongs to, a few
     dozen bytes. Absent for an entity outside the partition.
+
+    ``domain`` keeps what that module's documents (and those of the
+    modules built on it) say, as the overview's does (``graph_overview``):
+    the documents no module was set for are left out.
     """
     ids, report = _choose(con, entity_name, type)
-    rows, left_out = _walk(con, ids, hops, limit)
+    rows, left_out = _walk(con, ids, hops, limit, within=_domain_documents(con, domain))
     out: dict[str, Any] = {
         "entity": entity_name,
         "hops": max(0, min(hops, MAX_HOPS)),
@@ -378,8 +383,32 @@ def traverse_map(
     return out
 
 
+def _domain_documents(
+    con: sqlite3.Connection, domain: str | None
+) -> frozenset[int] | None:
+    """The documents whose set holds ``domain`` or a module built on it;
+    None for no domain (everything)."""
+    if not domain:
+        return None
+    from prax.graph import ontology
+
+    within = sorted(ontology.current().within(domain))
+    rows = con.execute(
+        "SELECT d.id FROM documents d WHERE EXISTS (SELECT 1 FROM"
+        " json_each(d.meta, '$.domains') j"
+        f" WHERE j.value IN ({','.join('?' * len(within))}))",
+        within,
+    )
+    return frozenset(int(r[0]) for r in rows)
+
+
 def _walk(
-    con: sqlite3.Connection, start_ids: list[int], hops: int, limit: int | None = None
+    con: sqlite3.Connection,
+    start_ids: list[int],
+    hops: int,
+    limit: int | None = None,
+    *,
+    within: frozenset[int] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     hops = max(0, min(hops, MAX_HOPS))
     if limit is None:
@@ -442,7 +471,12 @@ def _walk(
         (json.dumps(start_ids), hops, hops),
     ).fetchall()
     hidden = hidden_documents(con)
-    seen = [dict(r) for r in rows if r["source_doc"] not in hidden]
+    seen = [
+        dict(r)
+        for r in rows
+        if r["source_doc"] not in hidden
+        and (within is None or r["source_doc"] in within)
+    ]
     shaped, neighbours_left = _second_hop(seen)
     near = [r for r in shaped if int(r["hop"]) < 2]
     far = [r for r in shaped if int(r["hop"]) >= 2]

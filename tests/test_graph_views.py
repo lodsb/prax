@@ -81,3 +81,27 @@ def test_the_door_draws_both(client: TestClient) -> None:
     assert "apple" in {n["name"] for n in nodes}
     got = client.get(f"/graph/document/{docs['cake']}").json()
     assert got["doc_id"] == docs["cake"] and len(got["edges"]) == 2
+
+
+def test_an_entitys_walk_keeps_one_modules_documents(
+    con: sqlite3.Connection, client: TestClient
+) -> None:
+    """``traverse`` with a domain keeps what that module's documents say,
+    and those of the modules built on it; the unassigned are left out."""
+    docs = _library(con)
+    _edge(
+        con,
+        store.Edge("Apple cake", "document", "covers", "entropy", "concept"),
+        docs["cake"],
+    )
+    everywhere = store.traverse_map(con, "entropy")
+    assert {e["source_doc"] for e in everywhere["edges"]} >= {
+        docs["cake"],
+        docs["paper"],
+    }
+    research = store.traverse_map(con, "entropy", domain="research")
+    assert {e["source_doc"] for e in research["edges"]} == {docs["paper"]}
+    craft = store.traverse_map(con, "entropy", domain="craft")  # kitchen is built on it
+    assert {e["source_doc"] for e in craft["edges"]} == {docs["cake"]}
+    got = client.get("/traverse", params={"entity": "entropy", "domain": "research"})
+    assert {e["source_doc"] for e in got.json()["edges"]} == {docs["paper"]}
