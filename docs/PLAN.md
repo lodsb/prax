@@ -948,6 +948,39 @@ to find out whether a local logprob predicts anything.
 Deliberately after the current run of work: it is a measurement with a
 possible change behind it, not a change.
 
+## The engineering pass of 2026-09-30: what it left
+
+The pass itself is in `docs/log.md` (2026-09-30). These were found and
+not done.
+
+- [ ] **`store.retrieval` as a package.** It is 1,919 lines, under the
+      2,000 that CLAUDE.md sets for a split. It does four jobs: query
+      expansion, the search legs, fusion, and the vector files. Its tests
+      switch behaviour through module flags (`retrieval.SENSES`,
+      `retrieval.DOMAIN_PRIOR`, `DELTA_MERGE_AT`). Split into parts, a
+      flag set on the package would no longer reach the part that reads
+      it, and the tests would pass without testing. The split needs the
+      flags read through one settings object first.
+- [ ] **`store.repair` and `store.graph.context` in parts.** 1,697 and 954
+      lines. Their tests reach private state (`repair._glyphs_seen`),
+      which would move with the part that holds it.
+- [ ] **Typed shapes.** 869 `dict[str, Any]` annotations and no
+      `TypedDict`. The first ones worth writing are a search hit (read by
+      six modules), `get_document`, a job row and the meta keys.
+- [ ] **The next strict batch of mypy.** `prax.text`, `writing`, `wall`,
+      `ml`, `config`, `worker`, `host.schedule` and `steps.base` are
+      strict. `prax.store` needs `__all__` or explicit re-exports first:
+      926 of strict mode's 1,008 errors on 2026-09-30 were the store's
+      re-exports.
+- [ ] **The remaining complex functions.** None is over 21 (the ruff
+      ceiling). Worth splitting when next touched: `parsers.video.parse`
+      (21), `answering.questions.briefing` (20), `graph.extraction.build_input`
+      (19), `capture.routes.routes_for` (19).
+- [ ] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
+      the extension. Seven tests poll a job with their own loop. The
+      summaries and sections helpers that the store calls up to could
+      move into `prax.text`.
+
 ## The engineering pass of 2026-09-28: packages
 
 Asked for by the user: "a lot of separate source code files that may be

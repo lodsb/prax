@@ -2678,3 +2678,102 @@ Found while searching the library for the classification research
       `traverse` too). Both new modules changed the whole ontology's
       version, so the documents without a set are read again, like the
       406.
+
+## 2026-09-30: the engineering pass (the night after stage Z)
+
+Four read-only surveys first: modularity, duplication, complexity, and
+practice with the documents. Each claim that led to a change was
+checked in the code before the change. The pass went in stages. Each
+stage was committed with the full CI green: ruff, ruff format, mypy for
+Windows and for Linux, and the 1,043 tests. The door and the worker kept the code
+they started with while the re-extraction ran.
+
+**Defects the surveys found.**
+
+- `genres.ask` and the resolution judge called llama-server themselves
+      and caught every error. A server that was down read as "no
+      answer", so the genres step's defer path could not run.
+      `models.top_logprobs` asks through `post_json`, which raises
+      `ServerNotReady`. The judge keeps "no answer" on purpose: the pair
+      is left and asked again.
+- Which documents belong to a domain was written ten times in three
+      shapes. `store.holds_domain` and `store.domain_clause` say it once.
+      Each caller names its modules and whether an unset document counts,
+      so each kept what it did. An empty set is now no set everywhere.
+- A reading's mode was an environment variable set for the whole
+      process, and the figure fetch hook a module global. Two readings in
+      two threads saw each other's. Both are context variables now
+      (`config.overriding`, `figures.fetching`).
+- A worker without a step's model took the step's batch and marked every
+      document tried ("no titles model"), which kept them out of later
+      passes. `ModelStep.available` stops it asking. The genres step is
+      available when `genres_on()`.
+- The review rule for "references" was unreachable.
+- The archive path was built by hand in four places. `store.archive_path`
+      is the one place now.
+- A broken prax.yaml silently turned the figures queue off.
+- Five UI deletes ignored failure. They go through `send()` in core.js.
+- The invariant test had missed three tables. It reads the migrations
+      now.
+
+**Dead code.** `capture/pipeline.py` held an in-process runner,
+`process_captures` and its passes, about 500 lines. Nothing but its
+tests called it. Nine unused names went too. `scripts/work.py` is `prax work`
+now; it had drifted. `scripts/backfill.py`, a stage 1 stub, is retired.
+
+**Structure.**
+
+- `api/jobs.py` (994 lines, eight routers) is `work`, `curation`,
+      `importing`, `admin`, `wall` and `passes`. The five job starters
+      share `passes.run_as_job`.
+- `host/up.py` (1,439 lines) is `roles`, `process` and `up`. A caller
+      still writes `up.<name>`.
+- The lease table is `steps.leases`. `steps.base` imported `work` at its
+      top and `work` imported the steps, a cycle.
+- 36 store imports inside functions reached down, not up; they are at
+      the top now, and a test holds that line. The store's own arithmetic
+      moved down to it (`in_english_text`, `jaccard`), and a name's
+      matching key is `prax.text.names`.
+
+**Reuse.** One function now stands for several copies:
+
+- `_put_meta` for twenty copies of the meta write.
+- `models.ClaudeRuntime` for ask's own Claude call.
+- `Door.from_env` for the MCP proxy and three scripts.
+- `prax.evaluation.prf` for two F1 scorers.
+- One `client` fixture in conftest for fifteen test files.
+- `showError` for sixteen views of the UI.
+
+**Complexity.** Seven functions over 25 are split. Each was checked
+against a golden run of its old self:
+
+| function | before | how it was compared |
+|---|---|---|
+| `text.chunking.chunk` | 35 | 2,836 real texts of the library, every chunk's kind, range, page, heading, data and times |
+| `graph.review.decide_unmapped` | 31 | 105,300 generated items |
+| `graph.resolution.plan` | 31 | a generated library of 122 entities and 300 pairs, all settings |
+| `host.roles.roles` | 27 | 29 door and worker settings, and the refusals |
+| `graph.ontology.compose` | 26 | all 511 combinations of the nine modules |
+| `capture.routes.routes_for` | 26 → 19 | 1,200 real documents on a read-only connection |
+| `graph.review.decide` | 25 | 162,672 generated typed items |
+
+The golden run for `decide` first differed on 1,056 items. The cause was
+the generator: `DROP` is a set, so its order moved with the hash seed.
+Sorted and seeded, the two runs matched.
+
+**Tooling.** Ruff selects `UP`, `B`, `SIM`, `C4` and a complexity
+ceiling of 21, the package's worst after the pass (`video.parse`). The
+14 new findings are fixed. Strict mypy covers a first batch by its
+flags: `prax.text`, `writing`, `wall`, `ml`, `config`, `worker`,
+`host.schedule` and `steps.base`.
+
+**Documents.** The module map of `docs/architecture.md` had drifted by a
+pass. It is rewritten, and `tests/test_docs_names.py` resolves every
+`prax.…` and `store.…` name in it.
+
+Left for later, in `docs/PLAN.md`:
+
+- Splitting `store.retrieval`. Its tests set module flags, and a package
+      would cut them off from the code that reads them.
+- The typed shapes for hits, meta and jobs.
+- The next strict batch.

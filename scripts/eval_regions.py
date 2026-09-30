@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 """Whether a query can be matched to its region of the library ("A way
-in", docs/PLAN.md): the measurement ``prax.graph.regions`` waits on before
-``search`` or ``ask`` may show a region.
+in", docs/PLAN.md): the measurement ``store.regions_of``
+(``prax.graph.communities``) waited on before ``search`` or ``ask`` may
+show a region.
 
     python scripts/eval_regions.py [--queries tests/eval/queries-library.yaml]
 

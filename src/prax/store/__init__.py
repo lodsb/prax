@@ -14,14 +14,15 @@ process-wide re-entrant lock (invariant 4).
 
 | module | what lives there |
 |---|---|
-| ``base`` | the connection, the lock, the archive, the index files |
-| ``documents`` | ingest, read, meta, domains, promotion, retiring |
+| ``base`` | connection, lock, archive, index files, a domain's documents |
+| ``documents`` | ingest, read, meta, domains, genres, readings, retiring |
 | ``retrieval`` | query expansion, FTS, vectors, fusion, rerank |
-| ``graph`` | entities, edges, traversal, the review queue |
+| ``graph`` | entities, edges, names, regions, traversal, the review queue |
 | ``pages`` | the notes that are documents too |
 | ``jobs`` | what runs and what ran |
 | ``summary`` | what the store holds, counted |
 | ``repair`` | the damage that recurs: `health` finds it, `heal` mends it |
+| ``maintain`` | the derived tables rebuilt, without a model |
 | ``backup`` | a copy of the store somewhere else, incrementally |
 """
 

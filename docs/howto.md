@@ -1325,7 +1325,7 @@ and a line under `run:`. `prax up` starts it (4b): the port from
 loaded, which takes three minutes for the 35B when cold, and *up* once
 its `/health` says so. Its output is in `<data
 dir>/logs/llama-server.log`. The command line prax builds is
-`prax.host.up.llama_argv`: `--flash-attn on`, the KV cache at `q8_0`,
+`prax.host.roles.llama_argv`: `--flash-attn on`, the KV cache at `q8_0`,
 `--n-gpu-layers 999`, `--load-mode mmap`, thinking off, `--metrics`, no
 web UI. `serve.extra` appends arguments of your own.
 
@@ -2449,10 +2449,13 @@ drain that board's queue with this machine's models. `PRAX_TOKEN` or
 read command takes `--json` for a script to parse, and colour goes away
 when the output is piped.
 
-`prax work` is `scripts/work.py` under a shorter name, and `prax serve`
-is the uvicorn line. The one-off maintenance scripts (import, backfill,
-resolution, typing rules, rechunk, replay) stay scripts. They open the
-database directly and are the known deviation of invariant 4.
+`scripts/work.py` is `prax work` for a machine without the command on
+its PATH (a cron line, a service unit), and `prax serve` is the uvicorn
+line. The maintenance passes are jobs on the door (`prax maintain`,
+`prax resolve`, `prax heal`, `prax backup`). What still opens the
+database itself is the known deviation of invariant 4 in CLAUDE.md: the
+adjudicated tier of entity resolution and the measurement scripts, which
+read it read-only.
 
 ## 4b. Always on: `prax up`
 

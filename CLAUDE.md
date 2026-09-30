@@ -82,8 +82,9 @@ revisit threshold, under "Decision thresholds" below.
    one request per document). *Known deviation:* the adjudicated tier
    of entity resolution (`resolve_entities.py --adjudicate`) and the
    measurement scripts (`eval_retrieval.py`, `eval_references.py`,
-   `eval_confidence.py`, `compare_extractors.py`, `bench_extractor.py`,
-   `make_zotero_fixture.py`)
+   `eval_confidence.py`, `eval_genres.py`, `eval_regions.py`,
+   `compare_extractors.py`, `bench_extractor.py`,
+   `make_zotero_fixture.py`; the eval scripts read-only)
    still open the file.
    WAL, a 30 s busy timeout and a retry with rollback in
    `store._serialized` are the safety net for those, not a mechanism to
