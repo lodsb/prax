@@ -38,6 +38,7 @@ and ``prax.answering.ask``, as a job on the door (``POST /questions/run``,
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import sqlite3
@@ -722,6 +723,33 @@ def _first_sentence(text: str, limit: int = 220) -> str:
     return out.strip()
 
 
+def _sha256(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _remembered(page: dict[str, Any] | None) -> bool:
+    """Whether the page says which part of it the agent wrote."""
+    kept = ((page or {}).get("meta") or {}).get("briefing") or {}
+    return bool(kept.get("own") or kept.get("own_sha256"))
+
+
+def _briefing_own(page: dict[str, Any] | None) -> str | None:
+    """The agent's part at the head of a briefing page, when it is as the
+    agent wrote it; None when a hand changed it or nothing is remembered.
+    A page before 2026-09-30 kept the part's text (``own``)."""
+    if page is None:
+        return None
+    kept = (page.get("meta") or {}).get("briefing") or {}
+    text = str(page.get("text") or "")
+    if kept.get("own"):
+        own = str(kept["own"])
+        return own if text.startswith(own) else None
+    if kept.get("own_sha256"):
+        head = text[: int(kept.get("own_chars") or 0)]
+        return head if _sha256(head) == kept["own_sha256"] else None
+    return None
+
+
 def _last_briefing_until(con: sqlite3.Connection) -> str | None:
     for row in store.list_pages(con, kind=BRIEFING_KIND, limit=1):
         meta = store.get_meta(con, row["doc_id"])
@@ -804,12 +832,13 @@ def briefing(
     # a page whose agent part was edited by hand is left as it is
     own = text  # the agent's part, remembered so the next run knows its own
     current = store.get_page(con, slug)
-    before = ((current or {}).get("meta") or {}).get("briefing", {}).get("own")
+    before = _briefing_own(current)
     touched = current is not None and any(
         r["author"] == "human" for r in current["revisions"]
     )
     if current is not None and (
-        (before and not current["text"].startswith(before)) or (touched and not before)
+        (before is None and _remembered(current))
+        or (touched and not _remembered(current))
     ):
         # a hand in the agent's part, or a page from before the part was
         # remembered that a person has written to: not ours to replace
@@ -839,7 +868,10 @@ def briefing(
         "until": until,
         "documents": len(arrived),
         "moved": len(moved),
-        "own": own,
+        # its length and hash, not its text: the page holds the text, and
+        # a day of the NAS's arrivals put 309 KB into meta (2026-09-28)
+        "own_chars": len(own),
+        "own_sha256": _sha256(own),
     }
     store.set_meta(con, written["doc_id"], meta)
     return {**written, "documents": len(arrived), "moved": len(moved)}

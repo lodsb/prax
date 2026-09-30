@@ -269,8 +269,11 @@ def test_refresh_all_and_the_briefing(con: sqlite3.Connection) -> None:
     assert "Nothing arrived since" in store.get_page(con, "briefing-2026-09-22")["text"]
     # the day's page run again keeps what a person put under it (a
     # remark, an ask block): the agent's part is replaced, the rest stays
-    own = store.get_page(con, "briefing-2026-09-22")["meta"]["briefing"]["own"]
-    assert own.startswith("# What arrived, 2026-09-22\n")
+    page = store.get_page(con, "briefing-2026-09-22")
+    kept = page["meta"]["briefing"]
+    assert "own" not in kept  # the page holds the text, meta its length and hash
+    head = page["text"][: kept["own_chars"]]
+    assert head.startswith("# What arrived, 2026-09-22\n")
     store.append_page(
         con,
         "briefing-2026-09-22",
@@ -352,3 +355,24 @@ def test_the_door_keeps_lists_and_runs_the_questions(client: TestClient) -> None
         .json()[0]["slug"]
         .startswith("briefing-")
     )
+
+
+def test_a_briefing_page_that_kept_its_text_is_still_known(
+    con: sqlite3.Connection,
+) -> None:
+    """A page from before 2026-09-30 kept the agent's part as text
+    (``meta.briefing.own``): run again, its part is replaced and a
+    person's lines under it stay, and it then keeps the length and hash."""
+    questions.briefing(con, day="2026-09-23")
+    page = store.get_page(con, "briefing-2026-09-23")
+    kept = page["meta"]["briefing"]
+    old = {k: v for k, v in kept.items() if not k.startswith("own_")}
+    meta = store.get_meta(con, page["doc_id"])
+    meta["briefing"] = {**old, "own": page["text"][: kept["own_chars"]]}
+    store.set_meta(con, page["doc_id"], meta)
+    store.append_page(con, "briefing-2026-09-23", "Read later.", author="human")
+    again = questions.briefing(con, day="2026-09-23")
+    assert "left" not in again
+    page = store.get_page(con, "briefing-2026-09-23")
+    assert page["text"].rstrip().endswith("Read later.")
+    assert "own" not in page["meta"]["briefing"]
