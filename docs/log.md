@@ -2819,3 +2819,43 @@ when there is one). The document has the starred import's shape
 repository is already held. A newer push retires the older document
 into the new one (`store.documents_of_key`). The page is snapshotted
 only when the door cannot reach GitHub.
+
+## 2026-09-30: closing Z (stage AA), the first part
+
+**What a narrower subset reads.** The domain rules of the morning put
+2,027 documents under a domain set, and their re-extraction ran through
+the day. For the documents with an earlier reading, facts a document,
+the earlier reading (retired since 01:00) against the new one:
+
+| domain set | documents | facts a document | kinds of target |
+|---|---|---|---|
+| studio | 1,440 | 5.5 → 6.7 | 2.7 → 2.4 |
+| computing | 370 | 9.4 → 11.7 | 3.5 → 4.0 |
+| studio, electronics | 109 | 8.9 → 13.1 | 4.0 → 4.7 |
+| research, studio | 63 | 11.8 → 14.4 | 4.4 → 5.4 |
+| research | 45 | 13.0 → 15.0 | 4.6 → 5.2 |
+
+Every set reads more. The retired side counts whatever was retired since
+01:00, a few merges among it, and the computing side includes the 420
+facts the review pass settled (below).
+
+**computing v2.** The first reads of 389 documents queued 1,853 items.
+A programming language is now a `standard` (a document names it, a
+program conforms to it), and a symbol a `component` (a reference page
+describes it). Two review rules came with it: `covers` a program,
+library or symbol is `describes` (the rule asked for the type names
+`device` and `component` and missed their subtypes), and a symbol that
+"provides" its library is flipped. The review pass then settled 451 of
+the computing documents' open items (1,826 to 1,375) and linked 420
+facts. The 406 documents are read again against v2.
+
+**The store's write lock.** The vocabulary pass failed on one entity
+every cycle (179263, its name both as the English preferred label and
+without a language). The failed statement's transaction stayed open, so
+the door's other writers waited 200 s each from 10:08. Both are fixed:
+`label_in_language` does not move a label onto one it already has, and
+a store call that fails takes back its own writes and lets the lock go.
+
+**Left of AA:** the labeller's corrections (the Review page's genre tab,
+then `scripts/train_labeller.py`), and two decisions of the user: rules
+for `society`, and step 4 (`meta.regions`).

@@ -14,7 +14,7 @@ two features used every day, and a stage that is planned before it is
 built. Then the experiment, and last a phase of research that builds
 nothing.
 
-- [ ] **AA. Close Z.** The re-extraction of 2026-09-30 reads about 3,200
+- [ ] (2026-09-30, in part: the subsets read more, 5.5 to 15.0 facts a document; computing v2 and the review pass; the lock fixed; left: the labeller's corrections and two decisions) **AA. Close Z.** The re-extraction of 2026-09-30 reads about 3,200
       documents against their new domains. When it is through:
       - the review queue of the 406 `computing` documents is what
         `computing` v2 grows from, as studio grew (the module's header
