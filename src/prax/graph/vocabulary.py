@@ -43,14 +43,14 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import config
+from prax import config, store
 from prax.text import answers, language
 
-MAX_WORDS = 6  # a longer "name" is a sentence, and not this pass's business
+# a longer "name" is a sentence, and not this pass's business
+MAX_WORDS = store.NAME_MAX_WORDS
 # the other way, a longer name is a dish's title: "olive-brine vinaigrette"
 # came back as "Olivenpökellake-Dressing", and a title is not what a query
 # in another language crosses on (2026-09-26)
-LABEL_WORDS = 3
 # a language the library's documents are written in this much of is one a
 # reader of it asks in, and worth a label for every common name
 LABEL_SHARE = 0.05
@@ -132,46 +132,6 @@ class Naming:
     name: str
     changed: bool
     usage: dict[str, Any] = field(default_factory=dict)
-
-
-def library_sizes(con: sqlite3.Connection) -> tuple[int, int]:
-    """How many documents are in the library's language, and how many in
-    another one it knows. What a count of occurrences is divided by."""
-    from prax import store
-
-    return store.language_split(con, language.canonical())
-
-
-def in_english_text(
-    con: sqlite3.Connection, name: str, *, sizes: tuple[int, int] | None = None
-) -> bool:
-    """Is this name the library language's word, by the library's own use?
-
-    The library as its own dictionary: the share of English documents
-    that use the name, against the share of the others. A name English
-    documents never use is a candidate; one they use at least as often as
-    the rest is already the word English uses, whatever it looks like.
-    ``sizes`` is ``library_sizes``, for a caller asking about many names.
-    """
-    words = _WORD.findall(name)
-    if not words or len(words) > MAX_WORDS:
-        return True  # nothing to look up, or not a name
-    canonical = language.canonical()
-    match = " ".join(f'"{w}"' for w in words)  # the words in order
-    from prax import store
-
-    try:
-        # prax's own pages are left out: the library is not its own evidence
-        ours, theirs = store.phrase_languages(con, match, canonical)
-    except sqlite3.OperationalError:
-        return True  # a name FTS cannot parse is not this pass's business
-    if not ours:
-        return False
-    if not theirs:
-        return True
-    n_ours, n_theirs = sizes or library_sizes(con)
-    # ours / n_ours >= theirs / n_theirs, without the division
-    return ours * max(n_theirs, 1) >= theirs * max(n_ours, 1)
 
 
 def parse(out: str) -> str | None:

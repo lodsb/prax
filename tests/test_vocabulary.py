@@ -102,8 +102,8 @@ def test_a_name_an_english_document_uses_is_not_a_candidate(
 ) -> None:
     con = client.app.state.con
     client.post("/ingest", json={"text": ENGLISH, "title": "Pasta"})
-    assert vocabulary.in_english_text(con, "olive oil")
-    assert not vocabulary.in_english_text(con, "Olivenöl")
+    assert store.in_english_text(con, "olive oil")
+    assert not store.in_english_text(con, "Olivenöl")
 
 
 def test_a_name_only_a_german_document_uses_is_a_candidate(
@@ -111,7 +111,7 @@ def test_a_name_only_a_german_document_uses_is_a_candidate(
 ) -> None:
     con = client.app.state.con
     client.post("/ingest", json={"text": GERMAN, "title": "Rezept"})
-    assert not vocabulary.in_english_text(con, "Olivenöl")
+    assert not store.in_english_text(con, "Olivenöl")
 
 
 def test_a_word_a_few_english_documents_borrow_is_still_a_candidate(
@@ -128,8 +128,8 @@ def test_a_word_a_few_english_documents_borrow_is_still_a_candidate(
         "/ingest",
         json={"text": ENGLISH + " The German label said Olivenöl.", "title": "Tin"},
     )
-    assert not vocabulary.in_english_text(con, "Olivenöl")
-    assert vocabulary.in_english_text(con, "olive oil")
+    assert not store.in_english_text(con, "Olivenöl")
+    assert store.in_english_text(con, "olive oil")
     # used as often, document for document, it is the English word too:
     # four English documents of eight, three German ones of six
     other = "Dieses Rezept braucht Knoblauch und Butter für die Pfanne. " * 6
@@ -139,12 +139,12 @@ def test_a_word_a_few_english_documents_borrow_is_still_a_candidate(
             "/ingest",
             json={"text": ENGLISH + f" Olivenöl, as they say {i}.", "title": f"T{i}"},
         )
-    assert vocabulary.in_english_text(con, "Olivenöl")
+    assert store.in_english_text(con, "Olivenöl")
 
 
 def test_a_sentence_is_not_a_name(client: TestClient) -> None:
     con = client.app.state.con
-    assert vocabulary.in_english_text(con, " ".join(["wort"] * 12))
+    assert store.in_english_text(con, " ".join(["wort"] * 12))
 
 
 # --------------------------------------------------------- the step at work
@@ -583,7 +583,7 @@ def test_the_library_is_not_its_own_evidence(client: TestClient) -> None:
     took Olivenöl out of the net that would have folded it."""
     con = client.app.state.con
     client.post("/ingest", json={"text": GERMAN, "title": "Rezept"})
-    assert not vocabulary.in_english_text(con, "Olivenöl")
+    assert not store.in_english_text(con, "Olivenöl")
     store.write_page(
         con,
         slug="what-arrived",
@@ -597,7 +597,7 @@ def test_the_library_is_not_its_own_evidence(client: TestClient) -> None:
     meta = store.get_meta(con, meta_doc["doc_id"])
     meta["lang"] = "en"
     store.set_meta(con, meta_doc["doc_id"], meta)
-    assert not vocabulary.in_english_text(con, "Olivenöl")
+    assert not store.in_english_text(con, "Olivenöl")
 
 
 # ------------------------------------ the name as a cache of the labels

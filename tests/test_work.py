@@ -750,7 +750,7 @@ def test_a_capture_nothing_could_read_is_tried_once_and_then_left_alone(
     hist = store.get_meta(con, scan.doc_id)["parse_history"]
     assert [h["extractor"].split("/")[0] for h in hist] == ["pymupdf4llm", "pymupdf"]
     assert "error" in hist[0] and hist[1]["outcome"] == "empty"
-    assert queue._seen(store.get_meta(con, scan.doc_id), hist[0]["extractor"])
+    assert queue.seen(store.get_meta(con, scan.doc_id), hist[0]["extractor"])
     work._leases.clear()
     assert client.get("/work/parse").json()["items"] == []
     # the inbox says so, and a reading asked for on its page goes out

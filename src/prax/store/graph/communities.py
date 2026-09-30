@@ -17,6 +17,11 @@ SUMMARY_MIN = 5  # communities smaller than this get no summary
 LIST_MEMBERS = 8  # members named in a list of communities
 
 
+def jaccard(a: frozenset[int] | set[int], b: frozenset[int] | set[int]) -> float:
+    """How much two memberships overlap: shared over all, 1.0 for two empty."""
+    return len(a & b) / len(a | b) if a or b else 1.0
+
+
 @_reading
 def communities_input(
     con: sqlite3.Connection, topical: frozenset[str]
@@ -63,8 +68,6 @@ def replace_communities(
     summary; the summary is marked stale when the overlap is under
     ``FRESH``, so the summaries step writes it again. Returns what
     happened, per level."""
-    from prax.graph.communities import jaccard
-
     old: dict[int, dict[str, Any]] = {}
     for r in con.execute(
         "SELECT id, level, label, summary, summary_meta FROM communities"

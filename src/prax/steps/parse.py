@@ -154,7 +154,7 @@ class Parse(Step):
                 if mimes.is_picture(doc["mime"]) and vision_is_free():
                     ask_reading(h.con, doc_id, "vision")
                 continue
-            if any(queue._seen(doc["meta"], e.stamp) for e in exts):
+            if any(queue.seen(doc["meta"], e.stamp) for e in exts):
                 # the chain was run and found nothing (a scan without a
                 # text layer): a reading asked for on its page (OCR, the
                 # vision model) is the way on, not another round

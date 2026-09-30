@@ -3,6 +3,7 @@ step, both ways, and the corpus's recorded rulings."""
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from typing import Any
 
@@ -10,8 +11,53 @@ from prax.graph import ontology
 from prax.text import language
 
 from ..base import _reading, _serialized
+from ..documents import language_split
+from ..retrieval import phrase_languages
 from .decisions import queue_review
 from .labels import add_label, merge_entities
+
+# the longest name looked up in the library as its own dictionary: a
+# longer one is a sentence (``in_english_text``); and the longest common
+# name that gets a label in each language a reader asks in
+NAME_MAX_WORDS = 6
+LABEL_WORDS = 3
+_NAME_WORD = re.compile(r"[^\W\d_]{2,}", re.UNICODE)
+
+
+def library_sizes(con: sqlite3.Connection) -> tuple[int, int]:
+    """How many documents are in the library's language, and how many in
+    another one it knows. What a count of occurrences is divided by."""
+    return language_split(con, language.canonical())
+
+
+def in_english_text(
+    con: sqlite3.Connection, name: str, *, sizes: tuple[int, int] | None = None
+) -> bool:
+    """Is this name the library language's word, by the library's own use?
+
+    The library as its own dictionary: the share of English documents
+    that use the name, against the share of the others. A name English
+    documents never use is a candidate; one they use at least as often as
+    the rest is already the word English uses, whatever it looks like.
+    ``sizes`` is ``library_sizes``, for a caller asking about many names.
+    """
+    words = _NAME_WORD.findall(name)
+    if not words or len(words) > NAME_MAX_WORDS:
+        return True  # nothing to look up, or not a name
+    match = " ".join(f'"{w}"' for w in words)  # the words in order
+    try:
+        # prax's own pages are left out: the library is not its own evidence
+        ours, theirs = phrase_languages(con, match, language.canonical())
+    except sqlite3.OperationalError:
+        return True  # a name FTS cannot parse is not this pass's business
+    if not ours:
+        return False
+    if not theirs:
+        return True
+    n_ours, n_theirs = sizes or library_sizes(con)
+    # ours / n_ours >= theirs / n_theirs, without the division
+    return ours * max(n_theirs, 1) >= theirs * max(n_ours, 1)
+
 
 # The documents of an entity's live edges, one side at a time: ``src = ?
 # OR dst = ?`` in one condition kept SQLite off both indexes and scanned
@@ -225,7 +271,7 @@ def foreign_names(
     English — a term that an English document also uses is that
     document's word, not a translation. And the name occurs nowhere in
     the English half of the library as often as in the rest
-    (``vocabulary.in_english_text``), which is the dictionary this uses
+    (``in_english_text``), which is the dictionary this uses
     instead of a rule per language.
 
     An entity a pass has already decided is passed over — a label under
@@ -245,8 +291,6 @@ def foreign_names(
     library's own text was asked, and this name is already the word the
     library uses.
     """
-    from prax.graph import vocabulary
-
     common = sorted(ontology.current().common_types)
     if not common:
         return []
@@ -277,11 +321,11 @@ def foreign_names(
     ).fetchall()
     out: list[dict[str, Any]] = []
     ruled_out: list[tuple[int, str]] = []
-    sizes = vocabulary.library_sizes(con)
+    sizes = library_sizes(con)
     for r in rows:
         if r["id"] in skip:
             continue
-        if vocabulary.in_english_text(con, r["name"], sizes=sizes):
+        if in_english_text(con, r["name"], sizes=sizes):
             ruled_out.append((int(r["id"]), str(r["name"])))
             continue
         out.append(
@@ -320,12 +364,11 @@ def unlabelled_names(
 
     Only a common type (``naming: common``), only a name the library's
     own documents use, so it is known to be the library's word, and only
-    a name of up to ``vocabulary.LABEL_WORDS`` words: a longer one is a
+    a name of up to ``LABEL_WORDS`` words: a longer one is a
     dish's title, which came back as a literal translation nobody would
     type. A label in the language, whoever wrote it, takes the entity
     out, so the pass converges on its own answers.
     """
-    from prax.graph import vocabulary
 
     common = sorted(ontology.current().common_types)
     if not common or not langs:
@@ -359,7 +402,7 @@ def unlabelled_names(
                 canonical,
                 canonical,
                 *common,
-                vocabulary.LABEL_WORDS,
+                LABEL_WORDS,
                 lang,
                 limit + len(skip),
             ),

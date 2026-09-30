@@ -59,7 +59,9 @@ from .graph import (
     communities_input,
     corpus_rulings,
     find_edges,
+    in_english_text,
     languages_by_entity,
+    library_sizes,
     link,
     rename_display_language,
     replace_communities,
@@ -513,7 +515,6 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     than not is worse than no rule
     (`docs/eval/typing-rules-2026-09-24.md`).
     """
-    from prax.graph.resolution import SELF_KINDS
 
     onto = ontology.current()
     proposes = onto.relations.get("proposes")
@@ -552,7 +553,7 @@ def _proposes(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             (
                 t
                 for t in docs
-                if onto._allowed(proposes.domain, t) and t not in SELF_KINDS
+                if onto._allowed(proposes.domain, t) and t not in ontology.SELF_KINDS
             ),
             None,
         )
@@ -825,13 +826,11 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     This asks it again, and a name it overturns goes back in the queue.
     On request only: it reads every ruled name, a minute or so.
     """
-    from prax.graph import vocabulary
-
     rulings = corpus_rulings(con)
-    sizes = vocabulary.library_sizes(con)
+    sizes = library_sizes(con)
     overturned = []
     for n, (entity_id, name) in enumerate(rulings, 1):
-        if not vocabulary.in_english_text(con, name, sizes=sizes):
+        if not in_english_text(con, name, sizes=sizes):
             overturned.append((entity_id, name))
         if n % 500 == 0:
             job.update(done=n, total=len(rulings), note=f"rejudge: {n}")

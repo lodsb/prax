@@ -729,9 +729,9 @@ def test_a_budget_refusal_is_not_an_attempt() -> None:
         "parse_history": [{"extractor": stamp, "error": "FileDataError: cannot open"}]
     }
     empty = {"parse_history": [{"extractor": stamp, "outcome": "empty"}]}
-    assert not queue._seen(refused, stamp)
-    assert queue._seen(failed, stamp)
-    assert queue._seen(empty, stamp)
+    assert not queue.seen(refused, stamp)
+    assert queue.seen(failed, stamp)
+    assert queue.seen(empty, stamp)
 
 
 def test_the_ocr_language_is_a_setting_and_part_of_the_stamp(
@@ -752,7 +752,7 @@ def test_the_ocr_language_is_a_setting_and_part_of_the_stamp(
     tried_in_chinese = {
         "parse_history": [{"extractor": ocr.stamp.replace("+arabic", ""), "chars": 5}]
     }
-    assert not queue._seen(tried_in_chinese, ocr.stamp)
+    assert not queue.seen(tried_in_chinese, ocr.stamp)
 
 
 @pytest.mark.skipif(

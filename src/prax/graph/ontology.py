@@ -48,6 +48,10 @@ import yaml
 from prax import config
 
 CORE = "core"
+# The store's own kinds of document. A page is written here and a project
+# is declared here; neither is ever the extractor reaching for a general
+# type, so neither is proposed as one nor folded into its parent.
+SELF_KINDS = frozenset({"page", "project"})
 
 
 @dataclass(frozen=True)

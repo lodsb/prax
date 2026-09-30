@@ -26,9 +26,7 @@ then the longer name (usually the fuller one).
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
-import unicodedata
 from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -40,8 +38,9 @@ import numpy as np
 from prax import store
 from prax.graph import ontology
 from prax.ml import pricing
+from prax.text import names
+from prax.text.names import normalize
 
-SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "phd", "dr", "prof"}
 PRODUCER = "resolution"  # who signs a merge, for retiring a bad round
 LIKELY_THRESHOLD = 0.92  # cosine of name embeddings to become a candidate
 LIKELY_BLOCK = 2048  # names per block of the similarity computation (a worker)
@@ -51,27 +50,12 @@ LIKELY_DAYS = 7  # a type's pairs are computed again after this long
 # titles and claims that differ by a part number or a qualifier embed almost
 # identically while naming different things, so they are never candidates.
 LIKELY_TYPES = frozenset({"concept", "method", "tool", "dataset", "venue"})
-_PUNCT = re.compile(r"[^\w\s]")
-_SPACES = re.compile(r"\s+")
-
-
-def normalize(name: str, *, plural: bool = True) -> str:
-    """Case-, accent- and punctuation-insensitive key; name suffixes dropped;
-    with ``plural`` a trailing ``s`` on the last word is dropped too (for
-    concepts and methods, never for people)."""
-    s = unicodedata.normalize("NFKD", name)
-    s = "".join(ch for ch in s if not unicodedata.combining(ch))
-    s = _PUNCT.sub(" ", s.lower())
-    words = [w for w in _SPACES.split(s) if w and w not in SUFFIXES]
-    if plural and words and len(words[-1]) > 4 and words[-1].endswith("s"):
-        words[-1] = words[-1][:-1]
-    return " ".join(words)
 
 
 def initials_form(name: str) -> tuple[str, ...] | None:
     """``("j", "o", "smith")`` for an author name: initials of the given
     names plus the full last name, or None when there is no given name."""
-    words = [w for w in _SPACES.split(normalize(name, plural=False)) if w]
+    words = names.words(name, plural=False)
     if len(words) < 2:
         return None
     return tuple([w[0] for w in words[:-1]] + [words[-1]])
@@ -96,10 +80,7 @@ class Plan:
     subtypes: list[Candidate] = field(default_factory=list)  # a person who is an author
 
 
-# The store's own kinds of document. A page is written here and a project
-# is declared here; neither is ever the extractor reaching for a general
-# type, so neither takes part in the subtype fold.
-SELF_KINDS = frozenset({"page", "project"})
+SELF_KINDS = ontology.SELF_KINDS  # the store's own kinds: no subtype fold
 
 
 # A technique extracted as both a concept and a method (the v1 prompt let
@@ -305,7 +286,7 @@ def plan(
 
 
 def _is_initials_only(name: str) -> bool:
-    words = [w for w in _SPACES.split(normalize(name)) if w]
+    words = names.words(name)
     return len(words) >= 2 and all(len(w) == 1 for w in words[:-1])
 
 

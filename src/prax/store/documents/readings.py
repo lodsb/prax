@@ -129,7 +129,7 @@ def unreadable_documents(
     for r in rows:
         exts = parsers.candidates((r["mime"] or "").strip())
         meta = json.loads(r["meta"] or "{}")
-        if exts and any(queue._seen(meta, e.stamp) for e in exts):
+        if exts and any(queue.seen(meta, e.stamp) for e in exts):
             out.append(r["id"])
             if limit and len(out) >= limit:
                 break

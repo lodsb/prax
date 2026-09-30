@@ -140,10 +140,6 @@ def partition(
     return out
 
 
-def jaccard(a: frozenset[int] | set[int], b: frozenset[int] | set[int]) -> float:
-    return len(a & b) / len(a | b) if a or b else 1.0
-
-
 # ---------------------------------------------------------------- the words
 
 SHOW_MEMBERS = 40  # the members a summary is written from, by weight

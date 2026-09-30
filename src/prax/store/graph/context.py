@@ -8,6 +8,7 @@ import sqlite3
 from typing import Any
 
 from prax.graph import ontology
+from prax.text import names
 
 from ..base import _guards, _reading, _scrubbed, domain_clause, hidden_documents
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
@@ -578,9 +579,7 @@ def _suspect(alias: str, into: str) -> str | None:
     variants and translations share no such shape and are not listed."""
     import difflib
 
-    from prax.graph import resolution
-
-    x, y = resolution.normalize(alias).split(), resolution.normalize(into).split()
+    x, y = names.words(alias), names.words(into)
     wx, wy = set(x), set(y)
     if wx == wy:
         return None

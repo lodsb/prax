@@ -69,7 +69,7 @@ def _record(
     return meta
 
 
-def _seen(meta: dict[str, Any], stamp: str) -> bool:
+def seen(meta: dict[str, Any], stamp: str) -> bool:
     """True if this extractor version already tried the document and the
     result was kept, empty or an error: re-running would repeat that. An
     ``upgraded``/``created`` entry changes ``text_source``, so such documents
@@ -124,7 +124,7 @@ def parse_one(
     exts = parsers.candidates(doc["mime"] or "", extractor)
     if not exts:
         return "skipped"
-    if not force and _seen(doc["meta"], exts[0].stamp):
+    if not force and seen(doc["meta"], exts[0].stamp):
         return "seen"
     data = store.get_original(con, doc_id)
     path = doc.get("original_path")
