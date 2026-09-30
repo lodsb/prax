@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -48,11 +47,7 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0, help="only the first N regions")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
-    door = Door(
-        os.environ.get("PRAX_DOOR", "http://127.0.0.1:8000"),
-        token=os.environ.get("PRAX_TOKEN"),
-        timeout=900.0,
-    )
+    door = Door.from_env(timeout=900.0)
     regions = [
         c for c in door.get_json("/communities")["communities"] if c.get("label")
     ]

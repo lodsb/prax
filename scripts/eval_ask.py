@@ -47,7 +47,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from prax import models
-from prax.client import Door
+from prax.client import DEFAULT_DOOR, Door
 
 MATHS = re.compile(r"\$[^$\n]+\$")
 
@@ -334,9 +334,7 @@ def main() -> int:
         action="append",
         help="a steps setting (repeatable); default 0 and the host's",
     )
-    ap.add_argument(
-        "--door", default=os.environ.get("PRAX_DOOR", "http://127.0.0.1:8000")
-    )
+    ap.add_argument("--door", default=os.environ.get("PRAX_DOOR") or DEFAULT_DOOR)
     ap.add_argument(
         "--out", type=Path, help="write the Markdown report here (appended)"
     )

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import socket
 from pathlib import Path
 from typing import Any
@@ -22,7 +23,24 @@ class DoorError(RuntimeError):
         self.detail = detail
 
 
+DEFAULT_DOOR = "http://127.0.0.1:8000"  # the door on this machine
+
+
 class Door:
+    @classmethod
+    def from_env(
+        cls, *, name: str | None = None, timeout: float = 600.0, client: Any = None
+    ) -> Door:
+        """The door ``PRAX_DOOR`` names (this machine's when unset or empty),
+        with ``PRAX_TOKEN``: how a script or the MCP proxy finds it."""
+        return cls(
+            os.environ.get("PRAX_DOOR") or DEFAULT_DOOR,
+            token=os.environ.get("PRAX_TOKEN") or None,
+            client=client,
+            name=name,
+            timeout=timeout,
+        )
+
     def __init__(
         self,
         base_url: str,

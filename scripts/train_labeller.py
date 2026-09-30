@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import random
 import sys
 import time
@@ -39,21 +38,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 import numpy as np
 
 from prax.client import Door
+from prax.evaluation import prf
 from prax.graph import ontology
 from prax.ml import labeller
 
 BASE = "BAAI/bge-small-en-v1.5"
-
-
-def prf(pairs: list[tuple[set[str], set[str]]]) -> tuple[float, float, float]:
-    tp = fp = fn = 0
-    for said, truth in pairs:
-        tp += len(said & truth)
-        fp += len(said - truth)
-        fn += len(truth - said)
-    p = tp / (tp + fp) if tp + fp else 0.0
-    r = tp / (tp + fn) if tp + fn else 0.0
-    return p, r, (2 * p * r / (p + r) if p + r else 0.0)
 
 
 def blind_scores(
@@ -103,11 +92,7 @@ def main() -> None:
     import torch
     from transformers import AutoModel, AutoTokenizer
 
-    door = Door(
-        os.environ.get("PRAX_DOOR", "http://127.0.0.1:8000"),
-        token=os.environ.get("PRAX_TOKEN"),
-        timeout=600.0,
-    )
+    door = Door.from_env(timeout=600.0)
     got = door.get_json("/genres/training")
     G, S = ontology.genres(), ontology.subjects()
     labels = list(got["genres"]) + list(got["subjects"])

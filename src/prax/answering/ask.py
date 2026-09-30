@@ -403,28 +403,12 @@ class ClaudeAnswerer:
     def _chat(
         self, system: str, user: str, max_tokens: int
     ) -> tuple[str, dict[str, int]]:
-        if self.client is None:
-            import anthropic
-
-            self.client = anthropic.Anthropic(
-                timeout=extraction.CALL_TIMEOUT, max_retries=3
-            )
-        params: dict[str, Any] = {
-            "model": self.model,
-            "max_tokens": max_tokens,
-            "system": system,
-            "messages": [{"role": "user", "content": user}],
-        }
-        if pricing.supports_effort(self.model):
-            params["output_config"] = {"effort": self.effort}
-        response = self.client.messages.create(**params)
-        text = "".join(b.text for b in response.content if b.type == "text")
-        u = response.usage
-        usage = {
-            "input_tokens": int(getattr(u, "input_tokens", 0) or 0),
-            "output_tokens": int(getattr(u, "output_tokens", 0) or 0),
-        }
-        return text, usage
+        """One call through ``models.ClaudeRuntime``, which every Claude
+        text step uses; the client is kept for the next call."""
+        rt = models.ClaudeRuntime(self.model, effort=self.effort, client=self.client)
+        got = rt.chat(system, user, max_tokens=max_tokens)
+        self.client = rt.client
+        return got
 
     def answer(self, bundle: Bundle) -> tuple[str, dict[str, int]]:
         return self._chat(SYSTEM, bundle.as_message(), 2 * ANSWER_TOKENS)

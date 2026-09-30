@@ -89,6 +89,20 @@ class ModeScore:
         }
 
 
+def prf(pairs: list[tuple[set[str], set[str]]]) -> tuple[float, float, float]:
+    """Precision, recall and F1 over every pair of (what was said, what is
+    true), micro-averaged: the labels' scoring (``scripts/eval_genres.py``,
+    ``scripts/train_labeller.py``)."""
+    tp = fp = fn = 0
+    for said, truth in pairs:
+        tp += len(said & truth)
+        fp += len(said - truth)
+        fn += len(truth - said)
+    p = tp / (tp + fp) if tp + fp else 0.0
+    r = tp / (tp + fn) if tp + fn else 0.0
+    return p, r, (2 * p * r / (p + r) if p + r else 0.0)
+
+
 def load_queries(path: Path = QUERIES) -> list[Query]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     return [Query(**q) for q in data["queries"]]

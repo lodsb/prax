@@ -58,6 +58,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from prax import config, models
+from prax.evaluation import prf
 from prax.graph import calibration, ontology
 from prax.writing import genres as gw
 
@@ -100,17 +101,6 @@ def split(facet: ontology.Facet, labels: set[str]) -> tuple[set[str], set[str]]:
     """(levels, labels under a level)."""
     levels = {x for x in labels if facet.level_of(x) == x}
     return levels, labels - levels
-
-
-def prf(pairs: list[tuple[set[str], set[str]]]) -> tuple[float, float, float]:
-    tp = fp = fn = 0
-    for said, truth in pairs:
-        tp += len(said & truth)
-        fp += len(said - truth)
-        fn += len(truth - said)
-    p = tp / (tp + fp) if tp + fp else 0.0
-    r = tp / (tp + fn) if tp + fn else 0.0
-    return p, r, (2 * p * r / (p + r) if p + r else 0.0)
 
 
 def score(

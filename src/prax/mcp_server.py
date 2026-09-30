@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 from mcp.server.mcpserver import MCPServer
 
-from prax.client import Door, DoorError
+from prax.client import DEFAULT_DOOR, Door, DoorError
 
 mcp = MCPServer(
     "prax",
@@ -37,12 +37,15 @@ def configure(
 ) -> Door:
     """Point the proxy at a door (tests pass a test client)."""
     global _door
-    _door = Door(
-        base_url or os.environ.get("PRAX_DOOR") or "http://127.0.0.1:8000",
-        token=token if token is not None else os.environ.get("PRAX_TOKEN"),
-        client=client,
-        name="mcp",
-    )
+    if base_url is None and token is None:
+        _door = Door.from_env(name="mcp", client=client)
+    else:
+        _door = Door(
+            base_url or os.environ.get("PRAX_DOOR") or DEFAULT_DOOR,
+            token=token if token is not None else os.environ.get("PRAX_TOKEN"),
+            client=client,
+            name="mcp",
+        )
     return _door
 
 
