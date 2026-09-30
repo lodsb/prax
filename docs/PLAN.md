@@ -33,7 +33,7 @@ nothing.
       repository as a page snapshot where the starred-repository
       importer's shape would do better. Both are under "The UI and the
       agent".
-- [ ] **AD. Symbolic maths, planned as a stage** (niggles.txt,
+- [ ] (2026-09-30: planned, `docs/symbolic-maths.md`: 17,417 formulas in 243 documents; SymPy's ANTLR parser reads 81% and about 36% plausibly faithfully; three steps and five operations; the build waits on the user's choices) **AD. Symbolic maths, planned as a stage** (niggles.txt,
       2026-09-30). A display equation is a `formula` chunk with its LaTeX
       in `data` since marker. SymPy's LaTeX parser can turn it into an
       expression kept beside it. `ask` and the surfer could then use a
