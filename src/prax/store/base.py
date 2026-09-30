@@ -86,6 +86,9 @@ _TOKEN = re.compile(r"\w+", re.UNICODE)
 # gives it back under pressure; the cache is the connection's own.
 CACHE_MB = 64
 MMAP_MB = 1024
+# what the write-ahead log is cut back to when a checkpoint empties it:
+# nothing set it, and it stood at 48 MB between writes (2026-09-30)
+JOURNAL_MB = 16
 
 
 _SURROGATE = re.compile(r"[\ud800-\udfff]")
@@ -427,6 +430,10 @@ def connect(db_path: Path | None = None) -> sqlite3.Connection:
     mmap = config.whole("door.sqlite_mmap_mb", "PRAX_SQLITE_MMAP_MB", MMAP_MB)
     con.execute(f"PRAGMA cache_size = -{max(cache, 0) * 1024}")
     con.execute(f"PRAGMA mmap_size = {max(mmap, 0) * 1024 * 1024}")
+    journal = config.whole(
+        "door.sqlite_journal_mb", "PRAX_SQLITE_JOURNAL_MB", JOURNAL_MB
+    )
+    con.execute(f"PRAGMA journal_size_limit = {max(journal, 0) * 1024 * 1024}")
     return con
 
 

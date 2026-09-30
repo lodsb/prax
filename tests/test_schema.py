@@ -180,3 +180,15 @@ def test_bumped_ontology_is_picked_up_and_stamps_new_edges(
         r[0] for r in con.execute("SELECT ontology_version FROM edges ORDER BY id")
     ]
     assert versions == [before, "99"]  # old edges keep their version
+
+
+def test_a_connection_bounds_its_write_ahead_log(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``journal_size_limit`` on every connection (``door.sqlite_journal_mb``):
+    SQLite's default keeps a log as large as it ever grew."""
+    con = store.connect()
+    limit = con.execute("PRAGMA journal_size_limit").fetchone()[0]
+    assert limit == store.base.JOURNAL_MB * 1024 * 1024
+    monkeypatch.setenv("PRAX_SQLITE_JOURNAL_MB", "4")
+    assert store.connect().execute("PRAGMA journal_size_limit").fetchone()[0] == 4 << 20
