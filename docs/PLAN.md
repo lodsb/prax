@@ -42,7 +42,7 @@ nothing.
       formulas worth it, which parser reads marker's LaTeX, and what
       "plug things together" asks of the tool in practice. Built only
       after the user has read the plan.
-- [ ] **AE. The distilled surfer.** A small local model trained on the
+- [ ] (2026-09-30: a pilot of 50 questions, the teacher cited the expected document in 45; the numbers are with the plan, outside the repository) **AE. The distilled surfer.** A small local model trained on the
       large model's search-and-read trails. Its plan is kept outside the
       repository. It needs a question set and a training run of a few
       hours on the card.
