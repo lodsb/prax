@@ -27,10 +27,22 @@ from prax.host import schedule
 from prax.ml import embeddings
 from prax.wall import auth
 
-from . import ask, capture, documents, graph, jobs, pages, process
+from . import (
+    admin,
+    ask,
+    capture,
+    curation,
+    documents,
+    graph,
+    importing,
+    pages,
+    process,
+    wall,
+    work,
+)
 from ._base import _con, max_upload
-from .jobs import _start_backup, _start_figures, _start_maintain, _start_resolve
 from .pages import _answering, _answering_lock, _start_questions
+from .passes import start_backup, start_figures, start_maintain, start_resolve
 
 __all__ = ["_answering", "_answering_lock", "_con", "app", "max_upload"]
 
@@ -91,15 +103,15 @@ def _clock(stop: threading.Event, every: float) -> None:
                 schedule.tick(
                     con,
                     {
-                        "maintain": lambda o: _start_maintain(con, o.get("only")),
-                        "backup": lambda o: _start_backup(
+                        "maintain": lambda o: start_maintain(con, o.get("only")),
+                        "backup": lambda o: start_backup(
                             con, o.get("dest"), archive=o.get("archive", True)
                         ),
                         "questions": lambda o: _start_questions(
                             con, briefing=o.get("briefing", True)
                         ),
-                        "figures": lambda o: _start_figures(con, o.get("documents")),
-                        "resolve": lambda o: _start_resolve(
+                        "figures": lambda o: start_figures(con, o.get("documents")),
+                        "resolve": lambda o: start_resolve(
                             con,
                             twins=o.get("twins", True),
                             subtypes=o.get("subtypes", True),
@@ -363,5 +375,17 @@ class _UIFiles(StaticFiles):
 app.mount("/ui", _UIFiles(directory=UI_DIR, html=True), name="ui")
 
 
-for _router in (capture, documents, graph, pages, ask, process, jobs):
+for _router in (
+    capture,
+    documents,
+    graph,
+    pages,
+    ask,
+    process,
+    work,
+    curation,
+    importing,
+    admin,
+    wall,
+):
     app.include_router(_router.router)

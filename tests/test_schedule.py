@@ -216,7 +216,7 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
     not read, and nothing while the last slice waits: all of it at once
     would stand in front of every capture's parse for a day and a half."""
     from prax import models
-    from prax.api.jobs import _start_figures
+    from prax.api.passes import start_figures
     from prax.capture import pipeline
 
     local = models.ModelSpec(
@@ -230,11 +230,11 @@ def test_the_figures_backlog_is_asked_for_a_slice_at_a_time(
     ]
     # a caption no picture stands behind: no reading will change it
     _pdf_with(con, "captions", "\n\nFigure 3: a plot the extractor lost.\n")
-    got = _start_figures(con, 2)
+    got = start_figures(con, 2)
     assert got["requested"] == 2
     assert set(store.waiting_readings(con)) == {"figures"}
     # the next night, with that slice still waiting: nothing more
-    assert _start_figures(con, 2)["requested"] == 0
+    assert start_figures(con, 2)["requested"] == 0
     asked = {r["doc_id"] for r in store.reading_requests(con, limit=None)}
     assert asked == set(pictured[:2])
     assert store.last_job(con, "figures") is not None
