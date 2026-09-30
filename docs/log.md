@@ -2880,3 +2880,57 @@ Three documents, measured on a copy of the store. Nothing was built.
 - `docs/research-code-music-sound.md`. Code first (13,869 code chunks
       without a language, 830 SuperCollider files chunked as text), a
       music module second, sound only if the NAS holds sample libraries.
+
+## 2026-09-30: the infrastructure (stage AG)
+
+Every change was measured on a copy of the store before and after, warm,
+the best of three, with the answers compared. The copy's timings ran
+without the vector files, so the search answers compared are the keyword
+and document-field legs.
+
+| call | before | after | how |
+|---|---|---|---|
+| `traverse_map("reverb")` | 39.7 ms | 1.6 ms | migration 0031: `entity_labels(label COLLATE NOCASE)`, `entities(canonical_id)` |
+| `senses("apple")` | 29.5 ms | 0.2 ms | the same |
+| `search("feedback delay network")` | 645 ms | 183 ms | `domain_clause` reads the distinct domain sets through `idx_documents_domains` |
+| `list_documents(domain="kitchen")` | 239 ms | 9.6 ms | the same |
+| `list_documents()` | 20 ms | 1.0 ms | migration 0032: `idx_documents_live` on `(added_at, id)` |
+| `unlabelled_names("de")` | 705 ms | 295 ms | 0032's `idx_documents_lang`; the documents first |
+| `foreign_names` | 955 ms | 159 ms | a document's language read once, the entities of other languages first |
+| `select_for_extraction`, after a bump | 1,586 ms | 83 ms | `text_len` first, the chunk sum lazily until the limit |
+| `pending_embeddings`, nothing pending | 164 ms | 35 ms | migration 0033; a mark of the highest chunk id and the model's rows |
+| the reconcile at start | 158 ms | 0.3 ms | 0033: `chunk_embeddings(model, embedded_at)` |
+
+- `document_domains` was not built. The distinct sets through the
+  existing index give 183 ms against the table's measured 107, with no
+  second copy to keep in step.
+- `idx_documents_live` keyed by id made the default listing worse (138
+  ms): the planner took it and sorted every live row. Keyed by the
+  listing's order it answers in 1 ms.
+- `select_for_extraction` keeps its exact bar. On `text_len` alone, 66
+  documents with 300 characters of text but less in their chunks would
+  have been handed out.
+- A refusal that may pass next time (the OCR budget, a failed fetch)
+  counts as an attempt after five in a row under one stamp
+  (`queue.REFUSALS`). The loops the histories hold: three DjVu books on
+  2026-09-28 (the refusal it repeated no longer exists) and `pymupdf`
+  empties on 14 documents from 09-14 to 09-24.
+- `store.bounded_histories` is written and tested, not wired. It keeps
+  the last N entries, the newest of each kind, every text hash and each
+  extractor's last five. A dry run on the copy: 14 documents, about
+  4,100 entries, 0.6 MB of 53 MB, the same for N from 10 to 50.
+- A briefing page keeps its part's length and hash instead of its text
+  (309 KB in `meta` on 2026-09-28).
+- The document index's delta never reached `DELTA_MERGE_AT` in a library
+  of 13,000 documents. A merge is also due at the main file's size.
+- The chunk index held 484,000 removed slots beside 1.28 M vectors:
+  usearch keeps a removed key's slot. `compact_vectors` rebuilds the
+  graph past a tenth; on the copy 1.61 GB became 1.17 GB in 231 s, recall
+  at ten against exact search 0.963 -> 0.968. Nothing called it before;
+  `prax maintain vectors` does, on request. It no longer holds the
+  store's lock for minutes, and a build lock stops a merge from being
+  undone by a compaction's swap.
+- `journal_size_limit` is 16 MB (`door.sqlite_journal_mb`). `PRAGMA
+  optimize` was measured and left out: its statistics moved three plans
+  off their indexes (`list_documents` 1 -> 75 ms, `pending_embeddings`
+  32 -> 89, `select_for_extraction` 75 -> 89).

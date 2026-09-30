@@ -78,23 +78,22 @@ nothing.
       surfer's pilot and what is open of AA to AD).
       `docs/research-database-layout.md` has the measurements and the
       migration sketches.
-      - Migrations. Indexes for the NOCASE label lookup and for
-        `canonical_id`, the two redundant indexes dropped; a
-        `document_domains` table behind `domain_clause`; indexes for the
-        live documents and the language; the embedding stamps
-        (`model, embedded_at`). Each measured before and after on a copy.
-      - Code. `select_for_extraction` on `text_len`; `foreign_names`
-        rewritten; `_all_chunks_embedded` without the full count.
-      - Bounded histories. `parse_history` and `extraction_history`
-        capped (the user decides at how many), a briefing's text out of
-        `meta`. A document a reader refused for a reason that does not
-        change (the OCR budget) is not handed out again: the loop of
-        2026-09-28 recorded 897 attempts on each of three books.
-      - The vector files. The document index merged (not since
-        2026-09-12; its delta is larger than it), the chunk index
-        compacted if the slots rechunks left behind are confirmed.
-      - Maintenance. `PRAGMA optimize` after a large pass,
-        `journal_size_limit`, and a `VACUUM` with the door stopped.
+      - Done (docs/log.md, 2026-09-30): migrations 0031 to 0033 (the
+        graph lookups, the live documents and the language, the
+        embedding stamps); `domain_clause` through the distinct sets
+        instead of a `document_domains` table; `foreign_names`,
+        `unlabelled_names`, `select_for_extraction` and
+        `_all_chunks_embedded` without their per-row reads; a refusal
+        repeated five times is an attempt (`queue.REFUSALS`); a
+        briefing's text out of `meta`; the document delta merges at the
+        main file's size; `compact_vectors` rebuilds the graph, as `prax
+        maintain vectors`; `journal_size_limit`. `PRAGMA optimize` was
+        measured and left out (three plans got slower).
+      - Open, by the user's word: `store.bounded_histories` wired and its
+        pass run (14 documents, 4,100 entries; the cap barely matters);
+        `prax maintain vectors` on the live store (1.61 -> 1.17 GB, four
+        minutes of the door); a `VACUUM` with the door stopped, at 8 KB
+        pages or not.
       - The user's decisions: the cap; how long a resolved review item is
         kept; deleting the e5 indexes (1.04 GB) and `prax-before-heal.db`
         (1.7 GB); the entity threshold of CLAUDE.md as a traverse time.
