@@ -46,7 +46,7 @@ nothing.
       large model's search-and-read trails. Its plan is kept outside the
       repository. It needs a question set and a training run of a few
       hours on the card.
-- [ ] **AF. Research, three questions** (the user, 2026-09-30). Each ends
+- [x] (2026-09-30: `docs/research-condensed-knowledge.md`, `docs/research-database-layout.md`, `docs/research-code-music-sound.md`; the decisions each names are the user's) **AF. Research, three questions** (the user, 2026-09-30). Each ends
       in a document under `docs/` with a proposal and what it would
       cost. Nothing is built before the user has read it.
       - *Condensed knowledge.* What besides the graph's claims holds

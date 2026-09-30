@@ -2859,3 +2859,24 @@ a store call that fails takes back its own writes and lets the lock go.
 **Left of AA:** the labeller's corrections (the Review page's genre tab,
 then `scripts/train_labeller.py`), and two decisions of the user: rules
 for `society`, and step 4 (`meta.regions`).
+
+## 2026-09-30: research, three questions (stage AF)
+
+Three documents, measured on a copy of the store. Nothing was built.
+
+- `docs/research-condensed-knowledge.md`. The 52,220 tables are parsed
+      but untyped; about 180 spec tables and at least 619 result tables
+      are ready to become values with units. About 24,000 definition
+      sentences, 456 documents with formal definitions, 645 instructional
+      documents with numbered steps. First: values in table `data` and a
+      units-aware compare tool.
+- `docs/research-database-layout.md`. The schema fits. The slow queries
+      are indexes that miss (a NOCASE label lookup, `canonical_id`) and
+      `meta` read as JSON row by row (a search scoped to a domain spends
+      550 ms in `json_each`). Five small migrations and two code changes
+      are proposed. Found on the way: a DjVu refusal loop of 2026-09-28
+      recorded 897 parse attempts on three books, and nothing caps the
+      history.
+- `docs/research-code-music-sound.md`. Code first (13,869 code chunks
+      without a language, 830 SuperCollider files chunked as text), a
+      music module second, sound only if the NAS holds sample libraries.
