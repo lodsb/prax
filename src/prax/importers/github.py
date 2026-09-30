@@ -120,6 +120,18 @@ class GitHub:
             yield from json.loads(body)
             url = _next_link(headers.get("link", ""))
 
+    def repo(self, full_name: str) -> dict[str, Any]:
+        """One repository's facts (``GET /repos/{owner}/{repo}``)."""
+        status, _, body = self._call(
+            f"/repos/{full_name}", "application/vnd.github+json"
+        )
+        if status == 404:
+            raise KeyError(f"GitHub knows no repository {full_name!r}")
+        if status != 200:
+            raise RuntimeError(f"GitHub answered {status} for {full_name}")
+        data: dict[str, Any] = json.loads(body)
+        return data
+
     def readme(self, full_name: str) -> str | None:
         status, _, body = self._call(
             f"/repos/{full_name}/readme", "application/vnd.github+json"
@@ -136,6 +148,50 @@ class GitHub:
                 "utf-8", "replace"
             )
         return data.get("content") or None
+
+
+# the first path segments of github.com that are GitHub's own pages, not an
+# owner (the extension keeps the same list, lib.githubRepoOf)
+_NOT_OWNERS = frozenset(
+    [
+        "orgs",
+        "settings",
+        "marketplace",
+        "explore",
+        "topics",
+        "features",
+        "login",
+        "notifications",
+        "search",
+        "sponsors",
+        "collections",
+        "trending",
+        "about",
+        "pricing",
+    ]
+)
+
+
+def repo_of_url(url: str) -> str | None:
+    """``owner/repo`` of a github.com URL of a repository or a page in it
+    (a file, a branch, an issue), or None."""
+    parsed = urllib.parse.urlparse(url)
+    if parsed.hostname not in ("github.com", "www.github.com"):
+        return None
+    parts = [p for p in parsed.path.split("/") if p]
+    if len(parts) < 2 or parts[0].lower() in _NOT_OWNERS:
+        return None
+    repo = parts[1].removesuffix(".git")
+    return f"{parts[0]}/{repo}" if repo else None
+
+
+def one(api: GitHub, full_name: str) -> Item:
+    """One repository as the starred import makes it, README included."""
+    item = item_for(api.repo(full_name), starred_at=None)
+    readme = api.readme(item.key)
+    item.text = text_for(item.text or "", readme)
+    item.meta["readme"] = readme is not None
+    return item
 
 
 def _next_link(link: str) -> str | None:

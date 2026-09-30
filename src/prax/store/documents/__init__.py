@@ -164,6 +164,7 @@ from .reads import (  # noqa: F401
     document_titles,
     documents_added,
     documents_by_language,
+    documents_of_key,
     equations_near,
     figure_and_formula_data,
     find_chunk,

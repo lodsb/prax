@@ -80,8 +80,15 @@ before anything is sent, whenever it is not an ordinary page:
 - a YouTube video, or a video with captions: the transcript, with a
   frame every so often;
 - a paper page: its PDF from the citation tags, with the ids;
-- a PDF: fetched with the browser's session;
-- a GitHub repository: for now a snapshot of the page.
+- a PDF: fetched with the browser's session. The tab's content type
+  says so (`document.contentType`), so an arXiv `/pdf/…` address without
+  `.pdf` and Firefox's pdf.js viewer are PDFs too;
+- a page that is one frame over a PDF (IEEE's `stamp.jsp`): the PDF the
+  frame shows, fetched with the browser's session;
+- a GitHub repository: the door's GitHub import (`POST /import/github`),
+  the README under the repository's details, the same document a starred
+  import makes. The page is snapshotted only when the door cannot reach
+  GitHub.
 
 The popup's line and the background's choice come from one function,
 `lib.route`, so they cannot disagree. An ordinary page gets no line.

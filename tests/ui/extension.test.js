@@ -207,7 +207,9 @@ test("route: the way a tab goes, and the line the popup shows for it", () => {
   // a tab that is the PDF itself goes as the PDF, not by its tags
   assert.equal(lib.route("https://x.org/a.pdf", { paper }).kind, "pdf");
   assert.match(lib.route("https://x.org/p", { paper: { doi: "10.1/x" } }).label, /naming its paper \(doi 10\.1\/x\)/);
-  assert.match(lib.route("https://github.com/owner/tool/tree/main").label, /^GitHub repository owner\/tool: a snapshot/);
+  const repo = lib.route("https://github.com/owner/tool/tree/main");
+  assert.equal(repo.kind, "github");
+  assert.match(repo.label, /^GitHub repository owner\/tool: its README and details/);
   assert.deepEqual(lib.route("https://example.org/a", {}), { kind: "page", label: null });
 });
 
@@ -217,4 +219,21 @@ test("githubRepoOf: a repository's pages, not GitHub's own", () => {
   for (const u of ["https://github.com/a", "https://github.com/settings/tokens", "https://github.com/orgs/x/people", "https://gitlab.com/a/b", "nonsense"]) {
     assert.equal(lib.githubRepoOf(u), null, u);
   }
+});
+
+test("route: a tab that shows a PDF goes as the PDF, one that frames it as the frame's", () => {
+  // an arXiv /pdf/ URL has no .pdf: the tab's content type says it
+  assert.equal(lib.route("https://arxiv.org/pdf/2401.12345", {}).kind, "page");
+  assert.equal(lib.route("https://arxiv.org/pdf/2401.12345", { pdf: true }).kind, "pdf");
+  // IEEE's stamp.jsp: one frame over the PDF
+  const framed = lib.route("https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=1", { frame: "https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=1" });
+  assert.equal(framed.kind, "pdf-frame");
+  assert.match(framed.label, /PDF shown in a frame/);
+  // a video still wins, and a paper page with its PDF in citation tags stays a paper
+  assert.equal(lib.route("https://youtu.be/x1", { pdf: true }).kind, "video");
+  assert.equal(lib.route("https://x.org/abs/1", { paper: { pdf_url: "/a.pdf" } }).kind, "paper");
+});
+
+test("describeResult: a repository imported says what it is", () => {
+  assert.equal(lib.describeResult({ mode: "github", created: true, note: "GitHub repository a/b: its README and details" }), "new: GitHub repository a/b: its README and details");
 });

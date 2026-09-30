@@ -118,3 +118,60 @@ def import_citations(req: CitationsReq, request: Request) -> dict[str, Any]:
 
     threading.Thread(target=run, name="citations", daemon=True).start()
     return {"selected": len(ids), "source": req.source, "dry_run": False, "job": job.id}
+
+
+class GitHubReq(BaseModel):
+    url: str  # a repository's page, or any page in it
+    domains: list[str] | None = None
+    tags: list[str] | None = None
+
+
+@router.post("/import/github")
+def import_github(req: GitHubReq, request: Request) -> dict[str, Any]:
+    """One GitHub repository as the starred import makes it: its facts and
+    its README, as a document of ``source: github`` (the browser extension
+    sends a repository's page here). The door asks GitHub, with the token
+    of ``sources.github.token`` when there is one. A newer version of a
+    repository the library holds retires the older document, as a refresh
+    of the import does."""
+    from prax.importers import feed, github
+
+    full = github.repo_of_url(req.url)
+    if full is None:
+        raise HTTPException(400, f"not a GitHub repository: {req.url}")
+    try:
+        item = github.one(github.GitHub(token=github.token()), full)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except (RuntimeError, OSError) as exc:
+        raise HTTPException(502, str(exc)) from exc
+    con = _con(request)
+    before = store.documents_of_key(con, github.SOURCE, item.key)
+    tags = [t for t in [*(req.tags or []), *item.tags] if t]
+    body = feed.text_body(github.SOURCE, item, req.domains, tags)
+    result = store.ingest_text(
+        con,
+        body["text"],
+        title=body["title"],
+        source_url=body["source_url"],
+        meta=body["meta"],
+    )
+    doc_id = int(result["doc_id"])
+    try:
+        for d in req.domains or []:
+            store.add_domain(con, doc_id, d)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    for old in before:
+        if old != doc_id:
+            store.retire_document(
+                con,
+                old,
+                reason="replaced by a newer import from github",
+                duplicate_of=doc_id,
+            )
+    return {
+        **result,
+        "repository": full,
+        "replaced": [d for d in before if d != doc_id],
+    }

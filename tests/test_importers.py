@@ -17,7 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax.capture import inbox
-from prax.client import Door
+from prax.client import Door, DoorError
 from prax.importers import chats, feed, github, links
 
 PAGE = (
@@ -850,3 +850,59 @@ def test_claude_sessions_are_found_by_project_and_land_once(
     s1 = next(d for d in docs["items"] if d["meta"]["claude"]["session"] == "s1")
     assert s1["meta"]["claude"]["turns"] == 4
     assert "Done." in door.get_json(f"/get/{s1['id']}")["text"]
+
+
+def test_one_repository_through_the_door_is_the_starred_imports_document(
+    door: Door, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``POST /import/github`` (the extension's way): the door asks GitHub
+    for the repository and its README and stores the starred import's
+    shape; a star of the same repository is then already held, and a newer
+    push replaces the older document."""
+    repos = {"alice/wdf": _repo("alice/wdf")}
+
+    def fake(url: str, headers: dict[str, str]) -> tuple[int, dict[str, str], bytes]:
+        if "/starred" in url:
+            star = {"starred_at": "2024-03-05T10:00:00Z", "repo": repos["alice/wdf"]}
+            return 200, {}, json.dumps([star]).encode()
+        if url.endswith("/readme"):
+            content = base64.b64encode(b"# WDF\n\nWave digital filters.").decode()
+            return (
+                200,
+                {},
+                json.dumps({"encoding": "base64", "content": content}).encode(),
+            )
+        name = url.split("/repos/")[1]
+        if name not in repos:
+            return 404, {}, b"{}"
+        return 200, {}, json.dumps(repos[name]).encode()
+
+    monkeypatch.setattr(github, "_http", fake)
+    got = door.post_json(
+        "/import/github",
+        {"url": "https://github.com/alice/wdf/blob/main/src/wdf.cpp", "tags": ["x"]},
+    )
+    assert got["repository"] == "alice/wdf" and got["replaced"] == []
+    doc = door.get_json(f"/get/{got['doc_id']}")
+    assert (
+        doc["meta"]["source"] == "github"
+        and doc["meta"]["github"]["key"] == "alice/wdf"
+    )
+    assert "Wave digital filters." in doc["text"] and "x" in doc["meta"]["tags"]
+    # the starred import finds it held
+    report = feed.run(
+        door, github.SOURCE, github.items(github.GitHub(fetch=fake), "octocat")
+    )
+    assert report.seen == 1 and report.added == 0
+    # a push later: a new document, the old one retired into it
+    repos["alice/wdf"] = _repo("alice/wdf", pushed_at="2026-09-30T00:00:00Z")
+    again = door.post_json("/import/github", {"url": "https://github.com/alice/wdf"})
+    assert again["replaced"] == [got["doc_id"]]
+    for bad, status in (
+        ("https://github.com/settings/tokens", 400),
+        ("https://github.com/no/such", 404),
+    ):
+        with pytest.raises(DoorError) as exc:
+            door.post_json("/import/github", {"url": bad})
+        assert exc.value.status == status
+    assert github.repo_of_url("https://gitlab.com/a/b") is None

@@ -2798,3 +2798,24 @@ when the search finds nothing.
       the surfer's search take as passages. A plain search still finds
       them.
 - The reference is `docs/ask.md`, "Grounded and open".
+
+## 2026-09-30: two extension fixes (stage AC)
+
+**A tab that shows a PDF.** The extension recognised a PDF by its
+address (`.pdf`) or by the viewer's markup in the first 20,000
+characters. An arXiv `/pdf/…` address has no `.pdf`, and pdf.js puts its
+markup further down, so such tabs were snapshotted as the viewer: four
+documents held only its frame. `probeShown` asks the page: its
+`document.contentType`, and a frame, embed or object over half the page
+whose address or type says PDF. `lib.route` gives `pdf` (the tab is
+fetched as a PDF, never snapshotted) and `pdf-frame` (the frame's PDF is
+fetched, IEEE's `stamp.jsp`).
+
+**A GitHub repository.** A repository's page went as a snapshot. It now
+goes to `POST /import/github`, where the door asks GitHub for the
+repository and its README (`github.one`, with `sources.github.token`
+when there is one). The document has the starred import's shape
+(`feed.text_body`, `meta.github.key`), so a later star of the same
+repository is already held. A newer push retires the older document
+into the new one (`store.documents_of_key`). The page is snapshotted
+only when the door cannot reach GitHub.

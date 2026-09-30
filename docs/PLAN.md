@@ -28,7 +28,7 @@ nothing.
         (`meta.regions`, a nightly pass that writes every document).
 - [x] (2026-09-30: `ask.OPEN_SYSTEM`, `mode` on `POST /ask`, the Ask view's "open" box, `meta.page.open`; docs/ask.md "Grounded and open") **AB. An open mode for `ask`** (below, under "The UI and the
       agent"; experimental). About a day with the tests.
-- [ ] **AC. Two extension fixes.** A PDF viewer's tab is sent as the
+- [x] (2026-09-30: `probeShown` and the `pdf`/`pdf-frame` routes; `POST /import/github`, `github.one`) **AC. Two extension fixes.** A PDF viewer's tab is sent as the
       viewer's frame (four documents hold only its markup), and a GitHub
       repository as a page snapshot where the starred-repository
       importer's shape would do better. Both are under "The UI and the
@@ -764,14 +764,14 @@ recipe at once. Three independent failures, each wanting a different fix.
       Claude (`backend: claude`, paid) much better. There is no
       run-and-test loop, so real work in a codebase stays with Claude Code
       and prax over MCP. About a day with the tests.
-- [ ] **The extension sends a PDF viewer's tab as a snapshot.** A tab
+- [x] (2026-09-30, stage AC) **The extension sends a PDF viewer's tab as a snapshot.** A tab
       showing `arxiv.org/pdf/…` or IEEE's `stamp.jsp` is saved by
       SingleFile as the viewer's frame, not the PDF: four documents
       (9539, 9574, 9741, 10112) hold only the frame's markup. The
       extension should send the PDF the frame shows, as it does for a
       tab whose URL ends in `.pdf`. Since 2026-09-29 such a page no
       longer falls back to plain text, so it waits as a failed parse.
-- [ ] **The extension sends a GitHub repository as a page snapshot.**
+- [x] (2026-09-30, stage AC) **The extension sends a GitHub repository as a page snapshot.**
       The popup says so (`lib.route`, 2026-09-30). The importer for
       starred repositories (`prax.importers.github`, a client) writes a
       better document: the README under a header of the repository's

@@ -713,7 +713,30 @@ async function captureVideo(tab, opts, cfg, common) {
 async function tabHints(tab) {
   if (!lib.capturable(tab.url)) return {};
   const video = !!lib.videoOfUrl(tab.url) || await probeVideo(tab.id);
-  return { video, paper: await readPaper(tab.id) };
+  const shown = await probeShown(tab.id);
+  return { video, paper: await readPaper(tab.id), pdf: shown.pdf, frame: shown.frame };
+}
+
+/* What the tab shows, asked of the page itself: a PDF in the browser's
+   viewer says so in its content type (an arXiv /pdf/ URL has no .pdf, and
+   pdf.js's viewer markup can sit past what looksLikePdf reads); a page
+   that is one frame over a PDF (IEEE's stamp.jsp) names the frame. */
+async function probeShown(tabId) {
+  try {
+    const r = await api.scripting.executeScript({ target: { tabId }, func: () => {
+      const pdf = document.contentType === "application/pdf";
+      const area = window.innerWidth * window.innerHeight || 1;
+      let frame = null;
+      for (const el of document.querySelectorAll("iframe[src], embed[src], object[data]")) {
+        const box = el.getBoundingClientRect();
+        const src = el.getAttribute("src") || el.getAttribute("data") || "";
+        const pdfish = /pdf/i.test(src) || /pdf/i.test(el.getAttribute("type") || "");
+        if (src && pdfish && box.width * box.height > 0.5 * area) { frame = new URL(src, location.href).href; break; }
+      }
+      return { pdf, frame };
+    } });
+    return (r && r[0] && r[0].result) || {};
+  } catch (_) { return {}; }
 }
 
 async function captureTab(tab, opts, cfg) {
@@ -743,7 +766,27 @@ async function captureTab(tab, opts, cfg) {
       return { tabId: tab.id, url: tab.url, title: commonP.title, mode: "file", note: way.label, ...data };
     } catch (err) { log("warn", "the page's PDF could not be fetched; the page goes instead", paper.pdf_url, err); }
   }
-  const read = await readTab(tab.id);
+  if (way.kind === "pdf-frame") {
+    // the PDF the page's frame shows, fetched with this browser's session;
+    // the page itself only when that fails
+    const commonF = { url: tab.url, title: tab.title || null, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null, session: opts.session };
+    try {
+      const blob = await fetchPdf(hints.frame);
+      const data = await uploadFile(blob, lib.pdfFileName(hints.frame), commonF, cfg);
+      return { tabId: tab.id, url: tab.url, title: commonF.title, mode: "file", note: way.label, ...data };
+    } catch (err) { log("warn", "the frame's PDF could not be fetched; the page goes instead", hints.frame, err); }
+  }
+  if (way.kind === "github") {
+    // the repository as the door's GitHub import keeps it (README and
+    // details, the same document a star would be); the page only when
+    // the door cannot reach GitHub
+    try {
+      const data = await door("/import/github", { url: tab.url, domains: opts.domains.length ? opts.domains : null, tags: opts.tags.length ? opts.tags : null }, cfg);
+      return { tabId: tab.id, url: tab.url, title: tab.title || null, mode: "github", note: way.label, ...data };
+    } catch (err) { log("warn", "the door could not import the repository; the page goes instead", tab.url, err); }
+  }
+  // a tab that is a PDF is never snapshotted: its viewer is not the document
+  const read = way.kind === "pdf" ? null : await readTab(tab.id);
   const url = (read && read.url) || tab.url;
   const title = (paper && paper.title) || (read && read.title) || tab.title || null;
   const p = lib.plan(url, read && read.html);
@@ -759,7 +802,7 @@ async function captureTab(tab, opts, cfg) {
   // "view PDF" link rarely ends in .pdf): fetch it here, with the session
   // this browser has, and upload the bytes when they are a PDF. Only then
   // does the door fetch the URL itself, without any session.
-  let why = p.reason || null;
+  let why = way.kind === "pdf" ? "a PDF the extension could not fetch: the door fetched it" : p.reason || null;
   if (!read && !(await mayRead(url))) {
     // the browser would not let us into the tab, and would refuse our own
     // fetch of it just the same: say which permission is missing

@@ -206,19 +206,26 @@ def _send(
                 "note": item.note,
             },
         )
+    return door.post_json("/ingest", text_body(source, item, domains, all_tags))
+
+
+def text_body(
+    source: str, item: Item, domains: list[str] | None, tags: list[str]
+) -> dict[str, Any]:
+    """What a document of the importer's own is sent as (``POST /ingest``):
+    ``meta.source`` and ``meta.<source>`` with the key and the version. The
+    door's own import of one item (``POST /import/github``) stores the same
+    shape, so both find the one document."""
     own = {"key": item.key, **item.meta}
     if item.version:
         own["version"] = item.version
     meta: dict[str, Any] = {"source": source, source: own}
-    if all_tags:
-        meta["tags"] = all_tags
-    return door.post_json(
-        "/ingest",
-        {
-            "text": item.text,
-            "title": item.title,
-            "source_url": item.url,
-            "meta": meta,
-            "domains": domains or None,
-        },
-    )
+    if tags:
+        meta["tags"] = tags
+    return {
+        "text": item.text,
+        "title": item.title,
+        "source_url": item.url,
+        "meta": meta,
+        "domains": domains or None,
+    }

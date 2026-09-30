@@ -75,12 +75,13 @@
     }
     const paper = h.paper || null;
     const ids = paperIds(paper);
-    if (paper && paper.pdf_url && !looksLikePdf(url, null)) {
+    if (paper && paper.pdf_url && !looksLikePdf(url, null) && !h.pdf) {
       return { kind: "paper", label: `a paper: its PDF from the page's citation tags${ids ? ` (${ids})` : ""}` };
     }
-    if (looksLikePdf(url, null)) return { kind: "pdf", label: "a PDF: fetched with your session and uploaded" };
+    if (looksLikePdf(url, null) || h.pdf) return { kind: "pdf", label: "a PDF: fetched with your session and uploaded" };
+    if (h.frame) return { kind: "pdf-frame", label: "a PDF shown in a frame: the PDF itself, fetched with your session" };
     const repo = githubRepoOf(url);
-    if (repo) return { kind: "page", label: `GitHub repository ${repo.owner}/${repo.repo}: a snapshot of the page (no repository importer in the extension yet)` };
+    if (repo) return { kind: "github", label: `GitHub repository ${repo.owner}/${repo.repo}: its README and details, as prax's GitHub import keeps them` };
     if (ids) return { kind: "page", label: `a page naming its paper (${ids}): a snapshot carrying the ids` };
     return { kind: "page", label: null };
   }
@@ -125,7 +126,7 @@
   /** A one-line result for the popup. */
   function describeResult(res) {
     if (res.error) return `failed: ${res.error}`;
-    if ((res.mode === "video" || res.mode === "excerpt") && res.note) return `${res.created ? "new" : "already in the store"}: ${res.note}`;
+    if ((res.mode === "video" || res.mode === "excerpt" || res.mode === "github") && res.note) return `${res.created ? "new" : "already in the store"}: ${res.note}`;
     if (res.mode === "page" && res.note) return res.note;
     if (res.downloaded) return "downloaded for the watcher";
     if (res.manual) return "waiting for you";

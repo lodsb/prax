@@ -890,3 +890,18 @@ def shared_titles(con: sqlite3.Connection, *, at_least: int = SHARED_TITLE) -> s
             (at_least,),
         )
     }
+
+
+@_reading
+def documents_of_key(con: sqlite3.Connection, source: str, key: str) -> list[int]:
+    """The live documents an importer made of ``key`` (``meta.<source>.key``),
+    oldest first: what a refresh of one item replaces."""
+    if not source.isidentifier():
+        raise ValueError(f"not a source name: {source!r}")
+    rows = con.execute(
+        "SELECT id FROM documents WHERE json_extract(meta, '$.source') = ?"
+        f" AND json_extract(meta, '$.{source}.key') = ?"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id",
+        (source, key),
+    )
+    return [int(r[0]) for r in rows]

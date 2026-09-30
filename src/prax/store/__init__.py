@@ -183,6 +183,7 @@ from .documents import (  # noqa: F401
     documents_added,
     documents_by_language,
     documents_in_domain,
+    documents_of_key,
     domains_dry_run,
     domains_of,
     equation_density,
