@@ -299,9 +299,9 @@ def _health_of(base_url: str) -> str:
     return f"{url.scheme or 'http'}://{host}:{port}/health"
 
 
-def roles(section: dict[str, Any] | None = None) -> list[Role]:
-    """The roles ``run:`` names, in start order, each with its command."""
-    raw = config.setting("run") if section is None else section
+def _checked_run(raw: Any) -> dict[str, Any]:
+    """``run:`` as a mapping of known roles, each a mapping of its known
+    settings; anything else is refused with what would have been right."""
     if not raw:
         raise UpError(
             f"no run: section in {config.config_path()} — which of the door, the"
@@ -325,97 +325,116 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
                 f"run.{name}: unknown setting{_s(bad)} {', '.join(bad)};"
                 f" known: {', '.join(ROLE_KEYS[name])}"
             )
-    out: list[Role] = []
+    return raw
+
+
+def _served_role(name: str, opts: dict[str, Any]) -> Role:
+    """llama-server or the reranker: the model's server, its health and
+    metrics, the card it needs, and when it may idle."""
+    model = opts.get("model")
+    if not model:
+        raise UpError(f"run.{name}: which model? (a models: entry with a serve: block)")
+    spec = models.spec(str(model))
+    if spec is None:
+        raise UpError(f"run.{name}: no model named {model!r} in prax.yaml")
+    if name == "reranker" and not dict(spec.serve).get("reranker"):
+        raise UpError(
+            f"run.reranker: {model!r} is not a reranker (serve: reranker: true)"
+        )
+    served = Role(
+        name,
+        llama_argv(spec),
+        health=_health_of(spec.base_url or ""),
+        patience=SERVER_PATIENCE,
+    )
+    with contextlib.suppress(OSError):  # the model file is what it maps
+        size = model_path(spec).stat().st_size
+        served.needs_vram_mb = max(1, int(size / (1 << 20)))
+    if dict(spec.serve).get("metrics", True) and served.health:
+        served.metrics = served.health.rsplit("/health", 1)[0] + "/metrics"
+    served.idle_minutes = max(0.0, float(opts.get("idle_minutes") or 0))
+    if served.idle_minutes and not served.metrics:
+        raise UpError(
+            f"run.{name}.idle_minutes: the server's /metrics is how quiet"
+            " is told (serve: metrics: false turns it off)"
+        )
+    served.trim = bool(opts.get("trim", sys.platform == "win32"))
+    return _grouped(served, opts)
+
+
+def _door_role(opts: dict[str, Any], door_url: str | None) -> Role:
+    argv = prax_command(
+        "serve",
+        "--host",
+        str(opts.get("host", "127.0.0.1")),
+        "--port",
+        str(int(opts.get("port", 8000))),
+    )
+    if opts.get("ssl_certfile") or opts.get("ssl_keyfile"):
+        argv += [
+            "--ssl-certfile",
+            str(opts.get("ssl_certfile", "")),
+            "--ssl-keyfile",
+            str(opts.get("ssl_keyfile", "")),
+        ]
+    return _grouped(Role("door", argv, health=f"{door_url}/health"), opts)
+
+
+# the worker's settings that are a flag of ``prax work`` each: setting,
+# flag, and how its value is written (a list of steps joined by commas)
+_WORKER_FLAGS: tuple[tuple[str, str, Any], ...] = (
+    ("steps", "--steps", lambda v: ",".join(v) if isinstance(v, list) else str(v)),
+    ("scope", "--scope", str),
+    ("limit", "-n", lambda v: str(int(v))),
+    ("workers", "--workers", lambda v: str(int(v))),
+)
+
+
+def _worker_role(
+    opts: dict[str, Any], door_url: str | None, *, door_here: bool
+) -> Role:
+    target = str(opts.get("door") or door_url or "http://127.0.0.1:8000")
+    argv = prax_command(
+        "work",
+        "--watch",
+        "--door",
+        target,
+        "--interval",
+        str(float(opts.get("interval", 20))),
+    )
+    for key, flag, written in _WORKER_FLAGS:
+        if opts.get(key):
+            argv += [flag, written(opts[key])]
+    if opts.get("nightly"):
+        argv += ["--nightly", str(opts["nightly"])]
+        if opts.get("nightly_limit"):
+            argv += ["--nightly-limit", str(int(opts["nightly_limit"]))]
+    if opts.get("spend"):
+        argv.append("--spend")  # the paid steps run: money is spent
+    after = "door" if (door_here and not opts.get("door")) else None
+    return _grouped(Role("worker", argv, after=after, env={"PRAX_DOOR": target}), opts)
+
+
+def roles(section: dict[str, Any] | None = None) -> list[Role]:
+    """The roles ``run:`` names, in start order, each with its command."""
+    raw = _checked_run(config.setting("run") if section is None else section)
     door_url = None
     if "door" in raw:
         port = int((raw["door"] or {}).get("port", 8000))
         door_url = f"http://127.0.0.1:{port}"
+    out: list[Role] = []
     for name in ROLES:
         if name not in raw:
             continue
         opts = raw[name] or {}
         if name in ("llama-server", "reranker"):
-            model = opts.get("model")
-            if not model:
-                raise UpError(
-                    f"run.{name}: which model? (a models: entry with a serve: block)"
-                )
-            spec = models.spec(str(model))
-            if spec is None:
-                raise UpError(f"run.{name}: no model named {model!r} in prax.yaml")
-            if name == "reranker" and not dict(spec.serve).get("reranker"):
-                raise UpError(
-                    f"run.reranker: {model!r} is not a reranker (serve: reranker: true)"
-                )
-            served = Role(
-                name,
-                llama_argv(spec),
-                health=_health_of(spec.base_url or ""),
-                patience=SERVER_PATIENCE,
-            )
-            with contextlib.suppress(OSError):  # the model file is what it maps
-                size = model_path(spec).stat().st_size
-                served.needs_vram_mb = max(1, int(size / (1 << 20)))
-            if dict(spec.serve).get("metrics", True) and served.health:
-                served.metrics = served.health.rsplit("/health", 1)[0] + "/metrics"
-            served.idle_minutes = max(0.0, float(opts.get("idle_minutes") or 0))
-            if served.idle_minutes and not served.metrics:
-                raise UpError(
-                    f"run.{name}.idle_minutes: the server's /metrics is how quiet"
-                    " is told (serve: metrics: false turns it off)"
-                )
-            served.trim = bool(opts.get("trim", sys.platform == "win32"))
-            out.append(_grouped(served, opts))
+            out.append(_served_role(name, opts))
         elif name == "marker":
             out.append(marker_role(opts))
         elif name == "door":
-            argv = prax_command(
-                "serve",
-                "--host",
-                str(opts.get("host", "127.0.0.1")),
-                "--port",
-                str(int(opts.get("port", 8000))),
-            )
-            if opts.get("ssl_certfile") or opts.get("ssl_keyfile"):
-                argv += [
-                    "--ssl-certfile",
-                    str(opts.get("ssl_certfile", "")),
-                    "--ssl-keyfile",
-                    str(opts.get("ssl_keyfile", "")),
-                ]
-            out.append(_grouped(Role(name, argv, health=f"{door_url}/health"), opts))
+            out.append(_door_role(opts, door_url))
         elif name == "worker":
-            target = str(opts.get("door") or door_url or "http://127.0.0.1:8000")
-            argv = prax_command(
-                "work",
-                "--watch",
-                "--door",
-                target,
-                "--interval",
-                str(float(opts.get("interval", 20))),
-            )
-            if opts.get("steps"):
-                steps = opts["steps"]
-                argv += [
-                    "--steps",
-                    ",".join(steps) if isinstance(steps, list) else str(steps),
-                ]
-            if opts.get("scope"):
-                argv += ["--scope", str(opts["scope"])]
-            if opts.get("limit"):
-                argv += ["-n", str(int(opts["limit"]))]
-            if opts.get("workers"):
-                argv += ["--workers", str(int(opts["workers"]))]
-            if opts.get("nightly"):
-                argv += ["--nightly", str(opts["nightly"])]
-                if opts.get("nightly_limit"):
-                    argv += ["--nightly-limit", str(int(opts["nightly_limit"]))]
-            if opts.get("spend"):
-                argv.append("--spend")  # the paid steps run: money is spent
-            after = "door" if ("door" in raw and not opts.get("door")) else None
-            out.append(
-                _grouped(Role(name, argv, after=after, env={"PRAX_DOOR": target}), opts)
-            )
+            out.append(_worker_role(opts, door_url, door_here="door" in raw))
     return out
 
 
