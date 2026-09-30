@@ -149,3 +149,26 @@ def test_the_door_hands_out_the_training_data(data_dir: Path) -> None:
         assert by_id[a]["blind"] and not by_id[b]["blind"]
         assert by_id[a]["g"] == ["informational", "paper"]
         assert by_id[b]["view"].startswith("Title: E")
+
+
+def test_a_worker_without_a_model_defers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No labeller or no model is the worker's host, not the document: the
+    batch is deferred and nothing is marked tried."""
+    from prax import models
+    from prax.ml import labeller
+    from prax.steps import writing as step_writing
+
+    items = [{"doc_id": 1, "view": "a"}, {"doc_id": 2, "view": "b"}]
+    monkeypatch.setattr(labeller, "current", lambda: None)
+    monkeypatch.setattr(
+        models, "settings", lambda step: {"method": "small"} if step == "genres" else {}
+    )
+    assert step_writing.do_genres(items, None) == [
+        {"doc_id": 1, "defer": True},
+        {"doc_id": 2, "defer": True},
+    ]
+    monkeypatch.setattr(models, "settings", lambda step: {})
+    assert all(
+        r == {"doc_id": r["doc_id"], "defer": True}
+        for r in step_writing.do_genres(items, None)
+    )

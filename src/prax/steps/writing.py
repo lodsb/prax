@@ -532,8 +532,9 @@ def do_small_genres(
     from prax.ml import labeller
 
     model = labeller.current()
-    if model is None:
-        return [{"doc_id": it["doc_id"], "tried": "no labeller"} for it in items]
+    if model is None:  # this worker's host, not the document: defer
+        say(log_, "genres: no labeller (models/labeller/CURRENT)")
+        return [{"doc_id": it["doc_id"], "defer": True} for it in items]
     keep = float(models.settings("genres").get("keep") or model.threshold)
     G, S = ontology.genres(), ontology.subjects()
     probs = model.predict([it["view"] for it in items])
@@ -562,12 +563,11 @@ def do_genres(
     base_url = getattr(runtime, "base_url", None)
     model = getattr(runtime, "model", None)
     if runtime is None or not base_url or not model:
-        why = (
-            "no genres model"
-            if runtime is None
-            else "the genres step wants a local model"
-        )
-        return [{"doc_id": it["doc_id"], "tried": why} for it in items]
+        # this worker's configuration, not the document: defer, never mark
+        # it tried (a worker without prax.yaml once marked 174 so)
+        why = "no genres model" if runtime is None else "wants a local model"
+        say(log_, f"genres: {why}")
+        return [{"doc_id": it["doc_id"], "defer": True} for it in items]
     opts = models.settings("genres")
     platt = opts.get("platt") or None
     keep = float(opts.get("keep") or genres.KEEP)
