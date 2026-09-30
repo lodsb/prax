@@ -2615,3 +2615,25 @@ Found while searching the library for the classification research
       groups 0.769, the same to four decimals after the export. Through
       prax on the CPU: 7.1 documents a second, the open 12,400 in about 29
       minutes; 47 MB kept, 128 MB of model.
+
+## 2026-09-30: the library labelled, and domains by what a document is
+
+- **The small labeller over the library**: 12,340 documents labelled,
+      34 with no genre over the threshold. A worker started without the
+      host's prax.yaml marked 174 documents "no genres model" and so kept
+      them out of every later pass; a worker without a model now defers
+      its batch (b5f49c9), and the 174 were cleared and labelled.
+- **Domain rules** (stage Z, step 5), chosen after the dry run and put in
+      the host's prax.yaml: recipe or cooking → kitchen; datasheet,
+      schematic, or electronics at p 0.8 → studio and electronics; a
+      paper about audio or music → research and studio; audio or music →
+      studio; any other paper → research; facts mostly studio → studio.
+      The maintain pass gave 1,466 documents a domain set. Left out, as
+      the samples showed: `thesis` (it caught grading forms and
+      applications), `making` (3 documents, all wrong), facts mostly
+      research (the daily briefings). 1,292 open documents stay without
+      one. They are mostly computing (manuals, reference, source code) and
+      paperwork, for which no module exists yet: the society-module
+      decision, widened to computing.
+- **The extension's popup** names the way a tab goes before it is sent
+      (`lib.route`, 3631912).
