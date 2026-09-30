@@ -2947,3 +2947,13 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
 - `VACUUM` with the door stopped, run by the user at 4 KB pages: 3.00 GB
   -> 2.80 GB, no free pages. The write-ahead log stood at 16 MB before it,
   the new limit.
+- Deleted by the user's word: the `multilingual-e5-small` index files
+  (1.04 GB; they still covered 1.10 M of 1.28 M chunks, so a switch back
+  or the chunk-side rematch now means a full re-embed, about an hour with
+  the card free) and `prax-before-heal.db` of 2026-09-12 (1.7 GB).
+- The graph's threshold in CLAUDE.md is a walk time, not a count of
+  entities: 50 ms for one hop, 500 for two, from the ten most connected
+  entities, measured by `prax heal` (`slow-graph-walks`). The live store,
+  read-only: one hop 3–41 ms, two hops 34–276 ms (a two-hop walk from a
+  paper of 236 edges, the slowest). The 1.6–7 ms reported earlier the
+  same day were one-hop walks from `reverb` and `SuperCollider`.

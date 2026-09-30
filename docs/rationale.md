@@ -192,8 +192,13 @@ complement queries ("what is NOT connected") and at weighted
 propagation. The graph is therefore an entry-point enhancer for
 retrieval, and those queries are explicit SQL tools.
 
-**Revisit when** entities pass 50–100k or traversal gets slow. Then
-move the edges to Kùzu (embedded), not Neo4j.
+**Revisit when** a walk from one of the most connected entities takes
+more than 50 ms for one hop or 500 ms for two, which `prax heal`
+measures (`slow-graph-walks`). Then an index for the slow query first,
+and after that the edges in Kùzu (embedded), not Neo4j. Until
+2026-09-30 the line was 50–100k entities. The library passed it at
+160,571 with a one-hop walk at 3–41 ms, so the count said nothing
+about what it stood for.
 
 *Extraction (2026-09-09).* The extractor's prompt and output schema are
 generated from the ontology modules in `ontology/`, so the validator at

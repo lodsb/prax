@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -44,7 +45,14 @@ from .documents import (
     set_mime,
     similarity,
 )
-from .graph import entity_named_in, invalidate_edge, rename_entity, resolve_review
+from .graph import (
+    entities_with_degree,
+    entity_named_in,
+    invalidate_edge,
+    rename_entity,
+    resolve_review,
+    traverse_map,
+)
 from .jobs import Job, job_finish
 
 # How many rows one pass looks at and repairs; a bigger mess is cleared by
@@ -589,6 +597,40 @@ def _review_of_retired(con: sqlite3.Connection) -> list[dict[str, Any]]:
         (CAP,),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# The graph's threshold (CLAUDE.md, "Decision thresholds"): a walk from
+# one of the most connected entities, warm, past this many milliseconds
+# for its number of hops. On 2026-09-30, at 160,571 entities and after
+# migration 0031: one hop 3 to 41 ms (the route's default), two hops 34
+# to 276 ms, over the ten most connected
+SLOW_WALK_MS = {1: 50.0, 2: 500.0}
+WALKS_TIMED = 10  # the most connected entities walked from
+
+
+def _slow_walks(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The walks that answer slower than ``SLOW_WALK_MS`` for their hops:
+    each the best of two, so a cold page cache is not the finding."""
+    top = sorted(entities_with_degree(con), key=lambda e: -int(e["degree"]))
+    slow = []
+    for e in top[:WALKS_TIMED]:
+        for hops, limit in sorted(SLOW_WALK_MS.items()):
+            best = float("inf")
+            for _ in range(2):
+                t0 = time.perf_counter()
+                traverse_map(con, str(e["name"]), hops, type=str(e["type"]))
+                best = min(best, (time.perf_counter() - t0) * 1000)
+            if best > limit:
+                slow.append(
+                    {
+                        "entity": e["name"],
+                        "type": e["type"],
+                        "degree": int(e["degree"]),
+                        "hops": hops,
+                        "ms": round(best, 1),
+                    }
+                )
+    return slow
 
 
 def _stale_jobs(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -1345,6 +1387,20 @@ AILMENTS: tuple[Ailment, ...] = (
         fix="resolve them as dropped",
         find=_review_of_retired,
         repair=_repair_review,
+    ),
+    Ailment(
+        name="slow-graph-walks",
+        what=(
+            "walks from the most connected entities slower than SLOW_WALK_MS"
+            " (50 ms for one hop, 500 for two): the graph's threshold in"
+            " CLAUDE.md"
+        ),
+        fix=(
+            "first an index for the query the walk spends its time in (as"
+            " migration 0031 did); past that, the edges in Kuzu"
+            " (docs/rationale.md), not a server database"
+        ),
+        find=_slow_walks,
     ),
     Ailment(
         name="stale-jobs",

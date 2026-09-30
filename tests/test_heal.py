@@ -584,3 +584,16 @@ def test_the_container_is_never_retyped(con: sqlite3.Connection) -> None:
     )
     store.heal(con, only=["container-citations"])
     assert {e["dst"] for e in store.traverse(con, volume, hops=1)} == {"gesture"}
+
+
+def test_a_slow_graph_walk_is_the_graphs_threshold(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``slow-graph-walks`` times the walks from the most connected
+    entities: the threshold of CLAUDE.md, measured rather than counted."""
+    _link(con, "reverb", "feedback delay network")
+    _link(con, "reverb", "allpass filter")
+    assert store.health(con, only=["slow-graph-walks"])["found"] == 0
+    monkeypatch.setattr(store.repair, "SLOW_WALK_MS", {1: -1.0})
+    found = store.health(con, only=["slow-graph-walks"])["ailments"][0]
+    assert found["count"] >= 1 and found["examples"][0]["entity"] == "reverb"
