@@ -2934,3 +2934,16 @@ and document-field legs.
   optimize` was measured and left out: its statistics moved three plans
   off their indexes (`list_documents` 1 -> 75 ms, `pending_embeddings`
   32 -> 89, `select_for_extraction` 75 -> 89).
+
+The same evening, on the live store, after a backup to `I:\prax-backup`
+(3,004 MB, `quick_check` ok):
+
+- The histories held to 20 (`HISTORY_KEEP`, the user's cap): the
+  `histories` pass changed 14 documents; the looping books went from
+  about 900 parse entries to 25.
+- `prax maintain vectors`: the chunk index 1.58 GB -> 1.17 GB in 255 s,
+  the document index merged (8.8 MB and an 11.5 MB delta -> 12.2 MB).
+  The same five hits for "feedback delay network" before and after.
+- `VACUUM` with the door stopped, run by the user at 4 KB pages: 3.00 GB
+  -> 2.80 GB, no free pages. The write-ahead log stood at 16 MB before it,
+  the new limit.

@@ -89,12 +89,10 @@ nothing.
         main file's size; `compact_vectors` rebuilds the graph, as `prax
         maintain vectors`; `journal_size_limit`. `PRAGMA optimize` was
         measured and left out (three plans got slower).
-      - Open, by the user's word: `store.bounded_histories` wired and its
-        pass run (14 documents, 4,100 entries; the cap barely matters);
-        `prax maintain vectors` on the live store (1.61 -> 1.17 GB, four
-        minutes of the door); a `VACUUM` with the door stopped, at 8 KB
-        pages or not.
-      - The user's decisions: the cap; how long a resolved review item is
+      - Run on the live store the same evening (docs/log.md): the
+        histories capped at 20, `prax maintain vectors`, a `VACUUM` at 4 KB
+        pages.
+      - The user's decisions: how long a resolved review item is
         kept; deleting the e5 indexes (1.04 GB) and `prax-before-heal.db`
         (1.7 GB); the entity threshold of CLAUDE.md as a traverse time.
       - Open from AC: the four documents that hold only a PDF viewer
