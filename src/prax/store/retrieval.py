@@ -1215,19 +1215,39 @@ def _vec_count(con: sqlite3.Connection) -> int:
     return con.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0]
 
 
+# (database file, model) -> (highest chunk id, rows of the model) when
+# every chunk was found embedded. Chunk ids are reused, so the id alone
+# would not do; a chunk added, a vector lost or a model written over
+# moves one of the two
+_EMBEDDED: dict[tuple[str, str], tuple[int, int]] = {}
+
+
 def _all_chunks_embedded(con: sqlite3.Connection, model: str) -> bool:
     """Two counts before the scan: when every chunk has its vector from
     ``model`` there is nothing to look for. The scan below walks a
     million chunks probing the embeddings table for each — seventeen
     seconds with nothing pending, under the store's lock, every worker
-    cycle: the door's searches stood in that queue (2026-09-18)."""
+    cycle: the door's searches stood in that queue (2026-09-18).
+
+    The count of chunks is the dear one (190 ms of every hand-out,
+    2026-09-30), and it is taken again only when the mark in
+    ``_EMBEDDED`` no longer matches."""
+    top = int(con.execute("SELECT coalesce(max(id), 0) FROM chunks").fetchone()[0])
+    done = int(
+        con.execute(
+            "SELECT count(*) FROM chunk_embeddings WHERE model = ?", (model,)
+        ).fetchone()[0]
+    )
+    key = (str(con.execute("PRAGMA database_list").fetchone()[2]), model)
+    if _EMBEDDED.get(key) == (top, done):
+        return True
     chunks = con.execute(f"SELECT count(*) FROM chunks c WHERE 1=1{_ASIDE}").fetchone()[
         0
     ]
-    done = con.execute(
-        "SELECT count(*) FROM chunk_embeddings WHERE model = ?", (model,)
-    ).fetchone()[0]
-    return done >= chunks
+    if done < chunks:
+        return False
+    _EMBEDDED[key] = (top, done)
+    return True
 
 
 @_reading

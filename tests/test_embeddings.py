@@ -429,3 +429,32 @@ def test_the_arena_modes() -> None:
     assert not on
     with pytest.raises(ValueError, match="arena"):
         embeddings.arena_options(ort, "sometimes")
+
+
+def test_nothing_pending_is_remembered_until_it_is_not(
+    con: sqlite3.Connection,
+) -> None:
+    """``_all_chunks_embedded`` keeps a mark of the store it found fully
+    embedded (the highest chunk id and the model's rows) and counts the
+    chunks again only when the mark moves: a new chunk, a lost vector."""
+
+    def stamp(ids: list[int]) -> None:
+        con.executemany(
+            "INSERT INTO chunk_embeddings (chunk_id, model) VALUES (?, 'm')",
+            [(i,) for i in ids],
+        )
+        con.commit()
+
+    first = int(store.ingest_text(con, "A note on reverb.", title="one")["doc_id"])
+    ids = [c["chunk_id"] for c in store.list_chunks(con, first)]
+    assert [p["chunk_id"] for p in store.pending_embeddings(con, "m")] == ids
+    stamp(ids)
+    assert store.pending_embeddings(con, "m") == []
+    assert store.pending_embeddings(con, "m") == []  # from the mark
+    con.execute("DELETE FROM chunk_embeddings WHERE chunk_id = ?", (ids[0],))
+    con.commit()
+    assert [p["chunk_id"] for p in store.pending_embeddings(con, "m")] == ids[:1]
+    stamp(ids[:1])
+    second = int(store.ingest_text(con, "A note on delay.", title="two")["doc_id"])
+    more = [c["chunk_id"] for c in store.list_chunks(con, second)]
+    assert {p["chunk_id"] for p in store.pending_embeddings(con, "m")} == set(more)
