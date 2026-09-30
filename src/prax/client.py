@@ -48,7 +48,7 @@ class Door:
             detail = ""
             try:
                 detail = res.json().get("detail", "")
-            except Exception:  # noqa: BLE001
+            except (ValueError, AttributeError):  # not JSON, or not an object
                 detail = res.text[:200] if hasattr(res, "text") else ""
             raise DoorError(res.status_code, str(detail))
         return res

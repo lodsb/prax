@@ -564,7 +564,9 @@ def _drop_legacy_vec_table(con: sqlite3.Connection) -> None:
         pass
 
 
-def _archive_path(digest: str) -> Path:
+def archive_path(digest: str) -> Path:
+    """Where an original or a text artifact lives: the one place that says
+    so, for the day the archive gains a second level (CLAUDE.md)."""
     return config.archive_dir() / digest[:2] / digest
 
 
@@ -580,7 +582,7 @@ def sha256_file(path: Path, chunk: int = 1 << 20) -> str:
 def _archive_bytes(data: bytes) -> str:
     """Content-address ``data`` into the archive; return its sha256 hex."""
     digest = hashlib.sha256(data).hexdigest()
-    dest = _archive_path(digest)
+    dest = archive_path(digest)
     if not dest.exists():
         dest.parent.mkdir(parents=True, exist_ok=True)
         part = dest.with_name(dest.name + ".part")
@@ -590,7 +592,7 @@ def _archive_bytes(data: bytes) -> str:
 
 
 def _read_archive(digest: str) -> bytes:
-    return _archive_path(digest).read_bytes()
+    return archive_path(digest).read_bytes()
 
 
 def _like_prefix(prefix: str) -> str:

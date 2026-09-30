@@ -392,7 +392,8 @@ def decide_unmapped(
                 "developed_by",
             )
         return "open", [], None
-    if rel in ("mentions", "references", "discusses", "names"):
+    # "references" is the cites rule's, above: a work named is cited
+    if rel in ("mentions", "discusses", "names"):
         said = ontology.lexicon().type_of(item.get("reason") or "")
         if said and (title and src == title or src == item["src"]):
             st = own if title and src == title else "paper"

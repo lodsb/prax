@@ -10,10 +10,10 @@ from typing import Any
 
 from ..base import (
     _NOW,
-    _archive_path,
     _like_prefix,
     _reading,
     _serialized,
+    archive_path,
     now,
 )
 from .meta import DOCTYPES, get_meta, set_meta
@@ -157,7 +157,7 @@ def figure_blob(ref: str) -> tuple[bytes, str] | None:
     the archive has no such artifact."""
     if not re.fullmatch(r"[0-9a-f]{16,64}", ref or ""):
         return None
-    path = _archive_path(ref)
+    path = archive_path(ref)
     if not path.exists():
         return None
     from prax.parsers import figures
@@ -198,7 +198,7 @@ def page_counts(
         return out
     for doc_id, digest in todo:
         try:
-            with pymupdf.open(_archive_path(digest)) as doc:
+            with pymupdf.open(archive_path(digest)) as doc:
                 out[doc_id] = int(doc.page_count)
         except Exception:  # noqa: BLE001, S112 — not a PDF after all: left out
             continue
@@ -267,7 +267,7 @@ def thin_documents(
         if not n or n < min_pages:
             continue
         try:
-            size = _archive_path(r["text_hash"]).stat().st_size
+            size = archive_path(r["text_hash"]).stat().st_size
         except OSError:
             continue
         if size / n < per_page:

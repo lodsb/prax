@@ -513,7 +513,7 @@ def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     header): registered from a folder that held them beside the real files;
     no extractor will ever read them. Every type without text, not PDFs
     only: a copied Cygwin link was filed as the RTF it pointed at."""
-    from .base import _archive_path
+    from .base import archive_path
 
     out = []
     for r in con.execute(
@@ -522,7 +522,7 @@ def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
         " ORDER BY id"
     ):
         try:
-            with open(_archive_path(r["hash"]), "rb") as f:
+            with open(archive_path(r["hash"]), "rb") as f:
                 head = f.read(1024)
         except OSError:
             continue

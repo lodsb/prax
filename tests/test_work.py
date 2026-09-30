@@ -15,7 +15,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import models, steps, store, work, worker
+from prax import config, models, steps, store, work, worker
 from prax.capture import inbox
 from prax.ml import embeddings
 from prax.steps import parse as step_parse
@@ -575,7 +575,9 @@ def test_a_requested_reading_goes_out_first_and_comes_back_with_its_outcome(
 
     class FakeRuntime:
         def chat(self, system, user, **kw):
-            seen.append(os.environ.get("PRAX_VISION_PAGES") or "")
+            seen.append(
+                str(config.setting("parse.vision_pages", "PRAX_VISION_PAGES", ""))
+            )
             return "(handwritten) a transcribed page " + "word " * 100, {}
 
     monkeypatch.setattr(models, "runtime", lambda s: FakeRuntime())
@@ -804,7 +806,7 @@ def test_a_figures_request_may_ask_for_every_image(
     monkeypatch.setattr(models, "resolve", lambda s: spec if s == "vision" else None)
 
     def fake_describe(data: bytes, previous: str) -> str:
-        seen.append(os.environ.get("PRAX_FIGURES"))
+        seen.append(config.setting("parse.figures", "PRAX_FIGURES"))
         return previous
 
     monkeypatch.setattr(figures, "describe", fake_describe)

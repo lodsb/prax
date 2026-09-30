@@ -123,3 +123,32 @@ def test_the_boards_config_loads_and_names_no_model(
     assert config.setting("vectors.dtype") == "i8"
     for step in ("extract", "ask", "titles"):
         assert models.resolve(step) is None  # the worker's job, not the board's
+
+
+def test_a_setting_overridden_for_one_call_is_that_threads_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``overriding`` puts a value above the environment for the block, in
+    this thread only: a reading's mode no longer leaks into another
+    reading running beside it (it was an environment variable)."""
+    import threading
+
+    monkeypatch.setenv("PRAX_VISION_PAGES", "scans")
+    seen: list[str] = []
+    inside = threading.Event()
+    done = threading.Event()
+
+    def other() -> None:
+        inside.wait(5)
+        seen.append(str(config.setting("parse.vision_pages", "PRAX_VISION_PAGES")))
+        done.set()
+
+    t = threading.Thread(target=other)
+    t.start()
+    with config.overriding("PRAX_VISION_PAGES", "all"):
+        assert config.setting("parse.vision_pages", "PRAX_VISION_PAGES") == "all"
+        inside.set()
+        done.wait(5)
+    t.join(5)
+    assert seen == ["scans"]
+    assert config.setting("parse.vision_pages", "PRAX_VISION_PAGES") == "scans"

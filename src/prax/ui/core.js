@@ -98,6 +98,24 @@ async function api(path, params) {
   return res.json();
 }
 
+// A write to the door: POST, PUT or DELETE, with a JSON body when there is
+// one. A refused token asks for one; a failure throws the door's detail,
+// so a caller that shows its status never carries on as if it had worked.
+async function send(method, path, body) {
+  setStatus("…");
+  const init = { method };
+  if (body !== undefined) {
+    init.headers = { "Content-Type": "application/json" };
+    init.body = JSON.stringify(body);
+  }
+  const res = await fetch(path, init);
+  setStatus("");
+  if (res.status === 401) { askForToken(); throw new Error("access token required"); }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || res.statusText);
+  return data;
+}
+
 // ------------------------------------------------------------------ auth
 // The door wants a bearer token (PRAX_TOKEN). The UI exchanges it once for
 // an HttpOnly session cookie via POST /session, so plain links (originals,

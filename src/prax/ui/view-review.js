@@ -8,15 +8,7 @@
 // dropped, marked as an ontology gap, or linked as an edge after fixing its
 // types or relation with the current ontology's choices.
 
-async function post(path, body, method = "POST") {
-  setStatus("…");
-  const res = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  setStatus("");
-  if (res.status === 401) { askForToken(); throw new Error("access token required"); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || res.statusText);
-  return data;
-}
+function post(path, body, method = "POST") { return send(method, path, body); }
 
 // A POST answered line by line (/ask with stream): each JSON line goes
 // to onEvent as it arrives; the promise settles when the door is done.

@@ -41,7 +41,7 @@ async function viewPromote(p) {
   }));
   view.querySelectorAll("a.unpromote").forEach((a) => a.addEventListener("click", async (e) => {
     e.preventDefault();
-    await fetch(`/doc/${a.dataset.id}/promote`, { method: "DELETE" });
+    try { await send("DELETE", `/doc/${a.dataset.id}/promote`); } catch (err) { setStatus(err.message); return; }
     render();
   }));
 }

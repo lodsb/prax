@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import config, models, store
+from prax import models, store
 from prax.graph import extraction, ontology
 from prax.ml import embeddings, pricing
 from prax.parsers import figures
@@ -171,7 +171,7 @@ def pdf_title(con: sqlite3.Connection, doc: dict[str, Any]) -> str | None:
     try:
         import pymupdf
 
-        path = config.archive_dir() / doc["hash"][:2] / doc["hash"]
+        path = store.archive_path(doc["hash"])
         with pymupdf.open(str(path)) as pdf:
             return titles.pdf_meta_title((pdf.metadata or {}).get("title"))
     except Exception:  # noqa: BLE001 - a hint only

@@ -320,7 +320,7 @@ PROCESS.addEventListener("click", async (e) => {
   const cancel = e.target.closest(".route-cancel");
   if (cancel && processDoc) {
     e.preventDefault();
-    await fetch(`/doc/${processDoc.id}/reading`, { method: "DELETE" });
+    try { await send("DELETE", `/doc/${processDoc.id}/reading`); } catch (err) { setStatus(err.message); return; }
     processTouched = true;
     refreshProcess();
     return;
@@ -634,7 +634,7 @@ async function viewDoc(id, p) {
   const unretireLink = document.getElementById("unretire");
   if (unretireLink) unretireLink.addEventListener("click", async (e) => {
     e.preventDefault();
-    await fetch(`/doc/${doc.id}/retire`, { method: "DELETE" });
+    try { await send("DELETE", `/doc/${doc.id}/retire`); } catch (err) { setStatus(err.message); return; }
     render();
   });
   const proc = document.getElementById("process");
@@ -644,7 +644,7 @@ async function viewDoc(id, p) {
   const cancelReading = document.getElementById("reading-cancel");
   if (cancelReading) cancelReading.addEventListener("click", async (e) => {
     e.preventDefault();
-    await fetch(`/doc/${doc.id}/reading`, { method: "DELETE" });
+    try { await send("DELETE", `/doc/${doc.id}/reading`); } catch (err) { setStatus(err.message); return; }
     render({ keepScroll: true });
   });
   const figLink = document.getElementById("figures");
@@ -684,7 +684,7 @@ async function viewDoc(id, p) {
     const un = document.getElementById("unpromote");
     if (un) un.addEventListener("click", async (e) => {
       e.preventDefault();
-      await fetch(`/doc/${doc.id}/promote`, { method: "DELETE" });
+      try { await send("DELETE", `/doc/${doc.id}/promote`); } catch (err) { setStatus(err.message); return; }
       render();
     });
     document.getElementById("add-note").addEventListener("click", async (e) => {
@@ -750,15 +750,7 @@ function pagedBody(body, chunks, highlight, doc, maths, cites) {
   return { ensure, renderTo };
 }
 
-async function put(path, body) {
-  setStatus("…");
-  const res = await fetch(path, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  setStatus("");
-  if (res.status === 401) { askForToken(); throw new Error("access token required"); }
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.detail || res.statusText);
-  return data;
-}
+function put(path, body) { return send("PUT", path, body); }
 
 // The page editor: the current Markdown in a textarea, saved as a new
 // revision; the revision list with links to earlier texts. "edit page"

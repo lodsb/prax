@@ -38,10 +38,9 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
-from prax import config
 from prax.text import acronyms, references
 
-from .base import _reading, now
+from .base import _reading, archive_path, now
 from .documents import (
     assign_domains,
     dedupe_captures,
@@ -99,7 +98,7 @@ def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     ).fetchall()
     scanned = 0
     for n, r in enumerate(rows, 1):
-        path = config.archive_dir() / r["text_hash"][:2] / r["text_hash"]
+        path = archive_path(r["text_hash"])
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -722,7 +721,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     found: Counter[str] = Counter()
     unsure = 0
     for n, r in enumerate(rows, 1):
-        path = config.archive_dir() / r["text_hash"][:2] / r["text_hash"]
+        path = archive_path(r["text_hash"])
         try:
             with path.open(encoding="utf-8", errors="replace") as fh:
                 text = fh.read(language.SAMPLE)

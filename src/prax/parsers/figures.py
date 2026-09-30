@@ -35,6 +35,7 @@ import base64
 import hashlib
 import io
 import re
+from contextvars import ContextVar, Token
 from dataclasses import dataclass
 from typing import Any
 
@@ -344,7 +345,9 @@ def _page_span(lines: list[str], page: int) -> tuple[int | None, int | None]:
 # Where a figure that is not in the original comes from — a filed picture
 # (FILED): on the door, the archive; on a worker, the door's own figure
 # route. Set for the duration of a reading (``with fetching(fn)``).
-_fetch: list[Any] = [None]
+# A context variable: two readings in two threads (the door's request
+# threads, a worker's) each see their own.
+_FETCH: ContextVar[Any] = ContextVar("prax_figure_fetch", default=None)
 
 
 class fetching:
@@ -353,14 +356,14 @@ class fetching:
 
     def __init__(self, fn: Any) -> None:
         self.fn = fn
-        self.before: Any = None
+        self.token: Token[Any] | None = None
 
     def __enter__(self) -> None:
-        self.before = _fetch[0]
-        _fetch[0] = self.fn
+        self.token = _FETCH.set(self.fn)
 
     def __exit__(self, *exc: object) -> None:
-        _fetch[0] = self.before
+        if self.token is not None:
+            _FETCH.reset(self.token)
 
 
 def media_of(data: bytes) -> str:
@@ -394,10 +397,11 @@ def find(data: bytes, ref: str, *, filed: bool = False) -> tuple[bytes, str] | N
 
 
 def _fetched(ref: str) -> tuple[bytes, str] | None:
-    if _fetch[0] is None:
+    fetch = _FETCH.get()
+    if fetch is None:
         return None
     try:
-        return _fetch[0](ref)
+        return fetch(ref)
     except Exception:  # noqa: BLE001 - the door away is no figure
         return None
 

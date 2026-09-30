@@ -5,13 +5,12 @@ files the text and asks for what follows (``pipeline.follow_ups``)."""
 from __future__ import annotations
 
 import contextlib
-import os
 import threading
 import time
 from collections.abc import Callable, Iterator
 from typing import Any, Self
 
-from prax import models, parsers, store
+from prax import config, models, parsers, store
 from prax import steps as steps_mod
 from prax.capture import inbox, pipeline
 from prax.client import Door
@@ -48,7 +47,7 @@ def nothing_to_read(con: Any, doc_id: int, req: dict[str, Any]) -> bool:
         return False
     try:
         spec = models.resolve("vision")
-    except Exception:  # noqa: BLE001 - a config error is not this queue's
+    except models.ConfigError:  # the host's problem, not this queue's
         return False
     if spec is None:
         return False
@@ -522,12 +521,5 @@ def _mode(extractor: str, mode: str | None) -> Iterator[None]:
     if not mode or variable is None:
         yield
         return
-    before = os.environ.get(variable)
-    os.environ[variable] = mode
-    try:
+    with config.overriding(variable, mode):
         yield
-    finally:
-        if before is None:
-            os.environ.pop(variable, None)
-        else:
-            os.environ[variable] = before

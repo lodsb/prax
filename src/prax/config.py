@@ -19,7 +19,10 @@ client talks to), and the per-run switches ``PRAX_<STEP>``,
 
 from __future__ import annotations
 
+import contextlib
 import os
+from collections.abc import Iterator
+from contextvars import ContextVar
 from pathlib import Path
 from typing import Any
 
@@ -100,12 +103,33 @@ def document() -> dict[str, Any]:
     return data
 
 
+# What one call asks of a setting for itself (``overriding``): a reading
+# asked for "every page" says so for its extractor alone. A context
+# variable, so two readings in two threads never see each other's; an
+# environment variable set for one call was the whole process's.
+_OVERRIDES: ContextVar[dict[str, str] | None] = ContextVar(
+    "prax_overrides", default=None
+)
+
+
+@contextlib.contextmanager
+def overriding(env: str, value: str) -> Iterator[None]:
+    """``with config.overriding("PRAX_VISION_PAGES", "all"):`` — the
+    setting behind that variable reads ``value`` in this thread until the
+    block ends, above the environment and prax.yaml."""
+    token = _OVERRIDES.set({**(_OVERRIDES.get() or {}), env: value})
+    try:
+        yield
+    finally:
+        _OVERRIDES.reset(token)
+
+
 def setting(dotted: str, env: str | None = None, default: Any = None) -> Any:
-    """One setting: the environment variable when it is set (one run),
-    then ``prax.yaml`` by dotted path (``embeddings.variant``), then the
-    default."""
+    """One setting: what the call is overriding (``overriding``), then the
+    environment variable when it is set (one run), then ``prax.yaml`` by
+    dotted path (``embeddings.variant``), then the default."""
     if env:
-        raw = os.environ.get(env)
+        raw = (_OVERRIDES.get() or {}).get(env) or os.environ.get(env)
         if raw not in (None, ""):
             return raw
     node: Any = document()

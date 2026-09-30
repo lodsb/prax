@@ -8,7 +8,6 @@ import json
 import sqlite3
 from typing import Any
 
-from prax import config
 from prax.text import chunking, glyphs, language
 
 from ..base import (
@@ -17,10 +16,10 @@ from ..base import (
     _TOKEN,
     ASIDE_KINDS,
     _archive_bytes,
-    _archive_path,
     _read_archive,
     _reading,
     _serialized,
+    archive_path,
     now,
 )
 from .meta import _is_indexed, _refresh_document_field, get_meta
@@ -420,7 +419,7 @@ def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None
     if row is None:
         return None
     return {
-        "path": _archive_path(row["hash"]),
+        "path": archive_path(row["hash"]),
         "mime": row["mime"] or "application/octet-stream",
         "title": row["title"],
         "original_path": row["original_path"],
@@ -462,7 +461,7 @@ def suspect(
     if row["sensitivity"] is not None or _person_decided(meta):
         return None
     if text is None and row["text_hash"]:
-        path = config.archive_dir() / row["text_hash"][:2] / row["text_hash"]
+        path = archive_path(row["text_hash"])
         try:
             with path.open(encoding="utf-8", errors="replace") as fh:
                 text = fh.read(rules.head)

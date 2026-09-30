@@ -137,6 +137,42 @@ def test_the_parsers_parts_import_only_the_ones_before_them() -> None:
     assert not broken, "the parsers' order is broken: " + "; ".join(broken)
 
 
+def _top_level_parsers_imports(path: Path) -> set[str]:
+    """What a parsers module imports of ``prax.parsers`` at its top level
+    (not inside a function): ``parsers`` for the package itself, else the
+    module's name."""
+    out: set[str] = set()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.ImportFrom):
+            if node.level == 1:
+                out |= {node.module or a.name for a in node.names}
+            elif node.module == "prax.parsers":
+                out |= {a.name for a in node.names}
+            elif node.module == "prax":
+                out |= {a.name for a in node.names if a.name == "parsers"}
+    return out
+
+
+def test_a_parsers_helper_does_not_reach_back_into_the_parts() -> None:
+    """The modules outside the ``ORDER`` (figures, formulas, vision, …) are
+    helpers the parts call. One a part imports at its top may not import the
+    package or a part at its own top, or the two wait on each other."""
+    parsers = SRC / "parsers"
+    order = _declared_order(parsers / "__init__.py")
+    helpers = {p.stem for p in parsers.glob("*.py")} - set(order) - {"__init__"}
+    used = set()
+    for part in order:
+        used |= _top_level_parsers_imports(parsers / f"{part}.py") & helpers
+    assert used, "no part imports a helper at its top: the test reads nothing"
+    broken = [
+        f"{h}.py imports {x}"
+        for h in sorted(used)
+        for x in sorted(_top_level_parsers_imports(parsers / f"{h}.py"))
+        if x in order or x == "parsers" or x not in helpers
+    ]
+    assert not broken, "a parsers helper reaches back: " + "; ".join(broken)
+
+
 def test_the_mcp_server_is_a_thin_proxy() -> None:
     """Invariant 5. It makes one HTTP call per tool and must not reach
     into the store or the app — `tests/test_mcp.py` checks what a live
@@ -198,11 +234,26 @@ def test_the_text_package_stands_on_nothing_of_prax() -> None:
     assert not reaching, "prax.text imports prax at the top: " + "; ".join(reaching)
 
 
-PRAX_TABLES = (
-    "acronyms|chunk_embeddings|chunks|chunks_fts|document_embeddings|documents"
-    "|documents_fts|edges|entities|entity_candidates|entity_labels|jobs"
-    "|page_revisions|pages|readings|review_queue|spend"
+# every table a migration creates: derived, so a new one is covered the day
+# it is made (a hand-kept list had missed three by 2026-09-30)
+PRAX_TABLES = "|".join(
+    sorted(
+        {
+            m.group(1)
+            for sql in (SRC / "migrations").glob("*.sql")
+            for m in re.finditer(
+                r"CREATE\s+(?:VIRTUAL\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)",
+                sql.read_text(encoding="utf-8"),
+                re.IGNORECASE,
+            )
+        }
+    )
 )
+
+
+def test_the_table_list_is_read_from_the_migrations() -> None:
+    names = PRAX_TABLES.split("|")
+    assert {"documents", "edges", "tokens", "communities"} <= set(names)
 
 
 def test_no_module_outside_the_store_reads_prax_s_tables() -> None:
