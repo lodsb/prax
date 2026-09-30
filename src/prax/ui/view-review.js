@@ -137,6 +137,6 @@ async function viewReview(p) {
       });
     });
   } catch (err) {
-    list.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    showError(list, err);
   }
 }

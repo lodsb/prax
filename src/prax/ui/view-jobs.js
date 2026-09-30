@@ -211,7 +211,7 @@ function wirePasses(m) {
 async function viewJobs(p) {
   loading();
   let d, servers = [], readings = null, host = null, money = null;
-  try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { d = await api("/jobs", { limit: p.limit || 30 }); } catch (err) { showError(view, err); return; }
   try { servers = (await api("/models/servers")).servers; } catch (_) { /* the list is a nicety */ }
   try { readings = await api("/readings", { limit: 20 }); } catch (_) { /* so is this one */ }
   try { host = await api("/up"); } catch (_) { /* no supervisor here, or an older door */ }

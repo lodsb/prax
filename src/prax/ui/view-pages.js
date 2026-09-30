@@ -77,6 +77,6 @@ async function viewPages(p) {
       } catch (err) { setStatus(err.message); }
     }));
   } catch (err) {
-    list.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    showError(list, err);
   }
 }

@@ -52,7 +52,7 @@ async function viewBrowse(p) {
         <tbody>${rows}</tbody>
       </table>` + pager;
   } catch (err) {
-    list.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    showError(list, err);
   }
 }
 

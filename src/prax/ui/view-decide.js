@@ -45,7 +45,7 @@ async function viewDecide(p) {
   }
   const box = document.getElementById("decide-list");
   let res;
-  try { res = await api(list.path, { ...(list.params || {}), offset, limit }); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { res = await api(list.path, { ...(list.params || {}), offset, limit }); } catch (err) { showError(box, err); return; }
   const page = (o) => list.admin
     ? `#admin?${new URLSearchParams({ tab: p.list, offset: o })}`
     : `#review?${new URLSearchParams({ list: p.list, offset: o })}`;
@@ -121,7 +121,7 @@ async function viewCleanup(p) {
     <div id="cleanup-preview"></div><div id="cleanup-runs"></div>`;
   let info;
   try { info = await api("/cleanup"); } catch (err) {
-    document.getElementById("cleanup-rules").innerHTML = `<p class="error">${esc(err.message)}</p>`; return;
+    showError(document.getElementById("cleanup-rules"), err); return;
   }
   document.getElementById("cleanup-rules").innerHTML = cleanupRules(info.rules, p.rule, p.folder);
   document.getElementById("cleanup-runs").innerHTML = cleanupRuns(info.runs);
@@ -142,7 +142,7 @@ async function viewCleanup(p) {
   box.innerHTML = listPlaceholder("cleanup-preview");
   let res;
   try { res = await api(`/cleanup/${encodeURIComponent(p.rule)}`, { folder: p.folder }); } catch (err) {
-    box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return;
+    showError(box, err); return;
   }
   box.innerHTML = cleanupPreview(res);
   const go = box.querySelector("button[data-retire]");
@@ -177,7 +177,7 @@ async function viewGenres(p) {
   let vocab, res;
   try {
     [vocab, res] = await Promise.all([api("/genres"), api("/documents/genre-sample", { state, offset, limit })]);
-  } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  } catch (err) { showError(box, err); return; }
   document.getElementById("genre-count").textContent = ` — ${res.to_check} to check, ${res.labelled} labelled, ${res.skipped} set aside${state === "open" ? `, ${res.total.toLocaleString()} to go` : ""}`;
   const page = (o) => `#review?${new URLSearchParams({ list: "genre", state, offset: o })}`;
   const pager = `<div class="pager">${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}

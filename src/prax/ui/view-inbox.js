@@ -10,7 +10,7 @@
 async function viewInbox(p) {
   loading();
   let d;
-  try { d = await api("/inbox", { limit: p.limit || 50 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { d = await api("/inbox", { limit: p.limit || 50 }); } catch (err) { showError(view, err); return; }
   const domainOpts = d.modules.map((m) => `<label class="chip"><input type="checkbox" name="domain" value="${esc(m)}"> ${esc(m)}</label>`).join(" ");
   const row = (x) => `<tr>
       <td><a href="#doc/${x.doc_id}">${esc(x.title || "(untitled)")}</a>${x.source_url ? ` <a class="muted" href="${esc(x.source_url)}" target="_blank" rel="noopener" title="${esc(x.source_url)}">↗</a>` : ""}</td>

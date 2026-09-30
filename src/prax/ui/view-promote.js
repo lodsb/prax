@@ -10,7 +10,7 @@
 async function viewPromote(p) {
   loading();
   let d;
-  try { d = await api("/promote", { limit: p.limit || 30 }); } catch (err) { view.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { d = await api("/promote", { limit: p.limit || 30 }); } catch (err) { showError(view, err); return; }
   const pending = d.promoted.filter((x) => !x.done).length;
   const row = (x) => `<tr>
       <td><a href="#doc/${x.doc_id}">${esc(x.title || "(untitled)")}</a></td>

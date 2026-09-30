@@ -524,7 +524,7 @@ async function viewDoc(id, p) {
   try {
     [doc, chunks] = await Promise.all([api(`/get/${id}`, { max_chars: 0 }), api(`/doc/${id}/chunks`)]);
   } catch (err) {
-    view.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    showError(view, err);
     return;
   }
   const meta = doc.meta || {};
@@ -604,7 +604,7 @@ async function viewDoc(id, p) {
       if (sel) sel.addEventListener("change", () => loadContext(sel.value));
     } catch (err) {
       const aside = document.getElementById("doc-context");
-      if (aside) aside.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+      if (aside) showError(aside, err);
     }
   };
   loadContext(p.domain || "");
@@ -772,7 +772,7 @@ async function openEditor(slug) {
   const link = document.getElementById("page-edit");
   if (link) link.textContent = "close the editor";
   let page;
-  try { page = await api(`/page/${slug}`); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { page = await api(`/page/${slug}`); } catch (err) { showError(box, err); return; }
   box.innerHTML = `
     <div class="page-editor">
       <textarea id="page-text">${esc(page.text)}</textarea>

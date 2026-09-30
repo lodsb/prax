@@ -546,6 +546,6 @@ async function viewGraph(arg, p) {
     graph.merge(edges, start.key);
     graph.select(start.key);
   } catch (err) {
-    out.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    showError(out, err);
   }
 }

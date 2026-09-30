@@ -95,7 +95,7 @@ async function viewSearch(p) {
       </article>`;
     }).join("");
   } catch (err) {
-    results.innerHTML = `<p class="error">${esc(err.message)}</p>`;
+    showError(results, err);
   }
 }
 

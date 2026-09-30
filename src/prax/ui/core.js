@@ -116,6 +116,12 @@ async function send(method, path, body) {
   return data;
 }
 
+// A view's area when its request failed: the door's detail, in place of
+// what would have been shown.
+function showError(el, err) {
+  el.innerHTML = `<p class="error">${esc(err && err.message ? err.message : String(err))}</p>`;
+}
+
 // ------------------------------------------------------------------ auth
 // The door wants a bearer token (PRAX_TOKEN). The UI exchanges it once for
 // an HttpOnly session cookie via POST /session, so plain links (originals,

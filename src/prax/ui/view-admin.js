@@ -32,7 +32,7 @@ async function viewTokens() {
     <div id="token-secret"></div><div id="token-list">${listPlaceholder("token-list")}</div>`;
   const box = document.getElementById("token-list");
   let res;
-  try { res = await api("/tokens"); } catch (err) { box.innerHTML = `<p class="error">${esc(err.message)}</p>`; return; }
+  try { res = await api("/tokens"); } catch (err) { showError(box, err); return; }
   box.innerHTML = tokensTable(res);
   box.querySelectorAll("button[data-revoke]").forEach((b) => b.addEventListener("click", async () => {
     if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = `yes, revoke ${b.dataset.revoke}`; return; }
