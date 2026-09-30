@@ -112,17 +112,21 @@ def test_parse_and_titles_through_the_door(
     assert client.get("/work/parse").json()["items"] == []
     # the worker counted the pages on the way and the door kept the count
     assert store.get_meta(con, cap.doc_id)["pages"] >= 1
-    # titles: the file name is not a title; with no titles model the worker
-    # says so and the door remembers the try
+    # titles: the file name is not a title; a worker with no titles model
+    # asks for nothing and marks nothing, so the document waits for one that
+    # has a model (it used to be marked tried, and left out for good)
     batch = client.get("/work/titles").json()
     assert [i["doc_id"] for i in batch["items"]] == [cap.doc_id] and batch["items"][0][
         "why"
     ] == "filename"
     work._leases.clear()
     out = worker.run_once(d, steps=("titles",), log_=lambda t: None)
-    assert out["titles"].endswith("1 left")
-    assert store.get_meta(con, cap.doc_id)["titles_tried"]["why"] == "no titles model"
-    assert client.get("/work/titles").json()["items"] == []
+    assert "titles" not in out
+    assert "titles_tried" not in store.get_meta(con, cap.doc_id)
+    assert [i["doc_id"] for i in client.get("/work/titles").json()["items"]] == [
+        cap.doc_id
+    ]
+    work._leases.clear()
     # a retitle through the door
     rep = client.post(
         "/work/titles",

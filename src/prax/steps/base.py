@@ -208,8 +208,17 @@ class ModelStep(Step):
     def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
         raise NotImplementedError
 
+    def available(self, spec: models.ModelSpec | None) -> bool:
+        """Whether this worker can do the step: it has the step's model. A
+        worker without one asks for nothing, rather than taking a batch and
+        marking every document tried for want of a model it does not have
+        (a worker without the host's prax.yaml did that, 2026-09-30)."""
+        return spec is not None
+
     def run(self, p: Pass) -> str | None:
         spec = models.resolve(self.name)
+        if not self.available(spec):
+            return None  # the step is off on this worker: nothing to say
         refused = paid_refusal(self.name, spec)
         if refused:
             return refused

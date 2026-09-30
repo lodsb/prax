@@ -305,6 +305,9 @@ class Genres(ModelStep):
 
     name = "genres"
 
+    def available(self, spec: models.ModelSpec | None) -> bool:
+        return genres_on()  # the small labeller needs no model spec
+
     def hand_out(self, h: HandOut) -> dict[str, Any]:
         if not genres_on():
             return h.nothing()
