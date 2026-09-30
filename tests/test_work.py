@@ -280,7 +280,7 @@ def test_leases_expire(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> N
     inbox.ingest_upload(con, ("a note " * 60).encode(), filename="n.txt")
     assert len(client.get("/work/extract").json()["items"]) == 1
     assert client.get("/work/extract").json()["items"] == []
-    monkeypatch.setattr(work, "LEASE_SECONDS", 0)
+    monkeypatch.setattr(leases, "LEASE_SECONDS", 0)
     # a fresh hand-out after the lease ran out
     work._leases.clear()
     assert len(client.get("/work/extract").json()["items"]) == 1

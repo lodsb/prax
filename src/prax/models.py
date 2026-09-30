@@ -46,7 +46,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import urlparse
 
 from prax import config
@@ -377,6 +377,26 @@ def measure(runtime: Any, text: str) -> int | None:
         if isinstance(got, int) and got >= 0:
             return got
     return None
+
+
+class Runtime(Protocol):
+    """What a step needs from a model: ``OpenAIRuntime`` (llama-server
+    honours the grammar), ``ClaudeRuntime``, or a test double. The extractor,
+    the titles and ask are written against it."""
+
+    name: str
+
+    def chat(
+        self,
+        system: str,
+        user: str,
+        *,
+        grammar: str | None = None,
+        max_tokens: int = 2000,
+        temperature: float = 0.0,
+        repeat_penalty: float = 1.0,
+        stop: list[str] | None = None,
+    ) -> tuple[str, dict[str, int]]: ...
 
 
 class StubRuntime:

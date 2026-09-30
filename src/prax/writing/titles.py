@@ -27,7 +27,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from prax.graph import extraction
+from prax import models
 from prax.text import answers, markup
 
 HEAD_CHARS = 1500
@@ -440,7 +440,7 @@ def _same_title(a: str, b: str) -> bool:
 
 
 def guess_title(
-    runtime: extraction.Runtime,
+    runtime: models.Runtime,
     text: str,
     *,
     filename: str | None,

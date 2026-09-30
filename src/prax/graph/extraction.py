@@ -601,23 +601,7 @@ class StubExtractor:
         )
 
 
-class Runtime(Protocol):
-    """What ``LocalExtractor`` needs from a model: ``prax.models.OpenAIRuntime``
-    (llama-server honours the grammar) or a test double."""
-
-    name: str
-
-    def chat(
-        self,
-        system: str,
-        user: str,
-        *,
-        grammar: str | None = None,
-        max_tokens: int = 2000,
-        temperature: float = 0.0,
-        repeat_penalty: float = 1.0,
-        stop: list[str] | None = None,
-    ) -> tuple[str, dict[str, int]]: ...
+Runtime = models.Runtime  # where the runtimes that answer it live
 
 
 @dataclass
