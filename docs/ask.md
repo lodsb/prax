@@ -75,7 +75,12 @@ Every move is a read the service already performs for a person:
 `store.search`, `read_chunks`, `find_chunk`, `document_facts`,
 `traverse`, `similar_documents`. `maths:` is the one move that computes:
 it reads a formula chunk and runs the calculator in its own process.
-Nothing it does writes. A figure a vision model has read is
+Nothing it does writes. The answering call sees none of the steps, so
+the last six `maths:` results go to it in the bundle's note
+(`surf.answer_note`). Both answer prompts hold one rule for numbers. A
+number a passage prints is cited. A number the answer works out is the
+result the note gives. Any other number carries "(not checked)", with
+tools on or off (2026-10-02). A figure a vision model has read is
 text like any other. It comes back from a search or a reading with its
 description. A figure nobody has read stays out of the results.
 
