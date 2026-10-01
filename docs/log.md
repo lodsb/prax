@@ -2957,3 +2957,36 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   read-only: one hop 3–41 ms, two hops 34–276 ms (a two-hop walk from a
   paper of 236 edges, the slowest). The 1.6–7 ms reported earlier the
   same day were one-hop walks from `reverb` and `SuperCollider`.
+
+## 2026-10-01: the labeller again, `society` by rule, packs
+
+- **The labeller retrained** (`labeller-20261001T015042`) on the
+  person's 194 labels, 41 of them checks of the labeller's own on the
+  documents a domain rule placed (8 corrected), Claude's 93 and the
+  teacher's 1,429. A person's label counts as blind when nothing was
+  pre-ticked, so the test set grew from 30 to 68. On those 68: genres F1
+  0.395 -> 0.439, levels 0.564 -> 0.636, subjects 0.618 -> 0.633, groups
+  0.784 -> 0.748. It is the current run. The teacher's labels moved from
+  the session's scratch folder to `models/labeller/teacher-20260930.jsonl`.
+- **The genre tab's "decided a domain"**: the model's labels on the
+  documents a domain rule placed by them (about 2,800), least sure first.
+- **`society` by rule** (the user's options B and C): an argued subject
+  (philosophy, politics, sociology, economics, law) in an opinion genre
+  goes to `society`, in a paper to `research` and `society`, after the
+  Zotero rule. The subject group `society` was not used: it holds
+  education and psychology, 5,000 documents. A rule's `genre` and
+  `subject` take a list; `POST /domains/assign` applies the rules again
+  to named documents. 264 documents moved in the dry run; five in
+  `studio` (music theory, a Goethe reading, a press page) were left
+  there, and 259 moved: 241 to `society`, 18 to `research` and
+  `society`.
+- **A mistake on the way.** The edit to `prax.yaml` failed and the door
+  restarted with the old rules, which were then applied to the 259: 47
+  moved from `research` to other sets their newer labels matched. Applied
+  again with the right rules minutes later, they all ended where the dry
+  run said. None was extracted in between. The rule for next time: read
+  the rules the door loaded back before applying them.
+- **Step 4 dropped** (`meta.regions`): nothing reads it, its ids move
+  with each partition, and `store.regions_of` answers on read.
+- **Packs** (`docs/packs.md`, stage AD0): every domain is a pack, its
+  knowledge turned on by the library and its capability by the host.

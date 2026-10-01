@@ -24,8 +24,11 @@ nothing.
       - the labeller's mistakes on those documents, corrected on the
         Review page's genre tab, go back into its training
         (`scripts/train_labeller.py`);
-      - two decisions of the user: rules for `society`, and step 4
-        (`meta.regions`, a nightly pass that writes every document).
+      - two decisions of the user, taken 2026-10-01: rules for
+        `society` (the argued subjects in an essay, review or paper; 259
+        documents moved), and step 4 dropped (`meta.regions`: nothing
+        reads it, its ids move with each partition, and `regions_of`
+        answers on read).
 - [x] (2026-09-30: `ask.OPEN_SYSTEM`, `mode` on `POST /ask`, the Ask view's "open" box, `meta.page.open`; docs/ask.md "Grounded and open") **AB. An open mode for `ask`** (below, under "The UI and the
       agent"; experimental). About a day with the tests.
 - [x] (2026-09-30: `probeShown` and the `pdf`/`pdf-frame` routes; `POST /import/github`, `github.one`) **AC. Two extension fixes.** A PDF viewer's tab is sent as the
@@ -37,7 +40,10 @@ nothing.
       models and extra in one package under `src/prax/packs/`; first the registries, then
       maths as the first pack) **AD0. Packs.** The user, 2026-10-01: "should we have
       something like modules for these domain/infrastructure fields?" Packs live in
-      the repository.
+      the repository, and every domain is one: its knowledge (module, sameness
+      cases, cues, suggested rules) turned on by the library, its capability
+      (readers, kinds, steps, tools, models, extra) by the host. First step: the
+      registries and the eight existing modules moved into packs.
 - [ ] (2026-09-30: planned, `docs/symbolic-maths.md`: 17,417 formulas in 243 documents; SymPy's ANTLR parser reads 81% and about 36% plausibly faithfully; three steps and five operations; the build waits on the user's choices) **AD. Symbolic maths, planned as a stage** (niggles.txt,
       2026-09-30). A display equation is a `formula` chunk with its LaTeX
       in `data` since marker. SymPy's LaTeX parser can turn it into an
@@ -449,8 +455,10 @@ Built only when measured to be needed.
    filters by genre and subject, a level naming everything under it. The
    document field waits: it changes what search ranks, so it goes in
    with `scripts/eval_retrieval.py` before and after.)
-4. `meta.regions` from the communities pass, and the vector vote for
-   documents without facts.
+4. ~~`meta.regions` from the communities pass, and the vector vote for
+   documents without facts.~~ Dropped by the user, 2026-10-01: nothing
+   reads it, and a document's region is computed on read when a view
+   needs it (`store.regions_of`).
 5. The `genre` and `facts` match keys, a dry run over the 2,748
    documents without a domain, then the user's word.
 6. The `society` decision, measured.

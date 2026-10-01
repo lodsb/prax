@@ -1,28 +1,40 @@
 # Packs
 
-A pack is everything one field of knowledge brings to prax, in one
-package. It holds:
+A pack is one domain of knowledge, in one package: what the domain's
+things are, and what prax needs to read, keep and use them. Every domain
+is a pack (the user, 2026-10-01). Some bring only knowledge: society,
+kitchen, studio. Others bring code as well: maths, music.
 
-- the ontology module that says what the field's things are;
-- the readers that turn its files into text and chunks, and its chunk
-  kinds;
-- its worker steps;
-- the tools `ask` and the surfer may call;
-- its models and its dependencies.
+Packs live in this repository, under `src/prax/packs/` (the user,
+2026-09-30). This document is the contract. Nothing in it is built yet.
 
-Maths is the first (stage AD). Music and audio are the next
-candidates. The user decided on 2026-09-30 that packs live in this
-repository, under `src/prax/packs/`.
+## Two halves
 
-This document is the contract. Nothing in it is built yet.
+A pack has a knowledge half and a capability half, and two owners turn
+them on:
+
+| half | what it holds | turned on by |
+|---|---|---|
+| knowledge | the ontology module(s), its cases of "the same thing", its typing cues, the domain rules it suggests, its eval questions | the library |
+| capability | readers, chunk kinds, worker steps, tools for `ask` and the surfer, models, the `pyproject` extra | the host, `packs:` in `prax.yaml` |
+
+The knowledge is the library's because every host must compose the same
+ontology. The version string is stamped on every edge (invariant 9). A
+door and a worker that composed different ones would stamp different
+versions for one document. The capability is the host's because the
+board and the desktop run different things.
 
 ## Why
 
-Today a field's parts are spread over lists the core edits by hand:
+A domain's parts are spread today over files and lists the core edits
+by hand:
 
-| part | where it is named now |
+| part | where it is now |
 |---|---|
-| its things and relations | `ontology/<module>.yaml`, found by the loader |
+| its things and relations | `ontology/<module>.yaml` |
+| what "the same thing" means for its types | the `modules:` section of `ontology/sameness.yaml` |
+| the words that type its entities | `by_type` in `ontology/lexicon.yaml` |
+| the rules that send documents to it | `domains:` in `prax.yaml` |
 | a reader of a file type | `prax.parsers.REGISTRY` |
 | a reading asked for later | `store.READINGS`, `steps.READING_STEPS` |
 | a kind of chunk | `prax.text.chunking.KINDS`, `store.ASIDE_KINDS` |
@@ -33,26 +45,46 @@ Today a field's parts are spread over lists the core edits by hand:
 
 Maths needs most of these rows: a module, a reading, the `formula`
 kind's data, a step, a tool and SymPy. It would touch eight places, and
-nothing would say they belong together. A pack is the place that
-says so, and the lists become registries that read it.
+nothing would say they belong together. A pack is the place that says
+so, and the lists become registries that read it.
 
-Kitchen, studio, workshop and craft stay plain ontology modules: they
-have no readers, steps or tools of their own.
+## What stays in the core
+
+Only what every domain stands on:
+
+- the machinery: the ontology loader, the rule engine
+  (`store.assign_domains`), the sameness and lexicon mechanisms, the
+  registries;
+- `core.yaml`: person, organization, document, place, event, work,
+  concept, tool, and the relations every document shares;
+- `genres.yaml` and `subjects.yaml`: what any document is and what it is
+  about. A rule reads them to send a document to a pack, so they belong
+  to none;
+- the general cues of `lexicon.yaml`: what an organization is, what is
+  not a name;
+- the rules this library applies, in `prax.yaml`. A pack suggests rules,
+  and a person takes them after a dry run (`POST /domains/dry-run`).
 
 ## The layout
 
 ```
 src/prax/packs/
   __init__.py          # PACKS: the manifests, and nothing else
-  maths/
-    __init__.py        # MANIFEST: names only, imports nothing
-    maths.yaml         # the ontology module
+  society/             # knowledge only
+    __init__.py        # MANIFEST
+    society.yaml       # the ontology module
+    sameness.yaml      # its cases of "the same thing"
+    lexicon.yaml       # its typing cues
+    rules.yaml         # the domain rules it suggests
+  maths/               # knowledge and capability
+    __init__.py
+    maths.yaml
     parse.py           # readers and the step's door and worker halves
     tools.py           # the surfer's tool and its sandbox
 ```
 
-The package's `__init__.py` holds `MANIFEST` and imports nothing. The
-thin client reads step names as cheaply as the door does (the rule of
+A pack's `__init__.py` holds `MANIFEST` and imports nothing. The thin
+client reads step names as cheaply as the door does (the rule of
 `prax.steps`), so a pack's names must be readable without its
 dependencies. The code a manifest names is imported when a step, reader
 or tool is first used, as `steps._HOMES` does for the core steps.
@@ -62,7 +94,12 @@ or tool is first used, as `steps._HOMES` does for the core steps.
 ```python
 MANIFEST = Pack(
     name="maths",
+    # knowledge: always composed
     ontology=("maths.yaml",),
+    sameness="sameness.yaml",
+    lexicon="lexicon.yaml",
+    rules="rules.yaml",
+    # capability: on a host that names the pack
     extractors=("prax.packs.maths.parse:EXTRACTORS",),
     readings={"sympy": "formulas"},  # reading -> the step whose model it runs
     kinds=(),  # new chunk kinds; maths adds data to `formula`
@@ -76,11 +113,12 @@ MANIFEST = Pack(
 ```
 
 `Pack` is a frozen dataclass in `prax.packs`. Every field but `name` is
-optional. The strings are import paths, resolved on first use.
+optional. The strings are import paths or files beside the manifest,
+resolved on first use.
 
 ## What a host turns on
 
-`prax.yaml` names the packs this host runs:
+`prax.yaml` names the packs whose capability this host runs:
 
 ```yaml
 packs: [maths]
@@ -93,23 +131,25 @@ its own section name (`settings`) to the known ones, so a setting is
 read as any other (`config.setting("maths.timeout_s", ...)`). A matching
 `PRAX_*` variable overrides it for one run.
 
-A pack's runtime parts follow `packs:`: its readers, readings, steps
-and tools exist on a host that names it and on no other. The door on the
-board names none and serves the chunks the desktop's worker wrote.
+A pack's readers, readings, steps and tools exist on a host that names
+it and on no other. The door on the board names none and serves the
+chunks the desktop's worker wrote. A pack named in `packs:` whose extra
+is not installed is a configuration error at start. The message names
+the pack, its extra and the command that installs it.
 
-**The ontology does not follow `packs:`.** Every host must compose the
-same ontology. The version string is stamped on every edge
-(invariant 9). A door and a worker that composed different ones would
-stamp different versions for one document. So every pack's
-ontology module in the repository is always loaded. Adding a pack's
-module is a version bump like any module's. The documents with no domain
-set are read against every module, so they are extracted again.
-Documents assigned to other modules are not. That was the cost of
-`computing` and `society` too.
+## What the library turns on
 
-A pack named in `packs:` whose extra is not installed is a configuration
-error at start. The message names the pack, its extra and the command
-that installs it.
+Every pack's knowledge in the repository is composed, on every host.
+Adding a pack's module is a version bump like any module's. The
+documents with no domain set are read against every module, so they are
+extracted again. Documents assigned to other modules are not. That was
+the cost of `computing` and `society` too.
+
+A library that leaves a domain out is not possible yet. It would need a
+library setting kept in the database, not in `prax.yaml`, because both
+hosts must agree. Leaving a pack out of a library that used it would be
+a data migration, since its typed entities need a fallback type. It is
+built when a library needs it.
 
 ## What a pack may not do
 
@@ -131,6 +171,8 @@ The invariants hold for a pack as for the core. Concretely:
   first (below).
 - **Its ontology module follows invariant 9:** unique names across
   modules, `naming:` on its types, a version bump for any growth.
+- **Its rules are suggestions.** Nothing applies a pack's `rules.yaml`
+  on its own.
 
 `tests/test_invariants.py` gains two checks: no module under
 `prax/packs/` opens a database (`sqlite3.connect`, `store.connect`), and
@@ -138,12 +180,15 @@ every manifest imports nothing.
 
 ## How the core finds them
 
-Each hand-edited list becomes the core's entries plus those of the packs
-this host runs. The list stays where it is, so a caller does not move:
+Each hand-edited list becomes the core's entries plus the packs'. The
+knowledge lists read every pack, the capability lists the packs this
+host runs. The list stays where it is, so a caller does not move:
 
 | registry | reads |
 |---|---|
-| `ontology.load_dir` | `ontology/` and every pack's `ontology` files |
+| `ontology.load_dir` | `ontology/core.yaml` and every pack's `ontology` |
+| `ontology.sameness()` | the core's cases and every pack's `sameness` |
+| `ontology.lexicon()` | the core's cues and every pack's `lexicon` |
 | `parsers.REGISTRY` | the core's extractors, then the packs' |
 | `store.READINGS`, `steps.READING_STEPS` | the packs' `readings` |
 | `chunking.KINDS`, `store.ASIDE_KINDS` | the packs' `kinds`, `aside` |
@@ -153,6 +198,21 @@ this host runs. The list stays where it is, so a caller does not move:
 
 A pack's step name, reading name, kind or tool name may not repeat a
 core one or another pack's. The registry refuses the duplicate at start.
+
+## The existing modules
+
+`research`, `studio`, `electronics`, `computing`, `craft`, `kitchen`,
+`workshop` and `society` move into packs of their own. Each takes its
+module file, its section of `sameness.yaml` and its cues of
+`lexicon.yaml`. The rules of `prax.yaml` that name it become its
+`rules.yaml`. Modules built on each
+other may share a pack: `craft` with `kitchen` and `workshop`, `studio`
+with `electronics`.
+
+The version string is built from module names and versions
+(`core3+computing2+…`). A move changes neither, so no edge changes and
+nothing is extracted again. The proof is the version string before and
+after, and the full test suite.
 
 ## The packs in view
 
@@ -177,10 +237,11 @@ on its own before an audio pack asks for it.
 
 ## The order of the work
 
-1. **The registries** (about a day): `prax.packs` with `Pack` and
-   `PACKS`, the lists above reading it, `packs:` in the config, and the
-   two invariant checks. No pack yet. The tests prove the core behaves
-   the same with none.
+1. **The registries and the existing modules** (about two days).
+   `prax.packs` gets `Pack` and `PACKS`, and the lists above read it.
+   `packs:` joins the config, with the two invariant checks. The eight
+   modules move into packs with their sameness cases, cues and rules.
+   The tests and the unchanged version string prove nothing moved.
 2. **The maths pack**, as stage AD plans it, once the user has chosen
    its operations.
 3. **music**, after the library holds symbolic scores or the user sends
