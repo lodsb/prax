@@ -21,6 +21,7 @@ import random
 import re
 import sys
 from collections.abc import Callable
+from tokenize import TokenError
 from typing import Any
 
 import sympy
@@ -365,17 +366,31 @@ PLAIN = re.compile(r"^[A-Za-z0-9_ +\-*/^(),.=]*$")
 # the names plain notation knows: functions and constants, nothing else of
 # SymPy. Every other name is a symbol, so beta, gamma, N or S in a formula
 # are quantities and not SymPy's beta function or its N() (2026-10-01: a
-# model's `beta` was read as the function and the step failed)
+# model's `beta` was read as the function and the step failed). I and E are
+# symbols too: in these papers I is a current far more often than the
+# imaginary unit (write sqrt(-1)), and Euler's number is exp(1) or e**x
 PLAIN_NAMES = (  # noqa: SIM905 - a list of words reads as one
     "exp log ln sqrt cbrt root sin cos tan cot sec csc asin acos atan atan2"
     " sinh cosh tanh coth sech csch asinh acosh atanh Abs sign floor ceiling"
     " Min Max polylog LambertW erf erfc Heaviside DiracDelta Piecewise diff"
-    " integrate pi E I oo Rational"
+    " integrate pi oo Rational"
 ).split()
 EULER = re.compile(r"(?<![A-Za-z0-9_])e\s*\*\*")
+# a number with an SI prefix inside a formula (10k * 1u): its value in
+# parentheses. A prefix only right after a number, and before no letter
+SI_NUMBER = re.compile(
+    r"(?<![\w.])(\d+(?:\.\d+)?(?:[eE][-+]?\d+)?)([GMkmunp])(?![\w(])"
+)
+SI_FACTOR = {"G": "1e9", "M": "1e6", "k": "1e3", "m": "1e-3", "u": "1e-6"}
+SI_FACTOR.update({"n": "1e-9", "p": "1e-12"})
+# one equals sign of an equation, written = or == (a model writes both)
+EQUALS = re.compile(r"\s*==?\s*")
 SAFE_GLOBALS: dict[str, Any] = {"__builtins__": {}}
 for _n in PLAIN_NAMES:
     SAFE_GLOBALS[_n] = getattr(sympy, _n) if _n != "ln" else sympy.log
+SAFE_GLOBALS["Li2"] = sympy.Lambda(
+    sympy.Symbol("z"), sympy.polylog(2, sympy.Symbol("z"))
+)
 # what the parser itself writes (evaluate=False builds Add, Mul, Pow)
 SAFE_GLOBALS.update(
     Symbol=sympy.Symbol,
@@ -391,7 +406,8 @@ def _plain(formula: str) -> Any:
     text = formula.replace("^", "**")
     # e raised to a power is Euler's number: a model writes e**x for exp(x)
     # (2026-10-01: e read as a symbol made tanh's two forms "not the same")
-    text = EULER.sub("E**", text)
+    text = EULER.sub("exp(1)**", text)
+    text = SI_NUMBER.sub(lambda m: f"({m.group(1)}*{SI_FACTOR[m.group(2)]})", text)
     if (
         not PLAIN.match(formula)
         or "__" in formula
@@ -401,15 +417,24 @@ def _plain(formula: str) -> Any:
             "plain notation takes names, numbers, + - * / ** ^ ( ) , = only"
         )
     if "=" in text:
-        left, _, right = text.partition("=")
-        return sympy.Eq(_plain(left), _plain(right))
-    return parse_expr(
-        text,
-        local_dict={},
-        global_dict=dict(SAFE_GLOBALS),
-        transformations=standard_transformations,
-        evaluate=False,
-    )
+        sides = EQUALS.split(text)
+        if len(sides) != 2 or not all(x.strip() for x in sides):
+            raise ValueError("an equation has two sides and one = between them")
+        return sympy.Eq(_plain(sides[0]), _plain(sides[1]))
+    try:
+        return parse_expr(
+            text,
+            local_dict={},
+            global_dict=dict(SAFE_GLOBALS),
+            transformations=standard_transformations,
+            evaluate=False,
+        )
+    except (SyntaxError, TokenError) as exc:
+        # Python's own words ("invalid syntax, line 1") tell a model nothing
+        raise ValueError(
+            f"plain notation could not read {formula!r}: check the parentheses"
+            " and write 2*x for 2x"
+        ) from exc
 
 
 def read(formula: str, notation: str = "latex") -> tuple[Any, Reading | None]:

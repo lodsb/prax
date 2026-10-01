@@ -199,3 +199,27 @@ def test_e_to_a_power_is_eulers_number_and_any_step_takes_values() -> None:
         args={"values": {"x": "(V_2 - V_1)/V_T"}},
     )
     assert got["same"] is True
+
+
+def test_plain_notation_as_a_model_writes_it() -> None:
+    """An equation with ==, a prefixed number inside a formula, Li2, and I
+    as a current rather than the imaginary unit."""
+    got = ask(op="solve", a="I == I1 + I1*exp(u)", notation="plain", args={"var": "I1"})
+    assert got["result"][0]["text"] == "I/(exp(u) + 1)"
+    assert "I" in got["read"]["a"]["symbols"]
+    got = ask(op="evaluate", a="10k * 1u", notation="plain")
+    assert float(got["result"]["text"]) == pytest.approx(0.01)
+    got = ask(op="evaluate", a="Li2(0.5)", notation="plain")
+    assert float(got["result"]["text"]) == pytest.approx(0.5822405265)
+    got = ask(op="same", a="diff(x*log(x) - x, x)", b="log(x)", notation="plain")
+    assert got["same"] is True
+    out = subprocess.run(
+        [str(PYTHON), str(RUNTIME)],
+        input=json.dumps({"op": "read", "a": "(x + 1", "notation": "plain"}),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=True,
+    )
+    assert "check the parentheses" in json.loads(out.stdout)["error"]

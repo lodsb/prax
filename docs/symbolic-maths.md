@@ -324,12 +324,26 @@ What the tool did, case by case:
   - "given … and …" for definitions;
   - a parenthesis the model left open.
 
-Next, from these:
-- accept `$…$`, a trailing `x=…` without `with`, `Li2`, an equation for
-  `solve` and `simplify`, and an SI value in a formula;
-- tell the model to check a derived formula with `same` against what it
-  must equal, not with `diff` alone;
-- measure again, twice per row, so the spread between runs is known.
+The fixes that followed (2026-10-01, the third round):
+- `tool.parse_step` drops `$` and `$$`, takes trailing `x=…` values
+  without `with` (for `same`, `chain`, `evaluate`, `substitute`), splits
+  on `==` with or without spaces, and turns `simplify a == b` (also
+  `expand`, `factor`, `together`) into `same`. "given … and …" is refused
+  with how to write it.
+- Plain notation reads an equation written with `=` or `==`, a prefixed
+  number inside a formula (`10k * 1u`), and `Li2(z)` as
+  `polylog(2, z)`. A formula it cannot parse says to check the
+  parentheses, not Python's "invalid syntax".
+- `I` and `E` are no longer SymPy's imaginary unit and Euler's number in
+  plain notation. In these papers `I` is a current: the solve of
+  `I == I1 + I1*exp(u)` gave the imaginary unit before. Euler's number
+  is `exp(1)` or `e**x`.
+- The prompt says to check with `same` against what a result must equal
+  (`same diff(F, x) == f` for an antiderivative), and to write the
+  formula a number comes from before evaluating it.
+
+Still to do: measure again, twice per row, so the spread between runs
+is known.
 
 ## What the user decided (2026-10-01)
 

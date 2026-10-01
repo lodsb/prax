@@ -44,6 +44,13 @@ OPERATIONS = (
 WITH_VAR = ("solve", "diff", "integrate", "series", "limit", "apart")
 CHUNK_REF = re.compile(r"^chunk:(\d+)$")
 PASSAGE = re.compile(r"\[(\d+)\]")
+# what a model writes around and between formulas, read as meant
+# (the maths eval of 2026-10-01: 15 of 39 calls failed on these)
+MATH_DELIMS = re.compile(r"\${1,2}")  # $...$ and $$...$$ around a formula
+EQ_SPLIT = re.compile(r"\s*==\s*")
+TO_SAME = ("simplify", "expand", "factor", "together")
+NAME_VALUE = r"[A-Za-z_]\w*\s*=\s*[^\s,=]+"
+TRAILING_VALUES = re.compile(rf"\s+({NAME_VALUE}(?:\s*,\s*{NAME_VALUE})*)\s*$")
 # a model writes x**2 or exp(x) as often as LaTeX: formulas without a
 # backslash and with a * or a named function call are plain notation
 PLAINLY = re.compile(
@@ -154,10 +161,25 @@ def parse_step(arg: str) -> dict[str, Any]:
     op = op.lower()
     if op not in OPERATIONS:
         raise ValueError(f"maths takes one of {', '.join(OPERATIONS)} first")
+    rest = MATH_DELIMS.sub("", rest)  # a model wraps formulas in $...$
+    if " given " in rest:
+        raise ValueError(
+            "write given values as 'with x=1, y=2' at the end; an equation to"
+            " use is a formula of its own (substitute, solve)"
+        )
+    if op in TO_SAME and EQ_SPLIT.search(rest):
+        op = "same"  # simplify a == b: what is asked is whether they are equal
     request: dict[str, Any] = {"op": op}
     args: dict[str, Any] = {}
+    given = ""
     if " with " in rest:  # given values, for any operation
         rest, _, given = rest.partition(" with ")
+    elif op in ("same", "chain", "evaluate", "substitute"):
+        # the values written without "with" (same a == b x=1.0)
+        m = TRAILING_VALUES.search(rest)
+        if m:
+            rest, given = rest[: m.start()], m.group(1)
+    if given:
         values = {}
         for pair in given.split(","):
             name, eq, value = pair.partition("=")
@@ -174,12 +196,12 @@ def parse_step(arg: str) -> dict[str, Any]:
         lang, _, rest = rest.partition(" ")
         args["language"] = lang
     if op == "same":
-        a, sep, b = rest.partition(" == ")
-        if not sep:
+        sides = EQ_SPLIT.split(rest, maxsplit=1)
+        if len(sides) != 2:
             raise ValueError("same takes two formulas: same <a> == <b>")
-        request["a"], request["b"] = a.strip(), b.strip()
+        request["a"], request["b"] = sides[0].strip(), sides[1].strip()
     elif op == "chain":
-        steps = [f.strip() for f in rest.split(" == ")]
+        steps = [f.strip() for f in EQ_SPLIT.split(rest)]
         if len(steps) < 2 or not all(steps):
             raise ValueError("chain takes the steps of a derivation: chain a == b == c")
         request["a"], request["steps"] = steps[0], steps
@@ -196,6 +218,9 @@ def parse_step(arg: str) -> dict[str, Any]:
         and any(PLAINLY.search(f) for f in own)
     ):
         request["notation"] = "plain"
+    elif op not in ("same", "chain"):
+        # an equation in LaTeX has one =; a model writes == as in plain
+        request["a"] = EQ_SPLIT.sub(" = ", request["a"])
     if args:
         request["args"] = args
     return request

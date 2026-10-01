@@ -24,9 +24,13 @@ MANIFEST = Pack(
             "    Write exp(x) for e to the x. Do the maths here,\n"
             "    not in your head: check a formula you derive, a step you take\n"
             "    and a number you give before you answer. The answer is given\n"
-            "    the results. When maths says not the same, believe it and look\n"
-            "    again: a passage's formula may be extracted wrongly, or a sign\n"
-            "    or factor of yours may be off."
+            "    the results. Check with same, against what it must equal: an\n"
+            "    antiderivative F of f is same diff(F, x) == f, never diff alone.\n"
+            "    Write the formula a number comes from, then evaluate it with\n"
+            "    the given values (evaluate 2*pi*f/fs with f=1k, fs=48k).\n"
+            "    When maths says not the same, believe it and look again: a\n"
+            "    passage's formula may be extracted wrongly, or a sign or\n"
+            "    factor of yours may be off."
         )
     },
     settings="maths",

@@ -216,3 +216,18 @@ def test_any_step_may_give_values() -> None:
     got = tool.parse_step("same 1/(1 + exp(x)) == 0.5*(1 - tanh(x/2)) with x=V/V_T")
     assert got["b"] == "0.5*(1 - tanh(x/2))"
     assert got["args"]["values"] == {"x": "V/V_T"}
+
+
+def test_what_a_model_writes_around_a_formula_is_read_as_meant() -> None:
+    """The second maths eval (2026-10-01): 15 of 39 calls failed on these."""
+    got = tool.parse_step("same $exp(x)/2$ == $exp(x)*0.5$")
+    assert (got["a"], got["b"]) == ("exp(x)/2", "exp(x)*0.5")
+    got = tool.parse_step("same tanh(x) == (exp(2*x) - 1)/(exp(2*x) + 1) x=1.0")
+    assert got["args"]["values"] == {"x": "1.0"}
+    assert got["b"] == "(exp(2*x) - 1)/(exp(2*x) + 1)"
+    assert tool.parse_step("simplify w/(2*Q) == d/2")["op"] == "same"
+    assert tool.parse_step("same a==b")["b"] == "b"
+    got = tool.parse_step("solve I1 I == I1 + I1*exp(u)")
+    assert got["a"] == "I == I1 + I1*exp(u)" and got["notation"] == "plain"
+    with pytest.raises(ValueError, match="with x=1"):
+        tool.parse_step("solve x a == b given c == d and e == f")
