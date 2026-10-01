@@ -84,7 +84,9 @@ revisit threshold, under "Decision thresholds" below.
    measurement scripts (`eval_retrieval.py`, `eval_references.py`,
    `eval_confidence.py`, `eval_genres.py`, `eval_regions.py`, `eval_latex.py`,
    `compare_extractors.py`, `bench_extractor.py`,
-   `make_zotero_fixture.py`; the eval scripts read-only)
+   `make_zotero_fixture.py`, and `check_private.py`, the pre-commit guard
+   against the owner's private data; the eval scripts and the guard
+   read-only)
    still open the file.
    WAL, a 30 s busy timeout and a retry with rollback in
    `store._serialized` are the safety net for those, not a mechanism to

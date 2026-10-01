@@ -340,11 +340,11 @@ test("tokensTable, tokenSecret, privateRules: the admin page", () => {
   assert.match(secret, /shown this once/);
   assert.match(secret, /<pre>prax_abc<\/pre>/);
   const rules = lib.privateRules({ strong: ["kontoauszug"], weak: [["rechnung", "invoice"]], weak_needed: 2, head: 5000,
-    added: { strong: [], weak: [], paths: ["/coredata/verwaltung/"], names: 2 }, documents: { suspected: 404, personal: 3, released: 1 } });
+    added: { strong: [], weak: [], paths: ["/archive/private-example"], names: 2 }, documents: { suspected: 404, personal: 3, released: 1 } });
   assert.match(rules, /404 suspected, 3 personal, 1 released by you/);
   assert.match(rules, /rechnung \/ invoice/);
   assert.match(rules, /2 names \(a weak cue each\)/);
-  assert.match(rules, /everything under \/coredata\/verwaltung\//);
+  assert.match(rules, /everything under \/archive\/private-example/);
 });
 
 test("regionLine: where the search hits live, above them", () => {

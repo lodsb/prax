@@ -1,0 +1,5 @@
+# files scripts/check_private.py lets hold a value of the owner's: paths only
+# the open-access paper of the Zotero fixture prints its author's address (attribution)
+tests/fixtures/zotero/storage/5QSJDXUQ/.zotero-ft-cache
+tests/fixtures/zotero/storage/PTHEK9QS/.zotero-ft-cache
+tests/fixtures/zotero/storage/R89PCW52/.zotero-ft-cache
