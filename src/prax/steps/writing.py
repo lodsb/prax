@@ -329,7 +329,16 @@ class Genres(ModelStep):
                 ),
             }
 
-        return h.documents(store.genres_needed(h.con, limit=500), build)
+        # the small labeller's newer run relabels what an older run labelled
+        current = None
+        if genres_method() == "small":
+            from prax.ml import labeller
+
+            model = labeller.current()
+            current = model.name if model is not None else None
+        return h.documents(
+            store.genres_needed(h.con, limit=500, current=current), build
+        )
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         run = t.run()

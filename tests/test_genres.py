@@ -445,3 +445,23 @@ def test_a_rule_may_name_any_of_several_labels(con: sqlite3.Connection) -> None:
     store.assign_domains(con, rules)
     assert store.get_meta(con, essay)["domains"] == ["society"]
     assert store.get_meta(con, paper)["domains"] == ["research"]
+
+
+def test_a_newer_labeller_run_makes_the_older_ones_labels_stale(
+    con: sqlite3.Connection,
+) -> None:
+    """``genres_needed`` with the current run hands out, after the open
+    documents, those an older labeller run labelled; never a person's or
+    another model's, and not one the new run tried without result."""
+    old, new = "labeller:run-1", "labeller:run-2"
+    ids = [_doc(con, f"Document {i}.") for i in range(5)]
+    store.set_genres(con, ids[0], ["essay"], by=old)
+    store.set_genres(con, ids[1], ["essay"], by=new)
+    store.set_genres(con, ids[2], ["essay"])  # a person's
+    store.set_genres(con, ids[3], ["essay"], by="claude")
+    store.set_genres(con, ids[4], ["essay"], by=old)
+    store.genres_tried(con, ids[4], "pass-1", "no genre kept")
+    assert store.genres_needed(con, limit=50) == []
+    assert store.genres_needed(con, limit=50, current=new) == [ids[0]]
+    store.set_genres(con, ids[0], ["paper"], by=new)
+    assert store.genres_needed(con, limit=50, current=new) == []

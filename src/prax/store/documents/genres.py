@@ -227,16 +227,37 @@ def genre_training(
 
 
 @_reading
-def genres_needed(con: sqlite3.Connection, *, limit: int = 50) -> list[int]:
+def genres_needed(
+    con: sqlite3.Connection, *, limit: int = 50, current: str | None = None
+) -> list[int]:
     """The documents the genres step labels next: the open ones
     (``_GENRE_OPEN``) a pass has not tried without result, the newest
-    first, so a capture is labelled on the night it arrives."""
+    first, so a capture is labelled on the night it arrives. With
+    ``current`` (the labeller run in use, ``labeller:<run>``), then the
+    documents an older labeller run labelled: a new run makes its
+    predecessor's labels stale. A person's labels and another model's
+    are never taken."""
+    limit = max(1, limit)
     rows = con.execute(
         "SELECT id" + _GENRE_OPEN + " AND json_extract(meta, '$.genres_tried') IS NULL"
         " ORDER BY id DESC LIMIT ?",
-        (max(1, limit),),
+        (limit,),
     ).fetchall()
-    return [int(r[0]) for r in rows]
+    out = [int(r[0]) for r in rows]
+    if current and len(out) < limit:
+        stale = con.execute(
+            "SELECT id FROM documents"
+            " WHERE json_extract(meta, '$.genres_by') LIKE 'labeller:%'"
+            " AND json_extract(meta, '$.genres_by') != ?"
+            " AND json_extract(meta, '$.retired') IS NULL"
+            # tried by the new run and nothing kept: the old labels stay,
+            # and it is not handed out again (set_genres clears the mark)
+            " AND json_extract(meta, '$.genres_tried') IS NULL"
+            " ORDER BY id DESC LIMIT ?",
+            (current, limit - len(out)),
+        ).fetchall()
+        out += [int(r[0]) for r in stale]
+    return out
 
 
 @_serialized
