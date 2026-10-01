@@ -440,3 +440,24 @@ def test_which_documents_belong_to_a_domain_is_said_once(
     assert members(["research"], False) == set()
     assert members([], True) == {loose}
     assert members([], False) == set()
+
+
+def test_the_rules_are_applied_again_to_named_documents(
+    client: TestClient, three_modules: Path
+) -> None:
+    """``POST /domains/assign`` runs prax.yaml's rules over the named
+    documents, over a set a rule gave them, and leaves a person's set."""
+
+    def note(i: int) -> int:
+        body = {"text": f"note {i} " * 40, "title": f"N{i}"}
+        return int(client.post("/ingest", json=body).json()["doc_id"])
+
+    ids = [note(i) for i in range(3)]
+    client.put(f"/doc/{ids[2]}/domains", json={"domains": ["research"]})  # a person's
+    (config.data_dir() / "prax.yaml").write_text(
+        "domains:\n  - domains: [family]\n", encoding="utf-8"
+    )
+    got = client.post("/domains/assign", json={"ids": ids[1:]}).json()
+    assert got == {"rule 0": 1, "unmatched": 0}
+    domains = [client.get(f"/doc/{i}/domains").json()["domains"] for i in ids]
+    assert domains == [None, ["family"], ["research"]]

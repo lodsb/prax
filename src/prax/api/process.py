@@ -90,6 +90,25 @@ def domains_dry_run(req: DryRunReq, request: Request) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+class AssignReq(BaseModel):
+    ids: list[int]  # the documents, by id: never the whole library
+
+
+@router.post("/domains/assign")
+def domains_assign(req: AssignReq, request: Request) -> dict[str, Any]:
+    """The rules in prax.yaml applied again to the named documents, over a
+    set a rule gave them: what a changed rule needs for the documents it
+    now places elsewhere. A set a person wrote stays. Returns the counts
+    per rule, as the ``domains`` pass does."""
+    rules = list(models.load().get("domains") or [])
+    if not rules or not req.ids:
+        return {"unmatched": 0}
+    try:
+        return store.assign_domains(_con(request), rules, force=True, ids=req.ids)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 # ---------------------------------------------------------------- genres
 
 

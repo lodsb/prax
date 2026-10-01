@@ -427,3 +427,21 @@ def test_a_rule_with_a_key_the_door_does_not_know_is_refused(
     with pytest.raises(ValueError, match="orgin"):
         store.assign_domains(con, [rule])
     assert "domains" not in store.get_meta(con, d)
+
+
+def test_a_rule_may_name_any_of_several_labels(con: sqlite3.Connection) -> None:
+    """``genre`` and ``subject`` take a list, of which the document carries
+    one: the argued subjects for ``society`` (2026-10-01)."""
+    essay = _doc(con, "On billionaires.")
+    paper = _doc(con, "A survey of sensors.")
+    store.set_genres(con, essay, ["essay"], subjects=["politics", "economics"])
+    store.set_genres(con, paper, ["paper"], subjects=["electronics"])
+    argued = ["philosophy", "politics", "sociology", "economics", "law"]
+    rules = [
+        {"match": {"genre": "opinion", "subject": argued}, "domains": ["society"]},
+        {"match": {"genre": ["datasheet", "paper"]}, "domains": ["research"]},
+    ]
+    assert [r["count"] for r in store.domains_dry_run(con, rules)["rules"]] == [1, 1]
+    store.assign_domains(con, rules)
+    assert store.get_meta(con, essay)["domains"] == ["society"]
+    assert store.get_meta(con, paper)["domains"] == ["research"]

@@ -222,9 +222,12 @@ RULE_FACTS_SHARE = 0.5
 RULE_FACTS_MIN = 5
 
 
-def _has_label(meta: dict[str, Any], field: str, key: str, want: str, p: float) -> bool:
+def _has_label(meta: dict[str, Any], field: str, key: str, want: Any, p: float) -> bool:
+    """Whether the document carries the label ``want``, or one of them when
+    it is a list, with at least ``p``."""
+    names = {str(w) for w in want} if isinstance(want, list) else {str(want)}
     return any(
-        x.get(key) == want and float(x.get("p", 1.0)) >= p
+        x.get(key) in names and float(x.get("p", 1.0)) >= p
         for x in meta.get(field) or []
     )
 
@@ -295,11 +298,9 @@ def _rule_matches(
     if not m:
         return True
     p = float(m.get("p", RULE_LABEL_P))
-    if "genre" in m and not _has_label(meta, "genres", "genre", str(m["genre"]), p):
+    if "genre" in m and not _has_label(meta, "genres", "genre", m["genre"], p):
         return False
-    if "subject" in m and not _has_label(
-        meta, "subjects", "subject", str(m["subject"]), p
-    ):
+    if "subject" in m and not _has_label(meta, "subjects", "subject", m["subject"], p):
         return False
     if "facts" in m:
         if con is None or "id" not in doc:
@@ -384,9 +385,10 @@ def assign_domains(
     default. ``origin`` is a piece (or a list of pieces, any one) of the
     path the document had where it came from (``_origin_has``). ``genre``
     and ``subject`` name a label the document carries with at least ``p``
-    (``RULE_LABEL_P``); ``facts`` a module that holds at least ``share`` of
-    the entities its facts name (``fact_modules``), when they are ``min``
-    or more (``RULE_FACTS_MIN``).
+    (``RULE_LABEL_P``), or a list of labels of which it carries one;
+    ``facts`` a module that holds at least ``share`` of the entities its
+    facts name (``fact_modules``), when they are ``min`` or more
+    (``RULE_FACTS_MIN``).
     Documents whose set a person wrote by hand (``domains_by: human``) are
     never touched. Returns counts per rule index and ``unmatched``."""
     counts: dict[str, int] = {"unmatched": 0}

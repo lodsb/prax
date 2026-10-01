@@ -64,14 +64,14 @@ MANIFEST = Pack(
     name="maths",
     ontology=("maths.yaml",),
     extractors=("prax.packs.maths.parse:EXTRACTORS",),
-    readings={"sympy": "formulas"},        # reading -> the step whose model it runs
-    kinds=(),                              # new chunk kinds; maths adds data to `formula`
-    aside=(),                              # kinds kept out of vectors and search
+    readings={"sympy": "formulas"},  # reading -> the step whose model it runs
+    kinds=(),  # new chunk kinds; maths adds data to `formula`
+    aside=(),  # kinds kept out of vectors and search
     steps={"sympy": "prax.packs.maths.parse"},
-    watched=(),                            # steps a worker runs unasked
+    watched=(),  # steps a worker runs unasked
     tools={"math": "prax.packs.maths.tools:do_math"},
-    extra="maths",                         # the pyproject extra it needs
-    settings="maths",                      # its section in prax.yaml
+    extra="maths",  # the pyproject extra it needs
+    settings="maths",  # its section in prax.yaml
 )
 ```
 
