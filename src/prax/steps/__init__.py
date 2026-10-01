@@ -43,6 +43,10 @@ WATCHED_STEPS = (
     # free with a local model since 2026-09-28; a paid one is skipped with a
     # note, and the default (none) says nothing
     "adjudicate",
+    # the small labeller on the CPU (2026-10-01): a new document gets its
+    # genres within a pass, so the nightly rules can place it, and a new
+    # labeller run relabels its predecessor's documents a batch at a time
+    "genres",
 )
 
 # the rest: named on the command line, and the paid ones want --spend

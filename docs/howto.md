@@ -1087,8 +1087,12 @@ Then, in `prax.yaml`:
       genres:
         method: small
 
-and `prax work --steps genres` labels the documents nobody has labelled,
-newest first. Your own labels are never overwritten.
+and the worker labels the documents nobody has labelled, newest first,
+on every pass (`genres` is a watched step). A newer run you activate
+relabels what the older run labelled, a batch at a time. Your own labels
+and Claude's are never overwritten. Documents that already have a domain
+set keep it; the nightly rules place only documents without one, and
+never a document marked personal or suspected.
 
 ### Typing rules over the queue
 

@@ -465,3 +465,15 @@ def test_a_newer_labeller_run_makes_the_older_ones_labels_stale(
     assert store.genres_needed(con, limit=50, current=new) == [ids[0]]
     store.set_genres(con, ids[0], ["paper"], by=new)
     assert store.genres_needed(con, limit=50, current=new) == []
+
+
+def test_a_personal_document_is_never_placed_by_a_rule(con: sqlite3.Connection) -> None:
+    """The paperwork stays without a set: a rule neither counts nor places
+    a document marked personal or suspected, whatever its labels say."""
+    invoice = _doc(con, "An invoice for a synthesizer.")
+    store.set_genres(con, invoice, ["datasheet"], subjects=["electronics"])
+    store.set_sensitivity(con, invoice, "personal")
+    rules = [{"match": {"genre": "datasheet"}, "domains": ["electronics"]}]
+    assert store.domains_dry_run(con, rules)["rules"][0]["count"] == 0
+    store.assign_domains(con, rules, force=True)
+    assert store.get_meta(con, invoice).get("domains") is None

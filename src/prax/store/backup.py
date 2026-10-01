@@ -13,7 +13,9 @@ The delta vector index is copied as it stands, so a vector written in the
 seconds between the database snapshot and the file copy can be missing
 from the copy; ``chunks-without-vectors`` in ``prax heal`` finds those
 and the worker re-embeds them. Model files are not copied (``prax models
-fetch`` gets them again).
+fetch`` gets them again), except what was trained on this library and
+cannot be fetched (``TRAINED``: the labeller's runs and its teacher's
+labels, under ``models/``).
 
 Without the archive (``archive=False``) the copy is the database, the
 indexes and the config — the few gigabytes that cannot be rebuilt — for
@@ -34,11 +36,15 @@ from pathlib import Path
 from typing import Any
 
 from prax import config
+from prax.ml import fetch
 
 from .base import _LOCK, now
 from .jobs import Job
 
 MANIFEST = "backup.json"
+# what is trained here and cannot be fetched again: copied with the
+# database, under models/ (the labeller's runs and its teacher's labels)
+TRAINED = ("labeller",)
 CONFIG_FILES = ("prax.yaml",)
 Log = Callable[[str], None]
 
@@ -102,6 +108,8 @@ def _run(
     for name in CONFIG_FILES:
         if (src / name).is_file():
             shutil.copyfile(src / name, dest / name)
+    trained = _copy_trained(fetch.models_dir(), dest / "models")
+    say(f"trained models: {trained['copied']} of {trained['files']} files copied")
     if archive:
         copied = _copy_archive(
             config.archive_dir(), dest / config.archive_dir().name, job=job, log=log
@@ -116,6 +124,7 @@ def _run(
         "dest": str(dest),
         "database_bytes": db_bytes,
         "indexes": indexes,
+        "trained": trained,
         "archive": copied,
         "seconds": round(time.time() - started, 1),
     }
@@ -165,6 +174,25 @@ def _copy_indexes(src: Path, dest: Path) -> dict[str, int]:
             target = dest / path.name
             if _same_file(path, target):
                 continue
+            shutil.copy2(path, target)
+            copied += 1
+    return {"files": files, "copied": copied}
+
+
+def _copy_trained(models: Path, dest: Path) -> dict[str, int]:
+    """The models trained on this library (``TRAINED``), file by file;
+    a file the copy holds at the same size and time is left alone."""
+    files = copied = 0
+    for name in TRAINED:
+        root = models / name
+        if not root.is_dir():
+            continue
+        for path in sorted(p for p in root.rglob("*") if p.is_file()):
+            files += 1
+            target = dest / name / path.relative_to(root)
+            if _same_file(path, target):
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, target)
             copied += 1
     return {"files": files, "copied": copied}

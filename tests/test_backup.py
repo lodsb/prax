@@ -114,3 +114,29 @@ def test_without_the_archive_the_copy_is_what_cannot_be_rebuilt(
     full = store.backup(con, dest)
     assert full["archive"]["copied"] == full["archive"]["files"] > 0
     assert (dest / "archive").is_dir()
+
+
+def test_the_trained_labeller_is_copied_and_fetched_models_are_not(
+    con: Any, tmp_path: Path
+) -> None:
+    """A model trained on this library cannot be fetched again: its runs
+    go with the database, and only what changed the next time. A model
+    ``prax models fetch`` gets is left out."""
+    from prax.ml import fetch
+
+    models = fetch.models_dir()
+    run = models / "labeller" / "run-1"
+    run.mkdir(parents=True)
+    (run / "meta.json").write_text("{}", encoding="utf-8")
+    (models / "labeller" / "CURRENT").write_text("run-1", encoding="utf-8")
+    (models / "bge-small").mkdir()
+    (models / "bge-small" / "model.onnx").write_bytes(b"fetched")
+    dest = tmp_path / "copy"
+    first = store.backup(con, dest, archive=False)
+    assert first["trained"] == {"files": 2, "copied": 2}
+    assert (dest / "models" / "labeller" / "run-1" / "meta.json").is_file()
+    assert not (dest / "models" / "bge-small").exists()
+    assert store.backup(con, dest, archive=False)["trained"] == {
+        "files": 2,
+        "copied": 0,
+    }

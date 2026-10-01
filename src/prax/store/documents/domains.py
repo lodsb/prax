@@ -265,6 +265,12 @@ RULE_KEYS = frozenset(
 )
 
 
+# a document marked personal or suspected is never placed by a rule: the
+# paperwork stays without a set (the user, 2026-09-30), and a new label
+# alone would otherwise place it (five were about to be, 2026-10-01)
+_NOT_PERSONAL = " AND sensitivity IS NULL"
+
+
 def _check_rule(rule: dict[str, Any]) -> None:
     unknown = set(rule.get("match") or {}) - RULE_KEYS
     if unknown:
@@ -348,6 +354,7 @@ def domains_dry_run(
         "SELECT id, title, mime, original_path, meta FROM documents"
         " WHERE json_extract(meta, '$.domains') IS NULL"
         " AND json_extract(meta, '$.retired') IS NULL"
+        f"{_NOT_PERSONAL}"
     ).fetchall():
         doc = {
             "id": r["id"],
@@ -390,13 +397,15 @@ def assign_domains(
     facts name (``fact_modules``), when they are ``min`` or more
     (``RULE_FACTS_MIN``).
     Documents whose set a person wrote by hand (``domains_by: human``) are
-    never touched. Returns counts per rule index and ``unmatched``."""
+    never touched, nor those marked personal or suspected
+    (``sensitivity``). Returns counts per rule index and ``unmatched``."""
     counts: dict[str, int] = {"unmatched": 0}
     for rule in rules:
         _check_rule(rule)
     sql = (
         "SELECT id, mime, original_path, meta FROM documents"
         " WHERE coalesce(json_extract(meta, '$.domains_by'), '') != 'human'"
+        f"{_NOT_PERSONAL}"
     )
     args: tuple[Any, ...] = ()
     if not force:  # only the documents without a set (the index knows them)

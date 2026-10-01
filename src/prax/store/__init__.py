@@ -39,6 +39,7 @@ from prax.text import chunking  # noqa: F401
 
 from .backup import (  # noqa: F401
     MANIFEST,
+    TRAINED,
     backup,
     backup_target,
 )
