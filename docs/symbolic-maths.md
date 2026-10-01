@@ -314,18 +314,22 @@ What the tool did, case by case:
   derivative that is not log cosh x. The model then said the tool had
   confirmed it. It used `diff` and `simplify` where `same` would have
   said "not the same". All four ways got this question wrong.
-- 15 of the 39 calls failed. In order of count: a formula wrapped in
-  `$…$`; values without `with` (`x=1.0` at the end); `solve` or
-  `simplify` given an equation `a == b` (an IndexError); `Li2` for
-  `polylog(2, …)`; an SI prefix inside the formula (`10k * 1u`, which
-  only works as a value); "given … and …" for definitions; and a
-  parenthesis the model left open.
+- 15 of the 39 calls failed. The causes, most frequent first:
+  - a formula wrapped in `$…$`;
+  - values without `with` (`x=1.0` at the end);
+  - `solve` or `simplify` given an equation `a == b` (an IndexError);
+  - `Li2` for `polylog(2, …)`;
+  - an SI prefix inside the formula (`10k * 1u`), which only works as a
+    value;
+  - "given … and …" for definitions;
+  - a parenthesis the model left open.
 
-Next, from these: accept `$…$`, a trailing `x=…` without `with`, `Li2`,
-an equation for `solve` and `simplify`, and an SI value in a formula;
-tell the model to check a derived formula with `same` against what it
-must equal, not with `diff` alone. Then measure again, twice per row, so
-the spread between runs is known.
+Next, from these:
+- accept `$…$`, a trailing `x=…` without `with`, `Li2`, an equation for
+  `solve` and `simplify`, and an SI value in a formula;
+- tell the model to check a derived formula with `same` against what it
+  must equal, not with `diff` alone;
+- measure again, twice per row, so the spread between runs is known.
 
 ## What the user decided (2026-10-01)
 
