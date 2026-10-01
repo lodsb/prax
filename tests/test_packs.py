@@ -64,7 +64,7 @@ def test_no_pack_repeats_a_name() -> None:
     assert packs.duplicates({"steps": steps.CORE_STEPS}) == []
 
 
-@pytest.mark.parametrize("name", packs.names())
+@pytest.mark.parametrize("name", [p.name for p in packs.PACKS if p.ontology])
 def test_a_packs_suggested_rules_are_rules(name: str) -> None:
     path = packs.rules_file(name)
     assert path is not None and path.exists()
@@ -96,18 +96,20 @@ def test_a_packs_capability_reaches_the_registries(
         steps={"scan": "fakepack_code"},
         watched=("scan",),
         tools={"math": "fakepack_code:tool"},
+        tool_help={"math": "math: <x>   the fake tool"},
         settings="fake",
     )
     monkeypatch.setattr(packs, "PACKS", (*packs.PACKS, fake))
-    assert packs.step_homes() == {"scan": "fakepack_code"}
+    assert packs.step_homes()["scan"] == "fakepack_code"
     assert packs.watched() == ("scan",)
     assert packs.readings() == {"sympy": "formulas"}
     assert packs.kinds() == ("score",) and packs.aside() == ("score",)
-    assert packs.setting_sections() == ("fake",)
+    assert packs.setting_sections()[-1] == "fake"
     assert "fakepack_code" not in sys.modules  # names only, so far
     assert packs.extractors([]) == [] and packs.tools([]) == {}
     assert packs.extractors(["fake"]) == ["an extractor"]
     assert packs.tools(["fake"])["math"](None, None, "x") == "answered x"
+    assert packs.tool_help(["fake"]) == ["math: <x>   the fake tool"]
     with pytest.raises(KeyError, match="no pack named"):
         packs.running(["nope"])
     twice = Pack(name="twice", steps={"parse": "elsewhere"})
@@ -132,3 +134,16 @@ def test_a_packs_suggested_rules_are_tried_by_name(client: TestClient) -> None:
     got = client.post("/domains/dry-run", json={"pack": "craft"}).json()
     assert [r["domains"] for r in got["rules"]] == [["kitchen"], ["kitchen"]]
     assert client.post("/domains/dry-run", json={"pack": "nope"}).status_code == 404
+
+
+def test_the_surfers_prompt_shows_a_packs_tool(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A pack's tool line stands before ``answer`` in the step prompt, and
+    only on a host that runs the pack."""
+    from prax.answering import surf
+
+    assert surf.system() == surf.SYSTEM or "maths:" in surf.system()
+    monkeypatch.setattr(surf, "PACK_HELP", ["maths: same [n] == <latex>   check"])
+    text = surf.system()
+    assert text.index("maths: same") < text.index("\nanswer  ")
+    monkeypatch.setattr(surf, "PACK_HELP", [])
+    assert surf.system() == surf.SYSTEM

@@ -155,6 +155,12 @@ def whole(dotted: str, env: str | None = None, default: int = 0) -> int:
     return int(number(dotted, env, default))
 
 
+def host_packs() -> list[str]:
+    """The packs whose capability this host runs (``packs:``,
+    docs/packs.md); ``PRAX_PACKS`` overrides it for one run."""
+    return words("packs", "PRAX_PACKS")
+
+
 def words(
     dotted: str, env: str | None = None, default: tuple[str, ...] = ()
 ) -> list[str]:

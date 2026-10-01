@@ -117,3 +117,22 @@ def test_a_reading_that_stopped_short_is_refused() -> None:
     )
     got = json.loads(out.stdout)
     assert "only part of the formula" in got.get("error", ""), got
+
+
+def test_a_derivation_step_the_model_wrote_is_checked() -> None:
+    """The second antiderivative of tanh needs the dilogarithm, which SymPy
+    does not find; a model writes it and ``same`` checks it. On 2026-10-01
+    it caught a wrong sign in the first try."""
+    right = "diff(x**2/2 - x*log(2) + polylog(2, -exp(-2*x))/2, x)"
+    wrong = "diff(x**2/2 - x*log(2) - polylog(2, -exp(-2*x))/2, x)"
+    assert ask(op="same", notation="plain", a=right, b="log(cosh(x))")["same"] is True
+    assert ask(op="same", notation="plain", a=wrong, b="log(cosh(x))")["same"] is False
+    out = subprocess.run(
+        [str(PYTHON), str(RUNTIME)],
+        input=json.dumps({"op": "code", "notation": "plain", "a": "polylog(2, x)"}),
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert "c has no polylog" in json.loads(out.stdout)["error"]

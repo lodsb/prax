@@ -90,12 +90,18 @@ argument.
 version of this shaper." First-order ADAA needs the antiderivative F of
 the shaper f. The output is (F(xₙ) − F(xₙ₋₁)) / (xₙ − xₙ₋₁), with f at
 the midpoint when the two inputs are close. Claude finds the shaper's
-passage and asks `read` how it was parsed. Then `integrate` gives F
-(and, again, the second antiderivative for second order), `same` checks
-that F's derivative is f, and `code` gives the line in C. Claude writes
-the ADAA around it. For `tanh`, F is `log(cosh(x))`. The second
-antiderivative needs a polylogarithm, which SymPy writes and a model
-rarely gets right.
+passage and asks `read` how it was parsed. Then `integrate` gives F,
+`same` checks that F's derivative is f, and `code` gives the line in C.
+Claude writes the ADAA around it. For `tanh`, SymPy gives F as
+`x - log(tanh(x) + 1)`, which is `log(cosh(x))`.
+
+Second order needs the second antiderivative, which needs the
+dilogarithm Li₂, and SymPy does not find it: `integrate` answers with the
+integral unevaluated and says so. Here the model proposes and the tool
+checks. Claude's first proposal on 2026-10-01 had a wrong sign, and `same`
+said "not the same". The corrected x²/2 − x·log 2 + Li₂(−e^(−2x))/2 was
+"the same", numerically at 40 points. `code` then says that C has no
+polylogarithm, so the program needs its own Li₂.
 
 ## Where it runs
 
@@ -113,9 +119,24 @@ Python's `eval`, so a formula is read by the LaTeX parser or by a
 restricted parser of plain notation, and only the whitelisted operations
 are called on it.
 
-**Its doors.** A route of the door (`POST /maths`), an MCP tool of the
-same name for Claude, and a `maths:` action of the surfer for the local
-model, which cannot run code.
+**Its doors** (built 2026-10-01, step 2):
+
+- `POST /maths` on the door: `op`, the formula `a` (and `b` for
+  `same`), `notation`, `args` (`var`, `values`, `lower`, `upper`, `at`,
+  `to`, `language`) and `mapping`. A formula is LaTeX, plain notation, or
+  `chunk:<id>` for a display formula of the library, read through the
+  wall: a hidden document's chunk answers as an absent one. A host that
+  does not name the pack answers 404; one without `maths.python`, 503.
+- The MCP tool `maths`, one call to that route.
+- The surfer's action, for the local model, which cannot run code:
+  `maths: same [3] == [7]`, `maths: integrate x \tanh(x)`,
+  `maths: evaluate [4] with R=1000, C=1e-6`, `maths: code python <latex>`.
+  A passage [n] is the display formula it holds. The answer goes into the
+  log as one line, its reading first. The prompt shows the action only on
+  a host that runs the pack (the manifest's `tool_help`).
+
+The prax side is `src/prax/packs/maths/tool.py`. It runs the calculator,
+resolves a chunk to its LaTeX, and parses the surfer's syntax.
 
 ## Step 1, measured (2026-10-01)
 

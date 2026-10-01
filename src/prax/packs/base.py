@@ -28,5 +28,7 @@ class Pack:
     steps: dict[str, str] = field(default_factory=dict)  # step -> its module
     watched: tuple[str, ...] = ()  # steps a worker runs unasked
     tools: dict[str, str] = field(default_factory=dict)  # tool -> "module:function"
+    # tool -> the line the surfer's prompt shows for it, as the core's actions
+    tool_help: dict[str, str] = field(default_factory=dict)
     extra: str | None = None  # the pyproject extra it needs
     settings: str | None = None  # its section in prax.yaml

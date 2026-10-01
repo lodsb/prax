@@ -1097,6 +1097,29 @@ and Claude's are never overwritten. Documents that already have a domain
 set keep it; the nightly rules place only documents without one, and
 never a document marked personal or suspected.
 
+### The maths pack
+
+A calculator for formulas that Claude and the local model call: they
+write the algebra, and it checks each step and does what they get wrong
+(`docs/symbolic-maths.md`). It needs a Python environment of its own,
+because SymPy's LaTeX parser needs a newer ANTLR than prax's OCR allows:
+
+    py -3.13 -m venv %LOCALAPPDATA%\prax\maths-venv
+    %LOCALAPPDATA%\prax\maths-venv\Scripts\python -m pip install "sympy==1.14.0" "antlr4-python3-runtime==4.11.*"
+
+Then, in `prax.yaml`:
+
+    packs: [maths]
+    maths:
+      python: C:/Users/<you>/AppData/Local/prax/maths-venv/Scripts/python.exe
+      timeout_s: 20
+
+and restart the door (`prax up --restart door`). Claude's `maths` tool
+and the surfer's `maths:` action appear on a host that names the pack.
+A formula from the library is passed as `chunk:<id>` (the ids are in
+search results). Every answer shows how the formula was read: check it
+before trusting a result.
+
 ### Typing rules over the queue
 
 A model's misfits are systematic:

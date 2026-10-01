@@ -35,6 +35,7 @@ from . import (
     documents,
     graph,
     importing,
+    maths,
     pages,
     process,
     wall,
@@ -387,5 +388,6 @@ for _router in (
     importing,
     admin,
     wall,
+    maths,
 ):
     app.include_router(_router.router)

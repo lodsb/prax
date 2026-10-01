@@ -111,8 +111,9 @@ MANIFEST = Pack(
     aside=(),  # kinds kept out of vectors and search
     steps={"sympy": "prax.packs.maths.parse"},
     watched=(),  # steps a worker runs unasked
-    tools={"math": "prax.packs.maths.tools:do_math"},
-    extra="maths",  # the pyproject extra it needs
+    tools={"maths": "prax.packs.maths.tool:surf_maths"},
+    tool_help={"maths": "maths: same [n] == <latex>   check ..."},  # the prompt's line
+    extra=None,  # the pyproject extra it needs, if any
     settings="maths",  # its section in prax.yaml
 )
 ```
@@ -120,6 +121,13 @@ MANIFEST = Pack(
 `Pack` is a frozen dataclass in `prax.packs`. Every field but `name` is
 optional. The strings are import paths or files beside the manifest,
 resolved on first use.
+
+A pack whose dependencies cannot live in prax's environment runs them in
+an environment of its own, as marker does. The maths pack's SymPy needs
+ANTLR 4.11, and OCR pins 4.9, so its calculator is a subprocess of the
+interpreter `maths.python` names, and its `extra` is none. The real
+manifest (`src/prax/packs/maths/__init__.py`) holds only the tool, its
+prompt line and its settings so far.
 
 ## What a host turns on
 

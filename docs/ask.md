@@ -68,11 +68,14 @@ same two lines without a grammar.
 | `walk: <entity>` | one hop around an entity | up to 25 edges by relation, each with its source document. The documents are named, so a later step can read one. An unknown name returns the names like it |
 | `similar: [n]` | the documents nearest that passage's document in vector space | six, named, so they can be read |
 | `drop: [n] [m]` | set passages aside | they leave the working set and the answer. A later search will not bring their documents back |
+| `maths: same [n] == <latex>` | calculate, on a host that runs the maths pack | one line: how each formula was read, then the result. Also `read`, `simplify`, `solve x`, `diff x`, `integrate x`, `series x`, `limit x`, `evaluate [n] with R=1000`, `code`. A passage [n] is the display formula it holds. It adds no passage (`docs/symbolic-maths.md`) |
 | `answer` | stop looking | the answer is written from the passages kept |
 
 Every move is a read the service already performs for a person:
 `store.search`, `read_chunks`, `find_chunk`, `document_facts`,
-`traverse`, `similar_documents`. A figure a vision model has read is
+`traverse`, `similar_documents`. `maths:` is the one move that computes:
+it reads a formula chunk and runs the calculator in its own process.
+Nothing it does writes. A figure a vision model has read is
 text like any other. It comes back from a search or a reading with its
 description. A figure nobody has read stays out of the results.
 

@@ -120,6 +120,7 @@ WALKED = (
     ("POST", "/ingest"),
     ("POST", "/ingest/url"),
     ("POST", "/ingest/file"),
+    ("POST", "/maths"),
 )
 
 
@@ -254,3 +255,27 @@ def test_a_token_of_one_module_sees_only_that_module(client: TestClient) -> None
     }
     assert client.delete("/tokens/tablet", headers=admin).status_code == 200
     assert client.get(f"/get/{recipe}", headers=me).status_code == 401
+
+
+def test_a_named_token_asks_the_calculator_only_about_what_it_sees(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``POST /maths`` with ``chunk:<id>``: a hidden document's chunk is as
+    absent as one that does not exist; an open one that is not a formula
+    is said to be none."""
+    monkeypatch.setenv("PRAX_PACKS", "maths")
+    con = client.app.state.con
+    lib = _library(con, client)
+    me = _as(lib["secret"])
+    hidden = store.list_chunks(con, lib["bank"])[0]["chunk_id"]
+    got = client.post("/maths", json={"op": "read", "a": f"chunk:{hidden}"}, headers=me)
+    assert got.status_code == 404 and not _says(got, "zebrafinch")
+    assert (
+        client.post(
+            "/maths", json={"op": "read", "a": "chunk:999999"}, headers=me
+        ).status_code
+        == 404
+    )
+    shown = store.list_chunks(con, lib["paper"])[0]["chunk_id"]
+    got = client.post("/maths", json={"op": "read", "a": f"chunk:{shown}"}, headers=me)
+    assert got.status_code == 400 and "not a display formula" in got.text

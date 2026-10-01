@@ -375,7 +375,7 @@ REGISTRY: list[Extractor] = [
 ]
 # the extractors of the packs this host runs (``packs:``, docs/packs.md),
 # after the core's: a process keeps the ones it started with
-REGISTRY += packs.extractors(config.words("packs"))
+REGISTRY += packs.extractors(config.host_packs())
 
 
 _STAMP = re.compile(

@@ -82,6 +82,7 @@ RESTRICTED_ROUTES = tuple(
         ("POST", r"/ingest"),
         ("POST", r"/ingest/url"),
         ("POST", r"/ingest/file"),
+        ("POST", r"/maths"),
     )
 )
 

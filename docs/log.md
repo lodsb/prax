@@ -3054,3 +3054,18 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   against the LaTeX in three sets of 50: 21, then 36, then 43 faithful
   (86%). About a third of the library's display formulas are read
   faithfully, and nearly all of the rest are said to be unread.
+- **Step 2, the tool** (same day). The maths pack's manifest names its
+  tool and the line the surfer's prompt shows for it (`tool_help`, a new
+  manifest field). `POST /maths` resolves `chunk:<id>` through the wall
+  (a hidden document's chunk answers as an absent one, `tests/test_wall.py`),
+  the MCP tool `maths` makes one call to it, and the surfer's `maths:`
+  action takes a passage [n] as the formula it holds. `config.host_packs()`
+  (`packs:`, `PRAX_PACKS`) is the one place a host's packs are read.
+- **The tool caught my own mistake.** The second antiderivative of tanh
+  needs the dilogarithm, which SymPy does not find. My first proposal had
+  a wrong sign; `same` said "not the same", and the corrected one was the
+  same at 40 points. `code` says C has no polylogarithm.
+- **A reading fixed on the way:** `I_s(e^{v/V_T} - 1)` was a function
+  applied to a sum. A subscripted name before a sum holding a plain number
+  is now a factor; `x(n - 1)`, `h_r(t - nT)` and `X_c(j\Omega)` stay
+  functions.

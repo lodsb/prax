@@ -416,10 +416,20 @@ def _factors(e: Any) -> Any:
         name = f.func.__name__
         if len(f.args) != 1:
             continue
+        arg = f.args[0]
         if name in constants:
-            swap[f] = constants[name] * f.args[0]
+            swap[f] = constants[name] * arg
         elif name in bare or name in ("i", "j"):
-            swap[f] = sympy.Symbol(name) * f.args[0]
+            swap[f] = sympy.Symbol(name) * arg
+        elif (
+            "_" in name
+            and isinstance(arg, sympy.Add)
+            and any(t.is_Number for t in arg.args)
+        ):
+            # a subscripted quantity before a sum with a plain number is a
+            # factor: I_s(e^{v/V_T} - 1). x(n - 1) (no subscript), h_r(t - nT)
+            # (no number) and X_c(j\Omega) (no sum) stay functions
+            swap[f] = sympy.Symbol(name) * arg
     return e.xreplace(swap) if swap else e
 
 
@@ -584,11 +594,20 @@ def op_evaluate(
 
 
 def op_code(a: Any, *, language: str = "c", **_: Any) -> dict[str, Any]:
-    if language == "c":
-        return {"code": sympy.ccode(a)}
-    if language == "python":
-        return {"code": sympy.pycode(a)}
-    raise ValueError("language is c or python")
+    from sympy.printing.codeprinter import PrintMethodNotImplementedError
+
+    printers = {"c": sympy.ccode, "python": sympy.pycode}
+    if language not in printers:
+        raise ValueError("language is c or python")
+    try:
+        return {"code": printers[language](a)}
+    except PrintMethodNotImplementedError as exc:
+        # C has no polylog: the program needs an implementation of it
+        missing = str(exc).rsplit(":", 1)[-1].split()[0]
+        raise ValueError(
+            f"{language} has no {missing}: the expression needs an implementation"
+            f" of it beside the code"
+        ) from exc
 
 
 OPERATIONS: dict[str, Callable[..., dict[str, Any]]] = {

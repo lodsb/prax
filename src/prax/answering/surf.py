@@ -604,9 +604,21 @@ def _pack_tool(tool: Callable[[sqlite3.Connection, Surf, str], str]) -> Handler:
 
 
 PACK_TOOLS: tuple[str, ...] = ()
-for _name, _tool in packs.tools(config.words("packs")).items():
+for _name, _tool in packs.tools(config.host_packs()).items():
     DO[_name] = _pack_tool(_tool)
     PACK_TOOLS += (_name,)
+PACK_HELP = packs.tool_help(config.host_packs())
+
+
+def system() -> str:
+    """The prompt of a step: the core's actions, and before ``answer`` the
+    lines of the packs' tools this host runs."""
+    if not PACK_HELP:
+        return SYSTEM
+    head, sep, tail = SYSTEM.partition("\nanswer  ")
+    return head + "\n" + "\n".join(PACK_HELP) + sep + tail
+
+
 _ACTION = re.compile(rf"^({'|'.join([*DO, 'answer'])})\b\s*:?\s*(.*)$", re.IGNORECASE)
 
 
@@ -689,7 +701,7 @@ def run(
             return _result(s, answerer, None, t0)
         t = time.monotonic()
         try:
-            text, usage = answerer.step(SYSTEM, s.message(), grammar=grammar(s))
+            text, usage = answerer.step(system(), s.message(), grammar=grammar(s))
         except Exception as exc:  # noqa: BLE001 - answer from what was read
             record(Step(len(s.steps), "error"), f"the model failed: {exc}", [], t)
             break

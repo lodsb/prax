@@ -246,6 +246,55 @@ def ask(
 
 
 @mcp.tool()
+def maths(
+    op: str,
+    a: str,
+    b: str | None = None,
+    var: str | None = None,
+    values: dict[str, str] | None = None,
+    mapping: dict[str, str] | None = None,
+    language: str | None = None,
+    lower: str | None = None,
+    upper: str | None = None,
+    notation: str = "latex",
+) -> dict[str, Any]:
+    """A SymPy calculator for formulas, on a host that runs the maths pack.
+    ``op`` is one of read, same, simplify, substitute, solve, diff,
+    integrate, series, limit, evaluate, code. A formula (``a``, and ``b``
+    for ``same``) is LaTeX, plain notation with ``notation="plain"``
+    (``x**2 + 1``), or ``chunk:<id>`` for a display formula of the library
+    (ids from search results). ``var`` names the variable of solve, diff,
+    integrate, series and limit; ``values`` maps names to values for
+    evaluate and substitute; ``lower``/``upper`` bound an integral;
+    ``mapping`` renames b's symbols to a's for ``same`` (two papers'
+    notations); ``language`` is c or python for ``code``.
+
+    Every answer shows how each formula was read: check the reading before
+    trusting a result. ``same`` says how it decided (symbolic, or numeric at
+    random points); use it to check each step of a derivation you wrote.
+    A formula the tool cannot read whole comes back as an ``error``, never
+    as an answer about part of it."""
+    args: dict[str, Any] = {}
+    for key, value in (
+        ("var", var),
+        ("values", values),
+        ("language", language),
+        ("lower", lower),
+        ("upper", upper),
+    ):
+        if value is not None:
+            args[key] = value
+    body: dict[str, Any] = {"op": op, "a": a, "notation": notation}
+    if b is not None:
+        body["b"] = b
+    if mapping:
+        body["mapping"] = mapping
+    if args:
+        body["args"] = args
+    return _guard(lambda: door().post_json("/maths", body))
+
+
+@mcp.tool()
 def set_domains(doc_id: int, domains: list[str] | None) -> dict[str, Any]:
     """Which ontology modules a document is read against (its domains, e.g.
     ["research"], ["family", "research"] for a document that is both, or

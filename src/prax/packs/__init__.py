@@ -21,12 +21,13 @@ from typing import Any
 from prax.packs.base import Pack
 from prax.packs.computing import MANIFEST as COMPUTING
 from prax.packs.craft import MANIFEST as CRAFT
+from prax.packs.maths import MANIFEST as MATHS
 from prax.packs.research import MANIFEST as RESEARCH
 from prax.packs.society import MANIFEST as SOCIETY
 from prax.packs.studio import MANIFEST as STUDIO
 
 ROOT = Path(__file__).parent
-PACKS: tuple[Pack, ...] = (RESEARCH, CRAFT, STUDIO, COMPUTING, SOCIETY)
+PACKS: tuple[Pack, ...] = (RESEARCH, CRAFT, STUDIO, COMPUTING, SOCIETY, MATHS)
 
 
 def by_name(name: str) -> Pack:
@@ -116,6 +117,13 @@ def tools(chosen: Iterable[str]) -> dict[str, Any]:
     return {
         name: _resolve(path) for p in running(chosen) for name, path in p.tools.items()
     }
+
+
+def tool_help(chosen: Iterable[str]) -> list[str]:
+    """The prompt lines of the surfer's tools of the packs a host runs."""
+    return [
+        p.tool_help[n] for p in running(chosen) for n in p.tools if n in p.tool_help
+    ]
 
 
 def duplicates(core: dict[str, Iterable[str]]) -> list[str]:

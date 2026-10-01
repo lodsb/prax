@@ -33,6 +33,7 @@ EXPECTED_TOOLS = {
     "capture_url",
     "context",
     "documents",
+    "maths",
 }
 
 
