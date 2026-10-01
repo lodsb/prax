@@ -282,6 +282,51 @@ All four are fixed, the prompt now asks for checks, and `chain`,
 `expand`, `factor`, `together` and `apart` were added. The rerun is the
 measurement of that.
 
+The second run (2026-10-01, the same model and steps, after the fixes
+and two more: `with` after any operation, `e**x` as Euler's number):
+
+| tools, mode | right | partly | wrong |
+|---|---|---|---|
+| on, grounded | 11 | 5 | 4 |
+| off, grounded | 7 | 5 | 8 |
+| on, open | 14 | 2 | 4 |
+| off, open | 15 | 3 | 2 |
+
+The answers are in `docs/eval/maths-answers-2026-10-01-c.json`, kept
+out of the repository like the first run's. The tool was called in 11
+of the 40 asks with tools on (39 calls), against 7 before.
+
+Read with care. The "off" rows ran the same code both times, and
+"off, grounded" went from 11 right to 7. So the spread between two runs
+of the same thing is about four answers, and the second scoring may be
+stricter than the first. Compare rows within one run, not across runs.
+Within this run, grounded mode gains with the tool: 4 more right and 4
+fewer wrong. Open mode does not.
+
+What the tool did, case by case:
+- It made answers right. With the RC values given, grounded mode could
+  answer "10 ms" from `evaluate` where the library says nothing. On the
+  Moog tanh forms, open mode checked the identity and said so.
+- It made an answer wrong. For Dattorro's beta the model wrote the
+  formula with ω_c = π f/F_s (a factor 2 short) and gave the tool's
+  0.9678 instead of 0.9366. The tool computed what it was asked.
+- It was misread. On the second antiderivative of tanh, `diff` gave a
+  derivative that is not log cosh x. The model then said the tool had
+  confirmed it. It used `diff` and `simplify` where `same` would have
+  said "not the same". All four ways got this question wrong.
+- 15 of the 39 calls failed. In order of count: a formula wrapped in
+  `$…$`; values without `with` (`x=1.0` at the end); `solve` or
+  `simplify` given an equation `a == b` (an IndexError); `Li2` for
+  `polylog(2, …)`; an SI prefix inside the formula (`10k * 1u`, which
+  only works as a value); "given … and …" for definitions; and a
+  parenthesis the model left open.
+
+Next, from these: accept `$…$`, a trailing `x=…` without `with`, `Li2`,
+an equation for `solve` and `simplify`, and an SI value in a formula;
+tell the model to check a derived formula with `same` against what it
+must equal, not with `diff` alone. Then measure again, twice per row, so
+the spread between runs is known.
+
 ## What the user decided (2026-10-01)
 
 - The operations: the calculator above, with `same` as the check of the

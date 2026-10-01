@@ -3069,3 +3069,32 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   applied to a sum. A subscripted name before a sum holding a plain number
   is now a factor; `x(n - 1)`, `h_r(t - nT)` and `X_c(j\Omega)` stay
   functions.
+
+## 2026-10-01, the evening: the maths tool measured, its faults, stuck readings (stage AD, step 3)
+
+- **The first run** of the 20 maths questions, four ways each
+  (`scripts/eval_maths.py`): right, partly, wrong were 10/3/7 with the
+  tool and 11/3/6 without in grounded mode, 17/2/1 and 17/1/2 in open
+  mode. The tool was called in 7 of 40 asks and made no difference.
+- **Four faults behind it**, fixed in d3f00d9: the answering call never
+  saw the tool's results (now the last six go into the bundle's note,
+  `surf.answer_note`); plain notation refused a decimal point; it knew
+  every SymPy name, so `beta` was a function (now `PLAIN_NAMES` only);
+  a passage could not stand inside a formula (now `[n]` inside one is
+  its right side). Added `chain`, `expand`, `factor`, `together`,
+  `apart`, SI-prefixed values, and a prompt that asks for checks. The
+  partial rerun showed two more, fixed in dee47a1: `with` after any
+  operation, and `e**x` as Euler's number.
+- **The second run**: 11/5/4 with the tool and 7/5/8 without in grounded
+  mode, 14/2/4 and 15/3/2 in open mode; 11 of 40 asks called the tool.
+  The "off" rows ran unchanged code and moved by four, so only rows of
+  one run compare. The case-by-case reading, and the next fixes from
+  15 failed calls, are in `docs/symbolic-maths.md` ("How it is
+  measured").
+- **Readings stuck for two days.** A marker reading whose server was not
+  running leased its whole document, and a reading without a model goes
+  first, so two vision-pages readings of the same paper never left the
+  queue. Now only the reading waits (1c7fec1, `leases.defer_reading`).
+  Marker itself still waits for a hand: the planner of stage AI is what
+  starts it (`docs/PLAN.md`), in place of `swap: auto`, which would have
+  taken the card in the middle of an eval.
