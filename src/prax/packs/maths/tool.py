@@ -54,7 +54,9 @@ TRAILING_VALUES = re.compile(rf"\s+({NAME_VALUE}(?:\s*,\s*{NAME_VALUE})*)\s*$")
 # the second round of the eval (2026-10-02): 12 more ways it was written
 TRAILING_TALK = re.compile(r"\s+(?:answer|result|gives|then)\b\s*:?.*$", re.IGNORECASE)
 AS_CALL = re.compile(r"(?:diff|integrate|simplify|expand|factor)\(")
-FOR_VAR = re.compile(r"\s+for\s+([A-Za-z]\w*)\b.*$")
+# the variable after "for" stands alone, values may follow after a comma;
+# "solve I1 for I = I1 + ..." names the variable first and "for" the equation
+FOR_VAR = re.compile(r"\s+for\s+([A-Za-z]\w*)\s*(?:,.*)?$")
 SYMPY_ORDER = re.compile(r"(.+?),\s*([A-Za-z]\w*)\s*,\s*([^,]+?)(?:\s*,\s*(\d+))?\s*")
 POINT_AFTER = re.compile(r"(.+?),\s*([^,()]+?)(?:\s*,\s*(\d+))?\s*")
 AT_POINT = re.compile(r"(.+?)\s+(?:at\s+)?([A-Za-z]\w*)\s*=\s*(\S+)")
@@ -264,6 +266,7 @@ def _with_variable(op: str, rest: str, args: dict[str, Any]) -> str:
     if not re.fullmatch(r"[A-Za-z]\w*", var):
         raise ValueError(f"{op} takes the variable first: {op} x <formula>")
     args["var"] = var
+    formula = formula.removeprefix("for ")  # solve I1 for I = I1 + I1*exp(u)
     m = POINT_AFTER.fullmatch(formula)
     if m and op in ("series", "limit"):  # series x tanh(x), 0, 5
         args["at" if op == "series" else "to"] = m.group(2).strip()

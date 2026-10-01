@@ -252,3 +252,10 @@ def test_the_variable_and_the_point_as_a_model_writes_them() -> None:
     assert tool.parse_step("diff(x**2, x)")["op"] == "simplify"
     got = tool.parse_step("evaluate 2*exp(v) with v=0.4 answer: 2.98")
     assert got["args"]["values"] == {"v": "0.4"}
+
+
+def test_for_names_a_variable_only_when_one_stands_after_it() -> None:
+    """``solve I1 for I = I1 + I1*exp(u)``: I1 is the variable, the
+    equation follows "for" (the third double run, 2026-10-02)."""
+    got = tool.parse_step("solve I1 for I = I1 + I1*exp(u)")
+    assert (got["args"]["var"], got["a"]) == ("I1", "I = I1 + I1*exp(u)")

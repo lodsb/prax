@@ -3119,3 +3119,12 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   were stopped for memory while llama-server loaded after its idle time;
   `scripts/eval_maths.py` now waits for the model instead of recording a
   failure for every ask (d56d69a).
+- **The rule for numbers, measured** (the same day, 4aa6602 and the
+  double run e1/e2): rows moved by 0 to 2 right answers against the first
+  double run, inside the spread. The diode current was right for the
+  first time (13.23 mA from `evaluate`, in one run's two tool-on ways);
+  "(not checked)" appeared once in 160 answers. Grounded mode refused
+  the RC time constant while holding the tool's result, in every run:
+  the grounded prompt now says a computed result in the note answers a
+  question that is a calculation. "for" names a variable only when one
+  stands alone after it. Details: `docs/symbolic-maths.md`.

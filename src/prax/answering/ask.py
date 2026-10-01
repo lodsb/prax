@@ -51,7 +51,10 @@ knowledge of these documents. After each claim, cite the passages that
 support it in square brackets, like [2] or [1][3]; cite nothing else and
 never invent a number. A number you work out yourself, rather than one a
 passage prints, is the result the note gives for it; when the note gives
-none, write "(not checked)" right after it. When the question asks for an
+none, write "(not checked)" right after it. A result in the note was
+computed by a calculator from the question's values: use it and say it
+was computed; a question that is a calculation is answered by it, though
+no passage holds the number. When the question asks for an
 equation, a formula or a definition and a passage shows it, write it out
 as that passage has it
 — in full, every term and condition, the whole display, not a part of it

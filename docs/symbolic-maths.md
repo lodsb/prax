@@ -376,6 +376,37 @@ The fourth round (2026-10-02):
 - Plain notation reads `W` as the Lambert W, and a function it does not
   know is named in the error with the list of those it does.
 
+The rule for numbers (2026-10-02, 4aa6602): a number a passage prints is
+cited, one the answer works out is a result from the note, and any other
+carries "(not checked)". Both answer prompts hold it, and the surf line
+asks for every computed number through `evaluate`. The second double run
+(`docs/eval/maths-answers-2026-10-02-e1.json` and `-e2.json`):
+
+| tools, mode | run 1 R / P / W | run 2 R / P / W | same score in both |
+|---|---|---|---|
+| on, grounded | 12 / 3 / 5 | 12 / 3 / 5 | 16 of 20 |
+| on, open | 15 / 3 / 2 | 13 / 5 / 2 | 16 of 20 |
+| off, grounded | 9 / 6 / 5 | 8 / 7 / 5 | 13 of 20 |
+| off, open | 12 / 7 / 1 | 13 / 6 / 1 | 16 of 20 |
+
+- Against the first double run every row moved by 0 to 2 right
+  answers, inside the spread. The rule changed one question, not the
+  totals.
+- That question is the diode current. In the first run both tool-on
+  ways called `evaluate` and gave 13.23 mA, the first right answers it
+  ever had. The second run computed it by hand again (13.17, 13.28).
+- "(not checked)" appeared in 1 of 160 answers. The marking half of the
+  rule is mostly ignored by this model.
+- A conflict it showed: for the RC time constant, grounded mode had the
+  tool's 0.01 s and still said the passages do not hold it, in all four
+  tool-on grounded answers of both double runs. The grounded prompt now
+  says a result in the note was computed from the question's values, is
+  used and said to be computed, and answers a question that is a
+  calculation.
+- Failed calls: 21 of 83 (30 of 87 before). `solve I1 for I = …` took
+  `I` as the variable: "for" names a variable only when one stands alone
+  after it.
+
 ## What the user decided (2026-10-01)
 
 - The operations: the calculator above, with `same` as the check of the
