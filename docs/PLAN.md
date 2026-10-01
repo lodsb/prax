@@ -114,6 +114,70 @@ nothing.
         PDFs (13369 to 13371, read by the worker); the arXiv one was in
         the library already (13339).
 
+- [ ] **AI. A plan for the card: what waits, what a swap costs, and
+      "do it now".** The user, 2026-10-01: "shouldn't the whole resource
+      management be more aware of all the functionality and plan/batch?"
+      and "if the user just wants it done there is no point in waiting
+      for a maintenance run".
+
+      *Why now.* Two marker readings waited two days on 2026-10-01.
+      Marker is `on_demand` and stays paused until a person starts it.
+      Its deferral also leased the whole document, which kept two
+      vision-pages readings of the same paper out of every batch; that
+      half is fixed (1c7fec1: only the reading waits). `swap: auto`
+      exists in `prax up`, but it swaps as soon as anything waits. It
+      would have taken the card from llama-server in the middle of the
+      maths eval to read two PDFs. The section "What holds the card"
+      below (2026-09-25) said "not a general resource manager". What
+      changed since: four kinds of work now compete for one card
+      (llama-server's steps, marker, the labeller's training, the
+      eval and ask traffic), and a person asks for some of it to be
+      done now.
+
+      *The model.* The door groups what is waiting by the role that
+      must hold the card and by action. On 2026-10-01 that was marker
+      with 2 readings, and llama-server with 2 vision-pages readings
+      beside the extraction backlog. Each group gets a cost:
+      - the swap: the measured load time of the role that would take
+        the card (the 35B takes about three minutes) and of the role
+        that gets it back;
+      - the work: items times the group's own rate (`work.demand`
+        already measures `rate` and `hours_left`);
+      - the wait: how long the oldest item has waited, weighted by who
+        asked. A person's request outweighs a backlog pass, and "do it
+        now" outweighs everything but an ask in flight.
+
+      The plan is the cheapest order of holders over the next hours,
+      as a small graph: a node is "this role holds the card", an edge
+      is a swap with its cost. Greedy with hysteresis comes first. A
+      group that is small and not asked for waits for the nightly
+      window (`worker.nightly`) unless it grows past a size or a person
+      fast-forwards it.
+
+      *Who does what.* The door computes the plan, because it holds the
+      queues (`GET /work/plan`, beside `/work/demand`). `prax up`
+      carries it out, because it owns the processes. No second
+      supervisor (invariant 4). An ask in flight, or one in the last few
+      minutes, keeps llama-server: a swap never interrupts a streaming
+      answer.
+
+      *The steps.*
+      - [ ] The jobs view groups what waits by role and action, each
+            with its estimate (items, rate, the swap it needs), and a
+            "do it now" per group. That is `POST /work/now` with the
+            role and the action. Built on today's `swap`: the role takes
+            the card at the next tick, unless an ask holds it.
+      - [ ] `prax up` logs each role's load time, from start to ready.
+            The plan's swap costs are those numbers, not guesses.
+      - [ ] `GET /work/plan`: the groups, their costs and the order the
+            door would serve them in, shown in the jobs view.
+      - [ ] `prax up` follows the plan. It replaces `swap: auto` and the
+            third item of "What holds the card" below. Marker then needs
+            no hand to start it.
+      - [ ] Measured: how long readings wait before and after, and how
+            many swaps a day the plan makes. Fewer swaps for the same
+            waits is the point.
+
 - [ ] **AH. The stack for universal deployment, after the prototype
       settles** (the user, 2026-10-01: "a tight prototype, early version
       before figuring out the tech stack"). Python stays for what it is
@@ -870,7 +934,8 @@ What the day found missing is narrower, and in this order.
       is the class of bug that cost 71 failures and three documents that
       could not be read at all on 2026-09-25, and a wrong token estimate
       is a hard failure where a wrong batch size is only slow.
-- [ ] **Let a queue ask for the card.** `swap(back_when="idle")` exists
+- [ ] **Let a queue ask for the card** (now part of stage AI, a plan
+      with costs and a "do it now"). `swap(back_when="idle")` exists
       and a person invokes it. "A million chunks pending and no ask
       traffic for ten minutes" is a policy the machinery could already
       execute. Last of the three, and hysteretic if it is built at all:
