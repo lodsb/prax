@@ -1,14 +1,16 @@
-# Symbolic maths: the plan (stage AD)
+# Symbolic maths: the maths pack (stage AD)
 
-A plan, not a design that is built. It answers the three questions of
-stage AD in `docs/PLAN.md`:
+The plan of stage AD in `docs/PLAN.md`, and since 2026-10-01 the design
+of the first pack with capability (`docs/packs.md`). It answers three
+questions:
 
 - how many documents carry formulas worth it;
 - which parser reads marker's LaTeX;
 - what "plug things together" can ask of a tool.
 
-The build waits for the user's reading of it. Measured read-only on
-2026-09-30 with `scripts/eval_latex.py`.
+Measured read-only on 2026-09-30 with `scripts/eval_latex.py`. The user
+chose on 2026-10-01: a small SymPy calculator that a model calls, with
+equality as the step that checks the others (below).
 
 ## What the library holds
 
@@ -61,28 +63,63 @@ answers confidently and wrongly.
 
 ## What "plug things together" can mean
 
-Five operations, from the most to the least useful as far as the
-library goes. Each takes formulas by their passage number.
+A model is fluent at algebra and unreliable at it: asked how to get from
+A to B, it writes a chain of steps, and a wrong step looks like a right
+one. SymPy does the parts a model gets wrong, or says it cannot. So the
+tool is a small calculator of whitelisted SymPy operations that a model
+calls (the user, 2026-10-01). The model designs, and the tool computes
+and checks.
 
-1. **Same or not.** Two papers write one relation in their own
-   notation. The tool maps one's symbols to the other's (the model
-   proposes the mapping) and asks SymPy whether the difference
-   simplifies to zero, or checks it numerically at random points.
-2. **Substitute.** A definition from one formula into another: the
-   transfer function of a filter into the system equation.
-3. **Solve and rearrange.** Solve for a quantity the question asks
-   about.
-4. **Evaluate.** Numbers from the text or the question, with units kept
-   apart (SymPy's `units`), for "what cutoff do these values give".
-5. **Derive.** Differentiate, expand in a series, take a limit.
+| operation | what it does | for |
+|---|---|---|
+| `read` | the formula as parsed, with its symbols | catching a misreading before anything else |
+| `same` | the difference simplifies to zero, else a numeric check at random points; it says which | a model's step checked, two papers' formulas compared |
+| `simplify`, `substitute`, `solve` | the algebra | rearranging, a definition put into another formula |
+| `diff`, `integrate`, `series`, `limit` | the calculus | an antiderivative, a Taylor expansion |
+| `evaluate` | numbers, with units when given | what given values produce |
+| `code` | the expression as C or Python (SymPy's printers) | the line that goes into a program |
 
-The tool shows the formula back as it read it (`sympy.latex` of the
-expression) with every answer. The model, and a person reading the
-trail, then see the reading and can catch a misreading.
+A formula is LaTeX, a passage of the library by its number, or plain
+maths notation. Every answer shows the formula back as the tool read
+it (`sympy.latex`), so the model, and a person reading the trail, can
+catch a misreading. Comparing formulas of two papers needs a mapping of
+their symbols. The model proposes it, and the tool takes it as an
+argument.
 
-## The pipeline
+**An example the user gave.** "Make an antiderivative-antialiased
+version of this shaper." First-order ADAA needs the antiderivative F of
+the shaper f. The output is (F(xₙ) − F(xₙ₋₁)) / (xₙ − xₙ₋₁), with f at
+the midpoint when the two inputs are close. Claude finds the shaper's
+passage and asks `read` how it was parsed. Then `integrate` gives F
+(and, again, the second antiderivative for second order), `same` checks
+that F's derivative is f, and `code` gives the line in C. Claude writes
+the ADAA around it. For `tanh`, F is `log(cosh(x))`. The second
+antiderivative needs a polylogarithm, which SymPy writes and a model
+rarely gets right.
 
-Three steps, each measured before the next:
+## Where it runs
+
+**Its own Python.** OCR's RapidOCR needs `omegaconf`, which pins ANTLR
+4.9, and SymPy's LaTeX parser needs ANTLR 4.11, so the two cannot share
+prax's environment. The tool runs in a subprocess with an environment of
+its own (SymPy 1.14 and `antlr4-python3-runtime` 4.11), named by the
+setting `maths.python`, as marker has its own. A host that does not name
+the pack in `packs:` needs neither.
+
+**A sandbox.** The subprocess takes one request as JSON on its input and
+answers as JSON, under a time limit (`maths.timeout_s`). It imports
+nothing of prax. No code a model wrote runs. SymPy's `sympify` is
+Python's `eval`, so a formula is read by the LaTeX parser or by a
+restricted parser of plain notation, and only the whitelisted operations
+are called on it.
+
+**Its doors.** A route of the door (`POST /maths`), an MCP tool of the
+same name for Claude, and a `maths:` action of the surfer for the local
+model, which cannot run code.
+
+## The order of the work
+
+Each step measured before the next:
 
 1. **Rules before the parser** (about a day). Each normalizes one thing
    the parser misreads:
@@ -95,17 +132,14 @@ Three steps, each measured before the next:
    They are measured on the same 2,000 formulas and hand-checked on
    100. A rule stays only if it raises the faithful share without new
    misreadings.
-2. **The local model for the rest** (about a day, then a batch). A new
-   reading of the `formulas` step. The model writes SymPy for a formula
-   the rules could not read. It is given the formula, the lines around
-   it and the symbol table so far. The result is kept only when a check
-   passes: its LaTeX, rendered back, parses to the same expression tree
-   as the model's code. At about a second a formula on the 35B model,
-   the roughly 11,000 left after the rules are three to four hours.
-3. **The tool** (about two days). A `math` action of the surfer
-   (`prax.answering.surf`), with a grammar line for local models, and
-   an operation of open ask mode. It runs in a subprocess with a
-   timeout and SymPy alone, never code the model wrote.
+2. **The tool** (about two days): the subprocess, its operations, the
+   route, the MCP tool and the surf action, as the maths pack.
+3. **The questions** (below), with and without the tool.
+4. **The local model for the rest**, only after step 1 is measured: a
+   reading of the `formulas` step that writes SymPy for a formula the
+   rules could not read, kept only when its LaTeX parses back to the
+   same expression. At about a second a formula on the 35B model, the
+   roughly 11,000 left after the rules are three to four hours.
 
 ## Where the parse lives
 
@@ -123,16 +157,17 @@ again. No new table.
 
 ## How it is measured
 
-Thirty questions over the 243 documents, written with the user. Ten
-ask whether two formulas are the same, ten ask to solve or substitute,
-and ten ask what given values produce. Each is scored by hand, with and
-without the tool, in grounded and in open mode (`scripts/eval_ask.py`).
+About twenty questions over the 243 documents, shown to the user before
+they are used. Some ask whether two formulas are the same, some how to
+get from one formula to another (each step of the answer checked), some
+what given values produce, and one asks for an ADAA version of a shaper.
+Each is scored by hand, with and without the tool, in grounded and in
+open mode (`scripts/eval_ask.py`).
 
-## What the user decides
+## What the user decided (2026-10-01)
 
-- Which of the five operations matter. The pipeline is the same for
-  all of them, but the tool's first version need not do all five.
-- Whether step 2 (the model's reading) is worth its batch, after step 1
-  has been measured.
-- Whether the SymPy runtime and ANTLR 4.11 join prax's dependencies (an
-  optional extra, `maths`). They are not in the serving path.
+- The operations: the calculator above, with `same` as the check of the
+  others, rather than one tool per operation.
+- SymPy and ANTLR 4.11 in an environment of their own, on the hosts that
+  name the pack; never in the door's serving path.
+- Step 4 waits for step 1's measurement.
