@@ -34,6 +34,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from prax.client import Door
 
+LOAD_TRIES = 10  # asks while the model loads, LOAD_WAIT_S apart
+LOAD_WAIT_S = 60
 WAYS = (
     ("on", "grounded"),
     ("off", "grounded"),
@@ -70,12 +72,23 @@ def main() -> int:
                 "mode": mode,
                 "tools": tools == "on",
             }
-            t0 = time.time()
-            try:
-                got = door.post_json("/ask", body)
-            except Exception as exc:  # noqa: BLE001 - a failed ask is a row too
-                done[key] = {"error": str(exc)}
-                print(f"{key}: error {exc}", flush=True)
+            got: dict[str, Any] | None = None
+            for _ in range(LOAD_TRIES):
+                t0 = time.time()  # the answer's own time, not the load's
+                try:
+                    got = door.post_json("/ask", body)
+                    break
+                except Exception as exc:  # noqa: BLE001 - a failed ask is a row too
+                    if "not loaded yet" in str(exc):
+                        # llama-server gave the card back when idle; the ask
+                        # asked for it again, and a load takes minutes
+                        print(f"{key}: the model is loading, waiting", flush=True)
+                        time.sleep(LOAD_WAIT_S)
+                        continue
+                    done[key] = {"error": str(exc)}
+                    print(f"{key}: error {exc}", flush=True)
+                    break
+            if got is None:
                 continue
             answer = str(got.get("answer") or "")
             trail = got.get("trail") or []
