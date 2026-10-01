@@ -162,6 +162,19 @@ def parse_step(arg: str) -> dict[str, Any]:
         request["a"] = rest.strip()
     if not request["a"]:
         raise ValueError(f"{op} takes a formula: a passage [n] or LaTeX")
+    # a model writes x**2 or exp(x) as often as LaTeX: formulas without a
+    # backslash and with a * are plain notation (passages are LaTeX)
+    written = [request[k] for k in ("a", "b") if k in request]
+    out_written = [f for f in written if not f.startswith("[")]
+    plainly = re.compile(
+        r"\*|\b(exp|log|sqrt|tanh|sinh|cosh|sin|cos|tan|atan|polylog)\("
+    )
+    if (
+        out_written
+        and all("\\" not in f for f in out_written)
+        and any(plainly.search(f) for f in out_written)
+    ):
+        request["notation"] = "plain"
     if args:
         request["args"] = args
     return request

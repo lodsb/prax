@@ -509,6 +509,10 @@ def op_same(a: Any, b: Any, **_: Any) -> dict[str, Any]:
         d = _sides(a) - _sides(b)
     if sympy.simplify(d) == 0:
         return {"same": True, "how": "symbolic"}
+    # hyperbolic and trigonometric forms against exponentials: simplify
+    # alone does not see 1/(1 + e^x) = (1 - tanh(x/2))/2
+    if sympy.simplify(d.rewrite(sympy.exp)) == 0:
+        return {"same": True, "how": "symbolic, in exponentials"}
     syms = sorted(d.free_symbols, key=str)
     if not syms:
         value = complex(sympy.N(d))

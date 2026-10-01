@@ -159,3 +159,11 @@ def test_end_to_end_the_adaa_antiderivative(
     formula, _ = _formula(client.app.state.con)
     read = client.post("/maths", json={"op": "read", "a": f"chunk:{formula}"}).json()
     assert {"I_{s}", "V_{T}", "v"} <= set(read["read"]["a"]["symbols"])
+
+
+def test_plain_notation_is_seen_in_a_surf_step() -> None:
+    """A model writes exp(x) and ** as often as LaTeX: a formula without a
+    backslash and with a * goes as plain notation."""
+    got = tool.parse_step("same I / (1 + exp(x)) == I/2 * (1 - tanh(x/2))")
+    assert got["notation"] == "plain"
+    assert "notation" not in tool.parse_step(r"same \frac{1}{2} == [3]")
