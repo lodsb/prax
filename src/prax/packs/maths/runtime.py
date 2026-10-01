@@ -372,6 +372,7 @@ PLAIN_NAMES = (  # noqa: SIM905 - a list of words reads as one
     " Min Max polylog LambertW erf erfc Heaviside DiracDelta Piecewise diff"
     " integrate pi E I oo Rational"
 ).split()
+EULER = re.compile(r"(?<![A-Za-z0-9_])e\s*\*\*")
 SAFE_GLOBALS: dict[str, Any] = {"__builtins__": {}}
 for _n in PLAIN_NAMES:
     SAFE_GLOBALS[_n] = getattr(sympy, _n) if _n != "ln" else sympy.log
@@ -388,6 +389,9 @@ SAFE_GLOBALS.update(
 
 def _plain(formula: str) -> Any:
     text = formula.replace("^", "**")
+    # e raised to a power is Euler's number: a model writes e**x for exp(x)
+    # (2026-10-01: e read as a symbol made tanh's two forms "not the same")
+    text = EULER.sub("E**", text)
     if (
         not PLAIN.match(formula)
         or "__" in formula
@@ -750,6 +754,12 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
         kwargs["values"] = {
             str(k): _value(v, notation) for k, v in kwargs["values"].items()
         }
+    given: dict[Any, Any] = {}
+    if op not in ("evaluate", "substitute") and "values" in kwargs:
+        # a question's own definitions (same ... with x=(V_2 - V_1)/V_T):
+        # put in before the operation, which then works on the result
+        given = {sympy.Symbol(k): v for k, v in kwargs.pop("values").items()}
+        a = a.subs(given)
     if op == "same":
         b, rb = read(str(request["b"]), notation)
         out["read"]["b"] = {
@@ -762,7 +772,7 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
             b = b.xreplace(
                 {sympy.Symbol(k): _plain(str(v)) for k, v in mapping.items()}
             )
-        out.update(op_same(a, b.doit()))
+        out.update(op_same(a, b.doit().subs(given)))
         return out
     out.update(OPERATIONS[op](a, **kwargs))
     return out

@@ -178,3 +178,24 @@ def test_a_value_may_carry_a_prefix_and_a_unit() -> None:
         args={"values": {"beta": "2", "R": "4.7k"}},
     )
     assert float(got["result"]["text"]) == 9400.0
+
+
+def test_e_to_a_power_is_eulers_number_and_any_step_takes_values() -> None:
+    """A model writes e**x for exp(x), and ``same ... with x=...`` for a
+    question's own definitions (the maths eval of 2026-10-01)."""
+    got = ask(
+        op="same",
+        a="(e**x - exp(-x))/(exp(x) + exp(-x))",
+        b="(exp(2*x) - 1)/(exp(2*x) + 1)",
+        notation="plain",
+    )
+    assert got["same"] is True
+    assert "e" in ask(op="read", a="2*e + 1", notation="plain")["read"]["a"]["symbols"]
+    got = ask(
+        op="same",
+        a="1/(1 + exp(x))",
+        b="0.5*(1 - tanh(x/2))",
+        notation="plain",
+        args={"values": {"x": "(V_2 - V_1)/V_T"}},
+    )
+    assert got["same"] is True

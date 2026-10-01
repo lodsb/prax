@@ -210,3 +210,9 @@ def test_the_answer_is_given_what_the_tools_worked_out() -> None:
     note = surf.answer_note(s)
     assert note.startswith("a word\n\nWorked out with the tools")
     assert "same 8" in note and "same 2" not in note  # the latest six
+
+
+def test_any_step_may_give_values() -> None:
+    got = tool.parse_step("same 1/(1 + exp(x)) == 0.5*(1 - tanh(x/2)) with x=V/V_T")
+    assert got["b"] == "0.5*(1 - tanh(x/2))"
+    assert got["args"]["values"] == {"x": "V/V_T"}

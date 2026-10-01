@@ -156,7 +156,7 @@ def parse_step(arg: str) -> dict[str, Any]:
         raise ValueError(f"maths takes one of {', '.join(OPERATIONS)} first")
     request: dict[str, Any] = {"op": op}
     args: dict[str, Any] = {}
-    if " with " in rest and op in ("evaluate", "substitute"):
+    if " with " in rest:  # given values, for any operation
         rest, _, given = rest.partition(" with ")
         values = {}
         for pair in given.split(","):
