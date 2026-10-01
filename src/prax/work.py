@@ -46,11 +46,13 @@ from prax.steps.leases import (  # noqa: F401 - the table's names, as callers kn
     DEFER_SECONDS,
     LEASE_SECONDS,
     _leases,
+    defer_reading,
     leases,
     release_deferred,
     renew,
 )
 from prax.steps.leases import lease as _lease
+from prax.steps.leases import release as release_lease
 
 # which role of ``prax up`` a reading waits for: what the door reports as
 # demand (``GET /work/demand``) so the supervisor can give it the card
@@ -282,6 +284,12 @@ def take_in(
     out: dict[str, Any] = {"applied": 0, "errors": [], "skipped": 0}
     # "not yet": the item stays leased a while, the queue moves on. An
     # item is a document, or for the vocabulary an entity
+    # a reading says which: only it waits, the document's others go on
+    for r in results:
+        if r.get("defer") and r.get("extractor"):
+            defer_reading(str(r["extractor"]), int(r["doc_id"]))
+            release_lease(step, [int(r["doc_id"])])
+    results = [r for r in results if not (r.get("defer") and r.get("extractor"))]
     deferred = [int(r.get("doc_id", r.get("id"))) for r in results if r.get("defer")]
     if deferred:
         _lease(step, deferred, worker, seconds=DEFER_SECONDS)

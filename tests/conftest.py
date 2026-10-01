@@ -38,6 +38,9 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # otherwise hide the next test's document, which has the same id
     work._leases.clear()
     work._asked.clear()
+    from prax.steps import leases
+
+    leases._readings.clear()  # the readings deferred for a missing server
     # and where the embed hand-out is in its walk, and what it has not saved
     from prax.steps import embed
 

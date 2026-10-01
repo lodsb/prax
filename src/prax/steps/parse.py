@@ -93,10 +93,13 @@ class Parse(Step):
             store.reading_requests(h.con, limit=None, oldest_first=True),
             key=lambda r: (r["extractor"] in READING_STEPS, r["id"]),
         )
+        now = time.monotonic()
         for req in requests:
             doc_id = req["doc_id"]
             if len(items) >= h.limit or not h.free(doc_id):
                 continue
+            if leases.reading_deferred(req["extractor"], doc_id, now):
+                continue  # its server is not there; the document's others go on
             if doc_id in offered:
                 # its other readings wait their turn: two annotating
                 # readings of one document in a batch are computed from
@@ -362,7 +365,10 @@ def do_parse(
                 # document's fault; deferred, so the door leaves it leased a
                 # while and hands out other work meanwhile
                 say(log_, f"parse doc {doc_id}: not yet — {exc}")
-                done(*tried, {"doc_id": doc_id, "defer": True})
+                deferred: dict[str, Any] = {"doc_id": doc_id, "defer": True}
+                if it.get("extractor"):  # a requested reading: only it waits
+                    deferred["extractor"] = it["extractor"]
+                done(*tried, deferred)
                 break
             except Exception as exc:  # noqa: BLE001
                 last = (ext.stamp, f"{type(exc).__name__}: {exc}")

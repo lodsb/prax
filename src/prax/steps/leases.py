@@ -28,6 +28,20 @@ DEFER_SECONDS = 600
 
 # (step, item) -> (worker, until), in time.monotonic()
 _leases: dict[tuple[str, int], tuple[str, float]] = {}
+# (extractor, document) -> until: a reading whose server was not there.
+# Only that reading waits, not the document: a marker reading deferred by
+# leasing the whole document kept the document's two vision-pages
+# readings out of every batch for two days (2026-09-30 to 10-01)
+_readings: dict[tuple[str, int], float] = {}
+
+
+def defer_reading(extractor: str, doc_id: int, seconds: float = DEFER_SECONDS) -> None:
+    _readings[(extractor, int(doc_id))] = time.monotonic() + seconds
+
+
+def reading_deferred(extractor: str, doc_id: int, now: float) -> bool:
+    until = _readings.get((extractor, int(doc_id)))
+    return until is not None and until > now
 
 
 def free(step: str, item: int, now: float) -> bool:
@@ -94,6 +108,15 @@ def release_deferred(step: str, extractors: tuple[str, ...] = ()) -> int:
     ]
     for key in gone:
         _leases.pop(key, None)
+    if step == "parse":
+        held = [
+            k
+            for k, until in list(_readings.items())
+            if until > now and (not extractors or k[0] in extractors)
+        ]
+        for k in held:
+            _readings.pop(k, None)
+        gone += held  # type: ignore[arg-type]
     return len(gone)
 
 

@@ -1052,8 +1052,16 @@ def test_a_reading_whose_server_is_loading_waits_instead_of_failing(
     # and deferred: leased well past a batch, so the next hand-outs hold
     # other work — the follow-ups of the first papers marker read filled
     # every batch of ten with "not yet" and starved the 228 requests behind
-    held = work._leases[("parse", doc)]
-    assert held[1] > time.monotonic() + work.DEFER_SECONDS - 60
+    # — and only the reading waits, not the document: its other readings
+    # go on (a deferred marker reading held two vision-pages readings of
+    # its document back for two days)
+    from prax.steps import leases
+
+    assert ("parse", doc) not in work._leases
+    assert leases.reading_deferred("formulas", doc, time.monotonic() + 500)
+    store.request_reading(con, doc, "marker")  # a second reading, set up directly
+    again = client.get("/work/parse").json()["items"]
+    assert [(i["doc_id"], i["extractor"]) for i in again] == [(doc, "marker")]
     # a text document is not marker's type, so use a fake PDF-typed one
     pdf = store.register(con, b"%PDF-1.4 fake", mime="application/pdf", title="p")[
         "doc_id"
