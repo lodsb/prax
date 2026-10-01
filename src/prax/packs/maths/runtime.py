@@ -391,6 +391,10 @@ for _n in PLAIN_NAMES:
 SAFE_GLOBALS["Li2"] = sympy.Lambda(
     sympy.Symbol("z"), sympy.polylog(2, sympy.Symbol("z"))
 )
+SAFE_GLOBALS["W"] = sympy.LambertW  # the Lambert W, as the diode papers write it
+# a name called as a function: one plain notation knows, or an error that
+# names them (an unknown one failed as "name 'Function' is not defined")
+CALLED = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
 # what the parser itself writes (evaluate=False builds Add, Mul, Pow)
 SAFE_GLOBALS.update(
     Symbol=sympy.Symbol,
@@ -415,6 +419,13 @@ def _plain(formula: str) -> Any:
     ):
         raise ValueError(
             "plain notation takes names, numbers, + - * / ** ^ ( ) , = only"
+        )
+    unknown = sorted({n for n in CALLED.findall(text) if n not in SAFE_GLOBALS})
+    if unknown:
+        raise ValueError(
+            f"plain notation has no function {', '.join(unknown)}; it knows"
+            f" {', '.join(n for n in SAFE_GLOBALS if n[0].islower() and n != 'oo')}"
+            " (Li2 and W too)"
         )
     if "=" in text:
         sides = EQUALS.split(text)

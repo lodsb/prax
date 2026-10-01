@@ -223,3 +223,18 @@ def test_plain_notation_as_a_model_writes_it() -> None:
         check=True,
     )
     assert "check the parentheses" in json.loads(out.stdout)["error"]
+
+
+def test_w_is_lambert_and_an_unknown_function_is_named() -> None:
+    got = ask(op="evaluate", a="W(1)", notation="plain")
+    assert float(got["result"]["text"]) == pytest.approx(0.5671432904)
+    out = subprocess.run(
+        [str(PYTHON), str(RUNTIME)],
+        input=json.dumps({"op": "read", "a": "foo(x) + 1", "notation": "plain"}),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=60,
+        check=True,
+    )
+    assert "no function foo" in json.loads(out.stdout)["error"]

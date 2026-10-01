@@ -3098,3 +3098,24 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   Marker itself still waits for a hand: the planner of stage AI is what
   starts it (`docs/PLAN.md`), in place of `swap: auto`, which would have
   taken the card in the middle of an eval.
+
+## 2026-10-02: the maths tool measured twice (stage AD, step 3)
+
+- **The third round** (6bba583): `$…$`, values without `with`, `==` in
+  `solve`, `simplify a == b` as `same`, `Li2`, SI prefixes inside a
+  formula, a readable parse error, and `I`/`E` as symbols in plain
+  notation (a solve for a current came back imaginary).
+- **The double run**, every way twice and scored in one sitting: with the
+  tool, grounded mode had 11 right in both runs, without it 7 and 9;
+  wrong answers 4 and 3 against 9 and 8. Open mode was 12 and 13 with,
+  11 and 13 without. Two runs of one way disagree on 3 to 7 of 20
+  questions, so the grounded gain is past the spread and the open one is
+  not there. Table and reading: `docs/symbolic-maths.md`.
+- **The fourth round** from the 30 failed calls of 87: the variable after
+  `for`, SymPy's argument order for `series`, the point as `x=0`, a call
+  as the whole step, words after the values, `W` as Lambert W, and an
+  unknown function named with the list of known ones.
+- **The eval waits for a load.** Both first attempts at the double run
+  were stopped for memory while llama-server loaded after its idle time;
+  `scripts/eval_maths.py` now waits for the model instead of recording a
+  failure for every ask (d56d69a).

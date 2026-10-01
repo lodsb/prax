@@ -51,10 +51,17 @@ EQ_SPLIT = re.compile(r"\s*==\s*")
 TO_SAME = ("simplify", "expand", "factor", "together")
 NAME_VALUE = r"[A-Za-z_]\w*\s*=\s*[^\s,=]+"
 TRAILING_VALUES = re.compile(rf"\s+({NAME_VALUE}(?:\s*,\s*{NAME_VALUE})*)\s*$")
+# the second round of the eval (2026-10-02): 12 more ways it was written
+TRAILING_TALK = re.compile(r"\s+(?:answer|result|gives|then)\b\s*:?.*$", re.IGNORECASE)
+AS_CALL = re.compile(r"(?:diff|integrate|simplify|expand|factor)\(")
+FOR_VAR = re.compile(r"\s+for\s+([A-Za-z]\w*)\b.*$")
+SYMPY_ORDER = re.compile(r"(.+?),\s*([A-Za-z]\w*)\s*,\s*([^,]+?)(?:\s*,\s*(\d+))?\s*")
+POINT_AFTER = re.compile(r"(.+?),\s*([^,()]+?)(?:\s*,\s*(\d+))?\s*")
+AT_POINT = re.compile(r"(.+?)\s+(?:at\s+)?([A-Za-z]\w*)\s*=\s*(\S+)")
 # a model writes x**2 or exp(x) as often as LaTeX: formulas without a
 # backslash and with a * or a named function call are plain notation
 PLAINLY = re.compile(
-    r"\*|\b(exp|log|ln|sqrt|tanh|sinh|cosh|sin|cos|tan|atan|polylog|Abs)\("
+    r"\*|\b(exp|log|ln|sqrt|tanh|sinh|cosh|sin|cos|tan|atan|polylog|Li2|Abs|diff|integrate)\("
 )
 
 
@@ -159,9 +166,13 @@ def parse_step(arg: str) -> dict[str, Any]:
     text = " ".join(arg.split())
     op, _, rest = text.partition(" ")
     op = op.lower()
+    if op not in OPERATIONS and AS_CALL.match(text):
+        # diff(F, x) as the whole step: the call is the formula
+        op, rest = "simplify", text
     if op not in OPERATIONS:
         raise ValueError(f"maths takes one of {', '.join(OPERATIONS)} first")
     rest = MATH_DELIMS.sub("", rest)  # a model wraps formulas in $...$
+    rest = TRAILING_TALK.sub("", rest)  # "... answer: 0.0132" after the values
     if " given " in rest:
         raise ValueError(
             "write given values as 'with x=1, y=2' at the end; an equation to"
@@ -188,10 +199,7 @@ def parse_step(arg: str) -> dict[str, Any]:
             values[name.strip()] = value.strip()
         args["values"] = values
     if op in WITH_VAR:
-        var, _, rest = rest.partition(" ")
-        if not re.fullmatch(r"[A-Za-z]\w*", var):
-            raise ValueError(f"{op} takes the variable first: {op} x <formula>")
-        args["var"] = var
+        rest = _with_variable(op, rest, args)
     if op == "code" and rest.split(" ", 1)[0] in ("c", "python"):
         lang, _, rest = rest.partition(" ")
         args["language"] = lang
@@ -224,6 +232,45 @@ def parse_step(arg: str) -> dict[str, Any]:
     if args:
         request["args"] = args
     return request
+
+
+def _with_variable(op: str, rest: str, args: dict[str, Any]) -> str:
+    """The variable of solve, diff, integrate, series, limit and apart, the
+    ways a model writes it: first (``solve x <f>``), after ``for`` at the
+    end (``solve <f> for I1``), SymPy's order (``series tanh(x), x, 0, 5``)
+    or as the point (``series tanh(x) x=0``). The formula is what remains."""
+    if op in ("series", "limit"):
+        point = "at" if op == "series" else "to"
+        m = SYMPY_ORDER.fullmatch(rest)
+        if m:
+            args["var"], args[point] = m.group(2), m.group(3).strip()
+            if m.group(4) and op == "series":
+                args["order"] = int(m.group(4))
+            return m.group(1).strip()
+        m = AT_POINT.fullmatch(rest)
+        if m:
+            args["var"], args[point] = m.group(2), m.group(3)
+            return m.group(1).strip()
+    m = FOR_VAR.search(rest)
+    if m:
+        args["var"] = var = m.group(1)
+        formula = rest[: m.start()].strip()
+        first, _, after = formula.partition(" ")
+        # solve x <f> for x: the first x is the variable named twice, unless
+        # an operator follows it (solve I1 * (1 + e) == I for I1)
+        named_twice = first == var and after[:1].isalnum()
+        return after if named_twice else formula
+    var, _, formula = rest.partition(" ")
+    if not re.fullmatch(r"[A-Za-z]\w*", var):
+        raise ValueError(f"{op} takes the variable first: {op} x <formula>")
+    args["var"] = var
+    m = POINT_AFTER.fullmatch(formula)
+    if m and op in ("series", "limit"):  # series x tanh(x), 0, 5
+        args["at" if op == "series" else "to"] = m.group(2).strip()
+        if m.group(3) and op == "series":
+            args["order"] = int(m.group(3))
+        return m.group(1).strip()
+    return formula
 
 
 def shown(got: dict[str, Any]) -> str:

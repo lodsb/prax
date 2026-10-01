@@ -231,3 +231,24 @@ def test_what_a_model_writes_around_a_formula_is_read_as_meant() -> None:
     assert got["a"] == "I == I1 + I1*exp(u)" and got["notation"] == "plain"
     with pytest.raises(ValueError, match="with x=1"):
         tool.parse_step("solve x a == b given c == d and e == f")
+
+
+def test_the_variable_and_the_point_as_a_model_writes_them() -> None:
+    """The double run of 2026-10-02: the variable after ``for``, SymPy's
+    argument order, the point as x=0, a call as the whole step, and words
+    after the values."""
+    got = tool.parse_step("solve I1 * (1 + exp(u)) == I for I1")
+    assert got["args"]["var"] == "I1" and got["a"] == "I1 * (1 + exp(u)) == I"
+    got = tool.parse_step("solve x I == x + x*exp(u) for x, x=I1")
+    assert got["a"] == "I == x + x*exp(u)"
+    for step in ("series tanh(x), x, 0, 5", "series x tanh(x), 0, 5"):
+        got = tool.parse_step(step)
+        assert (got["a"], got["args"]) == (
+            "tanh(x)",
+            {"var": "x", "at": "0", "order": 5},
+        )
+    assert tool.parse_step("series tanh(x) x=0")["args"] == {"var": "x", "at": "0"}
+    assert tool.parse_step("limit sin(x)/x at x=0")["args"] == {"var": "x", "to": "0"}
+    assert tool.parse_step("diff(x**2, x)")["op"] == "simplify"
+    got = tool.parse_step("evaluate 2*exp(v) with v=0.4 answer: 2.98")
+    assert got["args"]["values"] == {"v": "0.4"}

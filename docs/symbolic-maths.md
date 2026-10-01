@@ -342,8 +342,39 @@ The fixes that followed (2026-10-01, the third round):
   (`same diff(F, x) == f` for an antiderivative), and to write the
   formula a number comes from before evaluating it.
 
-Still to do: measure again, twice per row, so the spread between runs
-is known.
+The double run (2026-10-02, after the third round): every way twice,
+scored by the same rules in one sitting
+(`docs/eval/maths-answers-2026-10-01-d1.json` and `-d2.json`, kept out
+of the repository):
+
+| tools, mode | run 1 R / P / W | run 2 R / P / W | same score in both |
+|---|---|---|---|
+| on, grounded | 11 / 5 / 4 | 11 / 6 / 3 | 13 of 20 |
+| on, open | 12 / 5 / 3 | 13 / 6 / 1 | 17 of 20 |
+| off, grounded | 7 / 4 / 9 | 9 / 3 / 8 | 13 of 20 |
+| off, open | 11 / 8 / 1 | 13 / 4 / 3 | 13 of 20 |
+
+- Two runs of the same way disagree on 3 to 7 of the 20 questions, and
+  the right count moves by up to 2.
+- In grounded mode the tool is worth 2 to 4 more right answers and about
+  5 fewer wrong ones, in both runs. That is past the spread.
+- In open mode it makes no difference: the model knows these identities
+  without the library or the tool.
+- Questions no way gets right yet: the resonator of Dattorro's (5) (it
+  equals (1 − A(z))/2; every answer says no or cannot find it), the
+  second antiderivative of tanh (every answer repeats the table's wrong
+  form), and the diode current (13.27 to 13.34 mA against 13.23; the
+  model computes e^15.47 by hand and is off).
+- The tool was called in 16 and 13 of the 40 asks with it, 87 calls;
+  30 failed. The ways they failed are the fourth round below.
+
+The fourth round (2026-10-02):
+- `tool.parse_step` takes the variable after `for` (`solve <f> for
+  I1`), SymPy's order (`series tanh(x), x, 0, 5`), the point as
+  `x=0` or `at x=0`, a call as the whole step (`diff(F, x)` is
+  `simplify` of it), and drops words after the values (`answer: …`).
+- Plain notation reads `W` as the Lambert W, and a function it does not
+  know is named in the error with the list of those it does.
 
 ## What the user decided (2026-10-01)
 
