@@ -108,6 +108,23 @@ nothing.
         PDFs (13369 to 13371, read by the worker); the arXiv one was in
         the library already (13339).
 
+- [ ] **AH. The stack for universal deployment, after the prototype
+      settles** (the user, 2026-10-01: "a tight prototype, early version
+      before figuring out the tech stack"). Python stays for what it is
+      now. The worker side (parsing, OCR, models, training, the packs'
+      libraries) stays Python for good. The read path of the door
+      (search, get, traverse, the wall) is the part a `prax-core` in
+      Rust could take over and make embeddable in other projects through
+      a C interface and PyO3. Zig was weighed: good C interop, but no
+      tokenizer library and not at 1.0. Not before the schema and the
+      store's interface stop moving (three migrations in two days at the
+      time of writing). The first step is a spike of about a week: a
+      crate that opens a data directory read-only and answers `search`,
+      measured against the Python store on the retrieval eval set for the
+      same answers and its speed. Only then a decision on going further,
+      one store module at a time behind the same `store.<name>`
+      interface, with today's tests and golden runs as the proof.
+
 ## The order, agreed 2026-09-27, second half (from niggles.txt)
 
 F–J below are done, and two niggles with them (taco/tacos is I, the
