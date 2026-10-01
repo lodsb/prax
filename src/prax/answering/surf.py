@@ -57,6 +57,7 @@ SECTIONS = 12  # sections named when a reading found nothing
 SIMILAR = 6
 NOTE_CHARS = 200
 QUERY_CHARS = 100
+TOOL_CHARS = 400  # a pack tool's argument: a derivation runs longer than a query
 LOOK_CHARS = 60  # the words a read looks for inside a document
 STEP_TOKENS = 160  # what a step's two lines may take
 OVERHEAD_TOKENS = 2200  # the system prompt, the question, the step lines, the answer
@@ -173,6 +174,7 @@ class Surf:
     chunks: set[int] = field(default_factory=set)  # chunk ids shown already
     barren: dict[tuple[str, str], int] = field(default_factory=dict)  # what led nowhere
     log: list[str] = field(default_factory=list)
+    worked: list[str] = field(default_factory=list)  # a pack tool's steps and answers
     steps: list[Step] = field(default_factory=list)
     usage: dict[str, int] = field(
         default_factory=lambda: {"input_tokens": 0, "output_tokens": 0}
@@ -567,7 +569,7 @@ def grammar(s: Surf) -> str:
             f'note ::= "note: " char{{1,{NOTE_CHARS}}} "\\n"',
             "action ::= " + " | ".join(actions),
             f'search ::= "search: " char{{2,{QUERY_CHARS}}} "\\n"',
-            *(f'{t} ::= "{t}: " char{{2,{QUERY_CHARS}}} "\\n"' for t in tools),
+            *(f'{t} ::= "{t}: " char{{2,{TOOL_CHARS}}} "\\n"' for t in tools),
             f'read ::= "read: " {where} look? "\\n"',
             f'look ::= " " char{{2,{LOOK_CHARS}}}',
             'facts ::= "facts: " pn "\\n"',
@@ -732,6 +734,8 @@ def run(
             result, added = f"{action} is not available here", []
         else:
             result, added = DO[action](con, s, arg)
+            if action in PACK_TOOLS:
+                s.worked.append(f"{action}: {' '.join(arg.split())}\n  -> {result}")
         if not added:
             s.barren.setdefault(key, step.n)
         line = f"{action}: {arg}" if arg else action
@@ -743,7 +747,11 @@ def run(
         return _result(s, answerer, None, t0)
     emit({"event": "answering", "model": answerer.name, "passages": len(kept)})
     bundle = ask.Bundle(
-        question=s.question, passages=kept, history=history, note=s.note, mode=mode
+        question=s.question,
+        passages=kept,
+        history=history,
+        note=answer_note(s),
+        mode=mode,
     )
     bundle.facts = store.document_facts(
         con, list(dict.fromkeys(p.doc_id for p in kept)), limit=ask.FACTS_PER_DOC
@@ -751,6 +759,24 @@ def run(
     text, usage = answerer.answer(bundle)
     s.add_usage(usage)
     return _result(s, answerer, text, t0, bundle)
+
+
+def answer_note(s: Surf) -> str:
+    """The note the answer is written with: the caller's, then what the
+    packs' tools worked out during the surf. The answering model saw none
+    of the steps, so a result it is not given is a result lost (the maths
+    run of 2026-10-01: seven checks made, none reached an answer)."""
+    if not s.worked:
+        return s.note
+    worked = "\n".join(s.worked[-WORKED_KEPT:])
+    head = (
+        "Worked out with the tools while reading (each line is the request,"
+        " then the tool's answer; use these results, cite the passages):"
+    )
+    return f"{s.note.strip()}\n\n{head}\n{worked}".strip()
+
+
+WORKED_KEPT = 6  # the latest tool results an answer is given
 
 
 def _summary(s: Surf, action: str, result: str, added: list[int]) -> str:
@@ -798,7 +824,7 @@ def _result(
             question=s.question,
             passages=s.kept,
             history=s.history,
-            note=s.note,
+            note=answer_note(s),
             mode=s.mode,
         )
     out = bundle.to_dict()

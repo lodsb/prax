@@ -23,6 +23,7 @@ class MathsReq(BaseModel):
     notation: str = "latex"  # or plain: x**2 + 1
     args: dict[str, Any] | None = None  # var, values, lower, upper, at, to, ...
     mapping: dict[str, str] | None = None  # same: b's symbols as a's
+    steps: list[str] | None = None  # chain: a derivation's steps, each a formula
 
 
 @router.post("/maths")

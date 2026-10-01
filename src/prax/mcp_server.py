@@ -257,16 +257,20 @@ def maths(
     lower: str | None = None,
     upper: str | None = None,
     notation: str = "latex",
+    steps: list[str] | None = None,
 ) -> dict[str, Any]:
     """A SymPy calculator for formulas, on a host that runs the maths pack.
-    ``op`` is one of read, same, simplify, substitute, solve, diff,
-    integrate, series, limit, evaluate, code. A formula (``a``, and ``b``
-    for ``same``) is LaTeX, plain notation with ``notation="plain"``
-    (``x**2 + 1``), or ``chunk:<id>`` for a display formula of the library
-    (ids from search results). ``var`` names the variable of solve, diff,
-    integrate, series and limit; ``values`` maps names to values for
-    evaluate and substitute; ``lower``/``upper`` bound an integral;
-    ``mapping`` renames b's symbols to a's for ``same`` (two papers'
+    ``op`` is one of read, same, chain, simplify, expand, factor, apart,
+    together, substitute, solve, diff, integrate, series, limit, evaluate,
+    code. A formula (``a``, and ``b`` for ``same``) is LaTeX, plain notation
+    with ``notation="plain"`` (``x**2 + 1``), or ``chunk:<id>`` for a
+    display formula of the library (ids from search results). ``chain``
+    takes the steps of a derivation as ``steps`` (``a`` its first) and
+    names the first link that does not hold. ``var`` names the variable
+    of solve, diff, integrate, series, limit and apart (partial fractions);
+    ``values`` maps names to values for evaluate and substitute, with an
+    SI prefix allowed (``10k``, ``1u``, ``26mV``); ``lower``/``upper``
+    bound an integral; ``mapping`` renames b's symbols to a's for ``same`` (two papers'
     notations); ``language`` is c or python for ``code``.
 
     Every answer shows how each formula was read: check the reading before
@@ -289,6 +293,8 @@ def maths(
         body["b"] = b
     if mapping:
         body["mapping"] = mapping
+    if steps:
+        body["steps"] = steps
     if args:
         body["args"] = args
     return _guard(lambda: door().post_json("/maths", body))

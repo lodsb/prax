@@ -361,11 +361,29 @@ def _cases(r: Reading) -> Any:
 # attribute access (a dot only inside a number), no dunder, no quotes, no
 # brackets, and the evaluation sees no builtins (2026-10-01: without the
 # gate a test's "__import__('os').system(...)" ran)
-PLAIN = re.compile(r"^[A-Za-z0-9_ +\-*/^(),=]*$")
+PLAIN = re.compile(r"^[A-Za-z0-9_ +\-*/^(),.=]*$")
+# the names plain notation knows: functions and constants, nothing else of
+# SymPy. Every other name is a symbol, so beta, gamma, N or S in a formula
+# are quantities and not SymPy's beta function or its N() (2026-10-01: a
+# model's `beta` was read as the function and the step failed)
+PLAIN_NAMES = (  # noqa: SIM905 - a list of words reads as one
+    "exp log ln sqrt cbrt root sin cos tan cot sec csc asin acos atan atan2"
+    " sinh cosh tanh coth sech csch asinh acosh atanh Abs sign floor ceiling"
+    " Min Max polylog LambertW erf erfc Heaviside DiracDelta Piecewise diff"
+    " integrate pi E I oo Rational"
+).split()
 SAFE_GLOBALS: dict[str, Any] = {"__builtins__": {}}
-for _n in dir(sympy):
-    if not _n.startswith("_"):
-        SAFE_GLOBALS[_n] = getattr(sympy, _n)
+for _n in PLAIN_NAMES:
+    SAFE_GLOBALS[_n] = getattr(sympy, _n) if _n != "ln" else sympy.log
+# what the parser itself writes (evaluate=False builds Add, Mul, Pow)
+SAFE_GLOBALS.update(
+    Symbol=sympy.Symbol,
+    Integer=sympy.Integer,
+    Float=sympy.Float,
+    Add=sympy.Add,
+    Mul=sympy.Mul,
+    Pow=sympy.Pow,
+)
 
 
 def _plain(formula: str) -> Any:
@@ -628,6 +646,66 @@ OPERATIONS: dict[str, Callable[..., dict[str, Any]]] = {
 }
 # the arguments that are formulas themselves, read like the main one
 FORMULA_ARGS = ("lower", "upper", "at", "to")
+# an SI prefix on a value, as a circuit writes it: 10k, 1u, 26m, 4.7n
+PREFIXES = {
+    "G": 1e9,
+    "M": 1e6,
+    "k": 1e3,
+    "m": 1e-3,
+    "u": 1e-6,
+    "µ": 1e-6,
+    "n": 1e-9,
+    "p": 1e-12,
+}
+VALUE = re.compile(
+    r"^\s*([-+]?\d*\.?\d+(?:[eE][-+]?\d+)?)\s*([GMkmuµnp]?)\s*[A-Za-zΩ]*\s*$"
+)
+
+
+def _value(v: Any, notation: str) -> Any:
+    """A given value: a number, with an SI prefix and a unit allowed
+    (``10k``, ``1 uF``, ``26mV``), or a formula."""
+    if not isinstance(v, str):
+        return v
+    m = VALUE.match(v)
+    if m:
+        return sympy.Float(m.group(1)) * sympy.Float(PREFIXES.get(m.group(2), 1.0))
+    return read(v, notation)[0]
+
+
+def op_chain(steps: list[Any], **_: Any) -> dict[str, Any]:
+    """Each link of a derivation A == B == C checked with ``same``; the
+    first link that fails is named, so a model sees where its step went
+    wrong."""
+    links = []
+    for i in range(len(steps) - 1):
+        got = op_same(steps[i], steps[i + 1])
+        links.append({"link": i + 1, **got})
+        if got.get("same") is not True:
+            return {"chain": False, "broken_at": i + 1, "links": links}
+    return {"chain": True, "links": links}
+
+
+def op_expand(a: Any, **_: Any) -> dict[str, Any]:
+    return {"result": _shown(sympy.expand(a))}
+
+
+def op_factor(a: Any, **_: Any) -> dict[str, Any]:
+    return {"result": _shown(sympy.factor(a))}
+
+
+def op_apart(a: Any, *, var: str, **_: Any) -> dict[str, Any]:
+    """Partial fractions in ``var``: a transfer function as its poles."""
+    return {"result": _shown(sympy.apart(sympy.together(a), sympy.Symbol(var)))}
+
+
+def op_together(a: Any, **_: Any) -> dict[str, Any]:
+    return {"result": _shown(sympy.cancel(sympy.together(a)))}
+
+
+OPERATIONS.update(
+    expand=op_expand, factor=op_factor, apart=op_apart, together=op_together
+)
 
 
 def answer(request: dict[str, Any]) -> dict[str, Any]:
@@ -636,8 +714,20 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
     arguments. Every answer says how each formula was read."""
     op = str(request.get("op") or "read")
     notation = str(request.get("notation") or "latex")
-    if op != "read" and op not in OPERATIONS:
-        raise ValueError(f"no operation {op!r}; they are read, {', '.join(OPERATIONS)}")
+    if op not in ("read", "chain") and op not in OPERATIONS:
+        raise ValueError(
+            f"no operation {op!r}; they are read, chain, {', '.join(OPERATIONS)}"
+        )
+    if op == "chain":  # a derivation, each step read and each link checked
+        written = request.get("steps") or str(request["a"]).split("==")
+        steps = [read(str(f).strip(), notation)[0] for f in written]
+        if len(steps) < 2:
+            raise ValueError("chain takes two formulas or more: a == b == c")
+        return {
+            "op": op,
+            "read": {str(i + 1): _shown(e) for i, e in enumerate(steps)},
+            **op_chain([e.doit() for e in steps]),
+        }
     a, ra = read(str(request["a"]), notation)
     out: dict[str, Any] = {
         "op": op,
@@ -658,8 +748,7 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
             kwargs[k] = read(kwargs[k], notation)[0]
     if "values" in kwargs:
         kwargs["values"] = {
-            str(k): read(str(v), notation)[0] if isinstance(v, str) else v
-            for k, v in kwargs["values"].items()
+            str(k): _value(v, notation) for k, v in kwargs["values"].items()
         }
     if op == "same":
         b, rb = read(str(request["b"]), notation)

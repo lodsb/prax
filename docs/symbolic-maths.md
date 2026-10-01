@@ -74,9 +74,11 @@ and checks.
 |---|---|---|
 | `read` | the formula as parsed, with its symbols | catching a misreading before anything else |
 | `same` | the difference simplifies to zero, else a numeric check at random points; it says which | a model's step checked, two papers' formulas compared |
+| `chain` | `same` on each link of `a == b == c`, stopping at the first that fails | a derivation checked, and the step that went wrong named |
 | `simplify`, `substitute`, `solve` | the algebra | rearranging, a definition put into another formula |
+| `expand`, `factor`, `together`, `apart` | the forms of an expression; `apart` is partial fractions in a variable | a transfer function as its poles |
 | `diff`, `integrate`, `series`, `limit` | the calculus | an antiderivative, a Taylor expansion |
-| `evaluate` | numbers, with units when given | what given values produce |
+| `evaluate` | numbers; a value may carry an SI prefix and a unit (`10k`, `1u`, `26mV`) | what given values produce |
 | `code` | the expression as C or Python (SymPy's printers) | the line that goes into a program |
 
 A formula is LaTeX, a passage of the library by its number, or plain
@@ -131,9 +133,19 @@ are called on it.
 - The surfer's action, for the local model, which cannot run code:
   `maths: same [3] == [7]`, `maths: integrate x \tanh(x)`,
   `maths: evaluate [4] with R=1000, C=1e-6`, `maths: code python <latex>`.
-  A passage [n] is the display formula it holds. The answer goes into the
-  log as one line, its reading first. The prompt shows the action only on
-  a host that runs the pack (the manifest's `tool_help`).
+  A passage [n] alone is the display formula it holds. Inside a formula
+  it is that formula's right side in parentheses (`diff x [3]`). The
+  answer goes into the log as one line, its reading first. The prompt
+  shows the action only on a host that runs the pack (the manifest's
+  `tool_help`). It tells the model to check what it derives, each step
+  and each number, and to believe a "not the same".
+- The answer is written by a call that sees none of the steps. So the
+  last six tool requests and their answers go into the bundle's note
+  (`surf.answer_note`, `WORKED_KEPT`). Before 2026-10-01 they did not, and
+  no check the surf made reached an answer.
+- Plain notation knows only the names in `runtime.PLAIN_NAMES`, the
+  functions and constants. Every other name is a symbol, so `beta` and
+  `N` are quantities, not SymPy's beta function and `N()`.
 
 The prax side is `src/prax/packs/maths/tool.py`. It runs the calculator,
 resolves a chunk to its LaTeX, and parses the surfer's syntax.
@@ -245,7 +257,30 @@ they are used. They ask:
 
 
 Each is scored by hand, with and without the tool, in grounded and in
-open mode (`scripts/eval_ask.py`).
+open mode (`scripts/eval_maths.py`, questions in
+`tests/eval/questions-maths.yaml`).
+
+The first run (2026-10-01, the local ask model, 8 steps) scored right,
+partly right and wrong as follows:
+
+| tools, mode | right | partly | wrong |
+|---|---|---|---|
+| on, grounded | 10 | 3 | 7 |
+| off, grounded | 11 | 3 | 6 |
+| on, open | 17 | 2 | 1 |
+| off, open | 17 | 1 | 2 |
+
+The tool was called in 7 of the 40 asks with tools on, and made no
+difference. Four faults explained it:
+
+- the answer never saw the tool's results;
+- plain notation refused a decimal point;
+- plain notation knew every SymPy name, so `beta` was a function;
+- a passage could not stand inside a formula.
+
+All four are fixed, the prompt now asks for checks, and `chain`,
+`expand`, `factor`, `together` and `apart` were added. The rerun is the
+measurement of that.
 
 ## What the user decided (2026-10-01)
 

@@ -136,3 +136,45 @@ def test_a_derivation_step_the_model_wrote_is_checked() -> None:
         check=False,
     )
     assert "c has no polylog" in json.loads(out.stdout)["error"]
+
+
+def test_a_chain_names_the_link_that_breaks() -> None:
+    got = ask(
+        op="chain", a="(x+1)**2 == x**2 + 2*x + 1 == x**2 + x + 1", notation="plain"
+    )
+    assert got["chain"] is False and got["broken_at"] == 2
+    assert got["links"][0]["same"] is True
+    assert ask(op="chain", steps=["sinh(x)/cosh(x)", "tanh(x)"], notation="plain")[
+        "chain"
+    ]
+
+
+def test_the_algebra_operations() -> None:
+    def text(**r: Any) -> str:
+        return str(ask(notation="plain", **r)["result"]["text"])
+
+    assert text(op="factor", a="x**2 - 1") == "(x - 1)*(x + 1)"
+    assert text(op="expand", a="(x + 1)**2") == "x**2 + 2*x + 1"
+    assert text(op="together", a="1/x + 1/y") == "(x + y)/(x*y)"
+    assert text(op="apart", a="1/((s + 1)*(s + 2))", args={"var": "s"}) == (
+        "-1/(s + 2) + 1/(s + 1)"
+    )
+
+
+def test_a_value_may_carry_a_prefix_and_a_unit() -> None:
+    """10k, 1u, 26mV as a circuit writes them; beta is a quantity, not
+    SymPy's beta function."""
+    got = ask(
+        op="evaluate",
+        a="I_s*(exp(V/V_T) - 1)",
+        notation="plain",
+        args={"values": {"I_s": "1e-12", "V": "0.6", "V_T": "26mV"}},
+    )
+    assert abs(float(got["result"]["text"]) - 0.010524) < 1e-5
+    got = ask(
+        op="evaluate",
+        a="beta*R",
+        notation="plain",
+        args={"values": {"beta": "2", "R": "4.7k"}},
+    )
+    assert float(got["result"]["text"]) == 9400.0

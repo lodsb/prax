@@ -167,3 +167,46 @@ def test_plain_notation_is_seen_in_a_surf_step() -> None:
     got = tool.parse_step("same I / (1 + exp(x)) == I/2 * (1 - tanh(x/2))")
     assert got["notation"] == "plain"
     assert "notation" not in tool.parse_step(r"same \frac{1}{2} == [3]")
+
+
+def test_a_chain_and_the_new_operations_in_a_surf_step() -> None:
+    got = tool.parse_step("chain (x+1)**2 == x**2 + 2*x + 1 == x**2 + 1")
+    assert got["steps"] == ["(x+1)**2", "x**2 + 2*x + 1", "x**2 + 1"]
+    assert got["notation"] == "plain"
+    assert tool.parse_step("apart s 1/((s+1)*(s+2))")["args"] == {"var": "s"}
+    with pytest.raises(ValueError, match="steps of a derivation"):
+        tool.parse_step("chain x**2")
+    got = tool.shown(
+        {"chain": False, "broken_at": 2, "links": [{}, {"how": "numeric"}]}
+    )
+    assert "link 2 (step 2 to step 3) does not hold" in got
+
+
+def test_a_passage_inside_a_formula_is_its_right_side(
+    con: sqlite3.Connection, asked: list[dict[str, Any]]
+) -> None:
+    formula, _ = _formula(con)
+
+    class Surf:
+        def by_n(self, arg: str) -> Passage | None:
+            if arg != "[1]":
+                return None
+            return Passage(1, 1, formula, "clipper", [], None, None, "")
+
+    tool.surf_maths(con, Surf(), r"diff v \frac{1}{2}[1]")
+    a = asked[-1]["a"]
+    assert a.startswith(r"\frac{1}{2}(I_s") and "i =" not in a
+    assert "notation" not in asked[-1]  # the passage is LaTeX
+    tool.surf_maths(con, Surf(), "chain [1] == x")
+    assert asked[-1]["steps"][0].startswith("i = I_s")
+
+
+def test_the_answer_is_given_what_the_tools_worked_out() -> None:
+    from prax.answering import surf
+
+    s = surf.Surf("q", "q", [], None, 5, 3, 1000, note="a word")
+    assert surf.answer_note(s) == "a word"
+    s.worked = [f"maths: same {i}\n  -> the same" for i in range(9)]
+    note = surf.answer_note(s)
+    assert note.startswith("a word\n\nWorked out with the tools")
+    assert "same 8" in note and "same 2" not in note  # the latest six

@@ -35,9 +35,20 @@ OPERATIONS = (
     "limit",
     "evaluate",
     "code",
+    "chain",
+    "expand",
+    "factor",
+    "apart",
+    "together",
 )
-WITH_VAR = ("solve", "diff", "integrate", "series", "limit")
+WITH_VAR = ("solve", "diff", "integrate", "series", "limit", "apart")
 CHUNK_REF = re.compile(r"^chunk:(\d+)$")
+PASSAGE = re.compile(r"\[(\d+)\]")
+# a model writes x**2 or exp(x) as often as LaTeX: formulas without a
+# backslash and with a * or a named function call are plain notation
+PLAINLY = re.compile(
+    r"\*|\b(exp|log|ln|sqrt|tanh|sinh|cosh|sin|cos|tan|atan|polylog|Abs)\("
+)
 
 
 class MathsUnavailable(RuntimeError):
@@ -114,7 +125,16 @@ def calculate(con: sqlite3.Connection, request: dict[str, Any]) -> dict[str, Any
     for key in ("a", "b"):
         if isinstance(out.get(key), str):
             out[key] = resolve(con, out[key])
+    if isinstance(out.get("steps"), list):
+        out["steps"] = [resolve(con, str(f)) for f in out["steps"]]
     return run(out)
+
+
+def right_side(latex: str) -> str:
+    """What a displayed equation defines: the part after its last ``=``
+    (``y[n] = x[n] - a`` as ``x[n] - a``), for a passage that stands inside
+    a formula the model wrote."""
+    return latex.rsplit("=", 1)[-1].strip() if "=" in latex else latex.strip()
 
 
 # ------------------------------------------------------------ the surfer
@@ -158,21 +178,22 @@ def parse_step(arg: str) -> dict[str, Any]:
         if not sep:
             raise ValueError("same takes two formulas: same <a> == <b>")
         request["a"], request["b"] = a.strip(), b.strip()
+    elif op == "chain":
+        steps = [f.strip() for f in rest.split(" == ")]
+        if len(steps) < 2 or not all(steps):
+            raise ValueError("chain takes the steps of a derivation: chain a == b == c")
+        request["a"], request["steps"] = steps[0], steps
     else:
         request["a"] = rest.strip()
     if not request["a"]:
         raise ValueError(f"{op} takes a formula: a passage [n] or LaTeX")
-    # a model writes x**2 or exp(x) as often as LaTeX: formulas without a
-    # backslash and with a * are plain notation (passages are LaTeX)
-    written = [request[k] for k in ("a", "b") if k in request]
-    out_written = [f for f in written if not f.startswith("[")]
-    plainly = re.compile(
-        r"\*|\b(exp|log|sqrt|tanh|sinh|cosh|sin|cos|tan|atan|polylog)\("
-    )
+    # passages are LaTeX; the formulas the model wrote say their notation
+    written = [*request.get("steps", ()), request["a"], request.get("b", "")]
+    own = [f for f in written if f and not re.fullmatch(r"\[\d+\]", f)]
     if (
-        out_written
-        and all("\\" not in f for f in out_written)
-        and any(plainly.search(f) for f in out_written)
+        own
+        and all("\\" not in f and not PASSAGE.search(f) for f in own)
+        and any(PLAINLY.search(f) for f in own)
     ):
         request["notation"] = "plain"
     if args:
@@ -187,6 +208,16 @@ def shown(got: dict[str, Any]) -> str:
         return f"maths: {got['error']}"
     reads = got.get("read") or {}
     parts = [f"read {k} as {v.get('text')}" for k, v in reads.items()]
+    if "chain" in got:
+        if got["chain"]:
+            parts.append(f"every link holds ({len(got.get('links') or [])})")
+        else:
+            n = int(got.get("broken_at") or 0)
+            link = (got.get("links") or [{}])[-1]
+            parts.append(
+                f"link {n} (step {n} to step {n + 1}) does not hold"
+                f" ({link.get('how')}); the links before it do"
+            )
     if "same" in got:
         verdict = {True: "the same", False: "not the same", None: "undecided"}
         parts.append(f"{verdict[got['same']]} ({got.get('how')})")
@@ -203,18 +234,37 @@ def shown(got: dict[str, Any]) -> str:
     return " | ".join(parts)
 
 
+def passages_in(con: sqlite3.Connection, s: Any, formula: str) -> str:
+    """A formula with the passages it names: ``[n]`` alone is that
+    passage's display formula (``chunk:<id>``), ``[n]`` inside a formula
+    is the formula's right side in parentheses (``\\frac{d}{dx}[3]``)."""
+    whole = re.fullmatch(r"\[(\d+)\]", formula.strip())
+
+    def chunk_of(ref: str) -> int:
+        p = s.by_n(ref)
+        if p is None or p.chunk_id is None:
+            raise ValueError(f"there is no passage {ref}")
+        return int(p.chunk_id)
+
+    if whole:
+        return f"chunk:{chunk_of(formula.strip())}"
+    return PASSAGE.sub(
+        lambda m: "(" + right_side(formula_of(con, chunk_of(m.group(0)))) + ")",
+        formula,
+    )
+
+
 def surf_maths(con: sqlite3.Connection, s: Any, arg: str) -> str:
     """The surfer's ``maths:`` action: a passage [n] is the formula it
-    holds, anything else is LaTeX the model wrote."""
+    holds, alone or inside a formula; anything else is what the model
+    wrote, LaTeX or plain notation."""
     try:
         request = parse_step(arg)
         for key in ("a", "b"):
-            ref = request.get(key)
-            if ref and re.fullmatch(r"\[\d+\]", ref):
-                p = s.by_n(ref)
-                if p is None or p.chunk_id is None:
-                    return f"maths: there is no passage {ref}"
-                request[key] = f"chunk:{p.chunk_id}"
+            if request.get(key):
+                request[key] = passages_in(con, s, request[key])
+        if "steps" in request:
+            request["steps"] = [passages_in(con, s, f) for f in request["steps"]]
         return shown(calculate(con, request))
     except (ValueError, KeyError, MathsUnavailable) as exc:
         return f"maths: {exc}"
