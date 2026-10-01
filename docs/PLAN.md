@@ -44,7 +44,7 @@ nothing.
       cases, cues, suggested rules) turned on by the library, its capability
       (readers, kinds, steps, tools, models, extra) by the host. First step: the
       registries and the eight existing modules moved into packs.
-- [ ] (2026-09-30: planned, `docs/symbolic-maths.md`: 17,417 formulas in 243 documents; SymPy's ANTLR parser reads 81% and about 36% plausibly faithfully; three steps and five operations; the build waits on the user's choices) **AD. Symbolic maths, planned as a stage** (niggles.txt,
+- [ ] (2026-10-01: the user chose a SymPy calculator with `same` as the check; step 1 done, the rules: 38% accepted, 86% of those faithful by hand, the rest refused rather than misread; next: the tool, the route, the MCP tool and the surf action) (2026-09-30: planned, `docs/symbolic-maths.md`: 17,417 formulas in 243 documents; SymPy's ANTLR parser reads 81% and about 36% plausibly faithfully; three steps and five operations; the build waits on the user's choices) **AD. Symbolic maths, planned as a stage** (niggles.txt,
       2026-09-30). A display equation is a `formula` chunk with its LaTeX
       in `data` since marker. SymPy's LaTeX parser can turn it into an
       expression kept beside it. `ask` and the surfer could then use a

@@ -3029,3 +3029,28 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   versions, the sameness rule and the lexicon identical before and after.
   The lexicon stays whole in the core: its `by_type` is ordered, and
   splitting it by pack would type 361 of 201,055 names differently.
+
+## 2026-10-01: the maths pack, step 1 (stage AD)
+
+- **The design** (`docs/symbolic-maths.md`, the user's choice): a small
+  SymPy calculator a model calls (read, same, simplify, substitute,
+  solve, diff, integrate, series, limit, evaluate, code), with `same` as
+  the check of a model's steps. The user's example is an ADAA version of
+  a shaper: `integrate` gives the antiderivative, `same` checks it, `code`
+  gives the line in C.
+- **Its own environment.** RapidOCR's `omegaconf` pins ANTLR 4.9, and
+  SymPy's LaTeX parser needs 4.11, so the calculator is
+  `src/prax/packs/maths/runtime.py`, run by the interpreter of
+  `%LOCALAPPDATA%\prax\maths-venv` (SymPy 1.14, ANTLR 4.11) as a
+  subprocess: JSON in, JSON out, a time limit, nothing of prax imported.
+- **A hole the tests found.** SymPy's expression parser is `eval` even
+  with only its standard transformations: a test's injected
+  `__import__('os').system(...)` ran. Plain notation now passes a gate
+  first (names, numbers, operators, parentheses; no attribute access, no
+  dunder, no quotes) and is evaluated with no builtins.
+- **The rules, measured** on the 2,000-formula sample: 38% accepted, 20%
+  refused as stopped short or unread, 42% no parse. Signs of a
+  misreading among the answers went from 45% to 0.4%. Hand-checked
+  against the LaTeX in three sets of 50: 21, then 36, then 43 faithful
+  (86%). About a third of the library's display formulas are read
+  faithfully, and nearly all of the rest are said to be unread.

@@ -117,6 +117,62 @@ are called on it.
 same name for Claude, and a `maths:` action of the surfer for the local
 model, which cannot run code.
 
+## Step 1, measured (2026-10-01)
+
+The rules live in the maths pack's runtime
+(`src/prax/packs/maths/runtime.py`, `Reading`). Each rewrites a name the
+parser would split into a placeholder it reads as one symbol, and
+renames it after the parse:
+
+- an accent (`\tilde{\zeta}_k` is `zeta_tilde_k`), a font
+  (`\mathcal{T}` is `T_cal`), a multi-letter or comma subscript
+  (`G_{max}`, `c_{in,p,i}`), a Greek multi-index
+  (`D_{\alpha\beta\gamma}`), a parenthesized superscript (`g^{(m)}`, a
+  label and not a power).
+- `x[n]` as the signal `x(n)`, after an accent too.
+- `\frac{d^2u}{dt^2}` as the second derivative (the parser knows only
+  the first, so it is nested).
+- `\operatorname{sgn}`, `\Re` and `\arg` as SymPy's functions.
+- a factor before parentheses, not a function: a name the formula also
+  uses alone, and `i`, `j`, `\pi`, `e` (`G(1 - G/N)`, `2\pi(1000)`).
+- `e` as the base of a power as Euler's number.
+- `cases` as a Piecewise, and a multi-line environment as one chain.
+- prose (`\text{for all}`, a unit) dropped, and what follows a `\quad`.
+
+Two checks refuse a reading instead of answering about it:
+
+- **stopped short**: the ANTLR parser returns the first part of a
+  formula and drops the rest without a word. A letter of the formula
+  missing from the result, or an `=` that did not become an equation, is
+  such a reading.
+- **a command it does not read**: a relation such as `\simeq`, `\propto`
+  or `\ll`, a matrix, an ellipsis or `\nabla`. A bare `*` is refused too,
+  because in signal processing it is a convolution. So is a command of
+  the formula that survived as a name.
+
+On the same sample of 2,000 formulas (seed 4; formulas of documents
+marked personal left out), with `scripts/eval_latex.py --modes
+antlr,rules`:
+
+| | the parser alone | with the rules |
+|---|---|---|
+| accepted | 710 (36%) "plausible" | 761 (38%) |
+| refused as stopped short or unread | none: wrong readings came back as answers | 391 (20%) |
+| no parse | 381 (19%) | 840 (42%) |
+| a sign of a misreading among the answers | 909 (45%) | 8 (0.4%) |
+
+The accepted readings were checked by hand against their LaTeX, in three
+sets of 50 drawn apart. Each set came after the fixes the one before had
+shown. Faithful: 21 of 50, then 36, then 43 (86%). Most wrong ones of the
+last set are notation the formula leaves open: `V_3(R_9\beta - …)` may be
+a function or a product. The others are physics notation the tool is not
+for, such as a functional derivative or an expectation `E[…]`.
+
+So about a third of the library's display formulas are read faithfully,
+and nearly all of the rest are said to be unread rather than answered
+wrongly. Every answer shows its reading back, which is how a model
+catches the remaining ambiguities.
+
 ## The order of the work
 
 Each step measured before the next:
@@ -135,10 +191,10 @@ Each step measured before the next:
 2. **The tool** (about two days): the subprocess, its operations, the
    route, the MCP tool and the surf action, as the maths pack.
 3. **The questions** (below), with and without the tool.
-4. **The local model for the rest**, only after step 1 is measured: a
-   reading of the `formulas` step that writes SymPy for a formula the
-   rules could not read, kept only when its LaTeX parses back to the
-   same expression. At about a second a formula on the 35B model, the
+4. **The local model for the rest**, only after step 1 is measured. A
+   reading of the `formulas` step writes SymPy for a formula the rules
+   could not read. It is kept only when its LaTeX parses back to the same
+   expression. At about a second a formula on the 35B model, the
    roughly 11,000 left after the rules are three to four hours.
 
 ## Where the parse lives
@@ -158,9 +214,15 @@ again. No new table.
 ## How it is measured
 
 About twenty questions over the 243 documents, shown to the user before
-they are used. Some ask whether two formulas are the same, some how to
-get from one formula to another (each step of the answer checked), some
-what given values produce, and one asks for an ADAA version of a shaper.
+they are used. They ask:
+
+- whether two formulas are the same;
+- how to get from one formula to another, each step of the answer
+  checked;
+- what given values produce;
+- and, once, for an ADAA version of a shaper.
+
+
 Each is scored by hand, with and without the tool, in grounded and in
 open mode (`scripts/eval_ask.py`).
 
