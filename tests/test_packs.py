@@ -145,5 +145,6 @@ def test_the_surfers_prompt_shows_a_packs_tool(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(surf, "PACK_HELP", ["maths: same [n] == <latex>   check"])
     text = surf.system()
     assert text.index("maths: same") < text.index("\nanswer  ")
+    assert surf.system(False) == surf.SYSTEM  # an ask with tools off
     monkeypatch.setattr(surf, "PACK_HELP", [])
     assert surf.system() == surf.SYSTEM

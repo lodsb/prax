@@ -40,6 +40,7 @@ class AskReq(BaseModel):
     stream: bool = False  # the trail as it happens, one JSON line per event
     regions: bool = False  # the region the passages come from, with its summary
     mode: str = "grounded"  # or open: the model's own knowledge beside the passages
+    tools: bool = True  # the packs' tools in the surf (False: without them)
 
 
 class SaveReq(BaseModel):
@@ -98,6 +99,7 @@ def ask(req: AskReq, request: Request) -> Any:
         "tokens": req.tokens,
         "regions": req.regions,
         "mode": req.mode,
+        "tools": req.tools,
     }
     if not req.stream:
         try:

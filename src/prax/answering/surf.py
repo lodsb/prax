@@ -164,6 +164,7 @@ class Surf:
     steps_left: int
     tokens_left: int
     note: str = ""  # beside the question, for the model only
+    tools: bool = True  # the packs' tools this host runs (False: without them)
     mode: str = "grounded"  # or open: the model's own knowledge beside
     passages: list[ask.Passage] = field(default_factory=list)
     seq: dict[int, int] = field(default_factory=dict)  # passage n -> where to read on
@@ -553,7 +554,8 @@ def grammar(s: Surf) -> str:
     live = s.live()
     pn = " | ".join(f'"[{n}]"' for n in live) or '"[0]"'
     docs = " | ".join(f'"{i}"' for i in sorted(s.docs)) or '"0"'
-    actions = ["search", "walk", "done", *PACK_TOOLS]
+    tools = PACK_TOOLS if s.tools else ()
+    actions = ["search", "walk", "done", *tools]
     if live:
         actions += ["read", "facts", "similar", "drop"]
     elif s.docs:
@@ -565,7 +567,7 @@ def grammar(s: Surf) -> str:
             f'note ::= "note: " char{{1,{NOTE_CHARS}}} "\\n"',
             "action ::= " + " | ".join(actions),
             f'search ::= "search: " char{{2,{QUERY_CHARS}}} "\\n"',
-            *(f'{t} ::= "{t}: " char{{2,{QUERY_CHARS}}} "\\n"' for t in PACK_TOOLS),
+            *(f'{t} ::= "{t}: " char{{2,{QUERY_CHARS}}} "\\n"' for t in tools),
             f'read ::= "read: " {where} look? "\\n"',
             f'look ::= " " char{{2,{LOOK_CHARS}}}',
             'facts ::= "facts: " pn "\\n"',
@@ -610,10 +612,10 @@ for _name, _tool in packs.tools(config.host_packs()).items():
 PACK_HELP = packs.tool_help(config.host_packs())
 
 
-def system() -> str:
+def system(tools: bool = True) -> str:
     """The prompt of a step: the core's actions, and before ``answer`` the
-    lines of the packs' tools this host runs."""
-    if not PACK_HELP:
+    lines of the packs' tools this host runs (none with ``tools`` off)."""
+    if not PACK_HELP or not tools:
         return SYSTEM
     head, sep, tail = SYSTEM.partition("\nanswer  ")
     return head + "\n" + "\n".join(PACK_HELP) + sep + tail
@@ -659,6 +661,7 @@ def run(
     stop: threading.Event | None = None,
     note: str = "",
     mode: str = "grounded",
+    tools: bool = True,
 ) -> dict[str, Any]:
     """Surf, then answer. Step 0 is the door's own search of the question
     (what the one-shot ask starts from); the model's steps follow, up to
@@ -675,6 +678,7 @@ def run(
         doctype=doctype,
         note=note,
         mode=mode,
+        tools=tools,
         limit=max(1, min(limit, 20)),
         steps_left=steps,
         tokens_left=tokens,
@@ -701,7 +705,9 @@ def run(
             return _result(s, answerer, None, t0)
         t = time.monotonic()
         try:
-            text, usage = answerer.step(system(), s.message(), grammar=grammar(s))
+            text, usage = answerer.step(
+                system(s.tools), s.message(), grammar=grammar(s)
+            )
         except Exception as exc:  # noqa: BLE001 - answer from what was read
             record(Step(len(s.steps), "error"), f"the model failed: {exc}", [], t)
             break
@@ -722,6 +728,8 @@ def run(
                 f"step {s.barren[key]} asked that and it brought nothing;"
                 " ask something else"
             )
+        elif action in PACK_TOOLS and not s.tools:
+            result, added = f"{action} is not available here", []
         else:
             result, added = DO[action](con, s, arg)
         if not added:

@@ -613,6 +613,7 @@ def ask(
     note: str = "",
     regions: bool = False,
     mode: str = "grounded",
+    tools: bool = True,
 ) -> dict[str, Any]:
     """Gather, then answer with ``answerer`` (None: the bundle alone, the
     caller's model answers). ``history`` is the conversation so far, as
@@ -646,6 +647,7 @@ def ask(
             stop=stop,
             note=note,
             mode=mode,
+            tools=tools,
         )
     bundle = gather(
         con,
