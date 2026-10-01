@@ -55,7 +55,8 @@ revisit threshold, under "Decision thresholds" below.
    caller writes `store.<name>` and never imports a submodule. Inside
    the package, a module imports only from the ones before it in that
    order. At the top of a module the store imports only what is below
-   it (config, `text`, `ml`, `graph.ontology`); a pass that needs a
+   it (config, the packs' manifests, `text`, `ml`, `graph.ontology`); a
+   pass that needs a
    step's logic calls up inside a function (`tests/test_invariants.py`).
    A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
@@ -126,7 +127,9 @@ revisit threshold, under "Decision thresholds" below.
    Provenance is a column on the fact, never an edge in the graph.
    Upgrading a producer's work is `retire_run` plus a new pass.
 9. **The ontology is small, versioned and modular.** *(enforced)* Entity and
-   relation types live in `ontology/`, one YAML module per domain.
+   relation types live in YAML modules, one per domain: `core.yaml` in
+   `ontology/`, and every domain's module in its pack
+   (`src/prax/packs/<pack>/`, `docs/packs.md`), composed on every host.
    `core.yaml` holds the shared types (person, organization, document,
    place, event, work, concept, tool) and the relations every kind of
    document and organization shares (`authored_by`, `published_by`,
@@ -168,8 +171,8 @@ revisit threshold, under "Decision thresholds" below.
    join the version string.
    What "the same thing" means for two entities is
    `ontology/sameness.yaml` beside it, in the same way: the cases that are
-   one thing and those that are two, and a module's own cases for its
-   types. Every judge of a likely pair is given it (the local model, the
+   one thing and those that are two; a module's own cases for its types
+   are in its pack (`sameness.yaml` beside the module). Every judge of a likely pair is given it (the local model, the
    paid one, and the Review page, `GET /graph/sameness`), and a change to
    its wording is measured again (`steps.adjudicate.platt`).
    What a document *is* is `ontology/genres.yaml`, the third file beside
@@ -272,7 +275,9 @@ reference `docs/ask.md`.
 - The layout (the engineering pass of 2026-09-28). The top of `prax`
   holds the foundations and the protocol the invariants name: `config`,
   `models`, `client`, `work`, `worker`, `mcp_server`, and `evaluation`
-  for the scripts. Everything else lives in a package that says what it
+  for the scripts. `packs` holds every domain (2026-10-01,
+  `docs/packs.md`): each pack's manifest is data that the config, the
+  step names and the store may read, and its code loads when used. Everything else lives in a package that says what it
   is about: `store`, `api`, `steps`, `parsers` (its extractors in parts by
   what they read, with an `ORDER`) and `importers` as before, and `text` (the shapes of text: markup, chunks, a page's
   regions, language, what a model wrapped its answer in; it imports

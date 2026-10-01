@@ -1,0 +1,8 @@
+# The craft pack's cases of "the same thing" (ontology/sameness.yaml says
+# how they are used). Composed after the general ones.
+modules:
+  kitchen:
+    different:
+      - case: a dish and a variant of it
+        examples:
+          - [Lasagne, vegane Lasagne]

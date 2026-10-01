@@ -6,7 +6,9 @@ is a pack (the user, 2026-10-01). Some bring only knowledge: society,
 kitchen, studio. Others bring code as well: maths, music.
 
 Packs live in this repository, under `src/prax/packs/` (the user,
-2026-09-30). This document is the contract. Nothing in it is built yet.
+2026-09-30). This document is the contract. Step 1 of "The order of the
+work" is built (2026-10-01): the registries, and the eight modules in
+five packs. No pack has capability yet; maths will be the first.
 
 ## Two halves
 
@@ -33,7 +35,7 @@ by hand:
 |---|---|
 | its things and relations | `ontology/<module>.yaml` |
 | what "the same thing" means for its types | the `modules:` section of `ontology/sameness.yaml` |
-| the words that type its entities | `by_type` in `ontology/lexicon.yaml` |
+| the words that type its entities | `by_type` in `ontology/lexicon.yaml` (stays in the core, below) |
 | the rules that send documents to it | `domains:` in `prax.yaml` |
 | a reader of a file type | `prax.parsers.REGISTRY` |
 | a reading asked for later | `store.READINGS`, `steps.READING_STEPS` |
@@ -60,8 +62,13 @@ Only what every domain stands on:
 - `genres.yaml` and `subjects.yaml`: what any document is and what it is
   about. A rule reads them to send a document to a pack, so they belong
   to none;
-- the general cues of `lexicon.yaml`: what an organization is, what is
-  not a name;
+- all of `lexicon.yaml`, a pack's typing cues included. `by_type` is
+  ordered and the first cue that matches wins, and research's types sit
+  between the core's (venue, tool, method, dataset, concept). Split by
+  pack, the order would change: measured on 2026-10-01, 361 of 201,055
+  names in the store would be typed differently, mostly "tool" becoming
+  "method". A pack's cues move into it when the cues no longer depend on
+  their order;
 - the rules this library applies, in `prax.yaml`. A pack suggests rules,
   and a person takes them after a dry run (`POST /domains/dry-run`).
 
@@ -74,7 +81,6 @@ src/prax/packs/
     __init__.py        # MANIFEST
     society.yaml       # the ontology module
     sameness.yaml      # its cases of "the same thing"
-    lexicon.yaml       # its typing cues
     rules.yaml         # the domain rules it suggests
   maths/               # knowledge and capability
     __init__.py
@@ -97,7 +103,6 @@ MANIFEST = Pack(
     # knowledge: always composed
     ontology=("maths.yaml",),
     sameness="sameness.yaml",
-    lexicon="lexicon.yaml",
     rules="rules.yaml",
     # capability: on a host that names the pack
     extractors=("prax.packs.maths.parse:EXTRACTORS",),
@@ -188,7 +193,6 @@ host runs. The list stays where it is, so a caller does not move:
 |---|---|
 | `ontology.load_dir` | `ontology/core.yaml` and every pack's `ontology` |
 | `ontology.sameness()` | the core's cases and every pack's `sameness` |
-| `ontology.lexicon()` | the core's cues and every pack's `lexicon` |
 | `parsers.REGISTRY` | the core's extractors, then the packs' |
 | `store.READINGS`, `steps.READING_STEPS` | the packs' `readings` |
 | `chunking.KINDS`, `store.ASIDE_KINDS` | the packs' `kinds`, `aside` |
@@ -202,17 +206,28 @@ core one or another pack's. The registry refuses the duplicate at start.
 ## The existing modules
 
 `research`, `studio`, `electronics`, `computing`, `craft`, `kitchen`,
-`workshop` and `society` move into packs of their own. Each takes its
-module file, its section of `sameness.yaml` and its cues of
-`lexicon.yaml`. The rules of `prax.yaml` that name it become its
-`rules.yaml`. Modules built on each
-other may share a pack: `craft` with `kitchen` and `workshop`, `studio`
-with `electronics`.
+`workshop` and `society` are in five packs (2026-10-01): `research`,
+`craft` (with `kitchen` and `workshop`), `studio` (with `electronics`),
+`computing` and `society`. Each holds its module files, its section of
+the sameness cases, and the rules it suggests, taken from `prax.yaml`'s.
+`PACKS` lists craft before studio, the order the cases stood in.
 
-The version string is built from module names and versions
-(`core3+computing2+…`). A move changes neither, so no edge changes and
-nothing is extracted again. The proof is the version string before and
-after, and the full test suite.
+A move changes no module name or version, so no edge changed and nothing
+is extracted again. A golden run checked it, with the hash seed fixed,
+before and after. It compared:
+
+- the whole composed ontology and its version string;
+- the version of every subset of one or two domains (36);
+- the sameness rule for every combination of up to three modules;
+- the lexicon, the genres and the subjects.
+
+All were identical.
+
+Packs join only the repository's own `ontology/` folder. A directory a
+host or a test names in `ontology.dir` is the whole ontology, as before,
+so a test's own modules stay its own. `ontology.module_files()` says where
+each composed module's file is (the graph export reads it), and
+`POST /domains/dry-run` with `pack` tries the rules a pack suggests.
 
 ## The packs in view
 

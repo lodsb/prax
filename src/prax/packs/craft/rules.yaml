@@ -1,0 +1,7 @@
+# The domain rules the craft pack suggests (docs/packs.md); a person tries
+# them with POST /domains/dry-run and copies the ones wanted into
+# prax.yaml. From the rules of 2026-09-30.
+- match: {genre: recipe}
+  domains: [kitchen]
+- match: {subject: cooking}
+  domains: [kitchen]

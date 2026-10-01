@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -480,11 +480,17 @@ SUBJECTS = "subjects"  # nor this: what a document is about, in a person's words
 BESIDE = (LEXICON, SAMENESS, GENRES, SUBJECTS)
 
 
-def load_dir(directory: Path) -> Ontology:
+def load_dir(directory: Path, extra: Iterable[Path] = ()) -> Ontology:
+    """The modules of ``directory``, and the module files ``extra`` names
+    (the packs', docs/packs.md), composed in the order of their names as
+    one directory's were."""
     # the lexicon is words *about* the types, not types: composed as a
     # module it would join the version string, and every document would
     # look unread against the new version
-    files = sorted(f for f in directory.glob("*.yaml") if f.stem not in BESIDE)
+    files = sorted(
+        [f for f in directory.glob("*.yaml") if f.stem not in BESIDE] + list(extra),
+        key=lambda f: f.name,
+    )
     texts = [(f.stem, f.read_text(encoding="utf-8")) for f in files]
     # and a file that does not say it is one is not a module either. A
     # door started before a file beside the modules was written knew no
@@ -742,15 +748,51 @@ def path() -> Path:
     return Path(config.setting("ontology.dir", "PRAX_ONTOLOGY", config.ONTOLOGY_PATH))
 
 
+def _packed(p: Path) -> bool:
+    """Whether the packs' knowledge joins ``p``: for the core directory of
+    the repository. A directory a host or a test names is the whole
+    ontology, as it was before packs (docs/packs.md)."""
+    return p.is_dir() and p.resolve() == config.ONTOLOGY_PATH.resolve()
+
+
+def _pack_modules(p: Path) -> list[Path]:
+    if not _packed(p):
+        return []
+    from prax import packs
+
+    return packs.ontology_files()
+
+
+def _pack_sameness(p: Path) -> list[Path]:
+    if not _packed(p):
+        return []
+    from prax import packs
+
+    return packs.sameness_files()
+
+
+def module_files() -> dict[str, Path]:
+    """Each composed module's own file, by module name: the core
+    directory's and the packs'."""
+    p = path()
+    if not p.is_dir():
+        return {}
+    files = [f for f in p.glob("*.yaml") if f.stem not in BESIDE]
+    return {f.stem: f for f in [*files, *_pack_modules(p)]}
+
+
 def _stamp(p: Path) -> tuple[Any, ...]:
     if p.is_dir():
-        return tuple((f.name, f.stat().st_mtime_ns) for f in sorted(p.glob("*.yaml")))
+        files = [*sorted(p.glob("*.yaml")), *_pack_modules(p), *_pack_sameness(p)]
+        return tuple((str(f), f.stat().st_mtime_ns) for f in files)
     return (p.name, p.stat().st_mtime_ns)
 
 
 @functools.lru_cache(maxsize=4)
 def _load(p: Path, stamp: tuple[Any, ...]) -> Ontology:
-    return load_dir(p) if p.is_dir() else parse(p.read_text(encoding="utf-8"))
+    if p.is_dir():
+        return load_dir(p, _pack_modules(p))
+    return parse(p.read_text(encoding="utf-8"))
 
 
 def current() -> Ontology:
@@ -776,9 +818,12 @@ def lexicon() -> Lexicon:
 @functools.lru_cache(maxsize=4)
 def _load_sameness(p: Path, stamp: tuple[Any, ...]) -> Sameness:
     f = (p / f"{SAMENESS}.yaml") if p.is_dir() else p.with_name(f"{SAMENESS}.yaml")
-    if not f.exists():
-        return Sameness()
-    return parse_sameness(f.read_text(encoding="utf-8"))
+    rule = parse_sameness(f.read_text(encoding="utf-8")) if f.exists() else Sameness()
+    # a pack's module cases follow the general ones, pack by pack
+    for extra in _pack_sameness(p):
+        more = parse_sameness(extra.read_text(encoding="utf-8"))
+        rule = replace(rule, modules=rule.modules + more.modules)
+    return rule
 
 
 def sameness() -> Sameness:

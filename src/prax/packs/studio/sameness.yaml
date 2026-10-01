@@ -1,0 +1,18 @@
+# The studio pack's cases of "the same thing" (ontology/sameness.yaml
+# says how they are used). Composed after the general ones.
+modules:
+  studio:
+    different:
+      - case: a device and its manual
+        examples:
+          - [Minimoog Model D, Minimoog Model D manual]
+      - case: a device and an expansion or module for it
+  electronics:
+    same:
+      - case: a part and the same part with a package or grade suffix
+        examples:
+          - [TL072, TL072CP]
+    different:
+      - case: two parts of one family
+        examples:
+          - [NE5532, NE5534]

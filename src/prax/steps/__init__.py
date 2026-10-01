@@ -8,13 +8,17 @@ asking for that queue. The CLI's ``--steps`` default, the worker's own
 default and the door's answer to "who would do this"
 (``prax.work.who_runs``) read these same names.
 
-Nothing here imports anything: the thin client reads it as cheaply as
-the door does.
+Nothing here imports anything but the packs' manifests, which are data:
+the thin client reads it as cheaply as the door does. A pack's steps and
+readings join the core's (docs/packs.md); a name a pack repeats is
+refused here, at import.
 """
 
 from __future__ import annotations
 
-STEPS = (
+from prax import packs as _packs
+
+CORE_STEPS = (
     "parse",
     "titles",
     "summaries",
@@ -29,6 +33,7 @@ STEPS = (
     "adjudicate",
     "genres",
 )
+STEPS = CORE_STEPS + tuple(_packs.step_homes())
 
 # what a worker asks for unless the run names its steps
 WATCHED_STEPS = (
@@ -47,7 +52,7 @@ WATCHED_STEPS = (
     # genres within a pass, so the nightly rules can place it, and a new
     # labeller run relabels its predecessor's documents a batch at a time
     "genres",
-)
+) + _packs.watched()
 
 # the rest: named on the command line, and the paid ones want --spend
 NAMED_ONLY = tuple(s for s in STEPS if s not in WATCHED_STEPS)
@@ -63,6 +68,7 @@ READING_STEPS = {
     "figures": "vision",
     "formulas": "formulas",
     "polish": "polish",
+    **_packs.readings(),
 }
 
 
@@ -82,7 +88,12 @@ _HOMES = {
     "resolve": "graph",
     "adjudicate": "graph",
     "embed": "embed",
+    **_packs.step_homes(),  # a pack's: the module's full name
 }
+
+_REPEATED = _packs.duplicates({"steps": CORE_STEPS})
+if _REPEATED:
+    raise ValueError(f"a pack repeats a name: {'; '.join(_REPEATED)}")
 
 
 def get(name: str):
@@ -93,5 +104,6 @@ def get(name: str):
         raise ValueError(f"unknown step {name!r}; steps are {STEPS}")
     import importlib
 
-    module = importlib.import_module(f"prax.steps.{_HOMES[name]}")
+    home = _HOMES[name]
+    module = importlib.import_module(home if "." in home else f"prax.steps.{home}")
     return module.REGISTERED[name]

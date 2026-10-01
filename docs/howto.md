@@ -109,10 +109,13 @@ place.
 
 ### Ontology
 
-`ontology/` holds the entity and relation types the graph accepts, one
-module per domain: `core.yaml`, `research.yaml`, `studio.yaml`,
-`craft.yaml`, `kitchen.yaml`, `workshop.yaml`. The format is in
-`src/prax/graph/ontology.py`. Each module has a `version`.
+The entity and relation types the graph accepts are YAML modules, one
+per domain. `ontology/core.yaml` holds the shared ones. Every other
+domain's module is in its pack under `src/prax/packs/`: `research`,
+`craft` (with `kitchen` and `workshop`), `studio` (with `electronics`),
+`computing` and `society` (`docs/packs.md`). Every host composes all of
+them. The format is in `src/prax/graph/ontology.py`. Each module has a
+`version`.
 
 Two things beside the types are data too, and neither bumps a version,
 because neither changes what the ontology accepts:

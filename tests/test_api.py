@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from prax.api import app
 from prax.graph import ontology
+from tests.conftest import copy_ontology
 
 
 def ontology_version_now() -> str:
@@ -431,12 +432,8 @@ def test_review_filters_bulk_and_replay(
     assert client.get("/review").json()["total"] == 1
     # a bumped research module in a copy of the ontology directory: cites
     # may now target a tool, and the replay links the last item under it
-    from prax import config
 
-    onto_dir = tmp_path / "onto"
-    onto_dir.mkdir()
-    for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
-        (onto_dir / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    onto_dir = copy_ontology(tmp_path / "onto")
     research = (onto_dir / "research.yaml").read_text(encoding="utf-8")
     research = research.replace("version: 9", "version: 99", 1).replace(
         "    domain: [document]\n    range: [document]\n",

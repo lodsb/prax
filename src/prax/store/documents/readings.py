@@ -8,6 +8,8 @@ import re
 import sqlite3
 from typing import Any
 
+from prax import packs
+
 from ..base import (
     _NOW,
     _like_prefix,
@@ -40,7 +42,7 @@ READINGS = (
     "marker",
     "trafilatura",
     "pymupdf4llm",
-)
+) + tuple(packs.readings())  # and the packs' (docs/packs.md)
 # the setting a request may choose for one run, per extractor
 MODES: dict[str, tuple[str, ...] | None] = {
     "vision-pages": ("scans", "all"),  # the pages without a text layer, or every page

@@ -36,7 +36,7 @@ nothing.
       repository as a page snapshot where the starred-repository
       importer's shape would do better. Both are under "The UI and the
       agent".
-- [ ] (2026-10-01: packs, `docs/packs.md`: a field's ontology, readers, kinds, steps, tools,
+- [ ] (2026-10-01: step 1 built: `prax.packs`, the registries, the eight modules in five packs, the knowledge identical by a golden run; the lexicon stays in the core, 361 names would type differently; next: maths as the first pack with capability) (2026-10-01: packs, `docs/packs.md`: a field's ontology, readers, kinds, steps, tools,
       models and extra in one package under `src/prax/packs/`; first the registries, then
       maths as the first pack) **AD0. Packs.** The user, 2026-10-01: "should we have
       something like modules for these domain/infrastructure fields?" Packs live in

@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, ParamSpec, TypeVar
 
-from prax import config
+from prax import config, packs
 from prax.ml import vectors
 
 VEC_DIM = 384  # dimension of the vector index; another dimension is a new index file
@@ -40,7 +40,7 @@ VEC_DIM = 384  # dimension of the vector index; another dimension is a new index
 # advertisement and a comment section are what a captured page carries
 # that is not the document (prax.text.furniture), and neither should answer
 # a question put to the library
-ASIDE_KINDS = ("reference", "ask", "ad", "comment")
+ASIDE_KINDS = ("reference", "ask", "ad", "comment") + packs.aside()
 _ASIDE = (  # a legacy row without a kind is text
     " AND (c.kind IS NULL OR c.kind NOT IN ("
     + ", ".join(f"'{k}'" for k in ASIDE_KINDS)

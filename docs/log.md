@@ -2990,3 +2990,42 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   with each partition, and `store.regions_of` answers on read.
 - **Packs** (`docs/packs.md`, stage AD0): every domain is a pack, its
   knowledge turned on by the library and its capability by the host.
+
+## 2026-10-01, the night: the relabel, the guard, packs (stage AD0, step 1)
+
+- **The library relabelled** by the new labeller run: 12,295 documents
+  (four kept their old labels, tried without a genre kept). A newer run
+  now makes an older run's labels stale, and the step relabels them; a
+  person's labels and Claude's are never taken. `genres` is a watched
+  step: until tonight the supervised worker never ran it, so a new
+  document got no genre and the genre rules never placed it.
+- **What the rules do after it**, read-only under the current rules: 24
+  documents without a set would get one tomorrow night, five of them
+  personal. The rules now never place a document marked personal or
+  suspected. 25 documents in `computing` would move to a `studio` set,
+  5 of them audio (applied by id: sample-rate conversion, the élastique
+  SDK, Vorbis, Kontakt, a guide to audio and video material); the other
+  20 were drivers and network books the labeller calls electronics, left
+  where they are.
+- **The backup keeps the trained labeller** (`models/labeller`, 260 MB
+  once): trained here, it cannot be fetched again.
+- **Private data and git.** Every commit was searched for what the 402
+  personal documents hold: none of their 42 IBANs, 126 street addresses,
+  350 postcodes or 251 phone numbers is in git. One private folder path
+  from prax.yaml had been copied into a UI test on 2026-09-28; it is an
+  invented one now. `scripts/check_private.py` is a pre-commit hook that
+  refuses a commit holding one of those values, naming file, line and
+  kind but never the value; its first run caught a placeholder address
+  that also stands in the owner's forms. The history stays as it is (the
+  user).
+- **Packs, step 1** (`docs/packs.md`). `prax.packs` holds the manifests;
+  research, craft (kitchen, workshop), studio (electronics), computing and
+  society are packs, each with its module files, its sameness cases and
+  the rules it suggests. The registries read the packs: the steps and
+  their homes, the readings, the chunk kinds and the aside kinds, the
+  extractors and the surfer's tools of the packs a host names in
+  `packs:`, and the config's sections. A golden run with the hash seed
+  fixed found the composed ontology, the version string, all 36 subset
+  versions, the sameness rule and the lexicon identical before and after.
+  The lexicon stays whole in the core: its `by_type` is ordered, and
+  splitting it by pack would type 361 of 201,055 names differently.

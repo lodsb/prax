@@ -5,10 +5,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import yaml
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from prax import models, store, work
+from prax import models, packs, store, work
 from prax.capture import routes
 from prax.graph import ontology
 
@@ -74,16 +75,24 @@ def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
 
 class DryRunReq(BaseModel):
     rules: list[dict[str, Any]] | None = None  # None: the rules in prax.yaml
+    pack: str | None = None  # or the rules a pack suggests (docs/packs.md)
 
 
 @router.post("/domains/dry-run")
 def domains_dry_run(req: DryRunReq, request: Request) -> dict[str, Any]:
     """What a set of domain rules would assign to the documents without a
     domain, written nowhere (stage Z, step 5). Without rules, the ones in
-    prax.yaml (``domains:``)."""
-    rules = (
-        req.rules if req.rules is not None else list(models.load().get("domains") or [])
-    )
+    prax.yaml (``domains:``); with ``pack``, the ones that pack suggests."""
+    if req.pack is not None:
+        try:
+            path = packs.rules_file(req.pack)
+        except KeyError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        rules = yaml.safe_load(path.read_text(encoding="utf-8")) if path else []
+    elif req.rules is not None:
+        rules = req.rules
+    else:
+        rules = list(models.load().get("domains") or [])
     try:
         return store.domains_dry_run(_con(request), rules)
     except ValueError as exc:

@@ -598,7 +598,7 @@ the audit of which repairs have earned their prevention.
 | add a media kind (audio) | a chunk `kind` and locator shape in `prax.text.chunking`; an analyzer that produces the searchable rendering (images already go through `vision`) |
 | change what a document *is* for search | `store.document_field`; run `prax maintain --only fields`, then a worker's embed step |
 | change the embedding model | an entry in `prax.ml.embeddings.MODELS`; the embed step re-embeds into new index files; another dimension also needs `VEC_DIM` |
-| add entity or relation types | the module file under `ontology/` plus that module's version bump (a new domain is a new file that requires `core`); `prax maintain --only review` replays the queue; old edges keep their version; the bump re-selects documents for extraction |
+| add entity or relation types | the module file in its pack (`src/prax/packs/<pack>/`; `core.yaml` under `ontology/`) plus that module's version bump (a new domain is a new pack whose module requires `core`, `docs/packs.md`); `prax maintain --only review` replays the queue; old edges keep their version; the bump re-selects documents for extraction |
 | replace one producer's work | re-extract (a new `run`), then `store.retire_run(producer=, run=)` on the old one; history stays |
 | change the extraction prompt | `extraction.system_prompt` (the JSON text is cached across calls) and `docs/eval/` for a before/after on the three benchmark papers |
 | change the schema | a new `NNNN_name.sql` under `src/prax/migrations/`; never edit an applied one |

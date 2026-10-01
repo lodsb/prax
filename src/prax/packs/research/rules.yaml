@@ -1,0 +1,6 @@
+# The domain rules the research pack suggests (docs/packs.md). Nothing
+# applies them by itself: a person tries them with POST /domains/dry-run
+# and copies the ones wanted into prax.yaml's `domains:`, where the order
+# decides (first match wins). From the rules of 2026-09-30.
+- match: {genre: paper}
+  domains: [research]

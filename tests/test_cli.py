@@ -202,9 +202,12 @@ def test_the_command_opens_no_database() -> None:
     )
     loaded = json.loads(out.stdout.replace("'", '"'))
     assert "prax.store" not in loaded and "prax.api" not in loaded
-    # the door's HTTP client, and the names of the worker's steps (a module
-    # of tuples, so that the --steps default is not a second list)
-    assert loaded == ["prax.client", "prax.steps"]
+    # the door's HTTP client, the names of the worker's steps (a module of
+    # tuples, so that the --steps default is not a second list), and the
+    # packs' manifests those names read (data, docs/packs.md)
+    packs = [m for m in loaded if m == "prax.packs" or m.startswith("prax.packs.")]
+    assert sorted(set(loaded) - set(packs)) == ["prax.client", "prax.steps"]
+    assert "prax.packs.base" in packs
 
 
 def test_help_lists_the_everyday_commands(capsys: pytest.CaptureFixture[str]) -> None:

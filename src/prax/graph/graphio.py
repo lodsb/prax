@@ -166,13 +166,11 @@ def _walk(
 def _module_texts() -> dict[str, str]:
     """The ontology modules' own files, so an export says exactly what its
     types and relations meant when it was written."""
-    from prax import config
-
-    folder = config.ONTOLOGY_PATH
+    files = ontology.module_files()
     out = {}
     for name in sorted(ontology.current().modules):
-        path = folder / f"{name}.yaml"
-        if path.exists():
+        path = files.get(name)
+        if path is not None and path.exists():
             out[name] = path.read_text(encoding="utf-8")
     return out
 

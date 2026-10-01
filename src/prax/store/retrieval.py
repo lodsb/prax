@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from prax import config
+from prax import config, packs
 from prax.graph import ontology
 from prax.ml import embeddings
 from prax.ml import rerank as rerank_mod
@@ -397,6 +397,9 @@ def _rare_terms(con: sqlite3.Connection, terms: list[list[str]]) -> list[list[st
 
 SEARCH_MODES = ("hybrid", "fts", "vec")
 
+
+# the kinds a chunk may have: the chunker's and the packs' (docs/packs.md)
+CHUNK_KINDS = chunking.KINDS + packs.kinds()
 
 WIDE_SCOPE = 0.5  # a scope holding this share of the documents is filtered after
 WIDE_DRAW = 3  # and the ranked list is drawn this many times deeper for it
@@ -791,8 +794,8 @@ def search(
     cross-encoder (``prax.ml.rerank``; None follows ``PRAX_RERANK``, which is
     off by default) and adds ``rerank_score``.
     """
-    if kind is not None and kind not in chunking.KINDS:
-        raise ValueError(f"kind must be one of {chunking.KINDS}")
+    if kind is not None and kind not in CHUNK_KINDS:
+        raise ValueError(f"kind must be one of {CHUNK_KINDS}")
     if mode not in SEARCH_MODES:
         raise ValueError(f"mode must be one of {SEARCH_MODES}")
     if doctype is not None and doctype not in DOCTYPES:

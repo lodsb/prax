@@ -182,7 +182,13 @@ def test_the_mcp_server_is_a_thin_proxy() -> None:
     assert asked <= {"prax.client"}, f"the proxy imports more than the client: {asked}"
 
 
-STORE_MAY_STAND_ON = ("prax.config", "prax.text", "prax.ml", "prax.graph.ontology")
+STORE_MAY_STAND_ON = (
+    "prax.config",
+    "prax.packs",  # the manifests: data (docs/packs.md)
+    "prax.text",
+    "prax.ml",
+    "prax.graph.ontology",
+)
 
 
 def test_the_store_stands_only_on_what_is_below_it() -> None:

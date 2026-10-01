@@ -1,0 +1,32 @@
+"""What a pack is (docs/packs.md): a manifest of names and files, no code.
+
+A manifest is read by the thin client as cheaply as by the door, so it
+imports nothing. The strings it holds are files beside it or import
+paths, resolved by ``prax.packs`` when a part is first used.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class Pack:
+    """One domain: its knowledge, composed on every host, and its
+    capability, run on a host that names the pack in ``packs:``."""
+
+    name: str  # the package's folder under prax/packs/
+    # knowledge: the library's, always composed
+    ontology: tuple[str, ...] = ()  # module files beside the manifest
+    sameness: str | None = None  # its cases of "the same thing"
+    rules: str | None = None  # the domain rules it suggests, never applied by itself
+    # capability: the host's
+    extractors: tuple[str, ...] = ()  # "module:NAME", a list of Extractor
+    readings: dict[str, str] = field(default_factory=dict)  # reading -> its step
+    kinds: tuple[str, ...] = ()  # new chunk kinds
+    aside: tuple[str, ...] = ()  # kinds kept out of vectors and search
+    steps: dict[str, str] = field(default_factory=dict)  # step -> its module
+    watched: tuple[str, ...] = ()  # steps a worker runs unasked
+    tools: dict[str, str] = field(default_factory=dict)  # tool -> "module:function"
+    extra: str | None = None  # the pyproject extra it needs
+    settings: str | None = None  # its section in prax.yaml

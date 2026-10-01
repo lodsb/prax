@@ -28,6 +28,8 @@ from typing import Any
 
 import yaml
 
+from prax import packs
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 ONTOLOGY_PATH = REPO_ROOT / "ontology"  # a directory of module files
@@ -51,7 +53,8 @@ SECTIONS = (
     "budget",  # daily_usd, monthly_usd: what the paid steps may spend (prax.ml.budget)
     "schedule",  # the door's clock: maintain and backup (prax.host.schedule)
     "private",  # what looks personal (prax.wall.private); the owner's names
-)
+    "packs",  # the packs whose capability this host runs (docs/packs.md)
+) + packs.setting_sections()  # and each pack's own section
 
 
 class ConfigError(ValueError):

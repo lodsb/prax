@@ -41,7 +41,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from prax import store
+from prax import config, packs, store
 from prax.answering import ask
 
 STEPS = 8  # the default number of steps; 0 is the one-shot ask
@@ -553,7 +553,7 @@ def grammar(s: Surf) -> str:
     live = s.live()
     pn = " | ".join(f'"[{n}]"' for n in live) or '"[0]"'
     docs = " | ".join(f'"{i}"' for i in sorted(s.docs)) or '"0"'
-    actions = ["search", "walk", "done"]
+    actions = ["search", "walk", "done", *PACK_TOOLS]
     if live:
         actions += ["read", "facts", "similar", "drop"]
     elif s.docs:
@@ -565,6 +565,7 @@ def grammar(s: Surf) -> str:
             f'note ::= "note: " char{{1,{NOTE_CHARS}}} "\\n"',
             "action ::= " + " | ".join(actions),
             f'search ::= "search: " char{{2,{QUERY_CHARS}}} "\\n"',
+            *(f'{t} ::= "{t}: " char{{2,{QUERY_CHARS}}} "\\n"' for t in PACK_TOOLS),
             f'read ::= "read: " {where} look? "\\n"',
             f'look ::= " " char{{2,{LOOK_CHARS}}}',
             'facts ::= "facts: " pn "\\n"',
@@ -591,6 +592,21 @@ DO: dict[str, Handler] = {
     "similar": lambda con, s, arg: (do_similar(con, s, arg), []),
     "drop": lambda con, s, arg: (do_drop(s, arg), []),
 }
+
+
+# the tools of the packs this host runs (docs/packs.md): each takes the
+# step's argument as text and answers with text, adding no passage
+def _pack_tool(tool: Callable[[sqlite3.Connection, Surf, str], str]) -> Handler:
+    def handle(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]:
+        return tool(con, s, arg), []
+
+    return handle
+
+
+PACK_TOOLS: tuple[str, ...] = ()
+for _name, _tool in packs.tools(config.words("packs")).items():
+    DO[_name] = _pack_tool(_tool)
+    PACK_TOOLS += (_name,)
 _ACTION = re.compile(rf"^({'|'.join([*DO, 'answer'])})\b\s*:?\s*(.*)$", re.IGNORECASE)
 
 

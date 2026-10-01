@@ -68,6 +68,7 @@ import mimetypes
 import re
 from pathlib import Path
 
+from prax import config, packs
 from prax.parsers import figures  # noqa: F401 - parsers.figures is used
 from prax.text import mimes
 
@@ -372,6 +373,9 @@ REGISTRY: list[Extractor] = [
         hints=True,
     ),
 ]
+# the extractors of the packs this host runs (``packs:``, docs/packs.md),
+# after the core's: a process keeps the ones it started with
+REGISTRY += packs.extractors(config.words("packs"))
 
 
 _STAMP = re.compile(

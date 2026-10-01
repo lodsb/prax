@@ -1,0 +1,9 @@
+# The domain rules the society pack suggests (docs/packs.md); a person
+# tries them with POST /domains/dry-run and copies the ones wanted into
+# prax.yaml. From 2026-10-01: the argued subjects in an essay or review,
+# and in a paper beside research. Not the subject group `society`, which
+# holds education and psychology.
+- match: {genre: opinion, subject: [philosophy, politics, sociology, economics, law]}
+  domains: [society]
+- match: {genre: paper, subject: [philosophy, politics, sociology, economics, law]}
+  domains: [research, society]

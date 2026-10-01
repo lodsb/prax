@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from prax import config
 from prax.graph import ontology
+from tests.conftest import copy_ontology
 
 EVERY_MODULE = (
     "core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
@@ -163,10 +163,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     o.check_edge("tool", "developed_by", "author")  # author is a person
     assert o.canonical_relation("supervised_by") == "advised_by"
     # a directory elsewhere works the same way, and a change is picked up
-    d = tmp_path / "onto"
-    d.mkdir()
-    for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
-        (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    d = copy_ontology(tmp_path / "onto")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert ontology.current().version == EVERY_MODULE
     text = (d / "research.yaml").read_text(encoding="utf-8")

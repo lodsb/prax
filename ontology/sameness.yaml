@@ -12,6 +12,8 @@
 # `same` and `different` hold for every pair. A module's own cases join
 # them when the pair's type belongs to that module or inherits from one
 # of its types, so a recipe pair is judged with the kitchen's examples.
+# They live in the module's pack (`sameness.yaml` beside the module,
+# docs/packs.md), composed after these in the order of `prax.packs.PACKS`.
 #
 # Like the lexicon, it bumps no module version: it changes how a pair is
 # judged, never what types exist. The loader keeps it out of the composed
@@ -56,24 +58,3 @@ different:
     examples:
       - [preorder traversal, postorder traversal]
 
-modules:
-  kitchen:
-    different:
-      - case: a dish and a variant of it
-        examples:
-          - [Lasagne, vegane Lasagne]
-  studio:
-    different:
-      - case: a device and its manual
-        examples:
-          - [Minimoog Model D, Minimoog Model D manual]
-      - case: a device and an expansion or module for it
-  electronics:
-    same:
-      - case: a part and the same part with a package or grade suffix
-        examples:
-          - [TL072, TL072CP]
-    different:
-      - case: two parts of one family
-        examples:
-          - [NE5532, NE5534]

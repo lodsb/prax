@@ -1,0 +1,22 @@
+# The domain rules the studio pack suggests (docs/packs.md); a person tries
+# them with POST /domains/dry-run and copies the ones wanted into
+# prax.yaml. From the rules of 2026-09-30. A rule that names research too
+# is here: studio is the narrower of the two.
+- match: {origin: [.help.rtf, supercollider, scclasslibrary, /quarks/, bbcut, sc3-plugins]}
+  domains: [studio]
+- match: {genre: datasheet}
+  domains: [studio, electronics]
+- match: {genre: schematic}
+  domains: [studio, electronics]
+- match: {genre: paper, subject: audio}
+  domains: [research, studio]
+- match: {genre: paper, subject: music}
+  domains: [research, studio]
+- match: {subject: audio}
+  domains: [studio]
+- match: {subject: music}
+  domains: [studio]
+- match: {subject: electronics, p: 0.8}
+  domains: [studio, electronics]
+- match: {facts: studio}
+  domains: [studio]

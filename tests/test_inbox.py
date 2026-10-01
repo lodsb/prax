@@ -14,9 +14,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import config, parsers, store
+from prax import parsers, store
 from prax.capture import inbox
 from prax.graph import ontology
+from tests.conftest import copy_ontology
 
 needs_trafilatura = pytest.mark.skipif(
     not parsers.by_name("trafilatura").available(), reason="trafilatura not installed"
@@ -43,10 +44,7 @@ relation_types:
 
 @pytest.fixture()
 def modules(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    d = tmp_path / "onto"
-    d.mkdir()
-    for f in Path(config.ONTOLOGY_PATH).glob("*.yaml"):
-        (d / f.name).write_text(f.read_text(encoding="utf-8"), encoding="utf-8")
+    d = copy_ontology(tmp_path / "onto")
     (d / "family.yaml").write_text(FAMILY, encoding="utf-8")
     monkeypatch.setenv("PRAX_ONTOLOGY", str(d))
     assert "family" in ontology.current().modules
