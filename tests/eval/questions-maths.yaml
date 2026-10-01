@@ -1,0 +1,165 @@
+# Maths eval set (stage AD, docs/symbolic-maths.md, "How it is measured"):
+# questions over the library's display formulas, each answered with and
+# without the maths pack's calculator, in grounded and in open mode, and
+# scored by hand. DRAFT, 2026-10-01: shown to the user before it is used.
+#
+#   kind       same      are two formulas equal (a paper's own steps, two forms)
+#              derive    how to get from one formula to another; every step
+#                        of the answer is checked with `same`
+#              evaluate  what given values produce
+#              adaa      an antiderivative-antialiased version of a shaper
+#   expect_doc the document the formulas are in (its id in the full store)
+#   chunks     the formula chunks involved (`chunk:<id>` for the tool)
+#   expected   the right answer, checked with SymPy when the set was written
+#   expect     a regex a right answer matches, where one can be written
+#
+# Run (when agreed): python scripts/eval_ask.py --questions tests/eval/questions-maths.yaml
+
+questions:
+  # --- same: equal or not --------------------------------------------------
+  - id: moog-tanh-forms
+    kind: same
+    q: 'In the Moog ladder analysis, is I_1 = I / (1 + e^{(V_2 - V_1)/V_T}) the same as the paper''s tanh form I/2 [1 - tanh((V_2 - V_1)/(2 V_T))]?'
+    expect_doc: 3995
+    chunks: [3009249, 3009252]
+    expected: 'the same (symbolically: the difference rewritten in exponentials is 0)'
+    expect: "same|equal|identical"
+  - id: moog-tanh-definition-typo
+    kind: same
+    q: 'The Moog ladder paper defines tanh x as (e^{xx} - e^{-x})/(e^x + e^{-x}) = (e^{2x} - 1)/(e^{2x} + 1). Are both expressions tanh x?'
+    expect_doc: 3995
+    chunks: [3009251]
+    expected: 'the second is tanh x; the first is not (a typo, e^{xx} for e^x)'
+    expect: "typo|not.*(same|tanh)|e\\^\\{?xx"
+  - id: moog-eq3-typo
+    kind: same
+    q: 'Does equation (3) of the Moog ladder paper, I = I_1 + I_2 e^{(V_2 - V_1)/V_1}, follow from equation (2) and I = I_1 + I_2?'
+    expect_doc: 3995
+    chunks: [3009246, 3009247, 3009248]
+    expected: 'no as printed; with V_T in the exponent''s denominator (not V_1) it is I = I_1 (1 + e^{(V_2 - V_1)/V_T}). The printed (3) has two slips.'
+    expect: "V_T|typo|not"
+  - id: dattorro-notch
+    kind: same
+    q: 'In Dattorro''s "Reverberator and Other Filters", is the notch H_n(z) of equation (4) the same as (1 + A(z))/2 with the allpass A(z) of equation (6)?'
+    expect_doc: 2272
+    chunks: [3010983, 3010985, 3010988]
+    expected: 'the same (checked symbolically)'
+    expect: "same|equal|identical"
+  - id: dattorro-resonator
+    kind: same
+    q: 'And is the resonator H_r(z) of equation (5) the same as (1 - A(z))/2?'
+    expect_doc: 2272
+    chunks: [3010984, 3010985, 3010987]
+    expected: 'the same (checked symbolically)'
+    expect: "same|equal|identical"
+  - id: dattorro-beta-forms
+    kind: same
+    q: 'Dattorro''s equation (14) writes beta two ways, with tan(omega_c/(2Q)) and with tan(Delta omega/2). Are they the same given equation (1)?'
+    expect_doc: 2272
+    chunks: [3010980, 3010993]
+    expected: 'the same, because Q = omega_c / Delta omega, so omega_c/(2Q) = Delta omega / 2'
+    expect: "same|equal|Q"
+
+  # --- derive: from one formula to another --------------------------------
+  - id: rms-rc-to-tau
+    kind: derive
+    q: 'In the RMS compressor paper, how do you get from the capacitor node equation (3) to equation (4), v_in^2(t) = tau dV_2/dt + V_2(t)?'
+    expect_doc: 9812
+    chunks: [2912752, 2912753]
+    expected: 'multiply (3) by R, set tau = RC, and read v_1(t) as v_in^2 (the squaring stage before it); each step checked with `same`'
+    expect: "tau\\s*=\\s*R\\s*C|RC"
+  - id: rms-substitution
+    kind: derive
+    q: 'How does substituting y(t) = exp(V_ms(t)/V_T) turn equation (11) of the RMS compressor paper into the linear equation (15)?'
+    expect_doc: 9812
+    chunks: [2912760, 2912761, 2912762]
+    expected: 'the chain rule gives d/dt exp(V_ms/V_T) = dy/dt, so (11) becomes i_in^2/I_R^2 = tau dy/dt + y'
+    expect: "dy/dt|chain rule|linear"
+  - id: moog-eq4
+    kind: derive
+    q: 'Derive the Moog ladder''s I_1 = I / (1 + e^{(V_2 - V_1)/V_T}) from the current ratio I_2/I_1 = e^{(V_2 - V_1)/V_T} and I = I_1 + I_2.'
+    expect_doc: 3995
+    chunks: [3009246, 3009247, 3009249]
+    expected: 'I_2 = I_1 e^{(V_2-V_1)/V_T}, so I = I_1 (1 + e^{...}), and solve for I_1; `solve` gives it'
+    expect: "1\\s*\\+\\s*e"
+  - id: moog-small-signal
+    kind: derive
+    q: 'Show how the Moog paper''s small-signal result I_1 - I_2 = I (V_1 - V_2)/(2 V_T) follows from its tanh forms of I_1 and I_2.'
+    expect_doc: 3995
+    chunks: [3009252, 3009253, 3009257]
+    expected: 'I_1 - I_2 = I tanh((V_1 - V_2)/(2V_T)) exactly; with tanh x ~ x (its series to first order) it is I (V_1 - V_2)/(2 V_T)'
+    expect: "tanh|series|small"
+  - id: adaa-linearisation
+    kind: derive
+    q: 'In the ADAA paper for stateful systems, why is the linearised first-order ADAA output f''(0) (x_n + x_{n-1})/2? Start from Phi(u, v) = integral from 0 to 1 of f(v + t(u - v)) dt.'
+    expect_doc: 9482
+    chunks: [3004480, 3004481, 3004482, 3004483, 3004484]
+    expected: 'both partial derivatives at (0,0) are f''(0) times the integral of t (or 1 - t) over [0, 1], each 1/2'
+    expect: "1/2|f'\\(0\\)/2|half"
+  - id: diode-lambert-w
+    kind: derive
+    q: 'How does the diode clipper paper get from the wave-domain equation (8) to the explicit b of equation (10) with the Lambert W function?'
+    expect_doc: 4000
+    chunks: [3009389, 3009387, 3009388, 3009390, 3009391]
+    expected: 'match (8) to (A + Bx) e^{Cx} = D with A, B, C, D of (9), apply (7), and simplify; `same` checks (10) against (7) with (9) substituted'
+    expect: "Lambert|W\\(|\\(9\\)|A\\s*\\+\\s*Bx"
+
+  # --- evaluate: numbers ----------------------------------------------------
+  - id: moog-19-2
+    kind: evaluate
+    q: 'Where does the 19.2 in the Moog paper''s I_1 - I_2 = 19.2 I (V_1 - V_2) come from?'
+    expect_doc: 3995
+    chunks: [3009257]
+    expected: '1/(2 V_T) with V_T = 26 mV is 19.23 per volt'
+    expect: "19\\.2|26\\s*mV|0\\.026"
+  - id: dattorro-beta-value
+    kind: evaluate
+    q: 'With Dattorro''s equation (14), what is beta for a notch at 1 kHz with Q = 2, at a 48 kHz sampling rate?'
+    expect_doc: 2272
+    chunks: [3010980, 3010993]
+    expected: 'omega_c = 2 pi 1000/48000 = 0.1309 rad; beta = 0.9366'
+    expect: "0\\.936|0\\.937"
+  - id: rms-tau
+    kind: evaluate
+    q: 'In the RMS compressor''s detector, what time constant tau do R = 10 kOhm and C = 1 uF give?'
+    expect_doc: 9812
+    chunks: [2912753]
+    expected: 'tau = RC = 10 ms'
+    expect: "10\\s*ms|0\\.01"
+  - id: diode-current
+    kind: evaluate
+    q: 'With the Shockley equation of the diode clipper paper, what current flows at v = 0.4 V for I_s = 2.52 nA and V_T = 25.85 mV?'
+    expect_doc: 4000
+    chunks: [3009385]
+    expected: 'about 13.2 mA (0.013232 A)'
+    expect: "13\\.2|0\\.0132"
+  - id: logistic-equilibria
+    kind: evaluate
+    q: 'Where are the equilibria of the logistic equation dN/dt = r N (1 - N/K) in Strogatz, and which is stable for r > 0?'
+    expect_doc: 9990
+    chunks: []
+    expected: 'N = 0 (unstable) and N = K (stable); `solve` gives the two, the sign of the derivative at each gives stability'
+    expect: "N\\s*=\\s*K|K.*stable"
+
+  # --- adaa: the user's case ------------------------------------------------
+  - id: adaa-tanh-first
+    kind: adaa
+    q: 'Write a first-order antiderivative-antialiased version of the tanh shaper, with the C line for its antiderivative and the case for nearly equal inputs.'
+    expect_doc: 9482
+    chunks: [3004479]
+    expected: 'F(x) = log(cosh(x)) (SymPy writes x - log(tanh(x) + 1)); y_n = (F(x_n) - F(x_{n-1}))/(x_n - x_{n-1}), and tanh at the midpoint when |x_n - x_{n-1}| is small; F'' = tanh checked with `same`'
+    expect: "log\\s*\\(?\\s*cosh|cosh"
+  - id: adaa-tanh-second
+    kind: adaa
+    q: 'And the second-order version: what is the second antiderivative of tanh, and how do you check it?'
+    expect_doc: 9482
+    chunks: []
+    expected: 'x^2/2 - x log 2 + Li_2(-e^{-2x})/2 (SymPy cannot integrate it; the model proposes, `same` on its derivative against log(cosh(x)) checks it); C needs its own Li_2'
+    expect: "Li_?2|polylog|dilog"
+  - id: adaa-hard-clip
+    kind: adaa
+    q: 'What is the antiderivative of a hard clipper that limits to [-1, 1], for first-order ADAA?'
+    expect_doc: 9482
+    chunks: []
+    expected: 'piecewise, -x below -1, x^2/2 + 1/2 inside, x above 1 (any constant shifts it); its derivative is the clipper, checked with `same`'
+    expect: "x\\^?2\\s*/\\s*2|piecewise"
