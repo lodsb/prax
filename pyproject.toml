@@ -55,30 +55,19 @@ packages = ["src/prax", "clients/cli/prax_cli"]
 pythonpath = ["src", "clients/cli"]
 
 [tool.mypy]
-# what the type hints promise, checked (niggles.txt, 2026-09-27): the
-# default mode at zero; strict mode (976 on that day) is later, file by
-# file. The optional extras (usearch, onnxruntime, docling, pymupdf…)
-# ship no types, so their imports are taken as they are.
+# what the type hints promise, checked (niggles.txt, 2026-09-27). Strict
+# mode's flags, without implicit re-exports (the store re-exports by
+# design, invariant 3): the first batch on 2026-09-30 (prax.text, writing,
+# wall, ml, config, worker, host.schedule, steps.base), the whole package
+# on 2026-10-03 after 66 fixes, mostly a typed local where an untyped
+# library's value is returned. The optional extras (usearch, onnxruntime,
+# docling, pymupdf…) ship no types, so their imports are taken as they
+# are, and calls into pymupdf and striprtf as untyped.
 files = ["src/prax"]
 # a pack's own tests are tests, checked as little as those in tests/
 exclude = ["src/prax/packs/[^/]+/tests/"]
 ignore_missing_imports = true
-
-# strict mode, package by package (the engineering pass of 2026-09-30): the
-# first batch, which met it with six explicit returns. A module here stays
-# strict; the rest joins as it gets there. mypy has no per-module "strict",
-# so these are the flags it is made of.
-[[tool.mypy.overrides]]
-module = [
-    "prax.text.*",
-    "prax.writing.*",
-    "prax.wall.*",
-    "prax.ml.*",
-    "prax.config",
-    "prax.worker",
-    "prax.host.schedule",
-    "prax.steps.base",
-]
+untyped_calls_exclude = ["pymupdf", "striprtf"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_calls = true

@@ -116,7 +116,7 @@ def release_deferred(step: str, extractors: tuple[str, ...] = ()) -> int:
         ]
         for k in held:
             _readings.pop(k, None)
-        gone += held  # type: ignore[arg-type]
+        gone += held
     return len(gone)
 
 

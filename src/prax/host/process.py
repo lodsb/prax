@@ -104,7 +104,10 @@ def status(data_dir: Path) -> dict[str, Any] | None:
     if running_pid(data_dir) is None:
         return None
     try:
-        return json.loads((run_dir(data_dir) / STATUS).read_text(encoding="utf-8"))
+        got: dict[str, Any] | None = json.loads(
+            (run_dir(data_dir) / STATUS).read_text(encoding="utf-8")
+        )
+        return got
     except (OSError, ValueError):
         return None
 
@@ -322,7 +325,8 @@ class _JobObject:
 def healthy(url: str, timeout: float = 3.0) -> bool:
     try:
         with urllib.request.urlopen(url, timeout=timeout) as r:
-            return 200 <= r.status < 300
+            got: bool = 200 <= r.status < 300
+            return got
     except (urllib.error.URLError, OSError, ValueError):
         return False
 

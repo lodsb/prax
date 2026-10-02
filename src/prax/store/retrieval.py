@@ -1216,7 +1216,8 @@ def _finish(
 
 
 def _vec_count(con: sqlite3.Connection) -> int:
-    return con.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0]
+    got: int = con.execute("SELECT count(*) FROM chunk_embeddings").fetchone()[0]
+    return got
 
 
 # (database file, model) -> (highest chunk id, rows of the model) when
@@ -1310,12 +1311,13 @@ def count_pending_embeddings(con: sqlite3.Connection, model: str) -> int:
     """How many chunks ``pending_embeddings`` would return, without the text."""
     if _all_chunks_embedded(con, model):
         return 0
-    return con.execute(
+    got: int = con.execute(
         "SELECT count(*) FROM chunks c"
         " LEFT JOIN chunk_embeddings e ON e.chunk_id = c.id"
         " WHERE e.chunk_id IS NULL OR e.model != ?",
         (model,),
     ).fetchone()[0]
+    return got
 
 
 @_serialized
@@ -1369,12 +1371,13 @@ def pending_document_embeddings(
 
 @_reading
 def count_pending_document_embeddings(con: sqlite3.Connection, model: str) -> int:
-    return con.execute(
+    got: int = con.execute(
         "SELECT count(*) FROM documents_fts f"
         " LEFT JOIN document_embeddings e ON e.doc_id = f.rowid"
         " WHERE e.doc_id IS NULL OR e.model != ?",
         (model,),
     ).fetchone()[0]
+    return got
 
 
 @_serialized

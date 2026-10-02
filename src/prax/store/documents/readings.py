@@ -711,4 +711,5 @@ def note_ocr_progress(
     con.commit()
     if left > 0:
         request_reading(con, doc_id, extractor, by="ocr-window")
-    return meta["ocr"]
+    got: dict[str, Any] = meta["ocr"]
+    return got

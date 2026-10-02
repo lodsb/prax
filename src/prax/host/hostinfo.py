@@ -246,8 +246,8 @@ def trim_working_set(pid: int) -> int | None:
     page cache already behaves so."""
     if sys.platform != "win32":
         return None
-    kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
-    psapi: Any = ctypes.windll.psapi  # type: ignore[attr-defined]
+    kernel32: Any = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined, unused-ignore]
+    psapi: Any = ctypes.windll.psapi  # type: ignore[attr-defined, unused-ignore]
     kernel32.OpenProcess.restype = ctypes.c_void_p
     handle = kernel32.OpenProcess(0x0100 | 0x0400 | 0x0010, False, int(pid))
     if not handle:  # PROCESS_SET_QUOTA | QUERY_INFORMATION | VM_READ
@@ -304,7 +304,7 @@ class _PROCESS_MEMORY_COUNTERS_EX(ctypes.Structure):
 
 
 def _windows_memory() -> dict[str, int]:
-    kernel32: Any = ctypes.windll.kernel32  # type: ignore[attr-defined]
+    kernel32: Any = ctypes.windll.kernel32  # type: ignore[attr-defined, unused-ignore]
     st = _MEMORYSTATUSEX()
     st.dwLength = ctypes.sizeof(st)
     if not kernel32.GlobalMemoryStatusEx(ctypes.byref(st)):
@@ -318,8 +318,8 @@ def _windows_memory() -> dict[str, int]:
 
 
 def _windows_process_mb() -> int:
-    kernel32: Any = ctypes.windll.kernel32  # type: ignore[attr-defined]
-    psapi: Any = ctypes.windll.psapi  # type: ignore[attr-defined]
+    kernel32: Any = ctypes.windll.kernel32  # type: ignore[attr-defined, unused-ignore]
+    psapi: Any = ctypes.windll.psapi  # type: ignore[attr-defined, unused-ignore]
     kernel32.GetCurrentProcess.restype = ctypes.c_void_p  # a pseudo-handle
     pmc = _PROCESS_MEMORY_COUNTERS_EX()
     pmc.cb = ctypes.sizeof(pmc)

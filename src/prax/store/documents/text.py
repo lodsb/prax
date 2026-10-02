@@ -145,7 +145,8 @@ def text_unchanged(con: sqlite3.Connection, doc_id: int, text: str) -> bool:
     if row is None or not row["text_hash"]:
         return False
     digest = hashlib.sha256(_cleaned(text).encode("utf-8")).hexdigest()
-    return digest == row["text_hash"]
+    got: bool = digest == row["text_hash"]
+    return got
 
 
 @_serialized
@@ -510,7 +511,7 @@ def suspect(
         row["source_url"] or "",
         str((meta.get("origin") or {}).get("path") or ""),
     ]
-    cues = rules.cues(row["title"] or "", paths, text or "")
+    cues: list[str] = rules.cues(row["title"] or "", paths, text or "")
     if not cues:
         # nothing to keep: a document with no cue carries no mark, and the
         # nightly pass reads it again (a file read, no write)

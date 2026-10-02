@@ -232,7 +232,10 @@ def build_fixture_store(
 
 
 def report(
-    scores: list[ModeScore], results: list[QueryResult], *, build: dict | None = None
+    scores: list[ModeScore],
+    results: list[QueryResult],
+    *,
+    build: dict[str, Any] | None = None,
 ) -> str:
     lines = ["# Retrieval eval", ""]
     if build:

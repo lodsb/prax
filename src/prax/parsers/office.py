@@ -121,7 +121,8 @@ def _zipped_xml(archive: Any, member: str) -> bytes:
             f"{member} inflates to {info.file_size >> 20} MB, over the"
             f" {ZIPPED_XML_MAX >> 20} MB the parser reads"
         )
-    return archive.read(member)
+    got: bytes = archive.read(member)
+    return got
 
 
 def _docx(data: bytes) -> str:

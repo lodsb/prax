@@ -401,7 +401,8 @@ def _fetched(ref: str) -> tuple[bytes, str] | None:
     if fetch is None:
         return None
     try:
-        return fetch(ref)
+        got: tuple[bytes, str] | None = fetch(ref)
+        return got
     except Exception:  # noqa: BLE001 - the door away is no figure
         return None
 

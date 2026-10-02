@@ -16,7 +16,12 @@ refused here, at import.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from prax import packs as _packs
+
+if TYPE_CHECKING:
+    from prax.steps.base import Step
 
 CORE_STEPS = (
     "parse",
@@ -96,7 +101,7 @@ if _REPEATED:
     raise ValueError(f"a pack repeats a name: {'; '.join(_REPEATED)}")
 
 
-def get(name: str):
+def get(name: str) -> Step:
     """The step called ``name``: what the door hands out for it, what the
     worker does with that, what the door takes in (``prax.steps.base.Step``).
     """
@@ -106,4 +111,5 @@ def get(name: str):
 
     home = _HOMES[name]
     module = importlib.import_module(home if "." in home else f"prax.steps.{home}")
-    return module.REGISTERED[name]
+    step: Step = module.REGISTERED[name]
+    return step

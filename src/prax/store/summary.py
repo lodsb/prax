@@ -89,7 +89,10 @@ def stats(con: sqlite3.Connection) -> dict[str, Any]:
             " GROUP BY 1 ORDER BY 2 DESC LIMIT 12"
         )
     }
-    one = lambda sql: int(con.execute(sql).fetchone()[0])
+
+    def one(sql: str) -> int:
+        return int(con.execute(sql).fetchone()[0])
+
     db = config.db_path()
     return {
         "documents": docs,

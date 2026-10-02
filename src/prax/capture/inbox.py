@@ -35,8 +35,9 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from http.client import HTTPMessage
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from prax import config, models, parsers, store
 from prax.capture import drop
@@ -168,7 +169,15 @@ class _CheckedRedirects(urllib.request.HTTPRedirectHandler):
     """Every hop of a redirect goes through the same check as the first
     URL: a public page that redirects into the LAN is refused there."""
 
-    def redirect_request(self, req, fp, code, msg, headers, newurl):  # type: ignore[override]
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+        newurl: str,
+    ) -> urllib.request.Request | None:
         check_reachable(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 

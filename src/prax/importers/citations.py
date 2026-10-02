@@ -87,7 +87,7 @@ class HttpFetcher:
             req = urllib.request.Request(url, headers={"User-Agent": ua})
             try:
                 with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
+                    data: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
                 time.sleep(self.pause)
                 return data
             except urllib.error.HTTPError as exc:

@@ -280,4 +280,5 @@ def _answer_new_blocks(con: Any, slug: str, text: str) -> int | None:
         return None  # (a held block is the person's until released)
     if _asking_page(slug):
         return None
-    return _start_questions(con, only=slug, briefing=False)["job"]
+    got: int | None = _start_questions(con, only=slug, briefing=False)["job"]
+    return got

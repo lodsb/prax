@@ -82,6 +82,11 @@ _GENRE_SURE = (
 
 
 @_serialized
+def _sure(labels: list[dict[str, Any]] | None, key: str) -> list[str]:
+    """The labels given with ``p`` of 0.5 or more."""
+    return [str(x[key]) for x in labels or [] if float(x.get("p", 1.0)) >= 0.5]
+
+
 def set_genres(
     con: sqlite3.Connection,
     doc_id: int,
@@ -205,9 +210,6 @@ def genre_training(
             except (OSError, KeyError):
                 text = ""
         by = meta.get("genres_by")
-        keep = lambda xs, key: [
-            x[key] for x in xs or [] if float(x.get("p", 1.0)) >= 0.5
-        ]
         out.append(
             {
                 "id": r["id"],
@@ -219,8 +221,8 @@ def genre_training(
                 or r["original_path"],
                 "by": by,
                 "blind": by == "human" and not meta.get("genres_model"),
-                "g": keep(meta.get("genres"), "genre"),
-                "s": keep(meta.get("subjects"), "subject"),
+                "g": _sure(meta.get("genres"), "genre"),
+                "s": _sure(meta.get("subjects"), "subject"),
             }
         )
     return out

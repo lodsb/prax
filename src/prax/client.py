@@ -11,7 +11,10 @@ import mimetypes
 import os
 import socket
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import httpx
 
 
 class DoorError(RuntimeError):
@@ -61,7 +64,7 @@ class Door:
             client = httpx.Client(base_url=self.base_url, timeout=timeout)
         self.client = client
 
-    def _check(self, res: Any) -> Any:
+    def _check(self, res: httpx.Response) -> httpx.Response:
         if res.status_code >= 400:
             detail = ""
             try:

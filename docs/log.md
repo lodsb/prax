@@ -3533,6 +3533,34 @@ search. Whether they help one that names a kind of document is not
 measured, since the set holds no such query; the next queries for it
 come from the documents the person labelled. The copy was deleted after.
 
+## 2026-10-03: mypy's strict flags over the whole package
+
+The first strict batch (2026-09-30) covered eight packages. The plan
+held the next one back until the store had an `__all__`, because 926 of
+strict mode's 1,008 errors were the store's re-exports. Those errors come
+from one flag, `no_implicit_reexport`, which the batch never set: the
+store re-exports every name on purpose (invariant 3). Under the batch's
+own flags the rest of the package had 66 errors.
+
+- 42 `no-any-return`: a value from an untyped library returned as a
+  declared type. The fix is the batch's: a typed local, then the return.
+  Three roots took 17 of them at once: `steps.get` now returns a `Step`;
+  `Door._check` takes and gives an `httpx.Response`, so `.content` is
+  `bytes`; and the MCP tools that answer one record go through
+  `_answer`, typed `dict[str, Any]`.
+- 14 untyped calls into pymupdf and striprtf, which ship no types:
+  `untyped_calls_exclude` names them.
+- 7 unused `type: ignore`s. Five in `hostinfo` are Windows calls that
+  Linux needs ignored and Windows does not: they now say
+  `[attr-defined, unused-ignore]`, so both platforms pass. Two were
+  stale.
+- 3 helpers without types (two lambdas, the redirect handler), and one
+  `dict` without arguments.
+
+The flags moved from the overrides to `[tool.mypy]`, so a new module is
+strict from its first line. `mypy` and `mypy --platform linux` pass;
+1156 tests pass.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

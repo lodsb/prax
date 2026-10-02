@@ -447,11 +447,11 @@ not done.
 - [ ] **Typed shapes.** 869 `dict[str, Any]` annotations and no
       `TypedDict`. The first ones worth writing are a search hit (read by
       six modules), `get_document`, a job row and the meta keys.
-- [ ] **The next strict batch of mypy.** `prax.text`, `writing`, `wall`,
-      `ml`, `config`, `worker`, `host.schedule` and `steps.base` are
-      strict. `prax.store` needs `__all__` or explicit re-exports first:
-      926 of strict mode's 1,008 errors on 2026-09-30 were the store's
-      re-exports.
+- [x] (2026-10-03) **The next strict batch of mypy: the whole package.**
+      Under the batch's flags the package had 66 errors, not the 1,008
+      feared. The 926 re-export errors come from `no_implicit_reexport`,
+      which the batch never set; the store re-exports by design. The
+      flags moved to `[tool.mypy]` itself (`docs/log.md`).
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`

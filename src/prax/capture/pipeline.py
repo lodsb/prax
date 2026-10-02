@@ -25,7 +25,8 @@ from prax.writing import summaries, titles
 
 def file_name(doc: dict[str, Any]) -> str | None:
     z = (doc["meta"] or {}).get("zotero") or {}
-    return z.get("filename") or doc["title"]
+    got: str | None = z.get("filename") or doc["title"]
+    return got
 
 
 def summaries_needed(

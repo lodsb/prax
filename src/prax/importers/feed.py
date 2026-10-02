@@ -194,8 +194,9 @@ def _send(
     tags: list[str] | None,
 ) -> dict[str, Any]:
     all_tags = [t for t in [*(tags or []), *item.tags] if t]
+    got: dict[str, Any]
     if item.is_link:
-        return door.post_json(
+        got = door.post_json(
             "/ingest/url",
             {
                 "url": item.url,
@@ -206,7 +207,9 @@ def _send(
                 "note": item.note,
             },
         )
-    return door.post_json("/ingest", text_body(source, item, domains, all_tags))
+    else:
+        got = door.post_json("/ingest", text_body(source, item, domains, all_tags))
+    return got
 
 
 def text_body(

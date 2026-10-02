@@ -162,7 +162,9 @@ class Passage:
         return "equations nearby: " + "; ".join(bits)
 
 
-def nearby_of(con: sqlite3.Connection, kind: str | None, chunk_id: int | None):
+def nearby_of(
+    con: sqlite3.Connection, kind: str | None, chunk_id: int | None
+) -> list[dict[str, Any]] | None:
     """The neighbourhood for a formula chunk, None for anything else."""
     if kind != "formula" or chunk_id is None:
         return None

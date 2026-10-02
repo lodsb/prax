@@ -335,4 +335,5 @@ def _docling(data: bytes) -> str:
     base = importlib.import_module("docling.datamodel.base_models")
     stream = base.DocumentStream(name="document.pdf", stream=BytesIO(data))
     result = converter_mod.DocumentConverter().convert(stream)
-    return result.document.export_to_markdown()
+    got: str = result.document.export_to_markdown()
+    return got

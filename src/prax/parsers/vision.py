@@ -219,6 +219,7 @@ def _read_server(
     """The prompt through an OpenAI-shaped server; a little temperature
     keeps a local model out of the repetition loops greedy decoding falls
     into on long transcriptions."""
+    text: str
     text, _usage = runtime.chat(
         "", prompt, images=[(data, mt)], max_tokens=max_tokens, temperature=0.2
     )

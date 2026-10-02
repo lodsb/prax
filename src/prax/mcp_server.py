@@ -64,6 +64,12 @@ def _guard(call: Callable[[], Any]) -> Any:
         }
 
 
+def _answer(call: Callable[[], Any]) -> dict[str, Any]:
+    """One record from the door, or the reason there is none."""
+    out: dict[str, Any] = _guard(call)
+    return out
+
+
 def _guarded_list(call: Callable[[], Any]) -> list[dict[str, Any]]:
     out = _guard(call)
     return out if isinstance(out, list) else [out]
@@ -123,7 +129,7 @@ def get_chunk(chunk_id: int) -> dict[str, Any]:
     Returns its text, kind, heading path, locator (character range and page
     in the document) and, for tables, ``data`` with header and rows.
     """
-    return _guard(lambda: door().get_json(f"/chunk/{chunk_id}"))
+    return _answer(lambda: door().get_json(f"/chunk/{chunk_id}"))
 
 
 @mcp.tool()
@@ -135,7 +141,7 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
     what the document is and where it belongs (source, domains, language,
     summary, ids, authors), not the history of how it was read.
     """
-    return _guard(
+    return _answer(
         lambda: door().get_json(
             f"/get/{doc_id}",
             {"offset": offset, "max_chars": max_chars, "brief": True},
@@ -189,7 +195,7 @@ def link(
 
     ``confidence`` is EXTRACTED, INFERRED, or AMBIGUOUS.
     """
-    return _guard(
+    return _answer(
         lambda: door().post_json(
             "/link",
             {
@@ -242,7 +248,7 @@ def ask(
         body["steps"] = steps
     if not answer:
         body["backend"] = "none"
-    return _guard(lambda: door().post_json("/ask", body))
+    return _answer(lambda: door().post_json("/ask", body))
 
 
 @mcp.tool()
@@ -299,7 +305,7 @@ def maths(
         body["steps"] = steps
     if args:
         body["args"] = args
-    return _guard(lambda: door().post_json("/maths", body))
+    return _answer(lambda: door().post_json("/maths", body))
 
 
 @mcp.tool()
@@ -311,7 +317,7 @@ def set_domains(doc_id: int, domains: list[str] | None) -> dict[str, Any]:
     under an extraction makes it stale (``reread`` true in the answer): the
     worker's next extract pass reads the document again against the new
     set and retires the old reading."""
-    return _guard(
+    return _answer(
         lambda: door().put_json(
             f"/doc/{doc_id}/domains", {"domains": domains, "by": "agent"}
         )
@@ -324,7 +330,7 @@ def promote(doc_id: int, reason: str | None = None) -> dict[str, Any]:
     with claims and relations between methods) when it turned out to matter:
     cited in an answer, central to a question, worth a page. The pass itself
     runs later as a batch; this only queues."""
-    return _guard(
+    return _answer(
         lambda: door().post_json(
             f"/doc/{doc_id}/promote", {"reason": reason, "by": "agent"}
         )
@@ -375,7 +381,7 @@ def context(
             "members": _brief(ctx.get("members"), ("doc_id", "title"), 40),
         }
 
-    return _guard(call)
+    return _answer(call)
 
 
 @mcp.tool()
@@ -427,7 +433,7 @@ def documents(
 def get_page(slug: str) -> dict[str, Any]:
     """A page of the library's wiki: its Markdown text, kind (addendum,
     project, topic), author of the latest revision and revision list."""
-    return _guard(lambda: door().get_json(f"/page/{slug}"))
+    return _answer(lambda: door().get_json(f"/page/{slug}"))
 
 
 @mcp.tool()
@@ -451,7 +457,7 @@ def write_page(
     -->`` on the next: the door answers it between the markers and asks
     again when the library learns something (``get_page`` lists them as
     ``blocks``)."""
-    return _guard(
+    return _answer(
         lambda: door().put_json(
             f"/page/{slug}",
             {
@@ -473,7 +479,7 @@ def append_page(
 ) -> dict[str, Any]:
     """Add a section to an existing page as the agent, leaving what a
     person wrote untouched."""
-    return _guard(
+    return _answer(
         lambda: door().post_json(
             f"/page/{slug}/append",
             {"section": section, "heading": heading, "author": "agent", "note": note},
@@ -486,7 +492,7 @@ def ingest(
     text: str, title: str | None = None, source_url: str | None = None
 ) -> dict[str, Any]:
     """Ingest raw text as a new document (deduped by content hash)."""
-    return _guard(
+    return _answer(
         lambda: door().post_json(
             "/ingest", {"text": text, "title": title, "source_url": source_url}
         )
@@ -503,7 +509,7 @@ def capture_url(
     know it: a file otherwise carries its file name or arXiv id until
     the titles pass reads one. A site that answers the server with a bot
     check is an error, not a document."""
-    return _guard(
+    return _answer(
         lambda: door().post_json(
             "/ingest/url",
             {"url": url, "title": title, "domains": domains, "by": "agent"},
@@ -547,7 +553,7 @@ def ingest_file(
     if source_url:
         fields["source_url"] = source_url
     mimetypes.guess_type(p.name)  # the upload names the type from the file name
-    return _guard(lambda: door().upload(p, fields))
+    return _answer(lambda: door().upload(p, fields))
 
 
 if __name__ == "__main__":

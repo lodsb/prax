@@ -507,7 +507,8 @@ def post_json(url: str, body: dict[str, Any], key: str | None) -> dict[str, Any]
     )
     try:
         with urllib.request.urlopen(req, timeout=OPENAI_TIMEOUT) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            got: dict[str, Any] = json.loads(resp.read().decode("utf-8"))
+            return got
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")[:300]
         if exc.code == 503:  # llama-server for a minute or three after a start
@@ -579,7 +580,8 @@ def _server_root(base_url: str) -> str:
 def get_text(url: str, timeout: float = STATUS_TIMEOUT) -> str:
     """One GET; replaced in tests."""
     with urllib.request.urlopen(url, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+        got: str = resp.read().decode("utf-8", errors="replace")
+        return got
 
 
 def parse_metrics(text: str) -> dict[str, float]:

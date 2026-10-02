@@ -171,7 +171,8 @@ def request_extraction(
     }
     _put_meta(con, doc_id, meta)
     con.commit()
-    return meta["extraction_stale"]
+    got: dict[str, Any] = meta["extraction_stale"]
+    return got
 
 
 def add_domain(
@@ -459,7 +460,8 @@ def _set_promote(
         "at": now(),
     }
     _put_meta(con, doc_id, meta)
-    return meta["promote"]
+    got: dict[str, Any] | None = meta["promote"]
+    return got
 
 
 @_serialized
@@ -689,7 +691,8 @@ def set_sensitivity(
         (state, json.dumps(meta), doc_id),
     )
     con.commit()
-    return row["sensitivity"]
+    got: str | None = row["sensitivity"]
+    return got
 
 
 @_reading
