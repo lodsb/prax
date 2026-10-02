@@ -562,7 +562,14 @@ def _sides(e: Any) -> Any:
 
 def op_same(a: Any, b: Any, **_: Any) -> dict[str, Any]:
     """Whether two expressions are equal: their difference simplified to
-    zero, else a numeric check at random points; it says which."""
+    zero, else a numeric check at random points; it says which. A function
+    with no definition (a paper's J_0, a model's F) leaves it undecided:
+    numbers cannot be put into it."""
+    from sympy.core.function import AppliedUndef
+
+    undefined = sorted({str(f.func) for e in (a, b) for f in e.atoms(AppliedUndef)})
+    if undefined:
+        return {"same": None, "how": f"undecided: {', '.join(undefined)} undefined"}
     if isinstance(a, sympy.Equality) and isinstance(b, sympy.Equality):
         a, b = _sides(a), _sides(b)
         # two equations are the same relation when one side difference is a

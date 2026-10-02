@@ -63,5 +63,8 @@ MANIFEST = Pack(
     tool_help={"maths": HELP},
     tool_grammar={"maths": GRAMMAR.strip()},
     answer_check="prax.packs.maths.check:check_answer",
+    # every display formula read once and its chain judged (AD2, step 4)
+    steps={"equations": "prax.packs.maths.formulas"},
+    watched=("equations",),
     settings="maths",
 )

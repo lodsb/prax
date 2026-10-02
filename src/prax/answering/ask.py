@@ -156,7 +156,12 @@ class Passage:
         bits = []
         for e in self.nearby:
             num = f"({e['number']})" if e.get("number") else "(unnumbered)"
-            bits.append(f"{num} {e['head']}" + (" ‹this one›" if e.get("here") else ""))
+            bit = f"{num} {e['head']}" + (" ‹this one›" if e.get("here") else "")
+            if e.get("broken"):
+                # the maths pack checked the display and a link of it
+                # fails: an extraction slip or the paper's own typo
+                bit += " ‹its = does not hold, by the calculator›"
+            bits.append(bit)
         return "equations nearby: " + "; ".join(bits)
 
 

@@ -3183,3 +3183,28 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   names the `V_T` slip. With a refusal pattern and `also: "V_T"`: 141 of
   160 (88%). The rest are partial credit for thin reasoning.
 - `scripts/eval_maths.py` keeps the door's answer checks (`checks`).
+
+## 2026-10-02: AD2, step 4 — the library's formulas checked
+
+- **What.** The maths pack's watched step `equations`: formula chunks
+  not checked at `CHECK_VERSION` go to a worker with the maths
+  environment, which reads each and judges its chain's links in one
+  calculator process; the door keeps `data.check`, and a broken link
+  shows beside the passage in the equations-nearby line. Store:
+  `formulas_to_check`, `set_formula_checks`.
+- **Measured on the live store, read-only.** 17,431 formulas in 244
+  documents; about 20 minutes of a worker for all of them. The first
+  sample of 600 marked 4 broken, the second of 1,500 marked 14, and
+  nearly all were the judge's errors: a true integral identity (22/7 −
+  π), a division rounded to the digits written, mixed numbers, `\div`,
+  ratios, `:=`, `\quad`, and equations in one unknown. Each became a rule
+  of `check.verdict`, which the answer check now shares. With them:
+  11 links judged in 2,100 formulas, one broken, and that one real (a
+  tuning paper's `9/8 · 256/243`). The answers of e1/e2 still mark the
+  quoted `e^{xx}` typo 15 times and the diode answer's division once.
+- **Two slips of mine on the way.** The new store read went in between
+  `equations_near`'s decorator and its definition (the wall's guard moved
+  onto the wrong function; caught by a failing call, restored), and an
+  empty skip list wrote `id NOT IN (NULL)`, which matches nothing. The
+  step was first named `formula-check`; a step name with a hyphen breaks
+  the command line's `--no-<step>` flag, so it is `equations`.

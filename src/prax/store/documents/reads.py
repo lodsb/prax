@@ -410,6 +410,39 @@ def _equation_head(data: str | None, text: str) -> str:
     return head if len(head) <= HEAD_CHARS else head[: HEAD_CHARS - 1].rstrip() + "…"
 
 
+@_reading
+def formulas_to_check(
+    con: sqlite3.Connection,
+    *,
+    version: int,
+    limit: int = 50,
+    skip: tuple[int, ...] = (),
+) -> list[dict[str, Any]]:
+    """Display formulas whose LaTeX the maths pack has not checked at this
+    ``version`` (``data.check.v``): ``{chunk_id, doc_id, latex}``, oldest
+    first. A re-chunk drops a check, and the chunk comes back here."""
+    # leased chunks left out; "NOT IN (NULL)" would leave out everything
+    gaps = f" AND id NOT IN ({','.join('?' * len(skip))})" if skip else ""
+    rows = con.execute(
+        "SELECT id, doc_id, json_extract(data, '$.latex') AS latex FROM chunks"
+        " WHERE kind = 'formula' AND json_extract(data, '$.latex') IS NOT NULL"
+        " AND coalesce(json_extract(data, '$.check.v'), 0) != ?"
+        f"{gaps} ORDER BY id LIMIT ?",
+        (version, *skip, limit),
+    ).fetchall()
+    return [
+        {"chunk_id": r["id"], "doc_id": r["doc_id"], "latex": r["latex"]} for r in rows
+    ]
+
+
+def _broken(data: str | None) -> bool:
+    if not data:
+        return False
+    with contextlib.suppress(ValueError, AttributeError):
+        return bool((json.loads(data).get("check") or {}).get("broken"))
+    return False
+
+
 @_guards("chunk", list)
 def equations_near(
     con: sqlite3.Connection,
@@ -456,6 +489,8 @@ def equations_near(
                 "number": number,
                 "head": _equation_head(r["data"], r["text"]),
                 "here": r["id"] == chunk_id,
+                # the maths pack's check: the display's own links do not hold
+                "broken": _broken(r["data"]),
             }
         )
     return out

@@ -101,7 +101,7 @@ def test_a_packs_capability_reaches_the_registries(
     )
     monkeypatch.setattr(packs, "PACKS", (*packs.PACKS, fake))
     assert packs.step_homes()["scan"] == "fakepack_code"
-    assert packs.watched() == ("scan",)
+    assert packs.watched()[-1:] == ("scan",)  # after the real packs' own
     assert packs.readings() == {"sympy": "formulas"}
     assert packs.kinds() == ("score",) and packs.aside() == ("score",)
     assert packs.setting_sections()[-1] == "fake"

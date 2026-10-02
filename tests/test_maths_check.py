@@ -107,10 +107,13 @@ def test_a_batch_is_one_process(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def fake(request: dict[str, Any], timeout: float | None = None) -> dict[str, Any]:
         seen.append(request)
-        return {"batch": [{"same": True}, {"same": False}]}
+        reads = {"a": {"symbols": ["a"]}, "b": {"symbols": ["a"]}}
+        return {
+            "batch": [{"same": True, "read": reads}, {"same": False, "read": reads}]
+        }
 
     monkeypatch.setattr(tool, "run", fake)
-    answer = "$$a + b = b + a = 2a$$"
+    answer = "$$a + a = 2 a = 3 a$$"
     _, found = check.check_links(answer)
     assert len(seen) == 1 and len(seen[0]["batch"]) == 2
     assert [c["verdict"] for c in found] == ["holds", "does not hold"]
@@ -129,3 +132,35 @@ def test_units_labels_and_lists_are_not_claims() -> None:
         "5296135.52",
     ]
     assert check.is_name("u'") and check.is_name("(x)")
+
+
+def test_what_is_judged() -> None:
+    """Arithmetic to the precision its result is written with, and an
+    identity in one variable; not an equation in one unknown, nor a
+    relation among several (the library's 2,100-formula sample,
+    2026-10-02)."""
+
+    def res(a: list[str], b: list[str], **kw: Any) -> dict[str, Any]:
+        return {"read": {"a": {"symbols": a}, "b": {"symbols": b}}, **kw}
+
+    v = check.verdict
+    assert v(
+        r"31/53 \times 1200",
+        "701.887",
+        res([], [], same=False, difference="(0.0003+0j)"),
+    )
+    assert not v(
+        "0.4/0.02585", "15.47814319", res([], [], same=False, difference="(0.004+0j)")
+    )
+    assert v(r"\tanh x", "...", res(["x"], ["x"], same=True)) is True
+    assert v("1 - y", r"\frac{1}{9}", res(["y"], [], same=False)) is None
+    several = res(["Q", "omega_c"], ["Delta_omega"], same=False)
+    assert v(r"\omega_c/(2Q)", r"\Delta\omega/2", several) is None
+    for display in (
+        r"\lim_{z \to \infty} J_0(z) + J_0(0) = 1",
+        r"3 \times 7 \frac{1}{51} - 12 = 9 \frac{3}{51}",
+        r"n := n + 1",
+        r"\frac{1}{\sqrt{2}} \quad g(0) = -g(1)",
+        r"36/25 \div 25/18 = 648/625",
+    ):
+        assert check.sides(display) == [], display

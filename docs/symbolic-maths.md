@@ -167,6 +167,36 @@ are called on it.
     15.478`, true 15.474). 44 links hold, 120 are not judged, 85 do not
     read. The numbers half is not measured on these answers: the eval
     files keep no passages.
+- The library's formulas checked (AD2, step 4): the maths pack's
+  watched step `equations` (`packs/maths/formulas.py`). The door hands
+  out formula chunks not checked at `CHECK_VERSION`
+  (`store.formulas_to_check`). The worker reads each formula and judges
+  its chain's links in one calculator process. The door keeps the
+  result in `data.check` (`store.set_formula_checks`): `reads`, `links`,
+  `judged`, `holds`, and `broken`, the links that do not hold. A
+  formula with a broken link carries "‹its = does not hold, by the
+  calculator›" in the equations-nearby line its passage shows. A worker
+  without `maths.python` asks for nothing. A re-chunk drops the checks
+  and the step makes them again.
+  - Judged, by one rule for the library and for answers
+    (`check.verdict`): arithmetic, compared to the decimal places of the
+    side that states the result (`31/53 × 1200 = 701.887` holds), and an
+    identity in one variable, with the same symbol on both sides. Not
+    judged: an equation in one unknown (`1 - y = 1/9`), a relation among
+    several quantities, a display with a limit, sum, product, integral,
+    ceiling, `\div`, a mixed number, a ratio or `:=`, two statements
+    side by side (`\quad`), a function with no definition.
+  - Measured on 2,100 of the 17,431 formulas (244 documents, read-only,
+    2026-10-02): 35% read, 11 links judged, one does not hold. That one
+    is real: `9/8 · 256/243 × 80/81 = 20480/19683 × 80/81` in a tuning
+    paper, where the left side's first product is 32/27. The rules above
+    came from the first two samples, which marked a true integral
+    identity, a rounded division, mixed numbers and equations in `y` as
+    broken. Coverage is small on purpose: a wrong "does not hold" next
+    to a passage is worse than none.
+  - Not built: checking a table's rows against each other (the RNN
+    paper's antiderivatives). A table does not say which column is the
+    derivative of which; it waits for a measured need.
 - The surfer's action as a line of text, as it was before AD2 and as a
   model without the grammar may still write it:
   `maths: same [3] == [7]`, `maths: integrate x \tanh(x)`,

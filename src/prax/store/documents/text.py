@@ -305,6 +305,30 @@ def _apply_reference_links(
 
 
 @_serialized
+def set_formula_checks(con: sqlite3.Connection, checks: list[dict[str, Any]]) -> int:
+    """Keep the maths pack's check of each formula in its chunk's
+    ``data.check`` (``{chunk_id, check}``); a chunk that is not a formula,
+    or is gone, is skipped. Returns how many were kept."""
+    n = 0
+    for c in checks:
+        row = con.execute(
+            "SELECT data FROM chunks WHERE id = ? AND kind = 'formula'",
+            (int(c["chunk_id"]),),
+        ).fetchone()
+        if row is None:
+            continue
+        data = json.loads(row["data"]) if row["data"] else {}
+        data["check"] = dict(c["check"])
+        con.execute(
+            "UPDATE chunks SET data = ? WHERE id = ?",
+            (json.dumps(data), int(c["chunk_id"])),
+        )
+        n += 1
+    con.commit()
+    return n
+
+
+@_serialized
 def set_reference_links(
     con: sqlite3.Connection, doc_id: int, links: list[dict[str, Any]]
 ) -> int:

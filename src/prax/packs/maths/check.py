@@ -68,6 +68,14 @@ def sides(display: str) -> list[str]:
     text = THOUSANDS.sub("", text)  # 10,000 is ten thousand
     if re.search(r"\\\\|&|\\(?:le|ge|leq|geq|neq|approx|sim|propto)\b|[<>]", text):
         return []
+    if re.search(r"\\q?quad", text):
+        return []  # two statements side by side: x = 1 \quad y = 2
+    if re.search(r"\\(?:lim|sum|prod|int|oint|lceil|lfloor|div)(?![A-Za-z])", text):
+        # a bound variable, a rounding, an ambiguous ÷: where readings go
+        # wrong (J_0(z) under a limit read as a product, 2026-10-02)
+        return []
+    if re.search(r"\d\s*\\frac|:", text):
+        return []  # a mixed number (7\frac{1}{51}), a ratio a : b, n := n + 1
     if UNITS.search(text):
         return []  # 10 kΩ = 10,000 Ω: a conversion of units, not maths
     out, depth, start = [], 0, 0
@@ -178,6 +186,41 @@ def check_numbers(
     return answer, checks
 
 
+def _places(side: str) -> int | None:
+    """The decimal places of a side that is one written number (the result
+    a link states, 701.887), or None: a computation's own inputs say
+    nothing of the precision of its result (0.4/0.02585 = 15.478 is
+    wrong at the third place, whatever 0.4 is written to)."""
+    m = re.fullmatch(r"\s*-?\d+\.(\d+)\s*(?:\\ldots|\.\.\.)?\s*", side)
+    return len(m.group(1)) if m else None
+
+
+def verdict(left: str, right: str, res: dict[str, Any]) -> bool | None:
+    """Whether a link holds by the calculator's ``same`` answer, or None
+    when it is not judged. Judged are arithmetic (no symbol either side,
+    compared to the precision written: 31/53 × 1200 = 701.887 holds) and
+    identities in one variable (the same one symbol on both sides). An
+    equation in one unknown (1 - y = 1/9) is a condition, not judged; nor
+    is a relation among several quantities."""
+    reads = res.get("read") or {}
+    if "error" in res or len(reads) < 2:
+        return None
+    a = set(reads["a"].get("symbols") or [])
+    b = set(reads["b"].get("symbols") or [])
+    if a != b or len(a) > FREE_MAX:
+        return None
+    if not a:  # arithmetic: to the digits the link is written with
+        places = [p for p in (_places(left), _places(right)) if p is not None]
+        try:
+            diff = abs(complex(str(res.get("difference", "")).replace(" ", "")))
+        except ValueError:
+            diff = None
+        if diff is not None and places:
+            return diff <= 0.5 * 10 ** -min(places) * 1.01
+    same = res.get("same")
+    return None if same is None else bool(same)
+
+
 def check_links(answer: str) -> tuple[str, list[dict[str, Any]]]:
     """The answer with each display equation's failing links marked."""
     found = links(answer)
@@ -188,15 +231,15 @@ def check_links(answer: str) -> tuple[str, list[dict[str, Any]]]:
     checks: list[dict[str, Any]] = []
     marks: dict[int, list[str]] = {}
     for (end, left, right), res in zip(found, got, strict=False):
-        reads = res.get("read") or {}
-        names = {n for r in reads.values() for n in r.get("symbols") or []}
-        if "error" in res or res.get("same") is None:
+        if "error" in res:
             checks.append({"link": f"{left} = {right}", "verdict": "unread"})
-        elif len(names) > FREE_MAX:
+            continue
+        holds = verdict(left, right, res)
+        if holds is None:
             # a relation among quantities holds given other facts (Q =
             # ω_c/Δω, the diode's waves): not an identity to judge alone
             checks.append({"link": f"{left} = {right}", "verdict": "not judged"})
-        elif res["same"]:
+        elif holds:
             checks.append({"link": f"{left} = {right}", "verdict": "holds"})
         else:
             checks.append({"link": f"{left} = {right}", "verdict": "does not hold"})

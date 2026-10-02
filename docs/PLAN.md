@@ -82,7 +82,7 @@ nothing.
             runs of one way disagree on 3 to 7 of 20, so a change is
             measured over five runs, not two; by hand that costs an hour
             of scoring per run.
-      - [ ] **Formulas checked when indexed.** The calculator reads each
+      - [x] (2026-10-02: the watched step `equations`; on 2,100 formulas 11 links judged and one real error found, `docs/symbolic-maths.md`; tables row against row not built) **Formulas checked when indexed.** The calculator reads each
             `formula` chunk once and keeps in `data` whether it reads
             and, for a chain A = B = C, whether each link holds. The
             surf shows a broken chain beside the passage (the Moog
