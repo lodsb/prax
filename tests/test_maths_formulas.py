@@ -40,8 +40,7 @@ def _calculator(
             out.append({"read": {"a": {"symbols": ["x"]}}})
         else:
             fails = "xx" in r["a"] or "xx" in r["b"]
-            sym = {"symbols": ["x"]}
-            out.append({"same": not fails, "read": {"a": sym, "b": sym}})
+            out.append({"verdict": "does not hold" if fails else "holds"})
     return {"batch": out}
 
 
@@ -88,3 +87,56 @@ def test_a_worker_without_the_maths_environment_asks_for_nothing(
             raise AssertionError("asked the door")
 
     assert formulas.REGISTERED["equations"].run(Pass(door=Door())) is None
+
+
+def test_a_check_never_lands_on_a_formula_that_changed(
+    client: TestClient,
+) -> None:
+    """Chunk ids are reused after a re-chunk: a check made of other LaTeX
+    than the chunk now holds is not kept (the review of 2026-10-02)."""
+    con = client.app.state.con
+    doc = int(store.ingest_text(con, PAPER, title="typo")["doc_id"])
+    chunk = next(c for c in store.list_chunks(con, doc) if c["kind"] == "formula")
+    stale = {
+        "v": formulas.CHECK_VERSION,
+        "sha": formulas.latex_sha("other"),
+        "reads": True,
+    }
+    assert (
+        store.set_formula_checks(con, [{"chunk_id": chunk["chunk_id"], "check": stale}])
+        == 0
+    )
+    latex = str(chunk["data"]["latex"])
+    fresh = {**stale, "sha": formulas.latex_sha(latex)}
+    assert (
+        store.set_formula_checks(con, [{"chunk_id": chunk["chunk_id"], "check": fresh}])
+        == 1
+    )
+
+
+def test_a_batch_the_calculator_fails_on_is_judged_one_at_a_time(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One formula that breaks the calculator does not keep the rest of its
+    batch from ever being checked: they are judged alone, and it is kept as
+    unread so it is not handed out again."""
+    calls: list[int] = []
+
+    def calculator(
+        request: dict[str, Any], timeout: float | None = None
+    ) -> dict[str, Any]:
+        calls.append(len(request["batch"]))
+        if any("bad" in r["a"] for r in request["batch"]):
+            return {"error": "the calculator took longer than 20 s and was stopped"}
+        return {"batch": [{"read": {}} for _ in request["batch"]]}
+
+    monkeypatch.setattr(tool, "run", calculator)
+    items = [
+        {"chunk_id": 1, "latex": "x + 1"},
+        {"chunk_id": 2, "latex": "bad"},
+        {"chunk_id": 3, "latex": "y"},
+    ]
+    got = {r["chunk_id"]: r["check"] for r in formulas.checks_of(items)}
+    assert got[1]["reads"] and got[3]["reads"]
+    assert not got[2]["reads"] and got[2]["v"] == formulas.CHECK_VERSION
+    assert calls[0] == 3 and len(calls) == 4  # the batch, then one at a time

@@ -34,12 +34,14 @@ CLOSING = re.compile(r"answer:?\**\s*\**(yes|no)\b", re.IGNORECASE)
 # when the tool's number stands further on
 REFUSAL = re.compile(
     r"(do|does) not (contain|provide|include|state|show|answer)"
-    r"|cannot be answered|not possible to",
+    r"|cannot be answered|not possible to"
+    r"|\bno (?:passage|document|source|information)\b",
     re.IGNORECASE,
 )
 MARKS = re.compile(
     r" \(the calculator gives [^)]*\)| \(not checked\)"
-    r"|\n\n\*The calculator finds that this does not hold: .*?\.\*"
+    r"|\n\n\*The calculator finds that this does not hold: .*?\.\*",
+    re.DOTALL,  # a note may hold a newline
 )
 TIMES_TEN = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\\times|×|x)\s*10\^\{?(-?\d+)\}?")
 
@@ -55,11 +57,14 @@ def numbers(text: str) -> list[float]:
     return out
 
 
-def closest(text: str, target: float) -> float:
+def closest(text: str, target: float, given: list[float] | None = None) -> float:
     """The smallest relative distance of any number in the text, in any
-    of the units, to the target."""
+    of the units, to the target; a number the question gives is not the
+    answer's (R = 10 k is not a time constant of 0.01 in a unit away)."""
     best = float("inf")
     for value in numbers(text):
+        if any(abs(value - g) <= 1e-12 * max(1.0, abs(g)) for g in given or []):
+            continue
         for k in SCALES:
             if target:
                 best = min(best, abs(value * k - target) / abs(target))
@@ -84,20 +89,21 @@ def model_text(answer: str) -> str:
     return MARKS.sub("", answer)
 
 
-def score(check: dict[str, Any], answer: str) -> str:
+def score(check: dict[str, Any], answer: str, question: str = "") -> str:
     """R, P or W for one answer under its question's check, on the text
     the model wrote. ``also`` is a pattern a right answer holds besides
-    its verdict (P without it)."""
+    its verdict (P without it). An opening sentence that declines is
+    wrong, a "no" included ("No passage in the library addresses it")."""
     answer = model_text(answer)
+    if REFUSAL.search(opening(answer)):
+        return "W"
     if "answer" in check:
         said = decision(answer)
         if said is None or said != bool(check["answer"]):
             return "W"
         also = check.get("also")
         return "R" if not also or re.search(also, answer) else "P"
-    if REFUSAL.search(opening(answer)):
-        return "W"  # "the passages do not contain it", the number or not
-    distance = closest(answer, float(check["number"]))
+    distance = closest(answer, float(check["number"]), numbers(question))
     if distance <= float(check.get("within", 0.001)):
         return "R"
     if distance <= float(check.get("near", 0)):
@@ -122,6 +128,7 @@ def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     questions = yaml.safe_load(a.questions.read_text(encoding="utf-8"))["questions"]
     checked = {q["id"]: q["check"] for q in questions if q.get("check")}
+    asked = {q["id"]: str(q["q"]) for q in questions}
     hand: dict[str, Any] = {}
     if a.hand:
         hand = yaml.safe_load(a.hand.read_text(encoding="utf-8"))["runs"]
@@ -136,7 +143,7 @@ def main() -> int:
                 row = done.get(f"{qid}|{tools}|{mode}")
                 if not row or "error" in row:
                     continue
-                verdict = score(check, row["answer"])
+                verdict = score(check, row["answer"], asked[qid])
                 got[verdict] += 1
                 by_hand = (hand.get(run) or {}).get(qid)
                 if by_hand:

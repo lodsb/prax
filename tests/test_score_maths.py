@@ -45,3 +45,16 @@ def test_the_door_s_marks_are_not_the_model_s_answer() -> None:
     check = {"number": 0.013232, "within": 0.001, "near": 0.02}
     marked = "The current is 13.28 (the calculator gives 13.23) mA."
     assert sm.score(check, marked) == "P"  # the model's 13.28, not the mark's
+
+
+def test_a_refusal_or_a_given_value_is_not_the_answer() -> None:
+    """The review of 2026-10-02: a declining "No" scored as the right no,
+    and a value the question gave matched the target in another unit."""
+    sm = _scorer()
+    assert (
+        sm.score({"answer": False}, "No passage in the library addresses this.") == "W"
+    )
+    tau = {"number": 0.01, "within": 0.001}
+    q = "What is tau for R = 10 kOhm and C = 1 uF?"
+    assert sm.score(tau, "With R = 10 and C = 1, I cannot compute tau.", q) == "W"
+    assert sm.score(tau, "tau = R C = 0.01 s.", q) == "R"

@@ -369,3 +369,35 @@ def test_a_file_with_a_shebang_is_executable_in_git() -> None:
         if f.is_file() and f.read_bytes()[:2] == b"#!" and mode != "100755":
             wrong.append(path)
     assert wrong == [], f"git update-index --chmod=+x {' '.join(wrong)}"
+
+
+def test_no_source_file_holds_a_control_character() -> None:
+    """A backslash lost in a shell edit writes \f, \t or \b into the code
+    (a form feed for \frac, a backspace for \b) and the file still parses;
+    it happened four times on 2026-10-01/02. Tab, newline and carriage
+    return are the only ones a source file may hold."""
+    import shutil
+    import subprocess
+
+    git = shutil.which("git")
+    if git is None:
+        pytest.skip("no git")
+    root = Path(__file__).resolve().parents[1]
+    listed = subprocess.run(
+        [git, "ls-files", "--", "*.py", "*.js", "*.yaml", "*.md", "*.css"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if listed.returncode != 0:
+        pytest.skip("not a git checkout")
+    allowed = {9, 10, 13}
+    wrong = []
+    for path in listed.stdout.splitlines():
+        f = root / path
+        if "/vendor/" in f"/{path}":
+            continue  # third-party code, as its authors ship it
+        if f.is_file() and any(c < 32 and c not in allowed for c in f.read_bytes()):
+            wrong.append(path)
+    assert wrong == []

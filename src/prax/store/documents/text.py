@@ -307,8 +307,9 @@ def _apply_reference_links(
 @_serialized
 def set_formula_checks(con: sqlite3.Connection, checks: list[dict[str, Any]]) -> int:
     """Keep the maths pack's check of each formula in its chunk's
-    ``data.check`` (``{chunk_id, check}``); a chunk that is not a formula,
-    or is gone, is skipped. Returns how many were kept."""
+    ``data.check`` (``{chunk_id, check}``). A chunk that is not a formula,
+    is gone, or holds other LaTeX than the check's ``sha`` was made of (a
+    re-chunk reuses ids) is skipped. Returns how many were kept."""
     n = 0
     for c in checks:
         row = con.execute(
@@ -318,6 +319,10 @@ def set_formula_checks(con: sqlite3.Connection, checks: list[dict[str, Any]]) ->
         if row is None:
             continue
         data = json.loads(row["data"]) if row["data"] else {}
+        sha = (c.get("check") or {}).get("sha")
+        latex = str(data.get("latex") or "")
+        if sha and hashlib.sha256(latex.encode("utf-8")).hexdigest() != sha:
+            continue  # the formula changed under the check
         data["check"] = dict(c["check"])
         con.execute(
             "UPDATE chunks SET data = ? WHERE id = ?",

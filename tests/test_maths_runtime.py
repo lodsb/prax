@@ -238,3 +238,13 @@ def test_w_is_lambert_and_an_unknown_function_is_named() -> None:
         check=True,
     )
     assert "no function foo" in json.loads(out.stdout)["error"]
+
+
+def test_an_argument_in_parentheses_is_not_an_equation_number() -> None:
+    """The (2) of \\log(2) at a formula's end is its argument; a number
+    after a space is the equation's (2026-10-02: the reading dropped
+    "- \\log(2)" and a true identity was marked)."""
+    got = ask(op="read", a=r"\log(e^x + e^{-x}) - \log(2)")
+    assert "log(2" in got["read"]["a"]["text"]
+    got = ask(op="read", a=r"a = b + 1 \quad (3)")
+    assert got["read"]["a"]["text"] == "Eq(a, b + 1)"

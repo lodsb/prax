@@ -289,6 +289,10 @@ dialog#settings input[type="number"] { width: 4.5rem; }
 /* a queue nobody is asking for: why it sits, and what would move it */
 .waiting-note { font-size: .84rem; border-left: 2px solid var(--accent); padding: .3rem 0 .3rem .6rem; margin: .4rem 0; color: var(--fg); }
 .waiting-note code { font-size: .8rem; }
+/* what the calculator found in an answer, under it (the maths pack) */
+.answer-checks { font-size: .84rem; border-left: 2px solid var(--accent); padding: .3rem 0 .3rem .6rem; margin: .5rem 0; }
+.answer-checks ul { margin: .2rem 0 0; padding-left: 1.1rem; }
+.answer-checks code { font-size: .8rem; }
 
 /* process…: the routes from a document, grouped, a button each */
 dialog#process-dialog, dialog#properties-dialog { max-width: min(46rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow: auto; }

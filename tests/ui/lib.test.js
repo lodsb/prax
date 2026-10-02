@@ -445,3 +445,18 @@ test("domainChips: a link per domain; none set says every module unless quiet", 
   assert.match(lib.domainChips(null, () => "", false), /every module/);
   assert.equal(lib.domainChips([], () => "", true), "");
 });
+
+test("checksBox lists what does not hold, differs or was not checked", () => {
+  assert.equal(lib.checksBox([]), "");
+  assert.equal(lib.checksBox([{ kind: "link", verdict: "holds", link: "a = a" }]), "");
+  const box = lib.checksBox([
+    { kind: "link", verdict: "does not hold", link: "x <y> = 1" },
+    { kind: "number", verdict: "differs", number: "13.28", result: "13.23" },
+    { kind: "number", verdict: "not checked", number: "0.9366" },
+    { kind: "number", verdict: "computed", number: "0.01323" },
+  ]);
+  assert.match(box, /does not hold: <code>x &lt;y&gt; = 1<\/code>/);
+  assert.match(box, /13.28: the calculator gives 13.23/);
+  assert.match(box, /0.9366: not checked/);
+  assert.doesNotMatch(box, /0.01323/);
+});

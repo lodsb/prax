@@ -102,7 +102,7 @@ function renderTurn(t, i) {
   let body;
   if (t.error) body = `<p class="error">${esc(t.error)}</p>`;
   else if (t.pending) body = `${renderTrail(t)}<p class="turn-pending muted">${esc(t.pending)}</p>`;
-  else if (t.answer) body = `<div class="answer">${citeLinks(md(t.answer), passages)}</div>${renderTrail(t)}`;
+  else if (t.answer) body = `<div class="answer">${citeLinks(md(t.answer), passages)}</div>${checksBox(t.checks)}${renderTrail(t)}`;
   else body = `<p class="muted">${passages.length ? "No model answered; the sources beside are what a model would have been given." : "No passages found."}</p>${renderTrail(t)}`;
   const meta = (t.pending || t.error) ? "" : `
     <div class="turn-meta muted">

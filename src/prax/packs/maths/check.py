@@ -1,21 +1,24 @@
-"""The check of an answer (AD2, step 2): what the answer claims, checked by
-the calculator after the model has written it, and marked in the text
-whatever the model wrote.
+"""The check of an answer (AD2): what the answer claims, checked by the
+calculator after the model has written it. The answer's text is left as
+the model wrote it; the checks come back as annotations with the span
+they are about, for the reader to see beside it (the review of
+2026-10-02: marks written into the text landed inside LaTeX and code,
+and had to be stripped again before an answer could be scored).
 
 Asked to mark its own unchecked numbers, the local model did so once in
 160 answers (docs/symbolic-maths.md). So the door does it:
 
-- every link of a display equation (``$$a = b = c$$``) whose sides are
-  both expressions is checked with ``same``; a link with a bare name on
-  one side (``I_1 = …``, ``H_n(z) = …``) is a definition and is left
-  alone. A link that does not hold is marked after the display.
-- every number written with a decimal point and three or more digits is
-  compared with what the answer had to go on: the question, the passages
-  and the calculator's results (in any of the units k, m, µ, n apart). A
-  number near a result but not equal to it is marked with the result; one
-  found nowhere is marked "(not checked)".
-
-The marks are in the answer's text and in ``checks``, one entry each.
+- every link of a display equation (``$$a = b = c$$``) goes to the
+  calculator's ``judge``, which decides on the parsed expressions what
+  the link claims: a definition, a condition, a relation among
+  quantities, or arithmetic and identities it can decide
+  (``runtime.judge``). This module only splits a display into links.
+- in an answer about maths (one with a display, or with the tools'
+  results), every number written with three significant digits or more
+  outside the maths, code and links is compared with what the answer had
+  to go on: the question, the passages and the calculator's results, in
+  units a thousand apart. A number near a result but not equal to it is
+  "differs"; one found nowhere is "not checked".
 """
 
 from __future__ import annotations
@@ -28,56 +31,44 @@ from typing import Any
 from . import tool
 
 DISPLAY = re.compile(r"\$\$(.+?)\$\$", re.DOTALL)
-# a number with a decimal point or an exponent; a full stop after it ends
-# a sentence
-NUMBER = re.compile(r"(?<![\w.\\])(\d+\.\d+|\d+\.?\d*[eE][-+]?\d+)(?!\w|\.\d)")
-# a number to check: three significant digits or more
-SIGNIFICANT = 3
+# what a number check leaves alone: maths, code, links and their ids
+MASKED = re.compile(
+    r"\$\$.+?\$\$|\$[^$\n]+\$|\\\(.+?\\\)|\\\[.+?\\\]"
+    r"|```.*?```|`[^`\n]+`"
+    r"|https?://\S+|\b10\.\d{4,9}/\S+|\barXiv:\s*\S+|\b\d{4}\.\d{4,5}(?:v\d+)?\b"
+    r"|\b[A-Z][A-Za-z+#]*\s+v?\d+\.\d+(?:\.\d+)*",  # a version: Python 3.11
+    re.DOTALL,
+)
+# a number with a decimal point or an exponent; a full stop after it ends a
+# sentence, and a digit group before it (1,234.5) is part of it
+NUMBER = re.compile(r"(?<![\w.,\\])(\d+\.\d+|\d+\.?\d*[eE][-+]?\d+)(?!\w|\.\d)")
+SIGNIFICANT = 3  # a number to check: three significant digits or more
 NEAR = 0.05  # a number this close to a result, and not equal, is a misreckoning
 SCALES = (1.0, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9, 1e12, 1e-12)
-TAG = re.compile(r"(,|\\quad|\\qquad)?\s*\(\s*\d+[a-z]?\s*\)\s*$|\\tag\{[^}]*\}")
-# a symbol, with a subscript and an argument list at most: what a
-# definition's left side is
-WORDS = re.compile(r"\\(?:text|mathrm|operatorname)\{[^{}]*\}")
+# a display's equation number, at its end: ", \quad (3)", "\tag{3}"
+# (only after a separator: the (2) of \log(2) is an argument, and taking it
+# for a number cut a link short, 2026-10-02)
+TAG = re.compile(r"(?:,|\\q?quad|~|\s{2,})\s*\(\s*\d+[a-z]?\s*\)\s*$|\\tag\{[^}]*\}")
 THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
-# a number with a unit written as a word after it
-UNIT_WORD = re.compile(r"\d\s*(?:\\[,;! ]\s*)?\\(?:text|mathrm)\{[\s\\A-Za-z]{1,12}\}")
-UNITS = re.compile(r"\\(?:Omega|mu|circ)\b|\\,\s*[A-Za-z]")
-NAME = re.compile(
-    r"\\?[A-Za-z]+'*(?:_\{?[A-Za-z0-9,]+\}?)?(?:\^\{?[^{}]*\}?)?"
-    r"(?:\s*\\?left)?(?:\([^()]*\)|\[[^\[\]]*\])?(?:\s*\\?right)?"
+# what is not one chain of equalities: alignment, several lines, another
+# relation, two statements side by side
+NOT_A_CHAIN = re.compile(
+    r"\\\\|&|\\(?:le|ge|leq|geq|neq|approx|sim|propto)(?![A-Za-z])|[<>]|\\q?quad"
+    r"|:"  # a ratio a : b = c : d, an assignment n := n + 1
 )
-NOT_CHECKED = "(not checked)"
-LINKS_MAX = 12  # links checked in one answer
-# a link is judged only with this many free symbols or fewer: arithmetic
-# and one-variable identities. On the e1 run's answers, judging every
-# link marked 64 "does not hold" and most were relations that hold given
-# other facts; at one symbol the marks were the e^{xx} typo and two
-# misreckonings (2026-10-02)
-FREE_MAX = 1
+LINKS_MAX = 12  # links judged in one answer
 TIMEOUT_S = 60.0
+RESULT = re.compile(r"result: ([-+]?\d+\.?\d*(?:[eE][-+]?\d+)?)")
 
 
 def sides(display: str) -> list[str]:
-    """A display's sides at its top-level equals signs; none for one with
-    alignment, several lines, or a relation that is not equality."""
+    """A display's sides at its top-level equals signs; none for one that
+    is not a single chain of equalities (alignment, several lines, an
+    inequality, two statements side by side, a list of definitions)."""
     text = TAG.sub("", display.strip()).strip().rstrip(".,;")
-    if UNIT_WORD.search(text):
-        return []  # 26 \text{ mV} = 0.026 \text{ V}: units again
-    text = WORDS.sub("", text)  # \text{Numerator}: a label, not maths
     text = THOUSANDS.sub("", text)  # 10,000 is ten thousand
-    if re.search(r"\\\\|&|\\(?:le|ge|leq|geq|neq|approx|sim|propto)\b|[<>]", text):
+    if NOT_A_CHAIN.search(text):
         return []
-    if re.search(r"\\q?quad", text):
-        return []  # two statements side by side: x = 1 \quad y = 2
-    if re.search(r"\\(?:lim|sum|prod|int|oint|lceil|lfloor|div)(?![A-Za-z])", text):
-        # a bound variable, a rounding, an ambiguous ÷: where readings go
-        # wrong (J_0(z) under a limit read as a product, 2026-10-02)
-        return []
-    if re.search(r"\d\s*\\frac|:", text):
-        return []  # a mixed number (7\frac{1}{51}), a ratio a : b, n := n + 1
-    if UNITS.search(text):
-        return []  # 10 kΩ = 10,000 Ω: a conversion of units, not maths
     out, depth, start = [], 0, 0
     for i, ch in enumerate(text):
         if ch in "{([":
@@ -93,33 +84,54 @@ def sides(display: str) -> list[str]:
     return [s.strip() for s in out] if len(out) > 1 else []
 
 
-def is_name(side: str) -> bool:
-    """A side that names a thing rather than computing it: a definition's
-    left side (``I_1``, ``H_n(z)``, ``y[n]``, ``\\beta``)."""
-    side = side.strip()
-    # an argument list whose name was a \text{...} label: tanh_AD1(x)
-    return bool(NAME.fullmatch(side)) or bool(re.fullmatch(r"\([^()]*\)", side))
-
-
-def links(answer: str) -> list[tuple[int, str, str]]:
-    """The links to check: (where the display ends, left, right)."""
+def links(answer: str) -> list[tuple[int, int, str, str]]:
+    """The links of the answer's displays: (start, end of the display,
+    left, right)."""
     out = []
     for m in DISPLAY.finditer(answer):
-        parts = sides(m.group(1))
-        for left, right in itertools.pairwise(parts):
-            if left and right and not is_name(left) and not is_name(right):
-                out.append((m.end(), left, right))
+        for left, right in itertools.pairwise(sides(m.group(1))):
+            if left and right:
+                out.append((m.start(), m.end(), left, right))
     return out[:LINKS_MAX]
+
+
+def check_links(answer: str) -> list[dict[str, Any]]:
+    """Each link judged by the calculator, in one process."""
+    found = links(answer)
+    if not found:
+        return []
+    batch = [{"op": "judge", "a": left, "b": right} for _, _, left, right in found]
+    got = tool.run({"batch": batch}, timeout=TIMEOUT_S).get("batch") or []
+    checks = []
+    for (start, end, left, right), res in zip(found, got, strict=False):
+        checks.append(
+            {
+                "kind": "link",
+                "start": start,
+                "end": end,
+                "link": f"{left} = {right}",
+                "verdict": str(res.get("verdict") or "not judged"),
+                "why": str(res.get("why") or res.get("error") or ""),
+            }
+        )
+    return checks
 
 
 def _digits(text: str) -> int:
     return len(re.sub(r"[^0-9]", "", text.split("e")[0].split("E")[0]).lstrip("0"))
 
 
+def _masked(text: str) -> str:
+    """The text with maths, code and links blanked to spaces, so positions
+    stay where they were."""
+    return MASKED.sub(lambda m: " " * len(m.group(0)), text)
+
+
 def numbers(text: str) -> list[tuple[int, int, float, str]]:
-    """The numbers worth checking: (start, end, value, as written)."""
+    """The numbers worth checking outside maths, code and links: (start,
+    end, value, as written)."""
     out = []
-    for m in NUMBER.finditer(text):
+    for m in NUMBER.finditer(_masked(text)):
         if _digits(m.group(1)) >= SIGNIFICANT:
             out.append((m.start(), m.end(), float(m.group(1)), m.group(1)))
     return out
@@ -148,122 +160,52 @@ def _near(value: float, source: float) -> float | None:
     return None
 
 
-def _shown_like(value: float, written: str) -> str:
-    places = max(_decimals(written), 2)
-    return f"{value:.{places}f}"
-
-
 def check_numbers(
     answer: str, sources: str, results: list[float]
-) -> tuple[str, list[dict[str, Any]]]:
-    """The answer with its numbers marked, and one check each."""
+) -> list[dict[str, Any]]:
+    """One check per number: computed (a result gives it), quoted (the
+    question or a passage holds it), differs (near a result, not equal)
+    or not checked."""
     known = [v for _, _, v, _ in numbers(sources)]
+    known += [float(m.group(1)) for m in NUMBER.finditer(sources)]
     checks: list[dict[str, Any]] = []
-    marks: list[tuple[int, str]] = []
     for start, end, value, written in numbers(answer):
-        after = answer[end : end + 40].lstrip()
-        if after.startswith((NOT_CHECKED, "(the calculator gives")):
-            continue  # marked already
-        if answer[max(0, start - 22) : start].endswith("the calculator gives "):
-            continue  # a mark's own number
-
+        check: dict[str, Any] = {
+            "kind": "number",
+            "start": start,
+            "end": end,
+            "number": written,
+        }
         if any(_rounds_to(value, written, r) for r in results):
-            checks.append({"number": written, "verdict": "computed"})
-            continue
-        if any(_rounds_to(value, written, k) for k in known) or written in sources:
-            checks.append({"number": written, "verdict": "quoted"})
-            continue
-        near = next((n for r in results if (n := _near(value, r)) is not None), None)
-        if near is not None:
-            said = _shown_like(near, written)
-            checks.append({"number": written, "verdict": "differs", "result": said})
-            marks.append((end, f" (the calculator gives {said})"))
+            check["verdict"] = "computed"
+        elif any(_rounds_to(value, written, k) for k in known) or written in sources:
+            check["verdict"] = "quoted"
         else:
-            checks.append({"number": written, "verdict": "not checked"})
-            marks.append((end, f" {NOT_CHECKED}"))
-    for at, mark in sorted(marks, reverse=True):
-        answer = answer[:at] + mark + answer[at:]
-    return answer, checks
-
-
-def _places(side: str) -> int | None:
-    """The decimal places of a side that is one written number (the result
-    a link states, 701.887), or None: a computation's own inputs say
-    nothing of the precision of its result (0.4/0.02585 = 15.478 is
-    wrong at the third place, whatever 0.4 is written to)."""
-    m = re.fullmatch(r"\s*-?\d+\.(\d+)\s*(?:\\ldots|\.\.\.)?\s*", side)
-    return len(m.group(1)) if m else None
-
-
-def verdict(left: str, right: str, res: dict[str, Any]) -> bool | None:
-    """Whether a link holds by the calculator's ``same`` answer, or None
-    when it is not judged. Judged are arithmetic (no symbol either side,
-    compared to the precision written: 31/53 × 1200 = 701.887 holds) and
-    identities in one variable (the same one symbol on both sides). An
-    equation in one unknown (1 - y = 1/9) is a condition, not judged; nor
-    is a relation among several quantities."""
-    reads = res.get("read") or {}
-    if "error" in res or len(reads) < 2:
-        return None
-    a = set(reads["a"].get("symbols") or [])
-    b = set(reads["b"].get("symbols") or [])
-    if a != b or len(a) > FREE_MAX:
-        return None
-    if not a:  # arithmetic: to the digits the link is written with
-        places = [p for p in (_places(left), _places(right)) if p is not None]
-        try:
-            diff = abs(complex(str(res.get("difference", "")).replace(" ", "")))
-        except ValueError:
-            diff = None
-        if diff is not None and places:
-            return diff <= 0.5 * 10 ** -min(places) * 1.01
-    same = res.get("same")
-    return None if same is None else bool(same)
-
-
-def check_links(answer: str) -> tuple[str, list[dict[str, Any]]]:
-    """The answer with each display equation's failing links marked."""
-    found = links(answer)
-    if not found:
-        return answer, []
-    batch = [{"op": "same", "a": left, "b": right} for _, left, right in found]
-    got = tool.run({"batch": batch}, timeout=TIMEOUT_S).get("batch") or []
-    checks: list[dict[str, Any]] = []
-    marks: dict[int, list[str]] = {}
-    for (end, left, right), res in zip(found, got, strict=False):
-        if "error" in res:
-            checks.append({"link": f"{left} = {right}", "verdict": "unread"})
-            continue
-        holds = verdict(left, right, res)
-        if holds is None:
-            # a relation among quantities holds given other facts (Q =
-            # ω_c/Δω, the diode's waves): not an identity to judge alone
-            checks.append({"link": f"{left} = {right}", "verdict": "not judged"})
-        elif holds:
-            checks.append({"link": f"{left} = {right}", "verdict": "holds"})
-        else:
-            checks.append({"link": f"{left} = {right}", "verdict": "does not hold"})
-            marks.setdefault(end, []).append(f"{left} = {right}")
-    for end in sorted(marks, reverse=True):
-        said = "; ".join(f"${x}$" for x in marks[end])
-        note = f"\n\n*The calculator finds that this does not hold: {said}.*"
-        answer = answer[:end] + note + answer[end:]
-    return answer, checks
-
-
-RESULT = re.compile(r"result: ([-+]?\d+\.?\d*(?:[eE][-+]?\d+)?)")
+            near = next(
+                (n for r in results if (n := _near(value, r)) is not None), None
+            )
+            if near is not None:
+                check["verdict"] = "differs"
+                check["result"] = f"{near:.{max(_decimals(written), 2)}f}"
+            else:
+                check["verdict"] = "not checked"
+        checks.append(check)
+    return checks
 
 
 def check_answer(
     answer: str, *, question: str, passages: list[str], worked: list[str]
 ) -> tuple[str, list[dict[str, Any]]]:
-    """The checked answer and its checks. ``worked`` is the surf's tool
-    lines (``surf.Surf.worked``), whose results the numbers are held to."""
+    """The answer, unchanged, and its checks. ``worked`` is the surf's tool
+    lines (``surf.Surf.worked``), whose results the numbers are held to.
+    The numbers are checked only in an answer about maths: one with a
+    display, or with results."""
     results = [float(x) for w in worked for x in RESULT.findall(w)]
-    sources = "\n".join([question, *passages])
     try:
-        answer, eq = check_links(answer)
+        found = check_links(answer)
     except tool.MathsUnavailable:
-        eq = []
-    answer, nums = check_numbers(answer, sources, results)
-    return answer, eq + nums
+        found = []
+    if results or DISPLAY.search(answer):
+        sources = "\n".join([question, *passages])
+        found += check_numbers(answer, sources, results)
+    return answer, found

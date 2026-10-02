@@ -137,7 +137,11 @@ def clean(s: str) -> str:
     s = re.sub(r"\\(left|right|big|Big|bigg|Bigg)[lr]?\b", "", s)
     s = re.sub(r"\\(displaystyle|textstyle|limits|nolimits)", "", s)
     s = re.sub(r"\\(label|tag)\{[^}]*\}", "", s)
-    s = re.sub(r"\(\s*\d+(\.\d+)*[a-z]?\s*\)\s*$", "", s.strip())  # a trailing (22.1.8)
+    # a trailing (22.1.8), after a space and not after a word: the (2) of
+    # \log(2) is its argument (it was taken for a number, 2026-10-02)
+    tail = re.search(r"\s+\(\s*\d+(\.\d+)*[a-z]?\s*\)\s*$", s.strip())
+    if tail and not re.search(r"[A-Za-z]$", s.strip()[: tail.start()]):
+        s = s.strip()[: tail.start()]
     if "\\begin{cases}" not in s:
         # a multi-line equation is one chain: the environment and its line
         # breaks go (a case distinction keeps them, _cases reads its rows)
@@ -764,6 +768,108 @@ OPERATIONS.update(
     expand=op_expand, factor=op_factor, apart=op_apart, together=op_together
 )
 
+# ----------------------------------------------------------- the judge (AD2)
+# Whether one link a = b of a display claims something the calculator can
+# decide, and what it decides. On the parsed expressions, not on the LaTeX
+# text: the review of 2026-10-02 found the text rules (check.py) marked a
+# solving step "does not hold" and let x^2 - 1 pass as a name.
+
+MIXED = re.compile(r"\d\s*\\frac")  # 7\frac{1}{51}: a mixed number, read as a product
+WORDS = re.compile(r"\\(?:text|mathrm|textrm|operatorname|mbox)\s*\{")
+DIVIDE = re.compile(r"\\div\b")  # a ÷ b / c: the precedence is the writer's
+RESULT = re.compile(r"\s*-?\d+\.(\d+)\s*(?:\\ldots|\.\.\.)?\s*")
+
+
+def _is_name(e: Any) -> bool:
+    """A side that names a thing rather than computing it: a symbol, an
+    indexed one, or a function nobody defined applied to symbols
+    (``I_1``, ``y[n]``, ``H_n(z)``) -- a definition's left side."""
+    from sympy.core.function import AppliedUndef
+
+    if isinstance(e, sympy.Symbol | sympy.Indexed):
+        return True
+    return isinstance(e, AppliedUndef) and all(
+        isinstance(arg, sympy.Symbol | sympy.Number) for arg in e.args
+    )
+
+
+def _places(latex: str) -> int | None:
+    """The decimal places a side writes its result with, when the side is
+    one number (``701.887``); None otherwise (the comparison is exact)."""
+    m = RESULT.fullmatch(latex)
+    return len(m.group(1)) if m else None
+
+
+def judge(left: str, right: str) -> dict[str, Any]:
+    """One link of a display: ``holds``, ``does not hold``, or ``not
+    judged`` with why. Judged are arithmetic, to the decimal places the
+    stated result is written with (31/53 x 1200 = 701.887 holds), and an
+    identity in one variable. Not judged: a definition (a name on either
+    side), a condition (an equation in one unknown whose sides differ by a
+    rational function of it: 3x + 2 = x + 6), a relation among several
+    quantities, a limit, sum, product or integral, a rounding function, a
+    function nobody defined, a mixed number, a division sign."""
+    from sympy.core.function import AppliedUndef
+
+    def no(why: str) -> dict[str, Any]:
+        return {"verdict": "not judged", "why": why}
+
+    if WORDS.search(left) or WORDS.search(right):
+        # the parser drops words: 1 \text{ \mu F} = 1 \times 10^{-6} \text{ F}
+        # reads as 1 = 1e-6 (2026-10-02)
+        return no("words or units in it")
+    if MIXED.search(left) or MIXED.search(right):
+        return no("a mixed number")
+    if DIVIDE.search(left) or DIVIDE.search(right):
+        return no("a division sign whose precedence is the writer's")
+    try:
+        a, _ = read(left)
+        b, _ = read(right)
+    except Exception as exc:  # noqa: BLE001 - an unread side is not judged
+        return no(f"unread: {type(exc).__name__}")
+    if isinstance(a, sympy.Basic) is False or isinstance(b, sympy.Basic) is False:
+        return no("unread")
+    if _is_name(a) or _is_name(b):
+        return no("a definition")
+    bound = (sympy.Limit, sympy.Sum, sympy.Product, sympy.Integral)
+    if any(e.has(*bound) for e in (a, b)):
+        return no("a bound variable")
+    if any(e.has(sympy.floor, sympy.ceiling) for e in (a, b)):
+        return no("a rounding function")
+    if any(e.atoms(AppliedUndef) for e in (a, b)):
+        return no("a function with no definition")
+    fa, fb = a.free_symbols, b.free_symbols
+    if len(fa | fb) > 1:
+        return no("a relation among quantities")
+    a, b = a.doit(), b.doit()
+    if fa != fb:
+        # one side constant: an identity (sin^2 x + cos^2 x = 1) or a value
+        # of x (e^x = 2); only the first can be told, by holding
+        got = op_same(a, b)
+        if got.get("same") is True:
+            return {"verdict": "holds", "why": str(got.get("how"))}
+        return no("a condition or a value of the variable")
+    if not fa:
+        try:
+            diff = abs(complex(sympy.N(a - b, 30)))
+        except (TypeError, ValueError):
+            return no("not a number")
+        places = [q for q in (_places(left), _places(right)) if q is not None]
+        if places:
+            ok = diff <= 0.5 * 10 ** -min(places) * 1.01
+        else:
+            ok = diff <= 1e-9 * max(1.0, abs(complex(sympy.N(b, 30))))
+        return {"verdict": "holds" if ok else "does not hold", "why": "arithmetic"}
+    (x,) = tuple(fa)
+    got = op_same(a, b)
+    if got.get("same") is True:
+        return {"verdict": "holds", "why": str(got.get("how"))}
+    if got.get("same") is None:
+        return no(str(got.get("how")))
+    if (a - b).is_rational_function(x):
+        return no("a condition on " + str(x))
+    return {"verdict": "does not hold", "why": str(got.get("how"))}
+
 
 def answer(request: dict[str, Any]) -> dict[str, Any]:
     """One request: ``op``, the formula(s) as ``a`` (and ``b`` for
@@ -771,10 +877,12 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
     arguments. Every answer says how each formula was read."""
     op = str(request.get("op") or "read")
     notation = str(request.get("notation") or "latex")
-    if op not in ("read", "chain") and op not in OPERATIONS:
+    if op not in ("read", "chain", "judge") and op not in OPERATIONS:
         raise ValueError(
             f"no operation {op!r}; they are read, chain, {', '.join(OPERATIONS)}"
         )
+    if op == "judge":  # one link of a display, on its two LaTeX sides
+        return {"op": op, **judge(str(request["a"]), str(request["b"]))}
     if op == "chain":  # a derivation, each step read and each link checked
         written = request.get("steps") or str(request["a"]).split("==")
         steps = [read(str(f).strip(), notation)[0] for f in written]

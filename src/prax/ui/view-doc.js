@@ -458,7 +458,7 @@ function outline(chunks) {
   for (const c of chunks) {
     const h = (c.heading || []);
     if (!h.length) continue;
-    const key = h.join(" ");
+    const key = h.join("\u0000");
     if (seen.has(key)) continue;
     seen.add(key);
     items.push(`<li style="--depth:${h.length - 1}"><a href="#chunk-${c.chunk_id}" data-scroll="${c.chunk_id}">${esc(h[h.length - 1])}</a></li>`);

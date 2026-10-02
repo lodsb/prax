@@ -622,6 +622,27 @@ function waitingNote(w, pending) {
   return `<p class="waiting-note">Nothing here is doing that work: ${esc(w.why)}.${how}${last}</p>`;
 }
 
+// What the calculator found in an answer (the maths pack's answer check):
+// the links that do not hold, the numbers that differ from a result or
+// that nothing checked. The answer's text is left as the model wrote it;
+// these sit under it. Empty when there is nothing to say.
+function checksBox(checks) {
+  const lines = (checks || []).map((c) => {
+    if (c.kind === "link" && c.verdict === "does not hold") {
+      return `<li>this does not hold: <code>${esc(c.link)}</code></li>`;
+    }
+    if (c.kind === "number" && c.verdict === "differs") {
+      return `<li>${esc(c.number)}: the calculator gives ${esc(c.result)}</li>`;
+    }
+    if (c.kind === "number" && c.verdict === "not checked") {
+      return `<li>${esc(c.number)}: not checked</li>`;
+    }
+    return "";
+  }).filter(Boolean);
+  if (!lines.length) return "";
+  return `<div class="answer-checks"><span class="muted">The calculator:</span><ul>${lines.join("")}</ul></div>`;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }
