@@ -2339,7 +2339,9 @@ machine that runs the door:
    `http://<address>:8000/ui/` asks for it once and keeps a session
    cookie. The `prax` command takes `--door http://<address>:8000` and
    `PRAX_TOKEN`. The MCP server and the Claude Code plugin read
-   `PRAX_DOOR` and `PRAX_TOKEN` (`docs/claude-workflow.md`). The
+   `PRAX_DOOR` and `PRAX_TOKEN` (`docs/claude-workflow.md`), and need
+   prax installed on that machine too (`clients/claude-plugin/README.md`,
+   "On another machine"). The
    browser extension has both in its options (`docs/extension.md`).
 
 A check from the door's own machine through its LAN address, not
@@ -2778,6 +2780,12 @@ sessions and memory files:
     export PRAX_PYTHON=/path/to/prax/.venv/bin/python
     claude plugin marketplace add lodsb/prax
     claude plugin install prax@prax
+
+On a machine other than the door's (a notebook), the plugin needs prax
+installed in a Python of its own, `PRAX_DOOR` naming the door's host
+and the token. The walkthrough, with what `CONNECTION_CLOSED` means and
+how to find its cause, is in `clients/claude-plugin/README.md`, "On
+another machine".
 
 ## 6. Deployment on the board (*the code is ready; the move is not made*)
 

@@ -33,6 +33,71 @@ prax`) shows up in the next session, not the current one. Then
 `/prax:scope` in any project says what the library holds for it;
 `claude plugin uninstall prax` takes it out again.
 
+## On another machine: a walkthrough
+
+Say the door (prax's server, `prax serve`) runs on your desktop and you
+want the library in Claude
+Code on a notebook. The notebook needs three things: prax installed in a
+Python of its own, the desktop's address, and the token. It does not
+need the store, the models or a GPU; the plugin's server only passes
+each tool call on to the door.
+
+**1. Install prax on the notebook.** The base install has no models and
+no OCR, so it is small:
+
+    git clone https://github.com/lodsb/prax ~/prax
+    cd ~/prax
+    python3 -m venv .venv
+    .venv/bin/pip install -e .
+    .venv/bin/python -c "import prax.mcp_server; print('ok')"
+
+On Windows the last two lines use `.venv\Scripts\pip` and
+`.venv\Scripts\python`. If pip fails to build a package on the newest
+Python (3.14 at the time of writing), make the venv with an older one:
+`brew install python@3.12`, then `python3.12 -m venv .venv`.
+
+**2. Tell Claude Code where prax and the door are.** On macOS or Linux,
+in `~/.zshrc` or your shell's profile:
+
+    export PRAX_PYTHON=~/prax/.venv/bin/python
+    export PRAX_DOOR=http://<the desktop's name or address>:8000
+    export PRAX_TOKEN=<the desktop's token, or one from `prax token add`>
+
+On Windows, set the same three as user environment variables. Then
+start Claude Code from a new terminal. An app started from the Dock or
+the Start menu may not see a shell profile, and plugins are read at
+startup only.
+
+**3. Check the door answers from the notebook:**
+
+    curl http://<the desktop>:8000/health
+
+If this times out, the desktop is not listening on the network or its
+firewall blocks the port: see "From another machine on the private
+network" in `docs/howto.md`. If it answers 401, the token is wrong.
+
+**4. Install the plugin** as under "Install" above, and run
+`/prax:scope` in a project to see it work.
+
+**When it fails.** Claude Code says `Failed to reconnect to
+plugin:prax:prax: CONNECTION_CLOSED` when the server stopped as soon as
+it started. Run what the plugin runs, by hand:
+
+    "$PRAX_PYTHON" -m prax.mcp_server
+
+- `No module named 'prax'`: that Python has no prax. `PRAX_PYTHON` is
+  unset, so the plugin used plain `python`, or it names another
+  interpreter. Do step 1, then set `PRAX_PYTHON` to that venv's python.
+- It waits silently: the server is fine (stop it with Ctrl-C). Then
+  Claude Code did not see your variables: start it again from a
+  terminal that has them, and reconnect with `/mcp`.
+
+A tool that answers `the door is not reachable` means the server runs
+but the desktop does not answer: step 3.
+
+The notebook's copy of prax may be older than the desktop's. That is
+fine for the tools, since the door answers them; pull it now and then.
+
 ## What it adds
 
 | | |
