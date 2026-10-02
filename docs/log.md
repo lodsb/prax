@@ -3385,6 +3385,55 @@ status carries their median as `load_s`, and the jobs view adds "loads
 in about 3 min" to a role that needs the card. The plan of step 4
 reads these numbers.
 
+## 2026-10-02, the evening: the card's plan (stage AI, step 4)
+
+`GET /work/plan` says what the card does next, and why
+(`prax.host.plan`). It reads the door's demand and the supervisor's
+status, and acts on nothing. Each waiting group gets three costs in
+seconds. The swap is the load time of the role that would take the
+card plus that of the one that gets it back, measured by step 3, or
+`LOAD_GUESS_S` (120) marked as a guess. The work is the items over the
+group's rate. The wait is the age of its oldest request
+(`store.waiting_since`, which also says whether a person asked).
+
+The decision is "being served" when the role holds the card. It is
+"next" for a "do it now", for 50 items or more, or once the wait has
+outgrown the swap: three times it for a person's request, twenty times
+for the door's or a rule's. Otherwise the group waits for the nightly
+window or for its wait to grow, and the plan says how many seconds
+more. With marker at 40 s and llama-server at 180 s, a person's marker
+reading goes next after eleven minutes. The factors are the hysteresis
+the plan of 2026-10-01 asked for; they are guesses until step 6
+measures waits and swaps.
+
+The jobs view shows each group's decision beside its "do it now".
+
+## 2026-10-02, the evening: `prax up` follows the plan (stage AI, step 5)
+
+The supervisor now does what the plan says. On its look at the demand,
+every 20 s, it asks `/work/demand?plan=true`: one request, with the plan
+built from the same demand. The first group the plan puts next gets its
+role the card (`Supervisor._follow_plan`). That is a swap when the card
+is free of a loan, or the loan's end when the card was lent away from
+that role. Nothing moves while an ask holds the card.
+
+It replaces two rules. `swap: auto` used to swap as soon as anything
+waited. It would have taken the card from llama-server in the middle of
+the maths eval to read two PDFs. `auto` now means the role follows the
+plan by itself; a role without it moves only for a person's "do it now".
+The `_do_now` of step 2 is folded in, since a "do it now" is just the
+plan's highest reason for "next".
+
+Two holds moved into the plan with it, so the supervisor has no rules of
+its own. A role on the card that still has readings waiting keeps it;
+a waiting group reads "after llama-server". A role a person asked for
+goes before the rest, so the card does not flip back on the next look.
+The night window is the worker's `nightly` hour plus four hours
+(`plan.night_now`, local time). Any waiting group goes then.
+
+On the desktop, marker is still `swap: ask` in `prax.yaml`. The plan
+acts there only on "do it now" until `swap: auto` is added to its line.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

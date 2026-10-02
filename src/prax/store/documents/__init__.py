@@ -140,6 +140,7 @@ from .readings import (  # noqa: F401
     uncounted_pages,
     unreadable_documents,
     waiting_readings,
+    waiting_since,
 )
 from .reads import (  # noqa: F401
     ANNOTATORS,

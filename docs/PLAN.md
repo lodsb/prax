@@ -113,11 +113,27 @@ and pushing what is committed.
             last five in `run/loads.json`, and puts their median in the
             status (`load_s`). The jobs view shows it beside "needs the
             card". The plan's swap costs are those numbers, not guesses.
-      - [ ] `GET /work/plan`: the groups, their costs and the order the
-            door would serve them in, shown in the jobs view.
-      - [ ] `prax up` follows the plan. It replaces `swap: auto` and the
-            older "let a queue ask for the card". Marker then needs
-            no hand to start it.
+      - [x] (2026-10-02) **`GET /work/plan`** (`prax.host.plan`): each
+            group with its swap cost (the load times of the role taking
+            the card and of the one getting it back), its work (items over
+            rate) and its wait (the oldest request, `store.waiting_since`),
+            and a decision: being served, next, or waits. A person's
+            request goes next after waiting three times its swap, the
+            door's after twenty, a group of 50 at once and a "do it now"
+            straight away. The jobs view shows the decision and its
+            reason on each group. Nothing acts on it yet: that is the
+            next step.
+      - [x] (2026-10-02) **`prax up` follows the plan.** It asks
+            `/work/demand?plan=true` on its look every 20 s and gives the
+            card to the first group the plan puts next (`_follow_plan`).
+            That replaces the old `swap: auto` rule (swap as soon as
+            anything waits): `auto` now means "follows the plan", and a
+            role without it moves only for a person's "do it now". The
+            plan never takes the card from a role still serving its own
+            readings, and puts a role a person asked for before the
+            others, so the card does not flip back. *For the user:*
+            marker on the desktop is still `swap: ask`; `swap: auto` on
+            its `run:` line is what lets it start without a hand.
       - [ ] Measured: how long readings wait before and after, and how
             many swaps a day the plan makes. Fewer swaps for the same
             waits is the point.

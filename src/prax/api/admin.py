@@ -236,15 +236,18 @@ def spending(request: Request, days: int = 30, limit: int = 20) -> dict[str, Any
 @router.get("/up")
 def up_state(request: Request) -> dict[str, Any]:
     """What ``prax up`` is running on this host, what each group's
-    resource is doing, what waits for the roles that are down, and the
-    cards' memory: everything the Jobs view needs to offer a swap."""
+    resource is doing, what waits for the roles that are down, the card's
+    plan for it (``GET /work/plan``), and the cards' memory: everything
+    the Jobs view needs to offer a swap."""
     from prax import config
-    from prax.host import hostinfo, up
+    from prax.host import hostinfo, plan, up
 
     state = up.status(config.data_dir())
+    demand = work.demand(_con(request))
     return {
         "up": state,
-        "demand": work.demand(_con(request)),
+        "demand": demand,
+        "plan": plan.for_host(demand, state),
         "gpu": hostinfo.gpu(),
         "gpu_holders": hostinfo.holders(),
         "memory": hostinfo.memory(),

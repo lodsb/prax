@@ -174,9 +174,17 @@ function mb(n) {
 // demand.groups), each with its rate and a "do it now" (POST /work/now):
 // the supervisor gives that role the card at its next look, unless an
 // ask holds it (stage AI).
-function waitingList(demand, roles, members, holder) {
+const DECISIONS = { serving: "being served", next: "next", waits: "waits" };
+function planNote(p) {
+  if (!p) return "";
+  const swap = p.swap_s ? ` · a swap of about ${p.swap_s >= 90 ? `${Math.round(p.swap_s / 60)} min` : `${p.swap_s} s`}${p.swap_guessed ? " (guessed)" : ""}` : "";
+  return ` · <span class="muted" title="the card's plan (GET /work/plan)">${esc(DECISIONS[p.decision] || p.decision)}: ${esc(p.why)}${swap}</span>`;
+}
+function waitingList(demand, roles, members, holder, plan) {
   const d = demand || {};
+  const planned = ((plan || {}).groups || []);
   const rows = (d.groups || []).filter((g) => members.includes(g.role)).map((g) => {
+    const p = planned.find((x) => x.role === g.role && x.action === g.action);
     const when = g.hours_left == null ? "" : g.hours_left >= 48 ? `${Math.round(g.hours_left / 24)} days` : `${Math.round(g.hours_left)} h`;
     const pace = g.rate ? ` · ${g.rate}/h · about ${when} left` : "";
     const state = (roles[g.role] || {}).state || "?";
@@ -186,7 +194,7 @@ function waitingList(demand, roles, members, holder) {
     const act = g.now
       ? ` · <span class="up-holder">asked for now${d.ask_holds ? ", after the answer in progress" : ""}</span>`
       : ` <button type="button" class="linkish up-now" data-role="${esc(g.role)}" data-action="${esc(g.action)}">do it now</button>`;
-    return `<li>${esc(g.role)}: ${g.waiting} ${esc(g.action)}${pace}${card}${act}</li>`;
+    return `<li>${esc(g.role)}: ${g.waiting} ${esc(g.action)}${pace}${card}${planNote(p)}${act}</li>`;
   });
   return rows.length ? `<ul class="servers up-waiting">${rows.join("")}</ul>` : "";
 }
@@ -218,7 +226,7 @@ function upPanel(u) {
           : esc(st);
         return `${esc(m)}: ${shown}${n ? ` · ${n} waiting` : ""}`;
       }).join(" · ")}${card ? ` · ${card}` : ""}</div>
-      ${waitingList(u.demand, roles, members, holder)}
+      ${waitingList(u.demand, roles, members, holder, u.plan)}
       <div class="up-acts">${members.map((m) => (roles[m] || {}).state === "up" || m === holder
         ? ""
         : `<button type="button" class="secondary up-swap" data-to="${esc(m)}">give it to ${esc(m)}${(demand[m] || 0) ? ` (${demand[m]} waiting)` : ""}</button>`).join("")}

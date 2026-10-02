@@ -2552,7 +2552,12 @@ quiet for ninety seconds. `back_when: never` (the `--swap` of the UI
 offers it) leaves it until asked.
 
 `swap: auto` on a role lets the supervisor take the card for it by
-itself when work for it waits:
+itself, when the door's plan says its work goes next (`GET /work/plan`,
+`prax.host.plan`). The plan waits until a swap is worth it: a person's
+request after waiting three times the swap's cost (the two roles' load
+times), the door's after twenty, 50 items at once, or any in the four
+hours from the worker's `nightly` hour. It never takes the card from a
+role still serving its own readings:
 
       marker: {venv: …, on_demand: true, group: card, swap: auto}
 

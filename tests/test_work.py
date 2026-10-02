@@ -1737,9 +1737,12 @@ def test_do_it_now_stands_until_its_work_is_done(
             "waiting": 1,
             "rate": None,
             "hours_left": None,
+            "oldest": demand["groups"][0]["oldest"],
+            "asked_by": "human",
             "now": False,
         }
     ]
+    assert demand["groups"][0]["oldest"].endswith("Z")
     assert demand["now"] == {} and demand["ask_holds"] is False
     assert client.post("/work/now", json={"role": "nobody"}).status_code == 400
     wrong = {"role": "marker", "action": "vision"}  # not marker's
@@ -1749,6 +1752,15 @@ def test_do_it_now_stands_until_its_work_is_done(
     assert r["released"] == 1 and r["after_ask"] is False
     demand = client.get("/work/demand").json()
     assert demand["now"] == {"marker": "marker"} and demand["groups"][0]["now"]
+    # the plan: a person asked, so marker goes next; no supervisor here, so
+    # the swap's cost is a guess
+    planned = client.get("/work/plan").json()
+    assert planned["order"] == ["marker"]
+    (row,) = planned["groups"]
+    assert row["decision"] == "next" and row["swap_guessed"]
+    # what prax up asks: the demand with the plan, one request
+    assert client.get("/work/demand?plan=true").json()["plan"]["order"] == ["marker"]
+    assert "plan" not in client.get("/work/demand").json()
     with work.asking():
         assert work.ask_holds()
     assert work.ask_holds()  # the last few minutes still hold it

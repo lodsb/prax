@@ -664,6 +664,23 @@ def readings_done_since(con: sqlite3.Connection, since: str) -> dict[str, int]:
     return {str(name or "?"): int(n) for name, n in rows}
 
 
+def waiting_since(con: sqlite3.Connection) -> dict[str, dict[str, Any]]:
+    """Per extractor, when its oldest waiting request was asked for and
+    whether a person asked for any of them (``asked_by``: ``human`` when
+    one did, else who did): what the card's plan weighs a wait by."""
+    rows = con.execute(
+        "SELECT extractor, min(at), max(asked_by = 'human'), min(asked_by)"
+        " FROM readings WHERE state = 'requested' GROUP BY 1"
+    ).fetchall()
+    return {
+        str(name or "?"): {
+            "oldest": oldest,
+            "asked_by": "human" if human else str(by or "door"),
+        }
+        for name, oldest, human, by in rows
+    }
+
+
 def waiting_readings(con: sqlite3.Connection) -> dict[str, int]:
     """How many requests wait per extractor: what a script that swaps
     the card to marker and back watches (``prax readings --wait``)."""

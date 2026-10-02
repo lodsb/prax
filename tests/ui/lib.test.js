@@ -154,8 +154,10 @@ test("upPanel: the group's holder, what waits, and the buttons offered", () => {
       { role: "marker", action: "marker", waiting: 2, rate: 1.5, hours_left: 1.3, now: false },
       { role: "llama-server", action: "vision-pages", waiting: 3, rate: null, hours_left: null, now: true },
     ] }, gpu: [],
+    plan: { groups: [{ role: "marker", action: "marker", decision: "waits", why: "until the nightly window, or 360 s more", swap_s: 220, swap_guessed: true }] },
   });
-  assert.match(waiting, /marker: 2 marker · 1\.5\/h · about 1 h left · needs the card \(marker is paused, loads in about 41 s\) <button[^>]*class="linkish up-now" data-role="marker" data-action="marker">do it now/);
+  assert.match(waiting, /waits: until the nightly window, or 360 s more · a swap of about 4 min \(guessed\)<\/span>/);
+  assert.match(waiting, /marker: 2 marker · 1\.5\/h · about 1 h left · needs the card \(marker is paused, loads in about 41 s\)[^]*?<button[^>]*class="linkish up-now" data-role="marker" data-action="marker">do it now/);
   assert.match(waiting, /llama-server: 3 vision-pages · <span class="up-holder">asked for now, after the answer in progress/);
   assert.doesNotMatch(waiting, /data-role="llama-server"/);
   // no supervisor on the host: no panel at all

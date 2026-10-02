@@ -76,12 +76,34 @@ def work_beat(job_id: int, req: SessionBeat, request: Request) -> dict[str, Any]
 
 
 @router.get("/work/demand")
-def work_demand(request: Request) -> dict[str, Any]:
+def work_demand(request: Request, plan: bool = False) -> dict[str, Any]:
     """What waits for a role that has to be running to do it (``prax.work``
     ``ROLE_WORK``): the reading requests per extractor and per role. The
     supervisor asks this to know when a borrowed card can go back, and
-    the Jobs view shows it beside the roles."""
-    return work.demand(_con(request))
+    the Jobs view shows it beside the roles. With ``plan`` it carries the
+    card's plan too (``GET /work/plan``), which is what ``prax up``
+    follows: one request a look."""
+    out = work.demand(_con(request))
+    if plan:
+        from prax import config
+        from prax.host import plan as card_plan
+        from prax.host import up
+
+        out["plan"] = card_plan.for_host(out, up.status(config.data_dir()))
+    return out
+
+
+@router.get("/work/plan")
+def work_plan(request: Request) -> dict[str, Any]:
+    """What the card does next (stage AI): each group of waiting work
+    with what its swap, its work and its wait cost, a decision, and the
+    order the card would serve them in (``prax.host.plan``). The swap
+    costs are ``prax up``'s measured load times; without a supervisor
+    here they are guesses, and the plan says so."""
+    from prax import config
+    from prax.host import plan, up
+
+    return plan.for_host(work.demand(_con(request)), up.status(config.data_dir()))
 
 
 class NowReq(BaseModel):

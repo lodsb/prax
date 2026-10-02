@@ -645,51 +645,59 @@ def test_an_idle_server_waits_for_a_lent_card(
         thread.join(timeout=10)
 
 
-def test_do_it_now_gives_the_card_unless_an_ask_holds_it(
+def test_prax_up_follows_the_plan(
     data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A person's "do it now" (the door's demand names the role under
-    ``now``) swaps the card to it at the supervisor's next look, never
-    while an ask holds the card; asked for the role the card was lent
-    away from, it ends the loan, and the borrower's ``swap: auto`` does
-    not take it straight back (stage AI)."""
+    """The door's plan (in its demand) says which group goes next. A role
+    with ``swap: auto`` takes the card for it by itself, any other only
+    for a person's "do it now"; never while an ask holds the card. Next
+    for the role the card was lent away from ends the loan (stage AI)."""
     data_dir.mkdir(parents=True, exist_ok=True)
     up.run_dir(data_dir).mkdir(parents=True, exist_ok=True)
     _, argv_a = child(tmp_path, "holder", 60)
     _, argv_b = child(tmp_path, "borrower", 60)
     holder = up.Role("llama-server", argv_a, group="card", needs_vram_mb=20000)
-    borrower = up.Role(
+    auto = up.Role(
         "marker", argv_b, group="card", needs_vram_mb=5000, on_demand=True, swap="auto"
     )
     said: list[str] = []
-    sup = up.Supervisor([holder, borrower], data_dir=data_dir, say=said.append)
+    sup = up.Supervisor([holder, auto], data_dir=data_dir, say=said.append)
     monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 100)  # they do not fit
-    said_by_door: dict[str, Any] = {"roles": {}, "now": {}, "ask_holds": False}
+    door: dict[str, Any] = {"roles": {}, "now": {}, "ask_holds": False, "plan": []}
 
     def ask_demand(self: up.Supervisor) -> None:
-        self.demand = said_by_door["roles"]
-        self.now = said_by_door["now"]
-        self.ask_holds = said_by_door["ask_holds"]
+        self.demand, self.now = door["roles"], door["now"]
+        self.ask_holds, self.plan = door["ask_holds"], door["plan"]
 
     monkeypatch.setattr(up.Supervisor, "_ask_demand", ask_demand)
-    said_by_door.update(now={"marker": "marker"}, ask_holds=True)
+    marker_next = [{"role": "marker", "action": "marker", "why": "waited past 660 s"}]
+    door.update(roles={"marker": 2}, plan=marker_next, ask_holds=True)
     sup._groups()
     assert "card" not in sup.groups  # an ask holds the card: it waits
-    said_by_door["ask_holds"] = False
+    door["ask_holds"] = False
     sup._groups()
     assert sup.groups["card"]["holder"] == "marker"
     assert "llama-server" in sup.paused
-    sup._groups()  # the request stands, and is already done
+    sup._groups()  # the plan says the same, and it is done already
     assert sup.groups["card"]["holder"] == "marker"
-    # the other way: the card back to what it was lent away from, while
-    # marker still has work, and marker's auto swap leaves it there
-    said_by_door.update(roles={"marker": 4}, now={"llama-server": None})
+    # a person asked for llama-server: the plan puts it next, the loan ends
+    door.update(
+        now={"llama-server": None},
+        plan=[{"role": "llama-server", "action": "vision", "why": "asked for now"}],
+    )
     sup._groups()
     assert "card" not in sup.groups
     assert "marker" in sup.paused and "llama-server" not in sup.paused
-    sup._groups()
-    assert "card" not in sup.groups
-    assert any("asked for now" in line for line in said)
+    assert any("the plan: asked for now" in line for line in said)
+    # a role without swap: auto follows the plan only for a person
+    asks = up.Role("marker", argv_b, group="card", needs_vram_mb=5000, on_demand=True)
+    other = up.Supervisor([holder, asks], data_dir=data_dir)
+    door.update(now={}, plan=marker_next)
+    other._groups()
+    assert "card" not in other.groups
+    door["now"] = {"marker": "marker"}
+    other._groups()
+    assert other.groups["card"]["holder"] == "marker"
 
 
 def test_a_load_time_is_noted_and_kept(

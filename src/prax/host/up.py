@@ -164,6 +164,7 @@ class Supervisor:
         self.demand: dict[str, Any] = {}  # what the door says waits, per role
         self.now: dict[str, Any] = {}  # the roles a person said do it now for
         self.ask_holds = False  # an ask keeps the card where it is
+        self.plan: list[dict[str, Any]] = []  # the door's plan: what goes next
         self._demand_at = 0.0
         # servers stopped for being quiet (``idle_minutes``), and per
         # watched server the last activity count, when it last moved and
@@ -660,7 +661,7 @@ class Supervisor:
         if not url:
             return
         token = environment(self.data_dir).get("PRAX_TOKEN", "")
-        req = urllib.request.Request(f"{url}/work/demand")
+        req = urllib.request.Request(f"{url}/work/demand?plan=true")
         if token:
             req.add_header("Authorization", f"Bearer {token}")
         try:
@@ -671,15 +672,20 @@ class Supervisor:
         self.demand = said.get("roles") or {}
         self.now = said.get("now") or {}
         self.ask_holds = bool(said.get("ask_holds"))
+        self.plan = [
+            row
+            for row in (said.get("plan") or {}).get("groups") or []
+            if row.get("decision") == "next"
+        ]
 
     def _groups(self) -> None:
-        """Every tick: a group whose borrower has nothing left to do gives
-        the resource back, and a paused role with ``swap: auto`` takes it
-        when work waits for it."""
+        """Every tick: the door's plan is followed (``_follow_plan``), and a
+        group whose borrower has nothing left to do gives the resource
+        back."""
         if not any(r.group for r in self.roles):
             return
         self._ask_demand()
-        self._do_now()
+        self._follow_plan()
         for group, loan in list(self.groups.items()):
             if loan["back_when"] != "idle":
                 continue
@@ -692,36 +698,31 @@ class Supervisor:
                 loan["quiet_since"] = time.monotonic()
             elif time.monotonic() - since >= GROUP_QUIET:
                 self._unswap(group, "nothing left waiting")
-        for role in self.roles:
-            if (
-                role.group
-                and role.swap == "auto"
-                and role.name in self.paused
-                and role.group not in self.groups
-                and int(self.demand.get(role.name, 0) or 0) > 0
-                and not any(  # a person asked for another to go first
-                    r.group == role.group and r.name in self.now for r in self.roles
-                )
-            ):
-                self._swap(role.name, "idle")
 
-    def _do_now(self) -> None:
-        """A person's "do it now" (``POST /work/now``, in the door's demand
-        as ``now``): the role gets its group's card, by a swap, or by the
-        loan ending when it is what the card was lent away from. Never
-        while an ask holds the card; the door keeps the request standing,
-        so the next look after the ask does it."""
+    def _follow_plan(self) -> None:
+        """The door's plan (``GET /work/plan``, in its demand): the first
+        group it says goes next gets its role the card, by a swap, or by
+        the loan ending when the card was lent away from that role. A role
+        with ``swap: auto`` follows the plan by itself; any other only for
+        a person's "do it now". Never while an ask holds the card; the
+        door keeps a "do it now" standing, so the next look does it."""
         if self.ask_holds:
             return
-        for role in self.roles:
-            if not role.group or role.name not in self.now:
+        for row in self.plan:
+            name = str(row.get("role") or "")
+            role = next((r for r in self.roles if r.name == name), None)
+            if role is None or not role.group:
+                continue
+            if role.swap != "auto" and name not in self.now:
                 continue
             loan = self.groups.get(role.group)
             if loan is None:
-                if role.name in self.paused:
-                    self._swap(role.name, "idle")
-            elif loan["holder"] != role.name and role.name in loan["was_up"]:
-                self._unswap(role.group, "asked for now")
+                if name in self.paused:
+                    self._swap(name, "idle")
+                    return
+            elif loan["holder"] != name and name in loan["was_up"]:
+                self._unswap(role.group, f"the plan: {row.get('why') or 'next'}")
+                return
 
     def _end(self, name: str, proc: subprocess.Popen[bytes]) -> None:
         """End a role's process and whatever it started: the job on

@@ -287,6 +287,7 @@ from .documents import (  # noqa: F401
     unstamp_extraction,
     untexted_captures,
     waiting_readings,
+    waiting_since,
 )
 from .graph import (  # noqa: F401
     _CONFIDENCE_BY_RANK,

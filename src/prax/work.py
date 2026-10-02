@@ -262,11 +262,15 @@ def do_now(role: str, action: str | None = None) -> dict[str, Any]:
 
 
 def _groups(
-    readings: dict[str, int], rate: dict[str, float], left: dict[str, float]
+    readings: dict[str, int],
+    rate: dict[str, float],
+    left: dict[str, float],
+    since: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
     """What waits, by the role that must run to do it and by action (an
     extractor's readings, or a step's deferred items), with the queue's
-    rate where one was measured."""
+    rate where one was measured, when its oldest item was asked for and
+    whether a person asked (``store.waiting_since``)."""
     out = [
         {
             "role": role,
@@ -274,6 +278,8 @@ def _groups(
             "waiting": readings[name],
             "rate": rate.get(name),
             "hours_left": left.get(name),
+            "oldest": (since.get(name) or {}).get("oldest"),
+            "asked_by": (since.get(name) or {}).get("asked_by", "door"),
         }
         for role, names in ROLE_WORK.items()
         for name in names
@@ -287,6 +293,8 @@ def _groups(
                 "waiting": n,
                 "rate": None,
                 "hours_left": None,
+                "oldest": None,  # a deferral keeps no moment
+                "asked_by": "human" if step == "ask" else "door",
             }
         )
     for g in out:
@@ -344,7 +352,7 @@ def demand(con: Any) -> dict[str, Any]:
         for name, waiting in readings.items()
         if rate.get(name)
     }
-    groups = _groups(readings, rate, left)
+    groups = _groups(readings, rate, left, store.waiting_since(con))
     return {
         "readings": readings,
         "roles": roles,
