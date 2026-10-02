@@ -18,28 +18,28 @@ the machine out of memory. Then the small structural debt of the maths
 pack, then what is running anyway, then measured improvements, then the
 engineering leftovers. What waits on the user is apart.
 
-1. **AI. A plan for the card** (below). Its first piece is in: an idle
-   server whose card is lent waits for it (2a04f4c). Next the jobs view
-   with "do it now", the load times, `GET /work/plan`, and `prax up`
-   following the plan. "See who holds the card" and "ask the runtime what
-   a text costs" join it as steps.
-2. **AD2, the tidy-up** (below): the maths pack's tests beside it, and
-   the maths pieces left in the core behind pack hooks.
+1. **AI. A plan for the card** (below): done but its measurement, which
+   needs days of running. The jobs view's "do it now", the load times,
+   `GET /work/plan` and `prax up` following it are in (0a92203, 135f3da).
+2. **AD2, the tidy-up**: done (1824fab).
 3. **The library's backlogs, running** (2026-10-02, `docs/log.md`, "what
    was never extracted"). A backlog worker extracts the graph of about
    1,050 documents. Marker reads the 29 books on the night of
    2026-10-02, then the ~190 weaker maths candidates. The `equations`
    step checks every formula, and a broken formula that is an
    extraction slip is read again. Watched, not built.
-4. **AA. Close Z** (below): the labeller's corrections, and the genre
+4. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
+   marker's own llama-server held 10 GB of RAM that no plan saw. Step 1
+   first, after the night's books; steps 2 and 3 after AA.
+5. **AA. Close Z** (below): the labeller's corrections, and the genre
    words in the document field, measured.
-5. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
+6. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
    `refetch-later.txt` (untracked) with the import of the old disk, when
    the NAS is reachable.
-6. **Measured improvements** (below, "Retrieval and ask", "The graph"):
+7. **Measured improvements** (below, "Retrieval and ask", "The graph"):
    the sections pass's vector arm and its worth to `ask`, document-aware
    rerank input, a compressed edge list, `confidence` as a number.
-7. **The engineering leftovers** (below): `store.retrieval` and
+8. **The engineering leftovers** (below): `store.retrieval` and
    `store.repair` in parts, typed shapes, the next strict mypy batch.
 
 Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
@@ -199,6 +199,68 @@ and pushing what is committed.
             calculation (values and a formula) goes a fixed path: the
             formula found, evaluated with the values, the model asked
             only to explain the result.
+
+- [ ] **AJ. Readers under prax's hand: every model process a role, the
+      OCR readers measured against each other.** The user, 2026-10-02:
+      "should we vendor the marker/surya/ocr pipeline in a way that we can
+      control it via prax properly... it also begs the question what we
+      do with rapid ocr and other ocr subsystems".
+
+      *Why.* On the night of 2026-10-02, with marker holding the card for
+      the 29 books, free RAM fell to 3.5 of 31 GB and a background job was
+      stopped for memory. `prax up --status` showed llama-server paused.
+      The memory was marker 2.0's: surya-ocr-2 is a GGUF vision model,
+      and surya's llama.cpp backend (`surya/inference/backends/
+      llamacpp.py`) starts a llama-server of its own. It found prax's
+      binary on the `PATH` and ran it with `--parallel 8 --ctx-size 98304`
+      and llama.cpp's default `--cache-ram` of 8192 MiB. It held 10.3 GB
+      of RAM (13.3 GB of commit) for a 1.4 GB model that sat on the card
+      in 3.4 GB of VRAM. Its log had 27,589 lines of "making room for
+      prompt cache entry": the cache sat at its cap. For OCR it buys
+      almost nothing, since every page is a different image. Marker's
+      own server held 3.4 GB more, and its layout and OCR-error helpers
+      1.8 GB. The log is opened for appending and never rotated (55 MB
+      after one night). Prax's own llama-server roles have the same
+      8 GB cap today.
+
+      *Not vendoring.* Marker 2.0 has just replaced its OCR stack, and a
+      vendored copy makes prax the maintainer of a fast-moving pipeline.
+      Marker's code is GPL-3.0 and Datalab's weights have a licence of
+      their own (to be read before anything is copied). What prax needs
+      to control is already a setting: `SURYA_INFERENCE_URL` (an outside
+      server, no spawn), `DETECTOR_SERVER_URL`, `OCR_ERROR_SERVER_URL`,
+      `FAST_LAYOUT_SERVER_URL`, and `LLAMA_CPP_EXTRA_ARGS`. Prax owns
+      the boundary instead: every process, its flags and its resources.
+
+      *The steps.*
+      - [ ] **Surya's OCR model as a prax role.** An `ocr-server` role of
+            `prax up`: llama-server with `surya-2.gguf` and its mmproj, in
+            the card group with marker, started with `--cache-ram 0` and
+            the slots prax picks. The marker role gets
+            `SURYA_INFERENCE_URL` and no longer spawns. Every llama-server
+            role gets a `--cache-ram` default, the 35B included. Prax
+            trims surya's log when it starts marker. Measured before and
+            after on the same few books: peak RAM and commit, VRAM, time
+            per page. First, after the night's books.
+      - [ ] **The reader contract.** A reader declares in its manifest the
+            processes it needs (roles of `prax up`), their resources
+            (VRAM, RAM, load time) and the settings prax passes. It runs
+            in a pinned environment: marker's venv from a lock file,
+            upgraded on purpose and measured. This is the rule the packs
+            follow, applied to the extractors. Nothing on the card is
+            started behind `prax up`'s back.
+      - [ ] **The OCR readers measured against each other.** Prax has at
+            least three ways to read a page that is not text: RapidOCR
+            through pymupdf4llm (in the worker, CPU), marker with surya
+            (its venv, the card), and vision-pages (llama-server with a
+            vision model). They grew one at a time. On a fixed set of
+            scans, with a hand-checked sample of their text: text
+            quality, time per page, peak RAM and VRAM. The result becomes
+            routing rules: which reader a document gets first, and when
+            it is read again. A reader that never wins is retired.
+            Surya's model and vision-pages are both a vision model behind
+            llama.cpp, so after step 1 they share one served-model
+            mechanism.
 
 - [ ] **AA. Close Z.** The re-extraction against the new domains, the
       `computing` v2 review, the `society` rules and the relabel are done

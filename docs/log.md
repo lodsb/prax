@@ -3465,6 +3465,26 @@ Three maths pieces in the core went behind one manifest field,
 
 Tests: 1155 passed before, and the same tests after the move.
 
+## 2026-10-02, the night: the 29 books, and marker's own llama-server
+
+The 29 books were queued for marker at 21:53 (a dry run first, 29 of 29)
+and the card swapped to it. By 22:35 four were read.
+
+Free RAM fell to 3.5 of 31 GB and a background job was stopped for
+memory. `prax up --status` showed llama-server paused, yet a
+llama-server held 10.3 GB of RAM and 13.3 GB of commit. It was marker's.
+Marker 2.0 reads with surya-ocr-2, a GGUF vision model, and surya's
+llama.cpp backend starts a llama-server of its own: prax's binary,
+found on the `PATH`, with `--parallel 8 --ctx-size 98304` and llama.cpp's
+default prompt cache of 8192 MiB in RAM. The model is 1.4 GB and sat on
+the card in 3.4 GB of VRAM. The server's log held 27,589 evictions from
+a full prompt cache, which OCR cannot use: every page is a new image.
+Marker's server held 3.4 GB more, its two helpers 1.8 GB.
+
+Prax's own llama-server roles carry the same 8 GB default. The fix and
+the larger question (who starts the processes on the card, and which of
+the OCR readers earns its place) are stage AJ of `docs/PLAN.md`.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
