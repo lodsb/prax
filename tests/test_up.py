@@ -591,3 +591,55 @@ def test_a_quiet_server_stops_and_comes_back_when_work_asks(
     finally:
         up.stop(data_dir, wait=20)
         thread.join(timeout=10)
+
+
+def test_an_idle_server_waits_for_a_lent_card(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A server stopped for being quiet, whose card marker borrowed, does
+    not load beside it when its work asks; it comes back with the card
+    (2026-10-02: llama-server reloaded during marker's turn, and both
+    models on the card ran the machine out of memory)."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark_a, argv_a = child(tmp_path, "holder", 60)
+    mark_b, argv_b = child(tmp_path, "borrower", 60)
+    holder = up.Role(
+        "llama-server",
+        argv_a,
+        group="card",
+        needs_vram_mb=20000,
+        health="http://127.0.0.1:1/health",
+        metrics="http://127.0.0.1:1/metrics",
+        idle_minutes=0.002,
+    )
+    borrower = up.Role(
+        "marker", argv_b, group="card", needs_vram_mb=5000, on_demand=True
+    )
+    said: list[str] = []
+    sup = up.Supervisor(
+        [holder, borrower], data_dir=data_dir, say=said.append, tick=0.05
+    )
+    monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 100)  # they do not fit
+    monkeypatch.setattr(up, "healthy", lambda url, timeout=3.0: True)
+    monkeypatch.setattr(up, "IDLE_POLL", 0.0)
+    monkeypatch.setattr(up, "GROUP_QUIET", 0.0)
+    monkeypatch.setattr(up.Supervisor, "_server_activity", lambda self, role: 7.0)
+    waiting: dict[str, int] = {}
+    monkeypatch.setattr(
+        up.Supervisor, "_ask_demand", lambda self: setattr(self, "demand", waiting)
+    )
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    try:
+        wait_for(lambda: "llama-server" in sup.idled)  # quiet, stopped
+        waiting["marker"] = 2
+        up.swap(data_dir, "marker")
+        wait_for(lambda: runs_of(mark_b) >= 1)
+        waiting["llama-server"] = 5  # its work asks while marker holds the card
+        wait_for(lambda: any("after marker" in line for line in said))
+        assert runs_of(mark_a) == 1  # not loaded beside marker
+        waiting.pop("marker")  # marker is done: the card goes back
+        wait_for(lambda: runs_of(mark_a) >= 2)
+    finally:
+        up.stop(data_dir, wait=20)
+        thread.join(timeout=10)

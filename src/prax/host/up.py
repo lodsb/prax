@@ -454,6 +454,18 @@ class Supervisor:
             name = role.name
             if name in self.idled:
                 if int(self.demand.get(name, 0) or 0) > 0:
+                    loan = self._lent_away(role)
+                    if loan is not None:
+                        # its card is on loan: it waits for it and comes back
+                        # with it, rather than loading beside the borrower
+                        # (2026-10-02: llama-server reloaded three minutes into
+                        # marker's turn, both models on the card and in RAM)
+                        if name not in loan["was_up"]:
+                            loan["was_up"].append(name)
+                            self._say(
+                                f"{name}: work waits for it; after {loan['holder']}"
+                            )
+                        continue
                     self._say(f"{name}: work waits for it; loading again")
                     self.idled.discard(name)
                     self.paused.discard(name)
@@ -563,6 +575,15 @@ class Supervisor:
         self._say(f"{group}: {to} takes it {how} {others} (back when {back_when})")
         self._write_status()
 
+    def _lent_away(self, role: Role) -> dict[str, Any] | None:
+        """The loan of the role's group to another role, if there is one."""
+        if not role.group:
+            return None
+        loan = self.groups.get(role.group)
+        if loan is None or loan.get("holder") == role.name or loan.get("fits"):
+            return None
+        return loan
+
     def _unswap(self, group: str, why: str) -> None:
         """The group's resource back to what held it: the borrower stops
         if it was not up before, and the others start again."""
@@ -578,6 +599,7 @@ class Supervisor:
                 self._end(holder, proc)
         for name in loan["was_up"]:
             self.paused.discard(name)
+            self.idled.discard(name)  # one that waited, idle, for the card
         back = ", ".join(loan["was_up"]) or "nothing"
         self._say(f"{group}: {holder} gives it back to {back} ({why})")
         self._write_status()

@@ -3332,3 +3332,11 @@ four commits:
   again. 39 of the 45 also carried a "created" reading with the empty
   string's hash: a forced reading of nothing was indexed. Fixed:
   `queue.apply_parse` never indexes an empty text.
+- **A swap that did not hold.** marker took the card from an idle
+  llama-server; three minutes later the follow-up readings waiting for
+  llama-server loaded it again (`_idle` reloads an idle server whose work
+  waits), so both models sat on the card and in memory, and the session's
+  memory guard stopped a waiting job. An idle server whose card is lent
+  now waits for it and comes back with it (`Supervisor._lent_away`, the
+  loan's `was_up`). The first step of stage AI's planner, measured on the
+  machine it broke.
