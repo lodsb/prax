@@ -197,6 +197,18 @@ are called on it.
   - Not built: checking a table's rows against each other (the RNN
     paper's antiderivatives). A table does not say which column is the
     derivative of which; it waits for a measured need.
+- An equation by its number (AD2, step 5, `surf.named_equations`): a
+  question that writes "equation (5)", "eq. (14)" or "equations (3) and
+  (4)" gets those formula chunks after the door's first search and
+  before the model's first step. One document gives them all: of the
+  search's first eight documents (`NAMED_DOCS`), the earliest with the
+  most of the numbers named, because every paper has an equation (1).
+  On the live store (read-only, the 8 questions that name equations):
+  the right paper in all 7 that got one, the eighth already had its
+  equation among the search's passages. Taking each number from the
+  first document that had it brought Helmholtz's (1) and Strogatz's (4)
+  into Dattorro and RMS questions. The resonator question, wrong in all
+  16 answers of two double runs, now starts with Dattorro's (5).
 - The surfer's action as a line of text, as it was before AD2 and as a
   model without the grammar may still write it:
   `maths: same [3] == [7]`, `maths: integrate x \tanh(x)`,

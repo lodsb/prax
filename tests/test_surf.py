@@ -550,3 +550,38 @@ def test_a_formula_passage_names_the_equations_around_it_and_reads_by_number(
     shown, _ = surf.do_read(con, fresh, f"doc {doc} discrete version samples")
     assert "(on 'discrete version samples')" in shown
     assert "read: [n] (2)" in surf.SYSTEM
+
+
+def test_an_equation_the_question_names_is_read_first(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """ "Equation (5)" in a question brings that formula in before the
+    model's first step, from the one document that has the most of the
+    numbers named; another paper's (1) is not taken (AD2, step 5)."""
+    monkeypatch.setattr(surf, "PACK_TOOLS", ())
+    filler = "A resonator and its notch, for reverberation. " * 30
+    tuned = store.ingest_text(
+        con,
+        f"# Filters\n\n{filler}\n\n$$H_n = (1 + A)/2 \\quad (1)$$\n\n{filler}\n\n"
+        f"$$H_r = (1 - A)/2 \\quad (5)$$\n\nwhich is the resonator.\n",
+        title="Reverberator and other filters",
+    )["doc_id"]
+    store.ingest_text(
+        con,
+        f"# Tone\n\n{filler}\n\n$$f = 2 g \\quad (1)$$\n\nfor a resonator.\n",
+        title="On the sensations of tone",
+    )
+    assert surf.named_numbers(
+        "is the resonator of equation (5), or eqs. (1) and (5)"
+    ) == [
+        "5",
+        "1",
+    ]
+    q = "Is the resonator of equation (5) the same as (1 - A)/2, given equation (1)?"
+    got = surf.run(con, q, answerer=ask.StubAnswerer(), steps=0, tokens=4000)
+    reads = [st for st in got["trail"] if st.get("action") == "read"]
+    added = {
+        p["doc_id"] for p in got["passages"] if "(5)" in p["text"] or "(1)" in p["text"]
+    }
+    assert reads and added == {tuned}
+    assert any("H_r" in p["text"] for p in got["passages"])

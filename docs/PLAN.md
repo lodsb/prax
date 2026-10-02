@@ -91,7 +91,7 @@ nothing.
             second antiderivative of tanh, wrong as extracted). A run
             over the 243 documents with formulas, measured: how many
             chains break, and how many of those are extraction faults.
-      - [ ] **An equation by its number.** A question that names a
+      - [x] (2026-10-02: `surf.named_equations`; the right paper for all 7 of 8 questions that needed one, on the live store) **An equation by its number.** A question that names a
             document and an equation number ("Dattorro's (5)") gets that
             formula chunk at the start of the surf, from the numbers the
             formula chunks already carry. The resonator question failed

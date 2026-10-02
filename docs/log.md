@@ -3208,3 +3208,18 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   empty skip list wrote `id NOT IN (NULL)`, which matches nothing. The
   step was first named `formula-check`; a step name with a hyphen breaks
   the command line's `--no-<step>` flag, so it is `equations`.
+
+## 2026-10-02: AD2, step 5 — an equation by its number
+
+- **What.** `surf.named_equations`: "equation (5)", "eq. (14)",
+  "equations (3) and (4)" in a question bring those formula chunks in
+  after the first search, as step 0's reads, before the model's turn.
+- **One document for all the numbers.** Taking each number from the first
+  of the search's documents that had one brought Helmholtz's (1) into a
+  Dattorro question and Strogatz's (4) into an RMS one. The rule now
+  takes the earliest document with the most of the numbers named, out of
+  the first eight. Dry run on the live store, read-only: the right paper
+  for all 7 of the 8 equation-naming questions that needed one; the
+  resonator question starts with Dattorro's (5).
+- **Not measured in the eval yet.** The five runs going now ran on the
+  door before steps 4 and 5; they measure steps 1 and 2.

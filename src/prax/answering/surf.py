@@ -407,6 +407,59 @@ def do_read(con: sqlite3.Connection, s: Surf, arg: str) -> tuple[str, list[int]]
     return _read(s, doc_id, title, chunks, tag, con)
 
 
+# "equation (5)", "eq. (14)", "equations (3) and (4)": an equation the
+# question names by its number (AD2, step 5)
+_NAMED_EQ = re.compile(r"\beq(?:uations?|s?\.)\s*\(\s*(\d+[a-z]?)\s*\)", re.IGNORECASE)
+_MORE_EQ = re.compile(r"^\s*(?:,|and|or)\s*\(\s*(\d+[a-z]?)\s*\)", re.IGNORECASE)
+NAMED_MAX = 4  # equations a question may bring in this way
+NAMED_DOCS = 8  # the first search's documents an equation is looked for in
+
+
+def named_numbers(question: str) -> list[str]:
+    """The equation numbers a question names, in order, once each."""
+    out: list[str] = []
+    for m in _NAMED_EQ.finditer(question):
+        out.append(m.group(1))
+        rest = question[m.end() :]
+        while (more := _MORE_EQ.match(rest)) is not None:
+            out.append(more.group(1))
+            rest = rest[more.end() :]
+    return list(dict.fromkeys(out))[:NAMED_MAX]
+
+
+def named_equations(
+    con: sqlite3.Connection, s: Surf
+) -> list[tuple[str, tuple[str, list[int]]]]:
+    """The formulas a question names by number ("equation (5)"), each from
+    the first of the first search's documents that has one by that number,
+    read as passages before the model's first step. The resonator question
+    failed in all 16 answers of two double runs because no step ever held
+    Dattorro's (5); the model did not use ``read: [n] (5)``."""
+    numbers = named_numbers(s.question)
+    if not numbers:
+        return []
+    # one document for all the numbers a question names: every paper has an
+    # equation (1), so the first that holds one is often another paper
+    # (Helmholtz's (1) for Dattorro's, 2026-10-02). The search's earliest
+    # document with the most of them; the wall has filtered these already
+    best: tuple[int, dict[str, dict[str, Any]]] | None = None
+    for doc_id in list(dict.fromkeys(p.doc_id for p in s.passages))[:NAMED_DOCS]:
+        has = {n: f for n in numbers if (f := store.formula_by_number(con, doc_id, n))}
+        if has and (best is None or len(has) > len(best[1])):
+            best = (doc_id, has)
+    if best is None:
+        return []
+    doc_id, has = best
+    title = s.docs.get(doc_id) or next(
+        (p.title for p in s.passages if p.doc_id == doc_id), ""
+    )
+    return [
+        (n, _read(s, doc_id, title, [f], f"({n})", con))
+        for n, f in has.items()
+        if f["chunk_id"] not in s.chunks
+    ]
+
+
 def _equations(con: sqlite3.Connection, doc_id: int) -> str:
     """The numbers a document's equations go by, for a read that asked
     for one it has not got."""
@@ -707,6 +760,10 @@ def run(
     result, added = do_search(con, s, s.query)
     s.log += [f"Step 0 · search: {s.query}", s.spend(result), ""]
     record(Step(0, "search", s.query), result, added, t)
+    for number, (result, added) in named_equations(con, s):
+        # the question named it: the formula, read before the model's turn
+        s.log += [f"Step 0 · read: equation ({number})", s.spend(result), ""]
+        record(Step(0, "read", f"equation ({number})"), result, added, t)
     if not s.passages and mode != "open":
         return _result(s, answerer, None, t0)  # nothing to surf from
 
