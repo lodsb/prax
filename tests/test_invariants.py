@@ -353,7 +353,7 @@ def test_a_file_with_a_shebang_is_executable_in_git() -> None:
         pytest.skip("no git")
     root = Path(__file__).resolve().parents[1]
     listed = subprocess.run(
-        [git, "ls-files", "-s", "--", "*.py"],
+        [git, "ls-files", "-s", "--", "*.py", "*.sh"],  # a shell script runs as one too
         cwd=root,
         capture_output=True,
         text=True,
