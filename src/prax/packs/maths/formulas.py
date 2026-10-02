@@ -28,7 +28,7 @@ from prax.steps.base import HandOut, Pass, Step, TakeIn
 
 from . import check, tool
 
-CHECK_VERSION = 2  # 2: the runtime's judge (2026-10-02)
+CHECK_VERSION = 3  # 2: the runtime's judge; 3: its reading ambiguities (2026-10-02)
 BATCH = 50  # formulas a batch, whatever a worker's own batch size
 ONE_TIMEOUT_S = 20.0  # one formula, when its batch failed
 

@@ -784,6 +784,11 @@ OPERATIONS.update(
 
 MIXED = re.compile(r"\d\s*\\frac")  # 7\frac{1}{51}: a mixed number, read as a product
 WORDS = re.compile(r"\\(?:text|mathrm|textrm|operatorname|mbox)\s*\{")
+# a decimal written without its 0: .3 is 0.3 (the reader misread it)
+LEADING_DOT = re.compile(r"(?<![\d}])\.(\d)")
+# a slash whose right operand has a juxtaposed factor after it: 1/5 (...)
+SLASH_THEN = re.compile(r"/\s*[\w.]+\s*(?:\(|\\left\()")
+DECIMAL = re.compile(r"\d*\.\d+")
 DIVIDE = re.compile(r"\\div\b")  # a ÷ b / c: the precedence is the writer's
 RESULT = re.compile(r"\s*-?\d+\.(\d+)\s*(?:\\ldots|\.\.\.)?\s*")
 
@@ -808,75 +813,137 @@ def _places(latex: str) -> int | None:
     return len(m.group(1)) if m else None
 
 
+def _text_refusal(left: str, right: str) -> str | None:
+    """Why a link's LaTeX is not judged before it is read, or None: what
+    the reader would misread (the library's formulas and answers,
+    2026-10-02)."""
+    sides = (left, right)
+    if any(WORDS.search(t) for t in sides):
+        # the parser drops words: 1 \text{ \mu F} = 1 \times 10^{-6} \text{ F}
+        # reads as 1 = 1e-6
+        return "words or units in it"
+    if any(MIXED.search(t) for t in sides):
+        return "a mixed number"
+    if any(DIVIDE.search(t) for t in sides):
+        return "a division sign whose precedence is the writer's"
+    if any(SLASH_THEN.search(t) for t in sides):
+        # 1/5 (1 + 1 + 1/6): the reader takes 1/(5(...)), the writer (1/5)(...)
+        return "a slash before a juxtaposed factor, whose precedence is the writer's"
+    return None
+
+
+def _shape_refusal(a: Any, b: Any) -> str | None:
+    """Why two read sides are not judged, or None."""
+    from sympy.core.function import AppliedUndef
+
+    if _is_name(a) or _is_name(b):
+        return "a definition"
+    checks = (
+        ((sympy.Limit, sympy.Sum, sympy.Product, sympy.Integral), "a bound variable"),
+        ((sympy.floor, sympy.ceiling), "a rounding function"),
+        # |1 - k|: an identity on one side of zero, which the writer knows
+        ((sympy.Abs, sympy.sign), "an absolute value, true on part of the line"),
+    )
+    for kinds, why in checks:
+        if any(e.has(*kinds) for e in (a, b)):
+            return why
+    if any(e.atoms(AppliedUndef) for e in (a, b)):
+        return "a function with no definition"
+    if len(a.free_symbols | b.free_symbols) > 1:
+        return "a relation among quantities"
+    return None
+
+
+def _arithmetic(a: Any, b: Any, left: str, right: str) -> dict[str, Any]:
+    """Two numbers, to the decimal places the stated result is written
+    with (31/53 x 1200 = 701.887 holds), else exactly."""
+    try:
+        diff = abs(complex(sympy.N(a - b, 30)))
+    except (TypeError, ValueError):
+        return {"verdict": "not judged", "why": "not a number"}
+    places = [q for q in (_places(left), _places(right)) if q is not None]
+    if places:
+        ok = diff <= 0.5 * 10 ** -min(places) * 1.01
+    else:
+        ok = diff <= 1e-9 * max(1.0, abs(complex(sympy.N(b, 30))))
+    return {"verdict": "holds" if ok else "does not hold", "why": "arithmetic"}
+
+
 def judge(left: str, right: str) -> dict[str, Any]:
     """One link of a display: ``holds``, ``does not hold``, or ``not
-    judged`` with why. Judged are arithmetic, to the decimal places the
-    stated result is written with (31/53 x 1200 = 701.887 holds), and an
-    identity in one variable. Not judged: a definition (a name on either
-    side), a condition (an equation in one unknown whose sides differ by a
-    rational function of it: 3x + 2 = x + 6), a relation among several
-    quantities, a limit, sum, product or integral, a rounding function, a
-    function nobody defined, a mixed number, a division sign."""
-    from sympy.core.function import AppliedUndef
+    judged`` with why. Judged are arithmetic and an identity in one
+    variable. Not judged: what the reader would misread
+    (``_text_refusal``), what is not an identity to decide alone
+    (``_shape_refusal``: a definition, a bound variable, a rounding
+    function, an absolute value, an undefined function, a relation among
+    several quantities), and a condition (an equation in one unknown
+    whose sides differ by a rational function of it: 3x + 2 = x + 6, or
+    one side constant and not an identity: e^x = 2)."""
 
     def no(why: str) -> dict[str, Any]:
         return {"verdict": "not judged", "why": why}
 
-    if WORDS.search(left) or WORDS.search(right):
-        # the parser drops words: 1 \text{ \mu F} = 1 \times 10^{-6} \text{ F}
-        # reads as 1 = 1e-6 (2026-10-02)
-        return no("words or units in it")
-    if MIXED.search(left) or MIXED.search(right):
-        return no("a mixed number")
-    if DIVIDE.search(left) or DIVIDE.search(right):
-        return no("a division sign whose precedence is the writer's")
+    why = _text_refusal(left, right)
+    if why:
+        return no(why)
+    left, right = LEADING_DOT.sub(r"0.\1", left), LEADING_DOT.sub(r"0.\1", right)
     try:
         a, _ = read(left)
         b, _ = read(right)
     except Exception as exc:  # noqa: BLE001 - an unread side is not judged
         return no(f"unread: {type(exc).__name__}")
-    if isinstance(a, sympy.Basic) is False or isinstance(b, sympy.Basic) is False:
+    if not isinstance(a, sympy.Basic) or not isinstance(b, sympy.Basic):
         return no("unread")
-    if _is_name(a) or _is_name(b):
-        return no("a definition")
-    bound = (sympy.Limit, sympy.Sum, sympy.Product, sympy.Integral)
-    if any(e.has(*bound) for e in (a, b)):
-        return no("a bound variable")
-    if any(e.has(sympy.floor, sympy.ceiling) for e in (a, b)):
-        return no("a rounding function")
-    if any(e.atoms(AppliedUndef) for e in (a, b)):
-        return no("a function with no definition")
+    why = _shape_refusal(a, b)
+    if why:
+        return no(why)
     fa, fb = a.free_symbols, b.free_symbols
-    if len(fa | fb) > 1:
-        return no("a relation among quantities")
     a, b = a.doit(), b.doit()
-    if fa != fb:
-        # one side constant: an identity (sin^2 x + cos^2 x = 1) or a value
-        # of x (e^x = 2); only the first can be told, by holding
-        got = op_same(a, b)
-        if got.get("same") is True:
-            return {"verdict": "holds", "why": str(got.get("how"))}
-        return no("a condition or a value of the variable")
-    if not fa:
-        try:
-            diff = abs(complex(sympy.N(a - b, 30)))
-        except (TypeError, ValueError):
-            return no("not a number")
-        places = [q for q in (_places(left), _places(right)) if q is not None]
-        if places:
-            ok = diff <= 0.5 * 10 ** -min(places) * 1.01
-        else:
-            ok = diff <= 1e-9 * max(1.0, abs(complex(sympy.N(b, 30))))
-        return {"verdict": "holds" if ok else "does not hold", "why": "arithmetic"}
-    (x,) = tuple(fa)
+    if not fa and not fb:
+        return _arithmetic(a, b, left, right)
     got = op_same(a, b)
     if got.get("same") is True:
         return {"verdict": "holds", "why": str(got.get("how"))}
+    if fa != fb:
+        # one side constant: an identity (sin^2 x + cos^2 x = 1) or a value
+        # of x (e^x = 2); only the first can be told, by holding
+        return no("a condition or a value of the variable")
     if got.get("same") is None:
         return no(str(got.get("how")))
+    (x,) = tuple(fa)
     if (a - b).is_rational_function(x):
         return no("a condition on " + str(x))
+    rounded = _rounded_constant(left + " " + right)
+    if rounded is not None and _close(a, b, x, rounded):
+        # e^{1.9 x} = 6.7^x: equal to the digits the constant is written with
+        return {
+            "verdict": "holds",
+            "why": f"to the {rounded:g} a rounded constant allows",
+        }
     return {"verdict": "does not hold", "why": str(got.get("how"))}
+
+
+def _rounded_constant(latex: str) -> float | None:
+    """The relative error the least precise decimal in a link allows (6.7:
+    two significant digits, 5%), or None when it writes no decimal."""
+    digits = [
+        len(m.group(0).replace(".", "").lstrip("0")) for m in DECIMAL.finditer(latex)
+    ]
+    return 0.5 * 10 ** (1 - min(digits)) if digits else None
+
+
+def _close(a: Any, b: Any, x: Any, rel: float) -> bool:
+    """Whether a and b agree within ``rel`` at points of (0.1, 2)."""
+    rng = random.Random(7)
+    for _ in range(20):
+        at = {x: sympy.Float(rng.uniform(0.1, 2.0))}
+        try:
+            va, vb = complex(sympy.N(a.subs(at))), complex(sympy.N(b.subs(at)))
+        except (TypeError, ValueError):
+            return False
+        if abs(va - vb) > rel * max(abs(vb), 1e-12):
+            return False
+    return True
 
 
 def _operands(

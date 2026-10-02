@@ -3300,3 +3300,15 @@ four commits:
   question's numbers dropped "19.2" from answers to "where does 19.2
   come from"; a given number now counts when it is the target. The
   scorer agrees with the hand on 177 of 200.
+- **The library's 24 broken formulas, read** (CHECK_VERSION 2, 11,650
+  of 17,431 checked by then): about half are extraction faults worth a
+  reader's look (`2^{22} = 2^4` for `2^{2^2}`, `2^*2`, continued
+  fractions cut to `\frac{1}{1+}`, `8 = \{3\}`), plus Moog's `e^{xx}` and
+  a ratio wrong at its fourth digit. Five were the judge's: a decimal
+  without its 0 (`.3`), a slash before a juxtaposed factor (`1/5 (…)`),
+  an absolute value true on one side of zero (Dattorro's `|1 - k|`), a
+  rounded constant (`e^{1.9x} = 6.7^x`), and a truncated continued
+  fraction written with `=` (left marked: it is not an equality).
+  The first four are rules of `judge` now, which is split into what is
+  refused before reading, what is refused after, and the arithmetic;
+  CHECK_VERSION 3 has the worker check every formula again.

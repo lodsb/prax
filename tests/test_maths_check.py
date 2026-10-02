@@ -82,6 +82,12 @@ def test_a_display_is_split_at_its_top_level_equals_signs() -> None:
         (r"2 \cdot 2^{(n-1)/2}", r"2^{\lceil n/2 \rceil}", "not judged"),
         (r"3 \times 7 \frac{1}{51} - 12", r"9 \frac{3}{51}", "not judged"),
         (r"36/25 \div 25/18", r"648/625", "not judged"),
+        # the library's own (2026-10-02): a leading-dot decimal, a slash
+        # before a juxtaposed factor, an absolute value, a rounded constant
+        (r"(0.34)(.3)(.6) + (0.08)(.1)(.6)", r"0.06120 + 0.00480", "holds"),
+        (r"1/5 (1 + 1 + 1/6)", r"13/30", "not judged"),
+        (r"\frac{1 + (1 - k)}{1 + |1 - k|}", r"\frac{2 - k}{k}", "not judged"),
+        (r"e^{1.9V_{in}}", r"6.7^{V_{in}}", "holds"),
         (r"1 \text{ \mu F}", r"1 \times 10^{-6} \text{ F}", "not judged"),
     ],
 )
