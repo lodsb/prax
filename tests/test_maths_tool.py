@@ -6,6 +6,7 @@ runs it when the maths environment is installed."""
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -259,3 +260,80 @@ def test_for_names_a_variable_only_when_one_stands_after_it() -> None:
     equation follows "for" (the third double run, 2026-10-02)."""
     got = tool.parse_step("solve I1 for I = I1 + I1*exp(u)")
     assert (got["args"]["var"], got["a"]) == ("I1", "I = I1 + I1*exp(u)")
+
+
+def test_the_json_steps_grammar_names_every_operation() -> None:
+    """The manifest holds data only, so its grammar spells the operations
+    out; they are the tool's."""
+    from prax.packs import maths
+
+    rules = ("m-check", "m-algebra", "m-calculus")
+    lines = [x for x in maths.GRAMMAR.splitlines() if x.startswith(rules)]
+    names = [n for x in lines for n in re.findall(r'"(\w+)"', x)]
+    assert sorted(names) == sorted(tool.OPERATIONS)
+    assert "\\\\" in maths.GRAMMAR  # no backslash in a formula string
+
+
+def test_the_surf_grammar_takes_a_tools_own_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from prax.answering import surf
+    from prax.packs import maths
+
+    monkeypatch.setattr(surf, "PACK_TOOLS", ("maths",))
+    monkeypatch.setattr(surf, "PACK_GRAMMAR", {"maths": maths.GRAMMAR.strip()})
+    s = surf.Surf("q", "q", [], None, 5, 3, 1000)
+    g = surf.grammar(s)
+    assert 'maths ::= "maths: {" m-op' in g and "m-str ::=" in g
+    assert 'maths ::= "maths: " char' not in g
+    s.tools = False
+    assert "m-op" not in surf.grammar(s)
+
+
+def test_a_json_step_is_a_plain_request_with_passages_read(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    formula, _ = _formula(con)
+    seen: list[dict[str, Any]] = []
+
+    def fake(request: dict[str, Any]) -> dict[str, Any]:
+        seen.append(request)
+        if request["op"] == "read":
+            return {"read": {"a": {"plain": "i = I_s*(exp(v/V_T) - 1)"}}}
+        return {"op": request["op"], "read": {"a": {"text": "x"}}, "same": True}
+
+    monkeypatch.setattr(tool, "run", fake)
+    tool._PLAIN.clear()
+
+    class Surf:
+        def by_n(self, arg: str) -> Passage | None:
+            if arg != "[1]":
+                return None
+            return Passage(1, 1, formula, "clipper", [], None, None, "")
+
+    step = '{"op": "same", "formula": "[1]*2", "other": "2*I_s*exp(v/V_T) - 2*I_s"}'
+    got = tool.surf_maths(con, Surf(), step)
+    assert "the same" in got
+    asked = seen[-1]
+    assert asked["notation"] == "plain"
+    assert asked["a"] == "(I_s*(exp(v/V_T) - 1))*2"  # the right side, inside
+    step = (
+        '{"op": "evaluate", "formula": "[1]", "values": {"I_s": "1e-12", "v": "0.6"}}'
+    )
+    tool.surf_maths(con, Surf(), step)
+    assert seen[-1]["a"] == "i = I_s*(exp(v/V_T) - 1)"  # whole, as an equation
+    assert seen[-1]["args"]["values"] == {"I_s": "1e-12", "v": "0.6"}
+    assert len([r for r in seen if r["op"] == "read"]) == 1  # read once
+    for bad, says in (
+        ('{"op": "same", "formula": "x"}', '"other"'),
+        ('{"op": "solve", "formula": "x = 1"}', '"var"'),
+        ('{"op": "guess", "formula": "x"}', "op is one of"),
+        ('{"op": "same", "formula": ', "one JSON object"),
+    ):
+        assert says in tool.surf_maths(con, Surf(), bad)
+    step = '{"op": "chain", "formula": "a", "then": ["b", "c"]}'
+    tool.surf_maths(con, Surf(), step)
+    assert seen[-1]["steps"] == ["a", "b", "c"]
+    step = '{"op": "series", "formula": "tanh(x)", "var": "x", "at": "0"}'
+    tool.surf_maths(con, Surf(), step)
+    assert seen[-1]["args"] == {"var": "x", "at": "0"}

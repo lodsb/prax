@@ -112,7 +112,8 @@ MANIFEST = Pack(
     steps={"sympy": "prax.packs.maths.parse"},
     watched=(),  # steps a worker runs unasked
     tools={"maths": "prax.packs.maths.tool:surf_maths"},
-    tool_help={"maths": "maths: same [n] == <latex>   check ..."},  # the prompt's line
+    tool_help={"maths": "maths: {...}   check ..."},  # the prompt's lines
+    tool_grammar={"maths": "maths ::= ..."},  # GBNF its step is written to
     extra=None,  # the pyproject extra it needs, if any
     settings="maths",  # its section in prax.yaml
 )

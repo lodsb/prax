@@ -68,7 +68,7 @@ same two lines without a grammar.
 | `walk: <entity>` | one hop around an entity | up to 25 edges by relation, each with its source document. The documents are named, so a later step can read one. An unknown name returns the names like it |
 | `similar: [n]` | the documents nearest that passage's document in vector space | six, named, so they can be read |
 | `drop: [n] [m]` | set passages aside | they leave the working set and the answer. A later search will not bring their documents back |
-| `maths: same [n] == <latex>` | calculate, on a host that runs the maths pack | one line: how each formula was read, then the result. Also `read`, `simplify`, `solve x`, `diff x`, `integrate x`, `series x`, `limit x`, `evaluate [n] with R=1000`, `code`. A passage [n] is the display formula it holds. It adds no passage (`docs/symbolic-maths.md`) |
+| `maths: {"op": "same", "formula": "[3]", "other": "1/(1 + exp(-x))"}` | calculate, on a host that runs the maths pack | one line: how each formula was read, then the result. One JSON object, written under the pack's grammar for a local model: `op`, `formula`, and `other`, `then`, `var`, `at`, `values` or `language` as the operation needs. A passage [n] is the display formula it holds. It adds no passage (`docs/symbolic-maths.md`) |
 | `answer` | stop looking | the answer is written from the passages kept |
 
 Every move is a read the service already performs for a person:

@@ -62,7 +62,7 @@ nothing.
       choice the model makes: whether to call the tool, how to write the
       call, whether to trust the result. Each step takes one choice
       away. In this order:
-      - [ ] **A step written to a schema.** The `maths` step becomes a
+      - [x] (2026-10-02: the pack's `tool_grammar`, `tool.surf_json`; llama-server accepts the grammar, and the diode question written as a JSON step gives 13.23 mA; measured with the machine scoring) **A step written to a schema.** The `maths` step becomes a
             JSON object (`op`, `formula`, `var`, `values`, `at`) under
             the surf's per-step grammar, so a local model writes only
             calls that parse. 21 to 30 of every 85 calls failed on

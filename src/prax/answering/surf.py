@@ -569,7 +569,10 @@ def grammar(s: Surf) -> str:
             f'note ::= "note: " char{{1,{NOTE_CHARS}}} "\\n"',
             "action ::= " + " | ".join(actions),
             f'search ::= "search: " char{{2,{QUERY_CHARS}}} "\\n"',
-            *(f'{t} ::= "{t}: " char{{2,{TOOL_CHARS}}} "\\n"' for t in tools),
+            *(
+                PACK_GRAMMAR.get(t) or f'{t} ::= "{t}: " char{{2,{TOOL_CHARS}}} "\\n"'
+                for t in tools
+            ),
             f'read ::= "read: " {where} look? "\\n"',
             f'look ::= " " char{{2,{LOOK_CHARS}}}',
             'facts ::= "facts: " pn "\\n"',
@@ -612,6 +615,8 @@ for _name, _tool in packs.tools(config.host_packs()).items():
     DO[_name] = _pack_tool(_tool)
     PACK_TOOLS += (_name,)
 PACK_HELP = packs.tool_help(config.host_packs())
+# a tool's own step grammar (the maths step is a JSON object), by tool
+PACK_GRAMMAR = packs.tool_grammar(config.host_packs())
 
 
 def system(tools: bool = True) -> str:

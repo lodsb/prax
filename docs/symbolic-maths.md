@@ -130,7 +130,19 @@ are called on it.
   wall: a hidden document's chunk answers as an absent one. A host that
   does not name the pack answers 404; one without `maths.python`, 503.
 - The MCP tool `maths`, one call to that route.
-- The surfer's action, for the local model, which cannot run code:
+- The surfer's action as one JSON object (AD2, 2026-10-02):
+  `maths: {"op": "evaluate", "formula": "I_s*(exp(v/V_T) - 1)",
+  "values": {"I_s": "2.52 nA", "v": "0.4 V", "V_T": "25.85 mV"}}`. The
+  keys are `op`, `formula`, `other` (for `same`), `then` (for `chain`),
+  `var`, `at` (for `series` and `limit`), `values` and `language`.
+  Under a local model's grammar (the pack's `tool_grammar`, GBNF) the
+  step can only be written in that shape. Formulas are plain notation
+  and hold no backslash. A passage [n] is the calculator's plain reading
+  of its display formula (the `read` answer's `plain`): the whole of it,
+  or its right side inside a formula. `tool.surf_json` builds the
+  request; a line that is not JSON still goes to `parse_step`.
+- The surfer's action as a line of text, as it was before AD2 and as a
+  model without the grammar may still write it:
   `maths: same [3] == [7]`, `maths: integrate x \tanh(x)`,
   `maths: evaluate [4] with R=1000, C=1e-6`, `maths: code python <latex>`.
   A passage [n] alone is the display formula it holds. Inside a formula

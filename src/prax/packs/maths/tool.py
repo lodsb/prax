@@ -329,11 +329,109 @@ def passages_in(con: sqlite3.Connection, s: Any, formula: str) -> str:
     )
 
 
-def surf_maths(con: sqlite3.Connection, s: Any, arg: str) -> str:
-    """The surfer's ``maths:`` action: a passage [n] is the formula it
-    holds, alone or inside a formula; anything else is what the model
-    wrote, LaTeX or plain notation."""
+# ------------------------------------------------- the step as JSON (AD2)
+# {"op": ..., "formula": ..., "other": ..., "then": [...], "var": ...,
+#  "at": ..., "values": {...}, "language": ...}: the shape the pack's
+# grammar lets a local model write (packs/maths/__init__.py). Formulas
+# are plain notation; a passage [n] in one is the plain reading of its
+# display formula, whole or, inside a formula, its right side.
+
+_PLAIN: dict[int, str] = {}  # chunk id -> its formula in plain notation
+
+
+def plain_of(con: sqlite3.Connection, chunk_id: int) -> str:
+    """A display formula of the library as plain notation, read once."""
+    if chunk_id not in _PLAIN:
+        got = run({"op": "read", "a": formula_of(con, chunk_id)})
+        if "error" in got:
+            raise ValueError(f"the formula could not be read: {got['error']}")
+        _PLAIN[chunk_id] = str(got["read"]["a"]["plain"])
+        while len(_PLAIN) > 512:
+            _PLAIN.pop(next(iter(_PLAIN)))
+    return _PLAIN[chunk_id]
+
+
+def plain_passages(con: sqlite3.Connection, s: Any, formula: str) -> str:
+    """A formula with each passage [n] as its plain reading: the whole
+    reading when [n] is the formula, the right side inside one."""
+
+    def chunk_of(ref: str) -> int:
+        p = s.by_n(ref)
+        if p is None or p.chunk_id is None:
+            raise ValueError(f"there is no passage {ref}")
+        return int(p.chunk_id)
+
+    if re.fullmatch(r"\s*\[\d+\]\s*", formula):
+        return plain_of(con, chunk_of(formula.strip()))
+    return PASSAGE.sub(
+        lambda m: "(" + right_side(plain_of(con, chunk_of(m.group(0)))) + ")",
+        formula,
+    )
+
+
+def request_of(step: dict[str, Any]) -> dict[str, Any]:
+    """The JSON step as a calculator request; ValueError says what is
+    missing."""
+    op = str(step.get("op") or "")
+    if op not in OPERATIONS:
+        raise ValueError(f"op is one of {', '.join(OPERATIONS)}")
+    formula = str(step.get("formula") or "").strip()
+    if not formula:
+        raise ValueError(f'{op} takes a "formula"')
+    request: dict[str, Any] = {"op": op, "a": formula, "notation": "plain"}
+    if op == "same":
+        if not step.get("other"):
+            raise ValueError('same takes "formula" and "other", the two to compare')
+        request["b"] = str(step["other"])
+    if op == "chain":
+        then = [str(f) for f in step.get("then") or []]
+        if not then:
+            raise ValueError('chain takes "formula" and "then", the steps after it')
+        request["steps"] = [formula, *then]
+    args: dict[str, Any] = {}
+    if op in WITH_VAR:
+        if not step.get("var"):
+            raise ValueError(f'{op} takes "var", the variable')
+        args["var"] = str(step["var"])
+    if step.get("at") is not None and op in ("series", "limit"):
+        args["at" if op == "series" else "to"] = str(step["at"])
+    if step.get("values"):
+        args["values"] = {str(k): str(v) for k, v in dict(step["values"]).items()}
+    if step.get("language"):
+        args["language"] = str(step["language"])
+    if args:
+        request["args"] = args
+    return request
+
+
+def surf_json(con: sqlite3.Connection, s: Any, arg: str) -> str:
+    """The maths step written as one JSON object."""
     try:
+        step = json.loads(arg)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"the step is one JSON object: {exc.msg}") from exc
+    if not isinstance(step, dict):
+        raise ValueError("the step is one JSON object")  # noqa: TRY004 - the step's word
+    request = request_of(step)
+    for key in ("a", "b"):
+        if request.get(key):
+            request[key] = plain_passages(con, s, request[key])
+    if "steps" in request:
+        request["steps"] = [plain_passages(con, s, f) for f in request["steps"]]
+    if "values" in request.get("args", {}):
+        values = request["args"]["values"]
+        for name, value in values.items():
+            values[name] = plain_passages(con, s, value)
+    return shown(calculate(con, request))
+
+
+def surf_maths(con: sqlite3.Connection, s: Any, arg: str) -> str:
+    """The surfer's ``maths:`` action: one JSON object (the grammar's
+    shape), or the older line of text a model without the grammar may
+    still write. A passage [n] is the formula it holds."""
+    try:
+        if arg.lstrip().startswith("{"):
+            return surf_json(con, s, arg)
         request = parse_step(arg)
         for key in ("a", "b"):
             if request.get(key):

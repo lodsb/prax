@@ -3128,3 +3128,23 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   the grounded prompt now says a computed result in the note answers a
   question that is a calculation. "for" names a variable only when one
   stands alone after it. Details: `docs/symbolic-maths.md`.
+
+## 2026-10-02: AD2, step 1 — the maths step as a JSON object
+
+- **Why.** Over four rounds every fix to the free-text `maths:` line was
+  followed by a new way of writing it: 21 to 30 of every 85 calls failed
+  on syntax in the double runs.
+- **What.** A pack may give a tool its own GBNF (`Pack.tool_grammar`,
+  `packs.tool_grammar`), and the surf's step grammar uses it in place of
+  a line of text. The maths step is one JSON object (`op`, `formula`,
+  `other`, `then`, `var`, `at`, `values`, `language`), in plain notation
+  and without a backslash, so a JSON string cannot turn `\frac` into a
+  form feed. A passage [n] is the calculator's plain reading of its
+  formula (`read` answers `plain` now; `V_{T}` reads back as `V_T`).
+  `tool.surf_json` builds the request; text still goes to `parse_step`.
+- **Checked live.** llama-server took the grammar. Given the help and the
+  diode task, the 35B wrote `{"op": "evaluate", "formula":
+  "I_s*(exp(v/V_T)-1)", "values": {"I_s": "2.52 nA", ...}}`, and the
+  tool answered 0.0132319712753 A — 13.23 mA, the right value.
+- **A clash caught on the way.** The runtime already had a `BRACED`
+  pattern for its LaTeX rules; the new one is `SUBSCRIPT_BRACED`.

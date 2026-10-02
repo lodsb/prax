@@ -126,6 +126,16 @@ def tool_help(chosen: Iterable[str]) -> list[str]:
     ]
 
 
+def tool_grammar(chosen: Iterable[str]) -> dict[str, str]:
+    """The grammar rules of the surfer's tools that have them, by tool."""
+    return {
+        n: p.tool_grammar[n]
+        for p in running(chosen)
+        for n in p.tools
+        if n in p.tool_grammar
+    }
+
+
 def duplicates(core: dict[str, Iterable[str]]) -> list[str]:
     """Names a pack repeats: of the core (``core``, by what they name) or
     of another pack. The registries refuse a duplicate at start."""

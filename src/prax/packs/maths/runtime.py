@@ -384,6 +384,7 @@ SI_NUMBER = re.compile(
 SI_FACTOR = {"G": "1e9", "M": "1e6", "k": "1e3", "m": "1e-3", "u": "1e-6"}
 SI_FACTOR.update({"n": "1e-9", "p": "1e-12"})
 # one equals sign of an equation, written = or == (a model writes both)
+SUBSCRIPT_BRACED = re.compile(r"_\{([A-Za-z0-9]+)\}")
 EQUALS = re.compile(r"\s*==?\s*")
 SAFE_GLOBALS: dict[str, Any] = {"__builtins__": {}}
 for _n in PLAIN_NAMES:
@@ -407,6 +408,7 @@ SAFE_GLOBALS.update(
 
 
 def _plain(formula: str) -> Any:
+    formula = SUBSCRIPT_BRACED.sub(r"_\1", formula)  # V_{T} as a reading writes it
     text = formula.replace("^", "**")
     # e raised to a power is Euler's number: a model writes e**x for exp(x)
     # (2026-10-01: e read as a symbol made tanh's two forms "not the same")
@@ -539,6 +541,14 @@ def _whole(r: Reading, e: Any) -> None:
 
 def _shown(e: Any) -> dict[str, Any]:
     return {"latex": sympy.latex(e), "text": str(e)}
+
+
+def plain_text(e: Any) -> str:
+    """A reading as plain notation that ``_plain`` reads back: an equation
+    as ``lhs = rhs``, a braced subscript without its braces."""
+    if isinstance(e, sympy.Equality):
+        return f"{plain_text(e.lhs)} = {plain_text(e.rhs)}"
+    return SUBSCRIPT_BRACED.sub(r"_\1", sympy.sstr(e))
 
 
 def _symbols(e: Any) -> list[str]:
@@ -774,6 +784,7 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
         "read": {
             "a": {
                 **_shown(a),
+                "plain": plain_text(a),
                 "symbols": _symbols(a),
                 "rules": sorted(set(ra.rules)) if ra else [],
             }
