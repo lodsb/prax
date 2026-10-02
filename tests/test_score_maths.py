@@ -38,3 +38,10 @@ def test_a_number_in_any_unit_within_its_tolerance() -> None:
     tau = {"number": 0.01, "within": 0.001}
     assert sm.score(tau, r"$\tau = 10,000 \times 1 \times 10^{-6} = 0.01$ s") == "R"
     assert sm.score(tau, "The passages do not contain it; the tool gave 0.01 s.") == "W"
+
+
+def test_the_door_s_marks_are_not_the_model_s_answer() -> None:
+    sm = _scorer()
+    check = {"number": 0.013232, "within": 0.001, "near": 0.02}
+    marked = "The current is 13.28 (the calculator gives 13.23) mA."
+    assert sm.score(check, marked) == "P"  # the model's 13.28, not the mark's

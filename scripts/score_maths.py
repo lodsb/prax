@@ -37,6 +37,10 @@ REFUSAL = re.compile(
     r"|cannot be answered|not possible to",
     re.IGNORECASE,
 )
+MARKS = re.compile(
+    r" \(the calculator gives [^)]*\)| \(not checked\)"
+    r"|\n\n\*The calculator finds that this does not hold: .*?\.\*"
+)
 TIMES_TEN = re.compile(r"(\d+(?:\.\d+)?)\s*(?:\\times|×|x)\s*10\^\{?(-?\d+)\}?")
 
 
@@ -73,9 +77,18 @@ def decision(text: str) -> bool | None:
     return None if m is None else m.group(1).lower() == "yes"
 
 
+def model_text(answer: str) -> str:
+    """The answer as the model wrote it: the door's answer check (AD2)
+    adds "(the calculator gives 13.23)", "(not checked)" and a line under
+    a display, and a mark holding the right value must not score it."""
+    return MARKS.sub("", answer)
+
+
 def score(check: dict[str, Any], answer: str) -> str:
-    """R, P or W for one answer under its question's check. ``also`` is a
-    pattern a right answer holds besides its verdict (P without it)."""
+    """R, P or W for one answer under its question's check, on the text
+    the model wrote. ``also`` is a pattern a right answer holds besides
+    its verdict (P without it)."""
+    answer = model_text(answer)
     if "answer" in check:
         said = decision(answer)
         if said is None or said != bool(check["answer"]):
