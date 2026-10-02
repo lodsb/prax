@@ -136,30 +136,30 @@ and pushing what is committed.
             could not be read at all on 2026-09-25, and a wrong token estimate
             is a hard failure where a wrong batch size is only slow.
 
-      *What would make it moot* (2026-09-25):
+      *What would make it moot* (2026-09-25).
 
-### And the one that would make it moot
+      The architecture already allows the model work to run elsewhere,
+      and that is what invariant 4 is for: a worker never opens the
+      database or the archive, it fetches work and originals over HTTP
+      and posts results back (`door.get_bytes`), so `--door` pointed at
+      another machine is all it takes. There are two axes and they are
+      independent — the **worker** elsewhere, or just **llama-server**
+      elsewhere, since `server-35b` is an `openai` model with a
+      `base_url`.
 
-The architecture already allows the model work to run elsewhere, and that
-is what invariant 4 is for: a worker never opens the database or the
-archive, it fetches work and originals over HTTP and posts results back
-(`door.get_bytes`), so `--door` pointed at another machine is all it
-takes. There are two axes and they are independent — the **worker**
-elsewhere, or just **llama-server** elsewhere, since `server-35b` is an
-`openai` model with a `base_url`.
+      Moving llama-server is one line of prax.yaml and dissolves the
+      contention above completely: Docling and the embedder get the card
+      to themselves and the 35B answers over the private network.
+      Whether there is a second machine to put it on is hardware, not
+      design.
 
-Moving llama-server is one line of prax.yaml and dissolves the
-contention above completely: Docling and the embedder get the card to
-themselves and the 35B answers over the private network. Whether there
-is a second machine to put it on is hardware, not design.
-
-What does **not** pay is distributing `embed`. It is round-trip bound
-already — 331 chunks/s of embedder delivering 98 on loopback — so a
-second GPU would hit the door's ceiling before it gained anything. The
-model steps (extract, titles, summaries, sections, vocabulary, typing)
-distribute cleanly, since they fetch text and post small JSON; `parse`
-distributes acceptably, being heavy compute for a megabyte down and
-kilobytes up.
+      What does **not** pay is distributing `embed`. It is round-trip
+      bound already — 331 chunks/s of embedder delivering 98 on loopback
+      — so a second GPU would hit the door's ceiling before it gained
+      anything. The model steps (extract, titles, summaries, sections,
+      vocabulary, typing) distribute cleanly, since they fetch text and
+      post small JSON; `parse` distributes acceptably, being heavy
+      compute for a megabyte down and kilobytes up.
 
 - [ ] **AD2, what is left.** Steps 1 to 5 and the review round are done
       and measured (`docs/symbolic-maths.md`, `docs/log.md`, 2026-10-02).
