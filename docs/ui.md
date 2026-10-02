@@ -15,7 +15,8 @@ The ones added for browsing, each a thin wrapper over a store function:
 
 | Endpoint | Returns |
 |---|---|
-| `GET /documents?limit&offset&title&source&mime&retired` | documents without text, newest first: id, title, mime, added_at, parsed_at, source_url, meta, chunk count. Retired ones only with `retired=1` |
+| `GET /documents?limit&offset&title&source&mime&retired&since` | documents without text, newest first: id, title, mime, added_at, parsed_at, source_url, meta, chunk count. Retired ones only with `retired=1`; `since` keeps those added at that date or UTC moment or later (`2026-10-03`, `2026-10-03T14:00:00Z`), 400 for anything else |
+| `url` in an answer | `POST /ingest`, `/ingest/url`, `/ingest/file`, `GET /get/{id}`, `GET /doc/{id}/context`, `PUT /page/{slug}` and its append answer where a person opens the document: `<the address the caller used>/ui/#doc/N`. `#page/<slug>` opens a page by its slug |
 | `GET /doc/{id}/original` | the archived original bytes with their MIME type. `Content-Disposition: inline`, so a PDF opens in the browser's viewer; `#page=N` comes from a chunk's locator |
 | `GET /doc/{id}/text` | the Markdown text artifact as `text/markdown` |
 | `GET /doc/{id}/figure/{sha}` | a figure's bytes out of the document's original, by the hash the text references (`![caption](figure:<sha256>)`). Immutable, cached for a year |

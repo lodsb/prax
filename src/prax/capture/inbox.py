@@ -113,6 +113,26 @@ def canonical_url(url: str) -> str:
     )
 
 
+_URL_SAFE = "/:@!$&'()*+,;=%~"  # what a path, a query or a fragment may hold as it is
+
+
+def clean_url(url: str) -> str:
+    """A URL as it may be fetched: a space or a character outside ASCII in
+    its path, query or fragment percent-encoded, what is already encoded
+    left so. A URL pasted from a page's text holds them (2026-10-03: a
+    literal space made the fetch raise past every handler, a 500)."""
+    parts = urllib.parse.urlsplit(url.strip())
+    return urllib.parse.urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            urllib.parse.quote(parts.path, safe=_URL_SAFE),
+            urllib.parse.quote(parts.query, safe=_URL_SAFE + "?"),
+            urllib.parse.quote(parts.fragment, safe=_URL_SAFE + "?#"),
+        )
+    )
+
+
 def check_url(url: str) -> None:
     parts = urllib.parse.urlsplit(url)
     if parts.scheme not in ("http", "https") or not parts.netloc:
@@ -549,6 +569,7 @@ def ingest_url(
     in place of the page is refused (``BotCheck``); an arXiv id or a DOI
     the URL names is kept, and stands in as the title of a file until the
     titles pass reads one."""
+    url = clean_url(url)
     check_url(url)
     data, ctype, final = fetch_url(url)
     mime = "text/html" if ctype in HTML_TYPES else ctype

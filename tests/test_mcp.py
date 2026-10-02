@@ -256,3 +256,34 @@ def test_context_and_documents_are_compact() -> None:
     assert rows[0]["source"] is None and rows[0]["tags"] == []
     assert call("documents", tag="project:none") == []
     assert {r["doc_id"] for r in call("documents")} >= {a["doc_id"], b["doc_id"]}
+
+
+def test_a_door_address_without_its_scheme_is_http() -> None:
+    """``PRAX_DOOR=host:8000`` is ``http://host:8000``: written without the
+    scheme, every call failed while the server looked connected (the
+    first client's feedback, 2026-10-03)."""
+    from prax.client import Door, door_url
+
+    assert door_url("192.0.2.7:8000") == "http://192.0.2.7:8000"
+    assert door_url(" https://door.example/ ") == "https://door.example"
+    assert Door("localhost:8000").base_url == "http://localhost:8000"
+
+
+def test_documents_say_when_they_came_and_filter_by_it(proxied: TestClient) -> None:
+    """``documents`` names when each was added (it read a field the door
+    never sent, so it said null) and keeps what came since a date or a
+    moment; a since that is neither is refused (2026-10-03)."""
+    from prax import mcp_server
+
+    made = mcp_server.ingest("Arrived today. " * 10, title="Fresh")
+    link = f"/ui/#doc/{made['doc_id']}"
+    assert made["url"].endswith(link)
+    assert mcp_server.get(made["doc_id"])["url"].endswith(link)
+    assert mcp_server.context(doc_id=made["doc_id"])["url"].endswith(link)
+    rows = mcp_server.documents(title="Fresh")
+    assert rows and rows[0]["added_at"]
+    day = rows[0]["added_at"][:10]
+    assert mcp_server.documents(title="Fresh", since=day)
+    assert mcp_server.documents(title="Fresh", since="2999-01-01") == []
+    refused = mcp_server.documents(since="yesterday")
+    assert "a date or a UTC moment" in refused[0]["error"]

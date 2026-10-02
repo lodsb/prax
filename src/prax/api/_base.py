@@ -23,9 +23,17 @@ def _split(csv: str | None) -> list[str] | None:
     return items or None
 
 
-def _capture_out(cap: inbox.Capture) -> dict[str, Any]:
+def ui_url(request: Request, doc_id: int) -> str:
+    """Where a person opens the document: the UI at the address the caller
+    reached the door by (the first client found ``#doc/N`` by reading the
+    UI's source, 2026-10-03)."""
+    return f"{str(request.base_url).rstrip('/')}/ui/#doc/{doc_id}"
+
+
+def _capture_out(cap: inbox.Capture, request: Request) -> dict[str, Any]:
     return {
         "doc_id": cap.doc_id,
+        "url": ui_url(request, cap.doc_id),
         "created": cap.created,
         "indexed": cap.indexed,
         "domains": cap.domains,

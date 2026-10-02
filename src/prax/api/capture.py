@@ -3,6 +3,7 @@ door fetches; retiring; the inbox view."""
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 from typing import Annotated, Any
@@ -14,7 +15,7 @@ from prax import store
 from prax.capture import inbox
 from prax.graph import ontology
 
-from ._base import _capture_out, _con, _split, max_upload
+from ._base import _capture_out, _con, _split, max_upload, ui_url
 
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
@@ -44,7 +45,7 @@ def ingest(req: IngestText, request: Request) -> dict[str, Any]:
                 store.add_domain(_con(request), result["doc_id"], d)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
-    return result
+    return {**result, "url": ui_url(request, int(result["doc_id"]))}
 
 
 class RetireReq(BaseModel):
@@ -186,7 +187,7 @@ def ingest_file(
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return _capture_out(cap)
+    return _capture_out(cap, request)
 
 
 class KnownReq(BaseModel):
@@ -251,7 +252,7 @@ def ingest_html(req: IngestHtml, request: Request) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return _capture_out(cap)
+    return _capture_out(cap, request)
 
 
 @router.post("/ingest/url")
@@ -268,8 +269,8 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
             by=req.by,
             note=req.note,
         )
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    except (ValueError, http.client.InvalidURL) as exc:  # not one to fetch
+        raise HTTPException(400, f"not a URL to fetch: {exc}") from exc
     except OSError as exc:  # urllib errors: unreachable, 403, 404, timeout
         why = str(exc)
         if "403" in why or "401" in why or isinstance(exc, inbox.BotCheck):
@@ -278,7 +279,7 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
                 " with your own session when it may read all sites)"
             )
         raise HTTPException(502, f"fetch failed: {why}") from exc
-    return _capture_out(cap)
+    return _capture_out(cap, request)
 
 
 @router.get("/inbox")

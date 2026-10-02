@@ -14,7 +14,7 @@ from prax import store
 from prax.answering import questions
 from prax.text import blocks
 
-from ._base import _con
+from ._base import _con, ui_url
 
 router = APIRouter()
 
@@ -93,6 +93,7 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
             force=req.force,
         )
         job = _answer_new_blocks(con, written["slug"], req.text)
+        written = {**written, "url": ui_url(request, int(written["doc_id"]))}
         return {**written, "job": job} if job is not None else written
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -105,7 +106,7 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
 @router.post("/page/{slug}/append")
 def append_page(slug: str, req: AppendReq, request: Request) -> dict[str, Any]:
     try:
-        return store.append_page(
+        appended = store.append_page(
             _con(request),
             slug,
             req.section,
@@ -113,6 +114,7 @@ def append_page(slug: str, req: AppendReq, request: Request) -> dict[str, Any]:
             author=req.author,
             note=req.note,
         )
+        return {**appended, "url": ui_url(request, int(appended["doc_id"]))}
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:

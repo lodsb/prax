@@ -3561,6 +3561,33 @@ The flags moved from the overrides to `[tool.mypy]`, so a new module is
 strict from its first line. `mypy` and `mypy --platform linux` pass;
 1156 tests pass.
 
+## 2026-10-03: the first client's four small bugs (stage AL)
+
+An agent in another repository used prax for a session through the
+plugin and wrote down what got in its way (`docs/PLAN.md`, AL). The four
+small ones are fixed.
+
+- **A door address without its scheme.** `PRAX_DOOR=<address>:8000`
+  failed every call ("Request URL is missing an 'http://'"), while the
+  MCP server looked connected. `client.door_url` adds `http://` when a
+  scheme is missing; `Door` uses it.
+- **A URL with a space.** `/ingest/url` turned `ValueError` and
+  `OSError` into 400 and 502, and `http.client.InvalidURL`, raised by a
+  literal space, into an opaque 500. `inbox.clean_url` now
+  percent-encodes a space or a non-ASCII character in the path, query
+  and fragment, leaving what is already encoded. A URL still not fit to
+  fetch is a 400 that says so.
+- **Links.** The agent found `ui/#doc/N` by reading the UI's source. The
+  answers of ingest (text, URL, file), `get`, a document's context, and
+  a page written or appended now carry `url`: the UI at the address the
+  caller reached the door by (`api._base.ui_url`). `#page/<slug>` opens
+  a page by its slug.
+- **When a document came.** The MCP `documents` tool reported
+  `created_at` from a field the door never sends, so always null; it
+  reports `added_at`. `since` (a date or a UTC moment) keeps what was
+  added then or later, on the store, the door and the tool; anything
+  else is a 400.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

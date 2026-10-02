@@ -689,3 +689,22 @@ def test_adopt_vectors_is_a_job_not_a_blocking_write(client: TestClient) -> None
     assert got["model"] == "never-used" and isinstance(got["job"], int)
     # the door is still answering while it runs
     assert client.get("/health").status_code == 200
+
+
+def test_what_a_write_or_a_read_answers_carries_its_link(client: TestClient) -> None:
+    """A document's answer says where a person opens it, at the address
+    the caller used (the first client found ``#doc/N`` by reading the UI's
+    source, 2026-10-03), and the UI opens a page by its slug."""
+    doc = client.post("/ingest", json={"text": "linked " * 30, "title": "L"}).json()
+    want = f"http://testserver/ui/#doc/{doc['doc_id']}"
+    assert doc["url"] == want
+    assert client.get(f"/get/{doc['doc_id']}").json()["url"] == want
+    assert client.get(f"/doc/{doc['doc_id']}/context").json()["url"] == want
+    page = client.put("/page/linked", json={"text": "# Linked\n\nA page."}).json()
+    assert page["url"] == f"http://testserver/ui/#doc/{page['doc_id']}"
+    more = client.post("/page/linked/append", json={"section": "More."}).json()
+    assert more["url"] == page["url"]
+    upload = client.post(
+        "/ingest/file", files={"file": ("n.txt", b"uploaded " * 30, "text/plain")}
+    ).json()
+    assert upload["url"].endswith(f"/ui/#doc/{upload['doc_id']}")

@@ -4,6 +4,7 @@ recent list, and the door's endpoints."""
 from __future__ import annotations
 
 import base64
+import http.client
 import json
 import os
 import sqlite3
@@ -557,6 +558,23 @@ def test_api_captures(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> No
         client.post("/ingest/url", json={"url": "ftp://example.org/x"}).status_code
         == 400
     )
+    # a URL pasted with a space is encoded, not a 500 (2026-10-03)
+    spaced = client.post("/ingest/url", json={"url": "https://example.org/a paper.txt"})
+    assert spaced.status_code == 200 and spaced.json()["doc_id"]  # the same bytes
+    assert inbox.clean_url(" https://example.org/a paper.txt?q=a b#c d ") == (
+        "https://example.org/a%20paper.txt?q=a%20b#c%20d"
+    )
+    assert inbox.clean_url("https://example.org/%C3%BC/ü") == (
+        "https://example.org/%C3%BC/%C3%BC"
+    )
+
+    def broken(url: str, *, timeout: float = 0) -> tuple[bytes, str, str]:
+        raise http.client.InvalidURL("control characters")
+
+    monkeypatch.setattr(inbox, "fetch_url", broken)
+    bad = client.post("/ingest/url", json={"url": "https://example.org/x"})
+    assert bad.status_code == 400 and "not a URL to fetch" in bad.json()["detail"]
+    monkeypatch.setattr(inbox, "fetch_url", fake_fetch)
     t = client.post(
         "/ingest",
         json={"text": "typed text " * 10, "title": "t", "domains": ["family"]},

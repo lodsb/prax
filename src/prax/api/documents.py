@@ -18,7 +18,7 @@ from prax import (
     store,
 )
 
-from ._base import _con
+from ._base import _con, ui_url
 
 router = APIRouter()
 
@@ -40,6 +40,7 @@ def get(
     # what it is waiting to be read by: a list since migration 21, and
     # `meta.reading` is the last reading that finished
     doc["pending"] = store.pending_readings(con, doc_id)
+    doc["url"] = ui_url(request, doc_id)
     return store.brief_document(doc) if brief else doc
 
 
@@ -118,25 +119,31 @@ def documents(
     tag: str | None = None,
     genre: str | None = None,
     subject: str | None = None,
+    since: str | None = None,
 ) -> dict[str, Any]:
     """Documents without text, newest first, filtered for browsing;
     ``domain`` keeps one ontology module's documents and those of the
     modules built on it (``unassigned``: the documents no module was set
     for), ``tag`` the documents carrying a tag (``project:synth``),
-    ``genre`` and ``subject`` the documents labelled so (stage Z)."""
-    return store.list_documents(
-        _con(request),
-        limit=limit,
-        offset=offset,
-        title=title,
-        source=source,
-        mime_prefix=mime,
-        retired=retired,
-        domain=domain or None,
-        tag=tag or None,
-        genre=genre or None,
-        subject=subject or None,
-    )
+    ``genre`` and ``subject`` the documents labelled so (stage Z),
+    ``since`` those added at that date or moment (UTC) or later."""
+    try:
+        return store.list_documents(
+            _con(request),
+            limit=limit,
+            offset=offset,
+            title=title,
+            source=source,
+            mime_prefix=mime,
+            retired=retired,
+            domain=domain or None,
+            tag=tag or None,
+            genre=genre or None,
+            subject=subject or None,
+            since=since or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/doc/{doc_id}/original")
@@ -237,4 +244,4 @@ def doc_context(
     )
     if ctx is None:
         raise HTTPException(404, "no such document")
-    return ctx
+    return {**ctx, "url": ui_url(request, doc_id)}

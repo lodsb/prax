@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 import sqlite3
 from typing import Any
 
@@ -199,6 +200,10 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     return out
 
 
+# a date, or a moment in the shape ``store.now()`` writes (CLAUDE.md)
+_MOMENT = re.compile(r"\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2})?Z?)?")
+
+
 @_reading
 def list_documents(
     con: sqlite3.Connection,
@@ -213,6 +218,7 @@ def list_documents(
     tag: str | None = None,
     genre: str | None = None,
     subject: str | None = None,
+    since: str | None = None,
 ) -> dict[str, Any]:
     """Documents without their text, newest first, for browsing.
 
@@ -225,7 +231,9 @@ def list_documents(
     documents without a domain set alone; ``tag`` keeps the documents
     carrying that tag (``project:synth``); ``genre`` and ``subject`` the
     documents labelled so, by a person or a model (a level names every
-    document labelled under it). Returns ``{"total", "items"}``
+    document labelled under it); ``since`` the documents added at that
+    moment or later (``2026-10-03`` or ``2026-10-03T14:00:00Z``, UTC).
+    Returns ``{"total", "items"}``
     where each item carries the row, its decoded ``meta`` and its chunk
     count.
     """
@@ -269,6 +277,11 @@ def list_documents(
     if mime_prefix:
         clauses.append("d.mime LIKE ? ESCAPE '!'")
         args.append(_like_prefix(mime_prefix))
+    if since:
+        if not _MOMENT.fullmatch(since):
+            raise ValueError(f"since: a date or a UTC moment, not {since!r}")
+        clauses.append("d.added_at >= ?")  # the stamps sort as moments
+        args.append(since)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     total = con.execute(f"SELECT count(*) FROM documents d {where}", args).fetchone()[0]
     rows = con.execute(

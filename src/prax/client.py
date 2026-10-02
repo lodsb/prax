@@ -29,6 +29,14 @@ class DoorError(RuntimeError):
 DEFAULT_DOOR = "http://127.0.0.1:8000"  # the door on this machine
 
 
+def door_url(text: str) -> str:
+    """A door's address as a base URL: ``host:8000`` is
+    ``http://host:8000`` (2026-10-03: a ``PRAX_DOOR`` written without
+    its scheme failed every call while the MCP server looked connected)."""
+    url = text.strip().rstrip("/")
+    return url if "://" in url else f"http://{url}"
+
+
 class Door:
     @classmethod
     def from_env(
@@ -53,7 +61,7 @@ class Door:
         name: str | None = None,
         timeout: float = 600.0,
     ) -> None:
-        self.base_url = base_url.rstrip("/")
+        self.base_url = door_url(base_url)
         self.name = name or socket.gethostname()
         self.headers = {"X-Prax-Worker": self.name}
         if token:

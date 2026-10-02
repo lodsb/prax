@@ -371,6 +371,7 @@ def context(
         return {
             "doc_id": ctx.get("doc_id"),
             "title": ctx.get("title"),
+            "url": ctx.get("url"),
             "summary": (ctx.get("summary") or "")[:1200],
             "page": ctx.get("page"),
             "entities": _brief(ctx.get("entities"), ("name", "type", "rel"), 40),
@@ -392,12 +393,16 @@ def documents(
     title: str | None = None,
     limit: int = 20,
     offset: int = 0,
+    since: str | None = None,
 ) -> list[dict[str, Any]]:
     """List documents, newest first, without their text: by ontology
     module (``domain``), by tag (``project:<name>``, ``chat:<name>``,
     ``github:<topic>``), by source (``zotero``, ``capture``, ``github``,
     ``chat``, ``project``), or by a title substring. Each row has the id,
-    title, mime, source and tags; read one with ``get``."""
+    title, mime, source, tags and when it was added; read one with
+    ``get``. ``since`` keeps what was added at that date or moment (UTC)
+    or later: ``2026-10-03``, ``2026-10-03T14:00:00Z`` ("what did the
+    user just upload")."""
 
     def call() -> list[dict[str, Any]]:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
@@ -406,6 +411,7 @@ def documents(
             ("tag", tag),
             ("source", source),
             ("title", title),
+            ("since", since),
         ):
             if v:
                 params[k] = v
@@ -421,7 +427,7 @@ def documents(
                     "source": meta.get("source"),
                     "tags": meta.get("tags") or [],
                     "domains": meta.get("domains"),
-                    "created_at": r.get("created_at"),
+                    "added_at": r.get("added_at"),
                 }
             )
         return rows

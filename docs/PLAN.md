@@ -241,21 +241,21 @@ and pushing what is committed.
       bugs are real.
 
       *Small bugs, first.*
-      - [ ] **A door address without a scheme.** `PRAX_DOOR=<address>:8000`
+      - [x] (2026-10-03) **A door address without a scheme.** `PRAX_DOOR=<address>:8000`
             made every call fail with "Request URL is missing an
             'http://'", while the server showed as connected.
             `client.Door` uses the variable as given. Add `http://` when
             there is no scheme, and say the address in every
             not-reachable error (it does for some).
-      - [ ] **A URL with a space is a 500.** `POST /ingest/url` turns
+      - [x] (2026-10-03) **A URL with a space is a 500.** `POST /ingest/url` turns
             `ValueError` and `OSError` into 400 and 502;
             `http.client.InvalidURL` is neither. Quote the URL's path,
             and answer 400 with the reason for one that is still bad.
-      - [ ] **Links in results.** `write_page`, `capture_url`, `get` and
+      - [x] (2026-10-03) **Links in results.** `write_page`, `capture_url`, `get` and
             `context` answer ids, and the agent found `ui/#doc/N` by
             reading the UI's source. A `url` field everywhere, from the
             door's own address, and a `#page/<slug>` route.
-      - [ ] **A date filter.** `documents()` has no `since`, and its rows
+      - [x] (2026-10-03) **A date filter.** `documents()` has no `since`, and its rows
             show `created_at: null` though `added_at` is set. "What did
             the user just upload" is one call with it.
 

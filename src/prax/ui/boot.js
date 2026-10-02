@@ -75,6 +75,12 @@ async function render(opts) {
   quiet = !!(opts && opts.keepScroll) && view.dataset.route === key;  // the same page, refreshed in place
   view.dataset.route = key;
   try {
+    if (r.name === "page" && r.arg) {
+      // a page by its slug (#page/onset-notes): it is a document; open that
+      const page = await api(`/page/${encodeURIComponent(decodeURIComponent(r.arg))}`);
+      location.replace(`#doc/${page.doc_id}`);
+      return;
+    }
     if (r.name === "doc") return await viewDoc(r.arg, r.params);
     if (r.name === "graph") return await viewGraph(r.arg, r.params);
     return await (views[r.name] || viewSearch)(r.params);
