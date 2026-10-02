@@ -264,7 +264,9 @@ def maths(
     together, substitute, solve, diff, integrate, series, limit, evaluate,
     code. A formula (``a``, and ``b`` for ``same``) is LaTeX, plain notation
     with ``notation="plain"`` (``x**2 + 1``), or ``chunk:<id>`` for a
-    display formula of the library (ids from search results). ``chain``
+    display formula of the library (ids from search results); in plain
+    notation ``chunk:<id>`` may stand inside a formula (``2*chunk:123``),
+    as the formula's right side, read from its LaTeX. ``chain``
     takes the steps of a derivation as ``steps`` (``a`` its first) and
     names the first link that does not hold. ``var`` names the variable
     of solve, diff, integrate, series, limit and apart (partial fractions);

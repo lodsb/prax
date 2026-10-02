@@ -130,105 +130,103 @@ are called on it.
   wall: a hidden document's chunk answers as an absent one. A host that
   does not name the pack answers 404; one without `maths.python`, 503.
 - The MCP tool `maths`, one call to that route.
-- The surfer's action as one JSON object (AD2, 2026-10-02):
+- The surfer's action, one JSON object (AD2):
   `maths: {"op": "evaluate", "formula": "I_s*(exp(v/V_T) - 1)",
   "values": {"I_s": "2.52 nA", "v": "0.4 V", "V_T": "25.85 mV"}}`. The
   keys are `op`, `formula`, `other` (for `same`), `then` (for `chain`),
-  `var`, `at` (for `series` and `limit`), `values` and `language`.
-  Under a local model's grammar (the pack's `tool_grammar`, GBNF) the
-  step can only be written in that shape. Formulas are plain notation
-  and hold no backslash. A passage [n] is the calculator's plain reading
-  of its display formula (the `read` answer's `plain`): the whole of it,
-  or its right side inside a formula. `tool.surf_json` builds the
-  request; a line that is not JSON still goes to `parse_step`.
-- The check after the answer (AD2, step 2, `packs/maths/check.py`, the
-  pack's `answer_check`). With tools on, the surf hands the answer to it
-  before returning, and the result carries the checks (`checks`).
-  - Each display equation is split at its top-level `=`, and each link
-    is checked with `same`, in one calculator process (`{"batch": …}`).
-    A link is judged only when its two sides together have at most one
-    free symbol (`FREE_MAX`): arithmetic, or a one-variable identity.
-    A relation among quantities (`ω_c/(2Q) = Δω/2`, which holds given
-    `Q = ω_c/Δω`) is "not judged". Left out: a side that is a name
-    (`I_1`, `H_n(z)`, `u'`), a unit conversion, a list of definitions in
-    one display, and a display with alignment or an inequality.
-  - A link that does not hold gets a line after its display: "The
-    calculator finds that this does not hold".
-  - Each number with three or more significant digits is held to the
-    question, the passages and the tool's results, in units a thousand
-    apart. A number within 5% of a result, and not equal to it, gets
-    "(the calculator gives 13.23)". One found nowhere gets "(not
-    checked)".
-  - Measured on the 160 answers of the e1/e2 double run (2026-10-02):
-    judging every link marked 64 "does not hold", most of them relations
-    true given other facts. With the rule above: 17 marks, every one
-    real. Fifteen are the Moog paper's `e^{xx}` typo quoted, and two are
-    the model's own arithmetic in a diode answer (`0.4/0.02585 =
-    15.478`, true 15.474). 44 links hold, 120 are not judged, 85 do not
-    read. The numbers half is not measured on these answers: the eval
-    files keep no passages.
-- The library's formulas checked (AD2, step 4): the maths pack's
-  watched step `equations` (`packs/maths/formulas.py`). The door hands
-  out formula chunks not checked at `CHECK_VERSION`
-  (`store.formulas_to_check`). The worker reads each formula and judges
-  its chain's links in one calculator process. The door keeps the
-  result in `data.check` (`store.set_formula_checks`): `reads`, `links`,
-  `judged`, `holds`, and `broken`, the links that do not hold. A
-  formula with a broken link carries "‹its = does not hold, by the
-  calculator›" in the equations-nearby line its passage shows. A worker
-  without `maths.python` asks for nothing. A re-chunk drops the checks
-  and the step makes them again.
-  - Judged, by one rule for the library and for answers
-    (`check.verdict`): arithmetic, compared to the decimal places of the
-    side that states the result (`31/53 × 1200 = 701.887` holds), and an
-    identity in one variable, with the same symbol on both sides. Not
-    judged: an equation in one unknown (`1 - y = 1/9`), a relation among
-    several quantities, a display with a limit, sum, product, integral,
-    ceiling, `\div`, a mixed number, a ratio or `:=`, two statements
-    side by side (`\quad`), a function with no definition.
-  - Measured on 2,100 of the 17,431 formulas (244 documents, read-only,
-    2026-10-02): 35% read, 11 links judged, one does not hold. That one
-    is real: `9/8 · 256/243 × 80/81 = 20480/19683 × 80/81` in a tuning
-    paper, where the left side's first product is 32/27. The rules above
-    came from the first two samples, which marked a true integral
-    identity, a rounded division, mixed numbers and equations in `y` as
-    broken. Coverage is small on purpose: a wrong "does not hold" next
-    to a passage is worse than none.
+  `var`, `at` (for `series` and `limit`), `values` and `language`, and
+  `tool.request_of` holds a step to them, types included. Under a local
+  model's grammar (the pack's `tool_grammar`, GBNF) the step can only be
+  written in that shape; a model without it gets "write the step as one
+  JSON object" for anything else. The free-text line of AD and the
+  patterns grown around it went in the review round of 2026-10-02.
+  Formulas are plain notation and hold no backslash. The prompt shows the
+  action only on a host that runs the pack (`tool_help`).
+- A formula of the library inside another: `[n]` in the surf,
+  `chunk:<id>` from the door or the MCP tool. In plain notation it is a
+  placeholder symbol (`tool.placeholder`), and its LaTeX goes beside it
+  in `passages`; the runtime reads the LaTeX with its LaTeX reader and
+  puts in the whole equation when the placeholder is the formula, its
+  right side when it stands inside one (`runtime._operands`). The
+  reading's names are spelled as plain notation spells them (`I_{s}` as
+  `I_s`), so a step's values reach them. Until the review round the
+  passage was turned into plain notation and read back, which lost
+  `y[n]`, `H(z)` and `V_{T,1}`.
+- The answer is written by a call that sees none of the steps. The last
+  six tool requests and their answers go to it as a section of the
+  bundle of their own (`Bundle.results`, `surf.results_of`), and the
+  pack's words about them (`Pack.answer_prompt`) are in the prompt only
+  when there are results. Before 2026-10-01 no result reached an answer;
+  from then to the review round they were in the note, and a sentence in
+  every prompt said the note's numbers were computed, so a tools-off
+  answer invented a calculator note.
+- The check after the answer (`packs/maths/check.py`, the pack's
+  `answer_check`). With tools on, the surf hands the answer to it; the
+  answer's text is left as written, and the result carries `checks`,
+  each with the span it is about. The ask view lists what does not hold,
+  differs or was not checked under the answer (`lib.checksBox`).
+  - Each display is split at its top-level `=` (not one that aligns,
+    breaks lines, holds another relation, a `\quad`, a ratio or a list),
+    and each link goes to the runtime's `judge`, in one process.
+  - `runtime.judge` decides on the parsed expressions. Not judged: a
+    definition (a symbol, an indexed symbol or an undefined function on
+    either side), words or units (`	ext`), a mixed number, `\div`, a
+    limit, sum, product or integral, a rounding function, a function
+    nobody defined, a relation among several quantities, and a condition
+    (one variable whose sides differ by a rational function of it,
+    `3x + 2 = x + 6`, or one side constant and not an identity, `e^x =
+    2`). Judged: arithmetic, to the decimal places of the side that
+    states the result (`31/53 × 1200 = 701.887` holds), and an identity
+    in one variable (`x^2 - 1 = (x-1)(x+1)`, `\sin^2 x + \cos^2 x = 1`).
+    A wrong polynomial identity (`(x+1)^2 = x^2 + x + 1`) passes as a
+    condition: missing it costs less than marking a solving step.
+  - In an answer about maths (with a display, or with results), each
+    number of three significant digits or more outside maths, code,
+    links and version numbers is held to the question, the passages and
+    the results, in units a thousand apart: computed, quoted, differs
+    (within 5% of a result; the check carries the result) or not
+    checked.
+- The library's formulas checked: the maths pack's watched step
+  `equations` (`packs/maths/formulas.py`). The door hands out formula
+  chunks not checked at `CHECK_VERSION` (`store.formulas_to_check`), 50
+  at a time. The worker judges each formula's links with the same
+  `judge`, in one process; a batch the calculator fails on is judged one
+  formula at a time with a time limit each, and a formula that still
+  fails is kept as unread. The door keeps the result in `data.check`
+  (`store.set_formula_checks`), stamped with the sha256 of the LaTeX it
+  judged and not kept on a chunk that holds other LaTeX by then.
+  `broken` lists the links that do not hold, and the formula's passage
+  shows "‹its = does not hold, by the calculator›" in its
+  equations-nearby line. A worker without `maths.python` asks for
+  nothing.
+  - Measured on 3,600 of the 17,431 formulas (244 documents, read-only,
+    2026-10-02): 26 links judged, 22 hold, 3 do not, each false as
+    printed (a tuning paper's `9/8 · 256/243`, and two that look like
+    extraction slips). On the answers of seven runs: the marks are the
+    quoted `e^{xx}` typo and the models' own slips (an ADAA answer's
+    algebra, a diode answer's division and exponential), no false one.
   - Not built: checking a table's rows against each other (the RNN
     paper's antiderivatives). A table does not say which column is the
     derivative of which; it waits for a measured need.
-- An equation by its number (AD2, step 5, `surf.named_equations`): a
-  question that writes "equation (5)", "eq. (14)" or "equations (3) and
-  (4)" gets those formula chunks after the door's first search and
-  before the model's first step. One document gives them all: of the
-  search's first eight documents (`NAMED_DOCS`), the earliest with the
-  most of the numbers named, because every paper has an equation (1).
-  On the live store (read-only, the 8 questions that name equations):
-  the right paper in all 7 that got one, the eighth already had its
-  equation among the search's passages. Taking each number from the
-  first document that had it brought Helmholtz's (1) and Strogatz's (4)
-  into Dattorro and RMS questions. The resonator question, wrong in all
-  16 answers of two double runs, now starts with Dattorro's (5).
-- The surfer's action as a line of text, as it was before AD2 and as a
-  model without the grammar may still write it:
-  `maths: same [3] == [7]`, `maths: integrate x \tanh(x)`,
-  `maths: evaluate [4] with R=1000, C=1e-6`, `maths: code python <latex>`.
-  A passage [n] alone is the display formula it holds. Inside a formula
-  it is that formula's right side in parentheses (`diff x [3]`). The
-  answer goes into the log as one line, its reading first. The prompt
-  shows the action only on a host that runs the pack (the manifest's
-  `tool_help`). It tells the model to check what it derives, each step
-  and each number, and to believe a "not the same".
-- The answer is written by a call that sees none of the steps. So the
-  last six tool requests and their answers go into the bundle's note
-  (`surf.answer_note`, `WORKED_KEPT`). Before 2026-10-01 they did not, and
-  no check the surf made reached an answer.
-- Plain notation knows only the names in `runtime.PLAIN_NAMES`, the
-  functions and constants. Every other name is a symbol, so `beta` and
-  `N` are quantities, not SymPy's beta function and `N()`.
+- An equation by its number (`surf.named_equations`): a question that
+  writes "equation (5)", "eq. (14)" or "equations (3) and (4)" gets those
+  formula chunks after the door's first search and before the model's
+  first step. One document gives them all: of the search's first eight
+  documents (`NAMED_DOCS`), the earliest with the most of the numbers
+  named, because every paper has an equation (1). On the live store
+  (read-only, the 8 questions that name equations): the right paper in
+  all 7 that got one; the eighth already had its equation among the
+  search's passages. A question naming only "(1)" can still get another
+  paper's (1).
+- Plain notation knows only the names in `runtime.PLAIN_NAMES` (with
+  `Li2` and `W`), and a function's name is the function only where it is
+  called: `W(x)` is the Lambert W, a bare `W` a quantity. Every other
+  name is a symbol, so `beta` and `N` are quantities, not SymPy's beta
+  function and `N()`.
 
 The prax side is `src/prax/packs/maths/tool.py`. It runs the calculator,
-resolves a chunk to its LaTeX, and parses the surfer's syntax.
+puts a library formula's LaTeX beside its placeholder, and holds the
+surfer's JSON step to its shape.
 
 ## Step 1, measured (2026-10-01)
 

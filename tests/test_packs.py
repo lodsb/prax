@@ -148,3 +148,22 @@ def test_the_surfers_prompt_shows_a_packs_tool(monkeypatch: pytest.MonkeyPatch) 
     assert surf.system(False) == surf.SYSTEM  # an ask with tools off
     monkeypatch.setattr(surf, "PACK_HELP", [])
     assert surf.system() == surf.SYSTEM
+
+
+def test_no_pack_module_assigns_a_name_twice() -> None:
+    """A second top-level ``FUNCTIONS = …`` replaces the first for every
+    function that reads it: the maths runtime lost its LaTeX function table
+    that way, and a regex table before it (2026-10-02)."""
+    for py in sorted(PACKS_DIR.rglob("*.py")):
+        seen: dict[str, int] = {}
+        for node in ast.parse(py.read_text(encoding="utf-8")).body:
+            targets = []
+            if isinstance(node, ast.Assign):
+                targets = [t for t in node.targets if isinstance(t, ast.Name)]
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                targets = [node.target]
+            for t in targets:
+                assert t.id not in seen, (
+                    f"{py.name}: {t.id} at {seen[t.id]} and {node.lineno}"
+                )
+                seen[t.id] = node.lineno

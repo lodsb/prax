@@ -3248,3 +3248,35 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
 - An earlier comparison in this session used scores from before the
   scorer stripped the check's marks and refused declines; it showed a
   drop that is not there.
+
+## 2026-10-02: the review round of AD2
+
+An independent review of 6bba583..HEAD (a fresh agent, report only)
+found ten defects and called the text heuristics duct tape. Worked off in
+four commits:
+
+- **Results and prompt** (f45f3d4): the tools' results are a section of
+  the bundle; the pack's words about them are in the prompt only when
+  there are results. A sentence in every prompt had a tools-off answer
+  invent a calculator note.
+- **Judging and checks** (bad4bbb): `runtime.judge` decides a link on
+  the parsed expressions (a solving step was marked "does not hold"; a
+  name pattern let `x^2 - 1` pass unjudged); the answer is left as
+  written and the checks are annotations with spans, shown under the
+  answer; numbers inside maths, code and links are left alone; the
+  equations step stamps a check with its LaTeX's sha, survives a failed
+  batch, and takes 50 at a time; the scorer no longer counts a declining
+  "no" or a value the question gave. Measured: 3,600 library formulas,
+  26 links judged, 3 broken and false as printed; seven runs' answers,
+  no false mark.
+- **Passages as LaTeX, the step held to its shape** (this commit): a
+  library formula goes to the runtime as LaTeX beside a placeholder,
+  never as plain notation read back (`y[n]`, `H(z)` and `V_{T,1}` had
+  failed or misread); a function's name is the function only where it is
+  called (a variable `W` had failed as LambertW); the free-text maths
+  line and its ~15 patterns are gone, and the JSON step is checked key by
+  key (a list for `values` had crashed the ask).
+- **Process.** Tests that no tracked source file holds a control
+  character (four came in through shell edits) and that no pack module
+  assigns a name twice (twice a new table replaced an existing one of
+  the same name: `BRACED`, then `FUNCTIONS`).

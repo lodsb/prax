@@ -390,25 +390,34 @@ SI_FACTOR.update({"n": "1e-9", "p": "1e-12"})
 # one equals sign of an equation, written = or == (a model writes both)
 SUBSCRIPT_BRACED = re.compile(r"_\{([A-Za-z0-9]+)\}")
 EQUALS = re.compile(r"\s*==?\s*")
-SAFE_GLOBALS: dict[str, Any] = {"__builtins__": {}}
-for _n in PLAIN_NAMES:
-    SAFE_GLOBALS[_n] = getattr(sympy, _n) if _n != "ln" else sympy.log
-SAFE_GLOBALS["Li2"] = sympy.Lambda(
+# A function's name is the function only where it is called: W(x) is the
+# Lambert W, a bare W a power or a width (the review of 2026-10-02: a
+# formula with a variable W failed as "SympifyError: LambertW")
+PLAIN_FUNCTIONS: dict[str, Any] = {
+    n: (getattr(sympy, n) if n != "ln" else sympy.log)
+    for n in PLAIN_NAMES
+    if n not in ("pi", "oo")
+}
+PLAIN_FUNCTIONS["Li2"] = sympy.Lambda(
     sympy.Symbol("z"), sympy.polylog(2, sympy.Symbol("z"))
 )
-SAFE_GLOBALS["W"] = sympy.LambertW  # the Lambert W, as the diode papers write it
+PLAIN_FUNCTIONS["W"] = sympy.LambertW  # the Lambert W, as the diode papers write it
+# what every plain formula may use: the constants, and what the parser
+# itself writes (evaluate=False builds Add, Mul, Pow)
+SAFE_GLOBALS: dict[str, Any] = {
+    "__builtins__": {},
+    "pi": sympy.pi,
+    "oo": sympy.oo,
+    "Symbol": sympy.Symbol,
+    "Integer": sympy.Integer,
+    "Float": sympy.Float,
+    "Add": sympy.Add,
+    "Mul": sympy.Mul,
+    "Pow": sympy.Pow,
+}
 # a name called as a function: one plain notation knows, or an error that
 # names them (an unknown one failed as "name 'Function' is not defined")
 CALLED = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
-# what the parser itself writes (evaluate=False builds Add, Mul, Pow)
-SAFE_GLOBALS.update(
-    Symbol=sympy.Symbol,
-    Integer=sympy.Integer,
-    Float=sympy.Float,
-    Add=sympy.Add,
-    Mul=sympy.Mul,
-    Pow=sympy.Pow,
-)
 
 
 def _plain(formula: str) -> Any:
@@ -426,13 +435,15 @@ def _plain(formula: str) -> Any:
         raise ValueError(
             "plain notation takes names, numbers, + - * / ** ^ ( ) , = only"
         )
-    unknown = sorted({n for n in CALLED.findall(text) if n not in SAFE_GLOBALS})
+    called = set(CALLED.findall(text))
+    unknown = sorted(called - set(PLAIN_FUNCTIONS))
     if unknown:
         raise ValueError(
             f"plain notation has no function {', '.join(unknown)}; it knows"
-            f" {', '.join(n for n in SAFE_GLOBALS if n[0].islower() and n != 'oo')}"
+            f" {', '.join(n for n in PLAIN_FUNCTIONS if n[0].islower())}"
             " (Li2 and W too)"
         )
+    known = dict(SAFE_GLOBALS) | {n: PLAIN_FUNCTIONS[n] for n in called}
     if "=" in text:
         sides = EQUALS.split(text)
         if len(sides) != 2 or not all(x.strip() for x in sides):
@@ -442,7 +453,7 @@ def _plain(formula: str) -> Any:
         return parse_expr(
             text,
             local_dict={},
-            global_dict=dict(SAFE_GLOBALS),
+            global_dict=known,
             transformations=standard_transformations,
             evaluate=False,
         )
@@ -545,14 +556,6 @@ def _whole(r: Reading, e: Any) -> None:
 
 def _shown(e: Any) -> dict[str, Any]:
     return {"latex": sympy.latex(e), "text": str(e)}
-
-
-def plain_text(e: Any) -> str:
-    """A reading as plain notation that ``_plain`` reads back: an equation
-    as ``lhs = rhs``, a braced subscript without its braces."""
-    if isinstance(e, sympy.Equality):
-        return f"{plain_text(e.lhs)} = {plain_text(e.rhs)}"
-    return SUBSCRIPT_BRACED.sub(r"_\1", sympy.sstr(e))
 
 
 def _symbols(e: Any) -> list[str]:
@@ -723,15 +726,20 @@ VALUE = re.compile(
 )
 
 
-def _value(v: Any, notation: str) -> Any:
+def _value(
+    v: Any,
+    notation: str,
+    operand: Callable[[str], tuple[Any, Any]] | None = None,
+) -> Any:
     """A given value: a number, with an SI prefix and a unit allowed
-    (``10k``, ``1 uF``, ``26mV``), or a formula."""
+    (``10k``, ``1 uF``, ``26mV``), or a formula (read by ``operand``, which
+    puts a library formula in for its placeholder)."""
     if not isinstance(v, str):
         return v
     m = VALUE.match(v)
     if m:
         return sympy.Float(m.group(1)) * sympy.Float(PREFIXES.get(m.group(2), 1.0))
-    return read(v, notation)[0]
+    return (operand or (lambda t: read(t, notation)))(v)[0]
 
 
 def op_chain(steps: list[Any], **_: Any) -> dict[str, Any]:
@@ -871,6 +879,44 @@ def judge(left: str, right: str) -> dict[str, Any]:
     return {"verdict": "does not hold", "why": str(got.get("how"))}
 
 
+def _operands(
+    request: dict[str, Any], notation: str
+) -> Callable[[str], tuple[Any, Reading | None]]:
+    """How a request's formulas are read: by their notation, then each
+    placeholder of a library formula (``passages``: name -> LaTeX) replaced
+    by that formula's reading -- the whole of it when the placeholder is
+    the formula, its right side when it stands inside one. The library's
+    LaTeX is read by the LaTeX reader, never through plain notation."""
+    passages = {str(k): str(v) for k, v in (request.get("passages") or {}).items()}
+    readings: dict[str, Any] = {}
+
+    def put(e: Any) -> Any:
+        for name in sorted(s.name for s in e.free_symbols if s.name in passages):
+            if name not in readings:
+                # the LaTeX reader names I_{s}; a plain formula and its
+                # values say I_s: one spelling, or nothing is put in
+                got = read(passages[name])[0]
+                readings[name] = got.xreplace(
+                    {
+                        s: sympy.Symbol(SUBSCRIPT_BRACED.sub(r"_\1", s.name))
+                        for s in got.free_symbols
+                        if SUBSCRIPT_BRACED.search(s.name)
+                    }
+                )
+            whole = readings[name]
+            if e == sympy.Symbol(name):
+                return whole
+            part = whole.rhs if isinstance(whole, sympy.Equality) else whole
+            e = e.xreplace({sympy.Symbol(name): part})
+        return e
+
+    def operand(text: str) -> tuple[Any, Reading | None]:
+        e, r = read(text, notation)
+        return put(e), r
+
+    return operand
+
+
 def answer(request: dict[str, Any]) -> dict[str, Any]:
     """One request: ``op``, the formula(s) as ``a`` (and ``b`` for
     ``same``), ``notation`` (latex or plain), and the operation's own
@@ -883,9 +929,10 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
         )
     if op == "judge":  # one link of a display, on its two LaTeX sides
         return {"op": op, **judge(str(request["a"]), str(request["b"]))}
+    operand = _operands(request, notation)
     if op == "chain":  # a derivation, each step read and each link checked
         written = request.get("steps") or str(request["a"]).split("==")
-        steps = [read(str(f).strip(), notation)[0] for f in written]
+        steps = [operand(str(f).strip())[0] for f in written]
         if len(steps) < 2:
             raise ValueError("chain takes two formulas or more: a == b == c")
         return {
@@ -893,13 +940,12 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
             "read": {str(i + 1): _shown(e) for i, e in enumerate(steps)},
             **op_chain([e.doit() for e in steps]),
         }
-    a, ra = read(str(request["a"]), notation)
+    a, ra = operand(str(request["a"]))
     out: dict[str, Any] = {
         "op": op,
         "read": {
             "a": {
                 **_shown(a),
-                "plain": plain_text(a),
                 "symbols": _symbols(a),
                 "rules": sorted(set(ra.rules)) if ra else [],
             }
@@ -911,10 +957,10 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
     kwargs = dict(request.get("args") or {})
     for k in FORMULA_ARGS:
         if k in kwargs and isinstance(kwargs[k], str):
-            kwargs[k] = read(kwargs[k], notation)[0]
+            kwargs[k] = operand(kwargs[k])[0]
     if "values" in kwargs:
         kwargs["values"] = {
-            str(k): _value(v, notation) for k, v in kwargs["values"].items()
+            str(k): _value(v, notation, operand) for k, v in kwargs["values"].items()
         }
     given: dict[Any, Any] = {}
     if op not in ("evaluate", "substitute") and "values" in kwargs:
@@ -923,7 +969,12 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
         given = {sympy.Symbol(k): v for k, v in kwargs.pop("values").items()}
         a = a.subs(given)
     if op == "same":
-        b, rb = read(str(request["b"]), notation)
+        b, rb = operand(str(request["b"]))
+        # a passage's whole equation against an expression: what it defines
+        if isinstance(a, sympy.Equality) and not isinstance(b, sympy.Equality):
+            a = a.rhs
+        elif isinstance(b, sympy.Equality) and not isinstance(a, sympy.Equality):
+            b = b.rhs
         out["read"]["b"] = {
             **_shown(b),
             "symbols": _symbols(b),
