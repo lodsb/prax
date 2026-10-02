@@ -101,6 +101,23 @@ nothing.
             calculation (values and a formula) goes a fixed path: the
             formula found, evaluated with the values, the model asked
             only to explain the result.
+      - [x] (2026-10-02: f45f3d4, bad4bbb, b85e9c2; `docs/log.md`) **The review round.**
+            An independent review of AD2 found ten defects and the text
+            heuristics; worked off: results as their own section, the
+            judge on parsed expressions, checks as annotations, passages
+            as LaTeX, the step held to its shape, the free-text parser
+            gone, the calculator's environment in CI.
+      - [ ] Measure the review round: the five runs again, scored by
+            machine (the last five ran before steps 4 and 5 and the
+            review round).
+      - [ ] *Later, a tidy-up* (the user: "tests for maths stuff should be
+            bundled with the pack"; the review's D2): the pack's tests
+            beside it (`src/prax/packs/maths/tests/`, collected by
+            pytest), and the maths-specific pieces still in the core
+            moved behind pack hooks: the "does not hold" in
+            `ask.Passage.nearby_line` and `store.equations_near`, and
+            `store.formulas_to_check` / `set_formula_checks` as a generic
+            "chunks of a kind missing a pack's key" pair.
 - [ ] (2026-09-30: a pilot of 50 questions, the teacher cited the expected document in 45; the numbers are with the plan, outside the repository) **AE. The distilled surfer.** A small local model trained on the
       large model's search-and-read trails. Its plan is kept outside the
       repository. It needs a question set and a training run of a few

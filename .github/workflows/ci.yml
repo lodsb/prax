@@ -45,6 +45,17 @@ jobs:
           ruff format --check .
       - name: mypy
         run: mypy
+      # the maths pack's calculator runs in an environment of its own
+      # (SymPy 1.14 and ANTLR 4.11; OCR pins ANTLR 4.9 in prax's), so its
+      # tests run here only when this one exists and PRAX_MATHS_PYTHON names it
+      - name: the maths pack's environment
+        shell: bash
+        run: |
+          python -m venv "$RUNNER_TEMP/maths-venv"
+          py="$RUNNER_TEMP/maths-venv/bin/python"
+          [ -x "$py" ] || py="$RUNNER_TEMP/maths-venv/Scripts/python.exe"
+          "$py" -m pip install --quiet "sympy==1.14.0" "antlr4-python3-runtime==4.11.*"
+          echo "PRAX_MATHS_PYTHON=$py" >> "$GITHUB_ENV"
       - name: pytest
         run: pytest -q -p no:cacheprovider
 
