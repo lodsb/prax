@@ -85,10 +85,12 @@ def python() -> Path:
     return path
 
 
-def run(request: dict[str, Any]) -> dict[str, Any]:
+def run(request: dict[str, Any], timeout: float | None = None) -> dict[str, Any]:
     """One request to the calculator, its answer as a dict; an error is an
-    ``error`` key, as the runtime gives it."""
-    timeout = config.number("maths.timeout_s", "PRAX_MATHS_TIMEOUT_S", TIMEOUT_S)
+    ``error`` key, as the runtime gives it. ``timeout`` for a batch, which
+    is several requests' time."""
+    if timeout is None:
+        timeout = config.number("maths.timeout_s", "PRAX_MATHS_TIMEOUT_S", TIMEOUT_S)
     try:
         done = subprocess.run(
             [str(python()), str(RUNTIME)],

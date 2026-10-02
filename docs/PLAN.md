@@ -69,7 +69,7 @@ nothing.
             syntax in the double runs; the parser's heuristics
             (`TRAILING_VALUES`, `FOR_VAR`, `SYMPY_ORDER`, …) go when it
             is in. Claude as the surfer gets the same shape as a tool.
-      - [ ] **A check after the answer.** The door reads the answer's
+      - [x] (2026-10-02: `packs/maths/check.py`; on the e1/e2 answers 17 marks, all real, after judging only links with one free symbol at most; the numbers half waits on machine scoring to be measured) **A check after the answer.** The door reads the answer's
             equations and checks each with `same` against the passages
             and the tool's results, and compares each number with the
             result that gave it. The marks ("checked", "does not hold",

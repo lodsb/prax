@@ -825,13 +825,27 @@ def answer(request: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def one(request: dict[str, Any]) -> dict[str, Any]:
+    """One request's answer, an error as the answer."""
+    try:
+        return answer(request)
+    except Exception as exc:  # noqa: BLE001 - the caller reads the error as the answer
+        return {"error": f"{type(exc).__name__}: {exc}"}
+
+
 def main() -> int:
+    """One request, or ``{"batch": [...]}`` for several in one process (the
+    check of an answer's equations: SymPy's import is most of a call)."""
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]
     try:
         request = json.loads(sys.stdin.read())
-        result = answer(request)
-    except Exception as exc:  # noqa: BLE001 - the caller reads the error as the answer
-        result = {"error": f"{type(exc).__name__}: {exc}"}
+    except json.JSONDecodeError as exc:
+        result: Any = {"error": f"JSONDecodeError: {exc}"}
+    else:
+        if isinstance(request.get("batch"), list):
+            result = {"batch": [one(r) for r in request["batch"]]}
+        else:
+            result = one(request)
     sys.stdout.write(json.dumps(result, default=str))
     return 0
 

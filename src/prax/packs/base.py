@@ -33,5 +33,8 @@ class Pack:
     # tool -> the GBNF rules its step is written to under a local model's
     # grammar, the rule named after the tool; none: one line of text
     tool_grammar: dict[str, str] = field(default_factory=dict)
+    # "module:function" run on an answer the surf wrote with tools on: the
+    # answer checked and marked, and the checks (the maths pack's numbers)
+    answer_check: str | None = None
     extra: str | None = None  # the pyproject extra it needs
     settings: str | None = None  # its section in prax.yaml

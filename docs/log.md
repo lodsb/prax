@@ -3148,3 +3148,23 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   tool answered 0.0132319712753 A — 13.23 mA, the right value.
 - **A clash caught on the way.** The runtime already had a `BRACED`
   pattern for its LaTeX rules; the new one is `SUBSCRIPT_BRACED`.
+
+## 2026-10-02: AD2, step 2 — the check after the answer
+
+- **What.** A pack may name an `answer_check`, which the surf runs on an
+  answer written with tools on. The maths pack's checks every display
+  equation's links with `same` (one calculator process for all of them,
+  the runtime's new `{"batch": …}`) and every number of three significant
+  digits against the question, the passages and the tool's results. It
+  marks what fails in the answer's text and returns `checks`.
+- **The first try was wrong, and the answers said so.** Run over the 160
+  answers of the e1/e2 double run, judging every link marked 64 links
+  "does not hold". Most were relations true given other facts:
+  `ω_c/(2Q) = Δω/2` needs `Q = ω_c/Δω`, the diode equations relate `a`
+  and `b`, `10 kΩ = 10,000 Ω` is a unit. A link is now judged only with
+  one free symbol at most, and units, word labels, lists of definitions
+  and primes are left out. Result: 17 marks, all real. Fifteen are the
+  quoted `e^{xx}` typo; two are a diode answer's own arithmetic
+  (`0.4/0.02585 = 15.478`, true 15.474, and the current from it).
+- **Not yet measured:** the numbers half, which needs the passages the
+  eval files do not keep; machine scoring (step 3) will keep them.

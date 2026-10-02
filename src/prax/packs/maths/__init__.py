@@ -62,5 +62,6 @@ MANIFEST = Pack(
     tools={"maths": "prax.packs.maths.tool:surf_maths"},
     tool_help={"maths": HELP},
     tool_grammar={"maths": GRAMMAR.strip()},
+    answer_check="prax.packs.maths.check:check_answer",
     settings="maths",
 )

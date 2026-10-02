@@ -141,6 +141,32 @@ are called on it.
   of its display formula (the `read` answer's `plain`): the whole of it,
   or its right side inside a formula. `tool.surf_json` builds the
   request; a line that is not JSON still goes to `parse_step`.
+- The check after the answer (AD2, step 2, `packs/maths/check.py`, the
+  pack's `answer_check`). With tools on, the surf hands the answer to it
+  before returning, and the result carries the checks (`checks`).
+  - Each display equation is split at its top-level `=`, and each link
+    is checked with `same`, in one calculator process (`{"batch": …}`).
+    A link is judged only when its two sides together have at most one
+    free symbol (`FREE_MAX`): arithmetic, or a one-variable identity.
+    A relation among quantities (`ω_c/(2Q) = Δω/2`, which holds given
+    `Q = ω_c/Δω`) is "not judged". Left out: a side that is a name
+    (`I_1`, `H_n(z)`, `u'`), a unit conversion, a list of definitions in
+    one display, and a display with alignment or an inequality.
+  - A link that does not hold gets a line after its display: "The
+    calculator finds that this does not hold".
+  - Each number with three or more significant digits is held to the
+    question, the passages and the tool's results, in units a thousand
+    apart. A number within 5% of a result, and not equal to it, gets
+    "(the calculator gives 13.23)". One found nowhere gets "(not
+    checked)".
+  - Measured on the 160 answers of the e1/e2 double run (2026-10-02):
+    judging every link marked 64 "does not hold", most of them relations
+    true given other facts. With the rule above: 17 marks, every one
+    real. Fifteen are the Moog paper's `e^{xx}` typo quoted, and two are
+    the model's own arithmetic in a diode answer (`0.4/0.02585 =
+    15.478`, true 15.474). 44 links hold, 120 are not judged, 85 do not
+    read. The numbers half is not measured on these answers: the eval
+    files keep no passages.
 - The surfer's action as a line of text, as it was before AD2 and as a
   model without the grammar may still write it:
   `maths: same [3] == [7]`, `maths: integrate x \tanh(x)`,

@@ -126,6 +126,11 @@ def tool_help(chosen: Iterable[str]) -> list[str]:
     ]
 
 
+def answer_checks(chosen: Iterable[str]) -> list[Any]:
+    """The answer checks of the packs a host runs, imported now."""
+    return [_resolve(p.answer_check) for p in running(chosen) if p.answer_check]
+
+
 def tool_grammar(chosen: Iterable[str]) -> dict[str, str]:
     """The grammar rules of the surfer's tools that have them, by tool."""
     return {

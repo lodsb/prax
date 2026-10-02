@@ -33,6 +33,7 @@ the trail comes back with the result.
 
 from __future__ import annotations
 
+import logging
 import re
 import sqlite3
 import threading
@@ -617,6 +618,8 @@ for _name, _tool in packs.tools(config.host_packs()).items():
 PACK_HELP = packs.tool_help(config.host_packs())
 # a tool's own step grammar (the maths step is a JSON object), by tool
 PACK_GRAMMAR = packs.tool_grammar(config.host_packs())
+# what checks an answer written with the tools on, after it is written
+ANSWER_CHECKS = packs.answer_checks(config.host_packs())
 
 
 def system(tools: bool = True) -> str:
@@ -833,7 +836,24 @@ def _result(
             mode=s.mode,
         )
     out = bundle.to_dict()
+    checks: list[dict[str, Any]] = []
+    if text and s.tools:
+        # what the answer claims, checked after it is written (AD2): the
+        # model was asked to mark its own unchecked numbers and did not
+        for check in ANSWER_CHECKS:
+            try:
+                text, found = check(
+                    text,
+                    question=s.question,
+                    passages=[p.text for p in bundle.passages],
+                    worked=s.worked,
+                )
+            except Exception as exc:  # noqa: BLE001 - an answer without its marks
+                logging.getLogger("prax.surf").warning("answer check failed: %s", exc)
+                continue
+            checks += found
     out.update(
+        checks=checks,
         answer=text.strip() if text else None,
         model=answerer.name if text else None,
         citations=ask.citations(text, bundle) if text else [],
