@@ -12,6 +12,10 @@
 #   chunks     the formula chunks involved (`chunk:<id>` for the tool)
 #   expected   the right answer, checked with SymPy when the set was written
 #   expect     a regex a right answer matches, where one can be written
+#   check      what a machine scores (scripts/score_maths.py): the answer's
+#              yes or no, or a number within a relative tolerance (in any
+#              unit a thousand apart), with `near` for partly right. The
+#              questions without one are scored by hand.
 #
 # Run (when agreed): python scripts/eval_ask.py --questions tests/eval/questions-maths.yaml
 
@@ -24,6 +28,7 @@ questions:
     chunks: [3009249, 3009252]
     expected: 'the same (symbolically: the difference rewritten in exponentials is 0)'
     expect: "same|equal|identical"
+    check: {answer: yes}
   - id: moog-tanh-definition-typo
     kind: same
     q: 'The Moog ladder paper defines tanh x as (e^{xx} - e^{-x})/(e^x + e^{-x}) = (e^{2x} - 1)/(e^{2x} + 1). Are both expressions tanh x?'
@@ -31,6 +36,7 @@ questions:
     chunks: [3009251]
     expected: 'the second is tanh x; the first is not (a typo, e^{xx} for e^x)'
     expect: "typo|not.*(same|tanh)|e\\^\\{?xx"
+    check: {answer: no}
   - id: moog-eq3-typo
     kind: same
     q: 'Does equation (3) of the Moog ladder paper, I = I_1 + I_2 e^{(V_2 - V_1)/V_1}, follow from equation (2) and I = I_1 + I_2?'
@@ -38,6 +44,7 @@ questions:
     chunks: [3009246, 3009247, 3009248]
     expected: 'no as printed; with V_T in the exponent''s denominator (not V_1) it is I = I_1 (1 + e^{(V_2 - V_1)/V_T}). The printed (3) has two slips.'
     expect: "V_T|typo|not"
+    check: {answer: no, also: "V_T"}
   - id: dattorro-notch
     kind: same
     q: 'In Dattorro''s "Reverberator and Other Filters", is the notch H_n(z) of equation (4) the same as (1 + A(z))/2 with the allpass A(z) of equation (6)?'
@@ -45,6 +52,7 @@ questions:
     chunks: [3010983, 3010985, 3010988]
     expected: 'the same (checked symbolically)'
     expect: "same|equal|identical"
+    check: {answer: yes}
   - id: dattorro-resonator
     kind: same
     q: 'And is the resonator H_r(z) of equation (5) the same as (1 - A(z))/2?'
@@ -52,6 +60,7 @@ questions:
     chunks: [3010984, 3010985, 3010987]
     expected: 'the same (checked symbolically)'
     expect: "same|equal|identical"
+    check: {answer: yes}
   - id: dattorro-beta-forms
     kind: same
     q: 'Dattorro''s equation (14) writes beta two ways, with tan(omega_c/(2Q)) and with tan(Delta omega/2). Are they the same given equation (1)?'
@@ -59,6 +68,7 @@ questions:
     chunks: [3010980, 3010993]
     expected: 'the same, because Q = omega_c / Delta omega, so omega_c/(2Q) = Delta omega / 2'
     expect: "same|equal|Q"
+    check: {answer: yes}
 
   # --- derive: from one formula to another --------------------------------
   - id: rms-rc-to-tau
@@ -112,6 +122,7 @@ questions:
     chunks: [3009257]
     expected: '1/(2 V_T) with V_T = 26 mV is 19.23 per volt'
     expect: "19\\.2|26\\s*mV|0\\.026"
+    check: {number: 19.23, within: 0.01}
   - id: dattorro-beta-value
     kind: evaluate
     q: 'With Dattorro''s equation (14), what is beta for a notch at 1 kHz with Q = 2, at a 48 kHz sampling rate?'
@@ -119,6 +130,7 @@ questions:
     chunks: [3010980, 3010993]
     expected: 'omega_c = 2 pi 1000/48000 = 0.1309 rad; beta = 0.9366'
     expect: "0\\.936|0\\.937"
+    check: {number: 0.9366, within: 0.0005, near: 0.01}
   - id: rms-tau
     kind: evaluate
     q: 'In the RMS compressor''s detector, what time constant tau do R = 10 kOhm and C = 1 uF give?'
@@ -126,6 +138,7 @@ questions:
     chunks: [2912753]
     expected: 'tau = RC = 10 ms'
     expect: "10\\s*ms|0\\.01"
+    check: {number: 0.01, within: 0.001}
   - id: diode-current
     kind: evaluate
     q: 'With the Shockley equation of the diode clipper paper, what current flows at v = 0.4 V for I_s = 2.52 nA and V_T = 25.85 mV?'
@@ -133,6 +146,7 @@ questions:
     chunks: [3009385]
     expected: 'about 13.2 mA (0.013232 A)'
     expect: "13\\.2|0\\.0132"
+    check: {number: 0.013232, within: 0.001, near: 0.02}
   - id: logistic-equilibria
     kind: evaluate
     q: 'Where are the equilibria of the logistic equation dN/dt = r N (1 - N/K) in Strogatz, and which is stable for r > 0?'

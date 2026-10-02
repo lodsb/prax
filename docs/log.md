@@ -3168,3 +3168,18 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   (`0.4/0.02585 = 15.478`, true 15.474, and the current from it).
 - **Not yet measured:** the numbers half, which needs the passages the
   eval files do not keep; machine scoring (step 3) will keep them.
+
+## 2026-10-02: AD2, step 3 — scoring by machine
+
+- **What.** `check:` on 10 of the 20 maths questions (six yes or no, four
+  values with a tolerance and a `near` for partly right) and
+  `scripts/score_maths.py`, which scores an answers file and, with
+  `--hand`, compares itself with `tests/eval/maths-hand-scores.yaml`
+  (the hand scores of the d1, d2, e1 and e2 runs, now kept).
+- **Agreement, measured.** 130 of 160 at first. Two causes were
+  systematic: a grounded answer that declines in its opening sentence but
+  quotes the tool's number (hand: wrong, machine: right), and the
+  equation (3) question, which the hand marks right only when the answer
+  names the `V_T` slip. With a refusal pattern and `also: "V_T"`: 141 of
+  160 (88%). The rest are partial credit for thin reasoning.
+- `scripts/eval_maths.py` keeps the door's answer checks (`checks`).

@@ -298,6 +298,18 @@ Each is scored by hand, with and without the tool, in grounded and in
 open mode (`scripts/eval_maths.py`, questions in
 `tests/eval/questions-maths.yaml`).
 
+Since AD2 step 3 (2026-10-02), 10 of the 20 are also scored by machine
+(`scripts/score_maths.py`): the six yes-or-no questions by the opening
+sentence's verdict, and the four values by the closest number in the
+answer within a tolerance, in any unit a thousand apart. A check may ask
+for a pattern besides the verdict (`also`). An opening sentence that
+declines ("the passages do not contain") scores wrong, as the hand
+scores do. The hand scores of four runs are
+`tests/eval/maths-hand-scores.yaml`; with `--hand` the scorer compares
+itself with them. On those 160 answers it agrees on 141 (88%); most of
+the rest are answers the hand called partly right for thin reasoning.
+The derivation and ADAA questions stay with the hand.
+
 The first run (2026-10-01, the local ask model, 8 steps) scored right,
 partly right and wrong as follows:
 

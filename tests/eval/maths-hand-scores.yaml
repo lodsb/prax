@@ -1,0 +1,90 @@
+# Hand scores of the maths eval (docs/symbolic-maths.md), R right, P partly,
+# W wrong, scored in one sitting per double run. Per question, the four
+# ways in the order: tools on grounded, on open, off grounded, off open.
+# The answers are docs/eval/maths-answers-<file>.json, outside the
+# repository. scripts/score_maths.py --hand compares the machine with these.
+runs:
+  2026-10-01-d1:
+    moog-tanh-forms: RRWR
+    moog-tanh-definition-typo: RRRR
+    moog-eq3-typo: RPRP
+    dattorro-notch: RRWR
+    dattorro-resonator: WWWW
+    dattorro-beta-forms: RRWP
+    rms-rc-to-tau: PPRP
+    rms-substitution: RRPR
+    moog-eq4: WRRR
+    moog-small-signal: PRPR
+    adaa-linearisation: RWWR
+    diode-lambert-w: PPWP
+    moog-19-2: RRWR
+    dattorro-beta-value: RRRR
+    rms-tau: WRWR
+    diode-current: PPPP
+    logistic-equilibria: RRRP
+    adaa-tanh-first: PPPP
+    adaa-tanh-second: WWWP
+    adaa-hard-clip: RRRR
+  2026-10-01-d2:
+    moog-tanh-forms: RRWR
+    moog-tanh-definition-typo: WRRR
+    moog-eq3-typo: PRRR
+    dattorro-notch: RRPP
+    dattorro-resonator: WPWW
+    dattorro-beta-forms: RRRR
+    rms-rc-to-tau: PPRR
+    rms-substitution: RRWR
+    moog-eq4: RRRR
+    moog-small-signal: RRWR
+    adaa-linearisation: PPRR
+    diode-lambert-w: PPWP
+    moog-19-2: RRWR
+    dattorro-beta-value: RRRR
+    rms-tau: PRWW
+    diode-current: PPPP
+    logistic-equilibria: RRPR
+    adaa-tanh-first: RPRP
+    adaa-tanh-second: WWWW
+    adaa-hard-clip: RRRR
+  2026-10-02-e1:
+    moog-tanh-forms: RRRR
+    moog-tanh-definition-typo: RRRR
+    moog-eq3-typo: RPPP
+    dattorro-notch: WRRR
+    dattorro-resonator: WWWR
+    dattorro-beta-forms: RRPW
+    rms-rc-to-tau: PRPP
+    rms-substitution: RRRR
+    moog-eq4: RRRR
+    moog-small-signal: RRWR
+    adaa-linearisation: WRRP
+    diode-lambert-w: PPWP
+    moog-19-2: RRPR
+    dattorro-beta-value: RRRR
+    rms-tau: WRWR
+    diode-current: RRPP
+    logistic-equilibria: RRRR
+    adaa-tanh-first: PPPP
+    adaa-tanh-second: WWWP
+    adaa-hard-clip: RRRR
+  2026-10-02-e2:
+    moog-tanh-forms: RRPR
+    moog-tanh-definition-typo: RRRR
+    moog-eq3-typo: RRPP
+    dattorro-notch: RRRR
+    dattorro-resonator: WWWP
+    dattorro-beta-forms: RRPR
+    rms-rc-to-tau: PPWP
+    rms-substitution: RRRR
+    moog-eq4: WRPR
+    moog-small-signal: RRRR
+    adaa-linearisation: WPWR
+    diode-lambert-w: PPPP
+    moog-19-2: RRRR
+    dattorro-beta-value: RRRR
+    rms-tau: WRWR
+    diode-current: PPPP
+    logistic-equilibria: RRRR
+    adaa-tanh-first: RPPP
+    adaa-tanh-second: WWWW
+    adaa-hard-clip: RRRR

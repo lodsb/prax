@@ -112,6 +112,9 @@ def main() -> int:
                     }
                 ),
                 "steps": len(trail),
+                # what the door's answer check found (AD2): its marks are in
+                # the answer, its verdicts here
+                "checks": got.get("checks") or [],
                 "seconds": round(time.time() - t0, 1),
                 "regex": bool(re.search(q["expect"], answer, re.IGNORECASE)),
             }

@@ -76,7 +76,7 @@ nothing.
             "not checked") go into the answer whatever the model wrote:
             "(not checked)" asked of the model was used once in 160
             answers.
-      - [ ] **Scoring by machine.** Each question gets a check the
+      - [x] (2026-10-02: `scripts/score_maths.py`, 10 of 20 questions; agrees with the hand on 141 of 160 answers; the five-run measurement is next) **Scoring by machine.** Each question gets a check the
             calculator can run: a number with a tolerance, a formula by
             `same`, a yes or no. Derivations stay scored by hand. Two
             runs of one way disagree on 3 to 7 of 20, so a change is
