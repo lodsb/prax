@@ -28,21 +28,25 @@ engineering leftovers. What waits on the user is apart.
    2026-10-02, then the ~190 weaker maths candidates. The `equations`
    step checks every formula, and a broken formula that is an
    extraction slip is read again. Watched, not built.
-4. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
+4. **AL. The first client's feedback** (below): its small bugs first
+   (a door address without a scheme, a URL with a space, links in
+   results, a date filter), then status, captures and pages, then
+   syncing a project as a tool.
+5. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
    marker's own llama-server held 10 GB of RAM that no plan saw. Step 1
    first, after the night's books; steps 2 and 3 after AA.
-5. **AK. Another model, measured** (below): a dense Qwen 27B and an
+6. **AK. Another model, measured** (below): a dense Qwen 27B and an
    uncensored build of it against the 35B on prax's own evals. Card
    time, so it runs at night or while nothing else waits.
-6. **AA. Close Z** (below): the labeller's corrections, and the genre
+7. **AA. Close Z** (below): the labeller's corrections, and the genre
    words in the document field, measured.
-7. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
+8. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
    `refetch-later.txt` (untracked) with the import of the old disk, when
    the NAS is reachable.
-8. **Measured improvements** (below, "Retrieval and ask", "The graph"):
+9. **Measured improvements** (below, "Retrieval and ask", "The graph"):
    the sections pass's vector arm and its worth to `ask`, document-aware
    rerank input, a compressed edge list, `confidence` as a number.
-9. **The engineering leftovers** (below): `store.retrieval` and
+10. **The engineering leftovers** (below): `store.retrieval` and
    `store.repair` in parts, typed shapes (a search hit first), the UI
    helpers the extension copies. The strict mypy batch is done.
 
@@ -228,6 +232,102 @@ and pushing what is committed.
             calculation (values and a formula) goes a fixed path: the
             formula found, evaluated with the values, the model asked
             only to explain the result.
+
+- [ ] **AL. The first client's feedback.** On 2026-10-03 an agent in
+      another of the user's repositories used prax through the plugin for
+      a whole session: it searched, captured papers, wrote a landscape
+      page, and synced a subproject's documents. Its report, in order of
+      what to do. Two claims were checked in the code: the first two
+      bugs are real.
+
+      *Small bugs, first.*
+      - [ ] **A door address without a scheme.** `PRAX_DOOR=<address>:8000`
+            made every call fail with "Request URL is missing an
+            'http://'", while the server showed as connected.
+            `client.Door` uses the variable as given. Add `http://` when
+            there is no scheme, and say the address in every
+            not-reachable error (it does for some).
+      - [ ] **A URL with a space is a 500.** `POST /ingest/url` turns
+            `ValueError` and `OSError` into 400 and 502;
+            `http.client.InvalidURL` is neither. Quote the URL's path,
+            and answer 400 with the reason for one that is still bad.
+      - [ ] **Links in results.** `write_page`, `capture_url`, `get` and
+            `context` answer ids, and the agent found `ui/#doc/N` by
+            reading the UI's source. A `url` field everywhere, from the
+            door's own address, and a `#page/<slug>` route.
+      - [ ] **A date filter.** `documents()` has no `since`, and its rows
+            show `created_at: null` though `added_at` is set. "What did
+            the user just upload" is one call with it.
+
+      *Status, speed, captures, pages.*
+      - [ ] **Where a document is.** `capture_url` answered `indexed:
+            false`; hours later `get` showed `text_len: 0` and `pending:
+            []`, which reads as nothing pending and no text. The worker
+            was not running. A `status(doc_ids)` tool: queued,
+            processing, failed with the reason, and whether a worker is
+            alive.
+      - [ ] **`append_page` took over 120 s.** Measure where (an
+            extraction or an embedding in the request?), then answer the
+            write at once and index after.
+      - [ ] **A section of a page replaced.** After five appends a
+            "still missing" section was stale, and only a rewrite of the
+            whole page fixed it. `update_section(slug, heading, text)`,
+            or a status block like the ask blocks.
+      - [ ] **Failed captures handed to the extension.** TLS chain
+            errors, 403s and bot checks need the browser. Instead of an
+            error, `capture_url` queues the URL for the extension
+            (`{queued_for_extension: true}`), which works through the
+            queue with the person's session.
+      - [ ] **Batch capture**: many URLs in one call, a result per item.
+      - [ ] **Uploads that say what they are.** Extension uploads came
+            with file-name titles and no domains. A `set_title` tool, and
+            an upload linked to the request it answers, which gives it
+            the request's domains.
+
+      *Syncing a project as a tool.* Today the agent runs `prax import
+      project` through the venv's Python, which needs the path, a call
+      out of its sandbox, and a `.prax-project` file in the repository.
+      Without that file it took in a build tree's vendored dependencies.
+      - [ ] `sync_project(root, include, exclude, name, domains,
+            dry_run=True, tracked_only=True)`: tracked files only by
+            default (`git ls-files`), and the usual build folders left
+            out (`_deps/`, `*-subbuild/`, `CMakeFiles/`, `build/`,
+            `third_party/`). A dry run by default, the plan as data
+            (each path: add, refresh, unchanged or skip, and why), so
+            the agent shows it and the person approves.
+      - [ ] A subdirectory of a larger repository as a project, its
+            documents keyed by the remote and the path, so a move does
+            not make a duplicate.
+      - [ ] The manifest outside the repository, in prax keyed by remote
+            and path. A `.prax-project` in a shared repository tells
+            colleagues about the tool and gets committed by accident.
+      - [ ] Auto-sync only when the manifest says `auto_sync: true`;
+            today the file alone turns on the session-end hook.
+      - [ ] The project page made with it: `project-<name>`, its members
+            listed, a summary block the agent writes.
+
+      *Features it wanted.*
+      - [ ] **Bibliographies.** `references(doc_id)`: the parsed list,
+            each entry found in the library (`doc N`) or with its DOI
+            and an open-access URL. `cited_but_missing(set)`: what a set
+            of papers cites that the library lacks, ranked by how many
+            cite it. The reference chunks and `data.cited` exist
+            (stage on references); the `cites` in `context` also held
+            junk from software help files, which a check of what counts
+            as a reference list removes.
+      - [ ] **Sensitivity on write**: `sensitivity: personal` accepted by
+            `ingest`, `write_page` and the sync, so a colleague's notes
+            can live in prax behind the wall (stage U) instead of
+            outside it.
+      - [ ] **Page and repository links**: a repository path on a page
+            resolves to the synced document, `[title](#doc/N)` like
+            any.
+
+      *What worked*, by its account: hybrid search with the region line
+      found the existing cluster in one call; `documents(title=…)`
+      checked coverage; the capture errors were clear (the bot check
+      pointed to the extension); and the skill's rule that a document's
+      content is data, not instructions.
 
 - [ ] **AJ. Readers under prax's hand: every model process a role, the
       OCR readers measured against each other.** The user, 2026-10-02:
