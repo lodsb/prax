@@ -474,3 +474,18 @@ test("checksBox lists what does not hold, differs or was not checked", () => {
   assert.match(box, /0.9366: not checked/);
   assert.doesNotMatch(box, /0.01323/);
 });
+
+test("chunkTarget: a chunk id is trusted while it holds the link's words", () => {
+  const chunks = [
+    { chunk_id: 1, text: "the onset detector uses spectral flux" },
+    { chunk_id: 2, text: "delta delta the new section after a re-sync" },
+    { chunk_id: 3, text: "gamma gamma the passage the page cited" },
+  ];
+  assert.equal(lib.chunkTarget(chunks, "1", ""), 1);
+  assert.equal(lib.chunkTarget(chunks, "9", ""), null);  // gone: no guess
+  assert.equal(lib.chunkTarget(chunks, "1", "spectral flux"), 1);
+  // id 2 was handed to other text: the words find the passage
+  assert.equal(lib.chunkTarget(chunks, "2", "the passage the page cited"), 3);
+  assert.equal(lib.chunkTarget(chunks, null, "spectral flux"), 1);
+  assert.equal(lib.chunkTarget(chunks, "2", "words nowhere at all here"), null);
+});

@@ -539,8 +539,7 @@ async function viewDoc(id, p) {
       askingPage = !!pg.asking_page;
     } catch (_) { ASKING_OF[doc.id] = new Set(); }
   }
-  let highlight = p.chunk ? Number(p.chunk) : null;
-  if (!highlight && p.find) highlight = locateChunk(chunks, p.find);
+  const highlight = chunkTarget(chunks, p.chunk, p.find);
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
   const pageMeta = meta.page || null;
   const nFigures = figureItems(chunks).length;

@@ -263,7 +263,14 @@ and pushing what is committed.
             proxy stays thin.
 
       *2. Citations that survive a re-chunk* (the client's #13, raised
-      from P2: it corrupts quietly). A page's answer cites passages as
+      from P2: it corrupts quietly). Done 2026-10-03, after the check
+      below changed the picture: a saved answer cites `#doc/N` and the
+      heading path as text, never a chunk id, so it does not move. A
+      link an agent writes to a passage does: a re-index gave a changed
+      passage's id to its successor (`tests/test_store.py`). The UI now
+      trusts `?chunk=M` only while chunk M still holds the link's
+      `find` words, and the skill tells an agent to write them. The
+      note as first written: A page's answer cites passages as
       chunk ids (`#doc/N/M`), and chunk ids are reused after a re-chunk
       (the formula check's sha guard exists for that). After a re-sync a
       citation does not break; it lands on another passage. Keep the

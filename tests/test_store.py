@@ -521,3 +521,28 @@ def test_a_label_already_held_in_the_librarys_language_is_not_moved_onto(
         )
     }
     assert ("Autorisierungsassistent", "de") in labels
+
+
+def test_a_changed_passage_may_hand_its_chunk_id_to_another(
+    con: sqlite3.Connection,
+) -> None:
+    """A chunk id is not a passage's name. A re-index keeps the ids of
+    unchanged chunks, deletes the changed ones and inserts their
+    successors, and SQLite gives a new row the highest id plus one: a
+    document's own newest chunks come back under the same ids with other
+    text (2026-10-03, the first client's question about its links). A
+    link to a passage says its words too (``#doc/N?chunk=M&find=…``), and
+    the UI goes by the words when the chunk no longer holds them."""
+
+    def para(word: str) -> str:
+        return " ".join([word] * 400)
+
+    text = f"# One\n\n{para('alpha')}\n\n# Two\n\n{para('gamma')}\n"
+    doc = store.ingest_text(con, text, title="synced")["doc_id"]
+    before = {c["chunk_id"]: c["text"] for c in store.list_chunks(con, doc)}
+    store.index_text(con, doc, text.replace(para("gamma"), para("delta")))
+    after = {c["chunk_id"]: c["text"] for c in store.list_chunks(con, doc)}
+    kept = [i for i in before if "alpha" in before[i]]
+    assert all(after[i] == before[i] for i in kept)  # unchanged: same id
+    moved = [i for i in before if "gamma" in before[i]]
+    assert moved and all(i in after and "delta" in after[i] for i in moved)

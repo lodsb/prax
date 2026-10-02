@@ -45,6 +45,19 @@ function locateChunk(chunks, quote) {
   return bestN >= Math.max(2, words.size * 0.4) ? best : null;
 }
 
+// The chunk a link means. A chunk id is not a passage's name: a re-index
+// hands a changed passage's id to its successor (tests/test_store.py,
+// 2026-10-03). So a link that also says the passage's words
+// (#doc/N?chunk=M&find=…) is trusted only while chunk M still holds them;
+// else the words find the passage, or nothing is highlighted.
+function chunkTarget(chunks, chunkId, find) {
+  const id = chunkId ? Number(chunkId) : null;
+  const held = id != null ? (chunks || []).find((c) => c.chunk_id === id) : null;
+  if (!find) return held ? id : null;
+  if (held && locateChunk([held], find) === id) return id;
+  return locateChunk(chunks, find);
+}
+
 // [n] citations in an answer become links to the passage's chunk.
 function citeLinks(html, passages) {
   const byN = Object.fromEntries((passages || []).map((p) => [p.n, p]));
@@ -668,5 +681,5 @@ function checksBox(checks) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }

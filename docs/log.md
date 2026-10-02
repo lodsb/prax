@@ -3613,6 +3613,30 @@ a refusal or no answer tell all three of its fields: the door's
 address as the server uses it, reachable or not, the token accepted or
 refused, and the worker. The skill says when to use each.
 
+## 2026-10-03: a link to a passage, across a re-sync (stage AL, step 2)
+
+The first client asked whether its page's links to passages break when a
+synced document is synced again. They do worse than break. A re-index
+keeps the id of every chunk whose text is unchanged, deletes the changed
+ones and inserts their successors, and SQLite gives a new row the
+highest id plus one. A document synced and then synced again holds the
+newest rows of the table, so its changed passages came back under their
+old ids with the new text: three of seven in the probe. A link
+`#doc/1/6` then opens another passage without a sign.
+
+What is safe: a saved answer cites `[title](#doc/N)` with the heading
+path and the page as text, never a chunk id. Graph edges keep a quote
+as their evidence. What is not: a link an agent writes from a search
+hit's `chunk_id`.
+
+Stable chunk ids would mean rebuilding the chunks table. The fix is
+the link's instead. `lib.chunkTarget` trusts `?chunk=M` only while
+chunk M still holds the link's `find` words, and otherwise finds the
+passage by the words, or highlights nothing rather than the wrong
+thing. The plugin's skill tells an agent to link a passage as
+`#doc/N?chunk=M&find=a+few+words`. `tests/test_store.py` pins down the
+reuse, so nothing comes to rely on a chunk id as a name.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
