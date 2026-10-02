@@ -319,9 +319,15 @@ and pushing what is committed.
       - the labeller's mistakes, corrected on the Review page's genre
         tab, go back into its training (`scripts/train_labeller.py`), as
         the user labels;
-      - the genre words in the document field (`document_field`, beside
-        "PDF document"), with `scripts/eval_retrieval.py` before and
-        after, since it changes what search ranks.
+      - [x] (2026-10-03) the genre words in the document field: the
+        genres a person or the labeller gave, `p` 0.5 or more, no level,
+        beside "PDF document" (`meta._genre_words`). On a copy of the
+        store, the 62 queries of `queries-library.yaml` scored the same
+        before and after (hybrid MRR 0.90, hit@1 0.87; one query from
+        rank 8 to 9). The set has no query that names a kind of
+        document, so the gain is unmeasured: queries like "… datasheet"
+        join the set from the person's labelled documents. Live with
+        the next door restart and the nightly `fields` pass.
 
 - [ ] (2026-09-30: a pilot of 50 questions, the teacher cited the expected document in 45; the numbers are with the plan, outside the repository) **AE. The distilled surfer.** A small local model trained on the
       large model's search-and-read trails. Its plan is kept outside the

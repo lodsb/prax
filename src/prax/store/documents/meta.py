@@ -8,6 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
+from prax.graph import ontology
 from prax.text import mimes
 
 from ..base import (
@@ -297,6 +298,24 @@ _KIND_WORDS = {
     "application/xhtml+xml": "web page",
     "text/plain": "text",
 }
+# what a document is, in the words a query would use (stage Z): the
+# genre labels a person or the labeller gave, each as sure as GENRE_FIELD_P.
+# The levels ("informational") say too little to help a search
+GENRE_FIELD_P = 0.5
+_GENRE_WORDS = {"qa": "question and answer", "source": "source code"}
+
+
+def _genre_words(meta: dict[str, Any]) -> list[str]:
+    levels = {lv.name for lv in ontology.genres().levels}
+    out = []
+    for g in meta.get("genres") or []:
+        label = str((g or {}).get("genre") or "")
+        if not label or label in levels:
+            continue
+        if float((g or {}).get("p", 1.0)) < GENRE_FIELD_P:
+            continue
+        out.append(_GENRE_WORDS.get(label, label))
+    return out
 
 
 @_guards("doc", lambda: None)
@@ -341,6 +360,7 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     source = str(meta.get("text_source") or "")
     if source.startswith(("claude-vision", "vision/")):
         words.append("image description")
+    words += [w for w in _genre_words(meta) if w not in words]
     parts = [row["title"] or "", " ".join(words)]
     creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
     if creators:

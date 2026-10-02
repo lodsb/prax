@@ -188,6 +188,27 @@ def test_document_field_follows_text_and_meta(con: sqlite3.Connection) -> None:
     assert store.vec_status(con)["documents"] == {}  # the row was dropped
 
 
+def test_document_field_says_its_genres(con: sqlite3.Connection) -> None:
+    """The genre words a person or the labeller gave go beside "PDF
+    document", the sure ones only, and no level (stage AA)."""
+    doc = store.ingest_text(
+        con,
+        "LM317 adjustable regulator. " * 5,
+        title="LM317",
+        meta={
+            "genres": [
+                {"genre": "instructional", "p": 0.99},
+                {"genre": "datasheet", "p": 0.97},
+                {"genre": "manual", "p": 0.2},
+                {"genre": "qa", "p": 0.8},
+            ]
+        },
+    )["doc_id"]
+    field = store.document_field(con, doc) or ""
+    assert field.splitlines()[1] == "text datasheet question and answer"
+    assert "instructional" not in field and "manual" not in field
+
+
 def test_document_field_ranks_identity_first(con: sqlite3.Connection) -> None:
     ids = _load(con)
     sch = store.ingest_text(

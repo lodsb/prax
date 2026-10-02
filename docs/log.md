@@ -3506,6 +3506,33 @@ books were still being read, so the desktop runs the old flags until
 then. 2048 MiB for the 35B is a guess at what the surf's resent context
 needs; its metrics (the prompt cache's share) will say.
 
+## 2026-10-03: the genre words in the document field (stage AA)
+
+A document's retrieval field now names what it is, in the labeller's
+words: "PDF document datasheet", "web page recipe", "text question and
+answer". The words are the genre labels in `meta.genres` with `p` of
+`GENRE_FIELD_P` (0.5) or more. Levels like "informational" say too
+little to help a search and stay out. `qa` and `source` are written out
+as "question and answer" and "source code". 12,551 of 13,395 documents
+carry genres: the labeller's 12,302, the person's 194, Claude's 55.
+
+Measured on a copy of the store, read from the live one with SQLite's
+backup API. The fields were rebuilt (12,412 changed, 11 s), the document
+vectors embedded again (12,414 in 475 s beside marker on the card), and
+`scripts/eval_retrieval.py` was run with `queries-library.yaml` before
+and after:
+
+| mode | hit@1 | hit@3 | MRR |
+|---|---|---|---|
+| fts | 0.73 → 0.73 | 0.87 → 0.87 | 0.80 → 0.80 |
+| vec | 0.69 → 0.69 | 0.81 → 0.81 | 0.75 → 0.75 |
+| hybrid | 0.87 → 0.87 | 0.92 → 0.92 | 0.90 → 0.90 |
+
+One query moved, from rank 8 to 9. The words do not disturb a topical
+search. Whether they help one that names a kind of document is not
+measured, since the set holds no such query; the next queries for it
+come from the documents the person labelled. The copy was deleted after.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
