@@ -3340,3 +3340,9 @@ four commits:
   now waits for it and comes back with it (`Supervisor._lent_away`, the
   loan's `was_up`). The first step of stage AI's planner, measured on the
   machine it broke.
+- **The 38 cut-short PDFs, fetched again where they could be.** 37 are
+  loose attachments with no DOI, URL or authors (several named by an md5
+  prefix, the old zoetrope store's naming), and no intact copy is on the
+  Zotero drive. One had an arXiv id: fetched whole (28 pages) as document
+  13376, and 4057 retired into it as its duplicate. The other 37 wait for
+  their originals from wherever the user kept them.
