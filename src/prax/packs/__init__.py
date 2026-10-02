@@ -131,6 +131,12 @@ def answer_checks(chosen: Iterable[str]) -> list[Any]:
     return [_resolve(p.answer_check) for p in running(chosen) if p.answer_check]
 
 
+def answer_prompts(chosen: Iterable[str]) -> str:
+    """The answer's words about the tools' results, of the packs a host runs."""
+    prompts = [p.answer_prompt for p in running(chosen) if p.answer_prompt]
+    return "\n\n".join(prompts)
+
+
 def tool_grammar(chosen: Iterable[str]) -> dict[str, str]:
     """The grammar rules of the surfer's tools that have them, by tool."""
     return {

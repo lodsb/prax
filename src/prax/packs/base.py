@@ -36,5 +36,8 @@ class Pack:
     # "module:function" run on an answer the surf wrote with tools on: the
     # answer checked and marked, and the checks (the maths pack's numbers)
     answer_check: str | None = None
+    # the words the answer is given about the tools' results, used only
+    # when an answer has results (the maths pack's calculator)
+    answer_prompt: str | None = None
     extra: str | None = None  # the pyproject extra it needs
     settings: str | None = None  # its section in prax.yaml

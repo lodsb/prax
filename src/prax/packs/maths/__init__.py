@@ -57,12 +57,23 @@ maths: {"op": "solve", "formula": "I = I1 + I1*exp(u)", "var": "I1"}
     same, believe it and look again: a passage's formula may be extracted
     wrongly, or a sign or factor of yours may be off."""
 
+# what the answer is told about the calculator's results, only when it has
+# some: a sentence in the core prompt for every ask had a tools-off answer
+# invent a calculator note (2026-10-02)
+ANSWER_PROMPT = """\
+The results above the passages were computed by a calculator from the
+question's values while the library was read. A number one of them gives
+is the answer's number; say it was computed. A question that is a
+calculation is answered by its result, though no passage holds the
+number."""
+
 MANIFEST = Pack(
     name="maths",
     tools={"maths": "prax.packs.maths.tool:surf_maths"},
     tool_help={"maths": HELP},
     tool_grammar={"maths": GRAMMAR.strip()},
     answer_check="prax.packs.maths.check:check_answer",
+    answer_prompt=ANSWER_PROMPT,
     # every display formula read once and its chain judged (AD2, step 4)
     steps={"equations": "prax.packs.maths.formulas"},
     watched=("equations",),

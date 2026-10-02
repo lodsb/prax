@@ -671,6 +671,8 @@ for _name, _tool in packs.tools(config.host_packs()).items():
 PACK_HELP = packs.tool_help(config.host_packs())
 # a tool's own step grammar (the maths step is a JSON object), by tool
 PACK_GRAMMAR = packs.tool_grammar(config.host_packs())
+# what the answer is told about the tools' results, when it has some
+RESULTS_PROMPT = packs.answer_prompts(config.host_packs())
 # what checks an answer written with the tools on, after it is written
 ANSWER_CHECKS = packs.answer_checks(config.host_packs())
 
@@ -815,8 +817,10 @@ def run(
         question=s.question,
         passages=kept,
         history=history,
-        note=answer_note(s),
+        note=s.note,
         mode=mode,
+        results=results_of(s),
+        results_prompt=RESULTS_PROMPT,
     )
     bundle.facts = store.document_facts(
         con, list(dict.fromkeys(p.doc_id for p in kept)), limit=ask.FACTS_PER_DOC
@@ -826,19 +830,13 @@ def run(
     return _result(s, answerer, text, t0, bundle)
 
 
-def answer_note(s: Surf) -> str:
-    """The note the answer is written with: the caller's, then what the
-    packs' tools worked out during the surf. The answering model saw none
-    of the steps, so a result it is not given is a result lost (the maths
-    run of 2026-10-01: seven checks made, none reached an answer)."""
-    if not s.worked:
-        return s.note
-    worked = "\n".join(s.worked[-WORKED_KEPT:])
-    head = (
-        "Worked out with the tools while reading (each line is the request,"
-        " then the tool's answer; use these results, cite the passages):"
-    )
-    return f"{s.note.strip()}\n\n{head}\n{worked}".strip()
+def results_of(s: Surf) -> list[str]:
+    """What the packs' tools worked out during the surf, the latest
+    ``WORKED_KEPT``: the answering model saw none of the steps, so a result
+    it is not given is a result lost (the maths run of 2026-10-01: seven
+    checks made, none reached an answer). A section of the bundle of its
+    own, apart from the caller's note."""
+    return s.worked[-WORKED_KEPT:]
 
 
 WORKED_KEPT = 6  # the latest tool results an answer is given
@@ -889,8 +887,10 @@ def _result(
             question=s.question,
             passages=s.kept,
             history=s.history,
-            note=answer_note(s),
+            note=s.note,
             mode=s.mode,
+            results=results_of(s),
+            results_prompt=RESULTS_PROMPT,
         )
     out = bundle.to_dict()
     checks: list[dict[str, Any]] = []

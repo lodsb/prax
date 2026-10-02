@@ -203,14 +203,25 @@ def test_a_passage_inside_a_formula_is_its_right_side(
 
 
 def test_the_answer_is_given_what_the_tools_worked_out() -> None:
-    from prax.answering import surf
+    from prax.answering import ask, surf
+    from prax.packs import maths
 
     s = surf.Surf("q", "q", [], None, 5, 3, 1000, note="a word")
-    assert surf.answer_note(s) == "a word"
+    assert surf.results_of(s) == []
     s.worked = [f"maths: same {i}\n  -> the same" for i in range(9)]
-    note = surf.answer_note(s)
-    assert note.startswith("a word\n\nWorked out with the tools")
-    assert "same 8" in note and "same 2" not in note  # the latest six
+    results = surf.results_of(s)
+    assert results[0].startswith("maths: same 3") and len(results) == 6  # the latest
+    with_results = ask.Bundle(
+        "q", note="a word", results=results, results_prompt=maths.ANSWER_PROMPT
+    )
+    message = with_results.as_message()
+    assert "Note: a word" in message and "Worked out with the tools" in message
+    assert "computed by a calculator" in with_results.system
+    # no results, no words about a calculator: a tools-off answer invented
+    # a calculator note when every prompt had them (2026-10-02)
+    without = ask.Bundle("q", note="a word", results_prompt=maths.ANSWER_PROMPT)
+    assert "calculator" not in without.system
+    assert "Worked out" not in without.as_message()
 
 
 def test_any_step_may_give_values() -> None:

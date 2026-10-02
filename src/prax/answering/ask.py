@@ -49,12 +49,7 @@ You answer questions from a personal research library. Use only the numbered
 passages and the graph facts given below the question; you have no other
 knowledge of these documents. After each claim, cite the passages that
 support it in square brackets, like [2] or [1][3]; cite nothing else and
-never invent a number. A number you work out yourself, rather than one a
-passage prints, is the result the note gives for it; when the note gives
-none, write "(not checked)" right after it. A result in the note was
-computed by a calculator from the question's values: use it and say it
-was computed; a question that is a calculation is answered by it, though
-no passage holds the number. When the question asks for an
+never invent a number. When the question asks for an
 equation, a formula or a definition and a passage shows it, write it out
 as that passage has it
 — in full, every term and condition, the whole display, not a part of it
@@ -77,10 +72,7 @@ You answer a question for someone whose personal research library is searched
 for you: numbered passages from it and the graph's facts about their
 documents are given below the question. Use them where they bear on the
 question and cite them in square brackets, like [2] or [1][3], right after
-what they support; cite nothing else and never invent a number. A number
-you work out yourself, rather than one a passage prints, is the result
-the note gives for it; when the note gives none, write "(not checked)"
-right after it. Beyond
+what they support; cite nothing else and never invent a number. Beyond
 them you may use your own knowledge: explain, derive, compare, write code,
 at the length the task needs. Keep the two apart. What rests on a passage
 carries its citation; what is your own carries none, and where the library
@@ -185,11 +177,20 @@ class Bundle:
     # grounded: the passages alone; open: the model's own knowledge beside
     # them (``OPEN_SYSTEM``)
     mode: str = "grounded"
+    # what a pack's tool worked out while the library was read (the maths
+    # pack's calculator), a section of its own; and the words a pack gives
+    # the answer for them, which are in the prompt only when there are any
+    results: list[str] = field(default_factory=list)
+    results_prompt: str = ""
 
     @property
     def system(self) -> str:
-        """The prompt the answer is asked with, by the mode."""
-        return OPEN_SYSTEM if self.mode == "open" else SYSTEM
+        """The prompt the answer is asked with, by the mode; a tool's
+        results bring their pack's words for them."""
+        base = OPEN_SYSTEM if self.mode == "open" else SYSTEM
+        if self.results and self.results_prompt:
+            return base + "\n\n" + self.results_prompt.strip()
+        return base
 
     def answer_tokens(self, grounded: int) -> int:
         """The answer's length budget: ``grounded`` for a grounded answer,
@@ -211,6 +212,15 @@ class Bundle:
         parts.append(f"Question: {self.question.strip()}")
         if self.note:
             parts.append(f"Note: {self.note.strip()}")
+        if self.results:
+            parts += [
+                "",
+                (
+                    "Worked out with the tools while reading (each request,"
+                    " then the tool's answer):"
+                ),
+                *self.results,
+            ]
         parts += ["", numbered]
         for p in self.passages:
             parts += ["", f"[{p.n}] {p.label()}", p.text]
@@ -253,6 +263,7 @@ class Bundle:
             "turns_before": len(self.history),
             "region": self.region,
             "mode": self.mode,
+            "results": self.results,
         }
 
 
