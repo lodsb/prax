@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from prax import store
 from prax.answering import ask, questions
 from prax.host import schedule
+from tests.conftest import wait_job
 
 
 def _library(con: sqlite3.Connection) -> tuple[int, int]:
@@ -339,11 +340,7 @@ def test_the_door_keeps_lists_and_runs_the_questions(client: TestClient) -> None
     listed = client.get("/questions").json()
     assert listed[0]["due"] and listed[0]["new"][0]["title"] == "A newer FDN reverb"
     job = client.post("/questions/run", json={"briefing": True}).json()["job"]
-    for _ in range(200):
-        row = client.get(f"/jobs/{job}").json()
-        if row["status"] != "running":
-            break
-        time.sleep(0.1)
+    row = wait_job(client, job)
     assert row["status"] == "done" and row["note"].startswith("1 of 1 asked again")
     assert "briefing: 3 documents" in row["note"]  # the whole library came today
     assert (

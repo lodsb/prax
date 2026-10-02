@@ -4,7 +4,6 @@ index files, the config, and only the archive files the copy lacks."""
 from __future__ import annotations
 
 import json
-import time
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import config, store
+from tests.conftest import wait_job
 
 
 def _fill(con: Any, n: int = 3) -> list[int]:
@@ -87,11 +87,7 @@ def test_the_door_runs_it_as_a_job(tmp_path: Path) -> None:
         bad = door.post("/backup", json={"dest": "relative"})
         assert bad.status_code == 400
         started = door.post("/backup", json={"dest": str(tmp_path / "copy")}).json()
-        for _ in range(100):
-            row = door.get(f"/jobs/{started['job']}").json()
-            if row["status"] != "running":
-                break
-            time.sleep(0.05)
+        row = wait_job(door, started["job"])
         assert row["status"] == "done", row
         assert row["note"].startswith("done:")
         assert (tmp_path / "copy" / "prax.db").is_file()

@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-import time
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -17,6 +16,7 @@ from fastapi.testclient import TestClient
 from prax_cli import main as cli
 
 from prax.client import Door
+from tests.conftest import wait_job
 
 
 @pytest.fixture()
@@ -437,10 +437,7 @@ def test_questions_are_listed_and_asked_again(
         "<!-- /prax:ask id=q1 -->\n"
     )
     job = door.put("/page/my-notes", json={"text": text, "title": "My notes"}).json()
-    for _ in range(100):
-        if door.get(f"/jobs/{job['job']}").json()["status"] != "running":
-            break
-        time.sleep(0.1)
+    wait_job(door, job["job"])
     assert run("questions") == 0
     printed = capsys.readouterr().out
     assert "my-notes#q1" in printed and "in My notes" in printed

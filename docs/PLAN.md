@@ -457,9 +457,10 @@ not done.
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`
       (19), `capture.routes.routes_for` (19).
 - [ ] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
-      the extension. Seven tests poll a job with their own loop. The
-      summaries and sections helpers that the store calls up to could
-      move into `prax.text`.
+      the extension. The summaries and sections helpers that the store
+      calls up to could move into `prax.text`. (2026-10-03: the six tests
+      that polled a job with their own loop use `tests.conftest.wait_job`,
+      which fails with the job's row instead of running on.)
 - **`text.compounds` asks the store** for the forms a word takes, and
   only the store uses it. It is retrieval, not text; it waits for
   `store/retrieval.py` (1,916 lines) to split at 2,000 as invariant 3

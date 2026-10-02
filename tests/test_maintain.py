@@ -6,7 +6,6 @@ nightly."""
 from __future__ import annotations
 
 import sqlite3
-import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from prax import config, store
 from prax.capture import inbox
+from tests.conftest import wait_job
 
 
 def test_the_pass_rebuilds_what_is_derived(
@@ -85,11 +85,7 @@ def test_the_door_runs_it_as_a_job(tmp_path: Path) -> None:
         assert door.post("/maintain", json={"only": ["nope"]}).status_code == 400
         started = door.post("/maintain", json={"only": ["fields", "dedupe"]}).json()
         assert started["passes"] == ["fields", "dedupe"]
-        for _ in range(100):
-            row = door.get(f"/jobs/{started['job']}").json()
-            if row["status"] != "running":
-                break
-            time.sleep(0.05)
+        row = wait_job(door, started["job"])
         assert row["status"] == "done", row
         assert row["note"].startswith("done: fields")
 

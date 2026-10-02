@@ -5,7 +5,6 @@ review queue's rule passes and a rechunk inside the maintenance pass."""
 from __future__ import annotations
 
 import sqlite3
-import time
 from collections.abc import Iterator
 from typing import Any
 
@@ -14,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from prax import store
 from prax.store import Edge as E
+from tests.conftest import wait_job
 
 
 @pytest.fixture()
@@ -22,15 +22,6 @@ def door(data_dir: object) -> Iterator[TestClient]:
 
     with TestClient(app) as c:
         yield c
-
-
-def _wait(door: TestClient, job_id: int) -> dict[str, Any]:
-    for _ in range(200):
-        row = door.get(f"/jobs/{job_id}").json()
-        if row["status"] != "running":
-            return row
-        time.sleep(0.05)
-    raise AssertionError("the job did not finish")
 
 
 def test_resolution_is_a_plan_and_then_a_job(door: TestClient) -> None:
@@ -51,7 +42,7 @@ def test_resolution_is_a_plan_and_then_a_job(door: TestClient) -> None:
     )
     applied = door.post("/graph/resolve", json={"embed": False, "apply": True}).json()
     assert applied["applied"] is True
-    row = _wait(door, applied["job"])
+    row = wait_job(door, applied["job"])
     assert row["status"] == "done" and row["note"].startswith("done: merged 2 sure")
     assert [e["name"] for e in store.find_entities(con, "smith")] == ["Julius O. Smith"]
     # idempotent: nothing left to merge
@@ -80,7 +71,7 @@ def test_the_review_pass_and_a_rechunk_run_inside_maintenance(door: TestClient) 
     assert store.count_review(con) == 1
     started = door.post("/maintain", json={"only": ["review", "rechunk"]}).json()
     assert started["passes"] == ["review", "rechunk"]
-    row = _wait(door, started["job"])
+    row = wait_job(door, started["job"])
     assert row["status"] == "done", row
     assert store.count_review(con) == 0
     assert any(
@@ -129,7 +120,7 @@ def test_the_citation_import_is_a_job(
     monkeypatch.setattr(citations, "import_citations", fake_import)
     monkeypatch.setattr(citations, "source_named", lambda name, fetch: object())
     started = door.post("/import/citations", json={"source": "crossref"}).json()
-    row = _wait(door, started["job"])
+    row = wait_job(door, started["job"])
     assert (
         row["status"] == "done"
         and "1 resolved" in row["note"]

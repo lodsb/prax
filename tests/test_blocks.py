@@ -5,7 +5,6 @@ guard, the chunk it becomes, the pass that answers it and the door."""
 from __future__ import annotations
 
 import sqlite3
-import time
 from pathlib import Path
 
 import pytest
@@ -14,6 +13,7 @@ from fastapi.testclient import TestClient
 from prax import store
 from prax.answering import ask, questions
 from prax.text import blocks, chunking
+from tests.conftest import wait_job
 
 PAGE = """# FDN notes
 
@@ -413,21 +413,12 @@ def client(data_dir: Path, monkeypatch: pytest.MonkeyPatch) -> TestClient:
         yield c
 
 
-def _wait(client: TestClient, job: int) -> dict:
-    for _ in range(200):
-        row = client.get(f"/jobs/{job}").json()
-        if row["status"] != "running":
-            return row
-        time.sleep(0.1)
-    return row
-
-
 def test_the_door_answers_a_saved_block_and_lists_it(client: TestClient) -> None:
     con = store.connect()
     _library(con)
     r = client.put("/page/fdn-notes", json={"text": PAGE, "kind": "topic"}).json()
     assert r["created"] and r["job"]
-    row = _wait(client, r["job"])
+    row = wait_job(client, r["job"])
     assert row["status"] == "done" and row["note"] == "1 of 1 asked again"
     page = client.get("/page/fdn-notes").json()
     assert page["revision"] == 2 and page["blocks"][0]["filled"]
@@ -469,7 +460,7 @@ def test_the_door_answers_a_saved_block_and_lists_it(client: TestClient) -> None
     moved = "# Moved\n\nMine.\n\n" + page["text"][b1.head[0] : b1.tail[1]]  # type: ignore[index]
     r = client.put("/page/moved", json={"text": moved, "kind": "topic"}).json()
     assert r["created"] and r["job"]
-    assert _wait(client, r["job"])["note"] == "1 of 1 asked again"
+    assert wait_job(client, r["job"])["note"] == "1 of 1 asked again"
     other = client.get("/page/moved").json()
     assert other["revision"] == 2 and other["blocks"][0]["asked_at"]
     assert other["blocks"][0]["history"] == 1 and other["text"].startswith("# Moved")
@@ -480,7 +471,7 @@ def test_the_door_answers_a_saved_block_and_lists_it(client: TestClient) -> None
     job = client.post(
         "/questions/run", json={"slug": "fdn-notes#q2", "force": True, "release": True}
     ).json()["job"]
-    assert _wait(client, job)["status"] == "done"
+    assert wait_job(client, job)["status"] == "done"
     page = client.get("/page/fdn-notes").json()
     assert page["revision"] == 4 and not page["blocks"][1]["held"]  # 3: the re-save
     assert "written by hand" not in page["text"]
