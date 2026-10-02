@@ -150,7 +150,9 @@ and pushing what is committed.
             said why, which turned a one-hour job into a thirty-four-hour
             estimate. A few dozen lines in `hostinfo`, shown by `prax status`
             and the jobs view.
-      - [ ] **Ask the runtime what a text costs, rather than guessing.**
+      - [x] (done in stage E, 0f8760b: `models.trim_measured` asks
+            `/tokenize` and halves until it fits) **Ask the runtime what a
+            text costs, rather than guessing.**
             `models.trim_guessed` bounds a prompt by characters *and* UTF-8 bytes
             because it has no way to ask how many tokens that is — a
             heuristic that works and is still a guess. llama.cpp serves
