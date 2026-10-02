@@ -93,6 +93,20 @@ def work_demand(request: Request, plan: bool = False) -> dict[str, Any]:
     return out
 
 
+@router.get("/work/status")
+def work_status(request: Request, ids: str = "") -> dict[str, Any]:
+    """Where each document is on its way to being read, and whether a
+    worker is about (``work.status``): ``ids`` comma-separated, none for
+    the worker alone. A named token's documents only (stage U)."""
+    try:
+        doc_ids = [int(x) for x in ids.split(",") if x.strip()]
+    except ValueError as exc:
+        raise HTTPException(400, "ids: comma-separated document ids") from exc
+    if len(doc_ids) > 200:
+        raise HTTPException(400, "ids: 200 at most")
+    return work.status(_con(request), doc_ids)
+
+
 @router.get("/work/plan")
 def work_plan(request: Request) -> dict[str, Any]:
     """What the card does next (stage AI): each group of waiting work

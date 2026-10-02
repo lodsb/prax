@@ -1771,3 +1771,56 @@ def test_do_it_now_stands_until_its_work_is_done(
     finally:
         con.close()
     assert client.get("/work/demand").json()["now"] == {}
+
+
+def test_status_tells_not_yet_from_never_from_no_worker(client: TestClient) -> None:
+    """``GET /work/status``: each document's state on its way to being
+    read, and whether a worker is about (the first client's feedback,
+    2026-10-03: no text and nothing pending told it nothing)."""
+    from prax import parsers
+
+    con = client.app.state.con
+    pdf = client.post(
+        "/ingest/file",
+        files={"file": ("scan.pdf", b"%PDF-1.4 fake", "application/pdf")},
+    ).json()["doc_id"]
+    text = client.post("/ingest", json={"text": "read " * 30, "title": "T"}).json()
+
+    def ask() -> dict[str, Any]:
+        got: dict[str, Any] = client.get(
+            "/work/status", params={"ids": f"{pdf},{text['doc_id']},999999"}
+        ).json()
+        return got
+
+    got = ask()
+    rows = {r["doc_id"]: r for r in got["documents"]}
+    assert rows[pdf]["state"] == "queued" and rows[pdf]["place"] >= 1
+    assert rows[text["doc_id"]]["state"] == "indexed"
+    assert rows[999999]["state"] == "unknown"
+    assert got["worker"]["alive"] is False  # nobody has asked for work
+    # a worker takes it
+    work._lease("parse", [pdf], "w", seconds=60)
+    first = ask()
+    assert first["documents"][0]["state"] == "processing"
+    assert first["worker"]["alive"] is True  # it holds a lease
+    work.release_lease("parse", [pdf])
+    # a reading asked for, its server down
+    client.post(f"/doc/{pdf}/reading", json={"extractor": "marker"})
+    work.defer_reading("marker", pdf)
+    row = ask()["documents"][0]
+    assert row["state"] == "reading" and row["waits_for"] == ["marker"]
+    assert row["server_down"] == "marker"
+    store.cancel_reading(con, pdf)
+    # the readers ran and found nothing: a scan wants a reading
+    stamp = parsers.candidates("application/pdf")[0].stamp
+    meta = store.get_meta(con, pdf)
+    meta["parse_history"] = [{"extractor": stamp, "outcome": "empty", "at": "x"}]
+    store.set_meta(con, pdf, meta)
+    row = ask()["documents"][0]
+    assert row["state"] == "nothing found" and "OCR" in row["why"]
+    assert row["last_attempt"]["outcome"] == "empty"
+    # a worker that asked lately is about, with nothing in hand
+    work._leases.clear()
+    client.get("/work/titles")
+    assert ask()["worker"]["alive"] is True
+    assert client.get("/work/status", params={"ids": "a,b"}).status_code == 400

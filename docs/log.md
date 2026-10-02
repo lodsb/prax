@@ -3588,6 +3588,31 @@ small ones are fixed.
   added then or later, on the store, the door and the tool; anything
   else is a 400.
 
+## 2026-10-03: `status` and `health` (stage AL, step 1)
+
+The first client could not tell "not yet" from "never" from "no worker":
+24 captures sat without text for hours, and `get` said `pending: []`.
+That list holds the readings a person or the door asked for, not the
+parse queue a capture waits in.
+
+`GET /work/status?ids=` (`work.status`) says, per document: `indexed`;
+`processing` (a worker holds it); `reading` (what it waits for, and
+`server_down` with the role of `prax up` that must be up when its
+reading was deferred); `queued` (its place among the captures, or the
+nightly backlog pass for an import's document); `nothing found` (the
+readers ran and found no text, so a scan wants OCR or the vision
+model); `failed` (the last attempt's error); and `unknown` for one the
+caller may not see (stage U: the route is a named token's, with a case
+in `tests/test_wall.py`). `worker.alive` holds when a worker asked for
+work in the last two minutes or holds a lease now. A long marker read
+asks for nothing new for twenty minutes, but renews its lease.
+
+The MCP server has two tools more. `status(doc_ids)` passes that on.
+`health()` makes one call, the same route without ids, and the answer,
+a refusal or no answer tell all three of its fields: the door's
+address as the server uses it, reachable or not, the token accepted or
+refused, and the worker. The skill says when to use each.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

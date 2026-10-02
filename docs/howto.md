@@ -2770,8 +2770,14 @@ Claude Code. A tool called while the door is down answers `{"error":
 "the door is not reachable ..."}` instead of failing. The tools are
 `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`,
 `link`, `ask`, `set_domains`, `promote`, `get_page`, `write_page`,
-`append_page`, `ingest`, `capture_url` and `ingest_file` (a file on
-the machine running Claude Code, uploaded to the door). What the agent
+`append_page`, `ingest`, `capture_url`, `ingest_file` (a file on
+the machine running Claude Code, uploaded to the door), `status` (where
+documents are on their way to being read: queued with its place,
+processing, waiting for a reading and whether its server is up, nothing
+found, failed with the error; and whether a worker is about) and
+`health` (the door's address as the server uses it, reachable or not,
+the token accepted or refused). When the tools fail, `health` says
+which of the three it is. What the agent
 writes is stamped `agent`: edges' producer, pages' author, domain sets,
 promotions. `get` and `search` ask the door for the brief form
 (`brief=true`). A document's `meta` comes without the histories of how

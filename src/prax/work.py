@@ -49,7 +49,9 @@ from prax.steps.leases import (  # noqa: F401 - the table's names, as callers kn
     LEASE_SECONDS,
     _leases,
     defer_reading,
+    leased,
     leases,
+    reading_deferred,
     release_deferred,
     renew,
 )
@@ -362,6 +364,101 @@ def demand(con: Any) -> dict[str, Any]:
         "now": _settle_now(groups),
         "ask_holds": ask_holds(),
     }
+
+
+# ------------------------------------------------------------------ status
+
+WORKER_SEEN_SECONDS = 120  # a worker asks every 20 s when idle (prax up's interval)
+
+
+def worker_state() -> dict[str, Any]:
+    """Whether a worker is about: one asked the door for work lately, or
+    holds a lease now (a long read asks for nothing new for minutes but
+    renews its lease). ``last_asked`` is when any step was last asked for
+    by this door's workers since it started."""
+    asked = [t for t in _asked.values() if t]
+    last = max(asked) if asked else None
+    recent = False
+    if last:
+        with contextlib.suppress(ValueError):
+            from datetime import UTC, datetime
+
+            then = datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+            recent = (datetime.now(UTC) - then).total_seconds() < WORKER_SEEN_SECONDS
+    working = leases()
+    return {"alive": recent or bool(working), "last_asked": last, "working": working}
+
+
+def status(con: Any, doc_ids: list[int]) -> dict[str, Any]:
+    """Where each document is on its way to being read (the first client's
+    feedback, 2026-10-03: 24 captures sat for hours, and "no text, nothing
+    pending" could not tell "not yet" from "never" from "no worker").
+
+    A document's ``state`` is ``indexed`` (it has text), ``processing``
+    (a worker holds it), ``reading`` (it waits for a reading a person or
+    the door asked for; ``waits_for`` names it and, when its server is not
+    up, the role of ``prax up`` that must be), ``queued`` (a capture the
+    parse step will take; ``place`` in the queue), ``nothing found`` (the
+    readers ran and found no text: a scan wants a reading, OCR or the
+    vision model) or ``failed`` (the last attempt's ``error``). A document
+    the caller may not see is not there at all (stage U). ``worker`` says
+    whether one is about."""
+    from prax import parsers
+    from prax.capture import inbox
+    from prax.parsers import queue
+
+    queued = inbox.pending_captures(con)
+    held = leased("parse")
+    now = time.monotonic()
+    out = []
+    for doc_id in doc_ids:
+        doc = store.get_document(con, int(doc_id), max_chars=0)
+        if doc is None:
+            out.append({"doc_id": doc_id, "state": "unknown"})
+            continue
+        row: dict[str, Any] = {"doc_id": doc_id, "text_len": doc["text_len"]}
+        readings = store.pending_readings(con, int(doc_id))
+        history = doc["meta"].get("parse_history") or []
+        last = history[-1] if history else {}
+        if doc_id in held:
+            row["state"] = "processing"
+        elif readings:
+            row["state"] = "reading"
+            row["waits_for"] = [r["extractor"] for r in readings]
+            for r in readings:
+                if reading_deferred(r["extractor"], int(doc_id), now):
+                    role = next(
+                        (n for n, xs in ROLE_WORK.items() if r["extractor"] in xs), None
+                    )
+                    row["server_down"] = role or r["extractor"]
+        elif doc["text_len"]:
+            row["state"] = "indexed"
+        elif doc_id in queued:
+            exts = parsers.candidates(doc["mime"] or "", doc["meta"].get("parser"))
+            if exts and any(queue.seen(doc["meta"], e.stamp) for e in exts):
+                row["state"] = "nothing found"
+                row["why"] = (
+                    "the readers ran and found no text; a scan wants a reading"
+                    " (OCR or the vision model) asked for on its page"
+                )
+            else:
+                row["state"] = "queued"
+                row["place"] = queued.index(doc_id) + 1
+        elif last.get("error"):
+            row["state"] = "failed"
+            row["error"] = str(last["error"])[:300]
+        elif history:
+            row["state"] = "nothing found"
+        else:
+            # not a capture: an import's document, read by the backlog pass
+            row["state"] = "queued"
+            row["why"] = "for the nightly backlog pass (a worker with scope all)"
+        if last:
+            row["last_attempt"] = {
+                k: last[k] for k in ("extractor", "outcome", "at", "error") if k in last
+            }
+        out.append(row)
+    return {"documents": out, "worker": worker_state()}
 
 
 def _check(step: str, scope: str, limit: int) -> int:

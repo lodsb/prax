@@ -252,13 +252,13 @@ and pushing what is committed.
       door never sent) and filters by `since`.
 
       *1. Signals: what is the matter, without the UI.*
-      - [ ] `status(doc_ids)`: queued (with its place), processing, done,
+      - [x] (2026-10-03) `status(doc_ids)`: queued (with its place), processing, done,
             failed with the reason, and whether a worker is alive. Today
             `pending: []` lists only the reading requests, not the parse
             queue a capture waits in, so a document with no text and
             nothing pending reads as "never will" when it is "worker
             down": 24 captures sat for hours that way.
-      - [ ] `health()`: the door's address, whether the token is
+      - [x] (2026-10-03) `health()`: the door's address, whether the token is
             accepted, the worker's state. One call to the door, so the
             proxy stays thin.
 

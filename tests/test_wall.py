@@ -121,6 +121,7 @@ WALKED = (
     ("POST", "/ingest/url"),
     ("POST", "/ingest/file"),
     ("POST", "/maths"),
+    ("GET", "/work/status"),
 )
 
 
@@ -279,3 +280,21 @@ def test_a_named_token_asks_the_calculator_only_about_what_it_sees(
     shown = store.list_chunks(con, lib["paper"])[0]["chunk_id"]
     got = client.post("/maths", json={"op": "read", "a": f"chunk:{shown}"}, headers=me)
     assert got.status_code == 400 and "not a display formula" in got.text
+
+
+def test_a_named_token_asks_the_status_only_of_what_it_sees(
+    client: TestClient,
+) -> None:
+    """``GET /work/status``: a hidden document is as absent as one that
+    does not exist, and its text length is not said."""
+    con = client.app.state.con
+    lib = _library(con, client)
+    me = _as(lib["secret"])
+    got = client.get(
+        "/work/status", params={"ids": f"{lib['bank']},{lib['paper']}"}, headers=me
+    )
+    assert got.status_code == 200
+    rows = {r["doc_id"]: r for r in got.json()["documents"]}
+    assert rows[lib["bank"]] == {"doc_id": lib["bank"], "state": "unknown"}
+    assert rows[lib["paper"]]["state"] == "indexed"
+    assert "alive" in got.json()["worker"]

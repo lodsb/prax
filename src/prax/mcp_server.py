@@ -386,6 +386,35 @@ def context(
 
 
 @mcp.tool()
+def status(doc_ids: list[int]) -> dict[str, Any]:
+    """Where documents are on their way to being read: ``indexed``,
+    ``processing``, ``reading`` (a reading waits; ``server_down`` names the
+    server that must be up), ``queued`` (its ``place``), ``nothing found``
+    (the readers found no text: a scan wants OCR or the vision model) or
+    ``failed`` (with the ``error``), and whether a worker is ``alive``. Use
+    it when a capture or an upload has no text yet."""
+    ids = ",".join(str(int(i)) for i in doc_ids)
+    return _answer(lambda: door().get_json("/work/status", {"ids": ids}))
+
+
+@mcp.tool()
+def health() -> dict[str, Any]:
+    """Whether prax answers: the door's address as this server uses it,
+    whether it is reachable, whether the token is accepted, and whether a
+    worker is about. The first thing to call when the other tools fail."""
+    d = door()
+    out: dict[str, Any] = {"door": d.base_url}
+    try:  # one call: an answer, a refusal or no answer say all three
+        worker = d.get_json("/work/status").get("worker")
+    except DoorError as exc:
+        refused = exc.status in (401, 403)
+        return {**out, "reachable": True, "token": "refused" if refused else str(exc)}
+    except (OSError, httpx.HTTPError) as exc:
+        return {**out, "reachable": False, "error": str(exc)}
+    return {**out, "reachable": True, "token": "accepted", "worker": worker}
+
+
+@mcp.tool()
 def documents(
     domain: str | None = None,
     tag: str | None = None,

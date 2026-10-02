@@ -92,6 +92,10 @@ it started. Run what the plugin runs, by hand:
   Claude Code did not see your variables: start it again from a
   terminal that has them, and reconnect with `/mcp`.
 
+Once it connects, the `health` tool says the rest: the address it uses,
+whether the door answers, whether your token is accepted, and whether a
+worker is about. A capture with no text yet is `status`'s question.
+
 A tool that answers `the door is not reachable` means the server runs
 but the desktop does not answer: step 3.
 
@@ -102,7 +106,7 @@ fine for the tools, since the door answers them; pull it now and then.
 
 | | |
 |---|---|
-| MCP server `prax` | `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`, `link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`, `promote`, `set_domains` |
+| MCP server `prax` | `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`, `link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`, `promote`, `set_domains`, `status`, `health` |
 | skill `prax` | when to reach for the library (a question about what you read or decided, a design decision in a domain it holds, "did I…", "save this"), how to read it (search, read the passage, cite `doc:<id>`), how to write back (pages, edges, captures) |
 | `/prax:scope [name]` | the project's page, its documents in the library, what else bears on it — at the start |
 | `/prax:research <question>` | search, read, answer with citations; offers to keep the answer as a page |

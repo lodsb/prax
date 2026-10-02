@@ -18,6 +18,8 @@ from prax import mcp_server
 
 EXPECTED_TOOLS = {
     "search",
+    "status",
+    "health",
     "get",
     "get_chunk",
     "traverse",
@@ -287,3 +289,34 @@ def test_documents_say_when_they_came_and_filter_by_it(proxied: TestClient) -> N
     assert mcp_server.documents(title="Fresh", since="2999-01-01") == []
     refused = mcp_server.documents(since="yesterday")
     assert "a date or a UTC moment" in refused[0]["error"]
+
+
+def test_status_and_health_through_the_proxy(proxied: TestClient) -> None:
+    """``status`` says where a document is; ``health`` says whether prax
+    answers at all, with the address it uses, and the worker (AL, 1)."""
+    from prax import mcp_server
+    from prax.client import Door
+
+    made = mcp_server.ingest("Status. " * 20, title="S")
+    got = mcp_server.status([made["doc_id"]])
+    assert got["documents"][0]["state"] == "indexed" and "alive" in got["worker"]
+    well = mcp_server.health()
+    assert well["door"] == "http://testserver" and well["reachable"]
+    assert well["token"] == "accepted" and "alive" in well["worker"]
+
+    class Refusing(Door):
+        def get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
+            raise mcp_server.DoorError(401, "token")
+
+    class Away(Door):
+        def get_json(self, path: str, params: dict[str, Any] | None = None) -> Any:
+            raise OSError("connection refused")
+
+    mcp_server._door = Refusing("door.example:8000")
+    refused = mcp_server.health()
+    assert (
+        refused["token"] == "refused" and refused["door"] == "http://door.example:8000"
+    )
+    mcp_server._door = Away("door.example:8000")
+    away = mcp_server.health()
+    assert away["reachable"] is False and "refused" in away["error"]

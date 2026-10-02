@@ -76,6 +76,12 @@ reads under the working directory only (`PRAX_INGEST_ROOTS` widens it).
 - Something read on the web that belongs in the library:
   `capture_url(url)`. A file the user points at: `ingest_file(path)`.
   A note of the user's own words: `ingest(text, title)`.
+- A capture or an upload with no text yet: `status([doc_ids])` says
+  whether it waits in the queue, is being read, needs a reading (OCR or
+  the vision model), failed and why, or whether no worker is running.
+  Say that to the user rather than guess.
+- When the tools fail: `health()` says the door's address as this server
+  uses it, whether it answers, and whether the token is accepted.
 - A project's own docs need no tool: `/prax:sync` (or the session-end
   hook, once the project has a `.prax-project` file) sends them.
 
