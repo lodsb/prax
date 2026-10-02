@@ -3223,3 +3223,28 @@ The same evening, on the live store, after a backup to `I:\prax-backup`
   resonator question starts with Dattorro's (5).
 - **Not measured in the eval yet.** The five runs going now ran on the
   door before steps 4 and 5; they measure steps 1 and 2.
+
+## 2026-10-02: the five runs after AD2 steps 1 and 2
+
+- **Measured by machine** (`scripts/score_maths.py`, the 10 questions it
+  scores; runs f1–f5 against d1, d2, e1, e2, all scored by the current
+  scorer). Mean right out of 10, range in brackets:
+  tools on grounded 6.75 (6–7) before, 6.40 (5–8) after; on open 8.50
+  (8–9), 8.40 (7–10); off grounded 5.00 (3–7), 6.00 (5–7); off open 7.50
+  (7–8), 6.80 (6–7). No change past the spread.
+- **The calls changed, the answers did not.** The tool was used in 82 of
+  200 tool-on asks (41%), all 176 calls as JSON, 30 of them failed (17%,
+  from 21–35%): passages that would not read (8), a string cut off before
+  its quote (7), the rest scattered. The RC question is still declined in
+  grounded mode with the tool's 0.01 s in the note: cf71a69 did not take.
+- **The scorer, out of sample.** f1's 40 machine-scored answers scored by
+  hand after the scorer was tuned: 36 of 40 agree (90%; in sample 88%).
+  Kept in `tests/eval/maths-hand-scores.yaml`.
+- **A regression the hand pass found.** cf71a69 put "a result in the note
+  was computed by a calculator" into the grounded prompt with tools off
+  too, and a tools-off answer wrote "the note states the result is 13.32
+  mA, which was computed by a calculator": a note it invented. Goes to the
+  review round.
+- An earlier comparison in this session used scores from before the
+  scorer stripped the check's marks and refused declines; it showed a
+  drop that is not there.

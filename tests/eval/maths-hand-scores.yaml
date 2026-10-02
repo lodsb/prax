@@ -88,3 +88,16 @@ runs:
     adaa-tanh-first: RPPP
     adaa-tanh-second: WWWW
     adaa-hard-clip: RRRR
+  # f1: scored by hand after the scorer was tuned, as its out-of-sample
+  # check; only the questions the machine scores
+  2026-10-02-f1:
+    moog-tanh-forms: RRRR
+    moog-tanh-definition-typo: RRRR
+    moog-eq3-typo: RRPP
+    dattorro-notch: RRRR
+    dattorro-resonator: WWWW
+    dattorro-beta-forms: RPPR
+    moog-19-2: RRRR
+    dattorro-beta-value: RRRR
+    rms-tau: WRWW
+    diode-current: RPPP
