@@ -1387,6 +1387,13 @@ The slot count changes little: a `q8_0` 8 K slot is about 0.3 GB.
 first N layers in RAM, which is a MoE model's bulk. 2 costs a tenth of
 the speed, 8 most of it. The desktop wants 3–4 GB for itself.
 
+RAM has a dial of its own. llama.cpp keeps prompts evicted from a slot
+in RAM, up to 8192 MiB unless told otherwise (`--cache-ram`). Prax
+passes `cache_ram_mb` from `serve:`, 2048 by default for a chat server
+(`roles.CACHE_RAM_MB`) and 0 for a reranker, whose prompts are never
+alike. On 2026-10-02 the default held 10 GB of RAM for marker's 1.4 GB
+OCR model (below).
+
 That last 3–4 GB is not all the desktop's, because **the worker parses
 on the same card**. Docling's layout and table models take about 2.2 GB
 of dedicated memory while a parse pass runs, which with the compositor's
@@ -1431,7 +1438,13 @@ a venv of its own, and its server is a role of `prax up`:
     #   marker_mode: fast                   # [PRAX_MARKER_MODE] balanced: the vision model lays out too
 
 The server reads through llama.cpp's server with `ngl` layers on the
-card (99, all, by default; `ngl: 0` for the CPU). It wants about 5 GB
+card (99, all, by default; `ngl: 0` for the CPU). Marker 2.0's OCR,
+surya-ocr-2, is a GGUF vision model, and surya starts that llama-server
+itself, inside marker's process tree, so it stops with marker. The role
+tells it `--cache-ram 0` (`ocr_cache_ram_mb`; its prompts are page
+images, never reused), and `ocr_parallel` sets its slots (surya's
+default is 8). Without the first it held 10 GB of RAM on 2026-10-02.
+It wants about 5 GB
 of the card, which does not fit beside a 20 GB model on a 24 GB card.
 Hence `on_demand`: declared, started when wanted. Measured 2026-09-16
 on the 4090: **2 s a page** through the server against 33 s on the

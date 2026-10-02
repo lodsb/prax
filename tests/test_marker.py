@@ -271,7 +271,15 @@ def test_the_marker_role_of_prax_up(data_dir: Path, tmp_path: Path) -> None:
     assert role.argv[-1] == "9001" and role.health == "http://127.0.0.1:9001/"
     assert role.env["SURYA_INFERENCE_BACKEND"] == "llamacpp"
     assert role.env["LLAMA_CPP_NGL"] == "0" and role.env["LLAMA_CPP_BINARY"]
+    # its OCR server keeps no prompt cache in RAM (2026-10-02: 10 GB)
+    assert role.env["LLAMA_CPP_EXTRA_ARGS"] == "--cache-ram 0"
+    assert "SURYA_INFERENCE_PARALLEL" not in role.env
     assert not role.on_demand
+    (tuned,) = up.roles(
+        {"marker": {"venv": str(venv), "ocr_cache_ram_mb": 256, "ocr_parallel": 4}}
+    )
+    assert tuned.env["LLAMA_CPP_EXTRA_ARGS"] == "--cache-ram 256"
+    assert tuned.env["SURYA_INFERENCE_PARALLEL"] == "4"
     (role,) = up.roles({"marker": {"venv": str(venv), "on_demand": True}})
     assert role.on_demand and role.argv[-1] == str(up.MARKER_PORT)
     # declared on demand: the supervisor starts it paused

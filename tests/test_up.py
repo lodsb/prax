@@ -139,6 +139,17 @@ def test_a_served_model_needs_its_file_and_the_binary(gpu_host: Path) -> None:
     argv = up.llama_argv(spec)
     assert argv[argv.index("--alias") + 1] == "q4"
     assert argv[argv.index("--port") + 1] == "8085"
+    # llama.cpp's 8 GB prompt cache in RAM, bounded (docs/PLAN.md, AJ)
+    assert argv[argv.index("--cache-ram") + 1] == str(up.CACHE_RAM_MB)
+    capped = models.ModelSpec(
+        name="c",
+        kind="openai",
+        base_url="http://127.0.0.1:8086/v1",
+        model="c",
+        serve=(("path", str(up.model_path(spec))), ("cache_ram_mb", 0)),
+    )
+    capped_argv = up.llama_argv(capped)
+    assert capped_argv[capped_argv.index("--cache-ram") + 1] == "0"
     ranker = models.ModelSpec(
         name="r",
         kind="openai",
@@ -148,6 +159,7 @@ def test_a_served_model_needs_its_file_and_the_binary(gpu_host: Path) -> None:
     )
     ranked = up.llama_argv(ranker)
     assert "--reranking" in ranked and "--parallel" in ranked
+    assert ranked[ranked.index("--cache-ram") + 1] == "0"
     with pytest.raises(up.UpError, match="not a reranker"):
         up.roles({"reranker": {"model": "big"}})
 

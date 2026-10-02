@@ -78,10 +78,12 @@ from .process import (  # noqa: F401
     unswap,
 )
 from .roles import (  # noqa: F401
+    CACHE_RAM_MB,
     DOOR_PATIENCE,
     GROUP_KEYS,
     MARKER_PORT,
     MARKER_VRAM_MB,
+    OCR_CACHE_RAM_MB,
     ROLE_KEYS,
     ROLES,
     SERVE_KEYS,

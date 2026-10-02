@@ -39,7 +39,14 @@ SERVE_KEYS = (
     "metrics",
     "reranker",  # a cross-encoder server instead of a chat one
     "extra",  # more llama-server arguments, as a list
+    "cache_ram_mb",  # the prompt cache kept in RAM (``CACHE_RAM_MB``)
 )
+# llama.cpp keeps prompts evicted from a slot in RAM, up to 8192 MiB by
+# default: on 2026-10-02 marker's OCR server held 10 GB for a 1.4 GB model
+# (docs/PLAN.md, AJ). A chat server's surf resends its context, so some
+# of it pays; a reranker's and an OCR server's prompts are never alike
+CACHE_RAM_MB = 2048
+OCR_CACHE_RAM_MB = 0
 # every role may say which resource it competes for and what it needs of
 # it; the supervisor keeps one holder of a group when they do not fit
 GROUP_KEYS = ("group", "needs_vram_mb", "swap")
@@ -50,7 +57,15 @@ SERVER_KEYS = ("model", "idle_minutes", "trim", *GROUP_KEYS)
 ROLE_KEYS = {
     "llama-server": SERVER_KEYS,
     "reranker": SERVER_KEYS,
-    "marker": ("venv", "port", "ngl", "on_demand", *GROUP_KEYS),
+    "marker": (
+        "venv",
+        "port",
+        "ngl",
+        "on_demand",
+        "ocr_cache_ram_mb",  # its OCR server's prompt cache (``OCR_CACHE_RAM_MB``)
+        "ocr_parallel",  # its OCR server's slots (surya's default: 8)
+        *GROUP_KEYS,
+    ),
     "door": ("host", "port", "ssl_certfile", "ssl_keyfile", *GROUP_KEYS),
     "worker": (
         "door",
@@ -218,13 +233,14 @@ def llama_argv(spec: models.ModelSpec, *, binary: str | None = None) -> list[str
         # one batch, one score out; so the batch is the context, and 4096
         # tokens covers any chunk prax sends
         return argv + common + [
-            "--reranking",
+            "--reranking", "--cache-ram", "0",
             "--ctx-size", "4096", "--parallel", "1",
             "--batch-size", "4096", "--ubatch-size", "4096",
             "--threads", threads, "--no-webui",
         ]  # fmt: skip
     return argv + common + [
         "--load-mode", "mmap",
+        "--cache-ram", str(int(serve.get("cache_ram_mb", CACHE_RAM_MB))),
         "--ctx-size", str(slots * spec.n_ctx), "--parallel", str(slots),
         "--flash-attn", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0",
         "--batch-size", "2048", "--ubatch-size", str(int(serve.get("ubatch", 512))),
@@ -236,7 +252,10 @@ def marker_role(opts: dict[str, Any]) -> Role:
     """marker's server (``marker_server``) from its own venv (``venv``: it
     is a heavy install and never one of prax's dependencies), reading
     through llama.cpp's server with ``ngl`` layers on the card (99: all;
-    0: the CPU, 33 s a page against 2). It wants about 5 GB of the card,
+    0: the CPU, 33 s a page against 2). Surya, marker's OCR, starts a
+    llama-server of its own inside marker's process tree; the role passes
+    it ``--cache-ram`` (``ocr_cache_ram_mb``) and its slots
+    (``ocr_parallel``). It wants about 5 GB of the card,
     which beside a 20 GB model does not fit a 24 GB one: ``on_demand``
     declares it without starting it, for a `--stop llama-server`,
     `--start marker` evening."""
@@ -260,7 +279,13 @@ def marker_role(opts: dict[str, Any]) -> Role:
         "SURYA_INFERENCE_BACKEND": "llamacpp",
         "LLAMA_CPP_BINARY": llama_binary(),
         "LLAMA_CPP_NGL": str(int(opts.get("ngl", 99))),
+        # surya starts its OCR model's llama-server itself and appends
+        # these: without them it kept an 8 GB prompt cache in RAM
+        "LLAMA_CPP_EXTRA_ARGS": "--cache-ram "
+        + str(int(opts.get("ocr_cache_ram_mb", OCR_CACHE_RAM_MB))),
     }
+    if opts.get("ocr_parallel"):
+        env["SURYA_INFERENCE_PARALLEL"] = str(int(opts["ocr_parallel"]))
     return Role(
         "marker",
         [str(exe), "--host", "127.0.0.1", "--port", str(port)],

@@ -3485,6 +3485,27 @@ Prax's own llama-server roles carry the same 8 GB default. The fix and
 the larger question (who starts the processes on the card, and which of
 the OCR readers earns its place) are stage AJ of `docs/PLAN.md`.
 
+## 2026-10-03: the prompt cache bounded (stage AJ, step 1)
+
+Every llama-server prax starts now says how much RAM its prompt cache
+may hold: `--cache-ram` from `serve.cache_ram_mb`, 2048 MiB by default
+for a chat server and 0 for a reranker. llama.cpp's own default is
+8192. The marker role passes `LLAMA_CPP_EXTRA_ARGS=--cache-ram 0` to
+surya, which appends it to the OCR server it starts; `ocr_cache_ram_mb`
+and `ocr_parallel` adjust it. OCR prompts are page images, and an
+evicted one is never asked for again.
+
+Planned as an `ocr-server` role of its own, with marker pointed at it
+by `SURYA_INFERENCE_URL`. That breaks the card group. A swap to marker
+pauses every other member, its OCR server too, so marker would find no
+server. The server stays surya's, inside marker's process tree, until a
+group can carry companions (AJ, step 2).
+
+It takes effect when marker and llama-server next start. The night's
+books were still being read, so the desktop runs the old flags until
+then. 2048 MiB for the 35B is a guess at what the surf's resent context
+needs; its metrics (the prompt cache's share) will say.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

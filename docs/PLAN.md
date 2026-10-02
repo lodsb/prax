@@ -236,22 +236,30 @@ and pushing what is committed.
       the boundary instead: every process, its flags and its resources.
 
       *The steps.*
-      - [ ] **Surya's OCR model as a prax role.** An `ocr-server` role of
-            `prax up`: llama-server with `surya-2.gguf` and its mmproj, in
-            the card group with marker, started with `--cache-ram 0` and
-            the slots prax picks. The marker role gets
-            `SURYA_INFERENCE_URL` and no longer spawns. Every llama-server
-            role gets a `--cache-ram` default, the 35B included. Prax
-            trims surya's log when it starts marker. Measured before and
-            after on the same few books: peak RAM and commit, VRAM, time
-            per page. First, after the night's books.
+      - [x] (2026-10-03, code; on the desktop at the next start of marker)
+            **The memory first.** Every llama-server role passes
+            `--cache-ram` (`serve.cache_ram_mb`, 2048 for a chat server,
+            0 for a reranker), and the marker role tells surya's server
+            `--cache-ram 0` through `LLAMA_CPP_EXTRA_ARGS`
+            (`ocr_cache_ram_mb`; `ocr_parallel` for its slots). Surya's
+            server stays surya's: it runs inside marker's process tree,
+            so it stops with marker. A role of its own (`ocr-server`,
+            `SURYA_INFERENCE_URL`) was the plan, but in a card group a
+            swap to marker pauses every other member, its OCR server
+            included. It needs a companion in groups (marker brings its
+            server along), which is step 2's. *Still to measure:* peak
+            RAM and commit, VRAM and time per page on the same few books,
+            before and after.
       - [ ] **The reader contract.** A reader declares in its manifest the
             processes it needs (roles of `prax up`), their resources
             (VRAM, RAM, load time) and the settings prax passes. It runs
             in a pinned environment: marker's venv from a lock file,
             upgraded on purpose and measured. This is the rule the packs
             follow, applied to the extractors. Nothing on the card is
-            started behind `prax up`'s back.
+            started behind `prax up`'s back. A role may name companions
+            that move with it in a swap (marker and its OCR server, then
+            `SURYA_INFERENCE_URL`), and prax trims a reader's own logs
+            (surya's grew 55 MB in one night).
       - [ ] **The OCR readers measured against each other.** Prax has at
             least three ways to read a page that is not text: RapidOCR
             through pymupdf4llm (in the worker, CPU), marker with surya
