@@ -11,3 +11,6 @@ dist/
 logs/
 # marker's server keeps the last upload where it runs (prax up runs it in run/ since 4ff564b)
 uploads/
+
+# the maths eval's answers: kept beside the docs, out of the repository
+docs/eval/maths-answers-*.json
