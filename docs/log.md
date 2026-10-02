@@ -3280,3 +3280,23 @@ four commits:
   character (four came in through shell edits) and that no pack module
   assigns a name twice (twice a new table replaced an existing one of
   the same name: `BRACED`, then `FUNCTIONS`).
+
+## 2026-10-02: the five runs after the review round (g1–g5)
+
+- **Machine-scored, mean right of 10** (before AD2 / f, steps 1–2 / g,
+  everything): tools on grounded 6.75 / 6.40 / 7.00; on open 8.50 / 8.40
+  / 8.60; off grounded 5.00 / 6.00 / 7.00; off open 7.50 / 6.80 / 7.80.
+  Grounded mode gains with and without tools: most of it is the equation
+  by number (step 5), which does not depend on the tools.
+- **The targeted questions moved.** The resonator, never right before,
+  4 of 5 with tools in grounded mode (Dattorro's (5) is now read first).
+  The RC time constant, declined in every run before, 4 of 5 (the
+  results' own prompt). The diode current: the model computes by hand
+  in 4 of 5, and the answer check now marks that number "not checked".
+- **Two faults found in the scoring of them.** A step is capped at 160
+  tokens, and 21 of 291 maths steps were cut off mid-string: now 400
+  (`ask.STEP_TOKENS`; the grammar bounds the step anyway; a second,
+  unused `surf.STEP_TOKENS` deleted). And the scorer's exclusion of the
+  question's numbers dropped "19.2" from answers to "where does 19.2
+  come from"; a given number now counts when it is the target. The
+  scorer agrees with the hand on 177 of 200.

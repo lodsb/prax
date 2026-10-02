@@ -62,8 +62,13 @@ def closest(text: str, target: float, given: list[float] | None = None) -> float
     of the units, to the target; a number the question gives is not the
     answer's (R = 10 k is not a time constant of 0.01 in a unit away)."""
     best = float("inf")
+    # a given number is an input, unless it is the target itself as written
+    # (19.2 in "where does 19.2 come from" is the answer's number)
+    inputs = [
+        g for g in given or [] if not target or abs(g - target) / abs(target) > 0.05
+    ]
     for value in numbers(text):
-        if any(abs(value - g) <= 1e-12 * max(1.0, abs(g)) for g in given or []):
+        if any(abs(value - g) <= 1e-12 * max(1.0, abs(g)) for g in inputs):
             continue
         for k in SCALES:
             if target:

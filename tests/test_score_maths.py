@@ -58,3 +58,12 @@ def test_a_refusal_or_a_given_value_is_not_the_answer() -> None:
     q = "What is tau for R = 10 kOhm and C = 1 uF?"
     assert sm.score(tau, "With R = 10 and C = 1, I cannot compute tau.", q) == "W"
     assert sm.score(tau, "tau = R C = 0.01 s.", q) == "R"
+
+
+def test_a_given_number_that_is_the_target_still_counts() -> None:
+    """ "Where does 19.2 come from?": an answer quoting 19.2 is not quoting
+    an input (the g runs, 2026-10-02, scored such answers wrong)."""
+    sm = _scorer()
+    check = {"number": 19.23, "within": 0.01}
+    q = "Where does the 19.2 in I_1 - I_2 = 19.2 I (V_1 - V_2) come from?"
+    assert sm.score(check, "It is 1/(2 V_T) = 19.2 per volt at 26 mV.", q) == "R"

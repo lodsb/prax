@@ -378,7 +378,11 @@ def gather(
 # ---------------------------------------------------------------- backends
 
 
-STEP_TOKENS = 160  # a surfing step's two lines
+# a surfing step's two lines; a tool's step (the maths pack's JSON, two
+# transfer functions in it) runs past 160 tokens, and 21 of 291 maths steps
+# were cut off mid-string at that (2026-10-02). The step's grammar bounds
+# its length, so this only has to let a whole one through
+STEP_TOKENS = 400
 
 
 class Answerer(Protocol):

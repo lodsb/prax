@@ -60,7 +60,6 @@ NOTE_CHARS = 200
 QUERY_CHARS = 100
 TOOL_CHARS = 400  # a pack tool's argument: a derivation runs longer than a query
 LOOK_CHARS = 60  # the words a read looks for inside a document
-STEP_TOKENS = 160  # what a step's two lines may take
 OVERHEAD_TOKENS = 2200  # the system prompt, the question, the step lines, the answer
 MIN_TOKENS = 1000
 LOCAL_TOKENS = 4000  # the default reading budget of a local model
