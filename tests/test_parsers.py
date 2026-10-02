@@ -857,3 +857,19 @@ def test_a_history_is_held_to_its_bound(con: sqlite3.Connection) -> None:
     out = store.maintain(con, only=["histories"])["histories"]
     assert out["documents"]["parse_history"] == 60 - store.HISTORY_KEEP
     assert len(store.get_meta(con, doc)["parse_history"]) == store.HISTORY_KEEP
+
+
+def test_a_forced_reading_that_found_nothing_is_empty(con: sqlite3.Connection) -> None:
+    """A reading runs with force, which passes the too-short guard; an empty
+    text must still not be indexed as "created" (39 PDFs whose pages no
+    renderer found counted as read, 2026-10-02)."""
+    doc_id = int(
+        store.register(con, b"%PDF-1.4 cut short", mime="application/pdf")["doc_id"]
+    )
+    action = queue.apply_parse(
+        con, doc_id, stamp="vision-pages/1", text="  ", force=True
+    )
+    assert action == "empty"
+    doc = store.get_document(con, doc_id, max_chars=0)
+    assert doc is not None and not doc["text_len"] and not doc.get("text_hash")
+    assert store.get_meta(con, doc_id)["parse_history"][-1]["outcome"] == "empty"

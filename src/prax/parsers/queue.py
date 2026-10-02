@@ -247,6 +247,13 @@ def apply_parse(
     text = text.strip()
     old_len = doc["text_len"]
     entry = {"extractor": stamp, "chars": len(text), "seconds": seconds}
+    if not text:
+        # nothing read is never a text, forced or not: 39 PDFs a reading
+        # found no page in were "created" with the empty string's hash, and
+        # counted as read for two weeks (2026-10-02)
+        action = "kept" if old_len else "empty"
+        _record(con, doc_id, {**entry, "outcome": action}, pages=pages)
+        return action
     if old_len and store.text_unchanged(con, doc_id, text):
         # a re-read that found nothing new (an upgrade pass over the
         # library): the stamp moves on, chunks and vectors stay

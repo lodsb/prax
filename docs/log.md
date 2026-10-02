@@ -3312,3 +3312,23 @@ four commits:
   The first four are rules of `judge` now, which is split into what is
   refused before reading, what is refused after, and the arithmetic;
   CHECK_VERSION 3 has the worker check every formula again.
+
+## 2026-10-02, the afternoon: what was never extracted
+
+- **Formulas.** Only marker reads display maths: every formula chunk is
+  in a marker-read paper (243 of 347). The 8,611 papers pymupdf4llm read
+  have none. About 263 of them show display maths (equation numbers left
+  alone on a line, "Eq. (n)" in the prose), 77 strongly. Queued for
+  marker with the 14 documents whose formulas the `equations` step found
+  broken: 62 papers up to 80 pages first (1,604 pages, about a minute a
+  paper), the 29 books (about 12,000 pages) for the night.
+- **The graph.** 1,052 documents with text were never extracted: the
+  watching worker extracts new captures only, and the backlog goes to a
+  nightly pass of 100 a step, which a worker restarted after 03:00 skips.
+  A one-off backlog worker (`prax work --watch --scope all --steps
+  extract`) runs after marker.
+- **45 PDFs without text.** 38 are cut short (no `%%EOF`), and Zotero's
+  own copies are the same bytes: broken at the source, to be fetched
+  again. 39 of the 45 also carried a "created" reading with the empty
+  string's hash: a forced reading of nothing was indexed. Fixed:
+  `queue.apply_parse` never indexes an empty text.
