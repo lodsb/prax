@@ -31,15 +31,18 @@ engineering leftovers. What waits on the user is apart.
 4. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
    marker's own llama-server held 10 GB of RAM that no plan saw. Step 1
    first, after the night's books; steps 2 and 3 after AA.
-5. **AA. Close Z** (below): the labeller's corrections, and the genre
+5. **AK. Another model, measured** (below): a dense Qwen 27B and an
+   uncensored build of it against the 35B on prax's own evals. Card
+   time, so it runs at night or while nothing else waits.
+6. **AA. Close Z** (below): the labeller's corrections, and the genre
    words in the document field, measured.
-6. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
+7. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
    `refetch-later.txt` (untracked) with the import of the old disk, when
    the NAS is reachable.
-7. **Measured improvements** (below, "Retrieval and ask", "The graph"):
+8. **Measured improvements** (below, "Retrieval and ask", "The graph"):
    the sections pass's vector arm and its worth to `ask`, document-aware
    rerank input, a compressed edge list, `confidence` as a number.
-8. **The engineering leftovers** (below): `store.retrieval` and
+9. **The engineering leftovers** (below): `store.retrieval` and
    `store.repair` in parts, typed shapes, the next strict mypy batch.
 
 Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
@@ -261,6 +264,46 @@ and pushing what is committed.
             Surya's model and vision-pages are both a vision model behind
             llama.cpp, so after step 1 they share one served-model
             mechanism.
+
+- [ ] **AK. Another model: a dense Qwen 27B, and an uncensored build of
+      it, against the 35B.** The user, 2026-10-03: "qwen 27b is deemed
+      to be better at agentic workflows than 35b (probably used less
+      memory) and I'd like to evaluate an uncensored version, too.
+      curiousity mainly (it is also on my private data)."
+
+      *What is compared.* The host's model now is
+      `qwen3.6-35b-a3b-ud-q4ks` (`server-35b`): a mixture of experts,
+      3B of its 35B parameters active per token, about 20 GB at Q4. A
+      dense 27B uses all of its parameters for every token: more
+      reasoning per token on paper, about 16–17 GB at Q4, and several
+      times slower per token on the 4090. "Uncensored" builds (the
+      refusal direction removed, "abliterated") answer what the
+      original declines, and often lose a little reasoning for it. Both
+      claims are other people's; prax measures them on its own work.
+      The files come from a known quantizer, and their names and hashes
+      go in the log.
+
+      *How.* Each candidate is a model entry of its own in `prax.yaml`
+      (`server-27b`, `server-27b-u`), served by `prax up` in turn on the
+      card. Nothing switches the steps until the numbers say so. On the
+      same sets as the 35B, read-only:
+      - the surf, which is the agentic part: `scripts/eval_ask.py` on
+        the equations questions and `scripts/eval_maths.py` in its four
+        ways (tools on and off, grounded and open), scored by
+        `scripts/score_maths.py`;
+      - extraction: `scripts/bench_extractor.py` on a fixed set of
+        documents, triples and how many the ontology accepts;
+      - speed and memory: tokens per second reading and writing, the
+        load time `prax up` records, VRAM and RAM at its peak;
+      - the private documents, counts only: how many summaries and
+        extractions of personal documents each model declines or
+        hedges. That is where an uncensored build could matter; the
+        documents stay on this machine either way.
+
+      *What would follow.* Models are chosen per step (`steps:` in
+      `prax.yaml`), so the answer may be a split: the 27B for `ask` and
+      the 35B for the bulk passes, or one model for all. Only the
+      winner stays on disk.
 
 - [ ] **AA. Close Z.** The re-extraction against the new domains, the
       `computing` v2 review, the `society` rules and the relabel are done
