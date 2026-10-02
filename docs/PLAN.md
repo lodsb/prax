@@ -28,10 +28,10 @@ engineering leftovers. What waits on the user is apart.
    2026-10-02, then the ~190 weaker maths candidates. The `equations`
    step checks every formula, and a broken formula that is an
    extraction slip is read again. Watched, not built.
-4. **AL. The first client's feedback** (below): its small bugs first
-   (a door address without a scheme, a URL with a space, links in
-   results, a date filter), then status, captures and pages, then
-   syncing a project as a tool.
+4. **AL. The first client's feedback** (below): its small bugs are
+   fixed. Next the signals (`status`, `health`), citations that survive
+   a re-chunk, the project sync, documents linked to documents, what is
+   current, then captures, pages, bibliographies and privacy.
 5. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
    marker's own llama-server held 10 GB of RAM that no plan saw. Step 1
    first, after the night's books; steps 2 and 3 after AA.
@@ -235,93 +235,121 @@ and pushing what is committed.
 
 - [ ] **AL. The first client's feedback.** On 2026-10-03 an agent in
       another of the user's repositories used prax through the plugin for
-      a whole session: it searched, captured papers, wrote a landscape
-      page, and synced a subproject's documents. Its report, in order of
-      what to do. Two claims were checked in the code: the first two
-      bugs are real.
+      a whole session: it searched, captured about 30 papers, wrote a
+      landscape page, and synced a subproject's 27 documents. It then
+      wrote 16 suggestions in four priorities. Below they are merged with
+      prax's own reading of them, in the order agreed with the user. The
+      project's documents are the acceptance set for steps 3 to 5; their
+      content and names stay out of the repository (the baseline is a
+      private page in prax, and the tests use invented documents of the
+      same shape).
 
-      *Small bugs, first.*
-      - [x] (2026-10-03) **A door address without a scheme.** `PRAX_DOOR=<address>:8000`
-            made every call fail with "Request URL is missing an
-            'http://'", while the server showed as connected.
-            `client.Door` uses the variable as given. Add `http://` when
-            there is no scheme, and say the address in every
-            not-reachable error (it does for some).
-      - [x] (2026-10-03) **A URL with a space is a 500.** `POST /ingest/url` turns
-            `ValueError` and `OSError` into 400 and 502;
-            `http.client.InvalidURL` is neither. Quote the URL's path,
-            and answer 400 with the reason for one that is still bad.
-      - [x] (2026-10-03) **Links in results.** `write_page`, `capture_url`, `get` and
-            `context` answer ids, and the agent found `ui/#doc/N` by
-            reading the UI's source. A `url` field everywhere, from the
-            door's own address, and a `#page/<slug>` route.
-      - [x] (2026-10-03) **A date filter.** `documents()` has no `since`, and its rows
-            show `created_at: null` though `added_at` is set. "What did
-            the user just upload" is one call with it.
+      *Done on 2026-10-03* (71a0916): a `PRAX_DOOR` without its scheme is
+      `http` (`client.door_url`); a URL with a space is percent-encoded
+      and one still unfit is a 400, not a 500 (`inbox.clean_url`); ingest,
+      `get`, `context` and page answers carry `url`, and `#page/<slug>`
+      opens a page; `documents` reports `added_at` (it read a field the
+      door never sent) and filters by `since`.
 
-      *Status, speed, captures, pages.*
-      - [ ] **Where a document is.** `capture_url` answered `indexed:
-            false`; hours later `get` showed `text_len: 0` and `pending:
-            []`, which reads as nothing pending and no text. The worker
-            was not running. A `status(doc_ids)` tool: queued,
-            processing, failed with the reason, and whether a worker is
-            alive.
-      - [ ] **`append_page` took over 120 s.** Measure where (an
-            extraction or an embedding in the request?), then answer the
-            write at once and index after.
-      - [ ] **A section of a page replaced.** After five appends a
-            "still missing" section was stale, and only a rewrite of the
-            whole page fixed it. `update_section(slug, heading, text)`,
-            or a status block like the ask blocks.
-      - [ ] **Failed captures handed to the extension.** TLS chain
-            errors, 403s and bot checks need the browser. Instead of an
-            error, `capture_url` queues the URL for the extension
-            (`{queued_for_extension: true}`), which works through the
-            queue with the person's session.
-      - [ ] **Batch capture**: many URLs in one call, a result per item.
-      - [ ] **Uploads that say what they are.** Extension uploads came
-            with file-name titles and no domains. A `set_title` tool, and
-            an upload linked to the request it answers, which gives it
-            the request's domains.
+      *1. Signals: what is the matter, without the UI.*
+      - [ ] `status(doc_ids)`: queued (with its place), processing, done,
+            failed with the reason, and whether a worker is alive. Today
+            `pending: []` lists only the reading requests, not the parse
+            queue a capture waits in, so a document with no text and
+            nothing pending reads as "never will" when it is "worker
+            down": 24 captures sat for hours that way.
+      - [ ] `health()`: the door's address, whether the token is
+            accepted, the worker's state. One call to the door, so the
+            proxy stays thin.
 
-      *Syncing a project as a tool.* Today the agent runs `prax import
-      project` through the venv's Python, which needs the path, a call
-      out of its sandbox, and a `.prax-project` file in the repository.
-      Without that file it took in a build tree's vendored dependencies.
+      *2. Citations that survive a re-chunk* (the client's #13, raised
+      from P2: it corrupts quietly). A page's answer cites passages as
+      chunk ids (`#doc/N/M`), and chunk ids are reused after a re-chunk
+      (the formula check's sha guard exists for that). After a re-sync a
+      citation does not break; it lands on another passage. Keep the
+      quote and the heading path with each citation and resolve through
+      `?find=`, as graph edges do. First a test that shows the fault.
+
+      *3. Syncing a project as a tool* (the client's #5, #6).
       - [ ] `sync_project(root, include, exclude, name, domains,
-            dry_run=True, tracked_only=True)`: tracked files only by
-            default (`git ls-files`), and the usual build folders left
-            out (`_deps/`, `*-subbuild/`, `CMakeFiles/`, `build/`,
-            `third_party/`). A dry run by default, the plan as data
-            (each path: add, refresh, unchanged or skip, and why), so
-            the agent shows it and the person approves.
-      - [ ] A subdirectory of a larger repository as a project, its
-            documents keyed by the remote and the path, so a move does
-            not make a duplicate.
-      - [ ] The manifest outside the repository, in prax keyed by remote
-            and path. A `.prax-project` in a shared repository tells
-            colleagues about the tool and gets committed by accident.
-      - [ ] Auto-sync only when the manifest says `auto_sync: true`;
-            today the file alone turns on the session-end hook.
-      - [ ] The project page made with it: `project-<name>`, its members
-            listed, a summary block the agent writes.
+            dry_run=True, tracked_only=True)`: tracked files only
+            (`git ls-files`), the usual build folders left out (`_deps/`,
+            `CMakeFiles/`, `*-subbuild/`, `build/`, `third_party/`), a
+            dry run by default with the plan as data (each path: add,
+            refresh, unchanged or skip, and why), a subdirectory of a
+            larger repository as a project, documents keyed by the
+            remote and the path so a move makes no duplicate. Without
+            this the CLI needed the venv path, a call out of the
+            sandbox, and took in about 90 vendored CMake files.
+      - [ ] The manifest in prax, keyed by remote and path, not a
+            `.prax-project` in the repository (a committed one tells
+            colleagues, and switches the session-end hook on by being
+            there). Auto-sync only with an explicit `auto_sync: true`.
+      - [ ] The project page made with it: `project-<name>`, its members,
+            a summary block the agent writes.
 
-      *Features it wanted.*
-      - [ ] **Bibliographies.** `references(doc_id)`: the parsed list,
-            each entry found in the library (`doc N`) or with its DOI
-            and an open-access URL. `cited_but_missing(set)`: what a set
-            of papers cites that the library lacks, ranked by how many
-            cite it. The reference chunks and `data.cited` exist
-            (stage on references); the `cites` in `context` also held
-            junk from software help files, which a check of what counts
-            as a reference list removes.
-      - [ ] **Sensitivity on write**: `sensitivity: personal` accepted by
-            `ingest`, `write_page` and the sync, so a colleague's notes
-            can live in prax behind the wall (stage U) instead of
-            outside it.
-      - [ ] **Page and repository links**: a repository path on a page
-            resolves to the synced document, `[title](#doc/N)` like
-            any.
+      *4. Documents linked to documents* (the client's #7 and #4, one
+      edge model). Documents are already graph nodes: `cites`,
+      `annotates`, `mentions` and `synthesizes` join them, and a page's
+      `[title](#doc/N)` is an `annotates` edge. No second table.
+      - [ ] At sync, Markdown links, backtick paths and bare `docs/x.md`
+            mentions matched exactly against the project's keys become
+            edges (producer `sync`, EXTRACTED). The acceptance project
+            has 15 links and 159 backtick references: about 174 edges
+            without a model. A path that matches nothing yet is matched
+            again at the next sync, not kept as a dangling node.
+      - [ ] `link` takes `doc:N` as either end. Evidence stays a quote,
+            never a chunk id.
+      - [ ] `supersedes` and `invalidates` in the core ontology (a
+            version bump, invariant 9): "the changelog invalidates the
+            re-baseline table" is a fact the graph cannot say today.
+      - [ ] `context` returns a document's edges out and in;
+            `traverse("doc:N")` walks from a document.
+
+      *5. What is current* (the client's #8). 13 of the acceptance
+      project's 27 documents say they are retired, superseded or invalid,
+      and an agent that quotes one as current repeats the failure that
+      cost months of a pitch.
+      - [ ] At sync, `retired` and `superseded_by` from front matter and
+            explicit status lines ("retired 2026-10-02", "superseded by
+            …", "status: …"), only in synced project documents: a paper
+            saying "superseded by" is about others' work.
+      - [ ] Search and `ask` rank a stale document lower and name its
+            replacement; never a filter (as the domain prior), and
+            `include_stale` turns it off. Measured on the project's own
+            question ("the current shipping candidate and its figure":
+            answered from the decision document and the corrected
+            re-baseline only).
+
+      *6. Captures and pages* (the client's #9, #10, #14).
+      - [ ] A failed capture (a TLS chain error, a 403, a bot check) is
+            queued for the extension (`{queued_for_extension: true}`),
+            which fetches it with the person's session; the upload is
+            linked to the request and takes its title and domains. 7 of
+            about 30 captures failed so.
+      - [ ] `append_page` took over 120 s. Measure where, then answer a
+            write at once and index after.
+      - [ ] `update_section(slug, heading, text)`, or a replaceable status
+            block like the ask blocks.
+      - [ ] `set_title`, and batch capture with a result per item.
+
+      *7. Bibliographies and privacy* (the client's #11, #12).
+      - [ ] `references(doc_id)`: the parsed list, each entry in the
+            library (`doc N`) or with a DOI and an open-access URL.
+            `cited_but_missing(set)`: what a set of papers cites that the
+            library lacks, ranked by how many cite it. First the
+            reference-list detector's scope: `cites` held
+            "OnsetDetector.LL" from software help files.
+      - [ ] `sensitivity: personal` accepted by `ingest`, `write_page` and
+            the sync, behind the wall (stage U), so a colleague's notes
+            can live in prax.
+
+      *Not now.* Search hits with a `url` each (the client's #3, at chunk
+      level too): about 40 bytes a hit against invariant 6. One `ui` base
+      per answer and the ids are enough to build `#doc/N?chunk=M`. The
+      book view of a project (#16: an ordered table of contents, a
+      "current state" path, one-file export) is cheap after steps 4 and
+      5, and comes then.
 
       *What worked*, by its account: hybrid search with the region line
       found the existing cluster in one call; `documents(title=…)`
