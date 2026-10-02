@@ -8,6 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
+from prax import packs
 from prax.text import chunking, glyphs, language
 
 from ..base import (
@@ -305,28 +306,38 @@ def _apply_reference_links(
 
 
 @_serialized
-def set_formula_checks(con: sqlite3.Connection, checks: list[dict[str, Any]]) -> int:
-    """Keep the maths pack's check of each formula in its chunk's
-    ``data.check`` (``{chunk_id, check}``). A chunk that is not a formula,
-    is gone, or holds other LaTeX than the check's ``sha`` was made of (a
-    re-chunk reuses ids) is skipped. Returns how many were kept."""
+def set_chunk_marks(
+    con: sqlite3.Connection,
+    marks: list[dict[str, Any]],
+    *,
+    kind: str,
+    key: str,
+    field: str,
+) -> int:
+    """Keep a pack's mark on each chunk (``{chunk_id, mark}``) as its
+    ``data.<key>``, a key a pack declared (``Pack.chunk_marks``). A chunk
+    not of ``kind``, gone, or whose ``data.<field>`` is not what the
+    mark's ``sha`` was made of (a re-chunk reuses ids) is skipped.
+    Returns how many were kept."""
+    if key not in packs.chunk_mark_keys():
+        raise ValueError(f"no pack marks chunks under {key!r}")
     n = 0
-    for c in checks:
+    for m in marks:
         row = con.execute(
-            "SELECT data FROM chunks WHERE id = ? AND kind = 'formula'",
-            (int(c["chunk_id"]),),
+            "SELECT data FROM chunks WHERE id = ? AND kind = ?",
+            (int(m["chunk_id"]), kind),
         ).fetchone()
         if row is None:
             continue
         data = json.loads(row["data"]) if row["data"] else {}
-        sha = (c.get("check") or {}).get("sha")
-        latex = str(data.get("latex") or "")
-        if sha and hashlib.sha256(latex.encode("utf-8")).hexdigest() != sha:
-            continue  # the formula changed under the check
-        data["check"] = dict(c["check"])
+        sha = (m.get("mark") or {}).get("sha")
+        value = str(data.get(field) or "")
+        if sha and hashlib.sha256(value.encode("utf-8")).hexdigest() != sha:
+            continue  # the chunk changed under the mark
+        data[key] = dict(m["mark"])
         con.execute(
             "UPDATE chunks SET data = ? WHERE id = ?",
-            (json.dumps(data), int(c["chunk_id"])),
+            (json.dumps(data), int(m["chunk_id"])),
         )
         n += 1
     con.commit()

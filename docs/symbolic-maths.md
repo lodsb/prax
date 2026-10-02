@@ -188,17 +188,18 @@ are called on it.
     checked.
 - The library's formulas checked: the maths pack's watched step
   `equations` (`packs/maths/formulas.py`). The door hands out formula
-  chunks not checked at `CHECK_VERSION` (`store.formulas_to_check`), 50
+  chunks not checked at `CHECK_VERSION` (`store.chunks_to_mark`), 50
   at a time. The worker judges each formula's links with the same
   `judge`, in one process; a batch the calculator fails on is judged one
   formula at a time with a time limit each, and a formula that still
   fails is kept as unread. The door keeps the result in `data.check`
-  (`store.set_formula_checks`), stamped with the sha256 of the LaTeX it
+  (`store.set_chunk_marks`), stamped with the sha256 of the LaTeX it
   judged and not kept on a chunk that holds other LaTeX by then.
   `broken` lists the links that do not hold, and the formula's passage
   shows "‹its = does not hold, by the calculator›" in its
-  equations-nearby line. A worker without `maths.python` asks for
-  nothing.
+  equations-nearby line, on a host that runs the pack (the note is
+  `formulas.nearby_note`, declared as `chunk_marks`). A worker without
+  `maths.python` asks for nothing.
   - Measured on 3,600 of the 17,431 formulas (244 documents, read-only,
     2026-10-02): 26 links judged, 22 hold, 3 do not, each false as
     printed (a tuning paper's `9/8 · 256/243`, and two that look like

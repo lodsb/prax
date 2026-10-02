@@ -4,7 +4,8 @@ judged (``runtime.judge``, the same judge an answer's links get). The
 result is kept in the chunk's ``data.check``; a formula whose own links
 do not hold is shown so beside its passage ("equations nearby").
 
-The door hands out formula chunks not checked at ``CHECK_VERSION``; the
+The door hands out formula chunks not checked at ``CHECK_VERSION``
+(``store.chunks_to_mark``, the generic pair a pack marks chunks with); the
 worker judges a batch in one calculator process and posts the checks,
 each stamped with the sha256 of the LaTeX it judged, so a check never
 lands on a chunk whose formula has changed since (chunk ids are reused).
@@ -31,6 +32,16 @@ from . import check, tool
 CHECK_VERSION = 3  # 2: the runtime's judge; 3: its reading ambiguities (2026-10-02)
 BATCH = 50  # formulas a batch, whatever a worker's own batch size
 ONE_TIMEOUT_S = 20.0  # one formula, when its batch failed
+# where the check is kept: a display formula's ``data.check``, made of its
+# ``data.latex`` (``store.chunks_to_mark``, ``store.set_chunk_marks``)
+MARK = {"kind": "formula", "key": "check", "field": "latex"}
+
+
+def nearby_note(check: dict[str, Any]) -> str | None:
+    """A nearby equation's note in an answer's bundle (``Pack.chunk_marks``):
+    said only when a link of the display does not hold, which is an
+    extraction slip or the paper's own typo."""
+    return "its = does not hold, by the calculator" if check.get("broken") else None
 
 
 def latex_sha(latex: str) -> str:
@@ -121,19 +132,31 @@ class FormulaCheck(Step):
     name = "equations"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        found = store.formulas_to_check(
+        found = store.chunks_to_mark(
             h.con,
             version=CHECK_VERSION,
             limit=BATCH,
             skip=tuple(sorted(leases.leased(self.name))),
+            **MARK,
         )
         h.lease([f["chunk_id"] for f in found])
-        return h.batch(found)
+        return h.batch(
+            [
+                {"chunk_id": f["chunk_id"], "doc_id": f["doc_id"], "latex": f["value"]}
+                for f in found
+            ]
+        )
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
         t.release([int(r["chunk_id"]) for r in t.results])
-        kept = store.set_formula_checks(
-            t.con, [r for r in t.results if not r.get("error")]
+        kept = store.set_chunk_marks(
+            t.con,
+            [
+                {"chunk_id": r["chunk_id"], "mark": r["check"]}
+                for r in t.results
+                if not r.get("error") and r.get("check")
+            ],
+            **MARK,
         )
         t.out["applied"] = kept
         t.out["broken"] = sum(

@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from prax import store, work, worker
+from prax import packs, store, work, worker
 from prax.answering import ask
 from prax.packs.maths import formulas, tool
 from prax.steps.base import Pass
@@ -70,6 +70,8 @@ def test_formulas_are_checked_through_the_door(
     p = ask.Passage(
         1, doc, chunks[0]["chunk_id"], "typo", [], None, "formula", "", nearby=near
     )
+    assert "does not hold" not in p.nearby_line()  # a host without the pack
+    monkeypatch.setattr(ask, "MARK_NOTES", packs.mark_notes(["maths"]))
     assert "does not hold, by the calculator" in p.nearby_line()
     assert p.nearby_line().count("does not hold") == 1  # (4) is not marked
 
@@ -102,16 +104,19 @@ def test_a_check_never_lands_on_a_formula_that_changed(
         "sha": formulas.latex_sha("other"),
         "reads": True,
     }
-    assert (
-        store.set_formula_checks(con, [{"chunk_id": chunk["chunk_id"], "check": stale}])
-        == 0
-    )
+
+    def keep(mark: dict[str, Any]) -> int:
+        marks = [{"chunk_id": chunk["chunk_id"], "mark": mark}]
+        return store.set_chunk_marks(con, marks, **formulas.MARK)
+
+    assert keep(stale) == 0
     latex = str(chunk["data"]["latex"])
-    fresh = {**stale, "sha": formulas.latex_sha(latex)}
-    assert (
-        store.set_formula_checks(con, [{"chunk_id": chunk["chunk_id"], "check": fresh}])
-        == 1
-    )
+    assert keep({**stale, "sha": formulas.latex_sha(latex)}) == 1
+    # only a key a pack declared is written, or asked for
+    with pytest.raises(ValueError, match="no pack marks"):
+        store.set_chunk_marks(con, [], kind="formula", key="title", field="latex")
+    with pytest.raises(ValueError, match="no pack marks"):
+        store.chunks_to_mark(con, kind="formula", key="meta", field="latex", version=1)
 
 
 def test_a_batch_the_calculator_fails_on_is_judged_one_at_a_time(

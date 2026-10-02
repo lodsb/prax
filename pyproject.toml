@@ -60,6 +60,8 @@ pythonpath = ["src", "clients/cli"]
 # file. The optional extras (usearch, onnxruntime, docling, pymupdf…)
 # ship no types, so their imports are taken as they are.
 files = ["src/prax"]
+# a pack's own tests are tests, checked as little as those in tests/
+exclude = ["src/prax/packs/[^/]+/tests/"]
 ignore_missing_imports = true
 
 # strict mode, package by package (the engineering pass of 2026-09-30): the

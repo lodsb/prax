@@ -39,5 +39,10 @@ class Pack:
     # the words the answer is given about the tools' results, used only
     # when an answer has results (the maths pack's calculator)
     answer_prompt: str | None = None
+    # what the pack keeps on a chunk, under a key of its ``data`` (written
+    # by its step through ``store.set_chunk_marks``), and the
+    # "module:function" that says it beside a nearby equation in an
+    # answer's bundle, or "" for none (the maths pack's ``check``)
+    chunk_marks: dict[str, str] = field(default_factory=dict)
     extra: str | None = None  # the pyproject extra it needs
     settings: str | None = None  # its section in prax.yaml

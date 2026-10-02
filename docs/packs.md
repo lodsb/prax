@@ -114,6 +114,10 @@ MANIFEST = Pack(
     tools={"maths": "prax.packs.maths.tool:surf_maths"},
     tool_help={"maths": "maths: {...}   check ..."},  # the prompt's lines
     tool_grammar={"maths": "maths ::= ..."},  # GBNF its step is written to
+    answer_check="prax.packs.maths.check:check_answer",  # run on a tool answer
+    answer_prompt="...",  # the words about the tools' results
+    # what it keeps on a chunk's data, and the note a nearby equation gets
+    chunk_marks={"check": "prax.packs.maths.formulas:nearby_note"},
     extra=None,  # the pyproject extra it needs, if any
     settings="maths",  # its section in prax.yaml
 )
@@ -127,8 +131,23 @@ A pack whose dependencies cannot live in prax's environment runs them in
 an environment of its own, as marker does. The maths pack's SymPy needs
 ANTLR 4.11, and OCR pins 4.9, so its calculator is a subprocess of the
 interpreter `maths.python` names, and its `extra` is none. The real
-manifest (`src/prax/packs/maths/__init__.py`) holds only the tool, its
-prompt line and its settings so far.
+manifest is `src/prax/packs/maths/__init__.py`.
+
+A pack marks chunks through one generic pair of the store. Its step asks
+`store.chunks_to_mark(kind=, key=, field=, version=)` for the chunks of
+a kind whose `data.<key>` is missing or of another version, and posts
+its marks to `store.set_chunk_marks`. Each mark may carry the `sha` of
+the `data.<field>` it was made of; a chunk whose field changed since is
+skipped. Both refuse a key no pack declares in `chunk_marks`, so a pack
+cannot write over the core's own keys. `store.equations_near` returns
+the declared marks of each equation, and the answer's bundle prints what
+the pack's note function makes of them. The maths pack's `equations`
+step is the one user: `data.check` of a formula, made of `data.latex`.
+
+A pack's tests live beside it, in `src/prax/packs/<pack>/tests/`. Bare
+`pytest` collects them, the shared fixtures reach them from the
+repository's root `conftest.py`, and mypy leaves them out as it does
+`tests/`.
 
 ## What a host turns on
 

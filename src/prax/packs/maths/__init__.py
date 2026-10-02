@@ -73,6 +73,7 @@ MANIFEST = Pack(
     tool_help={"maths": HELP},
     tool_grammar={"maths": GRAMMAR.strip()},
     answer_check="prax.packs.maths.check:check_answer",
+    chunk_marks={"check": "prax.packs.maths.formulas:nearby_note"},
     answer_prompt=ANSWER_PROMPT,
     # every display formula read once and its chain judged (AD2, step 4)
     steps={"equations": "prax.packs.maths.formulas"},

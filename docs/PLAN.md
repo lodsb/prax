@@ -188,14 +188,13 @@ and pushing what is committed.
 
 - [ ] **AD2, what is left.** Steps 1 to 5 and the review round are done
       and measured (`docs/symbolic-maths.md`, `docs/log.md`, 2026-10-02).
-      - [ ] *Later, a tidy-up* (the user: "tests for maths stuff should be
-            bundled with the pack"; the review's D2): the pack's tests
-            beside it (`src/prax/packs/maths/tests/`, collected by
-            pytest), and the maths-specific pieces still in the core
-            moved behind pack hooks: the "does not hold" in
-            `ask.Passage.nearby_line` and `store.equations_near`, and
-            `store.formulas_to_check` / `set_formula_checks` as a generic
-            "chunks of a kind missing a pack's key" pair.
+      - [x] (2026-10-02) *The tidy-up* (the user: "tests for maths stuff
+            should be bundled with the pack"; the review's D2). The pack's
+            tests are in `src/prax/packs/maths/tests/`, with the shared
+            fixtures in the root `conftest.py`. The maths pieces of the
+            core went behind `Pack.chunk_marks`: the generic
+            `store.chunks_to_mark` / `set_chunk_marks` pair, the marks in
+            `equations_near`, and the pack's note in `nearby_line`.
       - [ ] *Only if the steps above leave a gap:* a question that is a
             calculation (values and a formula) goes a fixed path: the
             formula found, evaluated with the values, the model asked

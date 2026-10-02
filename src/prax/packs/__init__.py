@@ -90,6 +90,12 @@ def aside() -> tuple[str, ...]:
     return tuple(k for p in PACKS for k in p.aside)
 
 
+def chunk_mark_keys() -> tuple[str, ...]:
+    """The keys of a chunk's ``data`` that packs keep their marks under:
+    the only ones ``store.set_chunk_marks`` writes."""
+    return tuple(k for p in PACKS for k in p.chunk_marks)
+
+
 def setting_sections() -> tuple[str, ...]:
     return tuple(p.settings for p in PACKS if p.settings)
 
@@ -135,6 +141,17 @@ def answer_prompts(chosen: Iterable[str]) -> str:
     """The answer's words about the tools' results, of the packs a host runs."""
     prompts = [p.answer_prompt for p in running(chosen) if p.answer_prompt]
     return "\n\n".join(prompts)
+
+
+def mark_notes(chosen: Iterable[str]) -> dict[str, Any]:
+    """Of the packs a host runs, each chunk mark's note function, imported
+    now: a mark in, a few words for the answer's bundle (or None) out."""
+    return {
+        key: _resolve(path)
+        for p in running(chosen)
+        for key, path in p.chunk_marks.items()
+        if path
+    }
 
 
 def tool_grammar(chosen: Iterable[str]) -> dict[str, str]:

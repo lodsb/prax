@@ -34,7 +34,7 @@ import time
 from dataclasses import dataclass, field, replace
 from typing import Any, Protocol
 
-from prax import models, store
+from prax import config, models, packs, store
 from prax.graph import extraction
 from prax.ml import pricing
 
@@ -87,6 +87,9 @@ MODES = ("grounded", "open")
 
 HISTORY_TURNS = 6  # what a follow-up carries along, at most
 HISTORY_CHARS = 1500  # of each earlier answer
+# of the packs this host runs, what each says of its mark on a nearby
+# equation (``Pack.chunk_marks``; the maths pack's check)
+MARK_NOTES = packs.mark_notes(config.host_packs())
 _FOLLOW_UP = re.compile(
     r"\b(it|its|that|this|these|those|they|them|their|the same|the other|"
     r"the second|the first|the latter|the former|he|she|his|her|also|too|"
@@ -149,10 +152,12 @@ class Passage:
         for e in self.nearby:
             num = f"({e['number']})" if e.get("number") else "(unnumbered)"
             bit = f"{num} {e['head']}" + (" ‹this one›" if e.get("here") else "")
-            if e.get("broken"):
-                # the maths pack checked the display and a link of it
-                # fails: an extraction slip or the paper's own typo
-                bit += " ‹its = does not hold, by the calculator›"
+            for key, mark in (e.get("marks") or {}).items():
+                # what a pack says of its mark (the maths pack: a link of
+                # the display does not hold)
+                note = MARK_NOTES[key](mark) if key in MARK_NOTES else None
+                if note:
+                    bit += f" ‹{note}›"
             bits.append(bit)
         return "equations nearby: " + "; ".join(bits)
 

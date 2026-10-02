@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-RUNTIME = Path(__file__).parents[1] / "src" / "prax" / "packs" / "maths" / "runtime.py"
+RUNTIME = Path(__file__).parents[1] / "runtime.py"
 PYTHON = Path(
     os.environ.get("PRAX_MATHS_PYTHON")
     or Path(os.environ.get("LOCALAPPDATA", ""))

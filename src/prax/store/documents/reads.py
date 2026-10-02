@@ -8,6 +8,7 @@ import json
 import sqlite3
 from typing import Any
 
+from prax import packs
 from prax.graph import ontology
 
 from ..base import (
@@ -411,36 +412,44 @@ def _equation_head(data: str | None, text: str) -> str:
 
 
 @_reading
-def formulas_to_check(
+def chunks_to_mark(
     con: sqlite3.Connection,
     *,
+    kind: str,
+    key: str,
+    field: str,
     version: int,
     limit: int = 50,
     skip: tuple[int, ...] = (),
 ) -> list[dict[str, Any]]:
-    """Display formulas whose LaTeX the maths pack has not checked at this
-    ``version`` (``data.check.v``): ``{chunk_id, doc_id, latex}``, oldest
-    first. A re-chunk drops a check, and the chunk comes back here."""
+    """Chunks of ``kind`` with a ``data.<field>`` that a pack has not
+    marked at this ``version`` (``data.<key>.v``): ``{chunk_id, doc_id,
+    value}``, oldest first. A re-chunk drops a mark, and the chunk comes
+    back here (the maths pack's check of a formula's LaTeX)."""
+    if key not in packs.chunk_mark_keys():
+        raise ValueError(f"no pack marks chunks under {key!r}")
     # leased chunks left out; "NOT IN (NULL)" would leave out everything
     gaps = f" AND id NOT IN ({','.join('?' * len(skip))})" if skip else ""
     rows = con.execute(
-        "SELECT id, doc_id, json_extract(data, '$.latex') AS latex FROM chunks"
-        " WHERE kind = 'formula' AND json_extract(data, '$.latex') IS NOT NULL"
-        " AND coalesce(json_extract(data, '$.check.v'), 0) != ?"
+        "SELECT id, doc_id, json_extract(data, ?) AS value FROM chunks"
+        " WHERE kind = ? AND json_extract(data, ?) IS NOT NULL"
+        " AND coalesce(json_extract(data, ?), 0) != ?"
         f"{gaps} ORDER BY id LIMIT ?",
-        (version, *skip, limit),
+        (f"$.{field}", kind, f"$.{field}", f"$.{key}.v", version, *skip, limit),
     ).fetchall()
     return [
-        {"chunk_id": r["id"], "doc_id": r["doc_id"], "latex": r["latex"]} for r in rows
+        {"chunk_id": r["id"], "doc_id": r["doc_id"], "value": r["value"]} for r in rows
     ]
 
 
-def _broken(data: str | None) -> bool:
+def _marks(data: str | None) -> dict[str, Any]:
+    """What packs keep on a chunk (``packs.chunk_mark_keys``)."""
     if not data:
-        return False
+        return {}
     with contextlib.suppress(ValueError, AttributeError):
-        return bool((json.loads(data).get("check") or {}).get("broken"))
-    return False
+        got = json.loads(data)
+        return {k: got[k] for k in packs.chunk_mark_keys() if k in got}
+    return {}
 
 
 @_guards("chunk", list)
@@ -489,8 +498,8 @@ def equations_near(
                 "number": number,
                 "head": _equation_head(r["data"], r["text"]),
                 "here": r["id"] == chunk_id,
-                # the maths pack's check: the display's own links do not hold
-                "broken": _broken(r["data"]),
+                # what packs keep on it (the maths pack's check of its links)
+                "marks": _marks(r["data"]),
             }
         )
     return out

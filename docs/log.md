@@ -3434,6 +3434,37 @@ The night window is the worker's `nightly` hour plus four hours
 On the desktop, marker is still `swap: ask` in `prax.yaml`. The plan
 acts there only on "do it now" until `swap: auto` is added to its line.
 
+## 2026-10-02, the evening: the AD2 tidy-up
+
+The maths pack now keeps its tests and its pieces of the core with it.
+
+The four `test_maths_*.py` files moved to `src/prax/packs/maths/tests/`.
+Pytest collects them from the root, as CI runs it. Fixtures in
+`tests/conftest.py` reach only tests under `tests/`, so the shared ones
+(`data_dir`, `con`, `client`) moved to a `conftest.py` at the
+repository's root; `copy_ontology` stayed, since five tests import it
+from there. Mypy excludes a pack's `tests/`, as it never read `tests/`.
+`test_score_maths.py` stayed in `tests/`: it tests a script of the eval,
+not the pack.
+
+Three maths pieces in the core went behind one manifest field,
+`Pack.chunk_marks` (`{"check": "prax.packs.maths.formulas:nearby_note"}`):
+
+- `store.formulas_to_check` and `set_formula_checks` became
+  `chunks_to_mark` and `set_chunk_marks`, which take the chunk kind, the
+  key and the field the mark is made of. Both refuse a key no pack
+  declares, so a pack cannot write over the core's keys. The worker's
+  wire format did not change (`latex` out, `check` back), so a worker
+  started before this still works.
+- `equations_near` returned `broken`; it now returns `marks`, the
+  declared keys of each equation's data.
+- `ask.Passage.nearby_line` printed the "does not hold" itself; it now
+  prints what each running pack's note function says of its mark
+  (`ask.MARK_NOTES`). On a host whose `packs:` leaves maths out, the
+  note is gone, as the pack's other parts are.
+
+Tests: 1155 passed before, and the same tests after the move.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
