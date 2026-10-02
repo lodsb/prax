@@ -23,6 +23,7 @@ KEEP_LOGS = 10
 PIDFILE = "up.pid"  # the files under <data dir>/run/
 STATUS = "up.json"
 COMMANDS = "commands"  # a directory: one file per command, taken in order
+LOADS = "loads.json"  # each role's last load times, start to ready
 
 
 # ------------------------------------------------------------- the files

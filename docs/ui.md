@@ -54,7 +54,8 @@ The ones added for browsing, each a thin wrapper over a store function:
 | `GET /models/servers` | the `openai` model servers of `prax.yaml`, one entry per server: reachable, alias, model file, slots, vision, and the load from `/metrics` when the server exposes it (tokens per second, busy slots, requests running and waiting, prompt tokens total and cached) |
 | `GET /changes`, `GET /jobs?limit` | the change stamp and running-job count the UI polls; the running and recent batch jobs with heartbeat, progress and note |
 | `GET /spending?days&limit` | what the paid steps have cost: the budget and what is left of it today and this month, and the ledger by step, by model and call by call (`prax.ml.budget`, `store.spending`) |
-| `GET /work/demand` | what waits for a role that has to be running to do it: the reading requests per extractor, and per role of `prax up` (`prax.work.ROLE_WORK`). The supervisor asks this to know when a borrowed card can go back |
+| `GET /work/demand` | what waits for a role that has to be running to do it: the reading requests per extractor, and per role of `prax up` (`prax.work.ROLE_WORK`); `groups`, the same by role and action with each queue's rate; `now`, the roles a person fast-forwarded; `ask_holds`, whether an ask in flight or in the last five minutes keeps the card. The supervisor asks this to know when a borrowed card can go back, and which role to give it to now |
+| `POST /work/now {role, action}` | "do it now" for what waits on a role, one action of it (an extractor or a step) or all of it: its deferrals are released, and `prax up` gives the role the card at its next look at the demand, unless an ask holds it (`after_ask`). The request stands until nothing of it waits, six hours at most (`work.do_now`) |
 | `GET /up`, `POST /up/command {cmd, name \| to, group, back_when}` | what `prax up` runs on the door's host, its groups, the cards and what waits; and a role change asked of it — `start`, `stop`, `restart`, `swap`, `unswap`. The door writes the command file the tray and the CLI write, and answers 409 when no supervisor runs there |
 | `POST /vectors/release` | drop the door's index views, so a batch job on the same machine can replace the files |
 | `GET /doc/{id}/context?limit` | what places a document in the library: extraction summary and entities, citations in and out (library documents resolved), the nearest documents by vector (the centroid of the document's chunk vectors, one KNN), documents sharing its entities or authors, Zotero parent, siblings, collections and tags |
@@ -331,6 +332,11 @@ groups of roles that share a card (`docs/howto.md` 4b). A group says
 who holds it, what waits for the roles that are down (`GET
 /work/demand`), the cards' free memory, and a button that hands it
 over (`POST /up/command`, which writes the supervisor's command file).
+Under the group is what waits for its roles, by role and action
+(`demand.groups`): how many, the queue's rate and the hours left, and
+whether the role needs the card. Its "do it now" asks the door
+(`POST /work/now`), and the supervisor swaps at its next look unless an
+answer is being written; the line then says "asked for now".
 A swap comes back on its own when nothing waits for the borrower. On a
 host without `prax up`, or one whose roles share nothing, the panel
 says so.

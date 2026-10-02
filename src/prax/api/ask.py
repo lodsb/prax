@@ -103,7 +103,8 @@ def ask(req: AskReq, request: Request) -> Any:
     }
     if not req.stream:
         try:
-            out = ask_mod.ask(con, req.question, **kw)
+            with work.asking():
+                out = ask_mod.ask(con, req.question, **kw)
             _note_ask(con, out)
             return out
         except ValueError as exc:
@@ -148,7 +149,10 @@ def _ask_stream(question: str, kw: dict[str, Any]) -> StreamingResponse:
     def run() -> None:
         con = store.connect()
         try:
-            result = ask_mod.ask(con, question, on_event=events.put, stop=stop, **kw)
+            with work.asking():
+                result = ask_mod.ask(
+                    con, question, on_event=events.put, stop=stop, **kw
+                )
             events.put({"event": "answer", "result": result})
         except models.ServerNotReady as exc:
             events.put({"event": "error", "detail": _asked_for_server(exc)})

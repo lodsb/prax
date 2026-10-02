@@ -643,3 +643,87 @@ def test_an_idle_server_waits_for_a_lent_card(
     finally:
         up.stop(data_dir, wait=20)
         thread.join(timeout=10)
+
+
+def test_do_it_now_gives_the_card_unless_an_ask_holds_it(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A person's "do it now" (the door's demand names the role under
+    ``now``) swaps the card to it at the supervisor's next look, never
+    while an ask holds the card; asked for the role the card was lent
+    away from, it ends the loan, and the borrower's ``swap: auto`` does
+    not take it straight back (stage AI)."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    up.run_dir(data_dir).mkdir(parents=True, exist_ok=True)
+    _, argv_a = child(tmp_path, "holder", 60)
+    _, argv_b = child(tmp_path, "borrower", 60)
+    holder = up.Role("llama-server", argv_a, group="card", needs_vram_mb=20000)
+    borrower = up.Role(
+        "marker", argv_b, group="card", needs_vram_mb=5000, on_demand=True, swap="auto"
+    )
+    said: list[str] = []
+    sup = up.Supervisor([holder, borrower], data_dir=data_dir, say=said.append)
+    monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 100)  # they do not fit
+    said_by_door: dict[str, Any] = {"roles": {}, "now": {}, "ask_holds": False}
+
+    def ask_demand(self: up.Supervisor) -> None:
+        self.demand = said_by_door["roles"]
+        self.now = said_by_door["now"]
+        self.ask_holds = said_by_door["ask_holds"]
+
+    monkeypatch.setattr(up.Supervisor, "_ask_demand", ask_demand)
+    said_by_door.update(now={"marker": "marker"}, ask_holds=True)
+    sup._groups()
+    assert "card" not in sup.groups  # an ask holds the card: it waits
+    said_by_door["ask_holds"] = False
+    sup._groups()
+    assert sup.groups["card"]["holder"] == "marker"
+    assert "llama-server" in sup.paused
+    sup._groups()  # the request stands, and is already done
+    assert sup.groups["card"]["holder"] == "marker"
+    # the other way: the card back to what it was lent away from, while
+    # marker still has work, and marker's auto swap leaves it there
+    said_by_door.update(roles={"marker": 4}, now={"llama-server": None})
+    sup._groups()
+    assert "card" not in sup.groups
+    assert "marker" in sup.paused and "llama-server" not in sup.paused
+    sup._groups()
+    assert "card" not in sup.groups
+    assert any("asked for now" in line for line in said)
+
+
+def test_a_load_time_is_noted_and_kept(
+    data_dir: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A server's load time, start to its first health answer, goes into
+    the status as the median of the last few and is kept across runs of
+    the supervisor (``run/loads.json``): what a swap costs (stage AI)."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark, argv = child(tmp_path, "server", 60)
+    server = up.Role("llama-server", argv, health="http://127.0.0.1:1/health")
+    said: list[str] = []
+    sup = up.Supervisor([server], data_dir=data_dir, say=said.append, tick=0.05)
+    assert sup.state["llama-server"]["load_s"] is None
+    monkeypatch.setattr(up, "healthy", lambda url, timeout=3.0: runs_of(mark) >= 1)
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    try:
+        wait_for(lambda: sup.state["llama-server"]["state"] == "up")
+        wait_for(lambda: sup.state["llama-server"]["load_s"] is not None)
+        assert any("s from start" in line for line in said)
+        assert cli.main(["up", "--status"]) == 0  # the command line says it
+        assert "loads in" in capsys.readouterr().out
+    finally:
+        up.stop(data_dir, wait=20)
+        thread.join(timeout=10)
+    (up.run_dir(data_dir) / up.LOADS).write_text(
+        json.dumps({"llama-server": [200.0, 1.0, 180.0, 190.0, 170.0, 175.0]})
+    )
+    again = up.Supervisor([server], data_dir=data_dir)
+    assert again.loads["llama-server"] == [1.0, 180.0, 190.0, 170.0, 175.0]
+    assert again.state["llama-server"]["load_s"] == 175.0
+    status = json.loads((up.run_dir(data_dir) / up.STATUS).read_text())
+    assert status["roles"]["llama-server"]["load_s"] is not None

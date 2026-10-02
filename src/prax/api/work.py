@@ -84,6 +84,23 @@ def work_demand(request: Request) -> dict[str, Any]:
     return work.demand(_con(request))
 
 
+class NowReq(BaseModel):
+    role: str
+    action: str | None = None  # an extractor or a step; none is all of it
+
+
+@router.post("/work/now")
+def work_now(req: NowReq) -> dict[str, Any]:
+    """ "Do it now" for what waits on a role (stage AI): its deferrals go,
+    and ``prax up`` gives it the card at its next look at the demand,
+    unless an ask holds the card (``after_ask`` says so). The door
+    supervises nothing; it says what is wanted, the supervisor acts."""
+    try:
+        return work.do_now(req.role, req.action)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.get("/work/{step}")
 def work_out(
     step: str, request: Request, limit: int = 10, scope: str = "captures"

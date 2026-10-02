@@ -2557,7 +2557,16 @@ itself when work for it waits:
       marker: {venv: …, on_demand: true, group: card, swap: auto}
 
 The default is `ask`: nothing moves unless a person asks, from the
-command line, the tray, or the Jobs view. That view shows each group,
+command line, the tray, or the Jobs view. The Jobs view also lists
+what waits, by role and action, each with a "do it now" (`POST
+/work/now`). The supervisor carries it out at its next look at the
+demand: a swap to that role, or the loan's end when the card was lent
+away from it. It never moves the card while an answer is being written,
+or for five minutes after one (`work.ASK_HOLD_SECONDS`), and a
+borrower's `swap: auto` does not take the card back from a role a
+person asked for. Each role's load time, from start to ready, is kept
+in `run/loads.json` (the last five), and `prax up --status` and the
+Jobs view show their median. That view shows each group,
 who holds it, what waits for the roles that are down, and a button to
 hand it over. The door writes the supervisor's command file for that
 (`POST /up/command`); it supervises nothing itself, and says so when

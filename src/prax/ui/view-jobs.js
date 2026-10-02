@@ -40,6 +40,18 @@ async function upCommand(body, msg) {
     setTimeout(() => render({ keepScroll: true }), 2500);
   } catch (err) { msg.textContent = err.message; }
 }
+view.addEventListener("click", async (e) => {
+  const now = e.target.closest("button.up-now");
+  if (!now) return;
+  const msg = document.getElementById("up-msg") || document.createElement("p");
+  now.disabled = true;
+  msg.textContent = "asking…";
+  try {
+    const r = await post("/work/now", { role: now.dataset.role, action: now.dataset.action });
+    msg.textContent = `${r.role} next${r.after_ask ? ", after the answer in progress" : ""}${r.released ? ` · ${r.released} held requests released` : ""}`;
+    setTimeout(() => render({ keepScroll: true }), 2500);
+  } catch (err) { msg.textContent = err.message; now.disabled = false; }
+});
 view.addEventListener("click", (e) => {
   const swap = e.target.closest("button.up-swap");
   const back = e.target.closest("button.up-unswap");

@@ -1713,3 +1713,49 @@ def test_work_deferred_for_a_missing_server_is_demand_for_its_role(
     work._wanted.pop(("extract", 11))
     work._wanted.pop(("extract", 12))
     assert work.wanted_roles() == {}
+
+
+def test_do_it_now_stands_until_its_work_is_done(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``POST /work/now`` fast-forwards what waits for a role: the demand
+    groups it by role and action, names the role under ``now`` until
+    nothing of it waits, and says whether an ask holds the card (stage
+    AI). Unknown roles and actions are refused."""
+    monkeypatch.setattr(work, "_now", {})
+    monkeypatch.setattr(work, "_asks", {"running": 0, "ended": float("-inf")})
+    pdf = client.post(
+        "/ingest/file",
+        files={"file": ("scan.pdf", b"%PDF-1.4 fake", "application/pdf")},
+    ).json()
+    client.post(f"/doc/{pdf['doc_id']}/reading", json={"extractor": "marker"})
+    demand = client.get("/work/demand").json()
+    assert demand["groups"] == [
+        {
+            "role": "marker",
+            "action": "marker",
+            "waiting": 1,
+            "rate": None,
+            "hours_left": None,
+            "now": False,
+        }
+    ]
+    assert demand["now"] == {} and demand["ask_holds"] is False
+    assert client.post("/work/now", json={"role": "nobody"}).status_code == 400
+    wrong = {"role": "marker", "action": "vision"}  # not marker's
+    assert client.post("/work/now", json=wrong).status_code == 400
+    work.defer_reading("marker", pdf["doc_id"])
+    r = client.post("/work/now", json={"role": "marker", "action": "marker"}).json()
+    assert r["released"] == 1 and r["after_ask"] is False
+    demand = client.get("/work/demand").json()
+    assert demand["now"] == {"marker": "marker"} and demand["groups"][0]["now"]
+    with work.asking():
+        assert work.ask_holds()
+    assert work.ask_holds()  # the last few minutes still hold it
+    # the reading done: the request is forgotten
+    con = store.connect()
+    try:
+        store.cancel_reading(con, pdf["doc_id"], extractor="marker")
+    finally:
+        con.close()
+    assert client.get("/work/demand").json()["now"] == {}

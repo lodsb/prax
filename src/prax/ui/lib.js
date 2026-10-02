@@ -170,6 +170,26 @@ function nextAskId(text) {
 function mb(n) {
   return n == null ? "?" : n >= 1024 ? `${(n / 1024).toFixed(1)} GB` : `${Math.round(n)} MB`;
 }
+// What waits for the group's roles, by role and action (GET /up's
+// demand.groups), each with its rate and a "do it now" (POST /work/now):
+// the supervisor gives that role the card at its next look, unless an
+// ask holds it (stage AI).
+function waitingList(demand, roles, members, holder) {
+  const d = demand || {};
+  const rows = (d.groups || []).filter((g) => members.includes(g.role)).map((g) => {
+    const when = g.hours_left == null ? "" : g.hours_left >= 48 ? `${Math.round(g.hours_left / 24)} days` : `${Math.round(g.hours_left)} h`;
+    const pace = g.rate ? ` · ${g.rate}/h · about ${when} left` : "";
+    const state = (roles[g.role] || {}).state || "?";
+    const load = (roles[g.role] || {}).load_s;
+    const loads = load == null ? "" : `, loads in about ${load >= 90 ? `${Math.round(load / 60)} min` : `${Math.round(load)} s`}`;
+    const card = g.role === holder || state === "up" ? "" : ` · needs the card (${esc(g.role)} is ${esc(state)}${loads})`;
+    const act = g.now
+      ? ` · <span class="up-holder">asked for now${d.ask_holds ? ", after the answer in progress" : ""}</span>`
+      : ` <button type="button" class="linkish up-now" data-role="${esc(g.role)}" data-action="${esc(g.action)}">do it now</button>`;
+    return `<li>${esc(g.role)}: ${g.waiting} ${esc(g.action)}${pace}${card}${act}</li>`;
+  });
+  return rows.length ? `<ul class="servers up-waiting">${rows.join("")}</ul>` : "";
+}
 function upPanel(u) {
   const s = u && u.up;
   if (!s) return "";
@@ -186,10 +206,6 @@ function upPanel(u) {
     const back = g.back_when === "idle" ? "when nothing waits for it" : "when you say so";
     const waiting = members.filter((m) => m !== holder && (demand[m] || 0) > 0)
       .map((m) => `${demand[m]} for ${esc(m)}`).join(", ");
-    const rates = Object.entries((u.demand || {}).readings || {})
-      .filter(([, n]) => n > 0)
-      .map(([name]) => `${esc(name)}: ${esc(queueRate(u.demand, name))}`)
-      .join(" · ");
     return `<div class="up-group">
       <div><strong>${esc(name)}</strong> ${holder
         ? `— <span class="up-holder">${esc(holder)}</span> has it ${g.fits ? "beside" : "instead of"} ${esc(others)}, back ${back}`
@@ -202,7 +218,7 @@ function upPanel(u) {
           : esc(st);
         return `${esc(m)}: ${shown}${n ? ` · ${n} waiting` : ""}`;
       }).join(" · ")}${card ? ` · ${card}` : ""}</div>
-      ${rates ? `<div class="up-line muted">${rates}</div>` : ""}
+      ${waitingList(u.demand, roles, members, holder)}
       <div class="up-acts">${members.map((m) => (roles[m] || {}).state === "up" || m === holder
         ? ""
         : `<button type="button" class="secondary up-swap" data-to="${esc(m)}">give it to ${esc(m)}${(demand[m] || 0) ? ` (${demand[m]} waiting)` : ""}</button>`).join("")}
@@ -644,5 +660,5 @@ function checksBox(checks) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }

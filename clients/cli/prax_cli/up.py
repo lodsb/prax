@@ -72,6 +72,8 @@ def show_status(data_dir: Path) -> int:
             note = f"since {_since(r['since'])}"
         if r.get("restarts"):
             note += f" · {out.plural(r['restarts'], 'restart')}"
+        if r.get("load_s") is not None:
+            note += f" · loads in {r['load_s']:.0f} s"
         rows.append([name, shown, str(r.get("pid") or ""), note.strip(" ·")])
     out.table(rows, headers=["role", "state", "pid", ""])
     for line in _groups_lines(snap):

@@ -54,6 +54,7 @@ from prax.host import hostinfo
 from .process import (  # noqa: F401
     COMMANDS,
     KEEP_LOGS,
+    LOADS,
     PIDFILE,
     STATUS,
     _alive,
@@ -110,6 +111,7 @@ TICK = 1.0
 BACK_WHEN = ("idle", "never")  # when the group goes back to what held it
 GROUP_QUIET = 90.0  # seconds of no work for the borrower before it goes back
 DEMAND_SECONDS = 20.0  # how often the supervisor asks the door what waits
+LOADS_KEPT = 5  # load times kept per role; the status says their median
 IDLE_POLL = 30.0  # how often an idle-watched server's /metrics is read
 
 
@@ -160,12 +162,19 @@ class Supervisor:
         # back (``_groups``). Empty until a swap is asked for
         self.groups: dict[str, dict[str, Any]] = {}
         self.demand: dict[str, Any] = {}  # what the door says waits, per role
+        self.now: dict[str, Any] = {}  # the roles a person said do it now for
+        self.ask_holds = False  # an ask keeps the card where it is
         self._demand_at = 0.0
         # servers stopped for being quiet (``idle_minutes``), and per
         # watched server the last activity count, when it last moved and
         # when /metrics was last read
         self.idled: set[str] = set()
         self._activity: dict[str, dict[str, Any]] = {}
+        # how long each role took from start to ready, the last few: what a
+        # swap costs (stage AI), kept across runs of the supervisor
+        self.loads: dict[str, list[float]] = self._read_loads()
+        for name, fields in self.state.items():
+            fields["load_s"] = self.load_seconds(name)
         self.started = _now()
         self.jobs: dict[str, _JobObject] = {}  # Windows: one per role, its tree
         self.paused.update(r.name for r in roles_ if r.on_demand)
@@ -286,9 +295,10 @@ class Supervisor:
                 while proc.poll() is None:
                     if not ready and healthy(role.health or ""):
                         ready = True
+                        took = time.monotonic() - began
                         self._set(role.name, state="up")
-                        self._say(f"{role.name}: up")
-                        self._loaded(role, proc)
+                        self._say(f"{role.name}: up ({took:.0f} s from start)")
+                        self._loaded(role, proc, took)
                     if self.stopping.wait(self.tick):
                         break
                 if self.stopping.is_set():
@@ -405,9 +415,37 @@ class Supervisor:
 
     # -- a model server that has loaded, and one that has been quiet
 
-    def _loaded(self, role: Role, proc: subprocess.Popen[bytes]) -> None:
-        """A server has answered its first health check: its quiet is
-        counted from now, and its working set is trimmed (``trim``)."""
+    def _read_loads(self) -> dict[str, list[float]]:
+        with contextlib.suppress(OSError, ValueError, AttributeError):
+            got = json.loads((self.run_dir / LOADS).read_text(encoding="utf-8"))
+            return {
+                str(name): [float(x) for x in seconds][-LOADS_KEPT:]
+                for name, seconds in got.items()
+            }
+        return {}
+
+    def load_seconds(self, name: str) -> float | None:
+        """The role's typical load time, start to ready: the median of the
+        last few, or None before the first."""
+        seconds = sorted(self.loads.get(name) or [])
+        return seconds[len(seconds) // 2] if seconds else None
+
+    def _note_load(self, name: str, seconds: float) -> None:
+        kept = [*self.loads.get(name, []), round(seconds, 1)][-LOADS_KEPT:]
+        self.loads[name] = kept
+        with contextlib.suppress(OSError):
+            self.run_dir.mkdir(parents=True, exist_ok=True)
+            (self.run_dir / LOADS).write_text(json.dumps(self.loads), encoding="utf-8")
+        self._set(name, load_s=self.load_seconds(name))
+
+    def _loaded(
+        self, role: Role, proc: subprocess.Popen[bytes], took: float | None = None
+    ) -> None:
+        """A server has answered its first health check: its load time is
+        noted (``took``, start to ready), its quiet is counted from now,
+        and its working set is trimmed (``trim``)."""
+        if took is not None:
+            self._note_load(role.name, took)
         self._activity[role.name] = {
             "count": None,
             "moved": time.monotonic(),
@@ -627,9 +665,12 @@ class Supervisor:
             req.add_header("Authorization", f"Bearer {token}")
         try:
             with urllib.request.urlopen(req, timeout=5) as r:
-                self.demand = json.loads(r.read().decode("utf-8")).get("roles", {})
+                said = json.loads(r.read().decode("utf-8"))
         except (urllib.error.URLError, OSError, ValueError):
-            self.demand = {}
+            said = {}
+        self.demand = said.get("roles") or {}
+        self.now = said.get("now") or {}
+        self.ask_holds = bool(said.get("ask_holds"))
 
     def _groups(self) -> None:
         """Every tick: a group whose borrower has nothing left to do gives
@@ -638,6 +679,7 @@ class Supervisor:
         if not any(r.group for r in self.roles):
             return
         self._ask_demand()
+        self._do_now()
         for group, loan in list(self.groups.items()):
             if loan["back_when"] != "idle":
                 continue
@@ -657,8 +699,29 @@ class Supervisor:
                 and role.name in self.paused
                 and role.group not in self.groups
                 and int(self.demand.get(role.name, 0) or 0) > 0
+                and not any(  # a person asked for another to go first
+                    r.group == role.group and r.name in self.now for r in self.roles
+                )
             ):
                 self._swap(role.name, "idle")
+
+    def _do_now(self) -> None:
+        """A person's "do it now" (``POST /work/now``, in the door's demand
+        as ``now``): the role gets its group's card, by a swap, or by the
+        loan ending when it is what the card was lent away from. Never
+        while an ask holds the card; the door keeps the request standing,
+        so the next look after the ask does it."""
+        if self.ask_holds:
+            return
+        for role in self.roles:
+            if not role.group or role.name not in self.now:
+                continue
+            loan = self.groups.get(role.group)
+            if loan is None:
+                if role.name in self.paused:
+                    self._swap(role.name, "idle")
+            elif loan["holder"] != role.name and role.name in loan["was_up"]:
+                self._unswap(role.group, "asked for now")
 
     def _end(self, name: str, proc: subprocess.Popen[bytes]) -> None:
         """End a role's process and whatever it started: the job on

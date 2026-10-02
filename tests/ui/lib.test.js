@@ -146,6 +146,18 @@ test("upPanel: the group's holder, what waits, and the buttons offered", () => {
   });
   assert.match(held, /On the card: python 2\.2 GB · dwm 800 MB/);
   assert.match(held, /llama-server: <span title="stopped after a quiet while[^"]*">idle, unloaded<\/span>/);
+  // what waits, by role and action, each with "do it now"
+  const waiting = lib.upPanel({
+    up: { roles: { "llama-server": { state: "up" }, marker: { state: "paused", load_s: 41 } },
+          groups: { card: { members: ["llama-server", "marker"] } } },
+    demand: { roles: { marker: 2 }, ask_holds: true, groups: [
+      { role: "marker", action: "marker", waiting: 2, rate: 1.5, hours_left: 1.3, now: false },
+      { role: "llama-server", action: "vision-pages", waiting: 3, rate: null, hours_left: null, now: true },
+    ] }, gpu: [],
+  });
+  assert.match(waiting, /marker: 2 marker · 1\.5\/h · about 1 h left · needs the card \(marker is paused, loads in about 41 s\) <button[^>]*class="linkish up-now" data-role="marker" data-action="marker">do it now/);
+  assert.match(waiting, /llama-server: 3 vision-pages · <span class="up-holder">asked for now, after the answer in progress/);
+  assert.doesNotMatch(waiting, /data-role="llama-server"/);
   // no supervisor on the host: no panel at all
   assert.equal(lib.upPanel(null), "");
   assert.equal(lib.upPanel({ up: null }), "");

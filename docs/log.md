@@ -3347,6 +3347,44 @@ four commits:
   13376, and 4057 retired into it as its duplicate. The other 37 wait for
   their originals from wherever the user kept them.
 
+## 2026-10-02, the evening: "do it now" (stage AI, step 2)
+
+The plan was rewritten first. 1,086 lines of finished work moved here
+verbatim, under the next heading. What stays open is grouped by
+subject, and the order is AI, the AD2 tidy-up, the backlogs, then AA.
+
+A person can now fast-forward what waits for the card. `GET
+/work/demand` groups the waiting work by role and action: an
+extractor's readings, or a step's items deferred because its server
+was gone (`work.wanted_steps`). Each group carries its rate and hours
+left. `POST /work/now {role, action}` releases that work's deferrals
+and records the request (`work.do_now`). The demand names the role
+under `now` until nothing of it waits, six hours at most.
+
+The supervisor acts on it, as invariant 4 wants: the door says, `prax
+up` does. At its next look at the demand (`Supervisor._do_now`) it
+swaps the card to the role. When the card was lent away from that
+role, it ends the loan instead. It does neither while an ask holds the
+card: `work.asking()` wraps both kinds of `POST /ask`, and
+`ask_holds` stays true for five minutes after one ends
+(`ASK_HOLD_SECONDS`). The request stands, so the swap happens after
+the answer. A borrower's `swap: auto` no longer takes the card back
+from a role a person asked for; without that guard, "do it now" for
+llama-server would have flipped back to marker on the next tick.
+
+The jobs view lists the groups under the card's group, each with "do
+it now", or "asked for now" once asked. "See who holds the card", a
+folded step of the old card plan, turned out done already
+(`hostinfo.holders`); the plan says so.
+
+Step 3 came with it: what a swap costs. `prax up` notes each role's
+load time, from start to its first health answer, and says it ("up
+(181 s from start)"). It keeps the last five per role in
+`run/loads.json`, so a restarted supervisor still knows them. The
+status carries their median as `load_s`, and the jobs view adds "loads
+in about 3 min" to a role that needs the card. The plan of step 4
+reads these numbers.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

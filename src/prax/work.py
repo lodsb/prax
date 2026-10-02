@@ -37,7 +37,9 @@ from __future__ import annotations
 
 import contextlib
 import sqlite3
+import threading
 import time
+from collections.abc import Iterator
 from typing import Any
 
 from prax import models, steps, store
@@ -177,24 +179,142 @@ def role_of_step(step: str) -> str | None:
     return None
 
 
-def wanted_roles() -> dict[str, int]:
-    """How many deferred items wait on each role now."""
+def wanted_steps() -> dict[tuple[str, str], int]:
+    """How many deferred items wait now, by role and step."""
     now = time.monotonic()
-    out: dict[str, int] = {}
+    out: dict[tuple[str, str], int] = {}
     for (step, i), until in list(_wanted.items()):
         if until < now:
             _wanted.pop((step, i), None)
             continue
         role = role_of_step(step)
         if role:
-            out[role] = out.get(role, 0) + 1
+            out[(role, step)] = out.get((role, step), 0) + 1
     return out
+
+
+def wanted_roles() -> dict[str, int]:
+    """How many deferred items wait on each role now."""
+    out: dict[str, int] = {}
+    for (role, _step), n in wanted_steps().items():
+        out[role] = out.get(role, 0) + n
+    return out
+
+
+# an ask in flight, or one that ended in the last ``ASK_HOLD_SECONDS``,
+# keeps the card where it is: a swap never interrupts a streaming answer,
+# nor the next question of the same person (stage AI)
+ASK_HOLD_SECONDS = 300.0
+_asks = {"running": 0, "ended": float("-inf")}
+_asks_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def asking() -> Iterator[None]:
+    """Around an answer's generation (``POST /ask``)."""
+    with _asks_lock:
+        _asks["running"] += 1
+    try:
+        yield
+    finally:
+        with _asks_lock:
+            _asks["running"] -= 1
+            _asks["ended"] = time.monotonic()
+
+
+def ask_holds() -> bool:
+    """Whether an ask holds the card now."""
+    with _asks_lock:
+        return bool(_asks["running"]) or (
+            time.monotonic() - _asks["ended"] < ASK_HOLD_SECONDS
+        )
+
+
+# a person's "do it now" (``POST /work/now``): role -> (action, until).
+# The supervisor gives that role the card at its next look at the
+# demand, unless an ask holds it. It stands until nothing of it waits
+NOW_SECONDS = 6 * 3600.0
+_now: dict[str, tuple[str | None, float]] = {}
+
+
+def do_now(role: str, action: str | None = None) -> dict[str, Any]:
+    """Fast-forward what waits for ``role`` (one ``action`` of it, an
+    extractor or a step, or all of it): the deferrals of it are let go,
+    so the next hand-out offers it, and the demand names the role under
+    ``now`` until nothing of it waits."""
+    actions = ROLE_WORK.get(role, ())
+    wanted = {step for (r, step) in wanted_steps() if r == role}
+    if not actions and not wanted:
+        raise ValueError(f"nothing waits for {role!r} on this host")
+    if action is not None and action not in actions and action not in wanted:
+        raise ValueError(f"{role} does not do {action!r}")
+    _now[role] = (action, time.monotonic() + NOW_SECONDS)
+    if action in wanted:
+        released = release_deferred(str(action))
+    else:
+        released = release_deferred("parse", (action,) if action else actions)
+    return {
+        "role": role,
+        "action": action,
+        "released": released,
+        "after_ask": ask_holds(),
+    }
+
+
+def _groups(
+    readings: dict[str, int], rate: dict[str, float], left: dict[str, float]
+) -> list[dict[str, Any]]:
+    """What waits, by the role that must run to do it and by action (an
+    extractor's readings, or a step's deferred items), with the queue's
+    rate where one was measured."""
+    out = [
+        {
+            "role": role,
+            "action": name,
+            "waiting": readings[name],
+            "rate": rate.get(name),
+            "hours_left": left.get(name),
+        }
+        for role, names in ROLE_WORK.items()
+        for name in names
+        if readings.get(name)
+    ]
+    for (role, step), n in sorted(wanted_steps().items()):
+        out.append(
+            {
+                "role": role,
+                "action": step,
+                "waiting": n,
+                "rate": None,
+                "hours_left": None,
+            }
+        )
+    for g in out:
+        asked = _now.get(str(g["role"]))
+        g["now"] = asked is not None and asked[0] in (None, g["action"])
+    return out
+
+
+def _settle_now(groups: list[dict[str, Any]]) -> dict[str, str | None]:
+    """The standing "do it now"s: one whose work is done, or that is
+    older than ``NOW_SECONDS``, is forgotten."""
+    clock = time.monotonic()
+    for role, (action, until) in list(_now.items()):
+        left = [
+            g for g in groups if g["role"] == role and action in (None, g["action"])
+        ]
+        if until < clock or not left:
+            _now.pop(role, None)
+    return {role: action for role, (action, _until) in _now.items()}
 
 
 def demand(con: Any) -> dict[str, Any]:
     """What waits, per extractor and per role of ``prax up``: the reading
     requests nobody has taken. A role with a count has work it cannot do
-    unless it is running, which is what a swap of the card is for. The
+    unless it is running, which is what a swap of the card is for.
+    ``groups`` is the same by role and action, for the Jobs view's "do it
+    now"; ``now`` the roles a person fast-forwarded (``do_now``), and
+    ``ask_holds`` whether an ask keeps the card where it is. The
     extraction backlog is left out on purpose: it is never empty, so it
     would say "work waiting" for ever.
 
@@ -224,7 +344,16 @@ def demand(con: Any) -> dict[str, Any]:
         for name, waiting in readings.items()
         if rate.get(name)
     }
-    return {"readings": readings, "roles": roles, "rate": rate, "hours_left": left}
+    groups = _groups(readings, rate, left)
+    return {
+        "readings": readings,
+        "roles": roles,
+        "rate": rate,
+        "hours_left": left,
+        "groups": groups,
+        "now": _settle_now(groups),
+        "ask_holds": ask_holds(),
+    }
 
 
 def _check(step: str, scope: str, limit: int) -> int:

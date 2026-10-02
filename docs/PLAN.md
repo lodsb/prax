@@ -100,13 +100,19 @@ and pushing what is committed.
             whose card is lent waits for it and comes back with it; before,
             its waiting work reloaded it beside the borrower, and marker and
             the 35B together ran the machine out of memory.
-      - [ ] The jobs view groups what waits by role and action, each
-            with its estimate (items, rate, the swap it needs), and a
-            "do it now" per group. That is `POST /work/now` with the
-            role and the action. Built on today's `swap`: the role takes
-            the card at the next tick, unless an ask holds it.
-      - [ ] `prax up` logs each role's load time, from start to ready.
-            The plan's swap costs are those numbers, not guesses.
+      - [x] (2026-10-02) **Do it now.** The jobs view groups what waits
+            by role and action, each with its count, rate and whether it
+            needs the card, and a "do it now" per group (`POST
+            /work/now`). The door keeps the request in its demand
+            (`now`); `prax up` swaps at its next look, unless an ask is
+            in flight or ended in the last five minutes (`ask_holds`).
+            The supervisor acts; the door supervises nothing. The load
+            time per swap is the next step's number.
+      - [x] (2026-10-02) **Load times.** `prax up` notes each role's
+            load time, from start to its first health answer, keeps the
+            last five in `run/loads.json`, and puts their median in the
+            status (`load_s`). The jobs view shows it beside "needs the
+            card". The plan's swap costs are those numbers, not guesses.
       - [ ] `GET /work/plan`: the groups, their costs and the order the
             door would serve them in, shown in the jobs view.
       - [ ] `prax up` follows the plan. It replaces `swap: auto` and the
@@ -117,7 +123,8 @@ and pushing what is committed.
             waits is the point.
 
       *Steps folded in on 2026-10-02* (from "What holds the card", 2026-09-25):
-      - [ ] **See who holds the card.** `prax.host.hostinfo` reads `nvidia-smi`,
+      - [x] (done before 2026-10-02: `hostinfo.holders`, "On the card" in
+            the jobs view) **See who holds the card.** `prax.host.hostinfo` reads `nvidia-smi`,
             which gives totals: prax could say the card was at 23.7 of
             24.5 GB and not say by whom. Under WDDM per-process VRAM is a
             performance counter, `\GPU Process Memory(*)\Dedicated Usage`,
