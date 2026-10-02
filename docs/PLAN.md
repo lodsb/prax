@@ -53,6 +53,54 @@ nothing.
       formulas worth it, which parser reads marker's LaTeX, and what
       "plug things together" asks of the tool in practice. Built only
       after the user has read the plan.
+      (2026-10-02: step 3 measured, `docs/symbolic-maths.md`: with the
+      tool, grounded mode gains 2 to 4 right answers, past the spread of
+      3 to 7 questions between runs; open mode does not change. Four
+      rounds of prompt and parser fixes; the wording has stopped paying.)
+- [ ] **AD2. The maths tool, made structural** (the user, 2026-10-02:
+      "what would be good structural fixes?"). Every failure left is a
+      choice the model makes: whether to call the tool, how to write the
+      call, whether to trust the result. Each step takes one choice
+      away. In this order:
+      - [ ] **A step written to a schema.** The `maths` step becomes a
+            JSON object (`op`, `formula`, `var`, `values`, `at`) under
+            the surf's per-step grammar, so a local model writes only
+            calls that parse. 21 to 30 of every 85 calls failed on
+            syntax in the double runs; the parser's heuristics
+            (`TRAILING_VALUES`, `FOR_VAR`, `SYMPY_ORDER`, …) go when it
+            is in. Claude as the surfer gets the same shape as a tool.
+      - [ ] **A check after the answer.** The door reads the answer's
+            equations and checks each with `same` against the passages
+            and the tool's results, and compares each number with the
+            result that gave it. The marks ("checked", "does not hold",
+            "not checked") go into the answer whatever the model wrote:
+            "(not checked)" asked of the model was used once in 160
+            answers.
+      - [ ] **Scoring by machine.** Each question gets a check the
+            calculator can run: a number with a tolerance, a formula by
+            `same`, a yes or no. Derivations stay scored by hand. Two
+            runs of one way disagree on 3 to 7 of 20, so a change is
+            measured over five runs, not two; by hand that costs an hour
+            of scoring per run.
+      - [ ] **Formulas checked when indexed.** The calculator reads each
+            `formula` chunk once and keeps in `data` whether it reads
+            and, for a chain A = B = C, whether each link holds. The
+            surf shows a broken chain beside the passage (the Moog
+            paper's tanh typo would carry it). A table of
+            antiderivatives is checked row against row (the RNN paper's
+            second antiderivative of tanh, wrong as extracted). A run
+            over the 243 documents with formulas, measured: how many
+            chains break, and how many of those are extraction faults.
+      - [ ] **An equation by its number.** A question that names a
+            document and an equation number ("Dattorro's (5)") gets that
+            formula chunk at the start of the surf, from the numbers the
+            formula chunks already carry. The resonator question failed
+            in all 16 answers of both double runs because no passage
+            held (5).
+      - [ ] *Only if the steps above leave a gap:* a question that is a
+            calculation (values and a formula) goes a fixed path: the
+            formula found, evaluated with the values, the model asked
+            only to explain the result.
 - [ ] (2026-09-30: a pilot of 50 questions, the teacher cited the expected document in 45; the numbers are with the plan, outside the repository) **AE. The distilled surfer.** A small local model trained on the
       large model's search-and-read trails. Its plan is kept outside the
       repository. It needs a question set and a training run of a few
