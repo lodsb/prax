@@ -43,11 +43,37 @@ engineering leftovers. What waits on the user is apart.
    the sections pass's vector arm and its worth to `ask`, document-aware
    rerank input, a compressed edge list, `confidence` as a number.
 9. **The engineering leftovers** (below): `store.retrieval` and
-   `store.repair` in parts, typed shapes, the next strict mypy batch.
+   `store.repair` in parts, typed shapes (a search hit first), the UI
+   helpers the extension copies. The strict mypy batch is done.
 
 Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
 after the prototype settles), the move to the board ("Deployment shape"),
 and pushing what is committed.
+
+### Next, by hand (noted 2026-10-03)
+
+- **Restart once marker has read the books** (the tray: "Stop prax",
+  then "Start prax"; or `prax up --stop` and `prax up --data-dir
+  C:\prax-data --detach`). Before that, Jobs shows nothing waiting for
+  marker, or the card back with llama-server. It brings the commits of
+  2026-10-03 live: the bounded prompt caches (AJ, step 1) and the genre
+  words in the document field (AA), which the first `fields` pass after
+  it rebuilds, and the worker embeds again (about 8 minutes).
+- **Then measure AJ step 1**: marker's peak RAM and commit, VRAM and
+  time per page on a few books, against the night of 2026-10-02 (10.3 GB
+  for its OCR server). The 35B's prompt-cache share in its metrics says
+  whether 2048 MiB is right.
+- **Two tray icons** run on the desktop (one from the autostart, one
+  started by hand, most likely): quit one. If it happens again, the tray
+  should refuse a second copy on the same data directory.
+- **Before AK's download**: see what Qwen has released since 3.6 (a page
+  names a "Qwen 3.8" lineup, not checked), then fetch with the user's
+  word, from a known quantizer, names and hashes in the log.
+- **The CLI client under strict mypy**: `clients/cli` has 7 errors under
+  the package's flags (2026-10-03). CI does not check `clients/`; adding
+  it to `files` is the user's call.
+- **Push** what is committed; CI on GitHub has not seen 2026-10-02 and
+  -03.
 
 ## Stages
 
@@ -364,6 +390,13 @@ and pushing what is committed.
       `scripts/eval_ask.py` is the instrument.
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
+
+- [ ] **A heading is capped in a hit** (found 2026-10-03). Doc 9522, a
+      patent read in two columns, has a heading of over 2,000 characters
+      of repeated text, and it rides along with every search hit and
+      `ask` passage of that document. Marker reads it again (queued the
+      night of 2026-10-02); a cap on a hit's `heading` would keep one bad
+      parse from swelling an answer (invariant 6). Not decided.
 
 ## The graph
 
