@@ -36,9 +36,9 @@ prax`) shows up in the next session, not the current one. Then
 ## On another machine: a walkthrough
 
 Say the door (prax's server, `prax serve`) runs on your desktop and you
-want the library in Claude
-Code on a notebook. The notebook needs three things: prax installed in a
-Python of its own, the desktop's address, and the token. It does not
+want the library in Claude Code on a notebook. The notebook needs three
+things: prax installed in a Python of its own, the desktop's address,
+and the token. It does not
 need the store, the models or a GPU; the plugin's server only passes
 each tool call on to the door.
 
