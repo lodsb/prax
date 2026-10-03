@@ -209,7 +209,11 @@ revisit threshold, under "Decision thresholds" below.
   160,571 entities, one hop took 3–41 ms and two hops 34–276 ms. The
   count of entities was the line until then, and it was passed with the
   walks fast. The answer is an index for the query the walk spends its
-  time in first, then Kùzu (embedded) for the edges, not Neo4j.
+  time in first, then a derived path index beside the database in the
+  vector files' pattern (stage AM of `docs/PLAN.md`), not a second
+  store. Kùzu, named here until 2026-10-03, was archived upstream on
+  2025-10-10; an embedded graph engine is chosen only for a need neither
+  index carries, and then.
 - SQLite write contention across capture sources. The answer is the
   single writer queue, not a new database.
 - One archive folder passes 10,000 files (`data/archive/<sha256[:2]>/`;

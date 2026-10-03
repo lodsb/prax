@@ -312,6 +312,14 @@ and pushing what is committed.
             re-baseline table" is a fact the graph cannot say today.
       - [ ] `context` returns a document's edges out and in;
             `traverse("doc:N")` walks from a document.
+      - [ ] Functional relations declared in the ontology (a building is
+            `located_in` one place), and a later pass that proposes
+            `contradicts` edges between facts of such a relation that
+            disagree, with their own producer and run, so `retire_run`
+            undoes a pass. Disagreement kept visible, never a fact ended
+            by a model (Cognee's opt-in pass; Graphiti ends facts only
+            when both carry world dates; the research note, sections 6
+            and 7).
 
       *5. What is current* (the client's #8). 13 of the acceptance
       project's 27 documents say they are retired, superseded or invalid,
@@ -334,6 +342,9 @@ and pushing what is committed.
             are, and invariant 8's wording in CLAUDE.md corrected with
             it (found 2026-10-03, talking about prax as an agent's
             memory).
+      - [ ] "As of a date" and "what changed in a period" as door
+            routes and MCP tools, once the world's time is on the facts
+            (Utopia exposes both; the research note, section 8).
       - [ ] Search and `ask` rank a stale document lower and name its
             replacement; never a filter (as the domain prior), and
             `include_stale` turns it off. Measured on the project's own
@@ -351,6 +362,9 @@ and pushing what is committed.
             write at once and index after.
       - [ ] `update_section(slug, heading, text)`, or a replaceable status
             block like the ask blocks.
+      - [ ] A page's lifecycle: marked stale, or contradicted, when the
+            documents it cites change or are superseded (Synthadoc's
+            draft, active, stale, contradicted, archived).
       - [ ] `set_title`, and batch capture with a result per item.
 
       *7. Bibliographies and privacy* (the client's #11, #12).
@@ -568,6 +582,25 @@ and pushing what is committed.
       night of 2026-10-02); a cap on a hit's `heading` would keep one bad
       parse from swelling an answer (invariant 6). Not decided.
 
+- [ ] **Facts as one more search list** (2026-10-03, from Graphiti's fact
+      sentence and LightRAG's relation vectors): a full-text table over
+      each edge's evidence, relation and its entities' names, a list in
+      the fusion like the document field, one vote per document through
+      `source_doc`. Vectors for it only if the text side earns them (one
+      384-d vector per edge; size it first). Measured with
+      `scripts/eval_retrieval.py` before and after.
+- [ ] **A focus entity as a vote** (Graphiti's node distance): in an `ask`
+      follow-up, the documents whose edges touch the entity in focus
+      and its first hop get one vote in the fusion, a preference like
+      `DOMAIN_PRIOR`, never a re-sort.
+- [ ] **A faithfulness score for `ask`**: an open model run locally
+      (Vectara's HHEM-2.1-Open) scores an answer against its passages;
+      first as a measurement on the eval sets, then perhaps as a mark on
+      the answer.
+- [ ] **Reading activity as a signal** (Glean's personal graph): what was
+      opened, and when, as a measured vote in ranking; it is also the
+      first of the "outcome signals" of the private research note.
+
 ## The graph
 
 - [ ] **Compress what repeats in an edge list.** The cap
@@ -594,6 +627,18 @@ and pushing what is committed.
       with networkx. The change is `communities.partition`. Worth it only
       if a region turns out to be two unrelated things, or if the
       packages prove easy on the Pi-class host.
+
+- [ ] **Support count as a signal** (2026-10-03, from Graphiti's episode
+      count, LightRAG's summed weights, HippoRAG's source counts): a
+      walk's first hop ordered by how many documents separately say each
+      fact, and search's ties broken by it. prax writes one edge row per
+      source, so the count is a GROUP BY. Nearly free.
+- [ ] **A deterministic step before the model in entity resolution**
+      (Graphiti's `dedup_helpers`): a normalised exact match with one
+      candidate resolves; a short or low-entropy name goes to the model;
+      otherwise 3-gram shingles, MinHash and a Jaccard of 0.9 or more
+      resolve. About 50 lines; fewer calls of the local model. Merges
+      stay recorded and undoable as now (`merged_by`, `merged_run`).
 
 ## The UI and the agent
 
@@ -672,6 +717,24 @@ not done.
   is tangled. Both are long lists of the same shape (ailments, roles).
 
 ## Later / maybe
+
+From the research of 2026-10-03 (the private research note, sections 6
+to 8; the library's `agent-memory-landscape` page):
+
+- Synonymy edges as a softer tier below a merge (HippoRAG): a "similar
+  name" link the walk may cross.
+- A scheduled contradiction report in the questions pass's briefing
+  (atomic).
+- Exports: SKOS for labels, PROV-O for provenance (producer and run are
+  `prov:wasGeneratedBy` and a `prov:Activity`), Google's Open Knowledge
+  Format for pages.
+- OAuth, or an allow-list of MCP clients (Notion and the vendors).
+- Federated sources, asked live and not indexed (Microsoft, Google).
+- docling-graph, watched: schema-first extraction from prax's parser
+  family, each node with its chunk and page.
+- The memory layer: outcome signals, `remember` and `revise`, the
+  person's preferences moved into prax behind the wall (the research
+  note, sections 1 and 2).
 
 - A prax plugin for Obsidian (or SiYuan) as a *client*: search hits, a
   document's facts, and a note that becomes a prax page. Their editors
