@@ -113,12 +113,56 @@ def entity_candidates(
         " FROM entity_candidates c"
         " JOIN entities ea ON ea.id = c.a JOIN entities eb ON eb.id = c.b"
         " WHERE ea.canonical_id IS NULL AND eb.canonical_id IS NULL"
-        " AND c.decided IS NULL"
+        " AND c.decided IS NULL AND c.held IS NULL"
         + (" AND c.type = ?" if etype else "")
         + " ORDER BY c.score DESC, c.a, c.b",
         (etype,) if etype else (),
     ).fetchall()
     return [dict(r) for r in rows]
+
+
+# a merge reaches far when an entity carries this many live edges: half the
+# library's entities carry one, 99% at most 32, the largest 2,758 (2026-10-03)
+HUB_EDGES = 100
+
+
+@_reading
+def merge_risk(con: sqlite3.Connection, keep: int, drop: int) -> str | None:
+    """Why an automatic merge of these two should wait for a person, or
+    None (after Utopia's execution gate): either carries ``HUB_EDGES`` live
+    edges or more, so a wrong merge would move many facts; or one of the
+    person's pages says something about it. Edges a rule derived would be
+    a third reason, when there are any (stage AN)."""
+    for side in (keep, drop):
+        live = con.execute(
+            "SELECT (SELECT count(*) FROM edges WHERE src = ? AND valid_to IS NULL)"
+            " + (SELECT count(*) FROM edges WHERE dst = ? AND valid_to IS NULL)",
+            (side, side),
+        ).fetchone()[0]
+        if live >= HUB_EDGES:
+            return f"entity {side} carries {live} live edges"
+    on_page = con.execute(
+        "SELECT e.src, e.dst FROM edges e JOIN pages p ON p.doc_id = e.source_doc"
+        " WHERE e.valid_to IS NULL AND (e.src IN (?, ?) OR e.dst IN (?, ?)) LIMIT 1",
+        (keep, drop, keep, drop),
+    ).fetchone()
+    if on_page:
+        return "a page says something about it"
+    return None
+
+
+@_serialized
+def hold_candidate(con: sqlite3.Connection, x: int, y: int, reason: str) -> bool:
+    """The pair waits for a person: out of the automatic adjudicator's
+    list, at the head of the Review page's, with the reason."""
+    a, b = (x, y) if x < y else (y, x)
+    cur = con.execute(
+        "UPDATE entity_candidates SET held = ?"
+        " WHERE a = ? AND b = ? AND decided IS NULL",
+        (reason, a, b),
+    )
+    con.commit()
+    return cur.rowcount > 0
 
 
 def candidate_runs(con: sqlite3.Connection) -> dict[str, str]:

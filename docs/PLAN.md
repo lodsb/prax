@@ -729,14 +729,14 @@ and pushing what is committed.
       walk's first hop ordered by how many documents separately say each
       fact, and search's ties broken by it. prax writes one edge row per
       source, so the count is a GROUP BY. Nearly free.
-- [ ] **A deterministic step before the model in entity resolution**
+- [x] (2026-10-03, as a near tier proposing to the judge, not merging) **A deterministic step before the model in entity resolution**
       (Graphiti's `dedup_helpers`): a normalised exact match with one
       candidate resolves; a short or low-entropy name goes to the model;
       otherwise 3-gram shingles, MinHash and a Jaccard of 0.9 or more
       resolve. About 50 lines; fewer calls of the local model. Merges
       stay recorded and undoable as now (`merged_by`, `merged_run`).
 
-- [ ] **A gate on automatic merges by what they touch** (Utopia's
+- [x] (2026-10-03: hubs of 100+ live edges, entities a page speaks of; rule-derived edges with AN) **A gate on automatic merges by what they touch** (Utopia's
       `execution_gate`): a merge of the adjudicated tier waits on the
       Review page when it would make two values of a functional relation,
       touch an inferred edge, or touch an entity a saved page or answer

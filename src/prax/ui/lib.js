@@ -309,7 +309,9 @@ function pairRow(it) {
   const k = it.keep, o = it.other;
   // the local model's calibrated probability, when it asked and left the pair
   const p = it.p_same == null ? "" : ` · model: ${Math.round(it.p_same * 100)}% same`;
-  return `<article class="decide-row"><div class="decide-pair">${entitySide(k)}${entitySide(o)}</div>
+  // a model said one thing, and the merge waits for a person: why
+  const held = it.held ? `<p class="decide-held">The model said these are one thing; the merge waits for you (${esc(it.held.replace(/^held: /, ""))}).</p>` : "";
+  return `<article class="decide-row${it.held ? " held" : ""}">${held}<div class="decide-pair">${entitySide(k)}${entitySide(o)}</div>
     <div class="decide-acts"><span class="muted">${esc(it.type)} · names ${it.score}${p}</span>
       <button type="button" data-act="same" data-keep="${k.id}" data-other="${o.id}">same, keep “${esc(k.name)}”</button>
       <button type="button" class="secondary" data-act="same" data-keep="${o.id}" data-other="${k.id}">same, keep “${esc(o.name)}”</button>

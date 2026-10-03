@@ -516,3 +516,12 @@ test("publishedLabel: a model's date says its words, and a bare one is asked", (
   const bare = lib.publishedLabel({ published: { date: "2007-05-30", by: "first-page", confidence: "medium", words: "30. Mai 2007" } });
   assert.match(bare, /not said to be its publication\)">2007-05-30\?<\/span>/);
 });
+
+test("pairRow: a held pair says why it waits", () => {
+  const side = (id, name) => ({ id, name, type: "concept", edges: 3 });
+  const held = lib.pairRow({ type: "concept", score: 0.95, p_same: null, keep: side(1, "spectral flux"), other: side(2, "spectral fluxes"), held: "held: a page says something about it" });
+  assert.match(held, /class="decide-row held"/);
+  assert.match(held, /the merge waits for you \(a page says something about it\)/);
+  const plain = lib.pairRow({ type: "concept", score: 0.95, p_same: null, keep: side(1, "a"), other: side(2, "b") });
+  assert.doesNotMatch(plain, /waits for you/);
+});

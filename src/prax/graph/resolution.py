@@ -50,6 +50,13 @@ LIKELY_DAYS = 7  # a type's pairs are computed again after this long
 # titles and claims that differ by a part number or a qualifier embed almost
 # identically while naming different things, so they are never candidates.
 LIKELY_TYPES = frozenset({"concept", "method", "tool", "dataset", "venue"})
+# Types whose names written nearly alike (``names.near_pairs``: 3-gram
+# Jaccard, the same numbers) are proposed too, where embeddings were not
+# trusted: a paper cited as two variants of one title, an organization
+# spelled two ways (646 and 111 pairs on 2026-10-03). Proposed to the
+# adjudicator like a likely pair, never merged on the string alone.
+NEAR_TYPES = frozenset({"paper", "organization"})
+RESOLVE_TYPES = LIKELY_TYPES | NEAR_TYPES
 
 
 def initials_form(name: str) -> tuple[str, ...] | None:
@@ -247,8 +254,12 @@ def _likely(
     by_id = {e["id"]: e for e in ents}
     out: list[Candidate] = []
     for row in store.entity_candidates(con, etype):
-        if row["type"] not in LIKELY_TYPES:
+        if row["type"] not in RESOLVE_TYPES:
             continue
+        if row["type"] in NEAR_TYPES and not names.same_numbers(
+            row["a_name"], row["b_name"]
+        ):
+            continue  # "Part 2" and "Part 4", the 17th and the 20th: two things
         a, b = by_id.get(row["a"]), by_id.get(row["b"])
         if a is None or b is None or a["id"] in taken or b["id"] in taken:
             continue
@@ -522,6 +533,7 @@ class Report:
     merged_twins: int = 0
     merged_subtypes: int = 0
     declined: int = 0
+    held: int = 0  # a yes whose merge waits for a person (``store.merge_risk``)
 
 
 def apply(
@@ -560,6 +572,12 @@ def apply(
             if yes is None:
                 continue  # no answer: left for the next round
             if yes:
+                risk = store.merge_risk(con, c.keep, c.drop)
+                if risk:
+                    # a model's yes on a merge that reaches far: a person's
+                    store.hold_candidate(con, c.keep, c.drop, f"held: {risk}")
+                    report.held += 1
+                    continue
                 try:
                     store.merge_entities(
                         con, c.drop, c.keep, producer=PRODUCER, run=run

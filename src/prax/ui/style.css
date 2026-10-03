@@ -463,6 +463,8 @@ th { border-bottom: 1px solid var(--fg); }
 .decide-tabs { font-family: var(--font-ui); font-size: .9rem; margin: .2rem 0 .8rem; }
 .decide-row { border-bottom: 1px solid var(--line); padding: .7rem 0; }
 .decide-row.done .decide-pair { opacity: .5; }
+.decide-held { margin: 0 0 .4rem; color: var(--accent); font-size: .92em; }
+.decide-row.held { border-left: 3px solid var(--accent); padding-left: .6rem; }
 .decide-pair { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: flex-start; }
 .decide-side { flex: 1 1 14rem; min-width: 0; }
 .decide-arrow { align-self: center; font-size: .84rem; }

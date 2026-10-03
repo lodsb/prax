@@ -103,7 +103,7 @@ class Resolve(Step):
             "%Y-%m-%dT%H:%M:%SZ",
             time.gmtime(time.time() - resolution.LIKELY_DAYS * 86400),
         )
-        for i, t in enumerate(sorted(resolution.LIKELY_TYPES)):
+        for i, t in enumerate(sorted(resolution.RESOLVE_TYPES)):
             if runs.get(t, "") >= cutoff or not h.free(i):
                 continue
             names = store.entity_names(h.con, t)
@@ -124,9 +124,9 @@ class Resolve(Step):
         from prax.graph import resolution
 
         etype = str(t.payload.get("type") or "")
-        if etype not in resolution.LIKELY_TYPES:
+        if etype not in resolution.RESOLVE_TYPES:
             raise ValueError(
-                f"resolve takes a type among {sorted(resolution.LIKELY_TYPES)}"
+                f"resolve takes a type among {sorted(resolution.RESOLVE_TYPES)}"
             )
         emb = embeddings.current()
         model = str(t.payload.get("model") or "")
@@ -136,7 +136,7 @@ class Resolve(Step):
         pairs = [
             (int(a), int(b), float(s)) for a, b, s in (t.payload.get("pairs") or [])
         ]
-        t.release([sorted(resolution.LIKELY_TYPES).index(etype)])
+        t.release([sorted(resolution.RESOLVE_TYPES).index(etype)])
         t.out["applied"] = store.replace_entity_candidates(
             t.con, etype, pairs, producer=f"{model} via {t.worker}"
         )
@@ -323,16 +323,25 @@ def do_adjudicate(
 
 
 def do_resolve(batch: dict[str, Any], emb: embeddings.Embedder) -> dict[str, Any]:
-    """The likely tier of entity resolution for one type: embed the names
-    the door handed out, find the close pairs, and post them."""
+    """The likely tier of entity resolution for one type: the names the
+    door handed out, the pairs close by embedding (the types embeddings
+    are trusted for) and the pairs written nearly alike (``near_pairs``),
+    the higher score kept for a pair both find."""
     from prax.graph import resolution
+    from prax.text.names import near_pairs
 
     names = [(int(i), str(n)) for i, n in (batch.get("names") or [])]
-    pairs = resolution.likely_pairs(
-        names,
-        emb,
-        threshold=float(batch.get("threshold") or resolution.LIKELY_THRESHOLD),
-    )
+    found: dict[tuple[int, int], float] = {}
+    if batch["type"] in resolution.LIKELY_TYPES:
+        for a, b, s in resolution.likely_pairs(
+            names,
+            emb,
+            threshold=float(batch.get("threshold") or resolution.LIKELY_THRESHOLD),
+        ):
+            found[(a, b)] = s
+    for a, b, s in near_pairs(names):
+        found[(a, b)] = max(found.get((a, b), 0.0), s)
+    pairs = sorted(((a, b, s) for (a, b), s in found.items()), key=lambda t: -t[2])
     return {
         "type": batch["type"],
         "model": emb.name,

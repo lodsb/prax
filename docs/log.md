@@ -3723,6 +3723,37 @@ key (`word=`, three letters or more) and counts it as
 `usage["leaked_lines"]`: a model that lost its place in a line is not
 trusted with the rest of it.
 
+## 2026-10-03: names written nearly alike, and a gate on far-reaching merges
+
+Two pieces of Graphiti's and Utopia's resolution, measured on the library
+first (read-only).
+
+**A near tier.** prax's sure tier already merges names equal once
+normalized (case, punctuation, diacritics, plurals, suffixes), so
+Graphiti's exact step was there. Its fuzzy step (3-gram shingles, MinHash
+with LSH, a Jaccard of 0.9) found 1,601 near pairs over 154,691 names in
+94 s. Merging them outright, as Graphiti does, would have been wrong:
+the 17th and the 20th ISMIR were 0.91 alike, ICASSP 2012 and 2018, and
+"C code" and "C/C++ code" 1.0. So `names.near_pairs` only proposes, and
+never a pair whose numbers differ (`names.same_numbers`). Within the
+types the embedding tier covers it adds little (62 pairs), but paper
+titles and organizations were never candidates there, since titles that
+differ by a qualifier embed alike: 646 and 111 pairs. The worker's
+`resolve` step computes both for its types (`RESOLVE_TYPES`), and the
+pairs go to the adjudicator as any likely pair does.
+
+**A gate.** A yes from the adjudicator is held for a person when the
+merge reaches far (`store.merge_risk`): an entity with 100 or more live
+edges (half the library's entities have one, 99% at most 32, the largest
+2,758), or one a page says something about (3,295 entities). Utopia's
+third reason, an inferred edge, would hold most merges here: 54,000 of
+213,000 live edges are the extractor's own INFERRED. It waits for
+rule-derived edges (stage AN). A held pair (`entity_candidates.held`,
+migration 34) leaves the automatic list and heads the Review page's,
+saying why.
+
+The search turned up the leaked names of the entry before.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

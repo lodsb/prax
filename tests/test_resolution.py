@@ -499,3 +499,92 @@ modules:
     assert "Ableton Live 7" in resolution.local_prompt("tool", "a", "b")
     assert "Lasagne" in resolution.same_rule(["recipe"])
     assert "Lasagne" not in resolution.same_rule(["method"])
+
+
+def test_names_written_nearly_alike_are_proposed_but_not_other_editions() -> None:
+    """``names.near_pairs``: 3-gram Jaccard over normalized names, and
+    never two names whose numbers differ (on the library, 2026-10-03,
+    the 17th and the 20th ISMIR were 0.91 alike)."""
+    from prax.text import names
+
+    got = names.near_pairs(
+        [
+            (1, "Generalised stochastic Petri net"),
+            (2, "generalised stochastic petri nets"),
+            (
+                3,
+                "17th International Society for Music Information Retrieval Conference",
+            ),
+            (
+                4,
+                "20th International Society for Music Information Retrieval Conference",
+            ),
+            (5, "a heuristic EI design framework"),
+            (6, "heuristic EI design framework"),
+            (7, "Onsets"),
+            (8, "Onset"),  # equal once normalized: the sure tier's, not this
+        ]
+    )
+    assert {(a, b) for a, b, _ in got} == {(1, 2), (5, 6)}
+    assert all(j >= names.NEAR_JACCARD for *_, j in got)
+    assert names.same_numbers("Part 2 of 2", "Part 2 of 2")
+    assert not names.same_numbers("Lecture 5 Part 2", "Lecture 5 Part 4")
+
+
+def test_a_yes_that_reaches_far_waits_for_a_person(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The adjudicator's yes on a pair whose merge would move many facts,
+    or touch what a page says, is held (``store.merge_risk``): not merged,
+    out of the automatic list, first on the Review page with the reason."""
+    store.link(con, E("P", "paper", "about", "granular synthesis", "concept"))
+    store.link(con, E("Q", "paper", "about", "granular synthesis method", "concept"))
+    store.link(con, E("R", "paper", "about", "room acoustics", "concept"))
+    store.link(con, E("S", "paper", "about", "room acoustic", "concept"))
+    assert _likely_computed(con, "concept", 0.6) >= 1
+    plan = resolution.plan(con)
+    granular = next(c for c in plan.likely if "granular" in c.keep_name)
+    monkeypatch.setattr(
+        store,
+        "merge_risk",
+        lambda con_, keep, drop: (
+            "entity carries many live edges" if keep == granular.keep else None
+        ),
+    )
+    report = resolution.apply(
+        con,
+        resolution.Plan(likely=[granular]),
+        adjudicator=resolution.StubAdjudicator(0.0),
+    )
+    assert report.held == 1 and report.merged_likely == 0
+    assert all("granular" not in r["a_name"] for r in store.entity_candidates(con))
+    page = store.candidates_page(con)
+    assert page["items"][0]["held"].startswith("held:")
+
+
+def test_merge_risk_says_hubs_and_pages(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for i in range(3):
+        store.link(con, E(f"P{i}", "paper", "about", "spectral flux", "concept"))
+    store.link(con, E("Q", "paper", "about", "spectral fluxes", "concept"))
+    flux = store.entity_names(con, "concept")
+    ids = {n: i for i, n in flux}
+    assert store.merge_risk(con, ids["spectral flux"], ids["spectral fluxes"]) is None
+    from prax.store.graph import decisions
+
+    hub = decisions.HUB_EDGES
+    monkeypatch.setattr(decisions, "HUB_EDGES", 3)
+    why = store.merge_risk(con, ids["spectral flux"], ids["spectral fluxes"])
+    assert why is not None and "3 live edges" in why
+    monkeypatch.setattr(decisions, "HUB_EDGES", hub)
+    # a page that says something about it
+    page = store.write_page(con, "flux-notes", "# Flux\n\nNotes.", title="Flux notes")
+    store.link(
+        con,
+        E("Flux notes", "page", "about", "spectral fluxes", "concept"),
+        source_doc=page["doc_id"],
+    )
+    assert store.merge_risk(con, ids["spectral flux"], ids["spectral fluxes"]) == (
+        "a page says something about it"
+    )

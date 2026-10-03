@@ -79,6 +79,7 @@ from .context import (  # noqa: F401
     subgraph_edges,
 )
 from .decisions import (  # noqa: F401
+    HUB_EDGES,
     REVIEW_KEEP_DAYS,
     _review_where,
     candidate_runs,
@@ -87,7 +88,9 @@ from .decisions import (  # noqa: F401
     entity_candidates,
     forget_resolved_reviews,
     get_review,
+    hold_candidate,
     list_review,
+    merge_risk,
     queue_review,
     replace_entity_candidates,
     resolve_review,

@@ -521,9 +521,10 @@ def candidates_page(
     offset: int = 0,
     limit: int = 30,
 ) -> dict[str, Any]:
-    """The likely pairs nobody has decided, closest names first, each
-    side with its edges and a document naming it: the review page's
-    "same thing?" list."""
+    """The likely pairs nobody has decided, the held ones first (a model
+    said one thing and the merge waits for a person, ``held`` saying why),
+    then the closest names, each side with its edges and a document naming
+    it: the review page's "same thing?" list."""
     where = (
         " FROM entity_candidates c JOIN entities ea ON ea.id = c.a"
         " JOIN entities eb ON eb.id = c.b WHERE c.decided IS NULL"
@@ -533,9 +534,9 @@ def candidates_page(
     args: list[Any] = [etype] if etype else []
     total = con.execute("SELECT count(*)" + where, args).fetchone()[0]
     rows = con.execute(
-        "SELECT c.a, c.b, c.type, c.score, c.p_same"
+        "SELECT c.a, c.b, c.type, c.score, c.p_same, c.held"
         + where
-        + " ORDER BY c.score DESC, c.a, c.b LIMIT ? OFFSET ?",
+        + " ORDER BY c.held IS NULL, c.score DESC, c.a, c.b LIMIT ? OFFSET ?",
         [*args, max(1, min(limit, 200)), max(0, offset)],
     ).fetchall()
     sides = _sides(con, [x for r in rows for x in (r["a"], r["b"])])
@@ -552,6 +553,9 @@ def candidates_page(
                     "p_same": None if r["p_same"] is None else round(r["p_same"], 3),
                     "keep": first,
                     "other": second,
+                    # the adjudicator said one thing, and the merge waits
+                    # for a person: why (``store.merge_risk``)
+                    "held": r["held"],
                 }
             )
     by_type = dict(
