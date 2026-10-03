@@ -489,3 +489,11 @@ test("chunkTarget: a chunk id is trusted while it holds the link's words", () =>
   assert.equal(lib.chunkTarget(chunks, null, "spectral flux"), 1);
   assert.equal(lib.chunkTarget(chunks, "2", "words nowhere at all here"), null);
 });
+
+test("publishedLabel: the date as its source says, and what said so", () => {
+  assert.equal(lib.publishedLabel({ published: { date: "2019-07", precision: "month", by: "arxiv" } }), '<span title="published, as its arXiv id says">2019-07</span>');
+  assert.equal(lib.publishedLabel({ date: "2019" }), "2019");  // before the pass ran
+  assert.equal(lib.publishedLabel({ date: "<b>2019</b>" }), "&lt;b&gt;2019&lt;/b&gt;");
+  assert.equal(lib.publishedLabel({}), "");
+  assert.equal(lib.publishedLabel(null), "");
+});

@@ -111,9 +111,12 @@ class Passage:
     figure: str | None = None  # a figure chunk's reference: the image beside it
     nearby: list[dict[str, Any]] | None = None  # a formula's neighbouring equations
     time: int | None = None  # seconds into a recording (a transcript's passage)
+    published: str | None = None  # when its document was published, as it says
 
     def label(self) -> str:
-        bits = [self.title or "(untitled)"]
+        title = self.title or "(untitled)"
+        # its year, so the answering model can weigh a source's age
+        bits = [f"{title} ({self.published[:4]})" if self.published else title]
         if self.heading:
             bits.append(" › ".join(self.heading))
         if self.page:
@@ -138,6 +141,7 @@ class Passage:
             "kind": self.kind,
             "text": self.text,
             "figure": self.figure,
+            "published": self.published,
             "nearby": self.nearby,
             "time": self.time,
         }
@@ -363,6 +367,7 @@ def gather(
                 figure=h.get("figure"),
                 nearby=nearby_of(con, h.get("kind"), chunk_id),
                 time=h.get("time"),
+                published=h.get("published"),
             )
         )
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))

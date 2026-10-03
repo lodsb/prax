@@ -421,6 +421,17 @@ reference `docs/ask.md`.
   expects (`parse.languages`), with a stopword count as the fallback
   where it is not installed. It says nothing rather than guess, so a
   missing `lang` is always allowed.
+- A document says when it was published: `meta.published`, its date as
+  precise as its source (`2019`, `2019-07`, `2019-07-03`), the
+  precision, and what said so (`by`), chosen by `store.published_of`
+  from the most trusted source that says it: a person, the record
+  (Zotero's `meta.date`), the extension's paper, a page's citation
+  tags, its schema.org markup, the arXiv id, a page's generic tags
+  (`prax.text.dates`). Written at capture and by the `published` pass of
+  `prax maintain`; a person's date is never replaced. Search hits, `get`
+  and `ask`'s passages show it, and search and `documents` filter by it;
+  an undated document is left out of a filtered search. It says when the
+  document appeared, not when a fact in it holds (AL step 5 of the plan).
 - An entity's names are `entity_labels`, which is what a thing is
   called; `entities.name` is a cache of the preferred one in the
   language this host shows (`graph.language`), rebuilt by the `names`

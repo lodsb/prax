@@ -329,7 +329,10 @@ and pushing what is committed.
       project's 27 documents say they are retired, superseded or invalid,
       and an agent that quotes one as current repeats the failure that
       cost months of a pitch.
-      - [ ] **A document's own date, first** (the user, 2026-10-03:
+      - [x] (2026-10-03: from the record, the extension's paper, a page's
+            tags and markup, the arXiv id; shown and filtered. Crossref by
+            DOI, the first page and a PDF's metadata are still to come)
+            **A document's own date, first** (the user, 2026-10-03:
             "there is no date for the docs visible … not when it was
             created in prax but when the document was published"; a
             person judges a paper by when it was written). Only 1,890 of

@@ -3637,6 +3637,40 @@ thing. The plugin's skill tells an agent to link a passage as
 `#doc/N?chunk=M&find=a+few+words`. `tests/test_store.py` pins down the
 reuse, so nothing comes to rely on a chunk id as a name.
 
+## 2026-10-03: when a document was published (stage AL, step 5, first item)
+
+A person judges a source by when it was written, and prax showed that
+for 1,890 of 12,837 live documents, on the document page only: Zotero's
+`meta.date`, 1,072 of them a year alone.
+
+`meta.published` now holds the date as precise as its source says it
+(`2019`, `2019-07`, `2019-07-03`), its precision, and what said so.
+`store.published_of` takes the most trusted source that says it: a
+person (never replaced), the record (Zotero's date), what the browser
+extension found on a paper's page, a page's citation tags (what
+scholarly sites write for Google Scholar), its schema.org
+`datePublished`, the arXiv id (the month of the first version), and a
+page's generic article and Dublin Core tags, often the day it was last
+edited. `prax.text.dates` reads them all, with month names in English,
+German and French. Nothing is guessed: what is not clearly a date gives
+nothing.
+
+A capture writes it as it arrives (`ingest_bytes`); the `published` pass
+of `prax maintain` fills the rest from what the documents hold, reading
+the head of a web page's original. Search hits carry `published`; `get`
+shows it; `ask`'s passages put the year beside the title, so the
+answering model weighs a source's age too; the UI shows the year on a
+hit and the date, with its source on hover, on a document's page.
+Search and `documents` take `published_since` and `published_before`,
+and leave the undated out of a filtered search.
+
+Found on the way: the document page wrote `meta.date` into its HTML
+without escaping it, harmless while only Zotero filled it; it goes
+through the same escaping as everything else now.
+
+Still to come: Crossref by DOI (the citations importer asks it
+already), the first page read by the titles pass, a PDF's metadata.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

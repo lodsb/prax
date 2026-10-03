@@ -42,6 +42,7 @@ from typing import IO, Any
 from prax import config, models, parsers, store
 from prax.capture import drop
 from prax.graph import ontology
+from prax.text import dates
 
 log = logging.getLogger("prax.inbox")
 
@@ -399,6 +400,11 @@ def ingest_bytes(
     capture of the same URL, and give it its domains."""
     url = canonical_url(source_url) if source_url else None
     meta = _capture_meta(source, session=session, by=by, tags=tags, extra=extra_meta)
+    # when it was published, as the page or the paper's record says it
+    page = dates.from_html(data) if mime in HTML_TYPES else None
+    published = store.published_of(meta, page)
+    if published:
+        meta["published"] = {**published, "at": _now()}
     # a page sent again: the bytes differ between two visits, the text does
     # not; the same page is one document, unless this send is a snapshot
     # and the earlier one only the bare DOM, in which case this one wins

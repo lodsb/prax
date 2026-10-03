@@ -9,7 +9,7 @@ import sqlite3
 from typing import Any
 
 from prax.graph import ontology
-from prax.text import mimes
+from prax.text import dates, mimes
 
 from ..base import (
     ASIDE_KINDS,
@@ -128,6 +128,57 @@ def set_meta(
         raise KeyError(f"no such document: {doc_id}")
     _refresh_document_field(con, doc_id)
     con.commit()
+
+
+# what says when a document was published, the most trusted first
+# (``prax.text.dates``): a person; the record it came with (Zotero's date,
+# ``meta.date``); what the extension found on a paper's page
+# (``meta.paper.date``); a page's citation tags; its schema.org markup; the
+# arXiv id; a page's generic article and Dublin Core tags
+PUBLISHED_BY = ("human", "record", "paper", "citation", "jsonld", "arxiv", "generic")
+
+
+def published_of(
+    meta: dict[str, Any], page: dict[str, tuple[str, str]] | None = None
+) -> dict[str, str] | None:
+    """When the document says it was published, from the most trusted
+    source that says it: ``{date, precision, by}``, or None. ``page`` is
+    what its HTML says (``dates.from_html``). A person's date is never
+    replaced: None then, as for a document that says nothing."""
+    held = meta.get("published") or {}
+    if held.get("by") == "human":
+        return None
+    page = page or {}
+    found = {
+        "record": dates.parse(meta.get("date")),
+        "paper": dates.parse((meta.get("paper") or {}).get("date")),
+        "citation": page.get("citation"),
+        "jsonld": page.get("jsonld"),
+        "arxiv": dates.from_arxiv(meta.get("arxiv")),
+        "generic": page.get("generic"),
+    }
+    for by in PUBLISHED_BY[1:]:
+        got = found[by]
+        if got:
+            return {"date": got[0], "precision": got[1], "by": by}
+    return None
+
+
+@_serialized
+def set_published(
+    con: sqlite3.Connection, doc_id: int, date: str, *, by: str = "human"
+) -> dict[str, str]:
+    """A date a person or a source gives a document (``meta.published``).
+    The date is read as ``dates.parse`` reads it; one that is not a date
+    is refused (ValueError)."""
+    got = dates.parse(date)
+    if got is None:
+        raise ValueError(f"not a date: {date!r}")
+    meta = get_meta(con, doc_id)
+    meta["published"] = {"date": got[0], "precision": got[1], "by": by, "at": now()}
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return dict(meta["published"])
 
 
 @_serialized

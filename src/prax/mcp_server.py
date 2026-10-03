@@ -84,6 +84,8 @@ def search(
     rerank: bool | None = None,
     domain: str | None = None,
     doctype: str | None = None,
+    published_since: str | None = None,
+    published_before: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search the knowledge base. Returns compact snippets + ids.
 
@@ -102,7 +104,10 @@ def search(
     library, the list opens with it as an item of its own
     (``kind: "region"``): its name, how much of the hits it holds, a line
     on what it covers, and its part when that is as clear; ``traverse``
-    and the graph go on from there.
+    and the graph go on from there. Each hit says when its document was
+    ``published`` (as precise as its source: ``2019``, ``2019-07``), so a
+    source's age can be weighed; ``published_since``/``published_before``
+    (a year or a date) keep a span and leave out undated documents.
     """
     params: dict[str, Any] = {
         "q": query,
@@ -116,6 +121,8 @@ def search(
         ("rerank", rerank),
         ("domain", domain),
         ("doctype", doctype),
+        ("published_since", published_since),
+        ("published_before", published_before),
     ):
         if v is not None:
             params[k] = v
@@ -423,6 +430,8 @@ def documents(
     limit: int = 20,
     offset: int = 0,
     since: str | None = None,
+    published_since: str | None = None,
+    published_before: str | None = None,
 ) -> list[dict[str, Any]]:
     """List documents, newest first, without their text: by ontology
     module (``domain``), by tag (``project:<name>``, ``chat:<name>``,
@@ -431,7 +440,9 @@ def documents(
     title, mime, source, tags and when it was added; read one with
     ``get``. ``since`` keeps what was added at that date or moment (UTC)
     or later: ``2026-10-03``, ``2026-10-03T14:00:00Z`` ("what did the
-    user just upload")."""
+    user just upload"). Each row says when the document was ``published``
+    (as its source says it); ``published_since``/``published_before`` (a
+    year or a date) keep a span."""
 
     def call() -> list[dict[str, Any]]:
         params: dict[str, Any] = {"limit": limit, "offset": offset}
@@ -441,6 +452,8 @@ def documents(
             ("source", source),
             ("title", title),
             ("since", since),
+            ("published_since", published_since),
+            ("published_before", published_before),
         ):
             if v:
                 params[k] = v
@@ -457,6 +470,7 @@ def documents(
                     "tags": meta.get("tags") or [],
                     "domains": meta.get("domains"),
                     "added_at": r.get("added_at"),
+                    "published": (meta.get("published") or {}).get("date"),
                 }
             )
         return rows

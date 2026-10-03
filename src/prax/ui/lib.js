@@ -596,6 +596,16 @@ function queueRate(demand, name) {
   return `${waiting} waiting · ${rate}/h · about ${when} left`;
 }
 
+// When a document was published, as its source says (meta.published:
+// date, precision, by), with what said so on hover; a record's own date
+// (meta.date) when the published pass has not run yet.
+const PUBLISHED_BY = { human: "set by hand", record: "its record (Zotero)", paper: "the paper's page", citation: "the page's citation tags", jsonld: "the page's schema.org markup", arxiv: "its arXiv id", generic: "the page's article tags" };
+function publishedLabel(meta) {
+  const p = (meta || {}).published;
+  if (p && p.date) return `<span title="published, as ${esc(PUBLISHED_BY[p.by] || p.by || "?")} says">${esc(p.date)}</span>`;
+  return meta && meta.date ? esc(String(meta.date)) : "";
+}
+
 // The language a document is in, under a name rather than a code.
 const LANGUAGES = { en: "English", de: "German", fr: "French", es: "Spanish", it: "Italian", nl: "Dutch", pt: "Portuguese", sv: "Swedish", da: "Danish", pl: "Polish", cs: "Czech", ru: "Russian", tr: "Turkish", ja: "Japanese", zh: "Chinese", ko: "Korean", ar: "Arabic", he: "Hebrew", el: "Greek", la: "Latin" };
 function languageName(code) {
@@ -681,5 +691,5 @@ function checksBox(checks) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }

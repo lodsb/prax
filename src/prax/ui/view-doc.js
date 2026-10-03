@@ -42,7 +42,8 @@ function pendingLine(pending) {
 function metaLine(meta) {
   const bits = [];
   if (meta.creators && meta.creators.length) bits.push(meta.creators.map((c) => c.name).join(", "));
-  if (meta.date) bits.push(meta.date);
+  const published = publishedLabel(meta);
+  if (published) bits.push(published);
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);

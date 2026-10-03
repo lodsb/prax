@@ -240,6 +240,7 @@ class Surf:
             text=text,
             figure=chunk.get("figure"),
             nearby=chunk.get("nearby"),
+            published=chunk.get("published"),
         )
         self.passages.append(p)
         if chunk.get("seq") is not None:
@@ -302,6 +303,7 @@ def do_search(con: sqlite3.Connection, s: Surf, query: str) -> tuple[str, list[i
             "page": h.get("page"),
             "kind": h.get("kind"),
             "figure": h.get("figure"),
+            "published": h.get("published"),
         }
         if chunk_id is not None:
             c = store.get_chunk(con, chunk_id)
@@ -497,6 +499,7 @@ def _read(
     first["seq"] = chunks[-1]["seq"]
     if con is not None:
         first["nearby"] = ask.nearby_of(con, first.get("kind"), first.get("chunk_id"))
+        first["published"] = store.published_dates(con, [doc_id]).get(doc_id)
     for c in chunks:
         s.chunks.add(c["chunk_id"])
     p = s.add(doc_id, first, text[: READ_CHARS + 200], title)

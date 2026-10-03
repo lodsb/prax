@@ -11,6 +11,7 @@ from typing import Any
 
 from prax import packs
 from prax.graph import ontology
+from prax.text import dates
 
 from ..base import (
     _TOKEN,
@@ -131,6 +132,7 @@ def get_document(
 # record are the UI's; they were three kilobytes before the text.
 BRIEF_META = (
     "source",
+    "published",
     "domains",
     "tags",
     "collections",
@@ -219,6 +221,8 @@ def list_documents(
     genre: str | None = None,
     subject: str | None = None,
     since: str | None = None,
+    published_since: str | None = None,
+    published_before: str | None = None,
 ) -> dict[str, Any]:
     """Documents without their text, newest first, for browsing.
 
@@ -232,7 +236,9 @@ def list_documents(
     carrying that tag (``project:synth``); ``genre`` and ``subject`` the
     documents labelled so, by a person or a model (a level names every
     document labelled under it); ``since`` the documents added at that
-    moment or later (``2026-10-03`` or ``2026-10-03T14:00:00Z``, UTC).
+    moment or later (``2026-10-03`` or ``2026-10-03T14:00:00Z``, UTC);
+    ``published_since``/``published_before`` those published in a span
+    (``meta.published``, compared as written), the undated left out.
     Returns ``{"total", "items"}``
     where each item carries the row, its decoded ``meta`` and its chunk
     count.
@@ -282,6 +288,13 @@ def list_documents(
             raise ValueError(f"since: a date or a UTC moment, not {since!r}")
         clauses.append("d.added_at >= ?")  # the stamps sort as moments
         args.append(since)
+    for bound, op in ((published_since, ">="), (published_before, "<")):
+        if bound:
+            got = dates.parse(bound)
+            if got is None:
+                raise ValueError(f"published: a date or a year, not {bound!r}")
+            clauses.append(f"json_extract(d.meta, '$.published.date') {op} ?")
+            args.append(got[0])
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     total = con.execute(f"SELECT count(*) FROM documents d {where}", args).fetchone()[0]
     rows = con.execute(

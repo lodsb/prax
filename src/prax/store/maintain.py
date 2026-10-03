@@ -40,7 +40,7 @@ from typing import Any
 
 from prax.graph import ontology
 from prax.ml import embeddings
-from prax.text import acronyms, language, references
+from prax.text import acronyms, dates, language, references
 
 from .base import _reading, _serialized, archive_path, now, vectors_available
 from .documents import (
@@ -51,6 +51,7 @@ from .documents import (
     dedupe_captures,
     fill_text_lengths,
     get_meta,
+    published_of,
     rechunk,
     reference_chunks,
     refresh_document_fields,
@@ -94,6 +95,7 @@ PASSES = (
     "fts",
     "lengths",
     "languages",
+    "published",
     "private",
     "names",
     "attachment",
@@ -715,6 +717,44 @@ def _private(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"looked_at": len(rows), "suspected": suspected, "rules": stamp}
 
 
+def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """When every document that does not say yet was published
+    (``store.published_of``): its record's date, what the extension found,
+    the arXiv id, and for a web page the tags and markup at the head of
+    its original. Idempotent: a document with ``meta.published`` is passed
+    over, so the nightly reads only what arrived since; one that says
+    nothing is read again each night, which costs a page's head."""
+    rows = con.execute(
+        "SELECT id, hash, mime, meta FROM documents"
+        " WHERE json_extract(meta, '$.published') IS NULL"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ).fetchall()
+    found: Counter[str] = Counter()
+    for n, r in enumerate(rows, 1):
+        meta = json.loads(r["meta"] or "{}")
+        page = None
+        if (r["mime"] or "") in ("text/html", "application/xhtml+xml"):
+            try:
+                with archive_path(r["hash"]).open("rb") as fh:
+                    page = dates.from_html(fh.read(dates.HEAD_BYTES))
+            except OSError:
+                page = None
+        published = published_of(meta, page)
+        if published is None:
+            continue
+        found[published["by"]] += 1
+        con.execute(
+            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+            " '$.published', json(?)) WHERE id = ?",
+            (json.dumps({**published, "at": now()}), r["id"]),
+        )
+        if n % 500 == 0:
+            con.commit()
+            job.update(done=n, total=len(rows), note=f"published: {n} of {len(rows)}")
+    con.commit()
+    return {"read": len(rows), "dated": sum(found.values()), "by": dict(found)}
+
+
 def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The language of every document that does not say yet
     (``prax.text.language`` over the head of its text artifact), and of every
@@ -935,6 +975,7 @@ _RUN = {
     "fts": _fts,
     "lengths": _lengths,
     "languages": _languages,
+    "published": _published,
     "private": _private,
     "names": _names,
     "attachment": _attachment,

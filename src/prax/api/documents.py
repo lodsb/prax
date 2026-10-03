@@ -56,13 +56,16 @@ def search(
     domain: str | None = None,
     regions: bool = False,
     brief: bool = False,
+    published_since: str | None = None,
+    published_before: str | None = None,
 ) -> list[dict[str, Any]]:
     """The hits; with ``regions`` first, when most of the first hits'
     entities live in one region of the library, that region and its part
     as an item of their own (``kind: "region"``): where the results are.
     ``brief`` leaves out the ranks and the empty fields (``store.brief_hit``),
     which an agent does not read; without it each hit says its
-    ``domains`` (None: every module)."""
+    ``domains`` (None: every module). Each hit says when its document was
+    published; ``published_since``/``published_before`` keep a span."""
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
     con = _con(request)
@@ -77,6 +80,8 @@ def search(
             doctype=doctype,
             domain=domain,
             timing=timing,
+            published_since=published_since,
+            published_before=published_before,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -120,6 +125,8 @@ def documents(
     genre: str | None = None,
     subject: str | None = None,
     since: str | None = None,
+    published_since: str | None = None,
+    published_before: str | None = None,
 ) -> dict[str, Any]:
     """Documents without text, newest first, filtered for browsing;
     ``domain`` keeps one ontology module's documents and those of the
@@ -141,6 +148,8 @@ def documents(
             genre=genre or None,
             subject=subject or None,
             since=since or None,
+            published_since=published_since or None,
+            published_before=published_before or None,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

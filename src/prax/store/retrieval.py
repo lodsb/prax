@@ -23,7 +23,7 @@ from prax.graph import ontology
 from prax.ml import embeddings
 from prax.ml import rerank as rerank_mod
 from prax.ml import vectors as vectors_mod
-from prax.text import chunking, compounds
+from prax.text import chunking, compounds, dates
 
 from .base import (
     _ASIDE,
@@ -769,6 +769,8 @@ def search(
     doctype: str | None = None,
     domain: str | None = None,
     timing: dict[str, float] | None = None,
+    published_since: str | None = None,
+    published_before: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search returning compact snippets + ids (agent-shaped). ``timing``,
     when given, is filled with the seconds each side took (``fts``,
@@ -793,6 +795,13 @@ def search(
     ``rerank`` rescores the top ``RERANK_DEPTH`` hits with the configured
     cross-encoder (``prax.ml.rerank``; None follows ``PRAX_RERANK``, which is
     off by default) and adds ``rerank_score``.
+
+    Every hit says when its document was published (``published``, the
+    date as precise as its source says it, or None; ``meta.published``).
+    ``published_since`` and ``published_before`` keep documents published
+    then or later, and before then: a date or a year, compared as written,
+    so ``2019`` keeps a document of 2019 and one of 2019-07. A document
+    that does not say when it was published is left out of such a search.
     """
     if kind is not None and kind not in CHUNK_KINDS:
         raise ValueError(f"kind must be one of {CHUNK_KINDS}")
@@ -807,15 +816,61 @@ def search(
         raise ValueError(f"unknown domain {domain!r}")
     depth = config.number("rerank.depth", "PRAX_RERANK_DEPTH", RERANK_DEPTH)
     fetch = max(limit, int(depth)) if reranker else limit
+    since = _published_bound(published_since, "published_since")
+    before = _published_bound(published_before, "published_before")
     if domain:
         fetch *= 3
+    if since or before:
+        fetch *= 4
     hits = _search_hits(con, query, fetch, kind, mode, doctype, timing)
     if domain:
         hits = _filter_domain(con, hits, domain)
+    stamped = published_dates(con, hits)
+    if since or before:
+        hits = [
+            h
+            for h in hits
+            if (d := stamped.get(h["doc_id"]))
+            and (not since or d >= since)
+            and (not before or d < before)
+        ]
     if reranker is not None and hits:
         with _Took(timing)("rerank"):
             hits = _apply_rerank(con, reranker, query, hits)
-    return hits[:limit]
+    hits = hits[:limit]
+    for h in hits:
+        h["published"] = stamped.get(h["doc_id"])
+    return hits
+
+
+def _published_bound(value: str | None, name: str) -> str | None:
+    """A bound of the published filter as a date prefix, or None."""
+    if not value:
+        return None
+    got = dates.parse(value)
+    if got is None:
+        raise ValueError(f"{name}: a date or a year, not {value!r}")
+    return got[0]
+
+
+def published_dates(
+    con: sqlite3.Connection, hits: list[dict[str, Any]] | list[int]
+) -> dict[int, str]:
+    """When each document was published, as it says it (``meta.published``):
+    of a list of hits or of document ids; the undated are left out."""
+    ids = list({h if isinstance(h, int) else h["doc_id"] for h in hits})
+    if not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    return {
+        r[0]: r[1]
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.published.date') FROM documents"
+            f" WHERE id IN ({marks})",
+            ids,
+        )
+        if r[1]
+    }
 
 
 def _filter_domain(
