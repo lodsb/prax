@@ -158,7 +158,11 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
 
 @mcp.tool()
 def traverse(
-    entity: str, hops: int = 1, type: str | None = None, domain: str | None = None
+    entity: str,
+    hops: int = 1,
+    type: str | None = None,
+    domain: str | None = None,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """Expand the knowledge graph 1-2 hops from a named entity.
 
@@ -178,12 +182,18 @@ def traverse(
 
     ``domain`` (a module: research, studio, computing…) keeps what that
     module's documents say, as ``search(domain=)`` does.
+
+    ``as_of`` (``2026-09`` or a UTC moment) walks what the graph held
+    then, before later readings ended some facts. A fact whose source
+    says when it holds in the world carries ``world_from``/``world_to``.
     """
     params: dict[str, Any] = {"entity": entity, "hops": hops}
     if type:
         params["type"] = type
     if domain:
         params["domain"] = domain
+    if as_of:
+        params["as_of"] = as_of
     out = _guard(lambda: door().get_json("/traverse", params))
     return out if isinstance(out, dict) else {"error": str(out)}
 

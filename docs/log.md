@@ -3754,6 +3754,37 @@ saying why.
 
 The search turned up the leaked names of the entry before.
 
+## 2026-10-03: written once, and when a fact holds (stage AL, step 5)
+
+**Append-only, by trigger** (migration 35). The database itself now
+refuses to delete an edge, to change an edge's fact (its ends, relation,
+confidence, quote), and to change or delete a page revision or a row of
+`spend`. Before this, only the code paths kept those rules, and a code
+path can change without anyone noticing. Provenance and the source
+document may still be mended: a duplicate's edges still move to the
+survivor, and a missing producer is still backfilled.
+
+**Two times on a fact** (migration 36). `valid_from`/`valid_to` were
+called bi-temporal, but both are record time: when prax wrote an edge
+and when a later reading ended it. The world's time is new:
+`world_from`/`world_to`, each a date as precise as the source writes it
+(`2019`, `2019-07`, `2019-07-03`) with its precision. A CHECK ties each
+date's length to its precision. "Ended, date unknown" is `world_to`
+NULL with precision `unknown`, as Utopia stores it. `store.link` takes
+both and refuses a date `dates.parse` cannot read, so no guess is
+stored. `traverse` shows them only on the facts that have them
+(invariant 6). Nothing fills them yet: the extraction prompt gets
+optional `from=`/`until=` fields next, measured before a pass.
+
+**As of a day.** `store.held_at(alias, as_of)` is the one place that
+builds "the edges prax held at T": written at or before T and not ended
+before it. A date stands for the last moment of its span, so "as of
+2026-09" means the end of September. The walk uses it, and
+`/traverse?as_of=` and the MCP tool expose it. A walk as of an earlier
+day still follows today's entity merges. The 92 other places in the store's graph part that
+write `valid_to IS NULL` themselves move behind the helper later, with
+an invariant test that none builds it alone.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

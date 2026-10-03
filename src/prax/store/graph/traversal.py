@@ -13,6 +13,7 @@ from prax.graph import ontology
 
 from ..base import VIEWER, _reading, domain_clause, hidden_documents
 from .communities import community_of
+from .edges import held_at
 
 MAX_HOPS = 2
 
@@ -310,6 +311,15 @@ def _choose(
 
 
 @_reading
+def _world_said(row: dict[str, Any]) -> dict[str, Any]:
+    """An edge's world time, said only when its source gave one: the
+    answer stays small for the facts with none (invariant 6)."""
+    for key in ("world_from", "world_from_precision", "world_to", "world_to_precision"):
+        if row.get(key) is None:
+            row.pop(key, None)
+    return row
+
+
 def traverse(
     con: sqlite3.Connection,
     entity_name: str,
@@ -317,6 +327,7 @@ def traverse(
     limit: int | None = None,
     *,
     type: str | None = None,
+    as_of: str | None = None,
 ) -> list[dict[str, Any]]:
     """The entity's own edges: every currently-valid one, with its evidence.
 
@@ -325,9 +336,15 @@ def traverse(
     because the second hop is a different kind of thing; ask
     ``traverse_map`` for it. A name that reaches several things walks one
     (``senses``): the one of ``type``, else the most connected.
+
+    ``as_of`` walks the edges prax held then (``held_at``): what the graph
+    said on a day, before a later reading ended some of them. Entities
+    are those of now: a merge since is followed as it stands.
     """
     ids, _ = _choose(con, entity_name, type)
-    return [r for r in _walk(con, ids, hops, limit)[0] if int(r["hop"]) < 2]
+    return [
+        r for r in _walk(con, ids, hops, limit, as_of=as_of)[0] if int(r["hop"]) < 2
+    ]
 
 
 @_reading
@@ -339,6 +356,7 @@ def traverse_map(
     *,
     type: str | None = None,
     domain: str | None = None,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: its own edges, the ideas around
     them, and how many of those did not fit.
@@ -365,9 +383,13 @@ def traverse_map(
     ``domain`` keeps what that module's documents (and those of the
     modules built on it) say, as the overview's does (``graph_overview``):
     the documents no module was set for are left out.
+
+    ``as_of`` walks the edges prax held then, as ``traverse`` does.
     """
     ids, report = _choose(con, entity_name, type)
-    rows, left_out = _walk(con, ids, hops, limit, within=_domain_documents(con, domain))
+    rows, left_out = _walk(
+        con, ids, hops, limit, within=_domain_documents(con, domain), as_of=as_of
+    )
     out: dict[str, Any] = {
         "entity": entity_name,
         "hops": max(0, min(hops, MAX_HOPS)),
@@ -403,8 +425,10 @@ def _walk(
     limit: int | None = None,
     *,
     within: frozenset[int] | None = None,
+    as_of: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     hops = max(0, min(hops, MAX_HOPS))
+    held, held_args = held_at("e", as_of)
     if limit is None:
         limit = config.whole("graph.edges", "PRAX_GRAPH_EDGES", EDGES)
     # The walk runs over raw entity ids and, at every step, expands the
@@ -415,7 +439,7 @@ def _walk(
     # hops). Edges are reported under the canonical names (invariant 8:
     # the rows keep the alias ids they were written with).
     rows = con.execute(
-        """
+        f"""
         WITH RECURSIVE
         start(cid) AS (
             -- the canonical entities the walk was asked to start at
@@ -428,7 +452,7 @@ def _walk(
             UNION
             SELECT m.id, w.depth + 1
             FROM walk w
-            JOIN edges e ON e.src = w.id AND e.valid_to IS NULL
+            JOIN edges e ON e.src = w.id AND {held}
             JOIN entities nb ON nb.id = e.dst
             JOIN entities m
                  ON COALESCE(m.canonical_id, m.id) = COALESCE(nb.canonical_id, nb.id)
@@ -436,7 +460,7 @@ def _walk(
             UNION
             SELECT m.id, w.depth + 1
             FROM walk w
-            JOIN edges e ON e.dst = w.id AND e.valid_to IS NULL
+            JOIN edges e ON e.dst = w.id AND {held}
             JOIN entities nb ON nb.id = e.src
             JOIN entities m
                  ON COALESCE(m.canonical_id, m.id) = COALESCE(nb.canonical_id, nb.id)
@@ -450,7 +474,8 @@ def _walk(
                cd.name AS dst, cd.type AS dst_type,
                e.confidence, e.source_doc, e.evidence, e.ontology_version,
                e.producer, e.run,
-               e.valid_from,
+               e.valid_from, e.world_from, e.world_from_precision,
+               e.world_to, e.world_to_precision,
                MAX(rs.depth, rd.depth) AS hop
         FROM edges e
         JOIN reach rs ON rs.id = e.src
@@ -459,14 +484,14 @@ def _walk(
         JOIN entities cs ON cs.id = COALESCE(s.canonical_id, s.id)
         JOIN entities d ON d.id = e.dst
         JOIN entities cd ON cd.id = COALESCE(d.canonical_id, d.id)
-        WHERE e.valid_to IS NULL
+        WHERE {held}
         ORDER BY hop, e.id
         """,
-        (json.dumps(start_ids), hops, hops),
+        (json.dumps(start_ids), *held_args, hops, *held_args, hops, *held_args),
     ).fetchall()
     hidden = hidden_documents(con)
     seen = [
-        dict(r)
+        _world_said(dict(r))
         for r in rows
         if r["source_doc"] not in hidden
         and (within is None or r["source_doc"] in within)

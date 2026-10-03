@@ -111,6 +111,7 @@ from .edges import (  # noqa: F401
     entity_name,
     find_edges,
     find_entities,
+    held_at,
     invalidate_edge,
     link,
     provenance_summary,

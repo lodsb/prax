@@ -121,9 +121,15 @@ revisit threshold, under "Decision thresholds" below.
 8. **Graph edges are evidence, not truth.** *(enforced)* Every edge carries
    `confidence` (EXTRACTED, INFERRED or AMBIGUOUS), `source_doc`,
    `ontology_version`, `producer` and `run` (which model, importer or
-   person wrote it, in which batch or pass), and the bi-temporal
-   columns `valid_from`, `valid_to` and `ingested_at`. Enrichment
-   invalidates edges by setting `valid_to`; it never deletes them.
+   person wrote it, in which batch or pass), and two times. Record
+   time is `valid_from` and `valid_to` (and `ingested_at`): when prax wrote the edge and
+   when a later reading ended it (`store.held_at` says which edges were
+   held at a moment; `traverse(as_of=)`). World time is `world_from` and
+   `world_to` with their precision (migration 36): when the fact holds
+   in the world, as its source states it, and only where it does.
+   Enrichment invalidates edges by setting `valid_to`; it never deletes
+   them, and the database refuses a delete or a change to an edge's
+   fact (migration 35's triggers).
    Provenance is a column on the fact, never an edge in the graph.
    Upgrading a producer's work is `retire_run` plus a new pass.
 9. **The ontology is small, versioned and modular.** *(enforced)* Entity and

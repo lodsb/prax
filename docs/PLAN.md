@@ -361,7 +361,13 @@ and pushing what is committed.
             explicit status lines ("retired 2026-10-02", "superseded by
             …", "status: …"), only in synced project documents: a paper
             saying "superseded by" is about others' work.
-      - [ ] **The world's time beside prax's.** Invariant 8 calls the
+      - [ ] (2026-10-03: the columns and the record time done: migration
+            36's `world_from`/`world_to` with their precision, written by
+            `store.link` and shown by `traverse` only where present;
+            `store.held_at` and `traverse(as_of=)` on the door and the
+            MCP tool; invariant 8 reworded. Left: extraction filling the
+            world dates, measured with `bench_extractor`; a document's
+            lifecycle in `meta`) **The world's time beside prax's.** Invariant 8 calls the
             edges bi-temporal, but `valid_from` is set when `store.link`
             writes an edge and `valid_to` when it is retired: both are
             when prax held the fact (transaction time), with
@@ -385,6 +391,10 @@ and pushing what is committed.
             its document's date (above); `supersedes` on an edge that
             corrects another, so "corrected" and "rejected" are a query;
             and **one module that builds "held at T"** for every graph
+            (2026-10-03: `store.held_at` is that module and the walk
+            uses it; 92 places in the store's graph part still write `valid_to IS
+            NULL` themselves, and moving them behind it with the test is
+            the follow-up)
             read (record time: written at or before T, not retired
             before it; no T: not retired), with a test in
             `test_invariants.py` that no read builds it itself. prax's

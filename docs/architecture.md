@@ -404,9 +404,10 @@ entity_labels    entity_id, label, lang, kind (pref | alt), was (the name it had
                  source_doc, producer, run, confidence, at
 edges            src, dst, rel, confidence, weight, source_doc, ontology_version,
                  evidence (a quote or a source id), producer, run,
-                 valid_from, valid_to, ingested_at
+                 valid_from, valid_to, ingested_at (record time),
+                 world_from, world_to + precision (world time, where a source says)
 review_queue     triples the extractor could not fit, with reason, evidence, resolution
-entity_candidates a, b, type, score, producer, at, decided, decided_by
+entity_candidates a, b, type, score, producer, at, decided, decided_by, held
                  (the likely tier's pairs, kept until something decides them)
 readings         id, doc_id, extractor, mode, asked_by, state, at, finished_at,
                  outcome, stamp, error   (the queue of what to read: several per

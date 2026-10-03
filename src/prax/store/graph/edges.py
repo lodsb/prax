@@ -5,12 +5,13 @@ which documents are due for extraction."""
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from typing import Any
 
 from prax.graph import ontology
-from prax.text import mimes
+from prax.text import dates, mimes
 
 from ..base import (
     _NOW,
@@ -177,12 +178,20 @@ def link(
     evidence: str | None = None,
     producer: str | None = None,
     run: str | None = None,
+    world_from: str | None = None,
+    world_to: str | None = None,
 ) -> int:
     """Insert a currently-valid edge; entities are created on demand.
 
     Types are validated against the current ontology (invariant 9); the edge
     is stamped with that ontology's version unless one is given. ``evidence``
     is a short quote from ``source_doc`` that supports the edge.
+
+    ``world_from`` and ``world_to`` are when the fact holds in the world,
+    as the source states it (a year, a month or a day, ``dates.parse``),
+    beside ``valid_from``, which is when prax wrote it. ``world_to`` may be
+    ``unknown``: ended, at a date nobody gives. A date that does not parse
+    is refused (ValueError), so nothing guessed is stored.
     """
     if source_doc is not None and document_hidden(con, source_doc):
         # a restricted viewer writes to nothing it may not see: as if absent
@@ -193,12 +202,19 @@ def link(
     onto.check_edge(edge.src_type, edge.rel, edge.dst_type)
     if ontology_version is None:
         ontology_version = onto.version
+    begin = _world_date(world_from, "world_from")
+    end = (
+        (None, "unknown")
+        if str(world_to or "").strip().lower() == "unknown"
+        else _world_date(world_to, "world_to")
+    )
     src = _entity_id(con, edge.src, edge.src_type)
     dst = _entity_id(con, edge.dst, edge.dst_type)
     cur = con.execute(
         "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
-        " ontology_version, evidence, producer, run, valid_from)"
-        f" VALUES (?,?,?,?,?,?,?,?,?, {_NOW})",
+        " ontology_version, evidence, producer, run, valid_from,"
+        " world_from, world_from_precision, world_to, world_to_precision)"
+        f" VALUES (?,?,?,?,?,?,?,?,?, {_NOW}, ?,?,?,?)",
         (
             src,
             dst,
@@ -209,10 +225,57 @@ def link(
             evidence,
             producer,
             run,
+            *begin,
+            *end,
         ),
     )
     con.commit()
     return int(cur.lastrowid or 0)
+
+
+def _world_date(value: str | None, name: str) -> tuple[str | None, str | None]:
+    """A world date and its precision, or two Nones for none."""
+    if not value:
+        return None, None
+    got = dates.parse(value)
+    if got is None:
+        raise ValueError(f"{name}: a year, a month or a day, not {value!r}")
+    return got
+
+
+def held_at(alias: str, as_of: str | None = None) -> tuple[str, list[str]]:
+    """The SQL that keeps the edges prax held at a moment (record time),
+    and its arguments: written at or before ``as_of`` and not ended before
+    it; without one, the edges in force now. One place says it (Utopia's
+    ``record_axis``), so "as of" means one thing in every read that takes
+    it. The world's time is another question (``world_from``/``world_to``).
+    """
+    if not as_of:
+        return f"{alias}.valid_to IS NULL", []
+    got = dates.parse(as_of)
+    if got is None and not _MOMENT_ISO.fullmatch(as_of):
+        raise ValueError(f"as_of: a date or a UTC moment, not {as_of!r}")
+    moment = as_of if _MOMENT_ISO.fullmatch(as_of) else _end_of(got)
+    held = (
+        f"{alias}.valid_from <= ?"
+        f" AND ({alias}.valid_to IS NULL OR {alias}.valid_to > ?)"
+    )
+    return held, [moment, moment]
+
+
+_MOMENT_ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
+
+
+def _end_of(got: tuple[str, str] | None) -> str:
+    """A date as the last moment of its span, so "as of 2026-10" holds
+    what prax held at the end of October."""
+    assert got is not None
+    date, precision = got
+    if precision == "year":
+        return f"{date}-12-31T23:59:59Z"
+    if precision == "month":
+        return f"{date}-31T23:59:59Z"  # sorts after every day of the month
+    return f"{date}T23:59:59Z"
 
 
 @_reading

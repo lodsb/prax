@@ -336,6 +336,51 @@ def test_traverse_ignores_invalidated_edges(con: sqlite3.Connection) -> None:
     assert _pairs(store.traverse(con, "C", hops=2)) == {("B", "C")}
 
 
+def test_a_fact_says_when_it_holds_in_the_world(con: sqlite3.Connection) -> None:
+    store.link(
+        con,
+        store.Edge("Ada", "person", "affiliated_with", "Lab", "organization"),
+        world_from="2019-07",
+        world_to="unknown",
+    )
+    store.link(con, store.Edge("Paper", "paper", "authored_by", "Ada", "person"))
+    rows = {r["dst"]: r for r in store.traverse(con, "Ada")}
+    held = rows["Lab"]
+    assert (held["world_from"], held["world_from_precision"]) == ("2019-07", "month")
+    # ended, at a date nobody gives
+    assert "world_to" not in held and held["world_to_precision"] == "unknown"
+    # a fact whose source gave no time says nothing about it
+    paper = next(r for r in store.traverse(con, "Ada") if r["src"] == "Paper")
+    assert not any(k.startswith("world_") for k in paper)
+    with pytest.raises(ValueError, match="world_from"):
+        store.link(
+            con,
+            store.Edge("Ada", "person", "affiliated_with", "Other", "organization"),
+            world_from="sometime in spring",
+        )
+
+
+def test_a_walk_as_of_a_day_sees_what_prax_held_then(con: sqlite3.Connection) -> None:
+    _chain(con, "A", "B", "C")
+    # written in August; the A -> B edge ended on September 15
+    con.execute("UPDATE edges SET valid_from = '2026-08-01T00:00:00Z'")
+    con.execute("UPDATE edges SET valid_to = '2026-09-15T12:00:00Z' WHERE src = 1")
+    con.commit()
+    assert _pairs(store.traverse(con, "A")) == set()
+    assert _pairs(store.traverse(con, "A", as_of="2026-09-01")) == {("A", "B")}
+    assert _pairs(store.traverse(con, "A", as_of="2026-09-15T11:59:59Z")) == {
+        ("A", "B")
+    }
+    # the end of the month is after the end of the edge
+    assert _pairs(store.traverse(con, "A", as_of="2026-09")) == set()
+    # before it was written, there was nothing
+    assert _pairs(store.traverse(con, "A", as_of="2026-07")) == set()
+    near = store.traverse_map(con, "A", hops=2, as_of="2026-09-01")
+    assert [n["name"] for n in near["neighbours"]] == ["C"]
+    with pytest.raises(ValueError, match="as_of"):
+        store.traverse(con, "A", as_of="yesterday")
+
+
 def test_traverse_unknown_entity_is_empty(con: sqlite3.Connection) -> None:
     assert store.traverse(con, "nobody") == []
 

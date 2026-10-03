@@ -26,6 +26,8 @@ class LinkReq(BaseModel):
     source_doc: int | None = None
     ontology_version: str | None = None
     producer: str = "manual"  # "agent" from the MCP proxy
+    world_from: str | None = None  # when the fact holds in the world
+    world_to: str | None = None  # a date, or "unknown"
 
 
 @router.post("/link")
@@ -39,6 +41,8 @@ def link(req: LinkReq, request: Request) -> dict[str, int]:
             source_doc=req.source_doc,
             ontology_version=req.ontology_version,
             producer=req.producer,
+            world_from=req.world_from,
+            world_to=req.world_to,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -53,6 +57,7 @@ def traverse(
     limit: int | None = None,
     type: str | None = None,
     domain: str | None = None,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: the edges, and what was left out.
 
@@ -60,11 +65,21 @@ def traverse(
     says how many neighbours it did not carry (`store._second_hop`). A
     name that reaches several things walks one, the one of ``type`` or
     else the most connected, and ``senses`` names them all. ``domain``
-    keeps what that module's documents say.
+    keeps what that module's documents say. ``as_of`` (a date or a UTC
+    moment) walks the edges prax held then.
     """
-    return store.traverse_map(
-        _con(request), entity, hops, limit, type=type, domain=domain or None
-    )
+    try:
+        return store.traverse_map(
+            _con(request),
+            entity,
+            hops,
+            limit,
+            type=type,
+            domain=domain or None,
+            as_of=as_of or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @router.get("/ontology")
