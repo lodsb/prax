@@ -37,6 +37,13 @@ You have three buttons.
 
 If you are not sure, skip the pair. Nothing happens to a pair you leave.
 
+Some pairs come first with a note: *the merge waits for you*. A model
+already said they are one thing, but prax would not merge them on its
+own, because the merge reaches far. Either name has 100 links or more,
+or one of your pages says something about it. A wrong merge there would
+move many facts at once, so the buttons are yours. The note says which
+reason held it.
+
 ## One name, several things
 
 Here one name belongs to things of different kinds. *SuperCollider*

@@ -55,11 +55,11 @@ work. The UI polls exactly this.
 
 | Call | What it gives |
 |---|---|
-| `GET /search?q=…&limit=&doctype=&domain=&kind=` | compact hits: document id, chunk id, title, a snippet, and which side found it. Stopwords and the entries of reference lists are left aside; `kind=reference` searches those on purpose |
+| `GET /search?q=…&limit=&doctype=&domain=&kind=&published_since=&published_before=` | compact hits: document id, chunk id, title, a snippet, which side found it, and `published` (the document's date, as precise as its source) where it has one. Stopwords and the entries of reference lists are left aside; `kind=reference` searches those on purpose. A `published_` filter (`2019`, `2019-07`, `2019-07-03`) leaves undated documents out |
 | `GET /get/{id}?offset=&max_chars=` | one document as a window, with `text_len` so you can page |
 | `GET /chunk/{id}`, `GET /doc/{id}/chunks` | one addressable region, or all of a document's: text, kind, heading path, page, and `data`. `data` holds a table's grid, a figure's reference, an equation's LaTeX, or a reference entry's number, surnames, year and title, with `cited` (the library document it cites, the score, how) once matched |
 | `GET /doc/{id}/context` | what places a document: summary, entities, citations both ways, similar documents, its pages and projects |
-| `GET /traverse?entity=…&hops=1` | the graph around a name: `edges`, every edge with its evidence and producer |
+| `GET /traverse?entity=…&hops=1&as_of=` | the graph around a name: `edges`, every edge with its evidence and producer, and `support` (how many documents state the same fact) where it is more than one. `as_of` (a date or a UTC moment) walks what the graph held then. An edge whose source says when the fact holds in the world carries `world_from`/`world_to` and their precision |
 | `GET /traverse?entity=…&hops=2` | and `neighbours`, the ideas those documents are also about, ranked by how many say so, with `left_out` |
 | `GET /entities?q=` | names, types, how connected each is |
 | `POST /ask {question, steps, stream}` | passages and graph facts, and an answer with citations when the host has a model (`docs/ask.md`) |
@@ -69,8 +69,8 @@ work. The UI polls exactly this.
 | `GET /page/{slug}` | the page with its text, revisions and `blocks`: each ask block with its state, and `asking` naming the blocks the pass is answering right now (`asking_page` for a question page). An ask block is `<!-- prax:ask id=q1 "…" -->` … `<!-- /prax:ask id=q1 -->` in any page's text (`docs/ask.md`, "Ask blocks") |
 | `PUT /page/{slug}`, `POST /page/{slug}/append` | a Markdown page, or a section appended to one. A page saved with a block not yet answered starts the pass for it and answers `job` |
 | `POST /ingest`, `/ingest/file`, `/ingest/url` | text, a file, or a URL for the door to fetch |
-| `POST /link` | one edge, with its evidence and your name as producer |
-| `GET /documents?tag=&domain=&doctype=` | the library filtered, newest first |
+| `POST /link` | one edge, with its evidence and your name as producer; `world_from`/`world_to` (a date, or `unknown` for an end nobody dates) say when the fact holds in the world. An edge is never changed or deleted afterwards: a correction ends it and links anew |
+| `GET /documents?tag=&domain=&doctype=&published_since=&published_before=` | the library filtered, newest first |
 | `GET /stats`, `GET /jobs`, `GET /changes` | what the store holds, what is running, whether anything moved |
 
 Responses are small on purpose: snippets and ids, never whole

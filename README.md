@@ -101,7 +101,9 @@ library. Titles that were file names get repaired.
 over what each document is about, and the results are merged per
 document. You can filter by kind of document or by subject. Acronyms
 the library defines are expanded on the way in. Stopwords and reference
-lists are left out, so a query is about what it says.
+lists are left out, so a query is about what it says. Each hit shows
+when its document was published, as precisely as the source says it,
+and you can ask for only what appeared after a year.
 
 **Connects them.** A model reads each document against a small
 ontology and writes typed relations: which paper uses which method,
@@ -112,6 +114,21 @@ reference list matched against the library, with a score. On a paper's
 page the [12] in the text is a link to what entry 12 cites. Every
 relation records who wrote it, from which document, under which version
 of the ontology, and the sentence it came from.
+
+**Says how it knows.** A link in the graph is evidence, not a settled
+fact. Nothing in the graph is overwritten. When a later reading
+disagrees, the old link is ended and kept beside the new one. The
+database itself refuses to delete a link or change what it says. So you
+can ask what the graph said on a given day, before a better model read
+the papers again. Two times are kept apart: when prax learned
+something, and when it holds in the world. "She worked at the lab from
+2019" keeps the 2019, as precisely as the source gave it. A fact that
+five papers state shows up once, with the five behind it. A name is not
+a thing: *apple* the ingredient and *Apple* the company stay apart, and
+the graph around the name says that both exist. When two names turn out
+to be one thing, the merge is a pointer you can take back. And a merge
+that would move many facts at once, or touch something your own notes
+are about, waits for you on the review page.
 
 **Answers questions.** With a model on the host, `ask` works the
 library for a few steps before it writes. It searches again, reads on,

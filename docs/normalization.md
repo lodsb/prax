@@ -73,7 +73,12 @@ and the document is the evidence.
 everything. Equal keys. An author's initials form. The ontology's
 subtype relation over one key. Nearest neighbours by name embedding,
 which the worker's `resolve` step computes and `entity_candidates`
-keeps. And a translation of the key, where a dictionary exists.
+keeps. Names written nearly alike, for papers and organizations, whose
+titles embed alike when they differ by a qualifier. These are 3-gram
+shingles, MinHash with LSH and a Jaccard of 0.9 or more
+(`names.near_pairs`, after Graphiti, 2026-10-03). A pair whose numbers
+differ is never proposed: the 17th and the 20th ISMIR are 0.91 alike.
+And a translation of the key, where a dictionary exists.
 
 **3. Score.** Features, not a single number. String similarity, name
 embedding cosine, type compatibility through the ontology, and the
@@ -85,12 +90,16 @@ its subject and *for* one where a text writes "Knollensellerie
 **4. Decide.** Three bands. High: merge, recorded as sure. Middle: the
 adjudicator — a model with the evidence in front of it, as today, or a
 person in the review view. Low: leave apart, and remember the decision
-so the pair is not asked about again (`store.decide_candidates`).
+so the pair is not asked about again (`store.decide_candidates`). A
+model's yes on a merge that reaches far is held for a person instead
+(`store.merge_risk`: 100 live edges or more on either side, or a page
+that speaks of it; `entity_candidates.held`), after Utopia's execution
+gate.
 
 **5. Record.** A merge is a pointer (`entities.canonical_id`), nothing
-is deleted, and `traverse` follows it. What is missing today and should
-follow the labels work below: which producer and which run made the
-merge, so a bad pass can be retired the way a bad extraction is.
+is deleted, and `traverse` follows it. The merge is stamped with its
+producer and run (`merged_by`, `merged_run`, migration 25), so
+`store.unmerge_run` takes a bad pass back whole.
 
 ## What each mechanism needs
 

@@ -240,6 +240,25 @@ embeddings do. Responses stay small by design (invariant 6): snippets
 and ids first, then `get_chunk`, `get` or `context` for exactly what is
 needed.
 
+A hit carries its document's publication date (`published`: the date
+as precise as its source, a year, a month or a day), and
+`published_since`/`published_before` filter by it; an undated document
+is left out of a filtered search. The date is `meta.published`, chosen
+by `store.published_of` from the most trusted source that gives one
+(section 7, the `published` pass and the `dates` step).
+
+`traverse` walks the edges in force, or with `as_of` the edges prax held
+at that moment: written at or before it and not ended before it
+(`store.held_at`, the one place that builds the condition). That is
+record time. An edge whose source says when the fact holds in the world
+also carries `world_from`/`world_to` with their precision, and says
+nothing about it otherwise. The first hop is capped (`graph.edges`). A
+fact several documents state is one edge per document, and each row
+says how many (`support`). The cap is spent on distinct facts first:
+the best supported first within a relation, round-robin over the
+relations. A walk as of an earlier day still follows today's entity
+merges.
+
 `ask` is retrieval plus generation on top of the same search
 (`prax.answering.ask`). The bundle is one passage per document (the matched
 chunk, 1,200 characters) for the top eight documents, plus what the
@@ -269,7 +288,7 @@ number of steps. Each step is two lines, a note and one action. The actions:
   hit somewhere);
 - `facts` of a document;
 - `walk` the graph from an entity: its relations and the documents
-  behind them;
+  behind them, a fact once with how many documents state it;
 - `similar` documents;
 - `drop` what is beside the point;
 - `answer`.
@@ -430,8 +449,16 @@ the entity that *answers* to a name when none carries it — so a rename
 does not start a split over. `entities.name` is still the identity;
 making it a display label is `docs/stratification.md` step 5.
 
+An edge is evidence (invariant 8), and the database holds it to that:
+migration 35's triggers refuse a `DELETE` on `edges` and an `UPDATE` of
+an edge's fact (`src`, `dst`, `rel`, `confidence`, `evidence`). A
+correction ends the edge (`valid_to`) and links anew. Provenance and the
+source document may still be mended: a duplicate's edges move to the
+survivor, a missing producer is backfilled. `page_revisions` and
+`spend` refuse every update and delete: a page's history and a ledger.
+
 Schema changes are numbered migrations in `src/prax/migrations/`
-(`0001_baseline` through `0022_one_pref_per_language`), applied by
+(`0001_baseline` through `0037_edges_held_at`), applied by
 `store.init_db` and tracked in `PRAGMA user_version`. The vector indexes are files
 beside the database, not tables (R6). (R12)
 
@@ -449,6 +476,7 @@ that has no column yet. The conventions in use:
 | `sections` | what a long document's parts are about, one summary a heading region, with the `text_hash` they were read from |
 | `summaries`, `summary_lang` | every summary there is keyed by language, so translating the German one does not lose it, and which language the canonical one is in |
 | `lang` | the document's own language, ISO 639-1, from `prax.text.language` |
+| `published` | when the document was published: `date` (`2019`, `2019-07`, `2019-07-03`), `precision`, `by` (human, record, paper, citation, jsonld, arxiv, generic, first-page, in that order of trust), `at`; from the `dates` step also `words`, `confidence`, `run` |
 | `extraction`, `extraction_history` | stamp of the last extraction (extractor, ontology version, run, counts, token usage) and every earlier stamp |
 | `citations` | source, work id, citation count, reference count, fetch time |
 | `page` | slug, kind, current revision and author of a page |
@@ -507,9 +535,11 @@ Nothing here opens the database file.
 | typing step | untyped review items, a batch of 40 to a request | edges (`typing:<model>`), `review_queue` (dropped, or the model's types on a misfit) | only when named; a paid model is refused. The rules that run before it sign their work (`typing-rules/<rule>`), so a rule can be judged on its own edges — `docs/eval/typing-rules-2026-09-24.md` says what each is worth |
 | embed step | chunks without a vector from the current model, then document fields without one | the delta `.usearch` files, `chunk_embeddings`, `document_embeddings`; the door folds the delta in | dimension check; the door is never stopped |
 | `prax maintain` | derived tables: acronyms, document fields, domain rules, duplicate captures, the review queue's rule passes, the `cites` edges a reference list makes to the library (`references`), the `proposes` edge between a paper and the method named after it (`proposes`); `--rechunk` every chunk | those tables; `meta.retired` on a duplicate; `cites` edges with `meta.references` | no model, no decision; nightly after the worker's pass |
+| `published` pass (`prax maintain`) | documents without `meta.published`, or with one from a less trusted source | `meta.published` from the record, a page's citation tags, schema.org markup, the arXiv id, generic tags (`prax.text.dates`) | no model; a source never replaces a more trusted one, a person's date never |
+| dates step | undated documents no model has tried, newest first, 60 a batch | `meta.published` with `by: first-page`, the words that state it and a confidence | watched; kept only when the words are on the first page and hold the year (`writing.dates.checked`); an answer of none is recorded, an error is not |
 | `prax resolve` | unmerged entities | `entities.canonical_id`, `entity_labels` | the sure tier and, when asked, the twins; the likely tier is listed from the pairs the worker's resolve step left (`entity_candidates`; `resolve_entities.py --adjudicate` asks Claude about them) |
-| resolve step | an entity type whose likely pairs are a week old or were never computed | `entity_candidates` for that type, the undecided rows replaced | the door never embeds a name; the worker does, a block at a time |
-| adjudicate step | the likely pairs nobody has decided | `entities.canonical_id` for a yes, `entity_candidates.decided` for a no | the adjudicate model (paid: `--spend`), forty pairs a call; a no is never asked again |
+| resolve step | an entity type whose likely pairs are a week old or were never computed (`RESOLVE_TYPES`) | `entity_candidates` for that type, the undecided rows replaced: name-embedding pairs, and for papers and organizations names written nearly alike (`names.near_pairs`: 3-gram MinHash, Jaccard 0.9) | the door never embeds a name; the worker does, a block at a time; a near pair whose numbers differ is never proposed (ICASSP 2012 and 2018) |
+| adjudicate step | the likely pairs nobody has decided and nothing holds | `entities.canonical_id` for a yes, `entity_candidates.decided` for a no, `entity_candidates.held` for a yes that reaches far | the adjudicate model (paid: `--spend`), forty pairs a call; a no is never asked again; a yes on an entity with 100 live edges or more, or one a page speaks of, waits for a person (`store.merge_risk`) |
 | `prax import citations` | documents without `meta.citations`, DOIs first (`--resolve-titles` for the rest) | `cites` edges, `meta.citations` | two sources behind one flag; polite-pool contact; retries |
 | `prax reread` | a selection: ids, a MIME prefix, a text-source stamp, the unreadable, the documents with read or unread figures or formulas | one reading request per document; the worker does the model work | the extractor is named, never guessed; a paid model is refused by the worker; `--dry-run` counts |
 | `prax heal --apply` | the ailments' rows | edges ended, items resolved, jobs closed, texts re-indexed, stamps moved | one ailment at a time; nothing deleted |
