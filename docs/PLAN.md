@@ -818,7 +818,7 @@ Left:
 The pass itself is in `docs/log.md` (2026-09-30). These were found and
 not done.
 
-- [ ] **`store.retrieval` as a package.** It is 1,919 lines, under the
+- [x] (2026-10-03: seven parts, the switches on `retrieval.knobs`, the package refusing a knob set on itself; `docs/log.md`) **`store.retrieval` as a package.** It is 1,919 lines, under the
       2,000 that CLAUDE.md sets for a split. It does four jobs: query
       expansion, the search legs, fusion, and the vector files. Its tests
       switch behaviour through module flags (`retrieval.SENSES`,
@@ -846,7 +846,7 @@ not done.
       calls up to could move into `prax.text`. (2026-10-03: the six tests
       that polled a job with their own loop use `tests.conftest.wait_job`,
       which fails with the job's row instead of running on.)
-- **`text.compounds` asks the store** for the forms a word takes, and
+- [x] (2026-10-03: `store.retrieval.compounds`, with `term_documents` beside it) **`text.compounds` asks the store** for the forms a word takes, and
   only the store uses it. It is retrieval, not text; it waits for
   `store/retrieval.py` (1,916 lines) to split at 2,000 as invariant 3
   says, and goes there.

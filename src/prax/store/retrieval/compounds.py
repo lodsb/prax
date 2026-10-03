@@ -17,6 +17,10 @@ no, at the cost of a lookup.
 
 Nothing here writes, and nothing here is language-specific: the same rule
 finds `wavetable` as `wave` + `table` where the library uses both.
+
+A part of the store's retrieval since 2026-10-03: it asks the keyword
+index which words the library uses, and only the query uses it (it was
+``prax.text.compounds``, which reached up to the store for this).
 """
 
 from __future__ import annotations
@@ -24,6 +28,8 @@ from __future__ import annotations
 import re
 import sqlite3
 from typing import Any
+
+from ..base import _reading
 
 MIN_WORD = 8  # a compound shorter than this is not worth splitting
 MIN_PART = 3  # neither half may be shorter than this
@@ -71,16 +77,32 @@ def split(
     return best
 
 
+@_reading
+def term_documents(
+    con: sqlite3.Connection, term: str, *, cap: int, table: str = "chunks_fts"
+) -> int:
+    """How many rows of a keyword index hold ``term`` as a word, counted up
+    to ``cap`` and no further: whether the library uses a word is all the
+    compound splitter asks, and a common word would otherwise be counted
+    to the end."""
+    if table not in ("chunks_fts", "documents_fts"):
+        raise ValueError(f"no keyword index {table!r}")
+    row = con.execute(
+        f"SELECT COUNT(*) FROM (SELECT rowid FROM {table}"
+        f" WHERE {table} MATCH ? LIMIT ?)",
+        (f'"{term}"', cap),
+    ).fetchone()
+    return int(row[0])
+
+
 def _docs(
     con: sqlite3.Connection, term: str, table: str, *, cap: int = MIN_DOCS
 ) -> int:
     """How many documents hold this term, through the index rather than a
     scan. 0 where the term is unknown, and 0 where the question cannot be
     asked — a library that will not answer is a library with no split."""
-    from prax import store
-
     try:
-        return store.term_documents(con, term, cap=cap, table=table)
+        return term_documents(con, term, cap=cap, table=table)
     except sqlite3.Error:
         return 0
 

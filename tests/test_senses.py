@@ -50,7 +50,7 @@ def library(con: sqlite3.Connection) -> Iterator[Library]:
     ).fetchone()[0]
     store.label_in_language(con, apple, "Apfel", lang="de", run="labels")
     yield con, recipe, manual
-    retrieval.SENSES = True
+    retrieval.knobs.SENSES = True
 
 
 def _found(con: sqlite3.Connection, query: str) -> list[int]:
@@ -79,10 +79,10 @@ def test_the_sense_is_searched_where_it_lives(library: Library) -> None:
     con, recipe, manual = library
     assert _found(con, "Apfel") == [recipe]
     # everywhere, the manual says it more often and comes first
-    retrieval.SENSES = False
+    retrieval.knobs.SENSES = False
     assert _found(con, "Apfel")[0] == manual
     # and a word the user typed is theirs, in every domain
-    retrieval.SENSES = True
+    retrieval.knobs.SENSES = True
     assert set(_found(con, "apple")) == {recipe, manual}
 
 
@@ -109,9 +109,9 @@ def test_a_sense_adds_no_vote_of_its_own(library: Library) -> None:
     own: in its domains a chunk scores as it did before, outside as if
     the graph had not added the word."""
     con, recipe, _ = library
-    retrieval.SENSES = False
+    retrieval.knobs.SENSES = False
     before = store.search(con, "Apfel", mode="fts", limit=10)
-    retrieval.SENSES = True
+    retrieval.knobs.SENSES = True
     after = store.search(con, "Apfel", mode="fts", limit=10)
     score = {h["doc_id"]: h["score"] for h in before}
     assert [h["doc_id"] for h in after] == [recipe]
@@ -141,7 +141,7 @@ def shelves(con: sqlite3.Connection) -> Iterator[tuple[sqlite3.Connection, list[
         store.set_domains(con, d, ["kitchen"])
         recipes.append(d)
     yield con, recipes
-    retrieval.DOMAIN_PRIOR = True
+    retrieval.knobs.DOMAIN_PRIOR = True
 
 
 def _top(con: sqlite3.Connection, query: str) -> list[int]:
@@ -152,9 +152,9 @@ def test_a_small_domain_the_candidates_gather_in_gets_a_vote(
     shelves: tuple[sqlite3.Connection, list[int]],
 ) -> None:
     con, recipes = shelves
-    retrieval.DOMAIN_PRIOR = False
+    retrieval.knobs.DOMAIN_PRIOR = False
     before = _top(con, "apple cake")
-    retrieval.DOMAIN_PRIOR = True
+    retrieval.knobs.DOMAIN_PRIOR = True
     after = _top(con, "apple cake")
     assert set(after[:3]) == set(recipes)
     # a preference, not a filter: what was found is still found
@@ -167,9 +167,9 @@ def test_the_brand_s_own_question_keeps_its_manuals(
     """Three recipes out of thirty candidates would do; "Apple Loops"
     gathers none of them, so nothing moves."""
     con, recipes = shelves
-    retrieval.DOMAIN_PRIOR = False
+    retrieval.knobs.DOMAIN_PRIOR = False
     before = _top(con, "Apple Loops")
-    retrieval.DOMAIN_PRIOR = True
+    retrieval.knobs.DOMAIN_PRIOR = True
     assert _top(con, "Apple Loops") == before
     assert not set(before[:4]) & set(recipes)
 

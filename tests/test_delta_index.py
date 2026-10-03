@@ -83,14 +83,14 @@ def test_delta_then_merge(
     hits = store.search(con, "granular cloud textures", mode="vec")
     assert hits and hits[0]["doc_id"] == b
     # a large delta merges by itself on save
-    monkeypatch.setattr(store.retrieval, "DELTA_MERGE_AT", 1)
+    monkeypatch.setattr(store.retrieval.knobs, "DELTA_MERGE_AT", 1)
     store.ingest_text(con, "wave digital filter diode clipper " * 20, title="C")
     _embed_all(con)
     assert not delta.exists()
     # and a delta as large as its main file, however far from DELTA_MERGE_AT:
     # the document index never reached fifty thousand (2026-09-12 to -30)
-    monkeypatch.setattr(store.retrieval, "DELTA_MERGE_AT", 50_000)
-    monkeypatch.setattr(store.retrieval, "DELTA_MERGE_MIN", 1)
+    monkeypatch.setattr(store.retrieval.knobs, "DELTA_MERGE_AT", 50_000)
+    monkeypatch.setattr(store.retrieval.knobs, "DELTA_MERGE_MIN", 1)
     doc_delta = data_dir / "vectors-doc-hash-test.delta.usearch"
     held = store.vec_status(con)["index"]["count"]
     for i in range(held + 1):

@@ -61,8 +61,11 @@ revisit threshold, under "Decision thresholds" below.
    A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, text, library, domains, genres,
-   readings, reads) and `graph` (edges, decisions, labels, languages, context, communities,
-   traversal).
+   readings, reads), `graph` (edges, decisions, labels, languages, context, communities,
+   traversal) and `retrieval` (knobs, compounds, query, legs, vectors,
+   fusion, similar). A switch a test turns is an attribute of a package's
+   one settings object (`retrieval.knobs`), read at call time: a flag
+   set on the package would not reach the part that reads it.
 4. **Single writer.** *(enforced)* The service process, the door, is the only
    writer. The recurring passes (parse, titles, extract, embed, and the
    likely tier of entity resolution) are done by workers. A worker

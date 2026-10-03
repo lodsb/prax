@@ -254,8 +254,8 @@ def test_the_text_package_stands_on_nothing_of_prax() -> None:
     of a page is. The engineering pass of 2026-09-28 gathered them because
     they import nothing of prax at the top of a module, which is what lets
     the store, the parsers and a client all read them. A module that needs
-    the store or the models belongs elsewhere; a function may still reach
-    for one lazily (compounds asks the store which forms a word takes)."""
+    the store or the models belongs elsewhere (compounds, which asked the
+    store which forms a word takes, became a part of its retrieval)."""
     reaching: list[str] = []
     for path in sorted((SRC / "text").glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))

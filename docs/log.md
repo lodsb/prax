@@ -3793,6 +3793,29 @@ does), and no module but `edges.py` writes the past-moment form
 (`test_a_moment_in_record_time_is_built_in_one_place`; a planted
 breach of each kind failed it).
 
+## 2026-10-03, the evening: three small fixes, and retrieval in parts
+
+- **An ask wakes an idled model under another name.** The demand an
+  ask records was there all along; `work.role_of_step` matched a step to
+  a role by the model entry's name only, and during AK the steps named
+  the 35B's entry while `run:` served the 27B's. It now also matches a
+  model at the served address (9f15efa).
+- **One tray a data directory** (`run/tray.pid`, `tray.claim`), so a
+  second icon is refused while the first lives (75e77a3).
+- **`store.retrieval` as a package.** It passed 2,000 lines (2,038), the
+  line invariant 3 draws. Seven parts in `ORDER`: `knobs`, `compounds`,
+  `query`, `legs`, `vectors`, `fusion`, `similar`. The trap the plan
+  named was the tests' module flags: `test_senses` set
+  `retrieval.SENSES = False` by assignment, which on a package creates a
+  new attribute and tests nothing. The five switches (`SENSES`,
+  `INFLECT`, `DOMAIN_PRIOR`, `DELTA_MERGE_AT`, `DELTA_MERGE_MIN`) are
+  attributes of one object, `retrieval.knobs`, read at call time, and
+  the package refuses a knob set on itself (`_Package.__setattr__`)
+  naming the right place. `text.compounds` moved in as a part, with
+  `term_documents` beside it, so it no longer reaches up to the store.
+  No behaviour changed: the suite (1,201) passed unchanged but for the
+  knobs' address, and the order test caught a planted backward import.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each
