@@ -3881,6 +3881,16 @@ Found on the way: with the worker paused, an `ask` did not wake an idled
 llama-server. The door answered "it has been asked for", and nothing
 loaded until `prax up --start llama-server`.
 
+**The host switched** (the user, 19:20: "keep the uncensored 27B, delete
+the plain one, start the worker"). `run: llama-server` and every local
+step now name `server-27b-u`, so the provenance stamps name the model
+that wrote them. Two steps are off until they are fitted to it: `vision`
+(the abliterated repository has no projector; unsloth's
+`mmproj-F16.gguf` for Qwen 3.8, 928 MB, is the candidate) and
+`adjudicate` (its Platt fit is the 35B's; `eval_confidence.py platt`
+again on the Review page's decisions). The plain 27B is deleted; the
+35B's file (21 GB) stays until the user says.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
