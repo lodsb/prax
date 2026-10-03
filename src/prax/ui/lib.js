@@ -606,6 +606,20 @@ function publishedLabel(meta) {
   return meta && meta.date ? esc(String(meta.date)) : "";
 }
 
+// A document's times, for its page's header: when it was published (as
+// its source says), when it came into the library, when its text was last
+// read. Each says what it is, so "2019" is never mistaken for the day the
+// file arrived.
+function dateLine(meta, doc) {
+  const bits = [];
+  const published = publishedLabel(meta);
+  if (published) bits.push(`published ${published}`);
+  const day = (s) => esc(String(s || "").slice(0, 10));
+  if (doc && doc.added_at) bits.push(`<span class="muted" title="when it came into the library">added ${day(doc.added_at)}</span>`);
+  if (doc && doc.parsed_at && day(doc.parsed_at) !== day(doc.added_at)) bits.push(`<span class="muted" title="when its text was last read">read ${day(doc.parsed_at)}</span>`);
+  return bits.join(" · ");
+}
+
 // The language a document is in, under a name rather than a code.
 const LANGUAGES = { en: "English", de: "German", fr: "French", es: "Spanish", it: "Italian", nl: "Dutch", pt: "Portuguese", sv: "Swedish", da: "Danish", pl: "Polish", cs: "Czech", ru: "Russian", tr: "Turkish", ja: "Japanese", zh: "Chinese", ko: "Korean", ar: "Arabic", he: "Hebrew", el: "Greek", la: "Latin" };
 function languageName(code) {
@@ -691,5 +705,5 @@ function checksBox(checks) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }

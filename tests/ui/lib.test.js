@@ -497,3 +497,15 @@ test("publishedLabel: the date as its source says, and what said so", () => {
   assert.equal(lib.publishedLabel({}), "");
   assert.equal(lib.publishedLabel(null), "");
 });
+
+test("dateLine: published, added and read, each said for what it is", () => {
+  const meta = { published: { date: "2019-07", precision: "month", by: "record" } };
+  const doc = { added_at: "2026-09-12T10:00:00Z", parsed_at: "2026-10-02T03:00:00Z" };
+  const line = lib.dateLine(meta, doc);
+  assert.match(line, /^published <span title="published, as its record \(Zotero\) says">2019-07<\/span>/);
+  assert.match(line, /added 2026-09-12/);
+  assert.match(line, /read 2026-10-02/);
+  // read the day it came: said once
+  assert.doesNotMatch(lib.dateLine({}, { added_at: "2026-09-12T10:00:00Z", parsed_at: "2026-09-12T10:05:00Z" }), /read/);
+  assert.equal(lib.dateLine({}, null), "");
+});

@@ -39,11 +39,11 @@ function pendingLine(pending) {
   return `<p class="reading-line muted">waiting for a worker: ${what}</p>`;
 }
 
-function metaLine(meta) {
+function metaLine(meta, doc) {
   const bits = [];
-  if (meta.creators && meta.creators.length) bits.push(meta.creators.map((c) => c.name).join(", "));
-  const published = publishedLabel(meta);
-  if (published) bits.push(published);
+  if (meta.creators && meta.creators.length) bits.push(esc(meta.creators.map((c) => c.name).join(", ")));
+  const when = dateLine(meta, doc);
+  if (when) bits.push(when);
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
@@ -547,7 +547,7 @@ async function viewDoc(id, p) {
   view.innerHTML = `
   <header class="doc-head">
     <h1>${pageMeta ? `<span class="kind-pill">${esc(pageMeta.kind)}</span> ` : ""}${esc(doc.title || "(untitled)")}</h1>
-    <div class="doc-meta">${metaLine(meta)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}${meta.question ? ` · a standing question, asked ${esc((meta.question.asked_at || "").slice(0, 10))} by ${esc(meta.question.model || "?")}${(meta.question.history || []).length ? `, moved ${meta.question.history.length} time${meta.question.history.length === 1 ? "" : "s"}` : ""}` : ""}</div>
+    <div class="doc-meta">${metaLine(meta, doc)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}${meta.question ? ` · a standing question, asked ${esc((meta.question.asked_at || "").slice(0, 10))} by ${esc(meta.question.model || "?")}${(meta.question.history || []).length ? `, moved ${meta.question.history.length} time${meta.question.history.length === 1 ? "" : "s"}` : ""}` : ""}</div>
     ${tags(meta)}
     <div class="doc-actions">
       <div class="doc-actions-zone doc-actions-left">
