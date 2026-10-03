@@ -74,6 +74,10 @@ and pushing what is committed.
 - **Two tray icons** run on the desktop (one from the autostart, one
   started by hand, most likely): quit one. If it happens again, the tray
   should refuse a second copy on the same data directory.
+- **An ask wakes an idled model with the worker paused** (2026-10-03,
+  AK): the door said the model "has been asked for" and nothing loaded
+  until `prax up --start llama-server`. The demand the supervisor reads
+  should come from the door's ask itself, not only from the worker.
 - **Before AK's download**: see what Qwen has released since 3.6 (a page
   names a "Qwen 3.8" lineup, not checked), then fetch with the user's
   word, from a known quantizer, names and hashes in the log.

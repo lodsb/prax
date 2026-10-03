@@ -3871,6 +3871,16 @@ Nothing switches yet. A split is what the numbers suggest: the 27B for
 answer, and the 35B for the bulk passes. Only one model fits the card
 at a time, so it needs a measurement of the swap first.
 
+By hand (the user, the evening): the abliterated build answers what the
+original refuses ("definitely uncensored"), and its tool use feels more
+fluent. In the maths eval it took fewer calculator steps than the plain
+27B (46 against 60) for the same scores, which fits that reading: fewer
+calls that miss.
+
+Found on the way: with the worker paused, an `ask` did not wake an idled
+llama-server. The door answered "it has been asked for", and nothing
+loaded until `prax up --start llama-server`.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
