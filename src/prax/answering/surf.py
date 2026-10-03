@@ -550,11 +550,16 @@ def do_walk(con: sqlite3.Connection, s: Surf, name: str) -> str:
     for i, t in titles.items():
         s.docs.setdefault(i, t)
     by_rel: dict[str, list[str]] = {}
+    said: set[tuple[str, str]] = set()
     for e in edges:
         outward = e["src"].lower() == name.lower()
         item = ("→ " if outward else "← ") + (e["dst"] if outward else e["src"])
+        if (e["rel"], item) in said:
+            continue  # a fact once, however many documents state it
+        said.add((e["rel"], item))
+        more = int(e.get("support") or 1) - 1
         if e.get("source_doc"):
-            item += f" (doc {e['source_doc']})"
+            item += f" (doc {e['source_doc']}" + (f" +{more} more)" if more else ")")
         by_rel.setdefault(e["rel"], []).append(item)
     lines = [f"{name}:"]
     for rel, items in by_rel.items():

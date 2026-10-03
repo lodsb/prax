@@ -734,7 +734,7 @@ and pushing what is committed.
       if a region turns out to be two unrelated things, or if the
       packages prove easy on the Pi-class host.
 
-- [ ] **Support count as a signal** (2026-10-03, from Graphiti's episode
+- [x] (2026-10-03: the first hop's cap, `support` on its rows, measured in the log; search's tie-break not built: a hit carries no fact to count) **Support count as a signal** (2026-10-03, from Graphiti's episode
       count, LightRAG's summed weights, HippoRAG's source counts): a
       walk's first hop ordered by how many documents separately say each
       fact, and search's ties broken by it. prax writes one edge row per

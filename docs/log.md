@@ -3785,6 +3785,31 @@ day still follows today's entity merges. The 92 other places in the store's grap
 write `valid_to IS NULL` themselves move behind the helper later, with
 an invariant test that none builds it alone.
 
+## 2026-10-03: a fact's witnesses, in the first hop's cap
+
+A fact several documents state is one edge per document. In the first
+hop each such row now says how many documents state its fact
+(`support`, absent for one). The cap (`graph.edges`, 25 in the surfer's
+`walk`) is spent on distinct facts first, the best supported first
+within a relation, still round-robin over the relations; a fact's
+further rows come only after every distinct fact has had its place. The
+surfer's `walk` names a fact once, with "+N more" documents.
+
+Measured on a copy of the library, over 60 entities past the cap (the
+15 most connected and 45 drawn from the rest), old rule against new:
+
+| at a cap of 25 | old | new |
+|---|---|---|
+| distinct facts shown | 1,449 | 1,500 |
+| documents behind them | 1,536 | 1,672 |
+| of each entity's 10 best-supported facts, shown | 481 | 517 |
+
+Only 24 of the 60 carry any fact more than one document states, so the
+gain sits there. For one paper, 2 of its 10 best-supported facts were
+shown before and 9 after; for one author, 4 and 8. `ask` was not
+re-run for it: the change reaches an answer only through a walk on such
+an entity, and a run's spread (3 to 7 questions) is larger than that.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

@@ -54,15 +54,53 @@ def _first_hop(
     commonest first, and every relation an entity has appears before any
     relation has a second row.
 
+    A fact several documents state is one row per document, and each row
+    says how many there are (``support``, absent for one). The cap is
+    spent on distinct facts first, the best supported first within a
+    relation, and a fact's further rows only after every distinct fact
+    has had its place: twenty papers saying a method is `about` audio
+    are one fact with twenty witnesses, not twenty slots.
+
     A caller that wants the whole list asks for it (``limit=0``), which
     is what the UI's canvas does.
     """
+    witnesses: dict[tuple[str, str, str], set[Any]] = {}
+    for e in near:
+        witnesses.setdefault(_fact(e), set()).add(e.get("source_doc"))
+    for e in near:
+        n = len(witnesses[_fact(e)])
+        if n > 1:
+            e["support"] = n
     if limit <= 0 or len(near) <= limit:
         return near, 0
-    by_rel: dict[str, list[dict[str, Any]]] = {}
+    firsts: dict[str, list[dict[str, Any]]] = {}
+    repeats: dict[str, list[dict[str, Any]]] = {}
+    met: set[tuple[str, str, str]] = set()
     for e in near:
-        by_rel.setdefault(str(e.get("rel") or ""), []).append(e)
-    order = sorted(by_rel, key=lambda r: (-len(by_rel[r]), r))
+        rel = str(e.get("rel") or "")
+        (repeats if _fact(e) in met else firsts).setdefault(rel, []).append(e)
+        met.add(_fact(e))
+    for rows in firsts.values():
+        rows.sort(key=lambda e: -int(e.get("support") or 1))  # stable: id order
+    order = sorted(firsts, key=lambda r: (-len(firsts[r]), r))
+    kept = _round_robin(firsts, order, limit)
+    if len(kept) < limit:
+        kept += _round_robin(repeats, sorted(repeats), limit - len(kept))
+    keep = {id(e) for e in kept}
+    return [e for e in near if id(e) in keep], len(near) - len(kept)
+
+
+def _fact(e: dict[str, Any]) -> tuple[str, str, str]:
+    """What an edge states, whoever states it: its two ends (canonical
+    names) and its relation."""
+    return (str(e.get("src")), str(e.get("rel")), str(e.get("dst")))
+
+
+def _round_robin(
+    by_rel: dict[str, list[dict[str, Any]]], order: list[str], limit: int
+) -> list[dict[str, Any]]:
+    """Up to ``limit`` rows, one from each relation in ``order`` per
+    round, so every relation appears before any has a second row."""
     kept: list[dict[str, Any]] = []
     round_ = 0
     while len(kept) < limit:
@@ -77,8 +115,7 @@ def _first_hop(
         if not took:
             break
         round_ += 1
-    keep = {id(e) for e in kept}
-    return [e for e in near if id(e) in keep], len(near) - len(kept)
+    return kept
 
 
 def _second_hop(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int]:

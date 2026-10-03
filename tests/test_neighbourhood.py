@@ -191,6 +191,33 @@ def test_the_first_hop_is_capped_with_every_relation_represented(
     assert "the one method" in {e["dst"] for e in answer["edges"]}
 
 
+def test_the_cap_keeps_distinct_facts_the_best_supported_first(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One fact five papers state is one fact with five witnesses: it
+    leads its relation, says so, and takes one slot of the cap, not
+    five."""
+    monkeypatch.setenv("PRAX_GRAPH_EDGES", "4")
+    papers = [_paper(con, n) for n in range(6)]
+    for n in range(3):
+        _link(con, "STFT", "concept", "extends", f"topic {n}", "concept", doc=papers[0])
+    for doc in papers[1:]:
+        _link(con, "STFT", "concept", "extends", "phase", "concept", doc=doc)
+    _link(con, "STFT", "concept", "extends", "topic 1", "concept", doc=papers[5])
+
+    answer = store.traverse_map(con, "STFT", hops=1)
+    kept = [(e["dst"], e.get("support")) for e in answer["edges"]]
+    # every distinct fact before any repeat; phase (5 papers) first
+    assert sorted(d for d, _ in kept) == ["phase", "topic 0", "topic 1", "topic 2"]
+    assert dict(kept)["phase"] == 5 and dict(kept)["topic 1"] == 2
+    assert dict(kept)["topic 0"] is None
+    assert answer["left_out"]["edges"] == 5
+
+    monkeypatch.setenv("PRAX_GRAPH_EDGES", "1")
+    only = store.traverse_map(con, "STFT", hops=1)["edges"]
+    assert [e["dst"] for e in only] == ["phase"]
+
+
 def test_a_caller_can_ask_for_the_whole_list(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:

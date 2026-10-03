@@ -585,3 +585,22 @@ def test_an_equation_the_question_names_is_read_first(
     }
     assert reads and added == {tuned}
     assert any("H_r" in p["text"] for p in got["passages"])
+
+
+def test_a_walk_says_a_fact_once_with_how_many_state_it(
+    con: sqlite3.Connection,
+) -> None:
+    docs = [
+        int(store.ingest_text(con, f"note {n} " * 30, title=f"Note {n}")["doc_id"])
+        for n in range(3)
+    ]
+    for doc in docs:
+        store.link(
+            con,
+            store.Edge("STFT", "concept", "extends", "Fourier", "concept"),
+            source_doc=doc,
+        )
+    s = surf.Surf("q", "q", [], None, 6, 4, 4000)
+    said = surf.do_walk(con, s, "STFT")
+    assert said.count("→ Fourier") == 1
+    assert f"(doc {docs[0]} +2 more)" in said
