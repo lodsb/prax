@@ -757,7 +757,7 @@ and pushing what is committed.
 - [ ] **Counted drops**: what extraction skips without queuing it (a
       reason, a count, an example, per document), beside the review
       queue (Utopia's `extraction_drops`).
-- [ ] **Append-only by trigger** on what is a ledger already (merge
+- [x] (2026-10-03, migration 35: edges never deleted and their fact fixed, page revisions, spend) **Append-only by trigger** on what is a ledger already (merge
       stamps, page revisions, token uses): `BEFORE UPDATE … RAISE(ABORT)`
       in SQLite, as Utopia's audit table.
 

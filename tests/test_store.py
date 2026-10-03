@@ -546,3 +546,32 @@ def test_a_changed_passage_may_hand_its_chunk_id_to_another(
     assert all(after[i] == before[i] for i in kept)  # unchanged: same id
     moved = [i for i in before if "gamma" in before[i]]
     assert moved and all(i in after and "delta" in after[i] for i in moved)
+
+
+def test_what_is_written_once_stays_as_written(con: sqlite3.Connection) -> None:
+    """The database refuses what would change history (migration 35): an
+    edge deleted or its fact changed, a page revision touched, a spend row
+    rewritten. Ending an edge, and moving it to a duplicate's survivor,
+    still work."""
+    store.link(con, store.Edge("Paper A", "paper", "about", "onsets", "concept"))
+    edge = con.execute("SELECT id FROM edges").fetchone()[0]
+    with pytest.raises(sqlite3.IntegrityError, match="never deleted"):
+        con.execute("DELETE FROM edges WHERE id = ?", (edge,))
+    with pytest.raises(sqlite3.IntegrityError, match="fact does not change"):
+        con.execute("UPDATE edges SET rel = 'cites' WHERE id = ?", (edge,))
+    con.execute(
+        "UPDATE edges SET valid_to = '2026-10-03T00:00:00Z' WHERE id = ?", (edge,)
+    )
+    con.rollback()
+    store.write_page(con, "kept", "# Kept\n\nOnce.", title="Kept")
+    with pytest.raises(sqlite3.IntegrityError, match="history"):
+        con.execute("UPDATE page_revisions SET note = 'rewritten'")
+    with pytest.raises(sqlite3.IntegrityError, match="history"):
+        con.execute("DELETE FROM page_revisions")
+    store.record_spend(
+        con, step="ask", model="claude-sonnet-5", usage={"input_tokens": 10}, usd=0.01
+    )
+    with pytest.raises(sqlite3.IntegrityError, match="ledger"):
+        con.execute("UPDATE spend SET usd = 0")
+    with pytest.raises(sqlite3.IntegrityError, match="ledger"):
+        con.execute("DELETE FROM spend")
