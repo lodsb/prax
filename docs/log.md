@@ -3891,6 +3891,23 @@ that wrote them. Two steps are off until they are fitted to it: `vision`
 again on the Review page's decisions). The plain 27B is deleted; the
 35B's file (21 GB) stays until the user says.
 
+**`adjudicate` refitted for the 27B** (the user: "do the adjudicate
+recalibration first"). `eval_confidence.py gold`, `ask`, `platt` on the
+296 pairs a person has decided on the Review page (205 same), 74 s of
+the model:
+
+| | agrees with the person | at 0.9: settled, agreeing | at 0.95 |
+|---|---|---|---|
+| 35B, 2026-09-28 (221 pairs) | 0.81 (ECE 0.031) | 40%, 87 of 89 | 30%, 66 of 67 |
+| 27B abliterated (296 pairs) | 0.77 (ECE 0.050) | 36%, 98 of 107 | 16%, 47 of 47 |
+
+The sets differ (the person decided 75 more pairs since), but the 27B
+is the weaker judge of sameness. `steps.adjudicate` names it again with
+its own fit (`platt: {a: 0.5525, b: 0.5186}`) and `settle: 0.95`: it
+settles fewer pairs, and the rest wait on the Review page with its
+number. Pairs the 35B already scored keep the 35B's number
+(`scored_pairs` are not asked again).
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
