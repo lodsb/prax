@@ -147,7 +147,7 @@ def parse(text: str) -> Extraction:
     ``usage['dropped_lines']``; repeats of a triple or an unmapped item
     (small models loop) are dropped and counted in ``usage['repeats']``."""
     ex = Extraction()
-    dropped = repeats = 0
+    dropped = repeats = leaked = 0
     seen: set[tuple[str, ...]] = set()
     for raw in text.splitlines():
         fields = [_unkey(f) for f in raw.split(SEP)]
@@ -163,6 +163,13 @@ def parse(text: str) -> Extraction:
                 continue
             seen.add(key)
             src, src_type, rel, dst, dst_type, conf = fields[1:7]
+            if _LEAKED.search(src) or _LEAKED.search(dst):
+                # the model wrote the rest of its line into a name, with
+                # spaces for tabs (``interpolation concept=INFERRED
+                # evidence=…``): it lost its place, so the triple goes
+                # (903 such names in the graph on 2026-10-03)
+                leaked += 1
+                continue
             # the optional fields are read by their key, not their place:
             # either may be there without the other
             printed = {
@@ -203,10 +210,15 @@ def parse(text: str) -> Extraction:
         ex.usage["dropped_lines"] = dropped
     if repeats:
         ex.usage["repeats"] = repeats
+    if leaked:
+        ex.usage["leaked_lines"] = leaked
     return ex
 
 
 _KEY = re.compile(r"^[a-z_]+=")
+# a field's key inside a name: the line written on with spaces for tabs. A
+# key or a type name, lower case, then "=": no entity is named so
+_LEAKED = re.compile(r"(?:^|\s)[a-z_]{3,}=\S")
 _PRINTED = re.compile(r"^(src_as|dst_as)=(.*)$")
 _SNAKE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+$")
 

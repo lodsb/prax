@@ -267,3 +267,29 @@ def test_control_tokens_are_dropped() -> None:
     )
     ex = lineformat.parse(text)
     assert ex.unmapped[0]["reason"] == "Citation without a title."
+
+
+def test_a_name_that_swallowed_its_line_drops_the_triple() -> None:
+    """A model that wrote the rest of its line into a name, spaces for
+    tabs, lost its place: the triple goes and is counted (903 such names
+    in the graph on 2026-10-03, "interpolation concept=INFERRED evidence=…")."""
+    good = (
+        "triple\tsrc=Doc\tsrc_type=document\trel=covers\tdst=Interpolation"
+        "\tdst_type=concept\tconfidence=EXTRACTED\tevidence=plug-ins supported"
+    )
+    leaked = (
+        "triple\tsrc=Doc\tsrc_type=document\trel=covers"
+        "\tdst=interpolation concept=INFERRED evidence=There are 11 types"
+        "\tdst_type=concept\tconfidence=INFERRED\tevidence=There are 11 types"
+    )
+    also = (
+        "triple\tsrc=Massive\tsrc_type=tool\trel=uses"
+        "\tdst=AUDIO dst_type=concept(confidence=EXTRACTED evidence=Um in MASSIVE"
+        "\tdst_type=concept\tconfidence=EXTRACTED\tevidence=Um in MASSIVE"
+    )
+    ex = lineformat.parse("\n".join(["summary\tA manual.", good, leaked, also]))
+    assert [t.dst for t in ex.triples] == ["Interpolation"]
+    assert ex.usage["leaked_lines"] == 2
+    # a name with an equals sign that is not a key stays
+    ok = good.replace("dst=Interpolation", "dst=fs=44100 sampling")
+    assert lineformat.parse(ok).triples[0].dst == "fs=44100 sampling"
