@@ -3908,6 +3908,20 @@ settles fewer pairs, and the rest wait on the Review page with its
 number. Pairs the 35B already scored keep the 35B's number
 (`scored_pairs` are not asked again).
 
+**`vision` back on, with a projector for the 27B** (the user: "work on
+the vision projector first"). huihui's repository has none; unsloth's
+`mmproj-F16.gguf` for Qwen3.8-27B (928 MB, sha256
+`cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e`) is
+served beside the abliterated weights, since the ablation leaves the
+vision tower alone (`serve.mmproj` by absolute path, `image_max_tokens:
+1024`). The card holds 18.6 GB with the display, 1.5 GB more than
+without it. On three figures the 35B had read, the 27B's readings were
+as coherent and caught the labels, each model misreading one thing the
+other got right (the 35B read "Bass 82.aif", the 27B "Base B2 af").
+Through the pipeline: document 13449's three figures in 35 s, stamped
+`figures/1-r2+qwen3.8-27b-abliterated-ud-dw-q4ks`. 3,625 documents still
+have figures nobody read; that run waits for the user.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
