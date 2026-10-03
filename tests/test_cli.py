@@ -487,3 +487,24 @@ def test_a_retyped_document_is_shown_by_its_title() -> None:
         "x", {"mime": "application/pdf", "documents": 3, "first_id": 1}
     )
     assert "3 documents" in counted
+
+
+def test_sync_plans_applies_and_follows_the_manifest(
+    door: TestClient, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``prax sync``: the plan, then --apply; the hook's --if-auto syncs
+    only a project whose manifest says so (no remote here: nothing)."""
+    root = tmp_path / "notes"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "a.md").write_text("# A\n\nOn filters.\n", encoding="utf-8")
+    (root / "build").mkdir()
+    (root / "build" / "b.md").write_text("# built\n", encoding="utf-8")
+    assert run("sync", str(root)) == 0
+    said = capsys.readouterr().out
+    assert "1 add" in said and "dry run" in said and "docs/a.md" in said
+    assert "a build or vendored folder" in said
+    assert run("sync", str(root), "--apply", "--name", "notes", "--json") == 0
+    res = json.loads(capsys.readouterr().out)
+    assert res["counts"]["add"] == 1 and res["dry_run"] is False
+    assert run("sync", str(root), "--if-auto") == 0
+    assert capsys.readouterr().out == ""  # outside git: no manifest to ask

@@ -429,3 +429,89 @@ def _run(door: Door, a: Any, source: str, items: Iterable[feed.Item]) -> int:
     if report.added or report.refreshed:
         out.hint("A worker reads what arrived: prax work --watch · prax jobs")
     return 0 if not report.failed else 1
+
+
+def sync(door: Door, a: Any) -> int:
+    """A project's written knowledge to the library (``POST /projects/sync``):
+    the plan by default, the sync with ``--apply``. ``--if-auto`` is the
+    session-end hook's: it syncs only a project whose manifest says
+    ``auto_sync``, or one with the older ``.prax-project`` file."""
+    from prax.client import DoorError, project_files
+    from prax.importers import project
+
+    root = Path(a.root or ".").expanduser()
+    legacy = (root / project.SETTINGS_FILE).is_file()
+    cfg = project.settings(root) if legacy else None
+    include = a.include or (cfg.include if cfg else [])
+    exclude = a.exclude or (cfg.exclude if cfg else [])
+    apply = bool(a.apply)
+    try:
+        if a.if_auto and not legacy:
+            where = project_files(root, include=include, exclude=exclude, texts=False)
+            if not where["remote"]:
+                return 0
+            got = door.get_json(
+                "/projects", {"remote": where["remote"], "prefix": where["prefix"]}
+            )
+            if not (got.get("project") or {}).get("auto_sync"):
+                return 0
+        if a.if_auto:
+            apply = True
+        files = project_files(
+            root,
+            include=include,
+            exclude=exclude,
+            tracked_only=not a.all_files,
+            texts=apply,
+        )
+        body = {
+            **files,
+            "name": a.name or (cfg.name if cfg else None),
+            "domains": a.domain or (cfg.domains if cfg and cfg.domains else None),
+            "tags": a.tag or (cfg.tags if cfg and cfg.tags else None),
+            "include": include or None,
+            "exclude": exclude or None,
+            "auto_sync": a.auto,
+            "dry_run": not apply,
+        }
+        res = door.post_json("/projects/sync", body)
+    except (ValueError, OSError) as exc:
+        out.fail(str(exc))
+        return 2
+    except DoorError as exc:
+        out.fail(exc.detail or str(exc))
+        return 1
+    if a.json:
+        print(json.dumps(res, indent=2))
+        return 0
+    if a.quiet:
+        return 0
+    where_text = res.get("remote") or str(root.resolve())
+    if res.get("prefix"):
+        where_text += f" · {res['prefix']}/"
+    out.say(out.bold("Project") + out.dim(f"   {res['name']} · {where_text}"))
+    counts = res.get("counts") or {}
+    out.say(
+        "  "
+        + ", ".join(f"{n} {k}" for k, n in counts.items() if n)
+        + (out.dim("   (a dry run: nothing sent)") if res.get("dry_run") else "")
+    )
+    shown = [
+        p for p in res.get("plan") or [] if p["action"] not in ("unchanged", "skip")
+    ]
+    for p in shown[:40]:
+        extra = f" (was {p['was']})" if p.get("was") else ""
+        out.hint(f"  {p['action']:<9} {p['path']}{extra}")
+    if len(shown) > 40:
+        out.hint(f"  … and {len(shown) - 40} more")
+    for why, row in (res.get("skipped") or {}).items():
+        examples = ", ".join(row.get("examples") or [])
+        out.hint(f"  skipped {row.get('count')}: {why}" + out.dim(f"  ({examples})"))
+    for g in res.get("gone") or []:
+        out.hint(f"  gone      {g.get('path')} (doc {g['doc_id']}; left as it is)")
+    if res.get("dry_run"):
+        out.hint("  prax sync --apply sends it")
+    else:
+        auto = "on" if res.get("auto_sync") else "off"
+        out.hint(f"  page project-{res['name']} · session-end sync {auto} (--auto)")
+    return 0

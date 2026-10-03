@@ -5,7 +5,8 @@ argument-hint: "<question>"
 
 Answer this from the library, with citations: $ARGUMENTS
 
-1. Decide the domain from the project (`.prax-project`, or the subject
+1. Decide the domain from the project (its synced settings, an older
+   `.prax-project`, or the subject
    of the question); leave it unset when unsure.
 2. `search(question, domain=…, limit=10)`; then `ask(question,
    domain=…)` for the bundle of passages and graph facts. Read the

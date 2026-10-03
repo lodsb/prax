@@ -5,8 +5,9 @@ argument-hint: "[what to remember]"
 
 Keep what this session decided or found, on the project's page.
 
-1. The project's name: `.prax-project`'s `name:`, else the root
-   directory's name; the page is `project-<name>`. If the page does not
+1. The project's name: the `name` of a `sync_project(root=".")` dry
+   run (what prax keeps for this working copy), else `.prax-project`'s
+   `name:`, else the root directory's name; the page is `project-<name>`. If the page does not
    exist, create it with `write_page(kind="project")` from one line
    about the project, then continue.
 2. Gather from this conversation: decisions made and why, findings

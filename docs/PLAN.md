@@ -288,7 +288,7 @@ and pushing what is committed.
       `?find=`, as graph edges do. First a test that shows the fault.
 
       *3. Syncing a project as a tool* (the client's #5, #6).
-      - [ ] `sync_project(root, include, exclude, name, domains,
+      - [x] (2026-10-03: the MCP tool, `prax sync`, `POST /projects/sync`; `docs/log.md`) `sync_project(root, include, exclude, name, domains,
             dry_run=True, tracked_only=True)`: tracked files only
             (`git ls-files`), the usual build folders left out (`_deps/`,
             `CMakeFiles/`, `*-subbuild/`, `build/`, `third_party/`), a
@@ -298,11 +298,11 @@ and pushing what is committed.
             remote and the path so a move makes no duplicate. Without
             this the CLI needed the venv path, a call out of the
             sandbox, and took in about 90 vendored CMake files.
-      - [ ] The manifest in prax, keyed by remote and path, not a
+      - [x] (2026-10-03: the `projects` table, migration 38; the hook asks it, `--if-auto`; an older `.prax-project` still counts) The manifest in prax, keyed by remote and path, not a
             `.prax-project` in the repository (a committed one tells
             colleagues, and switches the session-end hook on by being
             there). Auto-sync only with an explicit `auto_sync: true`.
-      - [ ] The project page made with it: `project-<name>`, its members,
+      - [x] (2026-10-03: made by the first sync, every synced document a member; the summary is the agent's to write) The project page made with it: `project-<name>`, its members,
             a summary block the agent writes.
 
       *4. Documents linked to documents* (the client's #7 and #4, one

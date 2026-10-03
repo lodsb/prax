@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 from mcp.server.mcpserver import MCPServer
 
-from prax.client import DEFAULT_DOOR, Door, DoorError
+from prax.client import DEFAULT_DOOR, Door, DoorError, project_files
 
 mcp = MCPServer(
     "prax",
@@ -613,6 +613,66 @@ def ingest_file(
         fields["source_url"] = source_url
     mimetypes.guess_type(p.name)  # the upload names the type from the file name
     return _answer(lambda: door().upload(p, fields))
+
+
+@mcp.tool()
+def sync_project(
+    root: str = ".",
+    name: str | None = None,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    domains: list[str] | None = None,
+    tags: list[str] | None = None,
+    dry_run: bool = True,
+    tracked_only: bool = True,
+    auto_sync: bool | None = None,
+) -> dict[str, Any]:
+    """Send a project's written knowledge (README, docs, notes: .md, .rst,
+    .txt, .adoc) from a working copy on this machine to the library.
+
+    A dry run by default: the answer is the plan, each path ``add``,
+    ``refresh``, ``unchanged``, ``moved`` or ``skip`` with why, documents
+    of the project that are ``gone``, and the counts. Run again with
+    ``dry_run=false`` to apply it. Only files git tracks count
+    (``tracked_only``), and build and vendored folders (``build/``,
+    ``_deps/``, ``CMakeFiles/``, ``*-subbuild/``, ``node_modules/``…)
+    never do. A subdirectory of a repository is a project of its own.
+
+    Documents are keyed by the git remote and their path in the
+    repository, so a checkout elsewhere finds the same ones. The project's
+    settings (``name``, ``domains``, ``tags``, ``include``, ``exclude``) are
+    kept in prax after the first sync and need not be sent again;
+    ``auto_sync=true`` lets the plugin's session-end hook sync it on its
+    own. Its page is ``project-<name>``. Needs the administrator token.
+    """
+    base = Path(root).expanduser().resolve()
+    roots = ingest_roots()
+    if not any(base == r or r in base.parents for r in roots):
+        return {
+            "error": f"{root} is outside the roots this server may read"
+            f" ({os.pathsep.join(str(r) for r in roots)}); set PRAX_INGEST_ROOTS"
+        }
+    try:
+        got = project_files(
+            base,
+            include=include or [],
+            exclude=exclude or [],
+            tracked_only=tracked_only,
+            texts=not dry_run,
+        )
+    except ValueError as exc:
+        return {"error": str(exc)}
+    body = {
+        **got,
+        "name": name,
+        "domains": domains,
+        "tags": tags,
+        "include": include,
+        "exclude": exclude,
+        "auto_sync": auto_sync,
+        "dry_run": dry_run,
+    }
+    return _answer(lambda: door().post_json("/projects/sync", body))
 
 
 if __name__ == "__main__":

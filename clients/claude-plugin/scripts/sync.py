@@ -1,15 +1,19 @@
-"""The plugin's session-end hook: a project that opted in (a
-``.prax-project`` file in its root) has its documentation files sent to
-the library, keyed by path and versioned by content, so a note rewritten
-during the session replaces its earlier self. With ``archive:`` in that
-file, the session's transcript (what was said, not what was run) and
-the agent's memory files go too:
+"""The plugin's session-end hook: a project that opted in has its
+documentation files sent to the library (``prax sync --if-auto``), keyed
+by the git remote and the path and versioned by content, so a note
+rewritten during the session replaces its earlier self. Opting in is the
+project's manifest in prax (``prax sync --apply --auto``, or the MCP tool
+``sync_project`` with ``auto_sync``), so nothing in the repository
+switches the hook on for a colleague. A project with the older
+``.prax-project`` file in its root counts as opted in too, and with
+``archive:`` in that file, the session's transcript (what was said, not
+what was run) and the agent's memory files go as well:
 
     archive: [transcripts, memory]
 
 Runs with whatever ``python`` the hook finds; when that interpreter has
 no prax, and ``PRAX_PYTHON`` names one that does, it hands over to it.
-Quiet on success; a project without the file is left alone. Never
+Quiet on success; a project that did not opt in is left alone. Never
 fails the session: a door that is down is a warning on stderr."""
 
 from __future__ import annotations
@@ -39,8 +43,7 @@ def archive_choices(root: Path) -> list[str]:
 
 def main() -> int:
     root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or os.getcwd())
-    if not (root / SETTINGS_FILE).is_file():
-        return 0
+    legacy = (root / SETTINGS_FILE).is_file()
     try:
         from prax_cli.main import main as prax
     except ImportError:
@@ -53,8 +56,8 @@ def main() -> int:
             file=sys.stderr,
         )
         return 0
-    runs = [["import", "project", str(root), "--refresh", "--quiet"]]
-    choices = archive_choices(root)
+    runs = [["sync", str(root), "--if-auto", "--quiet"]]
+    choices = archive_choices(root) if legacy else []
     if "transcripts" in choices:
         runs.append(["import", "claude", str(root), "--refresh", "--quiet"])
     if "memory" in choices:

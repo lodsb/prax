@@ -21,8 +21,9 @@ inspected and retired as a unit; write freely, but write well.
   project. A `search` with the project's domain costs one call.
 - The user says "did I…", "what do we know about…", "have I read…",
   "save this", "remember this", "keep this", "note that".
-- At the start of work on a project that has a `.prax-project` file
-  (or a `project-<name>` page): read the project's context first.
+- At the start of work on a project prax knows (a `project-<name>`
+  page, or an older `.prax-project` file): read the project's context
+  first.
 
 Do not reach for it to store source code, build output or anything git
 already keeps; the library holds what was read and what was decided.
@@ -87,8 +88,11 @@ reads under the working directory only (`PRAX_INGEST_ROOTS` widens it).
   Say that to the user rather than guess.
 - When the tools fail: `health()` says the door's address as this server
   uses it, whether it answers, and whether the token is accepted.
-- A project's own docs need no tool: `/prax:sync` (or the session-end
-  hook, once the project has a `.prax-project` file) sends them.
+- A project's own docs go with `sync_project(root=".")`: a dry run
+  first (the plan: add, refresh, moved, skip and why), then
+  `dry_run=false`. Its settings are kept in prax after the first sync,
+  and `auto_sync=true` lets the session-end hook send them from then on.
+  `/prax:sync` walks the user through it.
 
 ## Commands this plugin adds
 

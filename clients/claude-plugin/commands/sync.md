@@ -1,29 +1,34 @@
 ---
-description: Send this project's documentation files to the prax library (README, docs, notes; keyed by path, a rewritten note replaces itself)
-argument-hint: "[--dry-run]"
+description: Send this project's documentation files to the prax library (README, docs, notes; git-tracked only, keyed by remote and path, a rewritten note replaces itself)
+argument-hint: "[--apply] [--auto]"
 ---
 
 Send the project's written knowledge to the library.
 
-1. Look for `.prax-project` in the project root. If it is missing,
-   show the user the file that would name the project, its ontology
-   modules and what to include, for example:
-
-       name: <directory name>
-       domains: [workshop]
-       include: ["README.md", "docs/**/*.md", "adr/*.md"]
-
-   and ask whether to create it; with the file in place the plugin's
-   session-end hook syncs on its own from then on. Without it, run
-   once with the directory's name.
-2. Run, with the Bash tool: `prax import project . --refresh
-   $ARGUMENTS` (the `prax` command; if it is not on PATH, `"$PRAX_PYTHON"
-   -m prax_cli.main import project . --refresh $ARGUMENTS`). With
-   `--dry-run` nothing is sent and the plan is printed.
-3. Report the command's summary line: how many documents were added,
-   refreshed, already there, or failed, and remind the user that a
+1. Ask for the plan first: call the MCP tool
+   `sync_project(root=".")` (a dry run by default). If the tool is not
+   available, run `prax sync .` with the Bash tool (or `"$PRAX_PYTHON"
+   -m prax_cli.main sync .` when `prax` is not on PATH).
+2. Show the user the plan in a few lines: the counts, the paths that
+   would be added, refreshed or moved, and what was skipped and why
+   (build and vendored folders, files that are not documents). On a
+   first sync, ask for the project's name and its ontology modules
+   (`domains`, for example `[workshop]`) if the folder's name or the
+   defaults would be wrong.
+3. With the user's go-ahead, apply it: `sync_project(root=".",
+   dry_run=false, name=…, domains=[…])`, or `prax sync . --apply
+   --name … --domain …`. The settings are kept in prax from then on, so
+   later syncs need only `dry_run=false` (`--apply`). With `--apply` in
+   `$ARGUMENTS`, skip the confirmation.
+4. If the user wants the session-end hook to sync this project on its
+   own, pass `auto_sync=true` (`--auto`). Nothing in the repository
+   changes; the switch is in prax's manifest.
+5. Report: the counts, the project page (`project-<name>`), and that a
    worker (`prax work --watch`) reads what arrived.
 
-What goes: `.md`, `.rst`, `.txt`, `.adoc` files outside `.git`,
-`node_modules`, virtual environments, build output and vendored code.
-Source code does not; git keeps it.
+What goes: `.md`, `.rst`, `.txt`, `.adoc` files git tracks, outside
+build and vendored folders (`build/`, `_deps/`, `CMakeFiles/`,
+`*-subbuild/`, `node_modules/`, virtual environments). Source code
+does not; git keeps it. A subdirectory of a repository is a project of
+its own. A document that is gone from the working copy is reported,
+never retired by a sync.

@@ -69,6 +69,8 @@ work. The UI polls exactly this.
 | `GET /page/{slug}` | the page with its text, revisions and `blocks`: each ask block with its state, and `asking` naming the blocks the pass is answering right now (`asking_page` for a question page). An ask block is `<!-- prax:ask id=q1 "…" -->` … `<!-- /prax:ask id=q1 -->` in any page's text (`docs/ask.md`, "Ask blocks") |
 | `PUT /page/{slug}`, `POST /page/{slug}/append` | a Markdown page, or a section appended to one. A page saved with a block not yet answered starts the pass for it and answers `job` |
 | `POST /ingest`, `/ingest/file`, `/ingest/url` | text, a file, or a URL for the door to fetch |
+| `POST /projects/sync {files, remote, prefix, name, domains, include, exclude, auto_sync, dry_run}` | a project's documents, as `prax.client.project_files` reads them from a working copy: the plan (each path add, refresh, unchanged, moved or skip and why; what is gone) and, with `dry_run: false`, the sync. Keyed by the git remote and the path; the settings are kept in prax after the first sync. The administrator's token only |
+| `GET /projects?remote=&prefix=` | every project's manifest, or the one of a working copy (what the session-end hook asks) |
 | `POST /link` | one edge, with its evidence and your name as producer; `world_from`/`world_to` (a date, or `unknown` for an end nobody dates) say when the fact holds in the world. An edge is never changed or deleted afterwards: a correction ends it and links anew |
 | `GET /documents?tag=&domain=&doctype=&published_since=&published_before=` | the library filtered, newest first |
 | `GET /stats`, `GET /jobs`, `GET /changes` | what the store holds, what is running, whether anything moved |

@@ -6,9 +6,11 @@ argument-hint: "[project name]"
 Establish the project's scope from the prax library, then summarise it
 in a few lines for the user.
 
-1. Find the project's name: `$ARGUMENTS` if given; else the `name:` in
-   `.prax-project` in the project root; else the root directory's name.
-   Read `.prax-project` if it exists and note its `domains`.
+1. Find the project's name: `$ARGUMENTS` if given; else ask prax:
+   `sync_project(root=".")` is a dry run that writes nothing, and its
+   answer carries the `name` and `settings.domains` prax keeps for this
+   working copy (a first sync would use the folder's name). An older
+   `.prax-project` file, if there is one, says the same.
 2. `context(slug="project-<name>")` — the project's page and members.
    If there is no such page, say so and offer to create one with
    `write_page(slug="project-<name>", kind="project", text=…)` from
@@ -19,9 +21,8 @@ in a few lines for the user.
    what else the library holds that bears on it.
 5. Report: the page (or its absence), how many project documents and
    when the latest arrived, the five most relevant other documents with
-   their `doc:<id>`, and the domain the project reads against. If
-   `.prax-project` is missing, show the four-line file that would opt
-   the project into the session-end sync, and leave the choice to the
-   user.
+   their `doc:<id>`, and the domain the project reads against. If the
+   project was never synced (the dry run's plan is all `add`), offer
+   `/prax:sync`, and leave the choice to the user.
 
 Keep it short: this is orientation, not a report.

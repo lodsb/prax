@@ -877,6 +877,69 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=tokens.token, needs_door=True)
 
     s = sub.add_parser(
+        "sync",
+        parents=[door_opts],
+        help="a project's written knowledge to the library: plan, then --apply",
+        description=(
+            "Send a working copy's documents (README, docs, notes) to the"
+            " library. Only files git tracks count; build and vendored"
+            " folders never do. A dry run by default: the plan, each path"
+            " add, refresh, unchanged, moved or skip and why. The project's"
+            " settings are kept in prax after the first sync; --auto lets"
+            " the plugin's session-end hook sync it on its own."
+        ),
+        epilog=(
+            "examples:\n"
+            "  prax sync                    # the plan for this directory\n"
+            "  prax sync --apply --name synth --domain workshop\n"
+            "  prax sync fw --apply --auto  # a subdirectory as its own project"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    s.add_argument("root", nargs="?", help="the working copy (default: here)")
+    s.add_argument("--apply", action="store_true", help="send it (default: plan only)")
+    s.add_argument("--name", help="the project's name (kept after the first sync)")
+    s.add_argument(
+        "--domain", action="append", metavar="NAME", help="ontology module (repeatable)"
+    )
+    s.add_argument(
+        "--tag", action="append", metavar="TAG", help="a tag on every document"
+    )
+    s.add_argument(
+        "--include", action="append", metavar="GLOB", help="only these paths"
+    )
+    s.add_argument(
+        "--exclude", action="append", metavar="GLOB", help="never these paths"
+    )
+    s.add_argument(
+        "--all-files", action="store_true", help="untracked files too, not only git's"
+    )
+    auto = s.add_mutually_exclusive_group()
+    auto.add_argument(
+        "--auto",
+        dest="auto",
+        action="store_const",
+        const=True,
+        default=None,
+        help="the session-end hook syncs this project on its own",
+    )
+    auto.add_argument(
+        "--no-auto",
+        dest="auto",
+        action="store_const",
+        const=False,
+        help="it does not",
+    )
+    s.add_argument(
+        "--if-auto",
+        action="store_true",
+        help="the hook's: sync only a project whose manifest says auto",
+    )
+    s.add_argument("--json", action="store_true", help="the door's answer as JSON")
+    s.add_argument("--quiet", action="store_true", help="say nothing on success")
+    s.set_defaults(func=importing.sync, needs_door=True)
+
+    s = sub.add_parser(
         "export",
         parents=[door_opts],
         help="a piece of the graph as a file, for another library or a repository",

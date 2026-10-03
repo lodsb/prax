@@ -82,8 +82,9 @@ version, with the Zotero import and the browser extension, is in
 in a folder. The page you are reading, or every tab in the window, sent
 from the browser as a self-contained snapshot. A PDF behind a login,
 fetched with your own session. `prax import` reads exports from GitHub
-stars, chat apps, bookmarks, Pocket, Raindrop and Medium, and a
-project's own docs folder.
+stars, chat apps, bookmarks, Pocket, Raindrop and Medium. `prax sync`
+sends a project's notes and docs from its git working copy, and only
+those: never its source or a vendored build tree.
 
 **Reads them.** PDFs go through MuPDF, with OCR when you ask, or
 through marker when you want the maths as LaTeX. HTML goes through

@@ -106,26 +106,36 @@ fine for the tools, since the door answers them; pull it now and then.
 
 | | |
 |---|---|
-| MCP server `prax` | `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`, `link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`, `promote`, `set_domains`, `status`, `health` |
+| MCP server `prax` | `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`, `link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`, `promote`, `set_domains`, `status`, `health`, `maths`, `sync_project` |
 | skill `prax` | when to reach for the library (a question about what you read or decided, a design decision in a domain it holds, "did I…", "save this"), how to read it (search, read the passage, cite `doc:<id>`), how to write back (pages, edges, captures) |
 | `/prax:scope [name]` | the project's page, its documents in the library, what else bears on it — at the start |
 | `/prax:research <question>` | search, read, answer with citations; offers to keep the answer as a page |
 | `/prax:remember [what]` | this session's decisions and findings appended to the project's page, with edges for the facts |
-| `/prax:sync [--dry-run]` | the project's `.md`/`.rst`/`.txt`/`.adoc` files into the library, keyed by path |
+| `/prax:sync [--apply] [--auto]` | the project's git-tracked `.md`/`.rst`/`.txt`/`.adoc` files into the library, keyed by remote and path: the plan first, then the sync |
 | `/prax:archive [--since DATE] [--dry-run]` | the raw record: the project's Claude Code sessions (what was said, not what was run) and the agent's memory files |
-| hook `SessionEnd` | runs the sync for a project that has a `.prax-project` file, and the archive when that file asks for it; silent otherwise |
+| hook `SessionEnd` | runs the sync for a project whose manifest in prax says `auto_sync` (or that has an older `.prax-project` file), and the archive when that file asks for it; silent otherwise |
 
 ## Opting a project in
 
-A `.prax-project` file in the project root names it and says which
-ontology modules its documents are read against:
+A project's settings live in prax, not in the repository: the first
+sync names the project and its ontology modules, and later ones reuse
+them.
 
-    name: synth-firmware
-    domains: [workshop, studio]
-    include: ["README.md", "docs/**/*.md", "adr/*.md"]
+    prax sync                                   # the plan for this folder
+    prax sync --apply --name synth-firmware --domain workshop --domain studio
+    prax sync --apply --auto                    # and on every session's end
 
-With it, the session-end hook sends the project's docs every time a
-session ends; without it, `/prax:sync` does the same on request.
+The MCP tool `sync_project` does the same (`dry_run`, `name`, `domains`,
+`include`, `exclude`, `auto_sync`), so an agent needs no virtual
+environment or shell call out of its sandbox. Only files git tracks
+count, and build and vendored folders never do. A subdirectory of a
+repository is a project of its own, and documents are keyed by the
+remote and the path, so a checkout elsewhere finds the same ones.
+
+An older `.prax-project` file in the project root still works: it names
+the project, its modules and what to include, and opts the project into
+the session-end sync by being there. A committed one does that for every
+colleague too, which is why the manifest in prax replaced it.
 
 ## What was decided, and what was said
 

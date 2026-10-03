@@ -130,7 +130,8 @@ def test_the_hook_archives_transcripts_and_memory_when_asked(
         )
         assert sync.main() == 0
         rows = client.get("/documents", params={"limit": 50}).json()["items"]
-        assert {d["meta"]["source"] for d in rows} == {"project", "claude"}
+        # the project's documents, its page (made by the first sync), the session
+        assert {d["meta"]["source"] for d in rows} == {"project", "wiki", "claude"}
         memory = client.get("/documents", params={"tag": "project:gadget-memory"})
         assert memory.json()["total"] == 1
         sessions = client.get("/documents", params={"source": "claude"})

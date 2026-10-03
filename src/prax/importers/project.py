@@ -23,7 +23,6 @@ for before it syncs a project (``clients/claude-plugin/``).
 
 from __future__ import annotations
 
-import fnmatch
 import hashlib
 import re
 from collections.abc import Iterator
@@ -34,37 +33,16 @@ from typing import Any
 
 import yaml
 
+from prax import client
+
 from .feed import Item
 
 SOURCE = "project"
 SETTINGS_FILE = ".prax-project"
-DOC_SUFFIXES = (".md", ".markdown", ".rst", ".txt", ".adoc")
-SKIP_DIRS = {
-    ".git",
-    ".hg",
-    ".svn",
-    "node_modules",
-    ".venv",
-    "venv",
-    "env",
-    "__pycache__",
-    "dist",
-    "build",
-    "target",
-    "out",
-    ".idea",
-    ".vscode",
-    "vendor",
-    "third_party",
-    "site-packages",
-    ".tox",
-    ".mypy_cache",
-    ".ruff_cache",
-    ".pytest_cache",
-    ".claude",
-}
-SKIP_FILES = ("license", "licence", "copying", "notice", "requirements")
-MAX_BYTES = 2_000_000
+# which files are a project's documents is one rule, the client's
+# (``prax.client.project_skip``), shared with ``sync_project`` and the door
+DOC_SUFFIXES = client.PROJECT_DOC_SUFFIXES
+MAX_BYTES = client.PROJECT_MAX_BYTES
 _HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*$", re.MULTILINE)
 
 
@@ -103,36 +81,17 @@ def settings(root: Path, *, name: str | None = None) -> Settings:
     )
 
 
-def _matches(posix: str, globs: list[str]) -> bool:
-    """fnmatch with ``**/`` meaning "any depth, including none"."""
-    for g in globs:
-        if fnmatch.fnmatch(posix, g) or fnmatch.fnmatch(posix, g.replace("**/", "")):
-            return True
-    return False
-
-
 def files(root: Path, cfg: Settings) -> Iterator[Path]:
     """The documentation files, in one order on every platform."""
     for path in sorted(root.rglob("*"), key=lambda p: p.relative_to(root).as_posix()):
         if not path.is_file():
             continue
-        rel = path.relative_to(root)
-        parts = rel.parts
-        if any(p in SKIP_DIRS for p in parts[:-1]):
-            continue
-        posix = rel.as_posix()
-        if cfg.include:
-            if not _matches(posix, cfg.include):
-                continue
-        elif path.suffix.lower() not in DOC_SUFFIXES:
-            continue
-        if _matches(posix, cfg.exclude):
-            continue
-        if path.stem.lower().startswith(SKIP_FILES) and not cfg.include:
-            continue
-        if path.stat().st_size > MAX_BYTES:
-            continue
-        yield path
+        posix = path.relative_to(root).as_posix()
+        why = client.project_skip(
+            posix, path.stat().st_size, include=cfg.include, exclude=cfg.exclude
+        )
+        if why is None:
+            yield path
 
 
 def items(root: Path, cfg: Settings) -> Iterator[Item]:

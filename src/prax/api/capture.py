@@ -48,6 +48,50 @@ def ingest(req: IngestText, request: Request) -> dict[str, Any]:
     return {**result, "url": ui_url(request, int(result["doc_id"]))}
 
 
+class ProjectSync(BaseModel):
+    """``prax.client.project_files``' answer and the settings beside it."""
+
+    files: list[dict[str, Any]] = []
+    remote: str | None = None
+    prefix: str = ""
+    root_name: str | None = None
+    tracked: bool | None = None
+    skipped: dict[str, Any] = {}
+    name: str | None = None
+    domains: list[str] | None = None
+    tags: list[str] | None = None
+    include: list[str] | None = None
+    exclude: list[str] | None = None
+    auto_sync: bool | None = None
+    dry_run: bool = True
+
+
+@router.post("/projects/sync")
+def projects_sync(req: ProjectSync, request: Request) -> dict[str, Any]:
+    """A project's documents planned (add, refresh, unchanged, moved, skip
+    and why, gone) and, unless ``dry_run``, applied; the manifest kept in
+    prax (``prax.capture.projects``)."""
+    from prax.capture import projects
+
+    try:
+        return projects.sync(_con(request), req.model_dump())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.get("/projects")
+def projects_list(
+    request: Request, remote: str | None = None, prefix: str = ""
+) -> dict[str, Any]:
+    """Every project's manifest, or with ``remote`` the one of that working
+    copy (``project`` null when it has none): what the session-end hook
+    asks before it syncs on its own."""
+    con = _con(request)
+    if remote:
+        return {"project": store.project_at(con, remote, prefix.strip("/"))}
+    return {"projects": store.list_projects(con)}
+
+
 class RetireReq(BaseModel):
     reason: str = "retired by hand"
     duplicate_of: int | None = None

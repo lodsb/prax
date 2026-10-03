@@ -36,6 +36,7 @@ EXPECTED_TOOLS = {
     "context",
     "documents",
     "maths",
+    "sync_project",
 }
 
 
@@ -173,6 +174,26 @@ def test_ingest_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     doc = call("get", doc_id=r["doc_id"])
     assert doc["mime"] == "text/markdown" and doc["title"] == "note.md"
     assert call("search", query="granular")[0]["doc_id"] == r["doc_id"]
+
+
+def test_sync_project_plans_then_applies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One call to the door each time: a dry run's plan, then the sync."""
+    root = tmp_path / "notes"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "a.md").write_text("# A note\n\nOn filters.\n", encoding="utf-8")
+    (root / "main.c").write_text("int main;\n", encoding="utf-8")
+    assert "outside the roots" in call("sync_project", root=str(root))["error"]
+    monkeypatch.setenv("PRAX_INGEST_ROOTS", str(tmp_path))
+    args = {"root": str(root), "name": "notes"}  # call()'s own first is name
+    plan = _data(asyncio.run(mcp_server.mcp.call_tool("sync_project", args)))
+    assert plan["dry_run"] is True
+    assert [(p["path"], p["action"]) for p in plan["plan"]] == [("docs/a.md", "add")]
+    assert plan["skipped"]["not a document file"]["count"] == 1
+    done = call("sync_project", root=str(root), dry_run=False)
+    assert done["name"] == "notes" and done["counts"]["add"] == 1
+    assert call("sync_project", root=str(root))["counts"]["unchanged"] == 1
 
 
 def test_ingest_file_missing_returns_error(tmp_path: Path) -> None:

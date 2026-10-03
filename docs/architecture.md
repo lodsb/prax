@@ -382,6 +382,7 @@ carries it on the page.
 | `prax.host.schedule` | the door's clock: `resolve`, `maintain`, `backup`, `questions` and the `figures` slice at their hours (`schedule:` in prax.yaml), the jobs table as the memory | via store (reads) |
 | `prax.ml.budget` | what the paid steps may spend and what they have: the two numbers of `budget:` in `prax.yaml` against the `spend` ledger (one row per paid call, the money at the price of that moment). `allows` is what the work hand-out and the ask ask before a paid call; `note` is what every taken-in result writes | via store |
 | `prax.host.hostinfo` | what the host has left: free RAM and commit on Windows and Linux, the cards through `nvidia-smi` (`gpu`, `vram_free_mb`), this process's own footprint. No dependency, no raising: a host that cannot say has no numbers | no |
+| `prax.capture.projects` | a project's sync, the door's half of `POST /projects/sync`: each path planned (add, refresh, unchanged, moved, skip and why; a document whose path no longer comes is gone, reported and never retired), keyed by the canonical git remote and the path in the repository, applied unless a dry run; the manifest (`store.save_project`) and the page `project-<name>`, every synced document a member of it. The client half, which files of a working copy are documents, is `prax.client.project_files` | via store |
 | `prax.capture.drop` | a drop folder's rules, shared by the door's inbox scan and the worker's upload of its own folders: what is settled, what is a sidecar, what goes to `failed/`. Touches no store | no |
 | `prax.capture.inbox` | captures: uploads, pages sent with their rendered DOM, URLs fetched server-side, the drop folder scan; canonical URLs and re-capture links; HTML indexed at once, the rest left to the queue; domains from the request, the folder or the rules | via store |
 | `prax.wall.auth` | bearer token or session cookie on the HTTP door; loopback-only when unset | no |
@@ -438,6 +439,9 @@ jobs             id, name, host, pid, started_at, updated_at, finished_at, statu
                  done, total, note   (what runs and what ran)
 pages            doc_id, slug, kind (addendum | project | topic)
 page_revisions   doc_id, revision, text_hash, author (human | agent), note, created_at
+projects         name, remote (canonical git remote), prefix (the folder in the
+                 repository), settings JSON (domains, tags, include, exclude),
+                 auto_sync, created_at, synced_at, last   (a project's manifest)
 ```
 
 An entity's names are the shape SKOS gives a concept: one preferred
@@ -642,6 +646,7 @@ the audit of which repairs have earned their prevention.
 | do the model passes over new captures | run `prax work --watch` on the machine with the models, against the door (`prax.worker`); the door hands out and applies (`prax.work`) and stays the only writer |
 | name a new kind of recurring damage | a `find` (and a `repair` when it is safe) in `store.repair`, an entry in `AILMENTS`; look at what it finds in the library before giving it a repair |
 | add a command to `prax` | a handler in `prax.api` first (the contract), then a subcommand in `clients/cli/prax_cli/` that calls it and prints for a person; never a database call |
+| sync a project's documents | `prax.client.project_files` (which files: tracked, documents, not in a build or vendored folder) and `prax.capture.projects` (the plan and its application); `POST /projects/sync`, `GET /projects`, the `sync_project` MCP tool, `prax sync`, the plugin's session-end hook (`--if-auto`) |
 | take in a file, a page or a URL | `prax.capture.inbox` (`ingest_upload`, `ingest_html`, `ingest_url`, `scan`); the Inbox view, `POST /ingest/file|html|url`, the `capture_url` MCP tool, the door's own scan of the drop folder, `prax work --watch` for the pending parses |
 | send a document to the expensive model | flag it (`store.promote`, the page's "process…" dialog, the Promote view, the MCP tool); the `promote` work step (`prax work --steps promote --spend`) runs the `promote` step's model over flagged documents it has not read; the worker refuses it without `--spend`, and asks for it only when the run names the step (`prax.steps`), which is what `waiting` in `GET /promote` says |
 | add an agent tool | a store function first, a handler in `prax.api`, then the tool in `prax.mcp_server` that calls it; keep responses compact |

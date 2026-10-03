@@ -3823,6 +3823,58 @@ breach of each kind failed it).
   ones that go out (`steps.parse._capture_item`), so a capture tried and
   left alone keeps no room from the readings.
 
+## 2026-10-03, the night: syncing a project as a tool (stage AL, step 3)
+
+The first client synced a subproject's 27 documents through the CLI. It
+needed the virtual environment's path, a call out of its sandbox, and it
+took in about 90 vendored CMake files. Its notes became the shape of the
+tool.
+
+**One call, planned at the door.** An MCP tool makes one HTTP call
+(invariant 5), so the plan moved from the client to the door:
+`POST /projects/sync` takes the files and answers with the plan, each
+path `add`, `refresh`, `unchanged`, `moved` or `skip` with why, and the
+documents of the project that are `gone` (reported, never retired by a
+sync). It is a dry run unless `dry_run: false`
+(`prax.capture.projects`).
+
+**Which files is the client's.** `prax.client.project_files` lists what
+git tracks (`git ls-files`; untracked only when asked), keeps the
+document suffixes, and leaves out build and vendored folders, now with
+CMake's (`_deps/`, `CMakeFiles/`, `*-subbuild/`, `*-build/`). A dry run
+sends no text. The rule lives in `prax.client` because the proxy may
+import nothing else of prax; `prax.importers.project` and the door use
+the same one (`project_skip`).
+
+**Keys.** A document is keyed by the canonical git remote and its path
+in the repository (`github.com/a/b:docs/x.md`; `canonical_remote` folds
+`git@host:a/b.git`, `https://user:secret@host/a/b` and the rest into
+one, and no secret leaves the machine). A checkout in another folder or
+on another machine finds the same documents, and a subdirectory is a
+project of its own. A document the old importer wrote (`<name>/<path>`)
+is adopted under the new key.
+
+**The manifest in prax** (`projects`, migration 38): the name, the
+remote and folder (one project a working copy), the settings, and
+`auto_sync`. The session-end hook runs `prax sync --if-auto`, which asks
+the manifest; nothing in the repository switches it on for a colleague.
+An older `.prax-project` still counts and still names the archive
+choices.
+
+**The page.** The first sync makes `project-<name>` and links every
+synced document to it (`part_of`), without the promote flag a paper
+added by a person gets, so dozens of notes do not queue for the paid
+pass. The summary on it is the agent's to write.
+
+Surfaces: the `sync_project` MCP tool, `prax sync [ROOT] [--apply]
+[--auto]`, `GET /projects`, the plugin's `/prax:sync`, the scope and
+remember commands (the project's name comes from a dry run now). The
+route takes the administrator's token only: its plan names document ids
+a named token might not be allowed to see. Tested on invented
+repositories (`tests/test_project_files.py`, `tests/test_projects.py`,
+the MCP and CLI tests); the client's own project is the acceptance set,
+on Monday.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each
