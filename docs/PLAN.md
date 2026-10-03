@@ -71,7 +71,7 @@ and pushing what is committed.
   time per page on a few books, against the night of 2026-10-02 (10.3 GB
   for its OCR server). The 35B's prompt-cache share in its metrics says
   whether 2048 MiB is right.
-- **Two tray icons** run on the desktop (one from the autostart, one
+- [x] (2026-10-03: `tray.claim` keeps `run/tray.pid`; a second tray on the same data directory is refused while the first lives, a dead one's file taken over) **Two tray icons** run on the desktop (one from the autostart, one
   started by hand, most likely): quit one. If it happens again, the tray
   should refuse a second copy on the same data directory.
 - [x] (2026-10-03: not the paused worker: the ask's demand was recorded, but the `ask` step named the 35B's entry while `run:` served the 27B's, so it matched no role; `work.role_of_step` now also matches a model at the served address) **An ask wakes an idled model with the worker paused** (2026-10-03,

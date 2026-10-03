@@ -147,5 +147,26 @@ def test_a_signal_or_a_failed_supervisor_ends_the_tray(
     assert t2.stopping.is_set() and calls == ["stop"]
 
 
+def test_one_tray_a_data_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A second tray on the same data directory is refused while the
+    first lives; a dead one's file is taken over, and the file goes with
+    the tray that wrote it."""
+    tray.claim(tmp_path)
+    path = tray.up.run_dir(tmp_path) / tray.PIDFILE
+    assert path.read_text(encoding="utf-8").split()[0] == str(tray.os.getpid())
+    path.write_text("4242\n", encoding="utf-8")  # another tray, alive
+    monkeypatch.setattr(tray.up, "_alive", lambda pid: True)
+    with pytest.raises(tray.up.UpError, match="4242"):
+        tray.claim(tmp_path)
+    tray.release(tmp_path)  # not ours: left alone
+    assert path.exists()
+    monkeypatch.setattr(tray.up, "_alive", lambda pid: False)  # it died
+    tray.claim(tmp_path)
+    tray.release(tmp_path)
+    assert not path.exists()
+
+
 def test_the_icon_ships_with_the_package() -> None:
     assert tray.ICON.is_file() and tray.ICON.stat().st_size > 500

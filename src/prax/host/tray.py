@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import os
 import signal
 import subprocess
 import sys
@@ -39,6 +40,30 @@ log = logging.getLogger("prax.tray")
 
 ICON = Path(__file__).resolve().parents[1] / "ui" / "prax-tray.png"
 POLL = 2.0  # seconds between reads of the status file
+PIDFILE = "tray.pid"  # beside the supervisor's, under <data dir>/run/
+
+
+def claim(data_dir: Path) -> None:
+    """This process is the data directory's tray, or ``UpError`` names the
+    one that is: two icons on one desktop say the same thing twice, and
+    the second one went unnoticed for days (2026-10-03). A stale file is
+    taken over."""
+    path = up.run_dir(data_dir) / PIDFILE
+    pid = 0
+    with contextlib.suppress(OSError, ValueError, IndexError):
+        pid = int(path.read_text(encoding="utf-8").split()[0])
+    if pid and pid != os.getpid() and up._alive(pid):
+        raise up.UpError(f"a tray for {data_dir} is already running (pid {pid})")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"{os.getpid()}\n", encoding="utf-8")
+
+
+def release(data_dir: Path) -> None:
+    """The tray's file goes with it, when it is still this process's."""
+    path = up.run_dir(data_dir) / PIDFILE
+    with contextlib.suppress(OSError, ValueError, IndexError):
+        if int(path.read_text(encoding="utf-8").split()[0]) == os.getpid():
+            path.unlink()
 
 
 def door_url() -> str:
@@ -235,6 +260,13 @@ class Tray:
             self.stopping.wait(POLL)
 
     def run(self) -> int:
+        claim(self.data_dir)
+        try:
+            return self._run()
+        finally:
+            release(self.data_dir)
+
+    def _run(self) -> int:
         if self.supervise:
             roles = up.roles()
             if up.running_pid(self.data_dir) is not None:
