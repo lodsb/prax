@@ -3820,6 +3820,57 @@ shown before and 9 after; for one author, 4 and 8. `ask` was not
 re-run for it: the change reaches an answer only through a walk on such
 an entity, and a run's spread (3 to 7 questions) is larger than that.
 
+## 2026-10-03: Qwen 3.8's dense 27B, and an uncensored build of it (stage AK)
+
+What Qwen released after 3.6: Qwen 3.8 (mid-August), whose open models
+are a dense 27B and a 2.4T-A95B; a 35B-A3B is only registered in a
+ModelScope commit, not released. The files, downloaded with the user's
+word: unsloth's `Qwen3.8-27B-UD-Q4_K_S.gguf` (15.4 GB, sha256
+`75bc9c8adba2842e72f0ab5201aaa07133c5010b566305c09187fcbdcd364017`) and
+huihui-ai's `Huihui-Qwen3.8-27B-abliterated-UD-DW-Q4_K_S.gguf` (15.6 GB,
+sha256 `f10c26c7d07b056bccc60e09ec427a0861a7df554519e97ffd115f5f45900176`),
+abliterated from unsloth's files, so the two differ by the ablation
+alone. No projector: every measure is text. llama.cpp b10900 runs both.
+
+Each was served by `prax up` in turn (`server-27b`, `server-27b-u` in
+prax.yaml, `run: llama-server` pointed at it), the worker paused, so no
+pass wrote with a model under test. The 35B ran the same sets the same
+afternoon with today's code.
+
+| | 35B-A3B (3.6) | 27B (3.8) | 27B abliterated |
+|---|---|---|---|
+| writing, tok/s | 149 | 50 | 50 |
+| reading a 2,300-token prompt, tok/s | 2,200 | 2,450 | 2,400 |
+| card in use (with the display) | 22.1 GB | 16.9 GB | 17.1 GB |
+| extraction, 14 documents: seconds | 141 | 422 | 440 |
+| triples / valid against the ontology | 188 / 141 | 240 / 225 | 255 / 223 |
+| overlap with the live edges (196) | 74 | 74 | 79 |
+| maths, right of 10: tools on, grounded | 5 | 9 | 10 |
+| tools on, open | 7 | 10 | 9 |
+| tools off, grounded | 4 | 6 | 7 |
+| tools off, open | 8 | 8 | 8 |
+| maths eval, 80 asks: seconds | 1,145 | 1,935 | 2,052 |
+| personal documents, 40 × 2 tasks: declined or hedged | 0 | 0 | 0 |
+
+The maths numbers are one run each, machine-scored (`score_maths.py`);
+the 35B's five runs of 2026-10-02 averaged 7.0, 8.6, 7.0 and 7.8, so
+its 5 and 4 today are the low end of its spread, and the 27B's 9 and 10
+with the tool are past it. The 27B calls the calculator more (60 maths
+steps against 45) and writes valid triples more often (94% against
+75%), at a third of the speed. The extraction overlap is measured
+against edges the 35B mostly wrote, which favours it.
+
+The abliterated build loses nothing measurable here. It gains nothing
+either: on the owner's personal documents (`scripts/eval_refusals.py`,
+counts only) none of the three models declined or hedged a summary or
+a list of names and amounts. What the original refuses is a question of
+another kind, which the user tries by hand.
+
+Nothing switches yet. A split is what the numbers suggest: the 27B for
+`ask` and the surf, where a third of the speed costs seconds per
+answer, and the 35B for the bulk passes. Only one model fits the card
+at a time, so it needs a measurement of the swap first.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the

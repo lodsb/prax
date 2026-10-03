@@ -589,7 +589,7 @@ and pushing what is committed.
             llama.cpp, so after step 1 they share one served-model
             mechanism.
 
-- [ ] **AK. Another model: a dense Qwen 27B, and an uncensored build of
+- [ ] (2026-10-03: measured, `docs/log.md`: the 3.8 27B wins the maths with the tool and valid triples at a third of the speed; the abliterated build loses nothing; nobody declined a personal document; next: the split and its swap cost, the user's questions by hand) **AK. Another model: a dense Qwen 27B, and an uncensored build of
       it, against the 35B.** The user, 2026-10-03: "qwen 27b is deemed
       to be better at agentic workflows than 35b (probably used less
       memory) and I'd like to evaluate an uncensored version, too.
