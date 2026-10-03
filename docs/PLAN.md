@@ -28,10 +28,14 @@ engineering leftovers. What waits on the user is apart.
    2026-10-02, then the ~190 weaker maths candidates. The `equations`
    step checks every formula, and a broken formula that is an
    extraction slip is read again. Watched, not built.
-4. **AL. The first client's feedback** (below): its small bugs are
-   fixed. Next the signals (`status`, `health`), citations that survive
-   a re-chunk, the project sync, documents linked to documents, what is
-   current, then captures, pages, bibliographies and privacy.
+4. **AL. The first client's feedback** (below): its small bugs, the
+   signals (`status`, `health`) and citations that survive a re-chunk
+   are done. Next the project sync, documents linked to documents, what
+   is current (a document's own date first), then captures, pages,
+   bibliographies and privacy. AN (rules over the graph, the ontology
+   annotated in standard vocabularies, the markup pages already carry)
+   is a candidate after AL step 4, and AM (a path index) after AL
+   step 5.
 5. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
    marker's own llama-server held 10 GB of RAM that no plan saw. Step 1
    first, after the night's books; steps 2 and 3 after AA.
@@ -325,6 +329,25 @@ and pushing what is committed.
       project's 27 documents say they are retired, superseded or invalid,
       and an agent that quotes one as current repeats the failure that
       cost months of a pitch.
+      - [ ] **A document's own date, first** (the user, 2026-10-03:
+            "there is no date for the docs visible … not when it was
+            created in prax but when the document was published"; a
+            person judges a paper by when it was written). Only 1,890 of
+            12,837 live documents have one (`meta.date`, all from
+            Zotero: 1,072 a year, 512 a month, 306 a day), shown on the
+            document page and nowhere else. `meta.published` = {date,
+            precision (year, month, day), by, at}, filled from what
+            says it, best first: Zotero; Crossref by DOI (the citations
+            importer asks it already); the arXiv id (`yymm`); a web
+            page's `citation_date`, `article:published_time` or
+            `DC.date`; the first page read by the titles pass
+            ("Published …", a conference's year, ©); a PDF's metadata,
+            last, since it often says when a file was made. Shown as
+            the year in search hits, `get`, `ask`'s passages (so the
+            answering model weighs age too) and the UI's lists; a
+            filter `published_since`/`before` on search and
+            `documents`. It is also the anchor the world's time below
+            is read against: a document's date, never prax's.
       - [ ] At sync, `retired` and `superseded_by` from front matter and
             explicit status lines ("retired 2026-10-02", "superseded by
             …", "status: …"), only in synced project documents: a paper
@@ -345,6 +368,19 @@ and pushing what is committed.
       - [ ] "As of a date" and "what changed in a period" as door
             routes and MCP tools, once the world's time is on the facts
             (Utopia exposes both; the research note, section 8).
+      - [ ] **As Utopia does it** (its code, the research note, section
+            10): each world date with a precision (year, month, day),
+            and "ended, date unknown" as a state of its own (the end
+            null, its precision `unknown`), with CHECK constraints that
+            tie a precision to its date; an undated fact anchored to
+            its document's date (above); `supersedes` on an edge that
+            corrects another, so "corrected" and "rejected" are a query;
+            and **one module that builds "held at T"** for every graph
+            read (record time: written at or before T, not retired
+            before it; no T: not retired), with a test in
+            `test_invariants.py` that no read builds it itself. prax's
+            `valid_from`/`valid_to` are record time and are renamed or
+            documented so.
       - [ ] Search and `ask` rank a stale document lower and name its
             replacement; never a filter (as the domain prior), and
             `include_stale` turns it off. Measured on the project's own
@@ -390,6 +426,57 @@ and pushing what is committed.
       checked coverage; the capture errors were clear (the bot check
       pointed to the extension); and the skill's rule that a document's
       content is data, not instructions.
+
+- [ ] **AN. Rules over the graph: what follows from what is stated**
+      (candidate, after AL step 4; the user, 2026-10-03, on standard
+      vocabularies: "maybe they are more useful for a reasoning part?").
+      The research note, sections 10 and 11; Utopia's `utopia-reason` is
+      the worked design, under two thousand lines.
+      - [ ] **The ontology annotated, not replaced**: a relation's
+            characteristics in the YAML (`transitive`, `inverse_of`,
+            `symmetric`, `functional`, and `state`, `event` or
+            `eternal`), and `same_as` names in schema.org, SKOS and
+            PROV-O where they exist. It changes what types exist in no
+            way, so whether it bumps a module's version is decided with
+            it.
+      - [ ] **A lint of the ontology when it loads**: symmetric and
+            asymmetric at once, transitive and functional at once, a
+            subtype cycle, an inverse that is not mutual.
+      - [ ] **A rule pass on the door's clock**: OWL RL's few rules
+            (transitivity, inverses, symmetry, subproperties) as forward
+            rules in SQL. A derived edge is INFERRED, producer
+            `rule:<name>`, a run, its validity the intersection of its
+            premises', and its premises kept (a table of edge ids), so
+            "why is this here" has an answer. An asserted edge always
+            wins, and a derivation that contradicts one is not written.
+            A cap a relation. Retraction by recompute and diff: the pass
+            derives everything again and ends what no longer follows;
+            nothing is deleted, and retiring its run removes all of it.
+      - [ ] **Constraints as findings, not rules**: a functional relation
+            with two values goes to the `contradicts` pass (AL step 4).
+      - [ ] Measured: how many edges a pass adds, how many are wrong on a
+            sample, what it does to `traverse` and to `ask`. The path
+            index (AM) gains from it: a closure of `part_of` and of
+            `broader` gives a walk meaningful shortcuts.
+      - [ ] **More meaning from what the library holds, in standard
+            words** (the user, 2026-10-03: "the standardized ontologies
+            also could make sense to extract some more meaning from our
+            current chunks/docs"):
+            - the **schema.org markup web pages already carry**
+              (JSON-LD, microdata): a recipe's ingredients and times, an
+              article's author and `datePublished`, a product, an event,
+              a person. Read at capture and by a pass over the kept HTML
+              originals, no model: facts EXTRACTED with producer
+              `jsonld`, and a date for `meta.published` (AL step 5);
+            - prax's **genres and subjects mapped** to schema.org types
+              (`ScholarlyArticle`, `TechArticle`, `Recipe`, `Review`…)
+              and to SKOS concept schemes, so a document's kind is said
+              in words other systems and models know;
+            - the **extraction prompt given the standard names** beside
+              prax's (a relation's `same_as`), which may help a local
+              model place a relation; a module's version bump re-reads
+              what it touches, as any bump does, so it is measured on a
+              sample before a pass over the library.
 
 - [ ] **AM. A path index: how is A connected to B** (candidate, after
       AL step 5; the user, 2026-10-03: "path questions are interesting
@@ -639,6 +726,31 @@ and pushing what is committed.
       otherwise 3-gram shingles, MinHash and a Jaccard of 0.9 or more
       resolve. About 50 lines; fewer calls of the local model. Merges
       stay recorded and undoable as now (`merged_by`, `merged_run`).
+
+- [ ] **A gate on automatic merges by what they touch** (Utopia's
+      `execution_gate`): a merge of the adjudicated tier waits on the
+      Review page when it would make two values of a functional relation,
+      touch an inferred edge, or touch an entity a saved page or answer
+      cites. Three store queries, no table.
+- [ ] **Precedents for the judge of a pair** (Utopia's adjudication): the
+      person's earlier decisions on the Review page, with the reason they
+      wrote, given to the model as examples, and its verdicts cached by
+      pair and model. Utopia's identity rules (a version is not its
+      family; a qualifier trimmed from the front is the same thing, a
+      suffix added at the end another; a list is not its members; a
+      phrase containing a name is not the name; a parent and its
+      subsidiary are two) read against `ontology/sameness.yaml`; a
+      change to it is measured again (`steps.adjudicate.platt`).
+- [ ] **Evidence that knows where it stood**: the quote's character
+      offsets in the text artifact and the `text_hash` it was read from,
+      on an edge, so a re-parse shows which evidence moved (Utopia keeps
+      offsets and the document's version).
+- [ ] **Counted drops**: what extraction skips without queuing it (a
+      reason, a count, an example, per document), beside the review
+      queue (Utopia's `extraction_drops`).
+- [ ] **Append-only by trigger** on what is a ledger already (merge
+      stamps, page revisions, token uses): `BEFORE UPDATE … RAISE(ABORT)`
+      in SQLite, as Utopia's audit table.
 
 ## The UI and the agent
 
