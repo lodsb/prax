@@ -396,9 +396,11 @@ and pushing what is committed.
             corrects another, so "corrected" and "rejected" are a query;
             and **one module that builds "held at T"** for every graph
             (2026-10-03: `store.held_at` is that module and the walk
-            uses it; 92 places in the store's graph part still write `valid_to IS
-            NULL` themselves, and moving them behind it with the test is
-            the follow-up)
+            uses it; `test_a_moment_in_record_time_is_built_in_one_place`
+            holds every `as_of` read to it and the past-moment form to
+            `edges.py`. The 48 live-edge conditions of the graph part
+            and 23 elsewhere in the store stay as written: they mean
+            "now", and rewriting them would change nothing)
             read (record time: written at or before T, not retired
             before it; no T: not retired), with a test in
             `test_invariants.py` that no read builds it itself. prax's

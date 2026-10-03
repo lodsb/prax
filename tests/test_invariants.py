@@ -401,3 +401,43 @@ def test_no_source_file_holds_a_control_character() -> None:
         if f.is_file() and any(c < 32 and c not in allowed for c in f.read_bytes()):
             wrong.append(path)
     assert wrong == []
+
+
+def test_a_moment_in_record_time_is_built_in_one_place() -> None:
+    """Invariant 8's record time: "the edges prax held at T" is
+    ``store.held_at``, and nothing else writes it. A store read that takes
+    ``as_of`` either calls ``held_at`` or hands ``as_of`` on to one that
+    does; and the past-moment form (``valid_from <=`` beside
+    ``valid_to >``) appears in no other module, so two reads cannot mean
+    two different things by "as of". The plain live-edge condition
+    (``valid_to IS NULL``, "now") stays where each read writes it."""
+    home = SRC / "store" / "graph" / "edges.py"
+    past = re.compile(r"valid_from\s*<=", re.IGNORECASE)
+    guilty: list[str] = []
+    for path in sorted(SRC.rglob("*.py")):
+        if path == home:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            if past.search(line):
+                guilty.append(f"{path.relative_to(SRC)}:{i} writes a past moment")
+        if "store" not in path.parts:
+            continue
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            names = [a.arg for a in node.args.args + node.args.kwonlyargs]
+            if "as_of" not in names:
+                continue
+            calls = [c for c in ast.walk(node) if isinstance(c, ast.Call)]
+            built = any(
+                getattr(c.func, "id", getattr(c.func, "attr", None)) == "held_at"
+                for c in calls
+            )
+            passed = any(k.arg == "as_of" for c in calls for k in c.keywords)
+            if not (built or passed):
+                guilty.append(
+                    f"{path.relative_to(SRC)}:{node.lineno} {node.name} takes"
+                    " as_of without held_at"
+                )
+    assert not guilty, "; ".join(guilty)

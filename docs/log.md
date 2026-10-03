@@ -3781,9 +3781,17 @@ builds "the edges prax held at T": written at or before T and not ended
 before it. A date stands for the last moment of its span, so "as of
 2026-09" means the end of September. The walk uses it, and
 `/traverse?as_of=` and the MCP tool expose it. A walk as of an earlier
-day still follows today's entity merges. The 92 other places in the store's graph part that
-write `valid_to IS NULL` themselves move behind the helper later, with
-an invariant test that none builds it alone.
+day still follows today's entity merges.
+
+Later the same day, the follow-up: the "92 other places" counted the
+`__pycache__` files too. The source holds 48 live-edge conditions in the
+graph part of the store and 23 elsewhere in it, and each means "now",
+which `held_at` without a moment writes the same way. So they stay as
+written. What the test holds instead is the risk: every store read that
+takes `as_of` builds it through `held_at` (or hands it on to one that
+does), and no module but `edges.py` writes the past-moment form
+(`test_a_moment_in_record_time_is_built_in_one_place`; a planted
+breach of each kind failed it).
 
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
