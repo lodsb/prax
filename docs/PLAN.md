@@ -321,6 +321,19 @@ and pushing what is committed.
             explicit status lines ("retired 2026-10-02", "superseded by
             …", "status: …"), only in synced project documents: a paper
             saying "superseded by" is about others' work.
+      - [ ] **The world's time beside prax's.** Invariant 8 calls the
+            edges bi-temporal, but `valid_from` is set when `store.link`
+            writes an edge and `valid_to` when it is retired: both are
+            when prax held the fact (transaction time), with
+            `ingested_at` beside them. Nothing records when a fact holds
+            in the world by its source (valid time), and "retired
+            2026-10-02" or "superseded by …" in a document is that. Two
+            nullable columns on edges (a migration), filled only where a
+            source states a date, and the same on a document's
+            lifecycle (`meta`); today's columns documented as what they
+            are, and invariant 8's wording in CLAUDE.md corrected with
+            it (found 2026-10-03, talking about prax as an agent's
+            memory).
       - [ ] Search and `ask` rank a stale document lower and name its
             replacement; never a filter (as the domain prior), and
             `include_stale` turns it off. Measured on the project's own
