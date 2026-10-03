@@ -775,19 +775,20 @@ def doctor(door: Door, a: Any) -> int:
         from prax.host import hostinfo
 
         mem = hostinfo.memory()
-        if mem.get("ram_total_mb"):
-            tight = (mem.get("commit_free_mb") or 0) < 4096
+        total = mem.get("ram_total_mb")
+        if total:
+            # a figure the host could not read is None: said as unknown, not
+            # divided (a TypeError that took `prax status` down with it)
+            free = mem.get("ram_free_mb")
+            commit = mem.get("commit_free_mb")
+            tight = (commit or 0) < 4096
+            free_text = f"{free / 1024:.1f}" if free is not None else "?"
             rows.append(
                 (
                     not tight,
                     "this machine",
-                    f"{mem['ram_free_mb'] / 1024:.1f} of"
-                    + f" {mem['ram_total_mb'] / 1024:.1f} GB RAM free"
-                    + (
-                        f" · commit headroom {mem['commit_free_mb'] / 1024:.1f} GB"
-                        if mem.get("commit_free_mb")
-                        else ""
-                    ),
+                    f"{free_text} of {total / 1024:.1f} GB RAM free"
+                    + (f" · commit headroom {commit / 1024:.1f} GB" if commit else ""),
                 )
             )
     except Exception:  # noqa: BLE001, S110 - a missing number is not a finding

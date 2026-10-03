@@ -142,6 +142,25 @@ def test_jobs_inbox_pages_and_doctor_run(
         assert expected in capsys.readouterr().out
 
 
+def test_doctor_says_an_unread_figure_rather_than_failing(
+    door: TestClient,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A host that cannot read its free RAM says so; `prax doctor` divided
+    None by 1024 and failed with a TypeError (found by strict mypy over
+    the CLI, 2026-10-03)."""
+    from prax.host import hostinfo
+
+    monkeypatch.setattr(
+        hostinfo,
+        "memory",
+        lambda: {"ram_total_mb": 32768, "ram_free_mb": None, "commit_free_mb": None},
+    )
+    assert run("doctor") == 0
+    assert "? of 32.0 GB RAM free" in capsys.readouterr().out
+
+
 def test_graph_keeps_self_edges_out_of_the_way(
     door: TestClient, capsys: pytest.CaptureFixture[str]
 ) -> None:

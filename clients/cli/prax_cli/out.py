@@ -21,7 +21,7 @@ def _colour_ready() -> bool:
         try:
             import ctypes
 
-            kernel32: Any = ctypes.windll.kernel32  # type: ignore[attr-defined]
+            kernel32: Any = ctypes.windll.kernel32  # type: ignore[attr-defined, unused-ignore]
             handle = kernel32.GetStdHandle(-11)
             mode = ctypes.c_uint32()
             if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):

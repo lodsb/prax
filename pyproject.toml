@@ -63,7 +63,9 @@ pythonpath = ["src", "clients/cli"]
 # library's value is returned. The optional extras (usearch, onnxruntime,
 # docling, pymupdf…) ship no types, so their imports are taken as they
 # are, and calls into pymupdf and striprtf as untyped.
-files = ["src/prax"]
+files = ["src/prax", "clients/cli/prax_cli"]
+# the CLI is checked against the package it calls (2026-10-03), not as Any
+mypy_path = ["src", "clients/cli"]
 # a pack's own tests are tests, checked as little as those in tests/
 exclude = ["src/prax/packs/[^/]+/tests/"]
 ignore_missing_imports = true

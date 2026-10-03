@@ -203,7 +203,8 @@ def _upload(door: Door, path: Path, a: Any) -> dict[str, Any]:
         fields["title"] = a.title
     if a.domain:
         fields["domains"] = ",".join(a.domain)
-    return door.upload(path, fields)
+    got: dict[str, Any] = door.upload(path, fields)
+    return got
 
 
 def _files_of(folder: Path, recursive: bool) -> list[Path]:

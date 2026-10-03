@@ -77,9 +77,11 @@ and pushing what is committed.
 - **Before AK's download**: see what Qwen has released since 3.6 (a page
   names a "Qwen 3.8" lineup, not checked), then fetch with the user's
   word, from a known quantizer, names and hashes in the log.
-- **The CLI client under strict mypy**: `clients/cli` has 7 errors under
-  the package's flags (2026-10-03). CI does not check `clients/`; adding
-  it to `files` is the user's call.
+- [x] (2026-10-03, the user said yes) **The CLI client under strict
+  mypy**: `clients/cli` is in `files`, checked against the package's own
+  source (`mypy_path`), so its calls are no longer `Any`. One of its
+  errors was a real crash: `prax doctor` divided an unread memory figure
+  (None) by 1024.
 - **Push** what is committed; CI on GitHub has not seen 2026-10-02 and
   -03.
 

@@ -23,7 +23,7 @@ def _since(stamp: str | None) -> str:
     return out.when(stamp, "%m-%d %H:%M") if stamp else ""
 
 
-def _groups_lines(state: dict) -> list[str]:
+def _groups_lines(state: dict[str, Any]) -> list[str]:
     """One line per group whose resource is on loan."""
     out_lines = []
     for name, g in (state.get("groups") or {}).items():
