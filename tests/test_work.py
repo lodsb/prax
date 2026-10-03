@@ -1124,6 +1124,49 @@ def test_the_hand_out_sees_the_whole_reading_queue_oldest_first(
     assert len(listed) == 50 and set(newer) <= {r["doc_id"] for r in listed}
 
 
+def test_a_capture_is_not_starved_by_a_queue_of_readings(
+    client: TestClient,
+) -> None:
+    """3,625 figure readings were asked for at once (2026-10-03): with the
+    readings first and the captures in what was left, every batch was
+    full of readings and a page sent from the browser would have waited
+    ten days. Waiting captures keep up to half of each batch."""
+    con = client.app.state.con
+    for i in range(30):
+        pdf = store.register(
+            con, b"%PDF-1.4 r" + str(i).encode(), mime="application/pdf", title=f"r{i}"
+        )["doc_id"]
+        store.index_text(con, pdf, f"old text {i} " * 40, text_source="pymupdf4llm/1")
+        client.post(f"/doc/{pdf}/reading", json={"extractor": "marker"})
+    capture = store.register(
+        con,
+        b"%PDF-1.4 a capture",
+        mime="application/pdf",
+        title="sent from the browser",
+        meta={"source": "capture"},
+    )["doc_id"]
+    items = client.get("/work/parse").json()["items"]
+    handed = [i["doc_id"] for i in items]
+    assert capture in handed
+    assert len(handed) > 1 and handed.count(capture) == 1  # readings still go out
+    work._leases.clear()
+    # a capture no parser takes keeps no room: the readings fill the batch
+    con.execute(
+        "UPDATE documents SET meta = json_set(meta, '$.retired', 1) WHERE id = ?",
+        (capture,),
+    )
+    con.commit()
+    store.register(
+        con,
+        b"no parser reads this",
+        mime="application/x-nothing",
+        title="unreadable",
+        meta={"source": "capture"},
+    )
+    full = client.get("/work/parse").json()["items"]
+    assert len(full) == len(handed) and all(i["extractor"] == "marker" for i in full)
+
+
 def test_an_extraction_whose_server_is_down_is_not_a_failure_of_the_document(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

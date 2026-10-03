@@ -3815,6 +3815,13 @@ breach of each kind failed it).
   `term_documents` beside it, so it no longer reaches up to the store.
   No behaviour changed: the suite (1,201) passed unchanged but for the
   knobs' address, and the order test caught a planted backward import.
+- **A capture is not starved by a queue of readings.** The figure
+  backlog (3,625 documents, about 15 an hour) filled every parse batch,
+  because the hand-out gave the readings the batch and the captures what
+  was left: a page sent from the browser would have waited ten days.
+  Waiting captures now keep up to half of each batch, counted by the
+  ones that go out (`steps.parse._capture_item`), so a capture tried and
+  left alone keeps no room from the readings.
 
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the

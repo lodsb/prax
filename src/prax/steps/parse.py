@@ -74,13 +74,60 @@ def _file_name(path: str | None) -> str | None:
     return path.replace("\\", "/").rsplit("/", 1)[-1] if path else None
 
 
+def _capture_item(h: HandOut, doc_id: int) -> dict[str, Any] | None:
+    """A document to parse as an item of the batch, or None when it is not
+    to go out now: leased, out of the worker's scope, gone, with no parser
+    (a picture is asked of the vision model instead), or one whose chain
+    already ran and found nothing."""
+    from prax import parsers
+
+    if not h.free(doc_id) or not leases.in_scope(h.con, doc_id, h.scope):
+        return None
+    doc = store.get_document(h.con, doc_id, max_chars=0)
+    if doc is None:
+        return None
+    named = doc["meta"].get("parser")  # a document may name its parser
+    exts = parsers.candidates(doc["mime"] or "", named)
+    if not exts:
+        # an image has no parser of its own: the vision model reads it, as
+        # a reading the door asks for when that is free
+        if mimes.is_picture(doc["mime"]) and vision_is_free():
+            ask_reading(h.con, doc_id, "vision")
+        return None
+    if any(queue.seen(doc["meta"], e.stamp) for e in exts):
+        # the chain was run and found nothing (a scan without a text
+        # layer): a reading asked for on its page (OCR, the vision model)
+        # is the way on, not another round
+        return None
+    return {
+        "doc_id": doc_id,
+        "mime": doc["mime"],
+        "filename": _file_name(doc.get("original_path")),
+        "original": f"/doc/{doc_id}/original",
+        "old_len": doc["text_len"],
+        **({"extractor": named} if named else {}),
+    }
+
+
 class Parse(Step):
     name = "parse"
 
     def hand_out(self, h: HandOut) -> dict[str, Any]:
-        from prax import parsers
-
         items: list[dict[str, Any]] = []
+        # waiting captures keep up to half of a batch, counted by the ones
+        # that go out (a capture tried and left alone keeps no room): a
+        # capture is a person's page, parsed in seconds, and thousands of
+        # readings asked for at once would otherwise fill every batch for
+        # days (3,625 figure readings, 2026-10-03)
+        waiting = list(inbox.pending_captures(h.con))
+        fresh: list[dict[str, Any]] = []
+        for doc_id in waiting:
+            if len(fresh) >= max(1, h.limit // 2):
+                break
+            got = _capture_item(h, doc_id)
+            if got is not None:
+                fresh.append(got)
+        taken = {i["doc_id"] for i in fresh}
         # requested readings first: a person asked, whatever the scope; the
         # whole queue, oldest first — the status view's newest fifty hid
         # the 228 marker requests behind the follow-ups placed after them
@@ -96,7 +143,9 @@ class Parse(Step):
         now = time.monotonic()
         for req in requests:
             doc_id = req["doc_id"]
-            if len(items) >= h.limit or not h.free(doc_id):
+            if len(items) >= h.limit - len(fresh) or not h.free(doc_id):
+                continue
+            if doc_id in taken:
                 continue
             if leases.reading_deferred(req["extractor"], doc_id, now):
                 continue  # its server is not there; the document's others go on
@@ -132,44 +181,21 @@ class Parse(Step):
                 item["previous"] = held["text"] if held else None
             items.append(item)
             offered.add(doc_id)
-        waiting = list(inbox.pending_captures(h.con))
+        items += fresh
+        # what room is left: the other captures, and in the backlog pass
+        # the documents read by an extractor prax has revised since
+        rest = [i for i in waiting if i not in taken]
         if h.scope == "all":
-            # the backlog pass also brings texts up to date: documents read
-            # by an extractor prax has revised since, a few per pass
-            waiting += [
-                i for i in queue.stale(h.con, limit=h.limit) if i not in waiting
-            ]
-        for doc_id in waiting:
-            if len(items) >= h.limit or not h.free(doc_id):
+            rest += [i for i in queue.stale(h.con, limit=h.limit) if i not in rest]
+        for doc_id in rest:
+            if len(items) >= h.limit:
+                break
+            if doc_id in offered or doc_id in taken:
                 continue
-            if not leases.in_scope(h.con, doc_id, h.scope):
-                continue
-            doc = store.get_document(h.con, doc_id, max_chars=0)
-            if doc is None:
-                continue
-            named = doc["meta"].get("parser")  # a document may name its parser
-            exts = parsers.candidates(doc["mime"] or "", named)
-            if not exts:
-                # an image has no parser of its own: the vision model reads
-                # it, as a reading the door asks for when that is free
-                if mimes.is_picture(doc["mime"]) and vision_is_free():
-                    ask_reading(h.con, doc_id, "vision")
-                continue
-            if any(queue.seen(doc["meta"], e.stamp) for e in exts):
-                # the chain was run and found nothing (a scan without a
-                # text layer): a reading asked for on its page (OCR, the
-                # vision model) is the way on, not another round
-                continue
-            items.append(
-                {
-                    "doc_id": doc_id,
-                    "mime": doc["mime"],
-                    "filename": _file_name(doc.get("original_path")),
-                    "original": f"/doc/{doc_id}/original",
-                    "old_len": doc["text_len"],
-                    **({"extractor": named} if named else {}),
-                }
-            )
+            got = _capture_item(h, doc_id)
+            if got is not None:
+                items.append(got)
+                taken.add(doc_id)
         h.lease([i["doc_id"] for i in items])
         return h.batch(items)
 
