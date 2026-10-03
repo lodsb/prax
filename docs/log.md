@@ -3785,6 +3785,16 @@ day still follows today's entity merges. The 92 other places in the store's grap
 write `valid_to IS NULL` themselves move behind the helper later, with
 an invariant test that none builds it alone.
 
+The first walk as of a day on the live store took 44 s: the indexes on
+`edges(src)` and `edges(dst)` are partial (live edges only), so the
+condition `held_at` writes for a past moment scanned every edge at each
+step. Migration 37 adds full indexes on `(src, valid_from)` and
+`(dst, valid_from)`, built in 0.7 s on a copy. Two hops as of
+2026-09-20 from two entities went from 1,553 s and 275 s to 0.07 s and
+0.01 s; the walks of now did not change (0.03–0.15 s). It was a missing
+index, not a sign for the path index of stage AM, which must carry the
+record times all the same.
+
 ## 2026-10-03: a fact's witnesses, in the first hop's cap
 
 A fact several documents state is one edge per document. In the first
