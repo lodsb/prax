@@ -377,6 +377,28 @@ and pushing what is committed.
       pointed to the extension); and the skill's rule that a document's
       content is data, not instructions.
 
+- [ ] **AM. A path index: how is A connected to B** (candidate, after
+      AL step 5; the user, 2026-10-03: "path questions are interesting
+      though and would make sense for any agentic use/reasoning on
+      facts"). A derived file beside the database, in the vector files'
+      pattern (memory-mapped, a delta, a merge, rebuilt at will), holding
+      per entity its edges with what a path search weighs: relation,
+      confidence class, the times, the source document, the number of
+      documents behind it. Not a graph engine: a second store would break
+      invariant 1, double the wall, and Kùzu, the engine CLAUDE.md names,
+      was archived on 2025-10-10. Its search respects what no engine
+      knows: evidence per hop, a cost for hubs, preferred relations, the
+      world's time (`as_of`, hence after AL step 5), the wall. An agent
+      gets `connect(a, b, max_hops, relations, as_of)`: the two or three
+      best paths, each hop with its quote and document. First a Python
+      prototype on a copy of the store and an evaluation set (pairs with
+      a known connection and pairs with none), because a confident path
+      of weak edges is worse than none; then a store module and the
+      tool; compiled code only if speed asks, as AH's first piece. It
+      also settles the decision threshold for slow walks (an index for
+      the walk's query first, then this). The design is in the private
+      research note, section 9.
+
 - [ ] **AJ. Readers under prax's hand: every model process a role, the
       OCR readers measured against each other.** The user, 2026-10-02:
       "should we vendor the marker/surya/ocr pipeline in a way that we can
