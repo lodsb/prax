@@ -287,7 +287,7 @@ def test_a_name_that_swallowed_its_line_drops_the_triple() -> None:
         "\tdst=AUDIO dst_type=concept(confidence=EXTRACTED evidence=Um in MASSIVE"
         "\tdst_type=concept\tconfidence=EXTRACTED\tevidence=Um in MASSIVE"
     )
-    ex = lineformat.parse("\n".join(["summary\tA manual.", good, leaked, also]))
+    ex = lineformat.parse(f"summary\tA manual.\n{good}\n{leaked}\n{also}")
     assert [t.dst for t in ex.triples] == ["Interpolation"]
     assert ex.usage["leaked_lines"] == 2
     # a name with an equals sign that is not a key stays

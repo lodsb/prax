@@ -3703,6 +3703,26 @@ its confidence, and a document it cannot date is marked tried and not
 asked again. The page shows the words on hover, and a medium date with
 a question mark. `scripts/eval_dates.py` is the measurement.
 
+## 2026-10-03, the morning: names that swallowed their line
+
+Looking for near-identical entity names (for entity resolution) turned
+up names like `interpolation concept=INFERRED evidence=There are 11
+types…` and `AUDIO dst_type=concept(confidence=EXTRACTED evidence=…`:
+903 live entities, 638 live edges from 286 documents, nearly all from the
+35B's extraction. The model wrote the rest of a triple line into a name
+field with spaces for tabs; the grammar allows anything but a tab or a
+line break in a name, then makes the line end properly, so the line
+parsed.
+
+`prax heal` already had the check (`wire-names`), and found 943; its
+repair cuts the name at the syntax and cleans it, or merges it into the
+entity that already carries the clean name. Run with `--apply`: 943 of
+943. Nothing stopped new ones, though, and the extraction backlog was
+running. `lineformat.parse` now drops a triple whose name holds a field
+key (`word=`, three letters or more) and counts it as
+`usage["leaked_lines"]`: a model that lost its place in a line is not
+trusted with the rest of it.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
