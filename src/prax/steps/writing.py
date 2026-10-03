@@ -22,6 +22,9 @@ from .base import HandOut, Log, ModelStep, TakeIn, say
 TITLE_REASONS = ("empty", "filename", "identifier", "zotero-auto", "caps")
 
 SECTIONS_BATCH = 3  # documents a batch: each is a book's worth of calls
+# one short call a document: a batch the size of a worker's other steps' (ten)
+# would date the 10,800 undated documents of 2026-10-03 in days
+DATES_BATCH = 60
 
 
 class Titles(ModelStep):
@@ -104,7 +107,10 @@ class Dates(ModelStep):
         # document (about a second), and a backlog left to the nightly pass's
         # hundred a night would take months
         return h.documents(
-            store.dates_needed(h.con, limit=h.limit * 4), build, scoped=False
+            store.dates_needed(h.con, limit=DATES_BATCH * 2),
+            build,
+            scoped=False,
+            limit=DATES_BATCH,
         )
 
     def take_in(self, t: TakeIn) -> dict[str, Any]:
