@@ -427,8 +427,13 @@ reference `docs/ask.md`.
   from the most trusted source that says it: a person, the record
   (Zotero's `meta.date`), the extension's paper, a page's citation
   tags, its schema.org markup, the arXiv id, a page's generic tags
-  (`prax.text.dates`). Written at capture and by the `published` pass of
-  `prax maintain`; a person's date is never replaced. Search hits, `get`
+  (`prax.text.dates`), and last the `dates` step: a model reads the
+  first page and answers with the date and the words that state it,
+  kept only when those words are on the page and hold the year
+  (`writing.dates.checked`), with the words and a confidence. Written at
+  capture, by the `published` pass of `prax maintain` and by that step;
+  a source never replaces a more trusted one, and a person's date is
+  never replaced. Search hits, `get`
   and `ask`'s passages show it, and search and `documents` filter by it;
   an undated document is left out of a filtered search. It says when the
   document appeared, not when a fact in it holds (AL step 5 of the plan).

@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 CORE_STEPS = (
     "parse",
     "titles",
+    "dates",
     "summaries",
     "vocabulary",
     "sections",
@@ -44,6 +45,8 @@ STEPS = CORE_STEPS + tuple(_packs.step_homes())
 WATCHED_STEPS = (
     "parse",
     "titles",
+    # when a document was published, read from its first page (2026-10-03)
+    "dates",
     "summaries",
     "vocabulary",
     "communities",
@@ -82,6 +85,7 @@ READING_STEPS = {
 _HOMES = {
     "parse": "parse",
     "titles": "writing",
+    "dates": "writing",
     "summaries": "writing",
     "sections": "writing",
     "communities": "writing",

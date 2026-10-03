@@ -135,7 +135,16 @@ def set_meta(
 # ``meta.date``); what the extension found on a paper's page
 # (``meta.paper.date``); a page's citation tags; its schema.org markup; the
 # arXiv id; a page's generic article and Dublin Core tags
-PUBLISHED_BY = ("human", "record", "paper", "citation", "jsonld", "arxiv", "generic")
+PUBLISHED_BY = (
+    "human",
+    "record",
+    "paper",
+    "citation",
+    "jsonld",
+    "arxiv",
+    "generic",
+    "first-page",  # read from the first page by a model (the ``dates`` step)
+)
 
 
 def published_of(
@@ -158,7 +167,7 @@ def published_of(
         "generic": page.get("generic"),
     }
     for by in PUBLISHED_BY[1:]:
-        got = found[by]
+        got = found.get(by)  # the model's date comes by its own step, not here
         if got:
             return {"date": got[0], "precision": got[1], "by": by}
     return None
@@ -166,19 +175,67 @@ def published_of(
 
 @_serialized
 def set_published(
-    con: sqlite3.Connection, doc_id: int, date: str, *, by: str = "human"
+    con: sqlite3.Connection,
+    doc_id: int,
+    date: str,
+    *,
+    by: str = "human",
+    words: str | None = None,
+    confidence: str | None = None,
+    run: str | None = None,
 ) -> dict[str, str]:
     """A date a person or a source gives a document (``meta.published``).
     The date is read as ``dates.parse`` reads it; one that is not a date
-    is refused (ValueError)."""
+    is refused (ValueError). ``words`` are the text that states it, and
+    ``confidence`` how plainly (the ``dates`` step's). A source never
+    replaces a more trusted one (``PUBLISHED_BY``); a person replaces any."""
     got = dates.parse(date)
     if got is None:
         raise ValueError(f"not a date: {date!r}")
     meta = get_meta(con, doc_id)
-    meta["published"] = {"date": got[0], "precision": got[1], "by": by, "at": now()}
+    held = meta.get("published") or {}
+    rank = PUBLISHED_BY.index(by) if by in PUBLISHED_BY else len(PUBLISHED_BY)
+    if held and by != "human":
+        old = held.get("by")
+        if old in PUBLISHED_BY and PUBLISHED_BY.index(old) < rank:
+            return dict(held)  # a more trusted source said it already
+    entry: dict[str, str] = {"date": got[0], "precision": got[1], "by": by, "at": now()}
+    for key, value in (("words", words), ("confidence", confidence), ("run", run)):
+        if value:
+            entry[key] = str(value)
+    meta["published"] = entry
+    meta.pop("published_tried", None)
     _put_meta(con, doc_id, meta)
     con.commit()
-    return dict(meta["published"])
+    return dict(entry)
+
+
+@_serialized
+def published_tried(con: sqlite3.Connection, doc_id: int, run: str) -> None:
+    """The ``dates`` step read the first page and found no date it could
+    stand behind: not asked again by that step (a person still may set one)."""
+    meta = get_meta(con, doc_id)
+    meta["published_tried"] = {"run": run, "at": now()}
+    _put_meta(con, doc_id, meta)
+    con.commit()
+
+
+@_reading
+def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
+    """Documents with a text that say nothing of when they were published,
+    and that the ``dates`` step has not tried: newest first, so what just
+    arrived is dated before the backlog."""
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT id FROM documents WHERE text_hash IS NOT NULL"
+            " AND json_extract(meta, '$.published') IS NULL"
+            " AND json_extract(meta, '$.published_tried') IS NULL"
+            " AND json_extract(meta, '$.retired') IS NULL"
+            " ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+    ]
 
 
 @_serialized

@@ -509,3 +509,10 @@ test("dateLine: published, added and read, each said for what it is", () => {
   assert.doesNotMatch(lib.dateLine({}, { added_at: "2026-09-12T10:00:00Z", parsed_at: "2026-09-12T10:05:00Z" }), /read/);
   assert.equal(lib.dateLine({}, null), "");
 });
+
+test("publishedLabel: a model's date says its words, and a bare one is asked", () => {
+  const sure = lib.publishedLabel({ published: { date: "2009", by: "first-page", confidence: "high", words: "DAFx-09, Como" } });
+  assert.match(sure, /its first page, read by a model says: “DAFx-09, Como”">2009<\/span>/);
+  const bare = lib.publishedLabel({ published: { date: "2007-05-30", by: "first-page", confidence: "medium", words: "30. Mai 2007" } });
+  assert.match(bare, /not said to be its publication\)">2007-05-30\?<\/span>/);
+});

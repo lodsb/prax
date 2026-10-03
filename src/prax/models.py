@@ -58,6 +58,7 @@ STEPS = (
     "promote",
     "ask",
     "titles",
+    "dates",
     "summaries",
     "vocabulary",
     "sections",
@@ -74,6 +75,7 @@ STEP_DEFAULTS = {
     "promote": "claude-sonnet-5",  # the expensive pass over flagged documents
     "ask": "none",  # the caller's own model answers unless the file says otherwise
     "titles": "none",
+    "dates": "none",  # when a document was published, from its first page
     "summaries": "none",  # a summary written in another language, translated
     "vocabulary": "none",  # an entity named in another language, put into English
     "sections": "none",  # what a long document's chapters are about

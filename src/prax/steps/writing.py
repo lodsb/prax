@@ -11,7 +11,7 @@ from prax import models, store
 from prax.capture import pipeline
 from prax.graph import ontology
 from prax.text import language
-from prax.writing import genres, sections, summaries, titles
+from prax.writing import dates, genres, sections, summaries, titles
 
 from . import leases
 from .base import HandOut, Log, ModelStep, TakeIn, say
@@ -79,6 +79,80 @@ class Titles(ModelStep):
 
     def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
         return f"{rep.get('applied', 0)} retitled, {rep.get('skipped', 0)} left"
+
+
+class Dates(ModelStep):
+    """When a document was published, read from its first page: for the
+    documents no record, page tag or arXiv id dated (``meta.published``).
+    The model answers with the date and the words that state it; the
+    door keeps it only when those words are on the page and hold the year
+    (``writing.dates.checked``), below every other source."""
+
+    name = "dates"
+
+    def hand_out(self, h: HandOut) -> dict[str, Any]:
+        if models.resolve("dates") is None:
+            return h.nothing()
+
+        def build(doc_id: int) -> dict[str, Any] | None:
+            doc = store.get_document(h.con, doc_id, max_chars=12000)
+            if doc is None or not doc["text"]:
+                return None
+            return {"doc_id": doc_id, "title": doc["title"] or "", "text": doc["text"]}
+
+        # the whole library, not the scope's captures alone: one short call a
+        # document (about a second), and a backlog left to the nightly pass's
+        # hundred a night would take months
+        return h.documents(
+            store.dates_needed(h.con, limit=h.limit * 4), build, scoped=False
+        )
+
+    def take_in(self, t: TakeIn) -> dict[str, Any]:
+        run = t.run()
+
+        def tried(doc_id: int, r: dict[str, Any]) -> None:
+            store.published_tried(t.con, doc_id, run)
+
+        def apply(doc_id: int, r: dict[str, Any]) -> None:
+            store.set_published(
+                t.con,
+                doc_id,
+                str(r["date"]),
+                by="first-page",
+                words=str(r.get("words") or "") or None,
+                confidence=str(r.get("confidence") or "") or None,
+                run=run,
+            )
+
+        t.each(apply, tried=tried)
+        return t.out
+
+    def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
+        out = []
+        for it in items:
+            try:
+                got, _usage = dates.read_date(runtime, it["text"], it["title"])
+            except Exception as exc:  # noqa: BLE001 - one document must not stop the rest
+                out.append({"doc_id": it["doc_id"], "error": str(exc)[:200]})
+                continue
+            if got is None:
+                out.append(
+                    {"doc_id": it["doc_id"], "tried": "no date it could stand behind"}
+                )
+                continue
+            out.append(
+                {
+                    "doc_id": it["doc_id"],
+                    "date": got.date,
+                    "words": got.words,
+                    "confidence": got.confidence,
+                }
+            )
+        say(log, f"dates: {sum(1 for r in out if r.get('date'))} of {len(out)} dated")
+        return out
+
+    def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
+        return f"{rep.get('applied', 0)} dated, {rep.get('skipped', 0)} without a date"
 
 
 class Summaries(ModelStep):
@@ -373,7 +447,8 @@ class Genres(ModelStep):
 
 
 REGISTERED = {
-    s.name: s for s in (Titles(), Summaries(), Sections(), Communities(), Genres())
+    s.name: s
+    for s in (Titles(), Dates(), Summaries(), Sections(), Communities(), Genres())
 }
 
 

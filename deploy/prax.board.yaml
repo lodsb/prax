@@ -8,6 +8,7 @@
 steps:
   extract: {model: none}
   titles: {model: none}
+  dates: {model: none}
   ask: {model: none}
 
 vectors:

@@ -330,8 +330,12 @@ and pushing what is committed.
       and an agent that quotes one as current repeats the failure that
       cost months of a pitch.
       - [x] (2026-10-03: from the record, the extension's paper, a page's
-            tags and markup, the arXiv id; shown and filtered. Crossref by
-            DOI, the first page and a PDF's metadata are still to come)
+            tags and markup, the arXiv id; shown and filtered; and the
+            `dates` step reading the first page with a model, measured on
+            Zotero's dates: answers for 70%, its year right for 86% of
+            those, most misses being Zotero's other version of the paper.
+            Crossref by DOI waits: only 133 of 8,221 undated PDFs print
+            one near their start. A PDF's metadata is still to come)
             **A document's own date, first** (the user, 2026-10-03:
             "there is no date for the docs visible … not when it was
             created in prax but when the document was published"; a

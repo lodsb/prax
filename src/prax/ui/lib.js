@@ -599,10 +599,14 @@ function queueRate(demand, name) {
 // When a document was published, as its source says (meta.published:
 // date, precision, by), with what said so on hover; a record's own date
 // (meta.date) when the published pass has not run yet.
-const PUBLISHED_BY = { human: "set by hand", record: "its record (Zotero)", paper: "the paper's page", citation: "the page's citation tags", jsonld: "the page's schema.org markup", arxiv: "its arXiv id", generic: "the page's article tags" };
+const PUBLISHED_BY = { human: "set by hand", record: "its record (Zotero)", paper: "the paper's page", citation: "the page's citation tags", jsonld: "the page's schema.org markup", arxiv: "its arXiv id", generic: "the page's article tags", "first-page": "its first page, read by a model" };
 function publishedLabel(meta) {
   const p = (meta || {}).published;
-  if (p && p.date) return `<span title="published, as ${esc(PUBLISHED_BY[p.by] || p.by || "?")} says">${esc(p.date)}</span>`;
+  if (p && p.date) {
+    const said = `published, as ${PUBLISHED_BY[p.by] || p.by || "?"} says` + (p.words ? `: “${p.words}”` : "");
+    const unsure = p.confidence === "medium" ? " (a bare date on the page, not said to be its publication)" : "";
+    return `<span title="${esc(said + unsure)}">${esc(p.date)}${unsure ? "?" : ""}</span>`;
+  }
   return meta && meta.date ? esc(String(meta.date)) : "";
 }
 

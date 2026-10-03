@@ -3671,6 +3671,38 @@ through the same escaping as everything else now.
 Still to come: Crossref by DOI (the citations importer asks it
 already), the first page read by the titles pass, a PDF's metadata.
 
+## 2026-10-03, the night: dates from the first page
+
+The `published` pass dated 2,016 documents, 126 more than the Zotero
+dates shown before. Most of the other 10,800 are PDFs. Measured before
+building anything more (read-only, on the live store):
+
+- **DOIs**: only 109 of 8,221 undated PDFs print a labelled DOI in their
+  first 6,000 characters, 24 more an unlabelled one. Crossref waits.
+- **A heuristic**, the latest plausible year on the first page: right for
+  62% of 1,836 Zotero-dated PDFs, 271 with no year at all. Not to be
+  trusted.
+- **A model** (the 35B on the desktop) given the title and the first
+  3,000 characters, asked for `DATE | WORDS` or `none`, its answer kept
+  only when the words are on the page and hold the year
+  (`writing.dates.checked`): on 120 Zotero-dated PDFs it answered for 84
+  (70%), and its year was Zotero's for 72 of them (86%), in 94 seconds.
+  The misses were read by their words. Those marked high (the words name
+  a conference, a journal, a copyright line) are mostly Zotero's other
+  version of the paper: a NIME 2003 paper Zotero dates 2017 (a reprint),
+  "Published online: 08 Aug 2014" against the 2015 issue, "Copyright 2005
+  ACM" against 2006. Those marked medium are bare dates ("30. Mai 2007",
+  "14.07.2007", ResearchGate's "Article · September 2012"): print and
+  upload dates, the real errors.
+
+So the `dates` step: a watched model step (off until `prax.yaml` names
+its model, `steps.dates`), the whole library newest first, not only the
+scope's captures, since a backlog of a hundred a night would take
+months. Its date ranks below every other source, keeps its words and
+its confidence, and a document it cannot date is marked tried and not
+asked again. The page shows the words on hover, and a medium date with
+a question mark. `scripts/eval_dates.py` is the measurement.
+
 ## 2026-10-02: what the plan held that was done, moved here
 
 The plan was rewritten on 2026-10-02 to hold only what is open (the
