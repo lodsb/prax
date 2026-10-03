@@ -74,7 +74,7 @@ and pushing what is committed.
 - **Two tray icons** run on the desktop (one from the autostart, one
   started by hand, most likely): quit one. If it happens again, the tray
   should refuse a second copy on the same data directory.
-- **An ask wakes an idled model with the worker paused** (2026-10-03,
+- [x] (2026-10-03: not the paused worker: the ask's demand was recorded, but the `ask` step named the 35B's entry while `run:` served the 27B's, so it matched no role; `work.role_of_step` now also matches a model at the served address) **An ask wakes an idled model with the worker paused** (2026-10-03,
   AK): the door said the model "has been asked for" and nothing loaded
   until `prax up --start llama-server`. The demand the supervisor reads
   should come from the door's ask itself, not only from the worker.

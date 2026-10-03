@@ -1715,6 +1715,25 @@ def test_work_deferred_for_a_missing_server_is_demand_for_its_role(
     assert work.wanted_roles() == {}
 
 
+def test_a_step_on_the_served_address_wakes_the_server_by_another_name(
+    con: Any, data_dir: Path
+) -> None:
+    """During stage AK the steps named the 35B's entry while ``run:``
+    served the 27B's on the same address: an ask's demand matched no role
+    and an idled server never came back (2026-10-03)."""
+    (data_dir / "prax.yaml").write_text(
+        "models:\n"
+        "  old: {kind: openai, base_url: 'http://127.0.0.1:8085/v1', model: a}\n"
+        "  new: {kind: openai, base_url: 'http://127.0.0.1:8085/v1/', model: b}\n"
+        "  far: {kind: openai, base_url: 'http://127.0.0.1:9000/v1', model: c}\n"
+        "steps:\n  ask: {model: old}\n  titles: {model: far}\n"
+        "run:\n  llama-server: {model: new}\n",
+        encoding="utf-8",
+    )
+    assert work.role_of_step("ask") == "llama-server"
+    assert work.role_of_step("titles") is None
+
+
 def test_do_it_now_stands_until_its_work_is_done(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

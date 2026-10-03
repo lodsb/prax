@@ -169,16 +169,31 @@ def want(step: str, items: list[int] | None = None) -> None:
 
 
 def role_of_step(step: str) -> str | None:
-    """The role of ``prax up`` that serves ``step``'s model on this host
-    (``run.llama-server.model`` names it), or None."""
+    """The role of ``prax up`` that serves ``step``'s model on this host,
+    or None: the role whose ``run`` entry names that model, or serves
+    another at the same address. A step may name an entry the host does
+    not serve right now while the server on its address does (a model
+    under trial, stage AK); its work still waits for that server."""
     with contextlib.suppress(Exception):  # a step off, a file unreadable
         spec = models.resolve(step)
+        if spec is None:
+            return None
         run = models.load().get("run") or {}
         for role in ("llama-server", "reranker"):
-            opts = run.get(role) or {}
-            if spec is not None and opts.get("model") == spec.name:
+            served = (run.get(role) or {}).get("model")
+            if not served:
+                continue
+            if served == spec.name:
+                return role
+            other = models.spec(str(served))
+            if other is not None and _same_address(other.base_url, spec.base_url):
                 return role
     return None
+
+
+def _same_address(a: str | None, b: str | None) -> bool:
+    """Two base URLs that reach one server (a trailing slash aside)."""
+    return bool(a and b) and str(a).rstrip("/") == str(b).rstrip("/")
 
 
 def wanted_steps() -> dict[tuple[str, str], int]:
