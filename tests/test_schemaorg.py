@@ -133,3 +133,24 @@ def test_a_genre_in_schema_org_words() -> None:
     shown = {x["name"]: x for lv in g.as_dict()["levels"] for x in lv["genres"]}
     assert shown["recipe"]["same_as"] == "schema:Recipe"
     assert "same_as" not in shown["essay"]
+
+
+def test_the_markup_pass_leaves_the_review_queue_alone(con: sqlite3.Connection) -> None:
+    """The pass queues no review items, so it must not drop the
+    extraction's (found by the review of 2026-10-04: 2,091 dropped on a
+    copy of the library)."""
+    doc = store.register(con, _page(SITE).encode(), mime="text/html", title="A page")[
+        "doc_id"
+    ]
+    store.queue_review(
+        con,
+        src="A",
+        src_type="paper",
+        rel="about",
+        dst="B",
+        dst_type="nothing",
+        reason="unknown type",
+        source_doc=doc,
+    )
+    store.maintain(con, only=["markup"])
+    assert store.count_review(con) == 1

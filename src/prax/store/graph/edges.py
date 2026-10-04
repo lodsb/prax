@@ -416,12 +416,18 @@ def retire_reading(
     *,
     producer: str,
     except_version: str,
+    reviews: bool = True,
 ) -> int:
     """End the live edges ``producer`` wrote from this document under any
     ontology version but ``except_version``: a producer re-reading a
     document under its current subset (another domain, a grown module)
     supersedes its own earlier reading. Other producers' edges stay.
-    History is kept (invariant 8); returns how many edges."""
+    History is kept (invariant 8); returns how many edges.
+
+    ``reviews`` also drops the document's open review items, which the
+    new reading queues again: right for an extraction, wrong for a pass
+    that queues none (the markup and references passes), which would
+    drop the extraction's misfits with nothing to put them back."""
     cur = con.execute(
         f"UPDATE edges SET valid_to = {_NOW} WHERE valid_to IS NULL"
         " AND source_doc = ? AND producer = ?"
@@ -431,12 +437,13 @@ def retire_reading(
     # the earlier reading's open review items are superseded as well: the
     # new reading queues its own misfits against the ontology it was read
     # under (review items carry no producer, so this is per document)
-    con.execute(
-        f"UPDATE review_queue SET resolution = 'dropped', resolved_at = {_NOW}"
-        " WHERE source_doc = ? AND resolution IS NULL"
-        " AND coalesce(ontology_version, '') != ?",
-        (doc_id, except_version),
-    )
+    if reviews:
+        con.execute(
+            f"UPDATE review_queue SET resolution = 'dropped', resolved_at = {_NOW}"
+            " WHERE source_doc = ? AND resolution IS NULL"
+            " AND coalesce(ontology_version, '') != ?",
+            (doc_id, except_version),
+        )
     con.commit()
     return cur.rowcount
 

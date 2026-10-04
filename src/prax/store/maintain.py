@@ -389,7 +389,7 @@ def link_references(
         if not title:
             continue
         retired = retire_reading(
-            con, doc_id, producer=REFERENCES_PRODUCER, except_version=""
+            con, doc_id, producer=REFERENCES_PRODUCER, except_version="", reviews=False
         )
         stats["retired"] += retired
         # the entries: the reference chunks where the chunker cut them,
@@ -820,7 +820,10 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             page = schemaorg.of_page(archive_path(r["hash"]).read_bytes())
         except OSError:
             continue
-        retired = retire_reading(con, r["id"], producer=MARKUP, except_version="")
+        # the markup queues no review items: the extraction's stay open
+        retired = retire_reading(
+            con, r["id"], producer=MARKUP, except_version="", reviews=False
+        )
         counts["ended"] += retired
         stamp: dict[str, Any] = {"hash": r["hash"], "at": now(), "facts": 0}
         if page is not None:
