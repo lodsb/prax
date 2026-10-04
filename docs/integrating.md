@@ -64,6 +64,7 @@ work. The UI polls exactly this.
 | `GET /doc/{id}/context` | what places a document: summary, entities, citations both ways, `linked` (its edges to and from other documents, `out` and `in`: links, supersedes, invalidates), similar documents, its pages and projects |
 | `GET /traverse?entity=…&hops=1&as_of=` | the graph around a name: `edges`, every edge with its evidence and producer, and `support` (how many documents state the same fact) where it is more than one. `as_of` (a date or a UTC moment) walks what the graph held then. `entity=doc:N` walks from a library document. An edge whose source says when the fact holds in the world carries `world_from`/`world_to` and their precision |
 | `GET /traverse?entity=…&hops=2` | and `neighbours`, the ideas those documents are also about, ranked by how many say so, with `left_out` |
+| `GET /graph/connect?a=&b=` | how two things are connected: the best sound paths, each hop with its relation, the documents behind it, one of them and its quote; `relations`, `max_hops`, `as_of`, `weak` |
 | `GET /graph/changes?since=` | what changed in a period: on record time the facts prax came to hold and stopped holding (re-readings left out), with `world=true` what began and ended in the world as the sources state; counts by relation and the newest facts |
 | `GET /edge/{id}/why` | what a derived (`rule:…`, INFERRED) edge follows from: the stated facts of its chain |
 | `GET /entities?q=` | names, types, how connected each is |

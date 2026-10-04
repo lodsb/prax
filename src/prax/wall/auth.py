@@ -72,6 +72,7 @@ RESTRICTED_ROUTES = tuple(
         ("GET", r"/traverse"),
         ("GET", r"/edge/\d+/why"),
         ("GET", r"/graph/changes"),
+        ("GET", r"/graph/connect"),
         ("GET", r"/documents"),
         ("GET", r"/doc/\d+/context"),
         ("GET", r"/doc/\d+/references"),

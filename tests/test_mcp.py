@@ -24,6 +24,7 @@ EXPECTED_TOOLS = {
     "get_chunk",
     "traverse",
     "changes",
+    "connect",
     "link",
     "ingest",
     "ingest_file",

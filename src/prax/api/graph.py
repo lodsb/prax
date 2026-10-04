@@ -148,6 +148,40 @@ def changes(
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.get("/graph/connect")
+def connect(
+    a: str,
+    b: str,
+    request: Request,
+    type_a: str | None = None,
+    type_b: str | None = None,
+    max_hops: int = 4,
+    relations: str | None = None,
+    as_of: str | None = None,
+    weak: bool = False,
+) -> dict[str, Any]:
+    """How ``a`` is connected to ``b`` (``store.connect_entities``): the
+    best sound paths, each hop with its relation, documents and evidence;
+    ``relations`` a comma-separated set a path may use; ``weak`` shows the
+    paths past the line too."""
+    try:
+        return store.connect_entities(
+            _con(request),
+            a,
+            b,
+            type_a=type_a or None,
+            type_b=type_b or None,
+            max_hops=max_hops,
+            relations=[r.strip() for r in relations.split(",") if r.strip()]
+            if relations
+            else None,
+            as_of=as_of or None,
+            weak=weak,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.get("/edge/{edge_id}/why")
 def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
     """What a derived edge follows from: its premises, in the order of the

@@ -520,7 +520,7 @@ and pushing what is committed.
               what it touches, as any bump does, so it is measured on a
               sample before a pass over the library.
 
-- [ ] **AM. A path index: how is A connected to B** (candidate, after
+- [x] (2026-10-04: the prototype measured on a copy, then `prax.graph.paths` and `store.connect_entities`, `GET /graph/connect` and the `connect` tool; in memory, not a file, at this size; `scripts/eval_paths.py`) **AM. A path index: how is A connected to B** (candidate, after
       AL step 5; the user, 2026-10-03: "path questions are interesting
       though and would make sense for any agentic use/reasoning on
       facts"). A derived file beside the database, in the vector files'

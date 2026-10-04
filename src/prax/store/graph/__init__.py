@@ -20,6 +20,7 @@ ORDER = (
     "communities",
     "traversal",
     "rules",
+    "paths",
 )
 
 from .communities import (  # noqa: F401
@@ -160,6 +161,11 @@ from .languages import (  # noqa: F401
     name_in_english,
     unlabelled_names,
     unmark_corpus_ruling,
+)
+from .paths import (  # noqa: F401
+    PATH_REFRESH,
+    connect_entities,
+    path_index,
 )
 from .rules import (  # noqa: F401
     RULE_CAP,

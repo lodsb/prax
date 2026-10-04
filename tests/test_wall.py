@@ -115,6 +115,7 @@ WALKED = (
     ("GET", "/traverse"),
     ("GET", "/edge/1/why"),
     ("GET", "/graph/changes"),
+    ("GET", "/graph/connect"),
     ("GET", "/documents"),
     ("GET", "/doc/1/context"),
     ("GET", "/page/x"),
@@ -175,6 +176,23 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
         "/traverse", params={"entity": "Landlord Smith"}, headers=me
     ).json()
     assert walk["edges"] == [] and "senses" not in walk
+    # a path: none crosses the statement's facts for this token
+    path = client.get(
+        "/graph/connect",
+        params={"a": "Open paper", "b": "Landlord Smith", "weak": "true"},
+        headers=me,
+    ).json()
+    assert not path.get("paths")
+    full = client.get(
+        "/graph/connect",
+        params={"a": "Open paper", "b": "Landlord Smith", "weak": "true"},
+        headers=_as(ADMIN),
+    ).json()
+    assert [h["rel"] for h in full["paths"][0]["hops"]] == [
+        "uses",
+        "mentions",
+        "mentions",
+    ]
     # what changed: the statement's facts are neither listed nor counted
     changed = client.get("/graph/changes", params={"since": "2000"}, headers=me).json()
     assert not _says_text(changed, "Landlord Smith")

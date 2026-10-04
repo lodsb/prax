@@ -87,6 +87,7 @@ revisit threshold, under "Decision thresholds" below.
    of entity resolution (`resolve_entities.py --adjudicate`) and the
    measurement scripts (`eval_retrieval.py`, `eval_references.py`,
    `eval_confidence.py`, `eval_genres.py`, `eval_regions.py`, `eval_latex.py`,
+   `eval_paths.py`,
    `compare_extractors.py`, `bench_extractor.py`,
    `make_zotero_fixture.py`, and `check_private.py`, the pre-commit guard
    against the owner's private data; the eval scripts and the guard
@@ -118,6 +119,10 @@ revisit threshold, under "Decision thresholds" below.
    else the most connected, and `senses` names them all (`store.senses`).
    `community` names the region of the library the entity is in, and the
    part of it (`docs/communities.md`): a few dozen bytes.
+   `connect` answers how two things are connected with the two or three
+   best paths, each hop with its relation, documents and quote, about
+   2 KB; only sound ones (`paths.SOUND`), and "no sound connection" when
+   there is none (`store.connect_entities`, stage AM).
    Keep
    responses small; Claude's context is the scarce resource.
 7. **Pi-class hardware target.** *(measured)* No dependency that needs more than
@@ -233,9 +238,12 @@ revisit threshold, under "Decision thresholds" below.
   160,571 entities, one hop took 3–41 ms and two hops 34–276 ms. The
   count of entities was the line until then, and it was passed with the
   walks fast. The answer is an index for the query the walk spends its
-  time in first, then a derived path index beside the database in the
-  vector files' pattern (stage AM of `docs/PLAN.md`), not a second
-  store. Kùzu, named here until 2026-10-03, was archived upstream on
+  time in first, then the derived path index (`prax.graph.paths`, stage
+  AM), not a second store. It is held in memory as arrays and rebuilt
+  when the edges change: 1.2 s and some 31 MB at 197,000 facts. Past
+  ten times that, or a build past ten seconds, it moves to a file
+  beside the database in the vector files' pattern (memory-mapped, a
+  delta, a merge). Kùzu, named here until 2026-10-03, was archived upstream on
   2025-10-10; an embedded graph engine is chosen only for a need neither
   index carries, and then.
 - SQLite write contention across capture sources. The answer is the

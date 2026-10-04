@@ -291,6 +291,37 @@ def changes(
 
 
 @mcp.tool()
+def connect(
+    a: str,
+    b: str,
+    max_hops: int = 4,
+    relations: list[str] | None = None,
+    as_of: str | None = None,
+    weak: bool = False,
+    type_a: str | None = None,
+    type_b: str | None = None,
+) -> dict[str, Any]:
+    """How ``a`` is connected to ``b`` (two names: papers, people,
+    methods, devices…): the two or three best paths of at most
+    ``max_hops`` facts, each hop with its relation, how many documents
+    state it, one of them and its quote. A path through a hub ("machine
+    learning", a university) or over weak relations costs more; only
+    sound ones are shown, and an answer with none says so (``best_cost``,
+    ``weak_left_out``) — no sound connection is an answer. ``relations``
+    restricts the hops (``["cites", "extends"]``), ``as_of`` walks what was
+    held at a moment, ``weak`` shows the paths past the line too, marked."""
+    params: dict[str, Any] = {"a": a, "b": b, "max_hops": max_hops}
+    for key, value in (("as_of", as_of), ("type_a", type_a), ("type_b", type_b)):
+        if value:
+            params[key] = value
+    if relations:
+        params["relations"] = ",".join(relations)
+    if weak:
+        params["weak"] = "true"
+    return _answer(lambda: door().get_json("/graph/connect", params=params))
+
+
+@mcp.tool()
 def ask(
     question: str,
     limit: int = 8,

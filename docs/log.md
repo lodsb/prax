@@ -4241,6 +4241,72 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
+## 2026-10-04, late night: how is A connected to B (stage AM)
+
+An agent walking the graph spends a call and a context's worth of edges
+on every hop. `connect(a, b)` answers in one call: the two or three best
+paths of up to four facts, each hop with its relation, how many documents
+state it, one of them and its quote, about 2 KB. The design was the
+private research note's, section 9; its order was a prototype and an
+evaluation set first, because a confident path of weak edges is worse
+than none.
+
+**The cost of a path.** A hop costs by its relation (strong ones such as
+`cites`, `uses`, `authored_by` 1, the rest 2, `mentions` and `annotates`
+3), times its confidence class (INFERRED 1.35, AMBIGUOUS 2), divided by
+1 + log2 of the documents that state it. Passing through an entity costs
+0.5 times log(1 + its degree), as inverse document frequency does in
+text search; past 1,500 facts an entity is an end only. A path at or
+under cost 6 is sound. Paths further away exist, are left out, and are
+counted (`weak_left_out`, `best_cost`); `weak=true` shows them, marked.
+The rule pass's derivations are no hop (a path already composes facts),
+and neither is a briefing page: "What arrived" links a recipe to a DSP
+paper by the day they came in. That was every path the first run found
+between a recipe and a paper.
+
+**The evaluation** (`scripts/eval_paths.py`, read-only). Pairs with a
+known connection: a library paper citing another, as the references
+pass matched it, with the direct facts between them banned; and two
+documents linked from the same topic page, with the pages banned. Pairs
+with mostly none: a recipe and a research paper, and two random research
+papers. On a copy of the library (122,898 entities, 197,083 facts):
+
+| set | pairs | any path | cost <= 5 | cost <= 6 | cost <= 8 |
+|---|---|---|---|---|---|
+| a paper and one it cites | 150 | 145 | 86 | 111 | 136 |
+| two documents of a topic page | 91 | 84 | 32 | 41 | 61 |
+| a recipe and a paper | 150 | 0 | 0 | 0 | 0 |
+| two random research papers | 300 | 161 | 6 | 7 | 16 |
+
+The weights came from a sweep of the hub cost (0.35, 0.5, 0.7) and of
+the middle relations' cost (1.6, 2.0) against these sets. 0.5 and 2.0
+kept the random pairs under 2% at the line with the most positives;
+`published_in` moved to the middle, since "both published in arXiv" is
+no connection. Read by hand, most random pairs under the line were real:
+a shared author, a co-citation chain, the same method (two papers that
+use hidden Markov models). The false ones passed through an institution
+or a venue the extraction typed oddly. The topic pairs' paths read as
+the survey's own reasoning: Self-RAG cites Toolformer, Mem0 and Basic
+Memory both use Codex.
+
+**The index** (`prax.graph.paths`, pure; the store's part
+`store.graph.paths`). Compact arrays: entities as nodes, one fact per
+source, relation and target in a CSR adjacency, and the edges behind each
+fact with their documents. The two ends are grown halfway (two hops each
+for four) and met in the middle; the paths are the best through distinct
+entities. The wall is a filter in the loop: a fact is crossable when one
+of its documents is visible to the viewer, and `test_wall` holds that a
+named token gets no path over a personal document's facts. `as_of` builds
+an index of the edges held then (0.9 s) and keeps none. The design
+sketched a memory-mapped file with a delta; at this size it is not
+needed. The build takes 1.2 s and some 31 MB (194 MB at its peak). The
+door keeps one index per database file and rebuilds it when the edges
+have changed and the one held is five minutes old. A query takes about
+1 ms in the index and some 90 ms in all, most of it resolving the two
+names (`senses`, as `traverse` does). CLAUDE.md's decision threshold
+says when the file comes: ten times the facts, or a build past ten
+seconds.
+
 ## 2026-10-04, night: what changed in a period (AL step 5)
 
 "As of a day" was there (`traverse(as_of=)`); "what changed between two
