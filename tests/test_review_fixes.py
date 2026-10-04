@@ -229,3 +229,30 @@ def test_a_capture_does_not_touch_a_hidden_document(con: sqlite3.Connection) -> 
         store.VIEWER.reset(token)  # type: ignore[arg-type]
     assert again.created is False and again.domains is None
     assert "kitchen" not in (store.document_domains(con, first.doc_id) or [])
+
+
+# ------------------------------------------------------------- contracts
+
+
+def test_a_reference_list_is_capped_and_in_its_numbers_order(
+    con: sqlite3.Connection,
+) -> None:
+    """Finding 3 (and the client's N3): one call returned a book's whole
+    list, 2 MB; a list read in two columns came back out of order."""
+    from fastapi.testclient import TestClient
+
+    from prax.api import app
+
+    entries = [
+        f"[{n}] A. Author. Title number {n}. Some Journal, 2001." for n in range(1, 121)
+    ]
+    order = entries[:16] + entries[30:41] + entries[16:30] + entries[41:]
+    text = "A paper.\n\n## References\n\n" + "\n\n".join(order) + "\n"
+    doc = int(store.ingest_text(con, text, title="Two columns")["doc_id"])
+    with TestClient(app) as client:
+        got = client.get(f"/doc/{doc}/references").json()
+        assert got["entries"] == 120 and len(got["references"]) == 50
+        assert got["left_out"] == 70
+        assert [e.get("n") for e in got["references"][:20]] == list(range(1, 21))
+        more = client.get(f"/doc/{doc}/references", params={"offset": 100}).json()
+        assert [e.get("n") for e in more["references"]] == list(range(101, 121))

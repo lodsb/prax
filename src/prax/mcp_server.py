@@ -465,7 +465,7 @@ def context(
     what it cites and what cites it, the nearest documents, the notes on
     it, and — for a project page — its members. Where ``search`` finds
     things, ``context`` says what the library already knows around one;
-    a session on a project starts with ``context(slug="project/<name>")``.
+    a session on a project starts with ``context(slug="project-<name>")``.
     Follow an id with ``get`` or ``get_chunk``; a name with ``traverse``.
     """
 
@@ -748,12 +748,15 @@ def capture_urls(urls: list[str], domains: list[str] | None = None) -> dict[str,
 
 
 @mcp.tool()
-def references(doc_id: int) -> dict[str, Any]:
+def references(doc_id: int, limit: int = 50, offset: int = 0) -> dict[str, Any]:
     """A paper's reference list, an entry each in order: its number,
     title, authors, year, DOI or arXiv id as printed, and either
     ``in_library`` (the library document it cites, ``doc_id``) or ``links``
-    to read it elsewhere (doi.org, arxiv.org)."""
-    return _answer(lambda: door().get_json(f"/doc/{doc_id}/references"))
+    to read it elsewhere (doi.org, arxiv.org). ``limit`` entries from
+    ``offset`` (a book's list runs to thousands); ``entries`` counts the
+    whole list and ``left_out`` what this answer did not carry."""
+    params = {"limit": limit, "offset": offset}
+    return _answer(lambda: door().get_json(f"/doc/{doc_id}/references", params=params))
 
 
 @mcp.tool()

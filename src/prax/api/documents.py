@@ -247,20 +247,34 @@ def chunks(doc_id: int, request: Request) -> list[dict[str, Any]]:
     return store.list_chunks(_con(request), doc_id)
 
 
+REFERENCES_SHOWN = 50  # entries an answer lists unless asked for more
+REFERENCES_MAX = 300
+
+
 @router.get("/doc/{doc_id}/references")
-def doc_references(doc_id: int, request: Request) -> dict[str, Any]:
+def doc_references(
+    doc_id: int, request: Request, limit: int = REFERENCES_SHOWN, offset: int = 0
+) -> dict[str, Any]:
     """A paper's reference list, an entry each: what it names, the library
     document it cites (``in_library``) or ``links`` to read it elsewhere
-    (``store.references_of``)."""
+    (``store.references_of``). ``limit`` entries from ``offset``: a book's
+    list ran to 7,249 entries and 2 MB in one answer (invariant 6); the
+    counts are of the whole list, ``left_out`` what this page did not
+    carry."""
     con = _con(request)
     if store.get_document(con, doc_id, max_chars=0) is None:
         raise HTTPException(404, "no such document")
     refs = store.references_of(con, doc_id)
+    limit = max(1, min(int(limit), REFERENCES_MAX))
+    offset = max(0, int(offset))
+    shown = refs[offset : offset + limit]
     return {
         "doc_id": doc_id,
         "entries": len(refs),
         "in_library": sum(1 for r in refs if r.get("in_library")),
-        "references": refs,
+        "offset": offset,
+        "references": shown,
+        "left_out": len(refs) - len(shown),
     }
 
 

@@ -1031,7 +1031,10 @@ def references_of(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
     number, when the list numbers them), ``title``, ``authors``, ``year``,
     ``doi`` and ``arxiv`` as printed, ``in_library`` (the library document
     it cites, with the score and how it was matched) or ``links`` to read
-    it elsewhere, and the entry's ``text`` (cut at 300 characters)."""
+    it elsewhere, and the entry's ``text`` (cut at 300 characters, at 160
+    when a title was read from it). Numbered entries in their numbers'
+    order: a list read in two columns came back 1-16, 31-41, 17-30 (the
+    client's page, 2026-10-04)."""
     hidden = hidden_documents(con)
     out: list[dict[str, Any]] = []
     for r in con.execute(
@@ -1052,12 +1055,15 @@ def references_of(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
             "doi": data.get("doi"),
             "arxiv": data.get("arxiv"),
             "in_library": cited,
-            "text": str(r["text"] or "")[:300],
+            "text": str(r["text"] or "")[: 160 if data.get("title") else 300],
         }
         links = _entry_links(data)
         if links and not cited:
             entry["links"] = links
         out.append({k: v for k, v in entry.items() if v not in (None, [], {})})
+    numbered = [e for e in out if isinstance(e.get("n"), int)]
+    if len(numbered) > len(out) / 2:
+        out.sort(key=lambda e: (not isinstance(e.get("n"), int), e.get("n") or 0))
     return out
 
 
