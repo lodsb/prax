@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections import defaultdict, deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from prax.graph import ontology
@@ -363,33 +363,66 @@ CONFLICT_PRODUCER = "rule:functional"
 
 
 @_reading
-def part_of_roots(con: sqlite3.Connection) -> Callable[[int], int]:
-    """The root of each entity under the live ``part_of`` edges: two
-    values of a functional relation with one root are one answer said
-    finer and coarser ("NIME 2010" and "NIME")."""
-    parent: dict[int, int] = {}
-
-    def find(x: int) -> int:
-        while parent.setdefault(x, x) != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
+def part_of_ancestry(con: sqlite3.Connection) -> Callable[[int], frozenset[int]]:
+    """Each entity's ancestors under the live ``part_of`` edges (what it is
+    part of, and what that is part of), read once."""
+    parents: dict[int, set[int]] = defaultdict(set)
     for a, b in con.execute(
         "SELECT COALESCE(s.canonical_id, s.id), COALESCE(t.canonical_id, t.id)"
         " FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
         " WHERE e.rel = 'part_of' AND e.valid_to IS NULL"
     ):
-        parent[find(int(a))] = find(int(b))
-    return find
+        if a != b:
+            parents[int(a)].add(int(b))
+    memo: dict[int, frozenset[int]] = {}
+
+    def ancestors(x: int) -> frozenset[int]:
+        got = memo.get(x)
+        if got is None:
+            seen: set[int] = set()
+            todo = list(parents.get(x, ()))
+            while todo:
+                y = todo.pop()
+                if y not in seen:
+                    seen.add(y)
+                    todo.extend(parents.get(y, ()))
+            got = memo[x] = frozenset(seen)
+        return got
+
+    return ancestors
+
+
+def same_answers(
+    values: Iterable[int], ancestors: Callable[[int], frozenset[int]]
+) -> dict[int, int]:
+    """Values of one subject grouped into answers, each value to its
+    group's smallest id: two values are one answer said finer and coarser
+    when one is part of the other ("NIME 2010" and "NIME"); two siblings
+    ("ISMIR 2008" and "ISMIR 2009") are two (the review of 2026-10-04)."""
+    vals = sorted(set(values))
+    group = {v: v for v in vals}
+
+    def find(x: int) -> int:
+        while group[x] != x:
+            group[x] = group[group[x]]
+            x = group[x]
+        return x
+
+    for i, v in enumerate(vals):
+        for w in vals[i + 1 :]:
+            if w in ancestors(v) or v in ancestors(w):
+                a, b = find(v), find(w)
+                group[max(a, b)] = min(a, b)
+    return {v: find(v) for v in vals}
 
 
 @_reading
 def _functional_pairs(
-    con: sqlite3.Connection, rel: str, root: Callable[[int], int]
+    con: sqlite3.Connection, rel: str, ancestors: Callable[[int], frozenset[int]]
 ) -> set[tuple[int, int]]:
     """The pairs of live asserted edges of ``rel`` that disagree: one
-    subject, two values with different roots. One edge stands for each
+    subject, two values neither of which is part of the other (one answer
+    said finer and coarser is no conflict). One edge stands for each
     value (an EXTRACTED one first, then the oldest), and a subject makes
     ``CONFLICT_PAIRS`` pairs at most."""
     rows = con.execute(
@@ -403,15 +436,22 @@ def _functional_pairs(
         """,
         (rel,),
     ).fetchall()
-    by_subject: dict[int, dict[int, tuple[int, int]]] = defaultdict(dict)
+    edges_of: dict[int, list[tuple[int, int, str]]] = defaultdict(list)
     for r in rows:
-        key = root(int(r["value"]))
-        rank = (0 if r["confidence"] == "EXTRACTED" else 1, int(r["id"]))
-        held = by_subject[int(r["subject"])].get(key)
-        if held is None or rank < held:
-            by_subject[int(r["subject"])][key] = rank
+        edges_of[int(r["subject"])].append(
+            (int(r["id"]), int(r["value"]), r["confidence"])
+        )
     out: set[tuple[int, int]] = set()
-    for values in by_subject.values():
+    for edges in edges_of.values():
+        if len({v for _, v, _ in edges}) < 2:
+            continue
+        answer = same_answers((v for _, v, _ in edges), ancestors)
+        values: dict[int, tuple[int, int]] = {}
+        for eid, value, confidence in edges:
+            key = answer[value]
+            rank = (0 if confidence == "EXTRACTED" else 1, eid)
+            if key not in values or rank < values[key]:
+                values[key] = rank
         if len(values) < 2:
             continue
         ids = sorted(eid for _, eid in values.values())
@@ -450,12 +490,12 @@ def find_conflicts(
     deleted and no fact is ended: a disagreement is shown, a person
     decides."""
     say = log or (lambda _t: None)
-    root = part_of_roots(con)
+    ancestors = part_of_ancestry(con)
     report: dict[str, dict[str, int]] = {}
     for rel in sorted(
         r.name for r in ontology.current().relations.values() if r.functional
     ):
-        now = _functional_pairs(con, rel, root)
+        now = _functional_pairs(con, rel, ancestors)
         held = {
             (int(r[1]), int(r[2])): int(r[0])
             for r in con.execute(

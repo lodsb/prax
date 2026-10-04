@@ -687,10 +687,14 @@ def parse_lexicon(text: str) -> Lexicon:
 def cue_pattern(cues: tuple[tuple[str, ...], tuple[str, ...]]) -> re.Pattern[str]:
     """A lexicon section as one pattern: a stem matches from the start of
     a word on, a whole word must be the whole word. Longest first, so
-    "inc." wins over "inc"."""
+    "inc." wins over "inc". The edges are "no word character there", not
+    ``\\b``, so a cue that begins or ends in punctuation ("corp.", "& sons")
+    matches too (the review of 2026-10-04)."""
     stems, words = cues
-    parts = [rf"\b{re.escape(w)}" for w in sorted(stems, key=len, reverse=True)]
-    parts += [rf"\b{re.escape(w)}\b" for w in sorted(words, key=len, reverse=True)]
+    parts = [rf"(?<!\w){re.escape(w)}" for w in sorted(stems, key=len, reverse=True)]
+    parts += [
+        rf"(?<!\w){re.escape(w)}(?!\w)" for w in sorted(words, key=len, reverse=True)
+    ]
     return re.compile("|".join(parts) or r"(?!x)x", re.IGNORECASE)
 
 

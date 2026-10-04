@@ -256,3 +256,92 @@ def test_a_reference_list_is_capped_and_in_its_numbers_order(
         assert [e.get("n") for e in got["references"][:20]] == list(range(1, 21))
         more = client.get(f"/doc/{doc}/references", params={"offset": 100}).json()
         assert [e.get("n") for e in more["references"]] == list(range(101, 121))
+
+
+# ----------------------------------------------------------------- logic
+
+
+def test_a_path_is_simple_and_none_is_lost_to_a_cheaper_longer_way() -> None:
+    """Findings 11 and 12: a path crossed one fact twice; a node reached
+    more cheaply in more hops made the shorter way vanish."""
+    from prax.graph import paths
+
+    ix = paths.build(
+        [
+            (10, 1, "cites", 2, "EXTRACTED", None),
+            (11, 2, "cites", 3, "EXTRACTED", None),
+            (12, 2, "cites", 4, "EXTRACTED", None),
+        ]
+    )
+    found = paths.connect(ix, [1], [3], k=3)
+    assert [len(p.facts) for p in found] == [2]
+    ix = paths.build(
+        [
+            (1, 1, "mentions", 2, "AMBIGUOUS", None),
+            (2, 1, "cites", 5, "EXTRACTED", None),
+            (3, 5, "cites", 2, "EXTRACTED", None),
+            (4, 2, "cites", 6, "EXTRACTED", None),
+            (5, 6, "cites", 7, "EXTRACTED", None),
+            (6, 7, "cites", 8, "EXTRACTED", None),
+        ]
+    )
+    assert paths.connect(ix, [1], [8], max_hops=4)
+    assert paths.connect(ix, [1], [7], max_hops=3)
+
+
+def test_two_editions_of_one_series_conflict(con: sqlite3.Connection) -> None:
+    """Finding 13: siblings under one parent were taken for one answer."""
+    for venue in ("ISMIR 2008", "ISMIR 2009"):
+        store.link(
+            con, E("A paper", "paper", "published_in", venue, "venue"), producer="t"
+        )
+        store.link(con, E(venue, "venue", "part_of", "ISMIR", "venue"), producer="t")
+    assert store.find_conflicts(con)["published_in"]["open"] == 1
+
+
+def test_venue_reading_slips() -> None:
+    """Findings 14, 19 and 22."""
+    from prax.graph import venues
+
+    assert (
+        venues.plan(
+            [
+                (1, "IEEE MultiMedia", 5),
+                (2, "ACM Multimedia", 9),
+                (3, "ACM Multimedia 2019", 2),
+            ],
+            {},
+        ).merges
+        == []
+    )
+    assert (
+        venues.read("IEEE 24th Workshop on Multimedia Signal Processing (MMSP)").edition
+        == "#24"
+    )
+    assert venues.read("Proceedings of the 22nd symposium - SOSP '09").edition == "2009"
+    assert venues.not_a_venue("Acme Corp.") == "company"
+    assert venues.not_a_venue("Smith & Sons") == "publisher"
+
+
+def test_a_fraction_is_an_amount() -> None:
+    """Finding 20: '1/2 cup milk' became the ingredient '/2 cup milk'."""
+    from prax.text import schemaorg
+
+    assert schemaorg.ingredient_name("1/2 cup milk") == ["milk"]
+    assert schemaorg.ingredient_name("1 1/2 tbsp olive oil") == ["olive oil"]
+
+
+def test_traverse_is_a_guarded_read() -> None:
+    """Finding 21: the guard had slid onto a row helper."""
+    from prax.store.graph import traversal
+
+    assert hasattr(traversal.traverse, "__wrapped__")
+    assert not hasattr(traversal._world_said, "__wrapped__")
+
+
+def test_an_edge_written_at_since_is_news(con: sqlite3.Connection) -> None:
+    """Finding 23: an edge written in the very second of ``since`` was its
+    own re-reading."""
+    eid = store.link(con, E("Paper A", "paper", "uses", "Method B", "method"))
+    at = con.execute("SELECT valid_from FROM edges WHERE id = ?", (eid,)).fetchone()[0]
+    assert store.changes(con, at)["added"]["count"] == 1

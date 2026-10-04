@@ -70,9 +70,11 @@ _EVENT_WORDS = {
 }  # fmt: skip
 _YEAR = re.compile(r"(?<!\d)(19[5-9]\d|20[0-4]\d)(?!\d)")
 # CHI '04, DAFx25, DAFx-17, CHI 98
+# never the digits of an ordinal: "IEEE 24th Workshop" is no 2024
 _SHORT_YEAR = re.compile(
-    r"(?:['’‘`]|(?<=[A-Za-z])|(?<=[A-Za-z]-)|(?<=[A-Z] ))(\d{2})(?!\d)"
+    r"(?:['’‘`]|(?<=[A-Za-z])|(?<=[A-Za-z]-)|(?<=[A-Z] ))(\d{2})(?!\d|st|nd|rd|th|d\b)"
 )
+_APOSTROPHE_YEAR = re.compile(r"['’‘`](\d{2})(?!\d)")
 _ORDINAL = re.compile(r"\b(\d{1,3})\s*(?:st|nd|rd|th|d|\.)(?=\s|$)", re.IGNORECASE)
 _UNITS = [
     "first",
@@ -165,7 +167,8 @@ def read(name: str) -> Venue:
         text = text[: year.start()] + " " + text[year.end() :]
     acronyms = [a for a in _ACRONYM.findall(text) if a.upper() not in _NOT_ACRONYM]
     if edition is None:
-        short = _SHORT_YEAR.search(text)
+        # an apostrophe year ("SOSP '09") is surer than digits after letters
+        short = _APOSTROPHE_YEAR.search(text) or _SHORT_YEAR.search(text)
         if short and (acronyms or "'" in text or "’" in text):
             edition = _short_year(short.group(1))
             text = text[: short.start()] + " " + text[short.end() :]
@@ -255,8 +258,15 @@ def series_names(v: Venue, expansions: dict[str, set[str]]) -> set[str]:
     out = {v.series}
     # "IEEE ICASSP" is ICASSP: the form without a publisher's word, when
     # a series is left ("Proceedings of the IEEE" stays a journal)
+    # only when what is left is the name's own acronym: "IEEE MultiMedia"
+    # (a magazine) and "ACM Multimedia" (a conference) would otherwise meet
+    # on "multimedia" (the review of 2026-10-04)
     plain = [w for w in v.series.split() if w not in _PUBLISHERS]
-    if plain and len(plain) < len(v.series.split()) and not set(plain) <= _KIND_ONLY:
+    if (
+        v.acronym
+        and plain == [v.acronym.lower()]
+        and len(plain) < len(v.series.split())
+    ):
         out.add(" ".join(plain))
     if v.acronym:
         a = v.acronym.lower()

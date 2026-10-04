@@ -17,9 +17,10 @@ from ..graph import (
     entities_with_degree,
     entity_named_in,
     link,
-    part_of_roots,
+    part_of_ancestry,
     part_of_suspects,
     rename_entity,
+    same_answers,
     traverse_map,
 )
 from .common import (
@@ -131,7 +132,7 @@ def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     breach is a finding for a person, never an edge). Two values where
     one is ``part_of`` the other are one answer, said finer and coarser: a
     paper in "NIME 2010" and in "NIME" is in one venue."""
-    find = part_of_roots(con)
+    ancestors = part_of_ancestry(con)
     out: list[dict[str, Any]] = []
     for rel in sorted(
         r.name for r in ontology.current().relations.values() if r.functional
@@ -151,15 +152,16 @@ def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
             (rel,),
         ).fetchall()
         by_subject: dict[tuple[str, str], list[dict[str, Any]]] = {}
-        clusters: dict[tuple[str, str], set[int]] = {}
+        ids: dict[tuple[str, str], set[int]] = {}
         for r in rows:
             key = (r["subject"], r["type"])
             by_subject.setdefault(key, []).append(
                 {"value": r["value"], "edges": int(r["n"])}
             )
-            clusters.setdefault(key, set()).add(find(int(r["vid"])))
+            ids.setdefault(key, set()).add(int(r["vid"]))
         for (subject, etype), values in sorted(by_subject.items()):
-            if len(clusters[(subject, etype)]) > 1:
+            answers = set(same_answers(ids[(subject, etype)], ancestors).values())
+            if len(answers) > 1:
                 out.append(
                     {
                         "relation": rel,

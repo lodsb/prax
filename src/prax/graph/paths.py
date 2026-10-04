@@ -213,6 +213,9 @@ class _View:
         return got
 
 
+Layer = dict[int, tuple[float, int, int]]  # node -> (cost, previous node, fact)
+
+
 def _grow(
     ix: PathIndex,
     view: _View,
@@ -221,17 +224,17 @@ def _grow(
     hidden: frozenset[int],
     allowed: frozenset[int] | None,
     banned: frozenset[int],
-) -> dict[int, tuple[float, int, int]]:
-    """The best cost to every node within ``depth`` hops of the starts:
-    node -> (cost, previous node, fact); a start's previous node is -1.
+) -> list[Layer]:
+    """Layer by layer from the starts: ``layers[h]`` is the best way to
+    each node in exactly ``h`` hops, built from layer ``h - 1`` alone, so
+    a cheaper but longer way never overwrites a shorter one (the review of
+    2026-10-04 found a path to a node lost to a longer, cheaper one).
     Passing through a node costs its hub price; a start does not."""
-    best: dict[int, tuple[float, int, int]] = dict.fromkeys(starts, (0.0, -1, -1))
-    frontier = set(starts)
-    for _ in range(depth):
-        nxt: set[int] = set()
-        for u in frontier:
-            cu = best[u][0]
-            if best[u][1] != -1:
+    layers: list[Layer] = [dict.fromkeys(starts, (0.0, -1, -1))]
+    for h in range(depth):
+        nxt: Layer = {}
+        for u, (cu, _, _) in layers[-1].items():
+            if h > 0:
                 price = view.hub(u)
                 if price == math.inf:
                     continue
@@ -244,20 +247,22 @@ def _grow(
                     continue
                 v = int(ix.nbr[slot])
                 c = cu + view.cost(f)
-                if v not in best or c < best[v][0]:
-                    best[v] = (c, u, f)
-                    nxt.add(v)
-        frontier = nxt
-    return best
+                if v not in nxt or c < nxt[v][0]:
+                    nxt[v] = (c, u, f)
+        layers.append(nxt)
+    return layers
 
 
-def _back(best: dict[int, tuple[float, int, int]], node: int) -> list[int]:
-    out = []
-    while best[node][1] != -1:
-        _, prev, f = best[node]
-        out.append(f)
-        node = prev
-    return out[::-1]
+def _back(layers: list[Layer], hops: int, node: int) -> tuple[list[int], list[int]]:
+    """The facts and the nodes of the way to ``node`` in ``hops`` hops,
+    from its start."""
+    facts, nodes = [], [node]
+    while hops > 0:
+        _, prev, f = layers[hops][node]
+        facts.append(f)
+        nodes.append(prev)
+        node, hops = prev, hops - 1
+    return facts[::-1], nodes[::-1]
 
 
 def connect(
@@ -289,13 +294,25 @@ def connect(
     right = _grow(ix, view, b, max_hops // 2, hidden, allowed, banned)
     ends_ = set(a) | set(b)
     found: list[tuple[float, list[int]]] = []
-    for m in left.keys() & right.keys():
+    meeting = set().union(*left) & set().union(*right)
+    for m in meeting:
         hub = 0.0 if m in ends_ else view.hub(m)
         if hub == math.inf:
             continue
-        facts = _back(left, m) + _back(right, m)[::-1]
-        if facts and len(facts) <= max_hops:
-            found.append((left[m][0] + right[m][0] + hub, facts))
+        for dl, lay in enumerate(left):
+            if m not in lay:
+                continue
+            for dr, ray in enumerate(right):
+                if m not in ray or not 0 < dl + dr <= max_hops:
+                    continue
+                lf, ln = _back(left, dl, m)
+                rf, rn = _back(right, dr, m)
+                nodes = ln + rn[::-1][1:]
+                facts = lf + rf[::-1]
+                # a simple path only: no entity and no fact twice
+                if len(set(nodes)) != len(nodes) or len(set(facts)) != len(facts):
+                    continue
+                found.append((lay[m][0] + ray[m][0] + hub, facts))
     found.sort(key=lambda x: x[0])
     out: list[Path] = []
     seen: set[frozenset[int]] = set()

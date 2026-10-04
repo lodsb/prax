@@ -183,8 +183,9 @@ from .rules import (  # noqa: F401
     edge_conflicts,
     edge_premises,
     find_conflicts,
-    part_of_roots,
+    part_of_ancestry,
     part_of_suspects,
+    same_answers,
 )
 from .traversal import (  # noqa: F401
     CHANGES_SHOWN,

@@ -376,7 +376,6 @@ def _choose(
     return ([x["id"] for x in chosen] if chosen else []), report
 
 
-@_reading
 def _world_said(row: dict[str, Any]) -> dict[str, Any]:
     """An edge's world time, said only when its source gave one: the
     answer stays small for the facts with none (invariant 6)."""
@@ -386,6 +385,7 @@ def _world_said(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
+@_reading
 def traverse(
     con: sqlite3.Connection,
     entity_name: str,
@@ -745,7 +745,7 @@ def _change_sides(
                 if k == "added":
                     cond += (
                         f" AND NOT EXISTS (SELECT 1 FROM edges p WHERE {same}"
-                        f" AND {held}{seen})"
+                        f" AND p.id != e.id AND {held}{seen})"
                     )
                     bounds = [*bounds, *held_args, *seen_args]
                 else:
