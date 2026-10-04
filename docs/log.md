@@ -4241,6 +4241,25 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
+## 2026-10-04, past midnight: a heading is capped in a hit
+
+Found on 2026-10-03 in doc 9522, a patent read in two columns: a heading
+of over 2,000 characters rode along with every search hit and `ask`
+passage of the document. Marker's re-read mended 9522 (its longest
+heading is 119 characters now), but the shape is common to bad parses:
+1,044 chunks in 30 documents carry a heading path over 1,000 characters
+and 60 over 2,000, a book's epigraph or a page's running text read as a
+heading.
+
+`store.short_heading` caps the path where every read of a chunk is
+shaped (`_chunk_shape`): each level cut at a word to 120 characters and
+marked "…", and only the 4 nearest levels, the first marked "… " when
+more were left out. Search hits, `ask` passages, the surfer's reads and
+`get_chunk` all carry the short path; the chunk's text and the
+document's outline (`sections`) read the full one. On a copy of the
+library a search of ten hits that met such a document went from 5,805
+to 4,085 bytes, its one bad heading from 1,879 characters to 180.
+
 ## 2026-10-04, past midnight: `store.repair` in parts
 
 `store.repair` had grown to 1,890 lines with today's ailments, near the

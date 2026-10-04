@@ -183,6 +183,29 @@ def brief_hit(hit: dict[str, Any]) -> dict[str, Any]:
 ANNOTATORS = ("figures", "figure-refs", "formulas")  # readers that add to the text
 
 
+HEADING_PART_CHARS = 120  # one level of a heading path, at most
+HEADING_PARTS = 4  # levels of it, the nearest kept
+
+
+def short_heading(path: list[str]) -> list[str]:
+    """A heading path as a hit or a passage carries it: each level cut at a
+    word to ``HEADING_PART_CHARS`` and marked "…", and only the
+    ``HEADING_PARTS`` nearest levels. A parse that read a page's columns
+    or a book's epigraph as a heading wrote 1,000 characters and more into
+    1,044 chunks (2026-10-04), and every hit of those documents carried
+    them (invariant 6). The chunk's text is not touched."""
+    out = []
+    for part in path[-HEADING_PARTS:]:
+        part = str(part)
+        if len(part) > HEADING_PART_CHARS:
+            cut = part[:HEADING_PART_CHARS].rsplit(" ", 1)[0].rstrip(" ,;:–-")
+            part = (cut or part[:HEADING_PART_CHARS]) + "…"
+        out.append(part)
+    if len(path) > HEADING_PARTS:
+        out[0] = "… " + out[0]
+    return out
+
+
 def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     """The structural fields of a chunk row, decoded (None for legacy
     rows), and for a figure chunk the ``figure`` reference, so a hit or a
@@ -191,7 +214,7 @@ def _chunk_shape(row: sqlite3.Row) -> dict[str, Any]:
     loc = json.loads(row["locator"]) if row["locator"] else {}
     out = {
         "kind": row["kind"],
-        "heading": json.loads(row["heading"]) if row["heading"] else [],
+        "heading": short_heading(json.loads(row["heading"])) if row["heading"] else [],
         "page": loc.get("page"),
         "time": loc.get("time"),  # seconds into a recording, a transcript's passage
         "figure": None,

@@ -712,7 +712,7 @@ and pushing what is committed.
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
 
-- [ ] **A heading is capped in a hit** (found 2026-10-03). Doc 9522, a
+- [x] (2026-10-04: `store.short_heading` in `_chunk_shape`, 120 characters a level and the 4 nearest levels; marker had mended 9522, 30 documents were still past 1,000 characters) **A heading is capped in a hit** (found 2026-10-03). Doc 9522, a
       patent read in two columns, has a heading of over 2,000 characters
       of repeated text, and it rides along with every search hit and
       `ask` passage of that document. Marker reads it again (queued the
