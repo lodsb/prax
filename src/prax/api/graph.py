@@ -275,6 +275,22 @@ def review_bulk(req: BulkReq, request: Request) -> dict[str, int]:
     return {"resolved": n}
 
 
+class ReopenReq(BaseModel):
+    ids: list[int]
+    resolution: str = "dropped"
+
+
+@router.post("/review/reopen")
+def review_reopen(req: ReopenReq, request: Request) -> dict[str, int]:
+    """Open again review items closed as ``resolution`` (``dropped`` by
+    default): a drop by mistake undone. The administrator's only."""
+    return {
+        "reopened": store.reopen_reviews(
+            _con(request), req.ids, resolution=req.resolution
+        )
+    }
+
+
 @router.post("/review/replay")
 def review_replay(request: Request) -> dict[str, Any]:
     """Link the typed open items the current ontology now accepts."""

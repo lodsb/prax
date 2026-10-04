@@ -317,6 +317,31 @@ def forget_resolved_reviews(
     return int(cur.rowcount)
 
 
+@_serialized
+def reopen_reviews(
+    con: sqlite3.Connection, ids: list[int], *, resolution: str = "dropped"
+) -> int:
+    """Open again the items given that were closed as ``resolution``: a
+    drop by mistake undone (the references pass dropped other passes'
+    items from 2026-09-20 to 10-04). An item another of the same triple
+    is open for again is left closed; returns how many opened."""
+    done = 0
+    for start in range(0, len(ids), 500):
+        part = ids[start : start + 500]
+        marks = ",".join("?" * len(part))
+        cur = con.execute(
+            "UPDATE review_queue SET resolution = NULL, resolved_at = NULL"
+            f" WHERE id IN ({marks}) AND resolution = ?"
+            " AND NOT EXISTS (SELECT 1 FROM review_queue o WHERE o.resolution IS NULL"
+            " AND o.source_doc IS review_queue.source_doc AND o.src = review_queue.src"
+            " AND o.rel = review_queue.rel AND o.dst = review_queue.dst)",
+            [*part, resolution],
+        )
+        done += cur.rowcount
+    con.commit()
+    return done
+
+
 def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> None:
     """Close a review item: ``linked`` (written as an edge by hand),
     ``dropped`` or ``ontology`` (the ontology grew to fit it)."""

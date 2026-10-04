@@ -94,6 +94,7 @@ from .decisions import (  # noqa: F401
     list_review,
     merge_risk,
     queue_review,
+    reopen_reviews,
     replace_entity_candidates,
     resolve_review,
     resolve_review_many,

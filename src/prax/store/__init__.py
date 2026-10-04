@@ -435,6 +435,7 @@ from .graph import (  # noqa: F401
     regions_of,
     rename_display_language,
     rename_entity,
+    reopen_reviews,
     replace_communities,
     replace_entity_candidates,
     resolve_review,
