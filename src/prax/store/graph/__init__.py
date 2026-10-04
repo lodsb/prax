@@ -168,12 +168,17 @@ from .paths import (  # noqa: F401
     path_index,
 )
 from .rules import (  # noqa: F401
+    CONFLICT_PAIRS,
+    CONFLICT_PRODUCER,
     RULE_CAP,
     RULE_DEPTH,
     closure,
     converse,
     derive_rules,
+    edge_conflicts,
     edge_premises,
+    find_conflicts,
+    part_of_roots,
     part_of_suspects,
 )
 from .traversal import (  # noqa: F401

@@ -4241,6 +4241,38 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
+## 2026-10-04, night: two facts that cannot both hold (the conflicts pass)
+
+AL step 4's last item: a pass that keeps the disagreements of a
+functional relation visible, never ending a fact for them. The plan said
+"`contradicts` edges between facts", but an edge of the graph joins two
+entities, and a conflict joins two facts; an edge between "DAFx-14" and
+"ICASSP 2014" would say something false about two conferences. So the
+conflicts live beside the edges, as the rule pass's premises do:
+`edge_conflicts` (migration 43), the two edges, the relation, producer
+`rule:functional`, run `conflicts:<relation>`, when found and when ended.
+
+The `conflicts` pass of `prax maintain`, nightly, after the rule pass
+(`store.find_conflicts`): per relation the ontology calls functional
+(`published_in` today), the live asserted edges grouped by subject, the
+values by their root under `part_of` (`store.part_of_roots`, which the
+`functional-conflicts` finding now shares), one edge standing for each
+value (an EXTRACTED one first, then the oldest), six pairs a subject at
+most. Pairs that disagree and were not recorded are added; recorded ones
+that no longer disagree (an edge ended, a merge, a `part_of` that joined
+the two values) are ended. `traverse` marks a fact another contradicts
+(`disputed`: how many), counting only those the viewer may see, and `why`
+lists them with their documents and quotes (`store.edge_conflicts`,
+scrubbed by the wall).
+
+On a copy after the venue tier and `not-venues`: 224 conflicts in 0.25 s,
+a second pass 0.18 s with nothing changed. Of the 214 between open
+documents, 148 pair two values one document gave ("huggingface.co" and
+"GitHub", a journal with and without its volume and pages): an
+extraction's own ambiguity, not two sources at odds. The other 66 are
+documents disagreeing, some for real (a paper in NIME 2011 and in ITS
+2010). A person reads them; nothing is decided by the pass.
+
 ## 2026-10-04, night: a publisher is no venue (`not-venues`)
 
 After the venue tier, most of the 247 "published in two venues" findings

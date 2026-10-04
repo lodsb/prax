@@ -65,6 +65,7 @@ from .graph import (
     corpus_rulings,
     derive_rules,
     document_node,
+    find_conflicts,
     find_edges,
     forget_resolved_reviews,
     in_english_text,
@@ -103,6 +104,7 @@ PASSES = (
     "names",
     "attachment",
     "rules",
+    "conflicts",
     "communities",
     "histories",
 )
@@ -1061,6 +1063,15 @@ def _rules(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return dict(derive_rules(con))
 
 
+def _conflicts(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """Two facts that cannot both hold: a functional relation with two
+    values for one subject, neither part of the other, kept in
+    ``edge_conflicts`` and in step with the edges (``store.find_conflicts``).
+    Shown, never resolved: no fact is ended."""
+    job.update(note="facts that disagree")
+    return dict(find_conflicts(con))
+
+
 def _histories(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The parse and extraction histories held to ``HISTORY_KEEP`` entries
     (``bounded_histories``), for documents written before the bound or by
@@ -1156,6 +1167,7 @@ _RUN = {
     "vectors": _vectors,
     "histories": _histories,
     "rules": _rules,
+    "conflicts": _conflicts,
 }
 
 

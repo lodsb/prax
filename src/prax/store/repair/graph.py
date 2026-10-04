@@ -17,6 +17,7 @@ from ..graph import (
     entities_with_degree,
     entity_named_in,
     link,
+    part_of_roots,
     part_of_suspects,
     rename_entity,
     traverse_map,
@@ -130,20 +131,7 @@ def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     breach is a finding for a person, never an edge). Two values where
     one is ``part_of`` the other are one answer, said finer and coarser: a
     paper in "NIME 2010" and in "NIME" is in one venue."""
-    parent: dict[int, int] = {}
-
-    def find(x: int) -> int:
-        while parent.setdefault(x, x) != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    for a, b in con.execute(
-        "SELECT COALESCE(s.canonical_id, s.id), COALESCE(t.canonical_id, t.id)"
-        " FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
-        " WHERE e.rel = 'part_of' AND e.valid_to IS NULL"
-    ):
-        parent[find(int(a))] = find(int(b))
+    find = part_of_roots(con)
     out: list[dict[str, Any]] = []
     for rel in sorted(
         r.name for r in ontology.current().relations.values() if r.functional

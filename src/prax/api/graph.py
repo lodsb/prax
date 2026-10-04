@@ -185,8 +185,17 @@ def connect(
 @router.get("/edge/{edge_id}/why")
 def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
     """What a derived edge follows from: its premises, in the order of the
-    chain (``store.edge_premises``); empty for an asserted edge."""
-    return {"edge_id": edge_id, "premises": store.edge_premises(_con(request), edge_id)}
+    chain (``store.edge_premises``); empty for an asserted edge. And the
+    facts it disagrees with (``conflicts``, ``store.edge_conflicts``)."""
+    con = _con(request)
+    out: dict[str, Any] = {
+        "edge_id": edge_id,
+        "premises": store.edge_premises(con, edge_id),
+    }
+    conflicts = store.edge_conflicts(con, edge_id)
+    if conflicts:
+        out["conflicts"] = conflicts
+    return out
 
 
 @router.get("/ontology")

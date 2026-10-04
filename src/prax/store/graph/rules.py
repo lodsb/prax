@@ -27,7 +27,7 @@ from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _reading, _scrubbed, _serialized
+from ..base import _NOW, _reading, _scrubbed, _serialized
 from .edges import Edge, invalidate_edge, link
 
 RULE_CAP = 20_000  # derivations a relation at most
@@ -336,6 +336,152 @@ def edge_premises(con: sqlite3.Connection, edge_id: int) -> list[dict[str, Any]]
         " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
         " WHERE p.edge_id = ? ORDER BY p.rowid",
         (edge_id,),
+    ).fetchall()
+    return [
+        {
+            "edge_id": int(r["id"]),
+            "src": r["src"],
+            "rel": r["rel"],
+            "dst": r["dst"],
+            "source_doc": r["source_doc"],
+            "evidence": r["evidence"],
+        }
+        for r in rows
+    ]
+
+
+CONFLICT_PAIRS = 6  # pairs a subject's values make at most
+CONFLICT_PRODUCER = "rule:functional"
+
+
+@_reading
+def part_of_roots(con: sqlite3.Connection) -> Callable[[int], int]:
+    """The root of each entity under the live ``part_of`` edges: two
+    values of a functional relation with one root are one answer said
+    finer and coarser ("NIME 2010" and "NIME")."""
+    parent: dict[int, int] = {}
+
+    def find(x: int) -> int:
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for a, b in con.execute(
+        "SELECT COALESCE(s.canonical_id, s.id), COALESCE(t.canonical_id, t.id)"
+        " FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+        " WHERE e.rel = 'part_of' AND e.valid_to IS NULL"
+    ):
+        parent[find(int(a))] = find(int(b))
+    return find
+
+
+@_reading
+def _functional_pairs(
+    con: sqlite3.Connection, rel: str, root: Callable[[int], int]
+) -> set[tuple[int, int]]:
+    """The pairs of live asserted edges of ``rel`` that disagree: one
+    subject, two values with different roots. One edge stands for each
+    value (an EXTRACTED one first, then the oldest), and a subject makes
+    ``CONFLICT_PAIRS`` pairs at most."""
+    rows = con.execute(
+        """
+        SELECT e.id, COALESCE(s.canonical_id, s.id) AS subject,
+               COALESCE(t.canonical_id, t.id) AS value, e.confidence
+        FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
+        WHERE e.rel = ? AND e.valid_to IS NULL
+          AND COALESCE(e.producer, '') NOT LIKE 'rule:%'
+        ORDER BY e.id
+        """,
+        (rel,),
+    ).fetchall()
+    by_subject: dict[int, dict[int, tuple[int, int]]] = defaultdict(dict)
+    for r in rows:
+        key = root(int(r["value"]))
+        rank = (0 if r["confidence"] == "EXTRACTED" else 1, int(r["id"]))
+        held = by_subject[int(r["subject"])].get(key)
+        if held is None or rank < held:
+            by_subject[int(r["subject"])][key] = rank
+    out: set[tuple[int, int]] = set()
+    for values in by_subject.values():
+        if len(values) < 2:
+            continue
+        ids = sorted(eid for _, eid in values.values())
+        pairs = [(a, b) for i, a in enumerate(ids) for b in ids[i + 1 :]]
+        out.update(pairs[:CONFLICT_PAIRS])
+    return out
+
+
+@_serialized
+def _write_conflicts(
+    con: sqlite3.Connection,
+    rel: str,
+    added: list[tuple[int, int]],
+    ended: list[int],
+) -> None:
+    run = f"conflicts:{rel}"
+    con.executemany(
+        "INSERT INTO edge_conflicts (edge_a, edge_b, rel, producer, run, found_at)"
+        f" VALUES (?, ?, ?, ?, ?, {_NOW})",
+        [(a, b, rel, CONFLICT_PRODUCER, run) for a, b in added],
+    )
+    con.executemany(
+        f"UPDATE edge_conflicts SET ended_at = {_NOW} WHERE id = ?",
+        [(i,) for i in ended],
+    )
+    con.commit()
+
+
+def find_conflicts(
+    con: sqlite3.Connection, *, log: Callable[[str], None] | None = None
+) -> dict[str, dict[str, int]]:
+    """One pass over every relation the ontology calls functional, kept in
+    step with the edges: pairs that disagree now and were not recorded are
+    added, recorded ones that no longer disagree (an edge ended, a merge,
+    a ``part_of`` that joined the two values) are ended. Nothing is
+    deleted and no fact is ended: a disagreement is shown, a person
+    decides."""
+    say = log or (lambda _t: None)
+    root = part_of_roots(con)
+    report: dict[str, dict[str, int]] = {}
+    for rel in sorted(
+        r.name for r in ontology.current().relations.values() if r.functional
+    ):
+        now = _functional_pairs(con, rel, root)
+        held = {
+            (int(r[1]), int(r[2])): int(r[0])
+            for r in con.execute(
+                "SELECT id, edge_a, edge_b FROM edge_conflicts"
+                " WHERE rel = ? AND ended_at IS NULL",
+                (rel,),
+            )
+        }
+        added = sorted(now - held.keys())
+        ended = [i for pair, i in held.items() if pair not in now]
+        _write_conflicts(con, rel, added, ended)
+        report[rel] = {"open": len(now), "added": len(added), "ended": len(ended)}
+        say(f"conflicts {rel}: {report[rel]}")
+    return report
+
+
+@_scrubbed
+@_reading
+def edge_conflicts(con: sqlite3.Connection, edge_id: int) -> list[dict[str, Any]]:
+    """The facts an edge disagrees with (open conflicts): each the other
+    edge as ``edge_id, src, rel, dst, source_doc, evidence``."""
+    rows = con.execute(
+        """
+        SELECT o.id, s.name AS src, o.rel, t.name AS dst, o.source_doc, o.evidence
+        FROM edge_conflicts c
+        JOIN edges o ON o.id = CASE WHEN c.edge_a = ? THEN c.edge_b ELSE c.edge_a END
+        JOIN entities s0 ON s0.id = o.src
+        JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
+        JOIN entities t0 ON t0.id = o.dst
+        JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
+        WHERE (c.edge_a = ? OR c.edge_b = ?) AND c.ended_at IS NULL
+        ORDER BY o.id
+        """,
+        (edge_id, edge_id, edge_id),
     ).fetchall()
     return [
         {

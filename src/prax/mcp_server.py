@@ -253,7 +253,9 @@ def link(
 def why(edge_id: int) -> dict[str, Any]:
     """What a derived edge follows from (an INFERRED edge whose producer is
     ``rule:…``, as ``traverse`` lists it): the stated facts of its chain,
-    each with its document and evidence."""
+    each with its document and evidence. For a fact ``traverse`` marks
+    ``disputed``, the facts it disagrees with (``conflicts``): a paper said
+    to be published in two venues, each with the document that says so."""
     return _answer(lambda: door().get_json(f"/edge/{edge_id}/why"))
 
 

@@ -181,7 +181,10 @@ revisit threshold, under "Decision thresholds" below.
    it bumps a version, and `ontology.lint` refuses a contradiction at
    load. The rule pass (`store.derive_rules`) writes INFERRED edges with
    their premises (`edge_premises`) in the nightly `prax maintain`, and
-   stands on no `part_of` its names doubt (stage AN).
+   stands on no `part_of` its names doubt (stage AN). Two facts of a
+   functional relation that cannot both hold are kept beside the edges
+   (`edge_conflicts`, the `conflicts` pass), shown as `disputed` by
+   `traverse` and listed by `why`; no fact is ended for it.
    A type says with `naming:` whether its names are `proper` (one
    particular thing: a person, a publisher, a product, a title, the same
    string in every language) or `common` (a kind of thing, which every

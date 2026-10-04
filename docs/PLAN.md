@@ -322,7 +322,7 @@ and pushing what is committed.
             re-baseline table" is a fact the graph cannot say today.
       - [x] (2026-10-04: `linked.out`/`linked.in`; `traverse("doc:N")`) `context` returns a document's edges out and in;
             `traverse("doc:N")` walks from a document.
-      - [ ] Functional relations declared in the ontology (a building is
+      - [x] (2026-10-04: `edge_conflicts`, migration 43, kept by the nightly `conflicts` pass; `traverse` marks a fact `disputed`, `why` lists what disagrees; a table beside the edges, not a `contradicts` edge: an edge joins two entities, a conflict two facts) Functional relations declared in the ontology (a building is
             `located_in` one place), and a later pass that proposes
             `contradicts` edges between facts of such a relation that
             disagree, with their own producer and run, so `retire_run`

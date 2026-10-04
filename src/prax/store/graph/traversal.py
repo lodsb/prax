@@ -561,7 +561,35 @@ def _walk(
     near = [r for r in shaped if int(r["hop"]) < 2]
     far = [r for r in shaped if int(r["hop"]) >= 2]
     near, edges_left = _first_hop(near, limit)
+    _mark_disputed(con, near, hidden)
     return near + far, {"edges": edges_left, "neighbours": neighbours_left}
+
+
+def _mark_disputed(
+    con: sqlite3.Connection, rows: list[dict[str, Any]], hidden: frozenset[int]
+) -> None:
+    """A fact another one contradicts says so (``disputed``: how many),
+    counting only the others the viewer may see; ``why`` lists them."""
+    ids = [int(r["edge_id"]) for r in rows if r.get("edge_id") is not None]
+    if not ids:
+        return
+    marks = ",".join("?" * len(ids))
+    counts: dict[int, int] = {}
+    for mine, doc in con.execute(
+        "SELECT c.edge_a, o.source_doc FROM edge_conflicts c"
+        " JOIN edges o ON o.id = c.edge_b"
+        f" WHERE c.ended_at IS NULL AND c.edge_a IN ({marks})"
+        " UNION ALL SELECT c.edge_b, o.source_doc FROM edge_conflicts c"
+        " JOIN edges o ON o.id = c.edge_a"
+        f" WHERE c.ended_at IS NULL AND c.edge_b IN ({marks})",
+        ids + ids,
+    ):
+        if doc is None or int(doc) not in hidden:
+            counts[int(mine)] = counts.get(int(mine), 0) + 1
+    for r in rows:
+        n = counts.get(int(r.get("edge_id") or 0))
+        if n:
+            r["disputed"] = n
 
 
 CHANGES_SHOWN = 20  # facts a side of a changes answer lists at most
