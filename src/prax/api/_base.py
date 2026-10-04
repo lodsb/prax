@@ -31,16 +31,25 @@ def ui_url(request: Request, doc_id: int) -> str:
 
 
 def _capture_out(cap: inbox.Capture, request: Request) -> dict[str, Any]:
+    hidden = store.hidden_documents(_con(request))
+    if cap.doc_id in hidden:
+        # the same bytes as a document the caller may not see: accepted,
+        # nothing created, nothing named
+        return {"doc_id": None, "created": False, "indexed": False, "mime": cap.mime}
+
+    def shown(doc: int | None) -> int | None:
+        return None if doc is None or doc in hidden else doc
+
     return {
         "doc_id": cap.doc_id,
         "url": ui_url(request, cap.doc_id),
         "created": cap.created,
         "indexed": cap.indexed,
         "domains": cap.domains,
-        "previous_capture": cap.previous,
+        "previous_capture": shown(cap.previous),
         "mime": cap.mime,
-        "duplicate_of": cap.duplicate_of,
-        "replaced": cap.replaced,
+        "duplicate_of": shown(cap.duplicate_of),
+        "replaced": shown(cap.replaced),
     }
 
 

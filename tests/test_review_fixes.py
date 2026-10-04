@@ -82,3 +82,150 @@ def test_undoing_a_resolve_round_ends_its_edition_links(
     assert con.execute(links).fetchone()[0] == 1
     store.unmerge_run(con, "r1")
     assert con.execute(links).fetchone()[0] == 0
+
+
+# --------------------------------------------------------------- the wall
+
+
+def _as_restricted(domains: frozenset[str] | None = None) -> object:
+    return store.VIEWER.set(store.Viewer(name="t", domains=domains, personal=False))
+
+
+def _private_doc(con: sqlite3.Connection, text: str = "my own notes " * 20) -> int:
+    doc = int(store.ingest_text(con, text)["doc_id"])
+    store.set_sensitivity(con, doc, "personal")
+    return doc
+
+
+def test_a_derivation_from_a_hidden_premise_is_hidden(con: sqlite3.Connection) -> None:
+    """Finding 2: a rule edge quoted a premise only a hidden document
+    states; it is hidden with that premise (here: a premise from a
+    document the viewer's modules do not reach)."""
+    org = "organization"
+    doc = int(store.ingest_text(con, "lab notes of the department " * 20)["doc_id"])
+    store.set_domains(con, doc, ["research"])
+    store.link(con, E("Lab", org, "part_of", "Dept", org), source_doc=doc, producer="t")
+    store.link(con, E("Dept", org, "part_of", "Uni", org), producer="t")
+    store.derive_rules(con)
+    derived = int(
+        con.execute("SELECT id FROM edges WHERE producer LIKE 'rule:%'").fetchone()[0]
+    )
+    token = _as_restricted(frozenset({"kitchen", "unassigned"}))
+    try:
+        walk = store.traverse_map(con, "Uni")
+        assert all(e["edge_id"] != derived for e in walk["edges"])
+        assert store.edge_hidden(con, derived)
+        got = store.changes(con, "2000", derived=True)
+        assert all(f["edge_id"] != derived for f in got["added"]["facts"])
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert not store.edge_hidden(con, derived)
+
+
+def test_a_name_only_hidden_documents_know_is_unknown(con: sqlite3.Connection) -> None:
+    """Finding 8: changes told a hidden-only name from an unknown one."""
+    doc = _private_doc(con)
+    store.link(
+        con,
+        E("Bank statement", "document", "mentions", "Landlord X", "person"),
+        source_doc=doc,
+    )
+    token = _as_restricted()
+    try:
+        assert (
+            store.changes(con, "2000", entity="Landlord X")["unknown_entity"]
+            == "Landlord X"
+        )
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert "unknown_entity" not in store.changes(con, "2000", entity="Landlord X")
+
+
+def test_a_hidden_fact_makes_no_rereading(con: sqlite3.Connection) -> None:
+    """Finding 18: a hidden edge held before the period hid the visible
+    one written in it, as a re-reading."""
+    doc = _private_doc(con)
+    old = store.link(
+        con, E("Paper A", "paper", "uses", "Method B", "method"), source_doc=doc
+    )
+    con.execute(
+        "UPDATE edges SET valid_from = '2026-01-01T00:00:00Z' WHERE id = ?", (old,)
+    )
+    con.commit()
+    store.link(con, E("Paper A", "paper", "uses", "Method B", "method"))
+    token = _as_restricted()
+    try:
+        assert store.changes(con, store.now()[:10])["added"]["count"] == 1
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert store.changes(con, store.now()[:10])["added"]["count"] == 0
+
+
+def test_staleness_from_a_hidden_document_is_not_said(con: sqlite3.Connection) -> None:
+    """Finding 7: a personal note's supersedes edge made a visible hit
+    stale for a restricted token."""
+    old = int(
+        store.ingest_text(con, "the plan of record " * 20, title="Plan A")["doc_id"]
+    )
+    note = _private_doc(con)
+    store.link(
+        con,
+        E("Plan B", "document", "supersedes", "Plan A", "document"),
+        source_doc=note,
+    )
+    token = _as_restricted()
+    try:
+        assert old not in store.retrieval.staleness(
+            con, [{"doc_id": old, "title": "Plan A"}]
+        )
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert old in store.retrieval.staleness(con, [{"doc_id": old, "title": "Plan A"}])
+
+
+def test_a_path_cost_counts_only_visible_documents(con: sqlite3.Connection) -> None:
+    """Finding 17: a hop's cost fell with hidden documents behind it."""
+    from prax.graph import paths
+
+    open_doc = int(store.ingest_text(con, "wavelets for audio " * 20)["doc_id"])
+    hidden = [_private_doc(con, f"note {i} on wavelets " * 20) for i in range(3)]
+    for d in [open_doc, *hidden]:
+        store.link(
+            con,
+            E("Paper A", "paper", "uses", "wavelet transform", "method"),
+            source_doc=d,
+        )
+    store.link(
+        con,
+        E("Paper B", "paper", "uses", "wavelet transform", "method"),
+        source_doc=open_doc,
+    )
+    ix = store.path_index(con)
+    a, b = (
+        int(con.execute("SELECT id FROM entities WHERE name = ?", (n,)).fetchone()[0])
+        for n in ("Paper A", "Paper B")
+    )
+    full = paths.connect(ix, [a], [b])[0].cost
+    seen = paths.connect(ix, [a], [b], hidden=frozenset(hidden))[0].cost
+    assert seen > full  # the three hidden witnesses no longer lower it
+    one = paths.hop_cost("uses", "EXTRACTED", 1)
+    assert abs(seen - 2 * one - paths.HUB * __import__("math").log1p(2)) < 0.01
+
+
+def test_a_capture_does_not_touch_a_hidden_document(con: sqlite3.Connection) -> None:
+    """Finding 10: a named token sending the bytes of a hidden document
+    learned its id and could give it domains."""
+    from prax.capture import inbox
+
+    data = b"the same private letter, byte for byte " * 20
+    first = inbox.ingest_bytes(con, data, mime="text/plain", source="drop")
+    store.set_sensitivity(con, first.doc_id, "personal")
+    token = _as_restricted()
+    try:
+        again = inbox.ingest_bytes(
+            con, data, mime="text/plain", source="drop", domains=["kitchen"]
+        )
+    finally:
+        store.VIEWER.reset(token)  # type: ignore[arg-type]
+    assert again.created is False and again.domains is None
+    assert "kitchen" not in (store.document_domains(con, first.doc_id) or [])

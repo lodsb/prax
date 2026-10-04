@@ -333,7 +333,7 @@ def staleness(
             UNION ALL
             SELECT e.id, t.name FROM t CROSS JOIN entities e ON e.canonical_id = t.id
         )
-        SELECT x.rel, x.world_from, c.name AS src, ids.name AS dst
+        SELECT x.rel, x.world_from, x.source_doc, c.name AS src, ids.name AS dst
         FROM ids CROSS JOIN edges x ON x.dst = ids.id AND x.valid_to IS NULL
         JOIN entities s0 ON s0.id = x.src
         JOIN entities c ON c.id = COALESCE(s0.canonical_id, s0.id)
@@ -343,6 +343,8 @@ def staleness(
         tuple(titles),
     ).fetchall()
     for r in rows:
+        if r["source_doc"] is not None and int(r["source_doc"]) in hidden:
+            continue  # what only a hidden document says is not said
         other = con.execute(
             "SELECT id FROM documents WHERE title = ?"
             " AND json_extract(meta, '$.retired') IS NULL ORDER BY id DESC LIMIT 1",

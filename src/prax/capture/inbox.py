@@ -409,8 +409,13 @@ def ingest_bytes(
     # not; the same page is one document, unless this send is a snapshot
     # and the earlier one only the bare DOM, in which case this one wins
     same_id: int | None = None
+    # a named token's capture never lands on, names or changes a document
+    # it may not see (the wall: hidden means absent, existence too)
+    hidden = store.hidden_documents(con)
     if url and mime in HTML_TYPES and source == "capture":
         same_id, same_meta = _same_page_as(con, url, data)
+        if same_id is not None and same_id in hidden:
+            same_id = None
         if same_id is not None:
             better = store.capture_rank(meta) > store.capture_rank(same_meta or {})
             if not better:
@@ -440,8 +445,14 @@ def ingest_bytes(
     )
     doc_id = result["doc_id"]
     previous = None
+    if not result["created"] and doc_id in hidden:
+        # the same bytes as a hidden document: nothing is added to it,
+        # and the answer names no document (``_capture_out``)
+        return Capture(doc_id, False, False, None, None, mime)
     if result["created"]:
         previous = _previous_capture(con, url, exclude=doc_id)
+        if previous is not None and previous in hidden:
+            previous = None
         if previous is not None:
             m = store.get_meta(con, doc_id)
             m["previous_capture"] = previous

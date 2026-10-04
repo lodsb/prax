@@ -169,8 +169,53 @@ class Path:
     facts: list[int]  # in order from the start to the end
 
 
+class _View:
+    """The index as one viewer sees it: with hidden documents, a fact's
+    cost counts only the documents it may see, and an entity's hub price
+    only the facts it may cross, so neither a cost nor a ranking says what
+    a hidden document states (the review of 2026-10-04)."""
+
+    def __init__(self, ix: PathIndex, hidden: frozenset[int]) -> None:
+        self.ix, self.hidden = ix, hidden
+        self._cost: dict[int, float] = {}
+        self._hub: dict[int, float] = {}
+
+    def cost(self, f: int) -> float:
+        if not self.hidden:
+            return float(self.ix.cost[f])
+        got = self._cost.get(f)
+        if got is None:
+            docs = {
+                d
+                for _, d in self.ix.edges_of(f)
+                if d is not None and d not in self.hidden
+            }
+            conf = CONFIDENCES[self.ix.conf[f]]
+            got = self._cost[f] = hop_cost(
+                self.ix.rels[self.ix.rel[f]], conf, len(docs)
+            )
+        return got
+
+    def hub(self, node: int) -> float:
+        if not self.hidden:
+            return self.ix.hub(node)
+        got = self._hub.get(node)
+        if got is None:
+            ix = self.ix
+            seen = sum(
+                1
+                for slot in range(ix.off[node], ix.off[node + 1])
+                if ix.crossable(int(ix.slot_fact[slot]), self.hidden)
+            )
+            got = self._hub[node] = (
+                math.inf if seen > NO_PASS else HUB * math.log1p(seen)
+            )
+        return got
+
+
 def _grow(
     ix: PathIndex,
+    view: _View,
     starts: list[int],
     depth: int,
     hidden: frozenset[int],
@@ -187,7 +232,7 @@ def _grow(
         for u in frontier:
             cu = best[u][0]
             if best[u][1] != -1:
-                price = ix.hub(u)
+                price = view.hub(u)
                 if price == math.inf:
                     continue
                 cu += price
@@ -198,7 +243,7 @@ def _grow(
                 if not ix.crossable(f, hidden):
                     continue
                 v = int(ix.nbr[slot])
-                c = cu + ix.cost[f]
+                c = cu + view.cost(f)
                 if v not in best or c < best[v][0]:
                     best[v] = (c, u, f)
                     nxt.add(v)
@@ -239,12 +284,13 @@ def connect(
         if relations is None
         else frozenset(i for i, r in enumerate(ix.rels) if r in set(relations))
     )
-    left = _grow(ix, a, (max_hops + 1) // 2, hidden, allowed, banned)
-    right = _grow(ix, b, max_hops // 2, hidden, allowed, banned)
+    view = _View(ix, hidden)
+    left = _grow(ix, view, a, (max_hops + 1) // 2, hidden, allowed, banned)
+    right = _grow(ix, view, b, max_hops // 2, hidden, allowed, banned)
     ends_ = set(a) | set(b)
     found: list[tuple[float, list[int]]] = []
     for m in left.keys() & right.keys():
-        hub = 0.0 if m in ends_ else ix.hub(m)
+        hub = 0.0 if m in ends_ else view.hub(m)
         if hub == math.inf:
             continue
         facts = _back(left, m) + _back(right, m)[::-1]

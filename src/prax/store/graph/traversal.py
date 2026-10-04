@@ -15,7 +15,14 @@ from prax.text import dates
 
 from ..base import VIEWER, _reading, domain_clause, hidden_documents, now
 from .communities import community_of
-from .edges import _MOMENT_ISO, _end_of, changed_between, document_node, held_at
+from .edges import (
+    _MOMENT_ISO,
+    _end_of,
+    changed_between,
+    document_node,
+    held_at,
+    hidden_by_premise,
+)
 
 MAX_HOPS = 2
 
@@ -557,6 +564,17 @@ def _walk(
         if r["source_doc"] not in hidden
         and (within is None or r["source_doc"] in within)
     ]
+    veiled = hidden_by_premise(
+        con,
+        [
+            int(r["edge_id"])
+            for r in seen
+            if str(r.get("producer") or "").startswith("rule:")
+        ],
+        hidden,
+    )
+    if veiled:
+        seen = [r for r in seen if int(r["edge_id"]) not in veiled]
     shaped, neighbours_left = _second_hop(seen)
     near = [r for r in shaped if int(r["hop"]) < 2]
     far = [r for r in shaped if int(r["hop"]) >= 2]
@@ -624,6 +642,25 @@ def _span(since: str, until: str | None) -> tuple[str, str, str, str]:
     return begin, end, begin_date, end_date
 
 
+def _visible_ids(
+    con: sqlite3.Connection, ids: list[int], hidden: frozenset[int]
+) -> list[int]:
+    """Of these entities, those a live edge from a visible document (or
+    from none) speaks of."""
+    marks = ",".join("?" * len(ids))
+    rows = con.execute(
+        f"SELECT src, dst, source_doc FROM edges WHERE valid_to IS NULL"
+        f" AND (src IN ({marks}) OR dst IN ({marks}))",
+        ids + ids,
+    ).fetchall()
+    keep = set(ids)
+    seen: set[int] = set()
+    for src, dst, doc in rows:
+        if doc is None or int(doc) not in hidden:
+            seen.update(x for x in (int(src), int(dst)) if x in keep)
+    return [i for i in ids if i in seen]
+
+
 def _entity_ids(con: sqlite3.Connection, name: str) -> list[int]:
     """Every entity that answers to a name (its own or a label), with the
     ones merged into it."""
@@ -674,6 +711,53 @@ _WORLD_SIDES = {
 }
 
 
+def _change_sides(
+    world: bool,
+    rereadings: bool,
+    span: tuple[str, str, str, str],
+    hidden: frozenset[int],
+) -> dict[str, tuple[str, str, list[str]]]:
+    """The two sides of a period on one time, each its condition, the
+    column that says when, and the condition's arguments."""
+    begin, end, begin_date, end_date = span
+    veil = json.dumps(sorted(hidden))
+    sides: dict[str, tuple[str, str, list[str]]] = {}
+    if world:
+        for k, (cond, column) in _WORLD_SIDES.items():
+            sides[k] = (cond, column, [begin_date, end_date])
+    else:
+        held, held_args = held_at("p", begin)
+        for k in ("added", "ended"):
+            cond, bounds, column = changed_between("e", k, begin, end)
+            if not rereadings:
+                # news only: a fact added that was held when the period
+                # began, or ended while another edge still states it, is
+                # a re-reading (a re-extraction, a citation matched again)
+                same = "p.src = e.src AND p.rel = e.rel AND p.dst = e.dst"
+                # only what the viewer may see makes a fact a re-reading
+                seen, seen_args = "", []
+                if hidden:
+                    seen = (
+                        " AND (p.source_doc IS NULL OR p.source_doc NOT IN"
+                        " (SELECT value FROM json_each(?)))"
+                    )
+                    seen_args = [veil]
+                if k == "added":
+                    cond += (
+                        f" AND NOT EXISTS (SELECT 1 FROM edges p WHERE {same}"
+                        f" AND {held}{seen})"
+                    )
+                    bounds = [*bounds, *held_args, *seen_args]
+                else:
+                    cond += (
+                        f" AND NOT EXISTS (SELECT 1 FROM edges p WHERE {same}"
+                        f" AND p.id != e.id AND p.valid_to IS NULL{seen})"
+                    )
+                    bounds = [*bounds, *seen_args]
+            sides[k] = (cond, column, bounds)
+    return sides
+
+
 @_reading
 def changes(
     con: sqlite3.Connection,
@@ -714,10 +798,25 @@ def changes(
     if rel:
         where.append("e.rel = ?")
         args.append(rel)
+    hidden = hidden_documents(con)
+    veil = json.dumps(sorted(hidden))
     if not derived:
         where.append("COALESCE(e.producer, '') NOT LIKE 'rule:%'")
+    elif hidden:
+        # a derivation stands on its premises: hidden with any of them
+        where.append(
+            "NOT (COALESCE(e.producer, '') LIKE 'rule:%' AND EXISTS (SELECT 1"
+            " FROM edge_premises pp JOIN edges pe ON pe.id = pp.premise_id"
+            " WHERE pp.edge_id = e.id AND pe.source_doc IN"
+            " (SELECT value FROM json_each(?))))"
+        )
+        args.append(veil)
     if entity:
         ids = _entity_ids(con, entity)
+        if ids and hidden:
+            # a name only hidden documents speak of is as unknown as one
+            # nobody does (the wall: hidden means absent, existence too)
+            ids = _visible_ids(con, ids, hidden)
         if not ids:
             return {"since": since, "until": until, "unknown_entity": entity}
         marks = ",".join("?" * len(ids))
@@ -729,32 +828,7 @@ def changes(
         join = " JOIN documents d ON d.id = e.source_doc"
         where.append("1 = 1" + clause)
         args += dargs
-    hidden = hidden_documents(con)
-    sides: dict[str, tuple[str, str, list[str]]] = {}
-    if world:
-        for k, (cond, column) in _WORLD_SIDES.items():
-            sides[k] = (cond, column, [begin_date, end_date])
-    else:
-        held, held_args = held_at("p", begin)
-        for k in ("added", "ended"):
-            cond, bounds, column = changed_between("e", k, begin, end)
-            if not rereadings:
-                # news only: a fact added that was held when the period
-                # began, or ended while another edge still states it, is
-                # a re-reading (a re-extraction, a citation matched again)
-                same = "p.src = e.src AND p.rel = e.rel AND p.dst = e.dst"
-                if k == "added":
-                    cond += (
-                        f" AND NOT EXISTS (SELECT 1 FROM edges p WHERE {same}"
-                        f" AND {held})"
-                    )
-                    bounds = [*bounds, *held_args]
-                else:
-                    cond += (
-                        f" AND NOT EXISTS (SELECT 1 FROM edges p WHERE {same}"
-                        " AND p.id != e.id AND p.valid_to IS NULL)"
-                    )
-            sides[k] = (cond, column, bounds)
+    sides = _change_sides(world, rereadings, (begin, end, begin_date, end_date), hidden)
     out: dict[str, Any] = {
         "since": since,
         "until": until,

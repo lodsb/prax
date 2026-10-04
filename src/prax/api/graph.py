@@ -188,6 +188,9 @@ def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
     chain (``store.edge_premises``); empty for an asserted edge. And the
     facts it disagrees with (``conflicts``, ``store.edge_conflicts``)."""
     con = _con(request)
+    if store.edge_hidden(con, edge_id):
+        # as for an edge that is not there (the wall: existence too)
+        return {"edge_id": edge_id, "premises": []}
     out: dict[str, Any] = {
         "edge_id": edge_id,
         "premises": store.edge_premises(con, edge_id),

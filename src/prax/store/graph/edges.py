@@ -448,6 +448,45 @@ def retire_reading(
     return cur.rowcount
 
 
+def hidden_by_premise(
+    con: sqlite3.Connection, edge_ids: list[int], hidden: frozenset[int]
+) -> set[int]:
+    """Of these edges, the derived ones (``edge_premises``) that stand on a
+    premise from a hidden document: a derivation says what its premises
+    say, so a viewer who may not see one may not see it either (the
+    review of 2026-10-04: a module-limited token read research facts in a
+    rule edge's evidence)."""
+    if not hidden or not edge_ids:
+        return set()
+    out: set[int] = set()
+    for i in range(0, len(edge_ids), 500):
+        part = edge_ids[i : i + 500]
+        marks = ",".join("?" * len(part))
+        for eid, doc in con.execute(
+            "SELECT p.edge_id, e.source_doc FROM edge_premises p"
+            f" JOIN edges e ON e.id = p.premise_id WHERE p.edge_id IN ({marks})",
+            part,
+        ):
+            if doc is not None and int(doc) in hidden:
+                out.add(int(eid))
+    return out
+
+
+@_reading
+def edge_hidden(con: sqlite3.Connection, edge_id: int) -> bool:
+    """Whether the viewer may not see this edge: there is none, its
+    document is hidden, or it is derived from a premise that is."""
+    hidden = hidden_documents(con)
+    row = con.execute(
+        "SELECT source_doc FROM edges WHERE id = ?", (edge_id,)
+    ).fetchone()
+    if row is None:
+        return True
+    if row[0] is not None and int(row[0]) in hidden:
+        return True
+    return bool(hidden_by_premise(con, [edge_id], hidden))
+
+
 @_serialized
 def record_ending(con: sqlite3.Connection, edge_id: int, run: str) -> None:
     """Note that ``run`` ended this edge, for ``restore_run``."""
