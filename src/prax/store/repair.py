@@ -46,9 +46,12 @@ from .documents import (
     similarity,
 )
 from .graph import (
+    Edge,
     entities_with_degree,
     entity_named_in,
     invalidate_edge,
+    link,
+    part_of_suspects,
     rename_entity,
     resolve_review,
     traverse_map,
@@ -152,6 +155,13 @@ class Ailment:
 
 
 FUNCTIONAL_SHOWN = 200  # subjects a functional-conflicts finding lists
+
+
+def _backwards_part_of(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The live ``part_of`` edges whose names say they are wrong
+    (``ontology.part_of_suspect``): reversed, a misfit either way round,
+    or doubtful, the verdict and its reason on each."""
+    return [{**r, "id": r["edge_id"]} for r in part_of_suspects(con, limit=CAP)]
 
 
 def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -1188,6 +1198,51 @@ def _repair_edges(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     return _invalidate(con, [r["id"] for r in rows])
 
 
+HEAL_PRODUCER = "heal:part_of-direction"
+
+
+def _repair_part_of(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Turn a reversed ``part_of`` round (the old edge ended, the turned
+    one written with its document and evidence, INFERRED, by this repair)
+    and end a misfit. A doubtful one is left for a person: a topic is in
+    an exercise sheet as often as a course is wrongly said to be. A turn
+    the ontology does not take is left alone."""
+    onto = ontology.current()
+    done = 0
+    for row in rows:
+        if row["verdict"] == "misfit":
+            done += _invalidate(con, [int(row["id"])])
+            continue
+        if row["verdict"] != "reversed":
+            continue
+        turned = Edge(
+            row["dst"], row["dst_type"], "part_of", row["src"], row["src_type"]
+        )
+        try:
+            onto.check_edge(turned.src_type, turned.rel, turned.dst_type)
+        except ValueError:
+            continue
+        old = con.execute(
+            "SELECT evidence, world_from, world_to FROM edges WHERE id = ?",
+            (row["id"],),
+        ).fetchone()
+        if not _invalidate(con, [int(row["id"])]):
+            continue
+        link(
+            con,
+            turned,
+            confidence="INFERRED",
+            source_doc=row["source_doc"],
+            evidence=old["evidence"] if old else None,
+            producer=HEAL_PRODUCER,
+            run=HEAL_PRODUCER,
+            world_from=old["world_from"] if old else None,
+            world_to=old["world_to"] if old else None,
+        )
+        done += 1
+    return done
+
+
 def _repair_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     """Clean the name in place, or merge into the entity that already
     carries the clean one (a paper cited twice, once with markup)."""
@@ -1307,6 +1362,24 @@ AILMENTS: tuple[Ailment, ...] = (
             " not functional in the ontology's YAML; nothing is changed here"
         ),
         find=_functional_conflicts,
+    ),
+    Ailment(
+        name="backwards-part-of",
+        what=(
+            "a part_of whose names say it is wrong: the wrong way round (a"
+            " university part of its chair, a course part of its exam), one"
+            " that holds neither way (a university part of a project, a paper"
+            ' part of a publisher, anything part of "course"), or, by a cue'
+            " alone, doubtful"
+        ),
+        fix=(
+            "turn the reversed ones round and end the misfits (history kept,"
+            " INFERRED, producer heal:part_of-direction); the doubtful ones"
+            " are listed for a person and not changed. The rule pass stands"
+            " on none of them either way"
+        ),
+        find=_backwards_part_of,
+        repair=_repair_part_of,
     ),
     Ailment(
         name="stray-version-modules",

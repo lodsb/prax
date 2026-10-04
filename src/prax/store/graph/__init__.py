@@ -168,6 +168,7 @@ from .rules import (  # noqa: F401
     converse,
     derive_rules,
     edge_premises,
+    part_of_suspects,
 )
 from .traversal import (  # noqa: F401
     EDGES,

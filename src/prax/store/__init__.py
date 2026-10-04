@@ -415,6 +415,7 @@ from .graph import (  # noqa: F401
     name_in_english,
     own_type,
     page_slugs_of,
+    part_of_suspects,
     provenance_summary,
     queue_review,
     regions_for_matching,

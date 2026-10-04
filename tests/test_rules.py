@@ -146,3 +146,167 @@ def test_a_functional_relation_with_two_values_is_a_finding(
     assert any(
         a.name == "functional-conflicts" and not a.repairable for a in repair.AILMENTS
     )
+
+
+# ------------------------------------------------- which end is the part
+
+
+@pytest.mark.parametrize(
+    ("src", "src_type", "dst", "dst_type", "verdict"),
+    [
+        # the higher organization is not part of the lower
+        (
+            "Technische Universität München",
+            "organization",
+            "Chair for Informatics IX",
+            "organization",
+            "reversed",
+        ),
+        (
+            "Lab of Acoustics",
+            "organization",
+            "Helsinki University",
+            "organization",
+            None,
+        ),
+        # the destination is the source and a number more, or its exam
+        ("Dalil al Angham", "paper", "Dalil al Angham - 3.pdf", "paper", "reversed"),
+        (
+            "Grundlagen Betriebssysteme",
+            "paper",
+            "Klausur zur Vorlesung Grundlagen Betriebssysteme",
+            "paper",
+            "reversed",
+        ),
+        # but "Chapter 32- X" is the chapter X itself
+        (
+            "The Laplace Transform",
+            "paper",
+            "Chapter 32- The Laplace Transform",
+            "page",
+            None,
+        ),
+        # neither way round
+        (
+            "Technische Universität München",
+            "organization",
+            "Erasmus",
+            "project",
+            "misfit",
+        ),
+        (
+            "Handmade electronic music",
+            "document",
+            "Taylor & Francis Group",
+            "organization",
+            "misfit",
+        ),
+        ("Aufgabe 1 – Round Robin", "paper", "course", "project", "misfit"),
+        (
+            "Aufgabe 1 – Round Robin",
+            "paper",
+            "the research project",
+            "project",
+            "misfit",
+        ),
+        # a cue alone is a doubt
+        ("Diskrete Strukturen II", "paper", "Übungsblatt 07", "paper", "doubtful"),
+        ("C++ International Standard", "paper", "N3337", "paper", "doubtful"),
+        # an article is in a journal's volume; a section shares words with its chapter
+        (
+            "Gordon Mumma: Mograph 1962",
+            "paper",
+            "Leonardo Music Journal Vol 21",
+            "paper",
+            None,
+        ),
+        ("Adaptive Quadrature", "paper", "Chapter 6. Quadrature", "paper", None),
+        # "mit" is German for "with", not MIT
+        (
+            "Synchronisation mit Semaphoren",
+            "paper",
+            "Grundlagen Betriebssysteme",
+            "paper",
+            None,
+        ),
+        ("Übungsblatt 07", "paper", "Diskrete Strukturen II", "paper", None),
+    ],
+)
+def test_the_names_say_which_end_is_the_part(
+    src: str, src_type: str, dst: str, dst_type: str, verdict: str | None
+) -> None:
+    said = ontology.part_of_suspect(ontology.current(), src, src_type, dst, dst_type)
+    assert (said[0] if said else None) == verdict
+
+
+def test_a_backwards_part_of_goes_to_the_review_queue(con: sqlite3.Connection) -> None:
+    from prax.graph import extraction
+
+    doc = store.ingest_text(con, "exercise sheet seven of the course " * 10)["doc_id"]
+    ex = extraction.Extraction(
+        summary="s",
+        triples=[
+            extraction.Triple(
+                "Diskrete Strukturen II",
+                "paper",
+                "part_of",
+                "Übungsblatt 07",
+                "paper",
+                "EXTRACTED",
+                "e",
+            ),
+            extraction.Triple(
+                "Übungsblatt 07",
+                "paper",
+                "part_of",
+                "Diskrete Strukturen II",
+                "paper",
+                "EXTRACTED",
+                "e",
+            ),
+        ],
+    )
+    rep = extraction.apply(con, doc, ex, extractor="stub")
+    assert (rep.linked, rep.queued) == (1, 1)
+    queued = store.list_review(con)
+    assert any(q["reason"].startswith("part_of doubtful") for q in queued)
+
+
+def test_the_rule_pass_stands_on_no_suspect(con: sqlite3.Connection) -> None:
+    """One backwards fact would make every sheet part of the exam."""
+    for a, b in (
+        ("Blatt 1", "Grundlagen Betriebssysteme"),
+        (
+            "Grundlagen Betriebssysteme",
+            "Klausur zur Vorlesung Grundlagen Betriebssysteme",
+        ),
+    ):
+        store.link(con, E(a, "paper", "part_of", b, "paper"), producer="t")
+    out = store.derive_rules(con)["rule:part_of"]
+    assert (out["premises"], out["added"]) == (1, 0)
+
+
+def test_heal_turns_a_reversed_part_of_and_ends_a_misfit(
+    con: sqlite3.Connection,
+) -> None:
+    from prax.store import repair
+
+    _part_of(con, "Technische Universität München", "Fakultät für Informatik")
+    store.link(con, E("Aufgabe 4", "paper", "part_of", "course", "paper"), producer="t")
+    store.link(
+        con,
+        E("Normen von Funktionen", "paper", "part_of", "SS 2009 Blatt 2", "paper"),
+        producer="t",
+    )
+    found = {f["verdict"] for f in repair._backwards_part_of(con)}
+    assert found == {"reversed", "misfit", "doubtful"}
+    out = repair.heal(con, only=["backwards-part-of"])
+    assert out["backwards-part-of"] == {"found": 3, "repaired": 2, "left alone": 1}
+    live = _live(con, "part_of")
+    assert (
+        "Fakultät für Informatik",
+        "Technische Universität München",
+        repair.HEAL_PRODUCER,
+    ) in live
+    assert not any(b == "course" for _, b, _ in live)
+    assert ("Normen von Funktionen", "SS 2009 Blatt 2", "t") in live

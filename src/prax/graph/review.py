@@ -55,6 +55,9 @@ def replay(
             rep.checked += 1
             try:
                 onto.check_edge(it["src_type"], it["rel"], it["dst_type"])
+                onto.check_names(
+                    it["src"], it["src_type"], it["rel"], it["dst"], it["dst_type"]
+                )
             except ValueError:
                 rep.still_open += 1
                 continue
@@ -141,18 +144,9 @@ ATTRIBUTES = frozenset(
 @functools.lru_cache(maxsize=4)
 def _cues(version: str) -> dict[str, re.Pattern[str]]:
     lex = ontology.lexicon()
-
-    def alt(cues: tuple[tuple[str, ...], tuple[str, ...]]) -> re.Pattern[str]:
-        """A stem matches from the start of a word on, a whole word must
-        be the whole word. Longest first, so "inc." wins over "inc"."""
-        stems, words = cues
-        parts = [rf"\b{re.escape(w)}" for w in sorted(stems, key=len, reverse=True)]
-        parts += [rf"\b{re.escape(w)}\b" for w in sorted(words, key=len, reverse=True)]
-        return re.compile("|".join(parts) or r"(?!x)x", re.IGNORECASE)
-
     return {
-        "org": alt(lex.organization),
-        "top": alt(lex.top_organization),
+        "org": ontology.cue_pattern(lex.organization),
+        "top": ontology.cue_pattern(lex.top_organization),
         "never": re.compile(
             "|".join(r"^" + re.escape(w) for w in lex.never_start) or r"(?!x)x",
             re.IGNORECASE,
@@ -861,6 +855,7 @@ def apply_typing_rules(
         try:
             for e in edges:
                 onto.check_edge(e.src_type, e.rel, e.dst_type)
+                onto.check_names(e.src, e.src_type, e.rel, e.dst, e.dst_type)
         except ValueError:
             rep.still_open += 1
             continue

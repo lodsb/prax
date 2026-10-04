@@ -38,6 +38,7 @@ experiments).
 from __future__ import annotations
 
 import functools
+import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -227,6 +228,19 @@ class Ontology:
             raise ValueError(f"{rel!r} does not accept src type {src_type!r}")
         if not self._allowed(r.range, dst_type):
             raise ValueError(f"{rel!r} does not accept dst type {dst_type!r}")
+
+    def check_names(
+        self, src: str, src_type: str, rel: str, dst: str, dst_type: str
+    ) -> None:
+        """Raise ``ValueError`` when the names say the edge is wrong though
+        its types fit: a ``part_of`` the wrong way round, or one that holds
+        neither way (``part_of_suspect``). The writers call it beside
+        ``check_edge``, so a suspect takes the misfit's way to a person."""
+        if rel != "part_of":
+            return
+        said = part_of_suspect(self, src, src_type, dst, dst_type)
+        if said:
+            raise ValueError(f"part_of {said[0]}: {said[1]}")
 
     def within(self, domain: str) -> frozenset[str]:
         """The modules whose documents are also documents of ``domain``:
@@ -618,6 +632,12 @@ class Lexicon:
     exact: frozenset[str] = frozenset()
     vague_start: tuple[str, ...] = ()
     never_start: tuple[str, ...] = ()
+    # which end of a part_of is the part (``part_of_suspect``)
+    part: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
+    numbered: tuple[str, ...] = ()
+    whole: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
+    generic: frozenset[str] = frozenset()
+    ranks: tuple[tuple[int, tuple[tuple[str, ...], tuple[str, ...]]], ...] = ()
 
     def type_of(self, name: str) -> str | None:
         """The type a name's own words say it is, or None."""
@@ -631,6 +651,7 @@ class Lexicon:
 def parse_lexicon(text: str) -> Lexicon:
     data = yaml.safe_load(text) or {}
     words = data.get("not_a_name") or {}
+    parts = data.get("part_of") or {}
 
     def seq(section: Any) -> tuple[str, ...]:
         return tuple(str(x) for x in (section or []))
@@ -647,7 +668,123 @@ def parse_lexicon(text: str) -> Lexicon:
         exact=frozenset(str(x).lower() for x in (words.get("exact") or [])),
         vague_start=seq(words.get("vague_start")),
         never_start=seq(words.get("never_start")),
+        part=cues(parts.get("part")),
+        numbered=seq(parts.get("numbered")),
+        whole=cues(parts.get("whole")),
+        generic=frozenset(str(x).lower() for x in (parts.get("generic") or [])),
+        ranks=tuple(
+            sorted((int(k), cues(v)) for k, v in (parts.get("ranks") or {}).items())
+        ),
     )
+
+
+def cue_pattern(cues: tuple[tuple[str, ...], tuple[str, ...]]) -> re.Pattern[str]:
+    """A lexicon section as one pattern: a stem matches from the start of
+    a word on, a whole word must be the whole word. Longest first, so
+    "inc." wins over "inc"."""
+    stems, words = cues
+    parts = [rf"\b{re.escape(w)}" for w in sorted(stems, key=len, reverse=True)]
+    parts += [rf"\b{re.escape(w)}\b" for w in sorted(words, key=len, reverse=True)]
+    return re.compile("|".join(parts) or r"(?!x)x", re.IGNORECASE)
+
+
+@functools.lru_cache(maxsize=4)
+def _direction_cues(
+    lex: Lexicon,
+) -> tuple[re.Pattern[str], re.Pattern[str], list[tuple[int, re.Pattern[str]]]]:
+    part = cue_pattern(lex.part)
+    if lex.numbered:
+        words = "|".join(
+            re.escape(w) for w in sorted(lex.numbered, key=len, reverse=True)
+        )
+        # a number or a roman numeral after the word: "Teil 1", "Vol. IV"
+        numbered = re.compile(
+            rf"\b(?:{words})(?:\s|\b)\s*(?:\d|[ivxlc]+\b)", re.IGNORECASE
+        )
+        part = re.compile(f"{part.pattern}|{numbered.pattern}", re.IGNORECASE)
+    return part, cue_pattern(lex.whole), [(r, cue_pattern(c)) for r, c in lex.ranks]
+
+
+_DIGIT = re.compile(r"\d")
+HEAD_CHARS = 30  # where a name says what it is
+_FOLD = re.compile(r"[\W_]+")
+
+
+def _words(name: str) -> list[str]:
+    """The content words of a name: four letters or more."""
+    return [w for w in _FOLD.sub(" ", name.lower()).split() if len(w) >= 4]
+
+
+def _folded(name: str) -> str:
+    return " " + " ".join(_FOLD.sub(" ", name.lower()).split()) + " "
+
+
+def part_of_suspect(
+    onto: Ontology, src: str, src_type: str, dst: str, dst_type: str
+) -> tuple[str, str] | None:
+    """Whether ``src part_of dst`` looks wrong from its names: ``(verdict,
+    reason)`` or None. ``reversed``: the destination is the part, by
+    structure (the source is the higher organization, or the destination
+    is the source's name and a number more or its exam). ``misfit``: what
+    holds neither way round (a university part of a project, a paper part
+    of a publisher, anything part of "course"). ``doubtful``: a cue says so
+    (the destination names a part and the source does not, or the source
+    names a whole), which a topic in an exercise sheet also does. The cues
+    are the lexicon's ``part_of`` section. Every verdict keeps the triple
+    out of the graph for a person and out of the rule pass's premises; only
+    ``reversed`` and ``misfit`` are ever mended without one looking, and
+    only by ``prax heal --check backwards-part-of --apply``."""
+    lex = lexicon()
+    part, whole, ranks = _direction_cues(lex)
+    sheet = cue_pattern(lex.part)  # the part words without the numbered ones
+    plain = " ".join(dst.lower().split())
+    for article in ("the ", "a ", "an "):
+        plain = plain.removeprefix(article)
+    if plain in lex.generic:
+        return "misfit", f"{dst!r} is a kind of thing, not one"
+
+    def rank(name: str) -> int:
+        return max((r for r, pat in ranks if pat.search(name)), default=0)
+
+    org = "organization"
+    src_org = src_type in onto.types and onto.is_a(src_type, org)
+    dst_org = dst_type in onto.types and onto.is_a(dst_type, org)
+    rs, rd = rank(src), rank(dst)
+    ps, pd = bool(part.search(src)), bool(part.search(dst))
+    ws, wd = bool(whole.search(src)), bool(whole.search(dst))
+    fs, fd = _folded(src), _folded(dst)
+    if len(fs) > 3 and fs in fd:
+        extra = fd.replace(fs, " ")
+        # "Klausur zur Vorlesung X" is the exam of the course X
+        if sheet.search(extra):
+            return "reversed", f"{dst!r} is a part of {src!r} by its name"
+        # "Chapter 32- The Laplace Transform" is the chapter itself
+        if _DIGIT.search(extra) and not part.search(extra):
+            return "reversed", f"{dst!r} is {src!r} and a number more"
+        return None
+    if rs and rd:
+        if rs > rd:
+            return "reversed", f"{src!r} ranks above {dst!r} as an organization"
+        return None
+    # the institution leads the name: a document's title that only
+    # mentions one near its end ("… Referat, TU München") says nothing
+    if rank(src[:HEAD_CHARS]) >= 3 and not rd and not dst_org:
+        return "misfit", f"{src!r} is an institution, part of no {dst_type}"
+    if src_org and not dst_org:
+        return "misfit", f"an organization is part of no {dst_type}"
+    if dst_org and not src_org and onto.is_a(src_type, "document"):
+        return "misfit", f"a {src_type} is part of no organization"
+    # what the cues say is a guess, for a person: a topic is in an exercise
+    # sheet as often as a course is wrongly said to be. "Journal X, Vol. 4"
+    # names a part and a whole, and an article is in it; a section shares
+    # words with the chapter it is in
+    shared = set(_words(src)) & set(_words(dst))
+    if pd and not ps and not wd and not shared:
+        return "doubtful", f"{dst!r} names a part and {src!r} does not"
+    # a project may hold proceedings or a series
+    if ws and not wd and not ps and dst_type != "project":
+        return "doubtful", f"{src!r} names a whole and {dst!r} does not"
+    return None
 
 
 @dataclass(frozen=True)

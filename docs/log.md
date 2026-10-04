@@ -4062,6 +4062,16 @@ hit gets the id alone. Only an agent's search pays for it (`brief`),
 and `ask`'s passages carry it too. On six searches of the live store,
 51 of 60 hits got their words, for 23 to 116 ms a search.
 
+The first walk as of a day on the live store took 44 s: the indexes on
+`edges(src)` and `edges(dst)` are partial (live edges only), so the
+condition `held_at` writes for a past moment scanned every edge at each
+step. Migration 37 adds full indexes on `(src, valid_from)` and
+`(dst, valid_from)`, built in 0.7 s on a copy. Two hops as of
+2026-09-20 from two entities went from 1,553 s and 275 s to 0.07 s and
+0.01 s; the walks of now did not change (0.03–0.15 s). It was a missing
+index, not a sign for the path index of stage AM, which must carry the
+record times all the same.
+
 ## 2026-10-04, the evening: rules over the graph (stage AN, first part)
 
 **The ontology annotated.** A relation now says what follows from it:
@@ -4108,15 +4118,65 @@ reason: most of the 200+ subjects with two venues are one venue under
 two names ("ISMIR", "11th International Society for Music Information
 Retrieval Conference"), which is entity resolution's work.
 
-The first walk as of a day on the live store took 44 s: the indexes on
-`edges(src)` and `edges(dst)` are partial (live edges only), so the
-condition `held_at` writes for a past moment scanned every edge at each
-step. Migration 37 adds full indexes on `(src, valid_from)` and
-`(dst, valid_from)`, built in 0.7 s on a copy. Two hops as of
-2026-09-20 from two entities went from 1,553 s and 275 s to 0.07 s and
-0.01 s; the walks of now did not change (0.03–0.15 s). It was a missing
-index, not a sign for the path index of stage AM, which must carry the
-record times all the same.
+## 2026-10-04, late: which end of a part_of is the part (stage AN)
+
+The rule pass measured 5 of 20 `part_of` derivations right, the rest
+built on facts written backwards. A sample of the 866 live asserted
+`part_of` edges of open documents, read by hand, showed three ways to be
+wrong: the wrong way round ("Diskrete Strukturen II part_of
+Übungsblatt 07", "Technische Universität München part_of Chair for
+Informatics IX"), right neither way ("Technische Universität München
+part_of Erasmus", a book `part_of` its publisher), or about a kind of
+thing rather than one ("Aufgabe 1 part_of course", 14 edges into one
+entity named "research project").
+
+**The check** (`ontology.part_of_suspect`) reads the names against a new
+`part_of` section of `ontology/lexicon.yaml`, so it bumps no version:
+part words (Übungsblatt, Klausur, homework), words that count only with a
+number after them (Teil 1, Vol 6, Chapter 32, Lecture 4), whole words
+(course, journal, proceedings, manual, standard), generic wholes matched
+whole ("course", "research project"), and four organization ranks (lab,
+institute or department, faculty, university). It answers with one of
+three verdicts. `reversed` is structural: the source ranks above the
+destination as an organization, or the destination is the source's name
+and a number more ("Dalil al Angham - 3.pdf") or its exam ("Klausur zur
+Vorlesung X"). `misfit` holds neither way: a generic whole, an
+institution leading the source's name part of something that is not an
+organization, an organization part of a document, a document part of an
+organization. `doubtful` is a cue alone: the destination names a part
+and the source does not, or the source names a whole. A topic sits in an
+exercise sheet as often as a course is wrongly said to, so a doubt is
+for a person. Two guards keep the common right cases out: a destination
+that also names a whole ("Leonardo Music Journal Vol 21"), and two names
+sharing a content word (a section in "Chapter 6. Quadrature"). "Chapter
+32- The Laplace Transform" is the chapter itself, not a part of the
+transform. "mit" is not a rank: in German it means "with".
+
+**Where it acts.** `Ontology.check_names` raises beside `check_edge` in
+every writer of a model's or a rule's `part_of`: the extraction, the
+typing pass, the review rules and the replay. A suspect takes the
+misfit's way, to the review queue with its reason (`part_of doubtful:
+…`). The rule pass stands on no suspect (`store.part_of_suspects`). The
+`backwards-part-of` ailment of `prax heal` lists the edges already
+written. Its repair turns a reversed edge round (old ended, new INFERRED,
+producer `heal:part_of-direction`, same document and evidence) and ends a
+misfit; a doubtful one is listed and not changed. Not applied to the live
+store: that is the user's call (`prax heal --check backwards-part-of
+--apply`).
+
+**Measured on a copy.** Of the 866 edges, 15 reversed, 66 misfits and 28
+doubtful. Read by hand: reversed 13 of 14 right (one pair of unrelated
+companies, "Palo Alto Research Center" and "Sony BA Laboratories",
+turned by rank); the 50 misfits into a generic whole all right, the
+other 16 right in 15; doubtful 12 of 21.
+The rule pass then: 755 premises, 23 `part_of` derivations where there
+were 110, in 1.1 s. Read by hand, 20 of them: 18 right (the sections of
+"Getting Started With SuperCollider", the lectures of Distributed
+Problem Solving, a lab in CNRS). The 2 wrong stand on a fact typed
+organization at both ends that names a book, and on a course said to be
+part of another course. One backwards fact still fans out: before
+"manual" was a whole word, "BSD Library Functions Manual part_of
+Archive_Write_New" alone made nine of forty derivations wrong.
 
 ## 2026-10-03: a fact's witnesses, in the first hop's cap
 

@@ -182,3 +182,126 @@ not_a_name:
     - unknown
     - (unknown
     - supporting document
+
+# which end of a `part_of` is the part. A model writes the relation the
+# wrong way round often enough to matter ("Diskrete Strukturen II part_of
+# Übungsblatt 07", a university part_of a lecture), and the rule pass
+# carries one such fact into every chain through it (stage AN, measured
+# 5 of 20 right before this check). `ontology.part_of_suspect` reads
+# these; a suspect goes to the review queue instead of the graph, and
+# `prax heal --check backwards-part-of` lists the ones already written
+part_of:
+  # a name carrying one of these is a part of something: a sheet of a
+  # course, a chapter of a book, an exam of a lecture
+  part:
+    stems:
+      - übungsblatt
+      - lösungsblatt
+      - aufgabenblatt
+      - hausaufgabe
+      - tutoraufgabe
+      - musterlösung
+      - klausur
+      - endklausur
+      - homework
+      - assignment
+      - exercise sheet
+      - problem set
+      - appendix
+      - anhang
+    words:
+      - blatt
+      - aufgabe
+      - sheet
+      - exam
+      - exercise
+  # these count only with a number after them: "Teil 1", "Vol 6",
+  # "Lecture 3", "page 4 of 12", "Chapter 32"
+  numbered:
+    - teil
+    - part
+    - vol
+    - vol.
+    - volume
+    - no.
+    - nr.
+    - band
+    - heft
+    - issue
+    - lecture
+    - vorlesung
+    - lesson
+    - unit
+    - session
+    - week
+    - woche
+    - page
+    - seite
+    - section
+    - chapter
+    - kapitel
+    - abschnitt
+    - ch.
+  # a name carrying one of these holds parts rather than being one: a
+  # course, a series, a journal, a manual. Not "guide": a user guide is as
+  # often a part of a product line as the whole of anything
+  whole:
+    stems:
+      - manual
+      - documentation
+      - dokumentation
+      - lehrveranstaltung
+      - studiengang
+      - curriculum
+      - proceedings
+      - tagungsband
+      - journal
+      - encyclopedia
+      - enzyklopädie
+      - anthology
+      - anthologie
+      - magazin
+      - occasional papers
+    words:
+      - course
+      - kurs
+      - series
+      - reihe
+      - conference
+      - standard
+  # a whole that is a kind of thing rather than one: "Aufgabe 1 part_of
+  # course" says nothing, and the closure makes every exercise of every
+  # course a part of the one entity named "course". Matched whole,
+  # lowercased, an article in front allowed
+  generic:
+    - course
+    - lecture
+    - seminar
+    - project
+    - research
+    - research project
+    - interdisciplinary project
+    - conference volume
+    - book
+    - series
+    - collection
+    - document
+    - paper
+  # how far up an organization sits: a lab in a department, a department
+  # in a faculty, a faculty in a university. The highest rank a name
+  # holds is its rank, so "Institute of Technology" is a university and
+  # "Group, Universitat Pompeu Fabra" one too
+  ranks:
+    1:
+      stems: [laborator, lehrstuhl]
+      words: [lab, labs, group, chair, team, arbeitsgruppe]
+    2:
+      stems: [institut, department, abteilung, dept., centre, center, zentrum]
+      words: [division]
+    3:
+      stems: [faculty, fakultät, fachbereich]
+      words: [school]
+    4:
+      stems: [universit, hochschule, institute of technology, academy, akademie]
+      # not "mit": in German it is "with" ("Synchronisation mit Semaphoren")
+      words: [tu, eth, epfl]

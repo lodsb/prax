@@ -835,6 +835,7 @@ def apply(
             continue
         try:
             onto.check_edge(t.src_type, t.rel, t.dst_type)
+            onto.check_names(t.src, t.src_type, t.rel, t.dst, t.dst_type)
         except ValueError as exc:
             store.queue_review(
                 con,

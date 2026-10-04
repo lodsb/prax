@@ -343,6 +343,7 @@ def _apply(
     rel = REMAP.get((rel, st, dt), rel)
     try:
         b.onto.check_edge(st, rel, dt)
+        b.onto.check_names(src, st, rel, dst, dt)
     except ValueError:
         rep.misfit += 1
         rep.hit(f"misfit {st} -{rel}-> {dt}")

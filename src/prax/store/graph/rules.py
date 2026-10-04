@@ -13,7 +13,9 @@ from (stage U). A pass derives everything again and compares: a new
 derivation is linked, one that still follows is kept (its premises
 renewed), one that no longer follows is ended; nothing is deleted, and
 retiring a run takes all of it back. ``RULE_CAP`` derivations a relation
-at most, chains of ``RULE_DEPTH`` steps at most.
+at most, chains of ``RULE_DEPTH`` steps at most. A ``part_of`` whose names
+say it runs the wrong way round (``ontology.part_of_suspect``) is no
+premise: a closure carries one backwards fact into every chain through it.
 """
 
 from __future__ import annotations
@@ -111,6 +113,42 @@ def converse(edges: list[tuple[int, int, int, str | None]], *, cap: int) -> Plan
             if len(plan) >= cap:
                 break
     return plan
+
+
+@_scrubbed
+@_reading
+def part_of_suspects(
+    con: sqlite3.Connection, *, limit: int | None = None
+) -> list[dict[str, Any]]:
+    """The live ``part_of`` edges whose names say they are wrong
+    (``ontology.part_of_suspect``): ``edge_id, src, src_type, dst,
+    dst_type, source_doc, producer, verdict, reason``, the rule pass's own
+    edges left out."""
+    onto = ontology.current()
+    rows = con.execute(
+        """
+        SELECT e.id, s.name AS src, s.type AS src_type, t.name AS dst,
+               t.type AS dst_type, e.source_doc, e.producer
+        FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
+        WHERE e.rel = 'part_of' AND e.valid_to IS NULL
+          AND COALESCE(e.producer, '') NOT LIKE 'rule:%'
+        ORDER BY e.id
+        """
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        said = ontology.part_of_suspect(
+            onto, r["src"], r["src_type"], r["dst"], r["dst_type"]
+        )
+        if said:
+            out.append(
+                {**dict(r), "edge_id": r["id"], "verdict": said[0], "reason": said[1]}
+            )
+            if limit and len(out) >= limit:
+                break
+    for o in out:
+        o.pop("id", None)
+    return out
 
 
 @_reading
@@ -238,6 +276,9 @@ def derive_rules(
     report: dict[str, dict[str, int]] = {}
     for read, writes, kind in sorted(jobs):
         edges = _premise_edges(con, read)
+        if read == "part_of":
+            doubted = {int(x["edge_id"]) for x in part_of_suspects(con)}
+            edges = [e for e in edges if e[0] not in doubted]
         plan = (
             closure(edges, cap=cap)
             if kind == "transitive"

@@ -185,7 +185,8 @@ revisit threshold, under "Decision thresholds" below.
    names behave rather than what types exist, so it bumps no version and
    re-extracts nothing.
    The words that say what a name *is* — which terms mean an
-   organization, which name a type, which are not names at all — are
+   organization, which name a type, which are not names at all, which
+   end of a `part_of` is the part (`ontology.part_of_suspect`) — are
    `ontology/lexicon.yaml` beside the modules, not patterns in the
    module that reads them. A cue is a stem or a whole word, it changes
    what a typing rule guesses and never what the ontology accepts, and
