@@ -3998,6 +3998,22 @@ the language where it can (`UPDATE OR IGNORE`) and counts the rest as
 `labels_twinned` (6,337 on a copy of the store); nothing is deleted, the
 twin says the name already.
 
+**What the door cannot fetch waits for the browser** (the fifth of step
+6). 7 of the first client's 30 captures failed on a TLS chain the server
+did not trust, a 403 or a bot check: things a browser gets past. Such a
+failure (a 401/403/429, `BotCheck`, a certificate or SSL error; never a
+404) is now a request (`capture_requests`, migration 40, one waiting a
+URL) and the answer a 202 with `queued_for_extension`, in a batch per
+item. The extension asks for the waiting ones every 5 minutes (an alarm,
+the new `alarms` permission), fetches each with the person's session (a
+PDF directly, a page in a background tab captured like a tab), uploads
+it by its usual routes and posts which request it was; the door then
+gives the document the request's title and domains. A failed try is
+posted too, and after three the request is failed. The options page
+turns it off. The extension's test bed passes in Chrome but for two
+checks of the keyboard send that failed the same way before this change;
+Firefox could not be run with Waterfox open.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each

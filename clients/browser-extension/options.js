@@ -44,10 +44,11 @@ async function ensurePermission(server) {
 }
 
 async function load() {
-  const s = await api.storage.local.get(["server", "token", "domains", "close", "modules", "frame_interval", "site_rules"]);
+  const s = await api.storage.local.get(["server", "token", "domains", "close", "modules", "frame_interval", "site_rules", "fetch_requests"]);
   $("server").value = s.server || "";
   $("token").value = s.token || "";
   $("close").checked = !!s.close;
+  $("fetch_requests").checked = s.fetch_requests !== false;
   if (s.frame_interval) $("frame_interval").value = s.frame_interval;
   $("site_rules").value = s.site_rules || "";
   renderDomains(s.modules || [], s.domains || []);
@@ -60,7 +61,7 @@ async function save(e) {
   const token = $("token").value.trim();
   if (!(await ensurePermission(server))) { say("permission to talk to the server was not granted", false); return; }
   const frameInterval = Math.max(5, Math.min(600, Number($("frame_interval").value) || 30));
-  await api.storage.local.set({ server, token, close: $("close").checked, domains: chosenDomains(), frame_interval: frameInterval, site_rules: $("site_rules").value });
+  await api.storage.local.set({ server, token, close: $("close").checked, fetch_requests: $("fetch_requests").checked, domains: chosenDomains(), frame_interval: frameInterval, site_rules: $("site_rules").value });
   try {
     const data = await probe(server, token);
     const modules = Array.isArray(data.modules) ? data.modules : [];

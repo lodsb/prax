@@ -526,3 +526,135 @@ def token_viewer(con: sqlite3.Connection, secret: str) -> Viewer | None:
             seen |= set(onto.within(d)) if d != UNASSIGNED else {UNASSIGNED}
         domains = frozenset(seen)
     return Viewer(str(row["name"]), domains, bool(row["personal"]))
+
+
+# ------------------------------------------------------ capture requests
+#
+# What the door could not fetch and the browser extension can (migration
+# 40): kept as a request, asked for by the extension, finished by it.
+
+REQUEST_TRIES = 3  # failed tries of the extension before a request is failed
+REQUEST_FIELDS = (
+    "id, url, title, domains, tags, by, note, why, state, tries,"
+    " last_error, doc_id, asked_at, done_at"
+)
+
+
+def _request_row(row: sqlite3.Row) -> dict[str, Any]:
+    out = dict(row)
+    out["domains"] = json.loads(out["domains"]) if out.get("domains") else None
+    out["tags"] = json.loads(out["tags"]) if out.get("tags") else None
+    return out
+
+
+@_serialized
+def ask_extension(
+    con: sqlite3.Connection,
+    url: str,
+    why: str,
+    *,
+    title: str | None = None,
+    domains: list[str] | None = None,
+    tags: list[str] | None = None,
+    by: str | None = None,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Keep a capture the door could not fetch for the extension: the
+    waiting request of that URL, made when there is none (the latest
+    ``why``, title and domains win)."""
+    con.execute(
+        "INSERT INTO capture_requests (url, title, domains, tags, by, note, why)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)"
+        " ON CONFLICT(url) WHERE state = 'waiting' DO UPDATE SET"
+        " why = excluded.why, title = COALESCE(excluded.title, title),"
+        " domains = COALESCE(excluded.domains, domains),"
+        " tags = COALESCE(excluded.tags, tags)",
+        (
+            url,
+            title,
+            json.dumps(domains) if domains else None,
+            json.dumps(tags) if tags else None,
+            by,
+            note,
+            why,
+        ),
+    )
+    con.commit()
+    row = con.execute(
+        f"SELECT {REQUEST_FIELDS} FROM capture_requests"
+        " WHERE url = ? AND state = 'waiting'",
+        (url,),
+    ).fetchone()
+    return _request_row(row)
+
+
+@_reading
+def capture_requests(
+    con: sqlite3.Connection, *, state: str = "waiting", limit: int = 20
+) -> list[dict[str, Any]]:
+    """The requests of one state, oldest first: what the extension fetches
+    next (``waiting``), or what it finished."""
+    rows = con.execute(
+        f"SELECT {REQUEST_FIELDS} FROM capture_requests WHERE state = ?"
+        " ORDER BY id LIMIT ?",
+        (state, max(1, min(limit, 200))),
+    ).fetchall()
+    return [_request_row(r) for r in rows]
+
+
+@_serialized
+def finish_request(
+    con: sqlite3.Connection,
+    request_id: int,
+    *,
+    doc_id: int | None = None,
+    error: str | None = None,
+    drop: bool = False,
+) -> dict[str, Any]:
+    """What became of a request: ``done`` with the document the extension
+    uploaded, ``dropped`` when a person or the extension gives it up, or a
+    failed try (``error``), which keeps it waiting until ``REQUEST_TRIES``
+    and then fails it. KeyError for an unknown request, ValueError for one
+    no longer waiting or a document that does not exist."""
+    row = con.execute(
+        "SELECT state, tries FROM capture_requests WHERE id = ?", (request_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no capture request {request_id}")
+    if row["state"] != "waiting":
+        raise ValueError(f"capture request {request_id} is {row['state']}")
+    if doc_id is not None:
+        if not con.execute(
+            "SELECT 1 FROM documents WHERE id = ?", (doc_id,)
+        ).fetchone():
+            raise ValueError(f"no such document: {doc_id}")
+        con.execute(
+            f"UPDATE capture_requests SET state = 'done', doc_id = ?, done_at = {_NOW}"
+            " WHERE id = ?",
+            (doc_id, request_id),
+        )
+    elif drop:
+        con.execute(
+            f"UPDATE capture_requests SET state = 'dropped', done_at = {_NOW}"
+            " WHERE id = ?",
+            (request_id,),
+        )
+    else:
+        tries = int(row["tries"]) + 1
+        state = "failed" if tries >= REQUEST_TRIES else "waiting"
+        con.execute(
+            "UPDATE capture_requests SET tries = ?, last_error = ?, state = ?,"
+            f" done_at = CASE WHEN ? = 'failed' THEN {_NOW} END WHERE id = ?",
+            (
+                tries,
+                error or "the extension could not fetch it",
+                state,
+                state,
+                request_id,
+            ),
+        )
+    con.commit()
+    got = con.execute(
+        f"SELECT {REQUEST_FIELDS} FROM capture_requests WHERE id = ?", (request_id,)
+    ).fetchone()
+    return _request_row(got)

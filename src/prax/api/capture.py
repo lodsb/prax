@@ -9,6 +9,7 @@ import re
 from typing import Annotated, Any
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from prax import store
@@ -321,8 +322,8 @@ def ingest_html(req: IngestHtml, request: Request) -> dict[str, Any]:
     return _capture_out(cap, request)
 
 
-@router.post("/ingest/url")
-def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
+@router.post("/ingest/url", response_model=None)
+def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any] | JSONResponse:
     """Fetch a URL server-side and keep what came back."""
     try:
         cap = inbox.ingest_url(
@@ -336,9 +337,12 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
             note=req.note,
         )
     except (ValueError, http.client.InvalidURL, OSError) as exc:
-        # not one to fetch (400); unreachable, 403, 404, a timeout (502)
-        status, detail = _fetch_failure(exc)
-        raise HTTPException(status, detail) from exc
+        # not one to fetch (400); unreachable, 404, a timeout (502); refused
+        # or a certificate the server cannot verify: kept for the extension
+        status, body = _failed_capture(req, exc)
+        if status == 202:
+            return JSONResponse(status_code=202, content=body)
+        raise HTTPException(status, body["error"]) from exc
     return _capture_out(cap, request)
 
 
@@ -356,12 +360,46 @@ def _fetch_failure(exc: Exception) -> tuple[int, str]:
     if isinstance(exc, (ValueError, http.client.InvalidURL)):
         return 400, f"not a URL to fetch: {exc}"
     why = str(exc)
-    if "403" in why or "401" in why or isinstance(exc, inbox.BotCheck):
+    if _browser_can(exc):
         why += (
-            " (the site refused the server; the browser extension fetches"
-            " with your own session when it may read all sites)"
+            " (the site refused the server; it waits for the browser extension,"
+            " which fetches it with your own session)"
         )
     return 502, f"fetch failed: {why}"
+
+
+# what a browser gets past and the server does not: a refusal, a bot check,
+# a certificate chain the server cannot verify. A 404 is not one: the
+# browser cannot fetch what is not there either
+_REFUSED = re.compile(r"\b(401|403|429)\b|CERTIFICATE|SSL", re.IGNORECASE)
+
+
+def _browser_can(exc: Exception) -> bool:
+    return isinstance(exc, inbox.BotCheck) or bool(_REFUSED.search(str(exc)))
+
+
+def _failed_capture(item: IngestUrl, exc: Exception) -> tuple[int, dict[str, Any]]:
+    """A fetch that failed, as a status and an answer: what the browser
+    can fetch is kept for the extension (202, ``queued_for_extension``,
+    the ``request`` id); anything else is the error (400, 502)."""
+    status, detail = _fetch_failure(exc)
+    if status == 502 and _browser_can(exc):
+        req = store.ask_extension(
+            store.thread_connection(),
+            item.url,
+            detail,
+            title=item.title,
+            domains=item.domains,
+            tags=item.tags,
+            by=item.by,
+            note=item.note,
+        )
+        return 202, {
+            "queued_for_extension": True,
+            "request": req["id"],
+            "error": detail,
+        }
+    return status, {"error": detail}
 
 
 @router.post("/ingest/urls")
@@ -389,8 +427,8 @@ def ingest_urls(req: IngestUrls, request: Request) -> dict[str, Any]:
                 note=item.note,
             )
         except (ValueError, http.client.InvalidURL, OSError) as exc:
-            status, detail = _fetch_failure(exc)
-            return {"source": item.url, "error": detail, "status": status}
+            status, body = _failed_capture(item, exc)
+            return {"source": item.url, **body, "status": status}
         return {"source": item.url, **_capture_out(cap, request)}
 
     with ThreadPoolExecutor(max_workers=BATCH_FETCHES) as pool:
@@ -399,11 +437,55 @@ def ingest_urls(req: IngestUrls, request: Request) -> dict[str, Any]:
             pool.submit(contextvars.copy_context().run, one, item) for item in req.items
         ]
         results = [f.result() for f in futures]
+    queued = sum(1 for r in results if r.get("queued_for_extension"))
     return {
         "results": results,
         "captured": sum(1 for r in results if "error" not in r),
-        "failed": sum(1 for r in results if "error" in r),
+        "queued": queued,
+        "failed": sum(1 for r in results if "error" in r) - queued,
     }
+
+
+class RequestDone(BaseModel):
+    doc_id: int | None = None  # what the extension uploaded
+    error: str | None = None  # why its try failed
+    drop: bool = False  # given up
+
+
+@router.get("/captures/requests")
+def requests_list(
+    request: Request, state: str = "waiting", limit: int = 20
+) -> dict[str, Any]:
+    """The captures the door could not fetch and the extension may:
+    ``waiting`` (what it fetches next, oldest first), ``done``, ``failed``
+    or ``dropped``."""
+    if state not in ("waiting", "done", "failed", "dropped"):
+        raise HTTPException(400, "state is waiting, done, failed or dropped")
+    return {"requests": store.capture_requests(_con(request), state=state, limit=limit)}
+
+
+@router.post("/captures/requests/{request_id}")
+def requests_finish(
+    request_id: int, req: RequestDone, request: Request
+) -> dict[str, Any]:
+    """What became of a request: the document the extension uploaded, a
+    failed try (``error``; failed for good after a few), or given up."""
+    con = _con(request)
+    try:
+        done = store.finish_request(
+            con, request_id, doc_id=req.doc_id, error=req.error, drop=req.drop
+        )
+        if done["state"] == "done" and done["doc_id"]:
+            # what the capture asked for comes with it: its title, its domains
+            if done.get("title"):
+                store.retitle(con, int(done["doc_id"]), done["title"], source="request")
+            for d in done.get("domains") or []:
+                store.add_domain(con, int(done["doc_id"]), d)
+        return done
+    except KeyError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.get("/inbox")
@@ -412,6 +494,8 @@ def inbox_view(request: Request, limit: int = 50) -> dict[str, Any]:
     files) with their state, the drop folder, and the domains to choose."""
     return {
         "recent": inbox.recent(_con(request), limit=limit),
+        # what waits for the browser extension to fetch it
+        "requests": store.capture_requests(_con(request), state="waiting"),
         "inbox_dir": str(inbox.inbox_dir()),
         "modules": sorted(m for m in ontology.current().modules if m != ontology.CORE),
     }

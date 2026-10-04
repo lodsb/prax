@@ -20,7 +20,7 @@
       "description": "Send this tab to prax"
     }
   },
-  "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus", "downloads"],
+  "permissions": ["activeTab", "scripting", "storage", "tabs", "contextMenus", "downloads", "alarms"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self';"

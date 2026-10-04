@@ -600,8 +600,11 @@ def capture_url(
     once, a PDF waits for the worker. ``domains`` names the ontology
     modules it belongs to (e.g. ["research"]). Pass ``title`` when you
     know it: a file otherwise carries its file name or arXiv id until
-    the titles pass reads one. A site that answers the server with a bot
-    check is an error, not a document."""
+    the titles pass reads one. A site that refuses the server (a 403, a
+    bot check, a certificate it cannot verify) comes back as
+    ``queued_for_extension``: the browser extension fetches it with the
+    person's session and it arrives later; not an error, not yet a
+    document."""
     return _answer(
         lambda: door().post_json(
             "/ingest/url",

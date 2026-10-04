@@ -250,6 +250,12 @@ def add(door: Door, a: Any) -> int:
                     "by": "cli",
                 },
             )
+            if r.get("queued_for_extension"):
+                # the site refused the door: the browser extension fetches it
+                out.say(f"{target}\n      waits for the browser extension")
+                out.hint(f"      {r.get('error')}")
+                added += 1
+                continue
             state = "indexed" if r.get("indexed") else "pending"
             out.say(f"{target}\n      doc {r['doc_id']}  ({state})")
             added += 1

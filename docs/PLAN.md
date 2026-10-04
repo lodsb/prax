@@ -414,7 +414,7 @@ and pushing what is committed.
             re-baseline only).
 
       *6. Captures and pages* (the client's #9, #10, #14).
-      - [ ] A failed capture (a TLS chain error, a 403, a bot check) is
+      - [x] (2026-10-04: the `capture_requests` table, migration 40; the 202 answer; the extension's alarm every 5 minutes and its options switch; the bed in Chrome passes but for two checks that failed before the change, Firefox not run: Waterfox was open) A failed capture (a TLS chain error, a 403, a bot check) is
             queued for the extension (`{queued_for_extension: true}`),
             which fetches it with the person's session; the upload is
             linked to the request and takes its title and domains. 7 of

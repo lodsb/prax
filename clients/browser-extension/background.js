@@ -25,8 +25,8 @@ function log(level, ...parts) {
 }
 
 async function settings() {
-  const s = await api.storage.local.get(["server", "token", "domains", "close", "site_rules"]);
-  return { server: lib.normalizeServer(s.server), token: s.token || "", domains: s.domains || [], close: !!s.close, siteRules: lib.parseSiteRules(s.site_rules) };
+  const s = await api.storage.local.get(["server", "token", "domains", "close", "site_rules", "fetch_requests"]);
+  return { server: lib.normalizeServer(s.server), token: s.token || "", domains: s.domains || [], close: !!s.close, siteRules: lib.parseSiteRules(s.site_rules), fetchRequests: s.fetch_requests !== false };
 }
 
 /* The domains a send without the popup uses: the site's rule when the
@@ -1093,6 +1093,80 @@ function installMenus() {
     });
   } catch (_) { /* no menus in this browser */ }
 }
+/* What the door could not fetch and this browser can (a site that refuses
+   the server, a bot check, a certificate chain the server does not trust):
+   the door keeps it as a request (GET /captures/requests), this asks for
+   the waiting ones every few minutes, fetches each with the person's own
+   session (a PDF directly, a page in a background tab read as a capture
+   of it), uploads it by the usual routes and tells the door which request
+   it was; the door gives the document the request's title and domains. A
+   try that fails is said too, and after a few the door gives up. The
+   options page turns it off. */
+const REQUESTS_ALARM = "prax-requests";
+const REQUESTS_MINUTES = 5;
+const REQUESTS_PER_ROUND = 3;
+
+async function doorGet(path, cfg) {
+  const headers = cfg.token ? { Authorization: `Bearer ${cfg.token}` } : {};
+  const res = await fetch(`${cfg.server}${path}`, { headers });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || `${res.status} ${res.statusText}`);
+  return data;
+}
+
+async function fulfil(req, cfg) {
+  const common = { url: req.url, title: req.title || null, domains: req.domains || null, tags: req.tags || null, session: lib.sessionId() };
+  try {
+    const blob = await fetchPdf(req.url);
+    return await uploadFile(blob, lib.pdfFileName(req.url), common, cfg);
+  } catch (pdfErr) {
+    log("info", "not a PDF for this browser either; reading the page", req.url, pdfErr);
+  }
+  const tab = await api.tabs.create({ url: req.url, active: false });
+  try {
+    await waitForTab(tab.id, 30000);
+    await new Promise((r) => setTimeout(r, 1500)); // a challenge page settles
+    const fresh = await api.tabs.get(tab.id);
+    const r = await captureTab(fresh, { domains: req.domains || [], tags: req.tags || [], session: common.session }, cfg);
+    if (r.error) throw new Error(r.error);
+    if (!r.doc_id) throw new Error(r.note || "the page did not arrive as a document");
+    return r;
+  } finally {
+    api.tabs.remove(tab.id).catch(() => {});
+  }
+}
+
+let fulfilling = false;
+async function fulfilRequests() {
+  if (fulfilling) return;
+  const cfg = await settings();
+  if (!cfg.server || !cfg.fetchRequests) return;
+  fulfilling = true;
+  try {
+    let waiting = [];
+    try {
+      waiting = (await doorGet(`/captures/requests?state=waiting&limit=${REQUESTS_PER_ROUND}`, cfg)).requests || [];
+    } catch (err) { log("warn", "capture requests", err); return; }
+    for (const req of waiting) {
+      try {
+        const data = await fulfil(req, cfg);
+        await door(`/captures/requests/${req.id}`, { doc_id: data.doc_id }, cfg);
+        log("info", "fetched for the door", req.url, `doc ${data.doc_id}`);
+      } catch (err) {
+        log("warn", "could not fetch for the door", req.url, err);
+        await door(`/captures/requests/${req.id}`, { error: err.message }, cfg).catch(() => {});
+      }
+    }
+  } finally {
+    fulfilling = false;
+  }
+}
+
+if (api.alarms) {
+  api.alarms.create(REQUESTS_ALARM, { periodInMinutes: REQUESTS_MINUTES });
+  api.alarms.onAlarm.addListener((a) => { if (a.name === REQUESTS_ALARM) fulfilRequests(); });
+}
+
 if (api.runtime.onInstalled) api.runtime.onInstalled.addListener(installMenus);
 if (api.runtime.onStartup) api.runtime.onStartup.addListener(installMenus);
 installMenus();
