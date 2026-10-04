@@ -2,92 +2,59 @@
 
 What is open, and in what order. What was done, with the reasoning and
 the measurements under each night, is `docs/log.md`; the finished items
-this file used to carry are there too ("what the plan held that was
-done", 2026-10-02).
+this file used to carry are there too, under "Moved from the plan".
 
 Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
-## The order, agreed 2026-10-02
+## The order, agreed 2026-10-04
 
-Reevaluated the day the plan was rewritten. The card is first because
-everything the library still waits for (formulas, the graph backlog,
-readings) runs through it, and on 2026-10-02 two roles on it at once ran
-the machine out of memory. Then the small structural debt of the maths
-pack, then what is running anyway, then measured improvements, then the
-engineering leftovers. What waits on the user is apart.
+Rewritten the night AL, AN and AM were finished (the order of
+2026-10-02 is in `docs/log.md`, "Moved from the plan"). The card is
+busy until about the evening of 2026-10-05 with the figure readings, so
+what needs no model comes first; what waits for the card follows.
 
-1. **AI. A plan for the card** (below): done but its measurement, which
-   needs days of running. The jobs view's "do it now", the load times,
-   `GET /work/plan` and `prax up` following it are in (0a92203, 135f3da).
-2. **AD2, the tidy-up**: done (1824fab).
-3. **The library's backlogs, running** (2026-10-02, `docs/log.md`, "what
-   was never extracted"). A backlog worker extracts the graph of about
-   1,050 documents. Marker reads the 29 books on the night of
-   2026-10-02, then the ~190 weaker maths candidates. The `equations`
-   step checks every formula, and a broken formula that is an
-   extraction slip is read again. Watched, not built.
-4. **AL. The first client's feedback** (below): its small bugs, the
-   signals (`status`, `health`) and citations that survive a re-chunk
-   are done. Next the project sync, documents linked to documents, what
-   is current (a document's own date first), then captures, pages,
-   bibliographies and privacy. AN (rules over the graph, the ontology
-   annotated in standard vocabularies, the markup pages already carry)
-   is a candidate after AL step 4, and AM (a path index) after AL
-   step 5.
-5. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
-   marker's own llama-server held 10 GB of RAM that no plan saw. Step 1
-   first, after the night's books; steps 2 and 3 after AA.
-6. **AK. Another model, measured** (below): a dense Qwen 27B and an
-   uncensored build of it against the 35B on prax's own evals. Card
-   time, so it runs at night or while nothing else waits.
-7. **AA. Close Z** (below): the labeller's corrections, and the genre
-   words in the document field, measured.
-8. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
-   `refetch-later.txt` (untracked) with the import of the old disk, when
-   the NAS is reachable.
-9. **Measured improvements** (below, "Retrieval and ask", "The graph"):
-   the sections pass's vector arm and its worth to `ask`, document-aware
-   rerank input, a compressed edge list, `confidence` as a number.
-10. **The engineering leftovers** (below): `store.retrieval` and
-   `store.repair` in parts, typed shapes (a search hit first), the UI
-   helpers the extension copies. The strict mypy batch is done.
+1. **Watch the night's passes, then `not-venues`** (2026-10-05): the
+   resolve's venue tier (03:00), the rule pass and the first conflicts
+   pass (03:30), read from the job notes; then `prax heal --check
+   not-venues --apply`, which the user approved for that day.
+2. **A review phase of the code** written 2026-10-02 to -04 (below,
+   "A review of the last three days"), before more is built on it.
+3. **AN's last item**: the extraction prompt given the standard names,
+   measured on a sample with the card.
+4. **AL's last items**: extraction filling the world dates (measured
+   with `bench_extractor`), and the rest of "as Utopia does it".
+5. **AK's split and AJ** (below): what a swap costs on the card, readers
+   under prax's hand; **AI**'s measurement after days of running.
+6. **AA. Close Z** (below).
+7. **Measured improvements** ("Retrieval and ask", "The graph"): facts
+   as a search list, a focus entity as a vote, the sections pass's
+   vector arm, a compressed edge list, `confidence` as a number.
+8. **The engineering leftovers** (below): typed shapes (a search hit
+   first), the remaining complex functions, the UI helpers the
+   extension copies.
 
 Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
-after the prototype settles), the move to the board ("Deployment shape"),
-and pushing what is committed.
+after the prototype settles), the move to the board ("Deployment
+shape"), and the zoetrope disk and the NAS.
 
-### Next, by hand (noted 2026-10-03)
+### Next, by hand (noted 2026-10-04)
 
-- **Restart once marker has read the books** (the tray: "Stop prax",
-  then "Start prax"; or `prax up --stop` and `prax up --data-dir
-  C:\prax-data --detach`). Before that, Jobs shows nothing waiting for
-  marker, or the card back with llama-server. It brings the commits of
-  2026-10-03 live: the bounded prompt caches (AJ, step 1) and the genre
-  words in the document field (AA), which the first `fields` pass after
-  it rebuilds, and the worker embeds again (about 8 minutes).
-- **Then measure AJ step 1**: marker's peak RAM and commit, VRAM and
-  time per page on a few books, against the night of 2026-10-02 (10.3 GB
-  for its OCR server). The 35B's prompt-cache share in its metrics says
-  whether 2048 MiB is right.
-- [x] (2026-10-03: `tray.claim` keeps `run/tray.pid`; a second tray on the same data directory is refused while the first lives, a dead one's file taken over) **Two tray icons** run on the desktop (one from the autostart, one
-  started by hand, most likely): quit one. If it happens again, the tray
-  should refuse a second copy on the same data directory.
-- [x] (2026-10-03: not the paused worker: the ask's demand was recorded, but the `ask` step named the 35B's entry while `run:` served the 27B's, so it matched no role; `work.role_of_step` now also matches a model at the served address) **An ask wakes an idled model with the worker paused** (2026-10-03,
-  AK): the door said the model "has been asked for" and nothing loaded
-  until `prax up --start llama-server`. The demand the supervisor reads
-  should come from the door's ask itself, not only from the worker.
-- **Before AK's download**: see what Qwen has released since 3.6 (a page
-  names a "Qwen 3.8" lineup, not checked), then fetch with the user's
-  word, from a known quantizer, names and hashes in the log.
-- [x] (2026-10-03, the user said yes) **The CLI client under strict
-  mypy**: `clients/cli` is in `files`, checked against the package's own
-  source (`mypy_path`), so its calls are no longer `Any`. One of its
-  errors was a real crash: `prax doctor` divided an unread memory figure
-  (None) by 1024.
-- **Push** what is committed; CI on GitHub has not seen 2026-10-02 and
-  -03.
+- **On the notebook, Monday**: `git pull`, `/mcp` reconnect (it brings
+  the `changes` and `connect` tools), the project re-synced (the
+  acceptance test of AL steps 3 to 5), and the browser extension
+  reloaded for its `alarms` permission.
+- **Measure AJ step 1** when marker next reads: its peak RAM and commit,
+  VRAM and time per page, against the night of 2026-10-02.
+
+### A review of the last three days (proposed 2026-10-04)
+
+Between 2026-10-02 and -04 some forty commits went in, among them
+migrations 35 to 43, new store parts (`rules`, `paths`), two new
+packages (`store.retrieval`, `store.repair`) and seven MCP tools. Each
+was tested as it went; what has not been done is a read of the whole
+with fresh eyes. The scope and the way are to be agreed with the user.
 
 ## Stages
 
@@ -243,137 +210,9 @@ and pushing what is committed.
             formula found, evaluated with the values, the model asked
             only to explain the result.
 
-- [ ] **AL. The first client's feedback.** On 2026-10-03 an agent in
-      another of the user's repositories used prax through the plugin for
-      a whole session: it searched, captured about 30 papers, wrote a
-      landscape page, and synced a subproject's 27 documents. It then
-      wrote 16 suggestions in four priorities. Below they are merged with
-      prax's own reading of them, in the order agreed with the user. The
-      project's documents are the acceptance set for steps 3 to 5; their
-      content and names stay out of the repository (the baseline is a
-      private page in prax, and the tests use invented documents of the
-      same shape).
-
-      *Done on 2026-10-03* (71a0916): a `PRAX_DOOR` without its scheme is
-      `http` (`client.door_url`); a URL with a space is percent-encoded
-      and one still unfit is a 400, not a 500 (`inbox.clean_url`); ingest,
-      `get`, `context` and page answers carry `url`, and `#page/<slug>`
-      opens a page; `documents` reports `added_at` (it read a field the
-      door never sent) and filters by `since`.
-
-      *1. Signals: what is the matter, without the UI.*
-      - [x] (2026-10-03) `status(doc_ids)`: queued (with its place), processing, done,
-            failed with the reason, and whether a worker is alive. Today
-            `pending: []` lists only the reading requests, not the parse
-            queue a capture waits in, so a document with no text and
-            nothing pending reads as "never will" when it is "worker
-            down": 24 captures sat for hours that way.
-      - [x] (2026-10-03) `health()`: the door's address, whether the token is
-            accepted, the worker's state. One call to the door, so the
-            proxy stays thin.
-
-      *2. Citations that survive a re-chunk* (the client's #13, raised
-      from P2: it corrupts quietly). Done 2026-10-03, after the check
-      below changed the picture: a saved answer cites `#doc/N` and the
-      heading path as text, never a chunk id, so it does not move. A
-      link an agent writes to a passage does: a re-index gave a changed
-      passage's id to its successor (`tests/test_store.py`). The UI now
-      trusts `?chunk=M` only while chunk M still holds the link's
-      `find` words, and the skill tells an agent to write them. The
-      note as first written: A page's answer cites passages as
-      chunk ids (`#doc/N/M`), and chunk ids are reused after a re-chunk
-      (the formula check's sha guard exists for that). After a re-sync a
-      citation does not break; it lands on another passage. Keep the
-      quote and the heading path with each citation and resolve through
-      `?find=`, as graph edges do. First a test that shows the fault.
-
-      *3. Syncing a project as a tool* (the client's #5, #6).
-      - [x] (2026-10-03: the MCP tool, `prax sync`, `POST /projects/sync`; `docs/log.md`) `sync_project(root, include, exclude, name, domains,
-            dry_run=True, tracked_only=True)`: tracked files only
-            (`git ls-files`), the usual build folders left out (`_deps/`,
-            `CMakeFiles/`, `*-subbuild/`, `build/`, `third_party/`), a
-            dry run by default with the plan as data (each path: add,
-            refresh, unchanged or skip, and why), a subdirectory of a
-            larger repository as a project, documents keyed by the
-            remote and the path so a move makes no duplicate. Without
-            this the CLI needed the venv path, a call out of the
-            sandbox, and took in about 90 vendored CMake files.
-      - [x] (2026-10-03: the `projects` table, migration 38; the hook asks it, `--if-auto`; an older `.prax-project` still counts) The manifest in prax, keyed by remote and path, not a
-            `.prax-project` in the repository (a committed one tells
-            colleagues, and switches the session-end hook on by being
-            there). Auto-sync only with an explicit `auto_sync: true`.
-      - [x] (2026-10-03: made by the first sync, every synced document a member; the summary is the agent's to write) The project page made with it: `project-<name>`, its members,
-            a summary block the agent writes.
-
-      *4. Documents linked to documents* (the client's #7 and #4, one
-      edge model). Documents are already graph nodes: `cites`,
-      `annotates`, `mentions` and `synthesizes` join them, and a page's
-      `[title](#doc/N)` is an `annotates` edge. No second table.
-      - [x] (2026-10-04: `prax.text.paths`, `projects._links`; producer `sync`, run `links:<name>`, kept in step) At sync, Markdown links, backtick paths and bare `docs/x.md`
-            mentions matched exactly against the project's keys become
-            edges (producer `sync`, EXTRACTED). The acceptance project
-            has 15 links and 159 backtick references: about 174 edges
-            without a model. A path that matches nothing yet is matched
-            again at the next sync, not kept as a dangling node.
-      - [x] (2026-10-04: `store.document_node`; a chunk id as evidence is a 400) `link` takes `doc:N` as either end. Evidence stays a quote,
-            never a chunk id.
-      - [x] (2026-10-04: core 4 with `links_to` beside them; migration 39 moves the stamps, so nothing is re-extracted) `supersedes` and `invalidates` in the core ontology (a
-            version bump, invariant 9): "the changelog invalidates the
-            re-baseline table" is a fact the graph cannot say today.
-      - [x] (2026-10-04: `linked.out`/`linked.in`; `traverse("doc:N")`) `context` returns a document's edges out and in;
-            `traverse("doc:N")` walks from a document.
-      - [x] (2026-10-04: `edge_conflicts`, migration 43, kept by the nightly `conflicts` pass; `traverse` marks a fact `disputed`, `why` lists what disagrees; a table beside the edges, not a `contradicts` edge: an edge joins two entities, a conflict two facts) Functional relations declared in the ontology (a building is
-            `located_in` one place), and a later pass that proposes
-            `contradicts` edges between facts of such a relation that
-            disagree, with their own producer and run, so `retire_run`
-            undoes a pass. Disagreement kept visible, never a fact ended
-            by a model (Cognee's opt-in pass; Graphiti ends facts only
-            when both carry world dates; the research note, sections 6
-            and 7).
-            (2026-10-04: first the noise under it. Functional relations are
-            declared (stage AN) and their breaches listed (`functional-
-            conflicts`); most of the 345 were one venue under two names or
-            a series beside its edition. Resolution's `venue` tier merges
-            the one and links the other `part_of`, and the finding takes a
-            series and its edition for one answer: 247 left, mostly
-            publishers, universities and dates typed as venues. The
-            `not-venues` ailment of `prax heal` mends those: 157 left on a
-            copy.)
-
-      *5. What is current* (the client's #8). 13 of the acceptance
-      project's 27 documents say they are retired, superseded or invalid,
-      and an agent that quotes one as current repeats the failure that
-      cost months of a pitch.
-      - [x] (2026-10-03: from the record, the extension's paper, a page's
-            tags and markup, the arXiv id; shown and filtered; and the
-            `dates` step reading the first page with a model, measured on
-            Zotero's dates: answers for 70%, its year right for 86% of
-            those, most misses being Zotero's other version of the paper.
-            Crossref by DOI waits: only 133 of 8,221 undated PDFs print
-            one near their start. A PDF's metadata is still to come)
-            **A document's own date, first** (the user, 2026-10-03:
-            "there is no date for the docs visible … not when it was
-            created in prax but when the document was published"; a
-            person judges a paper by when it was written). Only 1,890 of
-            12,837 live documents have one (`meta.date`, all from
-            Zotero: 1,072 a year, 512 a month, 306 a day), shown on the
-            document page and nowhere else. `meta.published` = {date,
-            precision (year, month, day), by, at}, filled from what
-            says it, best first: Zotero; Crossref by DOI (the citations
-            importer asks it already); the arXiv id (`yymm`); a web
-            page's `citation_date`, `article:published_time` or
-            `DC.date`; the first page read by the titles pass
-            ("Published …", a conference's year, ©); a PDF's metadata,
-            last, since it often says when a file was made. Shown as
-            the year in search hits, `get`, `ask`'s passages (so the
-            answering model weighs age too) and the UI's lists; a
-            filter `published_since`/`before` on search and
-            `documents`. It is also the anchor the world's time below
-            is read against: a document's date, never prax's.
-      - [x] (2026-10-04: `prax.text.status`, `projects._statuses`: `meta.status` and `supersedes`/`invalidates` edges, run `status:<name>`, the line's date as world time) At sync, `retired` and `superseded_by` from front matter and
-            explicit status lines ("retired 2026-10-02", "superseded by
-            …", "status: …"), only in synced project documents: a paper
-            saying "superseded by" is about others' work.
+- [ ] **AL. The first client's feedback.** Steps 1 to 4 and 6 to 8, and
+      most of step 5, were done 2026-10-03 and -04 (`docs/log.md`; the
+      full stage is under "Moved from the plan"). Left of step 5:
       - [ ] (2026-10-03: the columns and the record time done: migration
             36's `world_from`/`world_to` with their precision, written by
             `store.link` and shown by `traverse` only where present;
@@ -393,9 +232,6 @@ and pushing what is committed.
             are, and invariant 8's wording in CLAUDE.md corrected with
             it (found 2026-10-03, talking about prax as an agent's
             memory).
-      - [x] (2026-10-04: `traverse(as_of=)` was there; `store.changes`, `GET /graph/changes` and the `changes` tool, record time and world time, re-readings left out; migration 42's indexes) "As of a date" and "what changed in a period" as door
-            routes and MCP tools, once the world's time is on the facts
-            (Utopia exposes both; the research note, section 8).
       - [ ] **As Utopia does it** (its code, the research note, section
             10): each world date with a precision (year, month, day),
             and "ended, date unknown" as a state of its own (the end
@@ -415,141 +251,21 @@ and pushing what is committed.
             `test_invariants.py` that no read builds it itself. prax's
             `valid_from`/`valid_to` are record time and are renamed or
             documented so.
-      - [x] (2026-10-04: `store.staleness`, `STALE_SHIFT` 5 places, `stale` on the hit and `ask`'s passage, `include_stale`; the measurement on the project's own question waits for its re-sync) Search and `ask` rank a stale document lower and name its
-            replacement; never a filter (as the domain prior), and
-            `include_stale` turns it off. Measured on the project's own
-            question ("the current shipping candidate and its figure":
-            answered from the decision document and the corrected
-            re-baseline only).
 
-      *6. Captures and pages* (the client's #9, #10, #14).
-      - [x] (2026-10-04: the `capture_requests` table, migration 40; the 202 answer; the extension's alarm every 5 minutes and its options switch; the bed in Chrome passes but for two checks that failed before the change, Firefox not run: Waterfox was open) A failed capture (a TLS chain error, a 403, a bot check) is
-            queued for the extension (`{queued_for_extension: true}`),
-            which fetches it with the person's session; the upload is
-            linked to the request and takes its title and domains. 7 of
-            about 30 captures failed so.
-      - [x] (2026-10-04: the append itself is 0.04 s on a copy; the rest was the write lock. The lock now logs a write that waited over 5 s with who held it, and one that held it over 10 s; the whole-library fields pass is batched. Answering before the write waits until the log names a holder worth it) `append_page` took over 120 s. Measure where, then answer a
-            write at once and index after.
-      - [x] (2026-10-04: `store.update_section`, `PUT /page/{slug}/section`, the MCP tool) `update_section(slug, heading, text)`, or a replaceable status
-            block like the ask blocks.
-      - [x] (2026-10-04: `lifecycle` and `stale_sources` on `GET /page`, said under the page's header; contradicted waits for the contradiction pass) A page's lifecycle: marked stale, or contradicted, when the
-            documents it cites change or are superseded (Synthadoc's
-            draft, active, stale, contradicted, archived).
-      - [x] (2026-10-04: `PUT /doc/{id}/title`, `POST /ingest/urls`, the MCP tools `set_title` and `capture_urls`) `set_title`, and batch capture with a result per item.
-
-      *7. Bibliographies and privacy* (the client's #11, #12).
-      - [x] (2026-10-04: `store.references_of`, `store.cited_but_missing`, the routes and tools; read from the reference entries, so an extraction's `cites` to a program ("OnsetDetector.LL", the 35B's typing) is not in them; open access is the DOI and arXiv links, a lookup per entry waits) `references(doc_id)`: the parsed list, each entry in the
-            library (`doc N`) or with a DOI and an open-access URL.
-            `cited_but_missing(set)`: what a set of papers cites that the
-            library lacks, ranked by how many cite it. First the
-            reference-list detector's scope: `cites` held
-            "OnsetDetector.LL" from software help files.
-      - [x] (2026-10-04: on `POST /ingest`, `PUT /page`, and the sync, kept with the project's settings; only `personal`, never a way to open) `sensitivity: personal` accepted by `ingest`, `write_page` and
-            the sync, behind the wall (stage U), so a colleague's notes
-            can live in prax.
-
-      *8. The client's own page* (doc 13470, written 2026-10-04 after it
-      checked the AL changes from its side; O6 and O7 were done that day).
-      - [x] (2026-10-04) O1: `sync_project` and `ingest_file` read within the git
-            repository of the working directory by default, so a sibling
-            subproject is in reach.
-      - [x] (2026-10-04) O3: `status` says `searchable` for a document in
-            `reading` whose text is indexed already.
-      - [x] (2026-10-04) O4: the `request_reading` tool (OCR, the vision
-            model, marker) over the existing route.
-      - [x] (2026-10-04) O5: `health` tells a refused token (401) from a route
-            not allowed (403, a door older than the client), and names the
-            door's commit beside the client's.
-      - [x] (2026-10-04, the user: "build it", after the numbers: a hit is
-            about 300 bytes, the link 45) O2: a ready passage link on each search hit, with `find` words
-            the door chooses (`cite` on an agent's hits and `ask`'s
-            passages, `store.cite_link`).
-
-      *Not now.* Search hits with a `url` each (the client's #3, at chunk
-      level too): about 40 bytes a hit against invariant 6. One `ui` base
-      per answer and the ids are enough to build `#doc/N?chunk=M`. The
-      book view of a project (#16: an ordered table of contents, a
-      "current state" path, one-file export) is cheap after steps 4 and
-      5, and comes then.
-
-      *What worked*, by its account: hybrid search with the region line
-      found the existing cluster in one call; `documents(title=…)`
-      checked coverage; the capture errors were clear (the bot check
-      pointed to the extension); and the skill's rule that a document's
-      content is data, not instructions.
-
-- [ ] **AN. Rules over the graph: what follows from what is stated**
-      (candidate, after AL step 4; the user, 2026-10-03, on standard
-      vocabularies: "maybe they are more useful for a reasoning part?").
-      The research note, sections 10 and 11; Utopia's `utopia-reason` is
-      the worked design, under two thousand lines.
-      - [x] (2026-10-04: `transitive`, `symmetric`, `functional`, `inverse_of`, `kind` and `same_as` on relations, `same_as` on types; no version bump: they change what validates in no way, as `naming:`) **The ontology annotated, not replaced**: a relation's
-            characteristics in the YAML (`transitive`, `inverse_of`,
-            `symmetric`, `functional`, and `state`, `event` or
-            `eternal`), and `same_as` names in schema.org, SKOS and
-            PROV-O where they exist. It changes what types exist in no
-            way, so whether it bumps a module's version is decided with
-            it.
-      - [x] (2026-10-04: `ontology.lint`, run by `compose`; a contradiction refuses to load) **A lint of the ontology when it loads**: symmetric and
-            asymmetric at once, transitive and functional at once, a
-            subtype cycle, an inverse that is not mutual.
-      - [x] (2026-10-04: `store.derive_rules`, `edge_premises` (migration 41), `GET /edge/{id}/why` and the `why` tool; on request (`prax maintain --only rules`), not on the clock: see the measurement) **A rule pass on the door's clock**: OWL RL's few rules
-            (transitivity, inverses, symmetry, subproperties) as forward
-            rules in SQL. A derived edge is INFERRED, producer
-            `rule:<name>`, a run, its validity the intersection of its
-            premises', and its premises kept (a table of edge ids), so
-            "why is this here" has an answer. An asserted edge always
-            wins, and a derivation that contradicts one is not written.
-            A cap a relation. Retraction by recompute and diff: the pass
-            derives everything again and ends what no longer follows;
-            nothing is deleted, and retiring its run removes all of it.
-      - [x] (2026-10-04: the `functional-conflicts` ailment of `prax heal`, report only) **Constraints as findings, not rules**: a functional relation
-            with two values goes to the `contradicts` pass (AL step 4).
-      - [x] (2026-10-04, on a copy: 306 derived in 2.9 s; `part_of` closure right in 5 of 20, the rest built on premises the extraction wrote backwards; so not nightly. Then the direction check, `ontology.part_of_suspect` with the lexicon's `part_of` cues: suspects go to the review queue, are no premise, and the `backwards-part-of` ailment lists and mends the written ones; the pass then wrote 23 `part_of` derivations, 18 of 20 right. The user put it on the clock the same day: a pass of the nightly `prax maintain`) Measured: how many edges a pass adds, how many are wrong on a
-            sample, what it does to `traverse` and to `ask`. The path
-            index (AM) gains from it: a closure of `part_of` and of
-            `broader` gives a walk meaningful shortcuts.
+- [ ] **AN. Rules over the graph.** The ontology annotated and linted,
+      the rule pass nightly with its premises checked, the `part_of`
+      direction check, functional conflicts kept (`edge_conflicts`), the
+      schema.org markup pages carry, and the genres in schema.org's
+      words were done 2026-10-04 (`docs/log.md`). Left:
       - [ ] **More meaning from what the library holds, in standard
             words** (the user, 2026-10-03: "the standardized ontologies
             also could make sense to extract some more meaning from our
             current chunks/docs"):
-            - [x] (2026-10-04: `prax.text.schemaorg` and the `markup` pass of `prax maintain`: 1,336 facts from 315 pages; the date reader read the unquoted tag too, 141 more pages dated) the **schema.org markup web pages already carry**
-              (JSON-LD, microdata): a recipe's ingredients and times, an
-              article's author and `datePublished`, a product, an event,
-              a person. Read at capture and by a pass over the kept HTML
-              originals, no model: facts EXTRACTED with producer
-              `jsonld`, and a date for `meta.published` (AL step 5);
-            - [x] (2026-10-04: the genres, exact matches only, `same_as:` in genres.yaml; the subjects not yet) prax's **genres and subjects mapped** to schema.org types
-              (`ScholarlyArticle`, `TechArticle`, `Recipe`, `Review`…)
-              and to SKOS concept schemes, so a document's kind is said
-              in words other systems and models know;
             - the **extraction prompt given the standard names** beside
               prax's (a relation's `same_as`), which may help a local
               model place a relation; a module's version bump re-reads
               what it touches, as any bump does, so it is measured on a
               sample before a pass over the library.
-
-- [x] (2026-10-04: the prototype measured on a copy, then `prax.graph.paths` and `store.connect_entities`, `GET /graph/connect` and the `connect` tool; in memory, not a file, at this size; `scripts/eval_paths.py`) **AM. A path index: how is A connected to B** (candidate, after
-      AL step 5; the user, 2026-10-03: "path questions are interesting
-      though and would make sense for any agentic use/reasoning on
-      facts"). A derived file beside the database, in the vector files'
-      pattern (memory-mapped, a delta, a merge, rebuilt at will), holding
-      per entity its edges with what a path search weighs: relation,
-      confidence class, the times, the source document, the number of
-      documents behind it. Not a graph engine: a second store would break
-      invariant 1, double the wall, and Kùzu, the engine CLAUDE.md names,
-      was archived on 2025-10-10. Its search respects what no engine
-      knows: evidence per hop, a cost for hubs, preferred relations, the
-      world's time (`as_of`, hence after AL step 5), the wall. An agent
-      gets `connect(a, b, max_hops, relations, as_of)`: the two or three
-      best paths, each hop with its quote and document. First a Python
-      prototype on a copy of the store and an evaluation set (pairs with
-      a known connection and pairs with none), because a confident path
-      of weak edges is worse than none; then a store module and the
-      tool; compiled code only if speed asks, as AH's first piece. It
-      also settles the decision threshold for slow walks (an index for
-      the walk's query first, then this). The design is in the private
-      research note, section 9.
 
 - [ ] **AJ. Readers under prax's hand: every model process a role, the
       OCR readers measured against each other.** The user, 2026-10-02:
@@ -713,13 +429,6 @@ and pushing what is committed.
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
 
-- [x] (2026-10-04: `store.short_heading` in `_chunk_shape`, 120 characters a level and the 4 nearest levels; marker had mended 9522, 30 documents were still past 1,000 characters) **A heading is capped in a hit** (found 2026-10-03). Doc 9522, a
-      patent read in two columns, has a heading of over 2,000 characters
-      of repeated text, and it rides along with every search hit and
-      `ask` passage of that document. Marker reads it again (queued the
-      night of 2026-10-02); a cap on a hit's `heading` would keep one bad
-      parse from swelling an answer (invariant 6). Not decided.
-
 - [ ] **Facts as one more search list** (2026-10-03, from Graphiti's fact
       sentence and LightRAG's relation vectors): a full-text table over
       each edge's evidence, relation and its entities' names, a list in
@@ -766,23 +475,6 @@ and pushing what is committed.
       if a region turns out to be two unrelated things, or if the
       packages prove easy on the Pi-class host.
 
-- [x] (2026-10-03: the first hop's cap, `support` on its rows, measured in the log; search's tie-break not built: a hit carries no fact to count) **Support count as a signal** (2026-10-03, from Graphiti's episode
-      count, LightRAG's summed weights, HippoRAG's source counts): a
-      walk's first hop ordered by how many documents separately say each
-      fact, and search's ties broken by it. prax writes one edge row per
-      source, so the count is a GROUP BY. Nearly free.
-- [x] (2026-10-03, as a near tier proposing to the judge, not merging) **A deterministic step before the model in entity resolution**
-      (Graphiti's `dedup_helpers`): a normalised exact match with one
-      candidate resolves; a short or low-entropy name goes to the model;
-      otherwise 3-gram shingles, MinHash and a Jaccard of 0.9 or more
-      resolve. About 50 lines; fewer calls of the local model. Merges
-      stay recorded and undoable as now (`merged_by`, `merged_run`).
-
-- [x] (2026-10-03: hubs of 100+ live edges, entities a page speaks of; rule-derived edges with AN) **A gate on automatic merges by what they touch** (Utopia's
-      `execution_gate`): a merge of the adjudicated tier waits on the
-      Review page when it would make two values of a functional relation,
-      touch an inferred edge, or touch an entity a saved page or answer
-      cites. Three store queries, no table.
 - [ ] **Precedents for the judge of a pair** (Utopia's adjudication): the
       person's earlier decisions on the Review page, with the reason they
       wrote, given to the model as examples, and its verdicts cached by
@@ -799,9 +491,6 @@ and pushing what is committed.
 - [ ] **Counted drops**: what extraction skips without queuing it (a
       reason, a count, an example, per document), beside the review
       queue (Utopia's `extraction_drops`).
-- [x] (2026-10-03, migration 35: edges never deleted and their fact fixed, page revisions, spend) **Append-only by trigger** on what is a ledger already (merge
-      stamps, page revisions, token uses): `BEFORE UPDATE … RAISE(ABORT)`
-      in SQLite, as Utopia's audit table.
 
 ## The UI and the agent
 
@@ -844,25 +533,12 @@ Left:
 The pass itself is in `docs/log.md` (2026-09-30). These were found and
 not done.
 
-- [x] (2026-10-03: seven parts, the switches on `retrieval.knobs`, the package refusing a knob set on itself; `docs/log.md`) **`store.retrieval` as a package.** It is 1,919 lines, under the
-      2,000 that CLAUDE.md sets for a split. It does four jobs: query
-      expansion, the search legs, fusion, and the vector files. Its tests
-      switch behaviour through module flags (`retrieval.SENSES`,
-      `retrieval.DOMAIN_PRIOR`, `DELTA_MERGE_AT`). Split into parts, a
-      flag set on the package would no longer reach the part that reads
-      it, and the tests would pass without testing. The split needs the
-      flags read through one settings object first.
 - [ ] (2026-10-04: `store.repair` done, four parts at 1,890 lines; `store.graph.context` at 954 is not yet past the line) **`store.repair` and `store.graph.context` in parts.** 1,697 and 954
       lines. Their tests reach private state (`repair._glyphs_seen`),
       which would move with the part that holds it.
 - [ ] **Typed shapes.** 869 `dict[str, Any]` annotations and no
       `TypedDict`. The first ones worth writing are a search hit (read by
       six modules), `get_document`, a job row and the meta keys.
-- [x] (2026-10-03) **The next strict batch of mypy: the whole package.**
-      Under the batch's flags the package had 66 errors, not the 1,008
-      feared. The 926 re-export errors come from `no_implicit_reexport`,
-      which the batch never set; the store re-exports by design. The
-      flags moved to `[tool.mypy]` itself (`docs/log.md`).
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`
@@ -872,12 +548,6 @@ not done.
       calls up to could move into `prax.text`. (2026-10-03: the six tests
       that polled a job with their own loop use `tests.conftest.wait_job`,
       which fails with the job's row instead of running on.)
-- [x] (2026-10-03: `store.retrieval.compounds`, with `term_documents` beside it) **`text.compounds` asks the store** for the forms a word takes, and
-  only the store uses it. It is retrieval, not text; it waits for
-  `store/retrieval.py` (1,916 lines) to split at 2,000 as invariant 3
-  says, and goes there.
-- **Large modules:** `store/repair.py` 1,625, `host/up.py` 1,435. Neither
-  is tangled. Both are long lists of the same shape (ailments, roles).
 
 ## Later / maybe
 

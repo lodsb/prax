@@ -3793,6 +3793,133 @@ does), and no module but `edges.py` writes the past-moment form
 (`test_a_moment_in_record_time_is_built_in_one_place`; a planted
 breach of each kind failed it).
 
+## 2026-10-03: a fact's witnesses, in the first hop's cap
+
+A fact several documents state is one edge per document. In the first
+hop each such row now says how many documents state its fact
+(`support`, absent for one). The cap (`graph.edges`, 25 in the surfer's
+`walk`) is spent on distinct facts first, the best supported first
+within a relation, still round-robin over the relations; a fact's
+further rows come only after every distinct fact has had its place. The
+surfer's `walk` names a fact once, with "+N more" documents.
+
+Measured on a copy of the library, over 60 entities past the cap (the
+15 most connected and 45 drawn from the rest), old rule against new:
+
+| at a cap of 25 | old | new |
+|---|---|---|
+| distinct facts shown | 1,449 | 1,500 |
+| documents behind them | 1,536 | 1,672 |
+| of each entity's 10 best-supported facts, shown | 481 | 517 |
+
+Only 24 of the 60 carry any fact more than one document states, so the
+gain sits there. For one paper, 2 of its 10 best-supported facts were
+shown before and 9 after; for one author, 4 and 8. `ask` was not
+re-run for it: the change reaches an answer only through a walk on such
+an entity, and a run's spread (3 to 7 questions) is larger than that.
+
+## 2026-10-03: Qwen 3.8's dense 27B, and an uncensored build of it (stage AK)
+
+What Qwen released after 3.6: Qwen 3.8 (mid-August), whose open models
+are a dense 27B and a 2.4T-A95B; a 35B-A3B is only registered in a
+ModelScope commit, not released. The files, downloaded with the user's
+word: unsloth's `Qwen3.8-27B-UD-Q4_K_S.gguf` (15.4 GB, sha256
+`75bc9c8adba2842e72f0ab5201aaa07133c5010b566305c09187fcbdcd364017`) and
+huihui-ai's `Huihui-Qwen3.8-27B-abliterated-UD-DW-Q4_K_S.gguf` (15.6 GB,
+sha256 `f10c26c7d07b056bccc60e09ec427a0861a7df554519e97ffd115f5f45900176`),
+abliterated from unsloth's files, so the two differ by the ablation
+alone. No projector: every measure is text. llama.cpp b10900 runs both.
+
+Each was served by `prax up` in turn (`server-27b`, `server-27b-u` in
+prax.yaml, `run: llama-server` pointed at it), the worker paused, so no
+pass wrote with a model under test. The 35B ran the same sets the same
+afternoon with today's code.
+
+| | 35B-A3B (3.6) | 27B (3.8) | 27B abliterated |
+|---|---|---|---|
+| writing, tok/s | 149 | 50 | 50 |
+| reading a 2,300-token prompt, tok/s | 2,200 | 2,450 | 2,400 |
+| card in use (with the display) | 22.1 GB | 16.9 GB | 17.1 GB |
+| extraction, 14 documents: seconds | 141 | 422 | 440 |
+| triples / valid against the ontology | 188 / 141 | 240 / 225 | 255 / 223 |
+| overlap with the live edges (196) | 74 | 74 | 79 |
+| maths, right of 10: tools on, grounded | 5 | 9 | 10 |
+| tools on, open | 7 | 10 | 9 |
+| tools off, grounded | 4 | 6 | 7 |
+| tools off, open | 8 | 8 | 8 |
+| maths eval, 80 asks: seconds | 1,145 | 1,935 | 2,052 |
+| personal documents, 40 × 2 tasks: declined or hedged | 0 | 0 | 0 |
+
+The maths numbers are one run each, machine-scored (`score_maths.py`);
+the 35B's five runs of 2026-10-02 averaged 7.0, 8.6, 7.0 and 7.8, so
+its 5 and 4 today are the low end of its spread, and the 27B's 9 and 10
+with the tool are past it. The 27B calls the calculator more (60 maths
+steps against 45) and writes valid triples more often (94% against
+75%), at a third of the speed. The extraction overlap is measured
+against edges the 35B mostly wrote, which favours it.
+
+The abliterated build loses nothing measurable here. It gains nothing
+either: on the owner's personal documents (`scripts/eval_refusals.py`,
+counts only) none of the three models declined or hedged a summary or
+a list of names and amounts. What the original refuses is a question of
+another kind, which the user tries by hand.
+
+Nothing switches yet. A split is what the numbers suggest: the 27B for
+`ask` and the surf, where a third of the speed costs seconds per
+answer, and the 35B for the bulk passes. Only one model fits the card
+at a time, so it needs a measurement of the swap first.
+
+By hand (the user, the evening): the abliterated build answers what the
+original refuses ("definitely uncensored"), and its tool use feels more
+fluent. In the maths eval it took fewer calculator steps than the plain
+27B (46 against 60) for the same scores, which fits that reading: fewer
+calls that miss.
+
+Found on the way: with the worker paused, an `ask` did not wake an idled
+llama-server. The door answered "it has been asked for", and nothing
+loaded until `prax up --start llama-server`.
+
+**The host switched** (the user, 19:20: "keep the uncensored 27B, delete
+the plain one, start the worker"). `run: llama-server` and every local
+step now name `server-27b-u`, so the provenance stamps name the model
+that wrote them. Two steps are off until they are fitted to it: `vision`
+(the abliterated repository has no projector; unsloth's
+`mmproj-F16.gguf` for Qwen 3.8, 928 MB, is the candidate) and
+`adjudicate` (its Platt fit is the 35B's; `eval_confidence.py platt`
+again on the Review page's decisions). The plain 27B is deleted; the
+35B's file (21 GB) stays until the user says.
+
+**`adjudicate` refitted for the 27B** (the user: "do the adjudicate
+recalibration first"). `eval_confidence.py gold`, `ask`, `platt` on the
+296 pairs a person has decided on the Review page (205 same), 74 s of
+the model:
+
+| | agrees with the person | at 0.9: settled, agreeing | at 0.95 |
+|---|---|---|---|
+| 35B, 2026-09-28 (221 pairs) | 0.81 (ECE 0.031) | 40%, 87 of 89 | 30%, 66 of 67 |
+| 27B abliterated (296 pairs) | 0.77 (ECE 0.050) | 36%, 98 of 107 | 16%, 47 of 47 |
+
+The sets differ (the person decided 75 more pairs since), but the 27B
+is the weaker judge of sameness. `steps.adjudicate` names it again with
+its own fit (`platt: {a: 0.5525, b: 0.5186}`) and `settle: 0.95`: it
+settles fewer pairs, and the rest wait on the Review page with its
+number. Pairs the 35B already scored keep the 35B's number
+(`scored_pairs` are not asked again).
+
+**`vision` back on, with a projector for the 27B** (the user: "work on
+the vision projector first"). huihui's repository has none; unsloth's
+`mmproj-F16.gguf` for Qwen3.8-27B (928 MB, sha256
+`cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e`) is
+served beside the abliterated weights, since the ablation leaves the
+vision tower alone (`serve.mmproj` by absolute path, `image_max_tokens:
+1024`). The card holds 18.6 GB with the display, 1.5 GB more than
+without it. On three figures the 35B had read, the 27B's readings were
+as coherent and caught the labels, each model misreading one thing the
+other got right (the 35B read "Bass 82.aif", the 27B "Base B2 af").
+Through the pipeline: document 13449's three figures in 35 s, stamped
+`figures/1-r2+qwen3.8-27b-abliterated-ud-dw-q4ks`. 3,625 documents still
+have figures nobody read; that run waits for the user.
+
 ## 2026-10-03, the evening: three small fixes, and retrieval in parts
 
 - **An ask wakes an idled model under another name.** The demand an
@@ -4072,7 +4199,7 @@ step. Migration 37 adds full indexes on `(src, valid_from)` and
 index, not a sign for the path index of stage AM, which must carry the
 record times all the same.
 
-## 2026-10-04, the evening: rules over the graph (stage AN, first part)
+## 2026-10-04, the afternoon: rules over the graph (stage AN, first part)
 
 **The ontology annotated.** A relation now says what follows from it:
 `transitive` (`part_of`, `located_in`, `has_part`, `supersedes`,
@@ -4118,7 +4245,7 @@ reason: most of the 200+ subjects with two venues are one venue under
 two names ("ISMIR", "11th International Society for Music Information
 Retrieval Conference"), which is entity resolution's work.
 
-## 2026-10-04, late: which end of a part_of is the part (stage AN)
+## 2026-10-04, the afternoon: which end of a part_of is the part (stage AN)
 
 The rule pass measured 5 of 20 `part_of` derivations right, the rest
 built on facts written backwards. A sample of the 866 live asserted
@@ -4182,7 +4309,7 @@ part of another course. One backwards fact still fans out: before
 "manual" was a whole word, "BSD Library Functions Manual part_of
 Archive_Write_New" alone made nine of forty derivations wrong.
 
-## 2026-10-04, night: what a web page says about itself (stage AN)
+## 2026-10-04, the evening: what a web page says about itself (stage AN)
 
 Of the library's 559 open web pages, 328 describe themselves in
 schema.org JSON-LD: articles and posts with their authors and publisher,
@@ -4241,167 +4368,39 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
-## 2026-10-04, night: two facts that cannot both hold (the conflicts pass)
+## 2026-10-04, the evening: what changed in a period (AL step 5)
 
-AL step 4's last item: a pass that keeps the disagreements of a
-functional relation visible, never ending a fact for them. The plan said
-"`contradicts` edges between facts", but an edge of the graph joins two
-entities, and a conflict joins two facts; an edge between "DAFx-14" and
-"ICASSP 2014" would say something false about two conferences. So the
-conflicts live beside the edges, as the rule pass's premises do:
-`edge_conflicts` (migration 43), the two edges, the relation, producer
-`rule:functional`, run `conflicts:<relation>`, when found and when ended.
+"As of a day" was there (`traverse(as_of=)`); "what changed between two
+days" was not. `store.changes` answers it on either time an edge
+carries, through `GET /graph/changes` and the MCP tool `changes`. On record
+time (the default) it lists the facts prax came to hold in the period
+(`added`) and those it stopped holding (`ended`); with `world=true`, the
+facts that began and ended in the world then, as their sources state
+(`began`, `ended`). A world date meets a period when their spans meet,
+each read at the coarser precision: "2026" meets September 2026, and so
+does "2026-09-14". Each side carries its count by relation and the
+newest 20 facts with `left_out`; `entity` (its name or a label, with
+what was merged into it), `rel` and `domain` narrow it. The rule pass's
+derivations are left out unless `derived`, since it re-derives nightly.
+A hidden document counts as absent, and `test_wall` checks it.
 
-The `conflicts` pass of `prax maintain`, nightly, after the rule pass
-(`store.find_conflicts`): per relation the ontology calls functional
-(`published_in` today), the live asserted edges grouped by subject, the
-values by their root under `part_of` (`store.part_of_roots`, which the
-`functional-conflicts` finding now shares), one edge standing for each
-value (an EXTRACTED one first, then the oldest), six pairs a subject at
-most. Pairs that disagree and were not recorded are added; recorded ones
-that no longer disagree (an edge ended, a merge, a `part_of` that joined
-the two values) are ended. `traverse` marks a fact another contradicts
-(`disputed`: how many), counting only those the viewer may see, and `why`
-lists them with their documents and quotes (`store.edge_conflicts`,
-scrubbed by the wall).
+The first version listed re-readings as news. On a copy of the library,
+the 4th of October had 2,684 facts added and 939 ended, of which 1,142
+and 936 were `cites`: the references pass matching the same citations
+again. A fact added that was already held when the period began, or
+ended while another edge still states it, is now left out unless
+`rereadings=true`. The same day then reads 1,648 added and 34 ended:
+the day's real news was the schema.org facts and new documents.
 
-On a copy after the venue tier and `not-venues`: 224 conflicts in 0.25 s,
-a second pass 0.18 s with nothing changed. Of the 214 between open
-documents, 148 pair two values one document gave ("huggingface.co" and
-"GitHub", a journal with and without its volume and pages): an
-extraction's own ambiguity, not two sources at odds. The other 66 are
-documents disagreeing, some for real (a paper in NIME 2011 and in ITS
-2010). A person reads them; nothing is decided by the pass.
+The record-time period is `changed_between` in `store.graph.edges`,
+beside `held_at`, so `test_a_moment_in_record_time_is_built_in_one_place`
+still holds every record-time condition to one module. Migration 42
+indexes `valid_from`, `valid_to`, `world_from` and `world_to`. Before
+it, a day took 1.2 s and a year 7.2 s, scanning every edge; after it,
+0.37 s and 2.2 s with the re-reading test. An entity's changes take
+14 ms. An answer is 2 to 11 KB.
 
-## 2026-10-04, night: a publisher is no venue (`not-venues`)
-
-After the venue tier, most of the 247 "published in two venues" findings
-were papers said to be published in something that is no venue: a
-publisher ("Oxford University Press", 24 edges), a company (a plug-in
-maker for its manual), a university or a faculty, a semester or an
-exercise sheet. The extraction typed them as venues because a venue was
-what the relation asked for.
-
-What a name says it is instead is a new section of the lexicon,
-`not_a_venue`, read by `prax.graph.venues.not_a_venue`: `publisher`
-(press, Verlag, publishing, the big houses by name), `company` (GmbH,
-Inc., Ltd, AG, LLC), `institution` (university in five languages,
-institute, faculty, department, laboratory, conservatory) and `none`
-(dates and semesters, exercise sheets, lectures, licences). A name with a
-venue word (journal, proceedings, conference, review, letters…) is a
-venue whatever else it says, so "Journal of the Audio Engineering
-Society", "Proceedings of the IEEE" and "Psychological Research" stay; so
-does "Acta Universitatis Upsaliensis", which no cue matches. The first
-cut used the lexicon's general organization words and caught journals on
-"systems", "research" and "technology"; these are narrower.
-
-The `not-venues` ailment of `prax heal` lists them. Its repair ends each
-`published_in` edge into one and writes what it meant beside it:
-`published_by` the publisher or company, `written_at` the institution,
-both of an organization by the same name, with the old edge's document,
-evidence and world dates, INFERRED, producer and run `heal:not-venues`.
-A date or an exercise sheet gets nothing. On a copy: 291 entities (105
-institutions, 84 publishers, 42 companies, 60 nothing) and 738 edges;
-after the venue tier and this, the findings went from 345 to 157. What
-is left is the material of the contradiction pass: real disagreements
-(a paper in DAFx-14 and in ICASSP), junk values ("DRAFT"), and spellings
-no rule folds ("Applied Sciences", "Apl. Sci.").
-
-## 2026-10-04, past midnight: a heading is capped in a hit
-
-Found on 2026-10-03 in doc 9522, a patent read in two columns: a heading
-of over 2,000 characters rode along with every search hit and `ask`
-passage of the document. Marker's re-read mended 9522 (its longest
-heading is 119 characters now), but the shape is common to bad parses:
-1,044 chunks in 30 documents carry a heading path over 1,000 characters
-and 60 over 2,000, a book's epigraph or a page's running text read as a
-heading.
-
-`store.short_heading` caps the path where every read of a chunk is
-shaped (`_chunk_shape`): each level cut at a word to 120 characters and
-marked "…", and only the 4 nearest levels, the first marked "… " when
-more were left out. Search hits, `ask` passages, the surfer's reads and
-`get_chunk` all carry the short path; the chunk's text and the
-document's outline (`sections`) read the full one. On a copy of the
-library a search of ten hits that met such a document went from 5,805
-to 4,085 bytes, its one bad heading from 1,879 characters to 180.
-
-## 2026-10-04, past midnight: `store.repair` in parts
-
-`store.repair` had grown to 1,890 lines with today's ailments, near the
-line CLAUDE.md draws at two thousand. It is a package of four parts now,
-in this order: `common` (the `Ailment` shape, the caps on one pass, and
-the repairs several ailments share: ending edges, closing review items
-and jobs), `graph` (entities named after the prompt, mangled and split
-names, loops, container citations, `part_of` the wrong way round,
-functional conflicts, slow walks, stray versions), `documents` (twins,
-files that are no documents, failed parses and readings, stale parses and
-extractions, the edges and review items of retired documents) and
-`ailments` (the list, `health`, `heal`). Its `__init__` re-exports every
-name, so `store.repair.<name>` and `store.health` read as before.
-
-The split was done by a script that moved each top-level statement whole,
-and checked afterwards: all 87 statements of the old module compare equal,
-syntax tree for syntax tree, with their copies in the parts. One test set
-`SLOW_WALK_MS` on the package; it now sets it on the part that reads it,
-since a name set on the package does not reach the part (as with
-`retrieval.knobs`).
-
-## 2026-10-04, late night: one venue under many names (resolution's venue tier)
-
-The `functional-conflicts` finding of stage AN listed 345 papers
-"published in" two venues or more (200 shown, the rest past its cap).
-Read, most were not conflicts: one venue under two names ("DAFx" and
-"International Conference on Digital Audio Effects"), or a series beside
-one of its editions ("NIME" and "NIME 2010", "ISMIR" and "ISMIR 2008 –
-Session 3a"). The likely tier of resolution compares names by embedding,
-and an acronym is far from its expansion there.
-
-**Reading a venue name** (`prax.graph.venues.read`, no model). A name
-becomes its series (the words that stay from year to year), its edition
-(a year, written "2008", "'04", "-17", "23", or an ordinal, "26th",
-"Thirty-Sixth", "3d") and its acronym. Taken off the series: "Proceedings
-of" when what is left is a meeting or an acronym ("Proceedings of the
-IEEE" and "Proceedings of the Musical Association" are journals and keep
-it), a session after a dash, a volume or issue, and past the first comma
-a place and a date when the part before carries the venue's own acronym
-("DAFX 12, …, York, UK, September 17-21"; "IEEE Transactions on Systems,
-Man, and Cybernetics" is one title with commas). A name of only months
-or semesters is no venue. A plain number stays: "Lecture 6" and "Lecture
-10" are two things.
-
-**Grouping.** Two names are one series when a form of their series
-meets: its words; the words without a publisher ("IEEE ICASSP"); for a
-bare acronym, the expansions the library's acronyms table holds that are
-venue-like and whose initials the acronym is; for a venue-like name, the
-acronym it carries when its letters are the words' initials (ICASSP) or
-when the name writes it in brackets ("… Digital Audio Effects
-(DAFx-06)"). The rules came from reading what joined wrongly: every
-company through "GmbH", "AI Magazine" with "AI & Society" (no acronym
-under three letters), SIAM's journals with each other (SIAM is not their
-initials), and OOPSLA under ECOOP, a wrong expansion in the table. In a
-group, names of one edition merge into the most connected; one year with
-two ordinals is two editions (the 122nd and 123rd AES Conventions were
-both in 2007); every edition is `part_of` the group's bare series.
-
-**In resolution.** The `venue` tier runs after the sure ones in
-`resolution.plan`, on the door's clock with them (`prax resolve`), its
-merges and links in the round's run, so `unmerge_run` takes it back
-whole. The `functional-conflicts` finding now takes two values where one
-is `part_of` the other for one answer.
-
-**Measured on a copy.** 96 merges and 184 edition links in 0.2 s; a
-second round plans nothing. The findings went from 345 to 247. The 96
-merges, read one by one, held a few weak ones (two junk entities, "TUM"
-and "in.tum", and the joint ICMC and SMC conference kept apart only
-because its name says "joint"). Earlier likely-tier rounds had folded
-some editions into "DAFx" itself; those stay until a person takes their
-round back. Most of the 247 left are not venues at all: publishers
-("Oxford University Press", "Wiley"), universities, dates, an exercise
-sheet. That is a typing question for the extraction, and the reason the
-contradiction pass waits.
-
-## 2026-10-04, late night: how is A connected to B (stage AM)
+## 2026-10-04, the evening: how is A connected to B (stage AM)
 
 An agent walking the graph spends a call and a context's worth of edges
 on every hop. `connect(a, b)` answers in one call: the two or three best
@@ -4467,164 +4466,620 @@ names (`senses`, as `traverse` does). CLAUDE.md's decision threshold
 says when the file comes: ten times the facts, or a build past ten
 seconds.
 
-## 2026-10-04, night: what changed in a period (AL step 5)
+## 2026-10-04, the evening: one venue under many names (resolution's venue tier)
 
-"As of a day" was there (`traverse(as_of=)`); "what changed between two
-days" was not. `store.changes` answers it on either time an edge
-carries, through `GET /graph/changes` and the MCP tool `changes`. On record
-time (the default) it lists the facts prax came to hold in the period
-(`added`) and those it stopped holding (`ended`); with `world=true`, the
-facts that began and ended in the world then, as their sources state
-(`began`, `ended`). A world date meets a period when their spans meet,
-each read at the coarser precision: "2026" meets September 2026, and so
-does "2026-09-14". Each side carries its count by relation and the
-newest 20 facts with `left_out`; `entity` (its name or a label, with
-what was merged into it), `rel` and `domain` narrow it. The rule pass's
-derivations are left out unless `derived`, since it re-derives nightly.
-A hidden document counts as absent, and `test_wall` checks it.
+The `functional-conflicts` finding of stage AN listed 345 papers
+"published in" two venues or more (200 shown, the rest past its cap).
+Read, most were not conflicts: one venue under two names ("DAFx" and
+"International Conference on Digital Audio Effects"), or a series beside
+one of its editions ("NIME" and "NIME 2010", "ISMIR" and "ISMIR 2008 –
+Session 3a"). The likely tier of resolution compares names by embedding,
+and an acronym is far from its expansion there.
 
-The first version listed re-readings as news. On a copy of the library,
-the 4th of October had 2,684 facts added and 939 ended, of which 1,142
-and 936 were `cites`: the references pass matching the same citations
-again. A fact added that was already held when the period began, or
-ended while another edge still states it, is now left out unless
-`rereadings=true`. The same day then reads 1,648 added and 34 ended:
-the day's real news was the schema.org facts and new documents.
+**Reading a venue name** (`prax.graph.venues.read`, no model). A name
+becomes its series (the words that stay from year to year), its edition
+(a year, written "2008", "'04", "-17", "23", or an ordinal, "26th",
+"Thirty-Sixth", "3d") and its acronym. Taken off the series: "Proceedings
+of" when what is left is a meeting or an acronym ("Proceedings of the
+IEEE" and "Proceedings of the Musical Association" are journals and keep
+it), a session after a dash, a volume or issue, and past the first comma
+a place and a date when the part before carries the venue's own acronym
+("DAFX 12, …, York, UK, September 17-21"; "IEEE Transactions on Systems,
+Man, and Cybernetics" is one title with commas). A name of only months
+or semesters is no venue. A plain number stays: "Lecture 6" and "Lecture
+10" are two things.
 
-The record-time period is `changed_between` in `store.graph.edges`,
-beside `held_at`, so `test_a_moment_in_record_time_is_built_in_one_place`
-still holds every record-time condition to one module. Migration 42
-indexes `valid_from`, `valid_to`, `world_from` and `world_to`. Before
-it, a day took 1.2 s and a year 7.2 s, scanning every edge; after it,
-0.37 s and 2.2 s with the re-reading test. An entity's changes take
-14 ms. An answer is 2 to 11 KB.
+**Grouping.** Two names are one series when a form of their series
+meets: its words; the words without a publisher ("IEEE ICASSP"); for a
+bare acronym, the expansions the library's acronyms table holds that are
+venue-like and whose initials the acronym is; for a venue-like name, the
+acronym it carries when its letters are the words' initials (ICASSP) or
+when the name writes it in brackets ("… Digital Audio Effects
+(DAFx-06)"). The rules came from reading what joined wrongly: every
+company through "GmbH", "AI Magazine" with "AI & Society" (no acronym
+under three letters), SIAM's journals with each other (SIAM is not their
+initials), and OOPSLA under ECOOP, a wrong expansion in the table. In a
+group, names of one edition merge into the most connected; one year with
+two ordinals is two editions (the 122nd and 123rd AES Conventions were
+both in 2007); every edition is `part_of` the group's bare series.
 
-## 2026-10-03: a fact's witnesses, in the first hop's cap
+**In resolution.** The `venue` tier runs after the sure ones in
+`resolution.plan`, on the door's clock with them (`prax resolve`), its
+merges and links in the round's run, so `unmerge_run` takes it back
+whole. The `functional-conflicts` finding now takes two values where one
+is `part_of` the other for one answer.
 
-A fact several documents state is one edge per document. In the first
-hop each such row now says how many documents state its fact
-(`support`, absent for one). The cap (`graph.edges`, 25 in the surfer's
-`walk`) is spent on distinct facts first, the best supported first
-within a relation, still round-robin over the relations; a fact's
-further rows come only after every distinct fact has had its place. The
-surfer's `walk` names a fact once, with "+N more" documents.
+**Measured on a copy.** 96 merges and 184 edition links in 0.2 s; a
+second round plans nothing. The findings went from 345 to 247. The 96
+merges, read one by one, held a few weak ones (two junk entities, "TUM"
+and "in.tum", and the joint ICMC and SMC conference kept apart only
+because its name says "joint"). Earlier likely-tier rounds had folded
+some editions into "DAFx" itself; those stay until a person takes their
+round back. Most of the 247 left are not venues at all: publishers
+("Oxford University Press", "Wiley"), universities, dates, an exercise
+sheet. That is a typing question for the extraction, and the reason the
+contradiction pass waits.
 
-Measured on a copy of the library, over 60 entities past the cap (the
-15 most connected and 45 drawn from the rest), old rule against new:
+## 2026-10-04, the night: `store.repair` in parts
 
-| at a cap of 25 | old | new |
-|---|---|---|
-| distinct facts shown | 1,449 | 1,500 |
-| documents behind them | 1,536 | 1,672 |
-| of each entity's 10 best-supported facts, shown | 481 | 517 |
+`store.repair` had grown to 1,890 lines with today's ailments, near the
+line CLAUDE.md draws at two thousand. It is a package of four parts now,
+in this order: `common` (the `Ailment` shape, the caps on one pass, and
+the repairs several ailments share: ending edges, closing review items
+and jobs), `graph` (entities named after the prompt, mangled and split
+names, loops, container citations, `part_of` the wrong way round,
+functional conflicts, slow walks, stray versions), `documents` (twins,
+files that are no documents, failed parses and readings, stale parses and
+extractions, the edges and review items of retired documents) and
+`ailments` (the list, `health`, `heal`). Its `__init__` re-exports every
+name, so `store.repair.<name>` and `store.health` read as before.
 
-Only 24 of the 60 carry any fact more than one document states, so the
-gain sits there. For one paper, 2 of its 10 best-supported facts were
-shown before and 9 after; for one author, 4 and 8. `ask` was not
-re-run for it: the change reaches an answer only through a walk on such
-an entity, and a run's spread (3 to 7 questions) is larger than that.
+The split was done by a script that moved each top-level statement whole,
+and checked afterwards: all 87 statements of the old module compare equal,
+syntax tree for syntax tree, with their copies in the parts. One test set
+`SLOW_WALK_MS` on the package; it now sets it on the part that reads it,
+since a name set on the package does not reach the part (as with
+`retrieval.knobs`).
 
-## 2026-10-03: Qwen 3.8's dense 27B, and an uncensored build of it (stage AK)
+## 2026-10-04, the night: a heading is capped in a hit
 
-What Qwen released after 3.6: Qwen 3.8 (mid-August), whose open models
-are a dense 27B and a 2.4T-A95B; a 35B-A3B is only registered in a
-ModelScope commit, not released. The files, downloaded with the user's
-word: unsloth's `Qwen3.8-27B-UD-Q4_K_S.gguf` (15.4 GB, sha256
-`75bc9c8adba2842e72f0ab5201aaa07133c5010b566305c09187fcbdcd364017`) and
-huihui-ai's `Huihui-Qwen3.8-27B-abliterated-UD-DW-Q4_K_S.gguf` (15.6 GB,
-sha256 `f10c26c7d07b056bccc60e09ec427a0861a7df554519e97ffd115f5f45900176`),
-abliterated from unsloth's files, so the two differ by the ablation
-alone. No projector: every measure is text. llama.cpp b10900 runs both.
+Found on 2026-10-03 in doc 9522, a patent read in two columns: a heading
+of over 2,000 characters rode along with every search hit and `ask`
+passage of the document. Marker's re-read mended 9522 (its longest
+heading is 119 characters now), but the shape is common to bad parses:
+1,044 chunks in 30 documents carry a heading path over 1,000 characters
+and 60 over 2,000, a book's epigraph or a page's running text read as a
+heading.
 
-Each was served by `prax up` in turn (`server-27b`, `server-27b-u` in
-prax.yaml, `run: llama-server` pointed at it), the worker paused, so no
-pass wrote with a model under test. The 35B ran the same sets the same
-afternoon with today's code.
+`store.short_heading` caps the path where every read of a chunk is
+shaped (`_chunk_shape`): each level cut at a word to 120 characters and
+marked "…", and only the 4 nearest levels, the first marked "… " when
+more were left out. Search hits, `ask` passages, the surfer's reads and
+`get_chunk` all carry the short path; the chunk's text and the
+document's outline (`sections`) read the full one. On a copy of the
+library a search of ten hits that met such a document went from 5,805
+to 4,085 bytes, its one bad heading from 1,879 characters to 180.
 
-| | 35B-A3B (3.6) | 27B (3.8) | 27B abliterated |
-|---|---|---|---|
-| writing, tok/s | 149 | 50 | 50 |
-| reading a 2,300-token prompt, tok/s | 2,200 | 2,450 | 2,400 |
-| card in use (with the display) | 22.1 GB | 16.9 GB | 17.1 GB |
-| extraction, 14 documents: seconds | 141 | 422 | 440 |
-| triples / valid against the ontology | 188 / 141 | 240 / 225 | 255 / 223 |
-| overlap with the live edges (196) | 74 | 74 | 79 |
-| maths, right of 10: tools on, grounded | 5 | 9 | 10 |
-| tools on, open | 7 | 10 | 9 |
-| tools off, grounded | 4 | 6 | 7 |
-| tools off, open | 8 | 8 | 8 |
-| maths eval, 80 asks: seconds | 1,145 | 1,935 | 2,052 |
-| personal documents, 40 × 2 tasks: declined or hedged | 0 | 0 | 0 |
+## 2026-10-04, the night: a publisher is no venue (`not-venues`)
 
-The maths numbers are one run each, machine-scored (`score_maths.py`);
-the 35B's five runs of 2026-10-02 averaged 7.0, 8.6, 7.0 and 7.8, so
-its 5 and 4 today are the low end of its spread, and the 27B's 9 and 10
-with the tool are past it. The 27B calls the calculator more (60 maths
-steps against 45) and writes valid triples more often (94% against
-75%), at a third of the speed. The extraction overlap is measured
-against edges the 35B mostly wrote, which favours it.
+After the venue tier, most of the 247 "published in two venues" findings
+were papers said to be published in something that is no venue: a
+publisher ("Oxford University Press", 24 edges), a company (a plug-in
+maker for its manual), a university or a faculty, a semester or an
+exercise sheet. The extraction typed them as venues because a venue was
+what the relation asked for.
 
-The abliterated build loses nothing measurable here. It gains nothing
-either: on the owner's personal documents (`scripts/eval_refusals.py`,
-counts only) none of the three models declined or hedged a summary or
-a list of names and amounts. What the original refuses is a question of
-another kind, which the user tries by hand.
+What a name says it is instead is a new section of the lexicon,
+`not_a_venue`, read by `prax.graph.venues.not_a_venue`: `publisher`
+(press, Verlag, publishing, the big houses by name), `company` (GmbH,
+Inc., Ltd, AG, LLC), `institution` (university in five languages,
+institute, faculty, department, laboratory, conservatory) and `none`
+(dates and semesters, exercise sheets, lectures, licences). A name with a
+venue word (journal, proceedings, conference, review, letters…) is a
+venue whatever else it says, so "Journal of the Audio Engineering
+Society", "Proceedings of the IEEE" and "Psychological Research" stay; so
+does "Acta Universitatis Upsaliensis", which no cue matches. The first
+cut used the lexicon's general organization words and caught journals on
+"systems", "research" and "technology"; these are narrower.
 
-Nothing switches yet. A split is what the numbers suggest: the 27B for
-`ask` and the surf, where a third of the speed costs seconds per
-answer, and the 35B for the bulk passes. Only one model fits the card
-at a time, so it needs a measurement of the swap first.
+The `not-venues` ailment of `prax heal` lists them. Its repair ends each
+`published_in` edge into one and writes what it meant beside it:
+`published_by` the publisher or company, `written_at` the institution,
+both of an organization by the same name, with the old edge's document,
+evidence and world dates, INFERRED, producer and run `heal:not-venues`.
+A date or an exercise sheet gets nothing. On a copy: 291 entities (105
+institutions, 84 publishers, 42 companies, 60 nothing) and 738 edges;
+after the venue tier and this, the findings went from 345 to 157. What
+is left is the material of the contradiction pass: real disagreements
+(a paper in DAFx-14 and in ICASSP), junk values ("DRAFT"), and spellings
+no rule folds ("Applied Sciences", "Apl. Sci.").
 
-By hand (the user, the evening): the abliterated build answers what the
-original refuses ("definitely uncensored"), and its tool use feels more
-fluent. In the maths eval it took fewer calculator steps than the plain
-27B (46 against 60) for the same scores, which fits that reading: fewer
-calls that miss.
+## 2026-10-04, the night: two facts that cannot both hold (the conflicts pass)
 
-Found on the way: with the worker paused, an `ask` did not wake an idled
-llama-server. The door answered "it has been asked for", and nothing
-loaded until `prax up --start llama-server`.
+AL step 4's last item: a pass that keeps the disagreements of a
+functional relation visible, never ending a fact for them. The plan said
+"`contradicts` edges between facts", but an edge of the graph joins two
+entities, and a conflict joins two facts; an edge between "DAFx-14" and
+"ICASSP 2014" would say something false about two conferences. So the
+conflicts live beside the edges, as the rule pass's premises do:
+`edge_conflicts` (migration 43), the two edges, the relation, producer
+`rule:functional`, run `conflicts:<relation>`, when found and when ended.
 
-**The host switched** (the user, 19:20: "keep the uncensored 27B, delete
-the plain one, start the worker"). `run: llama-server` and every local
-step now name `server-27b-u`, so the provenance stamps name the model
-that wrote them. Two steps are off until they are fitted to it: `vision`
-(the abliterated repository has no projector; unsloth's
-`mmproj-F16.gguf` for Qwen 3.8, 928 MB, is the candidate) and
-`adjudicate` (its Platt fit is the 35B's; `eval_confidence.py platt`
-again on the Review page's decisions). The plain 27B is deleted; the
-35B's file (21 GB) stays until the user says.
+The `conflicts` pass of `prax maintain`, nightly, after the rule pass
+(`store.find_conflicts`): per relation the ontology calls functional
+(`published_in` today), the live asserted edges grouped by subject, the
+values by their root under `part_of` (`store.part_of_roots`, which the
+`functional-conflicts` finding now shares), one edge standing for each
+value (an EXTRACTED one first, then the oldest), six pairs a subject at
+most. Pairs that disagree and were not recorded are added; recorded ones
+that no longer disagree (an edge ended, a merge, a `part_of` that joined
+the two values) are ended. `traverse` marks a fact another contradicts
+(`disputed`: how many), counting only those the viewer may see, and `why`
+lists them with their documents and quotes (`store.edge_conflicts`,
+scrubbed by the wall).
 
-**`adjudicate` refitted for the 27B** (the user: "do the adjudicate
-recalibration first"). `eval_confidence.py gold`, `ask`, `platt` on the
-296 pairs a person has decided on the Review page (205 same), 74 s of
-the model:
+On a copy after the venue tier and `not-venues`: 224 conflicts in 0.25 s,
+a second pass 0.18 s with nothing changed. Of the 214 between open
+documents, 148 pair two values one document gave ("huggingface.co" and
+"GitHub", a journal with and without its volume and pages): an
+extraction's own ambiguity, not two sources at odds. The other 66 are
+documents disagreeing, some for real (a paper in NIME 2011 and in ITS
+2010). A person reads them; nothing is decided by the pass.
 
-| | agrees with the person | at 0.9: settled, agreeing | at 0.95 |
-|---|---|---|---|
-| 35B, 2026-09-28 (221 pairs) | 0.81 (ECE 0.031) | 40%, 87 of 89 | 30%, 66 of 67 |
-| 27B abliterated (296 pairs) | 0.77 (ECE 0.050) | 36%, 98 of 107 | 16%, 47 of 47 |
+# Moved from the plan
 
-The sets differ (the person decided 75 more pairs since), but the 27B
-is the weaker judge of sameness. `steps.adjudicate` names it again with
-its own fit (`platt: {a: 0.5525, b: 0.5186}`) and `settle: 0.95`: it
-settles fewer pairs, and the rest wait on the Review page with its
-number. Pairs the 35B already scored keep the 35B's number
-(`scored_pairs` are not asked again).
+What follows is not the record of a night. It is plan material that was
+finished or set aside and moved here so the plan holds only what is open:
+the items done by 2026-10-02, the orders agreed on 2026-09-26 and -27,
+the stages planned on 2026-09-25 and -29, and the engineering passes as
+they were planned. Each says when it was written.
 
-**`vision` back on, with a projector for the 27B** (the user: "work on
-the vision projector first"). huihui's repository has none; unsloth's
-`mmproj-F16.gguf` for Qwen3.8-27B (928 MB, sha256
-`cbb841a9ee0636b2ec172f5bb8df2ea8dfeb01e90fe7c6126581d662a0b4e43e`) is
-served beside the abliterated weights, since the ablation leaves the
-vision tower alone (`serve.mmproj` by absolute path, `image_max_tokens:
-1024`). The card holds 18.6 GB with the display, 1.5 GB more than
-without it. On three figures the 35B had read, the 27B's readings were
-as coherent and caught the labels, each model misreading one thing the
-other got right (the 35B read "Bass 82.aif", the 27B "Base B2 af").
-Through the pipeline: document 13449's three figures in 35 s, stamped
-`figures/1-r2+qwen3.8-27b-abliterated-ud-dw-q4ks`. 3,625 documents still
-have figures nobody read; that run waits for the user.
+## 2026-10-04: what the plan held that was done, moved here
+
+The order of 2026-10-02 with its by-hand list, the whole of stages AL,
+AN and AM as they stood when finished (AL's and AN's open items stay
+in the plan), and the finished items of the plan's other sections,
+verbatim.
+
+## The order, agreed 2026-10-02
+
+Reevaluated the day the plan was rewritten. The card is first because
+everything the library still waits for (formulas, the graph backlog,
+readings) runs through it, and on 2026-10-02 two roles on it at once ran
+the machine out of memory. Then the small structural debt of the maths
+pack, then what is running anyway, then measured improvements, then the
+engineering leftovers. What waits on the user is apart.
+
+1. **AI. A plan for the card** (below): done but its measurement, which
+   needs days of running. The jobs view's "do it now", the load times,
+   `GET /work/plan` and `prax up` following it are in (0a92203, 135f3da).
+2. **AD2, the tidy-up**: done (1824fab).
+3. **The library's backlogs, running** (2026-10-02, `docs/log.md`, "what
+   was never extracted"). A backlog worker extracts the graph of about
+   1,050 documents. Marker reads the 29 books on the night of
+   2026-10-02, then the ~190 weaker maths candidates. The `equations`
+   step checks every formula, and a broken formula that is an
+   extraction slip is read again. Watched, not built.
+4. **AL. The first client's feedback** (below): its small bugs, the
+   signals (`status`, `health`) and citations that survive a re-chunk
+   are done. Next the project sync, documents linked to documents, what
+   is current (a document's own date first), then captures, pages,
+   bibliographies and privacy. AN (rules over the graph, the ontology
+   annotated in standard vocabularies, the markup pages already carry)
+   is a candidate after AL step 4, and AM (a path index) after AL
+   step 5.
+5. **AJ. Readers under prax's hand** (below). On the night of 2026-10-02
+   marker's own llama-server held 10 GB of RAM that no plan saw. Step 1
+   first, after the night's books; steps 2 and 3 after AA.
+6. **AK. Another model, measured** (below): a dense Qwen 27B and an
+   uncensored build of it against the 35B on prax's own evals. Card
+   time, so it runs at night or while nothing else waits.
+7. **AA. Close Z** (below): the labeller's corrections, and the genre
+   words in the document field, measured.
+8. **The zoetrope disk and the NAS** (below): the 37 cut-short PDFs of
+   `refetch-later.txt` (untracked) with the import of the old disk, when
+   the NAS is reachable.
+9. **Measured improvements** (below, "Retrieval and ask", "The graph"):
+   the sections pass's vector arm and its worth to `ask`, document-aware
+   rerank input, a compressed edge list, `confidence` as a number.
+10. **The engineering leftovers** (below): `store.retrieval` and
+   `store.repair` in parts, typed shapes (a search hit first), the UI
+   helpers the extension copies. The strict mypy batch is done.
+
+Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
+after the prototype settles), the move to the board ("Deployment shape"),
+and pushing what is committed.
+
+### Next, by hand (noted 2026-10-03)
+
+- **Restart once marker has read the books** (the tray: "Stop prax",
+  then "Start prax"; or `prax up --stop` and `prax up --data-dir
+  C:\prax-data --detach`). Before that, Jobs shows nothing waiting for
+  marker, or the card back with llama-server. It brings the commits of
+  2026-10-03 live: the bounded prompt caches (AJ, step 1) and the genre
+  words in the document field (AA), which the first `fields` pass after
+  it rebuilds, and the worker embeds again (about 8 minutes).
+- **Then measure AJ step 1**: marker's peak RAM and commit, VRAM and
+  time per page on a few books, against the night of 2026-10-02 (10.3 GB
+  for its OCR server). The 35B's prompt-cache share in its metrics says
+  whether 2048 MiB is right.
+- [x] (2026-10-03: `tray.claim` keeps `run/tray.pid`; a second tray on the same data directory is refused while the first lives, a dead one's file taken over) **Two tray icons** run on the desktop (one from the autostart, one
+  started by hand, most likely): quit one. If it happens again, the tray
+  should refuse a second copy on the same data directory.
+- [x] (2026-10-03: not the paused worker: the ask's demand was recorded, but the `ask` step named the 35B's entry while `run:` served the 27B's, so it matched no role; `work.role_of_step` now also matches a model at the served address) **An ask wakes an idled model with the worker paused** (2026-10-03,
+  AK): the door said the model "has been asked for" and nothing loaded
+  until `prax up --start llama-server`. The demand the supervisor reads
+  should come from the door's ask itself, not only from the worker.
+- **Before AK's download**: see what Qwen has released since 3.6 (a page
+  names a "Qwen 3.8" lineup, not checked), then fetch with the user's
+  word, from a known quantizer, names and hashes in the log.
+- [x] (2026-10-03, the user said yes) **The CLI client under strict
+  mypy**: `clients/cli` is in `files`, checked against the package's own
+  source (`mypy_path`), so its calls are no longer `Any`. One of its
+  errors was a real crash: `prax doctor` divided an unread memory figure
+  (None) by 1024.
+- **Push** what is committed; CI on GitHub has not seen 2026-10-02 and
+  -03.
+
+- [ ] **AL. The first client's feedback.** On 2026-10-03 an agent in
+      another of the user's repositories used prax through the plugin for
+      a whole session: it searched, captured about 30 papers, wrote a
+      landscape page, and synced a subproject's 27 documents. It then
+      wrote 16 suggestions in four priorities. Below they are merged with
+      prax's own reading of them, in the order agreed with the user. The
+      project's documents are the acceptance set for steps 3 to 5; their
+      content and names stay out of the repository (the baseline is a
+      private page in prax, and the tests use invented documents of the
+      same shape).
+
+      *Done on 2026-10-03* (71a0916): a `PRAX_DOOR` without its scheme is
+      `http` (`client.door_url`); a URL with a space is percent-encoded
+      and one still unfit is a 400, not a 500 (`inbox.clean_url`); ingest,
+      `get`, `context` and page answers carry `url`, and `#page/<slug>`
+      opens a page; `documents` reports `added_at` (it read a field the
+      door never sent) and filters by `since`.
+
+      *1. Signals: what is the matter, without the UI.*
+      - [x] (2026-10-03) `status(doc_ids)`: queued (with its place), processing, done,
+            failed with the reason, and whether a worker is alive. Today
+            `pending: []` lists only the reading requests, not the parse
+            queue a capture waits in, so a document with no text and
+            nothing pending reads as "never will" when it is "worker
+            down": 24 captures sat for hours that way.
+      - [x] (2026-10-03) `health()`: the door's address, whether the token is
+            accepted, the worker's state. One call to the door, so the
+            proxy stays thin.
+
+      *2. Citations that survive a re-chunk* (the client's #13, raised
+      from P2: it corrupts quietly). Done 2026-10-03, after the check
+      below changed the picture: a saved answer cites `#doc/N` and the
+      heading path as text, never a chunk id, so it does not move. A
+      link an agent writes to a passage does: a re-index gave a changed
+      passage's id to its successor (`tests/test_store.py`). The UI now
+      trusts `?chunk=M` only while chunk M still holds the link's
+      `find` words, and the skill tells an agent to write them. The
+      note as first written: A page's answer cites passages as
+      chunk ids (`#doc/N/M`), and chunk ids are reused after a re-chunk
+      (the formula check's sha guard exists for that). After a re-sync a
+      citation does not break; it lands on another passage. Keep the
+      quote and the heading path with each citation and resolve through
+      `?find=`, as graph edges do. First a test that shows the fault.
+
+      *3. Syncing a project as a tool* (the client's #5, #6).
+      - [x] (2026-10-03: the MCP tool, `prax sync`, `POST /projects/sync`; `docs/log.md`) `sync_project(root, include, exclude, name, domains,
+            dry_run=True, tracked_only=True)`: tracked files only
+            (`git ls-files`), the usual build folders left out (`_deps/`,
+            `CMakeFiles/`, `*-subbuild/`, `build/`, `third_party/`), a
+            dry run by default with the plan as data (each path: add,
+            refresh, unchanged or skip, and why), a subdirectory of a
+            larger repository as a project, documents keyed by the
+            remote and the path so a move makes no duplicate. Without
+            this the CLI needed the venv path, a call out of the
+            sandbox, and took in about 90 vendored CMake files.
+      - [x] (2026-10-03: the `projects` table, migration 38; the hook asks it, `--if-auto`; an older `.prax-project` still counts) The manifest in prax, keyed by remote and path, not a
+            `.prax-project` in the repository (a committed one tells
+            colleagues, and switches the session-end hook on by being
+            there). Auto-sync only with an explicit `auto_sync: true`.
+      - [x] (2026-10-03: made by the first sync, every synced document a member; the summary is the agent's to write) The project page made with it: `project-<name>`, its members,
+            a summary block the agent writes.
+
+      *4. Documents linked to documents* (the client's #7 and #4, one
+      edge model). Documents are already graph nodes: `cites`,
+      `annotates`, `mentions` and `synthesizes` join them, and a page's
+      `[title](#doc/N)` is an `annotates` edge. No second table.
+      - [x] (2026-10-04: `prax.text.paths`, `projects._links`; producer `sync`, run `links:<name>`, kept in step) At sync, Markdown links, backtick paths and bare `docs/x.md`
+            mentions matched exactly against the project's keys become
+            edges (producer `sync`, EXTRACTED). The acceptance project
+            has 15 links and 159 backtick references: about 174 edges
+            without a model. A path that matches nothing yet is matched
+            again at the next sync, not kept as a dangling node.
+      - [x] (2026-10-04: `store.document_node`; a chunk id as evidence is a 400) `link` takes `doc:N` as either end. Evidence stays a quote,
+            never a chunk id.
+      - [x] (2026-10-04: core 4 with `links_to` beside them; migration 39 moves the stamps, so nothing is re-extracted) `supersedes` and `invalidates` in the core ontology (a
+            version bump, invariant 9): "the changelog invalidates the
+            re-baseline table" is a fact the graph cannot say today.
+      - [x] (2026-10-04: `linked.out`/`linked.in`; `traverse("doc:N")`) `context` returns a document's edges out and in;
+            `traverse("doc:N")` walks from a document.
+      - [x] (2026-10-04: `edge_conflicts`, migration 43, kept by the nightly `conflicts` pass; `traverse` marks a fact `disputed`, `why` lists what disagrees; a table beside the edges, not a `contradicts` edge: an edge joins two entities, a conflict two facts) Functional relations declared in the ontology (a building is
+            `located_in` one place), and a later pass that proposes
+            `contradicts` edges between facts of such a relation that
+            disagree, with their own producer and run, so `retire_run`
+            undoes a pass. Disagreement kept visible, never a fact ended
+            by a model (Cognee's opt-in pass; Graphiti ends facts only
+            when both carry world dates; the research note, sections 6
+            and 7).
+            (2026-10-04: first the noise under it. Functional relations are
+            declared (stage AN) and their breaches listed (`functional-
+            conflicts`); most of the 345 were one venue under two names or
+            a series beside its edition. Resolution's `venue` tier merges
+            the one and links the other `part_of`, and the finding takes a
+            series and its edition for one answer: 247 left, mostly
+            publishers, universities and dates typed as venues. The
+            `not-venues` ailment of `prax heal` mends those: 157 left on a
+            copy.)
+
+      *5. What is current* (the client's #8). 13 of the acceptance
+      project's 27 documents say they are retired, superseded or invalid,
+      and an agent that quotes one as current repeats the failure that
+      cost months of a pitch.
+      - [x] (2026-10-03: from the record, the extension's paper, a page's
+            tags and markup, the arXiv id; shown and filtered; and the
+            `dates` step reading the first page with a model, measured on
+            Zotero's dates: answers for 70%, its year right for 86% of
+            those, most misses being Zotero's other version of the paper.
+            Crossref by DOI waits: only 133 of 8,221 undated PDFs print
+            one near their start. A PDF's metadata is still to come)
+            **A document's own date, first** (the user, 2026-10-03:
+            "there is no date for the docs visible … not when it was
+            created in prax but when the document was published"; a
+            person judges a paper by when it was written). Only 1,890 of
+            12,837 live documents have one (`meta.date`, all from
+            Zotero: 1,072 a year, 512 a month, 306 a day), shown on the
+            document page and nowhere else. `meta.published` = {date,
+            precision (year, month, day), by, at}, filled from what
+            says it, best first: Zotero; Crossref by DOI (the citations
+            importer asks it already); the arXiv id (`yymm`); a web
+            page's `citation_date`, `article:published_time` or
+            `DC.date`; the first page read by the titles pass
+            ("Published …", a conference's year, ©); a PDF's metadata,
+            last, since it often says when a file was made. Shown as
+            the year in search hits, `get`, `ask`'s passages (so the
+            answering model weighs age too) and the UI's lists; a
+            filter `published_since`/`before` on search and
+            `documents`. It is also the anchor the world's time below
+            is read against: a document's date, never prax's.
+      - [x] (2026-10-04: `prax.text.status`, `projects._statuses`: `meta.status` and `supersedes`/`invalidates` edges, run `status:<name>`, the line's date as world time) At sync, `retired` and `superseded_by` from front matter and
+            explicit status lines ("retired 2026-10-02", "superseded by
+            …", "status: …"), only in synced project documents: a paper
+            saying "superseded by" is about others' work.
+      - [ ] (2026-10-03: the columns and the record time done: migration
+            36's `world_from`/`world_to` with their precision, written by
+            `store.link` and shown by `traverse` only where present;
+            `store.held_at` and `traverse(as_of=)` on the door and the
+            MCP tool; invariant 8 reworded. Left: extraction filling the
+            world dates, measured with `bench_extractor`; a document's
+            lifecycle in `meta`) **The world's time beside prax's.** Invariant 8 calls the
+            edges bi-temporal, but `valid_from` is set when `store.link`
+            writes an edge and `valid_to` when it is retired: both are
+            when prax held the fact (transaction time), with
+            `ingested_at` beside them. Nothing records when a fact holds
+            in the world by its source (valid time), and "retired
+            2026-10-02" or "superseded by …" in a document is that. Two
+            nullable columns on edges (a migration), filled only where a
+            source states a date, and the same on a document's
+            lifecycle (`meta`); today's columns documented as what they
+            are, and invariant 8's wording in CLAUDE.md corrected with
+            it (found 2026-10-03, talking about prax as an agent's
+            memory).
+      - [x] (2026-10-04: `traverse(as_of=)` was there; `store.changes`, `GET /graph/changes` and the `changes` tool, record time and world time, re-readings left out; migration 42's indexes) "As of a date" and "what changed in a period" as door
+            routes and MCP tools, once the world's time is on the facts
+            (Utopia exposes both; the research note, section 8).
+      - [ ] **As Utopia does it** (its code, the research note, section
+            10): each world date with a precision (year, month, day),
+            and "ended, date unknown" as a state of its own (the end
+            null, its precision `unknown`), with CHECK constraints that
+            tie a precision to its date; an undated fact anchored to
+            its document's date (above); `supersedes` on an edge that
+            corrects another, so "corrected" and "rejected" are a query;
+            and **one module that builds "held at T"** for every graph
+            (2026-10-03: `store.held_at` is that module and the walk
+            uses it; `test_a_moment_in_record_time_is_built_in_one_place`
+            holds every `as_of` read to it and the past-moment form to
+            `edges.py`. The 48 live-edge conditions of the graph part
+            and 23 elsewhere in the store stay as written: they mean
+            "now", and rewriting them would change nothing)
+            read (record time: written at or before T, not retired
+            before it; no T: not retired), with a test in
+            `test_invariants.py` that no read builds it itself. prax's
+            `valid_from`/`valid_to` are record time and are renamed or
+            documented so.
+      - [x] (2026-10-04: `store.staleness`, `STALE_SHIFT` 5 places, `stale` on the hit and `ask`'s passage, `include_stale`; the measurement on the project's own question waits for its re-sync) Search and `ask` rank a stale document lower and name its
+            replacement; never a filter (as the domain prior), and
+            `include_stale` turns it off. Measured on the project's own
+            question ("the current shipping candidate and its figure":
+            answered from the decision document and the corrected
+            re-baseline only).
+
+      *6. Captures and pages* (the client's #9, #10, #14).
+      - [x] (2026-10-04: the `capture_requests` table, migration 40; the 202 answer; the extension's alarm every 5 minutes and its options switch; the bed in Chrome passes but for two checks that failed before the change, Firefox not run: Waterfox was open) A failed capture (a TLS chain error, a 403, a bot check) is
+            queued for the extension (`{queued_for_extension: true}`),
+            which fetches it with the person's session; the upload is
+            linked to the request and takes its title and domains. 7 of
+            about 30 captures failed so.
+      - [x] (2026-10-04: the append itself is 0.04 s on a copy; the rest was the write lock. The lock now logs a write that waited over 5 s with who held it, and one that held it over 10 s; the whole-library fields pass is batched. Answering before the write waits until the log names a holder worth it) `append_page` took over 120 s. Measure where, then answer a
+            write at once and index after.
+      - [x] (2026-10-04: `store.update_section`, `PUT /page/{slug}/section`, the MCP tool) `update_section(slug, heading, text)`, or a replaceable status
+            block like the ask blocks.
+      - [x] (2026-10-04: `lifecycle` and `stale_sources` on `GET /page`, said under the page's header; contradicted waits for the contradiction pass) A page's lifecycle: marked stale, or contradicted, when the
+            documents it cites change or are superseded (Synthadoc's
+            draft, active, stale, contradicted, archived).
+      - [x] (2026-10-04: `PUT /doc/{id}/title`, `POST /ingest/urls`, the MCP tools `set_title` and `capture_urls`) `set_title`, and batch capture with a result per item.
+
+      *7. Bibliographies and privacy* (the client's #11, #12).
+      - [x] (2026-10-04: `store.references_of`, `store.cited_but_missing`, the routes and tools; read from the reference entries, so an extraction's `cites` to a program ("OnsetDetector.LL", the 35B's typing) is not in them; open access is the DOI and arXiv links, a lookup per entry waits) `references(doc_id)`: the parsed list, each entry in the
+            library (`doc N`) or with a DOI and an open-access URL.
+            `cited_but_missing(set)`: what a set of papers cites that the
+            library lacks, ranked by how many cite it. First the
+            reference-list detector's scope: `cites` held
+            "OnsetDetector.LL" from software help files.
+      - [x] (2026-10-04: on `POST /ingest`, `PUT /page`, and the sync, kept with the project's settings; only `personal`, never a way to open) `sensitivity: personal` accepted by `ingest`, `write_page` and
+            the sync, behind the wall (stage U), so a colleague's notes
+            can live in prax.
+
+      *8. The client's own page* (doc 13470, written 2026-10-04 after it
+      checked the AL changes from its side; O6 and O7 were done that day).
+      - [x] (2026-10-04) O1: `sync_project` and `ingest_file` read within the git
+            repository of the working directory by default, so a sibling
+            subproject is in reach.
+      - [x] (2026-10-04) O3: `status` says `searchable` for a document in
+            `reading` whose text is indexed already.
+      - [x] (2026-10-04) O4: the `request_reading` tool (OCR, the vision
+            model, marker) over the existing route.
+      - [x] (2026-10-04) O5: `health` tells a refused token (401) from a route
+            not allowed (403, a door older than the client), and names the
+            door's commit beside the client's.
+      - [x] (2026-10-04, the user: "build it", after the numbers: a hit is
+            about 300 bytes, the link 45) O2: a ready passage link on each search hit, with `find` words
+            the door chooses (`cite` on an agent's hits and `ask`'s
+            passages, `store.cite_link`).
+
+      *Not now.* Search hits with a `url` each (the client's #3, at chunk
+      level too): about 40 bytes a hit against invariant 6. One `ui` base
+      per answer and the ids are enough to build `#doc/N?chunk=M`. The
+      book view of a project (#16: an ordered table of contents, a
+      "current state" path, one-file export) is cheap after steps 4 and
+      5, and comes then.
+
+      *What worked*, by its account: hybrid search with the region line
+      found the existing cluster in one call; `documents(title=…)`
+      checked coverage; the capture errors were clear (the bot check
+      pointed to the extension); and the skill's rule that a document's
+      content is data, not instructions.
+
+- [ ] **AN. Rules over the graph: what follows from what is stated**
+      (candidate, after AL step 4; the user, 2026-10-03, on standard
+      vocabularies: "maybe they are more useful for a reasoning part?").
+      The research note, sections 10 and 11; Utopia's `utopia-reason` is
+      the worked design, under two thousand lines.
+      - [x] (2026-10-04: `transitive`, `symmetric`, `functional`, `inverse_of`, `kind` and `same_as` on relations, `same_as` on types; no version bump: they change what validates in no way, as `naming:`) **The ontology annotated, not replaced**: a relation's
+            characteristics in the YAML (`transitive`, `inverse_of`,
+            `symmetric`, `functional`, and `state`, `event` or
+            `eternal`), and `same_as` names in schema.org, SKOS and
+            PROV-O where they exist. It changes what types exist in no
+            way, so whether it bumps a module's version is decided with
+            it.
+      - [x] (2026-10-04: `ontology.lint`, run by `compose`; a contradiction refuses to load) **A lint of the ontology when it loads**: symmetric and
+            asymmetric at once, transitive and functional at once, a
+            subtype cycle, an inverse that is not mutual.
+      - [x] (2026-10-04: `store.derive_rules`, `edge_premises` (migration 41), `GET /edge/{id}/why` and the `why` tool; on request (`prax maintain --only rules`), not on the clock: see the measurement) **A rule pass on the door's clock**: OWL RL's few rules
+            (transitivity, inverses, symmetry, subproperties) as forward
+            rules in SQL. A derived edge is INFERRED, producer
+            `rule:<name>`, a run, its validity the intersection of its
+            premises', and its premises kept (a table of edge ids), so
+            "why is this here" has an answer. An asserted edge always
+            wins, and a derivation that contradicts one is not written.
+            A cap a relation. Retraction by recompute and diff: the pass
+            derives everything again and ends what no longer follows;
+            nothing is deleted, and retiring its run removes all of it.
+      - [x] (2026-10-04: the `functional-conflicts` ailment of `prax heal`, report only) **Constraints as findings, not rules**: a functional relation
+            with two values goes to the `contradicts` pass (AL step 4).
+      - [x] (2026-10-04, on a copy: 306 derived in 2.9 s; `part_of` closure right in 5 of 20, the rest built on premises the extraction wrote backwards; so not nightly. Then the direction check, `ontology.part_of_suspect` with the lexicon's `part_of` cues: suspects go to the review queue, are no premise, and the `backwards-part-of` ailment lists and mends the written ones; the pass then wrote 23 `part_of` derivations, 18 of 20 right. The user put it on the clock the same day: a pass of the nightly `prax maintain`) Measured: how many edges a pass adds, how many are wrong on a
+            sample, what it does to `traverse` and to `ask`. The path
+            index (AM) gains from it: a closure of `part_of` and of
+            `broader` gives a walk meaningful shortcuts.
+      - [ ] **More meaning from what the library holds, in standard
+            words** (the user, 2026-10-03: "the standardized ontologies
+            also could make sense to extract some more meaning from our
+            current chunks/docs"):
+            - [x] (2026-10-04: `prax.text.schemaorg` and the `markup` pass of `prax maintain`: 1,336 facts from 315 pages; the date reader read the unquoted tag too, 141 more pages dated) the **schema.org markup web pages already carry**
+              (JSON-LD, microdata): a recipe's ingredients and times, an
+              article's author and `datePublished`, a product, an event,
+              a person. Read at capture and by a pass over the kept HTML
+              originals, no model: facts EXTRACTED with producer
+              `jsonld`, and a date for `meta.published` (AL step 5);
+            - [x] (2026-10-04: the genres, exact matches only, `same_as:` in genres.yaml; the subjects not yet) prax's **genres and subjects mapped** to schema.org types
+              (`ScholarlyArticle`, `TechArticle`, `Recipe`, `Review`…)
+              and to SKOS concept schemes, so a document's kind is said
+              in words other systems and models know;
+            - the **extraction prompt given the standard names** beside
+              prax's (a relation's `same_as`), which may help a local
+              model place a relation; a module's version bump re-reads
+              what it touches, as any bump does, so it is measured on a
+              sample before a pass over the library.
+
+- [x] (2026-10-04: the prototype measured on a copy, then `prax.graph.paths` and `store.connect_entities`, `GET /graph/connect` and the `connect` tool; in memory, not a file, at this size; `scripts/eval_paths.py`) **AM. A path index: how is A connected to B** (candidate, after
+      AL step 5; the user, 2026-10-03: "path questions are interesting
+      though and would make sense for any agentic use/reasoning on
+      facts"). A derived file beside the database, in the vector files'
+      pattern (memory-mapped, a delta, a merge, rebuilt at will), holding
+      per entity its edges with what a path search weighs: relation,
+      confidence class, the times, the source document, the number of
+      documents behind it. Not a graph engine: a second store would break
+      invariant 1, double the wall, and Kùzu, the engine CLAUDE.md names,
+      was archived on 2025-10-10. Its search respects what no engine
+      knows: evidence per hop, a cost for hubs, preferred relations, the
+      world's time (`as_of`, hence after AL step 5), the wall. An agent
+      gets `connect(a, b, max_hops, relations, as_of)`: the two or three
+      best paths, each hop with its quote and document. First a Python
+      prototype on a copy of the store and an evaluation set (pairs with
+      a known connection and pairs with none), because a confident path
+      of weak edges is worse than none; then a store module and the
+      tool; compiled code only if speed asks, as AH's first piece. It
+      also settles the decision threshold for slow walks (an index for
+      the walk's query first, then this). The design is in the private
+      research note, section 9.
+
+- [x] (2026-10-04: `store.short_heading` in `_chunk_shape`, 120 characters a level and the 4 nearest levels; marker had mended 9522, 30 documents were still past 1,000 characters) **A heading is capped in a hit** (found 2026-10-03). Doc 9522, a
+      patent read in two columns, has a heading of over 2,000 characters
+      of repeated text, and it rides along with every search hit and
+      `ask` passage of that document. Marker reads it again (queued the
+      night of 2026-10-02); a cap on a hit's `heading` would keep one bad
+      parse from swelling an answer (invariant 6). Not decided.
+
+- [x] (2026-10-03: the first hop's cap, `support` on its rows, measured in the log; search's tie-break not built: a hit carries no fact to count) **Support count as a signal** (2026-10-03, from Graphiti's episode
+      count, LightRAG's summed weights, HippoRAG's source counts): a
+      walk's first hop ordered by how many documents separately say each
+      fact, and search's ties broken by it. prax writes one edge row per
+      source, so the count is a GROUP BY. Nearly free.
+
+- [x] (2026-10-03, as a near tier proposing to the judge, not merging) **A deterministic step before the model in entity resolution**
+      (Graphiti's `dedup_helpers`): a normalised exact match with one
+      candidate resolves; a short or low-entropy name goes to the model;
+      otherwise 3-gram shingles, MinHash and a Jaccard of 0.9 or more
+      resolve. About 50 lines; fewer calls of the local model. Merges
+      stay recorded and undoable as now (`merged_by`, `merged_run`).
+
+- [x] (2026-10-03: hubs of 100+ live edges, entities a page speaks of; rule-derived edges with AN) **A gate on automatic merges by what they touch** (Utopia's
+      `execution_gate`): a merge of the adjudicated tier waits on the
+      Review page when it would make two values of a functional relation,
+      touch an inferred edge, or touch an entity a saved page or answer
+      cites. Three store queries, no table.
+
+- [x] (2026-10-03, migration 35: edges never deleted and their fact fixed, page revisions, spend) **Append-only by trigger** on what is a ledger already (merge
+      stamps, page revisions, token uses): `BEFORE UPDATE … RAISE(ABORT)`
+      in SQLite, as Utopia's audit table.
+
+- [x] (2026-10-03: seven parts, the switches on `retrieval.knobs`, the package refusing a knob set on itself; `docs/log.md`) **`store.retrieval` as a package.** It is 1,919 lines, under the
+      2,000 that CLAUDE.md sets for a split. It does four jobs: query
+      expansion, the search legs, fusion, and the vector files. Its tests
+      switch behaviour through module flags (`retrieval.SENSES`,
+      `retrieval.DOMAIN_PRIOR`, `DELTA_MERGE_AT`). Split into parts, a
+      flag set on the package would no longer reach the part that reads
+      it, and the tests would pass without testing. The split needs the
+      flags read through one settings object first.
+
+- [x] (2026-10-03) **The next strict batch of mypy: the whole package.**
+      Under the batch's flags the package had 66 errors, not the 1,008
+      feared. The 926 re-export errors come from `no_implicit_reexport`,
+      which the batch never set; the store re-exports by design. The
+      flags moved to `[tool.mypy]` itself (`docs/log.md`).
+
+- [x] (2026-10-03: `store.retrieval.compounds`, with `term_documents` beside it) **`text.compounds` asks the store** for the forms a word takes, and
+  only the store uses it. It is retrieval, not text; it waits for
+  `store/retrieval.py` (1,916 lines) to split at 2,000 as invariant 3
+  says, and goes there.
+- **Large modules:** `store/repair.py` 1,625, `host/up.py` 1,435. Neither
+  is tangled. Both are long lists of the same shape (ailments, roles).
 
 ## 2026-10-02: what the plan held that was done, moved here
 
