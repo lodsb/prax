@@ -590,5 +590,10 @@ else. The two faces are vendored under `src/prax/ui/vendor/fonts/`
 See `docs/PLAN.md` for what is next; `docs/log.md` is the record of what
 was done, with the reasoning and the measurements under each night. Work
 one stage per session. Write tests before wiring the MCP layer.
+Reviewing code is two reviews: safety and correctness (the invariants,
+the wall, bugs) first, then quality with the project's skill
+`.claude/skills/code-review` (hygiene, extensibility against the plan,
+independence from the owner's library, generality, performance on the
+target), in quick mode inline or in full mode as a workflow.
 Background research and rationale: `docs/rationale.md` (decisions) and
 `docs/research.md` (raw survey).

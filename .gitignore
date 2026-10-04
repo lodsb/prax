@@ -14,3 +14,7 @@ uploads/
 
 # the maths eval's answers: kept beside the docs, out of the repository
 docs/eval/maths-answers-*.json
+
+# Claude Code's local files stay out; the project's skills are checked in
+.claude/*
+!.claude/skills/
