@@ -643,3 +643,38 @@ def test_what_is_written_once_stays_as_written(con: sqlite3.Connection) -> None:
         con.execute("UPDATE spend SET usd = 0")
     with pytest.raises(sqlite3.IntegrityError, match="ledger"):
         con.execute("DELETE FROM spend")
+
+
+def test_the_languages_pass_outlives_a_label_with_a_twin(
+    con: sqlite3.Connection,
+) -> None:
+    """A label without a language whose twin already has the one the
+    pass would give it (same entity, same words) failed the whole pass
+    every night on the unique index (2026-10-04); it keeps no language."""
+    doc = store.ingest_text(con, "Der Apfel ist rot und süß. " * 20, title="Apfel")
+    meta = store.get_meta(con, doc["doc_id"])
+    meta["lang"] = "de"
+    store.set_meta(con, doc["doc_id"], meta)
+    store.link(
+        con,
+        store.Edge("Apfel", "document", "authored_by", "Bauer", "person"),
+        source_doc=doc["doc_id"],
+    )
+    bauer = con.execute("SELECT id FROM entities WHERE name = 'Bauer'").fetchone()[0]
+    con.execute(
+        "INSERT INTO entity_labels (entity_id, label, lang, kind)"
+        " VALUES (?, 'Bauer', 'de', 'alt')",
+        (bauer,),
+    )
+    con.commit()
+    out = store.maintain(con, only=["languages"])
+    got = out.get("languages", out)
+    assert got["labels_twinned"] >= 1
+    langs = [
+        r[0]
+        for r in con.execute(
+            "SELECT lang FROM entity_labels WHERE entity_id = ? AND label = 'Bauer'",
+            (bauer,),
+        )
+    ]
+    assert sorted(langs, key=str) == sorted([None, "de"], key=str)

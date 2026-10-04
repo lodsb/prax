@@ -824,17 +824,25 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     # is looked at again the next night, which now costs seconds.
 
     known = languages_by_entity(con)
-    placed = 0
+    placed = twinned = 0
     for r in con.execute(
         "SELECT id, entity_id FROM entity_labels WHERE lang IS NULL"
     ).fetchall():
         code = known.get(int(r["entity_id"]))
         if code:
-            con.execute(
-                "UPDATE entity_labels SET lang = ? WHERE id = ?", (code, r["id"])
+            # a label whose twin already carries that language (the same
+            # entity, the same words), or a second preferred one in it,
+            # keeps no language: the twin says the name already. Set
+            # anyway, it failed the whole pass every night (2026-10-04)
+            cur = con.execute(
+                "UPDATE OR IGNORE entity_labels SET lang = ? WHERE id = ?",
+                (code, r["id"]),
             )
-            placed += 1
-            if placed % 1000 == 0:
+            if cur.rowcount:
+                placed += 1
+            else:
+                twinned += 1
+            if (placed + twinned) % 1000 == 0:
                 con.commit()
     con.commit()
 
@@ -842,6 +850,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         "read": len(rows),
         "unsure": unsure,
         "labels_placed": placed,
+        "labels_twinned": twinned,
         **dict(found.most_common()),
         "summaries_read": len(written),
         "summaries_to_translate": sum(

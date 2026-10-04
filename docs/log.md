@@ -3991,6 +3991,13 @@ document the page links, annotates or synthesizes is no longer current
 each and its replacement, and the page's header says it. The page is
 never changed for it. "Contradicted" waits for the contradiction pass.
 
+**The nightly `languages` pass failed every night** on the unique label
+index: a label without a language whose twin (the same entity, the same
+words) already carried the language the pass would give it. It now sets
+the language where it can (`UPDATE OR IGNORE`) and counts the rest as
+`labels_twinned` (6,337 on a copy of the store); nothing is deleted, the
+twin says the name already.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each
