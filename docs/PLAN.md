@@ -19,8 +19,8 @@ what needs no model comes first; what waits for the card follows.
    resolve's venue tier (03:00), the rule pass and the first conflicts
    pass (03:30), read from the job notes; then `prax heal --check
    not-venues --apply`, which the user approved for that day.
-2. **A review phase of the code** written 2026-10-02 to -04 (below,
-   "A review of the last three days"), before more is built on it.
+2. **The quality review's fixes** (below), step by step; the safety
+   review and its fixes are done.
 3. **AN's last item**: the extraction prompt given the standard names,
    measured on a sample with the card.
 4. **AL's last items**: extraction filling the world dates (measured
@@ -51,9 +51,43 @@ shape"), and the zoetrope disk and the NAS.
 ### A review of the last three days (done 2026-10-05, `docs/log.md`)
 
 The safety review is done: 27 findings confirmed by a workflow of ten
-agents, every one fixed with a test that fails before the fix. Next the
+agents, every one fixed with a test that fails before the fix. The
 quality review with the project's skill (`.claude/skills/code-review`,
-full mode) over the same range, base `1c650c4^`.
+full mode) over the same range followed: 24 findings, planned below.
+
+### The quality review's fixes (agreed 2026-10-05)
+
+The quality review's 24 findings (`docs/eval/code-review-2026-10-05.md`,
+numbered there) in the order the user agreed: one step a session.
+
+- [ ] **Step 1, now: the two of high cost, the quick performance fixes, and the fraction in the general parser.**
+      - [ ] **1.** Two definitions of when a venue edition is 'the same thing': sameness.yaml says merge, the venue tier says keep apart and link part_of (an hour plus a re-measure of the judge)
+      - [ ] **2.** cited_but_missing reads every reference chunk in the library because the planner picks idx_chunks_kind over the doc_id IN list (an hour)
+      - [ ] **10.** The ASCII-fraction fix went into schema.org's ingredient_name only; the general ingredient parser still misreads '1/2 cup' (an hour plus a rechunk of recipes)
+      - [ ] **12.** connect_entities scans the whole edges table on every call, under _HELD_LOCK, just to read the index stamp (an hour)
+      - [ ] **13.** connect with as_of builds the whole path index on every request: about 1 s and a 148 MB peak each, with no bound on concurrent builds (an hour)
+      - [ ] **14.** cite_link's 100 ms budget is checked only between steps, and one step can take far longer: folding a book, or a library-wide FTS phrase query (an hour)
+      - [ ] **24.** A named token's hidden set is rebuilt by a documents scan each time it is needed, and staleness adds a second build to every search (an hour)
+- [ ] **Step 2: one rule in two places** (the project sync first: it can fork a project's documents).
+      - [ ] **3.** Two ways to sync a project, keyed differently, with the title and key rules written twice (an hour or two)
+      - [ ] **4.** The heal check for functional conflicts recomputes what rules.find_conflicts keeps, by a different rule (an hour)
+      - [ ] **16.** A second JSON-LD reader in text/dates, which misses what schemaorg.nodes handles (an hour)
+      - [ ] **17.** Two patterns for a display formula's equation number, which disagree (an hour plus a rechunk)
+      - [ ] **18.** The stale states and the status-to-relation map defined in three places (under an hour)
+      - [ ] **23.** Functional conflicts are computed twice, by heal and by the conflicts pass, with different rules for which edges count (an hour)
+- [ ] **Step 3: the words in data, and the code independent of this library** (with an eval script for the venue tier).
+      - [ ] **6.** Venue tier merges at confidence 1.0 every night, with English/German rules tuned on this library and no script that re-measures them (a stage (eval script plus lexicon move))
+      - [ ] **7.** Status reader marks a project note stale when an ordinary English sentence near its top starts with 'Archived', 'Wrong', 'Replaced', 'Void'… (an hour)
+      - [ ] **8.** Recipe markup turns French, Italian or Spanish ingredient lines into wrong EXTRACTED ingredient entities; the kitchen word lists are English/German code literals outside the kitchen pack (an hour to half a stage)
+      - [ ] **9.** venues.py keeps its own lists of venue words, publishers and legal forms beside the lexicon that already holds them (a few hours)
+      - [ ] **11.** store.document_node is the new single answer to 'a document as a graph node', but pages and the references pass still hard-code 'paper' (an hour or two, plus a heal or resolve round for the twins)
+      - [ ] **15.** Venue rules keep the words that say what a name is as code sets, partly copied from the lexicon (a stage (small))
+      - [ ] **19.** Path hop strength is a Python list of relation names from the packs, and it has already drifted from the ontology (an hour or two plus an eval run)
+      - [ ] **21.** Path costs class relations as strong or weak by a hard-coded list of research and studio relation names (an hour)
+      - [ ] **22.** Which schema.org types prax knows is listed twice: OWN_TYPES in code, same_as in genres.yaml, and the two disagree (an hour)
+- [ ] **Step 4, for the plan's own sections.**
+      - [ ] **5.** Repairs that end an edge and write its correction do not record which edge corrects which (an hour for the record in the two repairs; a migration only if a new column is chosen over restated_as)
+      - [ ] **20.** The card plan's swaps are recorded only as log prose, so AI's last step has no data to measure (an hour)
 
 ## Stages
 
