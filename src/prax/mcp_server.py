@@ -180,6 +180,9 @@ def traverse(
     walked, the most connected, and ``senses`` lists them all with their
     type, documents and domains; pass ``type`` to walk another.
 
+    ``entity`` may be ``doc:N`` to walk from a library document: what it
+    links to, supersedes or invalidates, and what does so to it.
+
     ``domain`` (a module: research, studio, computing…) keeps what that
     module's documents say, as ``search(domain=)`` does.
 
@@ -201,16 +204,22 @@ def traverse(
 @mcp.tool()
 def link(
     src: str,
-    src_type: str,
     rel: str,
     dst: str,
-    dst_type: str,
+    src_type: str | None = None,
+    dst_type: str | None = None,
     confidence: str = "EXTRACTED",
     source_doc: int | None = None,
+    evidence: str | None = None,
 ) -> dict[str, Any]:
     """Add a graph edge between two entities (created if missing).
 
-    ``confidence`` is EXTRACTED, INFERRED, or AMBIGUOUS.
+    Either end may be ``doc:N``, a library document: it brings its own
+    name and type, so ``supersedes``, ``invalidates`` and ``links_to``
+    join two documents (``link("doc:12", "supersedes", "doc:7",
+    source_doc=12, evidence="replaces the plan of March")``). A name
+    needs its type. ``evidence`` is a short quote from ``source_doc``,
+    never a chunk id. ``confidence`` is EXTRACTED, INFERRED, or AMBIGUOUS.
     """
     return _answer(
         lambda: door().post_json(
@@ -223,6 +232,7 @@ def link(
                 "dst_type": dst_type,
                 "confidence": confidence,
                 "source_doc": source_doc,
+                "evidence": evidence,
                 "producer": "agent",
             },
         )

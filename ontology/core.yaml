@@ -33,8 +33,16 @@
 # right; `located_in` takes a person ("based in Berlin"); and the
 # relations the models keep saying the other way round are aliases that
 # flip (`has_part`, `publisher_of`).
+# core v4 (2026-10-04, stage AL step 4): documents linked to documents.
+# `links_to` is a link or a path one document's text holds to another
+# (written by a project's sync, not by a model); `supersedes` and
+# `invalidates` are what a changelog, a revised plan or a status line
+# says of an earlier document, which the graph could not say before.
+# The bump only adds relations, so every reading made under core 3 is
+# valid under core 4: migration 39 moves the extraction stamps instead
+# of every document becoming due again.
 module: core
-version: 3
+version: 4
 
 entity_types:
   person:
@@ -118,6 +126,26 @@ relation_types:
     description: >-
       where an organization is based, an event was held or a person is
       based, as the text states it (a city, a country)
+  links_to:
+    domain: [document]
+    range: [document]
+    description: >-
+      the document's text links to another document or names its path
+      (a Markdown link, a backticked file name); written by a project's
+      sync from the text itself, never guessed
+  supersedes:
+    domain: [document]
+    range: [document]
+    description: >-
+      the document replaces an earlier one: a new version, a revised
+      plan, a later edition, a note that says it takes another's place
+  invalidates:
+    domain: [document]
+    range: [document]
+    description: >-
+      the document says an earlier one, or what it states, no longer
+      holds (a changelog retracting a table, an erratum, a status line
+      "invalid since …"); the earlier document stays, as evidence
 
 type_aliases:
   institution: organization
@@ -146,3 +174,9 @@ relation_aliases:
   publisher_of: {to: published_by, reversed: true}
   has_part: {to: part_of, reversed: true}
   contains: {to: part_of, reversed: true}
+  replaces: supersedes
+  obsoletes: supersedes
+  superseded_by: {to: supersedes, reversed: true}
+  replaced_by: {to: supersedes, reversed: true}
+  invalidated_by: {to: invalidates, reversed: true}
+  retracts: invalidates

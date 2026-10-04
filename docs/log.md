@@ -3875,6 +3875,42 @@ repositories (`tests/test_project_files.py`, `tests/test_projects.py`,
 the MCP and CLI tests); the client's own project is the acceptance set,
 on Monday.
 
+## 2026-10-04: documents linked to documents (stage AL, step 4)
+
+Documents were graph nodes already (`cites`, `annotates`, a page's
+`[title](#doc/N)`), but nothing said what one note says of another.
+
+**Core 4.** Three relations, document to document: `links_to` (a link or
+a path in the text, written by a sync, never guessed), `supersedes` and
+`invalidates` ("the changelog invalidates the re-baseline table"), with
+aliases that flip (`superseded_by`, `replaced_by`, `invalidated_by`). The
+bump only adds relations, and core is in every document's set: as with
+research 8 to 9, migration 39 moves the extraction stamps
+(`"core3+` to `"core4+`) instead of putting the whole library back in the
+extraction queue. Edges keep the version they were written under.
+
+**At sync.** `prax.text.paths` finds what a text refers to: a Markdown
+link resolved against the file's folder, a path in backticks, a bare
+`docs/x.md`, each with its candidates (from the repository's root, the
+project's folder, the file's folder). Matched exactly against the
+project's own paths, each is a `links_to` edge with the words as written
+for evidence (producer `sync`, run `links:<name>`). Each sync keeps them
+in step: new links added, links that went ended (`store.run_edges`), and
+a path that matches nothing is counted (`unmatched`) and not stored, so
+the next sync finds the file once it arrives. A refreshed note's edges
+move to its new document with it, and the ones its new text no longer
+holds are ended.
+
+**`doc:N` as an end.** `link` takes `doc:N` on either side: the
+document's title and the type its entity already has
+(`store.document_node`; a page is a page). A hidden document is a 404,
+as if absent, and a chunk id as evidence is a 400: evidence is the
+words. `traverse("doc:N")` walks from a document, and its context
+carries `linked`, its edges out and in.
+
+Left of step 4: functional relations and a pass proposing `contradicts`
+between facts that disagree, a stage of its own.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each

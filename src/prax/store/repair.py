@@ -1195,7 +1195,7 @@ def _repair_jobs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
 
 
 # A composed version names its modules, each with its own version
-# ("core3+research9"). A name there that is a file beside the modules
+# ("core4+research9"). A name there that is a file beside the modules
 # (genres, subjects, the lexicon) was a door reading that file as a module
 # before it knew its name: 2026-09-29, "+genres1" and "+subjects1".
 _VERSION_PART = re.compile(r"(?P<name>[a-z_]+)(?P<version>\d+)")

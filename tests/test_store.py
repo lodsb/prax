@@ -593,6 +593,29 @@ def test_a_changed_passage_may_hand_its_chunk_id_to_another(
     assert moved and all(i in after and "delta" in after[i] for i in moved)
 
 
+def test_core_four_moves_the_core_three_stamps(con: sqlite3.Connection) -> None:
+    """Migration 39: a bump that only adds relations moves the extraction
+    stamps instead of making the whole library due again."""
+    from importlib import resources
+
+    doc = store.ingest_text(con, "a document read under core three " * 20)["doc_id"]
+    meta = store.get_meta(con, doc)
+    meta["extraction"] = {"ontology_version": "core3+research9"}
+    meta["extraction_history"] = [{"ontology_version": "core3"}]
+    meta["note"] = "score3+ is not a version"
+    store.set_meta(con, doc, meta)
+    sql = (
+        resources.files("prax.migrations")
+        .joinpath("0039_core4.sql")
+        .read_text(encoding="utf-8")
+    )
+    con.executescript(sql)
+    got = store.get_meta(con, doc)
+    assert got["extraction"]["ontology_version"] == "core4+research9"
+    assert got["extraction_history"][0]["ontology_version"] == "core4"
+    assert got["note"] == "score3+ is not a version"
+
+
 def test_what_is_written_once_stays_as_written(con: sqlite3.Connection) -> None:
     """The database refuses what would change history (migration 35): an
     edge deleted or its fact changed, a page revision touched, a spend row

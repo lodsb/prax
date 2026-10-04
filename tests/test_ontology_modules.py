@@ -11,7 +11,7 @@ from prax.graph import ontology
 from tests.conftest import copy_ontology
 
 EVERY_MODULE = (
-    "core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
+    "core4+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
 )
 
 CORE = """
@@ -172,7 +172,7 @@ def test_repo_modules_load(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     )
     assert (
         ontology.current().version
-        == "core3+computing2+craft1+electronics1+kitchen2+research99"
+        == "core4+computing2+craft1+electronics1+kitchen2+research99"
         "+society1+studio5+workshop2"
     )
 
@@ -181,7 +181,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     o = ontology.current()
     kitchen = o.for_domains(["kitchen"])
     assert set(kitchen.modules) == {"core", "craft", "kitchen"}
-    assert kitchen.version == "core3+craft1+kitchen2"
+    assert kitchen.version == "core4+craft1+kitchen2"
     assert kitchen.self_types == ("recipe",)
     assert "paper" not in kitchen.types and "device" not in kitchen.types
     kitchen.check_edge("recipe", "makes", "dish")
@@ -197,7 +197,7 @@ def test_craft_kitchen_and_workshop_modules() -> None:
 
     workshop = o.for_domains(["workshop"])
     assert set(workshop.modules) == {"core", "craft", "studio", "workshop"}
-    assert workshop.version == "core3+craft1+studio5+workshop2"
+    assert workshop.version == "core4+craft1+studio5+workshop2"
     workshop.check_edge("build", "made_with", "component")  # studio's component
     workshop.check_edge("build", "made_with", "material")  # craft's material
     workshop.check_edge("build", "follows", "design")
@@ -213,13 +213,13 @@ def test_craft_kitchen_and_workshop_modules() -> None:
     # reads the word as its own method
     assert o.canonical_type("technique") == "technique"
     assert o.for_domains(["research"]).canonical_type("technique") == "method"
-    assert o.for_domains(["research"]).version == "core3+research9"
+    assert o.for_domains(["research"]).version == "core4+research9"
 
 
 def test_studio_module() -> None:
     o = ontology.current()
     s = o.for_domains(["studio"])
-    assert set(s.modules) == {"core", "studio"} and s.version == "core3+studio5"
+    assert set(s.modules) == {"core", "studio"} and s.version == "core4+studio5"
     assert s.self_types == ("manual", "datasheet", "schematic", "article")
     assert "paper" not in s.types and "cites" not in s.relations
     assert s.is_a("device", "tool") and s.is_a("manufacturer", "organization")
@@ -275,7 +275,7 @@ relation_aliases:
 
 def test_v8_admits_affiliation_beyond_persons() -> None:
     o = ontology.current()
-    assert o.version.startswith("core3+")
+    assert o.version.startswith("core4+")
     o.check_edge("organization", "affiliated_with", "organization")
     o.check_edge("person", "affiliated_with", "concept")
     o.check_edge("person", "located_in", "place")
@@ -313,7 +313,7 @@ def test_electronics_module() -> None:
     o = ontology.current()
     e = o.for_domains(["electronics"])
     assert set(e.modules) == {"core", "studio", "electronics"}
-    assert e.version == "core3+electronics1+studio5"
+    assert e.version == "core4+electronics1+studio5"
     e.check_edge("schematic", "shows_part", "component")
     e.check_edge("datasheet", "shows_part", "device")
     e.check_edge("component", "serves_as", "part_kind")

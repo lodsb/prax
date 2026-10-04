@@ -200,6 +200,14 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
         "source_doc": bank,
     }
     assert client.post("/link", json=link, headers=me).status_code == 400
+    # a hidden document as an end (doc:N) is as if absent
+    to_hidden = {
+        "src": "A",
+        "src_type": "concept",
+        "rel": "mentions",
+        "dst": f"doc:{bank}",
+    }
+    assert client.post("/link", json=to_hidden, headers=me).status_code == 404
     # what it may do: add to the library
     assert (
         client.post(

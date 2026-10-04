@@ -27,7 +27,7 @@ def test_the_lexicon_is_not_a_module() -> None:
     onto = ontology.current()
     assert "lexicon" not in onto.modules
     assert "lexicon" not in onto.version
-    assert onto.version.startswith("core3+")
+    assert onto.version.startswith("core4+")
 
 
 def test_a_name_says_its_type_from_the_lexicon() -> None:

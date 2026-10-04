@@ -233,6 +233,55 @@ def link(
     return int(cur.lastrowid or 0)
 
 
+@_reading
+def run_edges(
+    con: sqlite3.Connection, *, producer: str, run: str
+) -> list[dict[str, Any]]:
+    """The live edges one producer wrote in one run: ``id``, ``source_doc``,
+    ``src``, ``rel`` and ``dst`` (the names they were written with). What a
+    pass that keeps its own edges in step (a project's links) compares
+    against before it adds or ends one."""
+    rows = con.execute(
+        "SELECT e.id, e.source_doc, s.name AS src, e.rel, t.name AS dst"
+        " FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+        " WHERE e.producer = ? AND e.run = ? AND e.valid_to IS NULL ORDER BY e.id",
+        (producer, run),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@_reading
+def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
+    """A library document as a node of the graph, ``(name, type)``: its
+    title, and the type its entity already has (a page is a ``page``; else
+    the document type the most edges reach it as; else ``document``). A
+    document that does not exist, has no title or is hidden from this
+    viewer is a KeyError, as if absent (the wall)."""
+
+    row = con.execute("SELECT title FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    if row is None or not row["title"] or document_hidden(con, doc_id):
+        raise KeyError(f"no such document: {doc_id}")
+    title = str(row["title"])
+    if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)).fetchone():
+        return title, "page"
+    onto = ontology.current()
+    best: tuple[int, str] | None = None
+    for r in con.execute(
+        "SELECT e.type, (SELECT count(*) FROM edges x WHERE (x.src = e.id"
+        " OR x.dst = e.id) AND x.valid_to IS NULL) AS n FROM entities e"
+        " WHERE e.name = ? AND e.canonical_id IS NULL",
+        (title,),
+    ):
+        etype = str(r["type"])
+        if (
+            etype in onto.entity_types
+            and onto.is_a(etype, "document")
+            and (best is None or int(r["n"]) > best[0])
+        ):
+            best = (int(r["n"]), etype)
+    return title, best[1] if best else "document"
+
+
 def _world_date(value: str | None, name: str) -> tuple[str | None, str | None]:
     """A world date and its precision, or two Nones for none."""
     if not value:

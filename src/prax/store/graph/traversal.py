@@ -5,6 +5,7 @@ are also about (invariant 6)."""
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from typing import Any
 
@@ -13,7 +14,7 @@ from prax.graph import ontology
 
 from ..base import VIEWER, _reading, domain_clause, hidden_documents
 from .communities import community_of
-from .edges import held_at
+from .edges import document_node, held_at
 
 MAX_HOPS = 2
 
@@ -305,6 +306,26 @@ def _kinds(found: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     return sorted(kinds, key=lambda k: -sum(x["edges"] for x in k))
 
 
+_DOC_REF = re.compile(r"doc:(\d+)")
+
+
+def _from_document(
+    con: sqlite3.Connection, name: str, etype: str | None
+) -> tuple[str, str | None]:
+    """``doc:N`` as a walk's start: the document's node (its title and
+    type, ``document_node``). A document that is missing or hidden stays
+    ``doc:N``, which names nothing, so the walk is empty as for an unknown
+    name."""
+    m = _DOC_REF.fullmatch(name.strip())
+    if not m:
+        return name, etype
+    try:
+        title, own = document_node(con, int(m.group(1)))
+    except KeyError:
+        return name, etype
+    return title, etype or own
+
+
 def _choose(
     con: sqlite3.Connection, name: str, etype: str | None
 ) -> tuple[list[int], list[dict[str, Any]]]:
@@ -378,6 +399,7 @@ def traverse(
     said on a day, before a later reading ended some of them. Entities
     are those of now: a merge since is followed as it stands.
     """
+    entity_name, type = _from_document(con, entity_name, type)
     ids, _ = _choose(con, entity_name, type)
     return [
         r for r in _walk(con, ids, hops, limit, as_of=as_of)[0] if int(r["hop"]) < 2
@@ -423,6 +445,7 @@ def traverse_map(
 
     ``as_of`` walks the edges prax held then, as ``traverse`` does.
     """
+    entity_name, type = _from_document(con, entity_name, type)
     ids, report = _choose(con, entity_name, type)
     rows, left_out = _walk(
         con, ids, hops, limit, within=_domain_documents(con, domain), as_of=as_of

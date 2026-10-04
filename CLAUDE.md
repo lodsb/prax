@@ -142,7 +142,11 @@ revisit threshold, under "Decision thresholds" below.
    `core.yaml` holds the shared types (person, organization, document,
    place, event, work, concept, tool) and the relations every kind of
    document and organization shares (`authored_by`, `published_by`,
-   `part_of`, `located_in`, `affiliated_with`, `developed_by`).
+   `part_of`, `located_in`, `affiliated_with`, `developed_by`), and
+   what one document says of another (`links_to`, `supersedes`,
+   `invalidates`; core 4, 2026-10-04). A bump that only adds what a
+   module accepts moves the extraction stamps by migration (18, 26, 39)
+   instead of making every document due again.
    `research.yaml` holds papers, methods, claims and pages.
    `studio.yaml` holds gear and its manuals, datasheets, schematics and
    articles, with `electronics.yaml` (what a circuit is made of: a
@@ -157,7 +161,7 @@ revisit threshold, under "Decision thresholds" below.
    allowed. Aliases map what a model says to the canonical name and
    never shadow a declared one. A module's `self_types` say what the
    document being extracted may be. The composed version
-   (`core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
+   (`core4+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2`) is what
    `store.link` validates against and stamps on every edge. A document
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that

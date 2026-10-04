@@ -187,3 +187,61 @@ def test_refusals_come_before_anything_is_written(client: TestClient) -> None:
     )
     assert r.status_code == 400 and "no text" in r.json()["detail"]
     assert store.project_named(con, "x") is None
+
+
+def test_the_notes_links_to_each_other_are_edges_kept_in_step(
+    client: TestClient,
+) -> None:
+    """A Markdown link, a backticked path and a bare mention that match
+    another document of the project are ``links_to`` edges (AL step 4);
+    a path that matches nothing is counted, not kept, and found later."""
+    notes = (
+        "# Firmware notes\n\nThe voice is in [the design](docs/d.md); the"
+        " numbers wait in `docs/numbers.md`.\n"
+    )
+    design = "# Design\n\nAs fw/notes.md says, two oscillators.\n"
+    out = _sync(
+        client,
+        [_file("notes.md", notes), _file("docs/d.md", design)],
+        name="synth-fw",
+        dry_run=False,
+    )
+    assert out["links"] == {"added": 2, "kept": 0, "ended": 0, "unmatched": 1}
+    edges = client.get("/traverse", params={"entity": "Design (synth-fw)"}).json()[
+        "edges"
+    ]
+    said = {(e["src"], e["rel"], e["dst"]): e for e in edges}
+    there = said[("Firmware notes (synth-fw)", "links_to", "Design (synth-fw)")]
+    assert (
+        there["evidence"] == "[the design](docs/d.md)" and there["producer"] == "sync"
+    )
+    back = said[("Design (synth-fw)", "links_to", "Firmware notes (synth-fw)")]
+    assert back["evidence"] == "fw/notes.md"
+    # the missing file arrives: the next sync finds what the note named
+    numbers = "# Numbers\n\nTwelve.\n"
+    out2 = _sync(
+        client,
+        [
+            _file("notes.md", notes),
+            _file("docs/d.md", design),
+            _file("docs/numbers.md", numbers),
+        ],
+        dry_run=False,
+    )
+    assert out2["links"] == {"added": 1, "kept": 2, "ended": 0, "unmatched": 0}
+    # a link taken out of the text is ended, not deleted
+    plain = "# Firmware notes\n\nNo links any more.\n"
+    out3 = _sync(
+        client,
+        [
+            _file("notes.md", plain),
+            _file("docs/d.md", design),
+            _file("docs/numbers.md", numbers),
+        ],
+        dry_run=False,
+    )
+    assert out3["links"]["ended"] == 2 and out3["links"]["kept"] == 1
+    left = client.get("/traverse", params={"entity": "Numbers (synth-fw)"}).json()[
+        "edges"
+    ]
+    assert not [e for e in left if e["rel"] == "links_to"]

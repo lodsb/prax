@@ -309,18 +309,18 @@ and pushing what is committed.
       edge model). Documents are already graph nodes: `cites`,
       `annotates`, `mentions` and `synthesizes` join them, and a page's
       `[title](#doc/N)` is an `annotates` edge. No second table.
-      - [ ] At sync, Markdown links, backtick paths and bare `docs/x.md`
+      - [x] (2026-10-04: `prax.text.paths`, `projects._links`; producer `sync`, run `links:<name>`, kept in step) At sync, Markdown links, backtick paths and bare `docs/x.md`
             mentions matched exactly against the project's keys become
             edges (producer `sync`, EXTRACTED). The acceptance project
             has 15 links and 159 backtick references: about 174 edges
             without a model. A path that matches nothing yet is matched
             again at the next sync, not kept as a dangling node.
-      - [ ] `link` takes `doc:N` as either end. Evidence stays a quote,
+      - [x] (2026-10-04: `store.document_node`; a chunk id as evidence is a 400) `link` takes `doc:N` as either end. Evidence stays a quote,
             never a chunk id.
-      - [ ] `supersedes` and `invalidates` in the core ontology (a
+      - [x] (2026-10-04: core 4 with `links_to` beside them; migration 39 moves the stamps, so nothing is re-extracted) `supersedes` and `invalidates` in the core ontology (a
             version bump, invariant 9): "the changelog invalidates the
             re-baseline table" is a fact the graph cannot say today.
-      - [ ] `context` returns a document's edges out and in;
+      - [x] (2026-10-04: `linked.out`/`linked.in`; `traverse("doc:N")`) `context` returns a document's edges out and in;
             `traverse("doc:N")` walks from a document.
       - [ ] Functional relations declared in the ontology (a building is
             `located_in` one place), and a later pass that proposes

@@ -3,6 +3,7 @@ the overview."""
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -17,28 +18,58 @@ router = APIRouter()
 
 
 class LinkReq(BaseModel):
-    src: str
-    src_type: str
+    src: str  # a name, or doc:N for a library document
+    src_type: str | None = None  # needed for a name; doc:N brings its own
     rel: str
     dst: str
-    dst_type: str
+    dst_type: str | None = None
     confidence: str = "EXTRACTED"
     source_doc: int | None = None
+    evidence: str | None = None  # a quote from source_doc, never a chunk id
     ontology_version: str | None = None
     producer: str = "manual"  # "agent" from the MCP proxy
     world_from: str | None = None  # when the fact holds in the world
     world_to: str | None = None  # a date, or "unknown"
 
 
+_DOC_REF = re.compile(r"doc:(\d+)")
+# what a chunk id looks like: evidence is the words, so a re-chunk that
+# gives the id to another passage cannot move it (AL step 2)
+_CHUNK_ID = re.compile(r"\s*(#?doc/\d+/\d+|chunk[\s:#/]*\d+|\d+)\s*", re.IGNORECASE)
+
+
+def _end(con: Any, name: str, etype: str | None, side: str) -> tuple[str, str]:
+    """One end of an edge: ``doc:N`` is the document's node (its title and
+    type, ``store.document_node``); a name needs its type."""
+    m = _DOC_REF.fullmatch(name.strip())
+    if m:
+        try:
+            return store.document_node(con, int(m.group(1)))
+        except KeyError as exc:
+            raise HTTPException(404, str(exc).strip("'\"")) from exc
+    if not etype:
+        raise HTTPException(400, f"{side}_type is needed for a name ({name!r})")
+    return name, etype
+
+
 @router.post("/link")
 def link(req: LinkReq, request: Request) -> dict[str, int]:
-    edge = store.Edge(req.src, req.src_type, req.rel, req.dst, req.dst_type)
+    """One edge. Either end may be ``doc:N``, a library document, which
+    brings its own name and type; ``evidence`` is a quote, and a chunk id
+    in its place is refused."""
+    con = _con(request)
+    if req.evidence is not None and _CHUNK_ID.fullmatch(req.evidence):
+        raise HTTPException(400, "evidence is a quote from the source, not a chunk id")
+    src, src_type = _end(con, req.src, req.src_type, "src")
+    dst, dst_type = _end(con, req.dst, req.dst_type, "dst")
+    edge = store.Edge(src, src_type, req.rel, dst, dst_type)
     try:
         eid = store.link(
-            _con(request),
+            con,
             edge,
             confidence=req.confidence,
             source_doc=req.source_doc,
+            evidence=req.evidence,
             ontology_version=req.ontology_version,
             producer=req.producer,
             world_from=req.world_from,

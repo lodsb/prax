@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from prax import store
 from prax.api import app
 from prax.graph import ontology
 from tests.conftest import copy_ontology
@@ -105,6 +106,54 @@ def test_link_and_traverse(client: TestClient) -> None:
     # the first hop stays a fact list, the second becomes the map
     assert {(e["src"], e["dst"]) for e in capped["edges"]} == {("A", "B")}
     assert [(n["name"], n["via"]) for n in capped["neighbours"]] == [("C", ["extends"])]
+
+
+def test_a_document_is_an_end_of_an_edge(client: TestClient) -> None:
+    """``doc:N`` names a library document: its title and type come with
+    it, so one document can supersede or invalidate another (core 4)."""
+    con = client.app.state.con
+    old = store.ingest_text(con, "the re-baseline table, March " * 20, title="Baseline")
+    new = store.ingest_text(
+        con, "the changelog: the table is void " * 20, title="Changelog"
+    )
+    body = {
+        "src": f"doc:{new['doc_id']}",
+        "rel": "invalidates",
+        "dst": f"doc:{old['doc_id']}",
+        "source_doc": new["doc_id"],
+        "evidence": "the table is void",
+    }
+    assert client.post("/link", json=body).status_code == 200
+    row = client.get("/traverse", params={"entity": "Changelog"}).json()["edges"][0]
+    assert (row["src"], row["rel"], row["dst"]) == (
+        "Changelog",
+        "invalidates",
+        "Baseline",
+    )
+    assert row["src_type"] == "document" and row["dst_type"] == "document"
+    assert client.post("/link", json={**body, "rel": "supersedes"}).status_code == 200
+    # a walk starts at a document, and its context says what reaches it
+    walk = client.get("/traverse", params={"entity": f"doc:{old['doc_id']}"}).json()
+    assert {e["rel"] for e in walk["edges"]} == {"invalidates", "supersedes"}
+    ctx = client.get(f"/doc/{old['doc_id']}/context").json()
+    came = {(x["rel"], x["title"], x["doc_id"]) for x in ctx["linked"]["in"]}
+    assert came == {
+        ("invalidates", "Changelog", new["doc_id"]),
+        ("supersedes", "Changelog", new["doc_id"]),
+    }
+    assert ctx["linked"]["out"] == []
+    assert client.get("/doc/{}/context".format(new["doc_id"])).json()["linked"]["out"]
+    nowhere = client.get("/traverse", params={"entity": "doc:99999"}).json()
+    assert nowhere["edges"] == []
+    # a chunk id is not evidence; a missing document is not an end
+    assert (
+        client.post("/link", json={**body, "evidence": "doc/7/12"}).status_code == 400
+    )
+    assert client.post("/link", json={**body, "dst": "doc:99999"}).status_code == 404
+    # a name still needs its type
+    bare = {"src": "A", "rel": "extends", "dst": "B", "dst_type": "concept"}
+    r = client.post("/link", json=bare)
+    assert r.status_code == 400 and "src_type" in r.json()["detail"]
 
 
 def test_document_context(client: TestClient) -> None:

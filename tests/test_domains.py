@@ -120,7 +120,7 @@ def test_extraction_uses_the_documents_subset(
     store.set_domains(con, paper, ["research"])
     system2 = ext.params(extraction.build_input(con, paper))["system"][0]["text"]
     assert "paper entity" in system2 and "parent_of" not in system2
-    assert set(ext._prompts) == {"core3+family1", "core3+research9"}
+    assert set(ext._prompts) == {"core4+family1", "core4+research9"}
     # apply validates against the subset and stamps its version
     ex = extraction.Extraction(
         summary="s",
@@ -141,7 +141,7 @@ def test_extraction_uses_the_documents_subset(
     )
     rep = extraction.apply(con, fam, ex, extractor="stub")
     assert rep.linked == 1 and rep.queued == 1  # "paper" is not in the family subset
-    assert store.get_meta(con, fam)["extraction"]["ontology_version"] == "core3+family1"
+    assert store.get_meta(con, fam)["extraction"]["ontology_version"] == "core4+family1"
 
 
 def test_rereading_under_another_subset_retires_the_earlier_reading(
@@ -202,7 +202,7 @@ def test_rereading_under_another_subset_retires_the_earlier_reading(
     )
     rep = extraction.apply(con, doc, second, extractor="local")
     assert rep.retired == 1 and rep.linked == 1
-    assert [tuple(r) for r in live()] == [("local", "core3+family1")]
+    assert [tuple(r) for r in live()] == [("local", "core4+family1")]
     assert (
         con.execute(
             "SELECT count(*) FROM edges WHERE source_doc = ? AND valid_to IS NOT NULL",

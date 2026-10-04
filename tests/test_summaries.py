@@ -91,7 +91,7 @@ def test_an_unknown_naming_is_refused() -> None:
 def test_the_naming_key_bumps_no_version() -> None:
     # it says how a type's names behave, not what types exist: no triple
     # that validated before stops validating, so nothing re-extracts
-    assert ontology.current().version.startswith("core3+")
+    assert ontology.current().version.startswith("core4+")
 
 
 def test_the_prompt_writes_names_as_printed() -> None:

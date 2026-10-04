@@ -19,7 +19,14 @@ applied:
   repository, and ``auto_sync`` is set only when asked;
 - the project page ``project-<name>`` is made once, and every synced
   document is a member of it (``part_of``), without the promote flag a
-  paper added by a person gets.
+  paper added by a person gets;
+- what the notes say about each other becomes ``links_to`` edges (AL step
+  4): a Markdown link, a backticked path or a bare ``docs/x.md`` in one
+  document that matches another document of the project exactly
+  (``prax.text.paths``), the words as written for evidence, producer
+  ``sync`` and run ``links:<name>``. Each sync keeps them in step: a link
+  that went is ended, and a path that matches nothing yet is not kept
+  anywhere, so the next sync matches it again.
 """
 
 from __future__ import annotations
@@ -29,6 +36,7 @@ import sqlite3
 from typing import Any
 
 from prax import client, store
+from prax.text import paths
 
 PLAN_SHOWN = 400  # plan rows returned; the counts are always whole
 _HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*$", re.MULTILINE)
@@ -203,9 +211,82 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
             settings=settings,
             auto_sync=req.get("auto_sync"),
         )
-        store.note_project_sync(con, name, counts)
+        links = _links(con, name, prefix)
+        out["links"] = links
+        store.note_project_sync(
+            con, name, {**counts, "links": links["added"] + links["kept"]}
+        )
         out["auto_sync"] = manifest["auto_sync"]
     return out
+
+
+LINK_PRODUCER = "sync"
+LINK_REL = "links_to"
+EVIDENCE_CHARS = 300
+
+
+def _links(con: sqlite3.Connection, name: str, prefix: str) -> dict[str, int]:
+    """Keep the project's ``links_to`` edges in step with its texts: add
+    the links that are new, end the ones that went. Returns the counts,
+    ``unmatched`` being the references to paths no document of the
+    project has (yet)."""
+    run = f"links:{name}"
+    have = store.project_documents(con, name)
+    by_path = {str(v["path"]): int(v["doc_id"]) for v in have.values() if v.get("path")}
+    want: dict[tuple[int, int], str] = {}
+    unmatched = 0
+    for path, doc_id in by_path.items():
+        doc = store.get_document(con, doc_id)
+        for candidates, words in paths.references(
+            str(doc.get("text") or "") if doc else "", path, prefix
+        ):
+            hit = next((by_path[c] for c in candidates if c in by_path), None)
+            if hit is None:
+                unmatched += 1
+            elif hit != doc_id:
+                want.setdefault((doc_id, hit), words)
+    existing = {
+        (int(e["source_doc"]), str(e["dst"])): int(e["id"])
+        for e in store.run_edges(con, producer=LINK_PRODUCER, run=run)
+        if e["rel"] == LINK_REL and e["source_doc"] is not None
+    }
+    nodes: dict[int, tuple[str, str]] = {}
+
+    def node(doc_id: int) -> tuple[str, str]:
+        if doc_id not in nodes:
+            nodes[doc_id] = store.document_node(con, doc_id)
+        return nodes[doc_id]
+
+    added = kept = 0
+    held: set[tuple[int, str]] = set()
+    for (src_doc, dst_doc), words in want.items():
+        try:
+            src, src_type = node(src_doc)
+            dst, dst_type = node(dst_doc)
+        except KeyError:
+            continue  # a document without a title is no node
+        key = (src_doc, dst)
+        if key in held:
+            continue
+        held.add(key)
+        if key in existing:
+            kept += 1
+            continue
+        store.link(
+            con,
+            store.Edge(src, src_type, LINK_REL, dst, dst_type),
+            source_doc=src_doc,
+            evidence=words[:EVIDENCE_CHARS],
+            producer=LINK_PRODUCER,
+            run=run,
+        )
+        added += 1
+    ended = 0
+    for key, edge_id in existing.items():
+        if key not in held:
+            store.invalidate_edge(con, edge_id)
+            ended += 1
+    return {"added": added, "kept": kept, "ended": ended, "unmatched": unmatched}
 
 
 def _apply(

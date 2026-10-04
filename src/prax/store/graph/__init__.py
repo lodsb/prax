@@ -107,6 +107,7 @@ from .edges import (  # noqa: F401
     _subset_version_case,
     backfill_provenance,
     canonical_entity,
+    document_node,
     entities_with_degree,
     entity_name,
     find_edges,
@@ -117,6 +118,7 @@ from .edges import (  # noqa: F401
     provenance_summary,
     retire_reading,
     retire_run,
+    run_edges,
     select_for_extraction,
 )
 from .labels import (  # noqa: F401

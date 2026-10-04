@@ -23,7 +23,7 @@ def test_the_knowledge_of_every_pack_is_composed() -> None:
     version string they had in one folder; a golden run compared the whole
     ontology, the sameness rule and the lexicon before and after."""
     assert ontology.current().version == (
-        "core3+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
+        "core4+computing2+craft1+electronics1+kitchen2+research9+society1+studio5+workshop2"
     )
     files = ontology.module_files()
     assert files["research"].parent == PACKS_DIR / "research"

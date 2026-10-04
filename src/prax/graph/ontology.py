@@ -403,7 +403,7 @@ def _aliases(
 
 
 def _version(modules: list[Module]) -> str:
-    """The modules' versions joined, core first (``core3+research9``); a
+    """The modules' versions joined, core first (``core4+research9``); a
     single unnamed module keeps its plain version."""
     if len(modules) == 1 and modules[0].name == "main":
         return modules[0].version

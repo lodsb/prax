@@ -303,6 +303,7 @@ def document_context(
         "entities": entities,
         "cites": cites,
         "cited_by": cited_by,
+        "linked": _linked_documents(con, title, limit=limit),
         "similar": _similar_documents(con, doc_id, limit=limit, domain=domain),
         "shared": shared,
         "same_authors": same_authors,
@@ -313,6 +314,57 @@ def document_context(
             "tags": meta.get("tags") or [],
         },
     }
+
+
+def _linked_documents(
+    con: sqlite3.Connection, title: str, *, limit: int
+) -> dict[str, list[dict[str, Any]]]:
+    """A document's edges to and from other documents (``links_to``,
+    ``supersedes``, ``invalidates``, ``part_of``…; ``cites`` has its own
+    lists): ``out`` where it is the subject, ``in`` where it is the object,
+    each with the other document's id where the library holds it and the
+    evidence. At most ``limit`` a side."""
+    onto = ontology.current()
+    out: dict[str, list[dict[str, Any]]] = {"out": [], "in": []}
+    rows = con.execute(
+        """
+        SELECT x.rel, x.evidence, x.source_doc, s.name AS src, s.type AS src_type,
+               t.name AS dst, t.type AS dst_type
+        FROM edges x JOIN entities s0 ON s0.id = x.src
+        JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
+        JOIN entities t0 ON t0.id = x.dst
+        JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
+        WHERE x.valid_to IS NULL AND x.rel != 'cites' AND (s.name = ? OR t.name = ?)
+        ORDER BY x.rel, x.id
+        """,
+        (title, title),
+    ).fetchall()
+    seen: set[tuple[str, str, str]] = set()
+    for r in rows:
+        side = "out" if r["src"] == title else "in"
+        name, etype = (
+            (r["dst"], r["dst_type"]) if side == "out" else (r["src"], r["src_type"])
+        )
+        if name == title or etype not in onto.entity_types:
+            continue
+        if not onto.is_a(etype, "document") or len(out[side]) >= limit:
+            continue
+        if (side, r["rel"], name) in seen:
+            continue
+        seen.add((side, r["rel"], name))
+        other = con.execute(
+            "SELECT id FROM documents WHERE title = ? ORDER BY id LIMIT 1", (name,)
+        ).fetchone()
+        out[side].append(
+            {
+                "rel": r["rel"],
+                "title": name,
+                "type": etype,
+                "doc_id": int(other[0]) if other else None,
+                "evidence": r["evidence"],
+            }
+        )
+    return out
 
 
 @_reading
