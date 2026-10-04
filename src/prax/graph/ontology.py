@@ -897,6 +897,18 @@ class Facet:
 
     version: str = "0"
     levels: tuple[Level, ...] = ()
+    # a label in schema.org's words, where a type says the same thing
+    same_as: tuple[tuple[str, str], ...] = ()
+
+    def standard(self, label: str) -> str | None:
+        """A label's schema.org type (``schema:Recipe``), or None."""
+        return dict(self.same_as).get(label)
+
+    def label_for(self, standard: str) -> str | None:
+        """The label a schema.org type names (``Recipe`` or
+        ``schema:Recipe``), the first in the file when two share it."""
+        want = standard if ":" in standard else f"schema:{standard}"
+        return next((lb for lb, st in self.same_as if st == want), None)
 
     def labels(self) -> list[str]:
         """Every label, level by level, each level before its genres."""
@@ -941,7 +953,11 @@ class Facet:
                 {
                     "name": lv.name,
                     "description": lv.description,
-                    "genres": [{"name": g, "description": d} for g, d in lv.genres],
+                    "genres": [
+                        {"name": g, "description": d}
+                        | ({"same_as": st} if (st := self.standard(g)) else {})
+                        for g, d in lv.genres
+                    ],
                 }
                 for lv in self.levels
             ],
@@ -962,7 +978,13 @@ def parse_facet(text: str, *, name: str = GENRES) -> Facet:
                 raise ValueError(f"{name}.yaml names {label!r} twice")
             seen.add(label)
         levels.append(Level(str(level), str(body.get("description") or ""), under))
-    return Facet(version=str(data.get("version") or "0"), levels=tuple(levels))
+    same = tuple((str(k), str(v)) for k, v in (data.get("same_as") or {}).items())
+    unknown = sorted(k for k, _ in same if k not in seen)
+    if unknown:
+        raise ValueError(f"{name}.yaml maps labels it does not name: {unknown}")
+    return Facet(
+        version=str(data.get("version") or "0"), levels=tuple(levels), same_as=same
+    )
 
 
 def path() -> Path:

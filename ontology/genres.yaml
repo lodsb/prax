@@ -83,3 +83,29 @@ levels:
     description: program text or its configuration
     genres:
       source: source code, a script, a notebook, a configuration file
+
+# A genre in schema.org's words, where a type says the same thing (stage
+# AN): what other systems and models know a document's kind by. Only exact
+# matches; a genre with none (an essay, a schematic, a contract) says
+# nothing rather than something near. Not given to the model that labels,
+# so it moves no measured number and no version. The `markup` pass reads it
+# backwards: a page whose own schema.org type is one of these suggests its
+# genre (`meta.markup.genre`), for a person or the labeller to take.
+same_as:
+  paper: schema:ScholarlyArticle
+  thesis: schema:Thesis
+  book: schema:Book
+  lecture: schema:LearningResource
+  report: schema:Report
+  news: schema:NewsArticle
+  article: schema:Article
+  manual: schema:TechArticle
+  datasheet: schema:TechArticle
+  recipe: schema:Recipe
+  tutorial: schema:HowTo
+  review: schema:Review
+  forum: schema:DiscussionForumPosting
+  qa: schema:QAPage
+  letter: schema:Message
+  invoice: schema:Invoice
+  source: schema:SoftwareSourceCode

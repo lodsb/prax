@@ -4182,6 +4182,65 @@ part of another course. One backwards fact still fans out: before
 "manual" was a whole word, "BSD Library Functions Manual part_of
 Archive_Write_New" alone made nine of forty derivations wrong.
 
+## 2026-10-04, night: what a web page says about itself (stage AN)
+
+Of the library's 559 open web pages, 328 describe themselves in
+schema.org JSON-LD: articles and posts with their authors and publisher,
+recipes with their ingredients and cuisine. The date reader saw 80 of
+them. Its pattern wanted the script tag's `type` quoted, and the news
+sites write `type=application/ld+json`, which is valid HTML. The
+pattern now takes both; it lives in `prax.text.schemaorg.JSONLD`, and
+`prax.text.dates` uses it. On a copy the `published` pass then dated 141
+more documents, all by `jsonld`.
+
+**The reader** (`prax.text.schemaorg`, no model). `nodes` finds every
+JSON-LD object, a `@graph` opened. `own` picks the page's own work, the
+most telling type first (`OWN_TYPES`: a recipe before an article), never
+the site, its logo or a breadcrumb. `said` reduces it to names: authors
+(people, and organizations apart), the publisher through its `@id`, the
+date, and of a recipe its ingredients and cuisine. A news site holds its
+recipes in an `ItemList` beside the `Article`; a recipe with
+`recipeIngredient` is full, one without is a teaser for another page and
+is passed over. An ingredient line becomes the names it holds, without
+amount, unit, measure words, note or preparation: "500 g Zwetschgen,
+entsteint" is Zwetschgen, "Salz und Pfeffer" two, "a generous pinch of
+flaky salt" flaky salt (`ingredient_name`, over `prax.text.ingredients`).
+Microdata is not read: 24 pages carry it.
+
+**The `markup` pass** of `prax maintain`, nightly, writes the facts
+(`markup_facts`) EXTRACTED with producer and run `jsonld`: the document
+`authored_by` its authors, `published_by` its publisher with the
+publication date as the fact's world date, and of a recipe `calls_for`
+and `belongs_to`. A page with one full recipe is that recipe; a page
+with several holds each as a recipe `part_of` it. A fact goes through
+`check_edge` and `check_names` like any; what does not fit is counted.
+Each page is stamped with its original's hash (`meta.markup`), so it is
+read once and again only when a re-capture replaced it, the earlier
+reading then ended. The stamp keeps the page's own schema.org type and,
+where a genre says the same, the genre it suggests (`meta.markup.genre`:
+recipe 59, article 53, news 42, forum 3).
+
+**Genres in schema.org's words.** `same_as:` in `ontology/genres.yaml`
+maps a genre to its schema.org type where one says exactly the same:
+paper `ScholarlyArticle`, recipe `Recipe`, tutorial `HowTo`, review
+`Review` and 13 more. An essay, a schematic or a contract has none, and
+says nothing rather than something near. It is not given to the
+labelling model, so it moves no measured number and no version.
+`Facet.standard` and `Facet.label_for` read it both ways; the Review
+page's vocabulary carries it.
+
+**Measured on a copy.** One pass, 13.5 s: 315 pages with something to
+file, 1,336 new facts (`calls_for` 751, `authored_by` 296,
+`published_by` 272, `part_of` 11, `belongs_to` 6), 159 already stated
+by another producer, nothing refused. A German recipe's `Mehl` lands on
+the entity `flour`, which answers to that label since the vocabulary
+pass. Read by hand, 40 facts: 36 clean; the rest were ingredient names
+carrying a preparation or a count word ("Haselnüsse geröstet", "Köpfe
+Chicorée") and an organization the page calls a person. The
+ingredient names were cleaned in three rounds against samples of 30 to
+50, and the last sample of 50 held 2 still doubtful ("mint sprigs
+leaves", "tender plain white tofu").
+
 ## 2026-10-03: a fact's witnesses, in the first hop's cap
 
 A fact several documents state is one edge per document. In the first

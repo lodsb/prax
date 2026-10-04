@@ -456,7 +456,8 @@ reference `docs/ask.md`.
   from the most trusted source that says it: a person, the record
   (Zotero's `meta.date`), the extension's paper, a page's citation
   tags, its schema.org markup, the arXiv id, a page's generic tags
-  (`prax.text.dates`), and last the `dates` step: a model reads the
+  (`prax.text.dates`, the JSON-LD found by `prax.text.schemaorg`), and
+  last the `dates` step: a model reads the
   first page and answers with the date and the words that state it,
   kept only when those words are on the page and hold the year
   (`writing.dates.checked`), with the words and a confidence. Written at
@@ -466,6 +467,13 @@ reference `docs/ask.md`.
   and `ask`'s passages show it, and search and `documents` filter by it;
   an undated document is left out of a filtered search. It says when the
   document appeared, not when a fact in it holds (AL step 5 of the plan).
+- What a web page says about itself in schema.org JSON-LD is read
+  without a model (`prax.text.schemaorg`): its own work, never the site
+  around it, and the full recipes it holds. The `markup` pass of `prax
+  maintain` files it as EXTRACTED facts with producer `jsonld` (authors,
+  publisher with its date, a recipe's ingredients and cuisine), stamped
+  with the original's hash in `meta.markup`, which also suggests the
+  genre a page's type names (`same_as:` in `genres.yaml`).
 - An entity's names are `entity_labels`, which is what a thing is
   called; `entities.name` is a cache of the preferred one in the
   language this host shows (`graph.language`), rebuilt by the `names`

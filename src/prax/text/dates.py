@@ -21,6 +21,8 @@ from __future__ import annotations
 import json
 import re
 
+from prax.text import schemaorg
+
 PRECISIONS = ("year", "month", "day")
 EARLIEST, LATEST = 1500, 2100  # a year outside is a number, not a date
 
@@ -135,10 +137,8 @@ HEAD_BYTES = 400_000  # what is read of a page: its head and then some
 
 _META = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
 _ATTR = re.compile(r"""([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
-_JSONLD = re.compile(
-    r"<script[^>]+type\s*=\s*[\"']application/ld\+json[\"'][^>]*>(.*?)</script>",
-    re.IGNORECASE | re.DOTALL,
-)
+# quoted or not: ``type=application/ld+json`` is valid HTML
+_JSONLD = schemaorg.JSONLD
 
 
 def _meta_tags(head: str) -> dict[str, str]:

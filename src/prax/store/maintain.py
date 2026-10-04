@@ -40,7 +40,7 @@ from typing import Any
 
 from prax.graph import ontology
 from prax.ml import embeddings
-from prax.text import acronyms, dates, language, references
+from prax.text import acronyms, dates, language, references, schemaorg
 
 from .base import _reading, _serialized, archive_path, now, vectors_available
 from .documents import (
@@ -64,6 +64,7 @@ from .graph import (
     communities_input,
     corpus_rulings,
     derive_rules,
+    document_node,
     find_edges,
     forget_resolved_reviews,
     in_english_text,
@@ -97,6 +98,7 @@ PASSES = (
     "lengths",
     "languages",
     "published",
+    "markup",
     "private",
     "names",
     "attachment",
@@ -719,6 +721,153 @@ def _private(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"looked_at": len(rows), "suspected": suspected, "rules": stamp}
 
 
+MARKUP = "jsonld"  # the producer and run of what a page's markup says
+
+Fact = tuple[Edge, str, str | None]  # the edge, its evidence, its world date
+
+
+def markup_facts(name: str, etype: str, page: schemaorg.Page) -> list[Fact]:
+    """The facts a page's schema.org markup states about the document
+    ``(name, etype)``: who wrote it, who published it (dated by
+    ``datePublished``), and of a recipe what it calls for and the cuisine
+    it belongs to. A page with one full recipe is that recipe; a page with
+    several holds each as a recipe ``part_of`` it."""
+    out: list[Fact] = []
+    own = page.own
+    single = len(page.recipes) == 1
+    me = (name, "recipe" if single else etype)
+    when = dates.parse(own.date) if own else None
+    if own:
+        kind = own.kind
+        for a in own.authors:
+            out.append(
+                (
+                    Edge(*me, "authored_by", a, "person"),
+                    f"schema.org {kind} author",
+                    None,
+                )
+            )
+        for a in own.author_organizations:
+            if a != own.publisher:
+                out.append(
+                    (
+                        Edge(*me, "authored_by", a, "organization"),
+                        f"schema.org {kind} author",
+                        None,
+                    )
+                )
+        if own.publisher:
+            out.append(
+                (
+                    Edge(*me, "published_by", own.publisher, "organization"),
+                    f"schema.org {kind} publisher",
+                    when[0] if when else None,
+                )
+            )
+    for r in page.recipes:
+        it = me if single else (r.name, "recipe")
+        if not single:
+            out.append(
+                (Edge(*it, "part_of", *me), "schema.org Recipe on the page", None)
+            )
+        if not single or not (own and own.authors):
+            for a in r.authors:
+                out.append(
+                    (
+                        Edge(*it, "authored_by", a, "person"),
+                        "schema.org Recipe author",
+                        None,
+                    )
+                )
+        for i in r.ingredients:
+            out.append(
+                (
+                    Edge(*it, "calls_for", i, "ingredient"),
+                    "schema.org recipeIngredient",
+                    None,
+                )
+            )
+        for c in r.cuisines:
+            out.append(
+                (
+                    Edge(*it, "belongs_to", c, "cuisine"),
+                    "schema.org recipeCuisine",
+                    None,
+                )
+            )
+    return out
+
+
+def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The facts a web page's own schema.org markup states (JSON-LD, no
+    model): authors, publisher, a recipe's ingredients and cuisine
+    (``markup_facts``), EXTRACTED with producer ``jsonld``. Stamped with the
+    original's hash (``meta.markup``), so the nightly reads a page once and
+    again only when a re-capture replaced it, the earlier reading then
+    ended. A fact the ontology does not take is counted, not queued."""
+    rows = con.execute(
+        "SELECT id, hash, title, meta FROM documents"
+        " WHERE mime IN ('text/html', 'application/xhtml+xml') AND title IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+        " AND COALESCE(json_extract(meta, '$.markup.hash'), '') != hash ORDER BY id"
+    ).fetchall()
+    onto = ontology.current()
+    counts: Counter[str] = Counter()
+    for n, r in enumerate(rows, 1):
+        try:
+            page = schemaorg.of_page(archive_path(r["hash"]).read_bytes())
+        except OSError:
+            continue
+        retired = retire_reading(con, r["id"], producer=MARKUP, except_version="")
+        counts["ended"] += retired
+        stamp: dict[str, Any] = {"hash": r["hash"], "at": now(), "facts": 0}
+        if page is not None:
+            stamp["type"] = page.own.kind if page.own else "Recipe"
+            genre = ontology.genres().label_for(
+                "Recipe" if len(page.recipes) == 1 else stamp["type"]
+            )
+            if genre:
+                stamp["genre"] = genre
+            try:
+                name, etype = document_node(con, r["id"])
+            except KeyError:
+                name, etype = str(r["title"]), "document"
+            for edge, evidence, world in markup_facts(name, etype, page):
+                try:
+                    onto.check_edge(edge.src_type, edge.rel, edge.dst_type)
+                    onto.check_names(
+                        edge.src, edge.src_type, edge.rel, edge.dst, edge.dst_type
+                    )
+                except ValueError:
+                    counts["refused"] += 1
+                    continue
+                if find_edges(con, edge):
+                    counts["existing"] += 1
+                    continue
+                link(
+                    con,
+                    edge,
+                    source_doc=r["id"],
+                    evidence=evidence,
+                    producer=MARKUP,
+                    run=MARKUP,
+                    world_from=world,
+                )
+                stamp["facts"] += 1
+                counts[edge.rel] += 1
+            counts["pages"] += 1
+        con.execute(
+            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+            " '$.markup', json(?)) WHERE id = ?",
+            (json.dumps(stamp), r["id"]),
+        )
+        if n % 100 == 0:
+            con.commit()
+            job.update(done=n, total=len(rows), note=f"markup: {n} of {len(rows)}")
+    con.commit()
+    return {"read": len(rows), **dict(counts)}
+
+
 def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """When every document that does not say yet was published
     (``store.published_of``): its record's date, what the extension found,
@@ -997,6 +1146,7 @@ _RUN = {
     "lengths": _lengths,
     "languages": _languages,
     "published": _published,
+    "markup": _markup,
     "private": _private,
     "names": _names,
     "attachment": _attachment,

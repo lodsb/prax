@@ -504,13 +504,13 @@ and pushing what is committed.
             words** (the user, 2026-10-03: "the standardized ontologies
             also could make sense to extract some more meaning from our
             current chunks/docs"):
-            - the **schema.org markup web pages already carry**
+            - [x] (2026-10-04: `prax.text.schemaorg` and the `markup` pass of `prax maintain`: 1,336 facts from 315 pages; the date reader read the unquoted tag too, 141 more pages dated) the **schema.org markup web pages already carry**
               (JSON-LD, microdata): a recipe's ingredients and times, an
               article's author and `datePublished`, a product, an event,
               a person. Read at capture and by a pass over the kept HTML
               originals, no model: facts EXTRACTED with producer
               `jsonld`, and a date for `meta.published` (AL step 5);
-            - prax's **genres and subjects mapped** to schema.org types
+            - [x] (2026-10-04: the genres, exact matches only, `same_as:` in genres.yaml; the subjects not yet) prax's **genres and subjects mapped** to schema.org types
               (`ScholarlyArticle`, `TechArticle`, `Recipe`, `Review`…)
               and to SKOS concept schemes, so a document's kind is said
               in words other systems and models know;
