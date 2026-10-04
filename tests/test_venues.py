@@ -155,3 +155,76 @@ def test_the_tier_merges_links_and_quiets_the_finding(con: sqlite3.Connection) -
 def test_a_publishers_word_does_not_keep_a_series_apart() -> None:
     merges, _ = _plan(["ICASSP", "IEEE ICASSP"])
     assert merges == {("ICASSP", "IEEE ICASSP")}
+
+
+@pytest.mark.parametrize(
+    ("name", "kind"),
+    [
+        ("Oxford University Press", "publisher"),
+        ("Springer-Verlag London Limited", "publisher"),
+        ("Native Instruments GmbH", "company"),
+        ("Stanford University", "institution"),
+        ("Fakultät für Informatik", "institution"),
+        ("Sommersemester 2009", "none"),
+        ("Übungsblatt 06", "none"),
+        ("University Exercise Sheet", "none"),
+        ("proprietary software license", "none"),
+        # a venue word keeps a venue, whatever else the name says
+        ("Journal of the Audio Engineering Society", None),
+        ("Proceedings of the IEEE", None),
+        ("Acta Universitatis Upsaliensis", None),
+        ("Psychological Research", None),
+        ("AES E-Library", None),
+    ],
+)
+def test_what_a_venue_name_says_it_is_instead(name: str, kind: str | None) -> None:
+    assert venues.not_a_venue(name) == kind
+
+
+def test_the_repair_writes_what_the_fact_meant(con: sqlite3.Connection) -> None:
+    E = store.Edge
+    doc = store.ingest_text(con, "a monograph on counterpoint " * 20)["doc_id"]
+    for venue in (
+        "Oxford University Press",
+        "Stanford University",
+        "Sommersemester 2009",
+    ):
+        store.link(
+            con,
+            E("A monograph", "paper", "published_in", venue, "venue"),
+            source_doc=doc,
+            evidence="printed on the title page",
+            producer="t",
+        )
+    store.link(
+        con, E("A paper", "paper", "published_in", "DAFx", "venue"), producer="t"
+    )
+    found = repair._not_venues(con)
+    assert {(f["name"], f["is"]) for f in found} == {
+        ("Oxford University Press", "publisher"),
+        ("Stanford University", "institution"),
+        ("Sommersemester 2009", "none"),
+    }
+    assert repair.heal(con, only=["not-venues"])["not-venues"]["repaired"] == 3
+    live = {
+        (r[0], r[1], r[2], r[3])
+        for r in con.execute(
+            "SELECT e.rel, t.name, t.type, e.producer FROM edges e"
+            " JOIN entities t ON t.id = e.dst WHERE e.valid_to IS NULL"
+        )
+    }
+    assert (
+        "published_by",
+        "Oxford University Press",
+        "organization",
+        repair.NOT_VENUE_PRODUCER,
+    ) in live
+    assert (
+        "written_at",
+        "Stanford University",
+        "organization",
+        repair.NOT_VENUE_PRODUCER,
+    ) in live
+    assert ("published_in", "DAFx", "venue", "t") in live
+    assert not any(rel == "published_in" and name != "DAFx" for rel, name, _, _ in live)
+    assert repair._not_venues(con) == []

@@ -23,6 +23,8 @@ import re
 import unicodedata
 from dataclasses import dataclass
 
+from prax.graph import ontology
+
 # what a printed venue name carries that is not its series
 _LEADING = re.compile(
     r"^(?:(?:in|in:)\s+)?(?:(?:the\s+)?(?:proceedings|proc\.?|extended\s+abstracts|"
@@ -331,3 +333,25 @@ def plan(entities: list[tuple[int, str, int]], expansions: dict[str, set[str]]) 
                 (i, series) for k, i in survivors.items() if k[0] is not None
             ]
     return out
+
+
+NOT_A_VENUE_ORDER = ("none", "publisher", "company", "institution")
+
+
+def not_a_venue(name: str) -> str | None:
+    """What a name typed as a venue says it is instead (the lexicon's
+    ``not_a_venue``): ``none`` (a date, a semester, an exercise sheet, a
+    licence), ``publisher``, ``company`` or ``institution``; None for a
+    venue. A name with a venue word is a venue whatever else it says
+    ("Journal of the Audio Engineering Society", "Acta Universitatis
+    Upsaliensis" too, which no cue names)."""
+    v = read(name)
+    if not v.series:
+        return "none"  # a date: "March 2009", "Sommersemester 2005"
+    if set(_fold(name).replace("-", " ").split()) & VENUE_WORDS:
+        return None
+    cues = dict(ontology.lexicon().not_a_venue)
+    for kind in NOT_A_VENUE_ORDER:
+        if kind in cues and ontology.cue_pattern(cues[kind]).search(name):
+            return kind
+    return None

@@ -4241,6 +4241,40 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
+## 2026-10-04, night: a publisher is no venue (`not-venues`)
+
+After the venue tier, most of the 247 "published in two venues" findings
+were papers said to be published in something that is no venue: a
+publisher ("Oxford University Press", 24 edges), a company (a plug-in
+maker for its manual), a university or a faculty, a semester or an
+exercise sheet. The extraction typed them as venues because a venue was
+what the relation asked for.
+
+What a name says it is instead is a new section of the lexicon,
+`not_a_venue`, read by `prax.graph.venues.not_a_venue`: `publisher`
+(press, Verlag, publishing, the big houses by name), `company` (GmbH,
+Inc., Ltd, AG, LLC), `institution` (university in five languages,
+institute, faculty, department, laboratory, conservatory) and `none`
+(dates and semesters, exercise sheets, lectures, licences). A name with a
+venue word (journal, proceedings, conference, review, letters…) is a
+venue whatever else it says, so "Journal of the Audio Engineering
+Society", "Proceedings of the IEEE" and "Psychological Research" stay; so
+does "Acta Universitatis Upsaliensis", which no cue matches. The first
+cut used the lexicon's general organization words and caught journals on
+"systems", "research" and "technology"; these are narrower.
+
+The `not-venues` ailment of `prax heal` lists them. Its repair ends each
+`published_in` edge into one and writes what it meant beside it:
+`published_by` the publisher or company, `written_at` the institution,
+both of an organization by the same name, with the old edge's document,
+evidence and world dates, INFERRED, producer and run `heal:not-venues`.
+A date or an exercise sheet gets nothing. On a copy: 291 entities (105
+institutions, 84 publishers, 42 companies, 60 nothing) and 738 edges;
+after the venue tier and this, the findings went from 345 to 157. What
+is left is the material of the contradiction pass: real disagreements
+(a paper in DAFx-14 and in ICASSP), junk values ("DRAFT"), and spellings
+no rule folds ("Applied Sciences", "Apl. Sci.").
+
 ## 2026-10-04, past midnight: a heading is capped in a hit
 
 Found on 2026-10-03 in doc 9522, a patent read in two columns: a heading

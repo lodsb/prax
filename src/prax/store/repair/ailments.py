@@ -52,9 +52,11 @@ from .graph import (
     _container_citations,
     _functional_conflicts,
     _mangled_names,
+    _not_venues,
     _placeholder_entities,
     _reference_entities,
     _repair_names,
+    _repair_not_venues,
     _repair_part_of,
     _repair_stray_versions,
     _repair_wire_names,
@@ -78,6 +80,21 @@ AILMENTS: tuple[Ailment, ...] = (
             " not functional in the ontology's YAML; nothing is changed here"
         ),
         find=_functional_conflicts,
+    ),
+    Ailment(
+        name="not-venues",
+        what=(
+            'a paper "published in" what is no venue: a publisher, a company,'
+            " a university, a semester or an exercise sheet the extraction"
+            " typed as one"
+        ),
+        fix=(
+            "end the edge and write what it meant beside it: published_by the"
+            " publisher or company, written_at the institution, nothing for a"
+            " date (INFERRED, producer heal:not-venues)"
+        ),
+        find=_not_venues,
+        repair=_repair_not_venues,
     ),
     Ailment(
         name="backwards-part-of",

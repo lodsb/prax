@@ -637,6 +637,9 @@ class Lexicon:
     numbered: tuple[str, ...] = ()
     whole: tuple[tuple[str, ...], tuple[str, ...]] = ((), ())
     generic: frozenset[str] = frozenset()
+    # what a "venue" name says it is instead: publisher, company,
+    # institution, none (``not_a_venue``)
+    not_a_venue: tuple[tuple[str, tuple[tuple[str, ...], tuple[str, ...]]], ...] = ()
     ranks: tuple[tuple[int, tuple[tuple[str, ...], tuple[str, ...]]], ...] = ()
 
     def type_of(self, name: str) -> str | None:
@@ -672,6 +675,9 @@ def parse_lexicon(text: str) -> Lexicon:
         numbered=seq(parts.get("numbered")),
         whole=cues(parts.get("whole")),
         generic=frozenset(str(x).lower() for x in (parts.get("generic") or [])),
+        not_a_venue=tuple(
+            (str(k), cues(v)) for k, v in (data.get("not_a_venue") or {}).items()
+        ),
         ranks=tuple(
             sorted((int(k), cues(v)) for k, v in (parts.get("ranks") or {}).items())
         ),

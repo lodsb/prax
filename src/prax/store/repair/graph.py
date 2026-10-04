@@ -572,3 +572,105 @@ def _repair_stray_versions(con: sqlite3.Connection, rows: list[dict[str, Any]]) 
         done += cur.rowcount
     con.commit()
     return done
+
+
+NOT_VENUE_PRODUCER = "heal:not-venues"
+# what a "published in" a non-venue was meant to say, by what the name is
+NOT_VENUE_FACT = {
+    "publisher": "published_by",
+    "company": "published_by",
+    "institution": "written_at",
+}
+
+
+def _not_venues(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Entities typed as a venue that a paper is said to be "published in"
+    and whose name says they are not one (``venues.not_a_venue``): a
+    publisher, a company, a university or institute, or nothing of the
+    kind (a date, a semester, an exercise sheet, a licence). Each with
+    what it is and how many ``published_in`` edges reach it."""
+    from prax.graph import venues
+
+    rows = con.execute(
+        """
+        SELECT COALESCE(t.canonical_id, t.id) AS id, count(*) AS edges
+        FROM edges e JOIN entities t ON t.id = e.dst
+        WHERE e.rel = 'published_in' AND e.valid_to IS NULL
+        GROUP BY COALESCE(t.canonical_id, t.id)
+        """
+    ).fetchall()
+    counts = {int(r["id"]): int(r["edges"]) for r in rows}
+    out: list[dict[str, Any]] = []
+    for i in range(0, len(counts), 500):
+        part = sorted(counts)[i : i + 500]
+        marks = ",".join("?" * len(part))
+        for r in con.execute(
+            f"SELECT id, name, type FROM entities WHERE id IN ({marks})", part
+        ):
+            if r["type"] != "venue":
+                continue
+            kind = venues.not_a_venue(str(r["name"]))
+            if kind:
+                out.append(
+                    {
+                        "id": int(r["id"]),
+                        "name": r["name"],
+                        "is": kind,
+                        "edges": counts[int(r["id"])],
+                    }
+                )
+    out.sort(key=lambda x: (-x["edges"], x["name"]))
+    return out[:CAP]
+
+
+def _repair_not_venues(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """End each ``published_in`` edge into such an entity, and write what
+    it was meant to say beside it: ``published_by`` the publisher or the
+    company, ``written_at`` the institution, both of an organization by
+    the same name; for a date or an exercise sheet nothing. The new edge
+    keeps the old one's document, evidence and world dates, INFERRED, by
+    this repair (``heal:not-venues``), so the run is retired whole if it
+    was wrong."""
+    onto = ontology.current()
+    done = 0
+    for row in rows:
+        edges = con.execute(
+            """
+            SELECT e.id, s.name AS src, s.type AS src_type, e.source_doc,
+                   e.evidence, e.world_from, e.world_to
+            FROM edges e JOIN entities t ON t.id = e.dst
+            JOIN entities s0 ON s0.id = e.src
+            JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
+            WHERE e.rel = 'published_in' AND e.valid_to IS NULL
+              AND COALESCE(t.canonical_id, t.id) = ?
+            """,
+            (row["id"],),
+        ).fetchall()
+        rel = NOT_VENUE_FACT.get(row["is"])
+        for e in edges:
+            edge = (
+                Edge(e["src"], e["src_type"], rel, row["name"], "organization")
+                if rel
+                else None
+            )
+            if edge is not None:
+                try:
+                    onto.check_edge(edge.src_type, edge.rel, edge.dst_type)
+                except ValueError:
+                    edge = None  # what it was meant to say does not fit: ended only
+            if not _invalidate(con, [int(e["id"])]):
+                continue
+            if edge is not None:
+                link(
+                    con,
+                    edge,
+                    confidence="INFERRED",
+                    source_doc=e["source_doc"],
+                    evidence=e["evidence"],
+                    producer=NOT_VENUE_PRODUCER,
+                    run=NOT_VENUE_PRODUCER,
+                    world_from=e["world_from"],
+                    world_to=e["world_to"],
+                )
+            done += 1
+    return done

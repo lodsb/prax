@@ -336,8 +336,9 @@ and pushing what is committed.
             a series beside its edition. Resolution's `venue` tier merges
             the one and links the other `part_of`, and the finding takes a
             series and its edition for one answer: 247 left, mostly
-            publishers, universities and dates typed as venues, which is a
-            typing question. The pass itself waits until those are few.)
+            publishers, universities and dates typed as venues. The
+            `not-venues` ailment of `prax heal` mends those: 157 left on a
+            copy.)
 
       *5. What is current* (the client's #8). 13 of the acceptance
       project's 27 documents say they are retired, superseded or invalid,

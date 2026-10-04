@@ -305,3 +305,27 @@ part_of:
       stems: [universit, hochschule, institute of technology, academy, akademie]
       # not "mit": in German it is "with" ("Synchronisation mit Semaphoren")
       words: [tu, eth, epfl]
+
+# what the extraction typed as a venue and is not one: a paper is not
+# "published in" its publisher, its university or a semester (stage AN,
+# the `not-venues` ailment of `prax heal`). Each kind says what the fact
+# was meant to be. A name that carries a venue word (journal,
+# proceedings, conference, review… `prax.graph.venues.VENUE_WORDS`) is a
+# venue whatever else it says, so "Journal of the Audio Engineering
+# Society" stays
+not_a_venue:
+  # published_in becomes published_by
+  publisher:
+    stems: [verlag, publishing, publisher]
+    words: [press, "university press", "& sons", springer, elsevier, wiley, routledge, pergamon, "academic press", mcgraw-hill, addison-wesley, "o'reilly", "taylor & francis", "springer-verlag", birkhäuser, kluwer]
+  # a company: published_by too (a manual and its maker)
+  company:
+    stems: [gmbh]
+    words: [inc, inc., ltd, ltd., llc, corporation, corp., ag, "co. kg", ohg, bv, s.a., sarl]
+  # published_in becomes written_at
+  institution:
+    words: [university, universität, universitaet, université, università, universidad, universiteit, college, hochschule, institute, institut, department, fakultät, faculty, laboratory, lab, labs, rechenzentrum, universitätsbibliothek, "school of music", conservatory, konservatorium]
+  # no venue and no fact: the edge ends
+  none:
+    stems: [übungsblatt, lösungsblatt, aufgabenblatt, hausaufgabe, vorlesung, licen, lizenz]
+    words: [assignment, homework, lecture, "lecture notes", "lecture slides", "course materials", "exercise sheet", exercises]
