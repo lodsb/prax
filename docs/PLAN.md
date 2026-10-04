@@ -851,7 +851,7 @@ not done.
       flag set on the package would no longer reach the part that reads
       it, and the tests would pass without testing. The split needs the
       flags read through one settings object first.
-- [ ] **`store.repair` and `store.graph.context` in parts.** 1,697 and 954
+- [ ] (2026-10-04: `store.repair` done, four parts at 1,890 lines; `store.graph.context` at 954 is not yet past the line) **`store.repair` and `store.graph.context` in parts.** 1,697 and 954
       lines. Their tests reach private state (`repair._glyphs_seen`),
       which would move with the part that holds it.
 - [ ] **Typed shapes.** 869 `dict[str, Any]` annotations and no

@@ -62,8 +62,9 @@ revisit threshold, under "Decision thresholds" below.
    with an `ORDER` of its own, a part importing only from the parts
    before it: `documents` (meta, text, library, domains, genres,
    readings, reads), `graph` (edges, decisions, labels, languages, context, communities,
-   traversal) and `retrieval` (knobs, compounds, query, legs, vectors,
-   fusion, similar). A switch a test turns is an attribute of a package's
+   traversal, rules, paths), `retrieval` (knobs, compounds, query, legs,
+   vectors, fusion, similar) and `repair` (common, graph, documents,
+   ailments). A switch a test turns is an attribute of a package's
    one settings object (`retrieval.knobs`), read at call time: a flag
    set on the package would not reach the part that reads it.
 4. **Single writer.** *(enforced)* The service process, the door, is the only

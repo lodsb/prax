@@ -4241,6 +4241,27 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
+## 2026-10-04, past midnight: `store.repair` in parts
+
+`store.repair` had grown to 1,890 lines with today's ailments, near the
+line CLAUDE.md draws at two thousand. It is a package of four parts now,
+in this order: `common` (the `Ailment` shape, the caps on one pass, and
+the repairs several ailments share: ending edges, closing review items
+and jobs), `graph` (entities named after the prompt, mangled and split
+names, loops, container citations, `part_of` the wrong way round,
+functional conflicts, slow walks, stray versions), `documents` (twins,
+files that are no documents, failed parses and readings, stale parses and
+extractions, the edges and review items of retired documents) and
+`ailments` (the list, `health`, `heal`). Its `__init__` re-exports every
+name, so `store.repair.<name>` and `store.health` read as before.
+
+The split was done by a script that moved each top-level statement whole,
+and checked afterwards: all 87 statements of the old module compare equal,
+syntax tree for syntax tree, with their copies in the parts. One test set
+`SLOW_WALK_MS` on the package; it now sets it on the part that reads it,
+since a name set on the package does not reach the part (as with
+`retrieval.knobs`).
+
 ## 2026-10-04, late night: one venue under many names (resolution's venue tier)
 
 The `functional-conflicts` finding of stage AN listed 345 papers
