@@ -5,9 +5,11 @@ and the hits as an agent reads them."""
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
 from typing import Any
+from urllib.parse import quote_plus
 
 from prax import config
 from prax.graph import ontology
@@ -46,6 +48,7 @@ from .legs import (
 from .query import (
     ALL_TERMS_WEIGHT,
     RARE_TERMS_WEIGHT,
+    STOPWORDS,
     VEC_EXPAND,
     Scope,
     _expr,
@@ -76,6 +79,7 @@ def search(
     published_since: str | None = None,
     published_before: str | None = None,
     include_stale: bool = False,
+    cite: bool = False,
 ) -> list[dict[str, Any]]:
     """Search returning compact snippets + ids (agent-shaped). ``timing``,
     when given, is filled with the seconds each side took (``fts``,
@@ -114,6 +118,10 @@ def search(
     date and what replaced it, and moves ``STALE_SHIFT`` places down: a
     preference, never a filter, as the domain prior. ``include_stale``
     keeps the order as it was.
+
+    With ``cite``, a passage hit carries ``cite``: its link with words of
+    it no other passage of the document holds (``cite_link``), the
+    citation an agent pastes; within ``CITE_BUDGET`` a search.
     """
     if kind is not None and kind not in CHUNK_KINDS:
         raise ValueError(f"kind must be one of {CHUNK_KINDS}")
@@ -149,6 +157,8 @@ def search(
     if reranker is not None and hits:
         with _Took(timing)("rerank"):
             hits = _apply_rerank(con, reranker, query, hits)
+    folded: dict[int, list[tuple[int, str]]] = {}  # passages folded once a search
+    deadline = time.monotonic() + CITE_BUDGET
     stale = staleness(con, hits)
     if stale and not include_stale:
         hits = _shift_stale(hits, stale)
@@ -157,7 +167,104 @@ def search(
         h["published"] = stamped.get(h["doc_id"])
         if h["doc_id"] in stale:
             h["stale"] = stale[h["doc_id"]]
+        if cite and h.get("chunk_id") is not None:
+            h["cite"] = cite_link(
+                con, int(h["doc_id"]), int(h["chunk_id"]), folded, deadline
+            )
     return hits
+
+
+# A passage's link that survives a re-chunk (AL step 2; the client's O2):
+# the chunk id, which a re-index may hand to another passage, and a few
+# words of the passage that occur in no other passage of the document,
+# which the UI trusts over the id (``chunkTarget``). Chosen here, so no
+# agent picks them by hand. Relative: the door's address is the same for
+# every hit, and the agent has it.
+CITE_WORDS = (4, 6)  # the phrase's lengths tried, shortest first
+CITE_TRIES = 6  # places in the passage a phrase is tried at
+CITE_SCAN = 300  # words of the passage looked at
+CITE_MIN_WORDS = 8  # a shorter passage (a header, a caption line) gets the id alone
+CITE_LOCAL = 3000  # passages a document may have to be checked in memory
+CITE_INDEX_TRIES = 4  # phrase queries for a longer one (a common phrase is slow)
+CITE_BUDGET = 0.1  # seconds a search spends on its links; later hits get the id
+_FOLD = re.compile(r"[^\W_]+")  # the UI's norm: letters and digits, lowercased
+
+
+def cite_link(
+    con: sqlite3.Connection,
+    doc_id: int,
+    chunk_id: int,
+    folded_docs: dict[int, list[tuple[int, str]]] | None = None,
+    deadline: float | None = None,
+) -> str:
+    """``#doc/N?chunk=M&find=…``: the passage's link with words of it no
+    other passage of the document holds, or with the id alone when none is
+    found (a running header has none). The words are a run of the passage
+    as the UI folds text, so its exact-match path finds them. A document
+    of up to ``CITE_LOCAL`` passages is checked in memory with the UI's
+    own rule (one passage holds the run); a longer one by a phrase query
+    on the keyword index, limited to the document, at most
+    ``CITE_INDEX_TRIES`` times (a boilerplate passage has no such words,
+    and a try on a common phrase is slow). ``folded_docs`` keeps a
+    document's folded passages for the other hits of one search; past
+    ``deadline`` (a monotonic time) the link is the id alone."""
+    base = f"#doc/{doc_id}?chunk={chunk_id}"
+    row = con.execute("SELECT text FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
+    if row is None:
+        return base
+    words = _FOLD.findall(str(row[0] or "").lower())[:CITE_SCAN]
+    if len(words) < CITE_MIN_WORDS:
+        return base
+
+    def late() -> bool:
+        return deadline is not None and time.monotonic() > deadline
+
+    count = con.execute(
+        "SELECT count(*) FROM chunks WHERE doc_id = ?", (doc_id,)
+    ).fetchone()[0]
+    folded: list[tuple[int, str]] | None = None
+    if late():
+        return base
+    if count <= CITE_LOCAL:
+        cache = folded_docs if folded_docs is not None else {}
+        if doc_id not in cache:
+            cache[doc_id] = [
+                (int(r[0]), " ".join(_FOLD.findall(str(r[1] or "").lower())))
+                for r in con.execute(
+                    "SELECT id, text FROM chunks WHERE doc_id = ?", (doc_id,)
+                )
+            ]
+        folded = cache[doc_id]
+    tries = 0
+    for n in CITE_WORDS:
+        if len(words) < n:
+            continue
+        step = max(1, (len(words) - n) // CITE_TRIES)
+        for start in range(0, len(words) - n + 1, step)[:CITE_TRIES]:
+            run = words[start : start + n]
+            if sum(1 for w in run if len(w) > 3 and w not in STOPWORDS) < 2:
+                continue  # "and the of a": words every passage has
+            if late():
+                return base
+            phrase = " ".join(run)
+            if folded is not None:
+                holders = [i for i, t in folded if phrase in t]
+            else:
+                tries += 1
+                if tries > CITE_INDEX_TRIES:
+                    return base
+                holders = [
+                    int(r[0])
+                    for r in con.execute(
+                        "SELECT c.id FROM chunks_fts JOIN chunks c"
+                        " ON c.id = chunks_fts.rowid"
+                        " WHERE chunks_fts MATCH ? AND c.doc_id = ? LIMIT 2",
+                        ('"' + phrase + '"', doc_id),
+                    )
+                ]
+            if holders == [chunk_id]:
+                return f"{base}&find={quote_plus(phrase)}"
+    return base
 
 
 STALE_SHIFT = 5  # places a stale hit moves down: the same with or without a reranker

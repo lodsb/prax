@@ -451,9 +451,10 @@ and pushing what is committed.
       - [x] (2026-10-04) O5: `health` tells a refused token (401) from a route
             not allowed (403, a door older than the client), and names the
             door's commit beside the client's.
-      - [ ] O2: a ready passage link on each search hit, with `find` words
-            the door chooses. Against invariant 6 (below, "Not now"); the
-            user's call.
+      - [x] (2026-10-04, the user: "build it", after the numbers: a hit is
+            about 300 bytes, the link 45) O2: a ready passage link on each search hit, with `find` words
+            the door chooses (`cite` on an agent's hits and `ask`'s
+            passages, `store.cite_link`).
 
       *Not now.* Search hits with a `url` each (the client's #3, at chunk
       level too): about 40 bytes a hit against invariant 6. One `ui` base

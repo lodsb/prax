@@ -49,7 +49,15 @@ from .compounds import (  # noqa: F401
     term_documents,
 )
 from .fusion import (  # noqa: F401
+    _FOLD,
     ASIDE_PAGE_KINDS,
+    CITE_BUDGET,
+    CITE_INDEX_TRIES,
+    CITE_LOCAL,
+    CITE_MIN_WORDS,
+    CITE_SCAN,
+    CITE_TRIES,
+    CITE_WORDS,
     PRIOR_DEPTH,
     PRIOR_MIN,
     PRIOR_SMALL,
@@ -74,6 +82,7 @@ from .fusion import (  # noqa: F401
     _shift_stale,
     _Took,
     _without,
+    cite_link,
     published_dates,
     search,
     staleness,

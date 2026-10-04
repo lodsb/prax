@@ -113,7 +113,10 @@ def search(
     its own status line, or another document supersedes it) carries
     ``stale`` with the date and what replaced it, and ranks a few places
     lower; quote the replacement as the current word, or pass
-    ``include_stale=True`` to keep the plain order.
+    ``include_stale=True`` to keep the plain order. Each passage hit has
+    ``cite``, a link that survives a re-chunk (``#doc/N?chunk=M&find=…``,
+    words the door chose): paste it as the citation, after the door's
+    address and ``/ui/``.
     """
     params: dict[str, Any] = {
         "q": query,

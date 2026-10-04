@@ -113,6 +113,7 @@ class Passage:
     time: int | None = None  # seconds into a recording (a transcript's passage)
     published: str | None = None  # when its document was published, as it says
     stale: dict[str, Any] | None = None  # no longer current: state, since, replaced_by
+    cite: str | None = None  # its link that survives a re-chunk (store.cite_link)
 
     def label(self) -> str:
         title = self.title or "(untitled)"
@@ -153,6 +154,7 @@ class Passage:
             "figure": self.figure,
             "published": self.published,
             "stale": self.stale,
+            "cite": self.cite,
             "nearby": self.nearby,
             "time": self.time,
         }
@@ -382,6 +384,13 @@ def gather(
                 stale=h.get("stale"),
             )
         )
+    # each passage's link with words of it (the citation an agent pastes),
+    # within the time a search allows itself for them
+    deadline = time.monotonic() + store.CITE_BUDGET
+    folded: dict[int, list[tuple[int, str]]] = {}
+    for p in bundle.passages:
+        if p.chunk_id is not None:
+            p.cite = store.cite_link(con, p.doc_id, p.chunk_id, folded, deadline)
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))
     bundle.facts = store.document_facts(con, ids, limit=FACTS_PER_DOC)
     if regions and ids:

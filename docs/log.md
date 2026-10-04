@@ -4047,6 +4047,21 @@ name (O4); `health` tells a refused token (401) from a route not allowed
 (O5). O2, a ready passage link on every hit, is against invariant 6 and
 waits for the user.
 
+**O2, after all: a passage link on every agent's hit.** Measured first:
+a search hit is 220 to 520 bytes as the MCP tool returns it (median
+317), a search of ten 3 to 4.4 KB; the link adds about 45, some 15%,
+where invariant 6 was written against a 3.4 MB answer. The user: build
+it. `store.cite_link` gives `#doc/N?chunk=M&find=…`, the words a run of
+four (else six) of the passage as the UI folds text, that no other
+passage of the document holds, so the UI's exact-match path lands on
+it whatever a re-chunk does to the id; a passage the document repeats
+(a running header) gets the id alone. Checked in memory against the
+document's passages up to 3,000 of them, by a phrase query beyond
+(four tries at most), within 100 ms a search (`CITE_BUDGET`); a later
+hit gets the id alone. Only an agent's search pays for it (`brief`),
+and `ask`'s passages carry it too. On six searches of the live store,
+51 of 60 hits got their words, for 23 to 116 ms a search.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each

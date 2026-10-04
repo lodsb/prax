@@ -70,11 +70,12 @@ reads under the working directory only (`PRAX_INGEST_ROOTS` widens it).
   section, heading)` adds to a page; never replace a page a person
   wrote. Write Markdown; cite `doc:<id>` in the text; a `part_of`
   names the project page. Link a document as `[title](#doc/<id>)`, and
-  a passage of it with a few of its words as well:
-  `[title](#doc/<id>?chunk=<chunk_id>&find=spectral+flux+onset)`
-  (words joined by `+`, no brackets). A chunk id is not stable: a re-sync
-  can give it to other text, and the words are what still finds the
-  passage then.
+  a passage of it with the hit's `cite` as it comes:
+  `[title](#doc/<id>?chunk=<chunk_id>&find=spectral+flux+onset)`. The
+  door chose those words because no other passage of the document holds
+  them; a chunk id is not stable (a re-sync can give it to other text),
+  and the words are what still finds the passage then. A passage with no
+  such words (a running header) has the id alone.
 - A fact the library should know as a fact: `link(src, src_type, rel,
   dst, dst_type, source_doc)` against the ontology's types and
   relations, with the document it comes from. Only what a source

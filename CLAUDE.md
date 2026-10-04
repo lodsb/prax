@@ -100,7 +100,9 @@ revisit threshold, under "Decision thresholds" below.
    `PRAX_TOKEN`). It imports no store module, opens no database and
    contains no business logic. The door's handlers are the contract.
 6. **Agent-shaped endpoints.** *(measured)* `search` returns compact snippets and
-   ids, never full documents; asked with `regions`, it opens with the
+   ids, never full documents (for an agent, each passage hit also carries
+   `cite`, a link with words of it no other passage holds: some 45 bytes on
+   a hit of about 300, measured 2026-10-04); asked with `regions`, it opens with the
    region of the library its hits live in, a few dozen bytes
    (`store.regions_of`). `get` fetches one record fully but accepts
    an offset and a character limit. `traverse` expands 1–2 hops, and the

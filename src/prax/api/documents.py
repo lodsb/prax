@@ -69,7 +69,8 @@ def search(
     ``domains`` (None: every module). Each hit says when its document was
     published; ``published_since``/``published_before`` keep a span. A
     document no longer current carries ``stale`` and ranks lower, unless
-    ``include_stale``."""
+    ``include_stale``. ``brief`` (an agent) adds each passage's ``cite``,
+    a link that survives a re-chunk."""
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
     con = _con(request)
@@ -87,6 +88,7 @@ def search(
             published_since=published_since,
             published_before=published_before,
             include_stale=include_stale,
+            cite=brief,  # the agent's shape carries the passage's link
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
