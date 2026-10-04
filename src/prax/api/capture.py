@@ -29,6 +29,19 @@ class IngestText(BaseModel):
     source_url: str | None = None
     meta: dict[str, Any] | None = None
     domains: list[str] | None = None
+    sensitivity: str | None = None  # "personal": behind the wall from the start
+    by: str = "human"  # who says so: "agent" from the MCP proxy
+
+
+def _written_personal(con: Any, doc_id: int, sensitivity: str | None, by: str) -> None:
+    """A write that says its document is personal (a colleague's notes):
+    behind the wall at once (stage U). Only ``personal`` is taken: a
+    writer may hide what it writes, never open what is hidden."""
+    if sensitivity is None:
+        return
+    if sensitivity != "personal":
+        raise HTTPException(400, "sensitivity on a write is personal, or none")
+    store.set_sensitivity(con, doc_id, "personal", by=by)
 
 
 @router.post("/ingest")
@@ -46,6 +59,7 @@ def ingest(req: IngestText, request: Request) -> dict[str, Any]:
                 store.add_domain(_con(request), result["doc_id"], d)
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
+    _written_personal(_con(request), int(result["doc_id"]), req.sensitivity, req.by)
     return {**result, "url": ui_url(request, int(result["doc_id"]))}
 
 
@@ -64,6 +78,7 @@ class ProjectSync(BaseModel):
     include: list[str] | None = None
     exclude: list[str] | None = None
     auto_sync: bool | None = None
+    sensitivity: str | None = None  # "personal": every synced note of the project
     dry_run: bool = True
 
 

@@ -41,6 +41,7 @@ from prax.text import paths
 PLAN_SHOWN = 400  # plan rows returned; the counts are always whole
 _HEADING = re.compile(r"^#{1,3}\s+(.+?)\s*$", re.MULTILINE)
 SETTINGS = ("domains", "tags", "include", "exclude")
+SENSITIVITIES = (None, "personal")  # what a project's notes may be marked on sync
 
 
 def doc_key(name: str, remote: str | None, repo_path: str, rel: str) -> str:
@@ -101,6 +102,16 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
         k: _words(req[k]) if req.get(k) is not None else _words(stored.get(k))
         for k in SETTINGS
     }
+    sensitivity = (
+        req.get("sensitivity")
+        if req.get("sensitivity") is not None
+        else stored.get("sensitivity")
+    )
+    if sensitivity not in SENSITIVITIES:
+        raise ValueError("a project's sensitivity is personal, or none")
+    settings_out: dict[str, Any] = {**settings}
+    if sensitivity:
+        settings_out["sensitivity"] = sensitivity
     if not dry_run:
         from prax.graph import ontology
 
@@ -172,7 +183,7 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
         ]
         if missing:
             raise ValueError(f"no text sent for {', '.join(missing[:5])}")
-        _apply(con, name, remote, prefix, settings, rows)
+        _apply(con, name, remote, prefix, settings, rows, sensitivity)
     counts: dict[str, int] = {}
     for r in rows:
         counts[r["action"]] = counts.get(r["action"], 0) + 1
@@ -185,7 +196,7 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
         "remote": remote,
         "prefix": prefix,
         "dry_run": dry_run,
-        "settings": settings,
+        "settings": settings_out,
         "counts": counts,
         "plan": [
             {
@@ -208,7 +219,7 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
             name,
             remote=remote,
             prefix=prefix,
-            settings=settings,
+            settings=settings_out,
             auto_sync=req.get("auto_sync"),
         )
         texts = _texts(con, name)
@@ -388,6 +399,7 @@ def _apply(
     prefix: str,
     settings: dict[str, list[str]],
     rows: list[dict[str, Any]],
+    sensitivity: str | None = None,
 ) -> None:
     slug = f"project-{store.slugify(name)}"
     if store.get_page(con, slug) is None:
@@ -459,4 +471,7 @@ def _apply(
                 duplicate_of=doc_id,
             )
         r["doc_id"] = doc_id
+        if sensitivity:
+            # a colleague's notes: behind the wall from the first sync on
+            store.set_sensitivity(con, doc_id, sensitivity, by="sync")
         store.add_to_project(con, slug, doc_id, promote=False)

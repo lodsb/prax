@@ -13,6 +13,7 @@ from fastapi.responses import (
     PlainTextResponse,
     Response,
 )
+from pydantic import BaseModel
 
 from prax import (
     store,
@@ -242,6 +243,52 @@ def chunks(doc_id: int, request: Request) -> list[dict[str, Any]]:
     except KeyError as exc:
         raise HTTPException(404, "no such document") from exc
     return store.list_chunks(_con(request), doc_id)
+
+
+@router.get("/doc/{doc_id}/references")
+def doc_references(doc_id: int, request: Request) -> dict[str, Any]:
+    """A paper's reference list, an entry each: what it names, the library
+    document it cites (``in_library``) or ``links`` to read it elsewhere
+    (``store.references_of``)."""
+    con = _con(request)
+    if store.get_document(con, doc_id, max_chars=0) is None:
+        raise HTTPException(404, "no such document")
+    refs = store.references_of(con, doc_id)
+    return {
+        "doc_id": doc_id,
+        "entries": len(refs),
+        "in_library": sum(1 for r in refs if r.get("in_library")),
+        "references": refs,
+    }
+
+
+class MissingReq(BaseModel):
+    doc_ids: list[int] | None = None
+    tag: str | None = None
+    project: str | None = None
+    page: str | None = None  # the documents a page links
+    limit: int = 30
+
+
+@router.post("/references/missing")
+def references_missing(req: MissingReq, request: Request) -> dict[str, Any]:
+    """What a set of documents cites that the library lacks, ranked by how
+    many of them cite it (``store.cited_but_missing``). The set is
+    ``doc_ids``, a ``tag``, a ``project``'s documents or what a ``page``
+    links; several are joined."""
+    con = _con(request)
+    ids: list[int] = list(req.doc_ids or [])
+    if req.tag or req.project:
+        ids += store.seed_documents(con, project=req.project, tag=req.tag)
+    if req.page:
+        page = store.get_page(con, store.slugify(req.page))
+        if page is None:
+            raise HTTPException(404, f"no page {req.page!r}")
+        ids += store.linked_documents(page["text"])
+    if not ids:
+        raise HTTPException(400, "name the set: doc_ids, a tag, a project or a page")
+    limit = max(1, min(req.limit, 200))
+    return store.cited_but_missing(con, ids, limit=limit)
 
 
 @router.get("/doc/{doc_id}/context")

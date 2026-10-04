@@ -404,6 +404,30 @@ def worker_state() -> dict[str, Any]:
     return {"alive": recent or bool(working), "last_asked": last, "working": working}
 
 
+_COMMIT: dict[str, str | None] = {}
+
+
+def door_commit() -> str | None:
+    """The commit the door runs (the working copy it was started from),
+    read once: what tells a client of a newer prax that its door is older."""
+    if "c" not in _COMMIT:
+        import subprocess
+
+        from prax import config
+
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(config.REPO_ROOT), "rev-parse", "--short", "HEAD"],
+                capture_output=True,
+                check=True,
+                timeout=10,
+            )
+            _COMMIT["c"] = out.stdout.decode().strip() or None
+        except (OSError, subprocess.SubprocessError):
+            _COMMIT["c"] = None
+    return _COMMIT["c"]
+
+
 def status(con: Any, doc_ids: list[int]) -> dict[str, Any]:
     """Where each document is on its way to being read (the first client's
     feedback, 2026-10-03: 24 captures sat for hours, and "no text, nothing
@@ -417,7 +441,9 @@ def status(con: Any, doc_ids: list[int]) -> dict[str, Any]:
     readers ran and found no text: a scan wants a reading, OCR or the
     vision model) or ``failed`` (the last attempt's ``error``). A document
     the caller may not see is not there at all (stage U). ``worker`` says
-    whether one is about."""
+    whether one is about. A document in ``reading`` says ``searchable``
+    when its text is indexed already (a figure reading only adds to it);
+    ``door`` names the door's commit, so a client can tell an older door."""
     from prax import parsers
     from prax.capture import inbox
     from prax.parsers import queue
@@ -440,6 +466,9 @@ def status(con: Any, doc_ids: list[int]) -> dict[str, Any]:
         elif readings:
             row["state"] = "reading"
             row["waits_for"] = [r["extractor"] for r in readings]
+            # the text a reading adds to may be there already: an agent that
+            # read "reading" as "not ready" put off work it could do (O3)
+            row["searchable"] = bool(doc["text_len"])
             for r in readings:
                 if reading_deferred(r["extractor"], int(doc_id), now):
                     role = next(
@@ -473,7 +502,7 @@ def status(con: Any, doc_ids: list[int]) -> dict[str, Any]:
                 k: last[k] for k in ("extractor", "outcome", "at", "error") if k in last
             }
         out.append(row)
-    return {"documents": out, "worker": worker_state()}
+    return {"documents": out, "worker": worker_state(), "door": door_commit()}
 
 
 def _check(step: str, scope: str, limit: int) -> int:

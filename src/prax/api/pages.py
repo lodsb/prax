@@ -31,6 +31,7 @@ class PageReq(BaseModel):
     annotates: list[int] | None = None
     part_of: str | None = None
     force: bool = False
+    sensitivity: str | None = None  # "personal": behind the wall (stage U)
 
 
 class AppendReq(BaseModel):
@@ -100,6 +101,12 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
             part_of=req.part_of,
             force=req.force,
         )
+        if req.sensitivity is not None:
+            if req.sensitivity != "personal":
+                raise ValueError("sensitivity on a write is personal, or none")
+            store.set_sensitivity(
+                con, int(written["doc_id"]), "personal", by=req.author
+            )
         job = _answer_new_blocks(con, written["slug"], req.text)
         written = {**written, "url": ui_url(request, int(written["doc_id"]))}
         return {**written, "job": job} if job is not None else written

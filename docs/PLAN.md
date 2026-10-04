@@ -429,15 +429,31 @@ and pushing what is committed.
       - [x] (2026-10-04: `PUT /doc/{id}/title`, `POST /ingest/urls`, the MCP tools `set_title` and `capture_urls`) `set_title`, and batch capture with a result per item.
 
       *7. Bibliographies and privacy* (the client's #11, #12).
-      - [ ] `references(doc_id)`: the parsed list, each entry in the
+      - [x] (2026-10-04: `store.references_of`, `store.cited_but_missing`, the routes and tools; read from the reference entries, so an extraction's `cites` to a program ("OnsetDetector.LL", the 35B's typing) is not in them; open access is the DOI and arXiv links, a lookup per entry waits) `references(doc_id)`: the parsed list, each entry in the
             library (`doc N`) or with a DOI and an open-access URL.
             `cited_but_missing(set)`: what a set of papers cites that the
             library lacks, ranked by how many cite it. First the
             reference-list detector's scope: `cites` held
             "OnsetDetector.LL" from software help files.
-      - [ ] `sensitivity: personal` accepted by `ingest`, `write_page` and
+      - [x] (2026-10-04: on `POST /ingest`, `PUT /page`, and the sync, kept with the project's settings; only `personal`, never a way to open) `sensitivity: personal` accepted by `ingest`, `write_page` and
             the sync, behind the wall (stage U), so a colleague's notes
             can live in prax.
+
+      *8. The client's own page* (doc 13470, written 2026-10-04 after it
+      checked the AL changes from its side; O6 and O7 were done that day).
+      - [x] (2026-10-04) O1: `sync_project` and `ingest_file` read within the git
+            repository of the working directory by default, so a sibling
+            subproject is in reach.
+      - [x] (2026-10-04) O3: `status` says `searchable` for a document in
+            `reading` whose text is indexed already.
+      - [x] (2026-10-04) O4: the `request_reading` tool (OCR, the vision
+            model, marker) over the existing route.
+      - [x] (2026-10-04) O5: `health` tells a refused token (401) from a route
+            not allowed (403, a door older than the client), and names the
+            door's commit beside the client's.
+      - [ ] O2: a ready passage link on each search hit, with `find` words
+            the door chooses. Against invariant 6 (below, "Not now"); the
+            user's call.
 
       *Not now.* Search hits with a `url` each (the client's #3, at chunk
       level too): about 40 bytes a hit against invariant 6. One `ui` base

@@ -40,6 +40,9 @@ EXPECTED_TOOLS = {
     "update_section",
     "capture_urls",
     "set_title",
+    "references",
+    "cited_but_missing",
+    "request_reading",
 }
 
 
@@ -344,3 +347,46 @@ def test_status_and_health_through_the_proxy(proxied: TestClient) -> None:
     mcp_server._door = Away("door.example:8000")
     away = mcp_server.health()
     assert away["reachable"] is False and "refused" in away["error"]
+
+
+def test_the_roots_default_to_the_repository(monkeypatch: pytest.MonkeyPatch) -> None:
+    """From a subfolder, a sibling subproject is in reach: the roots are the
+    git repository of the working directory (the first client, O1)."""
+    repo = Path(__file__).resolve().parents[1]
+    monkeypatch.delenv("PRAX_INGEST_ROOTS", raising=False)
+    monkeypatch.chdir(repo / "tests")
+    assert mcp_server.ingest_roots() == [repo]
+
+
+def test_health_tells_a_refused_token_from_a_route_not_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from prax.client import DoorError
+
+    said = call("health")
+    assert (
+        said["token"] == "accepted"
+        and "door_commit" in said
+        and "client_commit" in said
+    )
+    for status, token in ((401, "refused"), (403, "accepted")):
+
+        def answer(path: str, params: Any = None, status: int = status) -> Any:
+            raise DoorError(status, "no")
+
+        monkeypatch.setattr(mcp_server.door(), "get_json", answer)
+        got = call("health")
+        assert got["token"] == token
+        assert ("older than the client" in got.get("error", "")) == (status == 403)
+
+
+def test_a_reading_is_asked_and_the_text_is_searchable_meanwhile() -> None:
+    """``request_reading`` asks a reading by name (O4); while it waits, a
+    document that has its text says ``searchable`` (O3)."""
+    r = call("ingest", text="a scanned thesis, read badly " * 20, title="thesis")
+    asked = call("request_reading", doc_id=r["doc_id"], extractor="formulas")
+    assert asked["state"] == "requested"
+    bad = call("request_reading", doc_id=r["doc_id"], extractor="nonesuch")
+    assert "extractor must be one of" in bad["error"]
+    row = call("status", doc_ids=[r["doc_id"]])["documents"][0]
+    assert row["state"] == "reading" and row["searchable"] is True

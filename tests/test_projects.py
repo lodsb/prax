@@ -287,3 +287,47 @@ def test_what_a_note_says_of_itself_is_its_status_and_an_edge(
     assert out2["status"]["ended"] == 1 and out2["status"]["stale"] == 0
     v1b = next(p["doc_id"] for p in out2["plan"] if p["path"] == "docs/plan-v1.md")
     assert "status" not in store.get_meta(con, v1b)
+
+
+def test_a_write_may_say_personal(client: TestClient) -> None:
+    """A colleague's notes can live in prax behind the wall (AL step 7):
+    ingest, write_page and the sync take ``sensitivity: personal``; any
+    other value on a write is refused."""
+    con = client.app.state.con
+    r = client.post(
+        "/ingest",
+        json={
+            "text": "a review of a colleague's code " * 10,
+            "sensitivity": "personal",
+        },
+    )
+    assert r.status_code == 200
+    assert store.get_document(con, r.json()["doc_id"])["sensitivity"] == "personal"
+    bad = client.post("/ingest", json={"text": "x " * 50, "sensitivity": "open"})
+    assert bad.status_code == 400
+    page = client.put(
+        "/page/review-notes",
+        json={
+            "text": "# Review\n\nNotes.\n",
+            "author": "agent",
+            "sensitivity": "personal",
+        },
+    )
+    assert page.status_code == 200
+    assert store.get_document(con, page.json()["doc_id"])["sensitivity"] == "personal"
+    out = _sync(
+        client,
+        [_file("notes.md", NOTES)],
+        name="colleague",
+        sensitivity="personal",
+        dry_run=False,
+    )
+    assert out["settings"]["sensitivity"] == "personal"
+    doc = out["plan"][0]["doc_id"]
+    assert store.get_document(con, doc)["sensitivity"] == "personal"
+    # kept with the manifest: the next sync needs not say it again
+    out2 = _sync(
+        client, [_file("notes.md", NOTES), _file("b.md", DESIGN)], dry_run=False
+    )
+    added = next(p["doc_id"] for p in out2["plan"] if p["path"] == "b.md")
+    assert store.get_document(con, added)["sensitivity"] == "personal"

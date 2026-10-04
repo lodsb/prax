@@ -472,6 +472,7 @@ def sync(door: Door, a: Any) -> int:
             "include": include or None,
             "exclude": exclude or None,
             "auto_sync": a.auto,
+            "sensitivity": "personal" if a.personal else None,
             "dry_run": not apply,
         }
         res = door.post_json("/projects/sync", body)

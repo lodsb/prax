@@ -975,3 +975,164 @@ def documents_of_key(con: sqlite3.Connection, source: str, key: str) -> list[int
         (source, key),
     )
     return [int(r[0]) for r in rows]
+
+
+# ---------------------------------------------------------- bibliographies
+#
+# A paper's own reference list, as the reference chunks hold it (an entry
+# each, parsed by ``prax.text.references``, matched to the library by the
+# ``references`` pass of ``prax maintain`` as ``data.cited``). Read from
+# the entries and never from ``cites`` edges: an extraction's ``cites``
+# can name a program a paper mentions ("OnsetDetector.LL"), an entry
+# cannot (AL step 7).
+
+MISSING_LIMIT = 30  # works a cited-but-missing answer names
+MISSING_SET = 500  # documents one question may span
+
+
+def _entry_links(data: dict[str, Any]) -> dict[str, str]:
+    """Where an entry can be read: its DOI (``doi.org``, which resolves to
+    the publisher; open access or not) and its arXiv id (open access)."""
+    out: dict[str, str] = {}
+    if data.get("doi"):
+        out["doi"] = f"https://doi.org/{data['doi']}"
+    if data.get("arxiv"):
+        out["arxiv"] = f"https://arxiv.org/abs/{data['arxiv']}"
+    return out
+
+
+@_guards("doc", list)
+@_reading
+def references_of(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """A document's reference list in order: each entry's ``n`` (its
+    number, when the list numbers them), ``title``, ``authors``, ``year``,
+    ``doi`` and ``arxiv`` as printed, ``in_library`` (the library document
+    it cites, with the score and how it was matched) or ``links`` to read
+    it elsewhere, and the entry's ``text`` (cut at 300 characters)."""
+    hidden = hidden_documents(con)
+    out: list[dict[str, Any]] = []
+    for r in con.execute(
+        "SELECT id, text, data FROM chunks WHERE doc_id = ? AND kind = 'reference'"
+        " ORDER BY seq",
+        (doc_id,),
+    ):
+        data = json.loads(r["data"]) if r["data"] else {}
+        cited = data.get("cited") or None
+        if cited and int(cited.get("doc_id") or 0) in hidden:
+            cited = None
+        entry: dict[str, Any] = {
+            "n": data.get("number"),
+            "chunk_id": int(r["id"]),
+            "title": data.get("title"),
+            "authors": data.get("surnames") or [],
+            "year": data.get("year"),
+            "doi": data.get("doi"),
+            "arxiv": data.get("arxiv"),
+            "in_library": cited,
+            "text": str(r["text"] or "")[:300],
+        }
+        links = _entry_links(data)
+        if links and not cited:
+            entry["links"] = links
+        out.append({k: v for k, v in entry.items() if v not in (None, [], {})})
+    return out
+
+
+def _work_key(data: dict[str, Any]) -> str | None:
+    """One cited work however its entries write it: its DOI, else its arXiv
+    id, else its title folded (a short or wordless title is no key)."""
+    if data.get("doi"):
+        return "doi:" + str(data["doi"]).lower().rstrip(".")
+    if data.get("arxiv"):
+        return "arxiv:" + str(data["arxiv"]).split("v")[0]
+    words = _TOKEN.findall(str(data.get("title") or "").lower())
+    if len(words) < 3 or sum(len(w) for w in words) < 15:
+        return None
+    return "title:" + " ".join(words)
+
+
+HELD_MIN_WORDS = 4  # a title one of the library's extends counts as held from this
+
+
+def _title_held(title: str, held: set[str], held_sorted: list[str]) -> bool:
+    """Whether the library holds a work of this folded title: the same
+    title, one that extends it ("… onset detection (superflux)"), or one
+    it extends, by whole words and at least ``HELD_MIN_WORDS`` of them.
+    What the matching pass will link on its next run, not counted as
+    missing meanwhile."""
+    import bisect
+
+    if title in held:
+        return True
+    words = title.split()
+    if len(words) < HELD_MIN_WORDS:
+        return False
+    at = bisect.bisect_left(held_sorted, title + " ")
+    if at < len(held_sorted) and held_sorted[at].startswith(title + " "):
+        return True
+    return any(" ".join(words[:n]) in held for n in range(HELD_MIN_WORDS, len(words)))
+
+
+@_reading
+def cited_but_missing(
+    con: sqlite3.Connection, doc_ids: list[int], *, limit: int = MISSING_LIMIT
+) -> dict[str, Any]:
+    """What a set of documents cites that the library does not hold: the
+    unmatched entries of their reference lists, one work per DOI, arXiv id
+    or folded title, ranked by how many of the documents cite it. Each
+    work names its ``title``, ``authors``, ``year``, ``doi``/``arxiv`` and
+    ``links``, and ``cited_by``. ``looked_at`` is how many of the documents
+    have a reference list; a title the library holds exactly counts as
+    held (the matching pass may not have run since it arrived)."""
+    hidden = hidden_documents(con)
+    ids = [int(i) for i in dict.fromkeys(doc_ids) if int(i) not in hidden][:MISSING_SET]
+    if not ids:
+        return {"looked_at": 0, "documents": 0, "missing": []}
+    held = {
+        " ".join(_TOKEN.findall(str(r[0]).lower()))
+        for r in con.execute("SELECT title FROM documents WHERE title IS NOT NULL")
+    }
+    held_sorted = sorted(held)
+    marks = ",".join("?" * len(ids))
+    works: dict[str, dict[str, Any]] = {}
+    with_lists: set[int] = set()
+    for r in con.execute(
+        "SELECT doc_id, data FROM chunks WHERE kind = 'reference'"
+        f" AND doc_id IN ({marks})",
+        ids,
+    ):
+        with_lists.add(int(r["doc_id"]))
+        data = json.loads(r["data"]) if r["data"] else {}
+        if data.get("cited"):
+            continue
+        key = _work_key(data)
+        if key is None:
+            continue
+        if key.startswith("title:") and _title_held(key[6:], held, held_sorted):
+            continue
+        work = works.setdefault(
+            key,
+            {
+                "title": data.get("title"),
+                "authors": data.get("surnames") or [],
+                "year": data.get("year"),
+                "doi": data.get("doi"),
+                "arxiv": data.get("arxiv"),
+                "cited_by": [],
+            },
+        )
+        if int(r["doc_id"]) not in work["cited_by"]:
+            work["cited_by"].append(int(r["doc_id"]))
+        for k in ("year", "doi", "arxiv"):
+            work[k] = work[k] or data.get(k)
+    ranked = sorted(
+        works.values(), key=lambda w: (-len(w["cited_by"]), str(w["title"]))
+    )
+    missing = []
+    for w in ranked[:limit]:
+        links = _entry_links(w)
+        item = {**w, "count": len(w["cited_by"])}
+        if links:
+            item["links"] = links
+        missing.append({k: v for k, v in item.items() if v not in (None, [], {})})
+    return {"looked_at": len(with_lists), "documents": len(ids), "missing": missing}

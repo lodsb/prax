@@ -19,7 +19,7 @@ from typing import Any
 import httpx
 from mcp.server.mcpserver import MCPServer
 
-from prax.client import DEFAULT_DOOR, Door, DoorError, project_files
+from prax.client import DEFAULT_DOOR, Door, DoorError, _git, project_files
 
 mcp = MCPServer(
     "prax",
@@ -437,15 +437,54 @@ def health() -> dict[str, Any]:
     whether it is reachable, whether the token is accepted, and whether a
     worker is about. The first thing to call when the other tools fail."""
     d = door()
-    out: dict[str, Any] = {"door": d.base_url}
+    out: dict[str, Any] = {"door": d.base_url, "client_commit": client_commit()}
     try:  # one call: an answer, a refusal or no answer say all three
-        worker = d.get_json("/work/status").get("worker")
+        got = d.get_json("/work/status")
     except DoorError as exc:
-        refused = exc.status in (401, 403)
-        return {**out, "reachable": True, "token": "refused" if refused else str(exc)}
+        if exc.status == 401:
+            return {**out, "reachable": True, "token": "refused"}
+        if exc.status == 403:
+            # the token is good and the route is not open to it: most often
+            # a door older than this client, before the route was allowed
+            return {
+                **out,
+                "reachable": True,
+                "token": "accepted",
+                "error": "this route is not allowed for the token: is the door older"
+                " than the client?",
+            }
+        return {**out, "reachable": True, "token": str(exc)}
     except (OSError, httpx.HTTPError) as exc:
         return {**out, "reachable": False, "error": str(exc)}
-    return {**out, "reachable": True, "token": "accepted", "worker": worker}
+    return {
+        **out,
+        "reachable": True,
+        "token": "accepted",
+        "worker": got.get("worker"),
+        "door_commit": got.get("door"),
+    }
+
+
+def client_commit() -> str | None:
+    """The commit of the working copy this server runs from, or None: put
+    beside the door's, it says when the two are not the same prax."""
+    out = _git(Path(__file__).resolve().parent, "rev-parse", "--short", "HEAD")
+    return out.strip() or None if out else None
+
+
+@mcp.tool()
+def request_reading(
+    doc_id: int, extractor: str, mode: str | None = None
+) -> dict[str, Any]:
+    """Ask for a reading of a document the readers found nothing in, or
+    read badly: ``pymupdf4llm-ocr`` (OCR over a scan), ``vision-pages``
+    (the vision model over scanned pages, ``mode`` scans or all),
+    ``marker`` (maths as LaTeX), ``docling``, ``vision`` (an image). A
+    worker takes it; ``status([doc_id])`` says when it is done."""
+    body: dict[str, Any] = {"extractor": extractor, "by": "agent"}
+    if mode:
+        body["mode"] = mode
+    return _answer(lambda: door().post_json(f"/doc/{doc_id}/reading", body))
 
 
 @mcp.tool()
@@ -521,6 +560,7 @@ def write_page(
     annotates: list[int] | None = None,
     part_of: str | None = None,
     note: str | None = None,
+    sensitivity: str | None = None,
 ) -> dict[str, Any]:
     """Create a page (kind addendum, project or topic) or replace its text
     as the agent. Refused when a person wrote the latest revision: use
@@ -532,7 +572,8 @@ def write_page(
     id=q1 "the question" -->`` on one line and ``<!-- /prax:ask id=q1
     -->`` on the next: the door answers it between the markers and asks
     again when the library learns something (``get_page`` lists them as
-    ``blocks``)."""
+    ``blocks``). ``sensitivity="personal"`` keeps the page behind the wall
+    (notes on a colleague's work)."""
     return _answer(
         lambda: door().put_json(
             f"/page/{slug}",
@@ -544,6 +585,7 @@ def write_page(
                 "note": note,
                 "annotates": annotates,
                 "part_of": part_of,
+                "sensitivity": sensitivity,
             },
         )
     )
@@ -582,14 +624,19 @@ def update_section(
 
 @mcp.tool()
 def ingest(
-    text: str, title: str | None = None, source_url: str | None = None
+    text: str,
+    title: str | None = None,
+    source_url: str | None = None,
+    sensitivity: str | None = None,
 ) -> dict[str, Any]:
-    """Ingest raw text as a new document (deduped by content hash)."""
-    return _answer(
-        lambda: door().post_json(
-            "/ingest", {"text": text, "title": title, "source_url": source_url}
-        )
-    )
+    """Ingest raw text as a new document (deduped by content hash).
+    ``sensitivity="personal"`` puts it behind the wall from the start (a
+    colleague's notes, a review): only the owner and tokens allowed
+    personal documents see it."""
+    body = {"text": text, "title": title, "source_url": source_url, "by": "agent"}
+    if sensitivity:
+        body["sensitivity"] = sensitivity
+    return _answer(lambda: door().post_json("/ingest", body))
 
 
 @mcp.tool()
@@ -624,6 +671,39 @@ def capture_urls(urls: list[str], domains: list[str] | None = None) -> dict[str,
 
 
 @mcp.tool()
+def references(doc_id: int) -> dict[str, Any]:
+    """A paper's reference list, an entry each in order: its number,
+    title, authors, year, DOI or arXiv id as printed, and either
+    ``in_library`` (the library document it cites, ``doc_id``) or ``links``
+    to read it elsewhere (doi.org, arxiv.org)."""
+    return _answer(lambda: door().get_json(f"/doc/{doc_id}/references"))
+
+
+@mcp.tool()
+def cited_but_missing(
+    doc_ids: list[int] | None = None,
+    tag: str | None = None,
+    project: str | None = None,
+    page: str | None = None,
+    limit: int = 30,
+) -> dict[str, Any]:
+    """What a set of papers cites that the library does not hold, ranked
+    by how many of them cite it: each work's title, authors, year, DOI or
+    arXiv id, ``links`` and ``cited_by``. Name the set by ``doc_ids``, a
+    ``tag``, a ``project`` or a ``page`` (the documents it links), e.g.
+    ``cited_but_missing(page="onset-detection-landscape")``; the works
+    are candidates for ``capture_url``."""
+    body = {
+        "doc_ids": doc_ids,
+        "tag": tag,
+        "project": project,
+        "page": page,
+        "limit": limit,
+    }
+    return _answer(lambda: door().post_json("/references/missing", body))
+
+
+@mcp.tool()
 def set_title(doc_id: int, title: str) -> dict[str, Any]:
     """Give a document its title (a file name or an arXiv id where a
     title belongs). The old one is kept in its history."""
@@ -633,13 +713,21 @@ def set_title(doc_id: int, title: str) -> dict[str, Any]:
 
 
 def ingest_roots() -> list[Path]:
-    """Where ``ingest_file`` may read from: ``PRAX_INGEST_ROOTS`` (paths
-    separated by the OS path separator), else the working directory. The
+    """Where ``ingest_file`` and ``sync_project`` may read from:
+    ``PRAX_INGEST_ROOTS`` (paths separated by the OS path separator), else
+    the git repository of the working directory, else the directory. The
     model names the path, on a page's say-so as much as the user's, so a
     key file or a browser profile outside the project stays out."""
     raw = os.environ.get("PRAX_INGEST_ROOTS", "").strip()
-    parts = [x for x in raw.split(os.pathsep) if x.strip()] if raw else ["."]
-    return [Path(x).expanduser().resolve() for x in parts]
+    if raw:
+        parts = [x for x in raw.split(os.pathsep) if x.strip()]
+        return [Path(x).expanduser().resolve() for x in parts]
+    # the repository the session works in, not only its folder: syncing a
+    # neighbouring subproject is the common case in a repository of many
+    # (the first client, O1); outside git, the working directory
+    here = Path.cwd()
+    top = _git(here, "rev-parse", "--show-toplevel")
+    return [Path(top.strip()).resolve()] if top and top.strip() else [here]
 
 
 @mcp.tool()
@@ -682,6 +770,7 @@ def sync_project(
     dry_run: bool = True,
     tracked_only: bool = True,
     auto_sync: bool | None = None,
+    sensitivity: str | None = None,
 ) -> dict[str, Any]:
     """Send a project's written knowledge (README, docs, notes: .md, .rst,
     .txt, .adoc) from a working copy on this machine to the library.
@@ -699,7 +788,9 @@ def sync_project(
     settings (``name``, ``domains``, ``tags``, ``include``, ``exclude``) are
     kept in prax after the first sync and need not be sent again;
     ``auto_sync=true`` lets the plugin's session-end hook sync it on its
-    own. Its page is ``project-<name>``. Needs the administrator token.
+    own. Its page is ``project-<name>``. ``sensitivity="personal"`` keeps
+    every synced note behind the wall (a colleague's project), and is kept
+    with the settings. Needs the administrator token.
     """
     base = Path(root).expanduser().resolve()
     roots = ingest_roots()
@@ -726,6 +817,7 @@ def sync_project(
         "include": include,
         "exclude": exclude,
         "auto_sync": auto_sync,
+        "sensitivity": sensitivity,
         "dry_run": dry_run,
     }
     return _answer(lambda: door().post_json("/projects/sync", body))

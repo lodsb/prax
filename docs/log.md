@@ -4014,6 +4014,39 @@ turns it off. The extension's test bed passes in Chrome but for two
 checks of the keyboard send that failed the same way before this change;
 Firefox could not be run with Waterfox open.
 
+## 2026-10-04, the afternoon: bibliographies, privacy on write, and the client's page (AL steps 7 and 8)
+
+**`references(doc_id)` and `cited_but_missing(set)`** (`store.references_of`,
+`store.cited_but_missing`). Both read the reference entries a paper's
+list was cut into, never `cites` edges: the "OnsetDetector.LL" the plan
+noted came from the 35B's extraction, which typed madmom's program, named
+in onset papers, as a cited document; an entry cannot be that. A work is
+one DOI, else one arXiv id, else one folded title, and the missing are
+ranked by how many papers of the set cite them. A title the library holds
+exactly, or one it extends or that extends it by whole words (at least
+four), counts as held: "Maximum filter vibrato suppression for onset
+detection" is the library's "… (SuperFlux)" before the matching pass
+links it. On the client's onset page (44 linked papers, 36 with a list)
+the top of the list is what the field cites: Bello 2004 and Böck 2012,
+seven papers each, the ENST and MDB drum sets. Open access is the DOI and
+arXiv links for now; a lookup per entry (Unpaywall, OpenAlex) is a
+network call per work and waits.
+
+**`sensitivity: personal` on write.** `POST /ingest`, `PUT /page` and the
+project sync take it (kept with the project's settings), so a colleague's
+notes or a code review can live in prax behind the wall. Only `personal`:
+a writer may hide what it writes, never open what is hidden.
+
+**The client's page** (doc 13470, its check of the AL changes from its
+side; its O6 and O7 were done the same day): `sync_project` and
+`ingest_file` read within the git repository of the working directory
+(O1); `status` says `searchable` when a document waiting for figures has
+its text (O3); `request_reading` asks OCR, the vision model or marker by
+name (O4); `health` tells a refused token (401) from a route not allowed
+(403, most often a door older than the client) and names both commits
+(O5). O2, a ready passage link on every hit, is against invariant 6 and
+waits for the user.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each

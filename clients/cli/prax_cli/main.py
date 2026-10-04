@@ -931,6 +931,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="it does not",
     )
     s.add_argument(
+        "--personal",
+        action="store_true",
+        help="every synced note behind the wall (a colleague's project)",
+    )
+    s.add_argument(
         "--if-auto",
         action="store_true",
         help="the hook's: sync only a project whose manifest says auto",
