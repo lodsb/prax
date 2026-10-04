@@ -258,6 +258,39 @@ def why(edge_id: int) -> dict[str, Any]:
 
 
 @mcp.tool()
+def changes(
+    since: str,
+    until: str | None = None,
+    world: bool = False,
+    entity: str | None = None,
+    rel: str | None = None,
+    domain: str | None = None,
+    limit: int = 20,
+) -> dict[str, Any]:
+    """What changed in a period (``since``/``until``: ``2026-09``, a day or
+    a UTC moment; no ``until`` is now). By default what the library learned
+    or stopped holding then (``added``/``ended``: when prax wrote or ended
+    each fact; a re-reading of a fact already held is left out). With
+    ``world``, what began or ended in the world then, as
+    the sources state (``began``/``ended``). Counts by relation and the
+    newest facts of each side, each with its document; ``entity`` keeps one
+    thing's facts, ``rel`` one relation, ``domain`` one module's documents.
+    ``traverse(as_of=)`` walks what was held at one moment."""
+    params: dict[str, Any] = {"since": since, "limit": limit}
+    for key, value in (
+        ("until", until),
+        ("entity", entity),
+        ("rel", rel),
+        ("domain", domain),
+    ):
+        if value:
+            params[key] = value
+    if world:
+        params["world"] = "true"
+    return _answer(lambda: door().get_json("/graph/changes", params=params))
+
+
+@mcp.tool()
 def ask(
     question: str,
     limit: int = 8,

@@ -96,6 +96,11 @@ def _library(con: sqlite3.Connection, client: TestClient) -> dict[str, Any]:
     }
 
 
+def _says_text(value: Any, *words: str) -> bool:
+    text = json.dumps(value)
+    return any(w in text for w in words)
+
+
 def _says(response: Any, *words: str) -> bool:
     text = json.dumps(response.json()) if response.content else ""
     return any(w in text for w in words)
@@ -109,6 +114,7 @@ WALKED = (
     ("GET", "/chunk/1"),
     ("GET", "/traverse"),
     ("GET", "/edge/1/why"),
+    ("GET", "/graph/changes"),
     ("GET", "/documents"),
     ("GET", "/doc/1/context"),
     ("GET", "/page/x"),
@@ -169,6 +175,10 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
         "/traverse", params={"entity": "Landlord Smith"}, headers=me
     ).json()
     assert walk["edges"] == [] and "senses" not in walk
+    # what changed: the statement's facts are neither listed nor counted
+    changed = client.get("/graph/changes", params={"since": "2000"}, headers=me).json()
+    assert not _says_text(changed, "Landlord Smith")
+    assert changed["added"]["count"] == len(changed["added"]["facts"])
     walk = client.get(
         "/traverse", params={"entity": "wavelet transform"}, headers=me
     ).json()

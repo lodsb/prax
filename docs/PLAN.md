@@ -384,7 +384,7 @@ and pushing what is committed.
             are, and invariant 8's wording in CLAUDE.md corrected with
             it (found 2026-10-03, talking about prax as an agent's
             memory).
-      - [ ] "As of a date" and "what changed in a period" as door
+      - [x] (2026-10-04: `traverse(as_of=)` was there; `store.changes`, `GET /graph/changes` and the `changes` tool, record time and world time, re-readings left out; migration 42's indexes) "As of a date" and "what changed in a period" as door
             routes and MCP tools, once the world's time is on the facts
             (Utopia exposes both; the research note, section 8).
       - [ ] **As Utopia does it** (its code, the research note, section

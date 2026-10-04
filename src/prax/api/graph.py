@@ -113,6 +113,41 @@ def traverse(
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.get("/graph/changes")
+def changes(
+    since: str,
+    request: Request,
+    until: str | None = None,
+    world: bool = False,
+    entity: str | None = None,
+    rel: str | None = None,
+    domain: str | None = None,
+    derived: bool = False,
+    rereadings: bool = False,
+    limit: int = store.CHANGES_SHOWN,
+) -> dict[str, Any]:
+    """What changed in a period (``store.changes``): on record time the
+    facts prax wrote and ended in it, on world time (``world``) the facts
+    that began and ended in it as their sources state; counts by relation
+    and the newest facts of each side. Re-readings are left out unless
+    ``rereadings``."""
+    try:
+        return store.changes(
+            _con(request),
+            since,
+            until or None,
+            world=world,
+            entity=entity or None,
+            rel=rel or None,
+            domain=domain or None,
+            derived=derived,
+            rereadings=rereadings,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @router.get("/edge/{edge_id}/why")
 def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
     """What a derived edge follows from: its premises, in the order of the

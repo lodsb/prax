@@ -4241,6 +4241,38 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
+## 2026-10-04, night: what changed in a period (AL step 5)
+
+"As of a day" was there (`traverse(as_of=)`); "what changed between two
+days" was not. `store.changes` answers it on either time an edge
+carries, through `GET /graph/changes` and the MCP tool `changes`. On record
+time (the default) it lists the facts prax came to hold in the period
+(`added`) and those it stopped holding (`ended`); with `world=true`, the
+facts that began and ended in the world then, as their sources state
+(`began`, `ended`). A world date meets a period when their spans meet,
+each read at the coarser precision: "2026" meets September 2026, and so
+does "2026-09-14". Each side carries its count by relation and the
+newest 20 facts with `left_out`; `entity` (its name or a label, with
+what was merged into it), `rel` and `domain` narrow it. The rule pass's
+derivations are left out unless `derived`, since it re-derives nightly.
+A hidden document counts as absent, and `test_wall` checks it.
+
+The first version listed re-readings as news. On a copy of the library,
+the 4th of October had 2,684 facts added and 939 ended, of which 1,142
+and 936 were `cites`: the references pass matching the same citations
+again. A fact added that was already held when the period began, or
+ended while another edge still states it, is now left out unless
+`rereadings=true`. The same day then reads 1,648 added and 34 ended:
+the day's real news was the schema.org facts and new documents.
+
+The record-time period is `changed_between` in `store.graph.edges`,
+beside `held_at`, so `test_a_moment_in_record_time_is_built_in_one_place`
+still holds every record-time condition to one module. Migration 42
+indexes `valid_from`, `valid_to`, `world_from` and `world_to`. Before
+it, a day took 1.2 s and a year 7.2 s, scanning every edge; after it,
+0.37 s and 2.2 s with the re-reading test. An entity's changes take
+14 ms. An answer is 2 to 11 KB.
+
 ## 2026-10-03: a fact's witnesses, in the first hop's cap
 
 A fact several documents state is one edge per document. In the first

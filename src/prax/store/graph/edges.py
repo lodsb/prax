@@ -312,6 +312,24 @@ def held_at(alias: str, as_of: str | None = None) -> tuple[str, list[str]]:
     return held, [moment, moment]
 
 
+def changed_between(
+    alias: str, side: str, begin: str, end: str
+) -> tuple[str, list[str], str]:
+    """The SQL that keeps the edges prax wrote (``added``) or ended
+    (``ended``) between two moments of record time, its arguments, and the
+    column that says when. Beside ``held_at``, so a period on record time
+    is said in one place too."""
+    column = {"added": "valid_from", "ended": "valid_to"}[side]
+    return (
+        (
+            f"{alias}.{column} IS NOT NULL AND {alias}.{column} >= ?"
+            f" AND {alias}.{column} <= ?"
+        ),
+        [begin, end],
+        f"{alias}.{column}",
+    )
+
+
 _MOMENT_ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z")
 
 

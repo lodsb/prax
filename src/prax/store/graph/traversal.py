@@ -11,10 +11,11 @@ from typing import Any
 
 from prax import config
 from prax.graph import ontology
+from prax.text import dates
 
-from ..base import VIEWER, _reading, domain_clause, hidden_documents
+from ..base import VIEWER, _reading, domain_clause, hidden_documents, now
 from .communities import community_of
-from .edges import document_node, held_at
+from .edges import _MOMENT_ISO, _end_of, changed_between, document_node, held_at
 
 MAX_HOPS = 2
 
@@ -561,3 +562,222 @@ def _walk(
     far = [r for r in shaped if int(r["hop"]) >= 2]
     near, edges_left = _first_hop(near, limit)
     return near + far, {"edges": edges_left, "neighbours": neighbours_left}
+
+
+CHANGES_SHOWN = 20  # facts a side of a changes answer lists at most
+
+
+def _span(since: str, until: str | None) -> tuple[str, str, str, str]:
+    """A period as moments (record time) and as dates (world time): a date
+    is its whole span, so "2026-09" runs from the first to the last moment
+    of September; no ``until`` is now."""
+
+    def parsed(value: str) -> tuple[str, str] | None:
+        got = dates.parse(value)
+        if got is None and not _MOMENT_ISO.fullmatch(value):
+            raise ValueError(f"a date or a UTC moment, not {value!r}")
+        return got
+
+    start = parsed(since)
+    if start is None:
+        begin, begin_date = since, since[:10]
+    else:
+        begin_date = start[0]
+        begin = begin_date + "-01-01"[len(begin_date) - 4 :] + "T00:00:00Z"
+    if until:
+        stop = parsed(until)
+        end = until if stop is None else _end_of(stop)
+        end_date = until[:10] if stop is None else stop[0]
+    else:
+        end = now()
+        end_date = end[:10]
+    if end < begin:
+        raise ValueError("until comes before since")
+    return begin, end, begin_date, end_date
+
+
+def _entity_ids(con: sqlite3.Connection, name: str) -> list[int]:
+    """Every entity that answers to a name (its own or a label), with the
+    ones merged into it."""
+    ids = {
+        int(r[0])
+        for r in con.execute(
+            "SELECT id FROM entities WHERE name = ? COLLATE NOCASE UNION"
+            " SELECT entity_id FROM entity_labels WHERE label = ? COLLATE NOCASE",
+            (name, name),
+        )
+    }
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
+    canon = {
+        int(r[0])
+        for r in con.execute(
+            f"SELECT COALESCE(canonical_id, id) FROM entities WHERE id IN ({marks})",
+            sorted(ids),
+        )
+    }
+    marks = ",".join("?" * len(canon))
+    ids |= canon | {
+        int(r[0])
+        for r in con.execute(
+            f"SELECT id FROM entities WHERE canonical_id IN ({marks})", sorted(canon)
+        )
+    }
+    return sorted(ids)
+
+
+# a world date meets a period when their spans meet: "2026" meets
+# September 2026, and "2026-09-14" does too
+def _world_side(column: str) -> str:
+    """A world date that meets the period ``?1`` to ``?2``: each side read
+    at the coarser of the two precisions."""
+    c = f"e.{column}"
+    return (
+        f"{c} IS NOT NULL"
+        f" AND substr({c}, 1, length(?1)) >= substr(?1, 1, length({c}))"
+        f" AND substr({c}, 1, length(?2)) <= substr(?2, 1, length({c}))"
+    )
+
+
+_WORLD_SIDES = {
+    "began": (_world_side("world_from"), "e.world_from"),
+    "ended": (_world_side("world_to") + " AND e.world_to != 'unknown'", "e.world_to"),
+}
+
+
+@_reading
+def changes(
+    con: sqlite3.Connection,
+    since: str,
+    until: str | None = None,
+    *,
+    world: bool = False,
+    entity: str | None = None,
+    rel: str | None = None,
+    domain: str | None = None,
+    derived: bool = False,
+    rereadings: bool = False,
+    limit: int = CHANGES_SHOWN,
+) -> dict[str, Any]:
+    """What changed in a period, on one of the two times an edge carries.
+
+    Record time (the default): the facts prax wrote in the period
+    (``added``, by ``valid_from``) and those a later reading ended in it
+    (``ended``, by ``valid_to``). World time (``world``): the facts that
+    began in the world in the period (``began``, by ``world_from``) and
+    those that ended in it (``ended``, by ``world_to``), as their sources
+    state; a fact dated more coarsely than the period counts when its
+    span meets it ("2026" meets September 2026). Each side gives its count
+    by relation and the newest ``limit`` facts, newest first, with
+    ``left_out``. ``entity`` keeps the facts an entity takes part in (by
+    its name or a label), ``rel`` one relation, ``domain`` what that
+    module's documents say. On record time a re-reading is left out unless
+    ``rereadings``: a fact added that was already held when the period
+    began, or ended while another edge still states it (a re-extraction,
+    a citation matched again), so what is listed is what the library came
+    to know or stopped knowing. The rule pass's derivations are left out
+    unless ``derived``: it re-derives every night. A document hidden from
+    the viewer counts as absent (the wall)."""
+    begin, end, begin_date, end_date = _span(since, until)
+    limit = max(1, min(int(limit), 200))
+    where: list[str] = []
+    args: list[Any] = []
+    if rel:
+        where.append("e.rel = ?")
+        args.append(rel)
+    if not derived:
+        where.append("COALESCE(e.producer, '') NOT LIKE 'rule:%'")
+    if entity:
+        ids = _entity_ids(con, entity)
+        if not ids:
+            return {"since": since, "until": until, "unknown_entity": entity}
+        marks = ",".join("?" * len(ids))
+        where.append(f"(e.src IN ({marks}) OR e.dst IN ({marks}))")
+        args += ids + ids
+    join = ""
+    if domain:
+        clause, dargs = domain_clause(con, [domain], unset=False)
+        join = " JOIN documents d ON d.id = e.source_doc"
+        where.append("1 = 1" + clause)
+        args += dargs
+    hidden = hidden_documents(con)
+    sides: dict[str, tuple[str, str, list[str]]] = {}
+    if world:
+        for k, (cond, column) in _WORLD_SIDES.items():
+            sides[k] = (cond, column, [begin_date, end_date])
+    else:
+        held, held_args = held_at("p", begin)
+        for k in ("added", "ended"):
+            cond, bounds, column = changed_between("e", k, begin, end)
+            if not rereadings:
+                # news only: a fact added that was held when the period
+                # began, or ended while another edge still states it, is
+                # a re-reading (a re-extraction, a citation matched again)
+                same = "p.src = e.src AND p.rel = e.rel AND p.dst = e.dst"
+                if k == "added":
+                    cond += (
+                        f" AND NOT EXISTS (SELECT 1 FROM edges p WHERE {same}"
+                        f" AND {held})"
+                    )
+                    bounds = [*bounds, *held_args]
+                else:
+                    cond += (
+                        f" AND NOT EXISTS (SELECT 1 FROM edges p WHERE {same}"
+                        " AND p.id != e.id AND p.valid_to IS NULL)"
+                    )
+            sides[k] = (cond, column, bounds)
+    out: dict[str, Any] = {
+        "since": since,
+        "until": until,
+        "time": "world" if world else "record",
+    }
+    for side, (cond, at, bounds) in sides.items():
+        sql_where = " AND ".join([cond, *where])
+        counts: dict[str, int] = {}
+        total = 0
+        for r in con.execute(
+            f"SELECT e.rel, e.source_doc, count(*) FROM edges e{join}"
+            f" WHERE {sql_where} GROUP BY e.rel, e.source_doc",
+            [*bounds, *args],
+        ):
+            if r[1] is not None and int(r[1]) in hidden:
+                continue
+            counts[r[0]] = counts.get(r[0], 0) + int(r[2])
+            total += int(r[2])
+        facts: list[dict[str, Any]] = []
+        offset = 0
+        while len(facts) < min(limit, total):
+            rows = con.execute(
+                f"SELECT e.id, s.name AS src, e.rel, t.name AS dst, e.source_doc,"
+                f" {at} AS at FROM edges e{join}"
+                " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+                f" WHERE {sql_where} ORDER BY {at} DESC, e.id DESC LIMIT ? OFFSET ?",
+                [*bounds, *args, limit * 2, offset],
+            ).fetchall()
+            if not rows:
+                break
+            offset += len(rows)
+            for r in rows:
+                doc = r["source_doc"]
+                if doc is not None and int(doc) in hidden:
+                    continue
+                fact = {
+                    "edge_id": int(r["id"]),
+                    "src": r["src"],
+                    "rel": r["rel"],
+                    "dst": r["dst"],
+                    "at": r["at"],
+                }
+                if doc is not None:
+                    fact["source_doc"] = int(doc)
+                facts.append(fact)
+                if len(facts) >= limit:
+                    break
+        out[side] = {
+            "count": total,
+            "by_rel": dict(sorted(counts.items(), key=lambda kv: -kv[1])),
+            "facts": facts,
+            "left_out": total - len(facts),
+        }
+    return out

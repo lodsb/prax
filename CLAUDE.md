@@ -129,7 +129,8 @@ revisit threshold, under "Decision thresholds" below.
    person wrote it, in which batch or pass), and two times. Record
    time is `valid_from` and `valid_to` (and `ingested_at`): when prax wrote the edge and
    when a later reading ended it (`store.held_at` says which edges were
-   held at a moment; `traverse(as_of=)`). World time is `world_from` and
+   held at a moment; `traverse(as_of=)`; `store.changes` what was
+   written and ended in a period, beside it in `changed_between`). World time is `world_from` and
    `world_to` with their precision (migration 36): when the fact holds
    in the world, as its source states it, and only where it does.
    Enrichment invalidates edges by setting `valid_to`; it never deletes

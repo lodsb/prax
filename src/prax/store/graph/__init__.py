@@ -171,6 +171,7 @@ from .rules import (  # noqa: F401
     part_of_suspects,
 )
 from .traversal import (  # noqa: F401
+    CHANGES_SHOWN,
     EDGES,
     MAX_HOPS,
     MIN_DOCUMENTS,
@@ -183,6 +184,7 @@ from .traversal import (  # noqa: F401
     _neighbourhood_limits,
     _second_hop,
     _walk,
+    changes,
     senses,
     traverse,
     traverse_map,
