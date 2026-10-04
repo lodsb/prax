@@ -624,6 +624,18 @@ function staleNote(stale) {
   return `<span class="stale" title="no longer current: ${esc(said)}">${esc(stale.state)}${when}${by ? ` → ${by}` : ""}</span>`;
 }
 
+// A page whose sources are no longer current (GET /page's
+// `stale_sources`): which, and what replaced each. Said under the page's
+// header; the page itself is never changed for it.
+function staleSources(sources) {
+  if (!sources || !sources.length) return "";
+  const items = sources.slice(0, 6).map((s) =>
+    `<a href="#doc/${Number(s.doc_id)}">${esc(s.title || "doc " + s.doc_id)}</a> ${staleNote(s)}`);
+  const more = sources.length > 6 ? ` and ${sources.length - 6} more` : "";
+  const n = sources.length;
+  return `<div class="stale-sources">This page rests on ${n} document${n === 1 ? "" : "s"} no longer current: ${items.join("; ")}${more}.</div>`;
+}
+
 // A document's times, for its page's header: when it was published (as
 // its source says), when it came into the library, when its text was last
 // read. Each says what it is, so "2019" is never mistaken for the day the
@@ -727,5 +739,5 @@ function checksBox(checks) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }

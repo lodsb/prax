@@ -544,20 +544,34 @@ def _refresh_document_field(con: sqlite3.Connection, doc_id: int) -> bool:
     return True
 
 
-@_serialized
+# documents a hold of the write lock rebuilds; the lock is let go between
+# batches. In one hold, the whole library's fields kept every other write
+# of the door waiting for minutes, nightly (an agent's append, 120 s)
+FIELD_BATCH = 200
+
+
 def refresh_document_fields(
     con: sqlite3.Connection, doc_ids: list[int] | None = None
 ) -> int:
     """Rebuild the field of the given documents (all when None); returns
     how many changed. The backfill after the migration, and the repair
-    after a change to ``document_field``."""
-    ids = doc_ids or [r[0] for r in con.execute("SELECT id FROM documents ORDER BY id")]
+    after a change to ``document_field``. ``FIELD_BATCH`` documents at a
+    time under the write lock, so the door's other writes go between."""
+    ids = doc_ids or _document_ids(con)
     changed = 0
-    for i, doc_id in enumerate(ids, 1):
-        if _refresh_document_field(con, doc_id):
-            changed += 1
-        if i % 500 == 0:
-            con.commit()
+    for start in range(0, len(ids), FIELD_BATCH):
+        changed += _refresh_fields_batch(con, ids[start : start + FIELD_BATCH])
+    return changed
+
+
+@_reading
+def _document_ids(con: sqlite3.Connection) -> list[int]:
+    return [int(r[0]) for r in con.execute("SELECT id FROM documents ORDER BY id")]
+
+
+@_serialized
+def _refresh_fields_batch(con: sqlite3.Connection, ids: list[int]) -> int:
+    changed = sum(1 for doc_id in ids if _refresh_document_field(con, doc_id))
     con.commit()
     return changed
 

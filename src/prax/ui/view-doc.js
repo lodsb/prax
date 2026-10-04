@@ -531,6 +531,7 @@ async function viewDoc(id, p) {
   const meta = doc.meta || {};
   if (meta.video) VIDEO_OF[doc.id] = meta.video;
   let askingPage = false;
+  let staleSourced = [];
   if (meta.page && meta.page.slug) {
     PAGE_OF[doc.id] = meta.page.slug;
     // what the questions pass has in hand for this page right now
@@ -538,6 +539,7 @@ async function viewDoc(id, p) {
       const pg = await api(`/page/${meta.page.slug}`);
       ASKING_OF[doc.id] = new Set(pg.asking || []);
       askingPage = !!pg.asking_page;
+      staleSourced = pg.stale_sources || [];
     } catch (_) { ASKING_OF[doc.id] = new Set(); }
   }
   const highlight = chunkTarget(chunks, p.chunk, p.find);
@@ -548,6 +550,7 @@ async function viewDoc(id, p) {
   <header class="doc-head">
     <h1>${pageMeta ? `<span class="kind-pill">${esc(pageMeta.kind)}</span> ` : ""}${esc(doc.title || "(untitled)")}</h1>
     <div class="doc-meta">${metaLine(meta, doc)}${pageMeta ? ` · revision ${pageMeta.revision} by ${esc(pageMeta.author || "?")}` : ""}${meta.question ? ` · a standing question, asked ${esc((meta.question.asked_at || "").slice(0, 10))} by ${esc(meta.question.model || "?")}${(meta.question.history || []).length ? `, moved ${meta.question.history.length} time${meta.question.history.length === 1 ? "" : "s"}` : ""}` : ""}</div>
+    ${staleSources(staleSourced)}
     ${tags(meta)}
     <div class="doc-actions">
       <div class="doc-actions-zone doc-actions-left">

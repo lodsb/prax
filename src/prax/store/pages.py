@@ -18,6 +18,7 @@ from prax.text import blocks, markup
 from .base import _read_archive, _reading, _serialized, document_hidden
 from .documents import _set_promote, get_meta, index_text, register, set_meta
 from .graph import Edge, find_edges, invalidate_edge, link, rename_entity
+from .retrieval import staleness
 
 # Living Markdown documents (migration 0006): notes on a document, ongoing
 # projects, topic pages. A page is a document, so everything that applies
@@ -99,7 +100,50 @@ def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
         "revisions": revisions,
         "meta": meta,
         "blocks": page_blocks(text, meta),
+        **_lifecycle(con, int(row["doc_id"]), text),
     }
+
+
+PAGE_SOURCES = 200  # sources of one page looked at for staleness
+
+
+def _lifecycle(con: sqlite3.Connection, doc_id: int, text: str) -> dict[str, Any]:
+    """Whether what the page rests on still holds: ``lifecycle`` is
+    ``stale`` when one of its sources (the documents its links name, and
+    those it annotates or synthesizes) is no longer current
+    (``staleness``: superseded, retired, invalid), else ``active``; and
+    ``stale_sources`` names them with what replaced each. A page is never
+    changed for it: the person or the agent decides what follows."""
+    ids = list(dict.fromkeys(linked_documents(text)))
+    for r in con.execute(
+        "SELECT DISTINCT t.name FROM edges x JOIN entities t ON t.id = x.dst"
+        " WHERE x.source_doc = ? AND x.valid_to IS NULL"
+        " AND x.rel IN ('annotates', 'synthesizes')",
+        (doc_id,),
+    ):
+        got = con.execute(
+            "SELECT id FROM documents WHERE title = ? ORDER BY id LIMIT 1", (r[0],)
+        ).fetchone()
+        if got is not None and int(got[0]) not in ids:
+            ids.append(int(got[0]))
+    ids = [i for i in ids if i != doc_id][:PAGE_SOURCES]
+    if not ids:
+        return {"lifecycle": "active", "stale_sources": []}
+    marks = ",".join("?" * len(ids))
+    hits = [
+        {"doc_id": int(r[0]), "title": r[1]}
+        for r in con.execute(
+            f"SELECT id, title FROM documents WHERE id IN ({marks})", ids
+        )
+        if not document_hidden(con, int(r[0]))
+    ]
+    stale = staleness(con, hits)
+    sources = [
+        {"doc_id": h["doc_id"], "title": h["title"], **stale[h["doc_id"]]}
+        for h in hits
+        if h["doc_id"] in stale
+    ]
+    return {"lifecycle": "stale" if sources else "active", "stale_sources": sources}
 
 
 def page_blocks(text: str, meta: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -459,6 +503,75 @@ def append_page(
         kind=page["kind"],
         annotates=annotates,
     )
+
+
+def update_section(
+    con: sqlite3.Connection,
+    slug: str,
+    heading: str,
+    text: str,
+    *,
+    author: str = "agent",
+    note: str | None = None,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Replace the body of the section headed ``heading`` with ``text``, as
+    a new revision, or add the section at the end when the page has none:
+    the place an agent keeps a status or a summary it rewrites, without
+    appending a new copy each time. ``created`` in the answer says which.
+
+    An agent never replaces what a person wrote: a section whose current
+    body is in a revision a person saved is refused (PermissionError)
+    unless ``force``. Nor does it replace an ask block's question; the
+    questions pass owns that block's interior (ValueError)."""
+    page = get_page(con, slugify(slug))
+    if page is None:
+        raise KeyError(f"no page {slug!r}")
+    old = page["text"]
+    span = markup.section_span(old, heading)
+    body = text.strip()
+    if span is None:
+        appended = append_page(
+            con, page["slug"], body, heading=heading, author=author, note=note
+        )
+        return {**appended, "section": "added"}
+    start, end, _level = span
+    current = old[start:end].strip()
+    if blocks.HEAD.search(current):
+        raise ValueError(
+            f"section {heading!r} holds an ask block; the questions pass keeps it"
+        )
+    if author == "agent" and not force and current:
+        human = con.execute(
+            "SELECT r.text_hash FROM page_revisions r WHERE r.doc_id = ?"
+            " AND r.author = 'human'",
+            (page["doc_id"],),
+        ).fetchall()
+        for row in human:
+            if current in _read_archive(row["text_hash"]).decode("utf-8"):
+                raise PermissionError(
+                    f"section {heading!r} of page {slug!r} is a person's text;"
+                    " force=True replaces it"
+                )
+    tail = old[end:]
+    new_text = (
+        old[:start]
+        + "\n"
+        + body
+        + "\n"
+        + ("\n" if tail.strip() else "")
+        + tail.lstrip("\n")
+    )
+    written = write_page(
+        con,
+        page["slug"],
+        new_text,
+        author=author,
+        note=note or f"section {heading!r} replaced",
+        force=True,
+        kind=page["kind"],
+    )
+    return {**written, "section": "replaced"}
 
 
 @_serialized

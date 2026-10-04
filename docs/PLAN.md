@@ -419,14 +419,14 @@ and pushing what is committed.
             which fetches it with the person's session; the upload is
             linked to the request and takes its title and domains. 7 of
             about 30 captures failed so.
-      - [ ] `append_page` took over 120 s. Measure where, then answer a
+      - [x] (2026-10-04: the append itself is 0.04 s on a copy; the rest was the write lock. The lock now logs a write that waited over 5 s with who held it, and one that held it over 10 s; the whole-library fields pass is batched. Answering before the write waits until the log names a holder worth it) `append_page` took over 120 s. Measure where, then answer a
             write at once and index after.
-      - [ ] `update_section(slug, heading, text)`, or a replaceable status
+      - [x] (2026-10-04: `store.update_section`, `PUT /page/{slug}/section`, the MCP tool) `update_section(slug, heading, text)`, or a replaceable status
             block like the ask blocks.
-      - [ ] A page's lifecycle: marked stale, or contradicted, when the
+      - [x] (2026-10-04: `lifecycle` and `stale_sources` on `GET /page`, said under the page's header; contradicted waits for the contradiction pass) A page's lifecycle: marked stale, or contradicted, when the
             documents it cites change or are superseded (Synthadoc's
             draft, active, stale, contradicted, archived).
-      - [ ] `set_title`, and batch capture with a result per item.
+      - [x] (2026-10-04: `PUT /doc/{id}/title`, `POST /ingest/urls`, the MCP tools `set_title` and `capture_urls`) `set_title`, and batch capture with a result per item.
 
       *7. Bibliographies and privacy* (the client's #11, #12).
       - [ ] `references(doc_id)`: the parsed list, each entry in the

@@ -112,6 +112,32 @@ def heading(level: int, text: str) -> str:
     return f"{'#' * max(1, min(6, level))} {text}"
 
 
+def section_span(text: str, title: str) -> tuple[int, int, int] | None:
+    """Where the section headed ``title`` lies in a Markdown ``text``:
+    ``(body_start, body_end, level)``, the body running from the line
+    after its heading to the next heading of the same or a higher level
+    (or the end). The first heading whose words are ``title``, case and
+    spacing aside; outside a fenced code block. None when there is none."""
+    want = " ".join(title.split()).casefold()
+    lines = text.splitlines(keepends=True)
+    offset = 0
+    found: tuple[int, int] | None = None  # (body start, level)
+    fenced = False
+    for line in lines:
+        bare = line.rstrip("\r\n")
+        if bare.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        m = None if fenced else HEADING.match(bare)
+        if m:
+            level = len(m.group("hashes"))
+            if found is not None and level <= found[1]:
+                return found[0], offset, found[1]
+            if found is None and " ".join(m.group("text").split()).casefold() == want:
+                found = (offset + len(line), level)
+        offset += len(line)
+    return (found[0], len(text), found[1]) if found else None
+
+
 # The sections prax adds to a captured page. They are headings like any
 # other, and named here so a writer and a reader cannot disagree on the
 # words

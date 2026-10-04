@@ -152,6 +152,7 @@ a:hover { text-decoration: underline; }
 /* a document no longer current: said beside its title, never hidden */
 .stale { color: var(--muted); font-size: .85em; font-style: italic; }
 .stale a { color: inherit; }
+.stale-sources { margin: .4rem 0; padding: .3rem .6rem; border-left: 2px solid var(--muted); color: var(--muted); font-size: .9em; }
 .error { color: var(--accent); }
 .num { text-align: right; }
 /* what you read, in the serif */

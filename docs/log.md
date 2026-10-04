@@ -3954,6 +3954,43 @@ Not measured yet: the client's own question ("the current candidate and
 its figure"), which needs its project re-synced so the status lines are
 read; Monday.
 
+## 2026-10-04: captures and pages, four of five (stage AL, step 6)
+
+**The append that took over 120 s.** On a copy of the store the append
+itself is 0.04 s (0.6 s cold): re-indexing the page, a revision, its
+edges. The rest of the 120 s was waiting for the write lock, which every
+write takes one at a time. The client's session predates the door logs
+kept now, so the holder that day cannot be named; since then the logs
+show writes kept waiting up to 28 s (a worker's session note behind an
+embed post of 16.5 s and a bulk readings request of 12.4 s). So the
+lock says it now: a write that waited over 5 s is logged with the write
+that held the lock before it, one that held it over 10 s is logged too
+(`store.base`, `LOCK_WAIT_SLOW`, `LOCK_HOLD_SLOW`). The maintenance
+passes, run one by one on the copy, held it under 10 s each; the
+document fields pass, which rebuilt all ~13,000 fields in one hold, now
+lets go every 200 (`FIELD_BATCH`). The same run found the nightly
+`languages` pass failing on a unique label index, a fault of its own.
+Answering an append before the write is applied waits until the log
+names a holder worth that change: an agent would otherwise append and
+then not find its own section.
+
+**`update_section`** replaces the body under a heading (or adds the
+section), for what an agent keeps current. A section whose current body
+a person saved is refused unless forced, and an ask block's section is
+the questions pass's. The heading is found by `markup.section_span`
+(outside fenced code, up to the next heading of the same level).
+
+**`set_title`** (`PUT /doc/{id}/title`) over `store.retitle`, and
+**batch capture** (`POST /ingest/urls`, the `capture_urls` tool): up to
+20 URLs four at a time, one result per URL in order, a failure never
+failing the others; the request's viewer goes with each thread.
+
+**A page's lifecycle.** `GET /page` says `lifecycle: stale` when a
+document the page links, annotates or synthesizes is no longer current
+(`store.staleness`, as search reads it), with `stale_sources` naming
+each and its replacement, and the page's header says it. The page is
+never changed for it. "Contradicted" waits for the contradiction pass.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each

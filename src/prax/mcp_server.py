@@ -564,6 +564,23 @@ def append_page(
 
 
 @mcp.tool()
+def update_section(
+    slug: str, heading: str, text: str, note: str | None = None
+) -> dict[str, Any]:
+    """Replace the body under one heading of a page with ``text``, or add
+    the section when the page has none (``section``: replaced or added).
+    For what you keep up to date (a project's status, a summary), where
+    ``append_page`` would add another copy each time. A section a person
+    wrote is never replaced, nor one holding an ask block."""
+    return _answer(
+        lambda: door().put_json(
+            f"/page/{slug}/section",
+            {"heading": heading, "text": text, "author": "agent", "note": note},
+        )
+    )
+
+
+@mcp.tool()
 def ingest(
     text: str, title: str | None = None, source_url: str | None = None
 ) -> dict[str, Any]:
@@ -590,6 +607,25 @@ def capture_url(
             "/ingest/url",
             {"url": url, "title": title, "domains": domains, "by": "agent"},
         )
+    )
+
+
+@mcp.tool()
+def capture_urls(urls: list[str], domains: list[str] | None = None) -> dict[str, Any]:
+    """Fetch and keep several URLs in one call (at most 20), each as
+    ``capture_url`` would: ``results`` has one entry per URL in the order
+    given, the capture (``doc_id``, ``url``) or its ``error``. A URL that
+    fails never fails the others."""
+    items = [{"url": u, "domains": domains, "by": "agent"} for u in urls]
+    return _answer(lambda: door().post_json("/ingest/urls", {"items": items}))
+
+
+@mcp.tool()
+def set_title(doc_id: int, title: str) -> dict[str, Any]:
+    """Give a document its title (a file name or an arXiv id where a
+    title belongs). The old one is kept in its history."""
+    return _answer(
+        lambda: door().put_json(f"/doc/{doc_id}/title", {"title": title, "by": "agent"})
     )
 
 

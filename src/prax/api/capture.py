@@ -92,6 +92,28 @@ def projects_list(
     return {"projects": store.list_projects(con)}
 
 
+class TitleReq(BaseModel):
+    title: str
+    by: str = "agent"  # who says so: "human" from the UI
+
+
+@router.put("/doc/{doc_id}/title")
+def set_title(doc_id: int, req: TitleReq, request: Request) -> dict[str, Any]:
+    """A document's title, the old one kept in its history and its entity
+    following (``store.retitle``). A document the viewer may not see is a
+    404, as if absent."""
+    con = _con(request)
+    if store.document_hidden(con, doc_id):
+        raise HTTPException(404, f"no such document: {doc_id}")
+    try:
+        out = store.retitle(con, doc_id, req.title, source=req.by)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc).strip("'\"")) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {**out, "url": ui_url(request, doc_id)}
+
+
 class RetireReq(BaseModel):
     reason: str = "retired by hand"
     duplicate_of: int | None = None
@@ -313,17 +335,75 @@ def ingest_url(req: IngestUrl, request: Request) -> dict[str, Any]:
             by=req.by,
             note=req.note,
         )
-    except (ValueError, http.client.InvalidURL) as exc:  # not one to fetch
-        raise HTTPException(400, f"not a URL to fetch: {exc}") from exc
-    except OSError as exc:  # urllib errors: unreachable, 403, 404, timeout
-        why = str(exc)
-        if "403" in why or "401" in why or isinstance(exc, inbox.BotCheck):
-            why += (
-                " (the site refused the server; the browser extension fetches"
-                " with your own session when it may read all sites)"
-            )
-        raise HTTPException(502, f"fetch failed: {why}") from exc
+    except (ValueError, http.client.InvalidURL, OSError) as exc:
+        # not one to fetch (400); unreachable, 403, 404, a timeout (502)
+        status, detail = _fetch_failure(exc)
+        raise HTTPException(status, detail) from exc
     return _capture_out(cap, request)
+
+
+class IngestUrls(BaseModel):
+    items: list[IngestUrl]
+
+
+BATCH_URLS = 20  # URLs one request may carry
+BATCH_FETCHES = 4  # fetched at once
+
+
+def _fetch_failure(exc: Exception) -> tuple[int, str]:
+    """What ``ingest_url`` said when a fetch failed, as a status and the
+    words a person reads (the single route's 400 and 502)."""
+    if isinstance(exc, (ValueError, http.client.InvalidURL)):
+        return 400, f"not a URL to fetch: {exc}"
+    why = str(exc)
+    if "403" in why or "401" in why or isinstance(exc, inbox.BotCheck):
+        why += (
+            " (the site refused the server; the browser extension fetches"
+            " with your own session when it may read all sites)"
+        )
+    return 502, f"fetch failed: {why}"
+
+
+@router.post("/ingest/urls")
+def ingest_urls(req: IngestUrls, request: Request) -> dict[str, Any]:
+    """Several URLs fetched at once (``BATCH_FETCHES`` at a time, at most
+    ``BATCH_URLS``), one result each in the order sent: the capture as
+    ``POST /ingest/url`` answers it, or ``error`` with its ``status``. One
+    URL that fails never fails the others."""
+    import contextvars
+    from concurrent.futures import ThreadPoolExecutor
+
+    if len(req.items) > BATCH_URLS:
+        raise HTTPException(400, f"at most {BATCH_URLS} URLs a request")
+
+    def one(item: IngestUrl) -> dict[str, Any]:
+        try:
+            cap = inbox.ingest_url(
+                store.thread_connection(),
+                item.url,
+                title=item.title,
+                domains=item.domains,
+                tags=item.tags,
+                session=item.session,
+                by=item.by,
+                note=item.note,
+            )
+        except (ValueError, http.client.InvalidURL, OSError) as exc:
+            status, detail = _fetch_failure(exc)
+            return {"source": item.url, "error": detail, "status": status}
+        return {"source": item.url, **_capture_out(cap, request)}
+
+    with ThreadPoolExecutor(max_workers=BATCH_FETCHES) as pool:
+        # each thread sees the request's viewer (the wall), as ask's do
+        futures = [
+            pool.submit(contextvars.copy_context().run, one, item) for item in req.items
+        ]
+        results = [f.result() for f in futures]
+    return {
+        "results": results,
+        "captured": sum(1 for r in results if "error" not in r),
+        "failed": sum(1 for r in results if "error" in r),
+    }
 
 
 @router.get("/inbox")

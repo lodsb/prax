@@ -536,3 +536,11 @@ test("staleNote: the state, the date and what replaced it, as a link", () => {
   const line = lib.dateLine({ status: { state: "retired", since: "2026-09", words: "Retired 2026-09" } }, {});
   assert.match(line, /class="stale"[^>]*>retired 2026-09/);
 });
+
+test("staleSources: a page's sources no longer current, each with its replacement", () => {
+  const html = lib.staleSources([{ doc_id: 3, title: "Tuning v1", state: "superseded", since: "2026-10-02", replaced_by: [{ doc_id: 4, title: "Tuning v2" }] }]);
+  assert.match(html, /rests on 1 document no longer current/);
+  assert.match(html, /href="#doc\/3">Tuning v1<\/a>/);
+  assert.match(html, /href="#doc\/4">Tuning v2<\/a>/);
+  assert.equal(lib.staleSources([]), "");
+});

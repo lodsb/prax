@@ -37,6 +37,9 @@ EXPECTED_TOOLS = {
     "documents",
     "maths",
     "sync_project",
+    "update_section",
+    "capture_urls",
+    "set_title",
 }
 
 

@@ -497,6 +497,7 @@ from .pages import (  # noqa: F401
     project_named,
     save_project,
     slugify,
+    update_section,
     write_page,
 )
 from .repair import (  # noqa: F401

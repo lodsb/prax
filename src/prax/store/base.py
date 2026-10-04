@@ -14,6 +14,7 @@ import contextlib
 import functools
 import hashlib
 import json
+import logging
 import re
 import sqlite3
 import threading
@@ -137,9 +138,13 @@ def _guarded(fn: Callable[P, R], *, lock: bool) -> Callable[P, R]:
 
     @functools.wraps(fn)
     def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        asked = time.monotonic()
         with _LOCK if lock else _NoLock():
             depth = getattr(_depth, "n", 0)
             _depth.n = depth + 1
+            if lock and depth == 0:
+                _note_wait(fn, time.monotonic() - asked)
+                _HOLDER["name"], _HOLDER["since"] = fn.__name__, time.monotonic()
             con = next((a for a in args if isinstance(a, sqlite3.Connection)), None)
             # the outermost call is atomic: when it fails, what it wrote is
             # taken back and the write lock let go. Left open, a failed
@@ -181,8 +186,37 @@ def _guarded(fn: Callable[P, R], *, lock: bool) -> Callable[P, R]:
                 raise
             finally:
                 _depth.n = depth
+                if lock and depth == 0:
+                    _note_hold(fn, time.monotonic() - float(_HOLDER["since"] or 0.0))
+                    _HOLDER["last"], _HOLDER["name"] = fn.__name__, None
 
     return wrapper
+
+
+# Who holds the store's write lock, and since when: what a write that had
+# to wait names in the log. A write waits for whatever holds it, so one
+# function that holds it for minutes stalls every capture, append and
+# worker post behind it (the document fields pass over the whole library,
+# nightly at 03:30, until 2026-10-04: an agent's append took over 120 s).
+LOCK_WAIT_SLOW = 5.0  # seconds a write may wait before it is logged
+LOCK_HOLD_SLOW = 10.0  # seconds a write may hold the lock before it is logged
+_HOLDER: dict[str, Any] = {"name": None, "since": None, "last": None}
+_lock_log = logging.getLogger("prax.store")
+
+
+def _note_wait(fn: Callable[..., Any], seconds: float) -> None:
+    if seconds >= LOCK_WAIT_SLOW:
+        _lock_log.warning(
+            "store: %s waited %.1f s for the write lock (held by %s)",
+            fn.__name__,
+            seconds,
+            _HOLDER.get("last") or "?",
+        )
+
+
+def _note_hold(fn: Callable[..., Any], seconds: float) -> None:
+    if seconds >= LOCK_HOLD_SLOW:
+        _lock_log.warning("store: %s held the write lock %.1f s", fn.__name__, seconds)
 
 
 def _serialized(fn: Callable[P, R]) -> Callable[P, R]:

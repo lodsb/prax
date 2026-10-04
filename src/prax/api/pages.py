@@ -40,6 +40,14 @@ class AppendReq(BaseModel):
     note: str | None = None
 
 
+class SectionReq(BaseModel):
+    heading: str
+    text: str
+    author: str = "agent"
+    note: str | None = None
+    force: bool = False
+
+
 class MemberReq(BaseModel):
     doc_id: int
 
@@ -117,6 +125,31 @@ def append_page(slug: str, req: AppendReq, request: Request) -> dict[str, Any]:
         return {**appended, "url": ui_url(request, int(appended["doc_id"]))}
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.put("/page/{slug}/section")
+def put_section(slug: str, req: SectionReq, request: Request) -> dict[str, Any]:
+    """Replace the body under one heading, or add the section when the
+    page has none (``section``: replaced or added). A person's section is
+    refused to an agent with 409 unless ``force``; a section holding an
+    ask block is a 400."""
+    try:
+        out = store.update_section(
+            _con(request),
+            slug,
+            req.heading,
+            req.text,
+            author=req.author,
+            note=req.note,
+            force=req.force,
+        )
+        return {**out, "url": ui_url(request, int(out["doc_id"]))}
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(409, str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

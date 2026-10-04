@@ -94,3 +94,25 @@ def test_the_answering_model_is_told() -> None:
     )
     assert "[no longer current: superseded 2026-10-02 by Tuning v2]" in p.label()
     assert p.to_dict()["stale"]["state"] == "superseded"
+
+
+def test_a_page_resting_on_a_superseded_document_is_stale(
+    con: sqlite3.Connection,
+) -> None:
+    old, new = _two(con)
+    store.write_page(
+        con, "tuning-notes", f"# Tuning notes\n\nFrom [the table](#doc/{old}).\n"
+    )
+    assert store.get_page(con, "tuning-notes")["lifecycle"] == "active"
+    store.link(
+        con,
+        store.Edge("Tuning v2", "document", "supersedes", "Tuning v1", "document"),
+        source_doc=new,
+        producer="test",
+    )
+    page = store.get_page(con, "tuning-notes")
+    assert page["lifecycle"] == "stale"
+    (source,) = page["stale_sources"]
+    assert (source["doc_id"], source["state"]) == (old, "superseded")
+    assert source["replaced_by"] == [{"doc_id": new, "title": "Tuning v2"}]
+    assert "From [the table]" in page["text"]  # the page itself is not changed
