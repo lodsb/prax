@@ -86,6 +86,7 @@ def search(
     doctype: str | None = None,
     published_since: str | None = None,
     published_before: str | None = None,
+    include_stale: bool | None = None,
 ) -> list[dict[str, Any]]:
     """Search the knowledge base. Returns compact snippets + ids.
 
@@ -108,6 +109,11 @@ def search(
     ``published`` (as precise as its source: ``2019``, ``2019-07``), so a
     source's age can be weighed; ``published_since``/``published_before``
     (a year or a date) keep a span and leave out undated documents.
+    A document that is no longer current (retired, superseded, invalid:
+    its own status line, or another document supersedes it) carries
+    ``stale`` with the date and what replaced it, and ranks a few places
+    lower; quote the replacement as the current word, or pass
+    ``include_stale=True`` to keep the plain order.
     """
     params: dict[str, Any] = {
         "q": query,
@@ -123,6 +129,7 @@ def search(
         ("doctype", doctype),
         ("published_since", published_since),
         ("published_before", published_before),
+        ("include_stale", include_stale),
     ):
         if v is not None:
             params[k] = v

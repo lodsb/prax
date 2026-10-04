@@ -3911,6 +3911,49 @@ carries `linked`, its edges out and in.
 Left of step 4: functional relations and a pass proposing `contradicts`
 between facts that disagree, a stage of its own.
 
+## 2026-10-04: what is current (stage AL, step 5)
+
+13 of the first client's 27 project documents say they are retired,
+superseded or invalid, and an agent that quoted one as current repeated
+the failure that cost months of a pitch.
+
+**What a note says of itself** (`prax.text.status`): front matter
+(`status: retired`, `retired: 2026-10-02`, `superseded_by: …`) and an
+explicit status line near the top (`> **Status:** superseded 2026-10-02
+by [the new plan](plan-v2.md)`, `RETIRED 2026-09`, `**Deprecated**
+since …`). A state word must open a line in the first 30, so "the
+retired voice board" in a heading or prose says nothing. Only a
+project's own notes are read this way; a paper's "superseded by" is
+about other people's work.
+
+**At sync** (`projects._statuses`): the state is `meta.status` (by
+`sync`, gone when the line goes, a person's never touched), and a
+replacement the line names, matched exactly against the project's
+paths, is an edge from it to the stale note: `supersedes`, or
+`invalidates` for an invalid one, the line for evidence and its date as
+the world's time (`world_from`). Kept in step per run (`status:<name>`)
+by the helper the links share now.
+
+**In search and `ask`** (`store.staleness`): a hit whose document is
+stale by its own status or by a live `supersedes`/`invalidates` edge
+(a sync, an agent's `link`, an extraction) carries `stale` (state,
+since, `replaced_by` with ids the viewer may see) and moves five places
+down, a shift rather than a score so it means the same with a reranker;
+five extra candidates are fetched so a current one can move up.
+`include_stale` keeps the plain order. `ask` labels the passage
+"[no longer current: superseded 2026-10-02 by …]", and the UI says it
+beside the hit and in the document's date line.
+
+The first query for the edges let the planner begin from the edges
+table, which a `rel` filter cannot narrow: 58 ms a search on the live
+store. Begun from the titles (the name index), the entities merged into
+them and `idx_edges_dst`, in that order (`CROSS JOIN`, materialized),
+it is 0.2 ms.
+
+Not measured yet: the client's own question ("the current candidate and
+its figure"), which needs its project re-synced so the status lines are
+read; Monday.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each

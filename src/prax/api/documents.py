@@ -58,6 +58,7 @@ def search(
     brief: bool = False,
     published_since: str | None = None,
     published_before: str | None = None,
+    include_stale: bool = False,
 ) -> list[dict[str, Any]]:
     """The hits; with ``regions`` first, when most of the first hits'
     entities live in one region of the library, that region and its part
@@ -65,7 +66,9 @@ def search(
     ``brief`` leaves out the ranks and the empty fields (``store.brief_hit``),
     which an agent does not read; without it each hit says its
     ``domains`` (None: every module). Each hit says when its document was
-    published; ``published_since``/``published_before`` keep a span."""
+    published; ``published_since``/``published_before`` keep a span. A
+    document no longer current carries ``stale`` and ranks lower, unless
+    ``include_stale``."""
     timing: dict[str, float] = {}
     request.state.detail = timing  # the slow-request log says which side took long
     con = _con(request)
@@ -82,6 +85,7 @@ def search(
             timing=timing,
             published_since=published_since,
             published_before=published_before,
+            include_stale=include_stale,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

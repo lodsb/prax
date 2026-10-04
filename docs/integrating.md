@@ -55,7 +55,7 @@ work. The UI polls exactly this.
 
 | Call | What it gives |
 |---|---|
-| `GET /search?q=…&limit=&doctype=&domain=&kind=&published_since=&published_before=` | compact hits: document id, chunk id, title, a snippet, which side found it, and `published` (the document's date, as precise as its source) where it has one. Stopwords and the entries of reference lists are left aside; `kind=reference` searches those on purpose. A `published_` filter (`2019`, `2019-07`, `2019-07-03`) leaves undated documents out |
+| `GET /search?q=…&limit=&doctype=&domain=&kind=&published_since=&published_before=&include_stale=` | compact hits: document id, chunk id, title, a snippet, which side found it, and `published` (the document's date, as precise as its source) where it has one. Stopwords and the entries of reference lists are left aside; `kind=reference` searches those on purpose. A `published_` filter (`2019`, `2019-07`, `2019-07-03`) leaves undated documents out. A document no longer current carries `stale` (state, since, `replaced_by`) and ranks a few places lower, unless `include_stale` |
 | `GET /get/{id}?offset=&max_chars=` | one document as a window, with `text_len` so you can page |
 | `GET /chunk/{id}`, `GET /doc/{id}/chunks` | one addressable region, or all of a document's: text, kind, heading path, page, and `data`. `data` holds a table's grid, a figure's reference, an equation's LaTeX, or a reference entry's number, surnames, year and title, with `cited` (the library document it cites, the score, how) once matched |
 | `GET /doc/{id}/context` | what places a document: summary, entities, citations both ways, `linked` (its edges to and from other documents, `out` and `in`: links, supersedes, invalidates), similar documents, its pages and projects |

@@ -525,3 +525,14 @@ test("pairRow: a held pair says why it waits", () => {
   const plain = lib.pairRow({ type: "concept", score: 0.95, p_same: null, keep: side(1, "a"), other: side(2, "b") });
   assert.doesNotMatch(plain, /waits for you/);
 });
+
+test("staleNote: the state, the date and what replaced it, as a link", () => {
+  const html = lib.staleNote({ state: "superseded", since: "2026-10-02", by: "sync", replaced_by: [{ doc_id: 12, title: "Plan <v2>" }] });
+  assert.match(html, /class="stale"/);
+  assert.match(html, /superseded 2026-10-02/);
+  assert.match(html, /href="#doc\/12">Plan &lt;v2&gt;<\/a>/);
+  assert.equal(lib.staleNote(null), "");
+  assert.match(lib.staleNote({ state: "invalid", by: "graph", replaced_by: [] }), /another document says so/);
+  const line = lib.dateLine({ status: { state: "retired", since: "2026-09", words: "Retired 2026-09" } }, {});
+  assert.match(line, /class="stale"[^>]*>retired 2026-09/);
+});

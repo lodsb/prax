@@ -211,10 +211,19 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
             settings=settings,
             auto_sync=req.get("auto_sync"),
         )
-        links = _links(con, name, prefix)
+        texts = _texts(con, name)
+        links = _links(con, name, prefix, texts)
+        statuses = _statuses(con, name, prefix, texts)
         out["links"] = links
+        out["status"] = statuses
         store.note_project_sync(
-            con, name, {**counts, "links": links["added"] + links["kept"]}
+            con,
+            name,
+            {
+                **counts,
+                "links": links["added"] + links["kept"],
+                "stale": statuses["stale"],
+            },
         )
         out["auto_sync"] = manifest["auto_sync"]
     return out
@@ -225,30 +234,20 @@ LINK_REL = "links_to"
 EVIDENCE_CHARS = 300
 
 
-def _links(con: sqlite3.Connection, name: str, prefix: str) -> dict[str, int]:
-    """Keep the project's ``links_to`` edges in step with its texts: add
-    the links that are new, end the ones that went. Returns the counts,
-    ``unmatched`` being the references to paths no document of the
-    project has (yet)."""
-    run = f"links:{name}"
-    have = store.project_documents(con, name)
-    by_path = {str(v["path"]): int(v["doc_id"]) for v in have.values() if v.get("path")}
-    want: dict[tuple[int, int], str] = {}
-    unmatched = 0
-    for path, doc_id in by_path.items():
-        doc = store.get_document(con, doc_id)
-        for candidates, words in paths.references(
-            str(doc.get("text") or "") if doc else "", path, prefix
-        ):
-            hit = next((by_path[c] for c in candidates if c in by_path), None)
-            if hit is None:
-                unmatched += 1
-            elif hit != doc_id:
-                want.setdefault((doc_id, hit), words)
+Want = dict[tuple[int, int, int, str], tuple[str, str | None]]
+
+
+def _keep_in_step(con: sqlite3.Connection, run: str, want: Want) -> dict[str, int]:
+    """Make one run's live edges what ``want`` says: ``{(source_doc,
+    src_doc, dst_doc, rel): (words, world_from)}``, the evidence and the
+    date. An edge already there is kept, a new one linked, one no longer
+    wanted ended (never deleted)."""
     existing = {
-        (int(e["source_doc"]), str(e["dst"])): int(e["id"])
+        (int(e["source_doc"]), str(e["src"]), str(e["rel"]), str(e["dst"])): int(
+            e["id"]
+        )
         for e in store.run_edges(con, producer=LINK_PRODUCER, run=run)
-        if e["rel"] == LINK_REL and e["source_doc"] is not None
+        if e["source_doc"] is not None
     }
     nodes: dict[int, tuple[str, str]] = {}
 
@@ -258,35 +257,128 @@ def _links(con: sqlite3.Connection, name: str, prefix: str) -> dict[str, int]:
         return nodes[doc_id]
 
     added = kept = 0
-    held: set[tuple[int, str]] = set()
-    for (src_doc, dst_doc), words in want.items():
+    held: set[tuple[int, str, str, str]] = set()
+    for (source_doc, src_doc, dst_doc, rel), (words, world_from) in want.items():
         try:
             src, src_type = node(src_doc)
             dst, dst_type = node(dst_doc)
         except KeyError:
             continue  # a document without a title is no node
-        key = (src_doc, dst)
+        key = (source_doc, src, rel, dst)
         if key in held:
             continue
         held.add(key)
         if key in existing:
             kept += 1
             continue
-        store.link(
-            con,
-            store.Edge(src, src_type, LINK_REL, dst, dst_type),
-            source_doc=src_doc,
-            evidence=words[:EVIDENCE_CHARS],
-            producer=LINK_PRODUCER,
-            run=run,
-        )
+        try:
+            store.link(
+                con,
+                store.Edge(src, src_type, rel, dst, dst_type),
+                source_doc=source_doc,
+                evidence=words[:EVIDENCE_CHARS],
+                producer=LINK_PRODUCER,
+                run=run,
+                world_from=world_from,
+            )
+        except ValueError:
+            # a date the store cannot read: the fact without the world's time
+            store.link(
+                con,
+                store.Edge(src, src_type, rel, dst, dst_type),
+                source_doc=source_doc,
+                evidence=words[:EVIDENCE_CHARS],
+                producer=LINK_PRODUCER,
+                run=run,
+            )
         added += 1
     ended = 0
     for key, edge_id in existing.items():
         if key not in held:
             store.invalidate_edge(con, edge_id)
             ended += 1
-    return {"added": added, "kept": kept, "ended": ended, "unmatched": unmatched}
+    return {"added": added, "kept": kept, "ended": ended}
+
+
+def _texts(con: sqlite3.Connection, name: str) -> dict[str, tuple[int, str]]:
+    """The project's live documents by their path in the repository, with
+    their text."""
+    out: dict[str, tuple[int, str]] = {}
+    for v in store.project_documents(con, name).values():
+        if not v.get("path"):
+            continue
+        doc = store.get_document(con, int(v["doc_id"]))
+        out[str(v["path"])] = (
+            int(v["doc_id"]),
+            str(doc.get("text") or "") if doc else "",
+        )
+    return out
+
+
+def _links(
+    con: sqlite3.Connection, name: str, prefix: str, texts: dict[str, tuple[int, str]]
+) -> dict[str, int]:
+    """Keep the project's ``links_to`` edges in step with its texts. Returns
+    the counts, ``unmatched`` being the references to paths no document of
+    the project has (yet)."""
+    by_path = {p: d for p, (d, _) in texts.items()}
+    want: Want = {}
+    unmatched = 0
+    for path, (doc_id, text) in texts.items():
+        for candidates, words in paths.references(text, path, prefix):
+            hit = next((by_path[c] for c in candidates if c in by_path), None)
+            if hit is None:
+                unmatched += 1
+            elif hit != doc_id:
+                want.setdefault((doc_id, doc_id, hit, LINK_REL), (words, None))
+    return {**_keep_in_step(con, f"links:{name}", want), "unmatched": unmatched}
+
+
+STATUS_EDGE = {"invalid": "invalidates"}  # else a replacement supersedes
+
+
+def _statuses(
+    con: sqlite3.Connection, name: str, prefix: str, texts: dict[str, tuple[int, str]]
+) -> dict[str, int]:
+    """What each note says of itself (``prax.text.status``): kept as
+    ``meta.status`` (by ``sync``, gone when the line goes; a person's is
+    never touched), and a replacement the line names as an edge from it to
+    the stale note (``supersedes``, ``invalidates`` for an invalid one),
+    the line for evidence and its date as the world's time."""
+    from prax.text import status as status_mod
+
+    by_path = {p: d for p, (d, _) in texts.items()}
+    want: Want = {}
+    stale = 0
+    for path, (doc_id, text) in texts.items():
+        st = status_mod.read(text, path, prefix)
+        meta = store.get_meta(con, doc_id)
+        held = meta.get("status") or {}
+        if held and held.get("by") not in (None, "sync"):
+            continue  # a person said it
+        if st is None:
+            if held:
+                meta.pop("status", None)
+                store.set_meta(con, doc_id, meta)
+            continue
+        said = {
+            "state": st.state,
+            "since": st.since,
+            "words": st.words[:EVIDENCE_CHARS],
+            "by": "sync",
+        }
+        if {k: held.get(k) for k in said} != said:
+            meta["status"] = {**said, "at": store.now()}
+            store.set_meta(con, doc_id, meta)
+        if not st.stale:
+            continue
+        stale += 1
+        rel = STATUS_EDGE.get(st.state, "supersedes")
+        for candidates, _words in st.refs:
+            hit = next((by_path[c] for c in candidates if c in by_path), None)
+            if hit is not None and hit != doc_id:
+                want.setdefault((doc_id, hit, doc_id, rel), (st.words, st.since))
+    return {**_keep_in_step(con, f"status:{name}", want), "stale": stale}
 
 
 def _apply(

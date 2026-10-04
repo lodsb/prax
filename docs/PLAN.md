@@ -361,7 +361,7 @@ and pushing what is committed.
             filter `published_since`/`before` on search and
             `documents`. It is also the anchor the world's time below
             is read against: a document's date, never prax's.
-      - [ ] At sync, `retired` and `superseded_by` from front matter and
+      - [x] (2026-10-04: `prax.text.status`, `projects._statuses`: `meta.status` and `supersedes`/`invalidates` edges, run `status:<name>`, the line's date as world time) At sync, `retired` and `superseded_by` from front matter and
             explicit status lines ("retired 2026-10-02", "superseded by
             …", "status: …"), only in synced project documents: a paper
             saying "superseded by" is about others' work.
@@ -406,7 +406,7 @@ and pushing what is committed.
             `test_invariants.py` that no read builds it itself. prax's
             `valid_from`/`valid_to` are record time and are renamed or
             documented so.
-      - [ ] Search and `ask` rank a stale document lower and name its
+      - [x] (2026-10-04: `store.staleness`, `STALE_SHIFT` 5 places, `stale` on the hit and `ask`'s passage, `include_stale`; the measurement on the project's own question waits for its re-sync) Search and `ask` rank a stale document lower and name its
             replacement; never a filter (as the domain prior), and
             `include_stale` turns it off. Measured on the project's own
             question ("the current shipping candidate and its figure":

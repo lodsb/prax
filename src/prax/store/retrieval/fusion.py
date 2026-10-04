@@ -75,6 +75,7 @@ def search(
     timing: dict[str, float] | None = None,
     published_since: str | None = None,
     published_before: str | None = None,
+    include_stale: bool = False,
 ) -> list[dict[str, Any]]:
     """Search returning compact snippets + ids (agent-shaped). ``timing``,
     when given, is filled with the seconds each side took (``fts``,
@@ -106,6 +107,13 @@ def search(
     then or later, and before then: a date or a year, compared as written,
     so ``2019`` keeps a document of 2019 and one of 2019-07. A document
     that does not say when it was published is left out of such a search.
+
+    A document that is no longer current (``staleness``: its own status
+    says retired, superseded, invalid or deprecated, or another document
+    supersedes or invalidates it) carries ``stale``, with the state, the
+    date and what replaced it, and moves ``STALE_SHIFT`` places down: a
+    preference, never a filter, as the domain prior. ``include_stale``
+    keeps the order as it was.
     """
     if kind is not None and kind not in CHUNK_KINDS:
         raise ValueError(f"kind must be one of {CHUNK_KINDS}")
@@ -126,7 +134,7 @@ def search(
         fetch *= 3
     if since or before:
         fetch *= 4
-    hits = _search_hits(con, query, fetch, kind, mode, doctype, timing)
+    hits = _search_hits(con, query, fetch + STALE_SPARE, kind, mode, doctype, timing)
     if domain:
         hits = _filter_domain(con, hits, domain)
     stamped = published_dates(con, hits)
@@ -141,10 +149,117 @@ def search(
     if reranker is not None and hits:
         with _Took(timing)("rerank"):
             hits = _apply_rerank(con, reranker, query, hits)
+    stale = staleness(con, hits)
+    if stale and not include_stale:
+        hits = _shift_stale(hits, stale)
     hits = hits[:limit]
     for h in hits:
         h["published"] = stamped.get(h["doc_id"])
+        if h["doc_id"] in stale:
+            h["stale"] = stale[h["doc_id"]]
     return hits
+
+
+STALE_SHIFT = 5  # places a stale hit moves down: the same with or without a reranker
+STALE_SPARE = 5  # candidates fetched past the limit, so a current one can move up
+STALE_STATES = ("retired", "superseded", "invalid", "deprecated")
+STALE_RELS = {"supersedes": "superseded", "invalidates": "invalid"}
+
+
+def _shift_stale(
+    hits: list[dict[str, Any]], stale: dict[int, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """The hits with each stale one ``STALE_SHIFT`` places further down;
+    the others keep their order."""
+    keyed = sorted(
+        enumerate(hits),
+        key=lambda ih: ih[0] + (STALE_SHIFT + 0.5 if ih[1]["doc_id"] in stale else 0),
+    )
+    return [h for _, h in keyed]
+
+
+def staleness(
+    con: sqlite3.Connection, hits: list[dict[str, Any]]
+) -> dict[int, dict[str, Any]]:
+    """Which of the hits' documents are no longer current, and why:
+    ``{doc_id: {state, since, by, replaced_by: [{doc_id, title}]}}``. Its
+    own status (``meta.status``, a project's sync reads it from the note)
+    or a live ``supersedes``/``invalidates`` edge that reaches it (a sync,
+    an agent's ``link``, an extraction). A replacement the viewer may not
+    see is not named."""
+    if not hits:
+        return {}
+    ids = sorted({int(h["doc_id"]) for h in hits})
+    marks = ",".join("?" * len(ids))
+    out: dict[int, dict[str, Any]] = {}
+    for r in con.execute(
+        f"SELECT id, json_extract(meta, '$.status') AS status FROM documents"
+        f" WHERE id IN ({marks}) AND json_extract(meta, '$.status.state') IN"
+        f" ({','.join('?' * len(STALE_STATES))})",
+        (*ids, *STALE_STATES),
+    ):
+        said = json.loads(r["status"])
+        out[int(r["id"])] = {
+            "state": said.get("state"),
+            "since": said.get("since"),
+            "by": said.get("by"),
+            "replaced_by": [],
+        }
+    titles: dict[str, list[int]] = {}
+    for h in hits:
+        if h.get("title"):
+            titles.setdefault(str(h["title"]), []).append(int(h["doc_id"]))
+    if not titles:
+        return out
+    hidden = hidden_documents(con)
+    tmarks = ",".join("?" * len(titles))
+    # from the titles (the name index), the entities merged into them
+    # (idx_entities_canonical_id) and the live edges into either
+    # (idx_edges_dst), in that order: every search asks this, and a plan
+    # left to choose began from the edges and scanned them all (58 ms on
+    # the library of 2026-10-04, 0.2 ms this way)
+    rows = con.execute(
+        f"""
+        WITH t AS MATERIALIZED (SELECT id, name FROM entities WHERE name IN ({tmarks})),
+        ids AS MATERIALIZED (
+            SELECT id, name FROM t
+            UNION ALL
+            SELECT e.id, t.name FROM t CROSS JOIN entities e ON e.canonical_id = t.id
+        )
+        SELECT x.rel, x.world_from, c.name AS src, ids.name AS dst
+        FROM ids CROSS JOIN edges x ON x.dst = ids.id AND x.valid_to IS NULL
+        JOIN entities s0 ON s0.id = x.src
+        JOIN entities c ON c.id = COALESCE(s0.canonical_id, s0.id)
+        WHERE x.rel IN ('supersedes', 'invalidates') AND c.name != ids.name
+        ORDER BY x.id
+        """,
+        tuple(titles),
+    ).fetchall()
+    for r in rows:
+        other = con.execute(
+            "SELECT id FROM documents WHERE title = ?"
+            " AND json_extract(meta, '$.retired') IS NULL ORDER BY id DESC LIMIT 1",
+            (r["src"],),
+        ).fetchone()
+        for doc_id in titles.get(str(r["dst"]), []):
+            entry = out.setdefault(
+                doc_id,
+                {
+                    "state": STALE_RELS[str(r["rel"])],
+                    "since": r["world_from"],
+                    "by": "graph",
+                    "replaced_by": [],
+                },
+            )
+            if (
+                other is not None
+                and int(other[0]) not in hidden
+                and int(other[0]) != doc_id
+            ):
+                named = {"doc_id": int(other[0]), "title": str(r["src"])}
+                if named not in entry["replaced_by"]:
+                    entry["replaced_by"].append(named)
+    return out
 
 
 def _published_bound(value: str | None, name: str) -> str | None:

@@ -612,6 +612,18 @@ function publishedLabel(meta) {
   return meta && meta.date ? esc(String(meta.date)) : "";
 }
 
+// A document that is no longer current (a search hit's `stale`: state,
+// since, replaced_by): its state and date, and a link to what replaced it.
+// Shown, never hidden: the search ranks it lower, the reader decides.
+function staleNote(stale) {
+  if (!stale || !stale.state) return "";
+  const when = stale.since ? ` ${esc(stale.since)}` : "";
+  const by = (stale.replaced_by || []).slice(0, 2)
+    .map((r) => `<a href="#doc/${Number(r.doc_id)}">${esc(r.title || "doc " + r.doc_id)}</a>`).join("; ");
+  const said = stale.by === "graph" ? "another document says so" : "its own text says so";
+  return `<span class="stale" title="no longer current: ${esc(said)}">${esc(stale.state)}${when}${by ? ` → ${by}` : ""}</span>`;
+}
+
 // A document's times, for its page's header: when it was published (as
 // its source says), when it came into the library, when its text was last
 // read. Each says what it is, so "2019" is never mistaken for the day the
@@ -623,6 +635,10 @@ function dateLine(meta, doc) {
   const day = (s) => esc(String(s || "").slice(0, 10));
   if (doc && doc.added_at) bits.push(`<span class="muted" title="when it came into the library">added ${day(doc.added_at)}</span>`);
   if (doc && doc.parsed_at && day(doc.parsed_at) !== day(doc.added_at)) bits.push(`<span class="muted" title="when its text was last read">read ${day(doc.parsed_at)}</span>`);
+  const st = (meta || {}).status;
+  if (st && ["retired", "superseded", "invalid", "deprecated"].includes(st.state)) {
+    bits.push(`<span class="stale" title="${esc(st.words || "")}">${esc(st.state)}${st.since ? " " + esc(st.since) : ""}</span>`);
+  }
   return bits.join(" · ");
 }
 
@@ -711,5 +727,5 @@ function checksBox(checks) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }

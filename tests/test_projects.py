@@ -245,3 +245,45 @@ def test_the_notes_links_to_each_other_are_edges_kept_in_step(
         "edges"
     ]
     assert not [e for e in left if e["rel"] == "links_to"]
+
+
+def test_what_a_note_says_of_itself_is_its_status_and_an_edge(
+    client: TestClient,
+) -> None:
+    """ "Superseded 2026-10-02 by the new plan" near a note's top is its
+    status (by sync) and a supersedes edge from the new plan, dated in the
+    world; when the line goes, so do both (AL step 5)."""
+    con = client.app.state.con
+    old = (
+        "# Plan v1\n\n> **Status:** superseded 2026-10-02 by"
+        " [the new plan](plan-v2.md)\n\nThe old numbers.\n"
+    )
+    new = "# Plan v2\n\nThe numbers that hold.\n"
+    out = _sync(
+        client,
+        [_file("docs/plan-v1.md", old), _file("docs/plan-v2.md", new)],
+        name="synth-fw",
+        dry_run=False,
+    )
+    assert out["status"] == {"added": 1, "kept": 0, "ended": 0, "stale": 1}
+    v1 = next(p["doc_id"] for p in out["plan"] if p["path"] == "docs/plan-v1.md")
+    said = store.get_meta(con, v1)["status"]
+    assert (said["state"], said["since"], said["by"]) == (
+        "superseded",
+        "2026-10-02",
+        "sync",
+    )
+    edges = client.get("/traverse", params={"entity": f"doc:{v1}"}).json()["edges"]
+    sup = next(e for e in edges if e["rel"] == "supersedes")
+    assert (sup["src"], sup["dst"]) == ("Plan v2 (synth-fw)", "Plan v1 (synth-fw)")
+    assert sup["world_from"] == "2026-10-02" and sup["source_doc"] == v1
+    # the line is taken out: the status and the edge go with it
+    plain = "# Plan v1\n\nThe old numbers.\n"
+    out2 = _sync(
+        client,
+        [_file("docs/plan-v1.md", plain), _file("docs/plan-v2.md", new)],
+        dry_run=False,
+    )
+    assert out2["status"]["ended"] == 1 and out2["status"]["stale"] == 0
+    v1b = next(p["doc_id"] for p in out2["plan"] if p["path"] == "docs/plan-v1.md")
+    assert "status" not in store.get_meta(con, v1b)

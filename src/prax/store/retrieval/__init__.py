@@ -54,6 +54,10 @@ from .fusion import (  # noqa: F401
     PRIOR_MIN,
     PRIOR_SMALL,
     PRIOR_WEIGHT,
+    STALE_RELS,
+    STALE_SHIFT,
+    STALE_SPARE,
+    STALE_STATES,
     _apply_rerank,
     _aside_documents,
     _by_score,
@@ -67,10 +71,12 @@ from .fusion import (  # noqa: F401
     _holds_every_term,
     _published_bound,
     _search_hits,
+    _shift_stale,
     _Took,
     _without,
     published_dates,
     search,
+    staleness,
 )
 from .knobs import (  # noqa: F401
     Knobs,

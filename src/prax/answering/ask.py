@@ -112,6 +112,7 @@ class Passage:
     nearby: list[dict[str, Any]] | None = None  # a formula's neighbouring equations
     time: int | None = None  # seconds into a recording (a transcript's passage)
     published: str | None = None  # when its document was published, as it says
+    stale: dict[str, Any] | None = None  # no longer current: state, since, replaced_by
 
     def label(self) -> str:
         title = self.title or "(untitled)"
@@ -128,6 +129,15 @@ class Passage:
         s = " — ".join(bits)
         if self.kind and self.kind != "text":
             s += f" [{self.kind}]"
+        if self.stale:
+            # the answering model is told, and may say which word is current
+            note = str(self.stale.get("state") or "stale")
+            if self.stale.get("since"):
+                note += f" {self.stale['since']}"
+            named = self.stale.get("replaced_by") or []
+            if named:
+                note += " by " + "; ".join(str(r["title"]) for r in named[:2])
+            s += f" [no longer current: {note}]"
         return s
 
     def to_dict(self) -> dict[str, Any]:
@@ -142,6 +152,7 @@ class Passage:
             "text": self.text,
             "figure": self.figure,
             "published": self.published,
+            "stale": self.stale,
             "nearby": self.nearby,
             "time": self.time,
         }
@@ -368,6 +379,7 @@ def gather(
                 nearby=nearby_of(con, h.get("kind"), chunk_id),
                 time=h.get("time"),
                 published=h.get("published"),
+                stale=h.get("stale"),
             )
         )
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))
