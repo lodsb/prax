@@ -77,6 +77,18 @@ def retire(req: RetireReq, request: Request) -> dict[str, Any]:
     return {"run": req.run, "producer": req.producer, "edges": ended}
 
 
+class RestoreReq(BaseModel):
+    run: str  # the repair run to undo
+
+
+@router.post("/graph/restore")
+def restore(req: RestoreReq, request: Request) -> dict[str, Any]:
+    """Undo a repair run (``store.restore_run``): the edges it wrote are
+    ended, and the edges it ended (``heal:not-venues``,
+    ``heal:part_of-direction``) are stated again as new edges."""
+    return {"run": req.run, **store.restore_run(_con(request), req.run)}
+
+
 class UnmergeReq(BaseModel):
     run: str  # the run to take back
 
@@ -89,8 +101,8 @@ def unmerge(req: UnmergeReq, request: Request) -> dict[str, Any]:
     wrongly has to be undoable through the door — or the only way to undo
     it is a script that opens the database, which invariant 4 forbids.
     Every entity the run folded stands on its own again, every entity it
-    renamed is called what it was called, and the labels it wrote are
-    gone.
+    renamed is called what it was called, the labels it wrote are gone,
+    and the edges it wrote are ended.
     """
     return {"run": req.run, "entities": store.unmerge_run(_con(request), req.run)}
 

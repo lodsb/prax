@@ -119,6 +119,8 @@ from .edges import (  # noqa: F401
     invalidate_edge,
     link,
     provenance_summary,
+    record_ending,
+    restore_run,
     retire_reading,
     retire_run,
     run_edges,

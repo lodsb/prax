@@ -449,6 +449,78 @@ def retire_reading(
 
 
 @_serialized
+def record_ending(con: sqlite3.Connection, edge_id: int, run: str) -> None:
+    """Note that ``run`` ended this edge, for ``restore_run``."""
+    con.execute(
+        "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
+        f" VALUES (?, ?, {_NOW})",
+        (edge_id, run),
+    )
+    con.commit()
+
+
+@_serialized
+def restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
+    """Undo a repair run: its own live edges are ended (``retire_run``),
+    and every edge it ended (``edge_endings``) is stated again as a new
+    edge with the old one's fact, document, evidence, producer, run and
+    world dates. The ended edge stays ended: when prax held what is
+    history. A fact that is live again by other means is not doubled."""
+    retired = con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE run = ? AND valid_to IS NULL", (run,)
+    ).rowcount
+    rows = con.execute(
+        """
+        SELECT x.edge_id, e.*, s.name AS s_name, s.type AS s_type,
+               t.name AS t_name, t.type AS t_type
+        FROM edge_endings x JOIN edges e ON e.id = x.edge_id
+        JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
+        WHERE x.run = ? AND x.restated_as IS NULL
+        """,
+        (run,),
+    ).fetchall()
+    restated = 0
+    for r in rows:
+        live = con.execute(
+            "SELECT id FROM edges WHERE src = ? AND rel = ? AND dst = ?"
+            " AND source_doc IS ? AND valid_to IS NULL",
+            (r["src"], r["rel"], r["dst"], r["source_doc"]),
+        ).fetchone()
+        if live is None:
+            cur = con.execute(
+                "INSERT INTO edges (src, rel, dst, confidence, source_doc, evidence,"
+                " ontology_version, producer, run, world_from, world_from_precision,"
+                f" world_to, world_to_precision, valid_from, ingested_at)"
+                f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, {_NOW}, {_NOW})",
+                (
+                    r["src"],
+                    r["rel"],
+                    r["dst"],
+                    r["confidence"],
+                    r["source_doc"],
+                    r["evidence"],
+                    r["ontology_version"],
+                    r["producer"],
+                    r["run"],
+                    r["world_from"],
+                    r["world_from_precision"],
+                    r["world_to"],
+                    r["world_to_precision"],
+                ),
+            )
+            new_id = int(cur.lastrowid or 0)
+            restated += 1
+        else:
+            new_id = int(live["id"])
+        con.execute(
+            "UPDATE edge_endings SET restated_as = ? WHERE edge_id = ? AND run = ?",
+            (new_id, r["edge_id"], run),
+        )
+    con.commit()
+    return {"retired": retired, "restated": restated}
+
+
+@_serialized
 def retire_run(
     con: sqlite3.Connection,
     *,

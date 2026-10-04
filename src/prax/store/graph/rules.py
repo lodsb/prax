@@ -152,15 +152,19 @@ def part_of_suspects(
 
 
 @_reading
-def _rule_edges(con: sqlite3.Connection, run: str) -> dict[Pair, int]:
-    """A run's live derived edges by their (canonical) ends."""
+def _rule_edges(con: sqlite3.Connection, run: str) -> dict[Pair, list[int]]:
+    """A run's live derived edges by their (canonical) ends: a merge can
+    fold two of them onto one pair, and both must be seen to end one."""
     rows = con.execute(
         "SELECT e.id, COALESCE(s.canonical_id, s.id), COALESCE(t.canonical_id, t.id)"
         " FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
         " WHERE e.run = ? AND e.valid_to IS NULL",
         (run,),
     ).fetchall()
-    return {(int(r[1]), int(r[2])): int(r[0]) for r in rows}
+    out: dict[Pair, list[int]] = defaultdict(list)
+    for r in rows:
+        out[(int(r[1]), int(r[2]))].append(int(r[0]))
+    return dict(out)
 
 
 @_reading
@@ -288,7 +292,11 @@ def derive_rules(
             stated_inverse = {(a, b) for _, a, b, _ in _premise_edges(con, writes)}
             plan = {k: v for k, v in plan.items() if k not in stated_inverse}
         run = f"rule:{writes}" if kind != "inverse" else f"rule:{writes}<-{read}"
-        have = _rule_edges(con, run)
+        held = _rule_edges(con, run)
+        # one edge stands for a pair; a second one a merge folded onto it
+        # is ended with those that no longer follow
+        have = {k: ids[0] for k, ids in held.items()}
+        doubled = [eid for ids in held.values() for eid in ids[1:]]
         world = {eid: wf for eid, _, _, wf in edges}
         new = [k for k in plan if k not in have]
         names = _names(con, {x for k in new for x in k})
@@ -306,7 +314,7 @@ def derive_rules(
             got = _write(con, writes, kind, run, batch, names, lines)
             added += got[0]
             refused += got[1]
-        gone = [eid for k, eid in have.items() if k not in plan]
+        gone = [eid for k, eid in have.items() if k not in plan] + doubled
         for i in range(0, len(gone), RULE_BATCH):
             _end(con, gone[i : i + RULE_BATCH])
         kept = {eid: plan[k] for k, eid in have.items() if k in plan}

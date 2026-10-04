@@ -528,7 +528,8 @@ def unmerge_entity(
 def unmerge_run(con: sqlite3.Connection, run: str) -> int:
     """Undo a round: every entity the run folded away stands on its own
     again, every entity it renamed is called what it was called, and the
-    labels it wrote are gone. Returns how many entities came back.
+    labels it wrote are gone, and the edges it wrote are ended. Returns how
+    many entities came back.
 
     The counterpart of ``retire_run`` for edges. A merge is a claim, and
     a pass that claimed wrongly has to be undoable, or nobody can try a
@@ -576,6 +577,12 @@ def unmerge_run(con: sqlite3.Connection, run: str) -> int:
             (r["entity_id"], r["label"]),
         )
         _refresh_name(con, int(r["entity_id"]))
+    # and the edges the round wrote: the venue tier links each edition
+    # part_of its series under the round's run (found by the review of
+    # 2026-10-04); ended, as retire_run ends them
+    con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE run = ? AND valid_to IS NULL", (run,)
+    )
     con.commit()
     return len(ids) + len(renamed)
 

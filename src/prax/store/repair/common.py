@@ -11,6 +11,7 @@ from typing import Any
 
 from ..graph import (
     invalidate_edge,
+    record_ending,
     resolve_review,
 )
 from ..jobs import job_finish
@@ -82,13 +83,19 @@ def _entity_rows(
     )
 
 
-def _invalidate(con: sqlite3.Connection, edge_ids: list[int]) -> int:
+def _invalidate(
+    con: sqlite3.Connection, edge_ids: list[int], *, run: str | None = None
+) -> int:
+    """End edges; with ``run``, record each under it (``edge_endings``),
+    so ``store.restore_run`` can undo the repair that ended them."""
     done = 0
     for edge_id in edge_ids:
         try:
             invalidate_edge(con, edge_id)
         except (KeyError, ValueError):  # another pass ended it first
             continue
+        if run is not None:
+            record_ending(con, edge_id, run)
         done += 1
     return done
 

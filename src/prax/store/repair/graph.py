@@ -447,7 +447,7 @@ def _repair_part_of(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     done = 0
     for row in rows:
         if row["verdict"] == "misfit":
-            done += _invalidate(con, [int(row["id"])])
+            done += _invalidate(con, [int(row["id"])], run=HEAL_PRODUCER)
             continue
         if row["verdict"] != "reversed":
             continue
@@ -462,7 +462,7 @@ def _repair_part_of(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
             "SELECT evidence, world_from, world_to FROM edges WHERE id = ?",
             (row["id"],),
         ).fetchone()
-        if not _invalidate(con, [int(row["id"])]):
+        if not _invalidate(con, [int(row["id"])], run=HEAL_PRODUCER):
             continue
         link(
             con,
@@ -646,7 +646,7 @@ def _repair_not_venues(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
                     onto.check_edge(edge.src_type, edge.rel, edge.dst_type)
                 except ValueError:
                     edge = None  # what it was meant to say does not fit: ended only
-            if not _invalidate(con, [int(e["id"])]):
+            if not _invalidate(con, [int(e["id"])], run=NOT_VENUE_PRODUCER):
                 continue
             if edge is not None:
                 link(
