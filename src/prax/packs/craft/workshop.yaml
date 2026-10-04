@@ -54,6 +54,9 @@ relation_types:
       the build is made to this design or by this technique, as the text
       says (a published schematic, a kit's instructions, a joint)
   derived_from:
+    transitive: true
+    kind: event
+    same_as: prov:wasDerivedFrom
     domain: [build, design]
     range: [build, design]
     description: >-

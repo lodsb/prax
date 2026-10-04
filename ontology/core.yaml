@@ -46,31 +46,38 @@ version: 4
 
 entity_types:
   person:
+    same_as: schema:Person
     description: >-
       A human being named in the text, as printed, full form, no titles.
       Domain modules subtype this (an author is a person).
   organization:
+    same_as: schema:Organization
     description: >-
       A university, department, lab, company, funder, consortium or
       standards body named in the text: Chalmers University of Technology,
       LMA-CNRS, Waves Audio, Austrian Science Fund. Full name as printed,
       no city or country unless part of the name.
   document:
+    same_as: schema:CreativeWork
     description: >-
       Something written or recorded that the store holds or the text names
       by title. Domain modules subtype this (a paper, a page).
   place:
+    same_as: schema:Place
     description: >-
       A named location: a city, a studio, a venue building, a country.
   event:
+    same_as: schema:Event
     description: >-
       A dated happening the text names: a conference edition, a concert,
       a release, a meeting.
   work:
+    same_as: schema:CreativeWork
     description: >-
       A creative work named as such: a piece of music, an album, a film,
       a book as a work rather than as the document at hand.
   concept:
+    same_as: skos:Concept
     naming: common
     description: >-
       An idea, topic, phenomenon or quantity a document is about: source
@@ -79,12 +86,15 @@ entity_types:
       is a concept; the technique itself is a method, never both under one
       name.
   tool:
+    same_as: schema:SoftwareApplication
     description: >-
       Software, hardware, a library or an instrument used or built:
       Matlab, Csound, Web Audio API, a specific synthesizer.
 
 relation_types:
   affiliated_with:
+    kind: state
+    same_as: schema:affiliation
     domain: [person, organization]
     range: [organization, concept]
     description: >-
@@ -94,10 +104,14 @@ relation_types:
       or organization's school of thought or movement, as a concept.
       When one organization is inside the other, part_of is the relation
   developed_by:
+    kind: eternal
+    same_as: schema:creator
     domain: [tool]
     range: [organization, person]
     description: who built or makes the tool, as the text states it
   authored_by:
+    kind: eternal
+    same_as: schema:author
     domain: [document]
     range: [person, organization]
     description: >-
@@ -106,6 +120,8 @@ relation_types:
       it when no person is named (a standards body, a manufacturer's
       manual)
   published_by:
+    kind: event
+    same_as: schema:publisher
     domain: [document]
     range: [organization]
     description: >-
@@ -113,6 +129,9 @@ relation_types:
       behind a manual); where it appeared — the journal, the conference —
       is published_in
   part_of:
+    transitive: true
+    kind: state
+    same_as: schema:isPartOf
     domain: [document, organization]
     range: [document, organization]
     description: >-
@@ -121,12 +140,17 @@ relation_types:
       organization within a larger one (a lab or department in a
       university, a subsidiary in a group)
   located_in:
+    transitive: true
+    kind: state
+    same_as: schema:containedInPlace
     domain: [organization, event, person]
     range: [place]
     description: >-
       where an organization is based, an event was held or a person is
       based, as the text states it (a city, a country)
   links_to:
+    kind: eternal
+    same_as: dcterms:references
     domain: [document]
     range: [document]
     description: >-
@@ -134,12 +158,16 @@ relation_types:
       (a Markdown link, a backticked file name); written by a project's
       sync from the text itself, never guessed
   supersedes:
+    transitive: true
+    kind: event
+    same_as: dcterms:replaces
     domain: [document]
     range: [document]
     description: >-
       the document replaces an earlier one: a new version, a revised
       plan, a later edition, a note that says it takes another's place
   invalidates:
+    kind: event
     domain: [document]
     range: [document]
     description: >-

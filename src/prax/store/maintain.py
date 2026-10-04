@@ -63,6 +63,7 @@ from .graph import (
     Edge,
     communities_input,
     corpus_rulings,
+    derive_rules,
     find_edges,
     forget_resolved_reviews,
     in_english_text,
@@ -103,7 +104,7 @@ PASSES = (
     "histories",
 )
 # a pass only when named: the nightly has no reason to
-ON_REQUEST = ("rechunk", "rejudge", "vectors")
+ON_REQUEST = ("rechunk", "rejudge", "vectors", "rules")
 
 
 def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
@@ -900,6 +901,15 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"rulings": len(rulings), "overturned": len(overturned)}
 
 
+def _rules(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """What follows from what is stated: the closure of each transitive
+    relation, the converse of each symmetric one, kept in step with the
+    asserted edges (``store.derive_rules``, stage AN). On request until
+    measured on the library."""
+    job.update(note="rules over the graph")
+    return dict(derive_rules(con))
+
+
 def _histories(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The parse and extraction histories held to ``HISTORY_KEEP`` entries
     (``bounded_histories``), for documents written before the bound or by
@@ -993,6 +1003,7 @@ _RUN = {
     "rejudge": _rejudge,
     "vectors": _vectors,
     "histories": _histories,
+    "rules": _rules,
 }
 
 

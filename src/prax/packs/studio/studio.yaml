@@ -116,6 +116,9 @@ relation_types:
       For a device or a part use `describes`; for a way of doing
       something, craft's `applies`
   has_part:
+    transitive: true
+    kind: state
+    same_as: schema:hasPart
     domain: [device, component]
     range: [component, device]
     description: >-
@@ -134,6 +137,9 @@ relation_types:
     range: [spec]
     description: a rated or measured value the text states for the device
   compatible_with:
+    symmetric: true
+    kind: state
+    same_as: schema:isRelatedTo
     domain: [device, component]
     range: [device, component]
     description: >-
@@ -141,6 +147,9 @@ relation_types:
       hosts, a controller it accepts, a format it loads from another
       device
   succeeds:
+    transitive: true
+    kind: event
+    same_as: schema:successorOf
     domain: [device]
     range: [device]
     description: the device is the newer model replacing or following the other

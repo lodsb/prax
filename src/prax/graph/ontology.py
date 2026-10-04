@@ -64,6 +64,10 @@ class EntityType:
     # from the parent, and a root that says nothing is proper (see
     # ``Ontology.naming``)
     naming: str = ""
+    # the same type in a standard vocabulary ("schema:Person",
+    # "skos:Concept"): what the type is called where other systems and
+    # models know it; it changes what validates in no way (stage AN)
+    same_as: tuple[str, ...] = ()
 
 
 NAMINGS = ("proper", "common")
@@ -76,6 +80,24 @@ class Relation:
     range: frozenset[str] = frozenset()
     description: str = ""
     module: str = CORE
+    # what follows from the relation (stage AN): the rule pass derives the
+    # closure of a transitive one and the converse of a symmetric one;
+    # a functional one (one value a subject) is a constraint whose breach
+    # is a finding, never an edge; ``inverse_of`` names the relation that
+    # says the same the other way round. None of it changes what
+    # validates, so none of it bumps a version
+    transitive: bool = False
+    symmetric: bool = False
+    functional: bool = False
+    inverse_of: str = ""
+    # how a fact of it lasts: "state" (holds for a while: an affiliation),
+    # "event" (happens once: a publication), "eternal" (holds as long as
+    # the things do: authorship); empty says nothing
+    kind: str = ""
+    same_as: tuple[str, ...] = ()  # in schema.org, SKOS, PROV-O, Dublin Core
+
+
+RELATION_KINDS = ("state", "event", "eternal")
 
 
 @dataclass(frozen=True)
@@ -291,6 +313,58 @@ def _naming(type_name: str, value: Any) -> str:
     return got
 
 
+def _same_as(name: str, value: Any) -> tuple[str, ...]:
+    """A ``same_as`` entry: one ``prefix:Term`` or a list of them."""
+    if value is None:
+        return ()
+    items = [value] if isinstance(value, str) else list(value)
+    for item in items:
+        if not isinstance(item, str) or ":" not in item:
+            raise ValueError(f"{name!r}: same_as is prefix:Term, not {item!r}")
+    return tuple(items)
+
+
+def lint(types: dict[str, EntityType], relations: dict[str, Relation]) -> list[str]:
+    """What contradicts itself in the composed ontology (stage AN): a
+    relation transitive and functional at once (its closure would give a
+    subject several values), symmetric between types it cannot hold the
+    other way round, an ``inverse_of`` that names nothing or is not
+    mutual, an unknown ``kind``, a subtype cycle."""
+    out: list[str] = []
+    for r in relations.values():
+        if r.transitive and r.functional:
+            out.append(f"relation {r.name!r} is transitive and functional")
+        if r.symmetric and r.domain and r.range and r.domain != r.range:
+            out.append(
+                f"relation {r.name!r} is symmetric but its domain is not its range"
+            )
+        if r.inverse_of:
+            other = relations.get(r.inverse_of)
+            if other is None:
+                out.append(
+                    f"relation {r.name!r}: inverse_of {r.inverse_of!r} is unknown"
+                )
+            elif other.inverse_of and other.inverse_of != r.name:
+                out.append(
+                    f"relation {r.name!r}: inverse_of {r.inverse_of!r}, which says"
+                    f" {other.inverse_of!r}"
+                )
+            elif r.symmetric:
+                out.append(f"relation {r.name!r} is symmetric and has an inverse")
+        if r.kind and r.kind not in RELATION_KINDS:
+            out.append(f"relation {r.name!r}: kind {r.kind!r}, one of {RELATION_KINDS}")
+    for t in types.values():
+        seen = {t.name}
+        parent = t.parent
+        while parent:
+            if parent in seen:
+                out.append(f"entity type {t.name!r} is in a subtype cycle")
+                break
+            seen.add(parent)
+            parent = types[parent].parent if parent in types else None
+    return out
+
+
 def parse_module(text: str, *, name: str | None = None) -> Module:
     """One module file. Without ``module:`` the file is a module named
     ``name`` (default ``main``) that requires nothing."""
@@ -305,6 +379,7 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
             parent=str(a["parent"]) if a.get("parent") else None,
             description=str(a.get("description") or "").strip(),
             naming=_naming(n, a.get("naming")),
+            same_as=_same_as(n, a.get("same_as")),
         )
         for n, a in _names(data.get("entity_types"), "entity_types").items()
     }
@@ -315,6 +390,12 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
             range=frozenset(a.get("range") or []),
             description=str(a.get("description") or "").strip(),
             module=mod,
+            transitive=bool(a.get("transitive", False)),
+            symmetric=bool(a.get("symmetric", False)),
+            functional=bool(a.get("functional", False)),
+            inverse_of=str(a.get("inverse_of") or ""),
+            kind=str(a.get("kind") or ""),
+            same_as=_same_as(n, a.get("same_as")),
         )
         for n, a in _names(data.get("relation_types"), "relation_types").items()
     }
@@ -426,6 +507,9 @@ def compose(modules: list[Module]) -> Ontology:
         _declare(types, "entity type", m.name, m.types)
         _declare(relations, "relation", m.name, m.relations)
     _check_references(types, relations)
+    problems = lint(types, relations)
+    if problems:
+        raise ValueError("the ontology contradicts itself: " + "; ".join(problems))
     type_aliases: dict[str, str] = {}
     relation_aliases: dict[str, str] = {}
     reversed_aliases: set[str] = set()

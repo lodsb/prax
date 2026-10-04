@@ -43,6 +43,7 @@ EXPECTED_TOOLS = {
     "references",
     "cited_but_missing",
     "request_reading",
+    "why",
 }
 
 

@@ -72,6 +72,8 @@ entity_types:
 
 relation_types:
   written_in:
+    kind: eternal
+    same_as: schema:programmingLanguage
     domain: [program, code_library, source_code]
     range: [programming_language]
     description: the language the program, library or source file is written in

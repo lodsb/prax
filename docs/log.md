@@ -4062,6 +4062,52 @@ hit gets the id alone. Only an agent's search pays for it (`brief`),
 and `ask`'s passages carry it too. On six searches of the live store,
 51 of 60 hits got their words, for 23 to 116 ms a search.
 
+## 2026-10-04, the evening: rules over the graph (stage AN, first part)
+
+**The ontology annotated.** A relation now says what follows from it:
+`transitive` (`part_of`, `located_in`, `has_part`, `supersedes`,
+`succeeds`, `derived_from`), `symmetric` (`compatible_with`), `functional`
+(`published_in`), `inverse_of` (none yet: prax states a relation one way
+and maps the other through aliases), `kind` (state, event, eternal), and
+`same_as` in schema.org, SKOS, PROV-O and Dublin Core where a term matches
+exactly; core's types carry `same_as` too (`schema:Person`,
+`skos:Concept`). None of it changes what validates, so no module's
+version moves, as with `naming:`. `ontology.lint` refuses at load a
+relation transitive and functional at once, symmetric between types it
+cannot hold the other way, an `inverse_of` that names nothing or is not
+mutual, an unknown kind, a subtype cycle.
+
+**The rule pass** (`store.derive_rules`, the graph package's `rules`
+part): the closure of each transitive relation (chains of six at most,
+20,000 a relation at most), the converse of each symmetric one, the
+inverse of a declared inverse. A derived edge is INFERRED, producer
+`rule:<kind>`, run `rule:<relation>`, its world date the latest of its
+premises', and its premises are kept (`edge_premises`, migration 41;
+`GET /edge/{id}/why`, the `why` tool). An asserted edge is never derived
+again. Premises come only from open documents, so a personal note's facts
+derive nothing a restricted token could see. Each pass derives everything
+again and compares: new derivations linked, kept ones' premises renewed,
+those that no longer follow ended. Constraints are findings: the
+`functional-conflicts` ailment of `prax heal` lists a subject with two
+values of a functional relation, for a person.
+
+**Measured on a copy of the library.** One pass: 2.9 s, 306 edges
+(`compatible_with` 192, `part_of` 110, `has_part` 3, `succeeds` 1;
+`located_in` none, since the ontology lets no place be in a place); a
+second pass 0.3 s, everything kept. Read by hand, 20 `part_of`
+derivations: 5 right (a book's chapter, a lecture in its course), 15
+wrong, nearly all on a premise the extraction wrote backwards
+("Technische Universität München part_of Lecture Distributed Problem
+Solving", a course `part_of` an exercise sheet). A closure carries such a
+premise into every chain through it. So the pass stays on request
+(`prax maintain --only rules`), not on the door's clock; its use now is
+as a detector, an absurd derivation pointing at the backwards fact under
+it. The way on is a direction check of `part_of` at extraction, and then
+the measurement again. The functional findings are noisy for a like
+reason: most of the 200+ subjects with two venues are one venue under
+two names ("ISMIR", "11th International Society for Music Information
+Retrieval Conference"), which is entity resolution's work.
+
 The first walk as of a day on the live store took 44 s: the indexes on
 `edges(src)` and `edges(dst)` are partial (live edges only), so the
 condition `held_at` writes for a past moment scanned every edge at each

@@ -19,6 +19,7 @@ ORDER = (
     "context",
     "communities",
     "traversal",
+    "rules",
 )
 
 from .communities import (  # noqa: F401
@@ -159,6 +160,14 @@ from .languages import (  # noqa: F401
     name_in_english,
     unlabelled_names,
     unmark_corpus_ruling,
+)
+from .rules import (  # noqa: F401
+    RULE_CAP,
+    RULE_DEPTH,
+    closure,
+    converse,
+    derive_rules,
+    edge_premises,
 )
 from .traversal import (  # noqa: F401
     EDGES,

@@ -106,7 +106,7 @@ fine for the tools, since the door answers them; pull it now and then.
 
 | | |
 |---|---|
-| MCP server `prax` | `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`, `link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`, `promote`, `set_domains`, `status`, `health`, `maths`, `sync_project`, `update_section`, `capture_urls`, `set_title`, `references`, `cited_but_missing`, `request_reading` |
+| MCP server `prax` | `search`, `get`, `get_chunk`, `context`, `documents`, `traverse`, `link`, `ask`, `get_page`, `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`, `promote`, `set_domains`, `status`, `health`, `maths`, `sync_project`, `update_section`, `capture_urls`, `set_title`, `references`, `cited_but_missing`, `request_reading`, `why` |
 | skill `prax` | when to reach for the library (a question about what you read or decided, a design decision in a domain it holds, "did I…", "save this"), how to read it (search, read the passage, cite `doc:<id>`), how to write back (pages, edges, captures) |
 | `/prax:scope [name]` | the project's page, its documents in the library, what else bears on it — at the start |
 | `/prax:research <question>` | search, read, answer with citations; offers to keep the answer as a page |

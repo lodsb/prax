@@ -113,6 +113,13 @@ def traverse(
         raise HTTPException(400, str(exc)) from exc
 
 
+@router.get("/edge/{edge_id}/why")
+def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
+    """What a derived edge follows from: its premises, in the order of the
+    chain (``store.edge_premises``); empty for an asserted edge."""
+    return {"edge_id": edge_id, "premises": store.edge_premises(_con(request), edge_id)}
+
+
 @router.get("/ontology")
 def ontology_view() -> dict[str, Any]:
     """The current ontology: what the graph and the review view may use."""

@@ -108,6 +108,7 @@ WALKED = (
     ("GET", "/get/1"),
     ("GET", "/chunk/1"),
     ("GET", "/traverse"),
+    ("GET", "/edge/1/why"),
     ("GET", "/documents"),
     ("GET", "/doc/1/context"),
     ("GET", "/page/x"),

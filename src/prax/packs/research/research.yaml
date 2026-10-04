@@ -100,6 +100,8 @@ entity_types:
 
 relation_types:
   cites:
+    kind: eternal
+    same_as: schema:citation
     domain: [document]
     range: [document]
     description: >-
@@ -113,10 +115,14 @@ relation_types:
       authors' affiliation on the first page, the company behind a
       manual); affiliated_with is for a person, this is for the document
   published_in:
+    functional: true
+    kind: event
+    same_as: schema:isPartOf
     domain: [document]
     range: [venue]
     description: the venue the document appeared in
   about:
+    same_as: schema:about
     domain: [document, claim]
     range: [concept, method, tool, dataset, person, organization, place, event, work]
     description: >-
@@ -180,6 +186,7 @@ relation_types:
       page's own claims then carry supports and contradicts edges from
       the papers
   mentions:
+    same_as: schema:mentions
     domain: [document]
     range: [tool, method, dataset, concept, person, organization, document, place, event, work]
     description: >-
@@ -189,6 +196,8 @@ relation_types:
       weakest relation: use it only when nothing stronger holds; never for
       something the document uses, cites or is substantially about
   funded_by:
+    kind: event
+    same_as: schema:funder
     domain: [document]
     range: [organization]
     description: a funder or grant programme acknowledged in the document

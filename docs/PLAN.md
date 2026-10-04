@@ -474,17 +474,17 @@ and pushing what is committed.
       vocabularies: "maybe they are more useful for a reasoning part?").
       The research note, sections 10 and 11; Utopia's `utopia-reason` is
       the worked design, under two thousand lines.
-      - [ ] **The ontology annotated, not replaced**: a relation's
+      - [x] (2026-10-04: `transitive`, `symmetric`, `functional`, `inverse_of`, `kind` and `same_as` on relations, `same_as` on types; no version bump: they change what validates in no way, as `naming:`) **The ontology annotated, not replaced**: a relation's
             characteristics in the YAML (`transitive`, `inverse_of`,
             `symmetric`, `functional`, and `state`, `event` or
             `eternal`), and `same_as` names in schema.org, SKOS and
             PROV-O where they exist. It changes what types exist in no
             way, so whether it bumps a module's version is decided with
             it.
-      - [ ] **A lint of the ontology when it loads**: symmetric and
+      - [x] (2026-10-04: `ontology.lint`, run by `compose`; a contradiction refuses to load) **A lint of the ontology when it loads**: symmetric and
             asymmetric at once, transitive and functional at once, a
             subtype cycle, an inverse that is not mutual.
-      - [ ] **A rule pass on the door's clock**: OWL RL's few rules
+      - [x] (2026-10-04: `store.derive_rules`, `edge_premises` (migration 41), `GET /edge/{id}/why` and the `why` tool; on request (`prax maintain --only rules`), not on the clock: see the measurement) **A rule pass on the door's clock**: OWL RL's few rules
             (transitivity, inverses, symmetry, subproperties) as forward
             rules in SQL. A derived edge is INFERRED, producer
             `rule:<name>`, a run, its validity the intersection of its
@@ -494,9 +494,9 @@ and pushing what is committed.
             A cap a relation. Retraction by recompute and diff: the pass
             derives everything again and ends what no longer follows;
             nothing is deleted, and retiring its run removes all of it.
-      - [ ] **Constraints as findings, not rules**: a functional relation
+      - [x] (2026-10-04: the `functional-conflicts` ailment of `prax heal`, report only) **Constraints as findings, not rules**: a functional relation
             with two values goes to the `contradicts` pass (AL step 4).
-      - [ ] Measured: how many edges a pass adds, how many are wrong on a
+      - [x] (2026-10-04, on a copy: 306 derived in 2.9 s; `part_of` closure right in 5 of 20, the rest built on premises the extraction wrote backwards; so not nightly. Next: a direction check of `part_of` at extraction, then measure again) Measured: how many edges a pass adds, how many are wrong on a
             sample, what it does to `traverse` and to `ask`. The path
             index (AM) gains from it: a closure of `part_of` and of
             `broader` gives a walk meaningful shortcuts.

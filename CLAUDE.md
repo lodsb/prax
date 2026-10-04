@@ -168,6 +168,13 @@ revisit threshold, under "Decision thresholds" below.
    carries its domain set in `meta.domains`, the modules it is read
    against; none means every module. It is extracted against that
    subset and stamped with the subset's version (`core1+family1`).
+   A relation says what follows from it (`transitive`, `symmetric`,
+   `functional`, `inverse_of`, `kind`) and a type or relation its
+   standard names (`same_as`: `schema:author`, `skos:Concept`); none of
+   it bumps a version, and `ontology.lint` refuses a contradiction at
+   load. The rule pass (`store.derive_rules`) writes INFERRED edges with
+   their premises (`edge_premises`), on request until it is measured
+   right (stage AN).
    A type says with `naming:` whether its names are `proper` (one
    particular thing: a person, a publisher, a product, a title, the same
    string in every language) or `common` (a kind of thing, which every

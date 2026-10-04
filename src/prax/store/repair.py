@@ -151,6 +151,51 @@ class Ailment:
 # ------------------------------------------------------------------- find
 
 
+FUNCTIONAL_SHOWN = 200  # subjects a functional-conflicts finding lists
+
+
+def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """The subjects with two or more live values of a relation the ontology
+    calls functional (``published_in``: a paper in one venue), each with
+    its values and how many edges say each (stage AN: a constraint's
+    breach is a finding for a person, never an edge)."""
+    out: list[dict[str, Any]] = []
+    for rel in sorted(
+        r.name for r in ontology.current().relations.values() if r.functional
+    ):
+        rows = con.execute(
+            """
+            SELECT cs.name AS subject, cs.type AS type, ct.name AS value, count(*) AS n
+            FROM edges e
+            JOIN entities s ON s.id = e.src
+            JOIN entities cs ON cs.id = COALESCE(s.canonical_id, s.id)
+            JOIN entities t ON t.id = e.dst
+            JOIN entities ct ON ct.id = COALESCE(t.canonical_id, t.id)
+            WHERE e.rel = ? AND e.valid_to IS NULL
+            GROUP BY cs.id, ct.id
+            """,
+            (rel,),
+        ).fetchall()
+        by_subject: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for r in rows:
+            by_subject.setdefault((r["subject"], r["type"]), []).append(
+                {"value": r["value"], "edges": int(r["n"])}
+            )
+        for (subject, etype), values in sorted(by_subject.items()):
+            if len(values) > 1:
+                out.append(
+                    {
+                        "relation": rel,
+                        "subject": subject,
+                        "type": etype,
+                        "values": values,
+                    }
+                )
+                if len(out) >= FUNCTIONAL_SHOWN:
+                    return out
+    return out
+
+
 def _live_edge_counts(con: sqlite3.Connection, ids: list[int]) -> dict[int, int]:
     """How many live edges each of these entities carries. Two indexed
     queries per batch: a correlated count with `src = ? OR dst = ?` cannot
@@ -1251,6 +1296,18 @@ def _repair_stray_versions(con: sqlite3.Connection, rows: list[dict[str, Any]]) 
 # --------------------------------------------------------------- the list
 
 AILMENTS: tuple[Ailment, ...] = (
+    Ailment(
+        name="functional-conflicts",
+        what=(
+            "a subject with two values of a relation the ontology calls"
+            " functional (a paper published in two venues)"
+        ),
+        fix=(
+            "look at the evidence of each: end the wrong edge, or say it is"
+            " not functional in the ontology's YAML; nothing is changed here"
+        ),
+        find=_functional_conflicts,
+    ),
     Ailment(
         name="stray-version-modules",
         what=(

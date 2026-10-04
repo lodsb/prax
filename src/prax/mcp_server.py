@@ -250,6 +250,14 @@ def link(
 
 
 @mcp.tool()
+def why(edge_id: int) -> dict[str, Any]:
+    """What a derived edge follows from (an INFERRED edge whose producer is
+    ``rule:…``, as ``traverse`` lists it): the stated facts of its chain,
+    each with its document and evidence."""
+    return _answer(lambda: door().get_json(f"/edge/{edge_id}/why"))
+
+
+@mcp.tool()
 def ask(
     question: str,
     limit: int = 8,
