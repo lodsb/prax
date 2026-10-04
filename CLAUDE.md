@@ -173,8 +173,8 @@ revisit threshold, under "Decision thresholds" below.
    standard names (`same_as`: `schema:author`, `skos:Concept`); none of
    it bumps a version, and `ontology.lint` refuses a contradiction at
    load. The rule pass (`store.derive_rules`) writes INFERRED edges with
-   their premises (`edge_premises`), on request until it is measured
-   right (stage AN).
+   their premises (`edge_premises`) in the nightly `prax maintain`, and
+   stands on no `part_of` its names doubt (stage AN).
    A type says with `naming:` whether its names are `proper` (one
    particular thing: a person, a publisher, a product, a title, the same
    string in every language) or `common` (a kind of thing, which every

@@ -496,7 +496,7 @@ and pushing what is committed.
             nothing is deleted, and retiring its run removes all of it.
       - [x] (2026-10-04: the `functional-conflicts` ailment of `prax heal`, report only) **Constraints as findings, not rules**: a functional relation
             with two values goes to the `contradicts` pass (AL step 4).
-      - [x] (2026-10-04, on a copy: 306 derived in 2.9 s; `part_of` closure right in 5 of 20, the rest built on premises the extraction wrote backwards; so not nightly. Then the direction check, `ontology.part_of_suspect` with the lexicon's `part_of` cues: suspects go to the review queue, are no premise, and the `backwards-part-of` ailment lists and mends the written ones; the pass then wrote 23 `part_of` derivations, 18 of 20 right. Whether it goes on the door's clock is the user's call) Measured: how many edges a pass adds, how many are wrong on a
+      - [x] (2026-10-04, on a copy: 306 derived in 2.9 s; `part_of` closure right in 5 of 20, the rest built on premises the extraction wrote backwards; so not nightly. Then the direction check, `ontology.part_of_suspect` with the lexicon's `part_of` cues: suspects go to the review queue, are no premise, and the `backwards-part-of` ailment lists and mends the written ones; the pass then wrote 23 `part_of` derivations, 18 of 20 right. The user put it on the clock the same day: a pass of the nightly `prax maintain`) Measured: how many edges a pass adds, how many are wrong on a
             sample, what it does to `traverse` and to `ask`. The path
             index (AM) gains from it: a closure of `part_of` and of
             `broader` gives a walk meaningful shortcuts.

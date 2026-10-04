@@ -4160,9 +4160,13 @@ misfit's way, to the review queue with its reason (`part_of doubtful:
 `backwards-part-of` ailment of `prax heal` lists the edges already
 written. Its repair turns a reversed edge round (old ended, new INFERRED,
 producer `heal:part_of-direction`, same document and evidence) and ends a
-misfit; a doubtful one is listed and not changed. Not applied to the live
-store: that is the user's call (`prax heal --check backwards-part-of
---apply`).
+misfit; a doubtful one is listed and not changed. The user had it applied to the
+live store the same evening (`prax heal --check backwards-part-of
+--apply`): 82 of 110 mended, 15 turned round and 67 ended, the 28
+doubtful left. One turned edge reads as doubtful the other way round
+("Lecture Course WS 2010/11 Distributed Problem Solving", a course cue
+on its source); a doubt is never mended, so nothing flips back. The
+rule pass is a pass of the nightly `prax maintain` from then on.
 
 **Measured on a copy.** Of the 866 edges, 15 reversed, 66 misfits and 28
 doubtful. Read by hand: reversed 13 of 14 right (one pair of unrelated

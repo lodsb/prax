@@ -100,11 +100,12 @@ PASSES = (
     "private",
     "names",
     "attachment",
+    "rules",
     "communities",
     "histories",
 )
 # a pass only when named: the nightly has no reason to
-ON_REQUEST = ("rechunk", "rejudge", "vectors", "rules")
+ON_REQUEST = ("rechunk", "rejudge", "vectors")
 
 
 def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
@@ -904,8 +905,9 @@ def _rejudge(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 def _rules(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """What follows from what is stated: the closure of each transitive
     relation, the converse of each symmetric one, kept in step with the
-    asserted edges (``store.derive_rules``, stage AN). On request until
-    measured on the library."""
+    asserted edges (``store.derive_rules``, stage AN). Nightly since its
+    premises are checked (``part_of_suspects``): 18 of 20 right, measured
+    on the library 2026-10-04."""
     job.update(note="rules over the graph")
     return dict(derive_rules(con))
 
