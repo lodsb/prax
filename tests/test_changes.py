@@ -19,6 +19,16 @@ def _set_record(con: sqlite3.Connection, edge_id: int, written: str) -> None:
     con.commit()
 
 
+def _day(con: sqlite3.Connection, edge_id: int) -> str:
+    """The day an edge was written: a period taken from a later now()
+    crosses midnight now and then (the review of 2026-10-04)."""
+    return str(
+        con.execute("SELECT valid_from FROM edges WHERE id = ?", (edge_id,)).fetchone()[
+            0
+        ]
+    )[:10]
+
+
 def test_record_time_says_what_was_written_and_ended(con: sqlite3.Connection) -> None:
     old = store.link(con, E("Lab", "organization", "part_of", "Uni", "organization"))
     new = store.link(con, E("Group", "organization", "part_of", "Uni", "organization"))
@@ -28,7 +38,7 @@ def test_record_time_says_what_was_written_and_ended(con: sqlite3.Connection) ->
     assert got["time"] == "record"
     assert [f["src"] for f in got["added"]["facts"]] == ["Lab"]
     assert got["ended"]["count"] == 0  # it ended later
-    today = store.changes(con, store.now()[:10])
+    today = store.changes(con, _day(con, new))
     assert {f["edge_id"] for f in today["added"]["facts"]} == {new}
     assert {f["edge_id"] for f in today["ended"]["facts"]} == {old}
     assert today["added"]["by_rel"] == {"part_of": 1}
@@ -108,8 +118,8 @@ def test_a_rereading_is_not_news(con: sqlite3.Connection) -> None:
     first = store.link(con, E("Lab", "organization", "part_of", "Uni", "organization"))
     _set_record(con, first, "2026-08-01T00:00:00Z")
     store.invalidate_edge(con, first)
-    store.link(con, E("Lab", "organization", "part_of", "Uni", "organization"))
-    today = store.changes(con, store.now()[:10])
+    again = store.link(con, E("Lab", "organization", "part_of", "Uni", "organization"))
+    today = store.changes(con, _day(con, again))
     assert (today["added"]["count"], today["ended"]["count"]) == (0, 0)
-    raw = store.changes(con, store.now()[:10], rereadings=True)
+    raw = store.changes(con, _day(con, again), rereadings=True)
     assert (raw["added"]["count"], raw["ended"]["count"]) == (1, 1)

@@ -4626,6 +4626,84 @@ extraction's own ambiguity, not two sources at odds. The other 66 are
 documents disagreeing, some for real (a paper in NIME 2011 and in ITS
 2010). A person reads them; nothing is decided by the pass.
 
+## 2026-10-05, the night: the review of three days, and its fix round
+
+**The review.** A workflow of ten agents read everything changed since
+`1c650c4^` (89 commits, migrations 35 to 43), five reviewers by area
+(data safety, the wall, the new logic, contracts and sizes, docs and
+tests), each finding re-checked by a skeptic told to refute it: 27
+confirmed, none refuted, one found twice. They were fixed in five
+commits, each fix with a test in `tests/test_review_fixes.py` that fails
+on the code the review read.
+
+**The worst one, caught before it ran.** `retire_reading` drops a
+document's open review items as well as the producer's edges, right for
+an extraction that queues its misfits again, wrong for a pass that
+queues none. The new `markup` pass would have dropped all 2,100 open
+items on HTML documents on its first night; it had not run on the live
+store. The older `references` pass had done it since 2026-09-20. Both
+now pass `reviews=False`. The items it dropped were found by the time
+windows of the maintain jobs that ran it (after the `review` pass in
+each), less those whose document was re-extracted then and those open
+again since: 2,617, reopened through the door (`store.reopen_reviews`,
+`POST /review/reopen`), 2,615 of them (two were queued again in the
+meantime). The open review queue went from 21,292 to 23,907.
+
+**The nightly maintain had failed since 2026-09-30**, every night, at
+`UNIQUE constraint failed: index 'idx_entity_labels_one'`, about seven
+minutes in: where the `languages` pass starts. It is the failure
+`e354c54` fixed on the afternoon of 2026-10-04; a full maintain on a
+fresh copy of the live store (SQLite's backup, read-only on the live
+side) ran clean in 528 s. The passes after `languages` (published,
+private, names, attachment, communities, histories, and since tonight
+rules, conflicts and markup) had not run at night for five nights.
+
+**Data safety.** A derived edge a merge folded onto another pair was not
+tracked, so it outlived its premises: the rule pass now tracks every one
+on a pair. The heal repairs were not undoable: retiring their run ended
+the replacements and could not bring back what they had ended. A repair
+now records the edges it ends (`edge_endings`, migration 44), and
+`store.restore_run` (`POST /graph/restore`) undoes the run whole, the
+ended facts stated again as new edges. The `backwards-part-of` repair
+applied on 2026-10-04 predates the record and cannot be undone this way.
+`unmerge_run` now ends the edges its round wrote (the venue tier's
+edition links).
+
+**The wall.** Seven places where hidden was not absent: a rule-derived
+edge quoting a premise from a hidden document (hidden now with any such
+premise, `store.hidden_by_premise`); `why` on a hidden edge; staleness
+from a hidden document's `supersedes`; `changes` telling a hidden-only
+name from an unknown one, and a hidden edge making a visible one a
+re-reading; a capture landing on, naming or giving domains to a hidden
+duplicate; path costs and hub prices counting hidden witnesses. On this
+library the one named token sees every module, so the module half of
+these did not apply; the personal half did.
+
+**Contracts.** `references` returned a book's whole list, 7,249 entries
+and 2 MB in one call: now 50 a page (at most 300), with `offset` and
+`left_out`, numbered entries in their numbers' order (the client's N3).
+
+**Logic.** `connect` could return a path crossing one fact twice and
+could lose a path to a node reached more cheaply in more hops: it grows
+layer by layer now and meets only simple paths, the evaluation unchanged
+(111/150, 41/91, 7/300, 0/150; 3.5 ms a query). Two editions of one
+series were taken for one answer: only an ancestor makes one now
+(`part_of_ancestry`). The venue reader merged IEEE MultiMedia into ACM
+Multimedia and read "24th" as 2024; lexicon cues ending in punctuation
+never matched; "1/2 cup milk" became an ingredient "/2 cup milk";
+`traverse` had lost its read guard to a helper inserted above it;
+`changes` left out an edge written in the very second of `since`.
+
+**Docs and tests.** A refused `POST /ingest` or `PUT /page` had already
+written its document, open, though it asked to be personal: both check
+first now. The flaky `test_up` was the status file read while being
+replaced, two writers sharing one temporary file: one writer at a time,
+a file each, and a reader that tries again. Two tests leaned on timing
+(a 50 ms sleep, a period from a later `now()`).
+
+**The client's second page** (doc 13470) came in during the round: N3 is
+in; N1, N2, N4 and G1 to G4 are AL step 9 of the plan.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

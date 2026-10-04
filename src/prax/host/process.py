@@ -99,17 +99,26 @@ def running_pid(data_dir: Path) -> int | None:
     return None
 
 
+STATUS_TRIES = 5  # reads of a status file caught mid-replace, 20 ms apart
+
+
 def status(data_dir: Path) -> dict[str, Any] | None:
-    """The supervisor's last status, or None when none is running."""
+    """The supervisor's last status, or None when none is running. A read
+    that meets the file mid-replace (Windows refuses the open, or the text
+    is cut short) is tried again: a running supervisor is not "not
+    running" for the 20 ms of a write."""
     if running_pid(data_dir) is None:
         return None
-    try:
-        got: dict[str, Any] | None = json.loads(
-            (run_dir(data_dir) / STATUS).read_text(encoding="utf-8")
-        )
-        return got
-    except (OSError, ValueError):
-        return None
+    for attempt in range(STATUS_TRIES):
+        try:
+            got: dict[str, Any] | None = json.loads(
+                (run_dir(data_dir) / STATUS).read_text(encoding="utf-8")
+            )
+            return got
+        except (OSError, ValueError):
+            if attempt + 1 < STATUS_TRIES:
+                time.sleep(0.02)
+    return None
 
 
 _commands_sent = itertools.count()

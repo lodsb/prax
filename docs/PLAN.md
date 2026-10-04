@@ -48,13 +48,12 @@ shape"), and the zoetrope disk and the NAS.
 - **Measure AJ step 1** when marker next reads: its peak RAM and commit,
   VRAM and time per page, against the night of 2026-10-02.
 
-### A review of the last three days (proposed 2026-10-04)
+### A review of the last three days (done 2026-10-05, `docs/log.md`)
 
-Between 2026-10-02 and -04 some forty commits went in, among them
-migrations 35 to 43, new store parts (`rules`, `paths`), two new
-packages (`store.retrieval`, `store.repair`) and seven MCP tools. Each
-was tested as it went; what has not been done is a read of the whole
-with fresh eyes. The scope and the way are to be agreed with the user.
+The safety review is done: 27 findings confirmed by a workflow of ten
+agents, every one fixed with a test that fails before the fix. Next the
+quality review with the project's skill (`.claude/skills/code-review`,
+full mode) over the same range, base `1c650c4^`.
 
 ## Stages
 
@@ -210,6 +209,30 @@ with fresh eyes. The scope and the way are to be agreed with the user.
             formula found, evaluated with the values, the model asked
             only to explain the result.
 
+- [ ] **AL step 9, the client's second page** (doc 13470, checked from
+      the laptop on 2026-10-04 against door `1886abb`):
+      - [ ] **N1** `sync_project` for a named token: a dry run, or a sync
+            of projects the administrator registered.
+      - [ ] **N2** `cite` words that skip boilerplate (an ACM copyright
+            notice, "in order to test"): the matched snippet's words, or
+            the chunk's rarest n-gram.
+      - [x] (2026-10-05, with the review's finding 3) **N3** `references`
+            in the numbers' order; the author biographies appended to an
+            entry and ditto authors are still to do.
+      - [ ] **N4** `cited_but_missing`: authors split into first and last
+            names, a year read as 1917, no `links`, generic references
+            ranked beside topic papers (`min_count`, or a down-rank).
+      - [ ] **G1** a citation the references pass matched with score 1.00
+            costs as a strong hop: three clean 3-hop chains came out weak
+            (6.45).
+      - [ ] **G2** one fact live under two ontology versions (edges 7402
+            and 47184): the older one ended, or kept as evidence.
+      - [ ] **G3** `changes(domain=…)` swamped by the night's `part_of`
+            corrections: a `producer`/`run` filter or a `corrected` side.
+      - [ ] **G4** the worker not back after a door restart: `health` says
+            "worker not reattached", or `prax up` restarts both.
+      - [ ] **O1, O7** re-checked from the laptop after its `git pull` and
+            the extension's reload (both were fixed on 2026-10-04).
 - [ ] **AL. The first client's feedback.** Steps 1 to 4 and 6 to 8, and
       most of step 5, were done 2026-10-03 and -04 (`docs/log.md`; the
       full stage is under "Moved from the plan"). Left of step 5:

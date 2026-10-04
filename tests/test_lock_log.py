@@ -23,14 +23,17 @@ def test_a_long_hold_and_a_long_wait_are_logged(
     monkeypatch.setattr(base, "LOCK_WAIT_SLOW", 0.05)
     monkeypatch.setattr(base, "LOCK_HOLD_SLOW", 0.1)
 
+    inside = threading.Event()
+
     @base._serialized
     def slow_pass(con: sqlite3.Connection) -> None:
+        inside.set()  # the lock is held from here: the wait is certain
         time.sleep(0.3)
 
     holder = threading.Thread(target=slow_pass, args=(con,))
     with caplog.at_level(logging.WARNING, logger="prax.store"):
         holder.start()
-        time.sleep(0.05)
+        assert inside.wait(5)
         store.ingest_text(con, "a note that had to wait " * 10, title="waiting")
         holder.join()
     said = caplog.text

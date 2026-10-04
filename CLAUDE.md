@@ -143,7 +143,11 @@ revisit threshold, under "Decision thresholds" below.
    them, and the database refuses a delete or a change to an edge's
    fact (migration 35's triggers).
    Provenance is a column on the fact, never an edge in the graph.
-   Upgrading a producer's work is `retire_run` plus a new pass.
+   Upgrading a producer's work is `retire_run` plus a new pass. A repair
+   that ends edges records them (`edge_endings`, migration 44), so
+   `restore_run` undoes it whole: its own edges ended, what it ended
+   stated again as new edges; `unmerge_run` ends the edges its round
+   wrote.
 9. **The ontology is small, versioned and modular.** *(enforced)* Entity and
    relation types live in YAML modules, one per domain: `core.yaml` in
    `ontology/`, and every domain's module in its pack
@@ -550,7 +554,9 @@ reference `docs/ask.md`.
   that takes a document or a chunk is `@_guards`ed (hidden: as if absent),
   a read of many rows filters them (`hidden_documents`, `@_scrubbed`), a
   search sets hidden documents aside before fusion, the walk drops their
-  edges, and a write to one answers as for a missing document. A named
+  edges (and a rule-derived edge any of whose premises is hidden,
+  `store.hidden_by_premise`), a count or a cost counts only what is
+  seen, and a write to one answers as for a missing document. A named
   token may call only `auth.RESTRICTED_ROUTES`, the MCP tools' routes;
   `tests/test_wall.py` walks every one of them and fails when one is
   added without a case. A new read that takes a document id is guarded

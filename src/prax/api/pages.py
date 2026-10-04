@@ -87,6 +87,9 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
     one is refused with 409 unless ``force``; use append. A page saved
     with an ask block not yet answered has the questions pass started
     for it (``job`` in the answer)."""
+    if req.sensitivity not in (None, "personal"):
+        # before the write: a refused request leaves no page behind
+        raise HTTPException(400, "sensitivity on a write is personal, or none")
     try:
         con = _con(request)
         written = store.write_page(
@@ -102,8 +105,6 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
             force=req.force,
         )
         if req.sensitivity is not None:
-            if req.sensitivity != "personal":
-                raise ValueError("sensitivity on a write is personal, or none")
             store.set_sensitivity(
                 con, int(written["doc_id"]), "personal", by=req.author
             )

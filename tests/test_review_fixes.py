@@ -152,13 +152,16 @@ def test_a_hidden_fact_makes_no_rereading(con: sqlite3.Connection) -> None:
         "UPDATE edges SET valid_from = '2026-01-01T00:00:00Z' WHERE id = ?", (old,)
     )
     con.commit()
-    store.link(con, E("Paper A", "paper", "uses", "Method B", "method"))
+    new = store.link(con, E("Paper A", "paper", "uses", "Method B", "method"))
+    day = str(
+        con.execute("SELECT valid_from FROM edges WHERE id = ?", (new,)).fetchone()[0]
+    )[:10]
     token = _as_restricted()
     try:
-        assert store.changes(con, store.now()[:10])["added"]["count"] == 1
+        assert store.changes(con, day)["added"]["count"] == 1
     finally:
         store.VIEWER.reset(token)  # type: ignore[arg-type]
-    assert store.changes(con, store.now()[:10])["added"]["count"] == 0
+    assert store.changes(con, day)["added"]["count"] == 0
 
 
 def test_staleness_from_a_hidden_document_is_not_said(con: sqlite3.Connection) -> None:
@@ -345,3 +348,34 @@ def test_an_edge_written_at_since_is_news(con: sqlite3.Connection) -> None:
     eid = store.link(con, E("Paper A", "paper", "uses", "Method B", "method"))
     at = con.execute("SELECT valid_from FROM edges WHERE id = ?", (eid,)).fetchone()[0]
     assert store.changes(con, at)["added"]["count"] == 1
+
+
+# --------------------------------------------------------- docs and tests
+
+
+def test_a_refused_write_leaves_nothing_behind(con: sqlite3.Connection) -> None:
+    """Finding 15: a refused ingest or page write still wrote its document,
+    open, though it asked to be personal."""
+    from fastapi.testclient import TestClient
+
+    from prax.api import app
+
+    count = "SELECT count(*) FROM documents"
+    before = con.execute(count).fetchone()[0]
+    with TestClient(app) as client:
+        bad = client.post(
+            "/ingest",
+            json={
+                "text": "a colleague's notes " * 20,
+                "domains": ["nope"],
+                "sensitivity": "personal",
+            },
+        )
+        assert bad.status_code == 400
+        bad = client.post(
+            "/ingest", json={"text": "notes " * 20, "sensitivity": "open"}
+        )
+        assert bad.status_code == 400
+        bad = client.put("/page/p1", json={"text": "a page", "sensitivity": "secret"})
+        assert bad.status_code == 400
+    assert con.execute(count).fetchone()[0] == before

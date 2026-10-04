@@ -46,6 +46,15 @@ def _written_personal(con: Any, doc_id: int, sensitivity: str | None, by: str) -
 
 @router.post("/ingest")
 def ingest(req: IngestText, request: Request) -> dict[str, Any]:
+    # checked before anything is written: a refused request leaves no
+    # document, least of all one it meant to keep personal open (the
+    # review of 2026-10-04)
+    if req.sensitivity not in (None, "personal"):
+        raise HTTPException(400, "sensitivity on a write is personal, or none")
+    try:
+        store._check_domains(req.domains or [])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     result = store.ingest_text(
         _con(request),
         req.text,
@@ -53,13 +62,9 @@ def ingest(req: IngestText, request: Request) -> dict[str, Any]:
         source_url=req.source_url,
         meta=req.meta,
     )
-    if req.domains:
-        try:
-            for d in req.domains:
-                store.add_domain(_con(request), result["doc_id"], d)
-        except ValueError as exc:
-            raise HTTPException(400, str(exc)) from exc
     _written_personal(_con(request), int(result["doc_id"]), req.sensitivity, req.by)
+    for d in req.domains or []:
+        store.add_domain(_con(request), result["doc_id"], d)
     return {**result, "url": ui_url(request, int(result["doc_id"]))}
 
 

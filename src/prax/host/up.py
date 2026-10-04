@@ -146,6 +146,7 @@ class Supervisor:
         self.cwd = cwd or config.REPO_ROOT
         self.stopping = threading.Event()
         self.lock = threading.Lock()
+        self._status_lock = threading.Lock()  # the status file, one writer
         self.procs: dict[str, subprocess.Popen[bytes]] = {}
         self.state: dict[str, dict[str, Any]] = {
             r.name: {
@@ -208,8 +209,11 @@ class Supervisor:
                 "waiting": dict(self.demand),
             }
         path = self.run_dir / STATUS
-        tmp = path.with_suffix(".tmp")
-        with contextlib.suppress(OSError):
+        # one writer at a time and a temporary file of each thread's own:
+        # the heartbeat and a role's thread wrote one shared .tmp at once
+        # and a reader then saw half a file (the review of 2026-10-04)
+        tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
+        with self._status_lock, contextlib.suppress(OSError):
             tmp.write_text(json.dumps(snapshot, indent=1), encoding="utf-8")
             tmp.replace(path)
 
