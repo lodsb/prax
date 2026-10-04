@@ -4241,6 +4241,60 @@ ingredient names were cleaned in three rounds against samples of 30 to
 50, and the last sample of 50 held 2 still doubtful ("mint sprigs
 leaves", "tender plain white tofu").
 
+## 2026-10-04, late night: one venue under many names (resolution's venue tier)
+
+The `functional-conflicts` finding of stage AN listed 345 papers
+"published in" two venues or more (200 shown, the rest past its cap).
+Read, most were not conflicts: one venue under two names ("DAFx" and
+"International Conference on Digital Audio Effects"), or a series beside
+one of its editions ("NIME" and "NIME 2010", "ISMIR" and "ISMIR 2008 –
+Session 3a"). The likely tier of resolution compares names by embedding,
+and an acronym is far from its expansion there.
+
+**Reading a venue name** (`prax.graph.venues.read`, no model). A name
+becomes its series (the words that stay from year to year), its edition
+(a year, written "2008", "'04", "-17", "23", or an ordinal, "26th",
+"Thirty-Sixth", "3d") and its acronym. Taken off the series: "Proceedings
+of" when what is left is a meeting or an acronym ("Proceedings of the
+IEEE" and "Proceedings of the Musical Association" are journals and keep
+it), a session after a dash, a volume or issue, and past the first comma
+a place and a date when the part before carries the venue's own acronym
+("DAFX 12, …, York, UK, September 17-21"; "IEEE Transactions on Systems,
+Man, and Cybernetics" is one title with commas). A name of only months
+or semesters is no venue. A plain number stays: "Lecture 6" and "Lecture
+10" are two things.
+
+**Grouping.** Two names are one series when a form of their series
+meets: its words; the words without a publisher ("IEEE ICASSP"); for a
+bare acronym, the expansions the library's acronyms table holds that are
+venue-like and whose initials the acronym is; for a venue-like name, the
+acronym it carries when its letters are the words' initials (ICASSP) or
+when the name writes it in brackets ("… Digital Audio Effects
+(DAFx-06)"). The rules came from reading what joined wrongly: every
+company through "GmbH", "AI Magazine" with "AI & Society" (no acronym
+under three letters), SIAM's journals with each other (SIAM is not their
+initials), and OOPSLA under ECOOP, a wrong expansion in the table. In a
+group, names of one edition merge into the most connected; one year with
+two ordinals is two editions (the 122nd and 123rd AES Conventions were
+both in 2007); every edition is `part_of` the group's bare series.
+
+**In resolution.** The `venue` tier runs after the sure ones in
+`resolution.plan`, on the door's clock with them (`prax resolve`), its
+merges and links in the round's run, so `unmerge_run` takes it back
+whole. The `functional-conflicts` finding now takes two values where one
+is `part_of` the other for one answer.
+
+**Measured on a copy.** 96 merges and 184 edition links in 0.2 s; a
+second round plans nothing. The findings went from 345 to 247. The 96
+merges, read one by one, held a few weak ones (two junk entities, "TUM"
+and "in.tum", and the joint ICMC and SMC conference kept apart only
+because its name says "joint"). Earlier likely-tier rounds had folded
+some editions into "DAFx" itself; those stay until a person takes their
+round back. Most of the 247 left are not venues at all: publishers
+("Oxford University Press", "Wiley"), universities, dates, an exercise
+sheet. That is a typing question for the extraction, and the reason the
+contradiction pass waits.
+
 ## 2026-10-04, late night: how is A connected to B (stage AM)
 
 An agent walking the graph spends a call and a context's worth of edges

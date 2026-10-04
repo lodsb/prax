@@ -168,14 +168,31 @@ def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """The subjects with two or more live values of a relation the ontology
     calls functional (``published_in``: a paper in one venue), each with
     its values and how many edges say each (stage AN: a constraint's
-    breach is a finding for a person, never an edge)."""
+    breach is a finding for a person, never an edge). Two values where
+    one is ``part_of`` the other are one answer, said finer and coarser: a
+    paper in "NIME 2010" and in "NIME" is in one venue."""
+    parent: dict[int, int] = {}
+
+    def find(x: int) -> int:
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for a, b in con.execute(
+        "SELECT COALESCE(s.canonical_id, s.id), COALESCE(t.canonical_id, t.id)"
+        " FROM edges e JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+        " WHERE e.rel = 'part_of' AND e.valid_to IS NULL"
+    ):
+        parent[find(int(a))] = find(int(b))
     out: list[dict[str, Any]] = []
     for rel in sorted(
         r.name for r in ontology.current().relations.values() if r.functional
     ):
         rows = con.execute(
             """
-            SELECT cs.name AS subject, cs.type AS type, ct.name AS value, count(*) AS n
+            SELECT cs.name AS subject, cs.type AS type, ct.id AS vid,
+                   ct.name AS value, count(*) AS n
             FROM edges e
             JOIN entities s ON s.id = e.src
             JOIN entities cs ON cs.id = COALESCE(s.canonical_id, s.id)
@@ -187,12 +204,15 @@ def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
             (rel,),
         ).fetchall()
         by_subject: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        clusters: dict[tuple[str, str], set[int]] = {}
         for r in rows:
-            by_subject.setdefault((r["subject"], r["type"]), []).append(
+            key = (r["subject"], r["type"])
+            by_subject.setdefault(key, []).append(
                 {"value": r["value"], "edges": int(r["n"])}
             )
+            clusters.setdefault(key, set()).add(find(int(r["vid"])))
         for (subject, etype), values in sorted(by_subject.items()):
-            if len(values) > 1:
+            if len(clusters[(subject, etype)]) > 1:
                 out.append(
                     {
                         "relation": rel,

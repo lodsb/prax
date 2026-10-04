@@ -36,7 +36,7 @@ from typing import Any, Protocol
 import numpy as np
 
 from prax import store
-from prax.graph import ontology
+from prax.graph import ontology, venues
 from prax.ml import pricing
 from prax.text import names
 from prax.text.names import normalize
@@ -75,7 +75,7 @@ class Candidate:
     keep_name: str
     drop_name: str
     type: str
-    tier: str  # sure | subtype | twins | likely
+    tier: str  # sure | subtype | twins | likely | venue | edition
     score: float  # 1.0 for sure, cosine similarity for likely
 
 
@@ -85,6 +85,11 @@ class Plan:
     likely: list[Candidate] = field(default_factory=list)
     twins: list[Candidate] = field(default_factory=list)  # concept + method, one name
     subtypes: list[Candidate] = field(default_factory=list)  # a person who is an author
+    # venue names of one series and edition (``prax.graph.venues``), and
+    # each edition with its series (keep: the series, drop: the edition),
+    # linked ``part_of`` rather than merged
+    venues: list[Candidate] = field(default_factory=list)
+    editions: list[Candidate] = field(default_factory=list)
 
 
 SELF_KINDS = ontology.SELF_KINDS  # the store's own kinds: no subtype fold
@@ -296,11 +301,41 @@ def plan(
     out.sure = _equal_names(ents, taken)
     out.subtypes = _subtypes(ents, taken)
     out.sure += _initials(ents, taken)
+    if etype is None or etype == "venue":
+        out.venues, out.editions = _venues(con, ents, taken)
     if etype is None or etype in TWIN_TYPES:
         out.twins = _twins(ents, taken)
     if likely:
         out.likely = _likely(con, ents, etype, taken)
     return out
+
+
+def _venues(
+    con: sqlite3.Connection, ents: list[Entity], taken: set[int]
+) -> tuple[list[Candidate], list[Candidate]]:
+    """The venue tier: names of one series and one edition merge (the
+    acronym and its expansion, "NIME 2010" and "NIME2010"), and an edition
+    is linked to its series' bare name (``prax.graph.venues``)."""
+    rows = [e for e in ents if e["type"] == "venue" and e["id"] not in taken]
+    by_id = {e["id"]: e for e in rows}
+    acronyms = {v.acronym for e in rows if (v := venues.read(e["name"])).acronym}
+    expansions = {a: set(store.acronym_expansions(con, a)) for a in acronyms}
+    p = venues.plan([(e["id"], e["name"], e["degree"]) for e in rows], expansions)
+    merges = [
+        Candidate(k, d, by_id[k]["name"], by_id[d]["name"], "venue", "venue", 1.0)
+        for k, d in p.merges
+    ]
+    taken.update(d for _, d in p.merges)
+    editions = [
+        Candidate(s, e, by_id[s]["name"], by_id[e]["name"], "venue", "edition", 1.0)
+        for e, s in p.editions
+        # an edition already linked is not planned again
+        if not store.find_edges(
+            con,
+            store.Edge(by_id[e]["name"], "venue", "part_of", by_id[s]["name"], "venue"),
+        )
+    ]
+    return merges, editions
 
 
 def _is_initials_only(name: str) -> bool:
@@ -532,6 +567,8 @@ class Report:
     merged_likely: int = 0
     merged_twins: int = 0
     merged_subtypes: int = 0
+    merged_venues: int = 0
+    editions: int = 0  # an edition linked part_of its series
     declined: int = 0
     held: int = 0  # a yes whose merge waits for a person (``store.merge_risk``)
 
@@ -553,6 +590,25 @@ def apply(
     for c in p.sure:
         store.merge_entities(con, c.drop, c.keep, producer=PRODUCER, run=run)
         report.merged_sure += 1
+    for c in p.venues:
+        try:
+            store.merge_entities(con, c.drop, c.keep, producer=PRODUCER, run=run)
+        except ValueError:
+            continue
+        report.merged_venues += 1
+    for c in p.editions:
+        edge = store.Edge(c.drop_name, "venue", "part_of", c.keep_name, "venue")
+        if store.find_edges(con, edge):
+            continue
+        store.link(
+            con,
+            edge,
+            confidence="INFERRED",
+            evidence="the venue's name: an edition of the series",
+            producer=PRODUCER,
+            run=run,
+        )
+        report.editions += 1
     if subtypes:
         for c in p.subtypes:
             store.merge_entities(

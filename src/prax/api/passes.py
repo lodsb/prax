@@ -66,6 +66,8 @@ def start_resolve(
         con,
         "resolve",
         total=len(plan.sure)
+        + len(plan.venues)
+        + len(plan.editions)
         + (len(plan.subtypes) if subtypes else 0)
         + (len(plan.twins) if twins else 0),
         note=f"{len(plan.sure)} sure" + (f", {len(plan.twins)} twins" if twins else ""),
@@ -75,7 +77,8 @@ def start_resolve(
         rep = resolution.apply(own, plan, twins=twins, subtypes=subtypes)
         mine.note(
             f"done: merged {rep.merged_sure} sure,"
-            f" {rep.merged_subtypes} subtypes, {rep.merged_twins} twins;"
+            f" {rep.merged_subtypes} subtypes, {rep.merged_twins} twins,"
+            f" {rep.merged_venues} venues; {rep.editions} editions linked;"
             f" {len(plan.likely)} likely left for a person"
         )
 

@@ -330,6 +330,14 @@ and pushing what is committed.
             by a model (Cognee's opt-in pass; Graphiti ends facts only
             when both carry world dates; the research note, sections 6
             and 7).
+            (2026-10-04: first the noise under it. Functional relations are
+            declared (stage AN) and their breaches listed (`functional-
+            conflicts`); most of the 345 were one venue under two names or
+            a series beside its edition. Resolution's `venue` tier merges
+            the one and links the other `part_of`, and the finding takes a
+            series and its edition for one answer: 247 left, mostly
+            publishers, universities and dates typed as venues, which is a
+            typing question. The pass itself waits until those are few.)
 
       *5. What is current* (the client's #8). 13 of the acceptance
       project's 27 documents say they are retired, superseded or invalid,

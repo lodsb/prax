@@ -140,9 +140,11 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
     The tiers: sure (equal after normalization, an initials form of one
     author name), subtypes (one name under a type and its subtype — an
     author who is also a person, a paper that is also a document),
-    concept/method twins, and likely ones (close by name embedding,
-    computed by a worker through the resolve step and kept until
-    decided). ``apply`` merges the sure ones, and the subtypes and twins
+    concept/method twins, venues (one series and edition under two names,
+    merged; an edition linked ``part_of`` its series), and likely ones
+    (close by name embedding, computed by a worker through the resolve
+    step and kept until decided). ``apply`` merges the sure ones and the
+    venues, links the editions, and the subtypes and twins
     when asked; the likely ones are a person's decision, or an
     adjudicator's, and stay in the plan. Merges are pointers
     (``entities.canonical_id``): nothing is deleted.
@@ -168,6 +170,8 @@ def resolve_entities(req: ResolveReq, request: Request) -> dict[str, Any]:
             ("sure", plan.sure),
             ("subtypes", plan.subtypes),
             ("twins", plan.twins),
+            ("venues", plan.venues),
+            ("editions", plan.editions),
             ("likely", plan.likely),
         )
     }
