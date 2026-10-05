@@ -280,11 +280,15 @@ def test_a_biography_is_no_reference_and_ditto_takes_the_authors_before() -> Non
         " Colloq., 2003.\n\n"
         "**Juan Pablo Bello** received the engineering degree in electronics from"
         " the Universidad Simon Bolivar, Caracas, Venezuela, in 1998 and the Ph.D."
-        " degree from Queen Mary, University of London, in 2003.\n"
+        " degree from Queen Mary, University of London, in 2003.\n\n"
+        # its second paragraph opens no entry either, and continues no entry
+        "After a brief period working in industry, he received awards.\n\n"
+        "[39] J. Smith, “A later entry about onsets,” in Proc. DAFx, 2004.\n"
     )
     chunks = chunking.chunk(text)
     refs = [c for c in chunks if c.kind == "reference"]
-    assert [(c.data or {}).get("number") for c in refs] == [37, 38]
+    assert [(c.data or {}).get("number") for c in refs] == [37, 38, 39]
+    assert not any("brief period" in c.text for c in refs)
     assert (refs[1].data or {})["surnames"] == ["Abdallah", "Plumbley"]
     assert not any("Bello" in c.text for c in refs)
     assert any(c.kind == "text" and "Bello" in c.text for c in chunks)

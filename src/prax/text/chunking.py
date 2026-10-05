@@ -725,7 +725,15 @@ class _Chunker:
         it (a wrapped title), or is text before the first."""
         text, chunks = self.text, self.chunks
         spans = references.entry_spans(el.text)
-        if spans and not spans[0][2] and chunks and chunks[-1].kind == "reference":
+        if (
+            spans
+            and not spans[0][2]
+            and chunks
+            and chunks[-1].kind == "reference"
+            # prose waiting between them (a biography) is what this goes on
+            # with, not the entry before it
+            and not self.pending
+        ):
             prior = chunks[-1]
             a, b, _ = spans[0]
             chunks[-1] = Chunk(
