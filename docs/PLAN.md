@@ -547,7 +547,9 @@ numbered there) in the order the user agreed: one step a session.
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as
       a measured experiment (`docs/log.md`, Stage 2).
 
-- [ ] **Facts as one more search list** (2026-10-03, from Graphiti's fact
+- [ ] (2026-10-05: measured on the 62 questions, no gain, not shipped;
+      `docs/eval/retrieval-facts-list-2026-10-05.md`. Again only with
+      fact-shaped questions in the set) **Facts as one more search list** (2026-10-03, from Graphiti's fact
       sentence and LightRAG's relation vectors): a full-text table over
       each edge's evidence, relation and its entities' names, a list in
       the fusion like the document field, one vote per document through

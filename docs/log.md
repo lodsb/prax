@@ -4991,6 +4991,17 @@ them, and an alternative from a label that holds "=" is left out: 2,262
 labels on 2,087 entities hold such syntax, and 390 live entities have it
 in their name (cleaning them is the user's call).
 
+## 2026-10-05, late night: the facts list, measured and left out
+
+The graph's facts as one more keyword list in the fusion (an FTS5 index
+over each live edge's names, relation and quote; one vote per document
+at its best fact) was built on a copy of the store and measured on the
+62 library questions: hybrid MRR 0.90 without it, 0.89 with a full vote
+(keyword questions up, paraphrases down), 0.90 with half a vote. Not
+shipped: some 48 MB and a trigger on every edge write for no measured
+gain. The set has no fact-shaped question, which is where it should
+help; `docs/eval/retrieval-facts-list-2026-10-05.md`.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
