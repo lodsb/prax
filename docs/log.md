@@ -4960,6 +4960,24 @@ joint conference `part_of` the SMC series beside ICMC.
   (what it says of itself), `stale` (no longer current, and what replaced
   it), `retired`.
 
+## 2026-10-05, night: the extraction prompt measured, and a chunker slip
+
+- **Standard names and world dates in the extraction prompt**, each
+  behind a switch (`extraction.standard_names`, `extraction.world_dates`)
+  and measured with `bench_extractor.py` on the 27B, the card shared with
+  the figure readings: standard names change nothing measurable; world
+  dates came back on no triple of five documents that state dated facts.
+  Both stay off (`docs/eval/extraction-standard-names-and-dates-
+  2026-10-05.md`). The code stays: a triple carries `world_from`/`to`, the
+  line format and the schema take them, and a date lands only when its
+  year is in the quote. The bench shows dates given and kept.
+- **A biography's second paragraph** was still joined to the entry
+  before the biography: it opens no entry, so it was taken as a wrapped
+  title, and the join reached back over the biography in between. A
+  paragraph continues an entry only when no prose waits between them.
+  After the rechunk Bello's list holds no biography; 862 ditto entries
+  carry their authors.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

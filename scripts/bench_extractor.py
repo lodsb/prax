@@ -49,8 +49,11 @@ def main() -> int:
     onto = ontology.current()
     lines = [f"# Extractor bench: {ext.name}", ""]
     lines += [
-        "| doc | seconds | in | out | triples | valid | ref edges | overlap |",
-        "|---|---|---|---|---|---|---|---|",
+        (
+            "| doc | seconds | in | out | triples | valid | ref edges | overlap"
+            " | dated | kept |"
+        ),
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     detail: list[str] = []
     for doc_id in a.ids:
@@ -68,11 +71,20 @@ def main() -> int:
         ref = reference(con, doc_id)
         got = {(t.rel, t.dst.lower()) for t in result.triples}
         overlap = len(ref & got)
+        # world dates given (AL step 5), and those the check keeps: the
+        # year in the triple's own quote
+        dated = [t for t in result.triples if t.world_from or t.world_to]
+        kept = [
+            t
+            for t in dated
+            if extraction.checked_date(t.world_from, t.evidence)
+            or extraction.checked_date(t.world_to, t.evidence, end=True)
+        ]
         u = result.usage
         lines.append(
             f"| {doc_id} | {dt:.0f} | {u.get('input_tokens', 0)}"
             f" | {u.get('output_tokens', 0)} | {len(result.triples)} | {valid}"
-            f" | {len(ref)} | {overlap} |"
+            f" | {len(ref)} | {overlap} | {len(dated)} | {len(kept)} |"
         )
         detail += [
             "",
@@ -84,6 +96,12 @@ def main() -> int:
         detail += [
             f"- {t.src} ({t.src_type}) --{t.rel}--> {t.dst} ({t.dst_type})"
             f" [{t.confidence}]"
+            + (
+                f" (from {t.world_from or '?'} to {t.world_to or '?'};"
+                f" quote: {t.evidence[:120]!r})"
+                if t.world_from or t.world_to
+                else ""
+            )
             for t in result.triples
         ]
         if result.unmapped:

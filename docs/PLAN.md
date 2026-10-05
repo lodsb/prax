@@ -22,7 +22,9 @@ so what needs no model comes first.
    unknown" as a state of its own, the checks that tie a precision to its
    date, an undated fact anchored to its document's date, a document's
    lifecycle in `meta`.
-3. **With the card, measured together on one sample**
+3. (measured 2026-10-05, both off:
+   `docs/eval/extraction-standard-names-and-dates-2026-10-05.md`; world
+   dates want a pass of their own, below in AL) **With the card, measured together on one sample**
    (`bench_extractor`): AN's last item, the extraction prompt given the
    standard names, and AL's, the extraction filling the world dates.
    Both change the prompt; neither passes over the library before the
@@ -312,9 +314,12 @@ numbered there) in the order the user agreed: one step a session.
             36's `world_from`/`world_to` with their precision, written by
             `store.link` and shown by `traverse` only where present;
             `store.held_at` and `traverse(as_of=)` on the door and the
-            MCP tool; invariant 8 reworded. Left: extraction filling the
-            world dates, measured with `bench_extractor`; a document's
-            lifecycle in `meta`) **The world's time beside prax's.** Invariant 8 calls the
+            MCP tool; invariant 8 reworded. 2026-10-05: a document's
+            lifecycle in `get`; the general extraction asked for world
+            dates gave none on five documents that state them (the
+            eval note of that day). Left: **a pass of its own** over the
+            sentences that hold a year and a lasting relation, with the
+            same check on the quote) **The world's time beside prax's.** Invariant 8 calls the
             edges bi-temporal, but `valid_from` is set when `store.link`
             writes an edge and `valid_to` when it is retired: both are
             when prax held the fact (transaction time), with
@@ -372,7 +377,9 @@ numbered there) in the order the user agreed: one step a session.
             words** (the user, 2026-10-03: "the standardized ontologies
             also could make sense to extract some more meaning from our
             current chunks/docs"):
-            - the **extraction prompt given the standard names** beside
+            - (2026-10-05: measured, no gain, the switch stays off;
+              `docs/eval/extraction-standard-names-and-dates-2026-10-05.md`)
+              the **extraction prompt given the standard names** beside
               prax's (a relation's `same_as`), which may help a local
               model place a relation; a module's version bump re-reads
               what it touches, as any bump does, so it is measured on a
