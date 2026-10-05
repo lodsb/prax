@@ -4906,6 +4906,23 @@ in the host's `prax.yaml` (`steps.adjudicate.platt: {a: 0.4877, b:
   then no acronym; alone it stays a name (CHI, MIX). `eval_venues.py
   --diff`: no merge and no edition link moved on this library.
 
+## 2026-10-05, late: the line of a sound path, and two repairs applied
+
+- **`paths.SOUND` is 7** (6 before), the user's call after the random
+  pairs it lets through were read (`eval_paths.py --show random:6:7`,
+  a new option): five of seven are real connections (two papers citing
+  one work, two about tangible interfaces), one runs through a
+  university only, one through a wrong authorship. On today's store:
+  citation pairs 106 → 126 of 150, topic pairs 47 → 59 of 91, random
+  pairs 5 → 12 of 300, recipe-paper 0. The client's SuperFlux to
+  adaptive whitening chains (6.1) are sound.
+- **Applied, on the user's word:** `document-twins` folded 450
+  entities of 356 documents into the type `document_node` gives
+  (`unmerge_run` of its run takes it back); `duplicate-facts` ended
+  2,029 later edges of 1,722 facts (more than the dry run's 2,018: the
+  folding made some new duplicates), recorded for `restore_run`. Both
+  checks are clear.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

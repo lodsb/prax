@@ -284,7 +284,8 @@ numbered there) in the order the user agreed: one step a session.
             (6.45). A sure title match now costs as a stated fact; the
             chains cost 6.1, over the line by their two middle papers'
             hub costs.
-      - [ ] **G1, the line.** `paths.SOUND` = 6 was read off
+      - [x] (2026-10-05, the user: yes; raised to 7 after reading the
+            seven random pairs between, five of them real) **G1, the line.** `paths.SOUND` = 6 was read off
             `eval_paths.py`: at 7, 126 of 150 citation pairs are sound
             and 13 of 300 random pairs (5 at 6). Moving it means reading
             those random paths by hand first; the user's call.

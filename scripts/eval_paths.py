@@ -49,6 +49,12 @@ def main() -> None:
     ap.add_argument("--db", default=str(config.data_dir() / "prax.db"))
     ap.add_argument("--seed", type=int, default=11)
     ap.add_argument("--pairs", type=int, default=150)
+    ap.add_argument(
+        "--show",
+        metavar="SET:LOW:HIGH",
+        help="print the paths of a set costing over LOW and at most HIGH, to read"
+        " before the line moves (random:6:7)",
+    )
     args = ap.parse_args()
     con = sqlite3.connect(f"file:{Path(args.db).as_posix()}?mode=ro", uri=True)
     rnd = random.Random(args.seed)
@@ -151,6 +157,11 @@ def main() -> None:
         + "".join(f"{'<=' + str(x):>8}" for x in lines)
         + f"{'ms p50':>8}"
     )
+    show = None
+    if args.show:
+        which, low, high = args.show.split(":")
+        show = (which, float(low), float(high))
+    shown: list[paths.Path] = []
     for name, pairs in sets.items():
         costs, times = [], []
         for a, b in pairs:
@@ -165,11 +176,23 @@ def main() -> None:
             got = paths.connect(ix, [a], [b], hidden=hidden, banned=banned, k=1)
             times.append((time.time() - t) * 1000)
             costs.append(got[0].cost if got else float("inf"))
+            if show and show[0] == name and got and show[1] < got[0].cost <= show[2]:
+                shown.append(got[0])
         found = sum(c != float("inf") for c in costs)
         cells = "".join(f"{sum(c <= x for c in costs):>8}" for x in lines)
         print(
             f"{name:<14}{len(pairs):>6}{found:>7}{cells}{statistics.median(times):>8.1f}"
         )
+
+    names = dict(con.execute("SELECT id, name FROM entities"))
+    for found_path in shown:
+        print(f"\n{found_path.cost:.2f}")
+        for f in found_path.facts:
+            src, dst = int(ix.ids[ix.src[f]]), int(ix.ids[ix.dst[f]])
+            rel = ix.rels[ix.rel[f]]
+            print(
+                f"  {names.get(src, src)!s:.60} --{rel}--> {names.get(dst, dst)!s:.60}"
+            )
 
 
 if __name__ == "__main__":

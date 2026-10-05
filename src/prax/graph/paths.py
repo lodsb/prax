@@ -22,11 +22,16 @@ What a path here respects, which no graph engine knows:
   (or it has none): the hidden documents are a filter in the loop.
 
 A path's cost is the sum of its hops and of the hubs it passes. Paths at
-or under ``SOUND`` are sound: measured on a copy of the library
-(``scripts/eval_paths.py``), 111 of 150 citation pairs (the direct edge
-banned) and 41 of 91 pairs from a topic page have one, 7 of 300 random
-pairs of papers, most of those real connections when read, and none of
-150 pairs of a recipe and a paper.
+or under ``SOUND`` are sound, measured on the library
+(``scripts/eval_paths.py``). At 7 (since 2026-10-05; 6 before), 126 of
+150 citation pairs (the direct edge banned) and 59 of 91 pairs from a
+topic page have one, 12 of 300 random pairs of papers and none of 150
+pairs of a recipe and a paper. The seven random pairs between 6 and 7
+were read (``--show random:6:7``): five real connections (two papers
+citing one work, two about one kind of interface), one through a
+university only, one through a wrong authorship. The line moved for
+the client's chains of resolved citations, which cost 6.1 (AL step 9,
+G1).
 """
 
 from __future__ import annotations
@@ -44,7 +49,7 @@ STRONG_COST, MEDIUM_COST, WEAK_COST = 1.0, 2.0, 3.0
 CONFIDENCE_COST = {"EXTRACTED": 1.0, "INFERRED": 1.35, "AMBIGUOUS": 2.0}
 HUB = 0.5  # the cost of passing through an entity, times log(1 + degree)
 NO_PASS = 1500  # an entity with more facts is an end only
-SOUND = 6.0  # a path at or under this cost is sound
+SOUND = 7.0  # a path at or under this cost is sound (6 until 2026-10-05)
 MAX_HOPS = 4
 
 
