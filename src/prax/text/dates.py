@@ -47,6 +47,13 @@ _MONTHS = {
     for name in names
 }
 
+
+def month_names() -> tuple[str, ...]:
+    """Every month name the date reader knows, in every language it
+    reads, lower case."""
+    return tuple(_MONTHS)
+
+
 _ISO = re.compile(r"(\d{4})(?:[-/.](\d{1,2})(?:[-/.](\d{1,2}))?)?(?=$|[T\s])")
 _DAY_MONTH_YEAR = re.compile(r"(\d{1,2})\.?\s+([A-Za-zÀ-ÿ]+)\.?,?\s+(\d{4})$")
 _MONTH_DAY_YEAR = re.compile(r"([A-Za-zÀ-ÿ]+)\.?\s+(\d{1,2}),?\s+(\d{4})$")

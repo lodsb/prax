@@ -72,6 +72,7 @@ entity_types:
 
 relation_types:
   written_in:
+    strength: strong
     kind: eternal
     same_as: schema:programmingLanguage
     domain: [program, code_library, source_code]

@@ -12,28 +12,29 @@ says nothing about the document: the reader looks at the first
 project's own notes are read this way (``prax.capture.projects``); a paper
 saying "superseded by" is about other people's work.
 
-The paths a status line names (the replacement) are found by
+The words that say a state, in each language, are the lexicon's
+(``status:`` in ``ontology/lexicon.yaml``), passed in as ``Words`` or
+read from the lexicon on disk when none are. A state word at a line's
+start counts only on a line of a status line's shape: after a key, or
+alone, emphasised, in capitals, or before a colon, a dash, a date or
+one of the words that follow a status ("Superseded by …"). The paths
+a status line names (the replacement) are found by
 ``prax.text.paths``; the caller matches them. Nothing here imports prax
-but its own text package.
+at the top but its own text package.
 """
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
 from prax.text import paths
 
 HEAD_LINES = 30  # how far down a status line counts
-# the states, and the words that say each (the first word of the line)
-STATES = {
-    "retired": ("retired", "withdrawn", "archived", "abandoned"),
-    "superseded": ("superseded", "replaced", "obsolete", "outdated"),
-    "invalid": ("invalid", "invalidated", "void", "wrong", "retracted"),
-    "deprecated": ("deprecated",),
-    "current": ("current", "active", "accepted", "final", "approved", "valid"),
-    "draft": ("draft", "proposed", "wip"),
-}
+# the states a document may say it is in; the words for each are data
+STATES = ("retired", "superseded", "invalid", "deprecated", "current", "draft")
 STALE = frozenset({"retired", "superseded", "invalid", "deprecated"})
 # the edges that make the document they reach stale, and the state each
 # puts it in; a stale note naming its replacement is reached by the first
@@ -47,12 +48,10 @@ def stale_rel(state: str) -> str:
     return _REL_OF.get(state, "supersedes")
 
 
-_WORD = {w: state for state, words in STATES.items() for w in words}
 _DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2}|\d{4}-\d{2})\b")
 # a line's furniture before its first word: a quote mark, a heading, a
 # list dash, emphasis, an emoji-free warning sign of text
 _LEAD = re.compile(r"^[\s>#*_\-|]*(?:\[!?\w+\]\s*)?[\s*_]*")
-_STATUS_KEY = re.compile(r"^status\s*[:=]\s*[*_\s]*(\w+)", re.IGNORECASE)
 _FRONT = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 _FRONT_KEY = re.compile(r"^([A-Za-z_\-]+)\s*:\s*(.*?)\s*$")
 
@@ -74,6 +73,82 @@ class Status:
         return self.state in STALE
 
 
+@dataclass(frozen=True)
+class Words:
+    """The words of one lexicon's ``status:`` section."""
+
+    by_word: tuple[tuple[str, str], ...] = ()  # (word, state), lower case
+    keys: tuple[str, ...] = ()  # "status", "Zustand"
+    after: tuple[str, ...] = ()  # "by", "since", "seit"
+
+    def state(self, word: str) -> str | None:
+        return dict(self.by_word).get(word.lower())
+
+    @property
+    def key(self) -> re.Pattern[str]:
+        return _key_pattern(self.keys)
+
+    @property
+    def follows(self) -> re.Pattern[str]:
+        return _after_pattern(self.after)
+
+
+def words_of(section: dict[str, Any] | None) -> Words:
+    """``Words`` from a lexicon's ``status:`` section; empty for none."""
+    section = section or {}
+    states = section.get("states") or {}
+    return Words(
+        by_word=tuple(
+            (str(w).lower(), str(state))
+            for state, ws in states.items()
+            if state in STATES
+            for w in ws or []
+        ),
+        keys=tuple(str(k) for k in section.get("keys") or []),
+        after=tuple(str(a) for a in section.get("after") or []),
+    )
+
+
+def lexicon_words() -> Words:
+    """The status words of the lexicon on disk."""
+    from prax.graph import ontology  # the lexicon is data beside the ontology
+
+    return words_of(ontology.lexicon().section("status"))
+
+
+@functools.lru_cache(maxsize=8)
+def _key_pattern(keys: tuple[str, ...]) -> re.Pattern[str]:
+    alt = "|".join(re.escape(k) for k in sorted(keys, key=len, reverse=True))
+    if not alt:
+        return re.compile(r"(?!x)x")
+    return re.compile(rf"^(?:{alt})\s*[:=]\s*[*_\s]*(\w+)", re.IGNORECASE)
+
+
+@functools.lru_cache(maxsize=8)
+def _after_pattern(after: tuple[str, ...]) -> re.Pattern[str]:
+    alt = "|".join(
+        re.escape(a).replace(r"\ ", r"\s+")
+        for a in sorted(after, key=len, reverse=True)
+    )
+    # a colon or a bang, a dash, a bracket, a date, or a word of ``after``
+    marks = r"[:!]|\s*[—–-]\s|\s*\(|\s+\d{4}"
+    return re.compile(
+        rf"^(?:{marks}" + (rf"|\s+(?:{alt})(?!\w)" if alt else "") + ")",
+        re.IGNORECASE,
+    )
+
+
+def _marks_a_status(line: str, rest: str, word: str, w: Words) -> bool:
+    """Whether a line opening with a state word, with no key before it,
+    is a status line rather than a sentence that starts with the word."""
+    after = rest[len(word) :].lstrip("*_")
+    if not after.strip(" .") or (word.isupper() and len(word) > 1):
+        return True  # "Deprecated" alone, "RETIRED"
+    if re.search(r"(\*\*|__|\*|_)" + re.escape(word) + r"\1", line, re.IGNORECASE):
+        return True  # **Deprecated** since 2026-09
+    return bool(w.follows.match(after))
+
+
 def _front_matter(text: str) -> dict[str, str]:
     m = _FRONT.match(text)
     if not m:
@@ -86,21 +161,23 @@ def _front_matter(text: str) -> dict[str, str]:
     return out
 
 
-def read(text: str, here: str, prefix: str = "") -> Status | None:
+def read(
+    text: str, here: str, prefix: str = "", words: Words | None = None
+) -> Status | None:
     """The document's own status, or None when it states none. ``here`` is
     its path in the repository and ``prefix`` the project's folder, which
-    a replacement's path is resolved against."""
+    a replacement's path is resolved against; ``words`` the lexicon's
+    (the one on disk when None)."""
+    w = words if words is not None else lexicon_words()
     front = _front_matter(text)
     if front:
         state = (
-            _WORD.get(front.get("status", "").split()[0].lower())
-            if front.get("status")
-            else None
+            w.state(front.get("status", "").split()[0]) if front.get("status") else None
         )
         since = None
         for key in ("retired", "superseded", "deprecated", "invalidated"):
             if front.get(key):
-                state = state or _WORD.get(key, key)
+                state = state or w.state(key) or key
                 found = _DATE.search(front[key])
                 since = since or (found.group(1) if found else None)
         replacement = front.get("superseded_by") or front.get("replaced_by")
@@ -112,7 +189,7 @@ def read(text: str, here: str, prefix: str = "") -> Status | None:
                     front.get("date", "") if state in STALE else ""
                 )
                 since = found.group(1) if found else None
-            words = "; ".join(
+            said = "; ".join(
                 f"{k}: {v}"
                 for k, v in front.items()
                 if k
@@ -131,21 +208,23 @@ def read(text: str, here: str, prefix: str = "") -> Status | None:
                 if replacement
                 else []
             )
-            return Status(state, since, words, refs)
+            return Status(state, since, said, refs)
     body = _FRONT.sub("", text, count=1)
     for line in body.splitlines()[:HEAD_LINES]:
         rest = _LEAD.sub("", line).strip()
         if not rest:
             continue
-        keyed = _STATUS_KEY.match(rest)
+        keyed = w.key.match(rest)
         word = (
             keyed.group(1) if keyed else re.split(r"[\s:.,;!*_]", rest, maxsplit=1)[0]
         )
-        state = _WORD.get(word.lower())
+        state = w.state(word)
         if state is None:
             continue
         if not keyed and state not in STALE:
             continue  # "Current draft of…" begins prose; only "Status: current" says it
+        if not keyed and not _marks_a_status(line, rest, word, w):
+            continue  # "Archived copies of the data live on the NAS"
         found = _DATE.search(rest)
         return Status(
             state,

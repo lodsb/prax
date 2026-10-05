@@ -328,10 +328,13 @@ def test_venue_reading_slips() -> None:
 
 def test_a_fraction_is_an_amount() -> None:
     """Finding 20: '1/2 cup milk' became the ingredient '/2 cup milk'."""
+    from prax.graph import ontology
     from prax.text import schemaorg
 
-    assert schemaorg.ingredient_name("1/2 cup milk") == ["milk"]
-    assert schemaorg.ingredient_name("1 1/2 tbsp olive oil") == ["olive oil"]
+    en = schemaorg.ingredient_words(ontology.lexicon().section("ingredients")["en"])
+    assert en is not None
+    assert schemaorg.ingredient_name("1/2 cup milk", en) == ["milk"]
+    assert schemaorg.ingredient_name("1 1/2 tbsp olive oil", en) == ["olive oil"]
 
 
 def test_traverse_is_a_guarded_read() -> None:

@@ -8,5 +8,6 @@ MANIFEST = Pack(
     name="craft",
     ontology=("craft.yaml", "kitchen.yaml", "workshop.yaml"),
     sameness="sameness.yaml",
+    lexicon="lexicon.yaml",
     rules="rules.yaml",
 )

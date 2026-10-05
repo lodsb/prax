@@ -51,18 +51,21 @@ entity_types:
 
 relation_types:
   makes:
+    strength: strong
     domain: [recipe]
     range: [dish]
     description: >-
       the dish this recipe produces; its point. One recipe usually makes
       one dish
   calls_for:
+    strength: strong
     domain: [recipe, dish]
     range: [ingredient]
     description: >-
       an ingredient the recipe uses. The quantity stays in the text; the
       edge is the ingredient alone
   variant_of:
+    strength: strong
     domain: [recipe, dish]
     range: [recipe, dish]
     description: >-

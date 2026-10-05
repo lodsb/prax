@@ -19,6 +19,8 @@ class Pack:
     # knowledge: the library's, always composed
     ontology: tuple[str, ...] = ()  # module files beside the manifest
     sameness: str | None = None  # its cases of "the same thing"
+    # its words that say what a name is: sections the core lexicon has not
+    lexicon: str | None = None
     rules: str | None = None  # the domain rules it suggests, never applied by itself
     # capability: the host's
     extractors: tuple[str, ...] = ()  # "module:NAME", a list of Extractor

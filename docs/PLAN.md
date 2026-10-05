@@ -75,16 +75,27 @@ numbered there) in the order the user agreed: one step a session.
       - [x] **17.** Two patterns for a display formula's equation number, which disagree (an hour plus a rechunk)
       - [x] **18.** The stale states and the status-to-relation map defined in three places (under an hour)
       - [x] **23.** Functional conflicts are computed twice, by heal and by the conflicts pass, with different rules for which edges count (an hour)
-- [ ] **Step 3: the words in data, and the code independent of this library** (with an eval script for the venue tier).
-      - [ ] **6.** Venue tier merges at confidence 1.0 every night, with English/German rules tuned on this library and no script that re-measures them (a stage (eval script plus lexicon move))
-      - [ ] **7.** Status reader marks a project note stale when an ordinary English sentence near its top starts with 'Archived', 'Wrong', 'Replaced', 'Void'… (an hour)
-      - [ ] **8.** Recipe markup turns French, Italian or Spanish ingredient lines into wrong EXTRACTED ingredient entities; the kitchen word lists are English/German code literals outside the kitchen pack (an hour to half a stage)
-      - [ ] **9.** venues.py keeps its own lists of venue words, publishers and legal forms beside the lexicon that already holds them (a few hours)
-      - [ ] **11.** store.document_node is the new single answer to 'a document as a graph node', but pages and the references pass still hard-code 'paper' (an hour or two, plus a heal or resolve round for the twins)
-      - [ ] **15.** Venue rules keep the words that say what a name is as code sets, partly copied from the lexicon (a stage (small))
-      - [ ] **19.** Path hop strength is a Python list of relation names from the packs, and it has already drifted from the ontology (an hour or two plus an eval run)
-      - [ ] **21.** Path costs class relations as strong or weak by a hard-coded list of research and studio relation names (an hour)
-      - [ ] **22.** Which schema.org types prax knows is listed twice: OWN_TYPES in code, same_as in genres.yaml, and the two disagree (an hour)
+- [x] (2026-10-05) **Step 3: the words in data, and the code independent of this library** (with an eval script for the venue tier).
+      - [x] **6.** Venue tier merges at confidence 1.0 every night, with English/German rules tuned on this library and no script that re-measures them (a stage (eval script plus lexicon move))
+      - [x] **7.** Status reader marks a project note stale when an ordinary English sentence near its top starts with 'Archived', 'Wrong', 'Replaced', 'Void'… (an hour)
+      - [x] **8.** Recipe markup turns French, Italian or Spanish ingredient lines into wrong EXTRACTED ingredient entities; the kitchen word lists are English/German code literals outside the kitchen pack (an hour to half a stage)
+      - [x] **9.** venues.py keeps its own lists of venue words, publishers and legal forms beside the lexicon that already holds them (a few hours)
+      - [x] **11.** store.document_node is the new single answer to 'a document as a graph node', but pages and the references pass still hard-code 'paper' (an hour or two, plus a heal or resolve round for the twins)
+      - [x] **15.** Venue rules keep the words that say what a name is as code sets, partly copied from the lexicon (a stage (small))
+      - [x] **19.** Path hop strength is a Python list of relation names from the packs, and it has already drifted from the ontology (an hour or two plus an eval run)
+      - [x] **21.** Path costs class relations as strong or weak by a hard-coded list of research and studio relation names (an hour)
+      - [x] **22.** Which schema.org types prax knows is listed twice: OWN_TYPES in code, same_as in genres.yaml, and the two disagree (an hour)
+- [ ] **Step 3's two leftovers** (2026-10-05):
+      - [ ] **Document twins.** 733 titles have entities of two or more
+            document types (146 article and paper, 108 build and paper, 94
+            manual and paper, 53 paper and recipe…), mostly from page links
+            and citations that typed every document a paper. New links
+            type it as `store.document_node` does; the old twins want a
+            heal check that folds each into the type `document_node`
+            gives, dry run first.
+      - [ ] **Roman editions.** "Atti del XX Colloquio" reads no edition:
+            a roman numeral meets real acronyms (CHI, MIX, VR). Only where
+            a venue word follows it, measured with `eval_venues.py`.
 - [ ] **Step 4, for the plan's own sections.**
       - [ ] **5.** Repairs that end an edge and write its correction do not record which edge corrects which (an hour for the record in the two repairs; a migration only if a new column is chosen over restated_as)
       - [ ] **20.** The card plan's swaps are recorded only as log prose, so AI's last step has no data to measure (an hour)

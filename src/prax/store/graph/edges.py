@@ -254,11 +254,17 @@ def run_edges(
 def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
     """A library document as a node of the graph, ``(name, type)``: its
     title, and the type its entity already has (a page is a ``page``; else
-    the document type the most edges reach it as; else ``document``). A
+    the document type the most edges reach it as; else the one type its
+    domains let a document be, which its extraction will name it by: a
+    research document is a ``paper``; else ``document``). A
     document that does not exist, has no title or is hidden from this
     viewer is a KeyError, as if absent (the wall)."""
 
-    row = con.execute("SELECT title FROM documents WHERE id = ?", (doc_id,)).fetchone()
+    row = con.execute(
+        "SELECT title, json_extract(meta, '$.domains') AS domains FROM documents"
+        " WHERE id = ?",
+        (doc_id,),
+    ).fetchone()
     if row is None or not row["title"] or document_hidden(con, doc_id):
         raise KeyError(f"no such document: {doc_id}")
     title = str(row["title"])
@@ -279,7 +285,11 @@ def document_node(con: sqlite3.Connection, doc_id: int) -> tuple[str, str]:
             and (best is None or int(r["n"]) > best[0])
         ):
             best = (int(r["n"]), etype)
-    return title, best[1] if best else "document"
+    if best:
+        return title, best[1]
+    domains = json.loads(row["domains"]) if row["domains"] else None
+    kinds = onto.for_domains(domains).self_types if domains else ()
+    return title, kinds[0] if len(kinds) == 1 else "document"
 
 
 def _world_date(value: str | None, name: str) -> tuple[str | None, str | None]:

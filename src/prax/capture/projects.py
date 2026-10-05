@@ -356,10 +356,11 @@ def _statuses(
     from prax.text import status as status_mod
 
     by_path = {p: d for p, (d, _) in texts.items()}
+    words = status_mod.lexicon_words()
     want: Want = {}
     stale = 0
     for path, (doc_id, text) in texts.items():
-        st = status_mod.read(text, path, prefix)
+        st = status_mod.read(text, path, prefix, words)
         meta = store.get_meta(con, doc_id)
         held = meta.get("status") or {}
         if held and held.get("by") not in (None, "sync"):

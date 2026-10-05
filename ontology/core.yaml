@@ -104,12 +104,14 @@ relation_types:
       or organization's school of thought or movement, as a concept.
       When one organization is inside the other, part_of is the relation
   developed_by:
+    strength: strong
     kind: eternal
     same_as: schema:creator
     domain: [tool]
     range: [organization, person]
     description: who built or makes the tool, as the text states it
   authored_by:
+    strength: strong
     kind: eternal
     same_as: schema:author
     domain: [document]
@@ -129,6 +131,7 @@ relation_types:
       behind a manual); where it appeared — the journal, the conference —
       is published_in
   part_of:
+    strength: strong
     transitive: true
     kind: state
     same_as: schema:isPartOf
@@ -158,6 +161,7 @@ relation_types:
       (a Markdown link, a backticked file name); written by a project's
       sync from the text itself, never guessed
   supersedes:
+    strength: strong
     transitive: true
     kind: event
     same_as: dcterms:replaces
@@ -167,6 +171,7 @@ relation_types:
       the document replaces an earlier one: a new version, a revised
       plan, a later edition, a note that says it takes another's place
   invalidates:
+    strength: strong
     kind: event
     domain: [document]
     range: [document]

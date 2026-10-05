@@ -8,5 +8,6 @@ MANIFEST = Pack(
     name="research",
     ontology=("research.yaml",),
     sameness=None,
+    lexicon="lexicon.yaml",
     rules="rules.yaml",
 )

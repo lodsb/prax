@@ -310,9 +310,9 @@ part_of:
 # "published in" its publisher, its university or a semester (stage AN,
 # the `not-venues` ailment of `prax heal`). Each kind says what the fact
 # was meant to be. A name that carries a venue word (journal,
-# proceedings, conference, review… `prax.graph.venues.VENUE_WORDS`) is a
-# venue whatever else it says, so "Journal of the Audio Engineering
-# Society" stays
+# proceedings, conference, review…: `venue_words` in the research pack's
+# lexicon, src/prax/packs/research/lexicon.yaml) is a venue whatever else
+# it says, so "Journal of the Audio Engineering Society" stays
 not_a_venue:
   # published_in becomes published_by
   publisher:
@@ -329,3 +329,24 @@ not_a_venue:
   none:
     stems: [übungsblatt, lösungsblatt, aufgabenblatt, hausaufgabe, vorlesung, licen, lizenz]
     words: [assignment, homework, lecture, "lecture notes", "lecture slides", "course materials", "exercise sheet", exercises]
+
+# what a project's note says of itself near its top (`prax.text.status`,
+# stage AL step 5): the state words by state, in each language a note may
+# be written in. A word counts on a line of its own shape: after a key
+# ("Status: veraltet"), or at the line's start as a marker: alone,
+# emphasised (**Deprecated**), in capitals, or followed by a colon, a dash,
+# a date or one of `after` ("Superseded by plan-v2.md"). "Archived copies
+# of the data live on the NAS" is a sentence, not a status (the quality
+# review of 2026-10-05, finding 7).
+status:
+  keys: [status, zustand, statut, estado, stato]
+  states:
+    retired: [retired, withdrawn, archived, abandoned, zurückgezogen, archiviert, eingestellt, retiré, archivé, abandonné]
+    superseded: [superseded, replaced, obsolete, outdated, ersetzt, überholt, veraltet, abgelöst, remplacé, obsolète, périmé]
+    invalid: [invalid, invalidated, void, wrong, retracted, ungültig, falsch, widerrufen, invalide]
+    deprecated: [deprecated, abgekündigt, déprécié]
+    current: [current, active, accepted, final, approved, valid, aktuell, gültig, aktiv, actuel]
+    draft: [draft, proposed, wip, entwurf, brouillon]
+  # what makes a line that opens with a state word a status: "Superseded
+  # by …", "Retired since 2026-10", "Veraltet seit …"
+  after: [by, since, "on", as of, in favour of, in favor of, durch, seit, am, ab, par, depuis]

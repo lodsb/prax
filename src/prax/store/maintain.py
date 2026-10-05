@@ -391,6 +391,11 @@ def link_references(
         retired = retire_reading(
             con, doc_id, producer=REFERENCES_PRODUCER, except_version="", reviews=False
         )
+        # one node per document, whatever links it (``document_node``)
+        try:
+            me = document_node(con, doc_id)
+        except KeyError:
+            me = (title, "paper")
         stats["retired"] += retired
         # the entries: the reference chunks where the chunker cut them,
         # the bibliography's text split where it has not (before a rechunk)
@@ -415,7 +420,11 @@ def link_references(
                     "how": how,
                 }
             )
-            edge = Edge(title, "paper", "cites", name, "paper")
+            try:
+                it = document_node(con, target)
+            except KeyError:
+                it = (name, "paper")
+            edge = Edge(*me, "cites", *it)
             if find_edges(con, edge):
                 existing += 1
                 continue
@@ -728,12 +737,19 @@ MARKUP = "jsonld"  # the producer and run of what a page's markup says
 Fact = tuple[Edge, str, str | None]  # the edge, its evidence, its world date
 
 
-def markup_facts(name: str, etype: str, page: schemaorg.Page) -> list[Fact]:
+def markup_facts(
+    name: str,
+    etype: str,
+    page: schemaorg.Page,
+    words: schemaorg.IngredientWords | None = None,
+) -> list[Fact]:
     """The facts a page's schema.org markup states about the document
     ``(name, etype)``: who wrote it, who published it (dated by
     ``datePublished``), and of a recipe what it calls for and the cuisine
     it belongs to. A page with one full recipe is that recipe; a page with
-    several holds each as a recipe ``part_of`` it."""
+    several holds each as a recipe ``part_of`` it. The ingredients are
+    read with ``words``, the page's language's; without them a recipe
+    calls for nothing here (the extraction still reads it)."""
     out: list[Fact] = []
     own = page.own
     single = len(page.recipes) == 1
@@ -781,7 +797,7 @@ def markup_facts(name: str, etype: str, page: schemaorg.Page) -> list[Fact]:
                         None,
                     )
                 )
-        for i in r.ingredients:
+        for i in schemaorg.ingredient_names(r.ingredient_lines, words):
             out.append(
                 (
                     Edge(*it, "calls_for", i, "ingredient"),
@@ -814,10 +830,14 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         " AND COALESCE(json_extract(meta, '$.markup.hash'), '') != hash ORDER BY id"
     ).fetchall()
     onto = ontology.current()
+    # the ingredient words of each language the craft pack's lexicon has
+    by_lang = ontology.lexicon().section("ingredients") or {}
+    # a page whose own type names a genre is read too (a Q&A page, a thesis)
+    standards = ontology.genres().standards()
     counts: Counter[str] = Counter()
     for n, r in enumerate(rows, 1):
         try:
-            page = schemaorg.of_page(archive_path(r["hash"]).read_bytes())
+            page = schemaorg.of_page(archive_path(r["hash"]).read_bytes(), standards)
         except OSError:
             continue
         # the markup queues no review items: the extraction's stay open
@@ -837,7 +857,16 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
                 name, etype = document_node(con, r["id"])
             except KeyError:
                 name, etype = str(r["title"]), "document"
-            for edge, evidence, world in markup_facts(name, etype, page):
+            # the page's language; for a page never indexed, the recipe
+            # lines', detected or else by whose ingredient words they use
+            lines = [line for x in page.recipes for line in x.ingredient_lines]
+            lang = (
+                json.loads(r["meta"] or "{}").get("lang")
+                or language.detect(" ".join(lines))
+                or schemaorg.likely_language(lines, by_lang)
+            )
+            words = schemaorg.ingredient_words(by_lang.get(lang or ""))
+            for edge, evidence, world in markup_facts(name, etype, page, words):
                 try:
                     onto.check_edge(edge.src_type, edge.rel, edge.dst_type)
                     onto.check_names(

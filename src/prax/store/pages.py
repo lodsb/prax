@@ -17,7 +17,14 @@ from prax.text import blocks, markup
 
 from .base import _read_archive, _reading, _serialized, document_hidden
 from .documents import _set_promote, get_meta, index_text, register, set_meta
-from .graph import Edge, find_edges, invalidate_edge, link, rename_entity
+from .graph import (
+    Edge,
+    document_node,
+    find_edges,
+    invalidate_edge,
+    link,
+    rename_entity,
+)
 from .retrieval import staleness
 
 # Living Markdown documents (migration 0006): notes on a document, ongoing
@@ -317,18 +324,13 @@ def write_page(
     # refused outright until the graph-file tests wrote one (2026-09-27)
     source_rel = "synthesizes" if kind in ("synthesis", "project") else "annotates"
     for target in annotates or []:
-        t = con.execute(
-            "SELECT title FROM documents WHERE id = ?", (target,)
-        ).fetchone()
-        if t is None or not t[0]:
-            raise KeyError(f"no such document to annotate: {target}")
-        target_type = (
-            "page"
-            if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (target,)).fetchone()
-            else "paper"
-        )
-        edge = Edge(page_title, page_type, source_rel, t[0], target_type)
-        if kind == "synthesis" and target_type == "paper":
+        try:
+            # one node per document, whatever links it (``document_node``)
+            target_name, target_type = document_node(con, target)
+        except KeyError:
+            raise KeyError(f"no such document to annotate: {target}") from None
+        edge = Edge(page_title, page_type, source_rel, target_name, target_type)
+        if kind == "synthesis" and target_type != "page":
             _set_promote(con, target, by="page", reason=f"source of synthesis {slug}")
         if not find_edges(con, edge):
             link(
@@ -389,18 +391,12 @@ def _link_edges(
     for target in linked_documents(text):
         if target == doc_id or target in named:
             continue
-        t = con.execute(
-            "SELECT title FROM documents WHERE id = ?", (target,)
-        ).fetchone()
-        if t is None or not t[0]:
+        try:
+            target_name, target_type = document_node(con, target)
+        except KeyError:
             continue
-        wanted_titles.add(t[0])
-        target_type = (
-            "page"
-            if con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (target,)).fetchone()
-            else "paper"
-        )
-        edge = Edge(page_title, page_type, rel, t[0], target_type)
+        wanted_titles.add(target_name)
+        edge = Edge(page_title, page_type, rel, target_name, target_type)
         if not find_edges(con, edge):
             link(
                 con,
@@ -588,13 +584,9 @@ def add_to_project(
     ).fetchone()
     if project is None:
         raise KeyError(f"no project page {project_slug!r}")
-    doc = con.execute("SELECT title FROM documents WHERE id = ?", (doc_id,)).fetchone()
-    if doc is None or not doc[0]:
-        raise KeyError(f"no such document: {doc_id}")
-    is_page = con.execute("SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)).fetchone()
-    edge = Edge(
-        doc[0], "page" if is_page else "paper", "part_of", project["title"], "project"
-    )
+    name, node_type = document_node(con, doc_id)
+    is_page = node_type == "page"
+    edge = Edge(name, node_type, "part_of", project["title"], "project")
     if find_edges(con, edge):
         return None
     if not is_page and promote:

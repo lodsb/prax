@@ -36,16 +36,10 @@ from array import array
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-STRONG = frozenset(
-    {
-        "cites", "extends", "implements", "uses", "proposes", "defines",
-        "part_of", "has_part", "authored_by", "developed_by", "calls_for",
-        "describes", "supports", "contrasts", "synthesizes", "makes",
-        "variant_of", "evaluates", "compares", "supersedes", "invalidates",
-        "advised_by", "succeeds", "derived_from", "written_in",
-    }
-)  # fmt: skip
-WEAK = frozenset({"mentions", "annotates"})
+from prax.graph import ontology
+
+# how strongly a relation connects is the relation's own ``strength`` in
+# its module (strong, weak, or between), the composed ontology's
 STRONG_COST, MEDIUM_COST, WEAK_COST = 1.0, 2.0, 3.0
 CONFIDENCE_COST = {"EXTRACTED": 1.0, "INFERRED": 1.35, "AMBIGUOUS": 2.0}
 HUB = 0.5  # the cost of passing through an entity, times log(1 + degree)
@@ -54,10 +48,22 @@ SOUND = 6.0  # a path at or under this cost is sound
 MAX_HOPS = 4
 
 
-def hop_cost(rel: str, confidence: str, documents: int) -> float:
-    """What one fact costs to cross: its relation, its confidence class,
-    and fewer the more documents state it."""
-    base = STRONG_COST if rel in STRONG else WEAK_COST if rel in WEAK else MEDIUM_COST
+def relation_strengths() -> dict[str, str]:
+    """Each relation's ``strength`` as the ontology on disk declares it."""
+    return {
+        r.name: r.strength for r in ontology.current().relations.values() if r.strength
+    }
+
+
+def hop_cost(
+    rel: str, confidence: str, documents: int, strength: str | None = None
+) -> float:
+    """What one fact costs to cross: its relation's strength (looked up
+    when not given), its confidence class, and fewer the more documents
+    state it."""
+    if strength is None:
+        strength = relation_strengths().get(rel, "")
+    base = {"strong": STRONG_COST, "weak": WEAK_COST}.get(strength, MEDIUM_COST)
     return (
         base * CONFIDENCE_COST.get(confidence, 2.0) / (1 + math.log2(max(1, documents)))
     )
@@ -78,6 +84,7 @@ class PathIndex:
     dst: array[int] = field(default_factory=lambda: array("q"))
     rel: array[int] = field(default_factory=lambda: array("H"))  # fact -> relation id
     rels: list[str] = field(default_factory=list)
+    strengths: list[str] = field(default_factory=list)  # beside ``rels``
     cost: array[float] = field(default_factory=lambda: array("f"))
     conf: array[int] = field(default_factory=lambda: array("B"))  # index in CONFIDENCES
     eoff: array[int] = field(default_factory=lambda: array("q"))  # fact -> its edges
@@ -111,11 +118,13 @@ CONFIDENCES = ("EXTRACTED", "INFERRED", "AMBIGUOUS")
 Row = tuple[int, int, str, int, str, int | None]  # edge, src, rel, dst, conf, doc
 
 
-def build(rows: Iterable[Row]) -> PathIndex:
+def build(rows: Iterable[Row], strengths: dict[str, str] | None = None) -> PathIndex:
     """The index from edges: ``(edge id, source entity, relation, target
     entity, confidence, document)``, the entities already canonical. A
     loop is dropped; edges of one (source, relation, target) are one fact,
-    its confidence the best of theirs."""
+    its confidence the best of theirs. ``strengths`` are the relations'
+    (``relation_strengths`` when None)."""
+    strength = relation_strengths() if strengths is None else strengths
     facts: dict[tuple[int, str, int], list[tuple[int, int | None, str]]] = {}
     for eid, s, r, d, conf, doc in rows:
         if s != d:
@@ -141,13 +150,16 @@ def build(rows: Iterable[Row]) -> PathIndex:
         if r not in rel_id:
             rel_id[r] = len(ix.rels)
             ix.rels.append(r)
+            ix.strengths.append(strength.get(r, ""))
         ix.rel.append(rel_id[r])
         best = min(
             CONFIDENCES.index(c) if c in CONFIDENCES else 2 for _, _, c in behind
         )
         ix.conf.append(best)
         documents = len({doc for _, doc, _ in behind if doc is not None})
-        ix.cost.append(hop_cost(r, CONFIDENCES[best], documents))
+        ix.cost.append(
+            hop_cost(r, CONFIDENCES[best], documents, ix.strengths[rel_id[r]])
+        )
         for eid, doc, _ in behind:
             ix.edge.append(eid)
             ix.doc.append(-1 if doc is None else doc)
@@ -191,8 +203,9 @@ class _View:
                 if d is not None and d not in self.hidden
             }
             conf = CONFIDENCES[self.ix.conf[f]]
+            r = self.ix.rel[f]
             got = self._cost[f] = hop_cost(
-                self.ix.rels[self.ix.rel[f]], conf, len(docs)
+                self.ix.rels[r], conf, len(docs), self.ix.strengths[r]
             )
         return got
 

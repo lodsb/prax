@@ -205,7 +205,10 @@ revisit threshold, under "Decision thresholds" below.
    module that reads them. A cue is a stem or a whole word, it changes
    what a typing rule guesses and never what the ontology accepts, and
    the loader keeps the file out of the composed modules so it cannot
-   join the version string.
+   join the version string. A pack adds sections of its own in its
+   `lexicon.yaml` (research's venue words, craft's ingredient words per
+   language; `ontology.lexicon().section`), and a relation says in its
+   module how strongly it connects for a path (`strength:`).
    What "the same thing" means for two entities is
    `ontology/sameness.yaml` beside it, in the same way: the cases that are
    one thing and those that are two; a module's own cases for its types

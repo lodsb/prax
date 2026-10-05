@@ -19,93 +19,130 @@ carries both ("Web Audio Conference WAC-2018").
 
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 from dataclasses import dataclass
 
 from prax.graph import ontology
+from prax.text import dates
 
-# what a printed venue name carries that is not its series
-_LEADING = re.compile(
-    r"^(?:(?:in|in:)\s+)?(?:(?:the\s+)?(?:proceedings|proc\.?|extended\s+abstracts|"
-    r"companion|adjunct\s+proceedings|abstracts|late[- ]breaking\s+(?:demo\s+)?"
-    r"(?:session|papers?)|papers|tagungsband)\s+(?:of|to|for|from|zur|der)?\s*(?:the\s+)?)+",
-    re.IGNORECASE,
-)
-_ABBREVIATIONS = {
-    "int": "international",
-    "intl": "international",
-    "conf": "conference",
-    "symp": "symposium",
-    "proc": "proceedings",
-    "assoc": "association",
-    "soc": "society",
-    "trans": "transactions",
-    "j": "journal",
-}
-_STOP = {"the", "of", "on", "for", "and", "in", "a", "an", "&", "annual"}
-# a name of only these says when, not where: "March 2009", "SS 2010"
-_WHEN = {
-    "january", "february", "march", "april", "may", "june", "july", "august",
-    "september", "october", "november", "december", "januar", "februar", "marz",
-    "mai", "juni", "juli", "oktober", "dezember", "ss", "ws", "semester",
-    "sommersemester", "wintersemester", "summer", "winter", "spring", "fall",
-}  # fmt: skip
-# what looks like an acronym and is a legal form or a generic word
-_NOT_ACRONYM = {
-    "GMBH", "KG", "OHG", "AG", "INC", "LTD", "LLC", "CO", "SE", "BV", "IEEE",
-    "ACM", "AES", "THE", "SS", "WS", "PHD", "MSC", "BSC", "USA", "UK", "EU",
-}  # fmt: skip
-# a word that says a name is a venue: what an acronym's expansion or a
-# name beside a bare acronym must carry before the two are one series
-VENUE_WORDS = {
-    "conference", "symposium", "workshop", "journal", "transactions",
-    "congress", "convention", "meeting", "society", "proceedings", "forum",
-    "colloquium", "review", "letters", "magazine", "summit", "expo",
-}  # fmt: skip
-# what a meeting is called, rather than a journal or a body
-_EVENT_WORDS = {
-    "conference", "symposium", "workshop", "congress", "convention",
-    "meeting", "colloquium", "summit", "forum", "session", "school",
-}  # fmt: skip
+NEVER = re.compile(r"(?!x)x")
+
+
+@dataclass(frozen=True)
+class Words:
+    """The research pack's venue words (its ``lexicon.yaml``, section
+    ``venues``), as the patterns and sets ``read`` uses. A host whose
+    lexicon has no such section reads every name as its plain words."""
+
+    leading: re.Pattern[str] = NEVER
+    abbreviations: tuple[tuple[str, str], ...] = ()
+    stop: frozenset[str] = frozenset()
+    when: frozenset[str] = frozenset()
+    not_acronym: frozenset[str] = frozenset()
+    venue_words: frozenset[str] = frozenset()
+    event_words: frozenset[str] = frozenset()
+    publishers: frozenset[str] = frozenset()
+    ordinal: re.Pattern[str] = NEVER
+    short_year: re.Pattern[str] = NEVER
+    spelled: re.Pattern[str] = NEVER
+    units: tuple[str, ...] = ()
+    tens: tuple[tuple[str, int], ...] = ()
+    tenths: tuple[tuple[str, int], ...] = ()
+
+
+def _alternation(phrases: list[str]) -> str:
+    """Phrases longest first, a space matching a space or a hyphen."""
+    return "|".join(
+        re.escape(p).replace(r"\ ", r"[\s-]+")
+        for p in sorted(phrases, key=len, reverse=True)
+    )
+
+
+@functools.lru_cache(maxsize=4)
+def _words(lex: ontology.Lexicon) -> Words:
+    data = lex.section("venues") or {}
+    if not data:
+        return Words()
+
+    def seq(key: str) -> list[str]:
+        return [str(x) for x in data.get(key) or []]
+
+    def folded(key: str) -> frozenset[str]:
+        return frozenset(_fold(x) for x in seq(key))
+
+    # the core lexicon's company forms are no acronyms either: GmbH, Inc
+    stems, forms = dict(lex.not_a_venue).get("company", ((), ()))
+    legal = {
+        part.upper()
+        for cue in (*stems, *forms)
+        for part in re.split(r"[^\w]+", cue)
+        if len(part) >= 2
+    }
+    leading = (
+        rf"^(?:(?:{_alternation(seq('citing'))})\s+)?"
+        rf"(?:(?:(?:{_alternation(seq('articles'))})\s+)?"
+        rf"(?:{_alternation(seq('leading'))})\s+"
+        rf"(?:{_alternation(seq('joiners'))})?\s*"
+        rf"(?:(?:{_alternation(seq('articles'))})\s+)?)+"
+    )
+    suffixes = seq("ordinal_suffixes")
+    # the digits of an ordinal are never a short year: "IEEE 24th
+    # Workshop" is no 2024 (a one-letter suffix only as a word's end)
+    not_ordinal = "|".join(
+        re.escape(s) + (r"\b" if len(s) == 1 else "")
+        for s in sorted(suffixes, key=len, reverse=True)
+        if s.isalpha()
+    )
+    units = seq("spelled_units")
+    tens = {str(k): int(v) for k, v in (data.get("spelled_tens") or {}).items()}
+    tenths = {str(k): int(v) for k, v in (data.get("spelled_tenths") or {}).items()}
+    return Words(
+        leading=re.compile(leading, re.IGNORECASE),
+        abbreviations=tuple(
+            (str(k), str(v)) for k, v in (data.get("abbreviations") or {}).items()
+        ),
+        stop=folded("stop"),
+        when=folded("when") | {_fold(m) for m in dates.month_names()},
+        not_acronym=frozenset(x.upper() for x in seq("not_acronym")) | legal,
+        venue_words=folded("venue_words"),
+        event_words=folded("event_words"),
+        publishers=folded("series_publishers"),
+        ordinal=re.compile(
+            rf"\b(\d{{1,3}})\s*(?:{_alternation(suffixes)})(?=\s|$)", re.IGNORECASE
+        )
+        if suffixes
+        else NEVER,
+        # CHI '04, DAFx25, DAFx-17, CHI 98
+        short_year=re.compile(
+            r"(?:['’‘`]|(?<=[A-Za-z])|(?<=[A-Za-z]-)|(?<=[A-Z] ))(\d{2})(?!\d"
+            + (f"|{not_ordinal}" if not_ordinal else "")
+            + ")"
+        ),
+        # "the Thirty-Sixth AAAI Conference", "Seventeenth International
+        # Conference"
+        spelled=re.compile(
+            rf"\b(?:({'|'.join(map(re.escape, tens))})[- ]?)?("
+            + "|".join(map(re.escape, [*units, *tenths]))
+            + r")\b",
+            re.IGNORECASE,
+        )
+        if units or tenths
+        else NEVER,
+        units=tuple(units),
+        tens=tuple(tens.items()),
+        tenths=tuple(tenths.items()),
+    )
+
+
+def words() -> Words:
+    """The venue words of the lexicon on disk."""
+    return _words(ontology.lexicon())
+
+
 _YEAR = re.compile(r"(?<!\d)(19[5-9]\d|20[0-4]\d)(?!\d)")
-# CHI '04, DAFx25, DAFx-17, CHI 98
-# never the digits of an ordinal: "IEEE 24th Workshop" is no 2024
-_SHORT_YEAR = re.compile(
-    r"(?:['’‘`]|(?<=[A-Za-z])|(?<=[A-Za-z]-)|(?<=[A-Z] ))(\d{2})(?!\d|st|nd|rd|th|d\b)"
-)
 _APOSTROPHE_YEAR = re.compile(r"['’‘`](\d{2})(?!\d)")
-_ORDINAL = re.compile(r"\b(\d{1,3})\s*(?:st|nd|rd|th|d|\.)(?=\s|$)", re.IGNORECASE)
-_UNITS = [
-    "first",
-    "second",
-    "third",
-    "fourth",
-    "fifth",
-    "sixth",
-    "seventh",
-    "eighth",
-    "ninth",
-    "tenth",
-    "eleventh",
-    "twelfth",
-    "thirteenth",
-    "fourteenth",
-    "fifteenth",
-    "sixteenth",
-    "seventeenth",
-    "eighteenth",
-    "nineteenth",
-]
-_TENS = {"twenty": 20, "thirty": 30, "forty": 40, "fifty": 50}
-_TENTHS = {"twentieth": 20, "thirtieth": 30, "fortieth": 40, "fiftieth": 50}
-# "the Thirty-Sixth AAAI Conference", "Seventeenth International Conference"
-_WORD_ORDINAL = re.compile(
-    r"\b(?:(twenty|thirty|forty|fifty)[- ]?)?("
-    + "|".join([*_UNITS, *_TENTHS])
-    + r")\b",
-    re.IGNORECASE,
-)
 # an acronym may run into its year: "DAFx23", "NIME05"
 _ACRONYM = re.compile(r"\b([A-Z][A-Za-z]*[A-Z][A-Za-z]*|[A-Z]{2,})(?=\d*\b)")
 # a session, a track or a page range after a dash belongs to the paper
@@ -119,10 +156,6 @@ _VOLUME = re.compile(
     r"\b(?:vol(?:ume)?|no|nr|issue|heft|band)\.?\s*\d+\w*|\b\d+\s*\(\d+\)",
     re.IGNORECASE,
 )
-# a publisher's word before a series it publishes: "IEEE ICASSP"
-_PUBLISHERS = {"ieee", "acm", "aes", "springer", "elsevier", "wiley"}
-# words that name a kind of venue and nothing of which one
-_KIND_ONLY = {"proceedings", "transactions", "journal", "conference", "magazine"}
 
 
 @dataclass(frozen=True)
@@ -147,6 +180,7 @@ def _short_year(two: str) -> str:
 
 def read(name: str) -> Venue:
     """A venue name as its series, its edition and its acronym."""
+    w = words()
     text = " ".join(name.split())
     text = _TAIL.sub("", text)
     # an acronym in brackets is the name's own: "… Digital Audio Effects
@@ -155,7 +189,7 @@ def read(name: str) -> Venue:
         a
         for inner in re.findall(r"\(([^)]*)\)", text)
         for a in _ACRONYM.findall(inner)
-        if a.upper() not in _NOT_ACRONYM
+        if a.upper() not in w.not_acronym
     ]
     text = _VOLUME.sub(" ", text)
     text = re.sub(r"\(([^)]*)\)", r" \1 ", text)  # "(ICMC)" keeps its word
@@ -165,10 +199,10 @@ def read(name: str) -> Venue:
     if year:
         edition = year.group(1)
         text = text[: year.start()] + " " + text[year.end() :]
-    acronyms = [a for a in _ACRONYM.findall(text) if a.upper() not in _NOT_ACRONYM]
+    acronyms = [a for a in _ACRONYM.findall(text) if a.upper() not in w.not_acronym]
     if edition is None:
         # an apostrophe year ("SOSP '09") is surer than digits after letters
-        short = _APOSTROPHE_YEAR.search(text) or _SHORT_YEAR.search(text)
+        short = _APOSTROPHE_YEAR.search(text) or w.short_year.search(text)
         if short and (acronyms or "'" in text or "’" in text):
             edition = _short_year(short.group(1))
             text = text[: short.start()] + " " + text[short.end() :]
@@ -178,54 +212,55 @@ def read(name: str) -> Venue:
     head, _, tail = text.partition(",")
     # (only past the venue's own acronym: "IEEE Transactions on Systems,
     # Man, and Cybernetics" is one title with commas in it)
-    if tail and any(a.upper() not in _NOT_ACRONYM for a in _ACRONYM.findall(head)):
+    if tail and any(a.upper() not in w.not_acronym for a in _ACRONYM.findall(head)):
         text = head
     text = text.replace("_th", "th")
-    ordinal = _ORDINAL.search(text)
+    ordinal = w.ordinal.search(text)
     if ordinal:
         number = int(ordinal.group(1))
         edition = edition or f"#{number}"
         text = text[: ordinal.start()] + " " + text[ordinal.end() :]
     else:
-        spelled = _WORD_ORDINAL.search(text)
+        spelled = w.spelled.search(text)
         if spelled:
-            tens = _TENS.get((spelled.group(1) or "").lower(), 0)
+            tens = dict(w.tens).get((spelled.group(1) or "").lower(), 0)
             unit = spelled.group(2).lower()
-            n = tens + (_TENTHS[unit] if unit in _TENTHS else _UNITS.index(unit) + 1)
+            tenths = dict(w.tenths)
+            n = tens + (tenths[unit] if unit in tenths else w.units.index(unit) + 1)
             number = n
             edition = edition or f"#{n}"
             text = text[: spelled.start()] + " " + text[spelled.end() :]
     # "Proceedings of the 5th Conference on X" is the conference; but
     # "Proceedings of the IEEE" and "Proceedings of the Musical
     # Association" are journals, not the body that publishes them
-    stripped = _LEADING.sub("", text.strip())
+    stripped = w.leading.sub("", text.strip())
     if stripped != text.strip():
         rest = set(re.split(r"[^\w]+", _fold(stripped))) - {""}
-        own = [a for a in _ACRONYM.findall(stripped) if a.upper() not in _NOT_ACRONYM]
-        if rest & _EVENT_WORDS or own:
+        own = [a for a in _ACRONYM.findall(stripped) if a.upper() not in w.not_acronym]
+        if rest & w.event_words or own:
             text = stripped
-    words = []
+    kept = []
     # a plain number stays: "Lecture 6" and "Lecture 10" are two things
     for raw in re.split(r"[^\w]+", _fold(text)):
         if not raw:
             continue
-        w = _ABBREVIATIONS.get(raw, raw)
-        if w not in _STOP:
-            words.append(w)
+        word = dict(w.abbreviations).get(raw, raw)
+        if word not in w.stop:
+            kept.append(word)
     acronym = None
     for a in acronyms:
         a = re.sub(r"\d+$", "", a)
-        if 3 <= len(a) <= 10 and a.upper() not in _NOT_ACRONYM:
+        if 3 <= len(a) <= 10 and a.upper() not in w.not_acronym:
             acronym = a.upper()
             break
-    if words and all(w in _WHEN for w in words):
-        words = []  # a date, not a venue
-    if "joint" in words and edition is None:
+    if kept and all(k in w.when for k in kept):
+        kept = []  # a date, not a venue
+    if "joint" in kept and edition is None:
         edition = "joint"  # two series met once: not either of them
     stated = acronym is not None and any(
         re.sub(r"\d+$", "", b).upper() == acronym for b in bracketed
     )
-    return Venue(" ".join(words), edition, acronym, stated, number)
+    return Venue(" ".join(kept), edition, acronym, stated, number)
 
 
 def is_bare(v: Venue) -> bool:
@@ -244,7 +279,7 @@ def _initials_of(acronym: str, series: str) -> bool:
 
 
 def _venue_like(series: str) -> bool:
-    return any(w in VENUE_WORDS for w in series.split())
+    return any(w in words().venue_words for w in series.split())
 
 
 def series_names(v: Venue, expansions: dict[str, set[str]]) -> set[str]:
@@ -261,7 +296,7 @@ def series_names(v: Venue, expansions: dict[str, set[str]]) -> set[str]:
     # only when what is left is the name's own acronym: "IEEE MultiMedia"
     # (a magazine) and "ACM Multimedia" (a conference) would otherwise meet
     # on "multimedia" (the review of 2026-10-04)
-    plain = [w for w in v.series.split() if w not in _PUBLISHERS]
+    plain = [w for w in v.series.split() if w not in words().publishers]
     if (
         v.acronym
         and plain == [v.acronym.lower()]
@@ -358,7 +393,7 @@ def not_a_venue(name: str) -> str | None:
     v = read(name)
     if not v.series:
         return "none"  # a date: "March 2009", "Sommersemester 2005"
-    if set(_fold(name).replace("-", " ").split()) & VENUE_WORDS:
+    if set(_fold(name).replace("-", " ").split()) & words().venue_words:
         return None
     cues = dict(ontology.lexicon().not_a_venue)
     for kind in NOT_A_VENUE_ORDER:

@@ -38,6 +38,7 @@ experiments).
 from __future__ import annotations
 
 import functools
+import json
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field, replace
@@ -96,9 +97,15 @@ class Relation:
     # the things do: authorship); empty says nothing
     kind: str = ""
     same_as: tuple[str, ...] = ()  # in schema.org, SKOS, PROV-O, Dublin Core
+    # how strongly a fact of it connects its two ends, for a path
+    # (``prax.graph.paths``): "strong" (a paper cites another, a recipe
+    # calls for an ingredient), "weak" (one mentions the other), empty
+    # for between
+    strength: str = ""
 
 
 RELATION_KINDS = ("state", "event", "eternal")
+RELATION_STRENGTHS = ("strong", "weak")
 
 
 @dataclass(frozen=True)
@@ -367,6 +374,11 @@ def lint(types: dict[str, EntityType], relations: dict[str, Relation]) -> list[s
                 out.append(f"relation {r.name!r} is symmetric and has an inverse")
         if r.kind and r.kind not in RELATION_KINDS:
             out.append(f"relation {r.name!r}: kind {r.kind!r}, one of {RELATION_KINDS}")
+        if r.strength and r.strength not in RELATION_STRENGTHS:
+            out.append(
+                f"relation {r.name!r}: strength {r.strength!r},"
+                f" one of {RELATION_STRENGTHS}"
+            )
     for t in types.values():
         seen = {t.name}
         parent = t.parent
@@ -409,6 +421,7 @@ def parse_module(text: str, *, name: str | None = None) -> Module:
             functional=bool(a.get("functional", False)),
             inverse_of=str(a.get("inverse_of") or ""),
             kind=str(a.get("kind") or ""),
+            strength=str(a.get("strength") or ""),
             same_as=_same_as(n, a.get("same_as")),
         )
         for n, a in _names(data.get("relation_types"), "relation_types").items()
@@ -641,6 +654,15 @@ class Lexicon:
     # institution, none (``not_a_venue``)
     not_a_venue: tuple[tuple[str, tuple[tuple[str, ...], tuple[str, ...]]], ...] = ()
     ranks: tuple[tuple[int, tuple[tuple[str, ...], tuple[str, ...]]], ...] = ()
+    # every other section, the core file's and the packs' (a pack's
+    # ``lexicon.yaml``: research's venue words, craft's ingredient words),
+    # as JSON so the lexicon stays hashable; read with ``section``
+    more: str = "{}"
+
+    def section(self, name: str) -> Any:
+        """A section the fields above do not hold, None when no file has
+        it."""
+        return _sections(self.more).get(name)
 
     def type_of(self, name: str) -> str | None:
         """The type a name's own words say it is, or None."""
@@ -651,8 +673,35 @@ class Lexicon:
         return None
 
 
-def parse_lexicon(text: str) -> Lexicon:
+# the sections the Lexicon's own fields hold
+_LEXICON_FIELDS = (
+    "version",
+    "organization",
+    "top_organization",
+    "by_type",
+    "not_a_name",
+    "part_of",
+    "not_a_venue",
+)
+
+
+@functools.lru_cache(maxsize=8)
+def _sections(more: str) -> dict[str, Any]:
+    out: dict[str, Any] = json.loads(more)
+    return out
+
+
+def parse_lexicon(text: str, packs: Iterable[str] = ()) -> Lexicon:
+    """The core lexicon, and the packs' sections beside it. A section is
+    one file's: two files that both hold one are refused, as two modules
+    declaring one name are."""
     data = yaml.safe_load(text) or {}
+    more = {k: v for k, v in data.items() if k not in _LEXICON_FIELDS}
+    for extra in packs:
+        for k, v in (yaml.safe_load(extra) or {}).items():
+            if k in _LEXICON_FIELDS or k in more:
+                raise ValueError(f"lexicon section {k!r} is declared twice")
+            more[k] = v
     words = data.get("not_a_name") or {}
     parts = data.get("part_of") or {}
 
@@ -681,6 +730,7 @@ def parse_lexicon(text: str) -> Lexicon:
         ranks=tuple(
             sorted((int(k), cues(v)) for k, v in (parts.get("ranks") or {}).items())
         ),
+        more=json.dumps(more, sort_keys=True, ensure_ascii=False),
     )
 
 
@@ -914,6 +964,14 @@ class Facet:
         """A label's schema.org type (``schema:Recipe``), or None."""
         return dict(self.same_as).get(label)
 
+    def standards(self) -> tuple[str, ...]:
+        """The schema.org types the labels name, without the prefix, in the
+        order of the file."""
+        bare = (
+            st.split(":", 1)[-1] for _, st in self.same_as if st.startswith("schema:")
+        )
+        return tuple(dict.fromkeys(bare))
+
     def label_for(self, standard: str) -> str | None:
         """The label a schema.org type names (``Recipe`` or
         ``schema:Recipe``), the first in the file when two share it."""
@@ -1034,9 +1092,22 @@ def module_files() -> dict[str, Path]:
     return {f.stem: f for f in [*files, *_pack_modules(p)]}
 
 
+def _pack_lexicons(p: Path) -> list[Path]:
+    if not _packed(p):
+        return []
+    from prax import packs
+
+    return packs.lexicon_files()
+
+
 def _stamp(p: Path) -> tuple[Any, ...]:
     if p.is_dir():
-        files = [*sorted(p.glob("*.yaml")), *_pack_modules(p), *_pack_sameness(p)]
+        files = [
+            *sorted(p.glob("*.yaml")),
+            *_pack_modules(p),
+            *_pack_sameness(p),
+            *_pack_lexicons(p),
+        ]
         return tuple((str(f), f.stat().st_mtime_ns) for f in files)
     return (p.name, p.stat().st_mtime_ns)
 
@@ -1059,7 +1130,10 @@ def _load_lexicon(p: Path, stamp: tuple[Any, ...]) -> Lexicon:
     f = (p / f"{LEXICON}.yaml") if p.is_dir() else p.with_name(f"{LEXICON}.yaml")
     if not f.exists():
         return Lexicon()  # a host without one: the callers fall back to nothing
-    return parse_lexicon(f.read_text(encoding="utf-8"))
+    return parse_lexicon(
+        f.read_text(encoding="utf-8"),
+        [x.read_text(encoding="utf-8") for x in _pack_lexicons(p)],
+    )
 
 
 def lexicon() -> Lexicon:

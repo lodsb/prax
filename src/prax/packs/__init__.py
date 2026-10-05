@@ -58,6 +58,11 @@ def sameness_files() -> list[Path]:
     return [home(p) / p.sameness for p in PACKS if p.sameness]
 
 
+def lexicon_files() -> list[Path]:
+    """Every pack's lexicon sections, in the order of ``PACKS``."""
+    return [home(p) / p.lexicon for p in PACKS if p.lexicon]
+
+
 def rules_file(name: str) -> Path | None:
     """The domain rules a pack suggests; None when it suggests none."""
     pack = by_name(name)

@@ -81,6 +81,7 @@ src/prax/packs/
     __init__.py        # MANIFEST
     society.yaml       # the ontology module
     sameness.yaml      # its cases of "the same thing"
+    lexicon.yaml       # its words that say what a name is (sections)
     rules.yaml         # the domain rules it suggests
   maths/               # knowledge and capability
     __init__.py
@@ -103,6 +104,12 @@ MANIFEST = Pack(
     # knowledge: always composed
     ontology=("maths.yaml",),
     sameness="sameness.yaml",
+    # sections of the lexicon the core file has not: research's `venues`
+    # (how a venue name says its series and edition), craft's
+    # `ingredients` (per language, what of a line is not the ingredient);
+    # read as `ontology.lexicon().section(name)`, a section in two files
+    # refused (the quality review of 2026-10-05)
+    lexicon="lexicon.yaml",
     rules="rules.yaml",
     # capability: on a host that names the pack
     extractors=("prax.packs.maths.parse:EXTRACTORS",),

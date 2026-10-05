@@ -1,0 +1,36 @@
+# The craft pack's words that say what a name is: what of a recipe's
+# ingredient line is not the ingredient (`prax.text.schemaorg`, the
+# `markup` pass of `prax maintain`). A section of the lexicon like the core
+# file's (`ontology/lexicon.yaml`), read through
+# `ontology.lexicon().section("ingredients")`; it bumps no module version.
+#
+# One list per language, by the page's `meta.lang`. A page in a language
+# with no list gives no `calls_for` facts from its markup: "200 g de
+# farine, tamisée" read with English and German words is the ingredient
+# "de farine" (the quality review of 2026-10-05, finding 8). The extraction
+# still reads the recipe.
+ingredients:
+  en:
+    # a measure written as words, at the start: "a generous pinch of"
+    qualifiers: [a, an, some, very, generous, large, small, good, big]
+    measures: [pinch, handful, splash, dash, knob, bunch, sprig, glug, squeeze]
+    measure_of: [of]
+    # how it is prepared, at the start: "finely chopped ginger"; "minced
+    # pork" keeps its word, which names the ingredient
+    leading: [finely, roughly, thinly, freshly, coarsely]
+    leading_done: [chopped, grated, sliced, ground]
+    # and at the end: "garlic cloves, peeled", "black pepper to taste"
+    trailing: [finely, roughly, thinly, lightly, freshly, to, for, peeled, sliced, chopped, grated, picked, topped, beaten, removed, diced, crushed, halved, trimmed, drained, softened, melted, washed, torn, shredded, rinsed, soaked, cubed, toasted, deep-frying, frying, serving, serve, taste, garnish, optional]
+    # two ingredients on one line: "salt and pepper"
+    joiners: [and, or, "&"]
+    # what follows the ingredient and is not one: "plus extra for greasing"
+    asides: [plus]
+  de:
+    qualifiers: [eine, ein, etwas]
+    measures: [prise, handvoll, schuss, bund, zweig, kopf, köpfe, knolle, stange, zehe, scheibe, dose, becher, päckchen, tasse, stück]
+    measure_of: []
+    leading: [etwas, frisch, fein]
+    leading_done: [gehackt, gehackte, gehackter, gerieben, geriebene, geriebener]
+    trailing: [zum, nach, gehackt, gewürfelt, geschält, gerieben, entsteint, halbiert, geröstet, gehobelt, abgerieben, zerdrückt, fein, grob, servieren, bestreuen, geschmack, belieben]
+    joiners: [und, oder, "&"]
+    asides: [sowie]

@@ -1,0 +1,57 @@
+# The research pack's words that say what a name is: how a printed venue
+# name says its series, its edition and its acronym (`prax.graph.venues`,
+# the `venue` tier of `prax resolve`). A section of the lexicon like the
+# core file's (`ontology/lexicon.yaml`), read through
+# `ontology.lexicon().section("venues")`; it bumps no module version.
+#
+# The tier merges at confidence 1.0 every night, so a word added here
+# changes merges without a person seeing them: measure it first with
+# `scripts/eval_venues.py --diff OLD.json` (docs/eval/venues-*.md).
+venues:
+  # what a printed name carries before its series: "Proceedings of the",
+  # "In: Extended Abstracts of", "Tagungsband zur". A phrase's space
+  # matches a space or a hyphen ("late-breaking")
+  leading: [proceedings, proc., proc, extended abstracts, companion, adjunct proceedings, abstracts, late breaking session, late breaking demo session, late breaking paper, late breaking papers, papers, tagungsband, actes, actas, atti]
+  # the small words after a leading phrase, and the article
+  joiners: [of, to, for, from, zur, der, du, des, de, del, della, dei, degli, do, da]
+  articles: [the, la, le, les, el, il, lo]
+  # before all of it: "In: Proceedings of…"
+  citing: [in, "in:"]
+  # a word written short, read as the whole word ("Int. Conf." is the
+  # International Conference)
+  abbreviations:
+    int: international
+    intl: international
+    conf: conference
+    symp: symposium
+    proc: proceedings
+    assoc: association
+    soc: society
+    trans: transactions
+    j: journal
+  # words that are no part of what a series is called
+  stop: [the, of, "on", for, and, in, a, an, "&", annual, de, del, della, di, du, des, d, l, la, le, el, il, und, fur, der, die, das]
+  # a name of only these and month names (`prax.text.dates`) says when,
+  # not where: "March 2009", "SS 2010"
+  when: [ss, ws, semester, sommersemester, wintersemester, summer, winter, spring, fall]
+  # what looks like an acronym and is none; the core lexicon's company
+  # forms (`not_a_venue.company`: GmbH, Inc, Ltd…) are none either
+  not_acronym: [ieee, acm, aes, the, ss, ws, phd, msc, bsc, usa, uk, eu, se]
+  # a word that says a name is a venue: what an acronym's expansion or a
+  # name beside a bare acronym must carry before the two are one series,
+  # and what keeps a name a venue whatever else it says (`not-venues`)
+  venue_words: [conference, symposium, workshop, journal, transactions, congress, convention, meeting, society, proceedings, forum, colloquium, review, letters, magazine, summit, expo, congres, congreso, congresso, colloque, coloquio, colloquio, conferencia, conferenza, convegno, jornadas, journees, simposio, tagung, jahrestagung, konferenz, kongress, revue, revista, rivista, zeitschrift]
+  # what a meeting is called, rather than a journal or a body: a leading
+  # "Proceedings of" is dropped only before one of these
+  event_words: [conference, symposium, workshop, congress, convention, meeting, colloquium, summit, forum, session, school, congres, congreso, congresso, colloque, coloquio, colloquio, conferencia, conferenza, convegno, jornadas, journees, simposio, tagung, jahrestagung, konferenz, kongress]
+  # a publisher's word before a series it publishes: "IEEE ICASSP" is
+  # ICASSP
+  series_publishers: [ieee, acm, aes, springer, elsevier, wiley]
+  # what follows an edition's number: "11th", "2nd", "3d", "5."
+  # and in French, Spanish, Italian: "12e", "3er", "1ère", "2º"
+  ordinal_suffixes: [st, nd, rd, th, d, ".", e, er, ère, ème, eme, re, º, ª]
+  # an edition written out: "the Thirty-Sixth", "Seventeenth"; the units
+  # in order from one, the tens and the tenths by their value
+  spelled_units: [first, second, third, fourth, fifth, sixth, seventh, eighth, ninth, tenth, eleventh, twelfth, thirteenth, fourteenth, fifteenth, sixteenth, seventeenth, eighteenth, nineteenth]
+  spelled_tens: {twenty: 20, thirty: 30, forty: 40, fifty: 50}
+  spelled_tenths: {twentieth: 20, thirtieth: 30, fortieth: 40, fiftieth: 50}

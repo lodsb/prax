@@ -4779,6 +4779,64 @@ and `tests/test_markup.py`).
   `capture/projects.py`. They are `status.STALE`, `status.STALE_RELS` and
   `status.stale_rel` now.
 
+## 2026-10-05, the quality review's third step: words in data
+
+Findings 6, 7, 8, 9/15, 11, 19/21 and 22
+(`docs/eval/code-review-2026-10-05.md`); their tests are in
+`tests/test_quality_fixes.py`.
+
+- **A pack's lexicon.** A pack may now carry a `lexicon.yaml`, sections
+  beside the core file's, read with `ontology.lexicon().section(name)`;
+  a section two files hold is refused. A YAML trap came with it: a bare
+  `on` in a word list is the boolean true, and a test now refuses any
+  boolean in a lexicon.
+- **The venue words** (findings 6, 9, 15) moved from `graph/venues.py`
+  into the research pack's lexicon (`venues:`): the leading phrases, the
+  abbreviations, the stop words, the venue and event words, the
+  publishers before a series, the ordinal suffixes and the spelled
+  ordinals. The month names come from `prax.text.dates`, and the legal
+  forms from the core lexicon's company cues. The move was checked first
+  on its own: the plan over the live names was the same with the old
+  module and the new one. French, Spanish, Italian and German words were
+  added after it ("Actes du", "Actas del", "12e", "3er", congrès,
+  congreso, Tagung…): on this library they add one merge, two names of
+  one venue apart only by an article (both behind the wall, read by
+  their shape, not their names).
+- **`scripts/eval_venues.py`** measures the tier against the Zotero
+  records of the papers that name a venue. Of the 92 merges of the
+  night's run, 5 have a record behind them and all 5 agree; of the 183
+  edition links, 27 do and 22 agree, the other five records naming a
+  session, a place or a university. `--save` and `--diff` show what a
+  change to the words moves before it merges at night.
+- **The status reader** (finding 7) wants a status line's shape now: a
+  key, or the state word alone, emphasised, in capitals, or before a
+  colon, a dash, a date or a word like "by" or "since". "Archived copies
+  of the datasets live on the NAS" no longer retires a note. The words
+  are the core lexicon's `status:` section, with German and French.
+- **The ingredient words** (finding 8) are the craft pack's, one list a
+  language. A page's `meta.lang` picks the list; a page never indexed is
+  detected, or scored by whose ingredient words its lines use. A
+  language with no list gives no `calls_for` facts from markup rather
+  than "de farine". On the 61 recipe pages of the library the names are
+  the same as before.
+- **A document as a node** (finding 11): page links, a project's
+  members and citations now type a document as `store.document_node`
+  does. A document with no entity yet is the one type its domains allow
+  (a research document is a `paper`), else a `document`. 733 titles
+  already have twins of two document types; folding them is in the plan.
+- **A relation's strength** (findings 19, 21) is `strength: strong|weak`
+  in its module, checked by `lint`, bumping no version; `paths` reads it
+  from the composed ontology. The map is the old lists exactly, less
+  `evaluates`, which no module declares, and `compares`, an alias.
+  `eval_paths.py` on today's store: cites 106/150, topic 39/91, random
+  5/300, recipe-paper 0/150 (111, 41, 7 and 0 on 2026-10-04, before the
+  night's merges and the not-venues repair, which ended 739
+  `published_in` edges some paths ran through).
+- **A page's own schema.org type** (finding 22) may be any type a genre
+  names (`genres.standards()`): a Q&A page, a thesis or source code now
+  gives its author. Pages already read keep their stamp until they are
+  captured again.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

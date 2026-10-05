@@ -28,7 +28,9 @@ JSONLD = re.compile(
 )
 
 # the page's own work, the most telling first: a page that is a recipe and
-# an article is the recipe
+# an article is the recipe. The genres' schema.org types (``same_as`` in
+# ontology/genres.yaml) are its own work too: the markup pass passes them
+# (``of_page(types=…)``), after these
 OWN_TYPES = (
     "Recipe",
     "ScholarlyArticle",
@@ -46,19 +48,6 @@ OWN_TYPES = (
     "Product",
 )
 NAME_CHARS = 120  # a name past this is a sentence, not a name
-# what a line says of the preparation, at its end: "garlic cloves, peeled",
-# "Black pepper to taste", "Zwetschgen entsteint"
-_PREP = re.compile(
-    r"(?:\s+(?:finely|roughly|thinly|lightly|freshly|to|for|zum|nach|"
-    r"peeled|sliced|chopped|grated|picked|topped|beaten|removed|diced|"
-    r"crushed|halved|trimmed|drained|softened|melted|washed|torn|shredded|"
-    r"rinsed|soaked|cubed|toasted|"
-    r"deep-frying|frying|serving|serve|taste|garnish|optional|"
-    r"gehackt|gewürfelt|geschält|gerieben|entsteint|halbiert|geröstet|"
-    r"gehobelt|abgerieben|zerdrückt|fein|grob|"
-    r"servieren|bestreuen|geschmack|belieben))+$",
-    re.IGNORECASE,
-)
 
 
 @dataclass
@@ -71,7 +60,9 @@ class Said:
     author_organizations: list[str] = field(default_factory=list)
     publisher: str = ""
     date: str = ""  # datePublished as written
-    ingredients: list[str] = field(default_factory=list)
+    # recipeIngredient as written; the names in them are
+    # ``ingredient_names``', with the words of the page's language
+    ingredient_lines: list[str] = field(default_factory=list)
     cuisines: list[str] = field(default_factory=list)
     categories: list[str] = field(default_factory=list)
     keywords: list[str] = field(default_factory=list)
@@ -112,16 +103,19 @@ def nodes(html: str | bytes) -> list[dict[str, Any]]:
     return out
 
 
-def own(found: list[dict[str, Any]]) -> dict[str, Any] | None:
+def own(
+    found: list[dict[str, Any]], types: tuple[str, ...] = OWN_TYPES
+) -> dict[str, Any] | None:
     """The page's own work among its objects: the first of the most
-    telling type (``OWN_TYPES``); a ``WebPage``'s ``mainEntity`` when it
-    is one; None for a page that only describes its site."""
+    telling type (``types``, ``OWN_TYPES`` and any the caller adds); a
+    ``WebPage``'s ``mainEntity`` when it is one; None for a page that
+    only describes its site."""
     candidates = list(found)
     for node in found:
         main = node.get("mainEntity")
         if isinstance(main, dict) and main.get("@type"):
             candidates.append(main)
-    for wanted in OWN_TYPES:
+    for wanted in types:
         for node in candidates:
             if wanted in _types(node):
                 return node
@@ -154,42 +148,106 @@ def _words(value: Any) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-# a measure written as words, at the start: "a generous pinch of", "1 handful"
-_MEASURE = re.compile(
-    r"^(?:(?:a|an|some|very|generous|large|small|good|big|eine?|etwas)\s+)*"
-    r"(?:pinch|handful|splash|dash|knob|bunch|sprig|glug|squeeze|"
-    r"prise|handvoll|schuss|bund|zweig|kopf|köpfe|knolle|stange|zehe|scheibe|"
-    r"dose|becher|päckchen|tasse|stück)(?:e?s|e?n)?\s+(?:of\s+)?",
-    re.IGNORECASE,
-)
+@dataclass(frozen=True)
+class IngredientWords:
+    """One language's words of an ingredient line that are not the
+    ingredient (the craft pack's lexicon, ``ingredients.<lang>``)."""
+
+    measure: re.Pattern[str]  # "a generous pinch of"
+    leading: re.Pattern[str]  # "finely chopped"
+    trailing: re.Pattern[str]  # ", peeled", "to taste"
+    joiners: re.Pattern[str]  # "salt and pepper"
+    asides: re.Pattern[str]  # "plus extra for greasing"
 
 
-# and at the start: "finely chopped ginger", "etwas Speiseöl"; "minced pork"
-# keeps its word, which names the ingredient
-_LEADING = re.compile(
-    r"^(?:(?:finely|roughly|thinly|freshly|coarsely|etwas|frisch|fein)\s+)+"
-    r"(?:(?:chopped|grated|sliced|ground|gehackte?r?|geriebene?r?)\s+)?",
-    re.IGNORECASE,
-)
+def _alt(words: list[str]) -> str:
+    return "|".join(re.escape(w) for w in sorted(words, key=len, reverse=True))
 
 
-def ingredient_name(line: str) -> list[str]:
+def ingredient_words(section: dict[str, Any] | None) -> IngredientWords | None:
+    """The patterns of one language's section; None for a language with
+    none, whose lines then name no ingredient."""
+    if not section:
+        return None
+
+    def seq(key: str) -> list[str]:
+        return [str(x) for x in section.get(key) or []]
+
+    never = r"(?!x)x"
+    of = _alt(seq("measure_of"))
+    measure = (
+        rf"^(?:(?:{_alt(seq('qualifiers'))})\s+)*(?:{_alt(seq('measures'))})"
+        r"(?:e?s|e?n)?\s+" + (rf"(?:(?:{of})\s+)?" if of else "")
+        if seq("measures")
+        else never
+    )
+    leading = (
+        rf"^(?:(?:{_alt(seq('leading'))})\s+)+"
+        + (rf"(?:(?:{_alt(seq('leading_done'))})\s+)?" if seq("leading_done") else "")
+        if seq("leading")
+        else never
+    )
+    trailing = rf"(?:\s+(?:{_alt(seq('trailing'))}))+$" if seq("trailing") else never
+    joiners = rf"\s+(?:{_alt(seq('joiners'))})\s+" if seq("joiners") else never
+    asides = (
+        r"\s(?:[–—-]" + (rf"|{_alt(seq('asides'))}" if seq("asides") else "") + r")\s"
+    )
+    return IngredientWords(
+        measure=re.compile(measure, re.IGNORECASE),
+        leading=re.compile(leading, re.IGNORECASE),
+        trailing=re.compile(trailing, re.IGNORECASE),
+        joiners=re.compile(joiners, re.IGNORECASE),
+        asides=re.compile(asides, re.IGNORECASE),
+    )
+
+
+def ingredient_name(line: str, words: IngredientWords) -> list[str]:
     """The ingredients one line of ``recipeIngredient`` names, without
     amount, unit, note or preparation: "500 g Zwetschgen, entsteint" is
     Zwetschgen; "Salz und Pfeffer" is two."""
     item = (ingredients.parse_item(line).get("item") or "").split(",")[0]
     item = re.sub(r"\([^)]*\)", " ", item)
-    parts = re.split(r"\s+(?:und|and|oder|or|&)\s+", item)
     out = []
-    for p in parts:
+    for p in words.joiners.split(item):
         # "– that is…", "plus extra for greasing"
-        name = " ".join(re.split(r"\s(?:[–—-]|plus|sowie)\s", p)[0].split())
-        name = _MEASURE.sub("", name)
-        name = _PREP.sub("", " " + _LEADING.sub("", name)).strip(" .;:")
+        name = " ".join(words.asides.split(p)[0].split())
+        name = words.measure.sub("", name)
+        name = words.trailing.sub("", " " + words.leading.sub("", name)).strip(" .;:")
         # "1 tbsp" alone, a unit left without its ingredient
         if len(name) > 1 and not name[0].isdigit():
             out.append(name)
     return out[:2]
+
+
+def likely_language(lines: list[str], sections: dict[str, Any]) -> str | None:
+    """The language whose ingredient words a recipe's lines use most, for a
+    page whose language is not known and too short to detect; None when
+    none is ahead."""
+    tokens = [t for line in lines for t in re.findall(r"[^\W\d_]+", line.lower())]
+    scores = {
+        lang: sum(
+            t in {str(w).lower() for key in section.values() for w in key or []}
+            for t in tokens
+        )
+        for lang, section in sections.items()
+        if isinstance(section, dict)
+    }
+    ranked = sorted(scores.items(), key=lambda kv: -kv[1])
+    if not ranked or ranked[0][1] == 0:
+        return None
+    if len(ranked) > 1 and ranked[1][1] == ranked[0][1]:
+        return None
+    return ranked[0][0]
+
+
+def ingredient_names(lines: list[str], words: IngredientWords | None) -> list[str]:
+    """The ingredients a recipe's lines name, each once; none without the
+    words of the page's language."""
+    if words is None:
+        return []
+    return list(
+        dict.fromkeys(n for line in lines for n in ingredient_name(line, words))
+    )
 
 
 def said(node: dict[str, Any], by_id: dict[str, dict[str, Any]] | None = None) -> Said:
@@ -226,10 +284,11 @@ def said(node: dict[str, Any], by_id: dict[str, dict[str, Any]] | None = None) -
     elif isinstance(publisher, str):
         out.publisher = _clean(publisher)
     out.date = str(node.get("datePublished") or "")[:32]
-    for line in _list(node.get("recipeIngredient") or node.get("ingredients")):
-        if isinstance(line, str):
-            out.ingredients += ingredient_name(line)
-    out.ingredients = list(dict.fromkeys(out.ingredients))
+    out.ingredient_lines = [
+        line
+        for line in _list(node.get("recipeIngredient") or node.get("ingredients"))
+        if isinstance(line, str)
+    ]
     out.cuisines = _words(node.get("recipeCuisine"))
     out.categories = _words(node.get("recipeCategory") or node.get("articleSection"))
     out.keywords = _words(node.get("keywords"))
@@ -260,12 +319,13 @@ def _recipes(node: Any, out: list[dict[str, Any]]) -> None:
             _recipes(child, out)
 
 
-def of_page(html: str | bytes) -> Page | None:
+def of_page(html: str | bytes, types: tuple[str, ...] = ()) -> Page | None:
     """What the page says of itself, or None when it says nothing prax
-    files."""
+    files. ``types`` are more schema.org types that are a page's own work
+    (the genres'), tried after ``OWN_TYPES``."""
     found = nodes(html)
     by_id = {str(n["@id"]): n for n in found if isinstance(n.get("@id"), str)}
-    node = own(found)
+    node = own(found, tuple(dict.fromkeys((*OWN_TYPES, *types))))
     full: list[dict[str, Any]] = []
     _recipes(found, full)
     if node is None and not full:

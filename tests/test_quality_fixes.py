@@ -147,3 +147,163 @@ def test_what_is_stale_is_one_rule() -> None:
     assert fusion.STALE_RELS is status.STALE_RELS
     assert status.stale_rel("invalid") == "invalidates"
     assert status.stale_rel("retired") == "supersedes"
+
+
+# ------------------------------------------- step 3: words in data, generality
+
+
+def test_a_pack_carries_lexicon_sections_and_none_is_declared_twice() -> None:
+    """Findings 6, 8, 9, 15: the venue and ingredient words are data in
+    their packs; a section two files hold is refused."""
+    import pytest
+    import yaml
+
+    from prax import packs
+
+    lex = ontology.lexicon()
+    assert "conference" in lex.section("venues")["venue_words"]
+    assert "Zwetschgen" not in lex.section("ingredients")["de"]["trailing"]
+    with pytest.raises(ValueError, match="declared twice"):
+        ontology.parse_lexicon("venues: {stop: [a]}\n", ["venues: {stop: [b]}\n"])
+
+    # a bare YAML word read as a boolean ("on", "no") is no word at all
+    def leaves(node: object) -> list[object]:
+        if isinstance(node, dict):
+            return [x for v in node.values() for x in leaves(v)]
+        if isinstance(node, list):
+            return [x for v in node for x in leaves(v)]
+        return [node]
+
+    for f in [*packs.lexicon_files(), ontology.path() / "lexicon.yaml"]:
+        data = yaml.safe_load(f.read_text(encoding="utf-8"))
+        assert not [x for x in leaves(data) if isinstance(x, bool)], f
+
+
+def test_venue_names_in_other_languages_read_their_editions() -> None:
+    """Finding 6: a French or Spanish edition stayed in the series."""
+    from prax.graph import venues
+
+    fr = venues.read("12e Congrès Français d'Acoustique 2014")
+    es = venues.read("Actas del 3er Congreso Iberoamericano de Acústica")
+    assert (fr.series, fr.ordinal) == ("congres francais acoustique", 12)
+    assert (es.series, es.edition) == ("congreso iberoamericano acustica", "#3")
+    # the core lexicon's company forms are no acronyms
+    assert "GMBH" in venues.words().not_acronym
+    assert venues.not_a_venue("Tagungsband zur Jahrestagung für Akustik") is None
+
+
+def test_a_sentence_is_no_status_and_german_states_are_read() -> None:
+    """Finding 7: a note opening with 'Archived copies…' was retired."""
+    from prax.text import status
+
+    for prose in (
+        "# Notes\n\nArchived copies of the datasets live on the NAS.",
+        "Wrong turns we took are listed below.",
+        "Replaced the ADC in rev B.",
+    ):
+        assert status.read(prose, "notes.md") is None, prose
+    for text, state in (
+        ("Veraltet: siehe plan-v2.md", "superseded"),
+        ("---\nstatus: veraltet\n---\n# Plan", "superseded"),
+        ("**Deprecated** since 2026-09", "deprecated"),
+        ("Superseded by [the plan](plan-v2.md)", "superseded"),
+        ("> RETIRED 2026-10-02", "retired"),
+        ("Retired.", "retired"),
+    ):
+        got = status.read(text, "notes.md")
+        assert got is not None and got.state == state, text
+
+
+def test_a_recipe_in_a_language_without_words_calls_for_nothing(
+    con: sqlite3.Connection,
+) -> None:
+    """Finding 8: '200 g de farine, tamisée' became the ingredient 'de
+    farine'."""
+    import json
+
+    from prax.text import schemaorg
+
+    section = ontology.lexicon().section("ingredients")
+    assert schemaorg.ingredient_words(section.get("fr")) is None
+    assert schemaorg.ingredient_names(["200 g de farine, tamisée"], None) == []
+    recipe = {
+        "@type": "Recipe",
+        "name": "Gâteau",
+        "recipeIngredient": ["200 g de farine, tamisée", "3 œufs battus"],
+    }
+    html = f"<script type=application/ld+json>{json.dumps(recipe)}</script>"
+    doc = int(
+        store.register(con, html.encode(), mime="text/html", title="Gâteau")["doc_id"]
+    )
+    con.execute(
+        "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'), '$.lang', 'fr')"
+        " WHERE id = ?",
+        (doc,),
+    )
+    con.commit()
+    store.maintain(con, only=["markup"])
+    rels = {
+        r[0]
+        for r in con.execute(
+            "SELECT rel FROM edges WHERE producer = 'jsonld' AND source_doc = ?", (doc,)
+        )
+    }
+    assert "calls_for" not in rels
+
+
+def test_a_page_links_a_document_as_the_node_it_is(con: sqlite3.Connection) -> None:
+    """Finding 11: a page annotating a recipe made a second, 'paper'
+    entity of it."""
+    doc = int(
+        store.ingest_text(con, "flour and plums " * 20, title="Plum cake")["doc_id"]
+    )
+    store.link(con, E("Plum cake", "recipe", "calls_for", "plum", "ingredient"))
+    store.write_page(con, "note-cake", "# Cake\n\nA note.", annotates=[doc])
+    types = {
+        r[0] for r in con.execute("SELECT type FROM entities WHERE name = 'Plum cake'")
+    }
+    assert types == {"recipe"}
+    # a research document with no entity yet is the paper its extraction
+    # will name it
+    paper = int(store.ingest_text(con, "a study " * 30, title="A study")["doc_id"])
+    store.set_domains(con, paper, ["research"])
+    assert store.document_node(con, paper) == ("A study", "paper")
+
+
+def test_a_relations_strength_is_its_modules(con: sqlite3.Connection) -> None:
+    """Findings 19, 21: hop strength was a list of names in paths.py."""
+    from prax.graph import paths
+
+    onto = ontology.current()
+    assert onto.relations["cites"].strength == "strong"
+    assert onto.relations["mentions"].strength == "weak"
+    assert "evaluates" not in paths.relation_strengths()
+    bad = ontology.Relation("x", strength="loud")
+    assert any("strength" in m for m in ontology.lint({}, {"x": bad}))
+    assert (
+        paths.hop_cost("cites", "EXTRACTED", 1)
+        < paths.hop_cost("about", "EXTRACTED", 1)
+        < paths.hop_cost("mentions", "EXTRACTED", 1)
+    )
+
+
+def test_a_genres_schema_type_is_a_pages_own_work() -> None:
+    """Finding 22: a Q&A page, a thesis or source code gave no author."""
+    import json
+
+    from prax.text import schemaorg
+
+    html = (
+        "<script type=application/ld+json>"
+        + json.dumps(
+            {"@type": "QAPage", "author": {"@type": "Person", "name": "Ann Bee"}}
+        )
+        + "</script>"
+    )
+    assert schemaorg.of_page(html) is None
+    page = schemaorg.of_page(html, ontology.genres().standards())
+    assert page is not None and page.own is not None
+    assert page.own.authors == ["Ann Bee"]
+    assert {"Thesis", "SoftwareSourceCode", "QAPage"} <= set(
+        ontology.genres().standards()
+    )

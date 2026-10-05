@@ -100,6 +100,7 @@ entity_types:
 
 relation_types:
   cites:
+    strength: strong
     kind: eternal
     same_as: schema:citation
     domain: [document]
@@ -130,20 +131,24 @@ relation_types:
       tool, dataset — or the person, organization, place, event or work
       it studies; something discussed at length, not mentioned in passing
   defines:
+    strength: strong
     domain: [document, claim]
     range: [concept]
     description: the document gives the concept its definition
   implements:
+    strength: strong
     domain: [tool, method]
     range: [concept, method]
     description: a tool or method realizes a concept or another method
   extends:
+    strength: strong
     domain: [document, method, concept, tool]
     range: [method, concept, tool, document]
     description: >-
       the document, method, concept or tool builds on or generalizes a
       method, concept, tool or an earlier document
   contrasts:
+    strength: strong
     domain: [document, method, claim, tool]
     range: [method, claim, document, tool, concept]
     description: >-
@@ -154,16 +159,19 @@ relation_types:
     range: [claim]
     description: two claims cannot both hold; a page argues against a claim
   supports:
+    strength: strong
     domain: [claim, document]
     range: [claim]
     description: evidence in favour of a claim; a page argues for it
   uses:
+    strength: strong
     domain: [document, method, tool]
     range: [dataset, tool, method, concept]
     description: >-
       the document, method or tool employs a dataset, tool, method or
       applies a concept
   proposes:
+    strength: strong
     domain: [document, person]
     range: [method, tool, claim, concept]
     description: >-
@@ -171,14 +179,17 @@ relation_types:
       own contribution; or the text credits a named person with
       introducing it
   advised_by:
+    strength: strong
     domain: [person]
     range: [person]
     description: doctoral or research supervision stated in the text
   annotates:
+    strength: weak
     domain: [page]
     range: [document]
     description: a page written about one document (a note, a commentary, an addendum)
   synthesizes:
+    strength: strong
     domain: [page, project]
     range: [document]
     description: >-
@@ -186,6 +197,7 @@ relation_types:
       page's own claims then carry supports and contradicts edges from
       the papers
   mentions:
+    strength: weak
     same_as: schema:mentions
     domain: [document]
     range: [tool, method, dataset, concept, person, organization, document, place, event, work]

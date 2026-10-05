@@ -71,13 +71,17 @@ def test_a_recipe_in_an_item_list_and_its_ingredients() -> None:
     }
     page = schemaorg.of_page(_page(ARTICLE, items))
     assert page is not None and [r.name for r in page.recipes] == ["Pflaumenkuchen"]
-    assert page.recipes[0].ingredients == [
+    section = ontology.lexicon().section("ingredients")
+    lines = page.recipes[0].ingredient_lines
+    de = schemaorg.ingredient_words(section["de"])
+    en = schemaorg.ingredient_words(section["en"])
+    assert schemaorg.ingredient_names(lines[:3], de) == [
         "Pflaumen",
         "Mehl",
         "Salz",
         "Pfeffer",
-        "flaky salt",
     ]
+    assert schemaorg.ingredient_names(lines[3:], en) == ["flaky salt"]
     assert page.recipes[0].cuisines == ["German"]
 
 

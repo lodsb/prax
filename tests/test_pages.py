@@ -181,7 +181,7 @@ def test_addendum_and_project_edges_reach_the_context(con: sqlite3.Connection) -
     pctx = store.document_context(con, proj["doc_id"])
     assert pctx["page"] == {"slug": "granular-study", "kind": "project"}
     assert {(m["title"], m["type"]) for m in pctx["members"]} == {
-        ("Grain Paper", "paper"),
+        ("Grain Paper", "document"),  # no domain says what it is
         ("Note grain paper", "page"),
     }
     assert [m["doc_id"] for m in pctx["members"] if m["title"] == "Grain Paper"] == [
