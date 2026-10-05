@@ -88,7 +88,7 @@ revisit threshold, under "Decision thresholds" below.
    of entity resolution (`resolve_entities.py --adjudicate`) and the
    measurement scripts (`eval_retrieval.py`, `eval_references.py`,
    `eval_confidence.py`, `eval_genres.py`, `eval_regions.py`, `eval_latex.py`,
-   `eval_paths.py`,
+   `eval_paths.py`, `eval_venues.py`, `eval_swaps.py`,
    `compare_extractors.py`, `bench_extractor.py`,
    `make_zotero_fixture.py`, and `check_private.py`, the pre-commit guard
    against the owner's private data; the eval scripts and the guard
@@ -147,7 +147,9 @@ revisit threshold, under "Decision thresholds" below.
    that ends edges records them (`edge_endings`, migration 44), so
    `restore_run` undoes it whole: its own edges ended, what it ended
    stated again as new edges; `unmerge_run` ends the edges its round
-   wrote.
+   wrote. A repair that ends an edge and writes its correction says
+   which corrects which (`edge_endings.corrected_by`, migration 46;
+   `why` shows it both ways).
 9. **The ontology is small, versioned and modular.** *(enforced)* Entity and
    relation types live in YAML modules, one per domain: `core.yaml` in
    `ontology/`, and every domain's module in its pack

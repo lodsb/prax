@@ -335,3 +335,37 @@ def test_a_documents_twins_fold_into_its_node_and_back(con: sqlite3.Connection) 
     assert repair._document_twins(con) == []
     assert store.unmerge_run(con, paper[1]) == 1
     assert len(repair._document_twins(con)) == 1
+
+
+def test_a_repair_says_which_edge_corrects_which(con: sqlite3.Connection) -> None:
+    """Finding 5: the not-venues and part_of repairs ended an edge, wrote
+    its correction and kept no record of the pair."""
+    from prax.store import repair
+
+    old = store.link(
+        con, E("A paper", "paper", "published_in", "Springer Berlin", "venue")
+    )
+    found = repair._not_venues(con)
+    assert [f["name"] for f in found] == ["Springer Berlin"]
+    assert repair._repair_not_venues(con, found) == 1
+    said = store.corrections_of(con, old)
+    new = said["corrected_by"]["edge_id"]
+    assert said["corrected_by"]["run"] == "heal:not-venues"
+    assert store.corrections_of(con, new) == {"corrects": [old]}
+    rel = con.execute("SELECT rel FROM edges WHERE id = ?", (new,)).fetchone()[0]
+    assert rel == "published_by"
+
+
+def test_a_roman_edition_is_read_before_a_meetings_word() -> None:
+    """Step 3's leftover: "Atti del XX Colloquio" read no edition; a
+    numeral alone stays a name (CHI, MIX)."""
+    from prax.graph import venues
+
+    xx = venues.read("Atti del XX Colloquio di Informatica Musicale")
+    assert (xx.series, xx.edition) == ("colloquio informatica musicale", "#20")
+    iv = venues.read("IV International Conference on Music")
+    assert iv.edition == "#4"
+    xxv = venues.read("Proceedings of the XXV Congresso")
+    assert (xxv.edition, xxv.acronym) == ("#25", None)
+    assert venues.read("ACM MIX workshop").edition is None
+    assert venues.read("CHI Conference on Human Factors").acronym == "CHI"

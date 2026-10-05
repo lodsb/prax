@@ -230,6 +230,14 @@ def read(name: str) -> Venue:
             number = n
             edition = edition or f"#{n}"
             text = text[: spelled.start()] + " " + text[spelled.end() :]
+        else:
+            roman = _roman_edition(text, w)
+            if roman is not None:
+                number, start, end = roman
+                edition = edition or f"#{number}"
+                numeral = text[start:end]
+                acronyms = [a for a in acronyms if a != numeral]  # XXV is no name
+                text = text[:start] + " " + text[end:]
     # "Proceedings of the 5th Conference on X" is the conference; but
     # "Proceedings of the IEEE" and "Proceedings of the Musical
     # Association" are journals, not the body that publishes them
@@ -261,6 +269,33 @@ def read(name: str) -> Venue:
         re.sub(r"\d+$", "", b).upper() == acronym for b in bracketed
     )
     return Venue(" ".join(kept), edition, acronym, stated, number)
+
+
+_ROMAN = re.compile(r"\b([IVXL]{1,6})\s+(\w+)")
+_ROMAN_VALUE = {"I": 1, "V": 5, "X": 10, "L": 50}
+
+
+def _roman_edition(text: str, w: Words) -> tuple[int, int, int] | None:
+    """An edition written as a roman numeral, only where a meeting's word
+    follows it ("Atti del XX Colloquio", "IV International Conference";
+    the word after "International" is looked at too): a numeral alone
+    meets real acronyms (CHI, MIX, VR). ``(number, start, end)`` of the
+    numeral, or None."""
+    for m in _ROMAN.finditer(text):
+        after = _fold(m.group(2))
+        rest = text[m.end() :].split()
+        if after in ("international", "internationale", "internazionale"):
+            after = _fold(rest[0]) if rest else ""
+        if after not in w.event_words:
+            continue
+        digits = [_ROMAN_VALUE[c] for c in m.group(1)]
+        n = sum(
+            -d if i + 1 < len(digits) and d < digits[i + 1] else d
+            for i, d in enumerate(digits)
+        )
+        if 1 < n <= 60:
+            return n, m.start(1), m.end(1)
+    return None
 
 
 def is_bare(v: Venue) -> bool:

@@ -509,6 +509,43 @@ def record_ending(con: sqlite3.Connection, edge_id: int, run: str) -> None:
 
 
 @_serialized
+def record_correction(
+    con: sqlite3.Connection, edge_id: int, run: str, corrected_by: int
+) -> None:
+    """Note that the edge ``run`` ended is corrected by ``corrected_by``,
+    the edge the run wrote in its place (migration 46)."""
+    con.execute(
+        "UPDATE edge_endings SET corrected_by = ? WHERE edge_id = ? AND run = ?",
+        (corrected_by, edge_id, run),
+    )
+    con.commit()
+
+
+@_reading
+def corrections_of(con: sqlite3.Connection, edge_id: int) -> dict[str, Any]:
+    """What a repair said of an edge: the edge that corrects it
+    (``corrected_by``, with the run) and the edges it corrects
+    (``corrects``); empty when neither."""
+    out: dict[str, Any] = {}
+    row = con.execute(
+        "SELECT corrected_by, run FROM edge_endings"
+        " WHERE edge_id = ? AND corrected_by IS NOT NULL",
+        (edge_id,),
+    ).fetchone()
+    if row is not None:
+        out["corrected_by"] = {"edge_id": int(row[0]), "run": row[1]}
+    corrects = [
+        int(r[0])
+        for r in con.execute(
+            "SELECT edge_id FROM edge_endings WHERE corrected_by = ?", (edge_id,)
+        )
+    ]
+    if corrects:
+        out["corrects"] = corrects
+    return out
+
+
+@_serialized
 def restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
     """Undo a repair run: its own live edges are ended (``retire_run``),
     and every edge it ended (``edge_endings``) is stated again as a new

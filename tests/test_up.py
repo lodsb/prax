@@ -527,6 +527,15 @@ def test_a_borrower_that_fits_runs_beside_the_holder(
         assert group["fits"] is True and group["was_up"] == ["llama-server"]
         assert status["roles"]["llama-server"]["state"] == "up"  # never stopped
         assert runs_of(mark_a) == 1  # and never restarted
+        # each swap is a line to measure the card plan by (finding 20)
+        lines = (up.run_dir(data_dir) / up.SWAPS).read_text().splitlines()
+        swap = json.loads(lines[-1])
+        assert (swap["kind"], swap["role"], swap["why"], swap["fits"]) == (
+            "swap",
+            "marker",
+            "asked for",
+            True,
+        )
     finally:
         up.stop(data_dir, wait=20)
         thread.join(timeout=10)

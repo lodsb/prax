@@ -4887,6 +4887,25 @@ in the host's `prax.yaml` (`steps.adjudicate.platt: {a: 0.4877, b:
   Waiting for the user's word, like `document-twins` (356 documents, 450
   entities folded into the type `document_node` gives).
 
+## 2026-10-05, the evening: the review's two plan items, and roman editions
+
+- **A swap is a record** (finding 20). `prax up` appends one line to
+  `run/swaps.jsonl` for each swap and each give-back: when, the group,
+  the role, the others, and why (a person, the plan's reason, nothing
+  left waiting). `scripts/eval_swaps.py` puts a day's swaps beside its
+  reading waits. The waits of the last days, before the record began:
+  a median of 0.3 to 0.4 hours until 2026-10-02, 16.6 on 10-04 and 37 on
+  10-05, the figure readings' backlog (about 1,650 waiting).
+- **Which edge corrects which** (finding 5). `edge_endings` has a
+  `corrected_by` column (migration 46), set by the `backwards-part-of`
+  and `not-venues` repairs to the edge they write in an ended one's
+  place, and `why` on either edge says so (`corrected_by`, `corrects`).
+  The repairs already applied before it say nothing.
+- **Roman editions.** A roman numeral before a meeting's word is an
+  edition ("Atti del XX Colloquio", "IV International Conference"), and
+  then no acronym; alone it stays a name (CHI, MIX). `eval_venues.py
+  --diff`: no merge and no edition link moved on this library.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

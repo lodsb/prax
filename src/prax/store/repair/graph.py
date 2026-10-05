@@ -22,6 +22,7 @@ from ..graph import (
     merge_entities,
     part_of_ancestry,
     part_of_suspects,
+    record_correction,
     rename_entity,
     traverse_map,
 )
@@ -471,7 +472,7 @@ def _repair_part_of(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
         ).fetchone()
         if not _invalidate(con, [int(row["id"])], run=HEAL_PRODUCER):
             continue
-        link(
+        new = link(
             con,
             turned,
             confidence="INFERRED",
@@ -482,6 +483,7 @@ def _repair_part_of(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
             world_from=old["world_from"] if old else None,
             world_to=old["world_to"] if old else None,
         )
+        record_correction(con, int(row["id"]), HEAL_PRODUCER, int(new))
         done += 1
     return done
 
@@ -656,7 +658,7 @@ def _repair_not_venues(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
             if not _invalidate(con, [int(e["id"])], run=NOT_VENUE_PRODUCER):
                 continue
             if edge is not None:
-                link(
+                new = link(
                     con,
                     edge,
                     confidence="INFERRED",
@@ -667,6 +669,7 @@ def _repair_not_venues(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
                     world_from=e["world_from"],
                     world_to=e["world_to"],
                 )
+                record_correction(con, int(e["id"]), NOT_VENUE_PRODUCER, int(new))
             done += 1
     return done
 

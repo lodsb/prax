@@ -95,7 +95,7 @@ numbered there) in the order the user agreed: one step a session.
             type it as `store.document_node` does; the old twins want a
             heal check that folds each into the type `document_node`
             gives, dry run first.
-      - [ ] **Roman editions.** "Atti del XX Colloquio" reads no edition:
+      - [x] (2026-10-05, no change on this library's plan) **Roman editions.** "Atti del XX Colloquio" reads no edition:
             a roman numeral meets real acronyms (CHI, MIX, VR). Only where
             a venue word follows it, measured with `eval_venues.py`.
 - [x] (2026-10-05, placed in AI and AL) **Step 4, for the plan's own sections.**
@@ -199,7 +199,10 @@ numbered there) in the order the user agreed: one step a session.
             (at, group, from, to, why, the plan's decision) under `run/`,
             bounded like `loads.json`, and a small count pairs the swaps
             of a day with that day's reading waits. Every day without it
-            is a day of the plan's own baseline lost.
+            is a day of the plan's own baseline lost. (2026-10-05: the
+            record is `run/swaps.jsonl` and the count
+            `scripts/eval_swaps.py`; what is left is the measurement,
+            after some days of swaps.)
 
       *Steps folded in on 2026-10-02* (from "What holds the card", 2026-09-25):
       - [x] (done before 2026-10-02: `hostinfo.holders`, "On the card" in
@@ -337,7 +340,8 @@ numbered there) in the order the user agreed: one step a session.
             repairs pass the new edge's id. That is the edge-level
             `supersedes` too, rather than a fifth side table beside
             premises, conflicts and endings, and it gives G3 its
-            `corrected` side);
+            `corrected` side; done 2026-10-05: `edge_endings.corrected_by`,
+            migration 46, and `why` shows it);
             and **one module that builds "held at T"** for every graph
             (2026-10-03: `store.held_at` is that module and the walk
             uses it; `test_a_moment_in_record_time_is_built_in_one_place`

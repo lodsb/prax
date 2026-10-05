@@ -57,6 +57,7 @@ from .process import (  # noqa: F401
     LOADS,
     PIDFILE,
     STATUS,
+    SWAPS,
     _alive,
     _await_state,
     _clear_commands,
@@ -114,6 +115,7 @@ BACK_WHEN = ("idle", "never")  # when the group goes back to what held it
 GROUP_QUIET = 90.0  # seconds of no work for the borrower before it goes back
 DEMAND_SECONDS = 20.0  # how often the supervisor asks the door what waits
 LOADS_KEPT = 5  # load times kept per role; the status says their median
+SWAPS_KEPT = 5000  # swap lines kept (a busy day makes a few dozen)
 IDLE_POLL = 30.0  # how often an idle-watched server's /metrics is read
 
 
@@ -394,7 +396,11 @@ class Supervisor:
                 else:
                     self._say(f"{one}: not stopped")
         elif cmd == "swap":
-            self._swap(str(what.get("to") or ""), str(what.get("back_when") or "idle"))
+            self._swap(
+                str(what.get("to") or ""),
+                str(what.get("back_when") or "idle"),
+                why="asked for",
+            )
         elif cmd == "unswap":
             groups = (
                 list(self.groups)
@@ -584,7 +590,7 @@ class Supervisor:
         free = hostinfo.vram_free_mb()
         return bool(want and free is not None and free >= want)
 
-    def _swap(self, to: str, back_when: str = "idle") -> None:
+    def _swap(self, to: str, back_when: str = "idle", why: str = "") -> None:
         """Give the group's resource to ``to``: the members that hold it
         stop (unless it fits beside them), and go back when the door says
         no work is left for the borrower (``idle``) or never."""
@@ -618,6 +624,7 @@ class Supervisor:
         how = "beside" if fits else "instead of"
         others = ", ".join(was_up) or "nothing"
         self._say(f"{group}: {to} takes it {how} {others} (back when {back_when})")
+        self._record_swap("swap", group, to, was_up, why, fits=fits)
         self._write_status()
 
     def _lent_away(self, role: Role) -> dict[str, Any] | None:
@@ -647,7 +654,42 @@ class Supervisor:
             self.idled.discard(name)  # one that waited, idle, for the card
         back = ", ".join(loan["was_up"]) or "nothing"
         self._say(f"{group}: {holder} gives it back to {back} ({why})")
+        self._record_swap("back", group, holder, list(loan["was_up"]), why)
         self._write_status()
+
+    def _record_swap(
+        self,
+        kind: str,
+        group: str,
+        role: str,
+        others: list[str],
+        why: str,
+        *,
+        fits: bool | None = None,
+    ) -> None:
+        """One line in ``run/swaps.jsonl`` a swap or a give-back: when,
+        which group, the role that takes the card (or gives it back), the
+        others, and why (a person, the plan's reason, nothing left).
+        What the card plan is measured by (stage AI; the quality review's
+        finding 20: a line of prose in the log was all there was). The
+        last ``SWAPS_KEPT`` lines are kept."""
+        line: dict[str, Any] = {
+            "at": _now(),
+            "kind": kind,
+            "group": group,
+            "role": role,
+            "others": others,
+            "why": why or None,
+        }
+        if fits is not None:
+            line["fits"] = fits
+        path = self.run_dir / SWAPS
+        with contextlib.suppress(OSError):
+            with path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(line) + "\n")
+            if path.stat().st_size > SWAPS_KEPT * 300:
+                kept = path.read_text(encoding="utf-8").splitlines()[-SWAPS_KEPT:]
+                path.write_text("\n".join(kept) + "\n", encoding="utf-8")
 
     def _door_url(self) -> str | None:
         role = next((r for r in self.roles if r.name == "door"), None)
@@ -724,7 +766,9 @@ class Supervisor:
             loan = self.groups.get(role.group)
             if loan is None:
                 if name in self.paused:
-                    self._swap(name, "idle")
+                    self._swap(
+                        name, "idle", why=f"the plan: {row.get('why') or 'next'}"
+                    )
                     return
             elif loan["holder"] != name and name in loan["was_up"]:
                 self._unswap(role.group, f"the plan: {row.get('why') or 'next'}")

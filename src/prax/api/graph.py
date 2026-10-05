@@ -188,7 +188,9 @@ def connect(
 def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
     """What a derived edge follows from: its premises, in the order of the
     chain (``store.edge_premises``); empty for an asserted edge. And the
-    facts it disagrees with (``conflicts``, ``store.edge_conflicts``)."""
+    facts it disagrees with (``conflicts``, ``store.edge_conflicts``), and
+    a repair's correction: the edge that corrects it (``corrected_by``)
+    or those it corrects (``corrects``)."""
     con = _con(request)
     if store.edge_hidden(con, edge_id):
         # as for an edge that is not there (the wall: existence too)
@@ -200,6 +202,8 @@ def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
     conflicts = store.edge_conflicts(con, edge_id)
     if conflicts:
         out["conflicts"] = conflicts
+    # a repair's correction, either way round (migration 46)
+    out.update(store.corrections_of(con, edge_id))
     return out
 
 
