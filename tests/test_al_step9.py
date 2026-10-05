@@ -407,3 +407,31 @@ def test_the_prompt_rules_are_switched_for_a_measurement() -> None:
     ):
         both = extraction.system_prompt(onto, output="lines")
     assert "[schema:author]" in both and "from and to" in both
+
+
+def test_a_label_with_quotes_and_colons_cannot_break_a_search(con: Any) -> None:
+    """2026-10-05: a label of "matrix" held an extractor's wire syntax with a
+    quoted "matrix size: 1024"; its quote closed the phrase, FTS5 read
+    "size:" as a column, and every search for "matrix" failed."""
+    from prax import store
+    from prax.store.retrieval import query as q
+
+    store.ingest_text(con, "The matrix of the mixer is large. " * 10, title="Mixer")
+    store.link(con, store.Edge("Mixer", "paper", "about", "matrix", "concept"))
+    entity = con.execute("SELECT id FROM entities WHERE name = 'matrix'").fetchone()[0]
+    con.execute(
+        "INSERT INTO entity_labels (entity_id, label, lang, kind, producer, at)"
+        " VALUES (?, ?, 'en', 'alt', 'baseline', '2026-10-05T00:00:00Z')",
+        (
+            entity,
+            (
+                "matrix dst_type=concept(confidence=extracted"
+                ' evidence="matrix size: 1024")'
+            ),
+        ),
+    )
+    con.commit()
+    hits = store.search(con, "matrix mixer", 5, mode="fts")
+    assert hits and hits[0]["title"] == "Mixer"
+    expr = q._expr([["matrix", 'say "size: 1024"'], ["a=b"]], all_terms=False)
+    assert expr is not None and ":" not in expr and expr.count('"') % 2 == 0

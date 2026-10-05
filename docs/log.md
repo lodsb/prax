@@ -4978,6 +4978,19 @@ joint conference `part_of` the SMC series beside ICMC.
   After the rechunk Bello's list holds no biography; 862 ditto entries
   carry their authors.
 
+## 2026-10-05, late night: a search that failed for "matrix"
+
+Found while measuring on a copy: every search with "matrix" in it failed
+with "no such column: size", on the live store too. The query expansion
+adds a word's graph labels, and one label of "matrix" was an extractor's
+wire syntax (`matrix dst_type=concept(confidence=extracted
+evidence="matrix size: 1024"…`). Its quote closed the phrase the
+expression had opened, and FTS5 read "size:" as a column. Each
+alternative of the expression is now its words as the index tokenizes
+them, and an alternative from a label that holds "=" is left out: 2,262
+labels on 2,087 entities hold such syntax, and 390 live entities have it
+in their name (cleaning them is the user's call).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

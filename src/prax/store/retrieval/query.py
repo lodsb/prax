@@ -297,7 +297,26 @@ def _expr(terms: list[list[str]], *, all_terms: bool) -> str | None:
     tier that wants every term present)."""
     if not terms:
         return None
-    groups = ["(" + " OR ".join(f'"{a}"' for a in term) + ")" for term in terms]
+    groups = []
+    for term in terms:
+        # an alternative is its words, as the index tokenizes them: a label
+        # the graph added may hold a quote or a colon, and one held both
+        # ('matrix … evidence="matrix size: 1024"'): its quote closed the
+        # phrase and FTS5 read "size:" as a column, so every search with
+        # "matrix" in it failed (2026-10-05)
+        # (and a label holding "=" is a model's wire syntax, never a word a
+        # reader searches for: 2,262 labels on 2,087 entities that day)
+        alternatives = list(
+            dict.fromkeys(
+                p
+                for i, a in enumerate(term)
+                if (i == 0 or "=" not in a) and (p := " ".join(_TOKEN.findall(a)))
+            )
+        )
+        if alternatives:
+            groups.append("(" + " OR ".join(f'"{a}"' for a in alternatives) + ")")
+    if not groups:
+        return None
     return (" AND " if all_terms else " OR ").join(groups)
 
 
