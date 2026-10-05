@@ -99,3 +99,51 @@ def test_the_hidden_set_is_read_once_a_state(con: sqlite3.Connection) -> None:
         assert doc in store.hidden_documents(con)
     finally:
         store.VIEWER.reset(token)
+
+
+def test_the_heal_check_and_the_conflicts_pass_agree(con: sqlite3.Connection) -> None:
+    """Findings 4 and 23: the heal check had its own definition of a
+    conflict, which counted rule-derived edges the pass leaves out."""
+    from prax.store import repair
+
+    for venue in ("DAFx-14", "ICASSP 2014"):
+        store.link(
+            con, E("Paper A", "paper", "published_in", venue, "venue"), producer="t"
+        )
+    store.link(
+        con, E("Paper B", "paper", "published_in", "NIME", "venue"), producer="t"
+    )
+    store.link(
+        con, E("Paper B", "paper", "published_in", "SMC", "venue"), producer="rule:x"
+    )
+    healed = {f["subject"] for f in repair._functional_conflicts(con)}
+    report = store.find_conflicts(con)["published_in"]
+    assert healed == {"Paper A"} and report["open"] == 1
+
+
+def test_a_pages_own_date_comes_before_what_it_links() -> None:
+    """Finding 16: the dates reader walked JSON-LD on its own and took the
+    first datePublished anywhere, a linked article's before the page's."""
+    from prax.text import dates
+
+    html = (
+        '<script type="application/ld+json">{"@type": "ItemList", "itemListElement":'
+        ' [{"@type": "ListItem", "item": {"@type": "Article",'
+        ' "datePublished": "2011-01-01"}}]}</script>'
+        "<script type=application/ld+json>"
+        '{"@type": "NewsArticle", "headline": "x", "datePublished": "2019-07-03"}'
+        "</script>"
+    )
+    assert dates.from_html(html)["jsonld"][0] == "2019-07-03"
+
+
+def test_what_is_stale_is_one_rule() -> None:
+    """Finding 18: the stale states and their relations were written in
+    three places."""
+    from prax.store.retrieval import fusion
+    from prax.text import status
+
+    assert set(fusion.STALE_STATES) == status.STALE
+    assert fusion.STALE_RELS is status.STALE_RELS
+    assert status.stale_rel("invalid") == "invalidates"
+    assert status.stale_rel("retired") == "supersedes"

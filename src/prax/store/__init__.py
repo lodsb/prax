@@ -406,6 +406,7 @@ from .graph import (  # noqa: F401
     find_entities,
     foreign_names,
     forget_resolved_reviews,
+    functional_breaches,
     get_review,
     held_at,
     hidden_by_premise,

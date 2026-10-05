@@ -69,7 +69,15 @@ def test_a_heading_round_trips() -> None:
 def test_a_formula_round_trips() -> None:
     m = markup.FORMULA.match(markup.formula(r"x = \frac{a}{b}, \quad (4)"))
     assert m
-    assert markup.EQ_NUMBER.search(m.group("latex")).group(1) == "4"
+    assert markup.eq_number(m.group("latex")) == (r"x = \frac{a}{b}", "4")
+    for written, number in (
+        (r"y = 2x, (3)", "3"),
+        (r"y = 2x ~(3a)", "3a"),
+        (r"y = 2x  (12)", "12"),
+        (r"y = 2x \tag{5}", "5"),
+        (r"y = \log(2)", None),
+    ):
+        assert markup.eq_number(written)[1] == number, written
 
 
 def test_a_document_link_round_trips() -> None:
@@ -112,7 +120,6 @@ def test_the_heading_and_table_patterns_are_shared() -> None:
     assert chunking._HEADING is markup.HEADING
     assert chunking._TABLE_SEP is markup.TABLE_SEP
     assert chunking._FORMULA is markup.FORMULA
-    assert chunking._EQ_NUMBER is markup.EQ_NUMBER
 
 
 def test_markup_imports_nothing_of_prax() -> None:

@@ -150,8 +150,26 @@ COMMENTS_HEADING = "## Comments"
 # a display equation alone on its line, as a parser that reads maths
 # writes it: `$$ x = \frac{a}{b}, \quad (4) $$`
 FORMULA = re.compile(r"^\$\$(?P<latex>.+)\$\$$", re.DOTALL)
-# the number the prose refers to it by, at the end: "\quad (4)"
-EQ_NUMBER = re.compile(r"\\(?:quad|qquad|hfill|tag)\s*\{?\(?(\d{1,3}[a-z]?)\)?\}?\s*$")
+# the number the prose refers to it by, at the end: "\quad (4)", ", (4)",
+# "~(4)", "  (4)", "\tag{4}". Bare parentheses count only after a
+# separator: the (2) of \log(2) is an argument, and taking it for a number
+# cut a link short (2026-10-02). The number is group 1, 2 or 3; take it
+# with ``eq_number``.
+EQ_NUMBER = re.compile(
+    r"(?:(?:\\q?quad|\\hfill)\s*\{?\(?\s*(\d{1,3}[a-z]?)\s*\)?\}?"
+    r"|(?:,|~|\s{2,})\s*\(\s*(\d{1,3}[a-z]?)\s*\)"
+    r"|\\tag\*?\{\s*\(?\s*([^{}]*?)\s*\)?\s*\})\s*$"
+)
+
+
+def eq_number(latex: str) -> tuple[str, str | None]:
+    """A display's LaTeX without its equation number, and the number (None
+    when it has none)."""
+    m = EQ_NUMBER.search(latex)
+    if not m:
+        return latex, None
+    number = m.group(1) or m.group(2) or m.group(3) or None
+    return latex[: m.start()].rstrip().rstrip(",.").rstrip(), number
 
 
 def formula(latex: str) -> str:

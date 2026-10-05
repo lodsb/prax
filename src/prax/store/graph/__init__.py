@@ -183,6 +183,7 @@ from .rules import (  # noqa: F401
     edge_conflicts,
     edge_premises,
     find_conflicts,
+    functional_breaches,
     part_of_ancestry,
     part_of_suspects,
     same_answers,

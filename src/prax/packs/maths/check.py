@@ -28,6 +28,8 @@ import math
 import re
 from typing import Any
 
+from prax.text import markup
+
 from . import tool
 
 DISPLAY = re.compile(r"\$\$(.+?)\$\$", re.DOTALL)
@@ -45,10 +47,7 @@ NUMBER = re.compile(r"(?<![\w.,\\])(\d+\.\d+|\d+\.?\d*[eE][-+]?\d+)(?!\w|\.\d)")
 SIGNIFICANT = 3  # a number to check: three significant digits or more
 NEAR = 0.05  # a number this close to a result, and not equal, is a misreckoning
 SCALES = (1.0, 1e3, 1e-3, 1e6, 1e-6, 1e9, 1e-9, 1e12, 1e-12)
-# a display's equation number, at its end: ", \quad (3)", "\tag{3}"
-# (only after a separator: the (2) of \log(2) is an argument, and taking it
-# for a number cut a link short, 2026-10-02)
-TAG = re.compile(r"(?:,|\\q?quad|~|\s{2,})\s*\(\s*\d+[a-z]?\s*\)\s*$|\\tag\{[^}]*\}")
+# a display's equation number is the chunker's (``markup.eq_number``)
 THOUSANDS = re.compile(r"(?<=\d),(?=\d{3}(?!\d))")
 # what is not one chain of equalities: alignment, several lines, another
 # relation, two statements side by side
@@ -65,7 +64,7 @@ def sides(display: str) -> list[str]:
     """A display's sides at its top-level equals signs; none for one that
     is not a single chain of equalities (alignment, several lines, an
     inequality, two statements side by side, a list of definitions)."""
-    text = TAG.sub("", display.strip()).strip().rstrip(".,;")
+    text = markup.eq_number(display.strip())[0].strip().rstrip(".,;")
     text = THOUSANDS.sub("", text)  # 10,000 is ten thousand
     if NOT_A_CHAIN.search(text):
         return []

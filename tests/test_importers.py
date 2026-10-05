@@ -580,7 +580,7 @@ def _project_tree(root: Path) -> None:
     assert project.SETTINGS_FILE == ".prax-project"
 
 
-def test_a_projects_docs_are_read_with_keys_and_versions(tmp_path: Path) -> None:
+def test_a_projects_settings_file_is_read(tmp_path: Path) -> None:
     from prax.importers import project
 
     root = tmp_path / "synth-firmware"
@@ -588,70 +588,81 @@ def test_a_projects_docs_are_read_with_keys_and_versions(tmp_path: Path) -> None
     _project_tree(root)
     cfg = project.settings(root)
     assert cfg.name == "synth-firmware" and cfg.domains == []
-    items = list(project.items(root, cfg))
-    assert [i.key for i in items] == [
-        "synth-firmware/README.md",
-        "synth-firmware/docs/design.md",
-        "synth-firmware/docs/notes.txt",
-    ]
-    design = items[1]
-    assert design.title == "Design (synth-firmware)"
-    assert design.tags == ["project:synth-firmware"]
-    assert design.meta["path"] == "docs/design.md" and len(design.version) == 16
-    assert items[2].title == "docs/notes.txt (synth-firmware)"
-    # the project's own file: name, modules, tags, what to include
     (root / ".prax-project").write_text(
         "name: synth\ndomains: [workshop, studio]\ntags: [firmware]\n"
         "include: ['docs/**/*.md']\n",
         encoding="utf-8",
     )
     cfg = project.settings(root)
-    assert (cfg.name, cfg.domains, cfg.tags) == (
+    assert (cfg.name, cfg.domains, cfg.tags, cfg.include) == (
         "synth",
         ["workshop", "studio"],
         ["firmware"],
+        ["docs/**/*.md"],
     )
-    items = list(project.items(root, cfg))
-    assert [i.key for i in items] == ["synth/docs/design.md"]
-    assert items[0].tags == ["project:synth", "firmware"]
     assert project.settings(root, name="other").name == "other"
 
 
-def test_a_project_lands_once_and_a_rewritten_note_replaces_itself(
-    door: Door, tmp_path: Path
-) -> None:
-    from prax.importers import project
+def test_import_project_is_the_sync(door: Door, tmp_path: Path) -> None:
+    """Quality review finding 3: ``prax import project`` had a key, a
+    title and a file rule of its own beside ``/projects/sync``; it is the
+    sync now, so the two cannot fork a project's documents."""
+    from types import SimpleNamespace
+
+    from prax_cli import importing
 
     root = tmp_path / "synth"
     root.mkdir()
     _project_tree(root)
-    cfg = project.settings(root)
-    first = feed.run(
-        door, project.SOURCE, project.items(root, cfg), domains=["workshop"]
-    )
-    assert (first.added, first.failed) == (3, [])
+
+    def run(**kw: object) -> int:
+        a = SimpleNamespace(
+            files=[str(root)],
+            name=None,
+            domain=None,
+            tag=None,
+            dry_run=False,
+            quiet=True,
+            json=False,
+        )
+        for k, v in kw.items():
+            setattr(a, k, v)
+        return importing._project(door, a)
+
+    assert run(dry_run=True) == 0
+    assert door.get_json("/documents", {"tag": "project:synth"})["total"] == 0
+    assert run(domain=["workshop"]) == 0
     docs = door.get_json("/documents", {"tag": "project:synth"})
     assert docs["total"] == 3
+    titles = {d["meta"]["project"]["path"]: d["title"] for d in docs["items"]}
+    assert titles == {
+        "README.md": "Synth firmware (synth)",
+        "docs/design.md": "Design (synth)",
+        "docs/notes.txt": "docs/notes.txt (synth)",
+    }
     design = next(
         d for d in docs["items"] if d["meta"]["project"]["path"] == "docs/design.md"
     )
     assert design["meta"]["domains"] == ["workshop"]
-    again = feed.run(door, project.SOURCE, project.items(root, cfg))
-    assert (again.added, again.seen) == (0, 3)
+    # the same files through the door's own route find the same documents
+    from prax.client import project_files
+
+    again = door.post_json(
+        "/projects/sync",
+        {**project_files(root, tracked_only=False, texts=False), "dry_run": True},
+    )
+    assert again["counts"].get("add", 0) == 0 and again["counts"]["unchanged"] == 3
     (root / "docs" / "design.md").write_text(
         "# Design\n\nWe chose a wave digital filter, then a state variable filter.\n",
         encoding="utf-8",
     )
-    third = feed.run(door, project.SOURCE, project.items(root, cfg), refresh=True)
-    assert (third.refreshed, third.seen) == (1, 2)
+    assert run() == 0
     now = door.get_json("/documents", {"tag": "project:synth"})
     assert now["total"] == 3
     fresh = next(
         d for d in now["items"] if d["meta"]["project"]["path"] == "docs/design.md"
     )
-    assert fresh["id"] != design["id"]
     assert "state variable" in door.get_json(f"/get/{fresh['id']}")["text"]
-    assert door.get_json(f"/get/{design['id']}")["meta"]["retired"]["of"] == fresh["id"]
 
 
 # ------------------------------------------------------------------- claude

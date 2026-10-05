@@ -16,11 +16,11 @@ from ..graph import (
     Edge,
     entities_with_degree,
     entity_named_in,
+    functional_breaches,
     link,
     part_of_ancestry,
     part_of_suspects,
     rename_entity,
-    same_answers,
     traverse_map,
 )
 from .common import (
@@ -126,52 +126,55 @@ def _backwards_part_of(con: sqlite3.Connection) -> list[dict[str, Any]]:
 
 
 def _functional_conflicts(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    """The subjects with two or more live values of a relation the ontology
+    """The subjects with two or more answers for a relation the ontology
     calls functional (``published_in``: a paper in one venue), each with
     its values and how many edges say each (stage AN: a constraint's
-    breach is a finding for a person, never an edge). Two values where
-    one is ``part_of`` the other are one answer, said finer and coarser: a
-    paper in "NIME 2010" and in "NIME" is in one venue."""
+    breach is a finding for a person, never an edge). What a breach is,
+    finer and coarser being one answer, is ``functional_breaches``, the
+    conflicts pass's own definition."""
     ancestors = part_of_ancestry(con)
     out: list[dict[str, Any]] = []
     for rel in sorted(
         r.name for r in ontology.current().relations.values() if r.functional
     ):
-        rows = con.execute(
-            """
-            SELECT cs.name AS subject, cs.type AS type, ct.id AS vid,
-                   ct.name AS value, count(*) AS n
-            FROM edges e
-            JOIN entities s ON s.id = e.src
-            JOIN entities cs ON cs.id = COALESCE(s.canonical_id, s.id)
-            JOIN entities t ON t.id = e.dst
-            JOIN entities ct ON ct.id = COALESCE(t.canonical_id, t.id)
-            WHERE e.rel = ? AND e.valid_to IS NULL
-            GROUP BY cs.id, ct.id
-            """,
-            (rel,),
-        ).fetchall()
-        by_subject: dict[tuple[str, str], list[dict[str, Any]]] = {}
-        ids: dict[tuple[str, str], set[int]] = {}
-        for r in rows:
-            key = (r["subject"], r["type"])
-            by_subject.setdefault(key, []).append(
-                {"value": r["value"], "edges": int(r["n"])}
-            )
-            ids.setdefault(key, set()).add(int(r["vid"]))
-        for (subject, etype), values in sorted(by_subject.items()):
-            answers = set(same_answers(ids[(subject, etype)], ancestors).values())
-            if len(answers) > 1:
-                out.append(
-                    {
-                        "relation": rel,
-                        "subject": subject,
-                        "type": etype,
-                        "values": values,
-                    }
+        found = functional_breaches(con, rel, ancestors)
+        ids = set(found)
+        for breach in found.values():
+            ids.update(v for edges in breach.values() for _, v, _ in edges)
+        marks = ",".join("?" * len(ids))
+        named = (
+            {
+                int(r["id"]): (r["name"], r["type"])
+                for r in con.execute(
+                    f"SELECT id, name, type FROM entities WHERE id IN ({marks})",
+                    sorted(ids),
                 )
-                if len(out) >= FUNCTIONAL_SHOWN:
-                    return out
+            }
+            if ids
+            else {}
+        )
+        rows = []
+        for subject, breach in found.items():
+            counts: dict[int, int] = {}
+            for edges in breach.values():
+                for _, value, _ in edges:
+                    counts[value] = counts.get(value, 0) + 1
+            name, etype = named.get(subject, ("", ""))
+            rows.append(
+                {
+                    "relation": rel,
+                    "subject": name,
+                    "type": etype,
+                    "values": [
+                        {"value": named.get(v, ("", ""))[0], "edges": n}
+                        for v, n in sorted(counts.items(), key=lambda kv: kv[0])
+                    ],
+                }
+            )
+        for row in sorted(rows, key=lambda r: (r["subject"], r["type"])):
+            out.append(row)
+            if len(out) >= FUNCTIONAL_SHOWN:
+                return out
     return out
 
 

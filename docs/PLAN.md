@@ -68,13 +68,13 @@ numbered there) in the order the user agreed: one step a session.
       - [x] **13.** connect with as_of builds the whole path index on every request: about 1 s and a 148 MB peak each, with no bound on concurrent builds (an hour)
       - [x] **14.** cite_link's 100 ms budget is checked only between steps, and one step can take far longer: folding a book, or a library-wide FTS phrase query (an hour)
       - [x] **24.** A named token's hidden set is rebuilt by a documents scan each time it is needed, and staleness adds a second build to every search (an hour)
-- [ ] **Step 2: one rule in two places** (the project sync first: it can fork a project's documents).
-      - [ ] **3.** Two ways to sync a project, keyed differently, with the title and key rules written twice (an hour or two)
-      - [ ] **4.** The heal check for functional conflicts recomputes what rules.find_conflicts keeps, by a different rule (an hour)
-      - [ ] **16.** A second JSON-LD reader in text/dates, which misses what schemaorg.nodes handles (an hour)
-      - [ ] **17.** Two patterns for a display formula's equation number, which disagree (an hour plus a rechunk)
-      - [ ] **18.** The stale states and the status-to-relation map defined in three places (under an hour)
-      - [ ] **23.** Functional conflicts are computed twice, by heal and by the conflicts pass, with different rules for which edges count (an hour)
+- [x] (2026-10-05) **Step 2: one rule in two places** (the project sync first: it can fork a project's documents).
+      - [x] **3.** Two ways to sync a project, keyed differently, with the title and key rules written twice (an hour or two)
+      - [x] **4.** The heal check for functional conflicts recomputes what rules.find_conflicts keeps, by a different rule (an hour)
+      - [x] **16.** A second JSON-LD reader in text/dates, which misses what schemaorg.nodes handles (an hour)
+      - [x] **17.** Two patterns for a display formula's equation number, which disagree (an hour plus a rechunk)
+      - [x] **18.** The stale states and the status-to-relation map defined in three places (under an hour)
+      - [x] **23.** Functional conflicts are computed twice, by heal and by the conflicts pass, with different rules for which edges count (an hour)
 - [ ] **Step 3: the words in data, and the code independent of this library** (with an eval script for the venue tier).
       - [ ] **6.** Venue tier merges at confidence 1.0 every night, with English/German rules tuned on this library and no script that re-measures them (a stage (eval script plus lexicon move))
       - [ ] **7.** Status reader marks a project note stale when an ordinary English sentence near its top starts with 'Archived', 'Wrong', 'Replaced', 'Void'… (an hour)

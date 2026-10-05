@@ -305,7 +305,7 @@ def test_import_project_reads_the_directory_quietly(
     assert capsys.readouterr().out == ""
     assert run("import", "project", str(root)) == 0
     printed = capsys.readouterr().out
-    assert "Project" in printed and "gadget" in printed and "1 already there" in printed
+    assert "Project" in printed and "gadget" in printed and "1 unchanged" in printed
     listing = door.get("/documents", params={"tag": "project:gadget"}).json()
     assert listing["total"] == 1 and listing["items"][0]["meta"]["domains"] == [
         "workshop"

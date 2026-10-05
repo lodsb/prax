@@ -18,7 +18,6 @@ Imports nothing of prax (the ``text`` package's rule).
 
 from __future__ import annotations
 
-import json
 import re
 
 from prax.text import schemaorg
@@ -137,8 +136,6 @@ HEAD_BYTES = 400_000  # what is read of a page: its head and then some
 
 _META = re.compile(r"<meta\b[^>]*>", re.IGNORECASE)
 _ATTR = re.compile(r"""([\w:.-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""")
-# quoted or not: ``type=application/ld+json`` is valid HTML
-_JSONLD = schemaorg.JSONLD
 
 
 def _meta_tags(head: str) -> dict[str, str]:
@@ -155,27 +152,18 @@ def _meta_tags(head: str) -> dict[str, str]:
 
 
 def _jsonld_dates(head: str) -> list[str]:
-    """``datePublished`` of every JSON-LD object on the page, the first
-    first (a page's own article before what it links)."""
-    found: list[str] = []
-
-    def walk(node: object) -> None:
-        if isinstance(node, dict):
-            value = node.get("datePublished")
-            if isinstance(value, str):
-                found.append(value)
-            for child in node.values():
-                walk(child)
-        elif isinstance(node, list):
-            for child in node:
-                walk(child)
-
-    for block in _JSONLD.findall(head):
-        try:
-            walk(json.loads(block.strip()))
-        except ValueError:
-            continue
-    return found
+    """``datePublished`` of the page's JSON-LD objects as the schema.org
+    reader finds them (``schemaorg.nodes``): the page's own work first
+    (``schemaorg.own``), then the others in the order written, so a list
+    of linked articles before the article does not date the page."""
+    found = schemaorg.nodes(head)
+    main = schemaorg.own(found)
+    out: list[str] = []
+    for node in ([main] if main is not None else []) + found:
+        value = node.get("datePublished")
+        if isinstance(value, str) and value not in out:
+            out.append(value)
+    return out
 
 
 def from_html(data: bytes | str) -> dict[str, tuple[str, str]]:

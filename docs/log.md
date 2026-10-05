@@ -4744,6 +4744,41 @@ their four steps in `docs/PLAN.md`. Step 1:
   parser too, not only in the schema.org reader; recipes need a
   `--rechunk` for their ingredient chunks to read it.
 
+## 2026-10-05, the quality review's second step: one rule in one place
+
+Five rules that were written twice, each now written once
+(`docs/eval/code-review-2026-10-05.md`, findings 3, 4/23, 16, 17, 18;
+the tests are in `tests/test_quality_fixes.py`, `tests/test_importers.py`
+and `tests/test_markup.py`).
+
+- **The project sync** (finding 3). `prax import project` had its own
+  key, title and file walk beside `POST /projects/sync`, so the same
+  project sent both ways could become two sets of documents. It is now
+  `prax sync --apply --all-files`: one request to the door. The importer
+  keeps only the `.prax-project` reader. The door still finds a document
+  by its old `name/path` key, so the earlier imports are refreshed, not
+  added again. One change in what it does: the first import of a
+  directory now saves a project manifest and its page, as a sync always
+  did (the plugin's `/archive` command imports the memory folder this
+  way).
+- **A functional conflict** (findings 4 and 23). The heal check
+  `functional-conflicts` counted rule-derived edges; the conflicts pass
+  did not. Both now read `store.functional_breaches`: the subjects whose
+  live asserted edges give two answers, finer and coarser being one.
+- **A page's date in JSON-LD** (finding 16). The dates reader walked the
+  JSON-LD itself and took the first `datePublished` anywhere, so a list
+  of linked articles above the article dated the page. It now reads
+  `schemaorg.nodes` and prefers `schemaorg.own`.
+- **An equation's number** (finding 17). The chunker's pattern did not
+  know the separators the maths pack learned on 2026-10-02 (`, (3)`,
+  `~(3)`, two spaces); the pack had its own. Both use `markup.eq_number`
+  now. A `prax maintain --rechunk` fills `data.number` for the formulas
+  written in those forms.
+- **What is stale** (finding 18). The stale states and the relation for
+  each were in `text/status.py`, `store/retrieval/fusion.py` and
+  `capture/projects.py`. They are `status.STALE`, `status.STALE_RELS` and
+  `status.stale_rel` now.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

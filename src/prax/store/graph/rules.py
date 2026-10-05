@@ -416,15 +416,20 @@ def same_answers(
     return {v: find(v) for v in vals}
 
 
+Breach = dict[int, list[tuple[int, int, str]]]
+
+
 @_reading
-def _functional_pairs(
+def functional_breaches(
     con: sqlite3.Connection, rel: str, ancestors: Callable[[int], frozenset[int]]
-) -> set[tuple[int, int]]:
-    """The pairs of live asserted edges of ``rel`` that disagree: one
-    subject, two values neither of which is part of the other (one answer
-    said finer and coarser is no conflict). One edge stands for each
-    value (an EXTRACTED one first, then the oldest), and a subject makes
-    ``CONFLICT_PAIRS`` pairs at most."""
+) -> dict[int, Breach]:
+    """What a conflict of a functional relation is, the one definition the
+    conflicts pass and the heal check share: the subjects (canonical ids)
+    whose live asserted edges of ``rel`` give two or more answers, two
+    values being one answer when one is part of the other (said finer and
+    coarser). Each subject maps its answers to their edges, ``(edge id,
+    value id, confidence)`` in id order. Rule-derived edges follow from
+    asserted ones and are left out."""
     rows = con.execute(
         """
         SELECT e.id, COALESCE(s.canonical_id, s.id) AS subject,
@@ -441,20 +446,31 @@ def _functional_pairs(
         edges_of[int(r["subject"])].append(
             (int(r["id"]), int(r["value"]), r["confidence"])
         )
-    out: set[tuple[int, int]] = set()
-    for edges in edges_of.values():
+    out: dict[int, Breach] = {}
+    for subject, edges in edges_of.items():
         if len({v for _, v, _ in edges}) < 2:
             continue
         answer = same_answers((v for _, v, _ in edges), ancestors)
-        values: dict[int, tuple[int, int]] = {}
-        for eid, value, confidence in edges:
-            key = answer[value]
-            rank = (0 if confidence == "EXTRACTED" else 1, eid)
-            if key not in values or rank < values[key]:
-                values[key] = rank
-        if len(values) < 2:
-            continue
-        ids = sorted(eid for _, eid in values.values())
+        by_answer: Breach = defaultdict(list)
+        for edge in edges:
+            by_answer[answer[edge[1]]].append(edge)
+        if len(by_answer) > 1:
+            out[subject] = dict(by_answer)
+    return out
+
+
+def _functional_pairs(
+    con: sqlite3.Connection, rel: str, ancestors: Callable[[int], frozenset[int]]
+) -> set[tuple[int, int]]:
+    """The pairs of edges that disagree (``functional_breaches``): one
+    edge stands for each answer (an EXTRACTED one first, then the oldest),
+    and a subject makes ``CONFLICT_PAIRS`` pairs at most."""
+    out: set[tuple[int, int]] = set()
+    for breach in functional_breaches(con, rel, ancestors).values():
+        ids = sorted(
+            min(edges, key=lambda e: (0 if e[2] == "EXTRACTED" else 1, e[0]))[0]
+            for edges in breach.values()
+        )
         pairs = [(a, b) for i, a in enumerate(ids) for b in ids[i + 1 :]]
         out.update(pairs[:CONFLICT_PAIRS])
     return out

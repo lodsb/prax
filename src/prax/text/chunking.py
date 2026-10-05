@@ -103,8 +103,6 @@ _READ_BY = markup.READ_BY
 # sentence it belongs to — a chunk is a region of the artifact, and an
 # inline formula cannot be one without tearing the text around it.
 _FORMULA = markup.FORMULA
-# the equation number a paper refers to it by, at the end: "\quad (4)"
-_EQ_NUMBER = markup.EQ_NUMBER
 # What makes a line of maths a formula rather than a stray symbol a parser
 # lifted out of a diagram (`$$\rightarrow K$$`): it states a relation, or it
 # is long enough to be an expression in its own right. "E = mc^2" passes on
@@ -340,11 +338,7 @@ def parse_formula(text: str) -> dict[str, Any] | None:
     if not m:
         return None
     latex = m.group("latex").strip()
-    number = None
-    found = _EQ_NUMBER.search(latex)
-    if found:
-        number = found.group(1)
-        latex = latex[: found.start()].rstrip().rstrip(",.").rstrip()
+    latex, number = markup.eq_number(latex)
     return {
         "latex": latex,
         "number": number,

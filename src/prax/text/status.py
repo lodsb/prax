@@ -35,6 +35,17 @@ STATES = {
     "draft": ("draft", "proposed", "wip"),
 }
 STALE = frozenset({"retired", "superseded", "invalid", "deprecated"})
+# the edges that make the document they reach stale, and the state each
+# puts it in; a stale note naming its replacement is reached by the first
+# of them whose state it has, else by ``supersedes``
+STALE_RELS = {"supersedes": "superseded", "invalidates": "invalid"}
+_REL_OF = {state: rel for rel, state in STALE_RELS.items()}
+
+
+def stale_rel(state: str) -> str:
+    """The relation from a replacement to a note in ``state``."""
+    return _REL_OF.get(state, "supersedes")
+
 
 _WORD = {w: state for state, words in STATES.items() for w in words}
 _DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2}|\d{4}-\d{2})\b")

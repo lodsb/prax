@@ -302,33 +302,33 @@ def _links(door: Door, a: Any) -> int:
 
 
 def _project(door: Door, a: Any) -> int:
-    from prax.importers import project
+    """``prax import project`` is ``prax sync --apply --all-files``: one
+    path to the door (``POST /projects/sync``), so a project's documents
+    have one key and one title however they were sent."""
+    from types import SimpleNamespace
 
     root = Path(a.files[0]) if a.files else Path.cwd()
     if not root.is_dir():
         out.fail(f"{root}: not a directory")
         return 2
-    try:
-        cfg = project.settings(root, name=a.name)
-    except (OSError, ValueError) as exc:
-        out.fail(str(exc))
-        return 2
-    items = list(project.items(root, cfg))
-    if not a.quiet:
-        modules = f" · modules {', '.join(cfg.domains)}" if cfg.domains else ""
-        out.say(
-            out.bold("Project")
-            + out.dim(
-                f"   {cfg.name} · {out.plural(len(items), 'document file')}"
-                f" under {root}{modules}"
-            )
-        )
-    if not items:
-        if not a.quiet:
-            out.hint("  nothing to send: no .md, .rst, .txt or .adoc files found")
-        return 0
-    a.domain = list(dict.fromkeys([*(a.domain or []), *cfg.domains])) or None
-    return _run(door, a, project.SOURCE, items)
+    return sync(
+        door,
+        SimpleNamespace(
+            root=str(root),
+            apply=not a.dry_run,
+            name=a.name,
+            domain=a.domain,
+            tag=a.tag,
+            include=None,
+            exclude=None,
+            all_files=True,  # the documents under the directory, as before
+            if_auto=False,
+            auto=None,
+            personal=False,
+            json=getattr(a, "json", False),
+            quiet=a.quiet,
+        ),
+    )
 
 
 def _claude(door: Door, a: Any) -> int:

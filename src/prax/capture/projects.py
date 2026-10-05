@@ -52,7 +52,7 @@ def doc_key(name: str, remote: str | None, repo_path: str, rel: str) -> str:
 
 def _title(rel: str, text: str, name: str) -> str:
     """The first heading of a Markdown file, else its path; with the
-    project's name, as the importer wrote it."""
+    project's name."""
     m = _HEADING.search(text) if rel.lower().endswith((".md", ".markdown")) else None
     return f"{m.group(1).strip() if m else rel} ({name})"
 
@@ -345,9 +345,6 @@ def _links(
     return {**_keep_in_step(con, f"links:{name}", want), "unmatched": unmatched}
 
 
-STATUS_EDGE = {"invalid": "invalidates"}  # else a replacement supersedes
-
-
 def _statuses(
     con: sqlite3.Connection, name: str, prefix: str, texts: dict[str, tuple[int, str]]
 ) -> dict[str, int]:
@@ -384,7 +381,7 @@ def _statuses(
         if not st.stale:
             continue
         stale += 1
-        rel = STATUS_EDGE.get(st.state, "supersedes")
+        rel = status_mod.stale_rel(st.state)
         for candidates, _words in st.refs:
             hit = next((by_path[c] for c in candidates if c in by_path), None)
             if hit is not None and hit != doc_id:

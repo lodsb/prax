@@ -15,7 +15,7 @@ from prax import config
 from prax.graph import ontology
 from prax.ml import embeddings
 from prax.ml import rerank as rerank_mod
-from prax.text import dates
+from prax.text import dates, status
 
 from ..base import (
     _has_vectors,
@@ -278,8 +278,9 @@ def cite_link(
 
 STALE_SHIFT = 5  # places a stale hit moves down: the same with or without a reranker
 STALE_SPARE = 5  # candidates fetched past the limit, so a current one can move up
-STALE_STATES = ("retired", "superseded", "invalid", "deprecated")
-STALE_RELS = {"supersedes": "superseded", "invalidates": "invalid"}
+# what is stale is one rule, the status reader's (``prax.text.status``)
+STALE_STATES = tuple(sorted(status.STALE))
+STALE_RELS = status.STALE_RELS
 
 
 def _shift_stale(
