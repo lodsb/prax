@@ -5014,7 +5014,7 @@ become a label): each is set aside as `kind = 'wire'`, never deleted
 (`store.set_aside_label`), and the words before the syntax written
 beside it under the run `heal:wire-labels`. Search already ignores them
 (2026-10-05); this is the record made clean. Applied on the user's word,
-names first.
+names first; on a dry run after, both checks found nothing.
 
 ## 2026-10-06: AJ's reader contract
 
@@ -5047,9 +5047,10 @@ reading waits for from it (`work.ROLE_WORK`).
   does.
 
 Not measured: the manifest's numbers are the night of 2026-10-02's.
-The desktop's prax.yaml still runs marker alone. Adding the `surya`
-model and `ocr-server` waits for the next marker evening, so peak RAM,
-VRAM and time per page can be taken with the server outside marker.
+The desktop's prax.yaml now names a `surya` model (port 8766, 8 slots
+of 12,288, f16 KV, no prompt cache, `--jinja`, as surya ran it) and the
+`ocr-server` role. It is live at the next start of `prax up`. Peak RAM,
+VRAM and time per page are taken on the next marker evening.
 
 ## 2026-10-06: AK's split, as configuration
 

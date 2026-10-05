@@ -29,8 +29,10 @@ so what needs no model comes first.
    standard names, and AL's, the extraction filling the world dates.
    Both change the prompt; neither passes over the library before the
    sample says so.
-4. (AJ's reader contract done 2026-10-06, code; the wire checks wait
-   for the user's word) **Next (2026-10-06): the wire syntax cleaned, then AJ's reader
+4. (done 2026-10-06: the wire checks applied, both clear on a dry run
+   after; AJ's reader contract as code, and the desktop's prax.yaml
+   names the `surya` model and the `ocr-server` role, live at the next
+   start of `prax up`) **Next (2026-10-06): the wire syntax cleaned, then AJ's reader
    contract.** `prax heal --check wire-names` (371 entities) and then
    `--check wire-labels` (410 labels, more after the names), dry runs
    shown, applied on the user's word; then **AJ's reader contract**
