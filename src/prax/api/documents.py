@@ -284,6 +284,7 @@ class MissingReq(BaseModel):
     project: str | None = None
     page: str | None = None  # the documents a page links
     limit: int = 30
+    min_count: int = 1  # works fewer of them cite are left out
 
 
 @router.post("/references/missing")
@@ -304,7 +305,9 @@ def references_missing(req: MissingReq, request: Request) -> dict[str, Any]:
     if not ids:
         raise HTTPException(400, "name the set: doc_ids, a tag, a project or a page")
     limit = max(1, min(req.limit, 200))
-    return store.cited_but_missing(con, ids, limit=limit)
+    return store.cited_but_missing(
+        con, ids, limit=limit, min_count=max(1, req.min_count)
+    )
 
 
 @router.get("/doc/{doc_id}/context")

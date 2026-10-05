@@ -8,6 +8,7 @@ import json
 import re
 import sqlite3
 from typing import Any
+from urllib.parse import quote_plus
 
 from prax import packs
 from prax.graph import ontology
@@ -1013,7 +1014,7 @@ MISSING_LIMIT = 30  # works a cited-but-missing answer names
 MISSING_SET = 500  # documents one question may span
 
 
-def _entry_links(data: dict[str, Any]) -> dict[str, str]:
+def _entry_links(data: dict[str, Any], *, search: bool = False) -> dict[str, str]:
     """Where an entry can be read: its DOI (``doi.org``, which resolves to
     the publisher; open access or not) and its arXiv id (open access)."""
     out: dict[str, str] = {}
@@ -1021,6 +1022,12 @@ def _entry_links(data: dict[str, Any]) -> dict[str, str]:
         out["doi"] = f"https://doi.org/{data['doi']}"
     if data.get("arxiv"):
         out["arxiv"] = f"https://arxiv.org/abs/{data['arxiv']}"
+    if search and not out and data.get("title"):
+        # no id printed: where to look it up (AL step 9, N4: no links came
+        # back for most entries)
+        out["search"] = "https://search.crossref.org/?q=" + quote_plus(
+            str(data["title"])
+        )
     return out
 
 
@@ -1102,9 +1109,34 @@ def _title_held(title: str, held: set[str], held_sorted: list[str]) -> bool:
     return any(" ".join(words[:n]) in held for n in range(HELD_MIN_WORDS, len(words)))
 
 
+CITERS_SCANNED = 500  # reference entries read to count a work's citers
+
+
+def _library_citers(
+    con: sqlite3.Connection, title: str | None, hidden: frozenset[int] | set[int]
+) -> int | None:
+    """How many documents of the library cite a work, by its title as a
+    phrase over the reference entries (the first eight words), counted
+    only where the viewer sees the citing document; None for a title too
+    short to say."""
+    words = _TOKEN.findall(str(title or "").lower())[:8]
+    if len(words) < 3:
+        return None
+    rows = con.execute(
+        "SELECT c.doc_id FROM chunks_fts JOIN chunks c ON c.id = chunks_fts.rowid"
+        " WHERE chunks_fts MATCH ? AND c.kind = 'reference' LIMIT ?",
+        ('"' + " ".join(words) + '"', CITERS_SCANNED),
+    ).fetchall()
+    return len({int(r[0]) for r in rows} - set(hidden))
+
+
 @_reading
 def cited_but_missing(
-    con: sqlite3.Connection, doc_ids: list[int], *, limit: int = MISSING_LIMIT
+    con: sqlite3.Connection,
+    doc_ids: list[int],
+    *,
+    limit: int = MISSING_LIMIT,
+    min_count: int = 1,
 ) -> dict[str, Any]:
     """What a set of documents cites that the library does not hold: the
     unmatched entries of their reference lists, one work per DOI, arXiv id
@@ -1112,7 +1144,14 @@ def cited_but_missing(
     work names its ``title``, ``authors``, ``year``, ``doi``/``arxiv`` and
     ``links``, and ``cited_by``. ``looked_at`` is how many of the documents
     have a reference list; a title the library holds exactly counts as
-    held (the matching pass may not have run since it arrived)."""
+    held (the matching pass may not have run since it arrived).
+
+    ``min_count`` leaves out what fewer of the documents cite. Among works
+    cited equally often, the one the rest of the library cites less comes
+    first, and each says how often the library cites it
+    (``cited_in_library``, what the viewer sees): a reference every field
+    cites (Adam, an acoustics textbook) is rarely what a topic lacks (AL
+    step 9, N4)."""
     hidden = hidden_documents(con)
     ids = [int(i) for i in dict.fromkeys(doc_ids) if int(i) not in hidden][:MISSING_SET]
     if not ids:
@@ -1158,11 +1197,21 @@ def cited_but_missing(
         for k in ("year", "doi", "arxiv"):
             work[k] = work[k] or data.get(k)
     ranked = sorted(
-        works.values(), key=lambda w: (-len(w["cited_by"]), str(w["title"]))
+        (w for w in works.values() if len(w["cited_by"]) >= min_count),
+        key=lambda w: (-len(w["cited_by"]), str(w["title"])),
+    )[: limit * 2]
+    for w in ranked:
+        w["cited_in_library"] = _library_citers(con, w.get("title"), hidden)
+    ranked.sort(
+        key=lambda w: (
+            -len(w["cited_by"]),
+            w["cited_in_library"] if w["cited_in_library"] is not None else 0,
+            str(w["title"]),
+        )
     )
     missing = []
     for w in ranked[:limit]:
-        links = _entry_links(w)
+        links = _entry_links(w, search=True)
         item = {**w, "count": len(w["cited_by"])}
         if links:
             item["links"] = links

@@ -4837,6 +4837,56 @@ Findings 6, 7, 8, 9/15, 11, 19/21 and 22
   gives its author. Pages already read keep their stamp until they are
   captured again.
 
+## 2026-10-05, the afternoon: the client's second page, and a judge measured again
+
+**The judge's re-measure.** The sameness rule's version 2 says a series
+and its editions are two things. Asked again on the person's 296
+decisions (`eval_confidence.py gold/ask/platt`, the 27B), the local
+model agrees 0.77 as before, its calibration a little better (ECE
+0.043, 0.050 on 2026-10-03); at the 0.95 line it settles 11% of pairs at
+34 of 34 (16% at 47 of 47 before). Of the 18 venue pairs, three are two
+editions apart: the person had called two of them one thing before the
+rule said otherwise, and the judge now calls all three two. The fit is
+in the host's `prax.yaml` (`steps.adjudicate.platt: {a: 0.4877, b:
+0.4917}`).
+
+**The client's second page** (AL step 9, `tests/test_al_step9.py`):
+
+- **G4.** A door that restarts forgets its workers: one in the middle of
+  a batch asks for nothing until it is through, and the client read
+  `alive: false`. `worker_state` now says why, from the supervisor's
+  status file: up and not asked since the door started, stopped, or no
+  supervisor at all.
+- **N1.** A named token may now plan any project (`sync_project`
+  dry run) and keep in step one the administrator registered, never its
+  settings, and only within the token's modules; a project holding a
+  note behind the wall is as if absent. Before, the client fell back to a
+  scratch script and the old keys.
+- **N2.** A citation's words are taken where the passage answers: around
+  the query's words first, the runs with more words of their own before
+  the others, and never a run holding a notice word (the lexicon's
+  `notices`: copyright, permission, licence…).
+- **N4.** A page number is no year ("pp. 1917–1930" dated YIN 1917); an
+  author run of whole names gives each name's last word as the surname
+  (it gave every first name too); a missing work with no DOI or arXiv id
+  gets a Crossref search link; `min_count` leaves out what fewer of the
+  set cite, and among works cited as often the one the rest of the
+  library cites less comes first (`cited_in_library`: Adam 58, Bello's
+  tutorial 36). The stored entries keep the old reading until a rechunk.
+- **G1.** A citation the references pass matched by title with a score
+  of 0.95 or more costs as a stated fact on a path. `eval_paths.py`:
+  citation pairs at cost 4 or under 36 → 55, sound ones 106 as before,
+  random pairs 5 of 300 as before. The client's SuperFlux to adaptive
+  whitening chains cost 6.1 now (6.45), over the line by their middle
+  papers' hub costs; moving the line is in the plan, for the user.
+- **G3.** `changes` leaves a repair's corrections out unless
+  `corrections`, and counts them per side as `corrected`.
+- **G2.** The `duplicate-facts` check of `prax heal` ends the later edges
+  of one fact stated twice by one reader from one document (1,711 facts,
+  2,018 edges on the dry run); the same fact from two readers stays.
+  Waiting for the user's word, like `document-twins` (356 documents, 450
+  entities folded into the type `document_node` gives).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

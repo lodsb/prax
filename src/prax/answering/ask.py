@@ -390,7 +390,9 @@ def gather(
     folded: dict[int, list[tuple[int, str]]] = {}
     for p in bundle.passages:
         if p.chunk_id is not None:
-            p.cite = store.cite_link(con, p.doc_id, p.chunk_id, folded, deadline)
+            p.cite = store.cite_link(
+                con, p.doc_id, p.chunk_id, folded, deadline, bundle.question
+            )
     ids = list(dict.fromkeys(p.doc_id for p in bundle.passages))
     bundle.facts = store.document_facts(con, ids, limit=FACTS_PER_DOC)
     if regions and ids:

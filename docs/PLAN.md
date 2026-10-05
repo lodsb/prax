@@ -86,7 +86,9 @@ numbered there) in the order the user agreed: one step a session.
       - [x] **21.** Path costs class relations as strong or weak by a hard-coded list of research and studio relation names (an hour)
       - [x] **22.** Which schema.org types prax knows is listed twice: OWN_TYPES in code, same_as in genres.yaml, and the two disagree (an hour)
 - [ ] **Step 3's two leftovers** (2026-10-05):
-      - [ ] **Document twins.** 733 titles have entities of two or more
+      - [ ] (the check is written: `prax heal --check document-twins`,
+            356 documents and 450 entities on the dry run; applying it
+            waits for the user's word) **Document twins.** 733 titles have entities of two or more
             document types (146 article and paper, 108 build and paper, 94
             manual and paper, 53 paper and recipe…), mostly from page links
             and citations that typed every document a paper. New links
@@ -263,26 +265,37 @@ numbered there) in the order the user agreed: one step a session.
 
 - [ ] **AL step 9, the client's second page** (doc 13470, checked from
       the laptop on 2026-10-04 against door `1886abb`):
-      - [ ] **N1** `sync_project` for a named token: a dry run, or a sync
+      - [x] (2026-10-05) **N1** `sync_project` for a named token: a dry run, or a sync
             of projects the administrator registered.
-      - [ ] **N2** `cite` words that skip boilerplate (an ACM copyright
+      - [x] (2026-10-05) **N2** `cite` words that skip boilerplate (an ACM copyright
             notice, "in order to test"): the matched snippet's words, or
             the chunk's rarest n-gram.
       - [x] (2026-10-05, with the review's finding 3) **N3** `references`
             in the numbers' order; the author biographies appended to an
             entry and ditto authors are still to do.
-      - [ ] **N4** `cited_but_missing`: authors split into first and last
+      - [x] (2026-10-05; the stored entries need a rechunk) **N4** `cited_but_missing`: authors split into first and last
             names, a year read as 1917, no `links`, generic references
             ranked beside topic papers (`min_count`, or a down-rank).
-      - [ ] **G1** a citation the references pass matched with score 1.00
+      - [x] (2026-10-05) **G1** a citation the references pass matched with score 1.00
             costs as a strong hop: three clean 3-hop chains came out weak
-            (6.45).
+            (6.45). A sure title match now costs as a stated fact; the
+            chains cost 6.1, over the line by their two middle papers'
+            hub costs.
+      - [ ] **G1, the line.** `paths.SOUND` = 6 was read off
+            `eval_paths.py`: at 7, 126 of 150 citation pairs are sound
+            and 13 of 300 random pairs (5 at 6). Moving it means reading
+            those random paths by hand first; the user's call.
       - [ ] **G2** one fact live under two ontology versions (edges 7402
-            and 47184): the older one ended, or kept as evidence.
-      - [ ] **G3** `changes(domain=…)` swamped by the night's `part_of`
+            and 47184): the older one ended, or kept as evidence. The
+            `duplicate-facts` check of `prax heal` (2026-10-05) finds
+            1,711 such facts, 2,018 later edges; applying it waits for the
+            user's word.
+      - [x] (2026-10-05) **G3** `changes(domain=…)` swamped by the night's `part_of`
             corrections: a `producer`/`run` filter or a `corrected` side.
-      - [ ] **G4** the worker not back after a door restart: `health` says
+      - [x] (2026-10-05) **G4** the worker not back after a door restart: `health` says
             "worker not reattached", or `prax up` restarts both.
+      - [ ] **N3's rest**: the author biographies appended to an entry,
+            and ditto authors (`~~,~~`) taken from the entry before.
       - [ ] **O1, O7** re-checked from the laptop after its `git pull` and
             the extension's reload (both were fixed on 2026-10-04).
 - [ ] **AL. The first client's feedback.** Steps 1 to 4 and 6 to 8, and

@@ -307,3 +307,31 @@ def test_a_genres_schema_type_is_a_pages_own_work() -> None:
     assert {"Thesis", "SoftwareSourceCode", "QAPage"} <= set(
         ontology.genres().standards()
     )
+
+
+def test_a_documents_twins_fold_into_its_node_and_back(con: sqlite3.Connection) -> None:
+    """Step 3's leftover: one document known as a paper and an article."""
+    from prax.store import repair
+
+    store.ingest_text(con, "a study of things " * 20, title="A study")
+    for other in ("B one", "B two"):
+        store.link(con, E("A study", "article", "mentions", other, "concept"))
+    store.link(con, E("Some paper", "paper", "cites", "A study", "paper"))
+    # a title two documents share may be two things: left alone
+    for _ in range(2):
+        store.ingest_text(con, f"shared {_} " * 30, title="Notes")
+    store.link(con, E("Notes", "article", "mentions", "x", "concept"))
+    store.link(con, E("Some paper", "paper", "cites", "Notes", "paper"))
+    found = repair._document_twins(con)
+    assert [(f["name"], f["type"], [a["type"] for a in f["also"]]) for f in found] == [
+        ("A study", "article", ["paper"])
+    ]
+    assert repair._repair_document_twins(con, found) == 1
+    paper = con.execute(
+        "SELECT canonical_id, merged_run FROM entities WHERE name = 'A study'"
+        " AND type = 'paper'"
+    ).fetchone()
+    assert paper[0] == found[0]["id"] and paper[1].startswith(repair.TWINS_PRODUCER)
+    assert repair._document_twins(con) == []
+    assert store.unmerge_run(con, paper[1]) == 1
+    assert len(repair._document_twins(con)) == 1

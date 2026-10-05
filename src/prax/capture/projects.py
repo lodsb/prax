@@ -77,6 +77,68 @@ def _page_text(name: str, remote: str | None, prefix: str) -> str:
     )
 
 
+class NotAllowed(PermissionError):
+    """What a named token may not do to a project (the route answers 403)."""
+
+
+def _named_may(
+    con: sqlite3.Connection,
+    req: dict[str, Any],
+    name: str,
+    held: dict[str, Any],
+    settings: dict[str, list[str]],
+    sensitivity: str | None,
+    have: dict[str, dict[str, Any]],
+    dry_run: bool,
+) -> None:
+    """What a named token may sync (AL step 9, N1): a plan of any project;
+    a sync only of a project the administrator registered, with its
+    settings as they are and its modules within the token's. A project
+    holding a note the token does not see, or kept personal, is as if
+    absent (a KeyError): its plan would name what the wall hides. The
+    administrator (no viewer) may do all of it."""
+    viewer = store.VIEWER.get()
+    if viewer is None:
+        return
+    hidden = store.hidden_documents(con)
+    if (sensitivity and not viewer.personal) or any(
+        v["doc_id"] in hidden for v in have.values()
+    ):
+        raise KeyError(f"no such project: {name}")
+    if dry_run:
+        return
+    if not held:
+        raise NotAllowed(
+            f"{name!r} is not a project yet: a named token syncs only a project"
+            " the administrator registered (a dry run is open to it)"
+        )
+    stored = held.get("settings") or {}
+    changed = [
+        k
+        for k in SETTINGS
+        if req.get(k) is not None and settings[k] != _words(stored.get(k))
+    ]
+    if req.get("sensitivity") is not None and req["sensitivity"] != stored.get(
+        "sensitivity"
+    ):
+        changed.append("sensitivity")
+    if req.get("auto_sync") is not None and bool(req["auto_sync"]) != bool(
+        held.get("auto_sync")
+    ):
+        changed.append("auto_sync")
+    if changed:
+        raise NotAllowed(
+            f"a project's settings are the administrator's: {', '.join(changed)}"
+        )
+    if viewer.domains is not None:
+        beyond = [d for d in settings["domains"] if d not in viewer.domains]
+        if beyond or not settings["domains"]:
+            raise NotAllowed(
+                "the project is read against modules this token does not see:"
+                f" {', '.join(beyond) or 'every module'}"
+            )
+
+
 def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
     """Plan a project's files and, unless ``dry_run``, apply the plan. The
     request is ``prax.client.project_files``' answer with the settings
@@ -145,6 +207,7 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
     have = store.project_documents(
         con, name, [r["key"] for r in rows] + [r["legacy"] for r in rows]
     )
+    _named_may(con, req, name, held, settings, sensitivity, have, dry_run)
     by_version = {v["version"]: (k, v) for k, v in have.items() if v.get("version")}
     claimed: set[str] = set()
     for r in rows:

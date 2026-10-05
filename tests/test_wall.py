@@ -136,6 +136,7 @@ WALKED = (
     ("POST", "/ingest/file"),
     ("POST", "/maths"),
     ("GET", "/work/status"),
+    ("POST", "/projects/sync"),
 )
 
 

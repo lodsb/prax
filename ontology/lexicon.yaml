@@ -350,3 +350,11 @@ status:
   # what makes a line that opens with a state word a status: "Superseded
   # by …", "Retired since 2026-10", "Veraltet seit …"
   after: [by, since, "on", as of, in favour of, in favor of, durch, seit, am, ab, par, depuis]
+
+# the words of a notice on a page that is not what the page says: a
+# copyright block, a licence, a reprint permission. A passage's citation
+# words (`store.cite_link`) never come from a run holding one (AL step 9,
+# N2: an agent was handed "permission to make digital" for a paper)
+notices:
+  stems: [copyright, licen, permission, republish, redistribut, reprint, urheberrecht, lizenz]
+  words: ["©", "rights reserved", classroom, "without fee", "hard copies", "all rights"]

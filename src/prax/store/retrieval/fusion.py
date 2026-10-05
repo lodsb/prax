@@ -169,7 +169,7 @@ def search(
             h["stale"] = stale[h["doc_id"]]
         if cite and h.get("chunk_id") is not None:
             h["cite"] = cite_link(
-                con, int(h["doc_id"]), int(h["chunk_id"]), folded, deadline
+                con, int(h["doc_id"]), int(h["chunk_id"]), folded, deadline, query
             )
     return hits
 
@@ -196,6 +196,7 @@ def cite_link(
     chunk_id: int,
     folded_docs: dict[int, list[tuple[int, str]]] | None = None,
     deadline: float | None = None,
+    near: str | None = None,
 ) -> str:
     """``#doc/N?chunk=M&find=…``: the passage's link with words of it no
     other passage of the document holds, or with the id alone when none is
@@ -207,7 +208,14 @@ def cite_link(
     ``CITE_INDEX_TRIES`` times (a boilerplate passage has no such words,
     and a try on a common phrase is slow). ``folded_docs`` keeps a
     document's folded passages for the other hits of one search; past
-    ``deadline`` (a monotonic time) the link is the id alone."""
+    ``deadline`` (a monotonic time) the link is the id alone.
+
+    The words are taken where the passage answers: around the words of
+    ``near`` (the query) first, then spread over the passage, and the
+    runs with more of their own words before the others. A run that holds
+    a word of a notice (the lexicon's ``notices``: an ACM copyright
+    block, a licence) is never the citation (AL step 9, N2: the client
+    was handed "permission to make digital")."""
     base = f"#doc/{doc_id}?chunk={chunk_id}"
     row = con.execute("SELECT text FROM chunks WHERE id = ?", (chunk_id,)).fetchone()
     if row is None:
@@ -240,14 +248,17 @@ def cite_link(
             cache[doc_id] = got
         folded = cache[doc_id]
     tries = 0
+    asked = {w for w in _FOLD.findall((near or "").lower()) if w not in STOPWORDS}
+    notice = _notice_pattern()
     for n in CITE_WORDS:
         if len(words) < n:
             continue
-        step = max(1, (len(words) - n) // CITE_TRIES)
-        for start in range(0, len(words) - n + 1, step)[:CITE_TRIES]:
+        for start in _cite_starts(words, n, asked):
             run = words[start : start + n]
             if sum(1 for w in run if len(w) > 3 and w not in STOPWORDS) < 2:
                 continue  # "and the of a": words every passage has
+            if notice.search(" ".join(run)):
+                continue  # "permission to make digital or hard copies"
             if late():
                 return base
             phrase = " ".join(run)
@@ -274,6 +285,41 @@ def cite_link(
             if holders == [chunk_id]:
                 return f"{base}&find={quote_plus(phrase)}"
     return base
+
+
+def _cite_starts(words: list[str], n: int, asked: set[str]) -> list[int]:
+    """Where a run of ``n`` words is tried: around each word of the query
+    the passage holds, then ``CITE_TRIES`` places spread over it; within
+    each, the runs with more words of their own first (longer words, no
+    stopwords), at most ``2 * CITE_TRIES`` places."""
+    last = len(words) - n
+
+    def own(start: int) -> int:
+        return sum(
+            len(w)
+            for w in words[start : start + n]
+            if len(w) > 3 and w not in STOPWORDS
+        )
+
+    near = sorted(
+        {min(max(0, i - n // 2), last) for i, w in enumerate(words) if w in asked},
+        key=lambda s: -own(s),
+    )[:CITE_TRIES]
+    step = max(1, last // CITE_TRIES)
+    spread = sorted(range(0, last + 1, step)[:CITE_TRIES], key=lambda s: -own(s))
+    return list(dict.fromkeys([*near, *spread]))
+
+
+def _notice_pattern() -> re.Pattern[str]:
+    """The lexicon's ``notices`` as one pattern (stems and words)."""
+    lex = ontology.lexicon()
+    section = lex.section("notices") or {}
+    return ontology.cue_pattern(
+        (
+            tuple(str(x) for x in section.get("stems") or []),
+            tuple(str(x) for x in section.get("words") or []),
+        )
+    )
 
 
 STALE_SHIFT = 5  # places a stale hit moves down: the same with or without a reranker

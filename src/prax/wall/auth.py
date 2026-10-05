@@ -93,6 +93,9 @@ RESTRICTED_ROUTES = tuple(
         ("POST", r"/ingest/file"),
         ("POST", r"/maths"),
         ("GET", r"/work/status"),
+        # a plan of any project, a sync of one the administrator registered
+        # (prax.capture.projects._named_may)
+        ("POST", r"/projects/sync"),
     )
 )
 

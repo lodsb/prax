@@ -770,6 +770,7 @@ def changes(
     domain: str | None = None,
     derived: bool = False,
     rereadings: bool = False,
+    corrections: bool = False,
     limit: int = CHANGES_SHOWN,
 ) -> dict[str, Any]:
     """What changed in a period, on one of the two times an edge carries.
@@ -789,8 +790,12 @@ def changes(
     began, or ended while another edge still states it (a re-extraction,
     a citation matched again), so what is listed is what the library came
     to know or stopped knowing. The rule pass's derivations are left out
-    unless ``derived``: it re-derives every night. A document hidden from
-    the viewer counts as absent (the wall)."""
+    unless ``derived``: it re-derives every night. A repair's corrections
+    are left out unless ``corrections`` (what a ``prax heal`` run wrote,
+    and what a recorded repair ended): each side then says how many it
+    left out as ``corrected``, so a night of ``part_of`` turned the right
+    way round does not bury what the library learned (AL step 9, G3). A
+    document hidden from the viewer counts as absent (the wall)."""
     begin, end, begin_date, end_date = _span(since, until)
     limit = max(1, min(int(limit), 200))
     where: list[str] = []
@@ -828,6 +833,14 @@ def changes(
         join = " JOIN documents d ON d.id = e.source_doc"
         where.append("1 = 1" + clause)
         args += dargs
+    # a repair's work: written by it, or ended by it and recorded
+    healed = (
+        "(COALESCE(e.producer, '') LIKE 'heal:%' OR EXISTS (SELECT 1"
+        " FROM edge_endings x WHERE x.edge_id = e.id AND x.run LIKE 'heal:%'))"
+    )
+    plain = list(where)
+    if not corrections:
+        where.append(f"NOT {healed}")
     sides = _change_sides(world, rereadings, (begin, end, begin_date, end_date), hidden)
     out: dict[str, Any] = {
         "since": since,
@@ -882,4 +895,17 @@ def changes(
             "facts": facts,
             "left_out": total - len(facts),
         }
+        if not corrections:
+            corrected = sum(
+                int(r[1])
+                for r in con.execute(
+                    f"SELECT e.source_doc, count(*) FROM edges e{join}"
+                    f" WHERE {' AND '.join([cond, *plain, healed])}"
+                    " GROUP BY e.source_doc",
+                    [*bounds, *args],
+                )
+                if r[0] is None or int(r[0]) not in hidden
+            )
+            if corrected:
+                out[side]["corrected"] = corrected
     return out

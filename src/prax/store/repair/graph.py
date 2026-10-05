@@ -12,12 +12,14 @@ from typing import Any
 
 from prax.graph import ontology
 
+from ..base import hidden_documents, now
 from ..graph import (
     Edge,
     entities_with_degree,
     entity_named_in,
     functional_breaches,
     link,
+    merge_entities,
     part_of_ancestry,
     part_of_suspects,
     rename_entity,
@@ -667,3 +669,148 @@ def _repair_not_venues(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
                 )
             done += 1
     return done
+
+
+TWINS_PRODUCER = "heal:document-twins"
+# a page or a project is its page's node, never folded into a document type
+_NOT_FOLDED = frozenset({"page", "project"})
+
+
+def _document_twins(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """One library document known to the graph as two or more entities of
+    different document types: the paper *X* and the article *X*, because a
+    page link or a citation typed every document a paper while its own
+    extraction named it an article (the quality review of 2026-10-05,
+    finding 11). Only a title exactly one live, open document carries,
+    and never a page or a project: a name two documents share may be two
+    things. Each with the type ``document_node`` gives it (the most
+    connected) and the entities to fold into it."""
+    onto = ontology.current()
+    kinds = {
+        t
+        for t in onto.entity_types
+        if onto.is_a(t, "document") and t not in _NOT_FOLDED
+    }
+    titles: dict[str, list[int]] = {}
+    for r in con.execute(
+        "SELECT id, title FROM documents WHERE title IS NOT NULL"
+        " AND sensitivity IS NULL AND json_extract(meta, '$.retired') IS NULL"
+        " AND id NOT IN (SELECT doc_id FROM pages)"
+    ):
+        titles.setdefault(str(r["title"]), []).append(int(r["id"]))
+    groups: dict[str, list[dict[str, Any]]] = {}
+    marks = ",".join("?" * len(kinds))
+    for r in con.execute(
+        f"SELECT id, name, type FROM entities WHERE canonical_id IS NULL"
+        f" AND type IN ({marks})",
+        sorted(kinds),
+    ):
+        if len(titles.get(r["name"], ())) == 1:
+            groups.setdefault(r["name"], []).append(dict(r))
+    twins = {n: g for n, g in groups.items() if len({e["type"] for e in g}) > 1}
+    counts = _live_edge_counts(con, [e["id"] for g in twins.values() for e in g])
+    out: list[dict[str, Any]] = []
+    for name, group in twins.items():
+        parts = sorted(
+            ({**e, "edges": counts.get(e["id"], 0)} for e in group),
+            key=lambda e: (-e["edges"], e["id"]),
+        )
+        if len({e["type"] for e in parts if e["edges"]}) < 2:
+            continue
+        lead = parts[0]  # what document_node gives: the most connected type
+        out.append(
+            {
+                "id": lead["id"],
+                "name": name,
+                "type": lead["type"],
+                "edges": lead["edges"],
+                "doc_id": titles[name][0],
+                "also": [
+                    {"id": e["id"], "type": e["type"], "edges": e["edges"]}
+                    for e in parts[1:]
+                ],
+            }
+        )
+    out.sort(key=lambda x: (-sum(a["edges"] for a in x["also"]), x["name"]))
+    return out[:CAP]
+
+
+def _repair_document_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Fold each document's other entities into the one ``document_node``
+    gives: a merge across types, signed by this repair under one run, so
+    ``unmerge_run`` takes the round back whole. Nothing is ended: the
+    folded entities' edges are evidence and now reach the document's
+    node."""
+    run = f"{TWINS_PRODUCER}:{now().replace(':', '').replace('-', '')}"
+    done = 0
+    for row in rows:
+        for other in row["also"]:
+            try:
+                merge_entities(
+                    con,
+                    int(other["id"]),
+                    int(row["id"]),
+                    across_types=True,
+                    producer=TWINS_PRODUCER,
+                    run=run,
+                )
+            except (KeyError, ValueError):
+                continue  # merged away meanwhile, or a cycle: left alone
+            done += 1
+    return done
+
+
+DUPLICATES_PRODUCER = "heal:duplicate-facts"
+
+
+def _duplicate_facts(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """One fact live twice from one document and one producer: the same
+    (subject, relation, object), the ends taken as merged, stated again
+    by a later run of the same reader (edges 7402 and 47184, one extraction
+    under ontology v1 and again under v3, their objects merged since; AL
+    step 9, G2). The same fact from two producers (the Zotero record and a
+    model) is two pieces of evidence and is not listed. Each with the
+    oldest edge, which stays, and the later ones."""
+    rows = con.execute(
+        """
+        SELECT COALESCE(a.canonical_id, a.id) AS s, e.rel,
+               COALESCE(b.canonical_id, b.id) AS d, e.source_doc,
+               COALESCE(e.producer, '') AS producer,
+               group_concat(e.id) AS ids, ca.name AS sname, cb.name AS dname
+        FROM edges e
+        JOIN entities a ON a.id = e.src
+        JOIN entities ca ON ca.id = COALESCE(a.canonical_id, a.id)
+        JOIN entities b ON b.id = e.dst
+        JOIN entities cb ON cb.id = COALESCE(b.canonical_id, b.id)
+        WHERE e.valid_to IS NULL AND e.source_doc IS NOT NULL
+        GROUP BY s, e.rel, d, e.source_doc, producer
+        HAVING count(*) > 1
+        """
+    ).fetchall()
+    hidden = hidden_documents(con)
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        ids = sorted(int(i) for i in str(r["ids"]).split(","))
+        out.append(
+            {
+                "id": ids[0],
+                # a fact of a document behind the wall is counted, not named
+                "name": "(behind the wall)"
+                if int(r["source_doc"]) in hidden
+                else f"{r['sname']} {r['rel']} {r['dname']}",
+                "doc": int(r["source_doc"]),
+                "edges": len(ids),
+                "later": ids[1:],
+            }
+        )
+    out.sort(key=lambda x: (-x["edges"], x["id"]))
+    return out[:CAP]
+
+
+def _repair_duplicate_facts(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """End the later edges of each fact, the oldest kept: recorded under
+    this repair's run (``edge_endings``), so ``restore_run`` states them
+    again if it was wrong."""
+    return _invalidate(
+        con, [i for row in rows for i in row["later"]], run=DUPLICATES_PRODUCER
+    )

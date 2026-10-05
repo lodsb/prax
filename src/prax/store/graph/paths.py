@@ -37,6 +37,10 @@ def _stamp(con: sqlite3.Connection) -> tuple[Any, ...]:
     return tuple(row)
 
 
+REFERENCES = "references"  # the producer of a reference list's citations
+SURE_CITATION = 0.95  # a title match this sure counts as stated, for a path
+
+
 def _rows(con: sqlite3.Connection, as_of: str | None) -> list[tuple[Any, ...]]:
     held, args = held_at("e", as_of)
     briefings = [
@@ -50,10 +54,18 @@ def _rows(con: sqlite3.Connection, as_of: str | None) -> list[tuple[Any, ...]]:
     ]
     rows = con.execute(
         "SELECT e.id, COALESCE(a.canonical_id, a.id), e.rel,"
-        " COALESCE(b.canonical_id, b.id), e.confidence, e.source_doc"
+        " COALESCE(b.canonical_id, b.id),"
+        # a citation the references pass matched by title with a sure
+        # score is as good as one matched by its DOI (AL step 9, G1: three
+        # clean 3-hop chains through resolved citations cost 6.45)
+        " CASE WHEN e.producer = ? AND e.confidence = 'INFERRED'"
+        " AND e.evidence LIKE '%, score _.__'"
+        " AND CAST(substr(e.evidence, -4) AS REAL) >= ?"
+        " THEN 'EXTRACTED' ELSE e.confidence END,"
+        " e.source_doc"
         " FROM edges e JOIN entities a ON a.id = e.src JOIN entities b ON b.id = e.dst"
         f" WHERE {held} AND COALESCE(e.producer, '') NOT LIKE 'rule:%'",
-        args,
+        (REFERENCES, SURE_CITATION, *args),
     ).fetchall()
     skip = set(briefings)
     return [tuple(r) for r in rows if r[1] not in skip and r[3] not in skip]

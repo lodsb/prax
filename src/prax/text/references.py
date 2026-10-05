@@ -227,9 +227,7 @@ def parse(entry: str) -> Reference:
     a = _ARXIV.search(p)
     if a:
         ref.arxiv = a.group(1).lower()
-    y = _YEAR.search(p)
-    if y:
-        ref.year = int(y.group(1))
+    ref.year = _year(p)
     q = _QUOTED.search(p)
     plain = _EMPH.sub(r"\1", p)
     if q and len(_WORD.findall(q.group(1))) >= _MIN_TITLE_WORDS:
@@ -243,6 +241,24 @@ def parse(entry: str) -> Reference:
         ref.title, head = _title_after_year_or_authors(plain)
     ref.surnames = _surnames(head)
     return ref
+
+
+# a page or a page range is never a year: "pp. 1917–1930" (YIN, 2002, was
+# cited as of 1917; AL step 9, N4)
+# (lower case: "M. P. 1994." is an initial before the year)
+_PAGES_BEFORE = re.compile(r"(?:\bpp\.?|\bp\.|\bS\.|[-–—])\s*$")
+_RANGE_AFTER = re.compile(r"^\s*[-–—]\s*\d")
+
+
+def _year(p: str) -> int | None:
+    """The entry's year: the first that is not a page or a page range."""
+    for y in _YEAR.finditer(p):
+        if _PAGES_BEFORE.search(p[max(0, y.start() - 6) : y.start()]):
+            continue
+        if _RANGE_AFTER.match(p[y.end() :]):
+            continue
+        return int(y.group(1))
+    return None
 
 
 def _author_run_end(plain: str) -> int:
@@ -389,6 +405,9 @@ def _surnames(head: str) -> list[str]:
     title-cased. At most twelve."""
     head = _EMPH.sub(r"\1", head)
     head = re.sub(r"\(\s*(?:19|20)\d{2}[a-z]?\s*\)", " ", head)
+    full = _full_names(head)
+    if full:
+        return full
     out: list[str] = []
     for tok in re.split(r"[\s,;&]+", head):
         t = tok.strip('().:"“”')
@@ -407,6 +426,33 @@ def _surnames(head: str) -> list[str]:
             out.append(name)
         if len(out) >= 12:
             break
+    return out
+
+
+def _full_names(head: str) -> list[str]:
+    """The surnames of an author run of whole names, "Florian Eyben,
+    Sebastian Böck, and Alex Graves. 2010.": each name's last word. Empty
+    when the run is not such (an initial, a "Surname, I." group, a
+    single word): the general reading takes it then, which read each of
+    those first names as a surname (AL step 9, N4)."""
+    run = re.split(r"\.\s+(?:19|20)\d{2}", head, maxsplit=1)[0]
+    run = re.sub(r"\bet\s+al\.?", "", run).strip(" .,;:")
+    groups = [g.strip() for g in re.split(r",|;|\band\b|&", run) if g.strip()]
+    if len(groups) < 1 or len(groups) > 12:
+        return []
+    out: list[str] = []
+    for g in groups:
+        words = g.split()
+        if not 2 <= len(words) <= 4:
+            return []
+        capital = [w for w in words if w[0].isupper()]
+        if len(capital) < 2 or any(
+            _INITIAL.match(w) or "." in w or not w.isalpha() for w in capital
+        ):
+            return []
+        last = words[-1]
+        if last not in out:
+            out.append(last)
     return out
 
 

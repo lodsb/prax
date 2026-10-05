@@ -124,13 +124,14 @@ def changes(
     domain: str | None = None,
     derived: bool = False,
     rereadings: bool = False,
+    corrections: bool = False,
     limit: int = store.CHANGES_SHOWN,
 ) -> dict[str, Any]:
     """What changed in a period (``store.changes``): on record time the
     facts prax wrote and ended in it, on world time (``world``) the facts
     that began and ended in it as their sources state; counts by relation
     and the newest facts of each side. Re-readings are left out unless
-    ``rereadings``."""
+    ``rereadings``, a repair's corrections unless ``corrections``."""
     try:
         return store.changes(
             _con(request),
@@ -142,6 +143,7 @@ def changes(
             domain=domain or None,
             derived=derived,
             rereadings=rereadings,
+            corrections=corrections,
             limit=limit,
         )
     except ValueError as exc:

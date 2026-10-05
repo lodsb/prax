@@ -384,6 +384,7 @@ def demand(con: Any) -> dict[str, Any]:
 # ------------------------------------------------------------------ status
 
 WORKER_SEEN_SECONDS = 120  # a worker asks every 20 s when idle (prax up's interval)
+_DOOR_STARTED = store.now()  # what this door's memory of its workers starts at
 
 
 def worker_state() -> dict[str, Any]:
@@ -401,7 +402,59 @@ def worker_state() -> dict[str, Any]:
             then = datetime.strptime(last, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
             recent = (datetime.now(UTC) - then).total_seconds() < WORKER_SEEN_SECONDS
     working = leases()
-    return {"alive": recent or bool(working), "last_asked": last, "working": working}
+    alive = recent or bool(working)
+    out: dict[str, Any] = {
+        "alive": alive,
+        "last_asked": last,
+        "working": working,
+        "door_started": _DOOR_STARTED,
+    }
+    process = _worker_process()
+    if process is not None:
+        out["process"] = process
+    if not alive:
+        out["note"] = _why_not_alive(last, process)
+    return out
+
+
+def _worker_process() -> dict[str, Any] | None:
+    """The worker as this host's supervisor last saw it (``prax up``'s
+    status file): its state, pid and start; None when no supervisor runs
+    here or it keeps no worker."""
+    from prax import config
+    from prax.host import process
+
+    got = process.status(config.data_dir())
+    role = ((got or {}).get("roles") or {}).get("worker")
+    if not isinstance(role, dict):
+        return None
+    return {k: role.get(k) for k in ("state", "pid", "since")}
+
+
+def _why_not_alive(last: str | None, process: dict[str, Any] | None) -> str:
+    """Why no worker is about, in a sentence a client can act on: the
+    door forgets its workers when it restarts, and a worker in the middle
+    of a long batch asks for nothing until it is through (AL step 9,
+    G4)."""
+    if process is None:
+        return (
+            "no worker has asked lately, and no supervisor on the door's host"
+            " keeps one: start one (prax work --watch) where the models are"
+        )
+    if process.get("state") != "up":
+        return (
+            f"prax up reports the worker {process.get('state')}: prax up --start worker"
+        )
+    if last is None:
+        return (
+            f"the door restarted at {_DOOR_STARTED} and the worker (pid"
+            f" {process.get('pid')}) has not asked it since: most likely in"
+            " the middle of a batch; it reattaches at its next ask"
+        )
+    return (
+        f"the worker (pid {process.get('pid')}) last asked at {last}: in a"
+        " long batch, or stuck; prax jobs shows what it holds"
+    )
 
 
 _COMMIT: dict[str, str | None] = {}

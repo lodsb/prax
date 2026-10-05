@@ -267,6 +267,7 @@ def changes(
     entity: str | None = None,
     rel: str | None = None,
     domain: str | None = None,
+    corrections: bool = False,
     limit: int = 20,
 ) -> dict[str, Any]:
     """What changed in a period (``since``/``until``: ``2026-09``, a day or
@@ -277,7 +278,9 @@ def changes(
     the sources state (``began``/``ended``). Counts by relation and the
     newest facts of each side, each with its document; ``entity`` keeps one
     thing's facts, ``rel`` one relation, ``domain`` one module's documents.
-    ``traverse(as_of=)`` walks what was held at one moment."""
+    A repair's corrections (a ``part_of`` turned round, a publisher that
+    was typed a venue) are counted as ``corrected`` and listed only with
+    ``corrections``. ``traverse(as_of=)`` walks what was held at one moment."""
     params: dict[str, Any] = {"since": since, "limit": limit}
     for key, value in (
         ("until", until),
@@ -289,6 +292,8 @@ def changes(
             params[key] = value
     if world:
         params["world"] = "true"
+    if corrections:
+        params["corrections"] = "true"
     return _answer(lambda: door().get_json("/graph/changes", params=params))
 
 
@@ -766,19 +771,24 @@ def cited_but_missing(
     project: str | None = None,
     page: str | None = None,
     limit: int = 30,
+    min_count: int = 1,
 ) -> dict[str, Any]:
     """What a set of papers cites that the library does not hold, ranked
     by how many of them cite it: each work's title, authors, year, DOI or
     arXiv id, ``links`` and ``cited_by``. Name the set by ``doc_ids``, a
     ``tag``, a ``project`` or a ``page`` (the documents it links), e.g.
     ``cited_but_missing(page="onset-detection-landscape")``; the works
-    are candidates for ``capture_url``."""
+    are candidates for ``capture_url``. ``min_count`` leaves out what
+    fewer of them cite; among works cited as often, the one the rest of
+    the library cites less (``cited_in_library``) comes first, so a
+    reference every field cites does not crowd the topic's own."""
     body = {
         "doc_ids": doc_ids,
         "tag": tag,
         "project": project,
         "page": page,
         "limit": limit,
+        "min_count": min_count,
     }
     return _answer(lambda: door().post_json("/references/missing", body))
 

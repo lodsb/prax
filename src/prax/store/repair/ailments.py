@@ -50,11 +50,15 @@ from .documents import (
 from .graph import (
     _backwards_part_of,
     _container_citations,
+    _document_twins,
+    _duplicate_facts,
     _functional_conflicts,
     _mangled_names,
     _not_venues,
     _placeholder_entities,
     _reference_entities,
+    _repair_document_twins,
+    _repair_duplicate_facts,
     _repair_names,
     _repair_not_venues,
     _repair_part_of,
@@ -212,6 +216,34 @@ AILMENTS: tuple[Ailment, ...] = (
             " a traverse from the name already walks one and names the others"
         ),
         find=_split_names,
+    ),
+    Ailment(
+        name="duplicate-facts",
+        what=(
+            "one fact live twice from one document and one reader: a later"
+            " run stated it again, or its ends were merged since"
+        ),
+        fix=(
+            "end the later edges, the oldest kept; a fact two readers state"
+            " (a record and a model) is two pieces of evidence and stays"
+        ),
+        find=_duplicate_facts,
+        repair=_repair_duplicate_facts,
+    ),
+    Ailment(
+        name="document-twins",
+        what=(
+            "one library document known to the graph as entities of two"
+            " document types (the paper X and the article X): a page link or a"
+            " citation typed it a paper, its own extraction otherwise"
+        ),
+        fix=(
+            "fold the others into the most connected (the type"
+            " store.document_node gives), one signed run unmerge_run takes back"
+            "; only a title one open document carries, never a page"
+        ),
+        find=_document_twins,
+        repair=_repair_document_twins,
     ),
     Ailment(
         name="twin-documents",

@@ -98,6 +98,10 @@ def projects_sync(req: ProjectSync, request: Request) -> dict[str, Any]:
         return projects.sync(_con(request), req.model_dump())
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    except projects.NotAllowed as exc:
+        raise HTTPException(403, str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
 
 
 @router.get("/projects")
