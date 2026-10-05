@@ -606,6 +606,7 @@ from .retrieval import (  # noqa: F401
     save_vectors,
     search,
     similar_documents,
+    staleness,
     store_document_embeddings,
     store_embeddings,
     term_documents,

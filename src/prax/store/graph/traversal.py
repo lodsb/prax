@@ -580,7 +580,36 @@ def _walk(
     far = [r for r in shaped if int(r["hop"]) >= 2]
     near, edges_left = _first_hop(near, limit)
     _mark_disputed(con, near, hidden)
+    _mark_stated(con, near)
     return near + far, {"edges": edges_left, "neighbours": neighbours_left}
+
+
+def _mark_stated(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> None:
+    """A fact whose source gives no world date is anchored to when its
+    document appeared (``stated``: ``meta.published``, as precise as it
+    is): not when the fact holds, but the latest it was already said
+    (AL, "as Utopia does it"). Said only where the document is dated."""
+    docs = {
+        int(r["source_doc"])
+        for r in rows
+        if r.get("source_doc") is not None and not r.get("world_from")
+    }
+    if not docs:
+        return
+    marks = ",".join("?" * len(docs))
+    dated = {
+        int(r[0]): str(r[1])
+        for r in con.execute(
+            "SELECT id, json_extract(meta, '$.published.date') FROM documents"
+            f" WHERE id IN ({marks}) AND json_extract(meta, '$.published.date')"
+            " IS NOT NULL",
+            sorted(docs),
+        )
+    }
+    for r in rows:
+        doc = r.get("source_doc")
+        if doc is not None and not r.get("world_from") and int(doc) in dated:
+            r["stated"] = dated[int(doc)]
 
 
 def _mark_disputed(

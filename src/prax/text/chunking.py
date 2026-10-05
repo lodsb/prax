@@ -390,6 +390,8 @@ def parse_reference(text: str) -> dict[str, Any]:
     ``how``) is the ``references`` pass's to add."""
     ref = references.parse(text)
     data: dict[str, Any] = {}
+    if ref.ditto:
+        data["ditto"] = True
     if ref.number is not None:
         data["number"] = ref.number
     if ref.surnames:
@@ -742,7 +744,17 @@ class _Chunker:
         self.flush()
         for a, b, _ in spans:
             start, end = el.start + a, el.start + b
-            self.add("reference", start, end, el.page, parse_reference(text[start:end]))
+            data = parse_reference(text[start:end])
+            if data.pop("ditto", False) and not data.get("surnames"):
+                # "———,": the authors of the entry before
+                before = next(
+                    (c for c in reversed(self.chunks) if c.kind == "reference"), None
+                )
+                authors = ((before.data or {}) if before else {}).get("surnames")
+                if authors:
+                    data["surnames"] = list(authors)
+                    data["ditto"] = True
+            self.add("reference", start, end, el.page, data)
 
     def para(self, el: _Element, nxt: _Element | None) -> None:
         pending = self.pending
@@ -832,7 +844,12 @@ def chunk(text: str) -> list[Chunk]:
             ck.heading_(el)
         elif el.kind == "ask":
             ck.ask(el)
-        elif el.kind == "para" and ck.in_bibliography():
+        elif (
+            el.kind == "para"
+            and ck.in_bibliography()
+            # a biography after the list is text, not the entry before it
+            and not references.is_prose(el.text)
+        ):
             ck.references(el)
         elif el.kind == "para":
             ck.para(el, els[idx + 1] if idx + 1 < len(els) else None)

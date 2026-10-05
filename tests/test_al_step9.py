@@ -4,6 +4,7 @@ checked from a laptop on 2026-10-04; items named as there)."""
 from __future__ import annotations
 
 import hashlib
+import json
 from collections.abc import Iterator
 from typing import Any
 
@@ -262,3 +263,106 @@ def test_a_repairs_corrections_are_counted_not_listed(con: Any) -> None:
     assert got["added"]["corrected"] == 2 and got["ended"]["corrected"] == 1
     every = store.changes(con, "2000-01-01", corrections=True)
     assert every["added"]["count"] == 3 and "corrected" not in every["added"]
+
+
+def test_a_biography_is_no_reference_and_ditto_takes_the_authors_before() -> None:
+    """N3's rest: Bello et al. 2005 (two columns) appended the authors'
+    biographies to entries 23 and 30, and entry 38's authors were a ditto
+    mark ("~~,~~")."""
+    from prax.text import chunking
+
+    text = (
+        "# Paper\n\nBody text about onsets.\n\n## References\n\n"
+        "[37] S. Abdallah and M. Plumbley, “Probability as metadata: event"
+        " detection in music using ICA,” in Proc. ICA, 2003.\n\n"
+        "[38] ~~,~~ “Unsupervised onset detection: a probabilistic approach using"
+        " ICA and a hidden Markov classifier,” in Cambridge Music Processing"
+        " Colloq., 2003.\n\n"
+        "**Juan Pablo Bello** received the engineering degree in electronics from"
+        " the Universidad Simon Bolivar, Caracas, Venezuela, in 1998 and the Ph.D."
+        " degree from Queen Mary, University of London, in 2003.\n"
+    )
+    chunks = chunking.chunk(text)
+    refs = [c for c in chunks if c.kind == "reference"]
+    assert [(c.data or {}).get("number") for c in refs] == [37, 38]
+    assert (refs[1].data or {})["surnames"] == ["Abdallah", "Plumbley"]
+    assert not any("Bello" in c.text for c in refs)
+    assert any(c.kind == "text" and "Bello" in c.text for c in chunks)
+
+
+def test_a_world_date_and_its_precision_fit(con: Any) -> None:
+    """AL, as Utopia does it: a precision says its date's length, and
+    "ended, date unknown" has no date (migration 47)."""
+    import sqlite3 as sq
+
+    from prax import store
+
+    E = store.Edge
+    edge = store.link(
+        con,
+        E("Ada", "person", "affiliated_with", "A lab", "organization"),
+        world_from="2019-07",
+        world_to="unknown",
+    )
+    row = con.execute(
+        "SELECT world_from, world_from_precision, world_to, world_to_precision"
+        " FROM edges WHERE id = ?",
+        (edge,),
+    ).fetchone()
+    assert tuple(row) == ("2019-07", "month", None, "unknown")
+    src, dst = con.execute(
+        "SELECT src, dst FROM edges WHERE id = ?", (edge,)
+    ).fetchone()
+    with pytest.raises(sq.IntegrityError, match="must fit"):
+        con.execute(
+            "INSERT INTO edges (src, rel, dst, confidence, world_from,"
+            " world_from_precision, valid_from, ingested_at)"
+            " VALUES (?, 'affiliated_with', ?, 'EXTRACTED', '2019', 'day', 'x', 'x')",
+            (src, dst),
+        )
+    with pytest.raises(sq.IntegrityError, match="do not change"):
+        con.execute("UPDATE edges SET world_from = '2020' WHERE id = ?", (edge,))
+    con.rollback()
+
+
+def test_an_undated_fact_is_anchored_to_its_documents_date(con: Any) -> None:
+    """AL, as Utopia does it: a fact whose source gives no world date
+    says when its document appeared (``stated``), not when it holds."""
+    from prax import store
+
+    doc = int(store.ingest_text(con, "a manual " * 40, title="The manual")["doc_id"])
+    con.execute(
+        "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'), '$.published',"
+        ' json(\'{"date": "2019-07", "precision": "month", "by": "human"}\'))'
+        " WHERE id = ?",
+        (doc,),
+    )
+    con.commit()
+    store.link(
+        con,
+        store.Edge("The manual", "manual", "describes", "A synth", "device"),
+        source_doc=doc,
+    )
+    walked = store.traverse(con, "A synth")
+    fact = next(e for e in walked if e["src"] == "The manual")
+    assert fact["stated"] == "2019-07" and "world_from" not in fact
+
+
+def test_get_says_a_documents_lifecycle(client: TestClient) -> None:
+    """AL: a document's lifecycle as an agent reads it: when it appeared,
+    what it says of itself, and whether it is still current."""
+    from prax import store
+
+    admin = _bearer(ADMIN)
+    con = client.app.state.con
+    doc = int(store.ingest_text(con, "an old plan " * 30, title="Plan v1")["doc_id"])
+    status = {"state": "superseded", "since": "2026-10-02", "words": "Superseded by v2"}
+    con.execute(
+        "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'), '$.status',"
+        " json(?)) WHERE id = ?",
+        (json.dumps(status), doc),
+    )
+    con.commit()
+    got = client.get(f"/get/{doc}", params={"brief": "true"}, headers=admin).json()
+    assert got["meta"]["status"]["state"] == "superseded"
+    assert got["stale"]["state"] == "superseded"

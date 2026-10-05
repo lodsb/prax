@@ -136,6 +136,35 @@ class Reference:
     title: str = ""
     doi: str | None = None
     arxiv: str | None = None
+    ditto: bool = False  # the authors are the entry before's ("———,")
+
+
+# an entry whose authors are the entry before's: "~~,~~" (a strike
+# through a comma, as an extractor reads a rule), "———,", "——.", "idem"
+_DITTO = re.compile(r"^(?:~~[,.]?~~|[—–-]{2,}|_{3,}|idem\b|ders\.)", re.IGNORECASE)
+# a biography a journal prints after the list: "**Juan Pablo Bello**
+# received the engineering degree…" (AL step 9, N3)
+_BIO = re.compile(
+    r"^\**[A-Z][\w.'’-]+(?:\s+[A-Z][\w.'’-]+){0,3}\**\s*,?\s+"
+    r"(?:\([^)]*\)\s+)?"
+    r"(?:received|receives|is|was|has|joined|studied|graduated|works|holds|"
+    r"obtained|completed|earned|got)\b"
+)
+_PROSE_MIN = 400  # an entry or a wrapped title is shorter, or opens like one
+
+
+def is_prose(paragraph: str) -> bool:
+    """Whether a paragraph under a bibliography heading is prose, not an
+    entry and not the wrapped part of one: an author's biography after
+    the list, or a long paragraph that opens like no entry."""
+    p = " ".join(_plain(paragraph or "").split())
+    if _BIO.match(p):
+        return True
+    if _MARK.match(p) or _LIST.match(p) or _author_run(p):
+        return False
+    # entries run together into one paragraph ("SINGER, Rolf … 1958a …
+    # CABIESES, Fernando 1985 …") carry a year each; prose hardly one
+    return len(p) > _PROSE_MIN and p.count(". ") >= 2 and len(_YEAR.findall(p)) <= 1
 
 
 def is_bibliography_heading(title: str) -> bool:
@@ -221,6 +250,7 @@ def parse(entry: str) -> Reference:
         p = p[m.end() :]
     elif _LIST.match(p):
         p = _LIST.sub("", p, count=1)
+    ref.ditto = bool(_DITTO.match(p.strip()))
     d = _DOI.search(p)
     if d:
         ref.doi = d.group(1).rstrip(".").lower()

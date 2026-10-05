@@ -8,30 +8,33 @@ Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
-## The order, agreed 2026-10-04
+## The order, agreed 2026-10-05
 
-Rewritten the night AL, AN and AM were finished (the order of
-2026-10-02 is in `docs/log.md`, "Moved from the plan"). The card is
-busy until about the evening of 2026-10-05 with the figure readings, so
-what needs no model comes first; what waits for the card follows.
+Rewritten the evening the quality review's fixes were done (the order of
+2026-10-04, whose first two items were the night's passes with
+`not-venues` and those fixes, is in `docs/log.md` of that day). The card
+is busy with the figure readings until about the night of 2026-10-05,
+so what needs no model comes first.
 
-1. **Watch the night's passes, then `not-venues`** (2026-10-05): the
-   resolve's venue tier (03:00), the rule pass and the first conflicts
-   pass (03:30), read from the job notes; then `prax heal --check
-   not-venues --apply`, which the user approved for that day.
-2. **The quality review's fixes** (below), step by step; the safety
-   review and its fixes are done.
-3. **AN's last item**: the extraction prompt given the standard names,
-   measured on a sample with the card.
-4. **AL's last items**: extraction filling the world dates (measured
-   with `bench_extractor`), and the rest of "as Utopia does it".
-5. **AK's split and AJ** (below): what a swap costs on the card, readers
-   under prax's hand; **AI**'s measurement after days of running.
-6. **AA. Close Z** (below).
-7. **Measured improvements** ("Retrieval and ask", "The graph"): facts
+1. (done 2026-10-05) **N3's rest** (AL step 9): the author biographies a two-column list
+   appends to an entry, and ditto authors taken from the entry before.
+2. (done 2026-10-05) **AL, "as Utopia does it"**, what needs no model: "ended, date
+   unknown" as a state of its own, the checks that tie a precision to its
+   date, an undated fact anchored to its document's date, a document's
+   lifecycle in `meta`.
+3. **With the card, measured together on one sample**
+   (`bench_extractor`): AN's last item, the extraction prompt given the
+   standard names, and AL's, the extraction filling the world dates.
+   Both change the prompt; neither passes over the library before the
+   sample says so.
+4. **AK's split and AJ** (below): what a swap costs on the card, readers
+   under prax's hand; **AI**'s measurement after days of
+   `run/swaps.jsonl` (`scripts/eval_swaps.py`).
+5. **AA. Close Z** (below).
+6. **Measured improvements** ("Retrieval and ask", "The graph"): facts
    as a search list, a focus entity as a vote, the sections pass's
    vector arm, a compressed edge list, `confidence` as a number.
-8. **The engineering leftovers** (below): typed shapes (a search hit
+7. **The engineering leftovers** (below): typed shapes (a search hit
    first), the remaining complex functions, the UI helpers the
    extension copies.
 
@@ -298,7 +301,7 @@ numbered there) in the order the user agreed: one step a session.
             corrections: a `producer`/`run` filter or a `corrected` side.
       - [x] (2026-10-05) **G4** the worker not back after a door restart: `health` says
             "worker not reattached", or `prax up` restarts both.
-      - [ ] **N3's rest**: the author biographies appended to an entry,
+      - [x] (2026-10-05; the stored lists need a rechunk) **N3's rest**: the author biographies appended to an entry,
             and ditto authors (`~~,~~`) taken from the entry before.
       - [ ] **O1, O7** re-checked from the laptop after its `git pull` and
             the extension's reload (both were fixed on 2026-10-04).
@@ -324,7 +327,11 @@ numbered there) in the order the user agreed: one step a session.
             are, and invariant 8's wording in CLAUDE.md corrected with
             it (found 2026-10-03, talking about prax as an agent's
             memory).
-      - [ ] **As Utopia does it** (its code, the research note, section
+      - [x] (2026-10-05: the precision tied to its date by migration
+            47's triggers, "ended, date unknown" was migration 36's
+            `unknown`, an undated fact `stated` at its document's date in
+            `traverse`, and a document's lifecycle in `get`: `published`,
+            `status`, `stale`, `retired`) **As Utopia does it** (its code, the research note, section
             10): each world date with a precision (year, month, day),
             and "ended, date unknown" as a state of its own (the end
             null, its precision `unknown`), with CHECK constraints that

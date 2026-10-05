@@ -42,6 +42,13 @@ def get(
     # `meta.reading` is the last reading that finished
     doc["pending"] = store.pending_readings(con, doc_id)
     doc["url"] = ui_url(request, doc_id)
+    # no longer current, and what replaced it (its own status, or a live
+    # supersedes/invalidates edge reaching it): the rest of its lifecycle
+    stale = store.staleness(con, [{"doc_id": doc_id, "title": doc.get("title")}]).get(
+        doc_id
+    )
+    if stale:
+        doc["stale"] = stale
     return store.brief_document(doc) if brief else doc
 
 

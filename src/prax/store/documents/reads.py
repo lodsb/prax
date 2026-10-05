@@ -147,6 +147,9 @@ BRIEF_META = (
     "origin",
     "video",
     "retired",
+    # its lifecycle beside `published` and `retired`: what it says of itself
+    # (a project note's status line, `prax.text.status`)
+    "status",
 )
 BRIEF_ROW_DROP = ("hash", "text_hash", "parsed_at")
 # what a search hit carries for the UI's "why this hit" line, and an

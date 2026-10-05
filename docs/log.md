@@ -4938,6 +4938,28 @@ every series whose acronym it states (`Venue.others`), never merged into
 either: `eval_venues.py --diff` adds exactly one link on the library, the
 joint conference `part_of` the SMC series beside ICMC.
 
+## 2026-10-05, the evening: the list without the card
+
+- **N3's rest** (AL step 9). A paragraph under a references heading
+  that is a biography ("**Juan Pablo Bello** received…") or long prose
+  with at most one year in it is ordinary text now, not the entry before
+  it; a run of author-year entries in one paragraph carries a year each
+  and stays a reference. An entry that opens with a ditto mark (`~~,~~`,
+  `———`, "idem") takes the entry before's surnames. On the live lists:
+  354 reference chunks of 209 documents held such prose, and 1,041
+  entries are ditto marks; a rechunk applies it. Read before: the first
+  rule took in runs of entries too ("SINGER, Rolf … 1958a …"), which is
+  why the year count is part of it.
+- **AL, as Utopia does it.** Migration 47: triggers hold a world date and
+  its precision together (a year is four characters, a month seven, a
+  day ten; "ended, date unknown" has no date), and refuse a change to an
+  edge's world dates; none of the 271 dated edges broke it. `traverse`
+  anchors a fact whose source gives no world date to its document's
+  publication date (`stated`), said only where the document is dated.
+  An agent's `get` shows a document's lifecycle: `published`, `status`
+  (what it says of itself), `stale` (no longer current, and what replaced
+  it), `retired`.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
