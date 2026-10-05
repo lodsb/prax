@@ -29,14 +29,16 @@ so what needs no model comes first.
    standard names, and AL's, the extraction filling the world dates.
    Both change the prompt; neither passes over the library before the
    sample says so.
-4. **Next (2026-10-06): the wire syntax cleaned, then AJ's reader
+4. (AJ's reader contract done 2026-10-06, code; the wire checks wait
+   for the user's word) **Next (2026-10-06): the wire syntax cleaned, then AJ's reader
    contract.** `prax heal --check wire-names` (371 entities) and then
    `--check wire-labels` (410 labels, more after the names), dry runs
    shown, applied on the user's word; then **AJ's reader contract**
    (below): a reader declares its processes and their resources, a role
    names companions that move with it in a swap, a reader's own logs
    are trimmed. Code first; trying it on marker waits for the card.
-5. **AK's split and the rest of AJ** (below): what a swap costs on the card, readers
+5. (AK's split as code done 2026-10-06; its measurement waits for the
+   user's word and the card) **AK's split and the rest of AJ** (below): what a swap costs on the card, readers
    under prax's hand; **AI**'s measurement after days of
    `run/swaps.jsonl` (`scripts/eval_swaps.py`).
 6. **AA. Close Z** (below).
@@ -439,7 +441,10 @@ numbered there) in the order the user agreed: one step a session.
             server along), which is step 2's. *Still to measure:* peak
             RAM and commit, VRAM and time per page on the same few books,
             before and after.
-      - [ ] **The reader contract.** A reader declares in its manifest the
+      - [x] (2026-10-06, code: `prax.host.readers`, the `ocr-server`
+            role, `prax up --readers` and `--lock`; on the desktop when
+            marker next reads: the `ocr-server` entry in prax.yaml, and the
+            manifest's numbers measured) **The reader contract.** A reader declares in its manifest the
             processes it needs (roles of `prax up`), their resources
             (VRAM, RAM, load time) and the settings prax passes. It runs
             in a pinned environment: marker's venv from a lock file,
@@ -501,6 +506,21 @@ numbered there) in the order the user agreed: one step a session.
       `prax.yaml`), so the answer may be a split: the 27B for `ask` and
       the 35B for the bulk passes, or one model for all. Only the
       winner stays on disk.
+
+      - [x] (2026-10-06, code) **The split, as configuration.** A further
+            chat server is the role `llama-server-<name>`; a reading
+            waits for the role of its step's model (`work.role_work`);
+            an ask is a person's "do it now" for its role (`ask_role` in
+            the demand), and the ask hold keeps the card with that role
+            without stopping the swap to it (howto 4b).
+      - [ ] **Its swap cost, measured on the card** (the user's word
+            first: the host runs the 27B for everything since
+            2026-10-03, and the 35B's file is still on disk). A day with
+            `llama-server: server-35b` for the bulk steps and
+            `llama-server-ask: server-27b-u` on demand: how often an ask
+            swaps, what the first answer waits, what the bulk passes
+            lose (`run/swaps.jsonl`, `scripts/eval_swaps.py`). Then one
+            model or two.
 
 - [ ] **AA. Close Z.** The re-extraction against the new domains, the
       `computing` v2 review, the `society` rules and the relabel are done

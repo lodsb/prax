@@ -178,6 +178,8 @@ steps:
 #   # reranker: {model: ranker}             # a second server, serve: {reranker: true}
 #   # marker: {venv: /path/to/marker-venv, on_demand: true}   # PDF to LaTeX (howto 3h);
 #   #                                       #   ngl: 99 layers on the card; on demand: --start marker
+#   # ocr-server: {model: surya}            # marker's OCR model served by prax up, its
+#   #                                       #   companion (howto 3h); else surya starts it
 #   door: {host: 0.0.0.0, port: 8000}       # ssl_certfile and ssl_keyfile for HTTPS
 #   worker:
 #     interval: 20                          # seconds between passes

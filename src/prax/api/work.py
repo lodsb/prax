@@ -78,7 +78,7 @@ def work_beat(job_id: int, req: SessionBeat, request: Request) -> dict[str, Any]
 @router.get("/work/demand")
 def work_demand(request: Request, plan: bool = False) -> dict[str, Any]:
     """What waits for a role that has to be running to do it (``prax.work``
-    ``ROLE_WORK``): the reading requests per extractor and per role. The
+    ``role_work``): the reading requests per extractor and per role. The
     supervisor asks this to know when a borrowed card can go back, and
     the Jobs view shows it beside the roles. With ``plan`` it carries the
     card's plan too (``GET /work/plan``), which is what ``prax up``

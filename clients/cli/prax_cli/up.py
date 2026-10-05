@@ -74,6 +74,10 @@ def show_status(data_dir: Path) -> int:
             note += f" · {out.plural(r['restarts'], 'restart')}"
         if r.get("load_s") is not None:
             note += f" · loads in {r['load_s']:.0f} s"
+        if r.get("with"):
+            note += f" · with {', '.join(r['with'])}"
+        if r.get("drift"):
+            note += f" · venv off its lock ({len(r['drift'])}; prax up --readers)"
         rows.append([name, shown, str(r.get("pid") or ""), note.strip(" ·")])
     out.table(rows, headers=["role", "state", "pid", ""])
     for line in _groups_lines(snap):
@@ -88,6 +92,98 @@ def show_status(data_dir: Path) -> int:
     return 0
 
 
+def _mb(value: int | None) -> str:
+    return f"{value / 1024:.1f} GB" if value else "?"
+
+
+def show_readers(data_dir: Path) -> int:
+    """Every reader's processes as its manifest declares them, beside what
+    this host has measured and runs: the roles, their card and RAM, the
+    load time (declared, measured), the venv against its lock, and its
+    own logs."""
+    from prax.host import readers, up
+
+    snap = up.status(data_dir) or {}
+    states = snap.get("roles") or {}
+    try:
+        run = {r.name: r for r in up.roles()}
+    except up.UpError:
+        run = {}
+    for reader in readers.READERS.values():
+        here = reader.role in run
+        out.say(
+            f"{reader.name}: reads {', '.join(reader.extractors)}"
+            + ("" if here else " · not in run: on this host")
+        )
+        rows = []
+        for proc in reader.processes:
+            role = run.get(proc.role)
+            state = (states.get(proc.role) or {}).get("state", "")
+            if role is None and here and proc.role != reader.role:
+                state = f"inside {reader.role}"  # it starts it itself
+            measured = (states.get(proc.role) or {}).get("load_s")
+            rows.append(
+                [
+                    proc.role,
+                    state or ("—" if role is None else "not running"),
+                    _mb(role.needs_vram_mb if role else proc.vram_mb),
+                    _mb(role.needs_ram_mb if role else proc.ram_mb),
+                    f"{measured:.0f} s" if measured is not None else "not measured",
+                ]
+            )
+        out.table(rows, headers=["process", "state", "card", "RAM", "load"])
+        for proc in reader.processes:
+            if proc.note:
+                out.hint(f"  {proc.role}: {proc.note}")
+        own = run.get(reader.role)
+        if reader.lock:
+            lock = readers.LOCKS / reader.lock
+            if own is None:
+                out.hint(f"  pinned by {lock}")
+            elif own.drift:
+                out.hint(f"  the venv differs from {lock}:")
+                for line in own.drift[:20]:
+                    out.hint(f"    {line}")
+                out.hint(f"  prax up --lock {reader.name} once the upgrade is measured")
+            else:
+                out.hint(f"  the venv matches {lock}")
+        for pattern in reader.logs:
+            path = Path(pattern).expanduser()
+            if path.is_file():
+                size = path.stat().st_size / (1 << 20)
+                out.hint(f"  its log {path} ({size:.1f} MB; trimmed at each start)")
+    return 0
+
+
+def write_lock(name: str) -> int:
+    """``prax up --lock READER``: the venv's packages become the pinned
+    environment, an upgrade made on purpose."""
+    from prax.host import readers, up
+
+    reader = readers.READERS.get(name)
+    if reader is None:
+        out.fail(f"no reader named {name!r}", f"known: {', '.join(readers.READERS)}")
+        return 2
+    role = next((r for r in up.roles() if r.name == reader.role), None)
+    venv = config_venv(reader.role)
+    if role is None or venv is None:
+        out.fail(f"run.{reader.role} is not in prax.yaml", "its venv is what is locked")
+        return 2
+    before = list(role.drift)
+    path = readers.write_lock(reader, venv)
+    out.say(f"{path} written from {venv}: {out.plural(len(before), 'change')}")
+    for line in before[:20]:
+        out.hint(f"  {line}")
+    return 0
+
+
+def config_venv(role: str) -> Path | None:
+    from prax import config
+
+    venv = config.setting(f"run.{role}.venv")
+    return Path(str(venv)).expanduser() if venv else None
+
+
 def up(a: Any) -> int:
     from prax import config
     from prax.host import up
@@ -96,6 +192,10 @@ def up(a: Any) -> int:
     try:
         if a.status:
             return show_status(data_dir)
+        if getattr(a, "readers", False):
+            return show_readers(data_dir)
+        if getattr(a, "lock", None):
+            return write_lock(a.lock)
         if a.stop:
             if up.running_pid(data_dir) is None:
                 out.say("prax up is not running")

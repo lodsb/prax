@@ -449,6 +449,7 @@ def build_parser() -> argparse.ArgumentParser:
             "  prax up                  here, in this terminal (ctrl-c stops all)\n"
             "  prax up -d               detached: survives this terminal\n"
             "  prax up --status\n"
+            "  prax up --readers        marker and its OCR server: what they hold\n"
             "  prax up --restart door   after a code change\n"
             "  prax up --stop llama-server   the card free for a while;"
             " --start brings it back\n"
@@ -471,6 +472,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     what = s.add_mutually_exclusive_group()
     what.add_argument("--status", action="store_true", help="what is running")
+    what.add_argument(
+        "--readers",
+        action="store_true",
+        help="the readers (marker): their processes, card, RAM and load time,"
+        " and their venv against its lock",
+    )
+    what.add_argument(
+        "--lock",
+        metavar="READER",
+        help="pin the reader's venv as it is now (after an upgrade, measured)",
+    )
     what.add_argument(
         "--stop",
         nargs="?",

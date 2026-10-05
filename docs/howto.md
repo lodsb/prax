@@ -1429,7 +1429,7 @@ the code Apache 2.0) and never one of prax's dependencies. It lives in
 a venv of its own, and its server is a role of `prax up`:
 
     python -m venv %LOCALAPPDATA%\prax\marker-venv        # ~/.local/share/prax/marker-venv elsewhere
-    %LOCALAPPDATA%\prax\marker-venv\Scripts\pip install marker-pdf fastapi "uvicorn[standard]" python-multipart
+    %LOCALAPPDATA%\prax\marker-venv\Scripts\pip install -r src\prax\host\locks\marker.txt
 
     run:
       marker: {venv: C:/Users/you/AppData/Local/prax/marker-venv, on_demand: true}
@@ -1437,16 +1437,51 @@ a venv of its own, and its server is a role of `prax up`:
     #   marker_url: http://127.0.0.1:8765   # [PRAX_MARKER_URL] the server the extractor sends PDFs to
     #   marker_mode: fast                   # [PRAX_MARKER_MODE] balanced: the vision model lays out too
 
+The venv is pinned. `src/prax/host/locks/marker.txt` is the lock, and
+`prax up` says at marker's first start when the venv differs from it.
+After an upgrade has been measured, `prax up --lock marker` writes the
+venv's packages as the new lock. `prax up --readers` shows marker's
+processes: what each holds of the card and of RAM, its load time, and
+the venv against the lock. The numbers come from marker's manifest
+(`prax.host.readers.MARKER`) until `prax up` has measured a load.
+
 The server reads through llama.cpp's server with `ngl` layers on the
 card (99, all, by default; `ngl: 0` for the CPU). Marker 2.0's OCR,
-surya-ocr-2, is a GGUF vision model, and surya starts that llama-server
-itself, inside marker's process tree, so it stops with marker. The role
-tells it `--cache-ram 0` (`ocr_cache_ram_mb`; its prompts are page
-images, never reused), and `ocr_parallel` sets its slots (surya's
-default is 8). Without the first it held 10 GB of RAM on 2026-10-02.
-It wants about 5 GB
-of the card, which does not fit beside a 20 GB model on a 24 GB card.
-Hence `on_demand`: declared, started when wanted. Measured 2026-09-16
+surya-ocr-2, is a GGUF vision model behind a llama-server of its own.
+That server is best a role of `prax up`, `ocr-server`, marker's
+companion. It is a `models:` entry like any served model, and its
+`model:` must be `datalab-to/surya-ocr-2`, the name surya checks:
+
+    models:
+      surya:
+        kind: openai
+        base_url: http://127.0.0.1:8766/v1
+        model: datalab-to/surya-ocr-2
+        n_ctx: 12288                 # surya's context per slot
+        serve:
+          path: C:/Users/you/.cache/huggingface/hub/models--datalab-to--surya-ocr-2-gguf/snapshots/<hash>/surya-2.gguf
+          mmproj: surya-2-mmproj.gguf
+          slots: 4                   # surya's default is 8
+          cache_ram_mb: 0            # page images: no prompt is ever reused
+          kv_type: f16               # as surya runs it; q8_0 is prax's default
+    run:
+      ocr-server: {model: surya}
+      marker: {venv: C:/Users/you/AppData/Local/prax/marker-venv, on_demand: true, group: card}
+
+The companion has marker's group and `on_demand`. It starts before
+marker, stops with it, and moves with it in a swap: `--start marker`,
+`--stop marker` and `--swap marker` take both. Marker is told where the
+server is (`SURYA_INFERENCE_URL`), so surya starts nothing itself.
+
+Without an `ocr-server` role, surya starts the server inside marker's
+process tree, and it stops with marker. The role then tells it
+`--cache-ram 0` (`ocr_cache_ram_mb`) and its slots (`ocr_parallel`).
+Without the cache setting it held 10 GB of RAM on 2026-10-02. Surya's
+own logs (`~/.cache/datalab/surya/*.log`) are never rotated by surya;
+`prax up` cuts each to its last 2 MB before marker starts and after it
+ends. Marker and its OCR server want about 5 GB of the card, which does
+not fit beside a 20 GB model on a 24 GB card. Hence `on_demand`:
+declared, started when wanted. Measured 2026-09-16
 on the 4090: **2 s a page** through the server against 33 s on the
 CPU. The library's 250,000 pages are still days, but the papers whose
 formulas matter are an evening:
@@ -2596,6 +2631,32 @@ next pass offers them at once instead of waiting out its ten minutes.
 
 Nothing here is required: a host whose roles fit together declares no
 group, and the supervisor never stops anything on its own.
+
+### Two chat models on one card
+
+Models are chosen per step (`steps:`), so one model can answer `ask`
+while another does the bulk passes. A further chat server is a role
+named `llama-server-<name>`, with the settings of `llama-server`:
+
+    steps:
+      extract: {model: server-35b}
+      ask: {model: server-27b}
+    run:
+      llama-server: {model: server-35b, group: card}
+      llama-server-ask: {model: server-27b, group: card, on_demand: true}
+
+Each step's work waits for the role whose model it names
+(`work.role_of_step`). A reading waits for the role of its step's model:
+a figure for the one `vision` names (`work.role_work`). An ask that
+finds its server down is answered with 503, counted as demand for that
+role, and is a person's "do it now": the plan puts it next even while
+another role is serving, and `prax up` swaps for it whatever its `swap:`
+says. The ask hold of five minutes keeps the card with the role that
+answered. It never stops the swap to that role. An ask that found no
+server answered nothing and holds nothing. After the hold, with nothing
+waiting for it, the card goes back. The first ask after a while costs
+the 27B's load (about 45 s on the 4090), and the bulk passes wait for
+the 35B's load (about three minutes) when the card comes back.
 
 ### A card given back when nothing uses it
 

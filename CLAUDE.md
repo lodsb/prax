@@ -450,7 +450,14 @@ reference `docs/ask.md`.
   and command files, never a second supervisor. The timed passes are
   the door's own clock (`schedule:`, `prax.host.schedule`) and the worker's
   `nightly` hour, never a cron or scheduler entry per pass. No shell
-  script derives the process model a second time.
+  script derives the process model a second time. A reader that runs
+  as processes of its own (marker) declares them in its manifest
+  (`prax.host.readers`): its roles and what each holds of the card and
+  of RAM, the companions that move with it in a swap (marker's
+  `ocr-server`), its venv's lock (`prax/host/locks/`) and the logs it
+  writes itself, which `prax up` trims. A further chat server is
+  `llama-server-<name>`, and a step's work waits for the role serving
+  its model.
 - The format prax writes into a text is `prax.text.markup`, which both emits
   a mark and matches it: the page mark, a figure line and its inlined
   form, a reading, a heading, a table separator, a display formula and

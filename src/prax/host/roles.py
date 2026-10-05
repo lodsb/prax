@@ -1,14 +1,16 @@
 """What ``run:`` in prax.yaml asks this host to keep alive, as roles: the
 command line of each (llama-server with its model and flags, marker, the
 door, the worker), the environment it starts with, and which roles share
-the card. Nothing here starts anything; ``prax.host.process`` does, and
-``prax.host.up`` watches."""
+the card. A reader's roles (marker and its OCR server) are built from
+its manifest (``prax.host.readers``). Nothing here starts anything;
+``prax.host.process`` does, and ``prax.host.up`` watches."""
 
 from __future__ import annotations
 
 import contextlib
 import logging
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field
@@ -17,12 +19,15 @@ from typing import Any
 from urllib.parse import urlparse
 
 from prax import config, models
+from prax.host import readers
 
 # the start order; the stop order is the reverse. A reranker is a second
 # llama-server with a cross-encoder (serve: {reranker: true} on its model);
-# marker is marker's own server, the PDF-to-LaTeX reading (howto 3h)
-ROLES = ("llama-server", "reranker", "marker", "door", "worker")
-MARKER_VRAM_MB = 5000  # what marker's models want of the card (howto 3h)
+# marker is marker's own server, the PDF-to-LaTeX reading (howto 3h), and
+# ocr-server the llama-server of its OCR model, its companion
+ROLES = ("llama-server", "reranker", "ocr-server", "marker", "door", "worker")
+# what marker's models want of the card, its OCR server's share included
+MARKER_VRAM_MB = readers.MARKER.alone().vram_mb or 5000
 MARKER_PORT = 8765
 DOOR_PATIENCE = 90.0  # how long the worker waits for the door
 SERVER_PATIENCE = 900.0  # a 20 GB model takes a while to load
@@ -40,7 +45,9 @@ SERVE_KEYS = (
     "reranker",  # a cross-encoder server instead of a chat one
     "extra",  # more llama-server arguments, as a list
     "cache_ram_mb",  # the prompt cache kept in RAM (``CACHE_RAM_MB``)
+    "kv_type",  # the KV cache's type (``KV_TYPE``); f16 is llama.cpp's own
 )
+KV_TYPE = "q8_0"
 # llama.cpp keeps prompts evicted from a slot in RAM, up to 8192 MiB by
 # default: on 2026-10-02 marker's OCR server held 10 GB for a 1.4 GB model
 # (docs/PLAN.md, AJ). A chat server's surf resends its context, so some
@@ -48,15 +55,18 @@ SERVE_KEYS = (
 CACHE_RAM_MB = 2048
 OCR_CACHE_RAM_MB = 0
 # every role may say which resource it competes for and what it needs of
-# it; the supervisor keeps one holder of a group when they do not fit
-GROUP_KEYS = ("group", "needs_vram_mb", "swap")
+# it (of the card, and of RAM); the supervisor keeps one holder of a group
+# when they do not fit
+GROUP_KEYS = ("group", "needs_vram_mb", "needs_ram_mb", "swap")
 # a model server may give the card back after a quiet while and come back
 # when work asks for it (``idle_minutes``), and have its working set
 # trimmed once it has loaded (``trim``, Windows; on by default)
-SERVER_KEYS = ("model", "idle_minutes", "trim", *GROUP_KEYS)
+SERVER_KEYS = ("model", "idle_minutes", "trim", "on_demand", *GROUP_KEYS)
 ROLE_KEYS = {
     "llama-server": SERVER_KEYS,
     "reranker": SERVER_KEYS,
+    # a companion: its group and its starts are marker's
+    "ocr-server": ("model", "trim", "needs_vram_mb", "needs_ram_mb"),
     "marker": (
         "venv",
         "port",
@@ -81,6 +91,38 @@ ROLE_KEYS = {
     ),
 }
 SWAP_WHEN = ("ask", "auto")  # who starts a swap: a person, or the supervisor
+# a second chat server is ``llama-server-<name>`` (stage AK's split: the
+# 27B for ask beside the 35B for the bulk passes, one card between them)
+_CHAT = re.compile(r"^llama-server-[a-z0-9][a-z0-9-]*$")
+
+
+def is_chat(name: str) -> bool:
+    """Whether ``name`` is a chat server's role: ``llama-server`` or one
+    of the further ones, ``llama-server-<name>``."""
+    return name == "llama-server" or bool(_CHAT.match(name))
+
+
+def is_served(name: str) -> bool:
+    """Whether the role serves a ``models:`` entry: a chat server, the
+    reranker or marker's OCR server."""
+    return is_chat(name) or name in ("reranker", "ocr-server")
+
+
+def role_keys(name: str) -> tuple[str, ...]:
+    return ROLE_KEYS["llama-server" if is_chat(name) else name]
+
+
+def ordered(names: Any) -> list[str]:
+    """``run:``'s roles in start order: the further chat servers right
+    after ``llama-server``, by name."""
+    extra = sorted(n for n in names if is_chat(n) and n != "llama-server")
+    out: list[str] = []
+    for name in ROLES:
+        if name in names:
+            out.append(name)
+        if name == "llama-server":
+            out += extra
+    return out
 
 
 def _s(items: list[Any]) -> str:
@@ -112,6 +154,19 @@ class Role:
     metrics: str | None = None
     idle_minutes: float = 0.0
     trim: bool = False
+    # what it needs of RAM, and its load time before one is measured: a
+    # reader's manifest says (``prax.host.readers``)
+    needs_ram_mb: int | None = None
+    load_guess_s: float | None = None
+    # the roles that start, stop and move with this one in a swap, and the
+    # role this one is a companion of (marker and its OCR server)
+    companions: tuple[str, ...] = ()
+    companion_of: str | None = None
+    # files the process writes itself, trimmed before it starts and after
+    # it ends (surya's server logs), and where its venv differs from the
+    # lock it is pinned to
+    own_logs: tuple[str, ...] = ()
+    drift: tuple[str, ...] = ()
 
 
 # ------------------------------------------------------------- the model
@@ -238,27 +293,33 @@ def llama_argv(spec: models.ModelSpec, *, binary: str | None = None) -> list[str
             "--batch-size", "4096", "--ubatch-size", "4096",
             "--threads", threads, "--no-webui",
         ]  # fmt: skip
+    kv = str(serve.get("kv_type", KV_TYPE))
     return argv + common + [
         "--load-mode", "mmap",
         "--cache-ram", str(int(serve.get("cache_ram_mb", CACHE_RAM_MB))),
         "--ctx-size", str(slots * spec.n_ctx), "--parallel", str(slots),
-        "--flash-attn", "on", "--cache-type-k", "q8_0", "--cache-type-v", "q8_0",
+        "--flash-attn", "on", "--cache-type-k", kv, "--cache-type-v", kv,
         "--batch-size", "2048", "--ubatch-size", str(int(serve.get("ubatch", 512))),
         "--threads", threads, "--no-webui",
     ]  # fmt: skip
 
 
-def marker_role(opts: dict[str, Any]) -> Role:
+def marker_role(opts: dict[str, Any], ocr: Role | None = None) -> Role:
     """marker's server (``marker_server``) from its own venv (``venv``: it
     is a heavy install and never one of prax's dependencies), reading
     through llama.cpp's server with ``ngl`` layers on the card (99: all;
-    0: the CPU, 33 s a page against 2). Surya, marker's OCR, starts a
-    llama-server of its own inside marker's process tree; the role passes
-    it ``--cache-ram`` (``ocr_cache_ram_mb``) and its slots
-    (``ocr_parallel``). It wants about 5 GB of the card,
-    which beside a 20 GB model does not fit a 24 GB one: ``on_demand``
-    declares it without starting it, for a `--stop llama-server`,
-    `--start marker` evening."""
+    0: the CPU, 33 s a page against 2). Its manifest is
+    ``readers.MARKER``.
+
+    Surya, marker's OCR, reads through a llama-server of its own. With an
+    ``ocr-server`` role (``ocr``) that server is a process of ``prax up``,
+    started before marker and moving with it, and surya is told where it
+    is (``SURYA_INFERENCE_URL``). Without one, surya starts it inside
+    marker's process tree, and the role passes it ``--cache-ram``
+    (``ocr_cache_ram_mb``) and its slots (``ocr_parallel``). Either way it
+    wants about 5 GB of the card, which beside a 20 GB model does not fit
+    a 24 GB one: ``on_demand`` declares it without starting it."""
+    reader = readers.MARKER
     venv = opts.get("venv")
     if not venv:
         raise UpError("run.marker: which venv? (where marker-pdf is installed)")
@@ -267,37 +328,88 @@ def marker_role(opts: dict[str, Any]) -> Role:
     exe = exe / ("marker_server.exe" if sys.platform == "win32" else "marker_server")
     if not exe.is_file():
         raise UpError(
-            f"run.marker: no marker_server at {exe} (pip install marker-pdf fastapi"
-            " uvicorn python-multipart there)"
+            f"run.marker: no marker_server at {exe} (pip install -r"
+            f" {readers.LOCKS / (reader.lock or '')} there; howto 3h)"
         )
     port = int(opts.get("port", MARKER_PORT))
-    # what marker's own models want of the card when they are on it
+    on_card = int(opts.get("ngl", 99)) > 0
+    # what marker's own models want of the card and of RAM: its manifest's
+    # numbers, its OCR server's share included when it starts that itself
+    own = reader.process(reader.role) if ocr is not None else reader.alone()
     needs = opts.get("needs_vram_mb")
-    if needs is None and int(opts.get("ngl", 99)) > 0:
-        needs = MARKER_VRAM_MB
+    if needs is None and on_card and own is not None:
+        needs = own.vram_mb
+    ram = opts.get("needs_ram_mb") or (own.ram_mb if own else None)
     env = {
-        "SURYA_INFERENCE_BACKEND": "llamacpp",
+        **reader.env,
         "LLAMA_CPP_BINARY": llama_binary(),
         "LLAMA_CPP_NGL": str(int(opts.get("ngl", 99))),
+    }
+    if ocr is not None:
+        for key in ("ocr_cache_ram_mb", "ocr_parallel"):
+            if opts.get(key) is not None:
+                raise UpError(
+                    f"run.marker.{key}: with an ocr-server role its model's serve:"
+                    " block says it (cache_ram_mb, slots)"
+                )
+        wire = reader.companion(ocr.name)
+        if wire is not None and ocr.health:
+            env[wire.env] = ocr.health.rsplit("/health", 1)[0] + wire.path
+    else:
         # surya starts its OCR model's llama-server itself and appends
         # these: without them it kept an 8 GB prompt cache in RAM
-        "LLAMA_CPP_EXTRA_ARGS": "--cache-ram "
-        + str(int(opts.get("ocr_cache_ram_mb", OCR_CACHE_RAM_MB))),
-    }
-    if opts.get("ocr_parallel"):
-        env["SURYA_INFERENCE_PARALLEL"] = str(int(opts["ocr_parallel"]))
+        env["LLAMA_CPP_EXTRA_ARGS"] = "--cache-ram " + str(
+            int(opts.get("ocr_cache_ram_mb", OCR_CACHE_RAM_MB))
+        )
+        if opts.get("ocr_parallel"):
+            env["SURYA_INFERENCE_PARALLEL"] = str(int(opts["ocr_parallel"]))
     return Role(
         "marker",
         [str(exe), "--host", "127.0.0.1", "--port", str(port)],
         health=f"http://127.0.0.1:{port}/",
+        after=ocr.name if ocr is not None else None,
         patience=SERVER_PATIENCE,
         env=env,
         on_demand=bool(opts.get("on_demand", False)),
         scratch=True,  # its server keeps the last upload as ./uploads/document.pdf
         group=str(opts["group"]) if opts.get("group") else None,
         needs_vram_mb=int(needs) if needs else None,
+        needs_ram_mb=int(ram) if ram else None,
+        load_guess_s=own.load_s if own else None,
         swap=_swap_setting(opts),
+        companions=(ocr.name,) if ocr is not None else (),
+        own_logs=reader.logs,
+        drift=tuple(readers.drift(reader, root)),
     )
+
+
+def ocr_role(opts: dict[str, Any], marker: dict[str, Any]) -> Role:
+    """The llama-server of marker's OCR model, a companion of marker: a
+    ``models:`` entry with a ``serve:`` block like any served model, whose
+    ``model`` is the name surya checks (``datalab-to/surya-ocr-2``). It
+    has marker's group and starts, stops and moves with it."""
+    reader = readers.MARKER
+    wire = reader.companion("ocr-server")
+    role = _served_role("ocr-server", opts)
+    spec = models.spec(str(opts.get("model")))
+    alias = wire.alias if wire is not None else None
+    if alias and spec is not None and (spec.model or spec.name) != alias:
+        raise UpError(
+            f"run.ocr-server: model {spec.name!r} must be served as"
+            f" {alias!r} (its model:), the name surya checks"
+        )
+    declared = reader.process("ocr-server")
+    if declared is not None:
+        # its slots' KV cache is on the card too: the manifest's number
+        # over the model file's size, unless run: says
+        role.needs_ram_mb = role.needs_ram_mb or declared.ram_mb
+        role.load_guess_s = declared.load_s
+        if declared.vram_mb and not opts.get("needs_vram_mb"):
+            role.needs_vram_mb = declared.vram_mb
+    role.group = str(marker["group"]) if marker.get("group") else None
+    role.on_demand = bool(marker.get("on_demand", False))
+    role.companion_of = "marker"
+    return role
 
 
 def _swap_setting(opts: dict[str, Any]) -> str:
@@ -314,6 +426,8 @@ def _grouped(role: Role, opts: dict[str, Any]) -> Role:
     role.group = str(opts["group"]) if opts.get("group") else None
     if opts.get("needs_vram_mb"):
         role.needs_vram_mb = int(opts["needs_vram_mb"])
+    if opts.get("needs_ram_mb"):
+        role.needs_ram_mb = int(opts["needs_ram_mb"])
     role.swap = _swap_setting(opts)
     return role
 
@@ -334,21 +448,23 @@ def _checked_run(raw: Any) -> dict[str, Any]:
         )
     if not isinstance(raw, dict):
         raise UpError("run: must be a mapping of roles")
-    unknown = sorted(k for k in raw if k not in ROLES)
+    unknown = sorted(k for k in raw if k not in ROLES and not is_chat(str(k)))
     if unknown:
         raise UpError(
             f"run: unknown role{_s(unknown)} {', '.join(unknown)};"
-            f" roles are {', '.join(ROLES)}"
+            f" roles are {', '.join(ROLES)}, and llama-server-<name> for a"
+            " further chat server"
         )
     for name, opts in raw.items():
         opts = opts or {}
         if not isinstance(opts, dict):
             raise UpError(f"run.{name}: must be a mapping (or empty)")
-        bad = sorted(k for k in opts if k not in ROLE_KEYS[name])
+        keys = role_keys(name)
+        bad = sorted(k for k in opts if k not in keys)
         if bad:
             raise UpError(
                 f"run.{name}: unknown setting{_s(bad)} {', '.join(bad)};"
-                f" known: {', '.join(ROLE_KEYS[name])}"
+                f" known: {', '.join(keys)}"
             )
     return raw
 
@@ -384,6 +500,7 @@ def _served_role(name: str, opts: dict[str, Any]) -> Role:
             " is told (serve: metrics: false turns it off)"
         )
     served.trim = bool(opts.get("trim", sys.platform == "win32"))
+    served.on_demand = bool(opts.get("on_demand", False))
     return _grouped(served, opts)
 
 
@@ -448,14 +565,20 @@ def roles(section: dict[str, Any] | None = None) -> list[Role]:
         port = int((raw["door"] or {}).get("port", 8000))
         door_url = f"http://127.0.0.1:{port}"
     out: list[Role] = []
-    for name in ROLES:
-        if name not in raw:
-            continue
+    for name in ordered(raw):
         opts = raw[name] or {}
-        if name in ("llama-server", "reranker"):
+        if is_chat(name) or name == "reranker":
             out.append(_served_role(name, opts))
+        elif name == "ocr-server":
+            if "marker" not in raw:
+                raise UpError(
+                    "run.ocr-server: the OCR server is marker's companion;"
+                    " run.marker is missing"
+                )
+            out.append(ocr_role(opts, raw["marker"] or {}))
         elif name == "marker":
-            out.append(marker_role(opts))
+            ocr = next((r for r in out if r.name == "ocr-server"), None)
+            out.append(marker_role(opts, ocr))
         elif name == "door":
             out.append(_door_role(opts, door_url))
         elif name == "worker":

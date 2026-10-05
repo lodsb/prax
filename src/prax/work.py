@@ -43,7 +43,8 @@ from collections.abc import Iterator
 from typing import Any
 
 from prax import models, steps, store
-from prax.steps import STEPS, WATCHED_STEPS
+from prax.host import readers
+from prax.steps import READING_STEPS, STEPS, WATCHED_STEPS
 from prax.steps.leases import (  # noqa: F401 - the table's names, as callers knew them
     DEFER_SECONDS,
     LEASE_SECONDS,
@@ -58,12 +59,23 @@ from prax.steps.leases import (  # noqa: F401 - the table's names, as callers kn
 from prax.steps.leases import lease as _lease
 from prax.steps.leases import release as release_lease
 
-# which role of ``prax up`` a reading waits for: what the door reports as
-# demand (``GET /work/demand``) so the supervisor can give it the card
-ROLE_WORK = {
-    "marker": ("marker",),
-    "llama-server": ("figures", "vision", "vision-pages", "formulas", "polish"),
-}
+# the readings a chat server does: each waits for the role that serves its
+# step's model (``READING_STEPS``), ``llama-server`` when none says
+SERVER_READINGS = ("figures", "vision", "vision-pages", "formulas", "polish")
+
+
+def role_work() -> dict[str, tuple[str, ...]]:
+    """Which role of ``prax up`` each reading waits for: what the door
+    reports as demand (``GET /work/demand``) so the supervisor can give it
+    the card. A reader of its own (marker) says so in its manifest; a
+    reading of a chat server waits for the one that serves its step's
+    model, so with two (stage AK's split) a figure waits for the one its
+    ``vision`` step names."""
+    out: dict[str, tuple[str, ...]] = dict(readers.role_work())
+    for name in SERVER_READINGS:
+        role = role_of_step(READING_STEPS.get(name, name)) or "llama-server"
+        out[role] = (*out.get(role, ()), name)
+    return out
 
 
 SCOPES = ("captures", "all")
@@ -178,8 +190,12 @@ def role_of_step(step: str) -> str | None:
         spec = models.resolve(step)
         if spec is None:
             return None
+        from prax.host import roles
+
         run = models.load().get("run") or {}
-        for role in ("llama-server", "reranker"):
+        for role in roles.ordered(run):
+            if not (roles.is_chat(role) or role == "reranker"):
+                continue
             served = (run.get(role) or {}).get("model")
             if not served:
                 continue
@@ -228,15 +244,28 @@ _asks_lock = threading.Lock()
 
 @contextlib.contextmanager
 def asking() -> Iterator[None]:
-    """Around an answer's generation (``POST /ask``)."""
+    """Around an answer's generation (``POST /ask``). An ask that found its
+    server not there answered nothing, so it holds nothing afterwards:
+    its role must be free to take the card (stage AK's split)."""
     with _asks_lock:
         _asks["running"] += 1
+    answered = True
     try:
         yield
+    except models.ServerNotReady:
+        answered = False
+        raise
     finally:
         with _asks_lock:
             _asks["running"] -= 1
-            _asks["ended"] = time.monotonic()
+            if answered:
+                _asks["ended"] = time.monotonic()
+
+
+def ask_role() -> str | None:
+    """The role that serves the ``ask`` step's model: the one an ask holds
+    the card for, and the one a swap may still go to while it holds."""
+    return role_of_step("ask")
 
 
 def ask_holds() -> bool:
@@ -259,7 +288,7 @@ def do_now(role: str, action: str | None = None) -> dict[str, Any]:
     extractor or a step, or all of it): the deferrals of it are let go,
     so the next hand-out offers it, and the demand names the role under
     ``now`` until nothing of it waits."""
-    actions = ROLE_WORK.get(role, ())
+    actions = role_work().get(role, ())
     wanted = {step for (r, step) in wanted_steps() if r == role}
     if not actions and not wanted:
         raise ValueError(f"nothing waits for {role!r} on this host")
@@ -279,6 +308,7 @@ def do_now(role: str, action: str | None = None) -> dict[str, Any]:
 
 
 def _groups(
+    work: dict[str, tuple[str, ...]],
     readings: dict[str, int],
     rate: dict[str, float],
     left: dict[str, float],
@@ -298,7 +328,7 @@ def _groups(
             "oldest": (since.get(name) or {}).get("oldest"),
             "asked_by": (since.get(name) or {}).get("asked_by", "door"),
         }
-        for role, names in ROLE_WORK.items()
+        for role, names in work.items()
         for name in names
         if readings.get(name)
     ]
@@ -316,7 +346,10 @@ def _groups(
         )
     for g in out:
         asked = _now.get(str(g["role"]))
-        g["now"] = asked is not None and asked[0] in (None, g["action"])
+        # an ask waiting for its server is a person's "do it now"
+        g["now"] = g["action"] == "ask" or (
+            asked is not None and asked[0] in (None, g["action"])
+        )
     return out
 
 
@@ -353,9 +386,10 @@ def demand(con: Any) -> dict[str, Any]:
     from prax import store
 
     readings = store.waiting_readings(con)
+    work = role_work()
     roles = {
         role: sum(readings.get(x, 0) for x in extractors)
-        for role, extractors in ROLE_WORK.items()
+        for role, extractors in work.items()
     }
     for role, n in wanted_roles().items():  # what found its server gone
         roles[role] = roles.get(role, 0) + n
@@ -369,7 +403,7 @@ def demand(con: Any) -> dict[str, Any]:
         for name, waiting in readings.items()
         if rate.get(name)
     }
-    groups = _groups(readings, rate, left, store.waiting_since(con))
+    groups = _groups(work, readings, rate, left, store.waiting_since(con))
     return {
         "readings": readings,
         "roles": roles,
@@ -378,6 +412,7 @@ def demand(con: Any) -> dict[str, Any]:
         "groups": groups,
         "now": _settle_now(groups),
         "ask_holds": ask_holds(),
+        "ask_role": ask_role(),
     }
 
 
@@ -501,6 +536,8 @@ def status(con: Any, doc_ids: list[int]) -> dict[str, Any]:
     from prax.capture import inbox
     from prax.parsers import queue
 
+    by_role = role_work()  # which role each reading waits for, once a call
+
     queued = inbox.pending_captures(con)
     held = leased("parse")
     now = time.monotonic()
@@ -525,7 +562,8 @@ def status(con: Any, doc_ids: list[int]) -> dict[str, Any]:
             for r in readings:
                 if reading_deferred(r["extractor"], int(doc_id), now):
                     role = next(
-                        (n for n, xs in ROLE_WORK.items() if r["extractor"] in xs), None
+                        (n for n, xs in by_role.items() if r["extractor"] in xs),
+                        None,
                     )
                     row["server_down"] = role or r["extractor"]
         elif doc["text_len"]:

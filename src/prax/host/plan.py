@@ -11,9 +11,11 @@ and ``prax up`` is the one that swaps.
 The costs, in seconds:
 
 - the swap: the load time of the role that would take the card and of
-  the one that gets it back (``load_s``, the median of the last five);
-  ``LOAD_GUESS_S`` where a role has never loaded under this supervisor,
-  marked as a guess;
+  the one that gets it back (``load_s``, the median of the last five),
+  each with the companions that start with it (marker's OCR server);
+  where a role has never loaded under this supervisor, its reader's
+  manifest's number (``load_guess_s``) or else ``LOAD_GUESS_S``, marked
+  as a guess;
 - the work: the items over the group's rate, when one was measured;
 - the wait: how long the oldest item has waited.
 
@@ -31,8 +33,11 @@ Three things hold a "next" back. A role on the card that is still
 serving keeps it: a swap would end marker in the middle of a book. Only
 a person's "do it now" takes the card from it. A role a person asked for
 goes before the others, so the card does not flip straight back to the
-one it came from. And an ask in flight holds the card: the plan then
-says "after the ask" for every swap.
+one it came from. And an ask in flight holds the card for the role that
+answers it (``ask_role``): the plan then says "after the ask" for every
+swap to another role. An ask that waits for its server is a person's
+"do it now" for that role (stage AK's split: the 27B answers, the 35B
+does the bulk passes, one card between them).
 """
 
 from __future__ import annotations
@@ -76,11 +81,20 @@ def _age_s(at: str | None, now: datetime) -> float | None:
 
 
 def _load(roles: dict[str, Any], name: str | None) -> tuple[float, bool]:
-    """A role's load time and whether it was measured."""
+    """A role's load time with its companions', which start with it (the
+    slower of them, since they load side by side), and whether every one
+    was measured."""
     if not name:
         return 0.0, True
-    got = (roles.get(name) or {}).get("load_s")
-    return (float(got), True) if got is not None else (LOAD_GUESS_S, False)
+    seconds, measured = [], True
+    for one in [name, *((roles.get(name) or {}).get("with") or [])]:
+        state = roles.get(one) or {}
+        got = state.get("load_s")
+        if got is None:
+            measured = False
+            got = state.get("load_guess_s")
+        seconds.append(float(got) if got is not None else LOAD_GUESS_S)
+    return max(seconds), measured
 
 
 def _holder(status: dict[str, Any], role: str) -> tuple[str | None, bool]:
@@ -111,8 +125,12 @@ def plan(
     now = now or datetime.now(UTC)
     status = status or {}
     roles = status.get("roles") or {}
-    asked_now = demand.get("now") or {}
+    asked_now = dict(demand.get("now") or {})
     ask_holds = bool(demand.get("ask_holds"))
+    ask_role = demand.get("ask_role")
+    for g in demand.get("groups") or []:
+        if g.get("action") == "ask":  # a person waits for the answer
+            asked_now.setdefault(str(g["role"]), None)
     out = []
     for g in demand.get("groups") or []:
         role = str(g["role"])
@@ -135,6 +153,8 @@ def plan(
         }
         if holds:
             row.update(decision="serving", why=f"{role} holds the card")
+        elif g.get("action") == "ask":
+            row.update(decision="next", why="an ask waits for it")
         elif role in asked_now and asked_now[role] in (None, g["action"]):
             row.update(decision="next", why="a person asked for it now")
         elif g["waiting"] >= BATCH_ITEMS:
@@ -160,7 +180,7 @@ def plan(
         first = sorted((busy | set(asked_now)) - {r["role"]})
         if first and r["role"] not in asked_now:
             r.update(decision="waits", why=f"after {', '.join(first)}")
-        elif ask_holds:
+        elif ask_holds and r["role"] != ask_role:
             r["why"] += ", after the ask"
     rank = {"serving": 0, "next": 1, "waits": 2}
     out.sort(key=lambda r: (rank[r["decision"]], -(r["waited_s"] or 0)))
@@ -168,7 +188,12 @@ def plan(
     for r in out:
         if r["decision"] != "waits" and r["role"] not in order:
             order.append(str(r["role"]))
-    return {"groups": out, "order": order, "ask_holds": ask_holds}
+    return {
+        "groups": out,
+        "order": order,
+        "ask_holds": ask_holds,
+        "ask_role": ask_role,
+    }
 
 
 def for_host(demand: dict[str, Any], status: dict[str, Any] | None) -> dict[str, Any]:

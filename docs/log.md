@@ -5016,6 +5016,69 @@ beside it under the run `heal:wire-labels`. Search already ignores them
 (2026-10-05); this is the record made clean. Applied on the user's word,
 names first.
 
+## 2026-10-06: AJ's reader contract
+
+A reader is now a manifest, `prax.host.readers`, in the way a pack is
+one. `readers.MARKER` names the roles marker needs (`marker`, and
+`ocr-server` for surya's OCR model), what each holds (card, RAM, load
+time), the settings prax passes it, the lock file of its venv, and the
+logs it writes itself. The door's demand reads which role a marker
+reading waits for from it (`work.ROLE_WORK`).
+
+- **A companion moves with its role.** `ocr-server` is a served model
+  like the reranker, and its `model:` must be `datalab-to/surya-ocr-2`,
+  the name surya checks. `roles()` gives it marker's group and
+  `on_demand` and starts it before marker. Marker gets
+  `SURYA_INFERENCE_URL`, so surya spawns nothing behind `prax up`'s
+  back. `Supervisor._party` is a role and its companions: `--start`,
+  `--stop`, a swap and the give-back take the party, and a swap to the
+  companion is a swap to marker. `_fits` adds up the party's card and,
+  when the host can say, its RAM. The plan's swap cost is the slowest
+  load of the party, with the manifest's `load_s` as the guess.
+- **The pinned venv.** `src/prax/host/locks/marker.txt` holds the
+  desktop's 89 packages (marker-pdf 2.0.0, surya-ocr 0.22.1). `prax up`
+  says at marker's first start where the venv differs, and the status
+  carries `drift`. `prax up --lock marker` writes a measured upgrade.
+- **Its own logs.** Surya's `llamacpp_server.log` stood at 74.5 MB.
+  `readers.trim_log` cuts each of the manifest's logs to its last 2 MB
+  before the role starts and after it ends, never while the process
+  holds the file open.
+- `serve.kv_type` (default `q8_0`) lets the OCR server run f16 as surya
+  does.
+
+Not measured: the manifest's numbers are the night of 2026-10-02's.
+The desktop's prax.yaml still runs marker alone. Adding the `surya`
+model and `ocr-server` waits for the next marker evening, so peak RAM,
+VRAM and time per page can be taken with the server outside marker.
+
+## 2026-10-06: AK's split, as configuration
+
+Stage AK measured the 27B as the better surfer and the 35B as three
+times faster at the bulk passes, with one card for both. Two chat
+servers can now share it:
+
+- **A further chat server** is the role `llama-server-<name>`
+  (`roles.is_chat`), with `llama-server`'s settings. `roles.ordered`
+  starts it right after `llama-server`. Served roles take `on_demand`
+  now, so the ask's server loads only when asked for.
+- **Each step waits for its own server.** `work.role_of_step` looks at
+  every chat server and the reranker. A reading waits for the role of
+  its step's model (`work.role_work`, which replaces the constant
+  `ROLE_WORK`): a figure for the role `vision` names, a formula reading
+  for the role of `formulas`.
+- **An ask wins the card for its role.** The demand names `ask_role`.
+  The plan puts an `ask` group next even past a serving holder ("an ask
+  waits for it"). `prax up` swaps for it whatever the role's `swap:`
+  says, and the ask hold no longer stops that swap: before, an ask that
+  found its server down set the five-minute hold and so blocked the very
+  swap it needed. `work.asking` now records no hold for an ask that
+  raised `ServerNotReady`. While the hold lasts, the ask's role keeps
+  the card. `Supervisor._crowded` stops an idled server from loading
+  beside a group member that holds the card: that is the plan's swap.
+
+The host still runs the 27B for every step. A day of the split, and
+its swap counts, waits for the user's word (the plan, AK).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

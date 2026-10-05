@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import Any
 
 from prax import config
-from prax.host import hostinfo
+from prax.host import hostinfo, readers
 
 # the roles and the processes, from where they are defined: a caller may
 # still write ``up.<name>`` for any of them
@@ -103,6 +103,7 @@ from .roles import (  # noqa: F401
     llama_binary,
     marker_role,
     model_path,
+    ocr_role,
     prax_command,
     roles,
 )
@@ -158,6 +159,12 @@ class Supervisor:
                 "restarts": 0,
                 "exit": None,
                 "next": None,
+                # what the status says of it for the plan and the Jobs view:
+                # the roles that move with it, its load time before one is
+                # measured, and where its venv differs from its lock
+                "with": list(r.companions),
+                "load_guess_s": r.load_guess_s,
+                "drift": list(r.drift),
             }
             for r in roles_
         }
@@ -168,7 +175,8 @@ class Supervisor:
         self.groups: dict[str, dict[str, Any]] = {}
         self.demand: dict[str, Any] = {}  # what the door says waits, per role
         self.now: dict[str, Any] = {}  # the roles a person said do it now for
-        self.ask_holds = False  # an ask keeps the card where it is
+        self.ask_holds = False  # an ask keeps the card where it is …
+        self.ask_role: str | None = None  # … with the role that answers it
         self.plan: list[dict[str, Any]] = []  # the door's plan: what goes next
         self._demand_at = 0.0
         # servers stopped for being quiet (``idle_minutes``), and per
@@ -184,6 +192,7 @@ class Supervisor:
         self.started = _now()
         self.jobs: dict[str, _JobObject] = {}  # Windows: one per role, its tree
         self.paused.update(r.name for r in roles_ if r.on_demand)
+        self._drift_said: set[str] = set()  # said once a run, at its first start
         self.log = logging.getLogger("prax.up")
         self._threads: list[threading.Thread] = []
 
@@ -242,7 +251,27 @@ class Supervisor:
                 said = True
             self.stopping.wait(self.tick)
 
+    def _trim_own_logs(self, role: Role) -> None:
+        """The files the role's process writes itself, cut to their last
+        lines while it is not running (``readers.trim_log``): surya's
+        server log grew 78 MB in one night and was never rotated."""
+        for pattern in role.own_logs:
+            path = Path(pattern).expanduser()
+            with contextlib.suppress(OSError):
+                gave = readers.trim_log(path)
+                if gave:
+                    self._say(f"{role.name}: {path.name} trimmed by {gave >> 20} MB")
+
     def _start(self, role: Role) -> subprocess.Popen[bytes] | None:
+        self._trim_own_logs(role)
+        if role.drift and role.name not in self._drift_said:
+            self._drift_said.add(role.name)
+            shown = "; ".join(role.drift[:5])
+            more = f" and {len(role.drift) - 5} more" if len(role.drift) > 5 else ""
+            self._say(
+                f"{role.name}: its venv differs from its lock: {shown}{more}"
+                " (prax up --lock, once the upgrade is measured)"
+            )
         log_path = rotate(self.logs, role.name)
         env = environment(self.data_dir)
         env.update(role.env)
@@ -314,6 +343,7 @@ class Supervisor:
                     break
                 code = proc.returncode
                 lived = time.monotonic() - began
+                self._trim_own_logs(role)
             else:
                 code, lived = None, 0.0
             immediate = role.name in self.restart_now
@@ -376,16 +406,21 @@ class Supervisor:
             if name not in self.state:
                 self._say(f"no role named {name}")
                 return
-            self._say(f"{name}: asked to stop until started again")
-            self.paused.add(str(name))
-            proc = self.procs.get(str(name))
-            if proc is not None and proc.poll() is None:
-                self._end(str(name), proc)
+            for one in self._party(str(name)):
+                self._say(f"{one}: asked to stop until started again")
+                self.paused.add(one)
+                proc = self.procs.get(one)
+                if proc is not None and proc.poll() is None:
+                    self._end(one, proc)
         elif cmd == "stop":
             self._say("asked to stop")
             self.stopping.set()
         elif cmd == "start":
-            names = list(self.paused) if name in (None, "", "all") else [str(name)]
+            names = (
+                list(self.paused)
+                if name in (None, "", "all")
+                else self._party(str(name))
+            )
             for one in names:
                 if one not in self.state:
                     self._say(f"no role named {one}")
@@ -517,6 +552,8 @@ class Supervisor:
                                 f"{name}: work waits for it; after {loan['holder']}"
                             )
                         continue
+                    if self._crowded(role):
+                        continue  # the card is another member's: a swap, by the plan
                     self._say(f"{name}: work waits for it; loading again")
                     self.idled.discard(name)
                     self.paused.discard(name)
@@ -574,6 +611,8 @@ class Supervisor:
             )
             group["members"].append(role.name)
             group["needs_vram_mb"][role.name] = role.needs_vram_mb
+            if role.companions:
+                group.setdefault("with", {})[role.name] = list(role.companions)
         for name, loan in self.groups.items():
             group = out.setdefault(name, {"members": []})
             group.update({k: v for k, v in loan.items() if k != "quiet_since"})
@@ -582,19 +621,40 @@ class Supervisor:
     def _members(self, group: str) -> list[Role]:
         return [r for r in self.roles if r.group == group]
 
+    def _party(self, name: str) -> list[str]:
+        """The role and the companions that move with it (marker and its
+        OCR server): what starts, stops and takes the card together."""
+        role = next((r for r in self.roles if r.name == name), None)
+        if role is None:
+            return [name]
+        return [name, *(c for c in role.companions if c in self.state)]
+
     def _fits(self, role: Role) -> bool:
-        """Whether the role can have what it needs of the card beside what
-        is on it now. Without a number for either, no: the swap is what
-        the group is for, and a wrong yes wedges two servers on one card."""
-        want = role.needs_vram_mb
+        """Whether the role and its companions can have what they need of
+        the card beside what is on it now, and of RAM when they say. Without
+        a number for the card, no: the swap is what the group is for, and a
+        wrong yes wedges two servers on one card. A RAM figure the host
+        cannot check does not refuse; one it can, does (2026-10-02: marker
+        and the 35B together ran the machine out of memory)."""
+        party = [r for r in self.roles if r.name in self._party(role.name)]
+        if any(not r.needs_vram_mb for r in party):
+            return False
+        want = sum(r.needs_vram_mb or 0 for r in party)
         free = hostinfo.vram_free_mb()
-        return bool(want and free is not None and free >= want)
+        if free is None or free < want:
+            return False
+        ram = sum(r.needs_ram_mb or 0 for r in party)
+        ram_free = hostinfo.memory().get("ram_free_mb")
+        return not (ram and ram_free is not None and ram_free < ram)
 
     def _swap(self, to: str, back_when: str = "idle", why: str = "") -> None:
         """Give the group's resource to ``to``: the members that hold it
         stop (unless it fits beside them), and go back when the door says
         no work is left for the borrower (``idle``) or never."""
         role = next((r for r in self.roles if r.name == to), None)
+        if role is not None and role.companion_of in self.state:
+            to = str(role.companion_of)  # a companion moves with its role
+            role = next((r for r in self.roles if r.name == to), None)
         if role is None or not role.group:
             self._say(f"{to}: not a role of a group (run.{to}.group)")
             return
@@ -603,7 +663,10 @@ class Supervisor:
             return
         group = role.group
         members = self._members(group)
-        was_up = [r.name for r in members if r.name != to and r.name not in self.paused]
+        party = self._party(to)
+        was_up = [
+            r.name for r in members if r.name not in party and r.name not in self.paused
+        ]
         fits = self._fits(role)
         if not fits:
             for name in was_up:
@@ -619,13 +682,30 @@ class Supervisor:
             "fits": fits,
             "quiet_since": None,
         }
-        self.paused.discard(to)
-        self.restart_now.discard(to)
+        for one in party:  # the borrower and its companions
+            self.paused.discard(one)
+            self.restart_now.discard(one)
         how = "beside" if fits else "instead of"
         others = ", ".join(was_up) or "nothing"
         self._say(f"{group}: {to} takes it {how} {others} (back when {back_when})")
         self._record_swap("swap", group, to, was_up, why, fits=fits)
         self._write_status()
+
+    def _crowded(self, role: Role) -> bool:
+        """Whether another member of the role's group is up and the role
+        does not fit beside it: loading it then is a swap, which is the
+        plan's to make (two chat servers in one group, stage AK)."""
+        if not role.group:
+            return False
+        party = self._party(role.name)
+        with self.lock:
+            others = [
+                r.name
+                for r in self._members(role.group)
+                if r.name not in party
+                and self.state[r.name]["state"] in ("up", "starting")
+            ]
+        return bool(others) and not self._fits(role)
 
     def _lent_away(self, role: Role) -> dict[str, Any] | None:
         """The loan of the role's group to another role, if there is one."""
@@ -645,10 +725,11 @@ class Supervisor:
         holder = str(loan["holder"])
         role = next((r for r in self.roles if r.name == holder), None)
         if role is not None and (role.on_demand or holder not in loan["was_up"]):
-            self.paused.add(holder)
-            proc = self.procs.get(holder)
-            if proc is not None and proc.poll() is None:
-                self._end(holder, proc)
+            for one in self._party(holder):
+                self.paused.add(one)
+                proc = self.procs.get(one)
+                if proc is not None and proc.poll() is None:
+                    self._end(one, proc)
         for name in loan["was_up"]:
             self.paused.discard(name)
             self.idled.discard(name)  # one that waited, idle, for the card
@@ -720,6 +801,7 @@ class Supervisor:
         self.demand = said.get("roles") or {}
         self.now = said.get("now") or {}
         self.ask_holds = bool(said.get("ask_holds"))
+        self.ask_role = said.get("ask_role")
         self.plan = [
             row
             for row in (said.get("plan") or {}).get("groups") or []
@@ -738,7 +820,7 @@ class Supervisor:
             if loan["back_when"] != "idle":
                 continue
             waiting = int(self.demand.get(str(loan["holder"]), 0) or 0)
-            if waiting:
+            if waiting or (self.ask_holds and loan["holder"] == self.ask_role):
                 loan["quiet_since"] = None
                 continue
             since = loan["quiet_since"]
@@ -752,16 +834,18 @@ class Supervisor:
         group it says goes next gets its role the card, by a swap, or by
         the loan ending when the card was lent away from that role. A role
         with ``swap: auto`` follows the plan by itself; any other only for
-        a person's "do it now". Never while an ask holds the card; the
-        door keeps a "do it now" standing, so the next look does it."""
-        if self.ask_holds:
-            return
+        a person's "do it now", or an ask that waits for it. While an ask
+        holds the card only the role that answers it may take it; the door
+        keeps a "do it now" standing, so the next look does the rest."""
         for row in self.plan:
             name = str(row.get("role") or "")
+            if self.ask_holds and name != self.ask_role:
+                continue
             role = next((r for r in self.roles if r.name == name), None)
             if role is None or not role.group:
                 continue
-            if role.swap != "auto" and name not in self.now:
+            asked = name in self.now or row.get("action") == "ask"
+            if role.swap != "auto" and not asked:
                 continue
             loan = self.groups.get(role.group)
             if loan is None:
