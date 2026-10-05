@@ -26,7 +26,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
-from prax import models, store
+from prax import config, models, store
 from prax.graph import ontology
 from prax.ml import pricing
 from prax.writing import summaries
@@ -238,6 +238,46 @@ class Triple:
     # when they are the same
     src_as: str = ""
     dst_as: str = ""
+    # when the fact holds in the world, where the text says so (AL step 5):
+    # YYYY, YYYY-MM or YYYY-MM-DD; world_to "unknown" when it ended at a
+    # date the text does not give; empty when the text says nothing
+    world_from: str = ""
+    world_to: str = ""
+
+
+def standard_names() -> bool:
+    """Whether the prompt gives each relation its standard name
+    (``same_as``: ``schema:author``) beside prax's (AN; measured before
+    it is on: ``extraction.standard_names``, ``PRAX_EXTRACT_STANDARD``)."""
+    return str(
+        config.setting("extraction.standard_names", "PRAX_EXTRACT_STANDARD", False)
+    ).lower() in ("1", "true", "yes", "on")
+
+
+def world_dates() -> bool:
+    """Whether the prompt asks for a fact's world dates where the text
+    states them (AL step 5; ``extraction.world_dates``,
+    ``PRAX_EXTRACT_DATES``)."""
+    return str(
+        config.setting("extraction.world_dates", "PRAX_EXTRACT_DATES", False)
+    ).lower() in ("1", "true", "yes", "on")
+
+
+_DATE = re.compile(r"^(\d{4})(?:-(\d{2})(?:-(\d{2}))?)?$")
+
+
+def checked_date(value: str, evidence: str, *, end: bool = False) -> str | None:
+    """A world date a model gave, kept only when it is a date and its year
+    is in the quote it gave for the fact: a model told the document's
+    date is not a fact's date still writes it (the ``dates`` step's rule,
+    ``writing.dates.checked``). ``unknown`` passes for an end."""
+    value = (value or "").strip().lower()
+    if end and value == "unknown":
+        return "unknown"
+    m = _DATE.match(value)
+    if not m or m.group(1) not in (evidence or ""):
+        return None
+    return value
 
 
 @dataclass
@@ -277,6 +317,11 @@ def output_schema(onto: ontology.Ontology) -> dict[str, Any]:
             "dst": entity,
             "confidence": {"type": "string", "enum": list(CONFIDENCES)},
             "evidence": {"type": "string"},
+            "from": {"type": "string", "description": "YYYY[-MM[-DD]], or omitted"},
+            "to": {
+                "type": "string",
+                "description": "YYYY[-MM[-DD]], unknown, or omitted",
+            },
         },
         "required": ["src", "rel", "dst", "confidence", "evidence"],
         "additionalProperties": False,
@@ -333,9 +378,12 @@ def system_prompt(
     ent = "\n".join(
         f"- {name}: {_desc(onto, name)}" for name in sorted(onto.entity_types)
     )
+    named = standard_names()
     rel = "\n".join(
         f"- {r.name} ({', '.join(sorted(r.domain)) or 'any'} -> "
-        f"{', '.join(sorted(r.range)) or 'any'}): {r.description}"
+        f"{', '.join(sorted(r.range)) or 'any'})"
+        + (f" [{', '.join(r.same_as)}]" if named and r.same_as else "")
+        + f": {r.description}"
         for r in (onto.relations[n] for n in sorted(onto.relations))
     )
     rules = [
@@ -384,6 +432,21 @@ def system_prompt(
             " appeared *in* is a venue, not a paper. Name it with published_in and"
             " never as something the document cites; cite the individual work by"
             " its own title."
+        ),
+        *(
+            [
+                (
+                    "Where the text states when a fact began or ended (an"
+                    " affiliation from 2015, a device made until 2003, a law in"
+                    " force since 1990-07), give it as from and to: YYYY, YYYY-MM"
+                    " or YYYY-MM-DD, as precise as the text, with the year in"
+                    " the evidence; to is unknown when it ended at a date the"
+                    " text does not give. Leave both out otherwise: the date"
+                    " the document appeared is not the date of its facts."
+                )
+            ]
+            if world_dates()
+            else []
         ),
         (
             "If a relationship matters but no relation or type fits, put it in unmapped"
@@ -454,6 +517,8 @@ def parse_output(data: dict[str, Any]) -> Extraction:
                 evidence=str(t.get("evidence", ""))[:300],
                 src_as=str(t["src"].get("as") or "").strip(),
                 dst_as=str(t["dst"].get("as") or "").strip(),
+                world_from=str(t.get("from") or "").strip(),
+                world_to=str(t.get("to") or "").strip(),
             )
         )
     return Extraction(
@@ -862,6 +927,8 @@ def apply(
                 evidence=t.evidence or None,
                 producer=extractor,
                 run=run,
+                world_from=checked_date(t.world_from, t.evidence),
+                world_to=checked_date(t.world_to, t.evidence, end=True),
             )
             report.linked += 1
         # the word the document printed, kept whether or not the edge was

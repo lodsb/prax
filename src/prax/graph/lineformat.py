@@ -64,11 +64,15 @@ def grammar(
             (
                 'triple ::= "triple\\tsrc=" name "\\tsrc_type=" etype "\\trel=" rel'
                 ' "\\tdst=" name "\\tdst_type=" etype "\\tconfidence=" conf'
-                ' "\\tevidence=" text srcas? dstas? "\\n"'
+                ' "\\tevidence=" text srcas? dstas? from? to? "\\n"'
             ),
             # the names as printed, where the name written is another
             'srcas ::= "\\tsrc_as=" name',
             'dstas ::= "\\tdst_as=" name',
+            # when the fact holds in the world, where the text says so
+            'from ::= "\\tfrom=" date',
+            'to ::= "\\tto=" (date | "unknown")',
+            'date ::= [0-9]{4} ("-" [0-9]{2} ("-" [0-9]{2})?)?',
             (
                 'unmapped ::= "unmapped\\tsrc=" name "\\trel=" name "\\tdst=" name'
                 ' "\\treason=" text "\\n"'
@@ -101,6 +105,7 @@ def prompt_section(*, max_triples: int = MAX_TRIPLES) -> str:
                 f"{t}dst=<name>{t}dst_type=<type>{t}confidence=<EXTRACTED or"
                 f" INFERRED or AMBIGUOUS>{t}evidence=<verbatim quote>"
                 f"[{t}src_as=<name as printed>][{t}dst_as=<name as printed>]"
+                f"[{t}from=<YYYY[-MM[-DD]]>][{t}to=<YYYY[-MM[-DD]] or unknown>]"
             ),
             f"unmapped{t}src=<name>{t}rel=<relation>{t}dst=<name>{t}reason=<why>",
             (
@@ -156,7 +161,7 @@ def parse(text: str) -> Extraction:
             ex.summary = whole_sentences(
                 " ".join(f for f in fields[1:] if f), SUMMARY_CHARS
             )
-        elif kind == "triple" and 8 <= len(fields) <= 10 and all(fields[1:7]):
+        elif kind == "triple" and 8 <= len(fields) <= 12 and all(fields[1:7]):
             key = tuple(f.lower() for f in fields[1:6])
             if key in seen:
                 repeats += 1
@@ -188,6 +193,8 @@ def parse(text: str) -> Extraction:
                     evidence=fields[7][:TEXT_CHARS],
                     src_as=printed.get("src_as", "")[:NAME_CHARS],
                     dst_as=printed.get("dst_as", "")[:NAME_CHARS],
+                    world_from=printed.get("from", "")[:10],
+                    world_to=printed.get("to", "")[:10],
                 )
             )
         elif kind == "unmapped" and len(fields) == 5:
@@ -219,7 +226,7 @@ _KEY = re.compile(r"^[a-z_]+=")
 # a field's key inside a name: the line written on with spaces for tabs. A
 # key or a type name, lower case, then "=": no entity is named so
 _LEAKED = re.compile(r"(?:^|\s)[a-z_]{3,}=\S")
-_PRINTED = re.compile(r"^(src_as|dst_as)=(.*)$")
+_PRINTED = re.compile(r"^(src_as|dst_as|from|to)=(.*)$")
 _SNAKE = re.compile(r"^[a-z0-9]+(_[a-z0-9]+)+$")
 
 

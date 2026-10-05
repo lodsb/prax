@@ -366,3 +366,40 @@ def test_get_says_a_documents_lifecycle(client: TestClient) -> None:
     got = client.get(f"/get/{doc}", params={"brief": "true"}, headers=admin).json()
     assert got["meta"]["status"]["state"] == "superseded"
     assert got["stale"]["state"] == "superseded"
+
+
+def test_a_triple_carries_its_world_dates_and_only_checked_ones_land() -> None:
+    """AL step 5: the extraction may say when a fact holds; a date whose
+    year is not in the quote is the model's guess (the document's date,
+    most often) and is dropped."""
+    from prax.graph import extraction, lineformat
+
+    line = (
+        "summary\tA board.\n"
+        "triple\tsrc=Ada\tsrc_type=person\trel=affiliated_with\tdst=IRCAM"
+        "\tdst_type=organization\tconfidence=EXTRACTED"
+        "\tevidence=she joined IRCAM in 2015\tfrom=2015\tto=unknown\n"
+    )
+    t = lineformat.parse(line).triples[0]
+    assert (t.world_from, t.world_to) == ("2015", "unknown")
+    assert extraction.checked_date("2015", t.evidence) == "2015"
+    assert extraction.checked_date("2019-07", t.evidence) is None  # not quoted
+    assert extraction.checked_date("unknown", t.evidence, end=True) == "unknown"
+    assert extraction.checked_date("soon", t.evidence) is None
+
+
+def test_the_prompt_rules_are_switched_for_a_measurement() -> None:
+    """AN and AL: the standard names and the world dates enter the prompt
+    only when switched on, so the bench compares with and without."""
+    from prax import config
+    from prax.graph import extraction, ontology
+
+    onto = ontology.current()
+    plain = extraction.system_prompt(onto, output="lines")
+    assert "[schema:author]" not in plain and "from and to" not in plain
+    with (
+        config.overriding("PRAX_EXTRACT_STANDARD", "1"),
+        config.overriding("PRAX_EXTRACT_DATES", "1"),
+    ):
+        both = extraction.system_prompt(onto, output="lines")
+    assert "[schema:author]" in both and "from and to" in both

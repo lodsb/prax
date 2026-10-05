@@ -104,7 +104,7 @@ def test_the_line_format_carries_the_printed_names_either_or_both() -> None:
 
 def test_the_grammar_allows_the_printed_names_and_does_not_require_them() -> None:
     g = lineformat.grammar(ontology.current())
-    assert '"\\tevidence=" text srcas? dstas? "\\n"' in g
+    assert '"\\tevidence=" text srcas? dstas? from? to? "\\n"' in g
     assert 'dstas ::= "\\tdst_as=" name' in g
 
 
