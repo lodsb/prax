@@ -5002,6 +5002,20 @@ shipped: some 48 MB and a trigger on every edge write for no measured
 gain. The set has no fact-shaped question, which is where it should
 help; `docs/eval/retrieval-facts-list-2026-10-05.md`.
 
+## 2026-10-06: the wire syntax in labels, a check of its own
+
+The labels an extractor's wire syntax got glued to (2,296 rows) are of
+three sorts. 1,776 are the preferred labels of entities whose own name
+holds the syntax: `wire-names` renames those (371 entities on the dry
+run). Some are `was` labels, what an entity used to be called, kept as
+history. The rest are the new check's, `wire-labels` (410 on the dry
+run: 385 whose words the entity already has as a label, 25 whose words
+become a label): each is set aside as `kind = 'wire'`, never deleted
+(`store.set_aside_label`), and the words before the syntax written
+beside it under the run `heal:wire-labels`. Search already ignores them
+(2026-10-05); this is the record made clean. Applied on the user's word,
+names first.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

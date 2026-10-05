@@ -29,14 +29,21 @@ so what needs no model comes first.
    standard names, and AL's, the extraction filling the world dates.
    Both change the prompt; neither passes over the library before the
    sample says so.
-4. **AK's split and AJ** (below): what a swap costs on the card, readers
+4. **Next (2026-10-06): the wire syntax cleaned, then AJ's reader
+   contract.** `prax heal --check wire-names` (371 entities) and then
+   `--check wire-labels` (410 labels, more after the names), dry runs
+   shown, applied on the user's word; then **AJ's reader contract**
+   (below): a reader declares its processes and their resources, a role
+   names companions that move with it in a swap, a reader's own logs
+   are trimmed. Code first; trying it on marker waits for the card.
+5. **AK's split and the rest of AJ** (below): what a swap costs on the card, readers
    under prax's hand; **AI**'s measurement after days of
    `run/swaps.jsonl` (`scripts/eval_swaps.py`).
-5. **AA. Close Z** (below).
-6. **Measured improvements** ("Retrieval and ask", "The graph"): facts
+6. **AA. Close Z** (below).
+7. **Measured improvements** ("Retrieval and ask", "The graph"): facts
    as a search list, a focus entity as a vote, the sections pass's
    vector arm, a compressed edge list, `confidence` as a number.
-7. **The engineering leftovers** (below): typed shapes (a search hit
+8. **The engineering leftovers** (below): typed shapes (a search hit
    first), the remaining complex functions, the UI helpers the
    extension copies.
 

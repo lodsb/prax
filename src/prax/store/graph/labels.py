@@ -622,3 +622,33 @@ def entity_names(con: sqlite3.Connection, etype: str) -> list[tuple[int, str]]:
         (etype,),
     ).fetchall()
     return [(int(r["id"]), str(r["name"])) for r in rows]
+
+
+WIRE_KIND = "wire"  # a label that was an extractor's wire syntax, kept as the record
+
+
+@_serialized
+def set_aside_label(
+    con: sqlite3.Connection, label_id: int, cleaned: str | None, *, run: str
+) -> bool:
+    """A label that holds an extractor's wire syntax ("ARP 2600
+    dst_type=tool confidence=…") set aside as ``kind = 'wire'``, never
+    deleted, and the words before the syntax written beside it as a label
+    of the same kind and language when the entity has no such label yet
+    (producer and run ``run``, so ``unmerge_run`` takes them back). False
+    when there was no such label."""
+    row = con.execute(
+        "SELECT entity_id, lang, kind FROM entity_labels WHERE id = ?", (label_id,)
+    ).fetchone()
+    if row is None or row["kind"] == WIRE_KIND:
+        return False
+    con.execute("UPDATE entity_labels SET kind = ? WHERE id = ?", (WIRE_KIND, label_id))
+    if cleaned:
+        con.execute(
+            "INSERT OR IGNORE INTO entity_labels"
+            " (entity_id, label, lang, kind, producer, run)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            (row["entity_id"], cleaned, row["lang"], row["kind"], run, run),
+        )
+    con.commit()
+    return True

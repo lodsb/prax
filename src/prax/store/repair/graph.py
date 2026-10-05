@@ -24,6 +24,7 @@ from ..graph import (
     part_of_suspects,
     record_correction,
     rename_entity,
+    set_aside_label,
     traverse_map,
 )
 from .common import (
@@ -816,4 +817,60 @@ def _repair_duplicate_facts(con: sqlite3.Connection, rows: list[dict[str, Any]])
     again if it was wrong."""
     return _invalidate(
         con, [i for row in rows for i in row["later"]], run=DUPLICATES_PRODUCER
+    )
+
+
+WIRE_LABELS_PRODUCER = "heal:wire-labels"
+
+
+def _wire_labels(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Labels that hold an extractor's wire syntax, with the label cut at
+    it (``cleaned``; empty when nothing but syntax was there, or ``same``
+    when the entity has that label already). A label marked ``was`` is
+    what an entity used to be called and stays as history; a label of an
+    entity whose own name still holds the syntax is ``wire-names``'s to
+    repair first, which renames the entity and its preferred label."""
+    have: dict[int, set[str]] = {}
+    found = []
+    for row in con.execute(
+        "SELECT l.id, l.entity_id, l.label, l.kind, e.name FROM entity_labels l"
+        " JOIN entities e ON e.id = l.entity_id"
+        " WHERE COALESCE(l.was, 0) = 0 AND l.kind != 'wire'"
+        " AND (l.label LIKE '%=%')"
+    ):
+        if not WIRE.search(row["label"] or "") or WIRE.search(row["name"] or ""):
+            continue
+        cleaned = clean_name(WIRE.sub("", row["label"]).strip(" (,;:"))
+        entity = int(row["entity_id"])
+        if entity not in have:
+            have[entity] = {
+                str(r[0]).lower()
+                for r in con.execute(
+                    "SELECT label FROM entity_labels WHERE entity_id = ?", (entity,)
+                )
+            }
+        found.append(
+            {
+                "id": int(row["id"]),
+                "name": row["label"][:120],
+                "kind": row["kind"],
+                "cleaned": cleaned,
+                "same": bool(cleaned) and cleaned.lower() in have[entity],
+            }
+        )
+    return found[:CAP]
+
+
+def _repair_wire_labels(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Set each such label aside (``kind = 'wire'``, kept) and write the
+    words before the syntax as a label of its own where the entity has
+    none such (``store.set_aside_label``)."""
+    return sum(
+        set_aside_label(
+            con,
+            int(row["id"]),
+            None if row["same"] else (row["cleaned"] or None),
+            run=WIRE_LABELS_PRODUCER,
+        )
+        for row in rows
     )

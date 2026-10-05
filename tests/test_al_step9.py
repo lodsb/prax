@@ -435,3 +435,40 @@ def test_a_label_with_quotes_and_colons_cannot_break_a_search(con: Any) -> None:
     assert hits and hits[0]["title"] == "Mixer"
     expr = q._expr([["matrix", 'say "size: 1024"'], ["a=b"]], all_terms=False)
     assert expr is not None and ":" not in expr and expr.count('"') % 2 == 0
+
+
+def test_a_wire_label_is_set_aside_and_its_words_kept(con: Any) -> None:
+    """2026-10-06: labels an extractor's wire syntax got glued to; the
+    words before it stay a label, the row is kept as the record."""
+    from prax import store
+    from prax.store import repair
+
+    store.link(con, store.Edge("A synth", "device", "uses", "ARP 2600", "device"))
+    entity = con.execute("SELECT id FROM entities WHERE name = 'ARP 2600'").fetchone()[
+        0
+    ]
+    for label in (
+        'ARP 2600 synth dst_type=tool confidence=EXTRACTED evidence="two of them"',
+        "ARP 2600 dst_type=device",
+    ):
+        con.execute(
+            "INSERT INTO entity_labels (entity_id, label, lang, kind, producer)"
+            " VALUES (?, ?, 'en', 'alt', 'baseline')",
+            (entity, label),
+        )
+    con.commit()
+    found = repair._wire_labels(con)
+    assert sorted((f["cleaned"], f["same"]) for f in found) == [
+        ("ARP 2600", True),
+        ("ARP 2600 synth", False),
+    ]
+    assert repair._repair_wire_labels(con, found) == 2
+    labels = {
+        (r[0], r[1])
+        for r in con.execute(
+            "SELECT label, kind FROM entity_labels WHERE entity_id = ?", (entity,)
+        )
+    }
+    assert ("ARP 2600 synth", "alt") in labels
+    assert sum(1 for _, kind in labels if kind == "wire") == 2
+    assert repair._wire_labels(con) == []

@@ -457,6 +457,7 @@ from .graph import (  # noqa: F401
     seed_documents,
     select_for_extraction,
     senses,
+    set_aside_label,
     set_community_summary,
     subgraph_edges,
     traverse,

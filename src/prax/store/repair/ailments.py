@@ -63,12 +63,14 @@ from .graph import (
     _repair_not_venues,
     _repair_part_of,
     _repair_stray_versions,
+    _repair_wire_labels,
     _repair_wire_names,
     _self_edges,
     _slow_walks,
     _split_names,
     _stray_version_modules,
     _unnamed_entities,
+    _wire_labels,
     _wire_names,
 )
 
@@ -191,6 +193,21 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_wire_names,
         repair=_repair_wire_names,
+    ),
+    Ailment(
+        name="wire-labels",
+        what=(
+            "labels an extractor's wire syntax got glued to ('ARP 2600"
+            " dst_type=tool confidence=…'); a query that added one to its"
+            " words failed until 2026-10-05"
+        ),
+        fix=(
+            "set the label aside (kind 'wire', kept) and write the words"
+            " before the syntax as a label where the entity has none such;"
+            " run wire-names first"
+        ),
+        find=_wire_labels,
+        repair=_repair_wire_labels,
     ),
     Ailment(
         name="unnamed-entities",

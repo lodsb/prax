@@ -148,6 +148,7 @@ from .labels import (  # noqa: F401
     merge_entities,
     rename_display_language,
     rename_entity,
+    set_aside_label,
     undecide_pair,
     unmerge_entity,
     unmerge_run,
