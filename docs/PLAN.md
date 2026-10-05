@@ -96,9 +96,9 @@ numbered there) in the order the user agreed: one step a session.
       - [ ] **Roman editions.** "Atti del XX Colloquio" reads no edition:
             a roman numeral meets real acronyms (CHI, MIX, VR). Only where
             a venue word follows it, measured with `eval_venues.py`.
-- [ ] **Step 4, for the plan's own sections.**
-      - [ ] **5.** Repairs that end an edge and write its correction do not record which edge corrects which (an hour for the record in the two repairs; a migration only if a new column is chosen over restated_as)
-      - [ ] **20.** The card plan's swaps are recorded only as log prose, so AI's last step has no data to measure (an hour)
+- [x] (2026-10-05, placed in AI and AL) **Step 4, for the plan's own sections.**
+      - [x] **5.** Repairs that end an edge and write its correction do not record which edge corrects which (an hour for the record in the two repairs; a migration only if a new column is chosen over restated_as)
+      - [x] **20.** The card plan's swaps are recorded only as log prose, so AI's last step has no data to measure (an hour)
 
 ## Stages
 
@@ -190,7 +190,14 @@ numbered there) in the order the user agreed: one step a session.
             its `run:` line is what lets it start without a hand.
       - [ ] Measured: how long readings wait before and after, and how
             many swaps a day the plan makes. Fewer swaps for the same
-            waits is the point.
+            waits is the point. First a record to measure from (the
+            quality review's finding 20): a swap is only a line of prose
+            in `logs/up.log` today, which breaks as soon as its wording
+            does. `_swap` and `_unswap` append one JSON line per swap
+            (at, group, from, to, why, the plan's decision) under `run/`,
+            bounded like `loads.json`, and a small count pairs the swaps
+            of a day with that day's reading waits. Every day without it
+            is a day of the plan's own baseline lost.
 
       *Steps folded in on 2026-10-02* (from "What holds the card", 2026-09-25):
       - [x] (done before 2026-10-02: `hostinfo.holders`, "On the card" in
@@ -306,7 +313,18 @@ numbered there) in the order the user agreed: one step a session.
             null, its precision `unknown`), with CHECK constraints that
             tie a precision to its date; an undated fact anchored to
             its document's date (above); `supersedes` on an edge that
-            corrects another, so "corrected" and "rejected" are a query;
+            corrects another, so "corrected" and "rejected" are a query
+            (the quality review's finding 5: the `backwards-part-of` and
+            `not-venues` repairs end an edge and write its correction, and
+            drop `link`'s id, so which edge corrects which is a guess.
+            The record belongs where the ending is recorded:
+            `edge_endings` gets a column `corrected_by` beside
+            `restated_as`, which `restore_run` already reads as "not
+            restored yet" and cannot carry a second meaning, and the
+            repairs pass the new edge's id. That is the edge-level
+            `supersedes` too, rather than a fifth side table beside
+            premises, conflicts and endings, and it gives G3 its
+            `corrected` side);
             and **one module that builds "held at T"** for every graph
             (2026-10-03: `store.held_at` is that module and the walk
             uses it; `test_a_moment_in_record_time_is_built_in_one_place`
