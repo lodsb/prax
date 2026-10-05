@@ -328,11 +328,40 @@ def domain_clause(
     )
 
 
+_HIDDEN_KEPT = 16  # (viewer, connection, state) -> hidden set, the newest kept
+_hidden_memo: dict[tuple[Any, ...], frozenset[int]] = {}
+_hidden_lock = threading.Lock()
+
+
 def hidden_documents(con: sqlite3.Connection) -> frozenset[int]:
-    """The documents the current viewer may not see; empty for none."""
+    """The documents the current viewer may not see; empty for none.
+
+    Read once for a viewer and a state of the store: a search asked it
+    two or three times and each read scanned every document (18 ms for a
+    module-limited token; the quality review of 2026-10-05). The state is
+    ``PRAGMA data_version`` (another connection committed) and this
+    connection's own ``total_changes`` (it wrote), so a write is never
+    missed."""
     viewer = VIEWER.get()
     if viewer is None:
         return frozenset()
+    state = int(con.execute("PRAGMA data_version").fetchone()[0])
+    # the file too: a closed connection's id may be a new one's
+    where = str(con.execute("PRAGMA database_list").fetchone()[2])
+    key = (viewer, where, id(con), state, con.total_changes)
+    with _hidden_lock:
+        held = _hidden_memo.get(key)
+    if held is not None:
+        return held
+    got = _hidden_read(con, viewer)
+    with _hidden_lock:
+        if len(_hidden_memo) >= _HIDDEN_KEPT:
+            _hidden_memo.pop(next(iter(_hidden_memo)))
+        _hidden_memo[key] = got
+    return got
+
+
+def _hidden_read(con: sqlite3.Connection, viewer: Viewer) -> frozenset[int]:
     out: set[int] = set()
     if not viewer.personal:
         out |= {

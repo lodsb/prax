@@ -4704,6 +4704,46 @@ a file each, and a reader that tries again. Two tests leaned on timing
 **The client's second page** (doc 13470) came in during the round: N3 is
 in; N1, N2, N4 and G1 to G4 are AL step 9 of the plan.
 
+## 2026-10-05, the night: the quality review, and its first step
+
+The project's skill `.claude/skills/code-review` ran in full mode over
+the same three days: five reviewers by dimension, a skeptic each. 24
+findings confirmed (three found twice), 2 refuted; all of them, with
+evidence and fixes, are in `docs/eval/code-review-2026-10-05.md`, and
+their four steps in `docs/PLAN.md`. Step 1:
+
+- **What "the same venue" means** (finding 1). `ontology/sameness.yaml`
+  told every judge that a series and its editions, and two editions, are
+  one thing; the venue tier keeps them apart and links them `part_of`,
+  and the likely tier still offered such pairs to the model, which could
+  undo the tier (the log of 2026-10-04 notes editions folded into DAFx
+  that way). The rule now says they are two (its version 2), and the
+  likely tier never offers two venue names of different editions. The
+  judge's measurement with the new wording (`steps.adjudicate.platt`)
+  waits for the card.
+- **`cited_but_missing`** (finding 2): the planner, with no statistics,
+  walked the kind index over all 158,645 reference chunks for a handful
+  of documents (65-90 ms). `+kind` was quicker warm but read every chunk
+  of the documents cold (1.5 s for 500). A partial index of the
+  reference chunks by document (migration 45), named in the query:
+  0-23 ms.
+- **`cite`** (finding 14): the phrase query is bounded by the
+  document's range of chunk ids, so the keyword index walks its
+  postings, not the library's. On a copy, a common phrase in a book of
+  13,680 chunks: 31 s unbounded, 43 ms bounded, the same result. The
+  in-memory fold checks the budget as it goes.
+- **The path index** (findings 12, 13): its stamp was one query of both
+  maxima, which scanned the edges table (62 ms a call): two indexed
+  subqueries now, and none at all while the index is fresh. An index of
+  a past moment (`as_of`) is kept, the last two by moment and stamp, and
+  built under the lock, so two requests cannot stack two peaks of 150 MB.
+- **A named token's hidden set** (finding 24) is read once for a state
+  of the store (the viewer, the file, `data_version`, the connection's
+  own changes): a search had scanned every document two or three times.
+- **"1/2 cup"** (finding 10) is an amount in the general ingredient
+  parser too, not only in the schema.org reader; recipes need a
+  `--rechunk` for their ingredient chunks to read it.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

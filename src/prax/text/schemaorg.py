@@ -173,16 +173,10 @@ _LEADING = re.compile(
 )
 
 
-_FRACTION = re.compile(r"^\s*(?:\d+\s+)?\d+\s*/\s*\d+\s*")
-
-
 def ingredient_name(line: str) -> list[str]:
     """The ingredients one line of ``recipeIngredient`` names, without
     amount, unit, note or preparation: "500 g Zwetschgen, entsteint" is
     Zwetschgen; "Salz und Pfeffer" is two."""
-    # an amount written as an ASCII fraction ("1/2 cup", "1 1/2 tbsp") goes
-    # first, so the unit after it is seen: else "/2 cup milk" was a name
-    line = _FRACTION.sub("", line)
     item = (ingredients.parse_item(line).get("item") or "").split(",")[0]
     item = re.sub(r"\([^)]*\)", " ", item)
     parts = re.split(r"\s+(?:und|and|oder|or|&)\s+", item)

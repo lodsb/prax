@@ -20,7 +20,7 @@
 # modules. A change to the wording moves the local model's numbers, so it
 # is measured again afterwards (`eval_confidence.py gold`, `ask`, `platt`)
 # and `steps.adjudicate.platt` in prax.yaml refitted.
-version: 1
+version: 2  # 2026-10-05: a series and its editions are two things (the venue tier)
 
 same:
   - case: spelling variants
@@ -30,12 +30,16 @@ same:
   - case: a product and a version of it
     examples:
       - [Ableton Live, Ableton Live 7]
-  - case: a conference or journal and one of its editions or years, since the library keeps the series
+  - case: two names for one edition of a conference, or for one journal
     examples:
-      - [ISMIR 2010, ISMIR 2011]
+      - [ISMIR 2010, 11th International Society for Music Information Retrieval Conference]
   - case: synonyms, but only when both names clearly belong to the same field
 
 different:
+  - case: a conference or journal series and one of its editions, or two of its editions (the venue tier links an edition part_of its series)
+    examples:
+      - [ISMIR, ISMIR 2010]
+      - [ISMIR 2010, ISMIR 2011]
   - case: a narrower method, concept or kind and the broader one
     examples:
       - [discrete Fourier transform, Fourier transform]

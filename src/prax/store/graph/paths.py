@@ -27,8 +27,13 @@ _HELD_LOCK = threading.Lock()
 
 
 def _stamp(con: sqlite3.Connection) -> tuple[Any, ...]:
-    """What moves when an edge is written or ended."""
-    row = con.execute("SELECT max(id), max(valid_to) FROM edges").fetchone()
+    """What moves when an edge is written or ended. Two scalar reads, each
+    on an index: one SELECT of both maxima scanned the edges table, 62 ms
+    on every call (the quality review of 2026-10-05)."""
+    row = con.execute(
+        "SELECT (SELECT max(id) FROM edges),"
+        " (SELECT max(valid_to) FROM edges WHERE valid_to IS NOT NULL)"
+    ).fetchone()
     return tuple(row)
 
 
@@ -54,22 +59,36 @@ def _rows(con: sqlite3.Connection, as_of: str | None) -> list[tuple[Any, ...]]:
     return [tuple(r) for r in rows if r[1] not in skip and r[3] not in skip]
 
 
+AS_OF_KEPT = 2  # indexes of past moments kept beside the current one
+
+
 def path_index(con: sqlite3.Connection, as_of: str | None = None) -> Any:
     """The index of the edges held now (kept, refreshed after a change once
-    ``PATH_REFRESH`` has passed) or as of a moment (built for the call)."""
+    ``PATH_REFRESH`` has passed) or as of a moment (the last
+    ``AS_OF_KEPT`` kept, by moment and stamp). Built one at a time under
+    the lock: a build peaks near 150 MB, and two at once would hold two
+    (the quality review of 2026-10-05)."""
     from prax.graph import paths
 
-    if as_of:
-        return paths.build(_rows(con, as_of=as_of))
     # one index per database file: a test's store, a copy, the library
     where = str(con.execute("PRAGMA database_list").fetchone()[2])
     with _HELD_LOCK:
-        stamp = _stamp(con)
+        if as_of:
+            stamp = _stamp(con)
+            past = _HELD.setdefault(f"{where}#as_of", {})
+            key = f"{as_of}|{stamp}"
+            if key not in past:
+                while len(past) >= AS_OF_KEPT:
+                    past.pop(next(iter(past)))
+                past[key] = paths.build(_rows(con, as_of=as_of))
+            return past[key]
         held = _HELD.get(where)
-        if held is not None:
-            fresh = time.monotonic() - held["at"] < PATH_REFRESH
-            if held["stamp"] == stamp or fresh:
-                return held["index"]
+        if held is not None and time.monotonic() - held["at"] < PATH_REFRESH:
+            return held["index"]  # fresh: not even the stamp is read
+        stamp = _stamp(con)
+        if held is not None and held["stamp"] == stamp:
+            held["at"] = time.monotonic()
+            return held["index"]
         index = paths.build(_rows(con, None))
         _HELD[where] = {"index": index, "stamp": stamp, "at": time.monotonic()}
         return index

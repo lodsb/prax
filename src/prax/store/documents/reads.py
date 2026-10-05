@@ -1125,9 +1125,12 @@ def cited_but_missing(
     marks = ",".join("?" * len(ids))
     works: dict[str, dict[str, Any]] = {}
     with_lists: set[int] = set()
+    # the reference chunks by document (migration 45): the kind index
+    # walked every reference chunk of the library for a handful of
+    # documents (the quality review of 2026-10-05)
     for r in con.execute(
-        "SELECT doc_id, data FROM chunks WHERE kind = 'reference'"
-        f" AND doc_id IN ({marks})",
+        "SELECT doc_id, data FROM chunks INDEXED BY idx_chunks_reference"
+        f" WHERE kind = 'reference' AND doc_id IN ({marks})",
         ids,
     ):
         with_lists.add(int(r["doc_id"]))

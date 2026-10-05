@@ -219,21 +219,25 @@ def cite_link(
     def late() -> bool:
         return deadline is not None and time.monotonic() > deadline
 
-    count = con.execute(
-        "SELECT count(*) FROM chunks WHERE doc_id = ?", (doc_id,)
-    ).fetchone()[0]
+    count, low, high = con.execute(
+        "SELECT count(*), min(id), max(id) FROM chunks WHERE doc_id = ?", (doc_id,)
+    ).fetchone()
     folded: list[tuple[int, str]] | None = None
     if late():
         return base
     if count <= CITE_LOCAL:
         cache = folded_docs if folded_docs is not None else {}
         if doc_id not in cache:
-            cache[doc_id] = [
-                (int(r[0]), " ".join(_FOLD.findall(str(r[1] or "").lower())))
-                for r in con.execute(
-                    "SELECT id, text FROM chunks WHERE doc_id = ?", (doc_id,)
+            got: list[tuple[int, str]] = []
+            for n, r in enumerate(
+                con.execute("SELECT id, text FROM chunks WHERE doc_id = ?", (doc_id,))
+            ):
+                if n % 200 == 0 and late():
+                    return base  # folding a long document ran past the budget
+                got.append(
+                    (int(r[0]), " ".join(_FOLD.findall(str(r[1] or "").lower())))
                 )
-            ]
+            cache[doc_id] = got
         folded = cache[doc_id]
     tries = 0
     for n in CITE_WORDS:
@@ -253,13 +257,18 @@ def cite_link(
                 tries += 1
                 if tries > CITE_INDEX_TRIES:
                     return base
+                # bounded by the document's own range of chunk ids, so the
+                # keyword index walks its postings, not the library's: a
+                # common phrase took 31 s unbounded, 43 ms bounded (the
+                # quality review of 2026-10-05)
                 holders = [
                     int(r[0])
                     for r in con.execute(
                         "SELECT c.id FROM chunks_fts JOIN chunks c"
                         " ON c.id = chunks_fts.rowid"
-                        " WHERE chunks_fts MATCH ? AND c.doc_id = ? LIMIT 2",
-                        ('"' + phrase + '"', doc_id),
+                        " WHERE chunks_fts MATCH ? AND chunks_fts.rowid BETWEEN ? AND ?"
+                        " AND c.doc_id = ? LIMIT 2",
+                        ('"' + phrase + '"', low, high, doc_id),
                     )
                 ]
             if holders == [chunk_id]:

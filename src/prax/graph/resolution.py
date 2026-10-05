@@ -265,6 +265,13 @@ def _likely(
             row["a_name"], row["b_name"]
         ):
             continue  # "Part 2" and "Part 4", the 17th and the 20th: two things
+        if row["type"] == "venue" and (
+            venues.read(row["a_name"]).edition != venues.read(row["b_name"]).edition
+        ):
+            # two editions, or a series and one of its editions: the venue
+            # tier links them part_of, no judge merges them (the quality
+            # review of 2026-10-05; sameness.yaml says the same)
+            continue
         a, b = by_id.get(row["a"]), by_id.get(row["b"])
         if a is None or b is None or a["id"] in taken or b["id"] in taken:
             continue

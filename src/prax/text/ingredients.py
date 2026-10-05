@@ -132,8 +132,9 @@ _UNIT = re.compile(
 )
 # "1. ", "2) ", "- ", "* "
 _MARKER = re.compile(r"^\s*(?:\d{1,2}[.)]|[-*•])\s+")
+# an ASCII fraction first ("1 1/2", "3/4"), or "1/2 cup" was 1 of "/2 cup"
 _AMOUNT = re.compile(
-    r"^(?P<num>(?:\d+[.,]?\d*|[½⅓⅔¼¾⅛⅜⅝⅞])(?:\s*[-–]\s*\d+[.,]?\d*)?"
+    r"^(?P<num>(?:\d+\s+\d+/\d+|\d+/\d+|\d+[.,]?\d*|[½⅓⅔¼¾⅛⅜⅝⅞])(?:\s*[-–]\s*\d+[.,]?\d*)?"
     r"(?:\s*[½⅓⅔¼¾⅛⅜⅝⅞])?)\s*(?P<rest>.*)$"
 )
 
@@ -240,7 +241,14 @@ def is_list(text: str) -> bool:
     return len(lines) <= 2 and all(_SERVINGS.match(ln) for ln in lines)
 
 
+_ASCII_FRACTION = re.compile(r"^(?:(\d+)\s+)?(\d+)/(\d+)")
+
+
 def _number(raw: str) -> float | None:
+    ascii_ = _ASCII_FRACTION.match(raw.strip())
+    if ascii_ and int(ascii_.group(3)):
+        whole_part = int(ascii_.group(1) or 0)
+        return round(whole_part + int(ascii_.group(2)) / int(ascii_.group(3)), 3)
     whole = 0.0
     seen = False
     for part in re.split(r"\s*[-–]\s*", raw)[:1]:  # a range: its lower end

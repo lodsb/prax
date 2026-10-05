@@ -60,14 +60,14 @@ full mode) over the same range followed: 24 findings, planned below.
 The quality review's 24 findings (`docs/eval/code-review-2026-10-05.md`,
 numbered there) in the order the user agreed: one step a session.
 
-- [ ] **Step 1, now: the two of high cost, the quick performance fixes, and the fraction in the general parser.**
-      - [ ] **1.** Two definitions of when a venue edition is 'the same thing': sameness.yaml says merge, the venue tier says keep apart and link part_of (an hour plus a re-measure of the judge)
-      - [ ] **2.** cited_but_missing reads every reference chunk in the library because the planner picks idx_chunks_kind over the doc_id IN list (an hour)
-      - [ ] **10.** The ASCII-fraction fix went into schema.org's ingredient_name only; the general ingredient parser still misreads '1/2 cup' (an hour plus a rechunk of recipes)
-      - [ ] **12.** connect_entities scans the whole edges table on every call, under _HELD_LOCK, just to read the index stamp (an hour)
-      - [ ] **13.** connect with as_of builds the whole path index on every request: about 1 s and a 148 MB peak each, with no bound on concurrent builds (an hour)
-      - [ ] **14.** cite_link's 100 ms budget is checked only between steps, and one step can take far longer: folding a book, or a library-wide FTS phrase query (an hour)
-      - [ ] **24.** A named token's hidden set is rebuilt by a documents scan each time it is needed, and staleness adds a second build to every search (an hour)
+- [x] (2026-10-05; the judge's re-measure with the new sameness wording, `steps.adjudicate.platt`, waits for the card) **Step 1, now: the two of high cost, the quick performance fixes, and the fraction in the general parser.**
+      - [x] **1.** Two definitions of when a venue edition is 'the same thing': sameness.yaml says merge, the venue tier says keep apart and link part_of (an hour plus a re-measure of the judge)
+      - [x] **2.** cited_but_missing reads every reference chunk in the library because the planner picks idx_chunks_kind over the doc_id IN list (an hour)
+      - [x] **10.** The ASCII-fraction fix went into schema.org's ingredient_name only; the general ingredient parser still misreads '1/2 cup' (an hour plus a rechunk of recipes)
+      - [x] **12.** connect_entities scans the whole edges table on every call, under _HELD_LOCK, just to read the index stamp (an hour)
+      - [x] **13.** connect with as_of builds the whole path index on every request: about 1 s and a 148 MB peak each, with no bound on concurrent builds (an hour)
+      - [x] **14.** cite_link's 100 ms budget is checked only between steps, and one step can take far longer: folding a book, or a library-wide FTS phrase query (an hour)
+      - [x] **24.** A named token's hidden set is rebuilt by a documents scan each time it is needed, and staleness adds a second build to every search (an hour)
 - [ ] **Step 2: one rule in two places** (the project sync first: it can fork a project's documents).
       - [ ] **3.** Two ways to sync a project, keyed differently, with the title and key rules written twice (an hour or two)
       - [ ] **4.** The heal check for functional conflicts recomputes what rules.find_conflicts keeps, by a different rule (an hour)
