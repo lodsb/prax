@@ -369,3 +369,30 @@ def test_a_roman_edition_is_read_before_a_meetings_word() -> None:
     assert (xxv.edition, xxv.acronym) == ("#25", None)
     assert venues.read("ACM MIX workshop").edition is None
     assert venues.read("CHI Conference on Human Factors").acronym == "CHI"
+
+
+def test_a_joint_meeting_is_an_edition_of_both_series() -> None:
+    """The owner, 2026-10-05: ICMC and SMC met once as one conference, an
+    edition of each; it is part of both and the same as neither."""
+    from prax.graph import venues
+
+    smc8 = "Proceedings of 8th international sound and music computing conference (SMC)"
+    joint = (
+        "Proceedings of the Joint International Conference Music Computing (ICMC)"
+        " and Sound and Music Computing (SMC)"
+    )
+    rows = [
+        (1, "International Computer Music Conference", 9),
+        (2, "Sound and Music Computing Conference", 8),
+        (3, smc8, 2),
+        (4, joint, 3),
+        (5, "ICMC 2010", 2),
+        (6, "SMC", 4),  # the bare acronym, which meets its expansion
+    ]
+    expansions = {
+        "ICMC": {"International Computer Music Conference"},
+        "SMC": {"Sound and Music Computing Conference"},
+    }
+    got = venues.plan(rows, expansions)
+    assert got.merges == [(2, 6)]  # the acronym and its expansion only
+    assert {(4, 1), (4, 2), (3, 2), (5, 1)} <= set(got.editions)

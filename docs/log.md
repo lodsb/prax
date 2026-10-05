@@ -4923,6 +4923,21 @@ in the host's `prax.yaml` (`steps.adjudicate.platt: {a: 0.4877, b:
   folding made some new duplicates), recorded for `restore_run`. Both
   checks are clear.
 
+## 2026-10-05, late: two old venue decisions, and a joint conference
+
+The re-measure turned up two of the person's venue decisions of
+2026-09-28 that the new rule contradicts; asked, the owner answered both
+as two things. The joint ICMC/SMC conference (one meeting, held once, an
+edition of each series) had been merged with the 8th SMC, and the
+Computational Creativity series with its second edition. Both merges were
+taken back through the door (`POST /graph/undecide` with their runs) and
+both pairs recorded as different (`POST /graph/decide`). The venue tier
+links the editions tonight: the 8th SMC and the second Computational
+Creativity each `part_of` its series. A joint meeting is now an edition of
+every series whose acronym it states (`Venue.others`), never merged into
+either: `eval_venues.py --diff` adds exactly one link on the library, the
+joint conference `part_of` the SMC series beside ICMC.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

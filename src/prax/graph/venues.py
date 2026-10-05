@@ -165,6 +165,9 @@ class Venue:
     acronym: str | None  # the name's own acronym, upper case
     stated: bool = False  # the name states its acronym: "(DAFx-06)"
     ordinal: int | None = None  # "the 123rd", beside a year: two in one year
+    # a joint meeting's other series, by the acronyms it states: "Joint
+    # International Conference ICMC and SMC" is an edition of both
+    others: tuple[str, ...] = ()
 
 
 def _fold(text: str) -> str:
@@ -268,7 +271,16 @@ def read(name: str) -> Venue:
     stated = acronym is not None and any(
         re.sub(r"\d+$", "", b).upper() == acronym for b in bracketed
     )
-    return Venue(" ".join(kept), edition, acronym, stated, number)
+    others: tuple[str, ...] = ()
+    if edition == "joint" and acronym is not None:
+        others = tuple(
+            dict.fromkeys(
+                b.upper()
+                for b in (re.sub(r"\d+$", "", x) for x in bracketed)
+                if b.upper() != acronym and 3 <= len(b) <= 10
+            )
+        )
+    return Venue(" ".join(kept), edition, acronym, stated, number, others)
 
 
 _ROMAN = re.compile(r"\b([IVXL]{1,6})\s+(\w+)")
@@ -369,7 +381,9 @@ def plan(entities: list[tuple[int, str, int]], expansions: dict[str, set[str]]) 
     grouped by the forms their series is known by; in a group, names of
     one edition (or of none) merge into the most connected, and every
     edition is ``part_of`` the group's bare series, the most connected name
-    without an edition, when there is one."""
+    without an edition, when there is one. A joint meeting is an edition
+    of every series whose acronym it states too (ICMC and SMC met once
+    as one conference), never merged into either."""
     parent: dict[object, object] = {}
 
     def find(x: object) -> object:
@@ -387,7 +401,8 @@ def plan(entities: list[tuple[int, str, int]], expansions: dict[str, set[str]]) 
         if ("e", i) in parent:
             groups.setdefault(find(("e", i)), []).append(i)
     out = Plan([], [])
-    for members in groups.values():
+    series_of: dict[object, int] = {}  # a group's root -> its bare series
+    for root, members in groups.items():
         if len(members) < 2:
             continue
         # one edition is one year, unless two ordinals say otherwise (the
@@ -409,9 +424,18 @@ def plan(entities: list[tuple[int, str, int]], expansions: dict[str, set[str]]) 
             out.merges += [(same[0], i) for i in same[1:]]
         series = survivors.get((None, None))
         if series is not None:
+            series_of[root] = series
             out.editions += [
                 (i, series) for k, i in survivors.items() if k[0] is not None
             ]
+    for i, (v, _) in reads.items():
+        for other in v.others:
+            form = other.lower()
+            if form not in parent:
+                continue
+            series = series_of.get(find(form))
+            if series is not None and series != i and (i, series) not in out.editions:
+                out.editions.append((i, series))
     return out
 
 
