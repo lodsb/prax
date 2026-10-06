@@ -13,6 +13,8 @@ from prax.text import dates, language, mimes
 
 from ..base import (
     ASIDE_KINDS,
+    DocumentMeta,
+    MetaLike,
     _guards,
     _reading,
     _serialized,
@@ -37,7 +39,7 @@ def _history_key(key: str, entry: dict[str, Any]) -> tuple[Any, ...]:
     return (entry.get("extractor"), entry.get("ontology_version"))
 
 
-def bounded_histories(meta: dict[str, Any], keep: int) -> dict[str, int]:
+def bounded_histories(meta: MetaLike, keep: int) -> dict[str, int]:
     """Drop from ``meta.parse_history`` and ``meta.extraction_history`` the
     entries no reader needs, in place, and say how many went of each.
 
@@ -86,7 +88,7 @@ def is_indexed(con: sqlite3.Connection, doc_id: int) -> bool:
 
 
 @_reading
-def get_meta(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
+def get_meta(con: sqlite3.Connection, doc_id: int) -> DocumentMeta:
     """The document's ``meta`` JSON without touching the text artifact."""
     row = con.execute("SELECT meta FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if row is None:
@@ -94,7 +96,7 @@ def get_meta(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
     return json.loads(row["meta"]) if row["meta"] else {}
 
 
-def _put_meta(con: sqlite3.Connection, doc_id: int, meta: dict[str, Any]) -> None:
+def _put_meta(con: sqlite3.Connection, doc_id: int, meta: MetaLike) -> None:
     """Write a document's meta back, inside the caller's transaction: the
     read-modify-write of every store function that changes a key of it.
     It refreshes nothing; a caller that changes what the document field
@@ -110,7 +112,7 @@ def _put_meta(con: sqlite3.Connection, doc_id: int, meta: dict[str, Any]) -> Non
 def set_meta(
     con: sqlite3.Connection,
     doc_id: int,
-    meta: dict[str, Any],
+    meta: MetaLike,
     *,
     title: str | None = None,
     source_url: str | None = None,
@@ -269,9 +271,7 @@ def stamp_world_dates(
     con.commit()
 
 
-def keep_summary(
-    meta: dict[str, Any], text: str, *, lang: str | None = None
-) -> str | None:
+def keep_summary(meta: MetaLike, text: str, *, lang: str | None = None) -> str | None:
     """File a summary in a document's ``meta`` and say what language it
     was filed under.
 

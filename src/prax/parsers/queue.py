@@ -58,7 +58,7 @@ def _record(
     entry: dict[str, Any],
     *,
     pages: int | None = None,
-) -> dict[str, Any]:
+) -> store.DocumentMeta:
     meta = store.get_meta(con, doc_id)
     history = list(meta.get("parse_history", []))
     history.append({"at": _now(), **entry})

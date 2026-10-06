@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from typing import Any
+from typing import Any, Final
 
 from prax.text import blocks, markup
 
@@ -648,7 +648,7 @@ def open_answer_documents(con: sqlite3.Connection, doc_ids: list[int]) -> set[in
 # read from it, and whether the session-end hook syncs it on its own. The
 # plan of a sync and its documents are ``prax.capture.projects``.
 
-PROJECT_SOURCE = "project"  # ``meta.source`` of a synced document
+PROJECT_SOURCE: Final = "project"  # ``meta.source`` of a synced document
 
 
 def _project_row(row: sqlite3.Row | None) -> dict[str, Any] | None:

@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any
+from typing import Any, Literal
 
 from prax.graph import ontology
 
@@ -81,6 +81,31 @@ _GENRE_SURE = (
 )
 
 
+# what a labelling replaces: every key of the last one
+GENRE_KEYS: tuple[
+    Literal[
+        "genres",
+        "subjects",
+        "genres_by",
+        "genres_at",
+        "genres_skip",
+        "genres_note",
+        "genres_run",
+        "genres_tried",
+    ],
+    ...,
+] = (
+    "genres",
+    "subjects",
+    "genres_by",
+    "genres_at",
+    "genres_skip",
+    "genres_note",
+    "genres_run",
+    "genres_tried",
+)
+
+
 @_serialized
 def _sure(labels: list[dict[str, Any]] | None, key: str) -> list[str]:
     """The labels given with ``p`` of 0.5 or more."""
@@ -128,16 +153,7 @@ def set_genres(
             "subjects": meta.get("subjects") or [],
             "note": meta.get("genres_note"),
         }
-    for key in (
-        "genres",
-        "subjects",
-        "genres_by",
-        "genres_at",
-        "genres_skip",
-        "genres_note",
-        "genres_run",
-        "genres_tried",
-    ):
+    for key in GENRE_KEYS:
         meta.pop(key, None)
     sure = {k: max(0.0, min(1.0, float(v))) for k, v in (p or {}).items()}
     if skip:

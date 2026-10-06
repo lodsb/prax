@@ -58,6 +58,7 @@ from .base import (  # noqa: F401
     Checks,
     Document,
     DocumentMeta,
+    MetaLike,
     P,
     R,
     SearchHit,

@@ -14,6 +14,11 @@ test scans. On a host the key is kept and logged once
 (`meta key 'x' is undeclared`). A nested object's own keys are its
 writer's; the comment names who that is.
 
+`store.get_meta` returns a `DocumentMeta`, so mypy checks a reader's
+literal keys and the type of what it reads. The writers (`set_meta`,
+`_put_meta`, `register`) take `store.MetaLike`, the declared shape or a
+plain dict. A key read through a variable is a `Final` or a `Literal`.
+
 To add a key: declare it in `store.DocumentMeta` with its shape and
 writer, and add its row here.
 
@@ -105,7 +110,7 @@ writer, and add its row here.
 | `extraction` | `dict[str, Any]` | the last reading of the graph, its stamp |
 | `extraction_history` | `list[dict[str, Any]]` | earlier readings' stamps |
 | `extraction_stale` | `dict[str, Any]` | the text read is replaced, or asked again |
-| `extraction_error` | `str` | the last reading failed |
+| `extraction_error` | `dict[str, Any]` | the last reading failed: who, under what |
 | `promote` | `dict[str, Any]` | flagged for the expensive pass |
 | `world_dates` | `dict[str, Any]` | the worlddates step's stamp |
 
@@ -124,3 +129,13 @@ writer, and add its row here.
 | `asks` | `dict[str, Any]` | a page's ask blocks by id |
 | `briefing` | `dict[str, Any]` | a briefing page's window and documents |
 | `question` | `dict[str, Any]` | a question page's question |
+
+## What a writer of meta takes: the declared shape, or a plain dict a
+
+| key | shape | what, and who writes it |
+|---|---|---|
+
+## Caller built (an importer's, a test's)
+
+| key | shape | what, and who writes it |
+|---|---|---|

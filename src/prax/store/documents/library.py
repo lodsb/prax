@@ -12,6 +12,7 @@ from prax.text import chunking, clutter
 
 from ..base import (
     _NOW,
+    MetaLike,
     _read_archive,
     _reading,
     _serialized,
@@ -27,7 +28,7 @@ from .text import _write_chunks
 # edges end (invariant 8). ``unretire_document`` brings the index back.
 
 
-def is_retired(meta: dict[str, Any]) -> bool:
+def is_retired(meta: MetaLike) -> bool:
     return bool(meta.get("retired"))
 
 

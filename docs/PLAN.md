@@ -802,8 +802,11 @@ not done.
       72 of them with their shapes and writers, the reference
       `docs/meta.md`; a write of an undeclared key fails in the tests and
       is logged on a host. Every one of the live store's 63 keys is
-      declared. Left: `get_meta` returning the shape, its readers typed
-      file by file.)
+      declared. `get_meta` returns `DocumentMeta` and the writers take
+      `store.MetaLike`: 56 type errors at first, 39 of them the writers'
+      signatures, and one a real misfit, `extraction_error` an object
+      where the declaration said a string. A nested object stays
+      `dict[str, Any]` until one earns a shape.)
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`

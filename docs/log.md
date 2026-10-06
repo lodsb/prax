@@ -5352,8 +5352,14 @@ found three keys nobody had listed: the importers' own blocks
 `meta.claude` and `meta.chat` (`meta.<source>`, written by
 `importers.feed`; `meta.links`, the third such importer, is declared with
 them), and a test's made-up `note`. All 63 keys of the live
-store are declared. Not done: `get_meta` returning `DocumentMeta`, which
-would type every reader; that is file by file, as strict mypy is.
+store are declared. The same night `get_meta` was made to return `DocumentMeta`: mypy
+found 56 errors in 16 files. 39 were the writers taking `dict[str,
+Any]`, which a `TypedDict` is not, so they take `store.MetaLike`, either
+one. The rest were readers that index by a variable key (made a `Final`
+or a `Literal` tuple) and one real misfit: `extraction_error` is an
+object, declared a string, and no live document had one to show it. A
+misspelt key at a reader is now a type error. The nested objects stay
+`dict[str, Any]`.
 
 # Moved from the plan
 

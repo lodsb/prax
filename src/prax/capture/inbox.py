@@ -502,8 +502,7 @@ def _fill_in(con: sqlite3.Connection, doc_id: int, extra: dict[str, Any]) -> Non
     m = store.get_meta(con, doc_id)
     added = {k: v for k, v in extra.items() if k in FILL_IN_KEYS and v and not m.get(k)}
     if added:
-        m.update(added)
-        store.set_meta(con, doc_id, m)
+        store.set_meta(con, doc_id, {**m, **added})
 
 
 _TITLE = re.compile(rb"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)

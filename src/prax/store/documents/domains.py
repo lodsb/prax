@@ -11,6 +11,7 @@ from typing import Any
 from prax.graph import ontology
 
 from ..base import (
+    MetaLike,
     _reading,
     _serialized,
     document_hidden,
@@ -99,7 +100,7 @@ def set_domains(
     return meta.get("domains")
 
 
-def _lens_changed(meta: dict[str, Any], *, by: str) -> bool:
+def _lens_changed(meta: MetaLike, *, by: str) -> bool:
     """The document's domain set changed under an extraction made against
     the old set: the stamp goes to the history, ``meta.extraction_stale``
     says why, so the extract step selects the document before the

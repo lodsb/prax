@@ -196,7 +196,7 @@ class DocumentMeta(TypedDict, total=False):
     extraction: dict[str, Any]  # the last reading of the graph, its stamp
     extraction_history: list[dict[str, Any]]  # earlier readings' stamps
     extraction_stale: dict[str, Any]  # the text read is replaced, or asked again
-    extraction_error: str  # the last reading failed
+    extraction_error: dict[str, Any]  # the last reading failed: who, under what
     promote: dict[str, Any]  # flagged for the expensive pass
     world_dates: dict[str, Any]  # the worlddates step's stamp
     # its life: retired, superseded, stale
@@ -209,7 +209,12 @@ class DocumentMeta(TypedDict, total=False):
     question: dict[str, Any]  # a question page's question
 
 
-def undeclared_meta(meta: dict[str, Any]) -> list[str]:
+# what a writer of meta takes: the declared shape, or a plain dict a
+# caller built (an importer's, a test's)
+MetaLike = DocumentMeta | dict[str, Any]
+
+
+def undeclared_meta(meta: MetaLike) -> list[str]:
     """The top-level keys of ``meta`` that ``DocumentMeta`` does not name."""
     return sorted(k for k in meta if k not in DocumentMeta.__annotations__)
 
@@ -227,7 +232,7 @@ checks = Checks()
 _meta_logged: set[str] = set()
 
 
-def check_meta(meta: dict[str, Any]) -> None:
+def check_meta(meta: MetaLike) -> None:
     """Refuse (in the tests) or log (on a host) a key nobody declared."""
     keys = undeclared_meta(meta)
     if not keys:

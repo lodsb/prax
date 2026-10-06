@@ -583,9 +583,9 @@ def refresh_blocks(
     asks = {
         k: v for k, v in asks.items() if any(b.id == k for b in blocks.blocks(text))
     }
-    meta = store.get_meta(con, page["doc_id"])
-    meta["asks"] = asks
-    store.set_meta(con, page["doc_id"], meta)
+    held = store.get_meta(con, page["doc_id"])
+    held["asks"] = asks
+    store.set_meta(con, page["doc_id"], held)
     return {
         "slug": slug,
         "refreshed": sum(1 for r in report.values() if r.get("filled")),
@@ -833,7 +833,7 @@ def briefing(
     return {**written, "documents": len(arrived), "moved": len(moved)}
 
 
-def _arrived_line(row: Any, meta: dict[str, Any]) -> str:
+def _arrived_line(row: Any, meta: store.MetaLike) -> str:
     """One document that arrived: its link, what it is (a video, a PDF, an
     image, a web page) and its domains, and its summary's first sentence."""
     line = f"- [{row['title'] or 'document ' + str(row['id'])}](#doc/{row['id']})"
