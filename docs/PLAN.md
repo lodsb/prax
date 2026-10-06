@@ -86,7 +86,7 @@ in the plan is blocked on these, except where an item says so.
 - [ ] **The `worlddates` step on**: `steps.worlddates.model` in
       prax.yaml (howto 3e). Some 500 dated facts over a night or two,
       18 of 18 right on the samples (`docs/eval/world-dates-2026-10-06.md`).
-- [ ] **Push**: the commits after `f215266`.
+- [x] **Push**: done 2026-10-06.
 
 **On the notebook** (noted 2026-10-04): `git pull`, `/mcp` reconnect
 (it brings the `changes` and `connect` tools), the project re-synced
