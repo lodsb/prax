@@ -698,7 +698,9 @@ not done.
       `ask`, `surf`, `questions`, the door and `evaluation` are checked
       against it. mypy caught a hit's `time` declared a float where the
       chunker writes whole seconds. A test fails when a hit carries a key
-      the shape does not declare.)
+      the shape does not declare. `get_document` returns `store.Document`,
+      the row and its text window; a test holds it to the table's
+      columns. Left: a job row and the meta keys.)
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`

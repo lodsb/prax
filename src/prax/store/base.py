@@ -95,6 +95,29 @@ class SearchHit(TypedDict, total=False):
     domains: list[str] | None  # the door's addition: the document's modules
 
 
+class Document(TypedDict):
+    """One document as ``get_document`` reads it: the ``documents`` row,
+    its ``meta`` parsed, and a window of its text. ``text`` is
+    ``[offset, offset + max_chars)``; ``text_len`` and ``truncated`` say
+    whether more remains."""
+
+    id: int
+    hash: str  # sha256 of the original bytes (invariant 2)
+    mime: str | None
+    title: str | None
+    source_url: str | None
+    original_path: str | None
+    text_hash: str | None  # the parsed-text artifact
+    added_at: str
+    parsed_at: str | None
+    meta: dict[str, Any]
+    text_len: int  # the column may be NULL; get_document always says it
+    sensitivity: str | None  # the wall: open, suspected, personal
+    text: str
+    offset: int
+    truncated: bool
+
+
 def now() -> str:
     """The moment, as every timestamp prax writes: UTC, ISO-8601 to the
     second, ``Z`` (``2026-09-22T01:49:03Z``). One shape, so the strings

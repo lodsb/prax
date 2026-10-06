@@ -35,9 +35,10 @@ def get(
     """One document and a window of its text; ``brief`` is what an agent
     reads (``store.brief_document``: the meta without its histories)."""
     con = _con(request)
-    doc = store.get_document(con, doc_id, offset=offset, max_chars=max_chars)
-    if doc is None:
+    found = store.get_document(con, doc_id, offset=offset, max_chars=max_chars)
+    if found is None:
         raise HTTPException(404, "no such document")
+    doc: dict[str, Any] = dict(found)  # the shape, and what the door adds
     # what it is waiting to be read by: a list since migration 21, and
     # `meta.reading` is the last reading that finished
     doc["pending"] = store.pending_readings(con, doc_id)

@@ -55,6 +55,7 @@ from .base import (  # noqa: F401
     UNASSIGNED,
     VEC_DIM,
     VIEWER,
+    Document,
     P,
     R,
     SearchHit,

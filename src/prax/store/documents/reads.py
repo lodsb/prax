@@ -7,7 +7,8 @@ import contextlib
 import json
 import re
 import sqlite3
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, cast
 from urllib.parse import quote_plus
 
 from prax import packs
@@ -17,6 +18,7 @@ from prax.text import dates
 from ..base import (
     _TOKEN,
     UNASSIGNED,
+    Document,
     SearchHit,
     _guards,
     _like_prefix,
@@ -96,8 +98,9 @@ def get_document(
     *,
     offset: int = 0,
     max_chars: int | None = None,
-) -> dict[str, Any] | None:
-    """One document with its text read from the parsed-text artifact.
+) -> Document | None:
+    """One document with its text read from the parsed-text artifact
+    (``Document``).
 
     ``text`` is the window ``[offset, offset + max_chars)``; ``text_len`` and
     ``truncated`` tell the caller whether more remains. With ``max_chars=0``
@@ -108,24 +111,25 @@ def get_document(
     doc = con.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     if not doc:
         return None
-    out = dict(doc)
-    out["meta"] = json.loads(out["meta"]) if out["meta"] else {}
+    row = dict(doc)
+    row["meta"] = json.loads(row["meta"]) if row["meta"] else {}
     offset = max(0, offset)
     known = doc["text_len"] if doc["text_hash"] else 0
     if max_chars == 0 and known is not None:
-        out.update(
+        row.update(
             text="", text_len=int(known), offset=offset, truncated=offset < int(known)
         )
-        return out
+        return cast(Document, row)
     full = _read_archive(doc["text_hash"]).decode("utf-8") if doc["text_hash"] else ""
     end = len(full) if max_chars is None else min(len(full), offset + max(0, max_chars))
-    out.update(
+    row.update(
         text=full[offset:end],
         text_len=len(full),
         offset=offset,
         truncated=end < len(full),
     )
-    return out
+    # the row's columns as the table has them; a test holds the two together
+    return cast(Document, row)
 
 
 # What an agent reads of a document's meta (``GET /get?brief=true``, the
@@ -158,7 +162,7 @@ BRIEF_ROW_DROP = ("hash", "text_hash", "parsed_at")
 HIT_RANKS = ("score", "fts_rank", "vec_rank", "field_rank", "dvec_rank")
 
 
-def brief_document(doc: dict[str, Any]) -> dict[str, Any]:
+def brief_document(doc: Mapping[str, Any]) -> dict[str, Any]:
     """A ``get_document`` result as an agent reads it: the meta cut to
     ``BRIEF_META``, the capture to who and when, the Zotero record to its
     keys, and the row without the hashes."""

@@ -13,6 +13,7 @@ and nothing called it but its own test.
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Mapping
 from typing import Any
 
 from prax import models, store
@@ -23,7 +24,7 @@ from prax.writing import summaries, titles
 # ---------------------------------------------------------------- titles
 
 
-def file_name(doc: dict[str, Any]) -> str | None:
+def file_name(doc: Mapping[str, Any]) -> str | None:
     z = (doc["meta"] or {}).get("zotero") or {}
     got: str | None = z.get("filename") or doc["title"]
     return got

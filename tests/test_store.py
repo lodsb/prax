@@ -678,3 +678,18 @@ def test_the_languages_pass_outlives_a_label_with_a_twin(
         )
     ]
     assert sorted(langs, key=str) == sorted([None, "de"], key=str)
+
+
+def test_a_document_has_the_shape_its_table_gives(con: sqlite3.Connection) -> None:
+    """``store.Document`` is the ``documents`` row and the text window: a
+    migration that adds a column fails here until the shape says it, since
+    ``get_document`` hands the row out under that type."""
+    doc_id = store.ingest_text(con, "Some text to read.", title="A note")["doc_id"]
+    for chars in (None, 0, 4):
+        doc = store.get_document(con, doc_id, max_chars=chars)
+        assert doc is not None
+        assert set(doc) == set(store.Document.__annotations__)
+        assert isinstance(doc["text_len"], int)
+    columns = {r[1] for r in con.execute("PRAGMA table_info(documents)")}
+    window = {"text", "offset", "truncated"}
+    assert set(store.Document.__annotations__) == columns | window
