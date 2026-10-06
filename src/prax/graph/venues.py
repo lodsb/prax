@@ -384,59 +384,81 @@ def plan(entities: list[tuple[int, str, int]], expansions: dict[str, set[str]]) 
     without an edition, when there is one. A joint meeting is an edition
     of every series whose acronym it states too (ICMC and SMC met once
     as one conference), never merged into either."""
-    parent: dict[object, object] = {}
-
-    def find(x: object) -> object:
-        while parent.setdefault(x, x) != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
     reads = {i: (read(n), d) for i, n, d in entities}
+    sets = _Sets()
     for i, (v, _) in reads.items():
         for form in series_names(v, expansions):
-            parent[find(("e", i))] = find(form)
+            sets.join(("e", i), form)
     groups: dict[object, list[int]] = {}
     for i in reads:
-        if ("e", i) in parent:
-            groups.setdefault(find(("e", i)), []).append(i)
+        if sets.has(("e", i)):
+            groups.setdefault(sets.find(("e", i)), []).append(i)
     out = Plan([], [])
     series_of: dict[object, int] = {}  # a group's root -> its bare series
     for root, members in groups.items():
         if len(members) < 2:
             continue
-        # one edition is one year, unless two ordinals say otherwise (the
-        # 122nd and 123rd AES Conventions were both in 2007); a name that
-        # gives no ordinal joins the one ordinal its year has, if one
-        by_edition: dict[tuple[str | None, int | None], list[int]] = {}
-        for i in members:
-            v = reads[i][0]
-            by_edition.setdefault((v.edition, v.ordinal), []).append(i)
-        for edition, ordinal in list(by_edition):
-            if ordinal is None:
-                others = [k for k in by_edition if k[0] == edition and k[1] is not None]
-                if len(others) == 1:
-                    by_edition[others[0]] += by_edition.pop((edition, None))
-        survivors: dict[tuple[str | None, int | None], int] = {}
-        for key, same in by_edition.items():
-            same.sort(key=lambda i: (-reads[i][1], i))
-            survivors[key] = same[0]
-            out.merges += [(same[0], i) for i in same[1:]]
-        series = survivors.get((None, None))
+        series = _plan_group(members, reads, out)
         if series is not None:
             series_of[root] = series
-            out.editions += [
-                (i, series) for k, i in survivors.items() if k[0] is not None
-            ]
     for i, (v, _) in reads.items():
         for other in v.others:
             form = other.lower()
-            if form not in parent:
+            if not sets.has(form):
                 continue
-            series = series_of.get(find(form))
+            series = series_of.get(sets.find(form))
             if series is not None and series != i and (i, series) not in out.editions:
                 out.editions.append((i, series))
     return out
+
+
+class _Sets:
+    """Union-find over the venue names and the forms of their series."""
+
+    def __init__(self) -> None:
+        self.parent: dict[object, object] = {}
+
+    def find(self, x: object) -> object:
+        parent = self.parent
+        while parent.setdefault(x, x) != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    def join(self, a: object, b: object) -> None:
+        self.parent[self.find(a)] = self.find(b)
+
+    def has(self, x: object) -> bool:
+        return x in self.parent
+
+
+def _plan_group(
+    members: list[int], reads: dict[int, tuple[Venue, int]], out: Plan
+) -> int | None:
+    """One series' names: those of one edition merge into the most
+    connected, and each edition is ``part_of`` the bare series. The bare
+    series (no edition), or None when the group has none."""
+    # one edition is one year, unless two ordinals say otherwise (the
+    # 122nd and 123rd AES Conventions were both in 2007); a name that
+    # gives no ordinal joins the one ordinal its year has, if one
+    by_edition: dict[tuple[str | None, int | None], list[int]] = {}
+    for i in members:
+        v = reads[i][0]
+        by_edition.setdefault((v.edition, v.ordinal), []).append(i)
+    for edition, ordinal in list(by_edition):
+        if ordinal is None:
+            others = [k for k in by_edition if k[0] == edition and k[1] is not None]
+            if len(others) == 1:
+                by_edition[others[0]] += by_edition.pop((edition, None))
+    survivors: dict[tuple[str | None, int | None], int] = {}
+    for key, same in by_edition.items():
+        same.sort(key=lambda i: (-reads[i][1], i))
+        survivors[key] = same[0]
+        out.merges += [(same[0], i) for i in same[1:]]
+    series = survivors.get((None, None))
+    if series is not None:
+        out.editions += [(i, series) for k, i in survivors.items() if k[0] is not None]
+    return series
 
 
 NOT_A_VENUE_ORDER = ("none", "publisher", "company", "institution")

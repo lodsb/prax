@@ -139,27 +139,12 @@ def _named_may(
             )
 
 
-def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
-    """Plan a project's files and, unless ``dry_run``, apply the plan. The
-    request is ``prax.client.project_files``' answer with the settings
-    beside it (``name``, ``domains``, ``tags``, ``include``, ``exclude``,
-    ``auto_sync``, ``dry_run``). Unknown domains and a missing text are a
-    ValueError, raised before anything is written."""
-    remote = req.get("remote") or None
-    prefix = str(req.get("prefix") or "").strip("/")
-    dry_run = bool(req.get("dry_run", True))
-    files: list[dict[str, Any]] = list(req.get("files") or [])
-    known = store.project_at(con, remote, prefix)
-    name = str(
-        req.get("name")
-        or (known or {}).get("name")
-        or req.get("root_name")
-        or (remote.rsplit("/", 1)[-1] if remote else "")
-    ).strip()
-    if not name:
-        raise ValueError("a project needs a name")
-    held = store.project_named(con, name) or known or {}
-    stored = held.get("settings") or {}
+def _settings(
+    req: dict[str, Any], stored: dict[str, Any]
+) -> tuple[dict[str, list[str]], str | None]:
+    """The project's settings, each from the request where it says one,
+    else as stored, and its sensitivity; a sensitivity that is neither
+    personal nor none is a ValueError."""
     settings = {
         k: _words(req[k]) if req.get(k) is not None else _words(stored.get(k))
         for k in SETTINGS
@@ -171,16 +156,19 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
     )
     if sensitivity not in SENSITIVITIES:
         raise ValueError("a project's sensitivity is personal, or none")
-    settings_out: dict[str, Any] = {**settings}
-    if sensitivity:
-        settings_out["sensitivity"] = sensitivity
-    if not dry_run:
-        from prax.graph import ontology
+    return settings, sensitivity
 
-        modules = set(ontology.current().modules)
-        unknown = [d for d in settings["domains"] if d not in modules]
-        if unknown:
-            raise ValueError(f"no ontology module {', '.join(unknown)}")
+
+def _file_rows(
+    files: list[dict[str, Any]],
+    name: str,
+    remote: str | None,
+    prefix: str,
+    settings: dict[str, list[str]],
+) -> list[dict[str, Any]]:
+    """One row a file: its path in the project and in the repository, the
+    document key and the one before keys were by remote (``legacy``), its
+    version, and why it is skipped, if it is."""
     rows: list[dict[str, Any]] = []
     for f in files:
         rel = str(f.get("path") or "").strip("/")
@@ -204,10 +192,16 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
                 "why": why,
             }
         )
-    have = store.project_documents(
-        con, name, [r["key"] for r in rows] + [r["legacy"] for r in rows]
-    )
-    _named_may(con, req, name, held, settings, sensitivity, have, dry_run)
+    return rows
+
+
+def _match(
+    rows: list[dict[str, Any]], have: dict[str, dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Each row's action against what the project holds (``have``, by
+    key): skip, unchanged or refresh by its key (or its legacy key),
+    moved where another key holds its version, else add. The documents no
+    row claimed are what is gone."""
     by_version = {v["version"]: (k, v) for k, v in have.items() if v.get("version")}
     claimed: set[str] = set()
     for r in rows:
@@ -233,11 +227,50 @@ def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
             r["action"] = "moved"
             continue
         r["action"] = "add"
-    gone = [
+    return [
         {"path": v.get("path"), "doc_id": v["doc_id"]}
         for k, v in have.items()
         if k not in claimed
     ]
+
+
+def sync(con: sqlite3.Connection, req: dict[str, Any]) -> dict[str, Any]:
+    """Plan a project's files and, unless ``dry_run``, apply the plan. The
+    request is ``prax.client.project_files``' answer with the settings
+    beside it (``name``, ``domains``, ``tags``, ``include``, ``exclude``,
+    ``auto_sync``, ``dry_run``). Unknown domains and a missing text are a
+    ValueError, raised before anything is written."""
+    remote = req.get("remote") or None
+    prefix = str(req.get("prefix") or "").strip("/")
+    dry_run = bool(req.get("dry_run", True))
+    files: list[dict[str, Any]] = list(req.get("files") or [])
+    known = store.project_at(con, remote, prefix)
+    name = str(
+        req.get("name")
+        or (known or {}).get("name")
+        or req.get("root_name")
+        or (remote.rsplit("/", 1)[-1] if remote else "")
+    ).strip()
+    if not name:
+        raise ValueError("a project needs a name")
+    held = store.project_named(con, name) or known or {}
+    settings, sensitivity = _settings(req, held.get("settings") or {})
+    settings_out: dict[str, Any] = {**settings}
+    if sensitivity:
+        settings_out["sensitivity"] = sensitivity
+    if not dry_run:
+        from prax.graph import ontology
+
+        modules = set(ontology.current().modules)
+        unknown = [d for d in settings["domains"] if d not in modules]
+        if unknown:
+            raise ValueError(f"no ontology module {', '.join(unknown)}")
+    rows = _file_rows(files, name, remote, prefix, settings)
+    have = store.project_documents(
+        con, name, [r["key"] for r in rows] + [r["legacy"] for r in rows]
+    )
+    _named_may(con, req, name, held, settings, sensitivity, have, dry_run)
+    gone = _match(rows, have)
     if not dry_run:
         missing = [
             r["path"]

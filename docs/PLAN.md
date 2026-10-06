@@ -717,7 +717,11 @@ not done.
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`
       (19), `capture.routes.routes_for` (19). (2026-10-06: those four
       split, each now 10 or under, the same output before and after; the
-      top of the list since is `changes` (20), `sync` and `plan` (19).)
+      top of the list since is `changes` (20), `sync` and `plan` (19).
+      Those three split the same day, the same output before and after
+      (`changes` on nine argument sets on a copy, `venues.plan` on its
+      2,704 venues); the top is now 18: `refresh_blocks`, `read`,
+      `request_of`, `cite_link`.)
 - [x] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
       the extension. The summaries and sections helpers that the store
       calls up to could move into `prax.text`. (2026-10-03: the six tests

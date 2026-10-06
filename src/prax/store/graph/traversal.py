@@ -827,41 +827,11 @@ def changes(
     document hidden from the viewer counts as absent (the wall)."""
     begin, end, begin_date, end_date = _span(since, until)
     limit = max(1, min(int(limit), 200))
-    where: list[str] = []
-    args: list[Any] = []
-    if rel:
-        where.append("e.rel = ?")
-        args.append(rel)
     hidden = hidden_documents(con)
-    veil = json.dumps(sorted(hidden))
-    if not derived:
-        where.append("COALESCE(e.producer, '') NOT LIKE 'rule:%'")
-    elif hidden:
-        # a derivation stands on its premises: hidden with any of them
-        where.append(
-            "NOT (COALESCE(e.producer, '') LIKE 'rule:%' AND EXISTS (SELECT 1"
-            " FROM edge_premises pp JOIN edges pe ON pe.id = pp.premise_id"
-            " WHERE pp.edge_id = e.id AND pe.source_doc IN"
-            " (SELECT value FROM json_each(?))))"
-        )
-        args.append(veil)
-    if entity:
-        ids = _entity_ids(con, entity)
-        if ids and hidden:
-            # a name only hidden documents speak of is as unknown as one
-            # nobody does (the wall: hidden means absent, existence too)
-            ids = _visible_ids(con, ids, hidden)
-        if not ids:
-            return {"since": since, "until": until, "unknown_entity": entity}
-        marks = ",".join("?" * len(ids))
-        where.append(f"(e.src IN ({marks}) OR e.dst IN ({marks}))")
-        args += ids + ids
-    join = ""
-    if domain:
-        clause, dargs = domain_clause(con, [domain], unset=False)
-        join = " JOIN documents d ON d.id = e.source_doc"
-        where.append("1 = 1" + clause)
-        args += dargs
+    filters = _change_filters(con, hidden, entity, rel, domain, derived)
+    if filters is None:
+        return {"since": since, "until": until, "unknown_entity": entity}
+    where, args, join = filters
     # a repair's work: written by it, or ended by it and recorded
     healed = (
         "(COALESCE(e.producer, '') LIKE 'heal:%' OR EXISTS (SELECT 1"
@@ -878,46 +848,11 @@ def changes(
     }
     for side, (cond, at, bounds) in sides.items():
         sql_where = " AND ".join([cond, *where])
-        counts: dict[str, int] = {}
-        total = 0
-        for r in con.execute(
-            f"SELECT e.rel, e.source_doc, count(*) FROM edges e{join}"
-            f" WHERE {sql_where} GROUP BY e.rel, e.source_doc",
-            [*bounds, *args],
-        ):
-            if r[1] is not None and int(r[1]) in hidden:
-                continue
-            counts[r[0]] = counts.get(r[0], 0) + int(r[2])
-            total += int(r[2])
-        facts: list[dict[str, Any]] = []
-        offset = 0
-        while len(facts) < min(limit, total):
-            rows = con.execute(
-                f"SELECT e.id, s.name AS src, e.rel, t.name AS dst, e.source_doc,"
-                f" {at} AS at FROM edges e{join}"
-                " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
-                f" WHERE {sql_where} ORDER BY {at} DESC, e.id DESC LIMIT ? OFFSET ?",
-                [*bounds, *args, limit * 2, offset],
-            ).fetchall()
-            if not rows:
-                break
-            offset += len(rows)
-            for r in rows:
-                doc = r["source_doc"]
-                if doc is not None and int(doc) in hidden:
-                    continue
-                fact = {
-                    "edge_id": int(r["id"]),
-                    "src": r["src"],
-                    "rel": r["rel"],
-                    "dst": r["dst"],
-                    "at": r["at"],
-                }
-                if doc is not None:
-                    fact["source_doc"] = int(doc)
-                facts.append(fact)
-                if len(facts) >= limit:
-                    break
+        values = [*bounds, *args]
+        counts, total = _side_counts(con, sql_where, values, join, hidden)
+        facts = _side_facts(
+            con, sql_where, values, join, at, hidden, min(limit, total), limit
+        )
         out[side] = {
             "count": total,
             "by_rel": dict(sorted(counts.items(), key=lambda kv: -kv[1])),
@@ -925,16 +860,123 @@ def changes(
             "left_out": total - len(facts),
         }
         if not corrections:
-            corrected = sum(
-                int(r[1])
-                for r in con.execute(
-                    f"SELECT e.source_doc, count(*) FROM edges e{join}"
-                    f" WHERE {' AND '.join([cond, *plain, healed])}"
-                    " GROUP BY e.source_doc",
-                    [*bounds, *args],
-                )
-                if r[0] is None or int(r[0]) not in hidden
-            )
+            corrected = _side_counts(
+                con, " AND ".join([cond, *plain, healed]), values, join, hidden
+            )[1]
             if corrected:
                 out[side]["corrected"] = corrected
     return out
+
+
+def _change_filters(
+    con: sqlite3.Connection,
+    hidden: frozenset[int],
+    entity: str | None,
+    rel: str | None,
+    domain: str | None,
+    derived: bool,
+) -> tuple[list[str], list[Any], str] | None:
+    """``changes``'s conditions on an edge beside its time, their values,
+    and the join a domain needs; None for an entity nobody visible speaks
+    of."""
+    where: list[str] = []
+    args: list[Any] = []
+    if rel:
+        where.append("e.rel = ?")
+        args.append(rel)
+    if not derived:
+        where.append("COALESCE(e.producer, '') NOT LIKE 'rule:%'")
+    elif hidden:
+        # a derivation stands on its premises: hidden with any of them
+        where.append(
+            "NOT (COALESCE(e.producer, '') LIKE 'rule:%' AND EXISTS (SELECT 1"
+            " FROM edge_premises pp JOIN edges pe ON pe.id = pp.premise_id"
+            " WHERE pp.edge_id = e.id AND pe.source_doc IN"
+            " (SELECT value FROM json_each(?))))"
+        )
+        args.append(json.dumps(sorted(hidden)))
+    if entity:
+        ids = _entity_ids(con, entity)
+        if ids and hidden:
+            # a name only hidden documents speak of is as unknown as one
+            # nobody does (the wall: hidden means absent, existence too)
+            ids = _visible_ids(con, ids, hidden)
+        if not ids:
+            return None
+        marks = ",".join("?" * len(ids))
+        where.append(f"(e.src IN ({marks}) OR e.dst IN ({marks}))")
+        args += ids + ids
+    join = ""
+    if domain:
+        clause, dargs = domain_clause(con, [domain], unset=False)
+        join = " JOIN documents d ON d.id = e.source_doc"
+        where.append("1 = 1" + clause)
+        args += dargs
+    return where, args, join
+
+
+def _side_counts(
+    con: sqlite3.Connection,
+    sql_where: str,
+    values: list[Any],
+    join: str,
+    hidden: frozenset[int],
+) -> tuple[dict[str, int], int]:
+    """The edges of one side by relation, and their total; an edge from a
+    hidden document is not counted."""
+    counts: dict[str, int] = {}
+    total = 0
+    for r in con.execute(
+        f"SELECT e.rel, e.source_doc, count(*) FROM edges e{join}"
+        f" WHERE {sql_where} GROUP BY e.rel, e.source_doc",
+        values,
+    ):
+        if r[1] is not None and int(r[1]) in hidden:
+            continue
+        counts[r[0]] = counts.get(r[0], 0) + int(r[2])
+        total += int(r[2])
+    return counts, total
+
+
+def _side_facts(
+    con: sqlite3.Connection,
+    sql_where: str,
+    values: list[Any],
+    join: str,
+    at: str,
+    hidden: frozenset[int],
+    wanted: int,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """The newest ``wanted`` facts of one side, read ``limit`` × 2 at a time
+    past the ones from hidden documents."""
+    facts: list[dict[str, Any]] = []
+    offset = 0
+    while len(facts) < wanted:
+        rows = con.execute(
+            f"SELECT e.id, s.name AS src, e.rel, t.name AS dst, e.source_doc,"
+            f" {at} AS at FROM edges e{join}"
+            " JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst"
+            f" WHERE {sql_where} ORDER BY {at} DESC, e.id DESC LIMIT ? OFFSET ?",
+            [*values, limit * 2, offset],
+        ).fetchall()
+        if not rows:
+            break
+        offset += len(rows)
+        for r in rows:
+            doc = r["source_doc"]
+            if doc is not None and int(doc) in hidden:
+                continue
+            fact = {
+                "edge_id": int(r["id"]),
+                "src": r["src"],
+                "rel": r["rel"],
+                "dst": r["dst"],
+                "at": r["at"],
+            }
+            if doc is not None:
+                fact["source_doc"] = int(doc)
+            facts.append(fact)
+            if len(facts) >= limit:
+                break
+    return facts
