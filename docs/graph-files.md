@@ -97,9 +97,16 @@ stem), with a run per file (`import-<name>-<stamp>`).
 held, the edges the local ontology takes and the ones it would queue,
 and the pages that are new, changed or the same.
 
-## Not yet
+## Kept beside a project
 
-The Claude Code plugin's session-end sync does not write
-`.prax/graph.jsonl` beside `.prax-project`. The design has it
-(docs/log.md, "The night of 2026-09-20"); run `prax export --project`
-by hand until it does.
+A project that keeps its graph in its repository exports it once by
+hand:
+
+    prax export --project synth -o .prax/graph.jsonl
+
+From then on the Claude Code plugin's session-end sync (`prax sync
+--if-auto`) exports it again after the project's files are sent, and
+writes the file only when more than its header's `exported_at`
+changed. A copy kept in git then diffs only when the graph did. A
+project without the file gets none: the first export is the choice to
+keep one.

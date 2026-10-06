@@ -113,7 +113,7 @@ fine for the tools, since the door answers them; pull it now and then.
 | `/prax:remember [what]` | this session's decisions and findings appended to the project's page, with edges for the facts |
 | `/prax:sync [--apply] [--auto]` | the project's git-tracked `.md`/`.rst`/`.txt`/`.adoc` files into the library, keyed by remote and path: the plan first, then the sync |
 | `/prax:archive [--since DATE] [--dry-run]` | the raw record: the project's Claude Code sessions (what was said, not what was run) and the agent's memory files |
-| hook `SessionEnd` | runs the sync for a project whose manifest in prax says `auto_sync` (or that has an older `.prax-project` file), and the archive when that file asks for it; silent otherwise |
+| hook `SessionEnd` | runs the sync for a project whose manifest in prax says `auto_sync` (or that has an older `.prax-project` file), and the archive when that file asks for it; refreshes `.prax/graph.jsonl` where the project keeps one (docs/graph-files.md); silent otherwise |
 
 ## Opting a project in
 

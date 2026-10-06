@@ -431,6 +431,41 @@ def _run(door: Door, a: Any, source: str, items: Iterable[feed.Item]) -> int:
     return 0 if not report.failed else 1
 
 
+GRAPH_FILE = Path(".prax") / "graph.jsonl"
+
+
+def _without_moment(data: bytes) -> bytes:
+    """A graph file with its header's ``exported_at`` taken out: what is the
+    same when nothing in the graph changed."""
+    newline = bytes([10])
+    head, _, rest = data.partition(newline)
+    try:
+        header = json.loads(head)
+    except ValueError:
+        return data
+    header.pop("exported_at", None)
+    return json.dumps(header, sort_keys=True).encode() + newline + rest
+
+
+def _refresh_graph_file(door: Door, root: Path, name: str) -> bool:
+    """The session-end hook's last part (docs/graph-files.md): a project
+    that keeps its graph beside it, ``.prax/graph.jsonl``, has it exported
+    again (``prax export --project``) and written when anything but the
+    moment of export changed, so a copy kept in git diffs only when the
+    graph did. A project without the file is left without one: exporting
+    once by hand is how a project chooses to keep it."""
+    target = root / GRAPH_FILE
+    if not name or not target.is_file():
+        return False
+    data = door.get_bytes_with("/graph/export", {"project": name})
+    if _without_moment(data) == _without_moment(target.read_bytes()):
+        return False
+    tmp = target.with_name(target.name + ".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(target)
+    return True
+
+
 def sync(door: Door, a: Any) -> int:
     """A project's written knowledge to the library (``POST /projects/sync``):
     the plan by default, the sync with ``--apply``. ``--if-auto`` is the
@@ -476,6 +511,8 @@ def sync(door: Door, a: Any) -> int:
             "dry_run": not apply,
         }
         res = door.post_json("/projects/sync", body)
+        if a.if_auto and not res.get("dry_run"):
+            _refresh_graph_file(door, root, str(res.get("name") or ""))
     except (ValueError, OSError) as exc:
         out.fail(str(exc))
         return 2

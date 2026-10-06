@@ -5277,6 +5277,17 @@ their document's text: 37% of the 35B's, 68% of Sonnet's, 50% of the
 text at all. So a quote is often a paraphrase, or from a text read again
 since, and "gone" in `why` can mean it never was the text's own words.
 
+## 2026-10-06, the night: the plugin keeps a project's graph file
+
+The last part of T's design. `prax sync --if-auto`, the Claude Code
+plugin's session-end run, exports the project's graph again after its
+files are sent, where the project keeps `.prax/graph.jsonl` (exported
+once by hand, which is the choice to keep it). The file is written only
+when more than its header's `exported_at` changed, so a copy in git
+diffs only when the graph did. A project without the file gets none.
+The plan's "a document's own neighbourhood" was done on 2026-09-27
+(stage L, the document page's "graph" link) and is ticked.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

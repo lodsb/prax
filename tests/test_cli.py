@@ -508,3 +508,27 @@ def test_sync_plans_applies_and_follows_the_manifest(
     assert res["counts"]["add"] == 1 and res["dry_run"] is False
     assert run("sync", str(root), "--if-auto") == 0
     assert capsys.readouterr().out == ""  # outside git: no manifest to ask
+
+
+def test_the_hook_keeps_a_graph_file_a_project_keeps(
+    door: TestClient, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The session-end sync refreshes ``.prax/graph.jsonl`` where a project
+    keeps one (exported once by hand), and rewrites it only when more than
+    the moment of export changed; a project without it gets none."""
+    root = tmp_path / "synth"
+    (root / "docs").mkdir(parents=True)
+    (root / "docs" / "a.md").write_text("# A\n\nOn oscillators.\n", encoding="utf-8")
+    (root / ".prax-project").write_text("name: synth\n", encoding="utf-8")
+    assert run("sync", str(root), "--if-auto") == 0
+    assert not (root / ".prax" / "graph.jsonl").exists()
+    graph = root / ".prax" / "graph.jsonl"
+    graph.parent.mkdir()
+    graph.write_text('{"kind": "header", "exported_at": "then"}\n', encoding="utf-8")
+    assert run("sync", str(root), "--if-auto") == 0
+    first = graph.read_bytes()
+    header = json.loads(first.split(b"\n", 1)[0])
+    assert header["kind"] == "header" and header["exported_at"] != "then"
+    assert run("sync", str(root), "--if-auto") == 0
+    assert graph.read_bytes() == first  # the same graph: the file untouched
+    capsys.readouterr()

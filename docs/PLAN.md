@@ -688,9 +688,12 @@ numbered there) in the order the user agreed: one step a session.
 
 ## The UI and the agent
 
-- [ ] **A document's own neighbourhood** — a link from a document to
+- [x] (done 2026-09-27, stage L, 8a7ed72: the document page's "graph"
+      link, `#graph?doc=N`; ticked 2026-10-06) **A document's own neighbourhood** — a link from a document to
       what it is connected to (`niggles.txt`).
-- [ ] **The plugin writes `.prax/graph.jsonl`** at session end, beside
+- [x] (2026-10-06: `prax sync --if-auto`, the hook's, refreshes it where
+      a project keeps one, written only when more than `exported_at`
+      changed) **The plugin writes `.prax/graph.jsonl`** at session end, beside
       `.prax-project`, with `prax export --project` (the last part of
       T's design).
 - [ ] **A procedural graph for the surfer** (later; the reference is in
