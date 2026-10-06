@@ -11,11 +11,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from prax.graph import ontology
-from prax.text import dates, mimes
+from prax.text import dates, mimes, quotes
 
 from ..base import (
     _NOW,
     _like_prefix,
+    _read_archive,
     _reading,
     _serialized,
     document_hidden,
@@ -180,6 +181,7 @@ def link(
     run: str | None = None,
     world_from: str | None = None,
     world_to: str | None = None,
+    place: tuple[int, int, str] | None = None,
 ) -> int:
     """Insert a currently-valid edge; entities are created on demand.
 
@@ -192,6 +194,11 @@ def link(
     beside ``valid_from``, which is when prax wrote it. ``world_to`` may be
     ``unknown``: ended, at a date nobody gives. A date that does not parse
     is refused (ValueError), so nothing guessed is stored.
+
+    ``place`` is where ``evidence`` stood: its ``(start, end)`` in the text
+    artifact of ``source_doc`` and that artifact's hash (migration 48,
+    ``text.quotes.place``), so a re-read can say whether it still stands
+    there (``evidence_place``).
     """
     if source_doc is not None and document_hidden(con, source_doc):
         # a restricted viewer writes to nothing it may not see: as if absent
@@ -213,8 +220,9 @@ def link(
     cur = con.execute(
         "INSERT INTO edges (src, dst, rel, confidence, source_doc,"
         " ontology_version, evidence, producer, run, valid_from,"
-        " world_from, world_from_precision, world_to, world_to_precision)"
-        f" VALUES (?,?,?,?,?,?,?,?,?, {_NOW}, ?,?,?,?)",
+        " world_from, world_from_precision, world_to, world_to_precision,"
+        " evidence_start, evidence_end, evidence_text_hash)"
+        f" VALUES (?,?,?,?,?,?,?,?,?, {_NOW}, ?,?,?,?, ?,?,?)",
         (
             src,
             dst,
@@ -227,10 +235,51 @@ def link(
             run,
             *begin,
             *end,
+            *(place if place is not None else (None, None, None)),
         ),
     )
     con.commit()
     return int(cur.lastrowid or 0)
+
+
+@_reading
+def evidence_place(con: sqlite3.Connection, edge_id: int) -> dict[str, Any] | None:
+    """Where an edge's quote stood and where it stands now: ``stood`` (its
+    range in the text it was read from, and that text's hash), and
+    ``stands``: ``where it stood`` (the document's text is the same one),
+    ``moved`` (the text changed; the quote is found at ``now``) or
+    ``gone`` (the quote is in the text no more). None for an edge with no
+    place recorded or no document."""
+
+    row = con.execute(
+        "SELECT e.evidence, e.source_doc, e.evidence_start, e.evidence_end,"
+        " e.evidence_text_hash, d.text_hash FROM edges e"
+        " LEFT JOIN documents d ON d.id = e.source_doc WHERE e.id = ?",
+        (edge_id,),
+    ).fetchone()
+    if row is None or row["evidence_text_hash"] is None:
+        return None
+    stood = {
+        "start": row["evidence_start"],
+        "end": row["evidence_end"],
+        "text_hash": row["evidence_text_hash"],
+    }
+    if stood["start"] is None:
+        # looked for (the ``places`` pass) and not found in that text
+        return {"stood": stood, "stands": "not in the text it was looked for in"}
+    if row["text_hash"] == row["evidence_text_hash"]:
+        return {"stood": stood, "stands": "where it stood"}
+    if row["text_hash"] is None:
+        return {"stood": stood, "stands": "gone"}
+    text = _read_archive(str(row["text_hash"])).decode("utf-8", "replace")
+    now = quotes.place(text, row["evidence"])
+    if now is None:
+        return {"stood": stood, "stands": "gone"}
+    return {
+        "stood": stood,
+        "stands": "moved",
+        "now": {"start": now[0], "end": now[1], "text_hash": row["text_hash"]},
+    }
 
 
 @_reading

@@ -141,7 +141,10 @@ revisit threshold, under "Decision thresholds" below.
    in the world, as its source states it, and only where it does;
    migration 47's triggers hold a date and its precision together.
    An undated fact says when its document appeared (`stated`, in
-   `traverse`), which is not when it holds.
+   `traverse`), which is not when it holds. Its quote keeps where it
+   stood: its range in the text artifact it was read from and that
+   text's hash (migration 48), written once, so a re-read says whether
+   it still stands there (`store.evidence_place`, in `why`).
    Enrichment invalidates edges by setting `valid_to`; it never deletes
    them, and the database refuses a delete or a change to an edge's
    fact (migration 35's triggers).

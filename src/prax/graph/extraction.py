@@ -29,6 +29,7 @@ from typing import Any, Protocol
 from prax import config, models, store
 from prax.graph import ontology
 from prax.ml import pricing
+from prax.text import quotes
 
 DEFAULT_MODEL = "claude-opus-5"
 CALL_TIMEOUT = 180.0  # seconds; a call takes under 90, the SDK default is 600
@@ -888,6 +889,17 @@ def _drop_reason(t: Triple) -> str | None:
     return None
 
 
+def _place_of(
+    text: str, text_hash: str | None, evidence: str
+) -> tuple[int, int, str] | None:
+    """Where a triple's quote stands in the text it was read from, with
+    that text's hash; None when the quote is not in it (``quotes.place``)."""
+    if not text_hash:
+        return None
+    at = quotes.place(text, evidence)
+    return (at[0], at[1], text_hash) if at else None
+
+
 def _one_self_type(
     con: sqlite3.Connection,
     doc_id: int,
@@ -968,6 +980,9 @@ def apply(
             con, doc_id, producer=extractor, except_version=""
         )
     page_titles = store.page_titles(con)
+    # where each quote stands in the text it was read from (migration 48)
+    read = store.get_document(con, doc_id)
+    text, text_hash = (read["text"], read["text_hash"]) if read else ("", None)
     lang = store.get_meta(con, doc_id).get("lang")
     _one_self_type(con, doc_id, extraction.triples, onto)
     for t in extraction.triples:
@@ -1029,6 +1044,7 @@ def apply(
                 run=run,
                 world_from=checked_date(t.world_from, t.evidence),
                 world_to=checked_date(t.world_to, t.evidence, end=True),
+                place=_place_of(text, text_hash, t.evidence),
             )
             report.linked += 1
         # the word the document printed, kept whether or not the edge was

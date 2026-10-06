@@ -116,6 +116,7 @@ from .edges import (  # noqa: F401
     edge_hidden,
     entities_with_degree,
     entity_name,
+    evidence_place,
     find_edges,
     find_entities,
     held_at,

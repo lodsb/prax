@@ -5254,6 +5254,29 @@ where they were measured to help.
 On the way, stopping the copy's door by command line also stopped the
 shells around it; the live `prax up` was untouched, its pids the same.
 
+## 2026-10-06, the night: evidence that knows where it stood
+
+An edge's quote keeps where it stood (migration 48): its character range
+in the text artifact it was read from and that text's hash, written
+once (a trigger refuses a change, as migration 35's refuse a change to
+the fact). Extraction records it (`text.quotes.place`: the quote as
+written, else with its whitespace and case loose, else with a hyphen at
+a line's end inside a word). `store.evidence_place` says whether the
+quote stands where it stood, moved after a re-read (and where to), or is
+gone, and `why` carries it. The `places` pass of `prax maintain` fills
+the edges written before, from each document's current text; a quote
+not in the text gets the hash and no range, so it is looked for once.
+
+The pass measured on a copy: 197 s for 9,061 documents the first night.
+The first version folded the whole text again for every quote it did not
+find at once, which on a book is hundreds of passes over megabytes; it
+ran past ten minutes and was stopped. The quote is a pattern over the
+text now, which is never copied. Of 118,729 live quotes, 38,576 stand in
+their document's text: 37% of the 35B's, 68% of Sonnet's, 50% of the
+27B's; crossref's, the references pass's and pages' are no quotes of the
+text at all. So a quote is often a paraphrase, or from a text read again
+since, and "gone" in `why` can mean it never was the text's own words.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

@@ -673,7 +673,10 @@ numbered there) in the order the user agreed: one step a session.
       phrase containing a name is not the name; a parent and its
       subsidiary are two) read against `ontology/sameness.yaml`; a
       change to it is measured again (`steps.adjudicate.platt`).
-- [ ] **Evidence that knows where it stood**: the quote's character
+- [x] (2026-10-06: migration 48, `text.quotes.place`, extraction records
+      it, `store.evidence_place` in `why`, the `places` pass for the edges
+      before; on a copy the first pass took 197 s and found 38,576 of
+      118,729 quotes in their text) **Evidence that knows where it stood**: the quote's character
       offsets in the text artifact and the `text_hash` it was read from,
       on an edge, so a re-parse shows which evidence moved (Utopia keeps
       offsets and the document's version).

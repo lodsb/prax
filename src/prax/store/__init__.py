@@ -406,6 +406,7 @@ from .graph import (  # noqa: F401
     entity_name,
     entity_named_in,
     entity_names,
+    evidence_place,
     extraction_drops,
     find_conflicts,
     find_edges,

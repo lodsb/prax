@@ -527,3 +527,76 @@ def test_the_library_says_what_its_extractions_left_out(
     assert got["reasons"]["a citation without a title"]["examples"][0]["said"] == (
         "One cites Smith et al., 2018"
     )
+
+
+def test_evidence_knows_where_it_stood(con: sqlite3.Connection) -> None:
+    """Migration 48: a fact keeps its quote's range in the text it was read
+    from and that text's hash; a re-read says whether the quote stands
+    where it stood, moved, or is gone. The place is written once."""
+    from prax.parsers import queue
+
+    quote = "Kalman filters track the pitch of a voice"
+    prose = "Some words about other things. " * 10
+    first = f"# Paper\n\n{prose}\n\n{quote} sample by sample.\n"
+    doc_id = store.ingest_text(con, first, title="Paper")["doc_id"]
+    got = extraction.Extraction(
+        triples=[
+            extraction.Triple(
+                "Paper",
+                "paper",
+                "about",
+                "pitch tracking",
+                "concept",
+                "EXTRACTED",
+                quote,
+            )
+        ]
+    )
+    extraction.apply(con, doc_id, got, extractor="stub")
+    (edge_id,) = [r[0] for r in con.execute("SELECT id FROM edges")]
+    place = store.evidence_place(con, edge_id)
+    assert place is not None and place["stands"] == "where it stood"
+    stood = place["stood"]
+    text = store.get_document(con, doc_id)["text"]
+    assert text[stood["start"] : stood["end"]] == quote
+    # a re-read with more before it: the quote moved
+    moved = (
+        f"# Paper\n\nA new opening paragraph.\n\n{prose}\n\n{quote} sample by sample.\n"
+    )
+    queue.apply_parse(con, doc_id, stamp="marker/x", text=moved)
+    place = store.evidence_place(con, edge_id)
+    assert place["stands"] == "moved" and place["now"]["start"] > stood["start"]
+    # and one without it: gone
+    queue.apply_parse(con, doc_id, stamp="marker/y", text=f"# Paper\n\n{prose}\n")
+    assert store.evidence_place(con, edge_id)["stands"] == "gone"
+    with pytest.raises(sqlite3.IntegrityError):
+        con.execute("UPDATE edges SET evidence_start = 0 WHERE id = ?", (edge_id,))
+    con.rollback()
+
+
+def test_the_places_pass_fills_what_was_written_before(
+    con: sqlite3.Connection,
+) -> None:
+    """An edge written without a place gets one from the document's text;
+    a quote not in the text gets the text's hash and no range, so the
+    pass does not look for it again."""
+    prose = "The vocoder splits the signal into bands and follows each. " * 5
+    doc_id = store.ingest_text(con, prose, title="Vocoder")["doc_id"]
+    for quote, dst in (
+        ("splits the signal into bands", "bands"),
+        ("not here at all", "x"),
+    ):
+        store.link(
+            con,
+            store.Edge("Vocoder", "paper", "about", dst, "concept"),
+            source_doc=doc_id,
+            evidence=quote,
+            producer="test",
+        )
+    out = store.maintain(con, only=["places"])["places"]
+    assert (out["documents"], out["placed"], out["not_in_text"]) == (1, 1, 1)
+    rows = con.execute(
+        "SELECT evidence, evidence_start, evidence_text_hash FROM edges ORDER BY id"
+    ).fetchall()
+    assert rows[0][1] is not None and rows[1][1] is None and rows[1][2]
+    assert store.maintain(con, only=["places"])["places"]["documents"] == 0

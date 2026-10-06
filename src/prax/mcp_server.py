@@ -255,7 +255,9 @@ def why(edge_id: int) -> dict[str, Any]:
     ``rule:…``, as ``traverse`` lists it): the stated facts of its chain,
     each with its document and evidence. For a fact ``traverse`` marks
     ``disputed``, the facts it disagrees with (``conflicts``): a paper said
-    to be published in two venues, each with the document that says so."""
+    to be published in two venues, each with the document that says so.
+    And where the fact's quote stood in its document's text (``place``):
+    still there, moved by a re-read (with where it stands now), or gone."""
     return _answer(lambda: door().get_json(f"/edge/{edge_id}/why"))
 
 

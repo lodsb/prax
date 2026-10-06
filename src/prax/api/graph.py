@@ -190,7 +190,9 @@ def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
     chain (``store.edge_premises``); empty for an asserted edge. And the
     facts it disagrees with (``conflicts``, ``store.edge_conflicts``), and
     a repair's correction: the edge that corrects it (``corrected_by``)
-    or those it corrects (``corrects``)."""
+    or those it corrects (``corrects``). And where its quote stood in the
+    text it was read from, and whether it stands there still (``place``,
+    ``store.evidence_place``)."""
     con = _con(request)
     if store.edge_hidden(con, edge_id):
         # as for an edge that is not there (the wall: existence too)
@@ -204,6 +206,9 @@ def edge_why(edge_id: int, request: Request) -> dict[str, Any]:
         out["conflicts"] = conflicts
     # a repair's correction, either way round (migration 46)
     out.update(store.corrections_of(con, edge_id))
+    place = store.evidence_place(con, edge_id)
+    if place is not None:
+        out["place"] = place
     return out
 
 
