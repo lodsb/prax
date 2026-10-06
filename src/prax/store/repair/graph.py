@@ -11,6 +11,7 @@ import time
 from typing import Any
 
 from prax.graph import ontology
+from prax.text import names
 
 from ..base import hidden_documents, now
 from ..graph import (
@@ -27,6 +28,7 @@ from ..graph import (
     set_aside_label,
     traverse_map,
 )
+from ..retrieval import term_documents
 from .common import (
     CAP,
     _entity_rows,
@@ -756,6 +758,128 @@ def _repair_document_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) 
                     int(row["id"]),
                     across_types=True,
                     producer=TWINS_PRODUCER,
+                    run=run,
+                )
+            except (KeyError, ValueError):
+                continue  # merged away meanwhile, or a cycle: left alone
+            done += 1
+    return done
+
+
+SPACING_PRODUCER = "heal:spacing-twins"
+SPACING_MIN_CHARS = 6  # a shorter name joined up says too little ("ws fl")
+_NOT_SPACED = frozenset({"page", "project"})  # a page is its own node
+# an accent a PDF's text left beside its letter ("Fakulta¨t", "me´ta")
+_DETACHED = re.compile("[\u00a8\u00b4\u0060\u02c6\u02dc]")
+
+
+SPACING_WORD_DOCS = 3  # a word of a name fewer chunks hold is not a word
+_WORD = re.compile(r"[^\W\d_]+")
+
+
+def _unknown_share(con: sqlite3.Connection, name: str) -> float:
+    """The share of a name's letters in words the library's text does not
+    use: a fragment of a word spaced apart ("Separ ation", "c sound") or a
+    run of words joined ("CollaborativeMusic"), which PDF text yields both
+    ways. A share, not a count: joined up, a name has fewer words to be
+    unknown."""
+    words = _WORD.findall(name)
+    total = sum(len(w) for w in words)
+    unknown = 0
+    for word in words:
+        if len(word) < 2:
+            unknown += len(word)
+            continue
+        try:
+            seen = term_documents(con, word.lower(), cap=SPACING_WORD_DOCS)
+        except sqlite3.Error:
+            continue  # a word the index cannot be asked about counts as known
+        if seen < SPACING_WORD_DOCS:
+            unknown += len(word)
+    return unknown / total if total else 0.0
+
+
+def _keeper_rank(
+    con: sqlite3.Connection, e: dict[str, Any]
+) -> tuple[int, float, int, int, int, int]:
+    """Which spelling of a group is kept: one without detached accents,
+    then the least of it in words the library does not use, then not all
+    capitals, then the most live edges, the longer name, the older."""
+    name = str(e["name"])
+    return (
+        len(_DETACHED.findall(name)) + name.count("\ufffd"),  # and a lost glyph
+        _unknown_share(con, name),
+        int(name.isupper()),
+        -int(e["edges"]),
+        -len(name),
+        int(e["id"]),
+    )
+
+
+def _spacing_twins(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Entities of one type whose names differ only in spacing: "Valhalla
+    DSP" and "ValhallaDSP", "sub-pattern" and "subpattern", "CHI2004" and
+    "CHI 2004". The resolution's sure tier folds case, punctuation, accents
+    and a plural (``names.normalize``) and keeps the word boundaries, so
+    these survive it (827 groups of 1,663 entities on 2026-10-06). The
+    names joined up must be ``SPACING_MIN_CHARS`` long and hold the same
+    numbers (``names.same_numbers``). Each group with the entity to keep
+    (``_keeper_rank``: the clean spelling first, not the most connected,
+    since the keeper's name is the one shown) and the ones to fold into
+    it."""
+    groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    for r in con.execute(
+        "SELECT id, name, type FROM entities WHERE canonical_id IS NULL"
+    ):
+        if r["type"] in _NOT_SPACED:
+            continue
+        key = names.normalize(str(r["name"])).replace(" ", "")
+        if len(key) >= SPACING_MIN_CHARS:
+            groups.setdefault((str(r["type"]), key), []).append(dict(r))
+    found = {
+        k: g
+        for k, g in groups.items()
+        if len({names.normalize(str(e["name"])) for e in g}) > 1
+        and all(names.same_numbers(g[0]["name"], e["name"]) for e in g[1:])
+    }
+    counts = _live_edge_counts(con, [e["id"] for g in found.values() for e in g])
+    out: list[dict[str, Any]] = []
+    for (etype, _key), group in found.items():
+        parts = sorted(
+            ({**e, "edges": counts.get(e["id"], 0)} for e in group),
+            key=lambda e: _keeper_rank(con, e),
+        )
+        lead = parts[0]
+        out.append(
+            {
+                "id": lead["id"],
+                "name": lead["name"],
+                "type": etype,
+                "edges": lead["edges"],
+                "also": [
+                    {"id": e["id"], "name": e["name"], "edges": e["edges"]}
+                    for e in parts[1:]
+                ],
+            }
+        )
+    out.sort(key=lambda x: (-sum(a["edges"] for a in x["also"]), x["name"]))
+    return out[:CAP]
+
+
+def _repair_spacing_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Fold each group into its keeper, signed by this repair under one run,
+    so ``unmerge_run`` takes the round back whole. Nothing is ended: the
+    folded entities' edges are evidence, and their names stay as labels."""
+    run = f"{SPACING_PRODUCER}:{now().replace(':', '').replace('-', '')}"
+    done = 0
+    for row in rows:
+        for other in row["also"]:
+            try:
+                merge_entities(
+                    con,
+                    int(other["id"]),
+                    int(row["id"]),
+                    producer=SPACING_PRODUCER,
                     run=run,
                 )
             except (KeyError, ValueError):

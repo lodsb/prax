@@ -5128,6 +5128,31 @@ entities of different types. In the two cases the vote lost, the right
 paper (docs 9778 and 9782) states no fact about the method it builds on,
 so the vote raised the papers the graph does connect to it.
 
+## 2026-10-06: names that differ only in spacing, a heal check
+
+The plan kept "entities that differ only by case or punctuation" for
+when they showed up. Case, punctuation, accents and a plural are the
+resolution's sure tier already (`names.normalize`), which keeps word
+boundaries. What showed up is spacing: 827 groups of one type whose
+names match with the spaces taken out ("Valhalla DSP" and "ValhallaDSP",
+"sub-pattern" and "subpattern", "Proceedings of DIS2002" and "… DIS
+2002"). Many come from PDF text, which runs words together or spaces
+them apart and leaves accents detached ("Fakulta¨t").
+
+`prax heal --check spacing-twins` folds each group into one entity under
+one signed run (`unmerge_run` takes it back). It skips names under six
+characters joined up and names whose numbers differ ("SSL4000" and "SSL
+400 0"). On the copy that is 783 groups, 793 entities to fold, in 4 s.
+The keeper is chosen by its spelling, because its name is the one shown
+(`_keeper_rank`). First come no detached accents and the smallest share
+of letters in words the library's text does not use: "Csound" over "c
+sound", "Collaborative Music-Making…" over "CollaborativeMusic
+MakingwithInteractiveTabletops". Then not all capitals, then the most
+edges. Ranking by edges alone kept the damaged spelling in five of
+the first twelve, and preferring words apart kept the exploded ones.
+Where both spellings are damaged the keeper is too; `mangled-names` is
+the place to mend that. The dry run waits for the user's word.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

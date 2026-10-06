@@ -617,7 +617,10 @@ numbered there) in the order the user agreed: one step a session.
       needs the room, not before.
 - [ ] **Entity ailments worth adding to `prax heal`** when they show up:
       entities that differ only by case or punctuation, and the like
-      (`docs/log.md`, "The heal pass").
+      (`docs/log.md`, "The heal pass"). (2026-10-06: case and punctuation
+      are the sure tier's already; what showed up is spacing.
+      `prax heal --check spacing-twins` finds 783 groups, 793 entities to
+      fold, on a copy of the store; applying it waits for the user's word.)
 - [ ] **Only then, `confidence` as a number.** A column beside the
       three words rather than instead of them, written where a pass
       measured it and left null where nothing did — an edge whose

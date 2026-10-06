@@ -62,11 +62,13 @@ from .graph import (
     _repair_names,
     _repair_not_venues,
     _repair_part_of,
+    _repair_spacing_twins,
     _repair_stray_versions,
     _repair_wire_labels,
     _repair_wire_names,
     _self_edges,
     _slow_walks,
+    _spacing_twins,
     _split_names,
     _stray_version_modules,
     _unnamed_entities,
@@ -261,6 +263,22 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_document_twins,
         repair=_repair_document_twins,
+    ),
+    Ailment(
+        name="spacing-twins",
+        what=(
+            "entities of one type whose names differ only in spacing"
+            " ('Valhalla DSP' and 'ValhallaDSP', 'sub-pattern' and"
+            " 'subpattern'): the resolution's sure tier keeps word boundaries"
+        ),
+        fix=(
+            "fold each into its clean spelling (no detached accents, the"
+            " fewest words the library's text does not use, not all capitals,"
+            " then the most edges), one signed run unmerge_run takes back;"
+            " only names of six characters or more joined up, same numbers"
+        ),
+        find=_spacing_twins,
+        repair=_repair_spacing_twins,
     ),
     Ailment(
         name="twin-documents",

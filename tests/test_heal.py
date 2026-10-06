@@ -598,3 +598,37 @@ def test_a_slow_graph_walk_is_the_graphs_threshold(
     monkeypatch.setattr(store.repair.graph, "SLOW_WALK_MS", {1: -1.0})
     found = store.health(con, only=["slow-graph-walks"])["ailments"][0]
     assert found["count"] >= 1 and found["examples"][0]["entity"] == "reverb"
+
+
+def test_names_that_differ_only_in_spacing_fold_into_the_clean_one(
+    con: sqlite3.Connection,
+) -> None:
+    """``spacing-twins``: the sure tier keeps word boundaries, so "Valhalla
+    DSP" and "ValhallaDSP" stayed two. The keeper is the clean spelling,
+    not the most connected; a short name, or numbers split apart, is left."""
+    _link(con, "Valhalla DSP", "plate reverb")
+    _link(con, "Valhalla DSP", "shimmer")
+    _link(con, "ValhallaDSP", "a plate")
+    accent = "Fakulta" + chr(0xA8) + "t Informatik"  # a PDF's detached accent
+    for other in ("a", "b", "c"):
+        _link(con, accent, other)
+    _link(con, "Fakultät Informatik", "d")
+    _link(con, "ws fl", "x")
+    _link(con, "wsfl", "y")  # four characters joined: too short to say
+    _link(con, "SSL4000", "x")
+    _link(con, "SSL 400 0", "y")  # the numbers differ
+    found = store.health(con, only=["spacing-twins"])["ailments"][0]
+    assert found["count"] == 2
+    keep = {r["name"]: [a["name"] for a in r["also"]] for r in found["examples"]}
+    assert keep == {
+        "Valhalla DSP": ["ValhallaDSP"],
+        "Fakultät Informatik": [accent],
+    }
+    assert store.heal(con, only=["spacing-twins"])["spacing-twins"]["repaired"] == 2
+    gone = store._entity_id(con, "ValhallaDSP", "concept")
+    row = con.execute(
+        "SELECT canonical_id, merged_run FROM entities WHERE id = ?", (gone,)
+    ).fetchone()
+    assert row["canonical_id"] == store._entity_id(con, "Valhalla DSP", "concept")
+    assert store.health(con, only=["spacing-twins"])["ailments"][0]["count"] == 0
+    assert store.unmerge_run(con, row["merged_run"]) == 2  # the round, back whole
