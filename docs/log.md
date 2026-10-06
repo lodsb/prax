@@ -5106,6 +5106,28 @@ Claude's are covered. The twin was folded first (`heal --check
 document-twins --apply`, 1 of 1). The fix is live in the door at its
 next restart.
 
+## 2026-10-06: follow-up questions, measured; the focus vote left out
+
+A set of follow-up questions did not exist, so the plan's focus-entity
+vote could not be measured. `tests/eval/followups-library.yaml` holds 30
+now (19 research, 5 kitchen, 4 studio, 2 computing): a first question
+and a follow-up that leans on it, the expected documents chosen by
+reading them and never from the graph's edges. `scripts/eval_followups.py`
+runs it on a copy of the store.
+
+Its first number is for what `ask` already does. Adding the previous
+question's words to a short or pointing follow-up (`ask.search_query`)
+takes MRR from 0.510 to 0.716 and hit@10 from 0.70 to 0.90.
+
+The vote did not add to that (MRR 0.689 to 0.701 at weights 0.5 to 2),
+and it is not in the code; its diff is beside the report
+(`docs/eval/followups-focus-vote-2026-10-06.md`). Finding the focus took
+one rule more than planned: a lone word held by more than 100 document
+fields is generic, because "string" and "method" are each a dozen small
+entities of different types. In the two cases the vote lost, the right
+paper (docs 9778 and 9782) states no fact about the method it builds on,
+so the vote raised the papers the graph does connect to it.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

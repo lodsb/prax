@@ -1,0 +1,252 @@
+diff --git a/src/prax/store/__init__.py b/src/prax/store/__init__.py
+index f93bce0..4321991 100644
+--- a/src/prax/store/__init__.py
++++ b/src/prax/store/__init__.py
+@@ -598,6 +598,7 @@ from .retrieval import (  # noqa: F401
+     delta_counts,
+     expand_query,
+     expanded_text,
++    focus_entities,
+     fts_merge,
+     known_as,
+     merge_vectors,
+diff --git a/src/prax/store/base.py b/src/prax/store/base.py
+index d14809a..364ec05 100644
+--- a/src/prax/store/base.py
++++ b/src/prax/store/base.py
+@@ -88,6 +88,7 @@ class SearchHit(TypedDict, total=False):
+     field_rank: int | None
+     dvec_rank: int | None
+     domain_rank: int  # its rank in the domain prior's vote
++    focus_rank: int  # its rank in the conversation focus's vote
+     rerank_score: float
+     published: str | None  # ``meta.published``, as precise as its source
+     stale: dict[str, Any]  # ``staleness``: the state, its date, the replacement
+diff --git a/src/prax/store/retrieval/__init__.py b/src/prax/store/retrieval/__init__.py
+index c5a0a4c..f87a688 100644
+--- a/src/prax/store/retrieval/__init__.py
++++ b/src/prax/store/retrieval/__init__.py
+@@ -83,6 +83,7 @@ from .fusion import (  # noqa: F401
+     _Took,
+     _without,
+     cite_link,
++    focus_entities,
+     published_dates,
+     search,
+     staleness,
+diff --git a/src/prax/store/retrieval/fusion.py b/src/prax/store/retrieval/fusion.py
+index 041f2ed..c78cdb3 100644
+--- a/src/prax/store/retrieval/fusion.py
++++ b/src/prax/store/retrieval/fusion.py
+@@ -18,6 +18,7 @@ from prax.ml import rerank as rerank_mod
+ from prax.text import dates, status
+ 
+ from ..base import (
++    _TOKEN,
+     SearchHit,
+     _has_vectors,
+     _index_path,
+@@ -27,6 +28,7 @@ from ..base import (
+     vectors_available,
+ )
+ from ..documents import DOCTYPES
++from .compounds import _docs
+ from .knobs import knobs
+ from .legs import (
+     CHUNK_KINDS,
+@@ -81,6 +83,7 @@ def search(
+     published_before: str | None = None,
+     include_stale: bool = False,
+     cite: bool = False,
++    focus: list[int] | None = None,
+ ) -> list[SearchHit]:
+     """Search returning compact snippets + ids (agent-shaped), each hit a
+     ``SearchHit``. ``timing``,
+@@ -124,6 +127,11 @@ def search(
+     With ``cite``, a passage hit carries ``cite``: its link with words of
+     it no other passage of the document holds (``cite_link``), the
+     citation an agent pastes; within ``CITE_BUDGET`` a search.
++
++    ``focus`` is the entities a conversation is about (``focus_entities``
++    of the turn before): the candidates that state facts about them, or
++    about what they touch, get one vote more (``_focus_vote``, a
++    preference like the domain prior; ``focus_rank``).
+     """
+     if kind is not None and kind not in CHUNK_KINDS:
+         raise ValueError(f"kind must be one of {CHUNK_KINDS}")
+@@ -144,7 +152,9 @@ def search(
+         fetch *= 3
+     if since or before:
+         fetch *= 4
+-    hits = _search_hits(con, query, fetch + STALE_SPARE, kind, mode, doctype, timing)
++    hits = _search_hits(
++        con, query, fetch + STALE_SPARE, kind, mode, doctype, timing, focus=focus
++    )
+     if domain:
+         hits = _filter_domain(con, hits, domain)
+     stamped = published_dates(con, hits)
+@@ -507,6 +517,8 @@ def _search_hits(
+     mode: str,
+     doctype: str | None = None,
+     timing: dict[str, float] | None = None,
++    *,
++    focus: list[int] | None = None,
+ ) -> list[dict[str, Any]]:
+     emb = embeddings.serving() if mode != "fts" else None
+     vectors_ready = (
+@@ -581,6 +593,7 @@ def _search_hits(
+         if kind is None:  # hybrid without vectors: the field too
+             _field_lists(con, query, depth, or_expr, sensed, lists, names, weights)
+         fused = _rrf([_without(x, aside) for x in lists], names, _drawn(fetch), weights)
++        fused = _focus_vote(con, fused, focus)
+         fused = _domain_prior(con, fused, fetch, keywords)
+         return _finish(con, fused, query, limit, doctype, expr=full_expr)
+     assert emb is not None
+@@ -605,11 +618,131 @@ def _search_hits(
+             lists.append(_field_vec_search(con, emb.name, vector, depth))
+         names.append("dvec")
+     fused = _rrf([_without(x, aside) for x in lists], names, _drawn(fetch), weights)
++    fused = _focus_vote(con, fused, focus)
+     fused = _domain_prior(con, fused, fetch, keywords)
+     with took("finish"):
+         return _finish(con, fused, query, limit, doctype, expr=full_expr)
+ 
+ 
++# the focus of a conversation (``focus_entities``, ``_focus_vote``)
++FOCUS_WORDS = 4  # the longest run of the question's words looked up as a name
++FOCUS_ENTITIES = 2  # things a question is taken to be about
++FOCUS_MAX_DOCS = 300  # a name more documents state is a field, not a focus
++FOCUS_WORD_DOCS = 100  # a lone word more document fields hold is generic
++HOP_MAX_DOCS = 50  # and a neighbour stated that widely says nothing of it
++HOP_MAX = 200  # neighbours looked at
++FOCUS_OWN = 2  # a fact about the focus counts this many neighbours' facts
++
++
++def focus_entities(con: sqlite3.Connection, text: str) -> list[int]:
++    """The things a question is about: the graph's entities whose name or
++    label is a run of its words, the longest runs first, at most
++    ``FOCUS_ENTITIES``, one per name. A name stated in more than
++    ``FOCUS_MAX_DOCS`` documents is a field ("audio") and no focus. A lone
++    word is looked up only when at most ``FOCUS_WORD_DOCS`` document fields
++    hold it: "string", "method" and "work" are each a dozen small entities
++    of different types, and the text, not the graph, says they are
++    generic. What ``ask`` hands the next turn's search (``focus``)."""
++    words = _TOKEN.findall(text or "")
++    found: list[int] = []
++    names: set[str] = set()
++    taken = [False] * len(words)
++    for n in range(min(FOCUS_WORDS, len(words)), 0, -1):
++        for i in range(len(words) - n + 1):
++            if any(taken[i : i + n]):
++                continue
++            run = words[i : i + n]
++            if not any(len(w) > 2 and w.lower() not in STOPWORDS for w in run):
++                continue
++            if n == 1 and (
++                _docs(con, run[0], "documents_fts", cap=FOCUS_WORD_DOCS + 1)
++                > FOCUS_WORD_DOCS
++            ):
++                continue
++            for entity_id, name in con.execute(
++                "SELECT DISTINCT e.id, e.name FROM entity_labels l"
++                " JOIN entities e ON e.id = l.entity_id"
++                " WHERE l.label = ? COLLATE NOCASE AND e.canonical_id IS NULL",
++                (" ".join(run),),
++            ):
++                key = str(name).casefold()
++                if key in names:
++                    continue
++                docs = _stated_in(con, int(entity_id))
++                if 0 < docs <= FOCUS_MAX_DOCS:
++                    found.append(int(entity_id))
++                    names.add(key)
++                    taken[i : i + n] = [True] * n
++            if len(found) >= FOCUS_ENTITIES:
++                return found[:FOCUS_ENTITIES]
++    return found
++
++
++def _stated_in(con: sqlite3.Connection, entity_id: int) -> int:
++    """How many documents state a live fact about the entity."""
++    return int(
++        con.execute(
++            "SELECT count(DISTINCT source_doc) FROM edges WHERE valid_to IS NULL"
++            " AND (src = ? OR dst = ?)",
++            (entity_id, entity_id),
++        ).fetchone()[0]
++    )
++
++
++def _focus_documents(con: sqlite3.Connection, focus: list[int]) -> dict[int, int]:
++    """Each document's share of the focus's neighbourhood: ``FOCUS_OWN``
++    for a fact about a focus entity, one for each first-hop neighbour it
++    states a fact about (a neighbour stated in at most ``HOP_MAX_DOCS``
++    documents; the first ``HOP_MAX`` of them)."""
++    score: dict[int, int] = {}
++    hops: set[int] = set()
++    for f in focus:
++        for src, dst, doc in con.execute(
++            "SELECT src, dst, source_doc FROM edges WHERE valid_to IS NULL"
++            " AND (src = ? OR dst = ?)",
++            (f, f),
++        ):
++            if doc is not None:
++                score[int(doc)] = score.get(int(doc), 0) + FOCUS_OWN
++            other = int(dst) if int(src) == f else int(src)
++            if other not in focus:
++                hops.add(other)
++    for n in sorted(hops)[:HOP_MAX]:
++        docs = {
++            int(r[0])
++            for r in con.execute(
++                "SELECT DISTINCT source_doc FROM edges WHERE valid_to IS NULL"
++                " AND (src = ? OR dst = ?) AND source_doc IS NOT NULL",
++                (n, n),
++            )
++        }
++        if len(docs) > HOP_MAX_DOCS:
++            continue
++        for d in docs:
++            score[d] = score.get(d, 0) + 1
++    return score
++
++
++def _focus_vote(
++    con: sqlite3.Connection, fused: list[dict[str, Any]], focus: list[int] | None
++) -> list[dict[str, Any]]:
++    """The fused hits with the focus's vote: the candidates that share the
++    neighbourhood of the conversation's focus, ranked by how much of it,
++    each gain what a list ranking them would give (``knobs.FOCUS_WEIGHT``).
++    Nothing is filtered and nothing joins: only a candidate the lists
++    found is moved, so a hidden document never comes in this way."""
++    if not focus or not fused or not knobs.FOCUS_WEIGHT:
++        return fused
++    share = _focus_documents(con, focus)
++    touched = [h for h in fused if share.get(h["doc_id"])]
++    touched.sort(key=lambda h: -share[h["doc_id"]])  # stable: fused order on ties
++    for rank, h in enumerate(touched, 1):
++        h["score"] += knobs.FOCUS_WEIGHT / (RRF_K + rank)
++        h["focus_rank"] = rank
++    fused.sort(key=lambda h: -h["score"])
++    return fused
++
++
+ PRIOR_DEPTH = 30  # the fused candidates looked at
+ PRIOR_MIN = 3  # of them in one small domain; chance gives it 0.2
+ PRIOR_SMALL = 0.2  # a domain holding less than this share of the documents
+diff --git a/src/prax/store/retrieval/knobs.py b/src/prax/store/retrieval/knobs.py
+index 47650bf..5d88cc7 100644
+--- a/src/prax/store/retrieval/knobs.py
++++ b/src/prax/store/retrieval/knobs.py
+@@ -26,6 +26,11 @@ class Knobs:
+     # documents gives any German word a lift of 20 to 90 by accident.
+     DOMAIN_PRIOR: bool = True
+ 
++    # A follow-up's candidates that share the neighbourhood of what the
++    # turn before was about get a vote of this weight (``_focus_vote``;
++    # 0 turns it off): the switch the follow-up measurement turns.
++    FOCUS_WEIGHT: float = 1.0
++
+     DELTA_MERGE_AT: int = 50_000  # vectors in the delta before a merge is due
+ 
+     # or as many as the main file holds, once past this: the document index

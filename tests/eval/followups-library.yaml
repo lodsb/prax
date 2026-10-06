@@ -1,0 +1,160 @@
+# Follow-up retrieval set against the FULL store (not the fixture), 2026-10-06.
+# Each case is a first question and a follow-up that leans on it; the
+# expected documents were chosen by reading their text, never from the
+# graph's edges, so a vote that uses the graph is not graded by itself.
+# Run: python scripts/eval_followups.py --store <copy of C:/prax-data>
+cases:
+  # --- research ---
+  - first: "How is non-negative matrix factorization used for sound source separation?"
+    then: "Is there a deep autoencoder alternative to it?"
+    expect_title: ["End-to-end non-negative auto-encoders"]
+    domain: research
+    note: "Thesis proposing non-negative autoencoders as a neural replacement for NMF audio modeling."
+  - first: "How is non-negative matrix factorization used for sound source separation?"
+    then: "Has it been used on wheezing lung sounds?"
+    expect_title: ["Wheezing Sound Separation"]
+    domain: research
+    note: "Separates wheezing sounds with an informed NMF partial co-factorization."
+  - first: "How does the Karplus-Strong plucked string algorithm work?"
+    then: "Has anyone made it differentiable for sound matching?"
+    expect_title: ["differentiable Karplus-Strong"]
+    domain: research
+    note: "Abstract: a differentiable KS decoder recovers interpretable parameters for plucked guitar sounds."
+  - first: "How does the Karplus-Strong plucked string algorithm work?"
+    then: "How did it evolve into digital waveguide models?"
+    expect_title: ["Plucked-String Models: From the Karplus-Strong"]
+    domain: research
+    note: "Karjalainen, Välimäki and Tolonen trace the line from KS to digital waveguides."
+  - first: "How do feedback delay networks produce artificial reverberation?"
+    then: "Can they be made nonlinear for a shimmer effect?"
+    expect_title: ["Shimmer reverberation with nonlinear feedback delay"]
+    domain: research
+    note: "Dal Santo et al. 2026: shimmer reverb built from nonlinear FDNs."
+  - first: "How do feedback delay networks produce artificial reverberation?"
+    then: "How do I make them colorless by optimisation?"
+    expect_title: ["Differentiable Feedback Delay Network For Colorless", "Role of Modal Excitation in Colorless"]
+    domain: research
+    note: "Differentiable FDN trained for colorless reverb; the modal-excitation paper treats colorlessness directly."
+  - first: "How does the phase vocoder do time stretching?"
+    then: "How can its transient smearing be reduced?"
+    expect_title: ["time-directional spectrogram squeezing", "Phase Vocoder and Beyond"]
+    domain: research
+    note: "Spectrogram squeezing targets percussion smearing; 'Phase Vocoder and Beyond' §2.2 on transient preservation."
+  - first: "How does the phase vocoder do time stretching?"
+    then: "Can it shift pitch in real time?"
+    expect_title: ["phase-vocoder techniques for real-time pitch shifting"]
+    domain: research
+    note: "Laroche and Dolson's real-time pitch-shifting techniques built on the phase vocoder."
+  - first: "What is DDSP, differentiable digital signal processing?"
+    then: "Has it been applied to guitar amplifiers?"
+    expect_title: ["DDSP Guitar Amp"]
+    domain: research
+    note: "Interpretable guitar amplifier modeling with a DDSP-based model."
+  - first: "What is DDSP, differentiable digital signal processing?"
+    then: "Is there a singing voice vocoder built on it?"
+    expect_title: ["DDSP-Based Singing Vocoder"]
+    domain: research
+    note: "Subtractive-based DDSP singing vocoder with an evaluation."
+  - first: "How are wave digital filters used to model analog circuits?"
+    then: "Is there a differentiable version for diode circuits?"
+    expect_title: ["Differentiable Wave Digital Filters"]
+    domain: research
+    note: "Emulates diode circuits by training differentiable WDFs."
+  - first: "How are wave digital filters used to model analog circuits?"
+    then: "Has a vacuum-tube amplifier been simulated with them?"
+    expect_title: ["Wave Digital Simulation of a Vacuum-Tube"]
+    domain: research
+    note: "WDF simulation of a tube amplifier stage (Karjalainen and Pakarinen 2006)."
+  - first: "How does the bandlimited step method (BLEP) reduce aliasing in oscillators?"
+    then: "Can it help when simulating bucket-brigade delay chips?"
+    expect_title: ["Antialiasing in BBD Chips"]
+    domain: research
+    note: "Abstract: applies BLEP to suppress the extra aliasing of a discrete-time BBD simulation."
+  - first: "How does the bandlimited step method (BLEP) reduce aliasing in oscillators?"
+    then: "How does that extend to corners in clipped signals?"
+    expect_title: ["Rounding Corners with BLAMP", "Aliasing Reduction in Clipped Signals"]
+    domain: research
+    note: "BLAMP, the integrated BLEP, antialiases the slope discontinuities of hard clipping."
+  - first: "How does the YIN fundamental frequency estimator work?"
+    then: "Is there a differentiable variant of it?"
+    expect_title: ["Differentiable Variants of Classical Fundamental Frequency"]
+    domain: research
+    note: "Abstract proposes dYIN and dSWIPE for gradient-based pipelines."
+  - first: "How does retrieval-augmented generation work for knowledge-intensive tasks?"
+    then: "Is there a graph-based variant for summarising a whole corpus?"
+    expect_title: ["Graph ?RAG Approach to Query-Focused", "LightRAG"]
+    domain: research
+    note: "GraphRAG builds an entity graph for global query-focused summarization; LightRAG is a lighter graph variant."
+  - first: "How does retrieval-augmented generation work for knowledge-intensive tasks?"
+    then: "Can the model learn when to retrieve and critique itself?"
+    expect_title: ["Self-RAG"]
+    domain: research
+    note: "Self-RAG trains reflection tokens to decide on retrieval and critique its own output."
+  - first: "How does spectral flux onset detection work?"
+    then: "Is there a neural network version using LSTMs?"
+    expect_title: ["Bidirectional Long Short-Term Memory"]
+    domain: research
+    note: "Eyben, Böck et al. 2010: universal onset detection with BLSTM networks."
+  - first: "How is dynamic time warping used to align music recordings?"
+    then: "Can it run online to follow a live performance?"
+    expect_title: ["On-Line Time Warping", "Real-Time Music Tracking using Multiple Performances"]
+    domain: research
+    note: "Dixon's abstract: DTW needs both series, so an on-line linear-cost variant follows live performances."
+  # --- kitchen ---
+  - first: "Which pumpkin recipes are in the library?"
+    then: "One paired with kimchi?"
+    expect_title: ["Kürbis-Kimchi-Suppe"]
+    domain: kitchen
+    note: "Pumpkin-kimchi soup from the Berlin restaurant Daluma."
+  - first: "What can I cook with chickpeas?"
+    then: "One with a creamy poached egg and sage?"
+    expect_title: ["Kichererbsenpfanne mit cremigem Ei"]
+    domain: kitchen
+    note: "Chickpea pan with spinach, cream, poached egg and sage."
+  - first: "Which recipes use mushrooms?"
+    then: "A small crispy Japanese pancake made with them?"
+    expect_title: ["Pilz-Okonomiyaki"]
+    domain: kitchen
+    note: "Mini mushroom okonomiyaki, crisp cabbage-and-mushroom pancakes."
+  - first: "How is classic Sichuan mapo tofu made?"
+    then: "A version with button mushrooms instead?"
+    expect_title: ["Mapo Champignons", "Fuchsia Dunlop"]
+    domain: kitchen
+    note: "Mapo Champignons replaces the tofu with mushrooms; Dunlop's page has a mushroom mapo too."
+  - first: "A recipe for vegan chocolate cake"
+    then: "What is the topping made of?"
+    expect_title: ["Veganer Schokokuchen"]
+    domain: kitchen
+    note: "Same document: the ganache is dark chocolate stirred into coconut milk."
+  # --- studio ---
+  - first: "How does the Moog transistor ladder filter work?"
+    then: "Can it be generalized with state variable filters?"
+    expect_title: ["Moog Ladder Filter Generalizations"]
+    domain: studio
+    note: "Generalizes the ladder into SVF-based structures (2020)."
+  - first: "How does the Moog transistor ladder filter work?"
+    then: "How do I reduce aliasing in its nonlinear model?"
+    expect_title: ["Reducing the aliasing of nonlinear waveshaping"]
+    domain: studio
+    note: "Continuous-time convolution antialiasing, §6.3 worked on a Moog-ladder-like filter."
+  - first: "What is special about the Roland TB-303's filter?"
+    then: "Is there a SuperCollider UGen that emulates it?"
+    expect_title: ["RLPFD"]
+    domain: studio
+    note: "RLPFD help file: a TB-303 filter emulation UGen with cutoff, resonance, distortion."
+  - first: "What is special about the Roland TB-303's filter?"
+    then: "How do the diodes atop its ladder change the gain?"
+    expect_title: ["Analysis of the Moog Transistor Ladder and Derivative"]
+    domain: studio
+    note: "§3.1 Diode Ladder Filters: one diode in the TB-303, more diodes raise the basic gain."
+  # --- computing ---
+  - first: "What changed in SuperCollider 3's architecture?"
+    then: "How does it differ from version 2?"
+    expect_title: ["Supercollider 3 versus Supercollider 2"]
+    domain: computing
+    note: "Lists client/server split, precompiled SynthDefs, no Spawn, sync/async, compatibility."
+  - first: "How do I write DSP code in the Faust language?"
+    then: "How is a plucked string written in it?"
+    expect_title: ["DSP Programming with Faust, Q and SuperCollider"]
+    domain: computing
+    note: "§2.3 implements Karplus-Strong in a few lines of Faust."

@@ -590,7 +590,11 @@ numbered there) in the order the user agreed: one step a session.
       `source_doc`. Vectors for it only if the text side earns them (one
       384-d vector per edge; size it first). Measured with
       `scripts/eval_retrieval.py` before and after.
-- [ ] **A focus entity as a vote** (Graphiti's node distance): in an `ask`
+- [ ] (2026-10-06: measured on a follow-up set of 30, no gain, not
+      shipped; `docs/eval/followups-focus-vote-2026-10-06.md`, the code in
+      the `.diff` beside it. The two cases it lost were papers the graph
+      never linked to the method they build on, docs 9778 and 9782: again
+      when it does) **A focus entity as a vote** (Graphiti's node distance): in an `ask`
       follow-up, the documents whose edges touch the entity in focus
       and its first hop get one vote in the fusion, a preference like
       `DOMAIN_PRIOR`, never a re-sort.
