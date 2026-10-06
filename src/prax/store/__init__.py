@@ -228,6 +228,7 @@ from .documents import (  # noqa: F401
     ingest_text,
     is_indexed,
     is_retired,
+    keep_summary,
     known_hashes,
     language_split,
     list_chunks,

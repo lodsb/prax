@@ -144,44 +144,6 @@ def native(held: dict[str, Any]) -> tuple[str, str] | None:
     return None
 
 
-def keep(meta: dict[str, Any], text: str, *, lang: str | None = None) -> str | None:
-    """File a summary in a document's ``meta`` and say what language it
-    was filed under.
-
-    ``meta.summary`` is the one the document field indexes and is English
-    wherever an English one exists; ``meta.summaries`` holds every one we
-    have, keyed by language, so the German summary of a German document
-    is never lost to the translation that replaced it. A document whose
-    only summary is German keeps it as the canonical one: worse for a
-    search than English, better than no summary at all.
-
-    A summary too short to place is filed without a language rather than
-    as English, and ``meta.summary_lang`` stays absent: the pass that
-    hands documents to a model asks for the ones known to be in another
-    language, never for the ones nothing could read.
-    """
-    code = lang or language.detect(text)
-    held = meta.setdefault("summaries", {})
-    if isinstance(held, dict):
-        # the one already there goes in first, under its own language. It
-        # got here before ``meta.summaries`` existed, so nothing else
-        # would file it, and the first batch of translations overwrote
-        # eight German summaries that this line would have kept
-        # (2026-09-24)
-        there, there_lang = meta.get("summary"), meta.get("summary_lang")
-        if there and there_lang and there_lang not in held:
-            held[str(there_lang)] = there
-        if code:
-            held[code] = text
-    if code == language.canonical() or not meta.get("summary"):
-        meta["summary"] = text
-        if code:
-            meta["summary_lang"] = code
-        else:
-            meta.pop("summary_lang", None)
-    return code
-
-
 def translate(
     runtime: Any,
     summary: str,

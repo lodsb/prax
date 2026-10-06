@@ -102,6 +102,7 @@ from .meta import (  # noqa: F401
     document_sections,
     get_meta,
     is_indexed,
+    keep_summary,
     published_of,
     published_tried,
     refresh_document_fields,

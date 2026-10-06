@@ -711,11 +711,20 @@ not done.
       (19), `capture.routes.routes_for` (19). (2026-10-06: those four
       split, each now 10 or under, the same output before and after; the
       top of the list since is `changes` (20), `sync` and `plan` (19).)
-- [ ] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
+- [x] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
       the extension. The summaries and sections helpers that the store
       calls up to could move into `prax.text`. (2026-10-03: the six tests
       that polled a job with their own loop use `tests.conftest.wait_job`,
       which fails with the job's row instead of running on.)
+      (2026-10-06: the extension's popup and options page use
+      `lib.escapeHtml`, which `lib.js` now exports, instead of a copy each;
+      the door's UI and the extension stay two packages, so `esc` and
+      `fmtTime` are one copy on each side. Filing a summary in `meta` is
+      the store's own (`store.keep_summary`, was `summaries.keep`). What
+      the store still calls up to is the sections pass's thresholds and
+      `clean_heading`, and a summary's `parse` and `acceptable` in a
+      repair: a judge of a model's answer stays with the caller that asked
+      (CLAUDE.md), so they stay in `prax.writing`.)
 
 ## Later / maybe
 

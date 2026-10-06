@@ -9,7 +9,7 @@ import sqlite3
 from typing import Any
 
 from prax.graph import ontology
-from prax.text import dates, mimes
+from prax.text import dates, language, mimes
 
 from ..base import (
     ASIDE_KINDS,
@@ -238,6 +238,46 @@ def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
     ]
 
 
+def keep_summary(
+    meta: dict[str, Any], text: str, *, lang: str | None = None
+) -> str | None:
+    """File a summary in a document's ``meta`` and say what language it
+    was filed under.
+
+    ``meta.summary`` is the one the document field indexes and is English
+    wherever an English one exists; ``meta.summaries`` holds every one we
+    have, keyed by language, so the German summary of a German document
+    is never lost to the translation that replaced it. A document whose
+    only summary is German keeps it as the canonical one: worse for a
+    search than English, better than no summary at all.
+
+    A summary too short to place is filed without a language rather than
+    as English, and ``meta.summary_lang`` stays absent: the pass that
+    hands documents to a model asks for the ones known to be in another
+    language, never for the ones nothing could read.
+    """
+    code = lang or language.detect(text)
+    held = meta.setdefault("summaries", {})
+    if isinstance(held, dict):
+        # the one already there goes in first, under its own language. It
+        # got here before ``meta.summaries`` existed, so nothing else
+        # would file it, and the first batch of translations overwrote
+        # eight German summaries that this line would have kept
+        # (2026-09-24)
+        there, there_lang = meta.get("summary"), meta.get("summary_lang")
+        if there and there_lang and there_lang not in held:
+            held[str(there_lang)] = there
+        if code:
+            held[code] = text
+    if code == language.canonical() or not meta.get("summary"):
+        meta["summary"] = text
+        if code:
+            meta["summary_lang"] = code
+        else:
+            meta.pop("summary_lang", None)
+    return code
+
+
 @_serialized
 def set_summary(
     con: sqlite3.Connection,
@@ -253,12 +293,10 @@ def set_summary(
     ``meta.summaries`` holds every summary we have keyed by language, so
     translating a German summary into English never loses the German one;
     ``meta.summary`` is the one the document field indexes, which is
-    English wherever an English one exists (``prax.writing.summaries``). The field
+    English wherever an English one exists (``keep_summary``). The field
     is refreshed, so the new summary is searchable and the document vector
     is embedded again.
     """
-    from prax.writing import summaries
-
     text = text.strip()
     if not text:
         raise ValueError("a summary cannot be empty")
@@ -267,7 +305,7 @@ def set_summary(
         raise KeyError(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
     was = str(meta.get("summary") or "")
-    code = summaries.keep(meta, text, lang=lang)
+    code = keep_summary(meta, text, lang=lang)
     meta.pop("summary_tried", None)  # it worked this time
     meta["summary_source"] = source
     meta["summary_run"] = run

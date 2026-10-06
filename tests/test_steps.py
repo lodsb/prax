@@ -20,7 +20,6 @@ from fastapi.testclient import TestClient
 
 from prax import models, steps, store, work, worker
 from prax.capture import pipeline
-from prax.writing import summaries
 
 DE = (
     "Dieses Dokument ist ein Verzeichnis von Herstellern und Zulieferern für"
@@ -107,7 +106,7 @@ def test_the_summaries_pass_translates_through_the_door(
         "/ingest", json={"text": "ein Text " * 80, "title": "Hersteller"}
     ).json()["doc_id"]
     meta = store.get_meta(con, doc)
-    summaries.keep(meta, DE)
+    store.keep_summary(meta, DE)
     store.set_meta(con, doc, meta)
     _answer(monkeypatch, EN)
     out = worker.run_once(
@@ -171,7 +170,7 @@ def test_a_paid_model_step_fetches_nothing_it_will_not_do(
         "/ingest", json={"text": "ein Text " * 80, "title": "Hersteller"}
     ).json()["doc_id"]
     meta = store.get_meta(con, doc)
-    summaries.keep(meta, DE)
+    store.keep_summary(meta, DE)
     store.set_meta(con, doc, meta)
     paid = models.ModelSpec(name="sonnet", kind="claude", model="claude-sonnet-5")
     monkeypatch.setattr(models, "resolve", lambda s: paid if s == "summaries" else None)

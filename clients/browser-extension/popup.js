@@ -7,7 +7,7 @@ const lib = globalThis.praxLib;
 const $ = (id) => document.getElementById(id);
 const progressArea = () => api.storage.session || api.storage.local;
 
-function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+const esc = lib.escapeHtml;  // lib.js, loaded before this file
 
 let cfg = { server: null, token: "", domains: [], close: false };
 

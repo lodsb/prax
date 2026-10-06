@@ -7,7 +7,7 @@ const api = globalThis.browser || globalThis.chrome;
 const lib = globalThis.praxLib;
 const $ = (id) => document.getElementById(id);
 
-function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+const esc = lib.escapeHtml;  // lib.js, loaded before this file
 
 function say(text, ok) {
   const m = $("msg");

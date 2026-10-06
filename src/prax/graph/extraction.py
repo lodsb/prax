@@ -29,7 +29,6 @@ from typing import Any, Protocol
 from prax import config, models, store
 from prax.graph import ontology
 from prax.ml import pricing
-from prax.writing import summaries
 
 DEFAULT_MODEL = "claude-opus-5"
 CALL_TIMEOUT = 180.0  # seconds; a call takes under 90, the SDK default is 600
@@ -1044,7 +1043,7 @@ def apply(
     if stale_now.get("extractor") == extractor or stale_now.get("requested"):
         meta.pop("extraction_stale")
     if extraction.summary:
-        summaries.keep(meta, extraction.summary)
+        store.keep_summary(meta, extraction.summary)
     if meta.get("extraction"):  # every model that has read the document
         history = meta.setdefault("extraction_history", [])
         history.append(meta["extraction"])

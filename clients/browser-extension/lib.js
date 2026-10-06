@@ -408,5 +408,5 @@ ${body.join("\n")}
 `;
   }
 
-  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, route, paperIds, githubRepoOf, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection, parseWebVtt, parseSiteRules, domainsFor };
+  return { MAX_HTML_BYTES, sessionId, capturable, looksLikePdf, plan, route, paperIds, githubRepoOf, normalizeServer, originPattern, describeResult, splitList, isPdfResponse, pdfFileName, videoOfUrl, fmtTime, escapeHtml, chooseTrack, groupCaptions, chaptersFrom, frameTimes, videoHtml, parseStoryboard, storyboardPlan, paperOf, excerptOf, pageSection, parseWebVtt, parseSiteRules, domainsFor };
 });

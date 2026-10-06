@@ -79,6 +79,11 @@ test("videoOfUrl: YouTube's watch pages in their forms, nothing else", () => {
   assert.equal(lib.videoOfUrl("nope"), null);
 });
 
+test("escapeHtml: the one the popup and the options page use", () => {
+  assert.equal(lib.escapeHtml(`<a href="x">'&'</a>`), "&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;");
+  assert.equal(lib.escapeHtml(null), "");
+});
+
 test("fmtTime and frameTimes", () => {
   assert.equal(lib.fmtTime(0), "0:00");
   assert.equal(lib.fmtTime(754), "12:34");

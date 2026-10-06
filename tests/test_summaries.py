@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from prax import store
 from prax.graph import ontology
 from prax.steps import writing as step_writing
 from prax.writing import summaries
@@ -147,7 +148,7 @@ def test_an_answer_about_the_text_instead_of_a_translation_is_refused() -> None:
 
 def test_keep_files_the_summary_under_its_language() -> None:
     meta: dict[str, Any] = {}
-    assert summaries.keep(meta, DE) == "de"
+    assert store.keep_summary(meta, DE) == "de"
     assert meta["summary_lang"] == "de"
     assert meta["summaries"]["de"] == DE
     # the only summary there is, so it is the canonical one
@@ -156,8 +157,8 @@ def test_keep_files_the_summary_under_its_language() -> None:
 
 def test_english_takes_the_canonical_place_and_german_is_kept() -> None:
     meta: dict[str, Any] = {}
-    summaries.keep(meta, DE)
-    summaries.keep(meta, EN, lang="en")
+    store.keep_summary(meta, DE)
+    store.keep_summary(meta, EN, lang="en")
     assert meta["summary"] == EN
     assert meta["summary_lang"] == "en"
     assert set(meta["summaries"]) == {"de", "en"}
@@ -166,7 +167,7 @@ def test_english_takes_the_canonical_place_and_german_is_kept() -> None:
 
 def test_a_later_german_summary_does_not_displace_the_english_one() -> None:
     meta: dict[str, Any] = {"summary": EN, "summary_lang": "en"}
-    summaries.keep(meta, DE, lang="de")
+    store.keep_summary(meta, DE, lang="de")
     assert meta["summary"] == EN
     assert meta["summary_lang"] == "en"
     assert meta["summaries"]["de"] == DE
@@ -174,7 +175,7 @@ def test_a_later_german_summary_does_not_displace_the_english_one() -> None:
 
 def test_a_summary_too_short_to_place_claims_no_language() -> None:
     meta: dict[str, Any] = {}
-    assert summaries.keep(meta, "Ein Verzeichnis.") is None
+    assert store.keep_summary(meta, "Ein Verzeichnis.") is None
     assert meta["summary"] == "Ein Verzeichnis."
     assert "summary_lang" not in meta  # so no pass hands it to a model
 
@@ -200,7 +201,7 @@ def test_the_step_translates_and_the_door_keeps_both(
             "/ingest", json={"text": "ein Text " * 80, "title": "Ebike Hersteller"}
         ).json()["doc_id"]
         meta = store.get_meta(con, doc_id)
-        summaries.keep(meta, DE)
+        store.keep_summary(meta, DE)
         store.set_meta(con, doc_id, meta)
         assert store.get_meta(con, doc_id)["summary_lang"] == "de"
 
@@ -239,7 +240,7 @@ def test_a_summary_the_model_cannot_translate_is_not_handed_out_again(
             "/ingest", json={"text": "ein Text " * 80, "title": "Ebike"}
         ).json()["doc_id"]
         meta = store.get_meta(con, doc_id)
-        summaries.keep(meta, DE)
+        store.keep_summary(meta, DE)
         store.set_meta(con, doc_id, meta)
 
         batch = client.get("/work/summaries", params={"scope": "all"}).json()
@@ -312,7 +313,7 @@ def test_a_translation_not_good_enough_is_asked_for_again(
             "/ingest", json={"text": "ein Text " * 80, "title": "Ebike"}
         ).json()["doc_id"]
         meta = store.get_meta(con, doc_id)
-        summaries.keep(meta, DE)
+        store.keep_summary(meta, DE)
         store.set_meta(con, doc_id, meta)
 
         # a batch that went through before the check knew about labels
@@ -339,7 +340,7 @@ def test_the_summary_already_there_is_filed_before_it_is_replaced() -> None:
     """The first batch overwrote eight German summaries: `keep` filed what
     it was handed and nothing filed what was already there."""
     meta: dict[str, Any] = {"summary": DE, "summary_lang": "de"}  # written before
-    summaries.keep(meta, EN, lang="en")
+    store.keep_summary(meta, EN, lang="en")
     assert meta["summary"] == EN
     assert meta["summaries"]["de"] == DE
     assert meta["summaries"]["en"] == EN
