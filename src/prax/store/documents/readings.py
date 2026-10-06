@@ -12,6 +12,7 @@ from prax import packs
 
 from ..base import (
     _NOW,
+    _guards,
     _like_prefix,
     _reading,
     _serialized,
@@ -142,6 +143,8 @@ THIN_BYTES_PER_PAGE = 100  # under this much text a page, the layer is the cover
 THIN_MIN_PAGES = 5  # a leaflet is not a scanned book
 
 
+@_guards("doc", lambda: False)
+@_reading
 def document_has_figure(con: sqlite3.Connection, doc_id: int, ref: str) -> bool:
     """Whether the document's text references the figure ``ref`` (a figure
     chunk carries it in ``data.ref``): what the figure route checks, so an

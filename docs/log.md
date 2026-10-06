@@ -5361,6 +5361,22 @@ object, declared a string, and no live document had one to show it. A
 misspelt key at a reader is now a type error. The nested objects stay
 `dict[str, Any]`.
 
+## 2026-10-07: pictures for an MCP client
+
+The clients said they could not reach an image, or a PDF whose text is
+OCR. Neither was a tool, and a named token could call neither route
+(`/doc/{id}/figure/{ref}`, `/doc/{id}/original`). Two tools answer with
+MCP image content now: `figure(doc_id, ref)`, the image behind a figure
+line, and `page_image(doc_id, page, width)`, a page of the original PDF
+drawn by the door (`GET /doc/{id}/page/{n}`, `figures.page_png`, 1000
+pixels wide by default and at most 1600; an image original is its own
+page 1). Both routes are in `auth.RESTRICTED_ROUTES`, and the reads
+behind them are guarded: `original_info` answers None and
+`document_has_figure` False for a document the viewer may not see, which
+the wall test walks. The PDF itself is not handed to the client: a page
+drawn is what a model reads, and a whole file would be the 3.4 MB
+answer invariant 6 is about.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

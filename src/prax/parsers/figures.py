@@ -37,6 +37,7 @@ import io
 import re
 from contextvars import ContextVar, Token
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from prax.text import markup
@@ -364,6 +365,31 @@ class fetching:
     def __exit__(self, *exc: object) -> None:
         if self.token is not None:
             _FETCH.reset(self.token)
+
+
+# a page drawn for an agent to read (an OCR'd scan, a figure the text lost):
+# about a page's worth of tokens at the default, and no wider than a model
+# looks at anyway
+PAGE_WIDTH = 1000
+PAGE_WIDTH_MAX = 1600
+
+
+def page_png(
+    path: Path, page: int, *, width: int = PAGE_WIDTH
+) -> tuple[bytes | None, int]:
+    """Page ``page`` (from 1) of the PDF at ``path`` drawn as a PNG
+    ``width`` pixels wide, and the PDF's page count; None for a page it
+    does not have. Raises ImportError where pymupdf is not installed."""
+    import pymupdf
+
+    with pymupdf.open(path) as doc:
+        count = int(doc.page_count)
+        if not 1 <= page <= count:
+            return None, count
+        p = doc[page - 1]
+        zoom = max(64, min(int(width), PAGE_WIDTH_MAX)) / max(float(p.rect.width), 1.0)
+        pix = p.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        return pix.tobytes("png"), count
 
 
 def media_of(data: bytes) -> str:

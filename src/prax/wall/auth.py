@@ -76,6 +76,9 @@ RESTRICTED_ROUTES = tuple(
         ("GET", r"/documents"),
         ("GET", r"/doc/\d+/context"),
         ("GET", r"/doc/\d+/references"),
+        # what a figure line shows, and a page of the original drawn
+        ("GET", r"/doc/\d+/figure/[0-9a-f]+"),
+        ("GET", r"/doc/\d+/page/\d+"),
         ("POST", r"/references/missing"),
         ("GET", r"/page/[^/]+"),
         ("PUT", r"/page/[^/]+"),

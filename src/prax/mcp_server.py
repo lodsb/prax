@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
-from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver import Image, MCPServer
 
 from prax.client import DEFAULT_DOOR, Door, DoorError, _git, project_files
 
@@ -27,6 +27,8 @@ mcp = MCPServer(
         "A personal research library: search returns compact hits with ids,"
         " get and get_chunk open them, traverse walks the graph, ask bundles"
         " passages for a question, pages keep what is worth keeping."
+        " figure and page_image show a figure or a page of the original as"
+        " a picture: for a scan whose text is OCR, or what the text lost."
     ),
 )
 _door: Door | None = None
@@ -156,7 +158,9 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
     Text is windowed: ``text_len`` and ``truncated`` say whether more
     remains; call again with a larger ``offset`` to page. ``meta`` holds
     what the document is and where it belongs (source, domains, language,
-    summary, ids, authors), not the history of how it was read.
+    summary, ids, authors), not the history of how it was read. A figure
+    line ``![caption](figure:<ref>)`` is looked at with ``figure``, a page
+    of the original with ``page_image``.
     """
     return _answer(
         lambda: door().get_json(
@@ -164,6 +168,42 @@ def get(doc_id: int, offset: int = 0, max_chars: int = 20000) -> dict[str, Any]:
             {"offset": offset, "max_chars": max_chars, "brief": True},
         )
     )
+
+
+def _picture(path: str, params: dict[str, Any] | None = None) -> Any:
+    """An image from the door as the client's model sees one, or the
+    reason there is none."""
+    got = _guard(lambda: door().get_media(path, params))
+    if isinstance(got, dict):
+        return got
+    data, media = got
+    return Image(data=data, format=media.removeprefix("image/") or "png")
+
+
+@mcp.tool()
+def figure(doc_id: int, ref: str) -> Any:
+    """Look at a figure: the picture itself, out of the document's original.
+
+    ``ref`` is the hash in a figure line of ``get``'s text,
+    ``![caption](figure:<ref>)``, or a figure chunk's ``data.ref``. The
+    caption and any reading of it are text already; this is for what they
+    do not say.
+    """
+    return _picture(f"/doc/{doc_id}/figure/{ref}")
+
+
+@mcp.tool()
+def page_image(doc_id: int, page: int, width: int = 1000) -> Any:
+    """Look at one page of a document's original PDF, drawn as a picture.
+
+    For a scan, whose text is OCR and may be wrong (``meta.text_source``
+    names an OCR reader), a formula or a table the text garbled, or a
+    figure the text did not keep. ``page`` counts from 1 (a passage's
+    ``page``, a ``get`` text's page marks). ``width`` in pixels, at most
+    1600; a page costs about a page of tokens at 1000. An image original
+    is its own page 1.
+    """
+    return _picture(f"/doc/{doc_id}/page/{page}", {"width": width})
 
 
 @mcp.tool()

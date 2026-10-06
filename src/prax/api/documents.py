@@ -235,6 +235,42 @@ def figure(doc_id: int, ref: str, request: Request) -> Response:
     )
 
 
+@router.get("/doc/{doc_id}/page/{page}")
+def page_image(
+    doc_id: int, page: int, request: Request, width: int | None = None
+) -> Response:
+    """Page ``page`` (from 1) of a document's original as a PNG ``width``
+    pixels wide (``figures.PAGE_WIDTH``, at most ``PAGE_WIDTH_MAX``): what
+    an agent reads a scan by, whose text is OCR, or a figure the text did
+    not keep. An image original is its own page 1, served as it is."""
+    from prax.parsers import figures
+
+    info = store.original_info(_con(request), doc_id)
+    if info is None or not info["path"].exists():
+        raise HTTPException(404, "no such document")
+    mime = (info["mime"] or "").split(";")[0]
+    headers = {
+        "Cache-Control": "public, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": SANDBOX_POLICY,
+    }
+    if mime.startswith("image/") and mime in INERT_TYPES:
+        if page != 1:
+            raise HTTPException(404, "an image is one page")
+        return Response(info["path"].read_bytes(), media_type=mime, headers=headers)
+    if mime != "application/pdf":
+        raise HTTPException(400, f"its original is {mime}, not a PDF: it has no pages")
+    try:
+        png, count = figures.page_png(
+            info["path"], page, width=width or figures.PAGE_WIDTH
+        )
+    except ImportError as exc:
+        raise HTTPException(501, "this door cannot draw pages (no pymupdf)") from exc
+    if png is None:
+        raise HTTPException(404, f"no page {page}: it has {count}")
+    return Response(png, media_type="image/png", headers=headers)
+
+
 @router.get("/doc/{doc_id}/text")
 def text(doc_id: int, request: Request) -> PlainTextResponse:
     """The Markdown text artifact of a document."""

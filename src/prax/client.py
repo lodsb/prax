@@ -131,6 +131,13 @@ class Door:
             self.client.get(path, params=params, headers=self.headers)
         ).content
 
+    def get_media(
+        self, path: str, params: dict[str, Any] | None = None
+    ) -> tuple[bytes, str]:
+        """A GET whose answer is a file: its bytes and its media type."""
+        res = self._check(self.client.get(path, params=params, headers=self.headers))
+        return res.content, str(res.headers.get("content-type") or "").split(";")[0]
+
     def get_bytes(self, path: str) -> bytes:
         return self._check(self.client.get(path, headers=self.headers)).content
 

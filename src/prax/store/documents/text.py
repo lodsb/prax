@@ -17,6 +17,7 @@ from ..base import (
     _TOKEN,
     ASIDE_KINDS,
     _archive_bytes,
+    _guards,
     _read_archive,
     _reading,
     _serialized,
@@ -449,6 +450,7 @@ def text_hashes(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
     return {r["id"]: r["text_hash"] or "" for r in rows}
 
 
+@_guards("doc", lambda: None)
 @_reading
 def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
     """MIME type, title and archive path of a document's original, for

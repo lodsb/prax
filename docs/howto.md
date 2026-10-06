@@ -2864,7 +2864,15 @@ processing, waiting for a reading and whether its server is up, nothing
 found, failed with the error; and whether a worker is about) and
 `health` (the door's address as the server uses it, reachable or not,
 the token accepted or refused). When the tools fail, `health` says
-which of the three it is. What the agent
+which of the three it is. Two tools answer with a picture the client's
+model sees (MCP image content) rather than text: `figure(doc_id, ref)`,
+the image a figure line `![caption](figure:<ref>)` of `get` stands for,
+and `page_image(doc_id, page, width=1000)`, a page of the original PDF
+drawn (`GET /doc/{id}/page/{n}`, at most 1600 pixels wide, about a
+page of tokens at 1000). That is how a client reads a scan whose text
+is OCR, or a table or formula the text garbled. The door draws the page
+with pymupdf; a door without it answers 501. A named token may call
+both, and a document it may not see has neither (the wall). What the agent
 writes is stamped `agent`: edges' producer, pages' author, domain sets,
 promotions. `get` and `search` ask the door for the brief form
 (`brief=true`). A document's `meta` comes without the histories of how

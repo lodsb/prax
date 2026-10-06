@@ -46,6 +46,8 @@ EXPECTED_TOOLS = {
     "cited_but_missing",
     "request_reading",
     "why",
+    "figure",
+    "page_image",
 }
 
 
@@ -393,3 +395,43 @@ def test_a_reading_is_asked_and_the_text_is_searchable_meanwhile() -> None:
     assert "extractor must be one of" in bad["error"]
     row = call("status", doc_ids=[r["doc_id"]])["documents"][0]
     assert row["state"] == "reading" and row["searchable"] is True
+
+
+def _pdf(pages: int) -> bytes:
+    import pymupdf
+
+    doc = pymupdf.open()
+    for n in range(pages):
+        doc.new_page().insert_text((72, 72), f"page {n + 1} of a scan")
+    return bytes(doc.tobytes())
+
+
+def test_a_client_looks_at_a_page_and_a_figure(proxied: TestClient) -> None:
+    """A scan's page and a figure come back as pictures the client's model
+    sees (MCP image content); what has no picture says why."""
+    pytest.importorskip("pymupdf")
+    from prax import store
+    from prax.store.base import _archive_bytes
+
+    con = proxied.app.state.con
+    scan = int(store.register(con, _pdf(2), mime="application/pdf")["doc_id"])
+    args = {"doc_id": scan, "page": 2, "width": 400}
+    got = asyncio.run(mcp_server.mcp.call_tool("page_image", args))
+    image = got.content[0]
+    assert image.type == "image" and image.mime_type == "image/png"
+    assert call("page_image", doc_id=scan, page=3) == {"error": "no page 3: it has 2"}
+    note = int(store.ingest_text(con, "a note " * 40, title="n")["doc_id"])
+    assert "not a PDF" in call("page_image", doc_id=note, page=1)["error"]
+    import pymupdf
+
+    with pymupdf.open(stream=_pdf(1), filetype="pdf") as doc:
+        png = doc[0].get_pixmap(dpi=20).tobytes("png")
+    ref = _archive_bytes(png)  # a filed picture, as a scan's crop is
+    line = f"![the response curve](figure:{ref})"
+    text = "\n\n".join(["A chart below.", line, "More of it. " * 20])
+    shown = int(store.ingest_text(con, text, title="with a figure")["doc_id"])
+    got = asyncio.run(mcp_server.mcp.call_tool("figure", {"doc_id": shown, "ref": ref}))
+    assert got.content[0].type == "image"
+    assert got.content[0].mime_type == "image/png"
+    # a figure the document's text does not show is not served under it
+    assert "error" in call("figure", doc_id=note, ref=ref)

@@ -131,6 +131,8 @@ WALKED = (
     ("POST", "/ingest/url"),
     ("POST", "/ingest/urls"),
     ("GET", "/doc/1/references"),
+    ("GET", "/doc/1/figure/ab12"),
+    ("GET", "/doc/1/page/1"),
     ("POST", "/references/missing"),
     ("PUT", "/doc/1/title"),
     ("POST", "/ingest/file"),
@@ -164,6 +166,11 @@ def test_a_named_token_does_not_see_what_is_personal(client: TestClient) -> None
     assert client.get(f"/get/{lib['paper']}", headers=me).status_code == 200
     assert client.get(f"/chunk/{lib['chunk']}", headers=me).status_code == 404
     assert client.get(f"/doc/{bank}/context", headers=me).status_code == 404
+    # its pages and figures: as if not there; an open one is seen (a text
+    # has no pages, which is a 400, not a 404)
+    assert client.get(f"/doc/{bank}/page/1", headers=me).status_code == 404
+    assert client.get(f"/doc/{bank}/figure/ab12", headers=me).status_code == 404
+    assert client.get(f"/doc/{lib['paper']}/page/1", headers=me).status_code == 400
     context = client.get(f"/doc/{lib['paper']}/context", headers=me)
     assert context.status_code == 200 and not _says(context, "Bank statement")
     assert client.get("/page/private-notes", headers=me).status_code == 404

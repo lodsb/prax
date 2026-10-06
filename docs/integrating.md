@@ -97,7 +97,9 @@ API and no privileged path. `prax.mcp_server` puts the same door in
 front of any MCP client as tools: `search`, `get`, `get_chunk`,
 `context`, `documents`, `traverse`, `link`, `ask`, `get_page`,
 `write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`,
-`promote`, `set_domains`, `status`, `health`. It is a proxy: one HTTP call per tool, no
+`promote`, `set_domains`, `status`, `health`, and two that answer
+with a picture: `figure` (a figure line's image) and `page_image` (a
+page of the original PDF, for a scan read by OCR). It is a proxy: one HTTP call per tool, no
 logic of its own. The door's handlers are the whole contract, and an
 agent can do nothing a script could not. One tool reads the agent's
 machine rather than the door: `ingest_file(path)` uploads a local file,
