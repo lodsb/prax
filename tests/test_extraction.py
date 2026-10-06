@@ -456,3 +456,43 @@ def test_the_input_is_budgeted_in_bytes_as_well_as_characters(
     got = extraction.build_input(con, doc["doc_id"])
     # a Latin document is unaffected: it reaches the character cap first
     assert len(got.text) > extraction.INPUT_CHARS / 2
+
+
+def test_the_document_is_one_entity_whatever_type_each_line_gave_it(
+    con: sqlite3.Connection,
+) -> None:
+    """A relation whose domain is ``document`` had the model write that type
+    on its line and ``recipe`` on the rest: the recipe became two entities
+    (doc 13559, 2026-10-06). Every triple naming the document by its title
+    now carries one type, the most frequent specific one."""
+    title = "Veganer Schokokuchen"
+    doc_id = store.ingest_text(con, "Zutaten: Mehl, Zucker.", title=title)["doc_id"]
+
+    def t(src: str, st: str, rel: str, dst: str, dt: str) -> extraction.Triple:
+        return extraction.Triple(src, st, rel, dst, dt, "EXTRACTED", "q")
+
+    got = extraction.Extraction(
+        triples=[
+            t(title, "recipe", "calls_for", "flour", "ingredient"),
+            t(title, "recipe", "calls_for", "sugar", "ingredient"),
+            t(title, "document", "published_by", "ZEITmagazin", "organization"),
+            t(title.lower(), "document", "needs", "microwave", "tool"),
+            # another document, and the title as something else: untouched
+            t("Another Cake", "document", "published_by", "ZEIT", "organization"),
+        ]
+    )
+    extraction.apply(con, doc_id, got, extractor="stub")
+    types = {
+        r[0]
+        for r in con.execute(
+            "SELECT type FROM entities WHERE lower(name) = lower(?)", (title,)
+        )
+    }
+    assert types == {"recipe"}
+    assert got.triples[4].src_type == "document"
+    # with only the plain type said, the graph's type for it is kept
+    plain = extraction.Extraction(
+        triples=[t(title, "document", "published_by", "ZEIT", "organization")]
+    )
+    extraction.apply(con, doc_id, plain, extractor="stub2")
+    assert plain.triples[0].src_type == "recipe"

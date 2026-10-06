@@ -5084,6 +5084,28 @@ were deleted the same night for disk space, on the user's word (20.9 GB
 of weights and its 0.9 GB projector; C: from 46 to 66 GB free). The
 `server-35b` entry stays in prax.yaml with the download line beside it.
 
+## 2026-10-06: the document twins' second source, the extraction itself
+
+The 450 twins folded on 2026-10-05 were blamed on page links and
+citations typing every document a paper. A new twin since then had
+another cause. Doc 13559, a recipe, was one extraction run
+(`work-20261005T235243`, the 27B) and two entities: `recipe` on its 11
+`calls_for`, `makes` and `authored_by` lines, and `document` on its
+`published_by` and two `needs` lines. Those two relations declare their
+domain as `document`, and the model wrote the domain's type. Both are
+accepted, because a subtype passes where its parent is allowed, and
+`store.link` keys an entity by name and type.
+
+`extraction.apply` now gives the document one type per extraction
+(`_one_self_type`). Every triple that names it by its title as a
+document type takes the most frequent type more specific than
+`document`. A tie goes to the type the graph already gives it
+(`store.document_node`), and a reading that says only `document` takes
+that type too. Every extractor's output goes through `apply`, so
+Claude's are covered. The twin was folded first (`heal --check
+document-twins --apply`, 1 of 1). The fix is live in the door at its
+next restart.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
