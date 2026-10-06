@@ -670,7 +670,9 @@ numbered there) in the order the user agreed: one step a session.
       offsets in the text artifact and the `text_hash` it was read from,
       on an edge, so a re-parse shows which evidence moved (Utopia keeps
       offsets and the document's version).
-- [ ] **Counted drops**: what extraction skips without queuing it (a
+- [x] (2026-10-06: `meta.extraction.drops` per document, by reason with a
+      count and the first example; `store.extraction_drops` and `GET
+      /review/drops` over the library; the UI shows nothing of it yet) **Counted drops**: what extraction skips without queuing it (a
       reason, a count, an example, per document), beside the review
       queue (Utopia's `extraction_drops`).
 
@@ -742,7 +744,9 @@ not done.
       Those three split the same day, the same output before and after
       (`changes` on nine argument sets on a copy, `venues.plan` on its
       2,704 venues); the top is now 18: `refresh_blocks`, `read`,
-      `request_of`, `cite_link`.)
+      `request_of`, `cite_link`; then 17: `apply` (resolution),
+      `_command`, `hand_out`, `_elements`. Split when touched, as the
+      item says.)
 - [x] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
       the extension. The summaries and sections helpers that the store
       calls up to could move into `prax.text`. (2026-10-03: the six tests

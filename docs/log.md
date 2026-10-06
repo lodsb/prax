@@ -5205,6 +5205,19 @@ With the card (the user: "work on all the tasks that need the card"):
   three it should have (the Voron manual, an army field manual, an
   op-amp datasheet) and none of the 13 papers, books and reports.
 
+## 2026-10-06, the evening: counted drops
+
+What an extraction leaves out without a review item is now said: an end
+without a name, a confidence that is none of the three, a reference
+number or a placeholder for a name, an unmapped citation without a
+title, a guess the model hedged (`graph.extraction._drop_reason`,
+`noise_reason`). Each reason has a count and its first example on the
+extraction's stamp (`meta.extraction.drops`). `store.extraction_drops`
+sums them over the library, without the documents a viewer may not
+see, and the door serves it beside the review queue (`GET
+/review/drops`). The `rejected` count is what it was. The numbers fill
+in as documents are extracted again.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
