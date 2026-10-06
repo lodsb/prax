@@ -1,0 +1,161 @@
+# Ask eval set: questions about the middle of long documents (2026-10-06),
+# each written from a passage at least 30% into the text, never from the
+# section summaries or the document's summary, which are what is measured.
+#   expect_doc   the document's id in the full store
+#   expect       a regex the cited passage should match
+#   style        middle
+# Run: python scripts/eval_ask.py --questions tests/eval/questions-sections.yaml
+questions:
+  # research books and theses
+  - q: "When estimating the fundamental frequency in order to link analysis frames by their harmonic structure, why were time-domain methods such as autocorrelation ruled out?"
+    expect_doc: 13401
+    expect: 'polyphony'
+    style: middle
+    where: "offset 300000 of 687609 (44%), p. 107"
+  - q: "On the test PC, how many times faster could the combined autocorrelation/FFT representation be computed than an FFT magnitude spectrum of matching accuracy?"
+    expect_doc: 8681
+    expect: '3\.3 times|6360'
+    style: middle
+    where: "offset 70000 of 142195 (49%), p. 47-48"
+  - q: "Why should a ligand for capture on a streptavidin sensor surface carry, ideally, fewer than one biotin label per molecule?"
+    expect_doc: 10002
+    expect: 'biotinylation|homogeneous'
+    style: middle
+    where: "offset 600000 of 1262521 (48%), p. 255-256"
+  - q: "Which Russian researcher separated 'paradox' creativity, original ideas that compensate for cognitive weaknesses, from productive creativity, and what four criteria of creative intellect did she propose?"
+    expect_doc: 927
+    expect: 'Kholodnaya|paradox creativity'
+    style: middle
+    where: "offset 700000 of 1412452 (50%), p. 268-269"
+  - q: "How do young chickens use their left and right eyes for feeding and watching for predators at the same time, and what happens to that ability if their eggs are kept in the dark?"
+    expect_doc: 924
+    expect: 'Hunsaker|lateraliz'
+    style: middle
+    where: "offset 900000 of 1962887 (46%), p. 239"
+  - q: "If z = f(x, y) with x and y both depending on t, why does cancelling dx and dy in the chain rule give a nonsensical result, and what notation avoids it?"
+    expect_doc: 9868
+    expect: 'partial derivative'
+    style: middle
+    where: "offset 600000 of 1321220 (45%), p. 238-240"
+  - q: "Why are random-walk strategies for generating music from a learned context model called greedy, and what kind of method plans over longer patterns instead?"
+    expect_doc: 1254
+    expect: 'random walk|pattern-based sampling'
+    style: middle
+    where: "offset 330000 of 659570 (50%), p. 119-120"
+  - q: "In experiments improving plain SGD for recurrent networks on symbolic music, how was the threshold for clipping gradients set and over how many time steps was each gradient computed?"
+    expect_doc: 1736
+    expect: 'gradient clipping|100 steps'
+    style: middle
+    where: "offset 160000 of 324080 (49%), p. 78-80"
+  - q: "How many trainable parameters per layer did the separation network need on the common fate representation compared with the STFT, and how did it compare with the other entries of the 2016 signal separation campaign?"
+    expect_doc: 209
+    expect: '26 million|SiSEC'
+    style: middle
+    where: "offset 190000 of 388157 (49%), p. 85-87"
+  - q: "Why does the Max/MSP external for the audio oracle hand out information-rate values one index at a time instead of as one list?"
+    expect_doc: 9772
+    expect: '256 atoms'
+    style: middle
+    where: "offset 180000 of 354483 (51%), p. 96-98"
+  - q: "In a beat tracker that fine-tunes several networks on different music subsets, how is the network used for a given piece selected?"
+    expect_doc: 13553
+    expect: 'mean squared difference'
+    style: middle
+    where: "offset 160000 of 327840 (49%), p. 88-89"
+  - q: "How could the loudness side of a recording's acoustic complexity be defined, and why would dynamically compressed material come out as less complex?"
+    expect_doc: 840
+    expect: 'Acoustic Complexity|compressed'
+    style: middle
+    where: "offset 90000 of 177491 (51%), p. 42-43"
+  - q: "In the worked example of an input-state-output observer for a linear port-Hamiltonian system with two measurements, what unknown input drove the simulation and where were the observer's poles put?"
+    expect_doc: 9245
+    expect: 'sawtooth'
+    style: middle
+    where: "offset 200000 of 402974 (50%), p. 96-98"
+  - q: "Which program by Golan Levin turns a drawn gesture into sound by reading its pixels as a spectrogram for an inverse FFT, with colour intensity setting each oscillator's level?"
+    expect_doc: 1967
+    expect: 'Yellowtail'
+    style: middle
+    where: "offset 110000 of 216559 (51%), p. 36"
+  - q: "How does the T-Stick's mapping software turn its on/off capacitive touch readings into gestures, telling a quick brush from a longer hold?"
+    expect_doc: 500
+    expect: 'brushing|integrated over time'
+    style: middle
+    where: "offset 85000 of 176598 (48%), p. 40-41"
+  # manuals of software and gear
+  - q: "When slicing a drum loop for a sampler, what sensitivity setting gives a good starting set of slices, and how do you get rid of a single unwanted slice without turning the sensitivity down?"
+    expect_doc: 13393
+    expect: 'Mute Tool|70 - 80'
+    style: middle
+    where: "offset 65000 of 133289 (49%), p. 46-47"
+  - q: "Why does the sample sales application for the handheld define different menubars for devices running OS 3.0 and those running earlier versions?"
+    expect_doc: 13261
+    expect: 'Beam'
+    style: middle
+    where: "offset 380000 of 803210 (47%), p. 165-167"
+  - q: "With Boost's Meta State Machine, when is it safe to serialize a state machine, given that its event queues cannot be saved?"
+    expect_doc: 12795
+    expect: 'event queues|serializ'
+    style: middle
+    where: "offset 150000 of 298308 (50%), p. 61-62"
+  - q: "How do you talk to the PostScript interpreter of an Apple LaserWriter directly over a serial cable: which line settings, and which command starts and ends the session?"
+    expect_doc: 11457
+    expect: 'executive|XON/XOFF'
+    style: middle
+    where: "offset 160000 of 332526 (48%), p. 122-124"
+  - q: "In OpenGL 1.1, what form must the width and height of a 2D texture image take, and what is the smallest maximum texture size an implementation has to support?"
+    expect_doc: 13259
+    expect: '2m\+2b|64 . 64'
+    style: middle
+    where: "offset 700000 of 1491542 (47%), p. 250"
+  - q: "Which Linux kernel modules make protocols such as FTP, IRC or RealAudio work through IP masquerading, and how are they loaded?"
+    expect_doc: 13178
+    expect: 'ip_masq_raudio|ip_masq_ftp'
+    style: middle
+    where: "offset 560000 of 1197304 (47%), p. 262-263"
+  - q: "In u-he's modular software synth, which distortion mode folds loud signals back so they may go quiet or flip phase, and what is it suggested for?"
+    expect_doc: 13027
+    expect: 'Wedge'
+    style: middle
+    where: "offset 80000 of 162363 (49%), p. 41-42"
+  - q: "On Waldorf's desktop wavetable synth, how slow can an LFO be made, free-running and when synced to tempo?"
+    expect_doc: 9299
+    expect: '1024|four minutes'
+    style: middle
+    where: "offset 210000 of 428939 (49%), p. 103-104"
+  # other long documents
+  - q: "In the 1980 projections for the US President, why were the Department of Energy and Brookhaven figures for pollution from energy production treated as no more than lower bounds?"
+    expect_doc: 9984
+    expect: 'DOE-BNL|lower bounds'
+    style: middle
+    where: "offset 1400000 of 3065476 (46%), p. 388"
+  - q: "How can a passenger who feels a forward jolt when a train brakes describe it without saying the carriage really decelerated?"
+    expect_doc: 13296
+    expect: 'railway carriage|gravitational field'
+    style: middle
+    where: "offset 110000 of 228065 (48%), p. 46"
+  - q: "What is the trick for having a marinated chicken breast cooked and ready for lunch after a few hours of driving?"
+    expect_doc: 6321
+    expect: 'exhaust manifold'
+    style: middle
+    where: "offset 80000 of 158782 (50%), p. 27 (53 pages)"
+  - q: "Which early knowledge-based program worked out the structure of a chemical compound from its mass spectrum, and why did its structure generator need what chemists knew?"
+    expect_doc: 13298
+    expect: 'DENDRAL'
+    style: middle
+    where: "offset 3300000 of 6627262 (50%), p. 563"
+  - q: "Why does a Csound instrument that band-pass filters white noise from the rand opcode need an envelope that removes clicks at its start and end?"
+    expect_doc: 11872
+    expect: 'de-clicking'
+    style: middle
+    where: "offset 560000 of 1145179 (49%), p. 345-347 (OCR text)"
+  - q: "In Lee's 1969 study of how women found someone to perform an illegal termination, how many people did they ask on average and how long were the successful chains?"
+    expect_doc: 11823
+    expect: '5\.8|2\.8'
+    style: middle
+    where: "offset 90000 of 179432 (50%), no page (Word document)"
+  - q: "How many spindles did the spinning jenny drive at once compared with a spinner working two wheels, and which part of a machine did the industrial revolution of the 18th century start from?"
+    expect_doc: 10300
+    expect: 'Jenny|Werkzeugmaschine'
+    style: middle
+    where: "offset 1000000 of 2069098 (48%), p. 408 (German text)"

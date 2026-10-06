@@ -596,7 +596,10 @@ numbered there) in the order the user agreed: one step a session.
       `document_embeddings`, where a query that paraphrases a chapter
       rather than quoting it should do better. The same A/B, the vector
       arm. (The backlog itself is done: 2,050 documents.)
-- [ ] **What sections are worth to `ask`**, which was the second reason
+- [x] (2026-10-06: nothing the noise does not also make;
+      `docs/eval/sections-ask-2026-10-06.md`, 30 questions about the middle
+      of long documents, `tests/eval/questions-sections.yaml`; a book's
+      middle is found through its chunks) **What sections are worth to `ask`**, which was the second reason
       for the pass: a cheaper way into a long book than its chunks.
       `scripts/eval_ask.py` is the instrument.
 - [ ] **Document-aware rerank input** (title + heading path + chunk) as

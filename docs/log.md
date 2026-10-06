@@ -5236,6 +5236,24 @@ with them. `gold` now keeps pairs of an entity type only. The fit on the
 240 settles 32% of pairs at 74/76 against the one in use at 11% and
 34/34. Changing it in prax.yaml waits for the user's word.
 
+## 2026-10-06, the evening: what the chapter summaries are worth to `ask`
+
+30 questions about the middle of long documents
+(`tests/eval/questions-sections.yaml`, written by a subagent from a
+passage 44–51% into each text, never from the summaries), asked of two
+doors: the live one, and one on a copy whose 2,006 sectioned documents
+had their field rebuilt without the section lines. `eval_ask.py --steps
+0`. On the 17 sectioned documents, 17 against 16 were among the sources
+and cited. On the 13 without sections, where the doors differ in nothing
+that matters, two questions changed. So the summaries make no
+difference to `ask` that asking twice does not also make: a book's
+middle is found through the chunk that holds it.
+`docs/eval/sections-ask-2026-10-06.md`. The sections stay for search,
+where they were measured to help.
+
+On the way, stopping the copy's door by command line also stopped the
+shells around it; the live `prax up` was untouched, its pids the same.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
