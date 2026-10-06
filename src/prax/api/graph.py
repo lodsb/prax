@@ -270,6 +270,13 @@ def review_list(
     }
 
 
+@router.get("/review/drops")
+def review_drops(request: Request) -> dict[str, Any]:
+    """What the extractions left out without a review item, by reason,
+    over the library (``store.extraction_drops``)."""
+    return store.extraction_drops(_con(request))
+
+
 @router.post("/review/bulk")
 def review_bulk(req: BulkReq, request: Request) -> dict[str, int]:
     """Close every open item matching the filter (``dropped`` or

@@ -79,15 +79,23 @@ _HEDGED = re.compile(
 )
 
 
-def unmapped_is_noise(item: dict[str, Any]) -> bool:
-    """Unmapped items the review queue should never see: citations by
-    number or author-year, and guesses the model itself hedges."""
+def noise_reason(item: dict[str, Any]) -> str | None:
+    """Why an unmapped item is one the review queue should never see, or
+    None: a citation by number or author-year, or a guess the model itself
+    hedges."""
     dst = str(item.get("dst", ""))
     if item.get("rel") == "cites" and (
         _REFERENCE_NUMBER.match(dst) or _AUTHOR_YEAR.search(dst)
     ):
-        return True
-    return bool(_HEDGED.search(str(item.get("reason", ""))))
+        return "a citation without a title"
+    if _HEDGED.search(str(item.get("reason", ""))):
+        return "a guess the model hedged"
+    return None
+
+
+def unmapped_is_noise(item: dict[str, Any]) -> bool:
+    """Unmapped items the review queue should never see (``noise_reason``)."""
+    return noise_reason(item) is not None
 
 
 # ------------------------------------------------------------------ input
@@ -853,6 +861,31 @@ class ApplyReport:
     queued: int = 0
     rejected: int = 0
     printed: int = 0  # words kept as the document printed them
+    # what was dropped without a review item, by reason: how many and the
+    # first of them (Utopia's extraction drops), kept on the stamp
+    drops: dict[str, dict[str, Any]] = field(default_factory=dict)
+
+    def drop(self, reason: str, example: str) -> None:
+        """One more triple or item left out for ``reason``."""
+        self.rejected += 1
+        seen = self.drops.setdefault(reason, {"count": 0, "example": example[:160]})
+        seen["count"] += 1
+
+
+def _drop_reason(t: Triple) -> str | None:
+    """Why a triple is left out without a review item, or None: an end
+    without a name, a confidence that is none of ``CONFIDENCES``, a bare
+    reference number ("[12]") for an end, or a placeholder name the model
+    copied from its prompt."""
+    if not t.src or not t.dst:
+        return "an end without a name"
+    if t.confidence not in CONFIDENCES:
+        return "a confidence that is not one"
+    if _REFERENCE_NUMBER.match(t.src) or _REFERENCE_NUMBER.match(t.dst):
+        return "a reference number for a name"
+    if _placeholder(t.src) or _placeholder(t.dst):
+        return "a placeholder for a name"
+    return None
 
 
 def _one_self_type(
@@ -961,16 +994,9 @@ def apply(
             )
             report.queued += 1
             continue
-        if (
-            not t.src
-            or not t.dst
-            or t.confidence not in CONFIDENCES
-            or _REFERENCE_NUMBER.match(t.src)
-            or _REFERENCE_NUMBER.match(t.dst)
-            or _placeholder(t.src)
-            or _placeholder(t.dst)
-        ):
-            report.rejected += 1
+        why = _drop_reason(t)
+        if why is not None:
+            report.drop(why, f"{t.src} {t.rel} {t.dst}")
             continue
         try:
             onto.check_edge(t.src_type, t.rel, t.dst_type)
@@ -1023,8 +1049,11 @@ def apply(
                     run=run,
                 )
     for u in extraction.unmapped:
-        if unmapped_is_noise(u):
-            report.rejected += 1
+        why = noise_reason(u)
+        if why is not None:
+            report.drop(
+                why, f"{u.get('src', '')} {u.get('rel', '')} {u.get('dst', '')}"
+            )
             continue
         store.queue_review(
             con,
@@ -1056,6 +1085,7 @@ def apply(
         "existing": report.existing,
         "queued": report.queued,
         "rejected": report.rejected,
+        **({"drops": report.drops} if report.drops else {}),
         **extraction.usage,
     }
     store.set_meta(con, doc_id, meta)

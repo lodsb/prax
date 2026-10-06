@@ -757,3 +757,8 @@ def test_what_a_write_or_a_read_answers_carries_its_link(client: TestClient) -> 
         "/ingest/file", files={"file": ("n.txt", b"uploaded " * 30, "text/plain")}
     ).json()
     assert upload["url"].endswith(f"/ui/#doc/{upload['doc_id']}")
+
+
+def test_the_drops_beside_the_review_queue(client: TestClient) -> None:
+    got = client.get("/review/drops")
+    assert got.status_code == 200 and got.json() == {"total": 0, "reasons": {}}

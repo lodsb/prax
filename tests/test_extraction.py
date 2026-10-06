@@ -149,6 +149,12 @@ def test_misfit_triples_go_to_review_not_graph(con: sqlite3.Connection) -> None:
     )
     report = extraction.apply(con, doc_id, bad, extractor="stub")
     assert report.linked == 0 and report.queued == 2 and report.rejected == 2
+    # what was left out without a review item, by reason, on the stamp
+    drops = store.get_meta(con, doc_id)["extraction"]["drops"]
+    assert drops == {
+        "an end without a name": {"count": 1, "example": " about y"},
+        "a confidence that is not one": {"count": 1, "example": "x about y"},
+    }
     assert con.execute("SELECT count(*) FROM edges").fetchone()[0] == 0
     items = store.list_review(con)
     assert {i["reason"].split(" ")[0] for i in items} <= {"'authored_by'", "unknown"}
@@ -496,3 +502,28 @@ def test_the_document_is_one_entity_whatever_type_each_line_gave_it(
     )
     extraction.apply(con, doc_id, plain, extractor="stub2")
     assert plain.triples[0].src_type == "recipe"
+
+
+def test_the_library_says_what_its_extractions_left_out(
+    con: sqlite3.Connection,
+) -> None:
+    """``store.extraction_drops`` sums what each extraction left out
+    without a review item, by reason, with the documents and examples."""
+    for title in ("One", "Two"):
+        doc_id = store.ingest_text(con, f"{title} text. " * 20, title=title)["doc_id"]
+        bad = extraction.Extraction(
+            triples=[
+                extraction.Triple(
+                    "[12]", "paper", "cites", "y", "paper", "EXTRACTED", "q"
+                )
+            ],
+            unmapped=[{"src": title, "rel": "cites", "dst": "Smith et al., 2018"}],
+        )
+        extraction.apply(con, doc_id, bad, extractor="stub")
+    got = store.extraction_drops(con)
+    assert got["total"] == 4
+    number = got["reasons"]["a reference number for a name"]
+    assert number["count"] == 2 and number["documents"] == 2
+    assert got["reasons"]["a citation without a title"]["examples"][0]["said"] == (
+        "One cites Smith et al., 2018"
+    )

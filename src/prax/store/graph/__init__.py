@@ -88,6 +88,7 @@ from .decisions import (  # noqa: F401
     count_review,
     decide_candidates,
     entity_candidates,
+    extraction_drops,
     forget_resolved_reviews,
     get_review,
     hold_candidate,

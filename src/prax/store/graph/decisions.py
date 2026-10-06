@@ -3,12 +3,13 @@ and the candidate pairs of entity resolution."""
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from typing import Any
 
 from prax.graph import ontology
 
-from ..base import _NOW, _reading, _serialized
+from ..base import _NOW, _reading, _serialized, hidden_documents
 
 
 @_serialized
@@ -354,3 +355,38 @@ def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> 
     if cur.rowcount == 0:
         raise KeyError(f"no such review item: {review_id}")
     con.commit()
+
+
+DROP_EXAMPLES = 3  # examples kept per reason in the library's account
+
+
+@_reading
+def extraction_drops(con: sqlite3.Connection) -> dict[str, Any]:
+    """What the extractions left out without a review item, over the
+    library: each reason with its count, the documents it happened in and
+    a few examples (``meta.extraction.drops``, written by
+    ``graph.extraction.apply``). Beside the review queue, which holds what
+    a person may still decide; these were never offered. A document
+    hidden from the viewer is not counted (the wall)."""
+    hidden = hidden_documents(con)
+    reasons: dict[str, dict[str, Any]] = {}
+    for doc_id, raw in con.execute(
+        "SELECT id, json_extract(meta, '$.extraction.drops') FROM documents"
+        " WHERE json_extract(meta, '$.extraction.drops') IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+    ):
+        if int(doc_id) in hidden:
+            continue
+        for reason, seen in (json.loads(raw) or {}).items():
+            row = reasons.setdefault(
+                reason, {"count": 0, "documents": 0, "examples": []}
+            )
+            row["count"] += int(seen.get("count") or 0)
+            row["documents"] += 1
+            if len(row["examples"]) < DROP_EXAMPLES:
+                row["examples"].append(
+                    {"doc_id": int(doc_id), "said": seen.get("example", "")}
+                )
+    total = sum(r["count"] for r in reasons.values())
+    ordered = dict(sorted(reasons.items(), key=lambda kv: -kv[1]["count"]))
+    return {"total": total, "reasons": ordered}
