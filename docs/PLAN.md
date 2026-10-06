@@ -55,14 +55,49 @@ Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
 after the prototype settles), the move to the board ("Deployment
 shape"), and the zoetrope disk and the NAS.
 
-### Next, by hand (noted 2026-10-04)
+### For the user (the list of 2026-10-06)
 
-- **On the notebook, Monday**: `git pull`, `/mcp` reconnect (it brings
-  the `changes` and `connect` tools), the project re-synced (the
-  acceptance test of AL steps 3 to 5), and the browser extension
-  reloaded for its `alarms` permission.
-- (done 2026-10-06, `docs/eval/ocr-readers-2026-10-06.md`) **Measure AJ step 1** when marker next reads: its peak RAM and commit,
-  VRAM and time per page, against the night of 2026-10-02.
+What waits on a person, with the numbers of that evening. Nothing else
+in the plan is blocked on these, except where an item says so.
+
+**Judging** (the Review page, or a file):
+
+- [ ] **The faithfulness gold set**: 150 sentences in
+      `C:/prax-data/eval/faithfulness-2026-10-06/to-label.md`, a
+      `label:` line each (yes, partly, no), about an hour. Then
+      `scripts/eval_faithfulness.py labels` and `report` on that folder.
+      Decides whether the 27B is right or too strict as a checker.
+- [ ] **"Same thing?"**: 797 likely pairs nobody has decided (`GET
+      /graph/candidates`; 241 tools, 239 papers, 156 concepts, 111
+      methods). Each decision also grows the judge's calibration set.
+- [ ] **Split names**: 2,615 names held by things of unrelated types
+      (`GET /graph/split-names`).
+- [ ] **Genres**: 194 documents labelled; the labeller's labels on
+      12,551 are open to check. Corrections go back into its training
+      (AA).
+- [ ] **Personal?**: 1 suspected document (Admin page).
+
+**A yes or no**, each a dry run shown and applied on the word:
+
+- [ ] **G2**, one fact under two ontology versions: `prax heal --check
+      duplicate-facts`, 1,711 facts, 2,018 later edges.
+- [ ] **Spacing twins**: `prax heal --check spacing-twins`, 783 groups,
+      793 entities to fold.
+- [ ] **Marker's swap**: `swap: auto` on its `run:` line, so the plan
+      can start it without a hand (now `swap: ask`).
+- [ ] **Push**: the commits after `f215266`.
+
+**On the notebook** (noted 2026-10-04): `git pull`, `/mcp` reconnect
+(it brings the `changes` and `connect` tools), the project re-synced
+(the acceptance test of AL steps 3 to 5), and the browser extension
+reloaded for its `alarms` permission; then O1 and O7 re-checked.
+
+**Decisions for later**: AE (the distilled surfer), AH (the stack), the
+move to the board, the zoetrope disk and the NAS, and the rerank, which
+is measured only when it is meant to be on.
+
+Not for a hand: the review queue's 23,964 misfit triples. They are
+the evidence a module grows from, read in bulk, not one by one.
 
 ### A review of the last three days (done 2026-10-05, `docs/log.md`)
 
