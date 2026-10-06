@@ -248,7 +248,31 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
             {"kind": "rechunk"},
         )
 
-    # -- the text
+    _text_routes(listed, counts, mime, video=state["video"], no_text=no_text, thin=thin)
+    if is_pdf or is_html:
+        _figure_routes(listed, counts, is_pdf=is_pdf)
+    if not is_image:
+        _formula_routes(listed, counts, is_pdf=is_pdf)
+    if row["text_hash"] is not None:
+        _graph_routes(listed, extraction)
+    return {"doc_id": doc_id, "state": state, "routes": routes}
+
+
+def _text_routes(
+    listed: _RouteList,
+    counts: dict[str, int],
+    mime: str,
+    *,
+    video: bool,
+    no_text: bool,
+    thin: bool,
+) -> None:
+    """The routes that read the text again: by type, the extractors and
+    the readings that replace or add to it."""
+    add = listed.add
+    is_pdf = mime == "application/pdf"
+    is_html = mime in ("text/html", "application/xhtml+xml")
+    is_image = mimes.is_picture(mime)
     if is_pdf and counts["figures"] > counts["figures_with_picture"]:
         add(
             "figure-crops",
@@ -326,7 +350,7 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
             " code, the comments under their heading",
             {"kind": "reading", "extractor": "trafilatura", "mode": None},
         )
-        if state["video"]:
+        if video:
             add(
                 "polish",
                 "text",
@@ -347,114 +371,122 @@ def routes_for(con: sqlite3.Connection, doc_id: int) -> dict[str, Any]:
             step="vision",
         )
 
-    # -- the figures
-    if is_pdf or is_html:
-        loose = counts["figures_uncaptioned"]
-        n = counts["figures"] - loose  # the captioned ones
-        unread = n - (counts["figures_read"] - counts["figures_uncaptioned_read"])
-        if n:
-            detail = (
-                f"{unread} of {n} captioned figures without a reading; the vision"
-                " model is shown the caption and the text around each, about"
-                " 4 s a figure locally"
-            )
-        elif loose:
-            detail = "no captioned figures: every image here is one no caption claims"
-        else:
-            detail = (
-                "no figure references in the text yet: read the document again"
-                " first (finds them)"
-            )
-        add(
-            "figures",
-            "figures",
-            "Read the figures nobody has read",
-            detail,
-            {"kind": "reading", "extractor": "figures", "mode": "captioned"},
-            step="vision",
-            available=unread > 0,
-        )
-        add(
-            "figures-again",
-            "figures",
-            "Read every figure again",
-            f"the {n} captioned figures under the current prompt (the one that"
-            " shows the model the text around the figure); this model's earlier"
-            " readings replaced, another model's kept",
-            {"kind": "reading", "extractor": "figures", "mode": "again"},
-            step="vision",
-            available=n > 0,
-        )
-        if is_pdf:
-            loose_unread = loose - counts["figures_uncaptioned_read"]
-            add(
-                "figures-all",
-                "figures",
-                "Read the images no caption claims too",
-                f"{loose_unread} of {loose} unread; a manual's screenshots and"
-                " panels, but often decoration",
-                {"kind": "reading", "extractor": "figures", "mode": "all"},
-                step="vision",
-                available=loose_unread > 0,
-            )
 
-    # -- the formulas
-    if not is_image:
-        n = counts["formulas"]
-        unread = n - counts["formulas_read"]
+def _figure_routes(listed: _RouteList, counts: dict[str, int], *, is_pdf: bool) -> None:
+    """The routes that read the figures: the captioned ones not read, all
+    of them again, and in a PDF the images no caption claims."""
+    add = listed.add
+    loose = counts["figures_uncaptioned"]
+    n = counts["figures"] - loose  # the captioned ones
+    unread = n - (counts["figures_read"] - counts["figures_uncaptioned_read"])
+    if n:
+        detail = (
+            f"{unread} of {n} captioned figures without a reading; the vision"
+            " model is shown the caption and the text around each, about"
+            " 4 s a figure locally"
+        )
+    elif loose:
+        detail = "no captioned figures: every image here is one no caption claims"
+    else:
+        detail = (
+            "no figure references in the text yet: read the document again"
+            " first (finds them)"
+        )
+    add(
+        "figures",
+        "figures",
+        "Read the figures nobody has read",
+        detail,
+        {"kind": "reading", "extractor": "figures", "mode": "captioned"},
+        step="vision",
+        available=unread > 0,
+    )
+    add(
+        "figures-again",
+        "figures",
+        "Read every figure again",
+        f"the {n} captioned figures under the current prompt (the one that"
+        " shows the model the text around the figure); this model's earlier"
+        " readings replaced, another model's kept",
+        {"kind": "reading", "extractor": "figures", "mode": "again"},
+        step="vision",
+        available=n > 0,
+    )
+    if is_pdf:
+        loose_unread = loose - counts["figures_uncaptioned_read"]
         add(
+            "figures-all",
+            "figures",
+            "Read the images no caption claims too",
+            f"{loose_unread} of {loose} unread; a manual's screenshots and"
+            " panels, but often decoration",
+            {"kind": "reading", "extractor": "figures", "mode": "all"},
+            step="vision",
+            available=loose_unread > 0,
+        )
+
+
+def _formula_routes(
+    listed: _RouteList, counts: dict[str, int], *, is_pdf: bool
+) -> None:
+    """The routes that read the display equations, new or all again."""
+    add = listed.add
+    n = counts["formulas"]
+    unread = n - counts["formulas_read"]
+    add(
+        "formulas",
+        "formulas",
+        "Read the equations",
+        (
+            f"{unread} of {n} display equations without a reading: one to"
+            " three sentences under each, in the document's terms"
+        )
+        if n
+        else "no display equations in the text"
+        + (": marker recovers them from a PDF" if is_pdf else ""),
+        {"kind": "reading", "extractor": "formulas", "mode": "new"},
+        step="formulas",
+        available=n > 0,
+    )
+    if n:
+        add(
+            "formulas-again",
             "formulas",
-            "formulas",
-            "Read the equations",
-            (
-                f"{unread} of {n} display equations without a reading: one to"
-                " three sentences under each, in the document's terms"
-            )
-            if n
-            else "no display equations in the text"
-            + (": marker recovers them from a PDF" if is_pdf else ""),
-            {"kind": "reading", "extractor": "formulas", "mode": "new"},
+            "Read every equation again",
+            "this model's earlier readings replaced",
+            {"kind": "reading", "extractor": "formulas", "mode": "again"},
             step="formulas",
-            available=n > 0,
         )
-        if n:
-            add(
-                "formulas-again",
-                "formulas",
-                "Read every equation again",
-                "this model's earlier readings replaced",
-                {"kind": "reading", "extractor": "formulas", "mode": "again"},
-                step="formulas",
-            )
 
-    # -- the graph
-    if row["text_hash"] is not None:
-        if extraction:
-            done = (
-                f"read by {extraction.get('extractor')} under"
-                f" {extraction.get('ontology_version')}"
-                f" on {str(extraction.get('at') or '')[:10]}"
-            )
-        else:
-            done = "not extracted yet"
-        add(
-            "extract",
-            "graph",
-            "Extract the graph again" if extraction else "Extract the graph",
-            f"{done}. The local model reads the document against its ontology"
-            " modules on the worker's next pass; the earlier reading's edges"
-            " are retired, history kept",
-            {"kind": "extract"},
-            step="extract",
+
+def _graph_routes(listed: _RouteList, extraction: dict[str, Any] | None) -> None:
+    """Extract the graph (again), and promote to the expensive model."""
+    add = listed.add
+    if extraction:
+        done = (
+            f"read by {extraction.get('extractor')} under"
+            f" {extraction.get('ontology_version')}"
+            f" on {str(extraction.get('at') or '')[:10]}"
         )
-        add(
-            "promote",
-            "graph",
-            "Promote to the expensive model",
-            "the richer pass (claims, relations between methods; an image"
-            " described again first). Flags the document; the worker runs the"
-            " pass only with --spend",
-            {"kind": "promote"},
-            step="promote",
-        )
-    return {"doc_id": doc_id, "state": state, "routes": routes}
+    else:
+        done = "not extracted yet"
+    add(
+        "extract",
+        "graph",
+        "Extract the graph again" if extraction else "Extract the graph",
+        f"{done}. The local model reads the document against its ontology"
+        " modules on the worker's next pass; the earlier reading's edges"
+        " are retired, history kept",
+        {"kind": "extract"},
+        step="extract",
+    )
+    add(
+        "promote",
+        "graph",
+        "Promote to the expensive model",
+        "the richer pass (claims, relations between methods; an image"
+        " described again first). Flags the document; the worker runs the"
+        " pass only with --spend",
+        {"kind": "promote"},
+        step="promote",
+    )

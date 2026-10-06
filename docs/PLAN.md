@@ -708,7 +708,9 @@ not done.
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`
-      (19), `capture.routes.routes_for` (19).
+      (19), `capture.routes.routes_for` (19). (2026-10-06: those four
+      split, each now 10 or under, the same output before and after; the
+      top of the list since is `changes` (20), `sync` and `plan` (19).)
 - [ ] **Smaller duplication.** The UI's `esc` and `fmtTime` are copied in
       the extension. The summaries and sections helpers that the store
       calls up to could move into `prax.text`. (2026-10-03: the six tests

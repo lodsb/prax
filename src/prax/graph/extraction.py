@@ -147,7 +147,34 @@ def build_input(
         raise KeyError(f"no such document: {doc_id}")
     meta = doc["meta"] or {}
     domains = list(meta["domains"]) if meta.get("domains") else None
-    lines = [f"Title: {doc['title'] or '(untitled)'}"]
+    # the text: chunks in order, up to the head budget; then the closing
+    # sections that fell past it, up to the tail. Figure captions and code
+    # are skipped, and so are the regions of a capture that are not the
+    # document: its advertising and what its readers wrote under it
+    skip = ("figure", "code", "ad", "comment")
+    chunks = [
+        c
+        for c in store.list_chunks(con, doc_id)
+        if c["kind"] not in skip and c["text"].strip()
+    ]
+    parts, cut = _head_parts(chunks, max_chars, max_bytes)
+    tail = _tail_parts(chunks[cut:], tail_chars)
+    text = "\n\n".join(parts)
+    if tail:
+        text += TAIL_MARK + "\n\n".join(tail)
+    header = _header_lines(doc["title"], meta, domains)
+    return DocumentInput(
+        doc_id, doc["title"] or "", "\n".join(header), text, domains=domains
+    )
+
+
+def _header_lines(
+    title: str | None, meta: dict[str, Any], domains: list[str] | None
+) -> list[str]:
+    """What the prompt says of the document before its text: the title,
+    the domains, a page's kind, and the record's authors, date, venue, DOI
+    and abstract."""
+    lines = [f"Title: {title or '(untitled)'}"]
     if domains:
         lines.append("Domains: " + ", ".join(domains))
     page = meta.get("page") or {}
@@ -172,20 +199,17 @@ def build_input(
         lines.append(f"DOI: {meta['doi']}")
     if meta.get("abstract"):
         lines.append(f"Abstract: {meta['abstract']}")
-    # the text: chunks in order, up to the head budget; then the closing
-    # sections that fell past it, up to the tail. Figure captions and code
-    # are skipped, and so are the regions of a capture that are not the
-    # document: its advertising and what its readers wrote under it
-    skip = ("figure", "code", "ad", "comment")
-    chunks = [
-        c
-        for c in store.list_chunks(con, doc_id)
-        if c["kind"] not in skip and c["text"].strip()
-    ]
+    return lines
+
+
+def _head_parts(
+    chunks: list[dict[str, Any]], max_chars: int, max_bytes: int
+) -> tuple[list[str], int]:
+    """The chunks from the start, within both budgets (the last one trimmed
+    to fit), and the index of the first chunk not read."""
     parts: list[str] = []
     used = 0
     used_bytes = 0
-    cut = len(chunks)
     for i, c in enumerate(chunks):
         piece = c["text"].strip()
         room = max(0, max_chars - used)
@@ -197,11 +221,16 @@ def build_input(
         used += len(piece) + 2
         used_bytes += len(piece.encode("utf-8")) + 2
         if used >= max_chars or used_bytes >= max_bytes:
-            cut = i + 1
-            break
+            return parts, i + 1
+    return parts, len(chunks)
+
+
+def _tail_parts(rest: list[dict[str, Any]], tail_chars: int) -> list[str]:
+    """Of the chunks past the head, those under a closing heading
+    (``_TAIL_HEADING``: the conclusions), up to ``tail_chars``."""
     tail: list[str] = []
     tail_used = 0
-    for c in chunks[cut:]:
+    for c in rest:
         heading = c.get("heading") or []
         if not (heading and _TAIL_HEADING.search(heading[-1])):
             continue
@@ -213,12 +242,7 @@ def build_input(
         tail_used += len(piece) + 2
         if tail_used >= tail_chars:
             break
-    text = "\n\n".join(parts)
-    if tail:
-        text += TAIL_MARK + "\n\n".join(tail)
-    return DocumentInput(
-        doc_id, doc["title"] or "", "\n".join(lines), text, domains=domains
-    )
+    return tail
 
 
 # ----------------------------------------------------------------- output

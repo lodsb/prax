@@ -63,11 +63,28 @@ def parse(data: bytes) -> str:
     from lxml import html as lxml_html
 
     root = lxml_html.fromstring(data.decode("utf-8", errors="replace"))
-    meta_el = root.find('.//meta[@name="prax-video"]')
+    meta = _meta(root)
+    out = _head(root, meta) + _description(root)
+    transcript = root.find('.//section[@class="transcript"]')
+    if transcript is None:
+        raise NotATranscript("a video capture without a transcript section")
+    out += ["## Transcript", ""] + _transcript(transcript, _chapters(meta))
+    return "\n".join(out).rstrip() + "\n"
+
+
+def _meta(root: Any) -> dict[str, Any]:
+    """The capture's ``prax-video`` meta, ``{}`` when it does not parse."""
+    el = root.find('.//meta[@name="prax-video"]')
     try:
-        meta = json.loads(meta_el.get("content") or "{}") if meta_el is not None else {}
+        got = json.loads(el.get("content") or "{}") if el is not None else {}
     except json.JSONDecodeError:
-        meta = {}
+        return {}
+    return got if isinstance(got, dict) else {}
+
+
+def _head(root: Any, meta: dict[str, Any]) -> list[str]:
+    """The title (the ``h1``, else the ``title``) and the byline: channel,
+    date, duration, address."""
     h1 = root.find(".//h1")
     title_el = root.find(".//title")
     title = (
@@ -75,34 +92,34 @@ def parse(data: bytes) -> str:
         if h1 is not None
         else (_text(title_el) if title_el is not None else "")
     )
-    out: list[str] = []
-    if title:
-        out.append(f"# {title}")
-        out.append("")
+    out = [f"# {title}", ""] if title else []
     byline = [str(meta[k]) for k in ("channel", "published") if meta.get(k)]
     if meta.get("duration"):
         byline.append(format_time(int(meta["duration"])))
     if meta.get("url"):
         byline.append(str(meta["url"]))
     if byline:
-        out.append(" · ".join(byline))
-        out.append("")
+        out += [" · ".join(byline), ""]
+    return out
+
+
+def _description(root: Any) -> list[str]:
+    """The description's paragraphs under a heading of their own."""
     desc = root.find('.//section[@class="description"]')
-    if desc is not None:
-        paras = [_text(p) for p in desc.iter("p")]
-        paras = [p for p in paras if p]
-        if paras:
-            out.append("## Description")
-            out.append("")
-            for p in paras:
-                out.append(p)
-                out.append("")
-    transcript = root.find('.//section[@class="transcript"]')
-    if transcript is None:
-        raise NotATranscript("a video capture without a transcript section")
-    out.append("## Transcript")
-    out.append("")
-    chapters = sorted(
+    paras = (
+        [p for p in (_text(p) for p in desc.iter("p")) if p] if desc is not None else []
+    )
+    if not paras:
+        return []
+    out = ["## Description", ""]
+    for p in paras:
+        out += [p, ""]
+    return out
+
+
+def _chapters(meta: dict[str, Any]) -> list[tuple[int, str]]:
+    """The chapters the meta names, ``(second, title)`` in order."""
+    return sorted(
         (
             (int(c.get("t", 0)), str(c.get("title") or "").strip())
             for c in (meta.get("chapters") or [])
@@ -110,8 +127,15 @@ def parse(data: bytes) -> str:
         ),
         key=lambda c: c[0],
     )
+
+
+def _transcript(transcript: Any, chapters: list[tuple[int, str]]) -> list[str]:
+    """The transcript's paragraphs and frames in order, each opening with
+    its moment, and a chapter's heading before the first line at or past
+    its start."""
+    out: list[str] = []
     next_chapter = 0
-    seen: set[str] = set()
+    seen: set[str] = set()  # a frame repeated is filed once
     for el in transcript:
         tag = el.tag if isinstance(el.tag, str) else ""
         if tag not in ("p", "figure"):
@@ -121,33 +145,39 @@ def parse(data: bytes) -> str:
         except ValueError:
             t = 0
         while next_chapter < len(chapters) and chapters[next_chapter][0] <= t:
-            out.append(f"### {chapters[next_chapter][1]}")
-            out.append("")
+            out += [f"### {chapters[next_chapter][1]}", ""]
             next_chapter += 1
         mark = format_time(t)
-        if tag == "p":
-            words = _text(el)
-            # the time link's own text, when the extension wrote one first
-            if words.startswith(mark):
-                words = words[len(mark) :].strip()
-            if words:
-                out.append(f"[{mark}] {words}")
-                out.append("")
-            continue
-        img = el.find(".//img")
-        found = figures._data_url(img.get("src") or "") if img is not None else None
-        if found is None:
-            continue
-        blob, media = found
-        ref = figures.sha(blob)
-        if ref in seen:
-            continue
-        seen.add(ref)
-        cap = el.find(".//figcaption")
-        caption = _text(cap) if cap is not None else ""
-        if caption.startswith(mark):
-            caption = caption[len(mark) :].lstrip(" —–-")
-        alt = f"{mark} — {caption}" if caption else f"{mark} — frame"
-        out.append(figures.line_for(figures.Figure(ref, blob, media, alt)))
-        out.append("")
-    return "\n".join(out).rstrip() + "\n"
+        line = _spoken(el, mark) if tag == "p" else _frame(el, mark, seen)
+        if line:
+            out += [line, ""]
+    return out
+
+
+def _spoken(el: Any, mark: str) -> str | None:
+    """A paragraph of the transcript as ``[12:34] words``; None when empty."""
+    words = _text(el)
+    # the time link's own text, when the extension wrote one first
+    if words.startswith(mark):
+        words = words[len(mark) :].strip()
+    return f"[{mark}] {words}" if words else None
+
+
+def _frame(el: Any, mark: str, seen: set[str]) -> str | None:
+    """A frame as a figure line by hash, its caption opening with the
+    moment; None when it holds no picture or one already filed."""
+    img = el.find(".//img")
+    found = figures._data_url(img.get("src") or "") if img is not None else None
+    if found is None:
+        return None
+    blob, media = found
+    ref = figures.sha(blob)
+    if ref in seen:
+        return None
+    seen.add(ref)
+    cap = el.find(".//figcaption")
+    caption = _text(cap) if cap is not None else ""
+    if caption.startswith(mark):
+        caption = caption[len(mark) :].lstrip(" —–-")
+    alt = f"{mark} — {caption}" if caption else f"{mark} — frame"
+    return figures.line_for(figures.Figure(ref, blob, media, alt))

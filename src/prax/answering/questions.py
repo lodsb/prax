@@ -776,56 +776,12 @@ def briefing(
     until = now.strftime("%Y-%m-%dT%H:%M:%SZ")
     if job is not None:
         job.update(note="briefing")
-    arrived = []
-    for r in store.documents_added(con, since, until):
-        meta = store.get_meta(con, r["id"])
-        line = f"- [{r['title'] or 'document ' + str(r['id'])}](#doc/{r['id']})"
-        bits = []
-        if meta.get("video"):
-            bits.append("video")
-        elif r["mime"] == "application/pdf":
-            bits.append("PDF")
-        elif mimes.is_picture(r["mime"]):
-            bits.append("image")
-        elif r["mime"] in ("text/html", "application/xhtml+xml"):
-            bits.append("web page")
-        if meta.get("domains"):
-            bits.append(", ".join(meta["domains"]))
-        if bits:
-            line += f" — {'; '.join(bits)}"
-        summary = _first_sentence(meta.get("summary") or "")
-        if summary:
-            line += f": {summary}"
-        arrived.append(line)
-    moved = []
-    for page in question_pages(con):
-        q = page["question"]
-        for h in q.get("history") or []:
-            if since < str(h.get("at") or "") <= until:
-                what = ", ".join(n["title"] for n in h.get("new") or [])
-                moved.append(
-                    f"- [{q.get('question')}](#doc/{page['doc_id']}) — revision"
-                    f" {h.get('revision')}" + (f": new: {what}" if what else "")
-                )
-    for page in block_pages(con):
-        for kept in ((page.get("meta") or {}).get("asks") or {}).values():
-            for h in kept.get("history") or []:
-                if since < str(h.get("at") or "") <= until:
-                    what = ", ".join(n["title"] for n in h.get("new") or [])
-                    moved.append(
-                        f"- [{kept.get('question')}](#doc/{page['doc_id']}) — in"
-                        f" {page['title']}, revision {h.get('revision')}"
-                        + (f": new: {what}" if what else "")
-                    )
-    text = f"# What arrived, {day}\n\n"
-    text += (
-        f"{len(arrived)} document{'s' if len(arrived) != 1 else ''} since"
-        f" {since[:16].replace('T', ' ')}.\n\n" + "\n".join(arrived) + "\n"
-        if arrived
-        else f"Nothing arrived since {since[:16].replace('T', ' ')}.\n"
-    )
-    if moved:
-        text += "\n## Questions that moved\n\n" + "\n".join(moved) + "\n"
+    arrived = [
+        _arrived_line(r, store.get_meta(con, r["id"]))
+        for r in store.documents_added(con, since, until)
+    ]
+    moved = _moved(con, since, until)
+    text = _briefing_text(day, since, arrived, moved)
     slug = f"briefing-{day}"
     # the day's page run again: the agent's part is replaced, what a
     # person wrote under it (a note, an ask block) stays where it is;
@@ -875,3 +831,72 @@ def briefing(
     }
     store.set_meta(con, written["doc_id"], meta)
     return {**written, "documents": len(arrived), "moved": len(moved)}
+
+
+def _arrived_line(row: Any, meta: dict[str, Any]) -> str:
+    """One document that arrived: its link, what it is (a video, a PDF, an
+    image, a web page) and its domains, and its summary's first sentence."""
+    line = f"- [{row['title'] or 'document ' + str(row['id'])}](#doc/{row['id']})"
+    bits = []
+    if meta.get("video"):
+        bits.append("video")
+    elif row["mime"] == "application/pdf":
+        bits.append("PDF")
+    elif mimes.is_picture(row["mime"]):
+        bits.append("image")
+    elif row["mime"] in ("text/html", "application/xhtml+xml"):
+        bits.append("web page")
+    if meta.get("domains"):
+        bits.append(", ".join(meta["domains"]))
+    if bits:
+        line += f" — {'; '.join(bits)}"
+    summary = _first_sentence(meta.get("summary") or "")
+    if summary:
+        line += f": {summary}"
+    return line
+
+
+def _moved(con: sqlite3.Connection, since: str, until: str) -> list[str]:
+    """The questions whose answer moved in ``(since, until]``: a question
+    page's revisions, then an ask block's in the page that holds it."""
+    out = []
+
+    def new_of(h: dict[str, Any]) -> str:
+        what = ", ".join(n["title"] for n in h.get("new") or [])
+        return f": new: {what}" if what else ""
+
+    def within(h: dict[str, Any]) -> bool:
+        return since < str(h.get("at") or "") <= until
+
+    for page in question_pages(con):
+        q = page["question"]
+        for h in q.get("history") or []:
+            if within(h):
+                out.append(
+                    f"- [{q.get('question')}](#doc/{page['doc_id']}) — revision"
+                    f" {h.get('revision')}" + new_of(h)
+                )
+    for page in block_pages(con):
+        for kept in ((page.get("meta") or {}).get("asks") or {}).values():
+            for h in kept.get("history") or []:
+                if within(h):
+                    out.append(
+                        f"- [{kept.get('question')}](#doc/{page['doc_id']}) — in"
+                        f" {page['title']}, revision {h.get('revision')}" + new_of(h)
+                    )
+    return out
+
+
+def _briefing_text(day: str, since: str, arrived: list[str], moved: list[str]) -> str:
+    """The agent's part of the day's page."""
+    at = since[:16].replace("T", " ")
+    text = f"# What arrived, {day}\n\n"
+    text += (
+        f"{len(arrived)} document{'s' if len(arrived) != 1 else ''} since"
+        f" {at}.\n\n" + "\n".join(arrived) + "\n"
+        if arrived
+        else f"Nothing arrived since {at}.\n"
+    )
+    if moved:
+        text += "\n## Questions that moved\n\n" + "\n".join(moved) + "\n"
+    return text
