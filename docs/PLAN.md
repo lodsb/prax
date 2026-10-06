@@ -516,7 +516,8 @@ numbered there) in the order the user agreed: one step a session.
             the demand), and the ask hold keeps the card with that role
             without stopping the swap to it (howto 4b).
       - [ ] (2026-10-06, the user: "right now I think we can stay with
-            27b for most tasks"; the split stays configuration, unused)
+            27b for most tasks"; the split stays configuration, unused, and the
+            35B's file is deleted: a split would download it again first)
             **Its swap cost, measured on the card** (the user's word
             first: the host runs the 27B for everything since
             2026-10-03, and the 35B's file is still on disk). A day with

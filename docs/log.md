@@ -5079,7 +5079,10 @@ servers can now share it:
 
 The host still runs the 27B for every step, and stays so (the user:
 "right now I think we can stay with 27b for most tasks"). The split is
-there for when a step wants the 35B's speed again.
+there for when a step wants the 35B's speed again. The 35B's files
+were deleted the same night for disk space, on the user's word (20.9 GB
+of weights and its 0.9 GB projector; C: from 46 to 66 GB free). The
+`server-35b` entry stays in prax.yaml with the download line beside it.
 
 # Moved from the plan
 
