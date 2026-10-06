@@ -245,6 +245,14 @@ def apply_parse(
     # is filed in the archive and referenced: no blob in a text artifact
     text, _filed = figures.file_inline(text.strip(), store.archive_blob)
     text = text.strip()
+    if not keep_source and doc["text_hash"]:
+        # a replacing read keeps what a model read of the figures it still
+        # holds: the readings were lines of the text it replaces, or of an
+        # earlier one a replacing read before this already dropped them from
+        current = store.get_document(con, doc_id)
+        if current is not None:
+            texts = [current["text"], *store.earlier_texts(con, doc_id)]
+            text = figures.carry_readings(texts, text)
     old_len = doc["text_len"]
     entry = {"extractor": stamp, "chars": len(text), "seconds": seconds}
     if not text:

@@ -90,9 +90,8 @@ class Reader:
 # marker 2.0 (howto 3h): its layout and OCR-error helpers run inside its
 # server; its OCR is surya-ocr-2, a GGUF vision model behind a llama-server
 # surya starts for itself unless SURYA_INFERENCE_URL names one. The
-# numbers are the night of 2026-10-02 (docs/PLAN.md, AJ step 1), before
-# the prompt cache was capped: the OCR server's RAM is the one to measure
-# again
+# numbers were measured on 2026-10-06 with the OCR server a role of its
+# own, 544 pages in fast mode (docs/eval/ocr-readers-2026-10-06.md)
 MARKER = Reader(
     name="marker",
     role="marker",
@@ -100,17 +99,19 @@ MARKER = Reader(
     processes=(
         Process(
             "marker",
-            vram_mb=1600,
-            ram_mb=5200,
-            note="2026-10-02: its server 3.4 GB, the layout and OCR-error"
-            " helpers 1.8 GB; the card: 5 GB in all less the OCR server's",
+            vram_mb=0,  # fast mode: layout on the CPU, its torch the CPU build
+            ram_mb=4700,
+            load_s=25.0,
+            note="2026-10-06: its server and helpers 4.6 GB resident, 9.1 GB"
+            " of commit, none of the card; 1.67 s a page over 544",
         ),
         Process(
             "ocr-server",
-            vram_mb=3400,
-            ram_mb=2000,
-            note="2026-10-02: 3.4 GB of the card; 10.3 GB of RAM with"
-            " llama.cpp's 8 GB prompt cache, which --cache-ram 0 removes",
+            vram_mb=3500,
+            ram_mb=1500,
+            load_s=6.0,
+            note="2026-10-06: 3.5 GB of the card, 1.4 GB resident, 5.9 GB of"
+            " commit (10.3 GB resident on 2026-10-02, before --cache-ram 0)",
         ),
     ),
     companions=(

@@ -832,6 +832,68 @@ def readable(data: bytes, media_type: str) -> tuple[bytes, str]:
 WHICH = ("captioned", "all", "again", "all-again")
 
 
+def _figure_ref_of(line: str) -> str | None:
+    """The figure a line references, when the line ends with one."""
+    found = list(REF.finditer(line))
+    if not found or not line.rstrip().endswith(found[-1].group(0)):
+        return None
+    return found[-1].group("ref")
+
+
+def carry_readings(previous: str | list[str], text: str) -> str:
+    """``text`` with the figure readings ``previous`` held carried over: a
+    replacing read (marker, OCR, the parser again) writes a text of its
+    own, and the readings were lines of the old one, under each figure's
+    line. A figure still in the new text, by its hash, gets the readings
+    it had, after any the new text already gives it, a model's line once.
+    ``previous`` may be several texts, newest first (the current one and
+    the earlier ones, ``store.earlier_texts``): a model's newest reading of
+    a figure is the one carried. On 2026-10-06 a marker evening dropped
+    every figure reading of the papers it read."""
+    texts = [previous] if isinstance(previous, str) else previous
+    held: dict[str, list[str]] = {}
+    for one in texts:
+        if "(figure:" not in one:
+            continue
+        old = one.split("\n")
+        for i, line in enumerate(old):
+            ref = _figure_ref_of(line)
+            if ref is None:
+                continue
+            have = {
+                m.group("model") for t in held.get(ref, []) if (m := READ_BY.match(t))
+            }
+            at = i + 1
+            while at < len(old) and (m := READ_BY.match(old[at])):
+                if m.group("model") not in have:
+                    held.setdefault(ref, []).append(old[at])
+                    have.add(m.group("model"))
+                at += 1
+    if not held:
+        return text
+    lines = text.split("\n")
+    out: list[str] = []
+    i = 0
+    while i < len(lines):
+        out.append(lines[i])
+        ref = _figure_ref_of(lines[i])
+        i += 1
+        if ref is None or ref not in held:
+            continue
+        there: list[str] = []
+        while i < len(lines) and READ_BY.match(lines[i]):
+            there.append(lines[i])
+            i += 1
+        models = {m.group("model") for t in there if (m := READ_BY.match(t))}
+        out += there
+        for reading in held.pop(ref):
+            m = READ_BY.match(reading)
+            if m and m.group("model") not in models:
+                out.append(reading)
+                models.add(m.group("model"))
+    return "\n".join(out)
+
+
 def describe(data: bytes, previous: str) -> str:
     """The text with every figure reference followed by the vision model's
     reading of it. ``parse.figures`` says which figures: ``captioned``

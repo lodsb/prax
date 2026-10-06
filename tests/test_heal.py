@@ -632,3 +632,31 @@ def test_names_that_differ_only_in_spacing_fold_into_the_clean_one(
     assert row["canonical_id"] == store._entity_id(con, "Valhalla DSP", "concept")
     assert store.health(con, only=["spacing-twins"])["ailments"][0]["count"] == 0
     assert store.unmerge_run(con, row["merged_run"]) == 2  # the round, back whole
+
+
+def test_figure_readings_a_replacing_read_dropped_come_back(
+    con: sqlite3.Connection,
+) -> None:
+    """``lost-figure-readings``: a document read by marker before the fix
+    lost the readings under its figures; the check finds them in an
+    earlier text and the repair carries them back, no model asked."""
+    from prax.parsers import queue
+
+    a = "a" * 64
+    prose = "Prose about the method of the paper. " * 10
+    doc_id = store.ingest_text(con, f"# Paper\n\n{prose}\n", title="Paper")["doc_id"]
+    read = (
+        f"# Paper\n\n{prose}\n\n![Figure 1](figure:{a})\n"
+        "*Figure, as read by big@host:* Six stacked curves.\n"
+    )
+    queue.apply_parse(con, doc_id, stamp="figures/1", text=read, keep_source=True)
+    # the text as marker left it before the fix, its chunk a figure chunk
+    bare = f"# Paper\n\n{prose} By marker.\n\n![Figure 1](figure:{a})\n"
+    queue.apply_parse(con, doc_id, stamp="marker/x", text=bare, keep_source=True)
+    found = store.health(con, only=["lost-figure-readings"])["ailments"][0]
+    assert found["count"] == 1 and found["examples"][0]["readings"] == 1
+    out = store.heal(con, only=["lost-figure-readings"])["lost-figure-readings"]
+    assert out["repaired"] == 1
+    text = store.get_document(con, doc_id)["text"]
+    assert "Six stacked curves." in text and "By marker." in text
+    assert store.health(con, only=["lost-figure-readings"])["ailments"][0]["count"] == 0

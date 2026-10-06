@@ -90,6 +90,43 @@ def meta_index(con: sqlite3.Connection, json_path: str) -> dict[str, int]:
     return {str(r["value"]): r["id"] for r in rows}
 
 
+EARLIER_TEXTS = 10  # earlier texts a replacing read looks back over
+
+
+@_guards("doc", list)
+@_reading
+def earlier_texts(
+    con: sqlite3.Connection, doc_id: int, *, limit: int = EARLIER_TEXTS
+) -> list[str]:
+    """The document's earlier texts, newest first, as ``meta.parse_history``
+    names them by hash (every text stays in the archive), the current one
+    left out: what a replacing read looks back over for the figure
+    readings the text it replaces had already lost
+    (``figures.carry_readings``). A hash the archive no longer holds is
+    skipped."""
+    row = con.execute(
+        "SELECT text_hash, meta FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        return []
+    current = row["text_hash"]
+    seen = {current}
+    out: list[str] = []
+    history = json.loads(row["meta"] or "{}").get("parse_history") or []
+    for entry in reversed(history):
+        digest = entry.get("text_hash") if isinstance(entry, dict) else None
+        if not digest or digest in seen:
+            continue
+        seen.add(digest)
+        try:
+            out.append(_read_archive(str(digest)).decode("utf-8"))
+        except (OSError, UnicodeDecodeError):
+            continue
+        if len(out) >= limit:
+            break
+    return out
+
+
 @_guards("doc", lambda: None)
 @_reading
 def get_document(

@@ -637,7 +637,7 @@ class Supervisor:
         cannot check does not refuse; one it can, does (2026-10-02: marker
         and the 35B together ran the machine out of memory)."""
         party = [r for r in self.roles if r.name in self._party(role.name)]
-        if any(not r.needs_vram_mb for r in party):
+        if any(r.needs_vram_mb is None for r in party):
             return False
         want = sum(r.needs_vram_mb or 0 for r in party)
         free = hostinfo.vram_free_mb()
@@ -708,11 +708,16 @@ class Supervisor:
         return bool(others) and not self._fits(role)
 
     def _lent_away(self, role: Role) -> dict[str, Any] | None:
-        """The loan of the role's group to another role, if there is one."""
+        """The loan of the role's group to another role, if there is one,
+        whether the borrower took the card beside the others or instead of
+        them. A loan that fit was measured with this role idle and off the
+        card: on 2026-10-06 the 27B loaded beside marker that way, its 17
+        GB fitting the card and its 18 GB of commit leaving the machine
+        1.7 GB."""
         if not role.group:
             return None
         loan = self.groups.get(role.group)
-        if loan is None or loan.get("holder") == role.name or loan.get("fits"):
+        if loan is None or loan.get("holder") == role.name:
             return None
         return loan
 

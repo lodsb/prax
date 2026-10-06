@@ -22,10 +22,12 @@ from .documents import (
     _extraction_failed,
     _glyph_documents,
     _labelled_summaries,
+    _lost_figure_readings,
     _not_documents,
     _repair_extraction_failed,
     _repair_glyphs,
     _repair_labelled_summaries,
+    _repair_lost_figure_readings,
     _repair_not_documents,
     _repair_stale_extractions,
     _repair_stale_parses,
@@ -376,6 +378,21 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_extraction_failed,
         repair=_repair_extraction_failed,
+    ),
+    Ailment(
+        name="lost-figure-readings",
+        what=(
+            "figure readings an earlier text of a document had, for figures"
+            " its text still holds: a replacing read (marker, the parser"
+            " again) wrote its own text without them"
+        ),
+        fix=(
+            "carry each figure's readings back under its line, a model's"
+            " newest once, as an annotation recorded under this repair; no"
+            " model is asked"
+        ),
+        find=_lost_figure_readings,
+        repair=_repair_lost_figure_readings,
     ),
     Ailment(
         name="not-documents",

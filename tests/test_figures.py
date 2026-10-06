@@ -309,3 +309,68 @@ def test_a_scanned_page_is_not_a_figure() -> None:
     born.insert_text((72, 72), "A born-digital page with a picture below.")
     born.insert_image(pymupdf.Rect(72, 100, 372, 300), stream=PLOT)
     assert [f.page for f in figures.pdf_figures(doc)] == [3]
+
+
+def test_a_replacing_read_keeps_what_was_read_of_its_figures(
+    con: sqlite3.Connection,
+) -> None:
+    """The readings are lines under each figure's line. marker's text over
+    a parser's dropped every one of them (2026-10-06): a figure the new
+    text still holds, by hash, keeps its readings, a model's line once;
+    a figure the new text lost takes its readings with it."""
+    a, b = "a" * 64, "b" * 64
+    first = (
+        "# Paper\n\nSome prose.\n\n"
+        f"![Figure 1: a plot](figure:{a})\n"
+        "*Figure, as read by big@host:* Six stacked curves.\n"
+        "*Figure, as read by small@host:* Curves.\n\n"
+        f"![Figure 2: gone](figure:{b})\n"
+        "*Figure, as read by big@host:* A table.\n"
+    )
+    doc_id = store.ingest_text(con, first, title="Paper")["doc_id"]
+    marker = (
+        "# Paper\n\nSome prose, read again with $$x = 1$$ in it.\n\n"
+        f"![Figure 1. A plot](figure:{a})\n"
+        "*Figure, as read by small@host:* Curves, read again.\n\n"
+        "More prose."
+    )
+    assert queue.apply_parse(con, doc_id, stamp="marker/2.0.0", text=marker) == (
+        "upgraded"
+    )
+    text = store.get_document(con, doc_id)["text"]
+    assert "Six stacked curves." in text  # carried over
+    assert text.count("as read by small@host") == 1  # the new one stays, once
+    assert "Curves, read again." in text
+    assert "A table." not in text  # its figure is not in the new text
+    lines = text.split("\n")
+    at = next(i for i, line in enumerate(lines) if line.endswith(f"(figure:{a})"))
+    assert lines[at + 1].startswith("*Figure, as read by small@host:*")
+    assert lines[at + 2].startswith("*Figure, as read by big@host:*")
+
+
+def test_readings_a_read_already_dropped_come_back_from_the_history(
+    con: sqlite3.Connection,
+) -> None:
+    """A text that lost its readings before the fix: the next replacing
+    read finds them in the earlier texts the parse record names by hash
+    (``store.earlier_texts``), the newest reading of a model first."""
+    a = "a" * 64
+    prose = "Prose about the method of the paper. " * 10  # past MIN_CHARS
+    doc_id = store.ingest_text(con, f"# Paper\n\n{prose}\n", title="Paper")["doc_id"]
+    for stamp, reading in (
+        ("figures/1+old", "*Figure, as read by big@host:* An old reading."),
+        ("figures/1+new", "*Figure, as read by big@host:* A newer reading."),
+    ):
+        text = f"# Paper\n\n{prose}\n\n![Figure 1](figure:{a})\n{reading}\n"
+        queue.apply_parse(con, doc_id, stamp=stamp, text=text, keep_source=True)
+    # what marker did before the fix: the text without its readings
+    bare = f"# Paper\n\n{prose} By marker.\n\n![Figure 1](figure:{a})\n"
+    queue.apply_parse(con, doc_id, stamp="marker/x", text=bare, keep_source=True)
+    assert "as read by" not in store.get_document(con, doc_id)["text"]
+    assert len(store.earlier_texts(con, doc_id)) >= 2
+    again = f"# Paper\n\n{prose} By marker again.\n\n![Figure 1](figure:{a})\n"
+    assert queue.apply_parse(con, doc_id, stamp="marker/2.0.0", text=again) == (
+        "upgraded"
+    )
+    text = store.get_document(con, doc_id)["text"]
+    assert "A newer reading." in text and "An old reading." not in text

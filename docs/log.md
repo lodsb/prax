@@ -5153,6 +5153,40 @@ the first twelve, and preferring words apart kept the exploded ones.
 Where both spellings are damaged the keeper is too; `mangled-names` is
 the place to mend that. The dry run waits for the user's word.
 
+## 2026-10-06, the afternoon: the readers measured, and readings lost since September
+
+With the card (the user: "work on all the tasks that need the card"):
+
+- **Marker with its OCR server as a role** read the 15 mathematical
+  PDFs it had not read, 544 pages, at 1.67 s a page. The OCR server held
+  1.4 GB resident and 5.9 GB of commit, against 10.3 and 13.3 GB on
+  2026-10-02. The manifest's numbers are the measured ones now, marker's
+  card 0 in fast mode (its torch is the CPU build), and a need of 0 is
+  no longer read as "unknown" by the fit check.
+- **The three OCR readers** on 20 pages made from born-digital PDFs,
+  their text layers the reference: word error rate 0.203 for RapidOCR,
+  0.124 for marker, 0.145 for vision-pages with the 27B; recall 0.924,
+  0.922 and 0.943. None is retired; the routing is in the plan.
+  `docs/eval/ocr-readers-2026-10-06.md`.
+- **The 27B loaded beside marker.** Two formula readings asked for it
+  while marker held a card it had taken "beside nothing", the 27B idle
+  at the time, and the rule that an idle server waits for a lent card
+  covered only a loan that did not fit. Free commit fell to 628 MB
+  before it was paused by hand. The rule now holds for every loan, with
+  a test for the loan that fit.
+- **Figure readings lost to a replacing read.** The readings are lines
+  under each figure in the text, and marker wrote its own text without
+  them. 35 documents had lost 710 readings since September, 30 of them
+  on earlier marker evenings. `apply_parse` now carries them over to a
+  replacing read's text, from the current text or an earlier one the
+  parse record names (`figures.carry_readings`, `store.earlier_texts`).
+  `prax heal --check lost-figure-readings` restores the rest without a
+  model; applying it waits for the user's word.
+- **A manual taken for a paper.** The *Voron Cascade Assembly Manual*
+  (doc 9829) scored 18 on maths density for its "(4)"-numbered steps and
+  went to marker in this set. Its `pymupdf4llm` text was read again, and
+  its 60 figure readings come back with the heal check.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

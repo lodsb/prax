@@ -614,13 +614,16 @@ def test_a_quiet_server_stops_and_comes_back_when_work_asks(
         thread.join(timeout=10)
 
 
+@pytest.mark.parametrize("free_mb", [100, 40000])
 def test_an_idle_server_waits_for_a_lent_card(
-    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, free_mb: int
 ) -> None:
     """A server stopped for being quiet, whose card marker borrowed, does
     not load beside it when its work asks; it comes back with the card
     (2026-10-02: llama-server reloaded during marker's turn, and both
-    models on the card ran the machine out of memory)."""
+    models on the card ran the machine out of memory). Also when marker
+    took the card beside it, the card free while the server was idle
+    (2026-10-06: the 27B loaded beside marker and left 1.7 GB of commit)."""
     data_dir.mkdir(parents=True, exist_ok=True)
     mark_a, argv_a = child(tmp_path, "holder", 60)
     mark_b, argv_b = child(tmp_path, "borrower", 60)
@@ -640,7 +643,7 @@ def test_an_idle_server_waits_for_a_lent_card(
     sup = up.Supervisor(
         [holder, borrower], data_dir=data_dir, say=said.append, tick=0.05
     )
-    monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 100)  # they do not fit
+    monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: free_mb)
     monkeypatch.setattr(up, "healthy", lambda url, timeout=3.0: True)
     monkeypatch.setattr(up, "IDLE_POLL", 0.0)
     monkeypatch.setattr(up, "GROUP_QUIET", 0.0)

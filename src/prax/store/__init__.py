@@ -200,6 +200,7 @@ from .documents import (  # noqa: F401
     documents_of_key,
     domains_dry_run,
     domains_of,
+    earlier_texts,
     equation_density,
     equations_near,
     expected_version,

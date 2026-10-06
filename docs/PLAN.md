@@ -61,7 +61,7 @@ shape"), and the zoetrope disk and the NAS.
   the `changes` and `connect` tools), the project re-synced (the
   acceptance test of AL steps 3 to 5), and the browser extension
   reloaded for its `alarms` permission.
-- **Measure AJ step 1** when marker next reads: its peak RAM and commit,
+- (done 2026-10-06, `docs/eval/ocr-readers-2026-10-06.md`) **Measure AJ step 1** when marker next reads: its peak RAM and commit,
   VRAM and time per page, against the night of 2026-10-02.
 
 ### A review of the last three days (done 2026-10-05, `docs/log.md`)
@@ -76,7 +76,7 @@ full mode) over the same range followed: 24 findings, planned below.
 The quality review's 24 findings (`docs/eval/code-review-2026-10-05.md`,
 numbered there) in the order the user agreed: one step a session.
 
-- [x] (2026-10-05; the judge's re-measure with the new sameness wording, `steps.adjudicate.platt`, waits for the card) **Step 1, now: the two of high cost, the quick performance fixes, and the fraction in the general parser.**
+- [x] (2026-10-05; the judge's re-measure with the new sameness wording, `steps.adjudicate.platt`, done the same afternoon, `docs/log.md`) **Step 1, now: the two of high cost, the quick performance fixes, and the fraction in the general parser.**
       - [x] **1.** Two definitions of when a venue edition is 'the same thing': sameness.yaml says merge, the venue tier says keep apart and link part_of (an hour plus a re-measure of the judge)
       - [x] **2.** cited_but_missing reads every reference chunk in the library because the planner picks idx_chunks_kind over the doc_id IN list (an hour)
       - [x] **10.** The ASCII-fraction fix went into schema.org's ingredient_name only; the general ingredient parser still misreads '1/2 cup' (an hour plus a rechunk of recipes)
@@ -444,9 +444,9 @@ numbered there) in the order the user agreed: one step a session.
             RAM and commit, VRAM and time per page on the same few books,
             before and after.
       - [x] (2026-10-06, code: `prax.host.readers`, the `ocr-server`
-            role, `prax up --readers` and `--lock`; on the desktop when
-            marker next reads: the `ocr-server` entry in prax.yaml, and the
-            manifest's numbers measured) **The reader contract.** A reader declares in its manifest the
+            role, `prax up --readers` and `--lock`; live on the desktop and
+            measured 2026-10-06: the OCR server 1.4 GB resident against
+            10.3, 1.67 s a page, `docs/eval/ocr-readers-2026-10-06.md`) **The reader contract.** A reader declares in its manifest the
             processes it needs (roles of `prax up`), their resources
             (VRAM, RAM, load time) and the settings prax passes. It runs
             in a pinned environment: marker's venv from a lock file,
@@ -456,7 +456,11 @@ numbered there) in the order the user agreed: one step a session.
             that move with it in a swap (marker and its OCR server, then
             `SURYA_INFERENCE_URL`), and prax trims a reader's own logs
             (surya's grew 55 MB in one night).
-      - [ ] **The OCR readers measured against each other.** Prax has at
+      - [x] (2026-10-06, measured on 20 pages made from born-digital
+            PDFs, `docs/eval/ocr-readers-2026-10-06.md`: none retired;
+            RapidOCR first, marker for two columns, German and maths,
+            vision-pages for what neither reads; real scans and
+            handwriting not in the set yet) **The OCR readers measured against each other.** Prax has at
             least three ways to read a page that is not text: RapidOCR
             through pymupdf4llm (in the worker, CPU), marker with surya
             (its venv, the card), and vision-pages (llama-server with a
@@ -468,6 +472,17 @@ numbered there) in the order the user agreed: one step a session.
             Surya's model and vision-pages are both a vision model behind
             llama.cpp, so after step 1 they share one served-model
             mechanism.
+      - [ ] **The routing as rules** (from the measurement above): a
+            two-column page or a German one goes to marker after
+            RapidOCR's first reading, where a host runs marker. And the
+            maths density must not take a manual's numbered steps for
+            equations: the *Voron Cascade Assembly Manual* scored 18 on
+            "(4)"-numbered steps and went to marker (2026-10-06).
+      - [ ] **The fit check knows commit.** A server's commit on Windows is
+            its card and its RAM, and the check counts the card and RAM
+            only: the 27B fit beside marker on the card and left 628 MB of
+            commit (2026-10-06). Each role's commit measured at its load,
+            kept beside its load times, and the check holding a reserve.
 
 - [ ] (2026-10-03: measured, `docs/log.md`: the 3.8 27B wins the maths with the tool and valid triples at a third of the speed; the abliterated build loses nothing; nobody declined a personal document; next: the split and its swap cost, the user's questions by hand) **AK. Another model: a dense Qwen 27B, and an uncensored build of
       it, against the 35B.** The user, 2026-10-03: "qwen 27b is deemed

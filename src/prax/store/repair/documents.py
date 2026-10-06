@@ -677,3 +677,70 @@ def _unembedded_chunks(con: sqlite3.Connection) -> list[dict[str, Any]]:
         )
     )
     return [{"chunks": waiting, "model": models or "no vectors yet"}]
+
+
+LOST_READINGS_PRODUCER = "heal:lost-figure-readings"
+
+
+def _lost_figure_readings(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents whose text lacks figure readings an earlier text of theirs
+    had, for figures the text still holds by hash: a replacing read (marker,
+    the parser again) wrote its own text and dropped the readings, which
+    were lines of the old one (35 documents and 710 readings on
+    2026-10-06, nearly all marker's). The earlier texts are the ones the
+    parse record names by hash (``earlier_texts``). Each with how many
+    readings would come back."""
+    from prax.parsers import figures
+
+    out: list[dict[str, Any]] = []
+    for r in con.execute(
+        "SELECT id, title, text_hash FROM documents d WHERE text_hash IS NOT NULL"
+        " AND json_extract(meta, '$.retired') IS NULL"
+        " AND json_extract(meta, '$.parse_history') LIKE '%text_hash%'"
+        " AND EXISTS (SELECT 1 FROM chunks c WHERE c.doc_id = d.id"
+        " AND c.kind = 'figure')"
+    ):
+        earlier = docs.earlier_texts(con, int(r["id"]))
+        if not earlier:
+            continue
+        try:
+            current = _read_archive(str(r["text_hash"])).decode("utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        carried = figures.carry_readings([current, *earlier], current)
+        gained = len(figures.READ_BY.findall(carried)) - len(
+            figures.READ_BY.findall(current)
+        )
+        if gained > 0:
+            out.append({"id": int(r["id"]), "title": r["title"], "readings": gained})
+    out.sort(key=lambda x: (-x["readings"], x["id"]))
+    return out[:CAP]
+
+
+def _repair_lost_figure_readings(
+    con: sqlite3.Connection, rows: list[dict[str, Any]]
+) -> int:
+    """Each text with its readings carried back in, through the parse path
+    as an annotation (``parsers.queue.apply_parse``, ``keep_source``): the
+    parse record says so under this repair's name, the text source stays,
+    and a chunk whose text did not change keeps its vector."""
+    from prax.parsers import figures, queue
+
+    done = 0
+    for row in rows:
+        doc = docs.get_document(con, int(row["id"]))
+        if doc is None:
+            continue
+        earlier = docs.earlier_texts(con, int(row["id"]))
+        carried = figures.carry_readings([doc["text"], *earlier], doc["text"])
+        if carried == doc["text"]:
+            continue
+        outcome = queue.apply_parse(
+            con,
+            int(row["id"]),
+            stamp=LOST_READINGS_PRODUCER,
+            text=carried,
+            keep_source=True,
+        )
+        done += outcome == "upgraded"
+    return done
