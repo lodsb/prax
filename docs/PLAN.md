@@ -474,11 +474,17 @@ numbered there) in the order the user agreed: one step a session.
             mechanism.
       - [ ] **The routing as rules** (from the measurement above): a
             two-column page or a German one goes to marker after
-            RapidOCR's first reading, where a host runs marker. And the
-            maths density must not take a manual's numbered steps for
-            equations: the *Voron Cascade Assembly Manual* scored 18 on
-            "(4)"-numbered steps and went to marker (2026-10-06).
-      - [ ] **The fit check knows commit.** A server's commit on Windows is
+            RapidOCR's first reading, where a host runs marker. Not built:
+            the evidence is one German page and one two-column page, so it
+            waits for real scans in the set. (2026-10-06, done: the maths
+            density no longer takes a manual's numbered steps for
+            equations; `--maths` never selects a document labelled a
+            manual or a datasheet, `_numbered_steps`. The *Voron Cascade
+            Assembly Manual* had scored 18.)
+      - [x] (2026-10-06: each role's peak commit read off its job object,
+            kept in `run/commit.json`; the check leaves `COMMIT_RESERVE_MB`
+            free on Windows; the manifest says marker's and the OCR
+            server's until measured) **The fit check knows commit.** A server's commit on Windows is
             its card and its RAM, and the check counts the card and RAM
             only: the 27B fit beside marker on the card and left 628 MB of
             commit (2026-10-06). Each role's commit measured at its load,

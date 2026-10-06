@@ -314,7 +314,8 @@ def select_for_reading(
     ``unread_formulas``), and to the mathematical ones (``maths``: at
     least that many references to numbered equations per 10,000
     characters of prose, and at least :data:`MATHS_MIN_REFS` of them —
-    what a parser that reads the mathematics is for); every filter
+    what a parser that reads the mathematics is for; never a manual or a
+    datasheet, ``_numbered_steps``); every filter
     given must hold. Retired documents are never selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
@@ -384,10 +385,42 @@ def select_for_reading(
     if maths is not None:
         dense = equation_density(con, chosen)
         chosen = [i for i in chosen if dense.get(i, 0.0) >= maths]
+        steps = _numbered_steps(con, chosen)
+        chosen = [i for i in chosen if i not in steps]
     return chosen[:limit] if limit else chosen
 
 
 MATHS_MIN_REFS = 15  # fewer references to numbered equations is not a maths paper
+# what a document is when its "(4)" numbers steps or notes, not equations:
+# the Voron Cascade Assembly Manual scored 18 and went to marker, an army
+# field manual and an op-amp datasheet with it (2026-10-06)
+NOT_MATHS_GENRES = ("manual", "datasheet")
+NOT_MATHS_P = 0.5  # the labeller's probability for it; a person's counts always
+
+
+def _numbered_steps(con: sqlite3.Connection, ids: list[int]) -> set[int]:
+    """Of these documents, the ones a person or the labeller calls a
+    manual or a datasheet (``NOT_MATHS_GENRES``): their numbered
+    references are steps and footnotes, and marker reads them no better."""
+    if not ids:
+        return set()
+    out: set[int] = set()
+    for r in con.execute(
+        "SELECT id, json_extract(meta, '$.genres') AS g FROM documents"
+        f" WHERE id IN ({','.join('?' * len(ids))})",
+        [int(i) for i in ids],
+    ):
+        for label in json.loads(r["g"]) if r["g"] else []:
+            if (
+                not isinstance(label, dict)
+                or label.get("genre") not in NOT_MATHS_GENRES
+            ):
+                continue
+            if label.get("p") is None or float(label["p"]) >= NOT_MATHS_P:
+                out.add(int(r["id"]))
+    return out
+
+
 _EQ_REF = re.compile(r"(?<![\w.])\((\d{1,3})\)(?![\w])")
 
 

@@ -25,6 +25,7 @@ STATUS = "up.json"
 COMMANDS = "commands"  # a directory: one file per command, taken in order
 LOADS = "loads.json"  # each role's last load times, start to ready
 SWAPS = "swaps.jsonl"  # one line a swap: what the card plan is measured by
+COMMITS = "commit.json"  # each role's peak committed memory, measured
 
 
 # ------------------------------------------------------------- the files
@@ -249,6 +250,7 @@ class _JobObject:
 
     def __init__(self) -> None:
         self.handle: Any = None
+        self._extended: Any = None
         # kernel32, declared here: on Linux mypy reads the Windows branch
         # below as unreachable and could not tell the attribute's type
         self._k32: Any = None
@@ -303,6 +305,14 @@ class _JobObject:
         ]
         k32.AssignProcessToJobObject.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
         k32.TerminateJobObject.argtypes = [ctypes.c_void_p, wintypes.UINT]
+        k32.QueryInformationJobObject.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+            ctypes.c_void_p,
+        ]
+        self._extended = EXTENDED
         k32.CloseHandle.argtypes = [ctypes.c_void_p]
         handle = k32.CreateJobObjectW(None, None)
         if not handle:
@@ -323,6 +333,21 @@ class _JobObject:
         if self.handle is None:
             return False
         return bool(self._k32.AssignProcessToJobObject(self.handle, int(proc._handle)))  # type: ignore[attr-defined,unused-ignore]
+
+    def peak_commit_mb(self) -> int | None:
+        """The most memory the role's processes together have committed,
+        since the job was made (Windows: ``PeakJobMemoryUsed``); a GPU
+        server's VRAM is charged here too. None elsewhere."""
+        if self.handle is None:
+            return None
+        import ctypes
+
+        info = self._extended()
+        if not self._k32.QueryInformationJobObject(
+            self.handle, 9, ctypes.byref(info), ctypes.sizeof(info), None
+        ):
+            return None
+        return int(info.PeakJobMemoryUsed) >> 20
 
     def terminate(self) -> bool:
         """End every process in the job: the role's tree, not just its root

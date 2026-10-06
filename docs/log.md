@@ -5187,6 +5187,24 @@ With the card (the user: "work on all the tasks that need the card"):
   went to marker in this set. Its `pymupdf4llm` text was read again, and
   its 60 figure readings come back with the heal check.
 
+## 2026-10-06, the evening: readings restored, commit in the fit check
+
+- **Restored.** After the restart, `prax heal --check
+  lost-figure-readings --apply` repaired 35 of 35 documents, and the
+  check is clear. The Voron manual has its 60 figure readings back.
+- **The fit check knows commit.** Each role's peak committed memory is
+  read off its job object (`PeakJobMemoryUsed`, the whole process tree
+  and, on Windows, its VRAM), kept in `run/commit.json` across runs. On
+  Windows a load must leave `COMMIT_RESERVE_MB` (4 GB) free. The
+  morning's case: the 27B's 18,379 MB beside marker would have left
+  1.6 GB, so it waits. The manifest gives marker's 9.2 GB and the OCR
+  server's 6 GB until they are measured here.
+- **No manual is mathematical.** `--maths` leaves out a document labelled
+  `manual` or `datasheet` (`p` 0.5 or a person's label): their "(4)"
+  are steps and footnotes. On the evening's set that drops exactly the
+  three it should have (the Voron manual, an army field manual, an
+  op-amp datasheet) and none of the 13 papers, books and reports.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

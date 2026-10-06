@@ -515,6 +515,9 @@ def test_a_borrower_that_fits_runs_beside_the_holder(
     ]
     sup = up.Supervisor(roles, data_dir=data_dir, say=lambda _line: None, tick=0.05)
     monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 40000)  # room for both
+    monkeypatch.setattr(
+        up.hostinfo, "memory", lambda: {"ram_free_mb": 64000, "commit_free_mb": 64000}
+    )
     monkeypatch.setattr(up.Supervisor, "_ask_demand", lambda self: None)
     thread = threading.Thread(target=sup.run, daemon=True)
     thread.start()
@@ -644,6 +647,9 @@ def test_an_idle_server_waits_for_a_lent_card(
         [holder, borrower], data_dir=data_dir, say=said.append, tick=0.05
     )
     monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: free_mb)
+    monkeypatch.setattr(
+        up.hostinfo, "memory", lambda: {"ram_free_mb": 64000, "commit_free_mb": 64000}
+    )
     monkeypatch.setattr(up, "healthy", lambda url, timeout=3.0: True)
     monkeypatch.setattr(up, "IDLE_POLL", 0.0)
     monkeypatch.setattr(up, "GROUP_QUIET", 0.0)

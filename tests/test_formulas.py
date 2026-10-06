@@ -160,6 +160,16 @@ def test_the_unread_ones_are_found_and_selected(con: sqlite3.Connection) -> None
     assert dense[unread] == 0.0  # two references: under the floor
     assert store.select_for_reading(con, maths=10) == [mathy]
     assert store.select_for_reading(con, maths=1000) == []
+    # a manual's numbered steps read as references too: a manual (or a
+    # datasheet) is never selected as mathematical (2026-10-06, the Voron
+    # Cascade Assembly Manual)
+    steps = " ".join(f"Step ({n}): fasten the ({n - 1}) bolts." for n in range(2, 40))
+    manual = _paper(con, "# Assembly\n\n" + steps, "Assembly")
+    meta = store.get_meta(con, manual)
+    meta["genres"] = [{"genre": "manual", "p": 0.88}]
+    store.set_meta(con, manual, meta)
+    assert store.equation_density(con, [manual])[manual] > 10
+    assert store.select_for_reading(con, maths=10) == [mathy]
     ailment = next(a for a in store.AILMENTS if a.name == "unread-formulas")
     found = ailment.find(con)
     assert [f["id"] for f in found] == [unread] and found[0]["unread"] == 2

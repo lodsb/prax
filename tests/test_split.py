@@ -207,5 +207,8 @@ def test_an_idle_server_does_not_load_beside_another_member(
     sup._idle()
     assert "llama-server-ask" in sup.paused  # left for the plan
     monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 40000)
+    monkeypatch.setattr(
+        up.hostinfo, "memory", lambda: {"ram_free_mb": 64000, "commit_free_mb": 64000}
+    )
     sup._idle()
     assert "llama-server-ask" not in sup.paused  # room for both: it loads

@@ -53,6 +53,7 @@ from prax.host import hostinfo, readers
 # still write ``up.<name>`` for any of them
 from .process import (  # noqa: F401
     COMMANDS,
+    COMMITS,
     KEEP_LOGS,
     LOADS,
     PIDFILE,
@@ -116,6 +117,10 @@ BACK_WHEN = ("idle", "never")  # when the group goes back to what held it
 GROUP_QUIET = 90.0  # seconds of no work for the borrower before it goes back
 DEMAND_SECONDS = 20.0  # how often the supervisor asks the door what waits
 LOADS_KEPT = 5  # load times kept per role; the status says their median
+# commit a loading role must leave free (Windows, where commit is enforced:
+# on 2026-10-06 the 27B beside marker left 628 MB, and a page file of twice
+# the RAM is what keeps the desktop alive past that)
+COMMIT_RESERVE_MB = 4096
 SWAPS_KEPT = 5000  # swap lines kept (a busy day makes a few dozen)
 IDLE_POLL = 30.0  # how often an idle-watched server's /metrics is read
 
@@ -187,6 +192,9 @@ class Supervisor:
         # how long each role took from start to ready, the last few: what a
         # swap costs (stage AI), kept across runs of the supervisor
         self.loads: dict[str, list[float]] = self._read_loads()
+        # each role's peak committed memory as measured (its job object),
+        # kept across runs: what it needs of commit when it loads next
+        self.commits: dict[str, int] = self._read_commits()
         for name, fields in self.state.items():
             fields["load_s"] = self.load_seconds(name)
         self.started = _now()
@@ -463,6 +471,38 @@ class Supervisor:
 
     # -- a model server that has loaded, and one that has been quiet
 
+    def _read_commits(self) -> dict[str, int]:
+        with contextlib.suppress(OSError, ValueError, AttributeError):
+            got = json.loads((self.run_dir / COMMITS).read_text(encoding="utf-8"))
+            return {str(name): int(mb) for name, mb in got.items()}
+        return {}
+
+    def _note_commits(self) -> None:
+        """Each running role's peak commit, read off its job object, kept
+        where it grew (``run/commit.json``)."""
+        grew = False
+        for name, job in list(self.jobs.items()):
+            peak = job.peak_commit_mb()
+            if peak and peak > self.commits.get(name, 0):
+                self.commits[name] = peak
+                grew = True
+        if grew:
+            with contextlib.suppress(OSError):
+                self.run_dir.mkdir(parents=True, exist_ok=True)
+                (self.run_dir / COMMITS).write_text(
+                    json.dumps(self.commits), encoding="utf-8"
+                )
+
+    def _commit_need(self, role: Role) -> int:
+        """What a role will commit when it runs: as measured here, else its
+        manifest's number, else its card and its RAM together."""
+        measured = self.commits.get(role.name)
+        if measured:
+            return measured
+        if role.needs_commit_mb:
+            return role.needs_commit_mb
+        return (role.needs_vram_mb or 0) + (role.needs_ram_mb or 0)
+
     def _read_loads(self) -> dict[str, list[float]]:
         with contextlib.suppress(OSError, ValueError, AttributeError):
             got = json.loads((self.run_dir / LOADS).read_text(encoding="utf-8"))
@@ -635,7 +675,10 @@ class Supervisor:
         a number for the card, no: the swap is what the group is for, and a
         wrong yes wedges two servers on one card. A RAM figure the host
         cannot check does not refuse; one it can, does (2026-10-02: marker
-        and the 35B together ran the machine out of memory)."""
+        and the 35B together ran the machine out of memory). On Windows the
+        commit the party will take must leave ``COMMIT_RESERVE_MB`` free:
+        a server's VRAM is charged to commit there, and on 2026-10-06 the
+        27B fit beside marker on the card and left 628 MB."""
         party = [r for r in self.roles if r.name in self._party(role.name)]
         if any(r.needs_vram_mb is None for r in party):
             return False
@@ -643,9 +686,22 @@ class Supervisor:
         free = hostinfo.vram_free_mb()
         if free is None or free < want:
             return False
+        memory = hostinfo.memory()
         ram = sum(r.needs_ram_mb or 0 for r in party)
-        ram_free = hostinfo.memory().get("ram_free_mb")
-        return not (ram and ram_free is not None and ram_free < ram)
+        ram_free = memory.get("ram_free_mb")
+        if ram and ram_free is not None and ram_free < ram:
+            return False
+        commit_free = memory.get("commit_free_mb")
+        if sys.platform != "win32" or commit_free is None:
+            return True  # elsewhere commit is overcommitted, not a wall
+        with self.lock:
+            down = [
+                r
+                for r in party
+                if self.state[r.name]["state"] not in ("up", "starting")
+            ]
+        need = sum(self._commit_need(r) for r in down)
+        return commit_free - need >= COMMIT_RESERVE_MB
 
     def _swap(self, to: str, back_when: str = "idle", why: str = "") -> None:
         """Give the group's resource to ``to``: the members that hold it
@@ -928,6 +984,7 @@ class Supervisor:
                 self._idle()
                 ticks += 1
                 if ticks % 10 == 0:  # a heartbeat; every change writes it anyway
+                    self._note_commits()
                     self._write_status()
                 self.stopping.wait(self.tick)
         except KeyboardInterrupt:

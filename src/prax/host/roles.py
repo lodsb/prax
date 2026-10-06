@@ -157,6 +157,7 @@ class Role:
     # what it needs of RAM, and its load time before one is measured: a
     # reader's manifest says (``prax.host.readers``)
     needs_ram_mb: int | None = None
+    needs_commit_mb: int | None = None  # its manifest's, until measured here
     load_guess_s: float | None = None
     # the roles that start, stop and move with this one in a swap, and the
     # role this one is a companion of (marker and its OCR server)
@@ -375,6 +376,7 @@ def marker_role(opts: dict[str, Any], ocr: Role | None = None) -> Role:
         group=str(opts["group"]) if opts.get("group") else None,
         needs_vram_mb=int(needs) if needs is not None else None,
         needs_ram_mb=int(ram) if ram else None,
+        needs_commit_mb=own.commit_mb if own else None,
         load_guess_s=own.load_s if own else None,
         swap=_swap_setting(opts),
         companions=(ocr.name,) if ocr is not None else (),
@@ -403,6 +405,7 @@ def ocr_role(opts: dict[str, Any], marker: dict[str, Any]) -> Role:
         # its slots' KV cache is on the card too: the manifest's number
         # over the model file's size, unless run: says
         role.needs_ram_mb = role.needs_ram_mb or declared.ram_mb
+        role.needs_commit_mb = declared.commit_mb
         role.load_guess_s = declared.load_s
         if declared.vram_mb and not opts.get("needs_vram_mb"):
             role.needs_vram_mb = declared.vram_mb

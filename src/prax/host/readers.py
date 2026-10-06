@@ -34,6 +34,7 @@ class Process:
     role: str  # the role of ``prax up``
     vram_mb: int | None = None  # of the card, with its model on it
     ram_mb: int | None = None  # resident at its peak
+    commit_mb: int | None = None  # committed at its peak (Windows: the card too)
     load_s: float | None = None  # start to ready, until prax has measured it
     note: str = ""  # where the numbers come from
 
@@ -82,6 +83,7 @@ class Reader:
             own.role,
             vram_mb=total([own.vram_mb, *(p.vram_mb for p in rest)]),
             ram_mb=total([own.ram_mb, *(p.ram_mb for p in rest)]),
+            commit_mb=total([own.commit_mb, *(p.commit_mb for p in rest)]),
             load_s=own.load_s,
             note=own.note,
         )
@@ -101,6 +103,7 @@ MARKER = Reader(
             "marker",
             vram_mb=0,  # fast mode: layout on the CPU, its torch the CPU build
             ram_mb=4700,
+            commit_mb=9200,
             load_s=25.0,
             note="2026-10-06: its server and helpers 4.6 GB resident, 9.1 GB"
             " of commit, none of the card; 1.67 s a page over 544",
@@ -109,6 +112,7 @@ MARKER = Reader(
             "ocr-server",
             vram_mb=3500,
             ram_mb=1500,
+            commit_mb=6000,
             load_s=6.0,
             note="2026-10-06: 3.5 GB of the card, 1.4 GB resident, 5.9 GB of"
             " commit (10.3 GB resident on 2026-10-02, before --cache-ram 0)",

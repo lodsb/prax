@@ -346,3 +346,35 @@ def test_a_swap_to_a_companion_is_a_swap_to_its_role(
     assert sup.groups["card"]["holder"] == "marker"
     assert sup.groups["card"]["was_up"] == ["llama-server"]
     assert "llama-server" in sup.paused and not {"marker", "ocr-server"} & sup.paused
+
+
+def test_a_load_that_would_leave_no_commit_does_not_fit(
+    data_dir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """On Windows a server's VRAM is charged to commit: the 27B fit beside
+    marker on the card and left 628 MB (2026-10-06). The commit a role
+    takes is measured off its job object and kept; the check leaves
+    ``COMMIT_RESERVE_MB`` free."""
+    monkeypatch.setattr(up.sys, "platform", "win32")
+    big = up.Role("llama-server", ["x"], group="card", needs_vram_mb=14900)
+    sup = up.Supervisor([big], data_dir=data_dir, say=lambda _l: None)
+    monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 20000)
+    free = {"ram_free_mb": 16000, "commit_free_mb": 20000}
+    monkeypatch.setattr(up.hostinfo, "memory", lambda: free)
+    assert sup._fits(big)  # its card's worth (14.9 GB) leaves 5 GB of commit
+
+    class Job:
+        def peak_commit_mb(self) -> int:
+            return 18379  # what the 27B committed: weights, KV cache, buffers
+
+    sup.jobs["llama-server"] = Job()  # type: ignore[assignment]
+    sup._note_commits()
+    assert sup.commits == {"llama-server": 18379}
+    assert not sup._fits(big)  # 1.6 GB would be left
+    again = up.Supervisor([big], data_dir=data_dir, say=lambda _l: None)
+    assert again.commits == {"llama-server": 18379}  # kept across runs
+    free["commit_free_mb"] = 30000
+    assert sup._fits(big)
+    monkeypatch.setattr(up.sys, "platform", "linux")  # overcommitted: no wall
+    free["commit_free_mb"] = 0
+    assert sup._fits(big)
