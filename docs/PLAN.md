@@ -628,7 +628,15 @@ numbered there) in the order the user agreed: one step a session.
       and tested on, the languages, the length of passage it reads, what
       it costs on the CPU, the alternatives, and how prax would measure
       it; written: `docs/research-faithfulness.md`, three questions for the
-      user at its end) **A faithfulness score for `ask`**: an open model run locally
+      user at its end. The user's answers, the same day: a non-commercial
+      licence is fine for now; downloads under 1 GB each are acceptable,
+      which leaves MiniCheck-7B out (some 4.5 GB as a GGUF); the gold set
+      will be labelled later, so the planted errors and paraphrases are
+      measured first. Measured the same night,
+      `docs/eval/faithfulness-2026-10-06.md`: of errors planted in a
+      sentence it accepted, HHEM caught 41%, LettuceDetect base 19%, the
+      27B 97%, but the 27B accepts a third of the originals; the gold
+      labels decide whether it is right) **A faithfulness score for `ask`**: an open model run locally
       (Vectara's HHEM-2.1-Open) scores an answer against its passages;
       first as a measurement on the eval sets, then perhaps as a mark on
       the answer.

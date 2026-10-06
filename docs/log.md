@@ -5298,6 +5298,21 @@ merges are signed with their round, so `unmerge_run` takes one back.
 The old fit is in the comment beside it and in
 `prax.yaml.bak-2026-10-06-platt`.
 
+## 2026-10-06, late: three faithfulness checkers, before the labels
+
+`scripts/eval_faithfulness.py` scored 475 cited sentences of 112 `ask`
+answers against the passages they cite, with 511 planted errors (a
+number, a negation, a name) and 475 paraphrases by the 27B. Of the
+errors planted in a sentence the checker accepted, HHEM-2.1-Open caught
+125/303 (41%), LettuceDetect base 60/315 (19%), the 27B as a judge
+137/141 (97%). The 27B accepts only 154 of the 475 originals, and keeps
+67% of the paraphrases of those it accepts, against 87% and 86% for the
+other two. The two small checkers are no mark on an answer. Whether the
+27B is right or too strict waits for the user's labels of 150 sentences
+(`to-label.md` in the data folder, then `labels` and `report`). Four
+sentences cite German passages, too few to measure.
+`docs/eval/faithfulness-2026-10-06.md`.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
