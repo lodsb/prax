@@ -57,6 +57,7 @@ from .base import (  # noqa: F401
     VIEWER,
     P,
     R,
+    SearchHit,
     Viewer,
     _archive_bytes,
     _delta,

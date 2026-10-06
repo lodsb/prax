@@ -305,8 +305,8 @@ def clean_history(history: list[dict[str, Any]] | None) -> list[dict[str, str]]:
 
 
 def evidence(
-    con: sqlite3.Connection, hits: list[dict[str, Any]]
-) -> list[dict[str, Any]]:
+    con: sqlite3.Connection, hits: list[store.SearchHit]
+) -> list[store.SearchHit]:
     """The hits that may be passages: a page kept from an open answer holds
     the model's own knowledge and is never the library's evidence."""
     marked = store.open_answer_documents(con, [int(h["doc_id"]) for h in hits])

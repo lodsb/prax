@@ -8,7 +8,7 @@ import json
 import re
 import sqlite3
 import time
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote_plus
 
 from prax import config
@@ -18,6 +18,7 @@ from prax.ml import rerank as rerank_mod
 from prax.text import dates, status
 
 from ..base import (
+    SearchHit,
     _has_vectors,
     _index_path,
     _reading,
@@ -80,8 +81,9 @@ def search(
     published_before: str | None = None,
     include_stale: bool = False,
     cite: bool = False,
-) -> list[dict[str, Any]]:
-    """Search returning compact snippets + ids (agent-shaped). ``timing``,
+) -> list[SearchHit]:
+    """Search returning compact snippets + ids (agent-shaped), each hit a
+    ``SearchHit``. ``timing``,
     when given, is filled with the seconds each side took (``fts``,
     ``embed``, ``vec``, ``field``, ``dvec``, ``finish``): what the door's
     slow-request log says of a search that took long.
@@ -171,7 +173,9 @@ def search(
             h["cite"] = cite_link(
                 con, int(h["doc_id"]), int(h["chunk_id"]), folded, deadline, query
             )
-    return hits
+    # built as plain dicts by the legs and the fusion; this is the shape
+    # they add up to, and what every reader is checked against
+    return cast(list[SearchHit], hits)
 
 
 # A passage's link that survives a re-chunk (AL step 2; the client's O2):

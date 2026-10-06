@@ -5,7 +5,8 @@ module of the store stands on. One process-wide re-entrant lock serializes
 writes (invariant 4); reads in the door take a connection per thread
 (``thread_connection``). Originals and parsed text are content-addressed
 files under ``data/archive`` (invariant 2), and the vector index files are
-opened and cached here.
+opened and cached here. So are the shapes a read hands out that more
+than one module of the store builds (``SearchHit``).
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, ParamSpec, Required, TypedDict, TypeVar
 
 from prax import config, packs
 from prax.ml import vectors
@@ -60,6 +61,38 @@ _INDEX_LOCK = threading.RLock()
 
 
 _NOW = "strftime('%Y-%m-%dT%H:%M:%SZ','now')"  # the same shape as now(), in SQL
+
+
+class SearchHit(TypedDict, total=False):
+    """One hit of ``store.search``: a passage, or a document found by its
+    field alone (``chunk_id`` then the passage that holds the query's words,
+    when one does). The legs build it, the fusion and the search's last
+    steps add to it, and the door, ``ask``, the surfer and the evaluation
+    read it. A key not listed here is a typo for mypy."""
+
+    doc_id: Required[int]
+    chunk_id: int | None
+    title: str | None
+    snippet: str
+    score: float  # the fused score
+    kind: str | None  # the chunk's kind
+    heading: list[str]  # its heading path, ``short_heading``
+    page: int | None
+    time: int | None  # seconds into a recording
+    figure: str | None  # a figure chunk's reference
+    # each rank list's rank of it, None when absent from that list
+    fts_rank: int | None
+    fts_all_rank: int | None
+    fts_rare_rank: int | None
+    vec_rank: int | None
+    field_rank: int | None
+    dvec_rank: int | None
+    domain_rank: int  # its rank in the domain prior's vote
+    rerank_score: float
+    published: str | None  # ``meta.published``, as precise as its source
+    stale: dict[str, Any]  # ``staleness``: the state, its date, the replacement
+    cite: str  # ``cite_link``, with ``cite=``
+    domains: list[str] | None  # the door's addition: the document's modules
 
 
 def now() -> str:

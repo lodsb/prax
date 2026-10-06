@@ -67,9 +67,10 @@ def search(
     published_since: str | None = None,
     published_before: str | None = None,
     include_stale: bool = False,
-) -> list[dict[str, Any]]:
-    """The hits; with ``regions`` first, when most of the first hits'
-    entities live in one region of the library, that region and its part
+) -> list[Any]:
+    """The hits (``store.SearchHit``, or ``brief_hit``'s shape); with
+    ``regions`` first, when most of the first hits' entities live in one
+    region of the library, that region and its part
     as an item of their own (``kind: "region"``): where the results are.
     ``brief`` leaves out the ranks and the empty fields (``store.brief_hit``),
     which an agent does not read; without it each hit says its
@@ -99,18 +100,20 @@ def search(
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    first = [int(h["doc_id"]) for h in hits[: store.REGION_HITS]]
+    out: list[Any]
     if brief:
-        hits = [store.brief_hit(h) for h in hits]
+        out = [store.brief_hit(h) for h in hits]
     else:  # the UI shows each hit's domains; an agent asks with domain=
         sets = store.domains_of(con, [int(h["doc_id"]) for h in hits])
         for h in hits:
             h["domains"] = sets.get(int(h["doc_id"]))
-    if regions and hits:
-        first = [int(h["doc_id"]) for h in hits[: store.REGION_HITS]]
+        out = list(hits)
+    if regions and out:
         where = store.regions_of(con, first)
         if where is not None:
-            return [where, *hits]
-    return hits
+            return [where, *out]
+    return out
 
 
 @router.get("/chunk/{chunk_id}")

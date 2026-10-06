@@ -499,3 +499,19 @@ def test_the_vectors_pass_merges_and_compacts(con: sqlite3.Connection) -> None:
     assert "vectors" in store.ON_REQUEST and "vectors" not in store.PASSES
     out = store.maintain(con, only=["vectors"])["vectors"]
     assert out["count"] == 3 and out["removed_stale"] == 0 and not out["rebuilt"]
+
+
+@needs_usearch
+def test_a_hit_carries_only_what_its_shape_declares(con: sqlite3.Connection) -> None:
+    """``store.SearchHit`` is what every reader is checked against: a key
+    a leg or the fusion adds without declaring it there fails here, since
+    mypy sees only the shape."""
+    _load(con)
+    _embed_all(con)
+    declared = set(store.SearchHit.__annotations__)
+    for mode in ("hybrid", "fts", "vec"):
+        hits = store.search(con, "kalman pitch estimator", mode=mode, cite=True)
+        assert hits
+        for h in hits:
+            assert set(h) <= declared, (mode, set(h) - declared)
+            assert set(store.brief_hit(h)) <= declared

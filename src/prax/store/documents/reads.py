@@ -17,6 +17,7 @@ from prax.text import dates
 from ..base import (
     _TOKEN,
     UNASSIGNED,
+    SearchHit,
     _guards,
     _like_prefix,
     _read_archive,
@@ -174,7 +175,7 @@ def brief_document(doc: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def brief_hit(hit: dict[str, Any]) -> dict[str, Any]:
+def brief_hit(hit: SearchHit) -> dict[str, Any]:
     """A search hit without its ranks (``HIT_RANKS`` and any other
     ``*_rank`` a rank list of its own adds) and empty fields."""
     return {

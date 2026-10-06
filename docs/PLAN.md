@@ -693,6 +693,12 @@ not done.
 - [ ] **Typed shapes.** 869 `dict[str, Any]` annotations and no
       `TypedDict`. The first ones worth writing are a search hit (read by
       six modules), `get_document`, a job row and the meta keys.
+      (2026-10-06: the search hit is `store.SearchHit`, in `store.base`
+      so `brief_hit` in `documents` reaches it; `search` returns it, and
+      `ask`, `surf`, `questions`, the door and `evaluation` are checked
+      against it. mypy caught a hit's `time` declared a float where the
+      chunker writes whole seconds. A test fails when a hit carries a key
+      the shape does not declare.)
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`
