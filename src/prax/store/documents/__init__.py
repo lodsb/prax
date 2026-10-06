@@ -113,7 +113,9 @@ from .meta import (  # noqa: F401
     set_published,
     set_sections,
     set_summary,
+    stamp_world_dates,
     summary_tried,
+    world_dates_needed,
 )
 from .readings import (  # noqa: F401
     _EQ_REF,
@@ -202,6 +204,7 @@ from .reads import (  # noqa: F401
     shared_titles,
     short_heading,
     summaries_in_other_languages,
+    text_chunks,
     text_sources,
     title_rows,
     titled_documents,

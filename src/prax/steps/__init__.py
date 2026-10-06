@@ -27,6 +27,7 @@ CORE_STEPS = (
     "parse",
     "titles",
     "dates",
+    "worlddates",
     "summaries",
     "vocabulary",
     "sections",
@@ -47,6 +48,9 @@ WATCHED_STEPS = (
     "titles",
     # when a document was published, read from its first page (2026-10-03)
     "dates",
+    # when a fact holds, from the sentences that date it (2026-10-06): off
+    # until prax.yaml names a served model for it
+    "worlddates",
     "summaries",
     "vocabulary",
     "communities",
@@ -86,6 +90,7 @@ _HOMES = {
     "parse": "parse",
     "titles": "writing",
     "dates": "writing",
+    "worlddates": "extract",
     "summaries": "writing",
     "sections": "writing",
     "communities": "writing",

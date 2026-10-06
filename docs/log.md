@@ -5313,6 +5313,31 @@ other two. The two small checkers are no mark on an answer. Whether the
 sentences cite German passages, too few to measure.
 `docs/eval/faithfulness-2026-10-06.md`.
 
+## 2026-10-06, late: when a fact holds, a step of its own
+
+AL step 5's open item. The `worlddates` step (`prax.graph.worlddates`)
+reads the sentences of a document's text that hold a year outside a
+citation and a word of time (`world_time:` in the lexicon), 40% of
+documents, at most 12 sentences each. The model sees them with only the
+relations a date fits (kind `state` or `event`, and `developed_by`),
+under a grammar that wants a `from` or a `to` on every line. The quote
+must be in a sentence and hold each date's year, neither end may be a
+date or a stand-in, and the ontology must take it. Then the same model
+judges each fact against its sentence, and a fact needs P(yes) 0.9
+(`steps.worlddates.supported`).
+
+Measured with `scripts/bench_world_dates.py`: of 45 facts that passed
+the checks, 23 were right by hand. The judge at 0.9 kept 12 of them, all
+right, and on a held-out sample 6 of 6. The first prompt's faults are
+in the eval note: a `<TAB>` written into names, `to=unknown` on every
+fact, years made entities, "bought" missing from the cues. The door
+ends an undated edge of the same fact and document and states it again
+with the dates (`store.end_edge`, `corrected_by`); `restore_run` undoes
+a batch, and now restates an edge with its quote's place, which it
+dropped before. Watched and off: a host turns it on by naming a served
+model for it. Some 500 facts over the library, about 6 hours of the
+card. `docs/eval/world-dates-2026-10-06.md`.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

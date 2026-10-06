@@ -358,3 +358,12 @@ status:
 notices:
   stems: [copyright, licen, permission, republish, redistribut, reprint, urheberrecht, lizenz]
   words: ["©", "rights reserved", classroom, "without fee", "hard copies", "all rights"]
+
+# the words that say a fact lasts or happened at a time: "since 1975",
+# "founded in", "joined … in", "from 1980 to 1992", "until". A sentence
+# that holds a year and one of these is what the `world-dates` step reads
+# (AL step 5, `prax.graph.worlddates`); a year alone is most often a
+# citation or a version
+world_time:
+  stems: [found, establish, join, appoint, elect, acquir, bought, sold, purchas, merg, mov, became, becom, retir, resign, renam, dissolv, close, open, launch, introduc, releas, fund, grant, award, member, director, professor, head, chair, lead, led, work, stud, employ, hired, serv, held, locat, based, built, construct, began, start, end, ceas, discontinu, gegründet, gründ, beigetret, ernannt, übernomm, übernahm, gekauft, kaufte, verkauf, umbenann, eingestellt, eröffn, geschlossen, arbeitet, leitet, gefördert, fondé, nommé, rejoint, racheté, acquis]
+  words: [since, until, till, from, between, during, seit, bis, von, zwischen, depuis, jusqu]

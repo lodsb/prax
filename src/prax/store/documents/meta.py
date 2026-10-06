@@ -238,6 +238,34 @@ def dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
     ]
 
 
+@_reading
+def world_dates_needed(con: sqlite3.Connection, limit: int = 200) -> list[int]:
+    """Documents with a text the ``worlddates`` step has not read, or read
+    when the text was another: newest first, like the ``dates`` step."""
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT id FROM documents WHERE text_hash IS NOT NULL"
+            " AND json_extract(meta, '$.world_dates.text_hash') IS NOT text_hash"
+            " AND json_extract(meta, '$.retired') IS NULL"
+            " ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+    ]
+
+
+@_serialized
+def stamp_world_dates(
+    con: sqlite3.Connection, doc_id: int, stamp: dict[str, Any]
+) -> None:
+    """What the ``worlddates`` step read of a document and wrote
+    (``meta.world_dates``), with the text's hash: a new text is read again."""
+    meta = get_meta(con, doc_id)
+    meta["world_dates"] = stamp
+    _put_meta(con, doc_id, meta)
+    con.commit()
+
+
 def keep_summary(
     meta: dict[str, Any], text: str, *, lang: str | None = None
 ) -> str | None:

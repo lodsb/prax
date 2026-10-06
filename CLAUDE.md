@@ -140,6 +140,8 @@ revisit threshold, under "Decision thresholds" below.
    `world_to` with their precision (migration 36): when the fact holds
    in the world, as its source states it, and only where it does;
    migration 47's triggers hold a date and its precision together.
+   The `worlddates` step reads them from the sentences that date a fact,
+   each judged against its sentence (`prax.graph.worlddates`).
    An undated fact says when its document appeared (`stated`, in
    `traverse`), which is not when it holds. Its quote keeps where it
    stood: its range in the text artifact it was read from and that

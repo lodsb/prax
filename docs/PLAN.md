@@ -83,8 +83,9 @@ in the plan is blocked on these, except where an item says so.
       duplicate-facts`, 1,711 facts, 2,018 later edges.
 - [ ] **Spacing twins**: `prax heal --check spacing-twins`, 783 groups,
       793 entities to fold.
-- [ ] **Marker's swap**: `swap: auto` on its `run:` line, so the plan
-      can start it without a hand (now `swap: ask`).
+- [ ] **The `worlddates` step on**: `steps.worlddates.model` in
+      prax.yaml (howto 3e). Some 500 dated facts over a night or two,
+      18 of 18 right on the samples (`docs/eval/world-dates-2026-10-06.md`).
 - [ ] **Push**: the commits after `f215266`.
 
 **On the notebook** (noted 2026-10-04): `git pull`, `/mcp` reconnect
@@ -356,16 +357,18 @@ numbered there) in the order the user agreed: one step a session.
 - [ ] **AL. The first client's feedback.** Steps 1 to 4 and 6 to 8, and
       most of step 5, were done 2026-10-03 and -04 (`docs/log.md`; the
       full stage is under "Moved from the plan"). Left of step 5:
-      - [ ] (2026-10-03: the columns and the record time done: migration
+      - [x] (2026-10-03: the columns and the record time done: migration
             36's `world_from`/`world_to` with their precision, written by
             `store.link` and shown by `traverse` only where present;
             `store.held_at` and `traverse(as_of=)` on the door and the
             MCP tool; invariant 8 reworded. 2026-10-05: a document's
             lifecycle in `get`; the general extraction asked for world
             dates gave none on five documents that state them (the
-            eval note of that day). Left: **a pass of its own** over the
-            sentences that hold a year and a lasting relation, with the
-            same check on the quote) **The world's time beside prax's.** Invariant 8 calls the
+            eval note of that day). 2026-10-06: **the pass of its own**,
+            the `worlddates` step, built and measured
+            (`docs/eval/world-dates-2026-10-06.md`: 18 of 18 kept facts
+            right at the judge's 0.9); watched and off until the user
+            names a model for it) **The world's time beside prax's.** Invariant 8 calls the
             edges bi-temporal, but `valid_from` is set when `store.link`
             writes an edge and `valid_to` when it is retired: both are
             when prax held the fact (transaction time), with

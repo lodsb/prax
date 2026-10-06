@@ -17,7 +17,7 @@ from prax.graph import extraction, ontology
 from prax.text import mimes
 
 from . import leases
-from .base import HandOut, Log, Pass, Step, TakeIn, say
+from .base import HandOut, Log, ModelStep, Pass, Step, TakeIn, say
 
 REPORTED = ("linked", "existing", "queued", "rejected", "retired")
 # less text than this is a stub, a cover or an error page: not extracted
@@ -190,7 +190,97 @@ class Promote(Extract):
         return ext, do_promote(p.door, items, ext, spec, log_=p.log)
 
 
-REGISTERED = {s.name: s for s in (Extract(), Promote())}
+# one short call a document, and most documents have no sentence to read
+WORLD_DATES_BATCH = 30
+
+
+class WorldDates(ModelStep):
+    """When a fact holds in the world, read from the sentences that date it
+    (AL step 5, ``prax.graph.worlddates``). The door hands out a document's
+    candidate sentences; a document with none is stamped without a call.
+    The door reads the sentences again when the answer comes back, so a
+    fact is checked against what it handed out, never against what a
+    worker says it was shown."""
+
+    name = "worlddates"
+
+    def available(self, spec: models.ModelSpec | None) -> bool:
+        """A served model only: the judge of each fact reads its answer's
+        log probabilities, which an API model does not give."""
+        return spec is not None and spec.kind == "openai"
+
+    def hand_out(self, h: HandOut) -> dict[str, Any]:
+        from prax.graph import worlddates
+
+        if models.resolve(self.name) is None:
+            return h.nothing()
+
+        def build(doc_id: int) -> dict[str, Any] | None:
+            said = worlddates.sentences(store.text_chunks(h.con, doc_id))
+            title = store.document_titles(h.con, [doc_id]).get(doc_id) or ""
+            return {"doc_id": doc_id, "title": title, "sentences": said}
+
+        return h.documents(
+            store.world_dates_needed(h.con, limit=WORLD_DATES_BATCH * 2),
+            build,
+            scoped=False,
+            limit=WORLD_DATES_BATCH,
+        )
+
+    def take_in(self, t: TakeIn) -> dict[str, Any]:
+        from prax.graph import worlddates
+
+        run = t.run()
+        spec = models.resolve(self.name)
+        model = str(t.payload.get("model") or (spec.name if spec else t.worker))
+        totals = {"restated": 0, "linked": 0, "existing": 0, "refused": 0}
+
+        def apply(doc_id: int, r: dict[str, Any]) -> None:
+            said = worlddates.sentences(store.text_chunks(t.con, doc_id))
+            got = worlddates.apply(
+                t.con, doc_id, list(r.get("facts") or []), said, model=model, run=run
+            )
+            for k in totals:
+                totals[k] += getattr(got, k)
+
+        t.each(apply)
+        t.out.update(totals)
+        return t.out
+
+    def do(self, items: list[dict[str, Any]], runtime: Any, log: Log | None) -> Any:
+        from prax.graph import ontology, worlddates
+
+        onto = ontology.current()
+        out: list[dict[str, Any]] = []
+        for it in items:
+            said = list(it.get("sentences") or [])
+            if not said:
+                out.append({"doc_id": it["doc_id"], "facts": []})
+                continue
+            try:
+                facts, _usage = worlddates.read(runtime, it["title"], said, onto)
+            except Exception as exc:  # noqa: BLE001 - one document must not stop the rest
+                out.append({"doc_id": it["doc_id"], "error": str(exc)[:200]})
+                continue
+            out.append(
+                {
+                    "doc_id": it["doc_id"],
+                    "facts": [worlddates.as_result(f) for f in facts],
+                }
+            )
+        dated = sum(len(r.get("facts") or []) for r in out)
+        say(log, f"worlddates: {dated} dated facts in {len(out)} documents")
+        return out
+
+    def report(self, rep: dict[str, Any], results: list[dict[str, Any]]) -> str:
+        return (
+            f"{rep.get('restated', 0)} facts dated, {rep.get('linked', 0)} new,"
+            f" {rep.get('existing', 0)} dated already,"
+            f" {rep.get('applied', 0)} documents"
+        )
+
+
+REGISTERED = {s.name: s for s in (Extract(), Promote(), WorldDates())}
 
 
 # ------------------------------------------------ the worker's half

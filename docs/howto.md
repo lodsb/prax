@@ -986,6 +986,32 @@ scope too. The new reading retires the producer's earlier edges, which
 stay as history (invariant 8). The dialog reads `requested` until the
 pass has run.
 
+### When a fact holds: the `worlddates` step
+
+An edge's `world_from` and `world_to` say when its fact holds in the
+world, where a source says so (invariant 8). The general extraction
+rarely fills them. The `worlddates` step (`prax.graph.worlddates`) reads
+only the sentences of a document that hold a year and a word of time
+(`world_time:` in `ontology/lexicon.yaml`), asks a served model which
+facts they date, and asks it again of each fact, as a yes or no against
+its sentence. A fact is written when that judge's P(yes) reaches
+`supported`, and its quote and dates are in the sentence. An undated
+edge of the same fact and document is ended and stated again with the
+dates (`corrected_by` in `why`); `prax`'s `restore_run` with the batch's
+run name (`worlddates-<stamp>`) undoes a batch. Measured in
+`docs/eval/world-dates-2026-10-06.md`.
+
+The step is watched but has no model by default. To turn it on:
+
+    steps:
+      worlddates:
+        model: server-27b-u   # a served model: the judge reads log probabilities
+        supported: 0.9        # the judge's line; 18 of 18 kept facts right at 0.9
+
+A document is read once per text (`meta.world_dates`, with the text's
+hash and what was written). `scripts/bench_world_dates.py` runs the
+step over a sample read-only and applies nothing.
+
 ### A document's domains
 
 A document is read against the ontology modules it belongs to, its

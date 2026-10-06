@@ -424,6 +424,51 @@ def find_edges(con: sqlite3.Connection, edge: Edge) -> list[int]:
 
 
 @_reading
+def document_edges_of(
+    con: sqlite3.Connection, edge: Edge, doc_id: int
+) -> list[dict[str, Any]]:
+    """The currently-valid edges of exactly this fact that ``doc_id``
+    states, with their world dates."""
+    rows = con.execute(
+        """
+        SELECT e.id, e.world_from, e.world_to, e.world_to_precision FROM edges e
+        JOIN entities s ON s.id = e.src JOIN entities t ON t.id = e.dst
+        WHERE s.name = ? AND s.type = ? AND e.rel = ?
+          AND t.name = ? AND t.type = ? AND e.source_doc = ? AND e.valid_to IS NULL
+        ORDER BY e.id
+        """,
+        (edge.src, edge.src_type, edge.rel, edge.dst, edge.dst_type, doc_id),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@_serialized
+def end_edge(
+    con: sqlite3.Connection,
+    edge_id: int,
+    *,
+    run: str,
+    corrected_by: int | None = None,
+) -> bool:
+    """End a live edge for ``run`` and record it (``edge_endings``), with
+    the edge that corrects it where there is one, so ``restore_run``
+    undoes the run whole. False when the edge was not live."""
+    cur = con.execute(
+        f"UPDATE edges SET valid_to = {_NOW} WHERE id = ? AND valid_to IS NULL",
+        (edge_id,),
+    )
+    if cur.rowcount == 0:
+        return False
+    con.execute(
+        "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at, corrected_by)"
+        f" VALUES (?, ?, {_NOW}, ?)",
+        (edge_id, run, corrected_by),
+    )
+    con.commit()
+    return True
+
+
+@_reading
 def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
     row = con.execute(
         "SELECT canonical_id FROM entities WHERE id = ?", (entity_id,)
@@ -625,8 +670,9 @@ def restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
             cur = con.execute(
                 "INSERT INTO edges (src, rel, dst, confidence, source_doc, evidence,"
                 " ontology_version, producer, run, world_from, world_from_precision,"
-                f" world_to, world_to_precision, valid_from, ingested_at)"
-                f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?, {_NOW}, {_NOW})",
+                " world_to, world_to_precision, evidence_start, evidence_end,"
+                " evidence_text_hash, valid_from, ingested_at)"
+                f" VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, {_NOW}, {_NOW})",
                 (
                     r["src"],
                     r["rel"],
@@ -641,6 +687,10 @@ def restore_run(con: sqlite3.Connection, run: str) -> dict[str, int]:
                     r["world_from_precision"],
                     r["world_to"],
                     r["world_to_precision"],
+                    # where its quote stood is part of the evidence (migration 48)
+                    r["evidence_start"],
+                    r["evidence_end"],
+                    r["evidence_text_hash"],
                 ),
             )
             new_id = int(cur.lastrowid or 0)

@@ -59,6 +59,7 @@ STEPS = (
     "ask",
     "titles",
     "dates",
+    "worlddates",
     "summaries",
     "vocabulary",
     "sections",
@@ -76,6 +77,7 @@ STEP_DEFAULTS = {
     "ask": "none",  # the caller's own model answers unless the file says otherwise
     "titles": "none",
     "dates": "none",  # when a document was published, from its first page
+    "worlddates": "none",  # when a fact holds, from the sentences that date it
     "summaries": "none",  # a summary written in another language, translated
     "vocabulary": "none",  # an entity named in another language, put into English
     "sections": "none",  # what a long document's chapters are about

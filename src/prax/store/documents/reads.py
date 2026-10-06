@@ -405,6 +405,20 @@ def list_chunks(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
 
 @_guards("doc", list)
 @_reading
+def text_chunks(con: sqlite3.Connection, doc_id: int) -> list[str]:
+    """The texts of a document's ``text`` chunks in order: its prose,
+    without references, tables, figures, formulas or what is set aside."""
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT text FROM chunks WHERE doc_id = ? AND kind = 'text' ORDER BY seq",
+            (doc_id,),
+        )
+    ]
+
+
+@_guards("doc", list)
+@_reading
 def read_chunks(
     con: sqlite3.Connection,
     doc_id: int,
