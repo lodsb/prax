@@ -588,3 +588,27 @@ def test_merge_risk_says_hubs_and_pages(
     assert store.merge_risk(con, ids["spectral flux"], ids["spectral fluxes"]) == (
         "a page says something about it"
     )
+
+
+def test_a_persons_decisions_like_a_pair_can_come_before_it() -> None:
+    """The precedents of a pair (measured 2026-10-06, not the nightly
+    judge's default): of its type first, then the most alike names, never
+    the pair itself."""
+    P = resolution.Precedent
+    decided = [
+        P("venue", "ICMC 2012", "ICMC", False),  # the pair itself
+        P("venue", "ICMC 2010", "ICMC", False),
+        P("venue", "NIME 2010", "NIME2010", True),
+        P("concept", "ICMC 2011", "ICMC", True),  # alike, another type
+    ]
+    got = resolution.precedents_for("venue", "ICMC 2012", "ICMC", decided, k=2)
+    assert [(p.a, p.b) for p in got] == [
+        ("ICMC 2010", "ICMC"),
+        ("NIME 2010", "NIME2010"),
+    ]
+    prompt = resolution.local_prompt("venue", "ICMC 2012", "ICMC", got)
+    assert '[venue] "ICMC 2010"  vs  "ICMC": no' in prompt
+    assert prompt.rstrip().endswith('[venue] "ICMC 2012"  vs  "ICMC"')
+    assert "decided these pairs before" not in resolution.local_prompt(
+        "venue", "a", "b"
+    )

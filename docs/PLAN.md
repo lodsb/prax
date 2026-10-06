@@ -657,7 +657,11 @@ numbered there) in the order the user agreed: one step a session.
       if a region turns out to be two unrelated things, or if the
       packages prove easy on the Pi-class host.
 
-- [ ] **Precedents for the judge of a pair** (Utopia's adjudication): the
+- [x] (2026-10-06, measured, not adopted: `docs/eval/judge-precedents-2026-10-06.md`;
+      `eval_confidence.py --precedents K`. The calibration set had 56
+      pairs of the `split-names` check in it, now left out; the fit on the
+      240 pairs of entity types settles 32% at 74/76 against 11% at 34/34,
+      waiting for the user's word) **Precedents for the judge of a pair** (Utopia's adjudication): the
       person's earlier decisions on the Review page, with the reason they
       wrote, given to the model as examples, and its verdicts cached by
       pair and model. Utopia's identity rules (a version is not its

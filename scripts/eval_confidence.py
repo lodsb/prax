@@ -59,7 +59,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from prax import config, models
 from prax.graph import calibration as cal
-from prax.graph import resolution
+from prax.graph import ontology, resolution
 
 
 def _ro() -> sqlite3.Connection:
@@ -147,13 +147,25 @@ def _read(path: Path) -> list[dict[str, Any]]:
     ]
 
 
-def ask(out: Path, workers: int) -> None:
+def _answers(precedents: int) -> str:
+    """The answers file of one way of asking: plain, or with precedents."""
+    return "answers.jsonl" if not precedents else f"answers-p{precedents}.jsonl"
+
+
+def ask(out: Path, workers: int, precedents: int = 0) -> None:
+    """Each pair to the local model; with ``precedents``, the person's
+    decisions most like it shown first, the pair's own left out (each
+    pair asked as if the rest were what a person had decided before)."""
     spec = models.resolve("extract")
     if spec is None or not spec.base_url:
         raise SystemExit("steps.extract names no served model")
     url = spec.base_url.rstrip("/") + "/chat/completions"
     pairs = _read(out / "pairs.jsonl")
-    done = {a["id"] for a in _read(out / "answers.jsonl")}
+    decided = [
+        resolution.Precedent(p["type"], p["a"], p["b"], bool(p["label"])) for p in pairs
+    ]
+    answers = out / _answers(precedents)
+    done = {a["id"] for a in _read(answers)}
     todo = [p for p in pairs if p["id"] not in done]
     print(f"{len(todo)} of {len(pairs)} pairs to ask", flush=True)
     lock = threading.Lock()
@@ -166,7 +178,16 @@ def ask(out: Path, workers: int) -> None:
             "messages": [
                 {
                     "role": "user",
-                    "content": resolution.local_prompt(p["type"], p["a"], p["b"]),
+                    "content": resolution.local_prompt(
+                        p["type"],
+                        p["a"],
+                        p["b"],
+                        resolution.precedents_for(
+                            p["type"], p["a"], p["b"], decided, precedents
+                        )
+                        if precedents
+                        else (),
+                    ),
                 }
             ],
             "max_tokens": 1,
@@ -193,7 +214,7 @@ def ask(out: Path, workers: int) -> None:
             {"id": p["id"], "p": prob, "top": [t["token"] for t in top[:4]]}
         )
         with lock:
-            with (out / "answers.jsonl").open("a", encoding="utf-8") as f:
+            with answers.open("a", encoding="utf-8") as f:
                 f.write(line + "\n")
             count[0] += 1
             if count[0] % 250 == 0:
@@ -213,10 +234,15 @@ SPLITS = (
 def gold(out: Path) -> None:
     """The pairs a person decided on the review page, as labelled pairs;
     the splits and merges an assistant made through the same routes (signed
-    "human" too) are left out by the list kept beside the write-up."""
+    "human" too) are left out by the list kept beside the write-up. So are
+    the pairs of a heal check (type ``split-names``: two entities of one
+    name, decided on what their documents say), which no judge of names
+    can decide and the nightly judge is never asked: 56 of 296 on
+    2026-10-06, and the fit of 2026-10-05 was made with them."""
     skip = {
         e["entity"] for e in json.loads(SPLITS.read_text(encoding="utf-8"))["entities"]
     }
+    types = set(ontology.current().entity_types)
     con = _ro()
     rows = [
         r
@@ -226,7 +252,7 @@ def gold(out: Path) -> None:
             JOIN entities ea ON ea.id = c.a JOIN entities eb ON eb.id = c.b
             WHERE c.decided_by = 'human'"""
         )
-        if r["a"] not in skip and r["b"] not in skip
+        if r["a"] not in skip and r["b"] not in skip and r["type"] in types
     ]
     (out / "pairs.jsonl").write_text(
         "".join(
@@ -249,12 +275,12 @@ def gold(out: Path) -> None:
     print(f"{len(rows)} decisions ({same} same) in {out / 'pairs.jsonl'}")
 
 
-def platt(out: Path, folds: int = 5) -> None:
+def platt(out: Path, folds: int = 5, precedents: int = 0) -> None:
     """Platt's map scored by cross-validation (each pair by a fit that did
     not see it), what each threshold settles, and the fit on every pair:
     the ``platt`` and ``settle`` of ``steps.adjudicate`` in prax.yaml."""
     pairs = {p["id"]: p for p in _read(out / "pairs.jsonl")}
-    rows = [a for a in _read(out / "answers.jsonl") if a["p"] is not None]
+    rows = [a for a in _read(out / _answers(precedents)) if a["p"] is not None]
     p = [a["p"] for a in rows]
     y = [pairs[a["id"]]["label"] for a in rows]
     order = list(range(len(p)))
@@ -446,13 +472,19 @@ def main() -> None:
         help="score against the recorded labels or the ones asked again",
     )
     ap.add_argument("--model", default="claude-opus-5", help="relabel's adjudicator")
+    ap.add_argument(
+        "--precedents",
+        type=int,
+        default=0,
+        help="ask and platt: show this many of a person's decisions like the pair",
+    )
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[union-attr]  # the tables print ≥
     a.out.mkdir(parents=True, exist_ok=True)
     if a.step == "build":
         build(a.out, a.threshold)
     elif a.step == "ask":
-        ask(a.out, a.workers)
+        ask(a.out, a.workers, a.precedents)
     elif a.step == "relabel":
         relabel(a.out, a.model)
     elif a.step == "compare":
@@ -460,7 +492,7 @@ def main() -> None:
     elif a.step == "gold":
         gold(a.out)
     elif a.step == "platt":
-        platt(a.out)
+        platt(a.out, precedents=a.precedents)
     else:
         score(a.out, a.bins, a.against)
 

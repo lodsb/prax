@@ -497,14 +497,67 @@ def answers_by_number(text: str, n: int) -> list[bool | None]:
 SETTLE = 0.9  # a calibrated probability this sure either way decides the pair
 
 
-def local_prompt(etype: str, a: str, b: str) -> str:
+PRECEDENTS = 6  # a person's earlier decisions shown beside a pair
+
+
+@dataclass(frozen=True)
+class Precedent:
+    """A pair a person decided on the Review page."""
+
+    type: str
+    a: str
+    b: str
+    same: bool
+
+
+def precedents_for(
+    etype: str, a: str, b: str, decided: Iterable[Precedent], k: int = PRECEDENTS
+) -> list[Precedent]:
+    """The ``k`` decisions most like this pair: of its type first, then by
+    how alike the names are (character 3-grams of both names, Jaccard), so
+    "ICMC 2010" against "ICMC" is shown the editions a person has kept
+    apart. The pair itself is never its own precedent."""
+
+    def grams(x: str, y: str) -> set[str]:
+        s = f" {names.normalize(x)} | {names.normalize(y)} "
+        return {s[i : i + 3] for i in range(len(s) - 2)}
+
+    mine = grams(a, b)
+    key = {names.normalize(a), names.normalize(b)}
+    scored = []
+    for p in decided:
+        if {names.normalize(p.a), names.normalize(p.b)} == key:
+            continue
+        theirs = grams(p.a, p.b)
+        jac = len(mine & theirs) / len(mine | theirs) if mine | theirs else 0.0
+        scored.append((p.type != etype, -jac, p.a, p.b, p))
+    scored.sort(key=lambda t: t[:4])
+    return [t[-1] for t in scored[:k]]
+
+
+def local_prompt(
+    etype: str, a: str, b: str, precedents: Iterable[Precedent] = ()
+) -> str:
     """The one-pair question the local model answers with one token; the
-    confidence experiment asks it in the same words."""
+    confidence experiment asks it in the same words. With ``precedents``,
+    a person's decisions on pairs like it come before the question."""
+    shown = "".join(
+        f'[{p.type}] "{p.a}"  vs  "{p.b}": {"yes" if p.same else "no"}\n'
+        for p in precedents
+    )
+    before = (
+        "The library's owner decided these pairs before; decide the new one"
+        " the way they would:\n" + shown + "\n"
+        if shown
+        else ""
+    )
     return (
         "Decide whether the two names refer to the same entity in a personal"
         " library (research papers, manuals, recipes, notes).\n\n"
         + same_rule([etype])
-        + "\nAnswer yes or no.\n\n"
+        + "\n"
+        + before
+        + "Answer yes or no.\n\n"
         + f'[{etype}] "{a}"  vs  "{b}"'
     )
 

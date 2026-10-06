@@ -5218,6 +5218,24 @@ see, and the door serves it beside the review queue (`GET
 /review/drops`). The `rejected` count is what it was. The numbers fill
 in as documents are extracted again.
 
+## 2026-10-06, the evening: precedents for the judge, measured
+
+The local judge of a likely pair was shown the person's decisions most
+like it (`resolution.precedents_for`, `eval_confidence.py --precedents
+K`, the pair's own left out). On the 240 decided pairs of entity types,
+six precedents raised the cross-validated agreement from 0.762 to
+0.800. At the 0.95 line the nightly judge acts on, the plain prompt
+settled more (32% against 29%) and was right as often (74/76 against
+67/70). Not adopted; `docs/eval/judge-precedents-2026-10-06.md`.
+
+Found on the way: `gold` took the heal check's `split-names` pairs as
+decisions on names. They are two entities of one name a person kept
+apart on their documents, 56 of the 296, and with precedents the judge
+was confidently wrong on six of them. The fit of 2026-10-05 was made
+with them. `gold` now keeps pairs of an entity type only. The fit on the
+240 settles 32% of pairs at 74/76 against the one in use at 11% and
+34/34. Changing it in prax.yaml waits for the user's word.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
