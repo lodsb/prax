@@ -627,7 +627,8 @@ numbered there) in the order the user agreed: one step a session.
       model code, `trust_remote_code`), its licence, what it was trained
       and tested on, the languages, the length of passage it reads, what
       it costs on the CPU, the alternatives, and how prax would measure
-      it; `docs/research-faithfulness.md`) **A faithfulness score for `ask`**: an open model run locally
+      it; written: `docs/research-faithfulness.md`, three questions for the
+      user at its end) **A faithfulness score for `ask`**: an open model run locally
       (Vectara's HHEM-2.1-Open) scores an answer against its passages;
       first as a measurement on the eval sets, then perhaps as a mark on
       the answer.
