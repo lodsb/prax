@@ -15,7 +15,7 @@ import sqlite3
 import time
 from datetime import UTC, datetime
 from types import TracebackType
-from typing import Any, Self
+from typing import Any, NotRequired, Self, TypedDict, cast
 
 from prax.graph import ontology
 
@@ -167,23 +167,54 @@ def job_reap(con: sqlite3.Connection) -> int:
     return n
 
 
+class JobRow(TypedDict):
+    """A row of ``jobs``: one maintenance pass, import or repair the door
+    runs, with its heartbeat (``updated_at``) and progress."""
+
+    id: int
+    name: str
+    host: str | None
+    pid: int | None
+    started_at: str
+    updated_at: str  # the heartbeat
+    finished_at: str | None
+    status: str  # running, done, failed
+    done: int
+    total: int | None
+    note: str | None
+    # a running job as ``list_jobs`` shows it: whether its heartbeat is
+    # older than ``JOB_STALE_SECONDS``, and how old, in seconds
+    stale: NotRequired[bool]
+    age: NotRequired[int]
+
+
+class JobList(TypedDict):
+    running: list[JobRow]
+    recent: list[JobRow]
+
+
+def _job_row(row: sqlite3.Row) -> JobRow:
+    # the table's columns; a test holds the two together
+    return cast(JobRow, dict(row))
+
+
 @_reading
-def get_job(con: sqlite3.Connection, job_id: int) -> dict[str, Any] | None:
+def get_job(con: sqlite3.Connection, job_id: int) -> JobRow | None:
     row = con.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    return dict(row) if row else None
+    return _job_row(row) if row else None
 
 
-def last_job(con: sqlite3.Connection, name: str) -> dict[str, Any] | None:
+def last_job(con: sqlite3.Connection, name: str) -> JobRow | None:
     """The newest job of that name, running or not: the clock's memory
     (``prax.host.schedule``)."""
     row = con.execute(
         "SELECT * FROM jobs WHERE name = ? ORDER BY started_at DESC, id DESC LIMIT 1",
         (name,),
     ).fetchone()
-    return dict(row) if row else None
+    return _job_row(row) if row else None
 
 
-def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> dict[str, Any]:
+def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> JobList:
     """``running`` (with ``stale`` when the heartbeat is old) and the last
     ``limit`` finished jobs, newest first."""
     now = datetime.now(UTC)
@@ -191,7 +222,7 @@ def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> dict[str, Any]:
     for r in con.execute(
         "SELECT * FROM jobs WHERE status = 'running' ORDER BY started_at DESC"
     ):
-        row = dict(r)
+        row = _job_row(r)
         try:
             beat = datetime.fromisoformat(row["updated_at"])
             age = (now - beat).total_seconds()
@@ -201,7 +232,7 @@ def list_jobs(con: sqlite3.Connection, *, limit: int = 20) -> dict[str, Any]:
         row["age"] = int(age)
         running.append(row)
     recent = [
-        dict(r)
+        _job_row(r)
         for r in con.execute(
             "SELECT * FROM jobs WHERE status != 'running'"
             " ORDER BY finished_at DESC, id DESC LIMIT ?",

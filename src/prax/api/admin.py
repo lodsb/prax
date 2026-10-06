@@ -297,7 +297,7 @@ def up_command(req: UpCommand, request: Request) -> dict[str, Any]:
 def jobs(request: Request, limit: int = 20) -> dict[str, Any]:
     """What runs and what ran lately, and what this door's host has left
     (free RAM, commit headroom) so a wall is visible before it is hit."""
-    out = store.list_jobs(_con(request), limit=limit)
+    out: dict[str, Any] = dict(store.list_jobs(_con(request), limit=limit))
     out["host"] = {"name": socket.gethostname(), **hostinfo.memory()}
     return out
 
@@ -315,4 +315,4 @@ def job(job_id: int, request: Request) -> dict[str, Any]:
     row = store.get_job(_con(request), job_id)
     if row is None:
         raise HTTPException(404, f"no job {job_id}")
-    return row
+    return dict(row)  # a plain dict: the annotation is FastAPI's response model

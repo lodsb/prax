@@ -700,7 +700,11 @@ not done.
       chunker writes whole seconds. A test fails when a hit carries a key
       the shape does not declare. `get_document` returns `store.Document`,
       the row and its text window; a test holds it to the table's
-      columns. Left: a job row and the meta keys.)
+      columns. A job row is `store.JobRow` (`get_job`, `last_job`,
+      `list_jobs` as a `JobList`), held to its table the same way. The
+      door's routes keep plain dicts: a route's annotation is FastAPI's
+      response model. Left: the meta keys, an open JSON object, a design
+      of its own.)
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`

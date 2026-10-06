@@ -693,3 +693,15 @@ def test_a_document_has_the_shape_its_table_gives(con: sqlite3.Connection) -> No
     columns = {r[1] for r in con.execute("PRAGMA table_info(documents)")}
     window = {"text", "offset", "truncated"}
     assert set(store.Document.__annotations__) == columns | window
+
+
+def test_a_job_row_has_the_shape_its_table_gives(con: sqlite3.Connection) -> None:
+    job_id = store.job_start(con, "a pass", total=3)
+    row = store.get_job(con, job_id)
+    assert row is not None
+    columns = {r[1] for r in con.execute("PRAGMA table_info(jobs)")}
+    assert set(row) == columns
+    shown = set(store.JobRow.__annotations__) - {"stale", "age"}
+    assert shown == columns
+    running = store.list_jobs(con)["running"][0]
+    assert set(running) == set(store.JobRow.__annotations__)

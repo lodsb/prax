@@ -475,6 +475,8 @@ from .jobs import (  # noqa: F401
     JOB_STALE_SECONDS,
     REQUEST_TRIES,
     Job,
+    JobList,
+    JobRow,
     _job_now,
     _pid_alive,
     add_token,
