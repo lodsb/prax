@@ -39,8 +39,8 @@ so what needs no model comes first.
    (below): a reader declares its processes and their resources, a role
    names companions that move with it in a swap, a reader's own logs
    are trimmed. Code first; trying it on marker waits for the card.
-5. (AK's split as code done 2026-10-06; its measurement waits for the
-   user's word and the card) **AK's split and the rest of AJ** (below): what a swap costs on the card, readers
+5. (AK's split as code done 2026-10-06; the 27B stays for most steps,
+   the user's choice that day, so the split's measurement is set aside) **AK's split and the rest of AJ** (below): what a swap costs on the card, readers
    under prax's hand; **AI**'s measurement after days of
    `run/swaps.jsonl` (`scripts/eval_swaps.py`).
 6. **AA. Close Z** (below).
@@ -515,7 +515,9 @@ numbered there) in the order the user agreed: one step a session.
             an ask is a person's "do it now" for its role (`ask_role` in
             the demand), and the ask hold keeps the card with that role
             without stopping the swap to it (howto 4b).
-      - [ ] **Its swap cost, measured on the card** (the user's word
+      - [ ] (2026-10-06, the user: "right now I think we can stay with
+            27b for most tasks"; the split stays configuration, unused)
+            **Its swap cost, measured on the card** (the user's word
             first: the host runs the 27B for everything since
             2026-10-03, and the 35B's file is still on disk). A day with
             `llama-server: server-35b` for the bulk steps and

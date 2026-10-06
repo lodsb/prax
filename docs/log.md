@@ -5077,8 +5077,9 @@ servers can now share it:
   the card. `Supervisor._crowded` stops an idled server from loading
   beside a group member that holds the card: that is the plan's swap.
 
-The host still runs the 27B for every step. A day of the split, and
-its swap counts, waits for the user's word (the plan, AK).
+The host still runs the 27B for every step, and stays so (the user:
+"right now I think we can stay with 27b for most tasks"). The split is
+there for when a step wants the 35B's speed again.
 
 # Moved from the plan
 
