@@ -5288,6 +5288,16 @@ diffs only when the graph did. A project without the file gets none.
 The plan's "a document's own neighbourhood" was done on 2026-09-27
 (stage L, the document page's "graph" link) and is ticked.
 
+## 2026-10-06, late: the judge refitted, on the user's word
+
+`steps.adjudicate.platt` in the desktop's prax.yaml is `{a: 0.8183, b:
+0.8627}`, the fit on the 240 decided pairs of entity types; `settle`
+stays 0.95. Cross-validated it settles 32% of pairs at 74/76 against the
+old fit's 11% at 34/34. The worker was restarted to read it. A night's
+merges are signed with their round, so `unmerge_run` takes one back.
+The old fit is in the comment beside it and in
+`prax.yaml.bak-2026-10-06-platt`.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

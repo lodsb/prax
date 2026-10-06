@@ -622,7 +622,12 @@ numbered there) in the order the user agreed: one step a session.
       follow-up, the documents whose edges touch the entity in focus
       and its first hop get one vote in the fusion, a preference like
       `DOMAIN_PRIOR`, never a re-sort.
-- [ ] **A faithfulness score for `ask`**: an open model run locally
+- [ ] (2026-10-06, the user: a proper analysis first, before anything is
+      downloaded or run: what the model is and how it loads (its own
+      model code, `trust_remote_code`), its licence, what it was trained
+      and tested on, the languages, the length of passage it reads, what
+      it costs on the CPU, the alternatives, and how prax would measure
+      it; `docs/research-faithfulness.md`) **A faithfulness score for `ask`**: an open model run locally
       (Vectara's HHEM-2.1-Open) scores an answer against its passages;
       first as a measurement on the eval sets, then perhaps as a mark on
       the answer.
@@ -664,7 +669,7 @@ numbered there) in the order the user agreed: one step a session.
       `eval_confidence.py --precedents K`. The calibration set had 56
       pairs of the `split-names` check in it, now left out; the fit on the
       240 pairs of entity types settles 32% at 74/76 against 11% at 34/34,
-      waiting for the user's word) **Precedents for the judge of a pair** (Utopia's adjudication): the
+      in use since 2026-10-06, the user's word) **Precedents for the judge of a pair** (Utopia's adjudication): the
       person's earlier decisions on the Review page, with the reason they
       wrote, given to the model as examples, and its verdicts cached by
       pair and model. Utopia's identity rules (a version is not its
