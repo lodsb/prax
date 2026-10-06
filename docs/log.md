@@ -5338,6 +5338,23 @@ dropped before. Watched and off: a host turns it on by naming a served
 model for it. Some 500 facts over the library, about 6 hours of the
 card. `docs/eval/world-dates-2026-10-06.md`.
 
+## 2026-10-06, late: what a document's meta holds, declared
+
+The typed shapes' last item. `documents.meta` stays an open object, and
+its keys are now a catalogue: `store.DocumentMeta`, a `TypedDict` of 72
+top-level keys with the shape of each value and who writes it, grouped
+as the reference `docs/meta.md` shows them. The three places a meta is
+written (`register`, `set_meta`, `_put_meta`) call `store.check_meta`:
+in the tests (`store.checks.strict_meta`, set by the root conftest) an
+undeclared key raises, on a host it is kept and logged once. The six
+`json_set` writes are read off the source by a test. The strict suite
+found three keys nobody had listed: the importers' own blocks
+`meta.claude` and `meta.chat` (`meta.<source>`, written by
+`importers.feed`; `meta.links`, the third such importer, is declared with
+them), and a test's made-up `note`. All 63 keys of the live
+store are declared. Not done: `get_meta` returning `DocumentMeta`, which
+would type every reader; that is file by file, as strict mypy is.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

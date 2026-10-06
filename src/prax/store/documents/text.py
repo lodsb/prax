@@ -21,6 +21,7 @@ from ..base import (
     _reading,
     _serialized,
     archive_path,
+    check_meta,
     now,
 )
 from .meta import _is_indexed, _put_meta, _refresh_document_field, get_meta
@@ -47,6 +48,7 @@ def register(
     row = con.execute("SELECT id FROM documents WHERE hash = ?", (digest,)).fetchone()
     if row:
         return {"doc_id": row["id"], "hash": digest, "created": False}
+    check_meta(meta or {})
     cur = con.execute(
         "INSERT INTO documents (hash, mime, title, source_url, original_path, meta)"
         " VALUES (?,?,?,?,?,?)",

@@ -55,7 +55,9 @@ from .base import (  # noqa: F401
     UNASSIGNED,
     VEC_DIM,
     VIEWER,
+    Checks,
     Document,
+    DocumentMeta,
     P,
     R,
     SearchHit,
@@ -83,6 +85,8 @@ from .base import (  # noqa: F401
     _scrubbed,
     _serialized,
     archive_path,
+    check_meta,
+    checks,
     chunk_hidden,
     connect,
     decode_domains,
@@ -97,6 +101,7 @@ from .base import (  # noqa: F401
     scrub,
     sha256_file,
     thread_connection,
+    undeclared_meta,
     vectors_available,
 )
 from .documents import (  # noqa: F401

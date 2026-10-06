@@ -798,8 +798,12 @@ not done.
       columns. A job row is `store.JobRow` (`get_job`, `last_job`,
       `list_jobs` as a `JobList`), held to its table the same way. The
       door's routes keep plain dicts: a route's annotation is FastAPI's
-      response model. Left: the meta keys, an open JSON object, a design
-      of its own.)
+      response model. 2026-10-06: the meta keys are `store.DocumentMeta`,
+      72 of them with their shapes and writers, the reference
+      `docs/meta.md`; a write of an undeclared key fails in the tests and
+      is logged on a host. Every one of the live store's 63 keys is
+      declared. Left: `get_meta` returning the shape, its readers typed
+      file by file.)
 - [ ] **The remaining complex functions.** None is over 21 (the ruff
       ceiling). Worth splitting when next touched: `parsers.video.parse`
       (21), `answering.questions.briefing` (20), `graph.extraction.build_input`

@@ -16,6 +16,7 @@ from ..base import (
     _guards,
     _reading,
     _serialized,
+    check_meta,
     now,
 )
 
@@ -98,6 +99,7 @@ def _put_meta(con: sqlite3.Connection, doc_id: int, meta: dict[str, Any]) -> Non
     read-modify-write of every store function that changes a key of it.
     It refreshes nothing; a caller that changes what the document field
     indexes (title, kind, summary) refreshes it itself."""
+    check_meta(meta)
     bounded_histories(meta, HISTORY_KEEP)
     con.execute(
         "UPDATE documents SET meta = ? WHERE id = ?", (json.dumps(meta), doc_id)
@@ -118,6 +120,7 @@ def set_meta(
     Importers use this to merge provenance when a known hash turns up again
     under another source record.
     """
+    check_meta(meta)
     bounded_histories(meta, HISTORY_KEEP)
     cur = con.execute(
         "UPDATE documents SET meta = ?, title = COALESCE(?, title),"

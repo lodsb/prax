@@ -47,6 +47,9 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from prax.steps import embed
 
     embed.forget()
+    # a meta key the code writes and store.DocumentMeta does not name fails
+    # the test that wrote it (a host only logs it)
+    monkeypatch.setattr(store.checks, "strict_meta", True)
     return d
 
 

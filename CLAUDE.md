@@ -363,7 +363,9 @@ reference `docs/ask.md`.
   (`NNNN_name.sql`, contiguous), applied by `store.init_db` and tracked
   in `PRAGMA user_version`. Never edit an applied migration; add a new
   one. Document-level extensibility lives in `documents.meta` (JSON).
-  A new source adds keys there before it earns a column.
+  A new source adds keys there before it earns a column, and declares
+  each in `store.DocumentMeta` with its shape and writer (`docs/meta.md`):
+  an undeclared key fails the test that writes it, and a host logs it.
 - Chunks are addressable regions: `kind`, `locator` (character range
   plus page; `chunk.text == artifact[start:end]` always), `heading`
   path, table `data`. Chunking lives in `prax.text.chunking`, and chunks are

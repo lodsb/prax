@@ -602,7 +602,7 @@ def test_core_four_moves_the_core_three_stamps(con: sqlite3.Connection) -> None:
     meta = store.get_meta(con, doc)
     meta["extraction"] = {"ontology_version": "core3+research9"}
     meta["extraction_history"] = [{"ontology_version": "core3"}]
-    meta["note"] = "score3+ is not a version"
+    meta["genres_note"] = "score3+ is not a version"  # a declared key
     store.set_meta(con, doc, meta)
     sql = (
         resources.files("prax.migrations")
@@ -613,7 +613,7 @@ def test_core_four_moves_the_core_three_stamps(con: sqlite3.Connection) -> None:
     got = store.get_meta(con, doc)
     assert got["extraction"]["ontology_version"] == "core4+research9"
     assert got["extraction_history"][0]["ontology_version"] == "core4"
-    assert got["note"] == "score3+ is not a version"
+    assert got["genres_note"] == "score3+ is not a version"
 
 
 def test_what_is_written_once_stays_as_written(con: sqlite3.Connection) -> None:
