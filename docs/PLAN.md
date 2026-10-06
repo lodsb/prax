@@ -101,10 +101,10 @@ numbered there) in the order the user agreed: one step a session.
       - [x] **19.** Path hop strength is a Python list of relation names from the packs, and it has already drifted from the ontology (an hour or two plus an eval run)
       - [x] **21.** Path costs class relations as strong or weak by a hard-coded list of research and studio relation names (an hour)
       - [x] **22.** Which schema.org types prax knows is listed twice: OWN_TYPES in code, same_as in genres.yaml, and the two disagree (an hour)
-- [ ] **Step 3's two leftovers** (2026-10-05):
-      - [ ] (the check is written: `prax heal --check document-twins`,
-            356 documents and 450 entities on the dry run; applying it
-            waits for the user's word) **Document twins.** 733 titles have entities of two or more
+- [x] **Step 3's two leftovers** (2026-10-05):
+      - [x] (applied 2026-10-05, run `heal:document-twins:20261005T130208Z`:
+            450 entities folded, the dry run's count; on 2026-10-06 the
+            check found one new twin, a capture since) **Document twins.** 733 titles have entities of two or more
             document types (146 article and paper, 108 build and paper, 94
             manual and paper, 53 paper and recipe…), mostly from page links
             and citations that typed every document a paper. New links
