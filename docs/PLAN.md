@@ -567,7 +567,9 @@ numbered there) in the order the user agreed: one step a session.
 
 ## Retrieval and ask
 
-- [ ] **The sections pass on the vector side.**
+- [x] (measured 2026-09-25, the same file's "The vector half": hit@10
+      0.210 to 0.300, MRR 0.121 to 0.166, brute-force cosine over a fixed
+      pool; the plan was not ticked then) **The sections pass on the vector side.**
       `docs/eval/sections-2026-09-25.md` measured the keyword half —
       hit@10 0.087 to 0.130, MRR 0.048 to 0.077 — and says nothing about
       `document_embeddings`, where a query that paraphrases a chapter
