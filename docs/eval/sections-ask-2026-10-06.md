@@ -45,7 +45,7 @@ nothing that matters differs. One question of 17 is within that.
 
 A question about the middle of a book finds the book through the chunk
 that holds the passage. 26 of the 30 expected documents were among the
-sources in both arms, and every passage-level hit carries its book with
+sources in each arm, and every passage-level hit carries its book with
 it. The document field says what a whole document is, and these
 questions do not ask that.
 
