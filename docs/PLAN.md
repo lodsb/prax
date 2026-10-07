@@ -83,7 +83,7 @@ in the plan is blocked on these, except where an item says so.
       duplicate-facts`, 1,711 facts, 2,018 later edges.
 - [ ] **Spacing twins**: `prax heal --check spacing-twins`, 783 groups,
       793 entities to fold.
-- [ ] **The `worlddates` step on**: `steps.worlddates.model` in
+- [x] (on 2026-10-07, the user's word) **The `worlddates` step on**: `steps.worlddates.model` in
       prax.yaml (howto 3e). Some 500 dated facts over a night or two,
       18 of 18 right on the samples (`docs/eval/world-dates-2026-10-06.md`).
 - [x] **Push**: done 2026-10-06.
