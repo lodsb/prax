@@ -298,8 +298,26 @@ originals as the truth. Agent-memory frameworks are built for an
 application's agents; prax is a tool for a person that agents can also
 use. Paperless files paperwork. The comparison by family and by
 product, with sources, is in
-[`docs/research.md`](docs/research.md#where-prax-sits). How its database
-compares with the nearest systems, table by table, is in
+[`docs/research.md`](docs/research.md#where-prax-sits).
+
+The nearest systems keep a graph of facts too. Roughly, as read from
+each project's code on 7 October 2026:
+
+| | prax | Utopia | Graphiti | Cognee | Basic Memory |
+|---|---|---|---|---|---|
+| Runs on | one SQLite file, a small board | Postgres and a server | a graph database server | SQLite and two embedded stores | your Markdown files, indexed in SQLite |
+| Keeps the source | the original file, by hash | documents and passages | the inputs, as episodes | datasets and passages | the notes themselves |
+| When a fact holds | where a source says, on few facts yet | on most facts, read as it extracts | on facts, from the text | on events, if asked | where a note says |
+| Who wrote each fact | the model, its run and the ontology's version | the source and its quote | the input it came from | the pipeline run | the note |
+| Taking work back | a whole run, or a merge | a merge | delete | delete | edit the file |
+| A fact can be rewritten | no, the database refuses | yes; only the audit log is fixed | yes | yes | yes |
+| Names in several languages | a name per language | one name | one name | not checked | one name |
+| Personal documents | hidden per document from a token | roles per knowledge base | namespaces | rights per dataset | projects |
+
+Where prax is behind: Utopia dates most facts as it reads them and can
+walk the graph as it stood on a date. Its facts can hold a plain value,
+a number or a date, and it records the decision on a conflict. The
+details, with the tables and columns behind each cell, are in
 [`docs/compared.md`](docs/compared.md).
 
 ## Documentation
