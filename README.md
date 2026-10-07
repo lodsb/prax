@@ -300,19 +300,17 @@ use. Paperless files paperwork. The comparison by family and by
 product, with sources, is in
 [`docs/research.md`](docs/research.md#where-prax-sits).
 
-The nearest systems keep a graph of facts too. Roughly, as read from
-each project's code on 7 October 2026:
+The nearest systems keep a graph of facts too. What each one stores,
+roughly, as read from their code on 7 October 2026:
 
 | | prax | Utopia | Graphiti | Cognee | Basic Memory |
 |---|---|---|---|---|---|
-| Runs on | one SQLite file, a small board | Postgres and a server | a graph database server | SQLite and two embedded stores | your Markdown files, indexed in SQLite |
-| Keeps the source | the original file, by hash | documents and passages | the inputs, as episodes | datasets and passages | the notes themselves |
-| When a fact holds | where a source says, on few facts yet | on most facts, read as it extracts | on facts, from the text | on events, if asked | where a note says |
-| Who wrote each fact | the model, its run and the ontology's version | the source and its quote | the input it came from | the pipeline run | the note |
-| Taking work back | a whole run, or a merge | a merge | delete | delete | edit the file |
-| A fact can be rewritten | no, the database refuses | yes; only the audit log is fixed | yes | yes | yes |
-| Names in several languages | a name per language | one name | one name | not checked | one name |
-| Personal documents | hidden per document from a token | roles per knowledge base | namespaces | rights per dataset | projects |
+| The sources | the original files, and their passages | documents and passages | the inputs | documents and passages | your own notes |
+| The facts | typed links, with a quote | typed facts and plain values, with a quote | facts as sentences | typed links | links written in the notes |
+| Where a fact came from | document, sentence, model and run | document and sentence | the input | the pipeline run | the note |
+| When it holds | where a source says, on few facts yet | on most facts | on facts, from the text | on events, if asked | where a note says |
+| What it used to say | every ended fact, kept | ended facts, kept | ended facts, kept | older values tagged, if asked | the file's history |
+| Names | one per language | one | one | one | one |
 
 Where prax is behind: Utopia dates most facts as it reads them and can
 walk the graph as it stood on a date. Its facts can hold a plain value,
