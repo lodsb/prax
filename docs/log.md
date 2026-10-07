@@ -5427,6 +5427,14 @@ stamp a page at a time. `tests/test_maintain_locks.py` spies on what the
 passes read and parse with and fails when a write is open then; it
 failed on the old code.
 
+The rest of the store, checked the same day for a write that commits
+outside the lock: `write_page` (the door's log had page writes failing
+on "database is locked"), `resolve_review`, `set_genres`, each step of
+`fts_merge` and each repair `heal` runs are behind `_serialized` now. A
+writer that waits on the store's lock queues; one that holds SQLite's
+lock outside it makes every other writer time out. `test_invariants`
+fails on a store function that writes and commits without the lock.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

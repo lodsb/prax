@@ -343,6 +343,7 @@ def reopen_reviews(
     return done
 
 
+@_serialized
 def resolve_review(con: sqlite3.Connection, review_id: int, resolution: str) -> None:
     """Close a review item: ``linked`` (written as an edge by hand),
     ``dropped`` or ``ontology`` (the ontology grew to fit it)."""

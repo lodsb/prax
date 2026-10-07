@@ -222,6 +222,7 @@ def list_pages(
     return [dict(r) for r in rows]
 
 
+@_serialized
 def write_page(
     con: sqlite3.Connection,
     slug: str,

@@ -375,6 +375,16 @@ def warm_fts(con: sqlite3.Connection) -> dict[str, int]:
     return {"blocks": int(rows), "bytes": int(size)}
 
 
+@_serialized
+def _fts_merge_step(con: sqlite3.Connection) -> int:
+    """One step of FTS5's ``merge`` behind the store's lock, committed; the
+    rows it changed."""
+    changes = con.total_changes
+    con.execute("INSERT INTO chunks_fts(chunks_fts, rank) VALUES('merge', 500)")
+    con.commit()
+    return int(con.total_changes - changes)
+
+
 def fts_merge(con: sqlite3.Connection, *, seconds: float = 60.0) -> dict[str, int]:
     """Merge the keyword index's segments a little at a time (FTS5's
     ``merge``, 500 pages a step) for up to ``seconds``: every batch of
@@ -387,11 +397,8 @@ def fts_merge(con: sqlite3.Connection, *, seconds: float = 60.0) -> dict[str, in
     steps = 0
     t0 = time.monotonic()
     while time.monotonic() - t0 < seconds:
-        changes = con.total_changes
-        con.execute("INSERT INTO chunks_fts(chunks_fts, rank) VALUES('merge', 500)")
-        con.commit()
         steps += 1
-        if con.total_changes - changes <= 1:  # nothing left to merge
+        if _fts_merge_step(con) <= 1:  # nothing left to merge
             break
     after = con.execute("SELECT count(DISTINCT segid) FROM chunks_fts_idx").fetchone()[
         0

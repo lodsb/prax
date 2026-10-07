@@ -441,3 +441,44 @@ def test_a_moment_in_record_time_is_built_in_one_place() -> None:
                     " as_of without held_at"
                 )
     assert not guilty, "; ".join(guilty)
+
+
+# what may write and commit without the decorator: it runs behind the lock
+# because its one caller holds it
+COMMITS_UNDER_A_CALLER = {
+    "_repair_stray_versions": "store.repair.heal runs every repair behind _serialized",
+}
+
+
+def test_a_store_function_that_writes_and_commits_holds_the_lock() -> None:
+    """Invariant 4: writes go one at a time behind the store's lock. A
+    function that writes and commits outside it holds SQLite's write lock
+    where the queue of writers cannot see it, and every other writer times
+    out instead of waiting: the markup pass did, and a night's backup
+    failed on "database is locked" (2026-10-07)."""
+    import ast
+
+    write = re.compile(r"['\"](UPDATE|INSERT|DELETE|REPLACE)\b", re.IGNORECASE)
+    bare = []
+    for path in sorted((SRC / "store").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for fn in ast.walk(tree):
+            if not isinstance(fn, ast.FunctionDef):
+                continue
+            if any("_serialized" in ast.unparse(d) for d in fn.decorator_list):
+                continue
+            calls = [
+                c
+                for c in ast.walk(fn)
+                if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+            ]
+            writes = any(
+                c.func.attr in ("execute", "executemany")
+                and c.args
+                and write.search(ast.unparse(c.args[0]))
+                for c in calls
+            )
+            commits = any(c.func.attr == "commit" for c in calls)
+            if writes and commits and fn.name not in COMMITS_UNDER_A_CALLER:
+                bare.append(f"{path.relative_to(SRC).as_posix()}:{fn.lineno} {fn.name}")
+    assert not bare, bare

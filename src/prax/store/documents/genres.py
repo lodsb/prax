@@ -112,6 +112,7 @@ def _sure(labels: list[dict[str, Any]] | None, key: str) -> list[str]:
     return [str(x[key]) for x in labels or [] if float(x.get("p", 1.0)) >= 0.5]
 
 
+@_serialized
 def set_genres(
     con: sqlite3.Connection,
     doc_id: int,

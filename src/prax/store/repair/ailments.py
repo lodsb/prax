@@ -6,7 +6,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from ..base import _NOW, _reading
+from ..base import _NOW, _reading, _serialized
 from ..jobs import Job
 from .common import (
     CAP,
@@ -679,7 +679,10 @@ def heal(con: sqlite3.Connection, *, only: list[str] | None = None) -> dict[str,
             if ailment.repair is None:  # a report: it says what to do
                 out[ailment.name] = f"{len(rows)} to look at — {ailment.fix}"
                 continue
-            repaired = ailment.repair(con, rows)
+            # behind the store's lock: a repair writes rows of its own, and
+            # a write outside it holds SQLite's lock where the queue of
+            # writers cannot see it (2026-10-07, maintain._write)
+            repaired = _serialized(ailment.repair)(con, rows)
             done += repaired
             out[ailment.name] = {"found": len(rows), "repaired": repaired}
             if repaired < len(rows):
