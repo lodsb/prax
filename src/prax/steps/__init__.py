@@ -53,6 +53,9 @@ WATCHED_STEPS = (
     "worlddates",
     "summaries",
     "vocabulary",
+    # what a long document's chapters are about (watched since 2026-10-07,
+    # the user's word: a book that arrives gets them without a hand)
+    "sections",
     "communities",
     "extract",
     "embed",

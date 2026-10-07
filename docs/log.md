@@ -5399,6 +5399,16 @@ guard only its audit table. Utopia is ahead on world time (extracted as
 it reads, and a walk "at" a world date), on literal values, and on a
 decision recorded for a conflict and for a merge with its reason.
 
+## 2026-10-07: the `worlddates` step on, and `sections` watched
+
+On the user's word, `steps.worlddates` in the desktop's prax.yaml names
+`server-27b-u` with `supported: 0.9`; the worker read 8,583 documents of
+12,839 by the morning and wrote 198 dated facts. The `sections` step is
+watched now: a long document (60,000 characters or more,
+`sections.MIN_DOCUMENT`) that arrives gets its chapter summaries without
+a hand. 1,449 long documents were due that day, new ones and ones whose
+text was replaced since they were read.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
