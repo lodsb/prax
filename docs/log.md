@@ -5377,6 +5377,28 @@ the wall test walks. The PDF itself is not handed to the client: a page
 drawn is what a model reads, and a whole file would be the 3.4 MB
 answer invariant 6 is about.
 
+## 2026-10-07: the docs brought up to date, and prax beside Utopia
+
+The reference docs were read against the code and CLAUDE.md, and their
+drift fixed: `architecture.md` (migrations to 0048 with the edge tables
+of 41 to 48, the store's parts, the module map's new rows, the passes,
+the hosts' card), `integrating.md` and `howto.md` (the full MCP tool
+list, `why`'s answer, the maintenance passes, the model steps and their
+defaults), `packs.md` (maths as a pack of its own), `claude-workflow.md`
+(`prax sync --if-auto`), `ui.md` and `review.md`. The README's numbers
+are those of 2026-10-07 (13,000 documents, 216,000 live relations over
+162,000 entities, 181,000 ended ones kept), and it says what the wall,
+the domains, the rules and `connect` are, and that an agent can look at
+a figure or a page.
+
+`docs/compared.md` sets prax's data model beside Utopia, Graphiti,
+Cognee, Semantica and Basic Memory, read from their repositories that
+day. prax alone puts a producer, a run and an ontology version on every
+fact and undoes a run whole; its triggers hold a fact, where Utopia's
+guard only its audit table. Utopia is ahead on world time (extracted as
+it reads, and a walk "at" a world date), on literal values, and on a
+decision recorded for a conflict and for a merge with its reason.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

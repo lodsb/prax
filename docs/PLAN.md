@@ -836,6 +836,14 @@ not done.
 
 ## Later / maybe
 
+From the comparison of 2026-10-07 (`docs/compared.md`, "Ideas worth
+taking"): `at` for a world date on `traverse` and `connect`, once more
+edges carry world time (the `worlddates` step on); a person's decision
+on a conflict (`edge_conflicts`) and the reason with a pair's decision
+(`entity_candidates`); sub-property rules; an RDF export with PROV-O and
+SKOS terms. Literal values (a fact whose end is a number or a date) are
+a change to the edge's shape, and wait for a need.
+
 From the research of 2026-10-03 (the private research note, sections 6
 to 8; the library's `agent-memory-landscape` page):
 

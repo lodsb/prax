@@ -65,8 +65,8 @@ work. The UI polls exactly this.
 | `GET /traverse?entity=…&hops=1&as_of=` | the graph around a name: `edges`, every edge with its evidence and producer, and `support` (how many documents state the same fact) where it is more than one. `as_of` (a date or a UTC moment) walks what the graph held then. `entity=doc:N` walks from a library document. An edge whose source says when the fact holds in the world carries `world_from`/`world_to` and their precision |
 | `GET /traverse?entity=…&hops=2` | and `neighbours`, the ideas those documents are also about, ranked by how many say so, with `left_out` |
 | `GET /graph/connect?a=&b=` | how two things are connected: the best sound paths, each hop with its relation, the documents behind it, one of them and its quote; `relations`, `max_hops`, `as_of`, `weak` |
-| `GET /graph/changes?since=` | what changed in a period: on record time the facts prax came to hold and stopped holding (re-readings left out), with `world=true` what began and ended in the world as the sources state; counts by relation and the newest facts |
-| `GET /edge/{id}/why` | what a derived (`rule:…`, INFERRED) edge follows from: the stated facts of its chain |
+| `GET /graph/changes?since=&until=&entity=&rel=&domain=&world=&corrections=` | what changed in a period: on record time the facts prax came to hold and stopped holding (re-readings left out), with `world=true` what began and ended in the world as the sources state; counts by relation and the newest facts. A repair's corrections are counted as `corrected` and listed only with `corrections=true` |
+| `GET /edge/{id}/why` | what a derived (`rule:…`, INFERRED) edge follows from: the stated facts of its chain (`premises`). Also the facts it disagrees with (`conflicts`), the edge that corrects it (`corrected_by`) or those it corrects (`corrects`), and where its quote stood in its text and whether it stands there still (`place`, `store.evidence_place`) |
 | `GET /entities?q=` | names, types, how connected each is |
 | `POST /ask {question, steps, stream}` | passages and graph facts, and an answer with citations when the host has a model (`docs/ask.md`) |
 | `POST /questions {result, options}` | keep an ask's result as a standing question: a page asked again when the library learns something about it |
@@ -84,6 +84,7 @@ work. The UI polls exactly this.
 | `GET /projects?remote=&prefix=` | every project's manifest, or the one of a working copy (what the session-end hook asks) |
 | `POST /link` | one edge, with its evidence and your name as producer. Either end may be `doc:N`, a library document, which brings its own name and type (`supersedes`, `invalidates`, `links_to` between two documents); `evidence` is a quote, and a chunk id in its place is refused. `world_from`/`world_to` (a date, or `unknown` for an end nobody dates) say when the fact holds in the world. An edge is never changed or deleted afterwards: a correction ends it and links anew |
 | `GET /documents?tag=&domain=&doctype=&published_since=&published_before=` | the library filtered, newest first |
+| `POST /maths {op, a, b, notation, args}` | one operation of the maths pack's calculator; a 404 on a host whose `packs:` does not name `maths` |
 | `GET /stats`, `GET /jobs`, `GET /changes` | what the store holds, what is running, whether anything moved |
 
 Responses are small on purpose: snippets and ids, never whole
@@ -94,18 +95,22 @@ what it needs.
 
 An agent gets everything above and nothing more. There is no second
 API and no privileged path. `prax.mcp_server` puts the same door in
-front of any MCP client as tools: `search`, `get`, `get_chunk`,
-`context`, `documents`, `traverse`, `link`, `ask`, `get_page`,
-`write_page`, `append_page`, `ingest`, `ingest_file`, `capture_url`,
-`promote`, `set_domains`, `status`, `health`, and two that answer
-with a picture: `figure` (a figure line's image) and `page_image` (a
-page of the original PDF, for a scan read by OCR). It is a proxy: one HTTP call per tool, no
-logic of its own. The door's handlers are the whole contract, and an
-agent can do nothing a script could not. One tool reads the agent's
-machine rather than the door: `ingest_file(path)` uploads a local file,
-and it reads under the server's working directory only, or under the
-roots `PRAX_INGEST_ROOTS` names (paths separated by the OS path
-separator). A page in the library can ask the model for a file; the
+front of any MCP client as tools. Reading: `search`, `get`,
+`get_chunk`, `context`, `documents`, `references`, `cited_but_missing`,
+`status` and `health`. The graph: `traverse`, `connect`, `changes`,
+`why` and `link`. Asking: `ask` and `maths`. Pages: `get_page`,
+`write_page`, `append_page` and `update_section`. Bringing documents
+in: `ingest`, `ingest_file`, `capture_url`, `capture_urls` and
+`sync_project`. Asking for work: `promote`, `set_domains`, `set_title`
+and `request_reading`. Two answer with a picture: `figure` (a figure
+line's image) and `page_image` (a page of the original PDF, for a scan
+read by OCR). `EXPECTED_TOOLS` in `tests/test_mcp.py` is the list. It is
+a proxy: one HTTP call per tool, no logic of its own. The door's handlers are the whole contract, and an
+agent can do nothing a script could not. Two tools read the agent's
+machine rather than the door. `ingest_file(path)` uploads a local file,
+and `sync_project(root)` sends a working copy's tracked notes. Both
+read under the server's working directory only, or under the roots
+`PRAX_INGEST_ROOTS` names (paths separated by the OS path separator). A page in the library can ask the model for a file; the
 roots say what it may have.
 
     PRAX_DOOR=http://127.0.0.1:8000 PRAX_TOKEN=… python -m prax.mcp_server
@@ -123,7 +128,8 @@ Two things make an agent's work safe to keep beside your own:
 
 The ontology is the schema a workflow can trust. It is typed,
 versioned, stamped on every edge, and written by hand in
-`ontology/*.yaml`. Every recipe `calls_for` its ingredients and every
+`ontology/core.yaml` and the packs' modules
+(`src/prax/packs/<pack>/*.yaml`, `docs/packs.md`). Every recipe `calls_for` its ingredients and every
 build is `made_with` its parts, so a shopping list for three recipes
 is a traversal, not a prompt.
 

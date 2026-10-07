@@ -163,7 +163,8 @@ are kept beside them so its agreement with you can be measured.
 
 ## Rules of thumb
 
-The rules are in `ontology/sameness.yaml`, and the "Same thing?" tab
+The rules are in `ontology/sameness.yaml`, with a domain's own cases in
+its pack (`src/prax/packs/<pack>/sameness.yaml`), and the "Same thing?" tab
 shows them above the pairs under **What counts as the same thing**. The
 models that decide pairs are asked with the same file, so your decisions
 and theirs can be compared. In short:

@@ -104,7 +104,9 @@ document. You can filter by kind of document or by subject. Acronyms
 the library defines are expanded on the way in. Stopwords and reference
 lists are left out, so a query is about what it says. Each hit shows
 when its document was published, as precisely as the source says it,
-and you can ask for only what appeared after a year.
+and you can ask for only what appeared after a year. A document a newer
+one replaced is still found, but it moves down and says what replaced
+it.
 
 **Connects them.** A model reads each document against a small
 ontology and writes typed relations: which paper uses which method,
@@ -114,7 +116,14 @@ links come from Crossref or OpenAlex, and from each paper's own
 reference list matched against the library, with a score. On a paper's
 page the [12] in the text is a link to what entry 12 cites. Every
 relation records who wrote it, from which document, under which version
-of the ontology, and the sentence it came from.
+of the ontology, and the sentence it came from. The ontology is split
+by domain: research, studio gear and its electronics, software, the
+kitchen, the workshop, society. A document is read only against the
+domains it belongs to, so nobody asks a recipe for its methods. A few
+rules add what follows from the rest (a part of a part is a part), and
+each added link names the links it stands on. Ask how two things are
+connected and you get the two or three best paths, with the sentence
+behind each step.
 
 **Says how it knows.** A link in the graph is evidence, not a settled
 fact. Nothing in the graph is overwritten. When a later reading
@@ -130,6 +139,12 @@ the graph around the name says that both exist. When two names turn out
 to be one thing, the merge is a pointer you can take back. And a merge
 that would move many facts at once, or touch something your own notes
 are about, waits for you on the review page.
+
+**Keeps some of it to itself.** Rules flag what looks personal, a bank
+statement or a letter, and you decide. A token you hand to an agent or
+to another machine sees only the domains you give it, and nothing
+personal unless you say so. The filter sits in the store, so a search,
+a walk of the graph and an answer all leave out the same documents.
 
 **Answers questions.** With a model on the host, `ask` works the
 library for a few steps before it writes. It searches again, reads on,
@@ -190,7 +205,10 @@ of this from the popup, the context menu or a single key.
 
 **HTTP, for everything else.** One service is the only writer and the
 only API. A shell script with `curl` and `jq` can do exactly what the
-UI does. An MCP server ships with it for agents. Whatever a script or
+UI does. An MCP server ships with it for agents. It offers the reads
+the UI has: search, a document, the graph around a name, how two things
+connect, what changed in a week, and a figure or a scanned page as a
+picture the agent's model can look at. Whatever a script or
 an agent writes carries its own name, so you can inspect it or take it
 back out as a unit. Recipes and the contract are in
 [`docs/integrating.md`](docs/integrating.md).
@@ -212,23 +230,23 @@ a gigabyte of memory.
 
 ## The library it was built on
 
-One real instance on 15 September 2026: a researcher's library after a
-Zotero import, a year of browser captures and a few weeks of model
-passes. The numbers are here for scale, not as targets.
+One real instance on 7 October 2026: a researcher's library after a
+Zotero import, the contents of a NAS, a year of browser captures and a
+few weeks of model passes. The numbers are here for scale, not as
+targets.
 
 | | |
 |---|---|
-| Documents | 10,305: 9,324 PDFs, 493 web pages, 104 text files, 73 notes, 34 talks from YouTube, 8 pages of my own. 8,990 came from Zotero; the rest were uploaded, sent from the browser or dropped in the folder |
-| Text and passages | 1,265,000 passages (937,000 text, 148,000 reference entries, 109,000 figures, 45,000 tables, 17,000 formulas, 9,000 code), 1,106,000 of them with a vector; 7,570 acronyms the library defines |
-| Figures | 62,400 with a picture across 4,966 documents, served out of the originals; 33,000 read by the local vision model, and each reading can be searched like a paragraph. Where the picture was drawn with vector paths and no extractor could lift it out, the region above its caption is rendered instead |
-| Graph | 162,000 live relations over 144,000 entities (43,600 papers, 25,600 concepts, 15,500 methods, 9,500 authors), against six ontology modules. 22,900 names are folded into another: the same thing under a different spelling, an initials form, or — since 2026-09-24 — the same thing in another language |
-| Languages | 71% English, 21% German, the rest French, Spanish, Italian and Dutch. The document field is written in English whatever the document is in, and an entity keeps the document's own word as a label in its own language |
-| Retrieval | MRR 0.905 for the combined search over 62 real queries (0.82 keywords alone, 0.79 vectors alone), hit@1 0.85 |
-| Running | one Windows desktop: service, worker and llama-server started at login, a backlog pass at 03:00, maintenance at 03:30, a backup at 04:30. A 2.3 GB database, a 1.3 GB vector index and a 20 GB archive |
+| Documents | 13,000: 10,200 PDFs, 2,200 office and text files, 600 web pages, 42 talks from YouTube, 28 pages of my own. 8,960 came from Zotero, 3,360 were uploaded or dropped in the folder, 620 were sent from the browser. About 400 are marked personal |
+| Text and passages | 1,486,000 passages (1,102,000 text, 160,000 reference entries, 120,000 figures, 55,000 tables, 33,000 formulas, 14,000 code), 1,325,000 of them with a vector; 8,900 acronyms the library defines |
+| Figures | 120,000 across 6,200 documents, served out of the originals; 62,000 read by the local vision model, and each reading can be searched like a paragraph. Where the picture was drawn with vector paths and no extractor could lift it out, the region above its caption is rendered instead |
+| Graph | 216,000 live relations over 162,000 entities (48,000 papers, 34,000 concepts, 19,000 methods, 10,000 authors, 10,000 tools), against nine ontology modules in eight domains; 45,000 of the relations are citations. 181,000 ended relations are kept as history. 43,000 names are folded into another: the same thing under a different spelling, an initials form, or the same thing in another language. 187 regions of the library, each named |
+| Languages | 74% English, 18% German, a few in French, Spanish, Italian and Dutch, and 12% too short or too scanned to tell. The document field is written in English whatever the document is in, and an entity keeps the document's own word as a label in its own language |
+| Retrieval | MRR 0.90 for the combined search over 62 real queries, hit@1 0.87 |
+| Running | one Windows desktop: service, worker and llama-server started at login, the figures read from 21:00, merges at 03:00, maintenance at 03:30, a backup at 04:30, the standing questions at 06:30. A 3.1 GB database, a 1.3 GB vector index and a 26 GB archive |
 
-715 of those documents are scans nothing could read yet. The service
-has not moved onto the serving board, though the code for it is in
-[`deploy/`](deploy/). What else is unfinished is in
+The service has not moved onto the serving board, though the code for
+it is in [`deploy/`](deploy/). What else is unfinished is in
 [`docs/PLAN.md`](docs/PLAN.md).
 
 ## How it works
@@ -280,7 +298,9 @@ originals as the truth. Agent-memory frameworks are built for an
 application's agents; prax is a tool for a person that agents can also
 use. Paperless files paperwork. The comparison by family and by
 product, with sources, is in
-[`docs/research.md`](docs/research.md#where-prax-sits).
+[`docs/research.md`](docs/research.md#where-prax-sits). How its database
+compares with the nearest systems, table by table, is in
+[`docs/compared.md`](docs/compared.md).
 
 ## Documentation
 
@@ -297,13 +317,16 @@ product, with sources, is in
 | [`docs/generalizing.md`](docs/generalizing.md) | Repair or prevention: what a new library gets without the week of passes, and in which languages. |
 | [`docs/normalization.md`](docs/normalization.md) | One thing under several names: the five kinds of duplicate and the mechanism for each, with what the measurements changed. |
 | [`docs/ui.md`](docs/ui.md) | The web UI: the endpoints it uses, its routes and rules. |
+| [`docs/compared.md`](docs/compared.md) | prax's data model beside Utopia, Graphiti, Cognee and others: time, evidence, undo, identity, access. |
+| [`docs/meta.md`](docs/meta.md) | What a document's `meta` holds: every key, its shape and what writes it. |
+| [`docs/packs.md`](docs/packs.md), [`docs/communities.md`](docs/communities.md) | The domains as packs, and the regions of the library. |
 | [`docs/graph-files.md`](docs/graph-files.md) | A piece of the graph as a file: `prax export` and `prax import graph`, the format, what an import does. |
 | [`docs/review.md`](docs/review.md) | Reviewing the graph by hand: which names are one thing, which are several, and which merges were wrong. |
 | [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The look: the mark printed the way an 1877 label was, the six themes as four values, the type. |
 | [`docs/sources.md`](docs/sources.md), [`docs/extension.md`](docs/extension.md) | Where documents come from, and the browser extension. |
 | [`docs/claude-workflow.md`](docs/claude-workflow.md) | One agent workflow in full, as an example: the Claude Code plugin. |
 | [`docs/eval/`](docs/eval/) | Measurements: extractors, retrieval, the local models. |
-| ontology [`v2`](docs/ontology-v2.md) [`v4`](docs/ontology-v4.md) [`v5`](docs/ontology-v5.md) [`v6`](docs/ontology-v6.md) [`v7`](docs/ontology-v7.md) [`v8`](docs/ontology-v8.md), [`studio`](docs/ontology-studio.md), [`craft`](docs/ontology-craft.md) | How the vocabulary grew, one version at a time, and why. |
+| ontology [`v2`](docs/ontology-v2.md) [`v4`](docs/ontology-v4.md) [`v5`](docs/ontology-v5.md) [`v6`](docs/ontology-v6.md) [`v7`](docs/ontology-v7.md) [`v8`](docs/ontology-v8.md) [`v9`](docs/ontology-v9.md), [`studio`](docs/ontology-studio.md), [`electronics`](docs/ontology-electronics.md), [`craft`](docs/ontology-craft.md) | How the vocabulary grew, one version at a time, and why. |
 | [`docs/PLAN.md`](docs/PLAN.md), [`docs/log.md`](docs/log.md) | What is next, and the record of what was done with the measurements under each night. |
 | [`docs/research.md`](docs/research.md) | The survey of the field. |
 | [`prax.example.yaml`](prax.example.yaml) | Template for `prax.yaml`: models, steps, every other setting. |

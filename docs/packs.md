@@ -8,7 +8,9 @@ kitchen, studio. Others bring code as well: maths, music.
 Packs live in this repository, under `src/prax/packs/` (the user,
 2026-09-30). This document is the contract. Step 1 of "The order of the
 work" is built (2026-10-01): the registries, and the eight modules in
-five packs. No pack has capability yet; maths will be the first.
+five packs. Step 2 is built too: `maths`, the sixth pack, is capability
+only (a surfer tool, the `equations` step, chunk marks) and brings no
+module yet.
 
 ## Two halves
 
@@ -83,11 +85,13 @@ src/prax/packs/
     sameness.yaml      # its cases of "the same thing"
     lexicon.yaml       # its words that say what a name is (sections)
     rules.yaml         # the domain rules it suggests
-  maths/               # knowledge and capability
-    __init__.py
-    maths.yaml
-    parse.py           # readers and the step's door and worker halves
-    tools.py           # the surfer's tool and its sandbox
+  maths/               # capability only, so far
+    __init__.py        # MANIFEST, the tool's grammar and help
+    tool.py            # the surfer's tool: the request sent to the runtime
+    runtime.py         # the calculator, run under the interpreter maths.python names
+    formulas.py        # the equations step's door and worker halves, the nearby note
+    check.py           # the check run on a tool answer
+    tests/             # its tests, beside it
 ```
 
 A pack's `__init__.py` holds `MANIFEST` and imports nothing. The thin
@@ -97,6 +101,9 @@ dependencies. The code a manifest names is imported when a step, reader
 or tool is first used, as `steps._HOMES` does for the core steps.
 
 ## The manifest
+
+A manifest with every field, as an example (the maths pack's own sets
+fewer):
 
 ```python
 MANIFEST = Pack(
@@ -130,7 +137,7 @@ MANIFEST = Pack(
 )
 ```
 
-`Pack` is a frozen dataclass in `prax.packs`. Every field but `name` is
+`Pack` is a frozen dataclass in `prax.packs.base`. Every field but `name` is
 optional. The strings are import paths or files beside the manifest,
 resolved on first use.
 
@@ -266,12 +273,14 @@ each composed module's file is (the graph export reads it), and
 
 ## The packs in view
 
-**maths** (stage AD, `docs/symbolic-maths.md`). An ontology module for
-theorems, definitions and variables, if the extraction measures a need
-for one. The `formula` chunk's `data` gains `sympy`, `symbols` and
-`parsed_by`. A `sympy` step reads the formulas by the rules first, then
-by the local model. A `math` tool offers the operations the user
-chooses. The `maths` extra holds SymPy and ANTLR 4.11.
+**maths** (stage AD, `docs/symbolic-maths.md`), built. The surfer's
+`maths` tool sends one JSON request to the calculator
+(`prax.packs.maths.tool:surf_maths`), and the door serves it to the MCP
+`maths` tool too (`prax.api.maths`). The watched `equations` step reads
+every display formula once and writes `data.check` (`formulas.py`).
+`check_answer` runs over a tool answer. An ontology module for
+theorems, definitions and variables waits until the extraction measures
+a need for one.
 
 **music** (`docs/research-code-music-sound.md`). The `music.yaml` module
 sketched there. Readers for MIDI and MusicXML through music21, when the
@@ -292,7 +301,7 @@ on its own before an audio pack asks for it.
    `packs:` joins the config, with the two invariant checks. The eight
    modules move into packs with their sameness cases, cues and rules.
    The tests and the unchanged version string prove nothing moved.
-2. **The maths pack**, as stage AD plans it, once the user has chosen
-   its operations.
+2. **The maths pack**, as stage AD plans it. Built: its tool, its
+   step and its marks; its module waits.
 3. **music**, after the library holds symbolic scores or the user sends
    them. **audio**, after the vector-space decision.

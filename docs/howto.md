@@ -128,8 +128,8 @@ because neither changes what the ontology accepts:
   a `work` whose name translates, a `standard` is a `concept` whose
   name does not. A type that says nothing and inherits nothing is
   proper, because translating a name that should not be translated is
-  the worse mistake. It tells the extraction prompt what to write in
-  English and the vocabulary pass what may be folded.
+  the worse mistake. It tells the vocabulary pass which names it may
+  translate and fold. The extraction prompt translates no name.
 - **`lexicon.yaml`** holds the words that say what a name *is*: the
   organization cues, the words that name a type, and the three kinds of
   non-name. A cue is a `stem` (matched from the start of a word on:
@@ -147,10 +147,11 @@ re-selects every document for extraction. A document is extracted
 against the modules of its domain set (section 3e, "A document's
 domains"), so a new module re-selects only the documents without a set.
 The reasoning behind v2 is in `docs/ontology-v2.md`, and each bump
-since has a note of its own. The latest is `docs/ontology-v8.md`:
-affiliation beyond persons, and reversed aliases such as `mentioned_in`
-for `mentions`, which the typing pass and the rules read the other way
-round. The studio module (gear, manuals, datasheets, magazine
+since has a note of its own. `docs/ontology-v8.md` covers affiliation
+beyond persons, and reversed aliases such as `mentioned_in` for
+`mentions`, which the typing pass and the rules read the other way
+round. The latest research note is `docs/ontology-v9.md`: a document's
+end where a paper was named. The studio module (gear, manuals, datasheets, magazine
 articles) is in `docs/ontology-studio.md`. A bump that only widens what
 the modules accept moves the extraction stamps in a migration instead
 of re-selecting every document (0018 did); one that renames or removes
@@ -903,7 +904,7 @@ evidence; `Speicherverwaltung` sat beside `memory management`,
 `kurzzeit-fourier-transformation` beside `short-time Fourier transform`
 and its 92 edges.
 
-    prax work --steps vocabulary            # named, never watched
+    prax work --steps vocabulary            # a watching worker asks for it too
 
 Which names may be folded at all is the ontology's `naming:` key: a
 `common` type names a kind of thing, which every language has its own
@@ -1781,7 +1782,9 @@ points elsewhere; `prax.example.yaml` in the repo is the template. The
 sections are `models` and `steps` (which model does which step),
 `domains` (which ontology modules a document is read against),
 `embeddings`, `vectors`, `rerank`, `parse`, `citations`, `door`,
-`ontology` and `paths`. Everything has a default, so the file may hold
+`ontology`, `graph`, `paths`, `sources`, `run` (4b), `budget`,
+`schedule`, `private` (4½) and `packs`, with a section of its own for
+each pack that has settings (`config.SECTIONS`). Everything has a default, so the file may hold
 only what differs.
 
 Each setting can still be given as an environment variable for one
@@ -1794,8 +1797,11 @@ a client talks to), and the per-run switches `PRAX_<STEP>`,
 `PRAX_OFFLINE` and `PRAX_DEBUG`. A section the code does not know is an
 error, not a silent typo.
 
-Every model-assisted step (`extract`, `promote`, `ask`, `titles`,
-`vision`, `adjudicate`) takes its model from the same file. `models`
+Every model-assisted step takes its model from the same file. The
+steps are the keys of `models.STEP_DEFAULTS`: `extract`, `promote`,
+`ask`, `titles`, `dates`, `worlddates`, `summaries`, `vocabulary`,
+`sections`, `communities`, `genres`, `vision`, `adjudicate`, `typing`,
+`formulas` and `polish`. `models`
 names backends; `steps` assigns them:
 
     models:
@@ -1819,8 +1825,8 @@ that need no file: any `claude-*` id, `stub`, `none`.
 
 Precedence per step: `PRAX_<STEP>` in the environment (a model name or
 `none`), then the file, then the default. The defaults are
-`claude-opus-5` for extraction, `none` for ask and titles, Sonnet 5 for
-vision, and `none` for adjudication. `PRAX_<STEP>_MODEL` swaps the
+`claude-opus-5` for extraction, Sonnet 5 for promote and vision, and
+`none` for every other step. `PRAX_<STEP>_MODEL` swaps the
 Claude model id for a step that resolves to Claude, as before. A
 runtime is built once per process however many steps name it. The
 model itself lives in its server.
@@ -2134,7 +2140,7 @@ stays addressable:
 | the text | the extractor's stamp `name/version[-rN][+variant]` in `meta.text_source`. `-rN` is prax's own revision of that extractor, bumped whenever its output changes (the figures it finds, a cleaner reading, page markers) | `meta.parse_history`: every attempt with its extractor, outcome, size, seconds, and the artifact's `text_hash`. An earlier text is still in the archive under its own hash, never overwritten |
 | the readings (an image, a page's figures, whole pages) | the reading model's name in the stamp (`vision/…+server-35b`). Readings are additive: a second model's is kept beside the first | the reading itself carries each model's name |
 | chunks and vectors | disposable, derived from the text. `chunk_embeddings` says which chunk has a vector from which model. Chunks whose text did not change keep their ids and vectors across a re-index | none needed |
-| the graph | `ontology_version`, `producer` and `run` on every edge, and the bi-temporal columns `valid_from`, `valid_to`, `ingested_at`. A better pass ends the old edges and writes new ones; nothing is deleted | the `edges` table is its own history |
+| the graph | `ontology_version`, `producer` and `run` on every edge, the record-time columns `valid_from`, `valid_to`, `ingested_at`, and the world-time columns `world_from`, `world_to` with their precision. A better pass ends the old edges and writes new ones. The database refuses a delete (migration 35), and a repair records what it ended in `edge_endings` | the `edges` table is its own history |
 | the extraction | `meta.extraction` (extractor, ontology version, run, counts) and `meta.extraction_history` | the same |
 | a page | numbered revisions with their author | `page_revisions` |
 
@@ -2304,7 +2310,21 @@ by `prax maintain` on request:
 | `references` | the citations a document's own reference list makes to documents in the library (3f). The entries under a References/Bibliography heading are read by rules (`prax.text.references`) and matched against the document field by title, creators and year. The `cites` edges are `EXTRACTED` by a printed DOI or arXiv id, `INFERRED` by a title match with the score in the evidence, `AMBIGUOUS` for each of several candidates within the margin (twins in the library). A document is read once per text (`meta.references`); a re-read retires the earlier edges. Measured in `docs/eval/references-2026-09-20.md` |
 | `fts` | the keyword index's segments merged a little (FTS5's `merge`, up to a minute). Every batch of chunks leaves a segment behind, and a term spread over two dozen of them is read from two dozen places when the cache is cold |
 | `lengths` | `documents.text_len`, the length of each text artifact, for the texts indexed before the column existed (migration 15). Each artifact read once; nothing after that. Until it has run, a request for such a document's row alone reads the artifact, as before |
+| `proposes` | the `proposes` edge between a paper and the method named after it, where one name is carried by both. Never a merge (`docs/normalization.md`) |
+| `languages` | `meta.lang` of every document that does not say yet, and the language of every summary that does not say yet (`prax.text.language`). A document that says is passed over |
+| `published` | `meta.published` of every document that does not say yet, from its record, the extension's paper, the arXiv id, and a web page's tags and markup (`store.published_of`) |
+| `places` | where each live edge's quote stands in its text, for the edges written before extraction recorded it (migration 48, `quotes.place`). A quote not in the text gets the text's hash and no range |
+| `markup` | the facts a web page's schema.org JSON-LD states (authors, publisher, a recipe's ingredients and cuisine), `EXTRACTED` with producer `jsonld`, stamped in `meta.markup` |
+| `private` | the personal-document rules (`prax.wall.private`, `private:` in prax.yaml) over every open document no person has decided about (4½) |
+| `names` | every entity's shown name rebuilt from its labels, in the language this host shows (`graph.language`) |
+| `attachment` | how much of the library each mechanism holds: the numbers invariants 6 and 7 are measured by |
+| `rules` | the INFERRED edges that follow from what is stated (transitive, symmetric, inverse relations), with their premises in `edge_premises` (`store.derive_rules`) |
+| `conflicts` | two facts of a functional relation that cannot both hold, kept in `edge_conflicts` (`store.find_conflicts`). Shown as `disputed`, never resolved |
+| `communities` | the regions of the library rebuilt at two levels (`prax.graph.communities`, `docs/communities.md`) |
+| `histories` | the parse and extraction histories held to `HISTORY_KEEP` entries |
 | `rechunk` (only with `--rechunk`) | every chunk rebuilt from its text artifact, after a change to the chunker (3c). The nightly has no reason to |
+| `rejudge` (only when named) | the corpus's rulings on which names are the library's word, asked again under the current test |
+| `vectors` (only when named) | both vector deltas merged and the chunk index rid of vectors of chunks that are gone, rebuilt when they are a tenth of it (`compact_vectors`) |
 
 What stays out on purpose: the repairs (`prax heal`, 3m; a person picks
 the ailment), the readings and extractions (the worker, with a model),
@@ -2598,7 +2618,9 @@ there.
 |---|---|---|
 | `llama-server` | llama-server for the model named, from its `serve:` block (3h) | — |
 | `reranker` | a second llama-server with a cross-encoder (`serve: {reranker: true}`) | — |
-| `marker` | marker's server from its own venv, the PDF-to-LaTeX reading (3h). `on_demand: true` declares it without starting it | — |
+| `llama-server-<name>` | a further chat server, with the settings of `llama-server` (below) | — |
+| `ocr-server` | the llama-server of marker's OCR model, a `models:` entry with a `serve:` block; marker's companion, which moves with it in a swap (3h) | — |
+| `marker` | marker's server from its own venv, the PDF-to-LaTeX reading (3h). `on_demand: true` declares it without starting it. Its roles, memory and lock are its manifest (`prax.host.readers.MARKER`) | — |
 | `door` | `prax serve --host … --port …` (`ssl_certfile`, `ssl_keyfile` for HTTPS) | — |
 | `worker` | `prax work --watch`, with `--nightly` for one bounded pass over everything a day | the door, unless `door:` names one elsewhere |
 
@@ -2855,9 +2877,12 @@ here or on the board. `PRAX_DOOR` names it (default
 for one; `.mcp.json` passes both through from the shell that launches
 Claude Code. A tool called while the door is down answers `{"error":
 "the door is not reachable ..."}` instead of failing. The tools are
-`search`, `get`, `get_chunk`, `context`, `documents`, `traverse`,
-`link`, `ask`, `set_domains`, `promote`, `get_page`, `write_page`,
-`append_page`, `ingest`, `capture_url`, `ingest_file` (a file on
+`search`, `get`, `get_chunk`, `context`, `documents`, `references`,
+`cited_but_missing`, `traverse`, `connect`, `changes`, `why`, `link`,
+`ask`, `maths`, `set_domains`, `set_title`, `promote`,
+`request_reading`, `get_page`, `write_page`, `append_page`,
+`update_section`, `ingest`, `capture_url`, `capture_urls`,
+`sync_project` (a working copy's tracked notes), `ingest_file` (a file on
 the machine running Claude Code, uploaded to the door), `status` (where
 documents are on their way to being read: queued with its place,
 processing, waiting for a reading and whether its server is up, nothing

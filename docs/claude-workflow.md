@@ -2,7 +2,7 @@
 
 Two directions: what a project learns becomes part of the library, and
 a project draws on what the library holds. Both go through the door.
-the plugin (`clients/claude-plugin/`) is the packaged form, the pieces
+The plugin (`clients/claude-plugin/`) is the packaged form, the pieces
 work on their own too.
 
 ## The plugin
@@ -14,7 +14,7 @@ work on their own too.
 
 It registers the `prax` MCP server for every session. With it come a skill
 that says when to reach for the library and how to cite and write back,
-four commands, and a session-end hook:
+five commands, and a session-end hook:
 
 | | |
 |---|---|
@@ -23,7 +23,7 @@ four commands, and a session-end hook:
 | `/prax:remember [what]` | this session's decisions and findings appended to the project's page, facts as edges |
 | `/prax:sync [--dry-run]` | the project's `.md`/`.rst`/`.txt`/`.adoc` files into the library |
 | `/prax:archive [--since DATE] [--dry-run]` | the raw record: the project's Claude Code sessions (words, not tool calls) and the agent's memory files |
-| hook `SessionEnd` | runs the sync for a project with a `.prax-project` file, and the archive when it lists `archive: [transcripts, memory]` |
+| hook `SessionEnd` | runs `prax sync --if-auto` (`scripts/sync.py`): the sync for a project whose manifest in prax says `auto_sync`, or one with the older `.prax-project` file, and the archive when that file lists `archive: [transcripts, memory]` |
 
 From a checkout, `claude plugin marketplace add /path/to/prax` in place
 of the GitHub name. Restart Claude Code after installing or updating:
@@ -45,18 +45,18 @@ the snippets below.
 
 ## Project → library
 
-Three levels, from the cheapest up:
+Four levels, from the cheapest up:
 
-1. **The project's own docs.** A `.prax-project` file in the root:
-
-       name: synth-firmware
-       domains: [workshop, studio]
-       include: ["README.md", "docs/**/*.md", "adr/*.md"]
-
-   Then `prax import project .` (or the hook at session end) sends
-   every documentation file, keyed by `<name>/<path>` and versioned by
-   its content. A rewritten note replaces its earlier self
-   (`--refresh`), and nothing is sent twice. Source code stays in git.
+1. **The project's own docs.** `prax sync .` prints the plan, and
+   `prax sync --apply` sends every documentation file git tracks
+   (`POST /projects/sync`; the `sync_project` tool, `/prax:sync`). A
+   document is keyed by the canonical git remote and its path in the
+   repository, and versioned by its content. A rewritten note replaces
+   its earlier self, and nothing is sent twice. The settings (`name`,
+   `domains`, `tags`, `include`, `exclude`) are the project's manifest
+   in prax, kept after the first sync. `--auto` turns on the
+   session-end sync. An older `.prax-project` file in the root still
+   counts as opted in. Source code stays in git.
    What was decided and why is what the library keeps.
 2. **The project's page.** `project-<name>` in the wiki, kind `project`. Slugs are slugified, so
    `Project Synth` and `project/synth` both become `project-synth`. The
@@ -104,8 +104,10 @@ the project has synced. `documents(domain=…)` says what a module holds.
   the server and the tools but not the skill and commands.
 - The change feed (`GET /changes`) is polling, not push; a workflow
   that should react to new documents polls it or runs on a schedule.
-- "Scheduled" means a cron line: `prax backup`, `prax import github`,
-  `prax import project ~/work/synth`.
+- The door's clock runs `maintain`, `backup`, `questions`, `figures`
+  and `resolve` (`schedule:` in prax.yaml). An import is not on it:
+  `prax import github` or `prax sync ~/work/synth --apply` on a timer is
+  a cron line.
 - Whether a project's decisions and requirements deserve ontology types of
   their own is open: a `project` module with decision, requirement and
   component. Pages and tags carry them today, and the review queue will

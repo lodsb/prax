@@ -1,9 +1,9 @@
 # prax architecture
 
-The picture of the whole system as built through Stage 3 (September
-2026). The invariants are in `CLAUDE.md`. The reasoning behind each
-choice is in `rationale.md` (R1–R17). The practical commands are in
-`howto.md`, the web UI in `ui.md`. This document explains how the
+The picture of the whole system as built (October 2026). The
+invariants are in `CLAUDE.md`. The reasoning behind each choice is in
+`rationale.md` (R1–R17). The practical commands are in `howto.md`, the
+web UI in `ui.md`. This document explains how the
 parts fit and where to touch what.
 
 ## 1. The shape in one paragraph
@@ -19,15 +19,16 @@ over a small versioned ontology. Entity resolution merges names for
 the same thing. Pages written by a person or an agent are documents
 too. Two thin doors serve queries: a FastAPI HTTP service, with a
 plain web UI as its client, and a FastMCP server that gives Claude
-search, get, traverse, link, ingest and page tools. The desktop runs
-the batch jobs. A Pi-class board is meant to serve.
+search, get, traverse, connect, link, ingest, ask and page tools
+(`EXPECTED_TOOLS` in `tests/test_mcp.py` is the full list). The
+desktop runs the batch jobs. A Pi-class board is meant to serve.
 
 Ten invariants hold that shape, and everything below follows from
 them:
 
 1. SQLite is the canonical store.
 2. Files are content-addressed.
-3. One module writes.
+3. One package writes and reads (`prax.store`).
 4. One process writes.
 5. The MCP server is a thin proxy.
 6. Endpoints return snippets and ids.
@@ -45,10 +46,11 @@ flowchart LR
     Z[Zotero library<br/>read-only copy]
     CR[Crossref / OpenAlex<br/>reference lists]
     W[Pages<br/>UI, MCP]
-    B[Browser extension, inbox<br/>planned]
+    B[Browser extension, drop folder<br/>inbox]
   end
   subgraph batch [The worker, on the machine with the models]
-    IMP[prax import<br/>zotero, github, chats, links, citations]
+    IMP[prax import<br/>zotero, github, chats, links]
+    CIT[prax import citations<br/>a job on the door]
     PQ[parse step<br/>extractors, readings, vision]
     EMB[embed step<br/>chunks + document fields]
     EXT[extract and promote steps<br/>the local model; Claude with --spend]
@@ -68,11 +70,12 @@ flowchart LR
   Z --> IMP --> store
   CR --> CIT --> store
   W --> API
-  B -.-> API
+  B --> API
   PQ --> store
   EMB --> store
   EXT --> store
-  RES --> store
+  TYP --> store
+  MNT --> store
   store --> API
   store --> MCP --> C[Claude Code]
   API --> UI --> Browser
@@ -82,7 +85,7 @@ flowchart LR
 
 | Where | What runs | Why |
 |---|---|---|
-| Windows desktop (12 cores, GTX 1070 8 GB) | development, and every batch job: import, parse, OCR, vision, embed, extract, resolve, eval; the local llama.cpp path | MuPDF layout analysis, OCR, embedding and a 7B model are CPU/GPU heavy. None of it is on the serving path (invariant 7) |
+| Windows desktop (12 cores, RTX 4090 24 GB) | development, and every batch job: import, parse, OCR, vision, embed, extract, resolve, eval; the local llama.cpp path | MuPDF layout analysis, OCR, embedding and a 7B model are CPU/GPU heavy. None of it is on the serving path (invariant 7) |
 | Pi-class SBC (an 8 GB Radxa Dragon Q6A is on hand; a Mac mini or N100 box under consideration) | the HTTP door and the UI, reachable over the private network. The MCP server runs where Claude Code runs and talks to the door | under 1 GB resident: SQLite, FTS5, two memory-mapped usearch files and one query embedding |
 
 The store is one directory (`PRAX_DATA_DIR`):
@@ -184,6 +187,17 @@ flowchart TD
    bi-temporal validity. Nothing is deleted, only invalidated. Types are
    validated against the composed ontology at the door. When a module
    grows, `prax.graph.review` replays the queue. (R7)
+
+   An edge's quote keeps where it stood: `evidence_start`,
+   `evidence_end` and `evidence_text_hash` (migration 48), placed by
+   `prax.text.quotes` and written once. The `places` pass of `prax
+   maintain` places the quotes of older edges. The `worlddates` step
+   (`prax.graph.worlddates`) reads the sentences that date a fact and
+   states the fact again with `world_from`/`world_to`. It ends the
+   undated edge with `edge_endings.corrected_by`. The `rules` pass
+   (`store.derive_rules`) writes INFERRED edges with their premises
+   (`edge_premises`). The `conflicts` pass keeps two facts of a
+   functional relation that cannot both hold in `edge_conflicts`.
 6. **Resolve**. `prax.graph.resolution` merges entities that name the same
    thing through `canonical_id`. Sure merges are by case, accents,
    punctuation and author initials. Concept/method twins merge into
@@ -312,15 +326,15 @@ carries it on the page.
 | Module | Responsibility | Writes SQLite? |
 |---|---|---|
 | `prax.store` | the only door, a package of ten modules (`base`, `documents`, `retrieval`, `graph`, `pages`, `jobs`, `summary`, `repair`, `maintain`, `backup`, each importing only the ones before it) whose `__init__` re-exports every name (so callers keep writing `store.<name>`) | yes, the only one |
-| `store.base` | the connection, the lock and its retry, migrations, the content-addressed archive (`archive_path`, the one place that says where an artifact lives), the index files, the wall's viewer, and which documents belong to a domain (`holds_domain`, `domain_clause`: each caller names its modules and whether a document with no set counts) | yes |
+| `store.base` | the connection, the lock and its retry, migrations, the content-addressed archive (`archive_path`, the one place that says where an artifact lives), the index files, the wall's viewer, which documents belong to a domain (`holds_domain`, `domain_clause`: each caller names its modules and whether a document with no set counts), and `DocumentMeta`, every key of `documents.meta` with its shape (`docs/meta.md`) | yes |
 | `store.documents` | a package of parts, in order: `meta` (meta, the document field, summary, title, sections), `text` (register, index_text, chunks, references, ingest), `library` (retiring, duplicates, captures), `domains` (domains, their rules and the dry run, promotion, extraction stamps), `genres` (what a document is and is about: the labels, the gold sample, the training set), `readings` (the readings queue, pages, figures), `reads` (get, list, chunks) | yes |
 | `store.retrieval` | a package of parts (2026-10-03): `knobs` (the switches a test or host turns, read at call time), `compounds` (a compound split where both halves are words the library uses, `Apfelkuchen`, and the other forms a rare word takes, taco and tacos), `query` (acronym expansion, the match expression, the words the graph adds), `legs` (BM25 and KNN over chunks and the field, fusion), `vectors` (the vector index and its delta, embedding bookkeeping), `fusion` (`search`, the domain prior, the filters, rerank), `similar` | yes |
-| `store.graph` | a package of parts, in order: `edges` (entities and edges with their provenance, selection for extraction), `decisions` (the review queue, resolution candidates), `labels` (names, merges, the shown name), `languages` (the vocabulary step's store half, and the library as its own dictionary: `in_english_text`), `context` (a document's facts and context, hubs), `communities` (the regions' tables), `traversal` (the walk, one module's documents with `domain`) | yes |
+| `store.graph` | a package of parts, in order: `edges` (entities and edges with their provenance, selection for extraction, `evidence_place`), `decisions` (the review queue, resolution candidates), `labels` (names, merges, the shown name), `languages` (the vocabulary step's store half, and the library as its own dictionary: `in_english_text`), `context` (a document's facts and context, hubs), `communities` (the regions' tables), `traversal` (the walk, `changes`, one module's documents with `domain`), `rules` (`derive_rules`, `edge_premises`), `paths` (the store's half of the path index, `connect_entities`) | yes |
 | `store.pages` | pages and their revisions (documents too), project membership | yes |
 | `store.jobs` | what runs, heartbeats, reaping, the change stamp | yes |
 | `store.summary` | `stats`: what the store holds, counted for `prax status` | reads |
-| `store.repair` | the damage that recurs (placeholder entities, mangled names, self-edges, stale jobs): `health` finds it, `heal` mends it through the store's own functions | yes |
-| `store.maintain` | the maintenance pass, what the store does to itself without a model or a decision: the acronyms, the document fields, the domain rules, duplicate captures, the references, languages, names, the regions; `prax maintain` runs it as a job, the clock every night | yes |
+| `store.repair` | the damage that recurs (placeholder entities, mangled names, self-edges, stale jobs): `health` finds it, `heal` mends it through the store's own functions; a package of parts, in order: `common`, `graph`, `documents`, `ailments` | yes |
+| `store.maintain` | the maintenance pass, what the store does to itself without a model or a decision: the passes named in `PASSES` (acronyms, fields, domains, dedupe, review, references, proposes, fts, lengths, languages, published, places, markup, private, names, attachment, rules, conflicts, communities, histories) and those run only when named (`ON_REQUEST`: rechunk, rejudge, vectors); `prax maintain` runs it as a job, the clock every night | yes |
 | `store.backup` | a copy of the store somewhere else: the database as one snapshot, the index files, the archive files the copy lacks; `POST /backup` runs it as a job | no (reads; writes the copy) |
 | `prax.text.markup` | the marks prax puts in a text, written and matched in one place: the page mark, a figure line and its inlined form, a reading, a heading, a table separator, a display formula and its number, the `## Figures` and `## Comments` sections, a `[title](#doc/N)` link. Each is a writer *and* a matcher, and a test asserts that what one emits the other matches — before it existed the page mark was written in four places and matched by three copies of one pattern. Imports nothing of prax | no (pure) |
 | `prax.text.answers` | what a model wrapped its answer in, taken off: a fence, a preamble, a label the message used, quotes, a chat token. What a *good* answer looks like stays with the caller that asked; this is the packaging, and seven modules kept their own copy of it until 2026-09-24 | no (pure) |
@@ -333,7 +347,8 @@ carries it on the page.
 | `prax.config` | where the store is (`PRAX_DATA_DIR`, the migrations), and `prax.yaml`: the sections, dotted lookup, an environment variable overriding one setting for one run, and `overriding`, one call's own value of a setting in its thread (a reading's mode) | no |
 | `prax.ml.fetch` | model files fetched once into `<data dir>/models/` (plain HTTPS, resumable, the old Hugging Face cache reused); the embedder, the reranker and `scripts/fetch_model.py` for the GGUFs `prax.yaml` names with `repo` and `file` | no |
 | `prax.ml.vectors` | a usearch index file: view for reads, writable copy for batch jobs, atomic save | no (writes the index file) |
-| `prax.graph.ontology` | loads the module files in `ontology/` (core, research, studio, electronics, craft, kitchen, workshop, computing, society), composes them (unique names, subtypes, aliases that never shadow a declared name, self types, a composed version), validates edge types, narrows to a document's domains; says whether a type's names are `proper` (one particular thing, the same string in every language) or `common` (a kind of thing, which every language has its own word for), which is what tells the extraction prompt what to write in English and the vocabulary pass what may be folded; and loads `ontology/lexicon.yaml`, the words that say what a name *is* — kept out of the composed modules, so it cannot join the version string, as are `sameness.yaml` and the two facets `genres.yaml` and `subjects.yaml` (`Facet`) | no |
+| `prax.graph.ontology` | loads `ontology/core.yaml` and each pack's modules (`src/prax/packs/<pack>/`: research, studio, electronics, craft, kitchen, workshop, computing, society), composes them (unique names, subtypes, aliases that never shadow a declared name, self types, a composed version), validates edge types, narrows to a document's domains; says whether a type's names are `proper` (one particular thing, the same string in every language) or `common` (a kind of thing, which every language has its own word for), which is what tells the vocabulary pass what it may translate and fold; and loads `ontology/lexicon.yaml`, the words that say what a name *is* — kept out of the composed modules, so it cannot join the version string, as are `sameness.yaml` and the two facets `genres.yaml` and `subjects.yaml` (`Facet`) | no |
+| `prax.packs` | every domain as a pack (`docs/packs.md`): `PACKS` holds the manifests (`Pack`, in `prax.packs.base`), data the config, the step names and the store read; research, craft, studio, computing and society bring modules, maths a tool and the `equations` step. A pack's code loads when it is first used | no |
 | `prax.importers.zotero` | read-only copy of `zotero.sqlite` → documents, notes, attachments, authored_by seeds; idempotent per key | via store |
 | `prax.importers.citations` | Crossref or OpenAlex by DOI or exact title → `cites` edges, citation counts in `meta.citations`; idempotent per document | via store |
 | `prax.importers.feed`, `.github`, `.chats`, `.links`, `.project`, `.claude` | door-side importers: a reader yields `Item`s (a document of its own with a key and a version, or a link), `feed.run` sends them through `POST /ingest` or `POST /ingest/url` and skips what the library holds; `prax import` | no (HTTP) |
@@ -355,6 +370,9 @@ carries it on the page.
 | `prax.graph.calibration` | whether a model's probability means what it says: P(yes) from the first token's alternatives, Platt's fit on a person's decisions | no |
 | `prax.graph.communities` | the regions of the library: a partition of the topical entities at two levels, named and described by the local model (`docs/communities.md`) | via store |
 | `prax.graph.graphio` | a piece of the graph as a file and back: an export from a seed (a project, a domain, a tag, an entity) as JSON lines, and its import (`docs/graph-files.md`) | via store |
+| `prax.graph.paths` | how A is connected to B (stage AM): a path index derived from the live edges, held in memory as arrays and rebuilt when the edges change; only sound paths (`paths.SOUND`); `store.connect_entities` feeds it, `connect` asks it | no |
+| `prax.graph.worlddates` | when a fact holds in the world: the sentences of a document that hold a year and a word of `world_time:` (`ontology/lexicon.yaml`), the facts they date, kept only when the quote holds the year; `apply` ends the undated edge and states it again with its dates (producer `world-dates:<model>`). The `worlddates` step is its front | via store |
+| `prax.graph.venues` | which venue names are one series and which name an edition of it, so `published_in` to two editions is no conflict | no |
 | `prax.graph.typing_pass` | the review queue's untyped items handed to the typing model in batches, its answers applied through the door | via store |
 | `prax.text.glyphs` | the ligatures and symbols a PDF extractor leaves mangled, and the documents damaged enough to be worth reading again | no |
 | `prax.ml.labeller` | the small labeller: bge-small fine-tuned with one output a genre or subject, run with onnxruntime; `models/labeller/CURRENT` names the run the genres step uses (`scripts/train_labeller.py` trains one) | no |
@@ -376,6 +394,7 @@ carries it on the page.
 | `prax.worker` | the worker: fetches work from a door, does it with this machine's models, posts results; uploads local drop folders; a session job with heartbeats; one bounded pass over everything once past its `nightly` hour; never opens the database | no (HTTP only) |
 | `prax.host.roles` | what `run:` asks this host to keep alive, as roles: each one's command line (llama-server with its model and flags, marker and its OCR server, the door, the worker), the environment it starts with, which share the card, and the companions that move with a role. Starts nothing | no |
 | `prax.host.readers` | a reader's manifest (AJ): the roles it needs, what each holds of the card and of RAM and its load time, the settings prax passes it, its companions, the lock file of its venv (`locks/`) and the logs it writes itself; `drift`, `write_lock`, `trim_log`. Data, no processes | no |
+| `prax.host.plan` | what the card does next: the door's plan over the work that waits for a role of `prax up`, from what each swap and each group costs (`GET /work/plan`). Acts on nothing; `prax up` swaps | no |
 | `prax.host.process` | the supervisor's files and the processes it starts: the pid file, the status it writes, the commands a client leaves (stop, start, swap, restart, one file each under `<data dir>/run/`), a role's log, the Windows job object; what the tray, the autostart entry, the CLI and the door use to talk to a running `prax up` | no |
 | `prax.host.up` | the supervisor: the roles started in order behind health gates, restarted with backoff, stopped in reverse; children without a console (Windows) or in their own session. Every name of `roles` and `process` is still `up.<name>` for a caller | no |
 | `prax.host.autostart` | the one login entry per platform that starts `prax up`: a Task Scheduler task under `pythonw.exe`, a systemd user unit, a launchd agent; `--tray` on a desktop when the tray library is installed | no |
@@ -383,6 +402,10 @@ carries it on the page.
 | `prax.host.schedule` | the door's clock: `resolve`, `maintain`, `backup`, `questions` and the `figures` slice at their hours (`schedule:` in prax.yaml), the jobs table as the memory | via store (reads) |
 | `prax.ml.budget` | what the paid steps may spend and what they have: the two numbers of `budget:` in `prax.yaml` against the `spend` ledger (one row per paid call, the money at the price of that moment). `allows` is what the work hand-out and the ask ask before a paid call; `note` is what every taken-in result writes | via store |
 | `prax.host.hostinfo` | what the host has left: free RAM and commit on Windows and Linux, the cards through `nvidia-smi` (`gpu`, `vram_free_mb`), this process's own footprint. No dependency, no raising: a host that cannot say has no numbers | no |
+| `prax.text.quotes` | where a quote stands in a text: the character range of an edge's evidence in the artifact it was read from (migration 48), found as written, then over runs of whitespace, then across a hyphen at a line's end | no (pure) |
+| `prax.text.dates` | a document's publication date as precise as its source, read without a model from a record, a page's tags, schema.org markup or an arXiv id; `store.published_of` chooses among them | no (pure) |
+| `prax.text.schemaorg` | what a web page says of itself in JSON-LD: its own work, never the site around it; the `markup` pass files it with producer `jsonld` | no (pure) |
+| `prax.writing.dates` | a document's publication date read from its first page by a model, kept only when the words that state it are on the page and hold the year (`checked`). The `dates` step is its front | no |
 | `prax.text.status` | what a note says of itself: front matter (`status`, `retired`, `superseded_by`) and an explicit status line near the top, never a word in passing; the state, its date, the line, the paths it names. Read by a project's sync only. Imports only its own package | no (pure) |
 | `prax.text.paths` | the paths a text refers to: a Markdown link resolved against the file's folder, a backticked path, a bare `docs/x.md`, each with its candidate locations and the words as written. What a project's sync makes `links_to` edges of. Imports nothing of prax | no (pure) |
 | `prax.capture.projects` | a project's sync, the door's half of `POST /projects/sync`: each path planned (add, refresh, unchanged, moved, skip and why; a document whose path no longer comes is gone, reported and never retired), keyed by the canonical git remote and the path in the repository, applied unless a dry run; the manifest (`store.save_project`) and the page `project-<name>`, every synced document a member of it; the notes' links to each other as `links_to` edges (run `links:<name>`), kept in step by each sync. The client half, which files of a working copy are documents, is `prax.client.project_files` | via store |
@@ -390,12 +413,13 @@ carries it on the page.
 | `prax.capture.inbox` | captures: uploads, pages sent with their rendered DOM, URLs fetched server-side, the drop folder scan; canonical URLs and re-capture links; HTML indexed at once, the rest left to the queue; domains from the request, the folder or the rules | via store |
 | `prax.wall.auth` | bearer token or session cookie on the HTTP door; loopback-only when unset | no |
 | `prax.wall.private` | what makes a document look personal: the rules that suspect it (never decide it), with the owner's names and paths from `private:` in prax.yaml | no (the store applies them) |
-| `prax.api` | the FastAPI door, a package: `__init__` holds the app, its lifespan (the inbox scan, the clock), the middleware (auth, the body cap, the change counter, CORS), the open endpoints and the UI's static files; one router per area beside it: `capture` (documents coming in), `documents` (reading them), `graph`, `pages` (pages and the standing questions), `ask`, `process` (domains, promote, routes, readings, the genre labels), `work` (the work protocol, the vector index), `curation` (a hand on the graph: labels, retirements, merges, a resolution round), `importing` (Zotero item by item, citations), `admin` (heal, maintain, backup, figures, stats, spending, the supervisor, jobs), `wall` (tokens, what is personal); `passes` starts the door's own jobs, for a request and for the clock, through one `run_as_job`; `_base` holds what they share | via store |
+| `prax.api` | the FastAPI door, a package: `__init__` holds the app, its lifespan (the inbox scan, the clock), the middleware (auth, the body cap, the change counter, CORS), the open endpoints and the UI's static files; one router per area beside it: `capture` (documents coming in), `documents` (reading them), `graph`, `pages` (pages and the standing questions), `ask`, `process` (domains, promote, routes, readings, the genre labels), `work` (the work protocol, the vector index), `curation` (a hand on the graph: labels, retirements, merges, a resolution round), `importing` (Zotero item by item, citations), `admin` (heal, maintain, backup, figures, stats, spending, the supervisor, jobs), `wall` (tokens, what is personal), `maths` (the maths pack's calculator); `passes` starts the door's own jobs, for a request and for the clock, through one `run_as_job`; `_base` holds what they share | via store |
 | `prax/ui/` | the web UI: one page, plain JS and CSS, vendored Markdown renderer and KaTeX (a formula chunk always, the `$…$` of a paper that carries maths and of an answer, never a snippet), a canvas force layout; a client of the door (R14) | no |
 | `clients/cli/` | the `prax` command: search, ask, add, show, status, jobs, inbox, work, serve, doctor, models; one HTTP call per command (howto 4a) | no (HTTP only) |
 | `clients/browser-extension/` | the browser extension: a client of the door's capture endpoints, nothing of its own (`docs/extension.md`) | no |
 | `prax.mcp_server` | the MCP server Claude Code spawns: each tool one HTTP call to the door (`prax.client`); no store import, no logic | no (HTTP only) |
 | `prax.client` | the door as a client sees it: JSON calls, one download, one upload; the worker and the MCP server use it | no (HTTP only) |
+| `scripts/*.py` | thin CLIs over the modules above: import, parse, rechunk, embed, refresh fields, extract, import citations, resolve, replay, eval, compare extractors, bench the local model, build fixture | via store |
 
 Schema version: `PRAGMA user_version` is the number of the last
 applied migration. `store.init_db` runs on every connect (door,
@@ -406,7 +430,6 @@ the tool's version on the row: `ontology_version`, `producer` and
 `run`, the parse stamp's extractor and revision, the embedding model,
 `title_source`. That is how a later pass knows what to redo.
 
-| `scripts/*.py` | thin CLIs over the modules above: import, parse, rechunk, embed, refresh fields, extract, import citations, resolve, replay, eval, compare extractors, bench the local model, build fixture | via store |
 
 ## 6. Data model
 
@@ -427,7 +450,14 @@ entity_labels    entity_id, label, lang, kind (pref | alt), was (the name it had
 edges            src, dst, rel, confidence, weight, source_doc, ontology_version,
                  evidence (a quote or a source id), producer, run,
                  valid_from, valid_to, ingested_at (record time),
-                 world_from, world_to + precision (world time, where a source says)
+                 world_from, world_to + precision (world time, where a source says),
+                 evidence_start, evidence_end, evidence_text_hash (where the
+                 quote stood in the text it was read from, written once)
+edge_premises    edge_id, premise_id   (what a rule-derived edge follows from)
+edge_conflicts   id, edge_a, edge_b, rel, producer, run, found_at, ended_at
+                 (two facts of a functional relation that cannot both hold)
+edge_endings     edge_id, run, ended_at, restated_as, corrected_by
+                 (the edges a repair ended, so restore_run undoes it whole)
 review_queue     triples the extractor could not fit, with reason, evidence, resolution
 entity_candidates a, b, type, score, producer, at, decided, decided_by, held
                  (the likely tier's pairs, kept until something decides them)
@@ -457,28 +487,32 @@ making it a display label is `docs/stratification.md` step 5.
 
 An edge is evidence (invariant 8), and the database holds it to that:
 migration 35's triggers refuse a `DELETE` on `edges` and an `UPDATE` of
-an edge's fact (`src`, `dst`, `rel`, `confidence`, `evidence`). A
-correction ends the edge (`valid_to`) and links anew. Provenance and the
+an edge's fact (`src`, `dst`, `rel`, `confidence`, `evidence`).
+Migration 48's triggers refuse a second write of an edge's evidence
+place. A correction ends the edge (`valid_to`) and links anew. A repair
+records what it ended in `edge_endings`, with the edge that corrects it
+in `corrected_by` (migration 46). Provenance and the
 source document may still be mended: a duplicate's edges move to the
 survivor, a missing producer is backfilled. `page_revisions` and
 `spend` refuse every update and delete: a page's history and a ledger.
 
 Schema changes are numbered migrations in `src/prax/migrations/`
-(`0001_baseline` through `0037_edges_held_at`), applied by
+(`0001_baseline` through `0048_evidence_place`), applied by
 `store.init_db` and tracked in `PRAGMA user_version`. The vector indexes are files
 beside the database, not tables (R6). (R12)
 
 `documents.meta` is the extension point for anything a source knows
-that has no column yet. The conventions in use:
+that has no column yet. `store.DocumentMeta` declares every key, and
+[`meta.md`](meta.md) is the full catalogue. The keys most passes read:
 
 | key | meaning |
 |---|---|
-| `source` | `"zotero"`, `"wiki"` for pages; a browser capture or inbox file later |
+| `source` | where the document came from: `zotero`, `wiki` for pages, `capture`, `drop`, `feed`, `github`, `project`, `claude`, `citations`… |
 | `zotero.kind`, `zotero.keys`, `zotero.items`, `zotero.parent`, `zotero.modified`, … | provenance and change detection for the importer |
 | `creators`, `date`, `doi`, `abstract`, `tags`, `collections`, `fields` | lifted metadata |
 | `text_source` | extractor stamp of the current text artifact |
 | `parse_history` | every extraction attempt: extractor, chars, seconds, outcome or error, and the `text_hash` of what it produced |
-| `summary` | the extraction's two-sentence summary, in English |
+| `summary` | the extraction's two-sentence summary, in the library's language (`graph.language`) |
 | `sections` | what a long document's parts are about, one summary a heading region, with the `text_hash` they were read from |
 | `summaries`, `summary_lang` | every summary there is keyed by language, so translating the German one does not lose it, and which language the canonical one is in |
 | `lang` | the document's own language, ISO 639-1, from `prax.text.language` |
@@ -536,14 +570,16 @@ Nothing here opens the database file.
 | titles step | titles that are file names or ALL CAPS, untried | `title`, `meta.title_history`, the document field | the recase rule needs no model; a paid model is refused |
 | summaries step | documents whose `meta.summary_lang` is not the language the document field is written in | `meta.summary` (English), `meta.summaries` keyed by language, the document field | watched, so a worker asks without being told; no document is read, the summary itself is the whole input; a paid model is refused; a translation the check refuses leaves the summary as it was and is not asked for again (`meta.summary_tried`) |
 | sections step | documents over 60,000 characters whose sections nobody has read, or has read from a text since replaced; longest first | `meta.sections`, the document field | only when named; a paid model is refused; a section shorter than 4,000 characters is not a chapter, and at most 40 a document; an empty answer is recorded, so a document with no chapters is not asked again |
-| vocabulary step | live entities of a type the ontology marks `naming: common` whose evidence is all non-English and whose name no English document in the library uses | `entities.name`, `entity_labels`, merges, and a review item for a type clash | only when named; a paid model is refused; the run signs every label and merge, so `prax resolve --unmerge <run>` takes a round back whole |
+| vocabulary step | live entities of a type the ontology marks `naming: common` whose evidence is all non-English and whose name no English document in the library uses | `entities.name`, `entity_labels`, merges, and a review item for a type clash | watched, and off while its model is `none` (the default); a paid model is refused; the run signs every label and merge, so `prax resolve --unmerge <run>` takes a round back whole |
 | extract step | indexed documents whose `meta.extraction.ontology_version` is not their subset's current one, with at least 500 characters of text | edges, `review_queue`, `meta.summary` (English, with its language), `meta.extraction` | a paid model is refused; reference-number names rejected; page/project names must be pages; the typing rules run over the document's items right after |
 | promote step | flagged documents (`meta.promote`) the promote model has not read; a promoted image is read again first | the same, run `promote-<time>` | only when named, `--spend` for a paid model |
 | typing step | untyped review items, a batch of 40 to a request | edges (`typing:<model>`), `review_queue` (dropped, or the model's types on a misfit) | only when named; a paid model is refused. The rules that run before it sign their work (`typing-rules/<rule>`), so a rule can be judged on its own edges — `docs/eval/typing-rules-2026-09-24.md` says what each is worth |
 | embed step | chunks without a vector from the current model, then document fields without one | the delta `.usearch` files, `chunk_embeddings`, `document_embeddings`; the door folds the delta in | dimension check; the door is never stopped |
-| `prax maintain` | derived tables: acronyms, document fields, domain rules, duplicate captures, the review queue's rule passes, the `cites` edges a reference list makes to the library (`references`), the `proposes` edge between a paper and the method named after it (`proposes`); `--rechunk` every chunk | those tables; `meta.retired` on a duplicate; `cites` edges with `meta.references` | no model, no decision; nightly after the worker's pass |
+| `prax maintain` | derived tables: acronyms, document fields, domain rules, duplicate captures, the review queue's rule passes, the `cites` edges a reference list makes to the library (`references`), the `proposes` edge between a paper and the method named after it (`proposes`), the INFERRED edges of the ontology's rules (`rules`), the facts that cannot both hold (`conflicts`), where older edges' quotes stand (`places`), a page's schema.org facts (`markup`); `--rechunk` every chunk; the full list is `store.maintain.PASSES` | those tables; `meta.retired` on a duplicate; `cites` edges with `meta.references`; `edge_premises`, `edge_conflicts`, the evidence place of an edge | no model, no decision; nightly after the worker's pass |
 | `published` pass (`prax maintain`) | documents without `meta.published`, or with one from a less trusted source | `meta.published` from the record, a page's citation tags, schema.org markup, the arXiv id, generic tags (`prax.text.dates`) | no model; a source never replaces a more trusted one, a person's date never |
 | dates step | undated documents no model has tried, newest first, 60 a batch | `meta.published` with `by: first-page`, the words that state it and a confidence | watched; kept only when the words are on the first page and hold the year (`writing.dates.checked`); an answer of none is recorded, an error is not |
+| worlddates step | documents whose text the step has not read (`meta.world_dates.text_hash` is not `text_hash`), newest first, 30 a batch | edges with `world_from`/`world_to` (producer `world-dates:<model>`), the undated edge ended with `edge_endings.corrected_by`, `meta.world_dates` | watched, and off until prax.yaml names a served model for it (it reads log probabilities, so an API model is refused); a document with no candidate sentence is stamped without a call; a fact is kept only when its quote is in a sentence handed out and holds the year |
+| genres step | open documents no pass has tried, newest first, then the ones an older labeller run labelled (`store.genres_needed`) | `meta.genres` and `meta.subjects` as the model's labels with the run (`store.set_genres`), `meta.genres_tried` for a try without result; a person's labels are never taken | watched; off until prax.yaml names a model, or until `steps.genres.method: small` has a current run of the small labeller (`prax.ml.labeller`) |
 | `prax resolve` | unmerged entities | `entities.canonical_id`, `entity_labels` | the sure tier and, when asked, the twins; the likely tier is listed from the pairs the worker's resolve step left (`entity_candidates`; `resolve_entities.py --adjudicate` asks Claude about them) |
 | resolve step | an entity type whose likely pairs are a week old or were never computed (`RESOLVE_TYPES`) | `entity_candidates` for that type, the undecided rows replaced: name-embedding pairs, and for papers and organizations names written nearly alike (`names.near_pairs`: 3-gram MinHash, Jaccard 0.9) | the door never embeds a name; the worker does, a block at a time; a near pair whose numbers differ is never proposed (ICASSP 2012 and 2018) |
 | adjudicate step | the likely pairs nobody has decided and nothing holds | `entities.canonical_id` for a yes, `entity_candidates.decided` for a no, `entity_candidates.held` for a yes that reaches far | the adjudicate model (paid: `--spend`), forty pairs a call; a no is never asked again; a yes on an entity with 100 live edges or more, or one a page speaks of, waits for a person (`store.merge_risk`) |
@@ -560,8 +596,8 @@ Nothing here opens the database file.
 | `PRAX_DATA_DIR` | the store directory (default `<repo>/data`) |
 | `PRAX_TOKEN` | bearer token for the HTTP door; unset = loopback clients only |
 | `ANTHROPIC_API_KEY` | the Claude API for extraction, vision and adjudication |
-| `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `openai`, `stub`) and the `extract`, `promote`, `ask`, `titles`, `vision`, `adjudicate` steps with their settings (howto 3k); `domains:` rules that give documents their domain set (the `domains` pass of `prax maintain`) |
-| `PRAX_EXTRACT`, `PRAX_PROMOTE`, `PRAX_ASK`, `PRAX_TITLES`, `PRAX_VISION`, `PRAX_ADJUDICATE`, `PRAX_TYPING` | a model name or `none`: overrides the step for one run |
+| `prax.yaml` in the data directory (`PRAX_CONFIG`) | which model does which step: named models (`claude`, `openai`, `stub`) and every step of `models.STEP_DEFAULTS` with its settings (howto 3k); `domains:` rules that give documents their domain set (the `domains` pass of `prax maintain`) |
+| `PRAX_<STEP>` (`PRAX_EXTRACT`, `PRAX_ASK`, `PRAX_WORLDDATES`…) | a model name or `none`: overrides the step for one run |
 | `PRAX_EXTRACT_MODEL`, `PRAX_ASK_MODEL`, `PRAX_VISION_MODEL`, `PRAX_EXTRACT_EFFORT` | the Claude model id (and effort) for a step that resolves to Claude |
 | `citations.mailto` [`PRAX_CITATIONS_MAILTO`] | polite-pool contact for Crossref and OpenAlex |
 | `rerank.model` [`PRAX_RERANK`], `rerank.url` [`PRAX_RERANK_URL`], `rerank.depth` [`PRAX_RERANK_DEPTH`] | cross-encoder name, `server` (a llama-server with `--reranking` at `url`), `stub`, or `0` (default off); how many top hits are rescored (30) |
@@ -580,7 +616,7 @@ Nothing here opens the database file.
 | `door.sqlite_cache_mb`, `door.sqlite_mmap_mb` [`PRAX_SQLITE_CACHE_MB`, `PRAX_SQLITE_MMAP_MB`] | SQLite's page cache per connection (64) and how much of the file is memory-mapped (1024; the OS's file-backed cache, 0 for none): a keyword query over a million chunks read its posting lists from disk on SQLite's 2 MB default |
 | `door.sqlite_journal_mb` [`PRAX_SQLITE_JOURNAL_MB`] | the size the write-ahead log is cut back to when a checkpoint empties it (16); nothing set it before, and it stood at 48 MB between writes |
 | `run.<role>` | what `prax up` keeps alive on this host: `llama-server` and `reranker` (a `models:` entry with a `serve:` block: slots, projector, `cpu_moe`…), `marker` (its venv, port, `ngl`; `on_demand` declares without starting), `ocr-server` (marker's OCR model as a `models:` entry; its companion, with marker's group), `door` (host, port, TLS files), `worker` (interval, steps, the `nightly` hour and limit, another host's `door`) (howto 4b) |
-| `schedule.maintain`, `schedule.backup`, `schedule.questions` | the door's clock: an `HH:MM` (or `{at:, only:}` / `{at:, archive:}` / `{at:, briefing: false}`) at which the door starts that job on itself once a day |
+| `schedule.maintain`, `schedule.backup`, `schedule.questions`, `schedule.figures`, `schedule.resolve` | the door's clock (`prax.host.schedule.NAMES`): an `HH:MM` (or `{at:, only:}` / `{at:, archive:}` / `{at:, briefing: false}`) at which the door starts that job on itself once a day |
 | `paths.llama_server` [`PRAX_LLAMA_SERVER`] | the llama-server binary `prax up` starts (default: where howto 3h puts it, or the PATH) |
 | `paths.models` | where fetched model files go (default `<data dir>/models`) |
 | `paths.backup` [`PRAX_BACKUP`] | where `prax backup` copies the store when no directory is given |
@@ -684,6 +720,6 @@ the audit of which repairs have earned their prevention.
 The backfill of the old external-disk store. The move of the service
 onto the serving board (the code is in `deploy/`). The figures nobody
 has read (55,607 on 2026-09-23, going down as the vision pass runs).
-The sub-graph export and import of a project. What else is open is in
+What else is open is in
 `PLAN.md`. The scans nothing could read are down to seven documents:
 the OCR and marker passes took the rest.
