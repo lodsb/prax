@@ -228,7 +228,8 @@ def build_parser() -> argparse.ArgumentParser:
             "  prax import claude . --since 2026-09-01 --dry-run\n"
             "  prax import citations --source crossref -n 50\n"
             "  prax import zotero ~/Zotero --dry-run\n"
-            "  prax import graph synth.graph.jsonl --name synth --dry-run"
+            "  prax import graph synth.graph.jsonl --name synth --dry-run\n"
+            "  prax import latex ~/math/preprints --tag openai-math --domain research"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

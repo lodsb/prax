@@ -5435,6 +5435,26 @@ writer that waits on the store's lock queues; one that holds SQLite's
 lock outside it makes every other writer time out. `test_invariants`
 fails on a store function that writes and commits without the lock.
 
+## 2026-10-08: papers with their LaTeX source
+
+The user's first import of a session about friction: OpenAI's
+mathematics release (github.com/openai/math, 722 manuscripts, each a PDF
+and the LaTeX that built it). A PDF's text layer loses the mathematics,
+and marker would cost hours of the card, so `prax import latex`
+(`prax.importers.latex`) sends each PDF as the original with a text made
+from its source: the `\input` files read in, citations numbered `[n]`
+by the bibliography's order (a `thebibliography` as written, a `.bib`
+by `plain`'s order), the bibliography written out as a References
+section, each numbered display tagged `	ag{n}` and every `\eqref`
+written `(n)`, and pandoc's Markdown tidied so a display equation is one
+`$$…$$` line, a formula chunk with its number. The door takes it with
+`POST /ingest/file`'s new `text` and `text_source` (a stamp of the
+sender's own; a parser's name is refused), through `queue.apply_parse`.
+Over the 722: 720 convert, about 0.3 s each (median 121,000 characters,
+156 displays); two stop pandoc and go as their PDFs alone. The tests found
+two bugs in the bibtex reader before any import: it began an entry at
+the comma after its key, and it stripped a brace off `{{A} bound}`.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

@@ -230,6 +230,25 @@ def dedupe(request: Request, commit: bool = False) -> dict[str, Any]:
     return store.dedupe_captures(_con(request), commit=commit)
 
 
+# what a sender may stamp a text with: a name and a version,
+# "latex-source/3.9"; ``_own_stamp`` refuses a parser's name
+_STAMP = re.compile(r"[a-z][a-z0-9-]{1,40}/[\w.+-]{1,40}")
+
+
+def _own_stamp(stamp: str) -> bool:
+    """A stamp of the sender's own: the shape, and no extractor's name,
+    which the parse queue would take for its own reading."""
+    from prax import parsers
+
+    if not _STAMP.fullmatch(stamp):
+        return False
+    try:
+        parsers.by_name(stamp.split("/", 1)[0])
+    except KeyError:
+        return True
+    return False
+
+
 @router.post("/ingest/file")
 def ingest_file(
     request: Request,
@@ -242,6 +261,8 @@ def ingest_file(
     by: Annotated[str | None, Form()] = None,
     paper: Annotated[str | None, Form()] = None,
     origin: Annotated[str | None, Form()] = None,
+    text: Annotated[str | None, Form()] = None,
+    text_source: Annotated[str | None, Form()] = None,
 ) -> dict[str, Any]:
     """Upload a file: archived at once, text and HTML indexed at once,
     anything else parsed by the batch host. ``domains`` and ``tags`` are
@@ -249,7 +270,18 @@ def ingest_file(
     ``paper`` is JSON — what the sender read off the page the file came
     from (doi, arxiv, authors, journal, date, pdf_url); ``origin`` is
     JSON too — where the file lives on the machine that sent it (host,
-    path; ``clients/send/prax_send.py``)."""
+    path; ``clients/send/prax_send.py``). ``text`` is the file's text read
+    from a better source, a paper's LaTeX (``prax import latex``), with
+    ``text_source`` its stamp (``latex-source/3.9``): taken in as a parse
+    is, and the parse queue then leaves the file alone."""
+    if (text is None) != (text_source is None):
+        raise HTTPException(400, "text and text_source come together")
+    if text_source is not None and not _own_stamp(text_source):
+        raise HTTPException(
+            400, "text_source is a stamp of the sender's own: name/version"
+        )
+    if text is not None and len(text.encode("utf-8")) > max_upload():
+        raise HTTPException(413, "text over door.max_upload_mb")
     paper_info = origin_info = None
     try:
         paper_info = json.loads(paper) if paper else None
@@ -275,6 +307,8 @@ def ingest_file(
             by=by or "upload",
             paper=paper_info if isinstance(paper_info, dict) else None,
             origin=origin_info if isinstance(origin_info, dict) else None,
+            text=text,
+            text_source=text_source,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

@@ -27,6 +27,7 @@ WHAT = (
     "citations",
     "zotero",
     "graph",
+    "latex",
 )
 
 
@@ -47,6 +48,8 @@ def import_(door: Door, a: Any) -> int:
         return _zotero(door, a)
     if a.what == "graph":
         return _graph(door, a)
+    if a.what == "latex":
+        return _latex(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
 
@@ -199,6 +202,82 @@ def _zotero(door: Door, a: Any) -> int:
         return 1 if errors else 0
     finally:
         lib.close()
+
+
+KNOWN_BATCH = 1000  # hashes one question to the door may ask about
+
+
+def _latex(door: Door, a: Any) -> int:
+    """Papers with their LaTeX source (``prax.importers.latex``): each
+    folder's PDF sent as the original with the text pandoc made of its
+    source. A PDF the door holds already is skipped unless ``--refresh``,
+    so a run can be stopped and started again."""
+    import hashlib
+
+    from prax.importers import latex
+
+    if not a.files:
+        out.fail("prax import latex <a folder of manuscripts, each a PDF and its .tex>")
+    binary = latex.pandoc()
+    if binary is None:
+        out.fail("pandoc is needed", "pip install prax[latex], or pandoc on the PATH")
+        return 2
+    stamp = f"{latex.STAMP}/{latex.pandoc_version(binary)}"
+    found = latex.manuscripts(Path(a.files[0]).expanduser())
+    digests = {m.key: hashlib.sha256(m.pdf.read_bytes()).hexdigest() for m in found}
+    held: set[str] = set()
+    if not a.refresh:
+        hashes = list(digests.values())
+        for i in range(0, len(hashes), KNOWN_BATCH):
+            got = door.post_json("/known", {"hashes": hashes[i : i + KNOWN_BATCH]})
+            held.update(got.get("known") or [])
+    todo = [m for m in found if digests[m.key] not in held]
+    if a.limit:
+        todo = todo[: a.limit]
+    out.say(
+        out.bold("LaTeX")
+        + out.dim(
+            f"   {len(found)} manuscripts, {len(found) - len(todo)} held already,"
+            f" {len(todo)} to send · {stamp} · {door.base_url}"
+        )
+    )
+    if a.dry_run:
+        for m in todo[:20]:
+            out.say(f"  {m.title}  " + out.dim(f"{m.date or ''} {m.main.name}"))
+        return 0
+    sent = 0
+    errors: list[str] = []
+    for n, m in enumerate(todo, 1):
+        try:
+            text = latex.convert(m, binary)
+        except Exception as exc:  # noqa: BLE001 - the PDF still goes, parsed as any
+            errors.append(f"{m.key}: {exc}")
+            text = None
+        paper = {"authors": list(m.authors), "date": m.date or ""}
+        fields: dict[str, Any] = {
+            "title": m.title,
+            "by": f"import:{latex.SOURCE}",
+            "paper": json.dumps(paper),
+            "tags": ",".join(a.tag or []),
+            "domains": ",".join(a.domain or []),
+        }
+        if text:
+            fields.update(text=text, text_source=stamp)
+        try:
+            door.post_form(
+                "/ingest/file",
+                fields,
+                files={"file": (m.pdf.name, m.pdf.read_bytes(), "application/pdf")},
+            )
+            sent += 1
+        except Exception as exc:  # noqa: BLE001 - keep going; listed at the end
+            errors.append(f"{m.key}: {exc}")
+        if n % 25 == 0 and not a.quiet:
+            out.hint(f"  {n}/{len(todo)} sent")
+    out.say(f"  {sent} sent, {len(errors)} with a problem")
+    for e in errors[:20]:
+        out.hint("  " + e)
+    return 1 if errors else 0
 
 
 def _citations(door: Door, a: Any) -> int:

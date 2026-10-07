@@ -381,6 +381,16 @@ def _index_now(con: sqlite3.Connection, doc_id: int, mime: str) -> bool:
     return action in ("created", "upgraded")
 
 
+def _take_text(con: sqlite3.Connection, doc_id: int, text: str, stamp: str) -> bool:
+    """A sender's text for a document, unless it already has one from the
+    same source; whether the document is indexed after."""
+    from prax.parsers import queue
+
+    if store.get_meta(con, doc_id).get("text_source") != stamp:
+        queue.apply_parse(con, doc_id, stamp=stamp, text=text)
+    return store.is_indexed(con, doc_id)
+
+
 def ingest_bytes(
     con: sqlite3.Connection,
     data: bytes,
@@ -395,9 +405,15 @@ def ingest_bytes(
     session: str | None = None,
     by: str | None = None,
     extra_meta: dict[str, Any] | None = None,
+    text: str | None = None,
+    text_source: str | None = None,
 ) -> Capture:
     """Register a capture, index it when cheap, link it to an earlier
-    capture of the same URL, and give it its domains."""
+    capture of the same URL, and give it its domains. ``text`` is a text
+    the sender read from a better source than the file (a paper's LaTeX,
+    ``prax import latex``), stamped ``text_source``: it is taken in as a
+    parse of the file is (``queue.apply_parse``), so the attempt is in the
+    history and a shorter text never replaces a longer one."""
     url = canonical_url(source_url) if source_url else None
     meta = _capture_meta(source, session=session, by=by, tags=tags, extra=extra_meta)
     # when it was published, as the page or the paper's record says it
@@ -462,7 +478,11 @@ def ingest_bytes(
         # (a paper's ids and authors read off its abstract page): what the
         # document lacks is filled in, what it has is left alone
         _fill_in(con, doc_id, extra_meta)
-    indexed = _index_now(con, doc_id, mime)
+    indexed = (
+        _take_text(con, doc_id, text, str(text_source))
+        if text and text_source
+        else _index_now(con, doc_id, mime)
+    )
     if indexed and result["created"]:
         # the readings the door asks for after a text lands (the polish of
         # an automatic transcript, a capture's figures): the same edges a
@@ -664,6 +684,8 @@ def ingest_upload(
     by: str | None = "upload",
     paper: dict[str, Any] | None = None,
     origin: dict[str, Any] | None = None,
+    text: str | None = None,
+    text_source: str | None = None,
 ) -> Capture:
     """A file handed over the door (the UI's upload, a script). ``paper``
     is what the sender read off the page it came from (its DOI, arXiv
@@ -686,6 +708,8 @@ def ingest_upload(
         session=session,
         by=by,
         extra_meta={**(paper_meta(paper) or {}), **_origin(origin)} or None,
+        text=text,
+        text_source=text_source,
     )
 
 
