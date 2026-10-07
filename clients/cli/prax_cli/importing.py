@@ -232,12 +232,13 @@ def _latex(door: Door, a: Any) -> int:
             got = door.post_json("/known", {"hashes": hashes[i : i + KNOWN_BATCH]})
             held.update(got.get("known") or [])
     todo = [m for m in found if digests[m.key] not in held]
+    already = len(found) - len(todo)
     if a.limit:
         todo = todo[: a.limit]
     out.say(
         out.bold("LaTeX")
         + out.dim(
-            f"   {len(found)} manuscripts, {len(found) - len(todo)} held already,"
+            f"   {len(found)} manuscripts, {already} held already,"
             f" {len(todo)} to send · {stamp} · {door.base_url}"
         )
     )
