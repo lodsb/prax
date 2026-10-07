@@ -223,6 +223,7 @@ def apply_parse(
     force: bool = False,
     keep_source: bool = False,
     pages: int | None = None,
+    unasked: bool = False,
 ) -> str:
     """Take in what an extractor produced for a document, here or on a
     worker: record the attempt in ``meta.parse_history`` (and the page
@@ -268,6 +269,14 @@ def apply_parse(
         _record(con, doc_id, {**entry, "outcome": "same"}, pages=pages)
         _restamp(con, doc_id, stamp, keep_source)
         return "same"
+    held_source = str((doc.get("meta") or {}).get("text_source") or "")
+    if unasked and not force and old_len and senders_text(held_source):
+        # a parse nobody asked for, handed out while the document had no
+        # text yet, comes back after a sender's own (a paper's LaTeX): the
+        # sender's stays (2026-10-08, one of OpenAI's papers lost its
+        # LaTeX text to the PDF's parse 25 s after it arrived)
+        _record(con, doc_id, {**entry, "outcome": "kept"}, pages=pages)
+        return "kept"
     if not force and _too_short(len(text), old_len):
         action = "kept" if old_len else "empty"
         _record(con, doc_id, {**entry, "outcome": action}, pages=pages)
@@ -293,6 +302,21 @@ def apply_parse(
         # figure pass would re-extract the library otherwise
         store.unstamp_extraction(con, doc_id, stamp)
     return action
+
+
+def senders_text(stamp: str) -> bool:
+    """Whether a text came with its document from the sender's own source
+    (``POST /ingest/file`` with ``text``: ``latex-source/3.9``), not from
+    an extractor of prax's and not from a cache an extractor improves on
+    (``zotero-ft-cache``, which has no version)."""
+    parts = parsers.stamp_parts(stamp)
+    if parts is None:
+        return False
+    try:
+        parsers.by_name(parts[0])
+    except KeyError:
+        return True
+    return False
 
 
 def _restamp(

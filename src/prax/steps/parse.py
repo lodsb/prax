@@ -215,6 +215,7 @@ class Parse(Step):
                 force=bool(r.get("force")),
                 keep_source=bool(r.get("keep_source")),
                 pages=int(r["pages"]) if r.get("pages") else None,
+                unasked=not r.get("requested"),
             )
             # what the reading paid for, if anything: the worker carries the
             # tokens home (prax.ml.usage) because it never writes itself

@@ -523,10 +523,37 @@ def tidy(markdown: str) -> str:
 
 
 _TYPED_LABEL = re.compile(r"\\label\s*\[[^\]]*\]\s*\{")
+# a wrapper that stitches PDFs built on their own: "\includepdf[…]{part-1.pdf}"
+_INCLUDEPDF = re.compile(
+    r"\\includepdf\b[^\n]*\{([^{}]+?)(?:\.pdf)?\}\s*$", re.MULTILINE
+)
+
+
+def parts(main: Path) -> list[Path]:
+    """The sources of the PDFs a wrapper includes (``\\includepdf``), in
+    order, where each is there as ``.tex``; empty for a paper that is its
+    own source."""
+    found = []
+    for name in _INCLUDEPDF.findall(flatten(main)):
+        tex = main.parent / f"{name}.tex"
+        if tex.is_file():
+            found.append(tex)
+    return found
 
 
 def convert(ms: Manuscript, binary: str) -> str:
-    """A manuscript's text, from its source."""
+    """A manuscript's text, from its source: a wrapper's parts one after
+    the other."""
+    pieces = parts(ms.main)
+    if pieces:
+        return "\n".join(
+            _convert_one(Manuscript(ms.folder, ms.pdf, p, ms.title, ms.date), binary)
+            for p in pieces
+        )
+    return _convert_one(ms, binary)
+
+
+def _convert_one(ms: Manuscript, binary: str) -> str:
     # cleveref's \label[lemma]{x}, which pandoc does not read
     tex = _TYPED_LABEL.sub(r"\\label{", flatten(ms.main))
     tex, entries = bibliography(tex, ms.main.parent)

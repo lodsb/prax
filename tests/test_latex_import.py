@@ -164,3 +164,26 @@ def test_the_door_takes_a_pdf_with_its_text(client: TestClient) -> None:
             "/ingest/file", data=bad, files={"file": ("q.pdf", b"%PDF other", "a/b")}
         )
         assert r.status_code == 400, bad
+
+
+def test_an_unasked_parse_keeps_a_senders_text(client: TestClient) -> None:
+    """A parse handed out while the PDF had no text yet comes back after
+    the sender's LaTeX text: the sender's stays; a reading someone asks
+    for still replaces it."""
+    from prax.parsers import queue
+
+    got = client.post(
+        "/ingest/file",
+        data={"text": TEXT, "text_source": "latex-source/3.9"},
+        files={"file": ("p.pdf", b"%PDF-1.4 raced", "application/pdf")},
+    )
+    doc = int(got.json()["doc_id"])
+    con = client.app.state.con
+    parsed = "A PDF's text layer. " * 200
+    stamp = "pymupdf4llm/1.28.2-r2"
+    assert queue.apply_parse(con, doc, stamp=stamp, text=parsed, unasked=True) == "kept"
+    assert store.get_meta(con, doc)["text_source"] == "latex-source/3.9"
+    assert queue.apply_parse(con, doc, stamp=stamp, text=parsed) == "upgraded"
+    assert queue.senders_text("latex-source/3.9")
+    assert not queue.senders_text("zotero-ft-cache")
+    assert not queue.senders_text(stamp)
