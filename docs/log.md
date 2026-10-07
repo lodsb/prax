@@ -5409,6 +5409,24 @@ watched now: a long document (60,000 characters or more,
 a hand. 1,449 long documents were due that day, new ones and ones whose
 text was replaced since they were read.
 
+## 2026-10-07: a night's backup lost to the markup pass
+
+The backup at 04:30 failed on "database is locked", and the clock's
+first try could not even start its job. The door's log said why: tiny
+writes (`job_update`, `job_start`, `stamp_world_dates`) each "held the
+write lock 204 s", which is the busy timeout and `_serialized`'s retries
+run out, so the holder was outside the store's lock. It was the
+`markup` pass of `prax maintain`, 4,286 s that night: it wrote each
+page's stamp with a raw `UPDATE` and committed a hundred pages later, so
+its connection held SQLite's write lock while it parsed pages and linked
+facts. `published`, `languages` and `places` (the last written the day
+before) did the same in smaller measure. All four now work out what to
+write holding nothing and apply it through `maintain._write`, one
+executemany behind the store's lock and committed at once, the markup
+stamp a page at a time. `tests/test_maintain_locks.py` spies on what the
+passes read and parse with and fails when a write is open then; it
+failed on the old code.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

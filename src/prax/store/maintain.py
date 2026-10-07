@@ -113,6 +113,44 @@ PASSES = (
 ON_REQUEST = ("rechunk", "rejudge", "vectors")
 
 
+@_serialized
+def _write(con: sqlite3.Connection, sql: str, rows: list[tuple[Any, ...]]) -> int:
+    """What a pass has worked out, applied in one short write behind the
+    store's lock and committed; how many rows it changed. A pass reads and
+    computes holding nothing, so a capture, a worker's post or the backup
+    never waits on a file read or a parse: the markup pass once held
+    SQLite's write lock from one commit to the next, a hundred pages
+    apart, 71 minutes in all, and the night's backup failed on "database
+    is locked" (2026-10-07)."""
+    changed = con.executemany(sql, rows).rowcount if rows else 0
+    con.commit()
+    return max(changed, 0)
+
+
+_SET_MARKUP = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.markup', json(?)) WHERE id = ?"
+)
+_SET_PUBLISHED = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.published', json(?)) WHERE id = ?"
+)
+_SET_LANG = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.lang', ?) WHERE id = ?"
+)
+_SET_SUMMARY_LANG = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.summary_lang', ?) WHERE id = ?"
+)
+_SET_LABEL_LANG = "UPDATE OR IGNORE entity_labels SET lang = ? WHERE id = ?"
+_SET_PLACE = (
+    "UPDATE edges SET evidence_start = ?, evidence_end = ?,"
+    " evidence_text_hash = ? WHERE id = ? AND evidence_text_hash IS NULL"
+)
+BATCH = 500  # rows a pass applies in one write
+
+
 def _acronyms(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """Every text artifact read once for its "phrase (ACRONYM)" definitions
     (``prax.text.acronyms``); the table replaced. Minutes over a large library."""
@@ -891,15 +929,9 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
                 stamp["facts"] += 1
                 counts[edge.rel] += 1
             counts["pages"] += 1
-        con.execute(
-            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
-            " '$.markup', json(?)) WHERE id = ?",
-            (json.dumps(stamp), r["id"]),
-        )
+        _write(con, _SET_MARKUP, [(json.dumps(stamp), r["id"])])
         if n % 100 == 0:
-            con.commit()
             job.update(done=n, total=len(rows), note=f"markup: {n} of {len(rows)}")
-    con.commit()
     return {"read": len(rows), **dict(counts)}
 
 
@@ -916,6 +948,7 @@ def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
     ).fetchall()
     found: Counter[str] = Counter()
+    pending: list[tuple[Any, ...]] = []
     for n, r in enumerate(rows, 1):
         meta = json.loads(r["meta"] or "{}")
         page = None
@@ -929,15 +962,12 @@ def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         if published is None:
             continue
         found[published["by"]] += 1
-        con.execute(
-            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
-            " '$.published', json(?)) WHERE id = ?",
-            (json.dumps({**published, "at": now()}), r["id"]),
-        )
-        if n % 500 == 0:
-            con.commit()
+        pending.append((json.dumps({**published, "at": now()}), r["id"]))
+        if len(pending) >= BATCH:
+            _write(con, _SET_PUBLISHED, pending)
+            pending = []
             job.update(done=n, total=len(rows), note=f"published: {n} of {len(rows)}")
-    con.commit()
+    _write(con, _SET_PUBLISHED, pending)
     return {"read": len(rows), "dated": sum(found.values()), "by": dict(found)}
 
 
@@ -960,6 +990,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     ).fetchall()
     found: Counter[str] = Counter()
     unsure = 0
+    pending: list[tuple[Any, ...]] = []
     for n, r in enumerate(rows, 1):
         path = archive_path(r["text_hash"])
         try:
@@ -972,15 +1003,12 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             unsure += 1
             continue
         found[code] += 1
-        con.execute(
-            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
-            " '$.lang', ?) WHERE id = ?",
-            (code, r["id"]),
-        )
-        if n % 200 == 0:
-            con.commit()
+        pending.append((code, r["id"]))
+        if len(pending) >= BATCH:
+            _write(con, _SET_LANG, pending)
+            pending = []
             job.update(done=n, total=len(rows), note=f"languages: {n} of {len(rows)}")
-    con.commit()
+    _write(con, _SET_LANG, pending)
 
     written = con.execute(
         "SELECT id, json_extract(meta, '$.summary') AS summary FROM documents"
@@ -988,19 +1016,17 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         " AND json_extract(meta, '$.summary_lang') IS NULL"
     ).fetchall()
     said: Counter[str] = Counter()
-    for n, r in enumerate(written, 1):
+    pending = []
+    for r in written:
         code = language.detect(r["summary"])
         if code is None:
             continue
         said[code] += 1
-        con.execute(
-            "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
-            " '$.summary_lang', ?) WHERE id = ?",
-            (code, r["id"]),
-        )
-        if n % 500 == 0:
-            con.commit()
-    con.commit()
+        pending.append((code, r["id"]))
+        if len(pending) >= BATCH:
+            _write(con, _SET_SUMMARY_LANG, pending)
+            pending = []
+    _write(con, _SET_SUMMARY_LANG, pending)
     # the labels that never got one. A name is one to three words, under
     # the detector's floor, so `language.detect` says nothing for nearly
     # all of them; the document that named the entity knows. All entities
@@ -1010,27 +1036,22 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     # is looked at again the next night, which now costs seconds.
 
     known = languages_by_entity(con)
-    placed = twinned = 0
-    for r in con.execute(
-        "SELECT id, entity_id FROM entity_labels WHERE lang IS NULL"
-    ).fetchall():
-        code = known.get(int(r["entity_id"]))
-        if code:
-            # a label whose twin already carries that language (the same
-            # entity, the same words), or a second preferred one in it,
-            # keeps no language: the twin says the name already. Set
-            # anyway, it failed the whole pass every night (2026-10-04)
-            cur = con.execute(
-                "UPDATE OR IGNORE entity_labels SET lang = ? WHERE id = ?",
-                (code, r["id"]),
-            )
-            if cur.rowcount:
-                placed += 1
-            else:
-                twinned += 1
-            if (placed + twinned) % 1000 == 0:
-                con.commit()
-    con.commit()
+    # a label whose twin already carries that language (the same entity,
+    # the same words), or a second preferred one in it, keeps no language:
+    # the twin says the name already. Set anyway, it failed the whole pass
+    # every night (2026-10-04); what the IGNORE left is the twins
+    labels = [
+        (code, int(r["id"]))
+        for r in con.execute(
+            "SELECT id, entity_id FROM entity_labels WHERE lang IS NULL"
+        ).fetchall()
+        if (code := known.get(int(r["entity_id"])))
+    ]
+    placed = sum(
+        _write(con, _SET_LABEL_LANG, labels[i : i + BATCH])
+        for i in range(0, len(labels), BATCH)
+    )
+    twinned = len(labels) - placed
 
     return {
         "read": len(rows),
@@ -1196,6 +1217,7 @@ def _places(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         )
     ]
     placed = missing = 0
+    pending: list[tuple[Any, ...]] = []
     for n, (doc_id, text_hash) in enumerate(docs, 1):
         try:
             text = archive_path(text_hash).read_text(encoding="utf-8", errors="replace")
@@ -1207,17 +1229,16 @@ def _places(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
             (doc_id,),
         ).fetchall():
             at = quotes.place(text, evidence)
-            con.execute(
-                "UPDATE edges SET evidence_start = ?, evidence_end = ?,"
-                " evidence_text_hash = ? WHERE id = ? AND evidence_text_hash IS NULL",
-                (at[0] if at else None, at[1] if at else None, text_hash, edge_id),
+            pending.append(
+                (at[0] if at else None, at[1] if at else None, text_hash, edge_id)
             )
             placed += at is not None
             missing += at is None
-        if n % 200 == 0:
-            con.commit()
+        if len(pending) >= BATCH:
+            _write(con, _SET_PLACE, pending)
+            pending = []
             job.update(done=n, total=len(docs))
-    con.commit()
+    _write(con, _SET_PLACE, pending)
     return {"documents": len(docs), "placed": placed, "not_in_text": missing}
 
 
