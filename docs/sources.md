@@ -323,8 +323,11 @@ can be swapped or removed without touching search.
 
 ## 6. What you keep elsewhere: `prax import`
 
-The Zotero importer opens the database on the door's host. The importers
-that came after it are clients of the door (`prax.importers.feed`). Each
+The Zotero importer reads a copy of `zotero.sqlite` on the machine where
+`prax import zotero` runs, plans there, and sends each document with its
+attachment through `POST /import/zotero/item`. The door never sees the
+library. The importers that came after it are clients of the door too
+(`prax.importers.feed`). Each
 reads an export or an API and sends every item through `POST /ingest`,
 as a document of its own, or `POST /ingest/url`, as a link the door
 fetches. They run wherever the `prax` command runs. Idempotence is by key. A text item carries `meta.<source>.key` and a

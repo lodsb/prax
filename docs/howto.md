@@ -1813,7 +1813,7 @@ names backends; `steps` assigns them:
       ask:        {model: local-server}
       titles:     {model: local-server}
       vision:     {model: sonnet}
-      adjudicate: {model: opus}
+      adjudicate: {model: claude-opus-5}   # a claude-* id needs no entry above
 
 The kinds are `claude` (the API, key in `ANTHROPIC_API_KEY`), `openai`
 and `stub` (tests). An `openai` model is any OpenAI-compatible server:
