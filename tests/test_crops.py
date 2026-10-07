@@ -112,3 +112,31 @@ def test_the_extractor_is_registered_and_wants_the_text() -> None:
     assert "figure-crops" in store.READINGS
     with pytest.raises(parsers.ExtractionError, match="parse the document first"):
         ext(_paper(), filename="p.pdf", previous=None)
+
+
+def test_a_text_without_page_marks_finds_each_caption_on_its_page() -> None:
+    """A text made from a paper's source has no page marks: each caption
+    is looked for page by page, and a figure of thin lines with labels
+    between them is taken whole, up to the paragraph above it."""
+    doc = pymupdf.open()
+    doc.new_page().insert_text(pymupdf.Point(80, 100), "An opening page of prose.")
+    page = doc.new_page()
+    para = "A paragraph of prose above the figure that runs across the line. " * 2
+    page.insert_textbox(pymupdf.Rect(72, 60, 540, 110), para, fontsize=10)
+    # sparse lines with a label between them: gaps over CROP_GAP
+    page.draw_line(pymupdf.Point(100, 150), pymupdf.Point(400, 150))
+    page.insert_text(pymupdf.Point(200, 200), "x_1")
+    page.draw_line(pymupdf.Point(100, 260), pymupdf.Point(400, 260))
+    page.insert_text(pymupdf.Point(72, 300), "Figure 1: Two lines and a label.")
+    data = doc.tobytes()
+    doc.close()
+    text = (
+        "# A paper\n\nAn opening page of prose.\n\nFigure 1: Two lines and a label.\n"
+    )
+    out = figures.add_crops(data, text)
+    pictures = figures.DATA_IMAGE.findall(out)
+    assert len(pictures) == 1 and pictures[0][0] == "Figure 1: Two lines and a label."
+    with pymupdf.open(stream=base64.b64decode(pictures[0][1].split(",", 1)[1])) as png:
+        rect = png[0].rect
+    # both lines, so taller than the one strip crop_region would keep
+    assert rect.height > 100  # points, as the image is opened

@@ -381,14 +381,15 @@ def _index_now(con: sqlite3.Connection, doc_id: int, mime: str) -> bool:
     return action in ("created", "upgraded")
 
 
-def _take_text(con: sqlite3.Connection, doc_id: int, text: str, stamp: str) -> bool:
+def _take_text(con: sqlite3.Connection, doc_id: int, text: str, stamp: str) -> str:
     """A sender's text for a document, unless it already has one from the
-    same source; whether the document is indexed after."""
+    same source: what ``apply_parse`` did with it, ``same`` when nothing
+    was sent to it."""
     from prax.parsers import queue
 
-    if store.get_meta(con, doc_id).get("text_source") != stamp:
-        queue.apply_parse(con, doc_id, stamp=stamp, text=text)
-    return store.is_indexed(con, doc_id)
+    if store.get_meta(con, doc_id).get("text_source") == stamp:
+        return "same"
+    return queue.apply_parse(con, doc_id, stamp=stamp, text=text)
 
 
 def ingest_bytes(
@@ -478,12 +479,13 @@ def ingest_bytes(
         # (a paper's ids and authors read off its abstract page): what the
         # document lacks is filled in, what it has is left alone
         _fill_in(con, doc_id, extra_meta)
-    indexed = (
+    taken = (
         _take_text(con, doc_id, text, str(text_source))
         if text and text_source
-        else _index_now(con, doc_id, mime)
+        else None
     )
-    if indexed and result["created"]:
+    indexed = store.is_indexed(con, doc_id) if taken else _index_now(con, doc_id, mime)
+    if indexed and (result["created"] or taken == "upgraded"):
         # the readings the door asks for after a text lands (the polish of
         # an automatic transcript, a capture's figures): the same edges a
         # worker's parse gets in take_in

@@ -30,6 +30,16 @@ from pathlib import Path
 
 SOURCE = "latex"
 STAMP = "latex-source"
+# what the conversion does, by revision: 2 writes each figure as its
+# caption line, where the figure-crops reading puts the picture
+REVISION = 2
+
+
+def stamp(pandoc_version: str) -> str:
+    """The text's stamp: ``latex-source/3.9-r2``."""
+    return f"{STAMP}/{pandoc_version}-r{REVISION}"
+
+
 MAX_DEPTH = 12  # \input within \input, at most
 PANDOC_SECONDS = 180
 
@@ -553,12 +563,73 @@ def convert(ms: Manuscript, binary: str) -> str:
     return _convert_one(ms, binary)
 
 
+_FIGURE = re.compile(r"\\begin\{figure\*?\}(?P<body>.*?)\\end\{figure\*?\}", re.DOTALL)
+_CAPTION_CMD = re.compile(r"\\caption\s*(?:\[[^\]]*\])?\s*(?=\{)")
+_SECTION = re.compile(r"\\section\s*(?=\{)|\\appendix\b")
+_BY_SECTION = re.compile(r"\\numberwithin\s*\{figure\}\s*\{section\}")
+
+
+def figure_captions(tex: str) -> str:
+    """Each figure environment as its caption line, ``Figure N: …``, the
+    number the PDF prints (in order, or by section where the paper says
+    ``\\numberwithin{figure}{section}``), and every ``\\ref`` to it as N.
+    The drawing itself (TikZ, an included graphic) is not text and goes;
+    the caption line is where the ``figure-crops`` reading puts the
+    picture it cuts from the PDF."""
+    by_section = bool(_BY_SECTION.search(tex))
+    marks = [(m.start(), m.group(0)) for m in _SECTION.finditer(tex)]
+    numbers: dict[str, str] = {}
+    count = 0
+    last_section = ""
+
+    def section_at(pos: int) -> str:
+        n, appendix = 0, False
+        for at, what in marks:
+            if at > pos:
+                break
+            if what.startswith("\\appendix"):
+                appendix, n = True, 0
+            else:
+                n += 1
+        if appendix and n:
+            return chr(ord("A") + n - 1)
+        return str(n)
+
+    def figure(m: re.Match[str]) -> str:
+        nonlocal count, last_section
+        body = m.group("body")
+        if by_section:
+            section = section_at(m.start())
+            if section != last_section:
+                count, last_section = 0, section
+            count += 1
+            number = f"{section}.{count}"
+        else:
+            count += 1
+            number = str(count)
+        for label in _LABEL.findall(body):
+            numbers[label] = number
+        cap = _CAPTION_CMD.search(body)
+        caption = ""
+        if cap:
+            caption = _balanced(body, cap.end()) or ""
+        return f"\n\n\\noindent Figure {number}: {_LABEL.sub('', caption)}\n\n"
+
+    tex = _FIGURE.sub(figure, tex)
+
+    def ref(m: re.Match[str]) -> str:
+        return numbers.get(m.group(2), m.group(0))
+
+    return _REF.sub(ref, tex)
+
+
 def _convert_one(ms: Manuscript, binary: str) -> str:
     # cleveref's \label[lemma]{x}, which pandoc does not read
     tex = _TYPED_LABEL.sub(r"\\label{", flatten(ms.main))
     tex, entries = bibliography(tex, ms.main.parent)
     tex = number_citations(tex, [k for k, _ in entries])
     tex = number_displays(tex)
+    tex = figure_captions(tex)
     section = references_section(entries)
     if section:
         if "\\end{document}" in tex:

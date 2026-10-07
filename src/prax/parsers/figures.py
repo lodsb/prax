@@ -544,18 +544,100 @@ def crop_region(page: Any, caption: Any, boxes: list[Any] | None = None) -> Any 
     return rect
 
 
+def region_to_paragraph(
+    page: Any, caption: Any, boxes: list[Any] | None = None
+) -> Any | None:
+    """The space a figure takes above its caption, for a caption known to
+    have one there (a text made from the paper's source, where the figure
+    environment says so): the text column's width, from the caption up to
+    the paragraph above it or the page's top margin, when something is
+    drawn in it. A TikZ figure is thin lines with labels between them, so
+    the gaps that end a picture in ``crop_region`` cut it after its bottom
+    strip. A block of text counts as a paragraph when it is wider than
+    half the column; a figure's labels are narrower."""
+    import pymupdf
+
+    boxes = page_boxes(page) if boxes is None else boxes
+    text_blocks = [b for b in page.get_text("blocks") if b[6] == 0]
+    blocks = [pymupdf.Rect(b[:4]) for b in text_blocks]
+    if not blocks:
+        return None
+    left = min(b.x0 for b in blocks)
+    right = max(b.x1 for b in blocks)
+    width = max(1.0, right - left)
+    # a paragraph is wide, and more than a line or a line of prose; a row
+    # of a figure's labels across the column is neither
+    above = [
+        r
+        for r, b in zip(blocks, text_blocks, strict=True)
+        if r.y1 <= caption.y0 - 1
+        and r.width > 0.5 * width
+        and (r.height > 14 or len(str(b[4]).strip()) >= 80)
+    ]
+    top = max((b.y1 for b in above), default=min(b.y0 for b in blocks)) + 2
+    rect = pymupdf.Rect(left, top, right, caption.y0 - 1)
+    # a straight rule is drawn too, though its box has no area
+    drawn = [
+        b
+        for b in boxes
+        if b.x0 <= rect.x1
+        and b.x1 >= rect.x0
+        and b.y0 <= rect.y1
+        and b.y1 >= rect.y0
+        and max(b.width, b.height) > 2
+    ]
+    if not drawn or rect.height < CROP_MIN_SIDE or rect.get_area() < CROP_MIN_AREA:
+        return None
+    if rect.get_area() > CROP_MAX_PAGE_SHARE * page.rect.get_area():
+        return None
+    return rect
+
+
+# what a caption from a paper's source writes that its PDF does not show
+_MATH_MARKS = re.compile(r"\$|\\[A-Za-z]+\s*|[{}^_]")
+
+
 def find_caption(page: Any, caption: str) -> Any | None:
     """Where a caption sits on its page. The text carries the extractor's
     Markdown emphasis (``_Block diagram_``) and the page does not, so the
-    search is over the plain words, and shortens until it finds them."""
+    search is over the plain words, and shortens until it finds them. A
+    caption from a paper's source is searched without its mathematics'
+    marks too (``$T$`` is printed T)."""
     plain = " ".join(_EMPHASIS.sub("", caption).split())
+    printed = " ".join(_MATH_MARKS.sub("", plain).split())
+    if printed != plain:
+        for n in (48, 24):
+            hits = page.search_for(printed[:n]) if len(printed) >= 12 else []
+            if hits:
+                return hits[0]
     for n in (48, 24, 14):
         if len(plain) < 6:
             break
         hits = page.search_for(plain[:n])
         if hits:
             return hits[0]
+    # the caption's own words, without its label: a text from the source
+    # writes "Figure 1:" where the PDF may print "Figure 1." or "Fig. 1"
+    body = _CAPTION_LINE.sub("", plain).strip()
+    for n in (48, 24):
+        if len(body) < 12:
+            break
+        hits = page.search_for(body[:n])
+        if hits:
+            return hits[0]
     return None
+
+
+def _caption_on_a_page(doc: Any, caption: str, *, start: int) -> tuple[int, Any | None]:
+    """The page (from 1) that carries a caption, looked for from ``start``
+    on, and where on it; ``(start, None)`` when no page does. For a text
+    without page marks (one made from a paper's LaTeX source), whose
+    captions come in the order the pages show them."""
+    for number in range(start, doc.page_count + 1):
+        where = find_caption(doc[number - 1], caption)
+        if where is not None:
+            return number, where
+    return start, None
 
 
 def bare_captions(lines: list[str]) -> set[int]:
@@ -608,6 +690,9 @@ def add_crops(data: bytes, previous: str, *, dpi: int = CROP_DPI) -> str:
     try:
         lines = previous.split("\n")
         bare = bare_captions(lines)
+        # a text with no page marks (made from a paper's source) says
+        # nothing of where a caption is: each is looked for page by page
+        marked = any(_PAGE_MARK.match(line) for line in lines)
         seen_boxes: dict[int, list[Any]] = {}  # a page's drawings, read once
         page_no = 1
         out: list[str] = []
@@ -620,15 +705,19 @@ def add_crops(data: bytes, previous: str, *, dpi: int = CROP_DPI) -> str:
                 if mark:
                     page_no = int(mark.group(1)) + 1
                 continue
+            if marked:
+                where = find_caption(doc[page_no - 1], stripped)
+            else:
+                page_no, where = _caption_on_a_page(doc, stripped, start=page_no)
             page = doc[page_no - 1]
-            where = find_caption(page, stripped)
             if where is not None and page_no not in seen_boxes:
                 seen_boxes[page_no] = page_boxes(page)
-            rect = (
-                crop_region(page, where, seen_boxes[page_no])
-                if where is not None
-                else None
-            )
+            rect = None
+            if where is not None and not marked:
+                # a caption from the source has its figure right above it
+                rect = region_to_paragraph(page, where, seen_boxes[page_no])
+            if rect is None and where is not None:
+                rect = crop_region(page, where, seen_boxes[page_no])
             if rect is None:
                 out.append(line)
                 continue

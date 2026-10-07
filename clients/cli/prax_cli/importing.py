@@ -222,7 +222,7 @@ def _latex(door: Door, a: Any) -> int:
     if binary is None:
         out.fail("pandoc is needed", "pip install prax[latex], or pandoc on the PATH")
         return 2
-    stamp = f"{latex.STAMP}/{latex.pandoc_version(binary)}"
+    stamp = latex.stamp(latex.pandoc_version(binary))
     found = latex.manuscripts(Path(a.files[0]).expanduser())
     digests = {m.key: hashlib.sha256(m.pdf.read_bytes()).hexdigest() for m in found}
     held: set[str] = set()

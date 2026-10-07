@@ -197,7 +197,7 @@ def follow_ups(
     # the page and runs no model at all, so there is nothing to be free.
     # Never after itself, and never for a scan (its pages are the picture)
     if (
-        stamp.startswith(("pymupdf4llm/", "marker/"))
+        stamp.startswith(("pymupdf4llm/", "marker/", "latex-source/"))
         and "figure-crops" not in pending
         and _wants_crops(con, doc_id)
     ):

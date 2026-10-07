@@ -5455,6 +5455,26 @@ Over the 722: 720 convert, about 0.3 s each (median 121,000 characters,
 two bugs in the bibtex reader before any import: it began an entry at
 the comma after its key, and it stripped a brace off `{{A} bound}`.
 
+## 2026-10-08: the figures of a paper read from its source
+
+385 of the 722 papers hold 588 figures, 373 of them TikZ: vector
+drawings in the source, which no extractor lifts out of a PDF. No TeX on
+the desktop, and the authors' PDF is TikZ rendered already, so the
+figures are cut from it. The converter (revision 2,
+`latex-source/3.9-r2`) writes each figure environment as its caption
+line, `Figure N: …`, numbered as the PDF prints it (by section under
+`
+umberwithin{figure}{section}`), every `ef` to it as N. The door
+asks `figure-crops` for a `latex-source/` text as it does for MuPDF's
+and marker's, and for a text a sender re-sent. `figures.add_crops`
+looks for each caption page by page when the text has no page marks,
+searches a caption without its mathematics' marks (`$T$` is printed
+T), and for such a text takes the column above the caption up to the
+paragraph before it (`region_to_paragraph`): a TikZ figure is thin lines
+with labels between, and `crop_region`'s 24-point gap cut it after its
+bottom strip. On 30 sample papers, 48 of 50 captions got their picture,
+looked at by eye.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

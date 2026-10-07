@@ -187,3 +187,20 @@ def test_an_unasked_parse_keeps_a_senders_text(client: TestClient) -> None:
     assert queue.senders_text("latex-source/3.9")
     assert not queue.senders_text("zotero-ft-cache")
     assert not queue.senders_text(stamp)
+
+
+FIGURES = (
+    r"\section{One}\begin{figure}\centering\begin{tikzpicture}\draw (0,0)--(1,1);"
+    r"\end{tikzpicture}\caption[short]{A line, $x$.}\label{fig:line}\end{figure}"
+    r" As Figure~\ref{fig:line} shows.\section{Two}\begin{figure*}"
+    r"\caption{Second.}\end{figure*}"
+)
+
+
+def test_a_figure_is_its_caption_line_with_the_number_the_pdf_prints() -> None:
+    out = latex.figure_captions(FIGURES)
+    assert "Figure 1: A line, $x$." in out and "Figure~1 shows" in out
+    assert "Figure 2: Second." in out and "tikzpicture" not in out
+    by_section = latex.figure_captions(r"\numberwithin{figure}{section}" + FIGURES)
+    assert "Figure 1.1: A line" in by_section and "Figure 2.1: Second." in by_section
+    assert latex.stamp("3.9") == f"latex-source/3.9-r{latex.REVISION}"
