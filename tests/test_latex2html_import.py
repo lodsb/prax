@@ -92,3 +92,32 @@ def test_a_paper_on_one_page_is_its_own_only_page(tmp_path: Path) -> None:
     page.write_bytes(b"<HTML><TITLE>Tone Holes</TITLE><BODY><P>All of it.</BODY>")
     got = l2h.book(fetcher, "https://example.org/~jos/tonehole/")
     assert got is not None and got.pages == ("https://example.org/~jos/tonehole/",)
+
+
+INDEX = """<HTML><TITLE>A BOOK</TITLE><BODY><UL>
+<LI><A HREF="Preface.html">Preface</A>
+<UL><LI><A HREF="Outline.html">Chapter Outline</A></UL>
+<LI><A HREF="Waveguides.html">Introduction to Digital Waveguides</A>
+<UL><LI><A HREF="Strings.html">Ideal Strings</A>
+<LI><A HREF="Index_this_Document.html">Index</A></UL>
+</UL></BODY></HTML>"""
+
+
+def test_a_book_gets_a_page_of_its_contents() -> None:
+    url = "https://example.org/~jos/pasp/"
+    entries = l2h.contents(url, INDEX)
+    assert [(d, t) for d, t, _ in entries] == [
+        (1, "Preface"),
+        (2, "Chapter Outline"),
+        (1, "Introduction to Digital Waveguides"),
+        (2, "Ideal Strings"),
+    ]
+    book = l2h.Book(url, "Physical Audio Signal Processing", "PASP", ())
+    documents = {url + "Preface.html": 7, url + "Strings.html": 9}
+    text = l2h.contents_page(book, entries, documents, ["Julius O. Smith III"])
+    lines = text.splitlines()
+    assert lines[0] == "# Physical Audio Signal Processing"
+    assert "- [Preface](#doc/7)" in lines and "  - Chapter Outline" in lines
+    # a chapter that is only its sections is its title; its section links
+    assert "- Introduction to Digital Waveguides" in lines
+    assert "  - [Ideal Strings](#doc/9)" in lines

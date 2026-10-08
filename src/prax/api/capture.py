@@ -263,6 +263,7 @@ def ingest_file(
     origin: Annotated[str | None, Form()] = None,
     text: Annotated[str | None, Form()] = None,
     text_source: Annotated[str | None, Form()] = None,
+    text_file: Annotated[UploadFile | None, File()] = None,
 ) -> dict[str, Any]:
     """Upload a file: archived at once, text and HTML indexed at once,
     anything else parsed by the batch host. ``domains`` and ``tags`` are
@@ -273,7 +274,11 @@ def ingest_file(
     path; ``clients/send/prax_send.py``). ``text`` is the file's text read
     from a better source, a paper's LaTeX (``prax import latex``), with
     ``text_source`` its stamp (``latex-source/3.9``): taken in as a parse
-    is, and the parse queue then leaves the file alone."""
+    is, and the parse queue then leaves the file alone. A text past the
+    form's 1 MB a field (a page with its pictures inlined) comes as the
+    file part ``text_file``, UTF-8."""
+    if text_file is not None:
+        text = text_file.file.read(max_upload() + 1).decode("utf-8", "replace")
     if (text is None) != (text_source is None):
         raise HTTPException(400, "text and text_source come together")
     if text_source is not None and not _own_stamp(text_source):

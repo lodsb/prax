@@ -5490,14 +5490,24 @@ the table of contents' order and makes each page a document (the user's
 choice, over a document per chapter or per book: the extraction reads a
 document's first 12,000 characters). A page's content is what lies
 between its navigation panels; its formulas become `$…$` and one-line
-`$$…$$` with the book's macros written out (`bs{z}` is
-`\left|zight|`, so KaTeX renders it and a search finds it); a figure
+`$$…$$` with the book's macros written out (`\abs{z}` is
+`\left|z
+ight|`, so KaTeX renders it and a search finds it); a figure
 its 2x picture inlined with its caption, which the door files for the
 vision pass. A title carries its book's short name, so the "Problems" of
 two books are two documents. The fetcher keeps what it fetched on disk
 and the site's Crawl-delay (ten seconds at CCRMA); a chapter's page that
 only lists its sections is not sent. Some 15 of his papers were in the
 library from Zotero already, and two captures of a book's front page.
+
+The user asked for a book's own page, which keeps its pages together:
+after a book, the importer writes `book-<name>`, a wiki page with the
+book's contents nested as its index nests them, each entry a link to
+its page's document (`[title](#doc/N)`, an `annotates` edge), a chapter
+that is only its sections its title. Written as the agent's, so a
+person's edit stands (409). The first figure-heavy page was refused:
+Starlette holds a form field to 1 MB, and a page with its pictures
+inlined is more, so the text now comes as the file part `text_file`.
 
 # Moved from the plan
 

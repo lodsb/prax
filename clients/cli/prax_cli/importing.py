@@ -284,6 +284,50 @@ def _latex(door: Door, a: Any) -> int:
     return 1 if errors else 0
 
 
+def _book_page(door: Door, fetcher: Any, book: Any, authors: list[str]) -> None:
+    """The book's page in prax (``book-<name>``): its contents, each entry
+    linking the document of its page. Written as the agent's: a page a
+    person has edited is left as it is (the door answers 409)."""
+    from prax.client import DoorError
+    from prax.importers import latex2html as l2h
+
+    documents: dict[str, int] = {}
+    offset = 0
+    while True:
+        got = door.get_json(
+            "/documents",
+            {"tag": f"book:{book.slug}", "limit": 200, "offset": offset},
+        )
+        items = got.get("items") or []
+        for item in items:
+            if item.get("source_url"):
+                documents[str(item["source_url"])] = int(item["id"])
+        offset += len(items)
+        if not items or offset >= int(got.get("total") or 0):
+            break
+    index = fetcher.get(book.url)
+    if index is None:
+        return
+    entries = l2h.contents(book.url, index.decode("utf-8", "replace"))
+    text = l2h.contents_page(book, entries, documents, authors)
+    try:
+        door.put_json(
+            f"/page/book-{book.slug}",
+            {
+                "text": text,
+                "title": book.title,
+                "kind": "topic",
+                "author": "agent",
+                "note": "the book's contents, as imported",
+            },
+        )
+        out.say(f"  page book-{book.slug}: {len(entries)} entries")
+    except DoorError as exc:
+        if exc.status != 409:
+            raise
+        out.hint(f"  page book-{book.slug}: a person's edit stands")
+
+
 def _latex2html(door: Door, a: Any) -> int:
     """Books on the web written with latex2html and MathJax
     (``prax.importers.latex2html``): every page of each book a document,
@@ -351,17 +395,29 @@ def _latex2html(door: Door, a: Any) -> int:
                 "tags": ",".join([*(a.tag or []), f"book:{book.slug}"]),
                 "domains": ",".join(a.domain or []),
             }
-            fields.update(text=text, text_source=l2h.stamp())
+            fields["text_source"] = l2h.stamp()
             name = page.rsplit("/", 1)[-1] or "index.html"
             try:
+                # the text as a file part: with its pictures it passes the
+                # 1 MB the door's form allows a field
                 door.post_form(
-                    "/ingest/file", fields, files={"file": (name, data, "text/html")}
+                    "/ingest/file",
+                    fields,
+                    files={
+                        "file": (name, data, "text/html"),
+                        "text_file": ("text.md", text.encode("utf-8"), "text/markdown"),
+                    },
                 )
                 sent += 1
             except Exception as exc:  # noqa: BLE001 - keep going; listed at the end
                 errors.append(f"{page}: {exc}")
             if n % 25 == 0 and not a.quiet:
                 out.hint(f"  {n}/{len(pages)} · {fetcher.fetched} fetched")
+        if len(book.pages) > 1:
+            try:
+                _book_page(door, fetcher, book, a.author or [])
+            except Exception as exc:  # noqa: BLE001 - the pages are in all the same
+                errors.append(f"{book.url}: its contents page: {exc}")
     out.say(f"  {sent} sent, {skipped} held already, {len(errors)} with a problem")
     for e in errors[:20]:
         out.hint("  " + e)

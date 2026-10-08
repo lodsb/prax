@@ -45,7 +45,7 @@ TIMEOUT = 60.0
 # what a book's table of contents links that is not a page of the book
 NOT_PAGES = re.compile(
     r"(?:^|/)(?:Index_this_Document|footnode|.*-citation|.*-hardcopy|"
-    r"GlobalJOSIndex|index)\.html$",
+    r"GlobalJOSIndex|index|About_this_document)\.html$",
     re.IGNORECASE,
 )
 
@@ -204,6 +204,52 @@ def book(fetcher: Fetcher, url: str) -> Book | None:
     if first:
         title = book_title(first.decode("utf-8", "replace")) or title
     return Book(url, title, short_title(title), pages)
+
+
+def contents(index_url: str, html: str) -> list[tuple[int, str, str]]:
+    """A book's table of contents as its index page nests it: each entry's
+    depth (from 1), title and page URL, in order; only the book's own
+    pages."""
+    import lxml.html
+
+    pages = set(book_pages(index_url, html))
+    root = lxml.html.fromstring(html)
+    out: list[tuple[int, str, str]] = []
+    seen: set[str] = set()
+    for li in root.iter("li"):
+        link = next((a for a in li.iterchildren("a") if a.get("href")), None)
+        if link is None:
+            continue
+        url = urljoin(index_url, str(link.get("href")).split("#")[0])
+        if url not in pages or url in seen:
+            continue
+        seen.add(url)
+        depth = sum(1 for p in li.iterancestors() if p.tag == "ul")
+        title = " ".join(link.text_content().split())
+        out.append((max(depth, 1), title, url))
+    return out
+
+
+def contents_page(
+    book: Book,
+    entries: list[tuple[int, str, str]],
+    documents: dict[str, int],
+    authors: list[str],
+) -> str:
+    """A book's page in prax: its name, author and address, and its
+    contents nested as the book nests them, each entry a link to the
+    document of that page (``[title](#doc/N)``, an ``annotates`` edge)
+    or, for a chapter that is only its sections, its title."""
+    lines = [f"# {book.title}", ""]
+    if authors:
+        lines += [", ".join(authors), ""]
+    lines += [f"The book online: <{book.url}>", "", "## Contents", ""]
+    top = min((d for d, _, _ in entries), default=1)
+    for depth, title, url in entries:
+        doc = documents.get(url)
+        shown = f"[{title}](#doc/{doc})" if doc else title
+        lines.append("  " * (depth - top) + "- " + shown)
+    return "\n".join(lines) + "\n"
 
 
 def book_macros(fetcher: Fetcher, book: Book) -> Macros:

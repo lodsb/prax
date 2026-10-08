@@ -204,3 +204,22 @@ def test_a_figure_is_its_caption_line_with_the_number_the_pdf_prints() -> None:
     by_section = latex.figure_captions(r"\numberwithin{figure}{section}" + FIGURES)
     assert "Figure 1.1: A line" in by_section and "Figure 2.1: Second." in by_section
     assert latex.stamp("3.9") == f"latex-source/3.9-r{latex.REVISION}"
+
+
+def test_a_text_past_a_form_field_comes_as_a_file_part(client: TestClient) -> None:
+    """A page with its pictures inlined passes the 1 MB a form field may
+    hold: the text comes as the file part ``text_file``."""
+    big = TEXT + "\n\n" + ("A long paragraph of prose. " * 50_000)
+    got = client.post(
+        "/ingest/file",
+        data={"text_source": "latex2html/1"},
+        files={
+            "file": ("p.html", b"<html>a page</html>", "text/html"),
+            "text_file": ("text.md", big.encode("utf-8"), "text/markdown"),
+        },
+    )
+    assert got.status_code == 200, got.text
+    doc = int(got.json()["doc_id"])
+    meta = store.get_meta(client.app.state.con, doc)
+    assert meta["text_source"] == "latex2html/1"
+    assert store.get_document(client.app.state.con, doc)["text_len"] > 1_000_000
