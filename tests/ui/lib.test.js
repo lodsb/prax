@@ -544,3 +544,16 @@ test("staleSources: a page's sources no longer current, each with its replacemen
   assert.match(html, /href="#doc\/4">Tuning v2<\/a>/);
   assert.equal(lib.staleSources([]), "");
 });
+
+test("nameDiff: how one name becomes the other, letter by letter", () => {
+  const body = (a, b) => lib.nameDiff(a, b).replace(/<p[^>]*>|<\/p>/g, "");
+  assert.equal(body("ValhallaDSP", "Valhalla DSP"), "Valhalla<ins>␣</ins>DSP");
+  assert.equal(body("colour", "color"), "colo<del>u</del>r");
+  assert.equal(body("Interactive tabletops", "interactive tabletop"), "<del>I</del><ins>i</ins>nteractive tabletop<del>s</del>");
+  // a short run kept between two changes reads as part of them
+  assert.equal(body("Fourier transform", "Fourier-Transformation"), "Fourier<del>␣t</del><ins>-T</ins>ransform<ins>ation</ins>");
+  // little spelling in common, or none to show: nothing
+  assert.equal(lib.nameDiff("feedback delay network", "FDN"), "");
+  assert.equal(lib.nameDiff("same", "same"), "");
+  assert.match(lib.nameDiff("<b>x", "<b>xy"), /&lt;b&gt;x<ins>y<\/ins>/);
+});

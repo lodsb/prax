@@ -472,6 +472,10 @@ th { border-bottom: 1px solid var(--fg); }
 .decide-pair { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: flex-start; }
 .decide-side { flex: 1 1 14rem; min-width: 0; }
 .decide-arrow { align-self: center; font-size: .84rem; }
+/* how the first name becomes the second (lib.js nameDiff) */
+.name-diff { margin: 0 0 .35rem; font-family: var(--font-ui); font-size: 1.05rem; color: var(--prax-key); overflow-wrap: anywhere; }
+.name-diff del { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); text-decoration: line-through; text-decoration-thickness: 2px; padding: 0 .05rem; }
+.name-diff ins { background: var(--mark); text-decoration: none; padding: 0 .05rem; }
 .decide-acts { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin-top: .35rem; }
 .decide-acts button { padding: .3rem .6rem; }
 

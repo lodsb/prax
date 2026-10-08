@@ -305,13 +305,66 @@ function entitySide(e) {
     <span class="muted">${esc(e.type)} · ${e.edges} edges</span>
     ${e.document ? `<div class="muted">in “${esc(e.document)}”</div>` : ""}</div>`;
 }
+// How one name becomes the other, letter by letter: what only the first
+// has is struck through, what only the second has is marked, a space is
+// shown as ␣ so a joined word can be seen. Two names with little spelling
+// in common (a translation, an acronym) get none, since a diff of them is
+// noise; their sides above already show both.
+function nameDiff(a, b) {
+  a = String(a || ""); b = String(b || "");
+  if (a === b || a.length * b.length > 40000) return "";
+  // the longest common subsequence, as a table of suffix lengths
+  const n = a.length, m = b.length;
+  const L = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) {
+    L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+  }
+  if (L[0][0] < 0.5 * Math.min(n, m)) return "";
+  const ops = []; // [kind, text], kind "=", "-" or "+"
+  const put = (kind, ch) => {
+    const last = ops[ops.length - 1];
+    if (last && last[0] === kind) last[1] += ch; else ops.push([kind, ch]);
+  };
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && a[i] === b[j]) { put("=", a[i]); i++; j++; }
+    else if (j < m && (i === n || L[i][j + 1] >= L[i + 1][j])) { put("+", b[j]); j++; }
+    else { put("-", a[i]); i++; }
+  }
+  // a run of one or two letters kept between two changes reads as part of
+  // them ("colour" → "color" is one change, not three)
+  const merged = [];
+  for (let x = 0; x < ops.length; x++) {
+    const [kind, text] = ops[x];
+    const between = kind === "=" && text.length <= 2 && x > 0 && x < ops.length - 1
+      && /\S/.test(text) && merged.length && merged[merged.length - 1][0] !== "=";
+    if (between) { merged.push(["-", text], ["+", text]); continue; }
+    merged.push([kind, text]);
+  }
+  // the deletions of a change before its insertions
+  const out = [];
+  let del = "", ins = "";
+  const flush = () => {
+    if (del) out.push(`<del>${esc(del.replace(/ /g, "␣"))}</del>`);
+    if (ins) out.push(`<ins>${esc(ins.replace(/ /g, "␣"))}</ins>`);
+    del = ""; ins = "";
+  };
+  for (const [kind, text] of merged) {
+    if (kind === "-") del += text;
+    else if (kind === "+") ins += text;
+    else { flush(); out.push(esc(text)); }
+  }
+  flush();
+  return `<p class="name-diff" title="from the first name to the second: struck through is only in the first, marked only in the second">${out.join("")}</p>`;
+}
+
 function pairRow(it) {
   const k = it.keep, o = it.other;
   // the local model's calibrated probability, when it asked and left the pair
   const p = it.p_same == null ? "" : ` · model: ${Math.round(it.p_same * 100)}% same`;
   // a model said one thing, and the merge waits for a person: why
   const held = it.held ? `<p class="decide-held">The model said these are one thing; the merge waits for you (${esc(it.held.replace(/^held: /, ""))}).</p>` : "";
-  return `<article class="decide-row${it.held ? " held" : ""}">${held}<div class="decide-pair">${entitySide(k)}${entitySide(o)}</div>
+  return `<article class="decide-row${it.held ? " held" : ""}">${held}${nameDiff(k.name, o.name)}<div class="decide-pair">${entitySide(k)}${entitySide(o)}</div>
     <div class="decide-acts"><span class="muted">${esc(it.type)} · names ${it.score}${p}</span>
       <button type="button" data-act="same" data-keep="${k.id}" data-other="${o.id}">same, keep “${esc(k.name)}”</button>
       <button type="button" class="secondary" data-act="same" data-keep="${o.id}" data-other="${k.id}">same, keep “${esc(o.name)}”</button>
@@ -544,7 +597,7 @@ function propertiesHtml(doc, levels) {
 function mergeRow(it) {
   const a = it.alias, into = it.into;
   if (!a || !into) return "";
-  return `<article class="decide-row"><div class="decide-pair">${entitySide(a)}<div class="decide-arrow muted">folded into</div>${entitySide(into)}</div>
+  return `<article class="decide-row">${nameDiff(a.name, into.name)}<div class="decide-pair">${entitySide(a)}<div class="decide-arrow muted">folded into</div>${entitySide(into)}</div>
     <div class="decide-acts"><span class="muted">${esc(it.why)}${it.by ? ` · by ${esc(it.by)}` : " · unsigned"}</span>
       <button type="button" data-act="same" data-keep="${into.id}" data-other="${a.id}">right</button>
       <button type="button" class="secondary" data-act="split" data-entity="${a.id}">wrong: split them</button>
@@ -739,5 +792,5 @@ function checksBox(checks) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
 }

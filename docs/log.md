@@ -5587,6 +5587,19 @@ so such a walk mostly answers "undated" until the step has worked
 through its queue. README, `docs/compared.md` and `CLAUDE.md` say so.
 The pyproject description lost its house word ("doors").
 
+## 2026-10-09: the names of a pair, letter by letter
+
+The owner asked to see how two names differ on the Review page's "same
+thing?" tab rather than read two long titles side by side. `nameDiff`
+(lib.js) puts one line above each pair, and above each merge to check:
+the first name turned into the second, what only the first has struck
+through in the accent colour, what only the second has marked, a space
+shown as ␣ so a joined word shows. It is a character diff by longest
+common subsequence, with a kept run of one or two letters between two
+changes folded into them ("Fourier␣t" → "Fourier-T", one change). Two
+names that share less than half their letters (a translation, an
+acronym) get no line, since a diff of them is noise.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
