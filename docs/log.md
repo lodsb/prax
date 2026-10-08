@@ -5567,6 +5567,26 @@ held-out set exists. Checker before: 186 sentences, 14.2 words, spread
 spread 6.8, no short runs, no bold openers. The report is
 `reports/Presenting prax without AI tells.md` (not committed).
 
+## 2026-10-08: a walk at a world date
+
+Asked whether prax could already do Utopia's "what held on that date":
+the walks could (`traverse` one and two hops, `connect` paths), but
+their `as_of` was record time only. `store.held_in_world` now sits beside
+`held_at` and keeps a fact whose `world_from`/`world_to` span meets the
+date at the coarser of the two precisions ("2019" meets 2019-07, and
+"2021-12-31" meets a fact that ended in 2021). An undated fact is kept,
+because it is not known to fail, and so is one whose end nobody gives.
+`traverse(world_at=)`, `traverse_map` (which then counts its dated and
+undated facts in `world`), `connect(world_at=)` (a path index built for
+the date, kept like an `as_of` one, and a hop now says `world_from` and
+`world_to` where its source dated it), the `/traverse` and
+`/graph/connect` routes and both MCP tools take it. Coverage is the
+real gap: 939 of 256,266 live edges carry a world date (652 from the
+`worlddates` step since it was turned on, 286 from schema.org markup),
+so such a walk mostly answers "undated" until the step has worked
+through its queue. README, `docs/compared.md` and `CLAUDE.md` say so.
+The pyproject description lost its house word ("doors").
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

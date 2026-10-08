@@ -251,16 +251,21 @@ named tokens, linked by similarity without typed relations.
   anchors undated facts with `attested_from`. In prax two passes write
   world time. The `markup` pass of `prax maintain` takes a page's
   schema.org dates: 275 live edges on 2026-10-07, producer `jsonld`. The
-  `worlddates` step (`prax.graph.worlddates`) is built and off until a
-  host names a model for it. The general extraction can ask
+  `worlddates` step (`prax.graph.worlddates`) reads the sentences that
+  date a fact and runs on this host since 2026-10-08: 652 live edges on
+  that day, of 256,266. The general extraction can ask
   for dates (`extraction.world_dates`), and the switch is off because it
   gave none (`docs/eval/extraction-standard-names-and-dates-2026-10-05.md`).
   An undated fact shows its document's date as `stated` in `traverse`,
   which is when it was said, not when it held.
-- **A world-time read.** Utopia's `entity_facts(at=)` and
-  `paths_between(at=)` answer "what held on that date". The prax
-  `traverse(as_of=)` reads record time only. `changes(world=True)` lists
-  what began or ended in a period but does not filter a walk.
+- **A world-time read, on few facts.** Utopia's `entity_facts(at=)` and
+  `paths_between(at=)` answer "what held on that date". Since
+  2026-10-08 prax's `traverse(world_at=)` and `connect(world_at=)` do
+  too (`store.held_in_world`, beside `held_at`, which is record time):
+  a fact is kept when its world span meets the date at the coarser
+  precision, and an undated fact is kept and counted (`world.undated`),
+  because it is not known to fail. With under 1% of facts dated, such a
+  walk mostly says "undated"; the gap is coverage, the read is there.
 - **Literal values.** Utopia's `facts.object_value` holds a number or a
   date as a fact with both clocks. In prax, `edges.dst` must be an entity.
 - **Resolution of a conflict.** Utopia records a person's choice in

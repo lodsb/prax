@@ -21,6 +21,7 @@ from .edges import (
     changed_between,
     document_node,
     held_at,
+    held_in_world,
     hidden_by_premise,
 )
 
@@ -394,6 +395,7 @@ def traverse(
     *,
     type: str | None = None,
     as_of: str | None = None,
+    world_at: str | None = None,
 ) -> list[dict[str, Any]]:
     """The entity's own edges: every currently-valid one, with its evidence.
 
@@ -406,12 +408,15 @@ def traverse(
     ``as_of`` walks the edges prax held then (``held_at``): what the graph
     said on a day, before a later reading ended some of them. Entities
     are those of now: a merge since is followed as it stands.
+
+    ``world_at`` keeps the facts that hold in the world at that date as
+    their sources state it (``held_in_world``), and the facts no source
+    dated, which carry no ``world_from``.
     """
     entity_name, type = _from_document(con, entity_name, type)
     ids, _ = _choose(con, entity_name, type)
-    return [
-        r for r in _walk(con, ids, hops, limit, as_of=as_of)[0] if int(r["hop"]) < 2
-    ]
+    rows = _walk(con, ids, hops, limit, as_of=as_of, world_at=world_at)[0]
+    return [r for r in rows if int(r["hop"]) < 2]
 
 
 @_reading
@@ -424,6 +429,7 @@ def traverse_map(
     type: str | None = None,
     domain: str | None = None,
     as_of: str | None = None,
+    world_at: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: its own edges, the ideas around
     them, and how many of those did not fit.
@@ -452,11 +458,21 @@ def traverse_map(
     the documents no module was set for are left out.
 
     ``as_of`` walks the edges prax held then, as ``traverse`` does.
+    ``world_at`` walks the facts that hold in the world at that date, and
+    the undated ones; ``world`` then says how many of the entity's own
+    facts were dated and how many were not, because a walk of mostly
+    undated facts says little about that date.
     """
     entity_name, type = _from_document(con, entity_name, type)
     ids, report = _choose(con, entity_name, type)
     rows, left_out = _walk(
-        con, ids, hops, limit, within=_domain_documents(con, domain), as_of=as_of
+        con,
+        ids,
+        hops,
+        limit,
+        within=_domain_documents(con, domain),
+        as_of=as_of,
+        world_at=world_at,
     )
     out: dict[str, Any] = {
         "entity": entity_name,
@@ -467,6 +483,13 @@ def traverse_map(
     }
     if len(report) > 1 or (type and not ids):
         out["senses"] = report
+    if world_at:
+        dated = sum(1 for r in out["edges"] if r.get("world_from") or r.get("world_to"))
+        out["world"] = {
+            "at": world_at,
+            "dated": dated,
+            "undated": len(out["edges"]) - dated,
+        }
     region = community_of(con, ids[0]) if ids else []
     if region:
         out["community"] = region
@@ -494,9 +517,12 @@ def _walk(
     *,
     within: frozenset[int] | None = None,
     as_of: str | None = None,
+    world_at: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     hops = max(0, min(hops, MAX_HOPS))
     held, held_args = held_at("e", as_of)
+    world, world_args = held_in_world("e", world_at)
+    held, held_args = f"{held} AND {world}", [*held_args, *world_args]
     if limit is None:
         limit = config.whole("graph.edges", "PRAX_GRAPH_EDGES", EDGES)
     # The walk runs over raw entity ids and, at every step, expands the

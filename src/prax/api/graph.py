@@ -89,6 +89,7 @@ def traverse(
     type: str | None = None,
     domain: str | None = None,
     as_of: str | None = None,
+    world_at: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: the edges, and what was left out.
 
@@ -97,7 +98,8 @@ def traverse(
     name that reaches several things walks one, the one of ``type`` or
     else the most connected, and ``senses`` names them all. ``domain``
     keeps what that module's documents say. ``as_of`` (a date or a UTC
-    moment) walks the edges prax held then.
+    moment) walks the edges prax held then; ``world_at`` (a year, month
+    or day) the facts that hold in the world then, and the undated ones.
     """
     try:
         return store.traverse_map(
@@ -108,6 +110,7 @@ def traverse(
             type=type,
             domain=domain or None,
             as_of=as_of or None,
+            world_at=world_at or None,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -160,12 +163,14 @@ def connect(
     max_hops: int = 4,
     relations: str | None = None,
     as_of: str | None = None,
+    world_at: str | None = None,
     weak: bool = False,
 ) -> dict[str, Any]:
     """How ``a`` is connected to ``b`` (``store.connect_entities``): the
     best sound paths, each hop with its relation, documents and evidence;
     ``relations`` a comma-separated set a path may use; ``weak`` shows the
-    paths past the line too."""
+    paths past the line too; ``world_at`` walks the facts that hold in the
+    world at that date, and the undated ones."""
     try:
         return store.connect_entities(
             _con(request),
@@ -178,6 +183,7 @@ def connect(
             if relations
             else None,
             as_of=as_of or None,
+            world_at=world_at or None,
             weak=weak,
         )
     except ValueError as exc:

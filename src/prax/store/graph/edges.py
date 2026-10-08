@@ -371,6 +371,32 @@ def held_at(alias: str, as_of: str | None = None) -> tuple[str, list[str]]:
     return held, [moment, moment]
 
 
+def held_in_world(alias: str, world_at: str | None = None) -> tuple[str, list[str]]:
+    """The SQL that keeps the facts that hold in the world at a date, as
+    their sources state it (``world_from``/``world_to``), and its
+    arguments; beside ``held_at``, which is record time. A date meets a
+    span when the two meet at the coarser of their precisions, so "2019"
+    meets a fact from 2019-07 and "2019-07" one from 2019. A fact no
+    source dated is kept, because an undated fact is not one known to
+    fail, and so is the start of one whose end nobody gives
+    (``world_to_precision`` 'unknown'); the walk says which facts were
+    dated. Without a date, every fact."""
+    if not world_at:
+        return "1 = 1", []
+    got = dates.parse(world_at)
+    if got is None:
+        raise ValueError(f"world_at: a year, a month or a day, not {world_at!r}")
+    day = got[0]
+    a = alias
+    held = (
+        f"({a}.world_from IS NULL OR substr({a}.world_from, 1, length(?))"
+        f" <= substr(?, 1, length({a}.world_from)))"
+        f" AND ({a}.world_to IS NULL OR substr({a}.world_to, 1, length(?))"
+        f" >= substr(?, 1, length({a}.world_to)))"
+    )
+    return held, [day, day, day, day]
+
+
 def changed_between(
     alias: str, side: str, begin: str, end: str
 ) -> tuple[str, list[str], str]:

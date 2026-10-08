@@ -381,6 +381,43 @@ def test_a_walk_as_of_a_day_sees_what_prax_held_then(con: sqlite3.Connection) ->
         store.traverse(con, "A", as_of="yesterday")
 
 
+def test_a_walk_in_the_world_at_a_date(con: sqlite3.Connection) -> None:
+    """``world_at`` keeps the facts that hold then as their sources date
+    them, meeting at the coarser precision, and keeps the undated ones."""
+    for org, begin, end in (
+        ("Lab", "2019-07", "2021"),
+        ("Firm", "2022", "unknown"),
+        ("Old", "2001", "2004-03-02"),
+    ):
+        store.link(
+            con,
+            store.Edge("Ada", "person", "affiliated_with", org, "organization"),
+            world_from=begin,
+            world_to=end,
+        )
+    store.link(con, store.Edge("Paper", "paper", "authored_by", "Ada", "person"))
+
+    def at(day: str) -> set[str]:
+        return {
+            r["dst"] if r["dst"] != "Ada" else r["src"]
+            for r in store.traverse(con, "Ada", world_at=day)
+        }
+
+    assert at("2020") == {"Lab", "Paper"}
+    assert at("2019") == {"Lab", "Paper"}  # 2019 meets July 2019
+    assert at("2019-06") == {"Paper"}  # before it began
+    assert at("2021-12-31") == {"Lab", "Paper"}  # 2021 meets the last day
+    assert at("2030") == {"Firm", "Paper"}  # its end is unknown: still held
+    assert at("2004-03") == {"Old", "Paper"}
+    assert at("2004-04") == {"Paper"}
+    assert len(store.traverse(con, "Ada")) == 4
+    near = store.traverse_map(con, "Ada", world_at="2020")
+    assert near["world"] == {"at": "2020", "dated": 1, "undated": 1}
+    assert "world" not in store.traverse_map(con, "Ada")
+    with pytest.raises(ValueError, match="world_at"):
+        store.traverse(con, "Ada", world_at="in spring")
+
+
 def test_traverse_unknown_entity_is_empty(con: sqlite3.Connection) -> None:
     assert store.traverse(con, "nobody") == []
 

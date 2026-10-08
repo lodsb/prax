@@ -427,6 +427,7 @@ from .graph import (  # noqa: F401
     functional_breaches,
     get_review,
     held_at,
+    held_in_world,
     hidden_by_premise,
     hold_candidate,
     hub_graph,

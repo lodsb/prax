@@ -141,7 +141,9 @@ revisit threshold, under "Decision thresholds" below.
    in the world, as its source states it, and only where it does;
    migration 47's triggers hold a date and its precision together.
    The `worlddates` step reads them from the sentences that date a fact,
-   each judged against its sentence (`prax.graph.worlddates`).
+   each judged against its sentence (`prax.graph.worlddates`). A walk at a
+   world date keeps what holds then and the undated facts
+   (`store.held_in_world`; `traverse(world_at=)`, `connect(world_at=)`).
    An undated fact says when its document appeared (`stated`, in
    `traverse`), which is not when it holds. Its quote keeps where it
    stood: its range in the text artifact it was read from and that

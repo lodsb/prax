@@ -1,7 +1,7 @@
 [project]
 name = "prax"
 version = "0.0.1"
-description = "Personal research knowledge base: SQLite, hybrid search, an evidence-bearing graph, doors for people and models"
+description = "A self-hosted library for the papers and web pages one person reads: hybrid search, a graph whose links cite their sentence, and an MCP interface for agents"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]

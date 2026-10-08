@@ -131,3 +131,28 @@ def test_a_new_edge_is_seen_once_the_index_is_refreshed(
     assert not store.connect_entities(con, "Paper A", "Paper B").get("paths")
     store.link(con, E("Paper C", "paper", "cites", "Paper B", "paper"))
     assert store.connect_entities(con, "Paper A", "Paper B")["paths"]
+
+
+def test_a_path_in_the_world_at_a_date(con: sqlite3.Connection, fresh: None) -> None:
+    """Ada was at the lab from 2019 to 2021; the lab is part of the
+    institute, undated. In 2020 she is connected to the institute through
+    the lab, in 2023 she is not, and the dated hop says when it held."""
+    store.link(
+        con,
+        E("Ada", "person", "affiliated_with", "Lab", "organization"),
+        world_from="2019",
+        world_to="2021-06",
+    )
+    store.link(con, E("Lab", "organization", "part_of", "Institute", "organization"))
+    then = store.connect_entities(con, "Ada", "Institute", world_at="2020")
+    [path] = then["paths"]
+    assert path["hops"][0]["world_from"] == "2019"
+    assert path["hops"][0]["world_to"] == "2021-06"
+    assert "world_from" not in path["hops"][1]
+    assert store.connect_entities(con, "Ada", "Institute", world_at="2021-06")["paths"]
+    assert not store.connect_entities(con, "Ada", "Institute", world_at="2023").get(
+        "paths"
+    )
+    assert store.connect_entities(con, "Ada", "Institute")["paths"]
+    with pytest.raises(ValueError, match="world_at"):
+        store.connect_entities(con, "Ada", "Institute", world_at="once")

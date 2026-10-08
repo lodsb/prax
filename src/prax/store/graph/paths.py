@@ -16,7 +16,7 @@ import time
 from typing import Any
 
 from ..base import _reading, hidden_documents
-from .edges import held_at
+from .edges import held_at, held_in_world
 from .traversal import _choose
 
 PATH_REFRESH = 300  # seconds an index serves after the edges changed
@@ -41,8 +41,12 @@ REFERENCES = "references"  # the producer of a reference list's citations
 SURE_CITATION = 0.95  # a title match this sure counts as stated, for a path
 
 
-def _rows(con: sqlite3.Connection, as_of: str | None) -> list[tuple[Any, ...]]:
+def _rows(
+    con: sqlite3.Connection, as_of: str | None, world_at: str | None = None
+) -> list[tuple[Any, ...]]:
     held, args = held_at("e", as_of)
+    world, world_args = held_in_world("e", world_at)
+    held, args = f"{held} AND {world}", [*args, *world_args]
     briefings = [
         int(r[0])
         for r in con.execute(
@@ -74,10 +78,13 @@ def _rows(con: sqlite3.Connection, as_of: str | None) -> list[tuple[Any, ...]]:
 AS_OF_KEPT = 2  # indexes of past moments kept beside the current one
 
 
-def path_index(con: sqlite3.Connection, as_of: str | None = None) -> Any:
+def path_index(
+    con: sqlite3.Connection, as_of: str | None = None, world_at: str | None = None
+) -> Any:
     """The index of the edges held now (kept, refreshed after a change once
-    ``PATH_REFRESH`` has passed) or as of a moment (the last
-    ``AS_OF_KEPT`` kept, by moment and stamp). Built one at a time under
+    ``PATH_REFRESH`` has passed) or as of a moment, or of the facts that
+    hold in the world at a date (the last ``AS_OF_KEPT`` of these kept, by
+    moment, date and stamp). Built one at a time under
     the lock: a build peaks near 150 MB, and two at once would hold two
     (the quality review of 2026-10-05)."""
     from prax.graph import paths
@@ -85,14 +92,14 @@ def path_index(con: sqlite3.Connection, as_of: str | None = None) -> Any:
     # one index per database file: a test's store, a copy, the library
     where = str(con.execute("PRAGMA database_list").fetchone()[2])
     with _HELD_LOCK:
-        if as_of:
+        if as_of or world_at:
             stamp = _stamp(con)
             past = _HELD.setdefault(f"{where}#as_of", {})
-            key = f"{as_of}|{stamp}"
+            key = f"{as_of}|{world_at}|{stamp}"
             if key not in past:
                 while len(past) >= AS_OF_KEPT:
                     past.pop(next(iter(past)))
-                past[key] = paths.build(_rows(con, as_of=as_of))
+                past[key] = paths.build(_rows(con, as_of=as_of, world_at=world_at))
             return past[key]
         held = _HELD.get(where)
         if held is not None and time.monotonic() - held["at"] < PATH_REFRESH:
@@ -124,6 +131,7 @@ def connect_entities(
     max_hops: int = 4,
     relations: list[str] | None = None,
     as_of: str | None = None,
+    world_at: str | None = None,
     weak: bool = False,
     k: int = 3,
 ) -> dict[str, Any]:
@@ -133,7 +141,10 @@ def connect_entities(
     documents behind it, one of them and its evidence. Only sound paths
     (``paths.SOUND``) unless ``weak``; then a weak one is marked so. With
     no sound path the answer says how many weak ones were left out and
-    the best cost, so "no sound connection" is an answer of its own."""
+    the best cost, so "no sound connection" is an answer of its own.
+    ``as_of`` walks the facts prax held at a moment, ``world_at`` those
+    that hold in the world at a date and the undated ones
+    (``held_in_world``)."""
     from prax.graph import paths
 
     max_hops = max(1, min(int(max_hops), paths.MAX_HOPS))
@@ -147,7 +158,9 @@ def connect_entities(
     if not starts or not ends:
         out["unknown"] = [n for n, ids in ((a, starts), (b, ends)) if not ids]
         return out
-    index = path_index(con, as_of=as_of)
+    if world_at:
+        held_in_world("e", world_at)  # a bad date is refused before a build
+    index = path_index(con, as_of=as_of, world_at=world_at)
     hidden = hidden_documents(con)
     found = paths.connect(
         index,
@@ -182,7 +195,7 @@ def connect_entities(
             ]
             eid, doc = behind[0]
             ev = con.execute(
-                "SELECT evidence FROM edges WHERE id = ?", (eid,)
+                "SELECT evidence, world_from, world_to FROM edges WHERE id = ?", (eid,)
             ).fetchone()
             src = names.get(int(index.ids[index.src[f]]), ("?", "?"))
             dst = names.get(int(index.ids[index.dst[f]]), ("?", "?"))
@@ -198,6 +211,13 @@ def connect_entities(
                 hop["source_doc"] = doc
             if ev and ev[0]:
                 hop["evidence"] = str(ev[0])[:EVIDENCE_CHARS]
+            # when the fact holds, said only where its source said it
+            for key, value in (
+                ("world_from", ev and ev[1]),
+                ("world_to", ev and ev[2]),
+            ):
+                if value:
+                    hop[key] = str(value)
             hops.append(hop)
         path: dict[str, Any] = {"cost": p.cost, "hops": hops}
         if p.cost > paths.SOUND:

@@ -24,8 +24,8 @@ archived as it arrives, and `prax work --watch`, run on the machine
 with the models, does the rest: its text, title, graph links and
 vectors. To keep the parts running, list them under `run:` in
 `prax.yaml` and run `prax up --install`, which starts them at login on
-Windows, Linux or macOS. The longer version, with the Zotero import and
-the browser extension, is in [`docs/howto.md`](docs/howto.md).
+Windows, Linux or macOS. Setting up the Zotero import and the browser
+extension is in [`docs/howto.md`](docs/howto.md).
 
 ## Why I built it
 
@@ -303,10 +303,11 @@ these describes you better, another tool is the better choice:
   [Graphiti](https://github.com/getzep/graphiti) (a library over Neo4j,
   FalkorDB or Neptune) or [Cognee](https://github.com/topoteretes/cognee)
   (a library, embedded by default).
-- You need dates on most facts as they are read, a walk of the graph as
-  it stood on a date, or facts that hold a plain number or date.
-  [Utopia](https://github.com/deeplethe/utopia) does these better than
-  prax does today.
+- You need most facts dated as they are read, or facts that hold a
+  plain number or date: [Utopia](https://github.com/deeplethe/utopia)
+  does both. A walk in prax can keep what held in the world on a date
+  (`world_at`), but under 1% of its facts are dated so far, and its
+  facts always link two things.
 - Several people will use it, or it must face the open internet: prax
   has no user accounts and no installer.
 

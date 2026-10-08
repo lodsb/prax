@@ -213,6 +213,7 @@ def traverse(
     type: str | None = None,
     domain: str | None = None,
     as_of: str | None = None,
+    world_at: str | None = None,
 ) -> dict[str, Any]:
     """Expand the knowledge graph 1-2 hops from a named entity.
 
@@ -239,6 +240,9 @@ def traverse(
     ``as_of`` (``2026-09`` or a UTC moment) walks what the graph held
     then, before later readings ended some facts. A fact whose source
     says when it holds in the world carries ``world_from``/``world_to``.
+    ``world_at`` (``2019``, ``2019-07``) keeps the facts that hold in the
+    world then, and the undated ones; ``world`` counts how many of the
+    entity's facts were dated, since most are not.
     """
     params: dict[str, Any] = {"entity": entity, "hops": hops}
     if type:
@@ -247,6 +251,8 @@ def traverse(
         params["domain"] = domain
     if as_of:
         params["as_of"] = as_of
+    if world_at:
+        params["world_at"] = world_at
     out = _guard(lambda: door().get_json("/traverse", params))
     return out if isinstance(out, dict) else {"error": str(out)}
 
@@ -348,6 +354,7 @@ def connect(
     as_of: str | None = None,
     weak: bool = False,
     type_a: str | None = None,
+    world_at: str | None = None,
     type_b: str | None = None,
 ) -> dict[str, Any]:
     """How ``a`` is connected to ``b`` (two names: papers, people,
@@ -358,9 +365,16 @@ def connect(
     sound ones are shown, and an answer with none says so (``best_cost``,
     ``weak_left_out``) — no sound connection is an answer. ``relations``
     restricts the hops (``["cites", "extends"]``), ``as_of`` walks what was
-    held at a moment, ``weak`` shows the paths past the line too, marked."""
+    held at a moment, ``world_at`` (``2019``) the facts that hold in the
+    world then and the undated ones, a hop saying ``world_from`` where its
+    source dated it; ``weak`` shows the paths past the line too, marked."""
     params: dict[str, Any] = {"a": a, "b": b, "max_hops": max_hops}
-    for key, value in (("as_of", as_of), ("type_a", type_a), ("type_b", type_b)):
+    for key, value in (
+        ("as_of", as_of),
+        ("world_at", world_at),
+        ("type_a", type_a),
+        ("type_b", type_b),
+    ):
         if value:
             params[key] = value
     if relations:

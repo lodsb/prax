@@ -122,6 +122,7 @@ from .edges import (  # noqa: F401
     find_edges,
     find_entities,
     held_at,
+    held_in_world,
     hidden_by_premise,
     invalidate_edge,
     link,
