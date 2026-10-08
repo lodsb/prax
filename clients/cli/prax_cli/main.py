@@ -271,6 +271,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="latex2html: the books' author, for each page (repeatable)",
     )
     s.add_argument(
+        "--url-base",
+        metavar="URL",
+        help="mdwiki: where the repository's files are on the web, for each"
+        " document's address (…/-/blob/master)",
+    )
+    s.add_argument(
         "--cache",
         metavar="DIR",
         help="latex2html: where the crawl keeps what it fetched"

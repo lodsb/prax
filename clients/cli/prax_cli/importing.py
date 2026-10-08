@@ -29,6 +29,7 @@ WHAT = (
     "graph",
     "latex",
     "latex2html",
+    "mdwiki",
 )
 
 
@@ -53,6 +54,8 @@ def import_(door: Door, a: Any) -> int:
         return _latex(door, a)
     if a.what == "latex2html":
         return _latex2html(door, a)
+    if a.what == "mdwiki":
+        return _mdwiki(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
 
@@ -279,6 +282,112 @@ def _latex(door: Door, a: Any) -> int:
         if n % 25 == 0 and not a.quiet:
             out.hint(f"  {n}/{len(todo)} sent")
     out.say(f"  {sent} sent, {len(errors)} with a problem")
+    for e in errors[:20]:
+        out.hint("  " + e)
+    return 1 if errors else 0
+
+
+def _mdwiki(door: Door, a: Any) -> int:
+    """A repository of papers with a Markdown wiki about them
+    (``prax.importers.mdwiki``): its PDFs as documents, its wiki as pages
+    whose links are the library's. Three passes: the PDFs; every page once,
+    for its document; every page again with its links resolved. A page
+    whose text has not changed is not written again, so a run can be
+    repeated."""
+    from prax.client import DoorError
+    from prax.importers import mdwiki
+
+    if not a.files:
+        out.fail("prax import mdwiki <a working copy> --name NAME [--url-base URL]")
+    root = Path(a.files[0]).expanduser()
+    name = a.name or root.name
+    tags = [name, *(a.tag or [])]
+    domains = ",".join(a.domain or [])
+    found_pdfs = mdwiki.pdfs(root)
+    found_notes = mdwiki.notes(root, name)
+    if a.limit:
+        found_pdfs, found_notes = found_pdfs[: a.limit], found_notes[: a.limit]
+    out.say(
+        out.bold(name)
+        + out.dim(
+            f"   {len(found_pdfs)} PDFs, {len(found_notes)} pages · {door.base_url}"
+        )
+    )
+    if a.dry_run:
+        for shown in found_notes[:15]:
+            out.say(f"  {shown.slug}  " + out.dim(shown.title[:60]))
+        return 0
+    errors: list[str] = []
+    documents: dict[str, int] = {}
+    for n, path in enumerate(found_pdfs, 1):
+        topic = path.split("/", 1)[0] if "/" in path else ""
+        fields: dict[str, Any] = {
+            "by": f"import:{mdwiki.SOURCE}",
+            "tags": ",".join([*tags, *([f"topic:{topic}"] if topic else [])]),
+            "domains": domains,
+        }
+        if a.url_base:
+            fields["source_url"] = a.url_base.rstrip("/") + "/" + path
+        try:
+            got = door.post_form(
+                "/ingest/file",
+                fields,
+                files={
+                    "file": (
+                        path.rsplit("/", 1)[-1],
+                        (root / path).read_bytes(),
+                        "application/pdf",
+                    )
+                },
+            )
+            if got.get("doc_id"):
+                documents[path] = int(got["doc_id"])
+        except Exception as exc:  # noqa: BLE001 - keep going; listed at the end
+            errors.append(f"{path}: {exc}")
+        if n % 25 == 0 and not a.quiet:
+            out.hint(f"  {n}/{len(found_pdfs)} PDFs")
+    out.say(f"  {len(documents)} PDFs held")
+    pages: dict[str, int] = {}
+    written = 0
+
+    def write(note: Any, text: str) -> None:
+        nonlocal written
+        try:
+            held = door.get_json(f"/page/{note.slug}")
+        except DoorError as exc:
+            if exc.status != 404:
+                raise
+            held = None
+        if held is not None:
+            pages[note.path] = int(held["doc_id"])
+            if held.get("text", "").strip() == text.strip():
+                return
+        where = f"{a.url_base.rstrip('/')}/{note.path}" if a.url_base else note.path
+        got = door.put_json(
+            f"/page/{note.slug}",
+            {
+                "text": text,
+                "title": note.title,
+                "kind": "topic",
+                "author": "agent",
+                "note": f"from {name}: {where}",
+            },
+        )
+        pages[note.path] = int(got["doc_id"])
+        written += 1
+
+    entries = mdwiki.topic_entries(found_notes)
+    for stage in (1, 2):
+        topics = {t: pages[p] for t, p in entries.items() if p in pages}
+        for note in found_notes:
+            text = mdwiki.rewrite(note.text, note.path, documents, pages, topics)
+            try:
+                write(note, text)
+            except Exception as exc:  # noqa: BLE001 - keep going; listed at the end
+                errors.append(f"{note.path}: {exc}")
+        if not a.quiet:
+            out.hint(f"  pass {stage}: {len(pages)} pages, {written} written")
+    out.say(f"  {len(pages)} pages, {written} revisions, {len(errors)} with a problem")
     for e in errors[:20]:
         out.hint("  " + e)
     return 1 if errors else 0

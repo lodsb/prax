@@ -5519,6 +5519,23 @@ under the door's 200 characters (`queue.MIN_CHARS`), which sat textless.
 The importer now sends no page whose own prose, figures aside, is under
 200 characters.
 
+## 2026-10-08: a repository of papers with an LLM wiki about them
+
+Julius O. Smith's Music 423 repository (cm-gitlab.stanford.edu,
+jos/music423-2023): 353 PDFs in topic folders, and beside them an
+"LLM wiki" Claude wrote from them, a summary a paper, concept pages
+across papers, landmark notes, an index a topic, linked to each other
+and to the PDFs by relative paths; its graph is those links. The user
+chose pages over plain documents. `prax import mdwiki`
+(`prax.importers.mdwiki`) sends the PDFs, then writes each wiki file as
+a page (`<name>-<path>`, cut to 80 characters with a hash where long),
+twice: once for its document, once with its links resolved, a PDF's to
+its document, a note's to its page, a topic's folder to its entry page
+(its wiki's index, else its README), all `[words](#doc/N)`, which is
+an `annotates` edge. A link to what was not imported keeps its words.
+Left out: the tooling, the generated graph, the `.txt` copies of PDFs
+and the course's admin files. 468 pages.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
