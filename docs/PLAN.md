@@ -79,10 +79,11 @@ in the plan is blocked on these, except where an item says so.
 
 **A yes or no**, each a dry run shown and applied on the word:
 
-- [ ] **G2**, one fact under two ontology versions: `prax heal --check
-      duplicate-facts`, 1,711 facts, 2,018 later edges.
-- [ ] **Spacing twins**: `prax heal --check spacing-twins`, 783 groups,
-      793 entities to fold.
+- [x] (2026-10-09, the user's word) **G2**, one fact under two ontology
+      versions: `prax heal --check duplicate-facts` applied, 89 facts left
+      by then, 162 later edges ended, the oldest kept.
+- [x] (2026-10-09, the user's word) **Spacing twins**: `prax heal --check
+      spacing-twins` applied, 759 groups, 774 entities folded in one run.
 - [x] (on 2026-10-07, the user's word) **The `worlddates` step on**: `steps.worlddates.model` in
       prax.yaml (howto 3e). Some 500 dated facts over a night or two,
       18 of 18 right on the samples (`docs/eval/world-dates-2026-10-06.md`).
@@ -341,7 +342,7 @@ numbered there) in the order the user agreed: one step a session.
             `eval_paths.py`: at 7, 126 of 150 citation pairs are sound
             and 13 of 300 random pairs (5 at 6). Moving it means reading
             those random paths by hand first; the user's call.
-      - [ ] **G2** one fact live under two ontology versions (edges 7402
+      - [x] (2026-10-09, applied) **G2** one fact live under two ontology versions (edges 7402
             and 47184): the older one ended, or kept as evidence. The
             `duplicate-facts` check of `prax heal` (2026-10-05) finds
             1,711 such facts, 2,018 later edges; applying it waits for the
