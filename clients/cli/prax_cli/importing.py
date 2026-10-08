@@ -28,6 +28,7 @@ WHAT = (
     "zotero",
     "graph",
     "latex",
+    "latex2html",
 )
 
 
@@ -50,6 +51,8 @@ def import_(door: Door, a: Any) -> int:
         return _graph(door, a)
     if a.what == "latex":
         return _latex(door, a)
+    if a.what == "latex2html":
+        return _latex2html(door, a)
     out.fail(f"unknown source {a.what!r}", "one of: " + ", ".join(WHAT))
     return 2
 
@@ -276,6 +279,90 @@ def _latex(door: Door, a: Any) -> int:
         if n % 25 == 0 and not a.quiet:
             out.hint(f"  {n}/{len(todo)} sent")
     out.say(f"  {sent} sent, {len(errors)} with a problem")
+    for e in errors[:20]:
+        out.hint("  " + e)
+    return 1 if errors else 0
+
+
+def _latex2html(door: Door, a: Any) -> int:
+    """Books on the web written with latex2html and MathJax
+    (``prax.importers.latex2html``): every page of each book a document,
+    its HTML the original and its text the page with the mathematics as
+    LaTeX. The crawl keeps what it fetched under ``--cache`` and keeps
+    the site's Crawl-delay; a page the door holds already is skipped."""
+    import hashlib
+
+    from prax.importers import latex2html as l2h
+
+    if not a.files:
+        out.fail("prax import latex2html <a book's index URL> …")
+    cache = Path(a.cache).expanduser() if a.cache else Path.home() / ".cache/prax/crawl"
+    fetcher = l2h.Fetcher(cache)
+    sent = skipped = 0
+    errors: list[str] = []
+    for url in a.files:
+        book = l2h.book(fetcher, url)
+        if book is None:
+            errors.append(f"{url}: not served")
+            continue
+        pages = book.pages[: a.limit] if a.limit else book.pages
+        out.say(
+            out.bold(book.short)
+            + out.dim(
+                f"   {len(book.pages)} pages, {len(pages)} this run · every"
+                f" {fetcher.pause(url):g} s · {door.base_url}"
+            )
+        )
+        if a.dry_run:
+            for p in pages[:10]:
+                out.say("  " + p)
+            continue
+        defined = l2h.book_macros(fetcher, book)
+        picture = l2h.data_url(fetcher)
+        for n, page in enumerate(pages, 1):
+            data = fetcher.get(page)
+            if data is None:
+                errors.append(f"{page}: not served")
+                continue
+            if not a.refresh:
+                digest = hashlib.sha256(data).hexdigest()
+                known = door.post_json("/known", {"hashes": [digest]}).get("known")
+                if known:
+                    skipped += 1
+                    continue
+            html = data.decode("utf-8", "replace")
+            try:
+                text = l2h.to_markdown(html, page, picture, defined)
+            except Exception as exc:  # noqa: BLE001 - the page still goes, as HTML
+                errors.append(f"{page}: {exc}")
+                text = ""
+            # a chapter's page that only lists its sections has nothing of
+            # its own: its sections are the pages
+            words = [x for x in text.splitlines() if x and not x.startswith("#")]
+            if not words:
+                skipped += 1
+                continue
+            title = f"{l2h.page_title(html) or page.rsplit('/', 1)[-1]} ({book.short})"
+            fields: dict[str, Any] = {
+                "title": title,
+                "source_url": page,
+                "by": f"import:{l2h.SOURCE}",
+                "paper": json.dumps({"authors": a.author or [], "journal": book.title}),
+                "tags": ",".join([*(a.tag or []), f"book:{book.slug}"]),
+                "domains": ",".join(a.domain or []),
+            }
+            fields.update(text=text, text_source=l2h.stamp())
+            name = page.rsplit("/", 1)[-1] or "index.html"
+            try:
+                door.post_form(
+                    "/ingest/file", fields, files={"file": (name, data, "text/html")}
+                )
+                sent += 1
+            except Exception as exc:  # noqa: BLE001 - keep going; listed at the end
+                errors.append(f"{page}: {exc}")
+            if n % 25 == 0 and not a.quiet:
+                out.hint(f"  {n}/{len(pages)} · {fetcher.fetched} fetched")
+    out.say(f"  {sent} sent, {skipped} held already, {len(errors)} with a problem")
     for e in errors[:20]:
         out.hint("  " + e)
     return 1 if errors else 0

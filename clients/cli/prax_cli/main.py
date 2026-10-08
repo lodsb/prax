@@ -264,6 +264,18 @@ def build_parser() -> argparse.ArgumentParser:
         "--links", action="store_true", help="chat: capture the links sent, too"
     )
     s.add_argument("--limit", type=int, metavar="N", help="send at most N")
+    s.add_argument(
+        "--author",
+        action="append",
+        metavar="NAME",
+        help="latex2html: the books' author, for each page (repeatable)",
+    )
+    s.add_argument(
+        "--cache",
+        metavar="DIR",
+        help="latex2html: where the crawl keeps what it fetched"
+        " (default ~/.cache/prax/crawl)",
+    )
     s.add_argument("--dry-run", action="store_true", help="list what would be added")
     s.add_argument("--quiet", action="store_true", help="only failures are printed")
     s.add_argument("--token-github", metavar="TOKEN", help=argparse.SUPPRESS)

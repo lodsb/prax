@@ -5464,7 +5464,8 @@ figures are cut from it. The converter (revision 2,
 `latex-source/3.9-r2`) writes each figure environment as its caption
 line, `Figure N: …`, numbered as the PDF prints it (by section under
 `
-umberwithin{figure}{section}`), every `ef` to it as N. The door
+umberwithin{figure}{section}`), every `
+ef` to it as N. The door
 asks `figure-crops` for a `latex-source/` text as it does for MuPDF's
 and marker's, and for a text a sender re-sent. `figures.add_crops`
 looks for each caption page by page when the text has no page marks,
@@ -5474,6 +5475,29 @@ paragraph before it (`region_to_paragraph`): a TikZ figure is thin lines
 with labels between, and `crop_region`'s 24-point gap cut it after its
 bottom strip. On 30 sample papers, 48 of 50 captions got their picture,
 looked at by eye.
+
+## 2026-10-08: books written with latex2html, page by page
+
+The user's next batch: Julius O. Smith's online books at CCRMA
+(*Mathematics of the DFT*, *Introduction to Digital Filters*, *Physical*
+and *Spectral Audio Signal Processing*, *Audio Signal Processing in
+Faust*: 2,161 pages) and his publications. The pages are latex2html with
+MathJax: inline `\(…\)` in a `MATH` span, a display in a `MATHDISPLAY`
+block, a figure a table with its caption and a PNG at 1x, 2x and 3x, and
+some 960 macros a book in its `mathjax-config.js`. `prax import
+latex2html` (`prax.importers.latex2html`) walks a book from its index in
+the table of contents' order and makes each page a document (the user's
+choice, over a document per chapter or per book: the extraction reads a
+document's first 12,000 characters). A page's content is what lies
+between its navigation panels; its formulas become `$…$` and one-line
+`$$…$$` with the book's macros written out (`bs{z}` is
+`\left|zight|`, so KaTeX renders it and a search finds it); a figure
+its 2x picture inlined with its caption, which the door files for the
+vision pass. A title carries its book's short name, so the "Problems" of
+two books are two documents. The fetcher keeps what it fetched on disk
+and the site's Crawl-delay (ten seconds at CCRMA); a chapter's page that
+only lists its sections is not sent. Some 15 of his papers were in the
+library from Zotero already, and two captures of a book's front page.
 
 # Moved from the plan
 
