@@ -1,12 +1,14 @@
-<p align="center"><a href="docs/design/BRIEF.md"><img src="docs/design/assets/logo/themes/prax-mark-bindery.svg" width="128" alt="The prax mark: a praxinoscope in elevation, printed in three passes — block, key and one colour facet"></a></p>
+<p align="center"><a href="docs/design/BRIEF.md"><img src="docs/design/assets/logo/themes/prax-mark-bindery.svg" width="128" alt="The prax mark: a praxinoscope in elevation, printed in three passes in block, key and one colour facet"></a></p>
 
 # prax
 
-A personal library for what you read: papers, web pages, manuals,
-notes. You get search that combines keywords and meaning, a graph of
-how things connect, and answers with citations back to the source. It
-runs on your own machines with your own models. You can use it from
-the browser, from a shell, or from an agent.
+prax is a self-hosted library for the papers, web pages, manuals and
+notes one person reads. Its search matches words and meaning at once,
+its graph records what the documents say about each other, and an AI
+agent can search and read it through the same interface its owner
+uses. Everything lives in one
+SQLite file and a folder of originals, on your own machines, with
+models you choose.
 
     pip install -e ".[serve,work]"
     export PRAX_DATA_DIR=~/prax-data
@@ -17,170 +19,205 @@ the browser, from a shell, or from an agent.
     prax search feedback delay networks
     prax ask --answer why do FDNs colour the tail
 
-An empty store works from the first command. On the machine with the
-models, `prax work --watch` finishes new documents: text, title, graph,
-vectors. To keep everything running, list the parts under `run:` in
-`prax.yaml` and run `prax up --install`. That starts them at login on
-Windows, Linux or macOS, with a tray icon on a desktop. The longer
-version, with the Zotero import and the browser extension, is in
-[`docs/howto.md`](docs/howto.md).
+An empty store works from the first command. A new document is
+archived as it arrives, and `prax work --watch`, run on the machine
+with the models, does the rest: its text, title, graph links and
+vectors. To keep the parts running, list them under `run:` in
+`prax.yaml` and run `prax up --install`, which starts them at login on
+Windows, Linux or macOS. The longer version, with the Zotero import and
+the browser extension, is in [`docs/howto.md`](docs/howto.md).
+
+## Why I built it
+
+My reading was spread over a Zotero library, an external disk I called
+zoetrope, a NAS and a year of browser tabs. I could only find a paper
+again if I remembered where I had put it. I wanted one place that keeps
+the originals and reads them closely enough to answer "which of my
+papers says this, and where". An agent working with me should be able
+to search it without being handed whole PDFs. I built prax with Claude
+Code over a few weeks in 2026. I decided what it should do and measured
+whether it did, and the log of that work is in
+[`docs/log.md`](docs/log.md). It is shaped by one library and one set
+of machines, and it is published so the design and the measurements
+can be read and reused.
+
+## One question, followed through
+
+Say I want to know why a feedback delay network colours the tail of a
+reverb. A search from the shell returns documents, each with the
+passage that matched (the brackets mark the matched words) and where
+in the document it sits:
+
+    $ prax search feedback delay networks colour the tail
+     …
+     3. The Role of Modal Excitation in Colorless Reverberation             doc 9577
+        [Feedback] [delay] [networks] (FDNs) are a computationally efficient
+        structure for artificial reverberation…
+         text · page 1 · THE ROLE OF MODAL EXCITATION IN COLORLESS R…
+     4. Allpass Feedback Delay Networks                                    doc 13371
+        …arbitrary connection of [delay] lines, namely [feedback] [delay] [networks]
+        (FDNs). We present…
+
+`prax ask --answer` goes further when there is a model on the host. It
+searches again with words of its own, reads on in the documents that
+looked promising and drops what does not help. Then it writes an answer
+whose citations point at the passages it kept. The trail of those steps
+is shown under the answer, so you can see why a source was used.
 
 <table>
 <tr>
-<td width="50%"><a href="docs/images/search.png"><img src="docs/images/search.png" alt="Search results: hybrid hits with the side that found each"></a></td>
-<td width="50%"><a href="docs/images/ask.png"><img src="docs/images/ask.png" alt="Ask: the model surfed four steps, searching again and reading on; the answer cites the passages it kept, the sources beside it, the trail under it"></a></td>
+<td width="50%"><a href="docs/images/search.png"><img src="docs/images/search.png" alt="Search results in the web UI, each hit marked with the side that found it"></a></td>
+<td width="50%"><a href="docs/images/ask.png"><img src="docs/images/ask.png" alt="An answer in the web UI with its cited passages beside it and the model's four steps of searching and reading under it"></a></td>
 </tr>
 <tr>
-<td><sub>Search. Each hit says which side found it: keywords, vectors, or the document's own summary.</sub></td>
-<td><sub>Ask. The model searched again and read on before it answered. The citations point at passages, and the trail shows how it got there.</sub></td>
+<td><sub>In the web UI each hit says whether keywords, vectors or the document's own summary found it.</sub></td>
+<td><sub>Here the model searched again and read on before answering, and the trail under the answer shows each step.</sub></td>
 </tr>
-<tr>
-<td><a href="docs/images/graph.png"><img src="docs/images/graph.png" alt="Graph: a method's neighbourhood, every edge with its evidence and its source"></a></td>
-<td><a href="docs/images/image-recognition.png"><img src="docs/images/image-recognition.png" alt="An image described and transcribed by two vision models, in the document view with its context"></a></td>
-</tr>
-<tr>
-<td><sub>Graph. A method and its neighbours. Every link says how sure it is, which model wrote it, from which document and which sentence.</sub></td>
-<td><sub>A schematic as a document, read by two vision models. Both readings are kept and both are named.</sub></td>
-</tr>
+</table>
+
+An agent asks the same library through the MCP server, and what comes
+back is sized for its context window. The same question asked by an
+agent, with three hits, is 1.8 KB of JSON. It opens with the region of
+the library the hits live in, and each hit carries a `cite` link that
+still finds the passage after the document is re-chunked:
+
+```json
+{"doc_id": 270, "title": "Building the Erbe-Verb: Extending the Feedback Delay Network Reverb for Modular Synthesizer Use",
+ "snippet": "…on a 4-[delay] [feedback] [delay] network [reverb] (FDN) as proposed by…",
+ "heading": ["…", "2. BASIC DESIGN"], "page": 1, "published": "2015",
+ "cite": "#doc/270?chunk=1757785&find=a+unitary+feedback+matrix"}
+```
+
+The agent can then ask how two things are connected. Asked for
+"feedback delay network" and "Schroeder reverberator", `connect`
+answers in 1.2 KB with one path of two steps through a paper on
+scattering delay networks, and each step quotes the sentence it rests
+on. One says the paper uses the Schroeder reverberator: "Starting with
+the Schroeder reverberator [3, 4], a wide variety of approaches for
+room acoustics simulation have been introduced…". The other says it
+uses feedback delay networks, on the strength of "…found that they
+perform better than Feedback Delay Networks (FDNs)". That is a generous
+reading, and because the quote comes with it, an agent or a person can
+see so and weigh it.
+
+## What it does
+
+### Reading figures with the words around them
+
+Most PDF tools stop at the text. prax pulls each figure out, or renders
+the region above its caption when the figure was drawn with vector
+paths. A vision model then reads it together with the paragraphs that
+refer to it. That is why a plot comes back as "the frequency responses
+of the five learned CNN kernels against the ground truth filter"
+instead of "six stacked curves". The reading
+is a passage of the document, so you can search for a figure by what it
+shows, cite it, and an answer can use it. A scanned book with no text
+layer is read the same way, page by page.
+
+<table>
 <tr>
 <td colspan="2"><a href="docs/images/vision-with-context.png"><img src="docs/images/vision-with-context.png" alt="A figure in the document view: the image, its caption, and the vision model's reading of it naming each step of the process"></a></td>
 </tr>
 <tr>
-<td colspan="2"><sub>A figure is read together with the words around it in the document. The reading names the process and its four steps instead of describing grey rectangles. The figure is a passage of the document: you can search for it, cite it, and an answer can use it.</sub></td>
+<td colspan="2"><sub>The reading names the process the figure shows and its four steps, because the model was given the caption and the text that refers to it.</sub></td>
 </tr>
 <tr>
-<td colspan="2"><a href="docs/images/youtube-extraction.png"><img src="docs/images/youtube-extraction.png" alt="A talk from YouTube as a document: the transcript in paragraphs headed by their moment, a frame of the talk as a figure with the words spoken there, the summary and the entities the extraction found beside it"></a></td>
-</tr>
-<tr>
-<td colspan="2"><sub>A talk sent from the browser. The transcript comes in paragraphs, each with its moment. A frame every so often is a figure, captioned with what was said there. The summary and the entities come from the same extraction a paper gets. Every moment is a link that seeks the player.</sub></td>
-</tr>
-<tr>
+<td width="50%"><a href="docs/images/image-recognition.png"><img src="docs/images/image-recognition.png" alt="A schematic as a document, described and transcribed by two vision models"></a></td>
 <td width="50%"><a href="docs/images/citations.png"><img src="docs/images/citations.png" alt="A paper's reference list in the document view: each entry a chunk of its own, and under it the library document it cites, matched by title with its score"></a></td>
-<td width="50%"><a href="docs/images/figure-strip.png"><img src="docs/images/figure-strip.png" alt="The figure strip of a talk: every frame the extension took, captioned by its moment and the words spoken there, each a link to its passage"></a></td>
 </tr>
 <tr>
-<td><sub>A paper's reference list. Each entry is matched against the library. The cited paper appears under it with a score, and the [n] in the text links to it.</sub></td>
-<td><sub>A talk's figures at a glance: the frames, each with its moment and what was said. A paper shows its figures the same way, a scan its pages.</sub></td>
-</tr>
-<tr>
-<td colspan="2"><a href="docs/images/ask-block.png"><img src="docs/images/ask-block.png" alt="A page of one's own notes with an ask block: the person's prose and links above, the door's answer on a plate below with the question on its rim, the documents the page links and cites as entities beside it"></a></td>
-</tr>
-<tr>
-<td colspan="2"><sub>A page of your own with a question in it. You write the question between two comment lines. prax answers it there, with sources, and answers again when new documents arrive. It never changes a word you wrote. The documents you link and the ones the answer cites show up in the column beside the page.</sub></td>
-</tr>
-<tr>
-<td colspan="2"><a href="docs/images/themes.png"><img src="docs/images/themes.png" alt="The six themes: Bindery, Dessau, Riso, Cyanotype, Night, Funk — the same page in each"></a></td>
-</tr>
-<tr>
-<td colspan="2"><sub>Six themes. Each one is four colours, and they change the page and the logo together.</sub></td>
+<td><sub>A schematic read by two vision models; both readings are kept, each with the model that wrote it.</sub></td>
+<td><sub>The entries of a paper's reference list are matched against the library, and the [12] in the text links to the paper it cites.</sub></td>
 </tr>
 </table>
 
-## What it does
+### A graph whose links say where they came from
 
-**Takes things in.** Your Zotero library, read-only. Files you drop
-in a folder. The page you are reading, or every tab in the window, sent
-from the browser as a self-contained snapshot. A PDF behind a login,
-fetched with your own session. `prax import` reads exports from GitHub
-stars, chat apps, bookmarks, Pocket, Raindrop and Medium. `prax sync`
-sends a project's notes and docs from its git working copy, and only
-those: never its source or a vendored build tree.
+A model reads each document against a small ontology: which paper uses
+which method, which manual belongs to which piece of gear, which recipe
+needs which ingredient. Every link it writes records the document, the
+sentence, the model, the batch it ran in and the ontology version. I
+wanted that because models misread papers, and a link I cannot trace to
+a sentence is one I cannot check. When a later reading disagrees, the
+old link is given an end date and kept. A database trigger refuses any
+attempt to delete a link or change what it says, so you can ask what
+the graph said on a given day. A whole batch from one model can be
+withdrawn without touching anyone else's work. A fact that states its
+own date ("she worked at the lab from 2019") keeps that date
+apart from the date prax learned it. Names are kept apart from things:
+*apple* the ingredient and *Apple* the company are two entities, and a
+merge of two names into one thing can be taken back.
 
-**Reads them.** PDFs go through MuPDF, with OCR when you ask, or
-through marker when you want the maths as LaTeX. HTML goes through
-trafilatura, comments included. Word files, code and talks with their
-transcripts are read too. Figures are pulled out and read by a vision
-model. The model sees the words around the figure, so a plot comes back
-as "the frequency responses of the five learned CNN kernels against the
-ground truth filter" and not as "six stacked curves". You can search
-for a figure by what it shows. A scanned book with no text layer comes
-back as its pages, filed as pictures and read the same way. Reference
-lists are cut into entries and each entry is matched against the
-library. Titles that were file names get repaired.
+<table>
+<tr>
+<td colspan="2"><a href="docs/images/graph.png"><img src="docs/images/graph.png" alt="A method's neighbourhood in the graph view, every link with its evidence and its source"></a></td>
+</tr>
+<tr>
+<td colspan="2"><sub>A method and its neighbours, where a link shows how sure the extraction was, which model wrote it, and the document and sentence it came from.</sub></td>
+</tr>
+</table>
 
-**Finds them.** Keyword and vector search run over the passages and
-over what each document is about, and the results are merged per
-document. You can filter by kind of document or by subject. Acronyms
-the library defines are expanded on the way in. Stopwords and reference
-lists are left out, so a query is about what it says. Each hit shows
-when its document was published, as precisely as the source says it,
-and you can ask for only what appeared after a year. A document a newer
-one replaced is still found, but it moves down and says what replaced
-it.
+### Search
 
-**Connects them.** A model reads each document against a small
-ontology and writes typed relations: which paper uses which method,
-which manual belongs to which piece of gear, which recipe needs which
-ingredient. You can read the whole ontology in an afternoon. Citation
-links come from Crossref or OpenAlex, and from each paper's own
-reference list matched against the library, with a score. On a paper's
-page the [12] in the text is a link to what entry 12 cites. Every
-relation records who wrote it, from which document, under which version
-of the ontology, and the sentence it came from. The ontology is split
-by domain: research, studio gear and its electronics, software, the
-kitchen, the workshop, society. A document is read only against the
-domains it belongs to, so nobody asks a recipe for its methods. A few
-rules add what follows from the rest (a part of a part is a part), and
-each added link names the links it stands on. Ask how two things are
-connected and you get the two or three best paths, with the sentence
-behind each step.
+Keyword (SQLite FTS5) and vector search run over the passages and over
+a short description of each document. The four lists are merged per
+document, and you can filter them by kind of document or by subject. Acronyms the library defines ("feedback delay network
+(FDN)") are expanded on the keyword side. Each hit shows when its
+document was published, as precisely as the source says, so you can
+ask for only what appeared after a given year. A document that a newer
+one replaced is still found, a few places lower, with a note naming its
+replacement. The numbers, with their caveats, are further down.
 
-**Says how it knows.** A link in the graph is evidence, not a settled
-fact. Nothing in the graph is overwritten. When a later reading
-disagrees, the old link is ended and kept beside the new one. The
-database itself refuses to delete a link or change what it says. So you
-can ask what the graph said on a given day, before a better model read
-the papers again. Two times are kept apart: when prax learned
-something, and when it holds in the world. "She worked at the lab from
-2019" keeps the 2019, as precisely as the source gave it. A fact that
-five papers state shows up once, with the five behind it. A name is not
-a thing: *apple* the ingredient and *Apple* the company stay apart, and
-the graph around the name says that both exist. When two names turn out
-to be one thing, the merge is a pointer you can take back. And a merge
-that would move many facts at once, or touch something your own notes
-are about, waits for you on the review page.
+### Pages of your own
 
-**Keeps some of it to itself.** Rules flag what looks personal, a bank
-statement or a letter, and you decide. A token you hand to an agent or
-to another machine sees only the domains you give it, and nothing
-personal unless you say so. The filter sits in the store, so a search,
-a walk of the graph and an answer all leave out the same documents.
+Notes, project logs and write-ups are Markdown pages with a revision
+history, and they are searched and read like any other document. A link
+from a page to a document becomes a link in the graph. If you put a
+question between two comment lines, prax answers it there with sources
+and answers again when new documents arrive. The second time, the model
+sees its earlier answer and is told what is new, so it revises. If you
+edit inside an answer, prax leaves that block alone. A daily briefing page lists what
+arrived and which answers changed.
 
-**Answers questions.** With a model on the host, `ask` works the
-library for a few steps before it writes. It searches again, reads on,
-walks the graph and drops what does not help. Then it answers and cites
-the passages it kept. You watch it happen. You can keep the answer as a
-page with links to its sources, or as a standing question that prax
-asks again when new documents arrive. Each new answer is a revision.
-A daily briefing page lists what arrived and which answers changed.
-What the model can and cannot do is in [`docs/ask.md`](docs/ask.md).
+<table>
+<tr>
+<td colspan="2"><a href="docs/images/ask-block.png"><img src="docs/images/ask-block.png" alt="A page of one's own notes with an ask block: the person's prose and links above, the answer below with the question on its rim, the documents the page links and cites beside it"></a></td>
+</tr>
+<tr>
+<td colspan="2"><sub>A page of notes with a standing question in it; the documents the page links and the ones the answer cites are listed beside it.</sub></td>
+</tr>
+</table>
 
-**Keeps what you write.** Notes, project logs and write-ups are
-Markdown pages with a revision history. They are documents like any
-other: searched, extracted, citable. Link a document from a page and
-the link becomes a relation in the graph. Put a question in a page
-between two comment lines and prax answers it there, with sources, and
-answers again when new documents speak to it. When it asks again, the
-model sees its earlier answer and is told what is new, so it revises
-instead of starting over. prax never rewrites what you wrote yourself.
-If you edit inside an answer, it leaves that block alone until you say
-otherwise. Rename a page and its links follow.
+### And the rest
 
-**Mends itself.** `prax heal` finds the usual kinds of damage: a
-placeholder entity, a page captured twice, a scan filed under its
-cover's title, figures nobody has read. For each it tells you the
-command that fixes it. Nothing is ever deleted. A wrong document is
-hidden, with its history kept. When the service felt slow, its log says
-what it was doing and which part took the time.
+- Documents come from a Zotero library (read from a copy, never
+  written to), a drop folder, and the browser extension. The extension
+  sends the page you are reading as a self-contained snapshot, a paper
+  as its PDF and a YouTube talk as its transcript and frames. `prax
+  import` reads exports from GitHub stars, chat apps, bookmarks, Pocket,
+  Raindrop and Medium, and `prax sync` sends a project's notes from its
+  git working copy.
+- PDFs are read by MuPDF with optional OCR, or by marker when you want
+  the maths as LaTeX. HTML goes through trafilatura, and Word files,
+  code and LaTeX sources have parsers of their own.
+- Rules flag documents that look personal (a bank statement, a letter)
+  and you decide. A token handed to an agent or another machine sees
+  only the domains you give it and no personal documents. Because the
+  filter sits in the store, search, the graph and answers all leave out
+  the same documents.
+- `prax heal` lists recurring damage (a placeholder entity, a page
+  captured twice, a scan filed under its cover's title, figures not yet
+  read) and prints the command that fixes each. A fix hides a wrong
+  document with its history and deletes nothing.
+- The UI has six themes, each four colours that change the page and the
+  logo together ([`docs/design/BRIEF.md`](docs/design/BRIEF.md)).
 
-## Four ways in
+## Ways in
 
-**The web UI** at `/ui/`. Search and ask, a document with its context
-and its figures, the graph, the review queue, your pages, the inbox and
-the jobs.
-
-**The `prax` command.** The whole library from a shell, and how most of
-it gets used:
+The web UI at `/ui/` has search and ask, a document with its context
+and figures, the graph, the review queue, your pages, the inbox and the
+jobs. The `prax` command covers the whole library from a shell, and it
+is how I use it most:
 
     prax                              where things stand, what to type next
     prax search granular synthesis    find documents
@@ -192,131 +229,140 @@ it gets used:
     prax status · jobs · heal · backup · doctor
     prax up · serve · work --watch    run it (--tray: an icon in the tray)
 
-Each command is one HTTP call. `--json` makes any of them usable from
-a script. `--door` points the same command at another machine, say the
-board in the cupboard from your laptop.
-
-**The browser extension.** It sends what you are reading, including
-pages that need your login. A page arrives as a self-contained
-snapshot. A paper arrives as its PDF, with the DOI and authors from the
-abstract page. A YouTube talk arrives as its transcript and frames. A
-selection arrives as an excerpt, or goes onto one of your pages. All
-of this from the popup, the context menu or a single key.
-
-**HTTP, for everything else.** One service is the only writer and the
-only API. A shell script with `curl` and `jq` can do exactly what the
-UI does. An MCP server ships with it for agents. It offers the reads
-the UI has: search, a document, the graph around a name, how two things
-connect, what changed in a week, and a figure or a scanned page as a
-picture the agent's model can look at. Whatever a script or
-an agent writes carries its own name, so you can inspect it or take it
-back out as a unit. Recipes and the contract are in
+A command is one HTTP call to the service, so `--json` makes any of
+them usable from a script and `--door` points the same command at
+another machine. The browser extension sends what you are reading,
+including pages behind your login. The MCP server gives an agent the
+same reads as the UI, each as one HTTP call. They cover search, a
+document by offset and length, the graph around a name, how two things
+connect, what changed in a week, and a figure or a scanned page as an
+image. Whatever a script or an agent writes carries its name, so you can
+inspect it or take it back as a unit. Recipes and the contract are in
 [`docs/integrating.md`](docs/integrating.md).
 
-## Whose models, and where it runs
+## Models and hardware
 
-Which model does which step is a line in a config file. It can be a
-GGUF served by llama.cpp on your own card, any OpenAI-compatible
-server, the Claude API for the few documents worth it, or `none` where
-a person does the job better. Nothing is spent unless a command says so.
-Private material never has to leave the house. The whole library below
-was read by one local model on one card. The measurements against the
-hosted model are in [`docs/eval/`](docs/eval/).
+Which model does which step is a line in `prax.yaml`. It can be a GGUF
+served by llama.cpp on your own card, any OpenAI-compatible server, or
+the Claude API for the few documents worth paying for, and where a
+person does the job better the line says `none`. A paid model is called
+only by a command you run, so private material stays on your machines unless you send it. The
+library below was read by local Qwen models on one RTX 4090, and the
+comparisons with the hosted model are in [`docs/eval/`](docs/eval/).
 
-It runs on one machine or on two. In the two-machine setup a small
-board holds the store and the service, and a desktop with a GPU does
-the model work through it. Nothing in the serving path needs more than
-a gigabyte of memory.
+prax runs on one machine or two. In the two-machine setup a small board
+holds the database and the service, and a desktop with a GPU does the
+model work through the same HTTP interface. The serving path is held to
+a gigabyte of memory so that the board can be a Raspberry Pi or an N100
+box.
 
 ## The library it was built on
 
-One real instance on 7 October 2026: a researcher's library after a
-Zotero import, the contents of a NAS, a year of browser captures and a
-few weeks of model passes. The numbers are here for scale, not as
-targets.
+These are the numbers of my own instance on 7 October 2026. It holds a
+Zotero import, the contents of a NAS and a year of browser captures,
+after a few weeks of model passes. They show the scale prax has been
+run at; they are not a benchmark.
 
 | | |
 |---|---|
 | Documents | 13,000: 10,200 PDFs, 2,200 office and text files, 600 web pages, 42 talks from YouTube, 28 pages of my own. 8,960 came from Zotero, 3,360 were uploaded or dropped in the folder, 620 were sent from the browser. About 400 are marked personal |
 | Text and passages | 1,486,000 passages (1,102,000 text, 160,000 reference entries, 120,000 figures, 55,000 tables, 33,000 formulas, 14,000 code), 1,325,000 of them with a vector; 8,900 acronyms the library defines |
-| Figures | 120,000 across 6,200 documents, served out of the originals; 62,000 read by the local vision model, and each reading can be searched like a paragraph. Where the picture was drawn with vector paths and no extractor could lift it out, the region above its caption is rendered instead |
-| Graph | 216,000 live relations over 162,000 entities (48,000 papers, 34,000 concepts, 19,000 methods, 10,000 authors, 10,000 tools), against nine ontology modules in eight domains; 45,000 of the relations are citations. 181,000 ended relations are kept as history. 43,000 names are folded into another: the same thing under a different spelling, an initials form, or the same thing in another language. 187 regions of the library, each named |
-| Languages | 74% English, 18% German, a few in French, Spanish, Italian and Dutch, and 12% too short or too scanned to tell. The document field is written in English whatever the document is in, and an entity keeps the document's own word as a label in its own language |
-| Retrieval | MRR 0.90 for the combined search over 62 real queries, hit@1 0.87 |
-| Running | one Windows desktop: service, worker and llama-server started at login, the figures read from 21:00, merges at 03:00, maintenance at 03:30, a backup at 04:30, the standing questions at 06:30. A 3.1 GB database, a 1.3 GB vector index and a 26 GB archive |
+| Figures | 120,000 across 6,200 documents, served out of the originals; 62,000 read by the local vision model |
+| Graph | 216,000 live relations over 162,000 entities (48,000 papers, 34,000 concepts, 19,000 methods, 10,000 authors, 10,000 tools), against nine ontology modules in eight domains; 45,000 of the relations are citations. 181,000 ended relations are kept as history, and 43,000 names are folded into another (a different spelling, an initials form, another language) |
+| Languages | 74% English, 18% German, a few in French, Spanish, Italian and Dutch, and 12% too short or too scanned to tell |
+| Running | one Windows desktop: service, worker and llama-server started at login, figures read from 21:00, merges at 03:00, maintenance at 03:30, a backup at 04:30, the standing questions at 06:30. A 3.1 GB database, a 1.3 GB vector index and a 26 GB archive |
 
-The service has not moved onto the serving board, though the code for
-it is in [`deploy/`](deploy/). What else is unfinished is in
-[`docs/PLAN.md`](docs/PLAN.md).
+Retrieval is measured on 62 questions I wrote about my own library
+(keyword, paraphrase and structure questions), as the mean reciprocal
+rank of the document I had in mind. On 8 September 2026 keyword search
+alone scored 0.82, vector search alone 0.80 and the merged search
+0.79, so merging did not help yet
+([`retrieval-library-2026-09-08`](docs/eval/retrieval-library-2026-09-08.md)).
+After a month of changes the merged search scores 0.90, with the right
+document first for 87% of the questions
+([`retrieval-facts-list-2026-10-05`](docs/eval/retrieval-facts-list-2026-10-05.md)).
+Those changes were checked against the same 62 questions, so 0.90 is
+an optimistic figure. A held-out set of questions is still to be
+written, and the results can be repeated only on this one library.
+
+## When to use something else
+
+prax is for one person who wants to keep the originals, see where every
+claim in the graph came from, and give agents bounded access. If one of
+these describes you better, another tool is the better choice:
+
+- You need citations in Word or Google Docs, sync across devices, or
+  shared group libraries: use [Zotero](https://www.zotero.org/). prax
+  reads a Zotero library and does not replace it.
+- Your knowledge is notes that you and your agents write, and the
+  Markdown files themselves should be the record:
+  [Basic Memory](https://github.com/basicmachines-co/basic-memory).
+- You want a chat assistant over your documents on every device, or a
+  hosted service: [Khoj](https://github.com/khoj-ai/khoj).
+- You are building an application whose agents need memory:
+  [Graphiti](https://github.com/getzep/graphiti) (a library over Neo4j,
+  FalkorDB or Neptune) or [Cognee](https://github.com/topoteretes/cognee)
+  (a library, embedded by default).
+- You need dates on most facts as they are read, a walk of the graph as
+  it stood on a date, or facts that hold a plain number or date.
+  [Utopia](https://github.com/deeplethe/utopia) does these better than
+  prax does today.
+- Several people will use it, or it must face the open internet: prax
+  has no user accounts and no installer.
+
+[`docs/compared.md`](docs/compared.md) sets out how prax stores facts,
+time and evidence beside Utopia, Graphiti, Cognee and Basic Memory, as
+read from their code at named commits. The wider survey is in
+[`docs/research.md`](docs/research.md#where-prax-sits).
 
 ## How it works
 
-**A document.** The bytes are archived once under their SHA-256. The
-database keeps the metadata and the hash, so the same file sent twice
-is one document. A parser writes the text, which is stored under its
-own hash and stamped with the parser that made it. The text is cut into
-addressable passages: text under a heading, tables, figures, display
-equations, code, the entries of the reference list. Each passage knows
-where it sits in the text. The passages go into an FTS5 index and a
-usearch vector index (reference entries into neither), and the document
-gets a summary field of its own. A model reads the document against
-the ontology modules it belongs to. Each relation it finds becomes a
-link with its evidence, or goes to a review queue when it fits no type.
-Reference entries are matched to the library by rules and become
-citation links with a score.
+A document's bytes are archived once under their SHA-256, so the same
+file sent twice is one document, and the database keeps the metadata
+and the hash. A parser writes the text, which is stored under its own
+hash and stamped with the parser that made it. The text is cut into
+passages that each know their place in it: text under a heading,
+tables, figures, display equations, code, the entries of a reference
+list. The passages go into an FTS5 index and a usearch vector index.
+Then a model reads the document against the ontology modules it belongs
+to. Each relation it finds becomes a link with its evidence, or an item
+in a review queue when it fits no type.
 
-**A query.** Four ranked lists are merged per document: keywords and
-vectors over the passages, keywords and vectors over the summary
-fields. A reranker can follow, and you can filter by type and subject.
-`ask` builds on the same search. The graph is walked one or two hops
-from an entity. Questions like "what is not connected" are SQL, not
-retrieval.
+Everything derived from a document (text, passages, vectors, links,
+summaries, figure readings) is a model's work and is stamped with what
+produced it. When a better model or prompt comes along, the documents
+read under the old stamp can be found and read again, and the earlier
+reading stays beside the new one. The originals are the only thing that
+cannot be made again, which is why they are the only thing kept as they
+arrived.
 
-**The batch work.** Parsing, titles, extraction and embedding are
-batch jobs, never part of a request. A worker fetches work from the
-service and posts the results back over HTTP. Nothing but the service
-writes to the store. When a document lands, the service follows up on
-its own: a transcript is polished, then its frames are read; a marker
-read is followed by its equations. A nightly job keeps the derived
-tables and the citation links current.
+The service is the only process that writes to the database. Parsing,
+extraction and embedding are batch jobs, done by a worker that fetches
+work from the service over HTTP and posts the results back. That lets
+the worker run on the GPU machine while the database stays on the
+board.
+[`docs/architecture.md`](docs/architecture.md) follows a document and
+a query through the code.
 
-**Why it is built this way.** Everything derived from a document is a
-model's work, kept so it need not be repeated: text, passages, vectors,
-relations, summaries, figure readings. Each is keyed by the stamp of
-whatever produced it. A better model or a better prompt is a new stamp.
-Whatever is behind it can be found and redone on request, and the
-earlier reading stays beside the new one. Only the originals are never
-derived, so everything else can be thrown away and made again.
+## Status
 
-## Where it sits among the others
+prax is one person's tool. There is no installer and no multi-user
+story, and the defaults reflect one library. The service has not yet
+moved onto the serving board, though the code for it is in
+[`deploy/`](deploy/), and what else is unfinished is in
+[`docs/PLAN.md`](docs/PLAN.md). Every push runs the test suite on Linux
+and Windows and the quick start above in a fresh venv
+([`ci.yml`](.github/workflows/ci.yml),
+[`scripts/smoke.sh`](scripts/smoke.sh)). The extension has a test bed
+that drives it in headless Chrome and Firefox
+([`scripts/extension_bed.mjs`](scripts/extension_bed.mjs)), and I use
+it daily in Firefox, Waterfox and Chrome. Issues and pull requests are
+welcome, though they may wait.
 
-Every neighbour exposes tools to an agent now, so that is not what sets
-prax apart. Bookmark managers keep links and have mobile apps. Zotero
-MCP servers give an agent a curated library and nothing else. The
-LLM-wiki family makes generated pages the index; prax keeps the
-originals as the truth. Agent-memory frameworks are built for an
-application's agents; prax is a tool for a person that agents can also
-use. Paperless files paperwork. The comparison by family and by
-product, with sources, is in
-[`docs/research.md`](docs/research.md#where-prax-sits).
-
-The nearest systems keep a graph of facts too. What each one stores,
-roughly, as read from their code on 7 October 2026:
-
-| | prax | Utopia | Graphiti | Cognee | Basic Memory |
-|---|---|---|---|---|---|
-| The sources | the original files, and their passages | documents and passages | the inputs | documents and passages | your own notes |
-| The facts | typed links, with a quote | typed facts and plain values, with a quote | facts as sentences | typed links | links written in the notes |
-| Where a fact came from | document, sentence, model and run | document and sentence | the input | the pipeline run | the note |
-| When it holds | where a source says, on few facts yet | on most facts | on facts, from the text | on events, if asked | where a note says |
-| What it used to say | every ended fact, kept | ended facts, kept | ended facts, kept | older values tagged, if asked | the file's history |
-| Names | one per language | one | one | one | one |
-
-Where prax is behind: Utopia dates most facts as it reads them and can
-walk the graph as it stood on a date. Its facts can hold a plain value,
-a number or a date, and it records the decision on a conflict. The
-details, with the tables and columns behind each cell, are in
-[`docs/compared.md`](docs/compared.md).
+The service is meant for a private network (a LAN or a VPN such as
+Tailscale). Its administrator token can read and change everything, the
+named tokens you hand out see only what you give them, and nobody has
+audited it. Do not expose it to the internet.
 
 ## Documentation
 
@@ -325,53 +371,47 @@ details, with the tables and columns behind each cell, are in
 | [`docs/howto.md`](docs/howto.md) | Setting up, the batch jobs, `prax.yaml`, the service, the board, backup. |
 | [`docs/integrating.md`](docs/integrating.md) | Using the library from scripts, agents and other tools. |
 | [`docs/ask.md`](docs/ask.md) | What the asking model can and cannot do, what it costs, how to steer it. |
-| [`docs/architecture.md`](docs/architecture.md) | The system as built: hosts, the life of a document and of a query, the modules, where to touch what. |
-| [`CLAUDE.md`](CLAUDE.md) | Invariants and conventions. The file an agent session loads. |
-| [`docs/rationale.md`](docs/rationale.md) | Decision records: what was chosen, what was measured, when to revisit. |
-| [`docs/stratification.md`](docs/stratification.md) | What the patterns in the code are for, what comparable systems do about it, and the plan that follows. |
-| [`docs/identity.md`](docs/identity.md) | What a thing is, and what it is called: the survey behind the identity change, and why the name column stays. |
-| [`docs/generalizing.md`](docs/generalizing.md) | Repair or prevention: what a new library gets without the week of passes, and in which languages. |
-| [`docs/normalization.md`](docs/normalization.md) | One thing under several names: the five kinds of duplicate and the mechanism for each, with what the measurements changed. |
-| [`docs/ui.md`](docs/ui.md) | The web UI: the endpoints it uses, its routes and rules. |
-| [`docs/compared.md`](docs/compared.md) | prax's data model beside Utopia, Graphiti, Cognee and others: time, evidence, undo, identity, access. |
-| [`docs/meta.md`](docs/meta.md) | What a document's `meta` holds: every key, its shape and what writes it. |
-| [`docs/packs.md`](docs/packs.md), [`docs/communities.md`](docs/communities.md) | The domains as packs, and the regions of the library. |
-| [`docs/graph-files.md`](docs/graph-files.md) | A piece of the graph as a file: `prax export` and `prax import graph`, the format, what an import does. |
-| [`docs/review.md`](docs/review.md) | Reviewing the graph by hand: which names are one thing, which are several, and which merges were wrong. |
-| [`docs/design/BRIEF.md`](docs/design/BRIEF.md) | The look: the mark printed the way an 1877 label was, the six themes as four values, the type. |
 | [`docs/sources.md`](docs/sources.md), [`docs/extension.md`](docs/extension.md) | Where documents come from, and the browser extension. |
-| [`docs/claude-workflow.md`](docs/claude-workflow.md) | One agent workflow in full, as an example: the Claude Code plugin. |
+| [`docs/architecture.md`](docs/architecture.md) | The system as built: hosts, the life of a document and of a query, the modules, where to touch what. |
+| [`CLAUDE.md`](CLAUDE.md) | Invariants and conventions; the file an agent session loads. |
+| [`docs/rationale.md`](docs/rationale.md) | Decision records: what was chosen, what was measured, when to revisit. |
+| [`docs/compared.md`](docs/compared.md), [`docs/research.md`](docs/research.md) | prax beside the systems nearest to it, and the survey of the field. |
 | [`docs/eval/`](docs/eval/) | Measurements: extractors, retrieval, the local models. |
-| ontology [`v2`](docs/ontology-v2.md) [`v4`](docs/ontology-v4.md) [`v5`](docs/ontology-v5.md) [`v6`](docs/ontology-v6.md) [`v7`](docs/ontology-v7.md) [`v8`](docs/ontology-v8.md) [`v9`](docs/ontology-v9.md), [`studio`](docs/ontology-studio.md), [`electronics`](docs/ontology-electronics.md), [`craft`](docs/ontology-craft.md) | How the vocabulary grew, one version at a time, and why. |
-| [`docs/PLAN.md`](docs/PLAN.md), [`docs/log.md`](docs/log.md) | What is next, and the record of what was done with the measurements under each night. |
-| [`docs/research.md`](docs/research.md) | The survey of the field. |
+| [`docs/PLAN.md`](docs/PLAN.md), [`docs/log.md`](docs/log.md) | What is next, and the record of what was done, with the measurements under each night. |
 | [`prax.example.yaml`](prax.example.yaml) | Template for `prax.yaml`: models, steps, every other setting. |
 
-## Scope and status
+The design notes behind particular parts are
+[`stratification`](docs/stratification.md),
+[`identity`](docs/identity.md),
+[`generalizing`](docs/generalizing.md),
+[`normalization`](docs/normalization.md),
+[`review`](docs/review.md),
+[`packs`](docs/packs.md),
+[`communities`](docs/communities.md),
+[`graph-files`](docs/graph-files.md),
+[`meta`](docs/meta.md),
+[`ui`](docs/ui.md),
+[`claude-workflow`](docs/claude-workflow.md) and the
+[`design brief`](docs/design/BRIEF.md). How the ontology grew is in
+[`v2`](docs/ontology-v2.md), [`v4`](docs/ontology-v4.md),
+[`v5`](docs/ontology-v5.md), [`v6`](docs/ontology-v6.md),
+[`v7`](docs/ontology-v7.md), [`v8`](docs/ontology-v8.md),
+[`v9`](docs/ontology-v9.md), [`studio`](docs/ontology-studio.md),
+[`electronics`](docs/ontology-electronics.md) and
+[`craft`](docs/ontology-craft.md).
 
-This is one person's tool. It was built with Claude Code over a few
-weeks and shaped by one library and one set of machines. It is
-published so the design and the measurements can be read and reused.
-There is no installer and no multi-user story, and the defaults reflect
-that one library. Every push runs the test suite on Linux and Windows,
-and the quick start above in a fresh venv
-([`ci.yml`](.github/workflows/ci.yml),
-[`scripts/smoke.sh`](scripts/smoke.sh)). The extension has a test bed
-of its own that drives it in headless Chrome and Firefox
-([`scripts/extension_bed.mjs`](scripts/extension_bed.mjs)), and it is
-used daily in Firefox, Waterfox and Chrome. Issues and pull requests
-are welcome, but may wait.
+## The name
 
-The name: the praxinoscope came after the zoetrope, the same drum with
-a sharper image. prax came after an external-disk store of the same
-library.
+The praxinoscope came after the zoetrope: the same spinning drum, with
+mirrors that gave a sharper image. prax came after zoetrope, the
+external disk that held the same library before.
 
 ## License
 
 MIT, see [`LICENSE`](LICENSE), except the browser extension.
 [`clients/browser-extension/`](clients/browser-extension/) is AGPL-3.0
 because it bundles SingleFile for page snapshots, the way the Zotero
-connector does. It is a separate program that talks to the service over
+connector does; it is a separate program that talks to the service over
 HTTP. The test fixture under [`tests/fixtures/`](tests/fixtures/) holds
 open-access papers under their own Creative Commons terms, listed with
 their licenses in

@@ -5535,6 +5535,37 @@ its document, a note's to its page, a topic's folder to its entry page
 an `annotates` edge. A link to what was not imported keeps its words.
 Left out: the tooling, the generated graph, the `.txt` copies of PDFs
 and the course's admin files. 468 pages.
+## 2026-10-08: the README rewritten, and the prose rules that made it read as generated
+
+The owner found the README read like AI slop and could not say why. A
+research pass measured it against the READMEs of ripgrep, Litestream,
+Datasette and restic: its mean sentence length was ordinary (13.6
+words), but 21% of its sentences had seven words or fewer, it had six
+runs of three short sentences in a row, 17 paragraphs opened on a bold
+verb fragment ("**Mends itself.**"), because-words came at 1.5 per
+thousand (ripgrep 5.9), and the author never said "I". Most of that
+came from the house prose rules (short sentences, one fact each,
+prefer a full stop, no "so that"), which cured the 2023-era style and
+produced the 2026 one. The rules (`~/.claude/skills/prose`, not in this
+repository) now ask for length that follows meaning, reasons joined to
+their facts, an author who may say "I", examples first, and absolutes
+that name their mechanism; the checker measures spread, short runs,
+bold openers, "X, not Y" and because-words, calibrated so that the four
+human READMEs pass.
+
+The new README opens with a definition, says in the first person why
+prax exists, follows one question (the FDN tail) through the shell, an
+agent's `search` (1.8 KB for three hits) and `connect` (1.2 KB, with a
+generous first hop shown as such), gives figures and the graph a
+section each and the rest a list, and replaces the rough comparison
+table with "When to use something else"; `docs/compared.md` keeps the
+sourced table. The retrieval number now says what it is: hybrid MRR
+0.79 on 2026-09-08 against 0.82 for keywords alone, 0.90 after a month
+of changes checked on the same 62 questions, so optimistic until a
+held-out set exists. Checker before: 186 sentences, 14.2 words, spread
+7.1, 6 short runs, 17 bold openers. After: 133 sentences, 19.9 words,
+spread 6.8, no short runs, no bold openers. The report is
+`reports/Presenting prax without AI tells.md` (not committed).
 
 # Moved from the plan
 
