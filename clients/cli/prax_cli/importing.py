@@ -284,6 +284,9 @@ def _latex(door: Door, a: Any) -> int:
     return 1 if errors else 0
 
 
+MIN_PAGE_CHARS = 200  # a page's own prose, figures aside: the door's MIN_CHARS
+
+
 def _book_page(door: Door, fetcher: Any, book: Any, authors: list[str]) -> None:
     """The book's page in prax (``book-<name>``): its contents, each entry
     linking the document of its page. Written as the agent's: a page a
@@ -381,9 +384,13 @@ def _latex2html(door: Door, a: Any) -> int:
                 errors.append(f"{page}: {exc}")
                 text = ""
             # a chapter's page that only lists its sections has nothing of
-            # its own: its sections are the pages
-            words = [x for x in text.splitlines() if x and not x.startswith("#")]
-            if not words:
+            # its own: its sections are the pages. Nor has a slide of a
+            # title and three bullets: the door takes under 200 characters
+            # for no text (queue.MIN_CHARS), and the page would sit textless
+            prose = [
+                x for x in text.splitlines() if x and not x.startswith(("#", "!["))
+            ]
+            if sum(len(x) for x in prose) < MIN_PAGE_CHARS:
                 skipped += 1
                 continue
             title = f"{l2h.page_title(html) or page.rsplit('/', 1)[-1]} ({book.short})"

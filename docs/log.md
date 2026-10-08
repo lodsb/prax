@@ -5509,6 +5509,16 @@ person's edit stands (409). The first figure-heavy page was refused:
 Starlette holds a form field to 1 MB, and a page with its pictures
 inlined is more, so the text now comes as the file part `text_file`.
 
+The JOS import, done: the five books (2,114 pages) and 30 of his
+publications as latex2html (434 pages; NewportBeach is no longer
+served), each a `book-<name>` page of its contents, and the eight PDFs
+of his publications page through `/ingest/url`. 35 documents retired
+on the user's word: latex2html's "About this document" pages (14), and
+21 pages with no text of their own, slides of a title and a few bullets
+under the door's 200 characters (`queue.MIN_CHARS`), which sat textless.
+The importer now sends no page whose own prose, figures aside, is under
+200 characters.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
