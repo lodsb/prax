@@ -197,7 +197,8 @@ def book(fetcher: Fetcher, url: str) -> Book | None:
     if data is None:
         return None
     html = data.decode("utf-8", "replace")
-    pages = book_pages(url, html)
+    # a paper latex2html wrote as one page is its own only page
+    pages = book_pages(url, html) or (url,)
     title = page_title(html)
     first = fetcher.get(pages[0]) if pages else None
     if first:

@@ -83,3 +83,12 @@ def test_the_fetcher_keeps_what_it_fetched(tmp_path: Path) -> None:
     # read from disk: no request, no robots.txt asked
     assert fetcher.get("https://example.org/~jos/mdft/") == b"<html>held</html>"
     assert fetcher.fetched == 0
+
+
+def test_a_paper_on_one_page_is_its_own_only_page(tmp_path: Path) -> None:
+    fetcher = l2h.Fetcher(tmp_path, delay=0)
+    page = tmp_path / "example.org" / "~jos" / "tonehole" / "index.html"
+    page.parent.mkdir(parents=True)
+    page.write_bytes(b"<HTML><TITLE>Tone Holes</TITLE><BODY><P>All of it.</BODY>")
+    got = l2h.book(fetcher, "https://example.org/~jos/tonehole/")
+    assert got is not None and got.pages == ("https://example.org/~jos/tonehole/",)
