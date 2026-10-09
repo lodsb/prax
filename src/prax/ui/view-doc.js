@@ -68,10 +68,17 @@ function tags(meta) {
   return t.length ? `<div class="tags">${t.map((x) => `<span class="tag">${esc(x)}</span>`).join("")}</div>` : "";
 }
 
+// A cell's own line breaks: a Markdown table row is one line, so the
+// reader writes a break inside a cell as <br>; shown as a break, the rest
+// of the cell escaped.
+function cellHtml(c) {
+  return String(c ?? "").split(/<br\s*\/?>/i).map(esc).join("<br>");
+}
+
 function renderTable(data) {
   if (!data || !data.header) return "";
-  const head = `<tr>${data.header.map((c) => `<th>${esc(c)}</th>`).join("")}</tr>`;
-  const rows = (data.rows || []).map((r) => `<tr>${r.map((c) => `<td>${esc(c)}</td>`).join("")}</tr>`).join("");
+  const head = `<tr>${data.header.map((c) => `<th>${cellHtml(c)}</th>`).join("")}</tr>`;
+  const rows = (data.rows || []).map((r) => `<tr>${r.map((c) => `<td>${cellHtml(c)}</td>`).join("")}</tr>`).join("");
   return `<div class="table-wrap"><table>${head}${rows}</table></div>`;
 }
 
@@ -118,7 +125,11 @@ function figureThumb(h) {
 // Snippets: an image reference is noise to a reader; its caption is not, and
 // a reading's emphasis markers are for Markdown, not for a card of plain text.
 function plainFigures(text) {
-  return String(text || "").replace(/!\[([^\]\n]*)\]\(figure:[0-9a-f]+\)/g, "[figure: $1]")
+  // a cell's or a figure's line breaks (<br>) as a separator, and the
+  // reader's markers around the words printed inside a figure dropped
+  return String(text || "").replace(/<!-- (Start|End) of picture text -->/g, "")
+    .replace(/<br\s*\/?>/gi, " · ")
+    .replace(/!\[([^\]\n]*)\]\(figure:[0-9a-f]+\)/g, "[figure: $1]")
     .replace(/\*(Figure|Formula), as read by ([^*:]+?):\*/g, "$1, read by $2:");
 }
 
