@@ -97,7 +97,7 @@ _ACCENT = re.compile("[" + "".join(ACCENTS) + "]")
 # only taken inside a word, with a letter on both sides
 _INSIDE_ONLY = {"ˆ", "˜"}
 _GAP = re.compile(r"\s")
-_WORD_GAP = re.compile(r"\S*")  # run on the reversed text: back to the gap
+WORD_REACH = 80  # characters a word is looked for on each side of a mark
 
 
 def _on(letter: str, accent: str) -> str | None:
@@ -123,10 +123,13 @@ def _sides(text: str, i: int) -> tuple[str | None, str | None]:
         # a Markdown code span opens after a space and closes after a
         # letter: only a grave inside a lowercase word, before its vowel,
         # with no other backtick in the word, is an accent
-        start = _WORD_GAP.match(text[::-1], len(text) - i)
-        begin = len(text) - start.end() if start else 0
-        gap = _GAP.search(text, i)
-        word = text[begin : gap.start() if gap else len(text)]
+        # the word around it, looked for within WORD_REACH characters: a
+        # search over the whole text per backtick took a book of 3.4 million
+        # characters half an hour (2026-10-09)
+        left = text[max(0, i - WORD_REACH) : i]
+        right = text[i : i + WORD_REACH]
+        gap = _GAP.search(right)
+        word = re.split(r"\s", left)[-1] + (right[: gap.start()] if gap else right)
         if not (prev.islower() and nxt.islower()) or word.count("`") > 1:
             return None, None
         after = None
