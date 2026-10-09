@@ -553,30 +553,40 @@ def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return out
 
 
-# documents one heal re-indexes: a book takes minutes, and a heal that runs
-# for an hour sends no heartbeat and is reaped (2026-10-09, 1,800 of 2,615
-# done); the rest are left for the next heal, which finds them again
+# what one heal re-indexes: a heal that runs past half an hour sends no
+# heartbeat and is reaped while its thread goes on, and one book of 3.7
+# million characters took 26 minutes alone (2026-10-09). The smallest
+# documents first, until this many characters; a larger one goes alone
 GLYPH_BATCH = 150
+GLYPH_CHARS = 4_000_000
 
 
 def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     """Re-index the document from its own artifact, cleaned: chunks whose
-    text did not change keep their vectors. At most ``GLYPH_BATCH`` a heal."""
+    text did not change keep their vectors. The smallest first, at most
+    ``GLYPH_BATCH`` documents and ``GLYPH_CHARS`` characters a heal; the
+    rest are found again by the next one."""
 
-    done = 0
-    for r in rows[:GLYPH_BATCH]:
+    sized = []
+    for r in rows:
         row = con.execute(
-            "SELECT text_hash, json_extract(meta, '$.text_source') AS src"
+            "SELECT text_hash, text_len, json_extract(meta, '$.text_source') AS src"
             " FROM documents WHERE id = ?",
             (r["id"],),
         ).fetchone()
-        if row is None or not row["text_hash"]:
-            continue
+        if row is not None and row["text_hash"]:
+            sized.append((int(row["text_len"] or 0), int(r["id"]), row))
+    sized.sort()
+    done = chars = 0
+    for size, doc_id, row in sized:
+        if done >= GLYPH_BATCH or (done and chars + size > GLYPH_CHARS):
+            break
         text = _read_archive(row["text_hash"]).decode("utf-8")
         if not glyphs.damaged(text):
             continue
-        docs.index_text(con, r["id"], text, text_source=row["src"])
+        docs.index_text(con, doc_id, text, text_source=row["src"])
         done += 1
+        chars += size
     return done
 
 
