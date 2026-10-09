@@ -219,7 +219,10 @@ def clean(text: str) -> str:
 
 
 def damaged(text: str) -> bool:
-    """Whether ``clean`` would change the text."""
-    if DAMAGED.search(text) is not None:
-        return True
-    return _ACCENT.search(text) is not None and accents(text) != text
+    """Whether ``clean`` would change the text. Asked of the cleaning
+    itself: a Symbol-font code point it leaves as it is (U+F0F0, which the
+    font leaves unassigned) is no damage it can mend, and counting it as
+    one re-indexed the same documents on every heal (2026-10-09)."""
+    if DAMAGED.search(text) is None and _ACCENT.search(text) is None:
+        return False
+    return clean(text) != text
