@@ -438,13 +438,21 @@ class DecideReq(BaseModel):
     other: int
     same: bool
     across_types: bool = False  # a split name: a tool and a method one thing
+    # who decided, when it is not the person at the page: a model that
+    # judged the pair signs with its name, so its answers never join the
+    # person's, which are the gold sample the judge is calibrated on
+    by: str | None = None
 
 
 @router.post("/graph/decide")
 def graph_decide(req: DecideReq, request: Request) -> dict[str, Any]:
     """A person's answer to "are these one thing?" (``store.decide_pair``):
     same merges ``other`` into ``keep`` under a run of its own; either way
-    the pair is recorded, signed, and not asked again."""
+    the pair is recorded, signed, and not asked again. ``by`` signs a
+    model's answer instead (never "human")."""
+    by = (req.by or "").strip()
+    if req.by is not None and (not by or by == store.PERSON):
+        raise HTTPException(400, f"by: a model's name, not {req.by!r}")
     try:
         return store.decide_pair(
             _con(request),
@@ -452,6 +460,7 @@ def graph_decide(req: DecideReq, request: Request) -> dict[str, Any]:
             req.other,
             same=req.same,
             across_types=req.across_types,
+            **({"by": by} if by else {}),
         )
     except (ValueError, KeyError) as exc:
         raise HTTPException(400, str(exc)) from exc

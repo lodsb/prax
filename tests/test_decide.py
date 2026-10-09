@@ -220,3 +220,23 @@ def test_a_right_merge_is_confirmed_and_a_click_can_be_taken_back(
     assert store.undecide_pair(con, w1, l1) is True
     assert _decided(con, w1, l1) is None
     assert store.undecide_pair(con, w1, l1) is False
+
+
+def test_a_models_decision_is_signed_with_its_name(client: TestClient) -> None:
+    """A model that judges a pair signs it, so its answer never joins the
+    person's, the gold sample; it may not sign as the person."""
+    con = client.app.state.con
+    w1, w2, l1, l2 = _pairs(con)
+    by = "claude-opus-5-5 (session, 2026-10-09)"
+    got = client.post(
+        "/graph/decide", json={"keep": l1, "other": l2, "same": False, "by": by}
+    )
+    assert got.status_code == 200 and _decided(con, l1, l2) == ("different", by)
+    for bad in ("human", " "):
+        assert (
+            client.post(
+                "/graph/decide",
+                json={"keep": w1, "other": w2, "same": False, "by": bad},
+            ).status_code
+            == 400
+        )

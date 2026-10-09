@@ -5600,6 +5600,24 @@ changes folded into them ("Fourier␣t" → "Fourier-T", one change). Two
 names that share less than half their letters (a translation, an
 acronym) get no line, since a diff of them is noise.
 
+## 2026-10-09: the "same thing?" queue, judged by a model and signed as one
+
+The owner asked Claude to work through the generic pairs of the queue
+(2,864 open), leaving out coursework. `/graph/decide` takes `by` now: a
+model that judges a pair signs it with its name, and "human" is refused
+there, because the person's decisions are the gold sample the judge is
+calibrated on (`eval_confidence.py` reads `decided_by = 'human'`). Of
+2,525 pairs of concepts, methods, tools and datasets (papers, venues and
+names with Übung, Aufgabe, Blatt, Lösung and the like left out), Claude
+(Opus 5.5, in the session) decided 2,403 by `ontology/sameness.yaml`:
+931 same, 1,472 different, the rest left open. Signed "claude-opus-5-5
+(session, 2026-10-09)"; a same merges the one with fewer edges into the
+other under a run of its own. Against the local judge's calibrated
+number they agree on 81% at 0.5: of 492 pairs it put under 0.2, six
+were called same; of 281 at 0.8 or more, 260. 454 pairs stay open for
+the person. The decisions and the log of runs are kept outside the
+repository with the private data.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
