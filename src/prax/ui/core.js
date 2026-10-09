@@ -7,7 +7,9 @@
    function per view. No framework; marked.js renders Markdown. */
 "use strict";
 
-const view = document.getElementById("view");
+// The element a view draws into. A live refresh points it at a hidden
+// twin for the length of one draw (boot.js, refreshInPlace), so it is let.
+let view = document.getElementById("view");
 // A view shows "Loading…" while its first requests are out — but not on a
 // live refresh (the poll below re-rendering the same route in place), where
 // the page it already shows stays until the new one is ready.

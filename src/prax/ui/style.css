@@ -612,3 +612,32 @@ table.props td { padding: .15rem 0; overflow-wrap: anywhere; border: 0; }
 .genre-p.unsure { color: var(--key, inherit); font-weight: 600; }
 .genre-model { font-size: .9rem; border-left: 2px solid var(--key, currentColor); padding-left: .6rem; }
 .genre-opening { white-space: pre-wrap; max-height: 16rem; overflow: auto; font-size: .8rem; }
+
+/* ---------------------------------------------------- a phone's width */
+/* The masthead in two rows: the mark, the search and the gear, then the
+   views as one strip that scrolls sideways (every view one swipe away,
+   none of the screen spent on a column of links). The page's own margins
+   narrow, and what would run past the edge wraps or scrolls in its box. */
+@media (max-width: 700px) {
+  .top { flex-wrap: wrap; gap: .5rem .9rem; padding: .6rem 1rem .7rem; }
+  .top::after { left: 1rem; right: 1rem; }
+  .brand svg { width: 2rem; height: 2rem; }
+  .wordmark { font-size: 1.4rem; }
+  .quick { order: 2; flex: 1 1 8rem; margin-left: 0; }
+  .quick input { width: 100%; max-width: none; }
+  .gear { order: 3; }
+  .top .status:empty { display: none; }
+  nav {
+    order: 4; flex: 1 0 100%; flex-wrap: nowrap; gap: 1.1rem;
+    overflow-x: auto; padding: .1rem 0 .35rem;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  nav::-webkit-scrollbar { display: none; }
+  nav a { flex: 0 0 auto; }
+  main { padding: 1rem 1rem 1.6rem; }
+  main p, main li, main td, main th, main h1, main h2, main h3, .chunk-body, .snippet { overflow-wrap: anywhere; }
+  main pre, main .table-wrap, main table:not(.table-wrap table) { max-width: 100%; overflow-x: auto; }
+  main img, main iframe, main video { max-width: 100%; height: auto; }
+  .doc-layout, .graph-layout, .ask { min-width: 0; }
+  .doc-layout > *, .graph-layout > *, .ask > * { min-width: 0; }
+}

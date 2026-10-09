@@ -5693,6 +5693,29 @@ line) until Python ran out of memory, and Windows grew the system-managed
 pagefile to 32.5 GB, which left drive C with 0.1 GB; the pip and uv
 caches (30 GB) were cleared on the owner's word.
 
+## 2026-10-10: a live page that stays as it is, and a phone's width
+
+The live refresh closed what the owner had opened and reloaded the page.
+`/changes` moves with every write, and the worker writes every few
+seconds, so every live view (a document, the Review lists, Jobs) was
+drawn again from nothing about every ten seconds. `refreshInPlace`
+(boot.js) now draws the route into a hidden twin of the view, placed
+before it so a view's `getElementById` finds the twin's elements. When
+the HTML is what the view last drew, which is most of the time, the twin
+goes and the page is not touched; when it changed, its children move in
+(handlers bound to them come along, the view's own delegated handlers
+stay) and the folds (by summary, numbers left out), scrolled panels and
+focus are put back. Tested in headless Chrome: the stamp moved during 25
+s and an open fold and the list stayed the same nodes; Jobs updated its
+last-pass time without an error. Polling every ten seconds stays: the
+transport was never the problem, what it did on arrival was.
+
+At a phone's width (under 700 px) the masthead takes two rows: the mark,
+the search and the gear, then the views as one strip that scrolls
+sideways, instead of a column of ten links beside the mark. The page's
+margins narrow, long words and links wrap, and tables and code scroll in
+their own box.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
