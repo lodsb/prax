@@ -428,6 +428,9 @@ def parse_reference(text: str) -> dict[str, Any]:
     return data
 
 
+_CELL_DIVIDER = re.compile(r"(?<!\\)\|")  # a pipe not escaped as \|
+
+
 def parse_table(markdown: str) -> dict[str, Any]:
     """A pipe table → ``{"header": [...], "rows": [[...], ...]}``."""
     rows: list[list[str]] = []
@@ -435,7 +438,15 @@ def parse_table(markdown: str) -> dict[str, Any]:
         s = line.strip()
         if not s.startswith("|") or _TABLE_SEP.match(s):
             continue
-        cells = [_EMPHASIS.sub("", c).strip() for c in s.strip("|").split("|")]
+        # a pipe inside a cell is written \| ("u/(1+\|u\|)"): only an
+        # unescaped one divides cells, and the escaped one is a character
+        body = s[1:]
+        if body.endswith("|") and not body.endswith("\\|"):
+            body = body[:-1]
+        cells = [
+            _EMPHASIS.sub("", c).replace("\\|", "|").strip()
+            for c in _CELL_DIVIDER.split(body)
+        ]
         rows.append(cells)
     if not rows:
         return {"header": [], "rows": []}

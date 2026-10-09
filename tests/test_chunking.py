@@ -436,3 +436,13 @@ def test_the_heal_sets_old_picture_text_aside(con: sqlite3.Connection) -> None:
     assert (
         store.health(con, only=["picture-text-in-prose"])["ailments"][0]["count"] == 0
     )
+
+
+def test_a_pipe_escaped_in_a_cell_stays_in_the_cell() -> None:
+    md = (
+        "| a | b | c |\n|---|---|---|\n"
+        "| sigmoid u/(1+\\|u\\|) | quadratic | [x](#doc/1) |\n"
+    )
+    assert chunking.parse_table(md)["rows"] == [
+        ["sigmoid u/(1+|u|)", "quadratic", "[x](#doc/1)"]
+    ]

@@ -72,7 +72,11 @@ function tags(meta) {
 // reader writes a break inside a cell as <br>; shown as a break, the rest
 // of the cell escaped.
 function cellHtml(c) {
-  return String(c ?? "").split(/<br\s*\/?>/i).map(esc).join("<br>");
+  const parts = String(c ?? "").split(/<br\s*\/?>/i);
+  // a cell is inline Markdown (a link to a document, emphasis), sanitized
+  // as md() is; without the libraries it is escaped text
+  if (typeof marked === "undefined" || typeof DOMPurify === "undefined") return parts.map(esc).join("<br>");
+  return parts.map((p) => DOMPurify.sanitize(marked.parseInline(p), MD_CLEAN)).join("<br>");
 }
 
 function renderTable(data) {
