@@ -5654,6 +5654,22 @@ takes back. Two shapes measured and left: a lowercase letter before a
 different word ("k mismatches") and a doubled fragment inside a word
 ("addadditive", 12 entities).
 
+Applying it to the library took from 02:48 to 10:18 and found four faults
+on the way, each fixed and committed: a heal that runs for an hour sends
+no heartbeat and its job is reaped while its thread goes on (now at most
+150 documents and 4 million characters a heal, the smallest first); the
+find step read every passage with a backtick, 117,372 of them, and held
+the door for twenty minutes (a grave counts only between a letter and a
+vowel: 1,004); `accents` reversed the whole text for every backtick to
+find its word, so a book of 3.4 million characters took half an hour
+(now 80 characters each side: two million characters in under two
+seconds); and `glyphs.damaged` counted a Symbol code point that `clean`
+leaves as it is, so the same documents were re-indexed every round (now
+it asks `clean`). An accent at a passage's first character is no longer
+counted on its own. In all about 1,330 documents were re-indexed; the
+check finds none left, and no passage holds "f¨ur", "Universit¨at" or
+"B´ezier". The `<sup>¨</sup>` of latex2html pages is markup and stays.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
