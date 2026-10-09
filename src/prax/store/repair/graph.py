@@ -903,7 +903,7 @@ _TYPE_TAIL = re.compile(
 )
 # a drop cap the text layer gave twice, the letter and then the word that
 # starts with it: "f face recognition", "d discrete cosine transform"
-_DROP_CAP = re.compile(r"^([a-z]) (?=\1)")
+_DROP_CAP = re.compile(r"^([a-z]) (?=\1[a-z])")
 # the types whose names are titles or people's names, where "Concept:" may
 # be the title's own word and a single letter an initial
 _TITLED = DOCUMENT_KINDS | {"person", "author"}
@@ -925,6 +925,8 @@ def mended_name(name: str, etype: str) -> str:
 
 # the entity a mended name already belongs to
 _CARRIER = "SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ? AND type = ?"
+# the entity that holds a name, and what it was folded into
+_HOLDER = "SELECT id, canonical_id FROM entities WHERE name = ? AND type = ?"
 _DAMAGE_HINT = re.compile(
     "[" + "".join(glyphs.ACCENTS) + "]|[=:]|^[a-z] ", re.IGNORECASE
 )
@@ -945,16 +947,21 @@ def _damaged_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
         if mended != name:
             found.append({**dict(row), "cleaned": mended})
     counts = _live_edge_counts(con, [r["id"] for r in found])
+    kept = []
     for r in found:
         r["edges"] = counts.get(r["id"], 0)
-        twin = con.execute(
-            _CARRIER,
-            (r["cleaned"], r["type"]),
-        ).fetchone()
+        twin = con.execute(_HOLDER, (r["cleaned"], r["type"])).fetchone()
         if twin is not None and int(twin[0]) != r["id"]:
-            r["into"] = int(twin[0])
-    found.sort(key=lambda r: (-r["edges"], r["name"]))
-    return found[:CAP]
+            if twin[1] == r["id"]:
+                # the mended name is an alias already folded into this one:
+                # the graph treats the two as one thing, only the name shown
+                # is ugly, and flipping which is canonical is a person's call
+                # (as _repair_names leaves it)
+                continue
+            r["into"] = int(twin[1] or twin[0])
+        kept.append(r)
+    kept.sort(key=lambda r: (-r["edges"], r["name"]))
+    return kept[:CAP]
 
 
 @_serialized
@@ -980,6 +987,12 @@ def _repair_damaged_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
             (row["cleaned"], row["type"]),
         ).fetchone()
         if twin is not None and int(twin[0]) != row["id"]:
+            # the clean name may itself have been folded into a thing of
+            # another type (an organization into the venue of its name, by
+            # a person's decision): this one follows it there
+            into = con.execute(
+                "SELECT type FROM entities WHERE id = ?", (int(twin[0]),)
+            ).fetchone()
             try:
                 merge_entities(
                     con,
@@ -987,6 +1000,7 @@ def _repair_damaged_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
                     int(twin[0]),
                     producer=DAMAGED_PRODUCER,
                     run=run,
+                    across_types=into is not None and into["type"] != row["type"],
                 )
             except (KeyError, ValueError):
                 continue
