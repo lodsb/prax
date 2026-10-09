@@ -597,7 +597,7 @@ PICTURE_BATCH = 200  # documents one heal re-splits, the smallest first
 
 
 def _picture_text_in_prose(con: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Documents whose ordinary passages still hold a reader's picture
+    """Documents whose text passages still hold a reader's picture
     text (``markup.PICTURE_START``): split before the chunker set it aside
     as ``figure-text`` (2026-10-09), so its rows of tick numbers sit in the
     vectors and the search. The smallest first."""
@@ -605,7 +605,7 @@ def _picture_text_in_prose(con: sqlite3.Connection) -> list[dict[str, Any]]:
         dict(r)
         for r in con.execute(
             "SELECT d.id, d.title, d.text_len FROM documents d WHERE d.id IN ("
-            "  SELECT DISTINCT doc_id FROM chunks WHERE kind != 'figure-text'"
+            "  SELECT DISTINCT doc_id FROM chunks WHERE kind = 'text'"
             "  AND text LIKE '%<!-- Start of picture text -->%')"
             " AND json_extract(d.meta, '$.retired') IS NULL"
             " ORDER BY d.text_len LIMIT ?",
