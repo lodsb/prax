@@ -24,11 +24,13 @@ from .documents import (
     _labelled_summaries,
     _lost_figure_readings,
     _not_documents,
+    _picture_text_in_prose,
     _repair_extraction_failed,
     _repair_glyphs,
     _repair_labelled_summaries,
     _repair_lost_figure_readings,
     _repair_not_documents,
+    _repair_picture_text,
     _repair_stale_extractions,
     _repair_stale_parses,
     _repair_twins,
@@ -611,6 +613,21 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_glyph_documents,
         repair=_repair_glyphs,
+        locks_itself=True,
+    ),
+    Ailment(
+        name="picture-text-in-prose",
+        what=(
+            "documents whose passages still hold the words a reader found"
+            " inside a vector figure (axis ticks, labels) as prose: rows of"
+            " numbers in the vectors and the search"
+        ),
+        fix=(
+            "re-split each from its own text, the picture text set aside as"
+            " figure-text passages; unchanged passages keep their vectors"
+        ),
+        find=_picture_text_in_prose,
+        repair=_repair_picture_text,
         locks_itself=True,
     ),
     Ailment(

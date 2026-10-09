@@ -5670,6 +5670,29 @@ counted on its own. In all about 1,330 documents were re-indexed; the
 check finds none left, and no passage holds "f¨ur", "Universit¨at" or
 "B´ezier". The `<sup>¨</sup>` of latex2html pages is markup and stays.
 
+## 2026-10-09: the words inside a vector figure, set aside
+
+The owner saw `<br>` all over tables and text. In tables it is a line
+break inside a cell, which a pipe row cannot hold otherwise; the UI now
+shows it as one (`cellHtml`), and a search snippet reads it as " · ".
+The rest was pymupdf4llm's picture text: the words it finds inside a
+figure drawn with vector paths (axis ticks, labels, a block diagram's
+boxes), joined with `<br>` between `<!-- Start of picture text -->` and
+`<!-- End of picture text -->`: 21,953 blocks, 5.8 million characters
+in 73,779 passages of 5,011 documents, mostly rows of tick numbers in
+the vectors and the search. The chunker makes each block a `figure-text`
+chunk with its words in `data`, set aside like a comment (never
+embedded, out of a search unless asked for by kind, out of what an
+extraction reads, folded in the document view). The text artifact does
+not change. The `picture-text-in-prose` ailment re-splits the documents
+split before, 200 a heal, the smallest first.
+
+Two side effects of the day: a test of the never-closing block looped
+(a paragraph that opened on the start marker stopped before its first
+line) until Python ran out of memory, and Windows grew the system-managed
+pagefile to 32.5 GB, which left drive C with 0.1 GB; the pip and uv
+caches (30 GB) were cleared on the owner's word.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

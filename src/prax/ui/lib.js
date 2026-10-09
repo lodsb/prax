@@ -720,6 +720,7 @@ function asideLine(kind, data, text, blocks) {
   const size = n >= 1000 ? `${Math.round(n / 100) / 10}k characters` : `${n} characters`;
   const many = blocks > 1 ? ` · ${blocks} blocks` : "";
   if (kind === "comment") return `what readers wrote${many} · ${size}`;
+  if (kind === "figure-text") return `words printed in a figure${many} · ${size}`;
   const d = data || {};
   const why = (d.why || []).join(", ");
   return `advertisement${d.brand ? ` · ${esc(d.brand)}` : ""}${why ? ` · ${esc(why)}` : ""}${many} · ${size}`;

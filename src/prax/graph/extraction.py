@@ -159,7 +159,7 @@ def build_input(
     # sections that fell past it, up to the tail. Figure captions and code
     # are skipped, and so are the regions of a capture that are not the
     # document: its advertising and what its readers wrote under it
-    skip = ("figure", "code", "ad", "comment")
+    skip = ("figure", "code", "ad", "comment", "figure-text")
     chunks = [
         c
         for c in store.list_chunks(con, doc_id)

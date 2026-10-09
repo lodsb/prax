@@ -41,6 +41,15 @@ chunks:
   the servings and every line with its amount, unit and note
   (``prax.text.ingredients``). One box rather than four fragments, and not set
   aside: an ingredient is what a search for one should find;
+* one chunk per **figure-text** block: the words a reader found inside a
+  figure drawn with vector paths (axis ticks, labels, a block diagram's
+  boxes), which pymupdf4llm writes into the running text between
+  ``<!-- Start of picture text -->`` and ``<!-- End of picture text -->``
+  (``markup.PICTURE``), the words in ``data``. Set aside like a comment:
+  kept in the artifact and shown folded, never embedded, out of a search
+  unless asked for by kind, out of what an extraction reads — rows of
+  tick numbers are not prose, and they were 5.8 million characters of
+  the library's text (2026-10-09);
 * **text** chunks of consecutive paragraphs under the same heading path, up
   to ``TARGET_CHARS``; a paragraph longer than ``MAX_CHARS`` falls back to
   overlapping fixed windows.
@@ -88,6 +97,7 @@ KINDS = (
     "ad",
     "comment",
     "ingredients",
+    "figure-text",
 )
 
 _PAGE_MARK = markup.PAGE_MARK
@@ -220,6 +230,15 @@ def _elements(text: str) -> list[_Element]:
         if not stripped:
             i += 1
             continue
+        if stripped == markup.PICTURE_START:
+            j = i
+            while j < n and markup.PICTURE_END not in lines[j][2]:
+                j += 1
+            if j < n:  # a block that never closes is left to the prose
+                pend = lines[j][1]
+                els.append(_Element("figure-text", start, pend, text[start:pend]))
+                i = j + 1
+                continue
         if start in asks:
             aend, block = asks[start]
             els.append(_Element("ask", start, aend, text[start:aend], block=block))
@@ -288,6 +307,8 @@ def _elements(text: str) -> list[_Element]:
             ):
                 break
             if j > i and _is_formula(s):
+                break
+            if j > i and s == markup.PICTURE_START:
                 break
             j += 1
         pend = lines[j - 1][1]
@@ -815,6 +836,8 @@ class _Chunker:
         data = None
         if el.kind == "figure":
             data = parse_figure(el.text)
+        elif el.kind == "figure-text":
+            data = {"words": markup.picture_words(el.text)}
         elif el.kind == "formula":
             data = parse_formula(el.text)
         self.add(el.kind, el.start, el.end, el.page, data, time=el.time)
@@ -863,7 +886,7 @@ def chunk(text: str) -> list[Chunk]:
             ck.para(el, els[idx + 1] if idx + 1 < len(els) else None)
         elif el.kind == "table":
             ck.table(el, els, idx)
-        elif el.kind in ("figure", "code", "formula"):
+        elif el.kind in ("figure", "code", "formula", "figure-text"):
             ck.block(el)
         # blank (a consumed caption): nothing
     ck.boundary()

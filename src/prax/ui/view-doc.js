@@ -419,7 +419,7 @@ function renderChunks(list, highlight, docId, cites) {
   const out = [];
   for (let i = 0; i < list.length; i++) {
     const c = list[i];
-    if (c.kind === "ad" || c.kind === "comment") {
+    if (c.kind === "ad" || c.kind === "comment" || c.kind === "figure-text") {
       const run = [c];
       while (i + 1 < list.length && list[i + 1].kind === c.kind) run.push(list[++i]);
       out.push(renderAside(run, docId, highlight));

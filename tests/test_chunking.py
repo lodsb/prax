@@ -384,3 +384,55 @@ def test_a_reference_list_is_one_chunk_per_entry() -> None:
     for c in chunks:
         assert c.text == text[c.char_start : c.char_end]
     assert "reference" in chunking.KINDS
+
+
+def test_picture_text_is_its_own_chunk_set_aside() -> None:
+    """The words a reader found inside a vector figure, between
+    pymupdf4llm's two markers: one figure-text chunk with the words in
+    ``data``; the prose around it stays text."""
+    text = (
+        "The system runs in three stages, as the diagram shows.\n\n"
+        "<!-- Start of picture text -->\n"
+        "Audio STFT NMF<br>ISTFT<br>0.5<br>1.5<br><!-- End of picture text -->\n\n"
+        "After the masking the sources are added back together."
+    )
+    got = chunking.chunk(text)
+    assert [c.kind for c in got] == ["text", "figure-text", "text"]
+    fig = got[1]
+    assert fig.text.startswith("<!-- Start of picture text -->")
+    assert fig.text.endswith("<!-- End of picture text -->")
+    assert fig.data == {"words": "Audio STFT NMF ISTFT 0.5 1.5"}
+    assert "picture text" not in got[0].text + got[2].text
+    # a block that never closes is left to the prose
+    open_block = chunking.chunk("Words.\n\n<!-- Start of picture text -->\n1<br>2")
+    assert {c.kind for c in open_block} == {"text"}
+
+
+def test_picture_text_stays_out_of_a_search() -> None:
+    from prax import store
+
+    assert "figure-text" in store.ASIDE_KINDS
+
+
+def test_the_heal_sets_old_picture_text_aside(con: sqlite3.Connection) -> None:
+    """A document split before figure-text existed holds its picture text
+    in a text passage; the heal re-splits it from the same text."""
+    text = (
+        "The stages, as the diagram shows. " * 12
+        + "\n\n<!-- Start of picture text -->\n1<br>2<br>3<br>"
+        + "<!-- End of picture text -->\n\n"
+        + "And the prose goes on after it. " * 12
+    )
+    doc = store.ingest_text(con, text, title="old split")["doc_id"]
+    # as the store held it before: the block inside a text passage
+    con.execute("UPDATE chunks SET kind = 'text' WHERE doc_id = ?", (doc,))
+    con.commit()
+    found = store.health(con, only=["picture-text-in-prose"])["ailments"][0]
+    assert [e["id"] for e in found["examples"]] == [doc]
+    healed = store.heal(con, only=["picture-text-in-prose"])
+    assert healed["picture-text-in-prose"] == {"found": 1, "repaired": 1}
+    kinds = [c["kind"] for c in store.list_chunks(con, doc)]
+    assert "figure-text" in kinds
+    assert (
+        store.health(con, only=["picture-text-in-prose"])["ailments"][0]["count"] == 0
+    )

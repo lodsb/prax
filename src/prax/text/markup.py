@@ -40,6 +40,25 @@ PAGE_MARK = re.compile(rf"^{_PAGE_MARK}\s*$")
 PAGE_MARK_ANY = re.compile(_PAGE_MARK)
 
 
+# the words pymupdf4llm finds inside a figure drawn with vector paths (axis
+# ticks, labels, the boxes of a block diagram), between two comment lines
+# and joined with <br>: the start marker alone on its line, the end one
+# closing the last line of the block
+PICTURE_START = "<!-- Start of picture text -->"
+PICTURE_END = "<!-- End of picture text -->"
+PICTURE = re.compile(
+    re.escape(PICTURE_START) + ".*?" + re.escape(PICTURE_END), re.DOTALL
+)
+LINE_BREAK = re.compile(r"<br\s*/?>", re.IGNORECASE)  # a break inside a cell or a block
+
+
+def picture_words(block: str) -> str:
+    """The words of a picture-text block: its markers out, its breaks as
+    spaces."""
+    inner = block.replace(PICTURE_START, " ").replace(PICTURE_END, " ")
+    return " ".join(LINE_BREAK.sub(" ", inner).split())
+
+
 def page_mark(page: int) -> str:
     """The mark that closes page ``page`` (1-based)."""
     return f"--- end of page.page_number={page} ---"

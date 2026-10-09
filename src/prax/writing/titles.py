@@ -55,9 +55,7 @@ SECTION_HEADING = re.compile(
     re.IGNORECASE,
 )
 PAGE_MARK = markup.PAGE_MARK_ANY
-PICTURE = re.compile(
-    r"<!-- Start of picture text -->.*?<!-- End of picture text -->", re.DOTALL
-)
+PICTURE = markup.PICTURE
 MARKUP = re.compile(r"(\*\*|__|~~|</?u>|</?i>|</?b>|<br>)")
 
 STOPWORDS = {

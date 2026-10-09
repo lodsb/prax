@@ -593,6 +593,42 @@ def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     return done
 
 
+PICTURE_BATCH = 200  # documents one heal re-splits, the smallest first
+
+
+def _picture_text_in_prose(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Documents whose ordinary passages still hold a reader's picture
+    text (``markup.PICTURE_START``): split before the chunker set it aside
+    as ``figure-text`` (2026-10-09), so its rows of tick numbers sit in the
+    vectors and the search. The smallest first."""
+    return [
+        dict(r)
+        for r in con.execute(
+            "SELECT d.id, d.title, d.text_len FROM documents d WHERE d.id IN ("
+            "  SELECT DISTINCT doc_id FROM chunks WHERE kind != 'figure-text'"
+            "  AND text LIKE '%<!-- Start of picture text -->%')"
+            " AND json_extract(d.meta, '$.retired') IS NULL"
+            " ORDER BY d.text_len LIMIT ?",
+            (CAP,),
+        )
+    ]
+
+
+def _repair_picture_text(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Re-split each from its own text (``documents.rechunk``): the text is
+    unchanged, its picture text becomes ``figure-text`` passages, and the
+    passages whose text did not change keep their vectors. At most
+    ``PICTURE_BATCH`` a heal, each behind the store's lock on its own."""
+    done = 0
+    for r in rows[:PICTURE_BATCH]:
+        try:
+            docs.rechunk(con, int(r["id"]))
+        except KeyError:
+            continue
+        done += 1
+    return done
+
+
 def _stale_parses(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents read by an extractor prax has revised since; ``covered``
     names the stamp an annotation in the history already brought the
