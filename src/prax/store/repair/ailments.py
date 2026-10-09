@@ -52,6 +52,7 @@ from .documents import (
 from .graph import (
     _backwards_part_of,
     _container_citations,
+    _damaged_names,
     _document_twins,
     _duplicate_facts,
     _functional_conflicts,
@@ -59,6 +60,7 @@ from .graph import (
     _not_venues,
     _placeholder_entities,
     _reference_entities,
+    _repair_damaged_names,
     _repair_document_twins,
     _repair_duplicate_facts,
     _repair_names,
@@ -181,6 +183,21 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_mangled_names,
         repair=_repair_names,
+    ),
+    Ailment(
+        name="damaged-names",
+        what=(
+            "entity names with an accent beside its letter ('TU Mu¨nchen'), the"
+            " type the model wrote into them ('concept=social networks',"
+            " 'rhythm complexity concept=EXTRACTED') or a drop cap given twice"
+            " ('f face recognition')"
+        ),
+        fix=(
+            "mend the name, or fold into the entity that already carries the"
+            " mended one; one signed run unmerge_run takes back"
+        ),
+        find=_damaged_names,
+        repair=_repair_damaged_names,
     ),
     Ailment(
         name="wire-names",
@@ -583,9 +600,10 @@ AILMENTS: tuple[Ailment, ...] = (
     Ailment(
         name="unmapped-glyphs",
         what=(
-            "documents whose text holds ligature glyphs (ﬁ, ﬂ) or Symbol-font"
-            " code points (=, ∈, α as private-use characters) from before"
-            " every text was cleaned: boxes on screen, words search cannot match"
+            "documents whose text holds ligature glyphs (ﬁ, ﬂ), Symbol-font"
+            " code points (=, ∈, α as private-use characters) or accents set"
+            " beside their letters (f¨ur, B´ezier) from before every text was"
+            " cleaned: boxes on screen, words search cannot match"
         ),
         fix=(
             "re-index each from its own text, cleaned (prax.text.glyphs); unchanged"
@@ -593,6 +611,7 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_glyph_documents,
         repair=_repair_glyphs,
+        locks_itself=True,
     ),
     Ailment(
         name="stale-parses",
@@ -682,7 +701,10 @@ def heal(con: sqlite3.Connection, *, only: list[str] | None = None) -> dict[str,
             # behind the store's lock: a repair writes rows of its own, and
             # a write outside it holds SQLite's lock where the queue of
             # writers cannot see it (2026-10-07, maintain._write)
-            repaired = _serialized(ailment.repair)(con, rows)
+            fix = (
+                ailment.repair if ailment.locks_itself else _serialized(ailment.repair)
+            )
+            repaired = fix(con, rows)
             done += repaired
             out[ailment.name] = {"found": len(rows), "repaired": repaired}
             if repaired < len(rows):

@@ -34,6 +34,11 @@ class Ailment:
     # readings a person may ask for over everything found (a report-only
     # ailment's way on): each a label and the body of POST /readings/bulk
     offers: tuple[dict[str, Any], ...] = ()
+    # a repair that takes the store's lock for each row itself (through a
+    # store function that is serialized) runs outside the heal's one lock,
+    # so a long one (2,000 documents re-indexed) does not hold every other
+    # writer for its whole length
+    locks_itself: bool = False
 
     @property
     def repairable(self) -> bool:

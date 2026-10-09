@@ -136,5 +136,6 @@ from .graph import (  # noqa: F401
     _wire_names,
     _without_stray,
     clean_name,
+    mended_name,
     split_names_page,
 )

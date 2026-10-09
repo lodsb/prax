@@ -5618,6 +5618,42 @@ were called same; of 281 at 0.8 or more, 260. 454 pairs stay open for
 the person. The decisions and the log of runs are kept outside the
 repository with the private data.
 
+## 2026-10-09: accents beside their letters, and names a model or a page broke
+
+The owner saw concepts that were plainly conversion damage. Measured on
+the live library (read-only): 37,295 passages in 2,088 documents held a
+detached umlaut ("f¨ur", "Universit¨at"), 13,366 a grave, 10,486 an
+acute, 6,041 a circumflex, some 1,400 a caron or double acute. A
+LaTeX-made PDF sets an accent as a glyph of its own, and MuPDF hands the
+two over side by side, so a search for "für" or "Universität" never found
+those passages, and the extraction named entities after the broken words.
+
+`prax.text.glyphs.accents` puts each accent back on its letter, as part
+of `clean`, which every text goes through when it is indexed. An accent
+goes where only one neighbour takes it; where both could, the order the
+text uses for that accent elsewhere decides, else before the letter (the
+LaTeX case, "B´ezier", "Raczy´nski"). Each accent combines only with the
+letters Latin script puts it on; an apostrophe written as ´
+("Wobbrock´s"), a grave that opens or closes a Markdown code span, a hat
+or tilde in a formula or a phonetic transcription are left. A dotless ı
+under an accent is the i it stood on ("reconnaˆıtre"). Checked on 30,000
+real passages by sample before it was wired in. The `unmapped-glyphs`
+ailment finds the older texts (a passage counts only when cleaning would
+change it) and re-indexes them, taking the store's lock per document
+(`Ailment.locks_itself`) rather than for the whole pass.
+
+The names: `store.mended_name` puts accents back and, for things that
+are not titles or people, takes out a type the model wrote into a name
+("concept=social networks", "rhythm complexity concept=EXTRACTED",
+"Concept: …") and a drop cap given twice ("f face recognition"). The
+extraction's answer goes through it as it is read (`parse_output`); the
+new `damaged-names` ailment mends the 690 names already there: 247 fold
+into the entity that carries the mended name, the rest are renamed with
+the old name kept as a `was` label, all under one run `unmerge_run`
+takes back. Two shapes measured and left: a lowercase letter before a
+different word ("k mismatches") and a doubled fragment inside a word
+("addadditive", 12 entities).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

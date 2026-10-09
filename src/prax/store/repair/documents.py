@@ -511,13 +511,17 @@ def _unpolished_transcripts(con: sqlite3.Connection) -> list[dict[str, Any]]:
 # the library took 13 s of every GET /heal; the door lives long)
 _glyphs_seen: dict[int, tuple[str, bool]] = {}
 
-_GLYPH_GLOB = "'*[\ufb00-\ufb06\uf020-\uf0fe]*'"  # the ligature and Symbol ranges
+# the ligature and Symbol ranges, and the spacing accents (glyphs.ACCENTS)
+_GLYPH_GLOB = "'*[\ufb00-\ufb06\uf020-\uf0fe" + "".join(glyphs.ACCENTS) + "]*'"
 
 
 def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     """Documents whose text still holds ligature or Symbol-font code
-    points: indexed before ``prax.text.glyphs`` cleaned every text. Each
-    document's chunks are read once per text (``_glyphs_seen``)."""
+    points, or accents beside their letters: indexed before
+    ``prax.text.glyphs`` cleaned every text. Each document's chunks are
+    read once per text (``_glyphs_seen``). An accent mark alone is no
+    damage (a backtick in code, an apostrophe written as \u00b4): a passage
+    counts when cleaning would change it."""
     out = []
     live: set[int] = set()
     for r in con.execute(
@@ -527,12 +531,15 @@ def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
         live.add(r["id"])
         seen = _glyphs_seen.get(r["id"])
         if seen is None or seen[0] != r["text_hash"]:
-            hit = con.execute(
-                f"SELECT 1 FROM chunks WHERE doc_id = ? AND text GLOB {_GLYPH_GLOB}"
-                " LIMIT 1",
-                (r["id"],),
-            ).fetchone()
-            seen = (r["text_hash"], hit is not None)
+            hit = any(
+                glyphs.damaged(str(c[0]))
+                for c in con.execute(
+                    "SELECT text FROM chunks WHERE doc_id = ?"
+                    f" AND text GLOB {_GLYPH_GLOB}",
+                    (r["id"],),
+                )
+            )
+            seen = (r["text_hash"], hit)
             _glyphs_seen[r["id"]] = seen
         if seen[1]:
             out.append({"id": r["id"], "title": r["title"]})

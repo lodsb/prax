@@ -11,11 +11,13 @@ import time
 from typing import Any
 
 from prax.graph import ontology
-from prax.text import names
+from prax.text import glyphs, language, names
 
-from ..base import hidden_documents, now
+from ..base import _serialized, hidden_documents, now
 from ..graph import (
     Edge,
+    _refresh_name,
+    add_label,
     entities_with_degree,
     entity_named_in,
     functional_breaches,
@@ -885,6 +887,135 @@ def _repair_spacing_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
             except (KeyError, ValueError):
                 continue  # merged away meanwhile, or a cycle: left alone
             done += 1
+    return done
+
+
+DAMAGED_PRODUCER = "heal:damaged-names"
+# the type a model wrote into the name, before it ("concept=social
+# networks", "Concept: creativity support system") or after it ("rhythm
+# complexity concept=EXTRACTED", "situated creativity concept=target")
+_TYPE_HEAD = re.compile(
+    r"^\s*(?:(?:concept|method|tool|target|type|dataset)\s*=|(?:concept|method)\s*:)\s*",
+    re.IGNORECASE,
+)
+_TYPE_TAIL = re.compile(
+    r"\s+(?:concept|method|tool|target|type)\s*=\s*\S+\s*$", re.IGNORECASE
+)
+# a drop cap the text layer gave twice, the letter and then the word that
+# starts with it: "f face recognition", "d discrete cosine transform"
+_DROP_CAP = re.compile(r"^([a-z]) (?=\1)")
+# the types whose names are titles or people's names, where "Concept:" may
+# be the title's own word and a single letter an initial
+_TITLED = DOCUMENT_KINDS | {"person", "author"}
+
+
+def mended_name(name: str, etype: str) -> str:
+    """A name with what the text layer and the model left in it taken out:
+    accents put back on their letters (``glyphs.accents``), and, for the
+    things that are not titles or people, a type written into the name and
+    a drop cap given twice. The name as it was when there is nothing to
+    mend."""
+    out = glyphs.accents(name)
+    if etype not in _TITLED:
+        out = _TYPE_TAIL.sub("", _TYPE_HEAD.sub("", out))
+        out = _DROP_CAP.sub("", out)
+    out = re.sub(r"\s+", " ", out).strip()
+    return out if len(out) >= 2 else name
+
+
+# the entity a mended name already belongs to
+_CARRIER = "SELECT COALESCE(canonical_id, id) FROM entities WHERE name = ? AND type = ?"
+_DAMAGE_HINT = re.compile(
+    "[" + "".join(glyphs.ACCENTS) + "]|[=:]|^[a-z] ", re.IGNORECASE
+)
+
+
+def _damaged_names(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Unmerged entities whose name ``mended_name`` changes, each with the
+    mended name and whether an entity of its type already carries it (the
+    two are then one thing)."""
+    found = []
+    for row in con.execute(
+        "SELECT id, name, type FROM entities WHERE canonical_id IS NULL"
+    ):
+        name = str(row["name"] or "")
+        if not _DAMAGE_HINT.search(name):
+            continue
+        mended = mended_name(name, str(row["type"]))
+        if mended != name:
+            found.append({**dict(row), "cleaned": mended})
+    counts = _live_edge_counts(con, [r["id"] for r in found])
+    for r in found:
+        r["edges"] = counts.get(r["id"], 0)
+        twin = con.execute(
+            _CARRIER,
+            (r["cleaned"], r["type"]),
+        ).fetchone()
+        if twin is not None and int(twin[0]) != r["id"]:
+            r["into"] = int(twin[0])
+    found.sort(key=lambda r: (-r["edges"], r["name"]))
+    return found[:CAP]
+
+
+@_serialized
+def _repair_damaged_names(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
+    """Fold each into the entity that carries the mended name, or give it
+    that name: the mended one preferred, the old one kept as a label that
+    says it was the name. One run for the round, so ``unmerge_run`` takes
+    the folds and the renames back."""
+    run = f"{DAMAGED_PRODUCER}:{now().replace(':', '').replace('-', '')}"
+    done = 0
+    for row in rows:
+        here = con.execute(
+            "SELECT name, canonical_id FROM entities WHERE id = ?", (row["id"],)
+        ).fetchone()
+        if (
+            here is None
+            or here["canonical_id"] is not None
+            or here["name"] != row["name"]
+        ):
+            continue  # merged or renamed since it was found
+        twin = con.execute(
+            _CARRIER,
+            (row["cleaned"], row["type"]),
+        ).fetchone()
+        if twin is not None and int(twin[0]) != row["id"]:
+            try:
+                merge_entities(
+                    con,
+                    int(row["id"]),
+                    int(twin[0]),
+                    producer=DAMAGED_PRODUCER,
+                    run=run,
+                )
+            except (KeyError, ValueError):
+                continue
+            done += 1
+            continue
+        old = con.execute(
+            "SELECT lang FROM entity_labels WHERE entity_id = ? AND label = ?"
+            " AND kind = 'pref' ORDER BY lang IS NULL LIMIT 1",
+            (row["id"], row["name"]),
+        ).fetchone()
+        lang = old["lang"] if old is not None else language.canonical()
+        # the old name stays, as the name it was (unmerge_run prefers it again)
+        con.execute(
+            "UPDATE entity_labels SET kind = 'alt', was = 1, run = ?"
+            " WHERE entity_id = ? AND label = ?",
+            (run, row["id"], row["name"]),
+        )
+        add_label(
+            con,
+            int(row["id"]),
+            row["cleaned"],
+            lang=lang,
+            kind="pref",
+            producer=DAMAGED_PRODUCER,
+            run=run,
+        )
+        _refresh_name(con, int(row["id"]))
+        done += 1
+    con.commit()
     return done
 
 

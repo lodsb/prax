@@ -561,6 +561,7 @@ from .repair import (  # noqa: F401
     clean_name,
     heal,
     health,
+    mended_name,
     split_names_page,
 )
 from .retrieval import (  # noqa: F401

@@ -660,3 +660,66 @@ def test_figure_readings_a_replacing_read_dropped_come_back(
     text = store.get_document(con, doc_id)["text"]
     assert "Six stacked curves." in text and "By marker." in text
     assert store.health(con, only=["lost-figure-readings"])["ailments"][0]["count"] == 0
+
+
+def test_damaged_names_are_mended_or_folded_and_can_be_taken_back(
+    con: sqlite3.Connection,
+) -> None:
+    """``damaged-names``: an accent beside its letter, a type the model
+    wrote into the name, a drop cap given twice. A name whose mended form
+    another entity carries folds into it; the others are renamed, the old
+    name kept as the one it was. ``unmerge_run`` takes the round back."""
+    _link(con, "concept=social networks", "a")
+    _link(con, "social networks", "b")
+    _link(con, "rhythm complexity concept=EXTRACTED", "c")
+    _link(con, "f face recognition", "d")
+    _link(con, "relative h" + chr(0xA8) + "aufigkeit", "e")
+    _link(con, "C compiler", "f")  # a single capital is a name's own letter
+    _link(con, "k mismatches", "g")  # and a lowercase one before another word
+    found = store.health(con, only=["damaged-names"])["ailments"][0]
+    mended = {r["name"]: r["cleaned"] for r in found["examples"]}
+    assert mended == {
+        "concept=social networks": "social networks",
+        "rhythm complexity concept=EXTRACTED": "rhythm complexity",
+        "f face recognition": "face recognition",
+        "relative h" + chr(0xA8) + "aufigkeit": "relative häufigkeit",
+    }
+    assert store.heal(con, only=["damaged-names"])["damaged-names"]["repaired"] == 4
+    leaked = con.execute(
+        "SELECT canonical_id, merged_run FROM entities WHERE name = ?",
+        ("concept=social networks",),
+    ).fetchone()
+    assert leaked["canonical_id"] == store._entity_id(con, "social networks", "concept")
+    names = {
+        r[0]
+        for r in con.execute("SELECT name FROM entities WHERE canonical_id IS NULL")
+    }
+    assert {"rhythm complexity", "face recognition", "relative häufigkeit"} <= names
+    assert store.health(con, only=["damaged-names"])["ailments"][0]["count"] == 0
+    # one run, taken back whole: the fold undone, the old names back
+    assert store.unmerge_run(con, leaked["merged_run"]) >= 4
+    names = {
+        r[0]
+        for r in con.execute("SELECT name FROM entities WHERE canonical_id IS NULL")
+    }
+    assert {"concept=social networks", "f face recognition"} <= names
+
+
+def test_a_models_names_are_mended_as_its_answer_is_read() -> None:
+    from prax.graph import extraction
+
+    got = extraction.parse_output(
+        {
+            "triples": [
+                {
+                    "src": {"name": "Universit`a di Pisa", "type": "organization"},
+                    "rel": "uses",
+                    "dst": {"name": "concept=genetic algorithms", "type": "concept"},
+                }
+            ]
+        }
+    )
+    assert (got.triples[0].src, got.triples[0].dst) == (
+        "Università di Pisa",
+        "genetic algorithms",
+    )

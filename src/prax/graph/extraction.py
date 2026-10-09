@@ -536,15 +536,19 @@ class Extractor(Protocol):
 
 
 def parse_output(data: dict[str, Any]) -> Extraction:
+    """The model's answer as triples. A name is mended on the way in
+    (``store.mended_name``): an accent beside its letter, as the PDF's
+    text gave it, and a type the model wrote into the name."""
     triples = []
     for t in data.get("triples", []):
+        src_type, dst_type = str(t["src"]["type"]), str(t["dst"]["type"])
         triples.append(
             Triple(
-                src=str(t["src"]["name"]).strip(),
-                src_type=str(t["src"]["type"]),
+                src=store.mended_name(str(t["src"]["name"]).strip(), src_type),
+                src_type=src_type,
                 rel=str(t["rel"]),
-                dst=str(t["dst"]["name"]).strip(),
-                dst_type=str(t["dst"]["type"]),
+                dst=store.mended_name(str(t["dst"]["name"]).strip(), dst_type),
+                dst_type=dst_type,
                 confidence=str(t.get("confidence", "AMBIGUOUS")),
                 evidence=str(t.get("evidence", ""))[:300],
                 src_as=str(t["src"].get("as") or "").strip(),
