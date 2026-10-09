@@ -548,12 +548,18 @@ def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     return out
 
 
+# documents one heal re-indexes: a book takes minutes, and a heal that runs
+# for an hour sends no heartbeat and is reaped (2026-10-09, 1,800 of 2,615
+# done); the rest are left for the next heal, which finds them again
+GLYPH_BATCH = 150
+
+
 def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
     """Re-index the document from its own artifact, cleaned: chunks whose
-    text did not change keep their vectors."""
+    text did not change keep their vectors. At most ``GLYPH_BATCH`` a heal."""
 
     done = 0
-    for r in rows:
+    for r in rows[:GLYPH_BATCH]:
         row = con.execute(
             "SELECT text_hash, json_extract(meta, '$.text_source') AS src"
             " FROM documents WHERE id = ?",
