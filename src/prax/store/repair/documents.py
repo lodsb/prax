@@ -583,6 +583,9 @@ def _repair_glyphs(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
             break
         text = _read_archive(row["text_hash"]).decode("utf-8")
         if not glyphs.damaged(text):
+            # its passages looked damaged and the whole text is not (an
+            # accent at a passage's edge): not listed again for this text
+            _glyphs_seen[doc_id] = (str(row["text_hash"]), False)
             continue
         docs.index_text(con, doc_id, text, text_source=row["src"])
         done += 1

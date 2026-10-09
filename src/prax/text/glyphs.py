@@ -145,6 +145,8 @@ def _sides(text: str, i: int) -> tuple[str | None, str | None]:
         following = text[i + 2] if i + 2 < len(text) else ""
         if not following.isalpha():
             before = None
+    if before and not prev:
+        before = None  # a passage's first character: what stood before it is not here
     if before and prev and not (prev.isalpha() or prev.isspace() or prev in "-(\"'"):
         before = None  # "**´**", "<sup>¨" are marks, not letters
     return after, before
