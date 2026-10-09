@@ -512,7 +512,13 @@ def _unpolished_transcripts(con: sqlite3.Connection) -> list[dict[str, Any]]:
 _glyphs_seen: dict[int, tuple[str, bool]] = {}
 
 # the ligature and Symbol ranges, and the spacing accents (glyphs.ACCENTS)
-_GLYPH_GLOB = "'*[\ufb00-\ufb06\uf020-\uf0fe" + "".join(glyphs.ACCENTS) + "]*'"
+# a grave only between a letter and a vowel: every Markdown code passage
+# holds a backtick, and reading them all held the door for minutes
+_MARKS = "".join(a for a in glyphs.ACCENTS if a != "`")
+_GLYPH_GLOB = (
+    f"(text GLOB '*[\ufb00-\ufb06\uf020-\uf0fe{_MARKS}]*'"
+    " OR text GLOB '*[a-z]`[aeiou]*')"
+)
 
 
 def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -534,8 +540,7 @@ def _glyph_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
             hit = any(
                 glyphs.damaged(str(c[0]))
                 for c in con.execute(
-                    "SELECT text FROM chunks WHERE doc_id = ?"
-                    f" AND text GLOB {_GLYPH_GLOB}",
+                    f"SELECT text FROM chunks WHERE doc_id = ? AND {_GLYPH_GLOB}",
                     (r["id"],),
                 )
             )
