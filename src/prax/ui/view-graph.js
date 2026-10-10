@@ -129,7 +129,7 @@ class ForceGraph {
     const n = this.nodes.get(key);
     n.expanded = true;
     // the node is one thing: its type says which, where its name is several
-    const edges = (await api("/traverse", { entity: n.name, hops: 1, limit: 0, type: n.type || "", domain: GRAPH_DOMAIN || undefined })).edges;
+    const edges = (await api("/traverse", { entity: n.name, hops: 1, limit: 0, type: n.type || "", ...scopeParams() })).edges;
     if (!n.expanded) return;  // folded while the fetch was in flight
     this.merge(edges, key);
     this.select(key);
@@ -368,7 +368,7 @@ class ForceGraph {
     });
     c.addEventListener("dblclick", (e) => {
       const n = this.hit(...at(e));
-      if (n) go("graph", "", GRAPH_DOMAIN ? { entity: n.name, domain: GRAPH_DOMAIN } : { entity: n.name });
+      if (n) go("graph", "", { entity: n.name, ...scopeParams() });
     });
     c.addEventListener("wheel", (e) => {
       e.preventDefault();
@@ -421,16 +421,70 @@ function graphPanelUpdater(panel, graphOf) {
   };
 }
 
-// The module the graph is drawn from, if one was chosen: the overview's
-// hubs, an entity's walk and every expansion keep to its documents
-// (GET /traverse?domain=), until the choice is cleared.
-let GRAPH_DOMAIN = "";
+// What the graph is drawn from, when narrowed: a module's documents
+// (domain), a page's tree with what it links (page: a project's notes and
+// the papers they cite), and the personal documents left out or alone
+// (personal). The overview's hubs, an entity's walk and every expansion
+// keep to it (GET /graph/overview, /traverse with the same parameters)
+// until the choice is cleared.
+let GRAPH_SCOPE = { domain: "", page: "", personal: "" };
+function scopeParams() {
+  const out = {};
+  for (const [k, v] of Object.entries(GRAPH_SCOPE)) if (v) out[k] = v;
+  return out;
+}
+let SCOPE_PAGES = null;  // the pages a filter may be: projects and collections
+async function scopeBar(p, what) {
+  if (!SCOPE_PAGES) {
+    try {
+      const pages = await api("/pages");
+      const parents = new Set(pages.map((pg) => pg.parent).filter((x) => x != null));
+      SCOPE_PAGES = pages
+        .filter((pg) => pg.kind === "project" || (pg.parent == null && parents.has(pg.doc_id)))
+        .sort((a, b) => (a.kind === "project" ? 0 : 1) - (b.kind === "project" ? 0 : 1) || (a.title || a.slug).localeCompare(b.title || b.slug));
+    } catch (_) { SCOPE_PAGES = []; }
+  }
+  const page = String(p.page || "");
+  const pageOpts = SCOPE_PAGES.map((pg) => `<option value="${pg.doc_id}"${String(pg.doc_id) === page ? " selected" : ""}>${pg.kind === "project" ? "project: " : ""}${esc(pg.title || pg.slug)}</option>`).join("");
+  const personal = p.personal || "";
+  const other = page && !SCOPE_PAGES.some((pg) => String(pg.doc_id) === page)
+    ? `<option value="${esc(page)}" selected>page ${esc(page)}</option>` : "";
+  return `<span class="graph-scope">
+    ${domainSelect(p.domain || "", "domain", what)}
+    <select name="page" title="a project's or a collection's pages and what they link">
+      <option value="">every page</option>${pageOpts}${other}
+    </select>
+    <select name="personal" title="the documents marked or suspected personal">
+      <option value=""${personal ? "" : " selected"}>personal too</option>
+      <option value="hide"${personal === "hide" ? " selected" : ""}>without personal</option>
+      <option value="only"${personal === "only" ? " selected" : ""}>personal only</option>
+    </select>
+  </span>`;
+}
+function scopeChange(out, base) {
+  out.querySelectorAll(".graph-scope select").forEach((s) => s.addEventListener("change", () => {
+    const next = { ...base };
+    out.querySelectorAll(".graph-scope select").forEach((x) => { if (x.value) next[x.name] = x.value; });
+    go("graph", "", next);
+  }));
+}
+function scopeWords() {
+  const bits = [];
+  if (GRAPH_SCOPE.domain) bits.push(`the <b>${esc(GRAPH_SCOPE.domain)}</b> documents`);
+  if (GRAPH_SCOPE.page) {
+    const pg = (SCOPE_PAGES || []).find((x) => String(x.doc_id) === String(GRAPH_SCOPE.page));
+    bits.push(`<b>${esc(pg ? pg.title || pg.slug : `page ${GRAPH_SCOPE.page}`)}</b> and what it links`);
+  }
+  if (GRAPH_SCOPE.personal === "hide") bits.push("without personal documents");
+  if (GRAPH_SCOPE.personal === "only") bits.push("personal documents only");
+  return bits.join(", ");
+}
 
 async function viewGraph(arg, p) {
   const q = p.q || "";
   const entity = p.entity || arg || "";
   const domain = p.domain || "";
-  GRAPH_DOMAIN = domain;
+  GRAPH_SCOPE = { domain, page: p.page || "", personal: p.personal || "" };
   const docId = p.doc || "";
   const communityId = p.community || "";
   await modules();
@@ -452,7 +506,27 @@ async function viewGraph(arg, p) {
       // one region of the library: what it covers, its parts, its things
       let got = null;
       try { got = await api(`/communities/${encodeURIComponent(communityId)}`); } catch (_) { /* gone at a rebuild */ }
-      out.innerHTML = regionPage(got);
+      if (!got) { out.innerHTML = regionPage(got); return; }
+      const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
+      out.innerHTML = `
+        <div class="graph-tools">
+          <span>The region <b>${esc(regionName(got))}</b>: the things that weigh most in it</span>
+          <span class="muted">· faint lines: things that share documents · click a node to expand it, double-click to open its neighbourhood</span>
+          <button type="button" id="graph-fit" class="secondary">fit</button>
+        </div>
+        <div class="legend">${legend}</div>
+        <div class="graph-layout">
+          <div class="graph-canvas plate"><canvas></canvas></div>
+          <aside class="graph-panel" id="graph-panel">${graphPanel(null, [])}</aside>
+        </div>
+        ${regionPage(got)}`;
+      const panel = document.getElementById("graph-panel");
+      const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
+      document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
+      try {
+        const drawn = await api(`/communities/${encodeURIComponent(communityId)}/graph`, { members: 40 });
+        if (drawn.nodes.length) graph.merge(drawn.edges, null, drawn.nodes, drawn.links);
+      } catch (_) { /* an older door: the text alone */ }
       return;
     }
     if (docId) {
@@ -481,8 +555,8 @@ async function viewGraph(arg, p) {
       const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
       out.innerHTML = `
         <div class="graph-tools">
-          ${domainSelect(domain, "domain", "draw one module's graph")}
-          <span>${domain ? `The <b>${esc(domain)}</b> documents' graph: its most connected things` : "Overview: the most connected concepts, methods, tools and datasets"}</span>
+          ${await scopeBar(p, "draw one module's graph")}
+          <span>${scopeWords() ? `The graph of ${scopeWords()}: its most connected things` : "Overview: the most connected concepts, methods, tools and datasets"}</span>
           <span class="muted">· faint lines: hubs that share documents · click a node to expand it, click it again to fold it, double-click to open its neighbourhood</span>
           <button type="button" id="graph-fit" class="secondary">fit</button>
         </div>
@@ -494,11 +568,11 @@ async function viewGraph(arg, p) {
       const panel = document.getElementById("graph-panel");
       const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
       document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
-      out.querySelector("select[name=domain]").addEventListener("change", (e) => go("graph", "", e.target.value ? { domain: e.target.value } : {}));
-      const overview = await api("/graph/overview", { limit: 30, domain: domain || undefined });
-      if (!overview.nodes.length) { out.innerHTML = `<p class="muted">The graph is empty; run an extraction first.</p>`; return; }
+      scopeChange(out, {});
+      const overview = await api("/graph/overview", { limit: 30, ...scopeParams() });
+      if (!overview.nodes.length) { panel.innerHTML = `<p class="muted">Nothing in the graph${scopeWords() ? ` for ${scopeWords()}` : "; run an extraction first"}.</p>`; return; }
       graph.merge(overview.edges, null, overview.nodes, overview.links);
-      if (!domain) {
+      if (!scopeWords()) {
         // below the hubs, the regions they sit in
         try {
           const regions = (await api("/communities", { level: 0, limit: 40 })).communities;
@@ -518,8 +592,8 @@ async function viewGraph(arg, p) {
     const legend = Object.entries(TYPE_COLORS).map(([t, c]) => `<span style="--c:${c}">${t}</span>`).join("");
     out.innerHTML = `
       <div class="graph-tools">
-        ${domainSelect(domain, "domain", "only what one module's documents say")}
-        <span>Neighbourhood of <b>${esc(entity)}</b>${domain ? ` in the <b>${esc(domain)}</b> documents` : ""}</span>
+        ${await scopeBar(p, "only what one module's documents say")}
+        <span>Neighbourhood of <b>${esc(entity)}</b>${scopeWords() ? ` in ${scopeWords()}` : ""}</span>
         <span class="muted">· click a node to expand it, click it again to fold it · drag to pan, wheel to zoom · dashed edges are inferred or ambiguous</span>
         <button type="button" id="graph-fit" class="secondary">fit</button>
       </div>
@@ -531,14 +605,9 @@ async function viewGraph(arg, p) {
     const panel = document.getElementById("graph-panel");
     const graph = new ForceGraph(out.querySelector("canvas"), graphPanelUpdater(panel, () => graph));
     document.getElementById("graph-fit").addEventListener("click", () => graph.fit());
-    out.querySelector("select[name=domain]").addEventListener("change", (e) => {
-      const next = { entity };
-      if (p.type) next.type = p.type;
-      if (e.target.value) next.domain = e.target.value;
-      go("graph", "", next);
-    });
-    const edges = (await api("/traverse", { entity, hops: 1, limit: 0, type: p.type || "", domain: domain || undefined })).edges;
-    if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity${domain ? ` in the ${esc(domain)} documents` : ""}.</p>`; return; }
+    scopeChange(out, p.type ? { entity, type: p.type } : { entity });
+    const edges = (await api("/traverse", { entity, hops: 1, limit: 0, type: p.type || "", ...scopeParams() })).edges;
+    if (!edges.length) { panel.innerHTML = `<p class="muted">No edges for this entity${scopeWords() ? ` in ${scopeWords()}` : ""}.</p>`; return; }
     const first = edges.find((e) => e.src === entity || e.dst === entity);
     if (!first) { graph.merge(edges, null); return; }
     const start = graph.node(entity, first.src === entity ? first.src_type : first.dst_type, null);

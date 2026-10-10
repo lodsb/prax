@@ -309,3 +309,40 @@ def test_pages_form_a_tree(con: sqlite3.Connection) -> None:
         store.set_page_parent(con, note, 999_999)
     store.set_page_parent(con, deep, None)
     assert {p["doc_id"]: p["parent"] for p in store.list_pages(con)}[deep] is None
+
+
+def test_a_graph_can_be_drawn_from_a_pages_tree_or_without_personal(
+    con: sqlite3.Connection,
+) -> None:
+    """``scope_documents``: a page's tree and the documents it links, the
+    personal documents left out or alone; ``hub_graph`` keeps to them, and
+    draws a given set of entities (a region) when asked."""
+    paper = store.ingest_text(con, "a paper about reverbs " * 30, title="P")["doc_id"]
+    diary = store.ingest_text(con, "my own diary entry " * 30, title="D")["doc_id"]
+    other = store.ingest_text(con, "something else " * 30, title="O")["doc_id"]
+    con.execute(
+        "UPDATE documents SET meta = json_set(meta, '$.sensitivity',"
+        ' json(\'{"state": "personal", "by": "human"}\')) WHERE id = ?',
+        (diary,),
+    )
+    con.commit()
+    proj = store.write_page(con, "project-r", "The project.", kind="project")["doc_id"]
+    note = store.write_page(
+        con, "r-notes", f"See [P](#doc/{paper}).", author="agent", part_of="project-r"
+    )["doc_id"]
+    assert store.scope_documents(con, page=proj) == frozenset({proj, note, paper})
+    assert diary not in (store.scope_documents(con, personal="hide") or set())
+    assert store.scope_documents(con, personal="only") == frozenset({diary})
+    for doc, name in ((paper, "reverb"), (other, "elsewhere")):
+        store.link(
+            con,
+            store.Edge(name, "concept", "extends", "topic", "concept"),
+            source_doc=doc,
+        )
+    scoped = store.hub_graph(con, within=store.scope_documents(con, page=proj))
+    assert {n["name"] for n in scoped["nodes"]} <= {"reverb", "topic"}
+    ids = [store._entity_id(con, "reverb", "concept")]
+    drawn = store.hub_graph(con, entities=ids)
+    assert [n["name"] for n in drawn["nodes"]] == ["reverb"]
+    with pytest.raises(ValueError):
+        store.scope_documents(con, personal="sometimes")

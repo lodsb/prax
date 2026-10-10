@@ -375,6 +375,8 @@ def hub_graph(
     types: tuple[str, ...] = HUB_TYPES,
     min_shared: int = 2,
     domain: str | None = None,
+    within: frozenset[int] | None = None,
+    entities: list[int] | None = None,
 ) -> dict[str, Any]:
     """The most connected entities of the given types, the currently valid
     edges among them, and ``links``: pairs of hubs that share at least
@@ -390,25 +392,38 @@ def hub_graph(
     (and those of the modules built on it) say, and its own kinds of thing
     among the hubs, the kitchen's ingredients and dishes beside the
     concepts. The documents no module was set for are left out: they are
-    in every module, and would put the whole library back."""
+    in every module, and would put the whole library back.
+
+    ``within`` keeps to the facts of those documents (a page's tree, a
+    project, the personal ones left out: ``store.scope_documents``).
+    ``entities`` draws those entities instead of the most connected (a
+    region's members), of any type, with their degree and the facts among
+    them."""
     limit = max(1, min(limit, 200))
     docs, docs_args = "", tuple[str, ...]()
     if domain:
         onto = ontology.current()
-        within = sorted(onto.within(domain))
+        modules = sorted(onto.within(domain))
         own = {
             t
-            for name in within
+            for name in modules
             if name in onto.modules
             for t in onto.modules[name].types
             if t not in onto.self_types
         }
         types = tuple(sorted(set(types) | own))
         # the documents no module was set for are left out (see above)
-        clause, held = domain_clause(con, within, unset=False)
+        clause, held = domain_clause(con, modules, unset=False)
         docs = f" AND source_doc IN (SELECT d.id FROM documents d WHERE 1 = 1{clause})"
         docs_args = tuple(held)
-    marks = ",".join("?" * len(types))
+    if within is not None:
+        docs += " AND source_doc IN (SELECT value FROM json_each(?))"
+        docs_args = (*docs_args, json.dumps(sorted(within)))
+    pick, pick_args = f"e.type IN ({','.join('?' * len(types))})", tuple(types)
+    if entities is not None:
+        pick = "e.id IN (SELECT value FROM json_each(?))"
+        pick_args = (json.dumps(sorted(set(entities))),)
+        limit = max(1, min(len(entities), 200))
     nodes = con.execute(
         f"""
         WITH ends(id) AS (
@@ -422,9 +437,9 @@ def hub_graph(
             GROUP BY COALESCE(n.canonical_id, n.id)
         )
         SELECT e.id, e.name, e.type, d.degree FROM deg d JOIN entities e ON e.id = d.cid
-        WHERE e.type IN ({marks}) ORDER BY d.degree DESC, e.name LIMIT ?
+        WHERE {pick} ORDER BY d.degree DESC, e.name LIMIT ?
         """,
-        (*docs_args, *docs_args, *types, limit),
+        (*docs_args, *docs_args, *pick_args, limit),
     ).fetchall()
     ids = [r["id"] for r in nodes]
     if not ids:

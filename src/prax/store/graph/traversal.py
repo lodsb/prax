@@ -430,6 +430,7 @@ def traverse_map(
     domain: str | None = None,
     as_of: str | None = None,
     world_at: str | None = None,
+    within: frozenset[int] | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: its own edges, the ideas around
     them, and how many of those did not fit.
@@ -465,12 +466,15 @@ def traverse_map(
     """
     entity_name, type = _from_document(con, entity_name, type)
     ids, report = _choose(con, entity_name, type)
+    keep = _domain_documents(con, domain)
+    if within is not None:
+        keep = within if keep is None else keep & within
     rows, left_out = _walk(
         con,
         ids,
         hops,
         limit,
-        within=_domain_documents(con, domain),
+        within=keep,
         as_of=as_of,
         world_at=world_at,
     )

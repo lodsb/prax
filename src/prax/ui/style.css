@@ -655,3 +655,7 @@ table.props td { padding: .15rem 0; overflow-wrap: anywhere; border: 0; }
 .page-tree .slug { color: var(--faint); font-size: .75rem; margin-left: .5rem; }
 .page-tree-group { margin: 1.1rem 0 .3rem; font-size: 1rem; }
 .page-filter { width: 100%; max-width: 26rem; margin: .4rem 0 .2rem; }
+
+/* the graph's filters: a module, a project's or collection's pages, the personal documents */
+.graph-scope { display: inline-flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.graph-scope select { max-width: 16rem; }

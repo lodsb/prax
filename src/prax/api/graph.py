@@ -90,6 +90,8 @@ def traverse(
     domain: str | None = None,
     as_of: str | None = None,
     world_at: str | None = None,
+    page: int | None = None,
+    personal: str | None = None,
 ) -> dict[str, Any]:
     """The neighbourhood of an entity: the edges, and what was left out.
 
@@ -100,8 +102,12 @@ def traverse(
     keeps what that module's documents say. ``as_of`` (a date or a UTC
     moment) walks the edges prax held then; ``world_at`` (a year, month
     or day) the facts that hold in the world then, and the undated ones.
+    ``page`` (a page's document id) and ``personal`` (hide, only) narrow
+    the walk to the documents ``store.scope_documents`` names.
     """
     try:
+        con = _con(request)
+        within = store.scope_documents(con, page=page, personal=personal or None)
         return store.traverse_map(
             _con(request),
             entity,
@@ -111,6 +117,7 @@ def traverse(
             domain=domain or None,
             as_of=as_of or None,
             world_at=world_at or None,
+            within=within,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
@@ -366,15 +373,39 @@ def entities(q: str, request: Request, limit: int = 20) -> list[dict[str, Any]]:
 
 @router.get("/graph/overview")
 def graph_overview(
-    request: Request, limit: int = 30, min_shared: int = 2, domain: str | None = None
+    request: Request,
+    limit: int = 30,
+    min_shared: int = 2,
+    domain: str | None = None,
+    page: int | None = None,
+    personal: str | None = None,
 ) -> dict[str, Any]:
     """The most connected concepts, methods, tools and datasets, the edges
     among them, and co-occurrence links (hubs sharing at least
     ``min_shared`` source documents): what the graph view opens on.
-    ``domain`` draws one module's graph, from its documents alone."""
+    ``domain`` draws one module's graph, from its documents alone; ``page``
+    (a page's tree and what it links) and ``personal`` (hide, only) narrow
+    it to the documents ``store.scope_documents`` names."""
+    con = _con(request)
+    try:
+        within = store.scope_documents(con, page=page, personal=personal or None)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     return store.hub_graph(
-        _con(request), limit=limit, min_shared=min_shared, domain=domain or None
+        con, limit=limit, min_shared=min_shared, domain=domain or None, within=within
     )
+
+
+@router.get("/communities/{cid}/graph")
+def community_graph(cid: int, request: Request, members: int = 40) -> dict[str, Any]:
+    """A region drawn: its members that weigh most, the facts among them,
+    and which of them share documents (``store.hub_graph``)."""
+    con = _con(request)
+    got = store.community(con, cid, members=max(1, min(members, 120)), documents=1)
+    if got is None:
+        raise HTTPException(404, "no such region")
+    ids = [int(m["id"]) for m in got["members"]]
+    return store.hub_graph(con, entities=ids, min_shared=2)
 
 
 @router.get("/communities")

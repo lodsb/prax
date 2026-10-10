@@ -424,6 +424,80 @@ def page_id(con: sqlite3.Connection, slug: str) -> int | None:
     return int(row[0]) if row else None
 
 
+@_reading
+def page_subtree(con: sqlite3.Connection, doc_id: int) -> list[int]:
+    """A page and every page under it in the tree of pages, the viewer's
+    to see; empty for a page that is not there."""
+    kids: dict[int, list[int]] = {}
+    for child, parent in con.execute(
+        "SELECT p.doc_id, json_extract(d.meta, '$.page.parent')"
+        " FROM pages p JOIN documents d ON d.id = p.doc_id"
+    ):
+        if parent is not None:
+            kids.setdefault(int(parent), []).append(int(child))
+    if con.execute(
+        "SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)
+    ).fetchone() is None or document_hidden(con, doc_id):
+        return []
+    out, todo, seen = [], [doc_id], {doc_id}
+    while todo:
+        here = todo.pop()
+        out.append(here)
+        for k in kids.get(here, []):
+            if k not in seen and not document_hidden(con, k):
+                seen.add(k)
+                todo.append(k)
+    return out
+
+
+PERSONAL_STATES = ("suspected", "personal")  # what "personal" means to a filter
+
+
+@_reading
+def scope_documents(
+    con: sqlite3.Connection, *, page: int | None = None, personal: str | None = None
+) -> frozenset[int] | None:
+    """The documents a view of the graph is drawn from, or None for all of
+    them. ``page``: that page, the pages under it in the tree of pages,
+    and the documents they link (``[title](#doc/N)``); a project's page so
+    gives its notes and the papers they cite. ``personal``: ``hide`` leaves
+    out the documents marked or suspected personal, ``only`` keeps them
+    alone (``documents.sensitivity``). The two narrow each other."""
+    out: frozenset[int] | None = None
+    if page is not None:
+        docs: set[int] = set()
+        for did in page_subtree(con, page):
+            docs.add(did)
+            row = con.execute(
+                "SELECT text_hash FROM documents WHERE id = ?", (did,)
+            ).fetchone()
+            if row is not None and row[0]:
+                docs.update(linked_documents(_read_archive(row[0]).decode("utf-8")))
+        out = frozenset(docs)
+    if personal in ("hide", "only"):
+        marks = ",".join("?" * len(PERSONAL_STATES))
+        marked = {
+            int(r[0])
+            for r in con.execute(
+                "SELECT id FROM documents WHERE json_extract(meta,"
+                f" '$.sensitivity.state') IN ({marks})",
+                PERSONAL_STATES,
+            )
+        }
+        if personal == "only":
+            out = frozenset(marked) if out is None else out & marked
+        elif out is not None:
+            out = out - marked
+        else:
+            out = (
+                frozenset(int(r[0]) for r in con.execute("SELECT id FROM documents"))
+                - marked
+            )
+    elif personal not in (None, "", "all"):
+        raise ValueError(f"personal: hide, only or all, not {personal!r}")
+    return out
+
+
 @_serialized
 def set_page_parent(
     con: sqlite3.Connection, doc_id: int, parent: int | None, *, by: str = "human"
