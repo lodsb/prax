@@ -12,6 +12,7 @@ from prax.text import names
 
 from ..base import _guards, _reading, _scrubbed, domain_clause, hidden_documents
 from ..retrieval import CONTEXT_LIMIT, _similar_documents
+from .edges import held_in_world
 
 HUB_TYPES = ("concept", "method", "tool", "dataset")
 
@@ -377,6 +378,7 @@ def hub_graph(
     domain: str | None = None,
     within: frozenset[int] | None = None,
     entities: list[int] | None = None,
+    world_at: str | None = None,
 ) -> dict[str, Any]:
     """The most connected entities of the given types, the currently valid
     edges among them, and ``links``: pairs of hubs that share at least
@@ -398,7 +400,12 @@ def hub_graph(
     project, the personal ones left out: ``store.scope_documents``).
     ``entities`` draws those entities instead of the most connected (a
     region's members), of any type, with their degree and the facts among
-    them."""
+    them. ``world_at`` keeps the facts that hold in the world at that
+    date and the undated ones (``held_in_world``).
+
+    A node carries ``docs``, the documents that say something of it in
+    what is drawn, and ``region``, the region of the library it is in
+    (level 0 of ``entity_communities``; absent outside the partition)."""
     limit = max(1, min(limit, 200))
     docs, docs_args = "", tuple[str, ...]()
     if domain:
@@ -419,6 +426,10 @@ def hub_graph(
     if within is not None:
         docs += " AND source_doc IN (SELECT value FROM json_each(?))"
         docs_args = (*docs_args, json.dumps(sorted(within)))
+    if world_at:
+        world, world_args = held_in_world("edges", world_at)
+        docs += f" AND {world}"
+        docs_args = (*docs_args, *world_args)
     pick, pick_args = f"e.type IN ({','.join('?' * len(types))})", tuple(types)
     if entities is not None:
         pick = "e.id IN (SELECT value FROM json_each(?))"
@@ -467,7 +478,7 @@ def hub_graph(
             JOIN entities s ON s.id = COALESCE(a.canonical_id, a.id)
             JOIN entities t ON t.id = COALESCE(b.canonical_id, b.id)
             WHERE x.valid_to IS NULL AND x.src IN ({mm}) AND x.dst IN ({mm})
-            {docs.replace("source_doc", "x.source_doc")}
+            {_on_x(docs)}
             ORDER BY x.id
             """,
             (*members, *members, *docs_args),
@@ -481,11 +492,19 @@ def hub_graph(
             SELECT COALESCE(n.canonical_id, n.id), x.source_doc
             FROM edges x JOIN entities n ON n.id = x.{side}
             WHERE x.valid_to IS NULL AND x.source_doc IS NOT NULL
-              AND x.{side} IN ({mm}){docs.replace("source_doc", "x.source_doc")}
+              AND x.{side} IN ({mm}){_on_x(docs)}
             """,
             (*members, *docs_args),
         ):
             touch.setdefault(cid, set()).add(doc)
+    regions = {
+        int(r[0]): int(r[1])
+        for r in con.execute(
+            "SELECT entity_id, community_id FROM entity_communities"
+            f" WHERE level = 0 AND entity_id IN ({idmarks})",
+            ids,
+        )
+    }
     by_id = {r["id"]: r for r in nodes}
     links: list[dict[str, Any]] = []
     for i, a in enumerate(ids):
@@ -504,11 +523,76 @@ def hub_graph(
     links.sort(key=lambda r: -r["weight"])
     return {
         "nodes": [
-            {"name": r["name"], "type": r["type"], "degree": r["degree"]} for r in nodes
+            {
+                "name": r["name"],
+                "type": r["type"],
+                "degree": r["degree"],
+                "docs": len(touch.get(r["id"], ())),
+                **({"region": regions[r["id"]]} if r["id"] in regions else {}),
+            }
+            for r in nodes
         ],
         "edges": edges,
         "links": links[:300],
     }
+
+
+MARKED = 200  # entities one call to ``entity_marks`` reads
+
+
+@_reading
+def entity_marks(
+    con: sqlite3.Connection,
+    things: list[tuple[str, str]],
+    *,
+    within: frozenset[int] | None = None,
+) -> list[dict[str, Any]]:
+    """What the graph view sizes and colours a node by, for things already
+    drawn (``(name, type)`` pairs, at most ``MARKED``): ``docs``, how many
+    documents say something of it (in ``within`` when given, never a hidden
+    one), and ``region``, its region of the library, as ``hub_graph`` gives
+    them for the hubs. A name that is no entity is left out."""
+    hidden = hidden_documents(con)
+    out: list[dict[str, Any]] = []
+    for name, etype in things[:MARKED]:
+        row = con.execute(
+            "SELECT COALESCE(canonical_id, id) FROM entities"
+            " WHERE name = ? AND type = ?",
+            (name, etype),
+        ).fetchone()
+        if row is None:
+            continue
+        cid = int(row[0])
+        docs = {
+            int(r[0])
+            for side in ("src", "dst")
+            for r in con.execute(
+                f"""
+                SELECT DISTINCT x.source_doc FROM edges x
+                WHERE x.valid_to IS NULL AND x.source_doc IS NOT NULL AND x.{side} IN
+                  (SELECT id FROM entities WHERE COALESCE(canonical_id, id) = ?)
+                """,
+                (cid,),
+            )
+        } - hidden
+        if within is not None:
+            docs &= within
+        got: dict[str, Any] = {"name": name, "type": etype, "docs": len(docs)}
+        region = con.execute(
+            "SELECT community_id FROM entity_communities"
+            " WHERE entity_id = ? AND level = 0",
+            (cid,),
+        ).fetchone()
+        if region is not None:
+            got["region"] = int(region[0])
+        out.append(got)
+    return out
+
+
+def _on_x(clause: str) -> str:
+    """A clause written over ``edges`` unaliased, for a query that calls
+    the table ``x``."""
+    return clause.replace("edges.", "x.").replace("source_doc", "x.source_doc")
 
 
 DOCUMENT_EDGES = 300  # a document's graph: a book says more than a page holds

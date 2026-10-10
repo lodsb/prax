@@ -100,7 +100,11 @@ async function drawRoute(r) {
 async function render(opts) {
   const r = route();
   document.querySelectorAll("nav a").forEach((a) => a.classList.toggle("active", a.dataset.view === r.name));
-  view.classList.remove("stage", "wide");  // the ask view widens the page, the document and graph views take all of it; others get the default
+  // the ask view widens the page, the document and graph views take all of
+  // it; others get the default. The graph keeps its width while the next
+  // graph is fetched, so the one on screen does not jump.
+  view.classList.remove("stage");
+  if (r.name !== "graph") view.classList.remove("wide");
   if (!(opts && opts.keepScroll)) window.scrollTo(0, 0);
   const key = `${r.name}/${r.arg || ""}`;
   quiet = !!(opts && opts.keepScroll) && view.dataset.route === key;  // the same page, refreshed in place

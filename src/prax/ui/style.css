@@ -659,3 +659,14 @@ table.props td { padding: .15rem 0; overflow-wrap: anywhere; border: 0; }
 /* the graph's filters: a module, a project's or collection's pages, the personal documents */
 .graph-scope { display: inline-flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 .graph-scope select { max-width: 16rem; }
+.graph-scope .graph-vs { display: inline-flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.graph-scope .graph-vs[hidden] { display: none; }
+.graph-when { display: inline-flex; gap: .35rem; align-items: center; }
+.graph-when input { width: 9rem; accent-color: var(--accent); }
+.graph-when output { min-width: 4.5rem; font-variant-numeric: tabular-nums; }
+#graph-find { width: 11rem; }
+.graph-compare .ring { display: inline-block; width: .7rem; height: .7rem; border: 2px solid var(--accent); border-radius: 50%; vertical-align: middle; }
+.graph-compare .ring.dashed { border: 2px dashed var(--fg); }
+.graph-acts { margin: .3rem 0; font-size: .85rem; }
+.graph-canvas canvas { touch-action: none; }
+.graph-canvas canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

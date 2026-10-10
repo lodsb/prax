@@ -5743,6 +5743,46 @@ agents' pages under their projects (physmod 12, onset 2, voynich 3, prax
 Left at the top: reverb design notes, ZDF/ADAA musings, the sequence
 models survey and the AI bubble test page.
 
+## 2026-10-10: the graph view, filtered, steady and readable
+
+The graph is drawn from a scope: a module, a project's or a collection's
+pages and the documents they link (`store.scope_documents`), the personal
+documents left out or alone, and a world date (`world_at`, a year on a
+slider; `hub_graph(world_at=)` joins `traverse` and `connect`). A second
+scope can be drawn beside it (`vs_domain`, `vs_page`, `vs_personal`):
+what only the first has is ringed, what only the second has wears a
+dashed ring. A region's page opens on its graph
+(`GET /communities/{id}/graph`), and the overview can draw the regions
+themselves (`GET /communities/map`, `store.region_map`: the largest
+forty, a line for the facts reaching between two).
+
+A graph no longer flies in from the top left. The view used to start at
+the world's origin with every node placed at random and fit only once
+the layout had cooled; now the data is fetched before the page is
+touched, laid out in one go (up to 200 ms of steps) and fitted before
+the first frame. A node starts where the page last drew it (a layout
+memory for the visit), else at an angle its name hashes to, so a filter
+or the slider changes the picture in place. An expansion eases the view
+to take it in rather than jumping.
+
+Readable at a glance: a label is written only where it covers no other
+(the selected, the hovered, a match and a path always), the faint
+shared-document lines are each node's three heaviest until zoomed in or
+focused, and a node is as large as the number of documents that say
+something of it (`docs` on the overview's nodes; `POST /graph/marks`
+for what an expansion adds, with its region). Colour by type or by
+region, with the regions present as the legend.
+
+On the map: a node's documents can hang off it as squares
+(`GET /graph/documents` names them); shift-click, or "how is it
+connected to…", draws `connect`'s paths in and lists them with their
+quotes (its hops now carry `src_type` and `dst_type`, some 40 bytes a
+hop); "find on the map" lights the matches; with the canvas focused the
+arrow keys walk to the neighbour that way, Enter expands, Escape lets
+go. Pointer events replace the mouse ones, so a finger drags and a
+second pinches; a double tap opens. Measured on the live library: the
+region map answers in 0.3 s (5 KB).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

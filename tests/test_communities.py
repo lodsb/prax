@@ -295,3 +295,88 @@ def test_the_regions_are_named_through_the_door(
     listed = client.get("/communities").json()["communities"]
     assert {c["label"] for c in listed} == {"Everyday cooking"}
     assert all(c["summary_state"] == "fresh" for c in listed)
+
+
+def test_the_graph_view_draws_regions_and_marks_its_nodes(
+    client: TestClient,
+) -> None:
+    """What the graph view reads beside the overview: the regions as one
+    map with the facts reaching between them (``region_map``), each hub's
+    documents and region (``hub_graph``, ``entity_marks``), the titles of
+    documents hung off a node, and connect's hops with their types."""
+    con = client.app.state.con
+    _library(con)
+    store.maintain(con, only=["communities"])
+    bridge = int(store.ingest_text(con, "A bridge. " * 30, title="Bridge")["doc_id"])
+    # no relation of the ontology joins a method and an ingredient: the fact
+    # reaching across is a copy of one, between the two regions
+    cols = [
+        r[1]
+        for r in con.execute("PRAGMA table_info(edges)")
+        if r[1] not in ("id", "src", "dst", "source_doc")
+    ]
+    con.execute(
+        f"INSERT INTO edges (src, dst, source_doc, {', '.join(cols)})"
+        f" SELECT ?, ?, ?, {', '.join(cols)} FROM edges LIMIT 1",
+        (
+            store._entity_id(con, SIGNAL[0], "method"),
+            store._entity_id(con, KITCHEN[0], "ingredient"),
+            bridge,
+        ),
+    )
+    con.commit()
+    drawn = client.get("/communities/map").json()
+    assert len(drawn["nodes"]) == 2 and all(n["size"] == 5 for n in drawn["nodes"])
+    assert len(drawn["links"]) == 1 and drawn["links"][0]["weight"] == 1
+    ids = {n["id"] for n in drawn["nodes"]}
+    assert {drawn["links"][0]["a"], drawn["links"][0]["b"]} == ids
+    hubs = client.get(
+        "/graph/overview", params={"limit": 50, "domain": "kitchen"}
+    ).json()["nodes"]
+    garlic = next(n for n in hubs if n["name"] == "garlic")
+    assert garlic["docs"] >= 3 and garlic["region"] in ids
+    marks = client.post(
+        "/graph/marks",
+        json={"things": [["garlic", "ingredient"], ["nothing", "concept"]]},
+    ).json()["marks"]
+    assert marks == [
+        {
+            "name": "garlic",
+            "type": "ingredient",
+            "docs": garlic["docs"],
+            "region": garlic["region"],
+        }
+    ]
+    titles = client.get("/graph/documents", params={"ids": f"{bridge},99999"}).json()
+    assert titles["titles"] == {str(bridge): "Bridge"}
+    assert client.get("/graph/documents", params={"ids": "x"}).status_code == 400
+    path = client.get(
+        "/graph/connect", params={"a": SIGNAL[0], "b": KITCHEN[0]}
+    ).json()["paths"][0]["hops"][0]
+    assert path["src_type"] == "method" and path["dst_type"] == "ingredient"
+
+
+def test_the_overview_keeps_to_a_world_date(con: sqlite3.Connection) -> None:
+    """``hub_graph(world_at=)``: the facts that hold then, and the undated."""
+    doc = int(store.ingest_text(con, "History. " * 30, title="H")["doc_id"])
+    for name, begin, end in (
+        ("valve", "1920", "1960"),
+        ("transistor", "1950", None),
+        ("idea", None, None),
+    ):
+        store.link(
+            con,
+            store.Edge(name, "concept", "extends", "amplification", "concept"),
+            confidence="EXTRACTED",
+            source_doc=doc,
+            producer="t",
+            run="t",
+            world_from=begin,
+            world_to=end,
+        )
+    at = lambda year: {n["name"] for n in store.hub_graph(con, world_at=year)["nodes"]}
+    assert at("1930") == {"valve", "idea", "amplification"}
+    assert at("1970") == {"transistor", "idea", "amplification"}
+    assert at(None) == {"valve", "transistor", "idea", "amplification"}
+    with pytest.raises(ValueError):
+        store.hub_graph(con, world_at="soon")

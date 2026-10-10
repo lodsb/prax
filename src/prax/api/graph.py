@@ -379,21 +379,68 @@ def graph_overview(
     domain: str | None = None,
     page: int | None = None,
     personal: str | None = None,
+    world_at: str | None = None,
 ) -> dict[str, Any]:
     """The most connected concepts, methods, tools and datasets, the edges
     among them, and co-occurrence links (hubs sharing at least
     ``min_shared`` source documents): what the graph view opens on.
     ``domain`` draws one module's graph, from its documents alone; ``page``
     (a page's tree and what it links) and ``personal`` (hide, only) narrow
-    it to the documents ``store.scope_documents`` names."""
+    it to the documents ``store.scope_documents`` names; ``world_at`` keeps
+    the facts that hold in the world at that date and the undated ones."""
     con = _con(request)
     try:
         within = store.scope_documents(con, page=page, personal=personal or None)
+        return store.hub_graph(
+            con,
+            limit=limit,
+            min_shared=min_shared,
+            domain=domain or None,
+            within=within,
+            world_at=world_at or None,
+        )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
-    return store.hub_graph(
-        con, limit=limit, min_shared=min_shared, domain=domain or None, within=within
-    )
+
+
+class MarksReq(BaseModel):
+    things: list[tuple[str, str]]
+    page: int | None = None
+    personal: str | None = None
+
+
+@router.post("/graph/marks")
+def graph_marks(req: MarksReq, request: Request) -> dict[str, Any]:
+    """For things the graph view has drawn (``[name, type]`` pairs), how
+    many documents say something of each and its region
+    (``store.entity_marks``), so an expansion is sized and coloured as the
+    overview's hubs are."""
+    con = _con(request)
+    try:
+        within = store.scope_documents(
+            con, page=req.page, personal=req.personal or None
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return {"marks": store.entity_marks(con, req.things, within=within)}
+
+
+@router.get("/graph/documents")
+def graph_documents(ids: str, request: Request) -> dict[str, Any]:
+    """The titles of documents the graph view hangs off a node
+    (comma-separated ``ids``, at most 50; hidden ones left out)."""
+    try:
+        wanted = [int(i) for i in ids.split(",") if i.strip()][:50]
+    except ValueError as exc:
+        raise HTTPException(400, "ids: document ids separated by commas") from exc
+    return {"titles": store.document_titles(_con(request), wanted)}
+
+
+@router.get("/communities/map")
+def communities_map(request: Request, limit: int = 40) -> dict[str, Any]:
+    """The regions as one picture: the largest as nodes and how many facts
+    reach between each two (``store.region_map``)."""
+    return store.region_map(_con(request), limit=max(1, min(limit, 120)))
 
 
 @router.get("/communities/{cid}/graph")

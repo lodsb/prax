@@ -557,3 +557,41 @@ test("nameDiff: how one name becomes the other, letter by letter", () => {
   assert.equal(lib.nameDiff("same", "same"), "");
   assert.match(lib.nameDiff("<b>x", "<b>xy"), /&lt;b&gt;x<ins>y<\/ins>/);
 });
+
+test("hashUnit is stable and in [0, 1)", () => {
+  assert.equal(lib.hashUnit("concept|fdn"), lib.hashUnit("concept|fdn"));
+  assert.notEqual(lib.hashUnit("concept|fdn"), lib.hashUnit("concept|fdtd"));
+  for (const s of ["", "a", "tool|SuperCollider"]) { const u = lib.hashUnit(s); assert.ok(u >= 0 && u < 1); }
+});
+
+test("strongLinks keeps each node's heaviest links", () => {
+  const links = [
+    { a: "x", b: "a", weight: 9 }, { a: "x", b: "b", weight: 8 }, { a: "x", b: "c", weight: 7 },
+    { a: "x", b: "d", weight: 1 }, { a: "d", b: "e", weight: 1 },
+  ];
+  const strong = lib.strongLinks(links, 3);
+  assert.deepEqual([...strong].sort(), [0, 1, 2, 3, 4]);  // x-d is d's heaviest
+  // x-c is neither x's heaviest (x-a) nor c's (c-y)
+  const one = lib.strongLinks([...links, { a: "c", b: "y", weight: 20 }], 1);
+  assert.ok(one.has(0) && one.has(5) && !one.has(2));
+});
+
+test("placeLabels skips a label that would cover one placed, never a must", () => {
+  const box = (key, x, y, must) => ({ key, x, y, w: 50, h: 14, must });
+  const got = lib.placeLabels([box("sel", 0, 0, true), box("big", 10, 5), box("far", 200, 0), box("hit", 5, 5, true)]);
+  assert.deepEqual([...got].sort(), ["far", "hit", "sel"]);
+  assert.deepEqual([...lib.placeLabels([box("a", 0, 0), box("b", 100, 0)], 1)], ["a"]);
+});
+
+test("neighbourToward picks the nearest node the arrow points at", () => {
+  const from = { x: 0, y: 0 };
+  const cands = [{ key: "right", x: 100, y: 10 }, { key: "far-right", x: 300, y: 0 }, { key: "up", x: 0, y: -50 }];
+  assert.equal(lib.neighbourToward(from, cands, 1, 0), "right");
+  assert.equal(lib.neighbourToward(from, cands, 0, -1), "up");
+  assert.equal(lib.neighbourToward(from, cands, -1, 0), null);
+});
+
+test("regionHue spreads neighbouring ids apart", () => {
+  assert.ok(Math.abs(lib.regionHue(1) - lib.regionHue(2)) > 60);
+  assert.ok(lib.regionHue(348) >= 0 && lib.regionHue(348) < 360);
+});

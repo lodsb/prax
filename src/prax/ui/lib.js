@@ -792,6 +792,78 @@ function checksBox(checks) {
   return `<div class="answer-checks"><span class="muted">The calculator:</span><ul>${lines.join("")}</ul></div>`;
 }
 
+// ----------------------------------------------------------- graph drawing
+// The parts of the graph view that are arithmetic, kept here so they can
+// be tested without a canvas.
+
+// A number in [0, 1) from a string, the same on every visit: where a node
+// no layout remembers is first put, so the same graph opens the same way.
+function hashUnit(s) {
+  let h = 2166136261;
+  for (const ch of String(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619); }
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+// A region's hue: spread by the golden angle so neighbouring ids differ.
+function regionHue(id) {
+  return Math.round((Number(id) * 137.508) % 360);
+}
+
+// The links worth drawing at a glance: each node's `per` heaviest. A link
+// is strong when it is among them for either of its ends. Links are
+// {a, b, weight}; the answer is the set of their indexes.
+function strongLinks(links, per = 3) {
+  const by = new Map();
+  links.forEach((l, i) => {
+    for (const k of [l.a, l.b]) { if (!by.has(k)) by.set(k, []); by.get(k).push(i); }
+  });
+  const strong = new Set();
+  for (const ids of by.values()) {
+    ids.sort((p, q) => links[q].weight - links[p].weight);
+    for (const i of ids.slice(0, per)) strong.add(i);
+  }
+  return strong;
+}
+
+// Which labels to write. Candidates come in order of importance, each a
+// box {key, x, y, w, h} with `must` for the ones always written (the
+// selected node, the one under the pointer, a match). A label goes on when
+// it overlaps none already placed; `limit` caps the ones that are not a
+// must. The answer is the set of keys.
+function placeLabels(cands, limit = Infinity) {
+  const placed = [];
+  const out = new Set();
+  let free = 0;
+  for (const c of cands) {
+    if (!c.must) {
+      if (free >= limit) continue;
+      const clash = placed.some((p) => c.x < p.x + p.w && p.x < c.x + c.w && c.y < p.y + p.h && p.y < c.y + c.h);
+      if (clash) continue;
+      free++;
+    }
+    placed.push(c);
+    out.add(c.key);
+  }
+  return out;
+}
+
+// The neighbour an arrow key moves to: of `cands` ({key, x, y}), the one
+// closest in the direction (dx, dy) from `from`, within 60 degrees of it,
+// distance weighted by how far off the direction it lies. None: null.
+function neighbourToward(from, cands, dx, dy) {
+  let best = null, bestScore = Infinity;
+  for (const c of cands) {
+    const vx = c.x - from.x, vy = c.y - from.y;
+    const d = Math.hypot(vx, vy);
+    if (!d) continue;
+    const cos = (vx * dx + vy * dy) / d / Math.hypot(dx, dy);
+    if (cos < 0.5) continue;
+    const score = d * (2 - cos);
+    if (score < bestScore) { best = c.key; bestScore = score; }
+  }
+  return best;
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox };
+  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

@@ -696,10 +696,10 @@ def document_outline(
 
 
 def document_titles(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
+    """Titles by id, for naming documents in a result (unknown and hidden
+    ids left out; an untitled document is an empty string)."""
     hidden = hidden_documents(con)
     doc_ids = [d for d in doc_ids if d not in hidden]
-    """Titles by id, for naming documents in a result (unknown ids left
-    out; an untitled document is an empty string)."""
     ids = list(dict.fromkeys(int(i) for i in doc_ids))
     if not ids:
         return {}

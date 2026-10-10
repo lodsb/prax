@@ -201,8 +201,10 @@ def connect_entities(
             dst = names.get(int(index.ids[index.dst[f]]), ("?", "?"))
             hop: dict[str, Any] = {
                 "src": src[0],
+                "src_type": src[1],
                 "rel": index.rels[index.rel[f]],
                 "dst": dst[0],
+                "dst_type": dst[1],
                 "edge_id": eid,
                 "confidence": paths.CONFIDENCES[index.conf[f]],
                 "documents": len({d for _, d in behind if d is not None}),

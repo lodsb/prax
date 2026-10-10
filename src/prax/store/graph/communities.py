@@ -9,7 +9,7 @@ import sqlite3
 from collections import Counter, defaultdict
 from typing import Any
 
-from ..base import _reading, _serialized, now
+from ..base import _reading, _serialized, hidden_documents, now
 
 CARRY = 0.5  # a new community takes the id and summary of an old one this close
 FRESH = 0.8  # below this, what the summary was written about has moved
@@ -253,6 +253,55 @@ def community(
         "parts": list_communities(con, level=1, parent=cid) if r["level"] == 0 else [],
         "documents": [
             {"id": d["id"], "title": d["title"], "named": d["named"]} for d in docs
+        ],
+    }
+
+
+@_reading
+def region_map(con: sqlite3.Connection, *, limit: int = 40) -> dict[str, Any]:
+    """The regions of the library as one picture: the largest ``limit`` of
+    level 0 as nodes (id, label, size) and, for each pair of them, how
+    many live facts reach from a member of one to a member of the other
+    (``links``, heaviest first). What the graph view opens a level above
+    its hubs on."""
+    regions = list_communities(con, level=0, limit=limit)
+    shown = {r["id"] for r in regions}
+    if not shown:
+        return {"nodes": [], "links": []}
+    marks = ",".join("?" * len(shown))
+    hidden = hidden_documents(con)
+    crossing: Counter[tuple[int, int]] = Counter()
+    for ra, rb, doc in con.execute(
+        f"""
+        SELECT ma.community_id, mb.community_id, x.source_doc
+        FROM edges x
+        JOIN entities a ON a.id = x.src
+        JOIN entities b ON b.id = x.dst
+        JOIN entity_communities ma
+          ON ma.entity_id = COALESCE(a.canonical_id, a.id) AND ma.level = 0
+        JOIN entity_communities mb
+          ON mb.entity_id = COALESCE(b.canonical_id, b.id) AND mb.level = 0
+        WHERE x.valid_to IS NULL AND ma.community_id <> mb.community_id
+          AND ma.community_id IN ({marks}) AND mb.community_id IN ({marks})
+        """,
+        (*sorted(shown), *sorted(shown)),
+    ):
+        if doc is not None and doc in hidden:
+            continue
+        crossing[(min(ra, rb), max(ra, rb))] += 1
+    return {
+        "nodes": [
+            {
+                "id": r["id"],
+                "label": r["label"],
+                "size": r["size"],
+                "members": r["members"][:3],
+            }
+            for r in regions
+        ],
+        "links": [
+            {"a": a, "b": b, "weight": n}
+            for (a, b), n in crossing.most_common(4 * len(shown))
         ],
     }
 
