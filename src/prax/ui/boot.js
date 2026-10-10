@@ -47,19 +47,31 @@ function setMaintenance(m) {
   b.textContent = `maintenance: ${m.name}${far}`;
   b.title = m.note || "";
 }
+// An open document is drawn again by its own fingerprint (the store's
+// stamp moves with every write anywhere, and re-reading a whole document
+// on each was most of what a live page cost); the lists by the stamp.
+let lastPrint = null;
+let printOf = null;  // the document the fingerprint is of
 async function pollChanges() {
   if (document.visibilityState !== "visible") return;
+  const r = route();
+  const doc = r.name === "doc" && /^\d+$/.test(r.arg || "") ? r.arg : null;
   let d;
   try {
-    const res = await fetch("/changes");
+    const res = await fetch(doc ? `/changes?doc=${doc}` : "/changes");
     if (!res.ok) return;
     d = await res.json();
   } catch (_) { return; }
   setJobsBadge(d.jobs);
   setMaintenance(d.maintenance);
-  const moved = lastStamp !== null && d.stamp !== lastStamp;
+  let moved = lastStamp !== null && d.stamp !== lastStamp;
   lastStamp = d.stamp;
-  if (moved && LIVE_VIEWS.has(route().name) && !typing()) {
+  if (doc) {
+    moved = printOf === doc && d.doc !== lastPrint;
+    lastPrint = d.doc;
+    printOf = doc;
+  }
+  if (moved && LIVE_VIEWS.has(r.name) && !typing()) {
     const y = window.scrollY;
     if (await refreshInPlace()) window.scrollTo(0, y);
   }

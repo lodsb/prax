@@ -4,6 +4,7 @@ neighbours, the equations near a place, an outline."""
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import re
 import sqlite3
@@ -381,6 +382,39 @@ def list_documents(
         item["meta"] = json.loads(item["meta"]) if item["meta"] else {}
         items.append(item)
     return {"total": total, "items": items}
+
+
+@_guards("doc", lambda: None)
+@_reading
+def document_fingerprint(con: sqlite3.Connection, doc_id: int) -> str | None:
+    """What a document's page shows, in a dozen characters: it moves when
+    the document's row, its chunks, the facts read from it or its readings
+    move, and only then. The UI asks it every few seconds while the
+    document is open and draws the page again only when it moved; the
+    store's change stamp moves with every write anywhere, and re-reading a
+    whole document on each was most of what a live page cost (2026-10-10).
+    Five lookups on indexes. None for a document that is not there."""
+    row = con.execute(
+        "SELECT title, text_hash, meta FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        return None
+    parts = [
+        tuple(row),
+        con.execute(
+            "SELECT count(*), max(id) FROM chunks WHERE doc_id = ?", (doc_id,)
+        ).fetchone(),
+        con.execute(
+            "SELECT count(*), max(id), max(valid_to) FROM edges WHERE source_doc = ?",
+            (doc_id,),
+        ).fetchone(),
+        con.execute(
+            "SELECT count(*), max(id), max(finished_at) FROM readings WHERE doc_id = ?",
+            (doc_id,),
+        ).fetchone(),
+    ]
+    blob = json.dumps([list(p) for p in parts], default=str)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:12]
 
 
 @_guards("doc", list)

@@ -194,6 +194,7 @@ from .documents import (  # noqa: F401
     document_dois,
     document_domains,
     document_field,
+    document_fingerprint,
     document_has_figure,
     document_outline,
     document_sections,

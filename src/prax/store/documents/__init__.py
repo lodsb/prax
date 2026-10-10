@@ -176,6 +176,7 @@ from .reads import (  # noqa: F401
     cited_but_missing,
     document_by_zotero_key,
     document_dois,
+    document_fingerprint,
     document_outline,
     document_source,
     document_state,

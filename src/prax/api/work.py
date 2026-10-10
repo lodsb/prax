@@ -232,10 +232,12 @@ def vectors_adopt(request: Request, model: str) -> dict[str, Any]:
 
 
 @router.get("/changes")
-def changes(request: Request) -> dict[str, Any]:
+def changes(request: Request, doc: int | None = None) -> dict[str, Any]:
     """A stamp that changes when the store changed (this door's writes or
     another process's commits) and how many jobs are running: the UI polls
-    it and re-renders a listing when the stamp moved."""
+    it and re-renders a listing when the stamp moved. With ``doc``, also
+    that document's fingerprint (``store.document_fingerprint``), which an
+    open document's page is drawn again by instead of the stamp."""
     con = request.app.state.con  # one fixed connection: its data_version moves
     # when any other connection commits, this door's threads included; a
     # connection is one thread's at a time (reads no longer take the
@@ -246,6 +248,9 @@ def changes(request: Request) -> dict[str, Any]:
             "jobs": store.running_jobs(con),
             # what the banner says while the door is busy with one
             "maintenance": store.running_of(con, MAINTENANCE),
+            **(
+                {"doc": store.document_fingerprint(con, doc)} if doc is not None else {}
+            ),
         }
 
 

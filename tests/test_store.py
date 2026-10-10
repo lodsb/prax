@@ -742,3 +742,26 @@ def test_a_job_row_has_the_shape_its_table_gives(con: sqlite3.Connection) -> Non
     assert shown == columns
     running = store.list_jobs(con)["running"][0]
     assert set(running) == set(store.JobRow.__annotations__)
+
+
+def test_a_documents_fingerprint_moves_with_it_and_no_other(
+    con: sqlite3.Connection,
+) -> None:
+    """``document_fingerprint`` moves when the document's own row, chunks
+    or facts move, and stays when another document changes."""
+    a = store.ingest_text(con, "the first text " * 20, title="A")["doc_id"]
+    b = store.ingest_text(con, "the second text " * 20, title="B")["doc_id"]
+    before = store.document_fingerprint(con, a)
+    assert before and len(before) == 12
+    store.link(
+        con, store.Edge("B paper", "paper", "uses", "a method", "method"), source_doc=b
+    )
+    assert store.document_fingerprint(con, a) == before
+    store.link(
+        con, store.Edge("A paper", "paper", "uses", "a method", "method"), source_doc=a
+    )
+    after_fact = store.document_fingerprint(con, a)
+    assert after_fact != before
+    store.retitle(con, a, "A, retitled", source="human")
+    assert store.document_fingerprint(con, a) != after_fact
+    assert store.document_fingerprint(con, 999_999) is None
