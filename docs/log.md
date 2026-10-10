@@ -5716,6 +5716,33 @@ sideways, instead of a column of ten links beside the mark. The page's
 margins narrow, long words and links wrap, and tables and code scroll in
 their own box.
 
+## 2026-10-10: pages as a tree
+
+549 pages, 468 of them the music423 wiki, made the Pages view one long
+list by kind. A page now sits under one parent (`meta.page.parent`, who
+put it there in `parent_by`; `store.set_page_parent` refuses a page that
+is not one, one the viewer may not see, and a cycle). `write_page` takes
+`parent` (a slug), and a `part_of` project is the parent when none is
+named; `PUT /doc/{id}/page-parent` moves one; the MCP tool `write_page`
+takes `parent` too. `get_page` returns `ancestors`, the breadcrumb a page
+shows above its title. The wiki importer places each note by where it
+lies (`mdwiki.parent_of`: a wiki page under its topic's index, the index
+under the topic's README, the README under the repository's).
+
+The Pages view is the tree: standing questions first, then projects,
+collections (a page with pages under it), loose topics and the briefings
+by month, each branch a fold with how many pages it holds, and a filter
+that keeps the way to a match. One parent a page: a page that belongs in
+two places sits under one and is linked from the other.
+
+Placed on the live library: the 467 music423 pages by their slugs (the
+clone was gone; `music423-<topic>-wiki-…` under `…-wiki-index`, the index
+under `music423-<topic>-readme`, those under `music423-readme`); the
+agents' pages under their projects (physmod 12, onset 2, voynich 3, prax
+3); and the 33 JOS book pages under a new collection page, `jos-books`.
+Left at the top: reverb design notes, ZDF/ADAA musings, the sequence
+models survey and the AI bubble test page.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
