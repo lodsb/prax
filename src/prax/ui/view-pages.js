@@ -38,7 +38,6 @@ async function viewPages(p) {
   try {
     const pages = await api("/pages", { kind: p.kind });
     if (!pages.length) { list.innerHTML = `<p class="muted">No pages yet. Create a topic or project page above, or add a note from any document.</p>`; return; }
-    const groups = { question: "Standing questions", project: "Projects", synthesis: "Syntheses", topic: "Topics", briefing: "Briefings", addendum: "Notes on documents" };
     // a standing question says whether the library has learned something
     // since; the ask blocks of other pages are standing questions too
     let standing = [];
@@ -58,17 +57,24 @@ async function viewPages(p) {
           <td class="muted">r${q.revision}${q.model ? ` · ${esc(q.model)}` : ""}</td>
           <td class="muted">${esc((q.asked_at || "").slice(0, 16).replace("T", " "))}</td>
         </tr>`).join("");
-    list.innerHTML = Object.entries(groups).map(([kind, label]) => {
-      const rows = pages.filter((pg) => pg.kind === kind);
-      if (!rows.length && !(kind === "question" && blocks.length)) return "";
-      return `<h2 style="font-size:1rem;margin:1rem 0 .3rem">${label}</h2>
-        <table class="doc-list page-list"><tbody>${rows.map((pg) => `<tr>
+    const questions = pages.filter((pg) => pg.kind === "question");
+    const questionTable = questions.length || blocks.length
+      ? `<h2 class="page-tree-group">Standing questions</h2>
+        <table class="doc-list page-list"><tbody>${questions.map((pg) => `<tr>
           <td><a href="#doc/${pg.doc_id}">${esc(pg.title || pg.slug)}</a></td>
-          <td class="muted">${kind === "question" ? state(news[pg.slug], pg.slug) : esc(pg.slug)}</td>
+          <td class="muted">${state(news[pg.slug], pg.slug)}</td>
           <td class="muted">r${pg.revision} · ${esc(pg.author || "")}</td>
           <td class="muted">${esc((pg.updated_at || "").slice(0, 16).replace("T", " "))}</td>
-        </tr>`).join("")}${kind === "question" ? blockRows : ""}</tbody></table>`;
-    }).join("");
+        </tr>`).join("")}${blockRows}</tbody></table>`
+      : "";
+    const filter = pageFilter();
+    list.innerHTML = `${questionTable}
+      <input id="page-filter" class="page-filter" type="search" placeholder="filter the pages…" value="${esc(filter)}" aria-label="filter the pages">
+      <div id="page-tree-box">${pageTree(pages, filter)}</div>`;
+    document.getElementById("page-filter").addEventListener("input", (e) => {
+      pageFilter(e.target.value);
+      document.getElementById("page-tree-box").innerHTML = pageTree(pages, e.target.value);
+    });
     list.querySelectorAll("a.ask-again").forEach((a) => a.addEventListener("click", async (e) => {
       e.preventDefault();
       try {
@@ -79,4 +85,59 @@ async function viewPages(p) {
   } catch (err) {
     showError(list, err);
   }
+}
+
+// The filter of the Pages view, kept for this tab so that a live refresh
+// or a visit to a page and back finds it as it was. With a value, sets it.
+function pageFilter(value) {
+  try {
+    if (value !== undefined) sessionStorage.setItem("prax.pages.filter", value);
+    return sessionStorage.getItem("prax.pages.filter") || "";
+  } catch (_) { return value || ""; }
+}
+
+// The tree of pages: each page under its parent (meta.page.parent), and
+// the pages at the top in four groups: projects, collections (a page with
+// pages under it: an imported wiki, a set of books), loose topics, and the
+// briefings by month. A branch is a fold that says how many pages it holds;
+// with a filter, a page matches by title or slug and the way to it stays.
+function pageTree(pages, filter) {
+  const byId = new Map(pages.filter((pg) => pg.kind !== "question").map((pg) => [pg.doc_id, { ...pg, kids: [] }]));
+  const roots = [];
+  for (const n of byId.values()) {
+    const up = n.parent != null ? byId.get(n.parent) : null;
+    (up ? up.kids : roots).push(n);
+  }
+  const size = (n) => n.kids.reduce((s, k) => s + 1 + size(k), 0);
+  const q = (filter || "").trim().toLowerCase();
+  const hit = (n) => !q || `${n.title || ""} ${n.slug}`.toLowerCase().includes(q);
+  const keep = (n) => hit(n) || n.kids.some(keep);
+  const byTitle = (a, b) => (a.title || a.slug).localeCompare(b.title || b.slug);
+  const node = (n) => {
+    const kids = n.kids.filter(keep).sort(byTitle);
+    const link = `<a href="#doc/${n.doc_id}">${esc(n.title || n.slug)}</a>`;
+    if (!kids.length) return `<li>${link}<span class="slug">${esc(n.slug)}</span></li>`;
+    return `<li><details${q ? " open" : ""}><summary>${link}<span class="n">${size(n)}</span></summary><ul class="page-tree">${kids.map(node).join("")}</ul></details></li>`;
+  };
+  const groups = [
+    ["Projects", (n) => n.kind === "project"],
+    ["Collections", (n) => n.kind !== "project" && n.kind !== "briefing" && n.kids.length > 0],
+    ["Topics", (n) => n.kind !== "project" && n.kind !== "briefing" && n.kids.length === 0],
+  ];
+  let html = "";
+  for (const [label, test] of groups) {
+    const rs = roots.filter(test).filter(keep).sort(byTitle);
+    if (rs.length) html += `<h2 class="page-tree-group">${label}</h2><ul class="page-tree">${rs.map(node).join("")}</ul>`;
+  }
+  const briefs = roots.filter((n) => n.kind === "briefing").filter(keep).sort((a, b) => b.slug.localeCompare(a.slug));
+  if (briefs.length) {
+    const months = new Map();
+    for (const b of briefs) {
+      const m = (b.slug.match(/\d{4}-\d{2}/) || ["other"])[0];
+      if (!months.has(m)) months.set(m, []);
+      months.get(m).push(b);
+    }
+    html += `<h2 class="page-tree-group">Briefings</h2><ul class="page-tree">${[...months].map(([m, bs]) => `<li><details${q ? " open" : ""}><summary>${esc(m)}<span class="n">${bs.length}</span></summary><ul class="page-tree">${bs.map(node).join("")}</ul></details></li>`).join("")}</ul>`;
+  }
+  return html || `<p class="muted">No page matches.</p>`;
 }

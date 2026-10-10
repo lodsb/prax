@@ -288,3 +288,24 @@ def test_a_project_page_linking_a_paper_synthesizes_it(con: sqlite3.Connection) 
         )
     }
     assert "synthesizes" in rels
+
+
+def test_pages_form_a_tree(con: sqlite3.Connection) -> None:
+    """A page sits under one other: set by ``parent`` on a write, by the
+    ``part_of`` project when it names none, or by ``set_page_parent``; a
+    cycle is refused and None puts a page back at the top."""
+    proj = store.write_page(con, "project-x", "The project.", kind="project")["doc_id"]
+    note = store.write_page(
+        con, "x-notes", "Notes on x.", author="agent", part_of="project-x"
+    )["doc_id"]
+    deep = store.write_page(
+        con, "x-deeper", "Deeper.", author="agent", parent="x-notes"
+    )["doc_id"]
+    parents = {p["doc_id"]: p["parent"] for p in store.list_pages(con)}
+    assert parents == {proj: None, note: proj, deep: note}
+    with pytest.raises(ValueError, match="cycle"):
+        store.set_page_parent(con, proj, deep)
+    with pytest.raises(KeyError):
+        store.set_page_parent(con, note, 999_999)
+    store.set_page_parent(con, deep, None)
+    assert {p["doc_id"]: p["parent"] for p in store.list_pages(con)}[deep] is None

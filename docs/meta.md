@@ -125,7 +125,7 @@ writer, and add its row here.
 
 | key | shape | what, and who writes it |
 |---|---|---|
-| `page` | `dict[str, Any]` | slug, kind, revision, author |
+| `page` | `dict[str, Any]` | slug, kind, revision, author; `parent` (a page's document id) and `parent_by` (`store.set_page_parent`) |
 | `asks` | `dict[str, Any]` | a page's ask blocks by id |
 | `briefing` | `dict[str, Any]` | a briefing page's window and documents |
 | `question` | `dict[str, Any]` | a question page's question |

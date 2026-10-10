@@ -119,6 +119,27 @@ def topic_entries(found: list[Note]) -> dict[str, str]:
     return out
 
 
+def parent_of(path: str, paths: set[str]) -> str | None:
+    """The note a note sits under in the tree of pages, from where it lies
+    in the repository: a page of a topic's wiki under that wiki's index
+    (``topic/wiki/index.md``), else the topic's README; the index under its
+    topic's README; a topic's README under the repository's; the
+    repository's README at the top. None where nothing above it was
+    imported."""
+    parts = path.split("/")
+    root = "README.md" if "README.md" in paths else None
+    if len(parts) == 1:
+        return None  # the repository's own README, or a loose note
+    topic = parts[0]
+    readme = f"{topic}/README.md" if f"{topic}/README.md" in paths else None
+    index = f"{topic}/wiki/index.md" if f"{topic}/wiki/index.md" in paths else None
+    if path == f"{topic}/README.md":
+        return root
+    if path == index:
+        return readme or root
+    return index or readme or root
+
+
 def rewrite(
     text: str,
     here: str,

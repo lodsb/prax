@@ -30,8 +30,13 @@ class PageReq(BaseModel):
     note: str | None = None
     annotates: list[int] | None = None
     part_of: str | None = None
+    parent: str | None = None  # the page this one sits under, by slug
     force: bool = False
     sensitivity: str | None = None  # "personal": behind the wall (stage U)
+
+
+class ParentReq(BaseModel):
+    parent: int | None = None  # a page's document id; None puts it at the top
 
 
 class AppendReq(BaseModel):
@@ -72,6 +77,18 @@ def page(slug: str, request: Request) -> dict[str, Any]:
     return p
 
 
+@router.put("/doc/{doc_id}/page-parent")
+def page_parent(doc_id: int, req: ParentReq, request: Request) -> dict[str, Any]:
+    """Put a page under another in the tree of pages, or at the top
+    (``store.set_page_parent``); 409 for a cycle."""
+    try:
+        return store.set_page_parent(_con(request), doc_id, req.parent)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 @router.get("/page/{slug}/revision/{revision}")
 def page_revision(slug: str, revision: int, request: Request) -> dict[str, Any]:
     try:
@@ -102,6 +119,7 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
             note=req.note,
             annotates=req.annotates,
             part_of=req.part_of,
+            parent=req.parent,
             force=req.force,
         )
         if req.sensitivity is not None:

@@ -86,3 +86,23 @@ def test_a_long_path_keeps_a_slug_of_its_own() -> None:
         mdwiki.slug_for("m423", long.format(2)),
     )
     assert len(one) <= mdwiki.SLUG_CHARS and one != two
+
+
+def test_a_note_sits_under_its_wiki_index_and_the_index_under_its_topic() -> None:
+    paths = {
+        "README.md",
+        "diffusion/README.md",
+        "diffusion/wiki/index.md",
+        "diffusion/wiki/noise.md",
+        "diffusion/wiki/sources/ddpm.md",
+        "attention/README.md",
+        "attention/wiki/notes/x.md",
+    }
+    p = mdwiki.parent_of
+    assert p("README.md", paths) is None
+    assert p("diffusion/README.md", paths) == "README.md"
+    assert p("diffusion/wiki/index.md", paths) == "diffusion/README.md"
+    assert p("diffusion/wiki/noise.md", paths) == "diffusion/wiki/index.md"
+    assert p("diffusion/wiki/sources/ddpm.md", paths) == "diffusion/wiki/index.md"
+    # a topic without a wiki index: its pages under the topic's README
+    assert p("attention/wiki/notes/x.md", paths) == "attention/README.md"

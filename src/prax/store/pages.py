@@ -107,8 +107,29 @@ def get_page(con: sqlite3.Connection, slug: str) -> dict[str, Any] | None:
         "revisions": revisions,
         "meta": meta,
         "blocks": page_blocks(text, meta),
+        "ancestors": _ancestors(con, int(row["doc_id"])),
         **_lifecycle(con, int(row["doc_id"]), text),
     }
+
+
+def _ancestors(con: sqlite3.Connection, doc_id: int) -> list[dict[str, Any]]:
+    """The pages above this one, the top first: what a page's breadcrumb
+    shows. A page the viewer may not see ends the line there."""
+    out: list[dict[str, Any]] = []
+    seen = {doc_id}
+    above = _parent_of(con, doc_id)
+    while above is not None and above not in seen and not document_hidden(con, above):
+        seen.add(above)
+        row = con.execute(
+            "SELECT p.slug, d.title FROM pages p JOIN documents d ON d.id = p.doc_id"
+            " WHERE p.doc_id = ?",
+            (above,),
+        ).fetchone()
+        if row is None:
+            break
+        out.append({"doc_id": above, "slug": row["slug"], "title": row["title"]})
+        above = _parent_of(con, above)
+    return out[::-1]
 
 
 PAGE_SOURCES = 200  # sources of one page looked at for staleness
@@ -201,8 +222,11 @@ def page_revision_text(con: sqlite3.Connection, slug: str, revision: int) -> str
 
 @_reading
 def list_pages(
-    con: sqlite3.Connection, *, kind: str | None = None, limit: int = 200
+    con: sqlite3.Connection, *, kind: str | None = None, limit: int = 2000
 ) -> list[dict[str, Any]]:
+    """Pages, the last revised first, each with its ``parent`` (a page's
+    document id, or None for a page at the top): what the Pages view draws
+    as a tree."""
     where = "WHERE p.kind = ?" if kind else ""
     args: tuple[Any, ...] = (kind, limit) if kind else (limit,)
     rows = con.execute(
@@ -213,7 +237,9 @@ def list_pages(
                (SELECT author FROM page_revisions r WHERE r.doc_id = p.doc_id
                 ORDER BY revision DESC LIMIT 1) AS author,
                (SELECT max(created_at) FROM page_revisions r WHERE r.doc_id = p.doc_id)
-                   AS updated_at
+                   AS updated_at,
+               json_extract(d.meta, '$.page.parent') AS parent,
+               json_extract(d.meta, '$.source') AS source
         FROM pages p JOIN documents d ON d.id = p.doc_id {where}
         ORDER BY updated_at DESC LIMIT ?
         """,
@@ -234,9 +260,14 @@ def write_page(
     note: str | None = None,
     annotates: list[int] | None = None,
     part_of: str | None = None,
+    parent: str | None = None,
     force: bool = False,
 ) -> dict[str, Any]:
     """Create or replace a page's text as a new revision.
+
+    ``parent`` names, by slug, the page this one sits under in the tree of
+    pages (``set_page_parent``); without it a ``part_of`` project is the
+    parent, when the page has none yet.
 
     ``annotates`` names documents this page is about (``page --annotates-->
     paper`` edges, the page as source document); ``part_of`` names a
@@ -365,8 +396,72 @@ def write_page(
                 producer="page",
                 run=f"{slug}@{revision}",
             )
+    under = parent or (part_of if _parent_of(con, doc_id) is None else None)
+    if under:
+        above = page_id(con, under)
+        if above is None:
+            raise KeyError(f"no page {under!r}")
+        if above != doc_id:
+            set_page_parent(con, doc_id, above, by=author)
     con.commit()
     return {"doc_id": doc_id, "slug": slug, "revision": revision, "created": created}
+
+
+def _parent_of(con: sqlite3.Connection, doc_id: int) -> int | None:
+    row = con.execute(
+        "SELECT json_extract(meta, '$.page.parent') FROM documents WHERE id = ?",
+        (doc_id,),
+    ).fetchone()
+    return int(row[0]) if row and row[0] is not None else None
+
+
+@_reading
+def page_id(con: sqlite3.Connection, slug: str) -> int | None:
+    """The document id of the page at ``slug``, or None."""
+    row = con.execute(
+        "SELECT doc_id FROM pages WHERE slug = ?", (slugify(slug),)
+    ).fetchone()
+    return int(row[0]) if row else None
+
+
+@_serialized
+def set_page_parent(
+    con: sqlite3.Connection, doc_id: int, parent: int | None, *, by: str = "human"
+) -> dict[str, Any]:
+    """Put a page under another in the tree of pages, or at the top
+    (``parent`` None): ``meta.page.parent`` and who put it there
+    (``parent_by``). Both must be pages the viewer may see, and a page may
+    not sit under itself or under one of the pages below it (ValueError).
+    One parent a page: a page that belongs in two places sits under one
+    and is linked from the other."""
+    if con.execute(
+        "SELECT 1 FROM pages WHERE doc_id = ?", (doc_id,)
+    ).fetchone() is None or document_hidden(con, doc_id):
+        raise KeyError(f"no such page: {doc_id}")
+    if parent is not None:
+        if con.execute(
+            "SELECT 1 FROM pages WHERE doc_id = ?", (parent,)
+        ).fetchone() is None or document_hidden(con, parent):
+            raise KeyError(f"no such page: {parent}")
+        seen: set[int] = set()
+        above: int | None = parent
+        while above is not None and above not in seen:
+            if above == doc_id:
+                raise ValueError("that page sits under this one: a cycle")
+            seen.add(above)
+            above = _parent_of(con, above)
+    meta = get_meta(con, doc_id)
+    page = dict(meta.get("page") or {})
+    if parent is None:
+        page.pop("parent", None)
+        page.pop("parent_by", None)
+    else:
+        page["parent"] = parent
+        page["parent_by"] = by
+    meta["page"] = page
+    set_meta(con, doc_id, meta)
+    con.commit()
+    return {"doc_id": doc_id, "parent": parent}
 
 
 def _link_edges(

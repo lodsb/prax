@@ -641,3 +641,17 @@ table.props td { padding: .15rem 0; overflow-wrap: anywhere; border: 0; }
   .doc-layout, .graph-layout, .ask { min-width: 0; }
   .doc-layout > *, .graph-layout > *, .ask > * { min-width: 0; }
 }
+
+/* where a page sits in the tree of pages, above its title (view-doc.js) */
+.crumbs { font-family: var(--font-ui); font-size: .8rem; color: var(--faint); margin: 0 0 .3rem; }
+.crumbs a { color: var(--muted); }
+
+/* the Pages view: the tree of pages, each branch a fold (view-pages.js) */
+.page-tree { list-style: none; margin: 0; padding: 0; }
+.page-tree .page-tree { padding-left: 1.1rem; border-left: 1px solid var(--line); margin-left: .35rem; }
+.page-tree li { margin: .12rem 0; }
+.page-tree summary { cursor: pointer; }
+.page-tree .n { color: var(--faint); font-size: .78rem; margin-left: .35rem; font-family: var(--font-ui); }
+.page-tree .slug { color: var(--faint); font-size: .75rem; margin-left: .5rem; }
+.page-tree-group { margin: 1.1rem 0 .3rem; font-size: 1rem; }
+.page-filter { width: 100%; max-width: 26rem; margin: .4rem 0 .2rem; }

@@ -699,12 +699,16 @@ def write_page(
     part_of: str | None = None,
     note: str | None = None,
     sensitivity: str | None = None,
+    parent: str | None = None,
 ) -> dict[str, Any]:
     """Create a page (kind addendum, project or topic) or replace its text
     as the agent. Refused when a person wrote the latest revision: use
     append_page then. ``annotates`` lists document ids the page is about;
-    ``part_of`` names a project page's slug. Cite what you read as
-    chunk ids or document ids in the text so readers can check; a link
+    ``part_of`` names a project page's slug. ``parent`` names the page this
+    one sits under in the tree of pages (a project's page, a topic's
+    overview), by slug; without it the ``part_of`` project is the parent.
+    Cite what you read as chunk ids or document ids in the text so readers
+    can check; a link
     ``[title](#doc/N)`` in the text is an edge to that document. A
     standing question inside the page is an ask block, ``<!-- prax:ask
     id=q1 "the question" -->`` on one line and ``<!-- /prax:ask id=q1
@@ -723,6 +727,7 @@ def write_page(
                 "note": note,
                 "annotates": annotates,
                 "part_of": part_of,
+                "parent": parent,
                 "sensitivity": sensitivity,
             },
         )

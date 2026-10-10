@@ -387,6 +387,23 @@ def _mdwiki(door: Door, a: Any) -> int:
                 errors.append(f"{note.path}: {exc}")
         if not a.quiet:
             out.hint(f"  pass {stage}: {len(pages)} pages, {written} written")
+    # the tree of pages: each note under the one its place in the
+    # repository puts it under (mdwiki.parent_of)
+    paths = set(pages)
+    placed = 0
+    for note in found_notes:
+        above = mdwiki.parent_of(note.path, paths)
+        if note.path not in pages or above is None or above not in pages:
+            continue
+        try:
+            door.put_json(
+                f"/doc/{pages[note.path]}/page-parent", {"parent": pages[above]}
+            )
+            placed += 1
+        except Exception as exc:  # noqa: BLE001 - keep going; listed at the end
+            errors.append(f"{note.path}: parent: {exc}")
+    if not a.quiet:
+        out.hint(f"  {placed} pages placed under their parent")
     out.say(f"  {len(pages)} pages, {written} revisions, {len(errors)} with a problem")
     for e in errors[:20]:
         out.hint("  " + e)
