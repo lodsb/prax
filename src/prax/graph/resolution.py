@@ -325,9 +325,10 @@ def _venues(
     is linked to its series' bare name (``prax.graph.venues``)."""
     rows = [e for e in ents if e["type"] == "venue" and e["id"] not in taken]
     by_id = {e["id"]: e for e in rows}
-    acronyms = {v.acronym for e in rows if (v := venues.read(e["name"])).acronym}
-    expansions = {a: set(store.acronym_expansions(con, a)) for a in acronyms}
-    p = venues.plan([(e["id"], e["name"], e["degree"]) for e in rows], expansions)
+    with venues.holding():
+        acronyms = {v.acronym for e in rows if (v := venues.read(e["name"])).acronym}
+        expansions = {a: set(store.acronym_expansions(con, a)) for a in acronyms}
+        p = venues.plan([(e["id"], e["name"], e["degree"]) for e in rows], expansions)
     merges = [
         Candidate(k, d, by_id[k]["name"], by_id[d]["name"], "venue", "venue", 1.0)
         for k, d in p.merges

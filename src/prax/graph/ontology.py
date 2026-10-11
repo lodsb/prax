@@ -1059,10 +1059,13 @@ def path() -> Path:
     return Path(config.setting("ontology.dir", "PRAX_ONTOLOGY", config.ONTOLOGY_PATH))
 
 
+@functools.lru_cache(maxsize=16)
 def _packed(p: Path) -> bool:
     """Whether the packs' knowledge joins ``p``: for the core directory of
     the repository. A directory a host or a test names is the whole
-    ontology, as it was before packs (docs/packs.md)."""
+    ontology, as it was before packs (docs/packs.md). Kept per path: the
+    two ``resolve`` calls are some 60 µs on Windows, and every look at the
+    ontology asked three times."""
     return p.is_dir() and p.resolve() == config.ONTOLOGY_PATH.resolve()
 
 

@@ -36,12 +36,23 @@ async function viewPages(p) {
   });
   const list = document.getElementById("pages-list");
   try {
+    // a standing question says whether the library has learned something
+    // since (a search per question, a second or two while the store is
+    // being written to); the tree does not wait for it: it is drawn as soon
+    // as the pages are in, and the questions' state follows
+    const standingP = api("/questions").catch(() => []);
     const pages = await api("/pages", { kind: p.kind });
     if (!pages.length) { list.innerHTML = `<p class="muted">No pages yet. Create a topic or project page above, or add a note from any document.</p>`; return; }
-    // a standing question says whether the library has learned something
-    // since; the ask blocks of other pages are standing questions too
-    let standing = [];
-    try { standing = await api("/questions"); } catch (_) { standing = []; }
+    const filter = pageFilter();
+    list.innerHTML = `<div id="pages-questions">${pages.some((pg) => pg.kind === "question") ? `<h2 class="page-tree-group">Standing questions</h2><p class="muted">checking what the library has learned since…</p>` : ""}</div>
+      <input id="page-filter" class="page-filter" type="search" placeholder="filter the pages…" value="${esc(filter)}" aria-label="filter the pages">
+      <div id="page-tree-box">${pageTree(pages, filter)}</div>`;
+    document.getElementById("page-filter").addEventListener("input", (e) => {
+      pageFilter(e.target.value);
+      document.getElementById("page-tree-box").innerHTML = pageTree(pages, e.target.value);
+    });
+    // the ask blocks of other pages are standing questions too
+    const standing = await standingP;
     const news = Object.fromEntries(standing.map((q) => [q.slug, q]));
     const blocks = standing.filter((q) => q.block);
     const state = (q, slug) => {
@@ -67,15 +78,9 @@ async function viewPages(p) {
           <td class="muted">${esc((pg.updated_at || "").slice(0, 16).replace("T", " "))}</td>
         </tr>`).join("")}${blockRows}</tbody></table>`
       : "";
-    const filter = pageFilter();
-    list.innerHTML = `${questionTable}
-      <input id="page-filter" class="page-filter" type="search" placeholder="filter the pages…" value="${esc(filter)}" aria-label="filter the pages">
-      <div id="page-tree-box">${pageTree(pages, filter)}</div>`;
-    document.getElementById("page-filter").addEventListener("input", (e) => {
-      pageFilter(e.target.value);
-      document.getElementById("page-tree-box").innerHTML = pageTree(pages, e.target.value);
-    });
-    list.querySelectorAll("a.ask-again").forEach((a) => a.addEventListener("click", async (e) => {
+    const box = document.getElementById("pages-questions");
+    box.innerHTML = questionTable;
+    box.querySelectorAll("a.ask-again").forEach((a) => a.addEventListener("click", async (e) => {
       e.preventDefault();
       try {
         const r = await post("/questions/run", { slug: a.dataset.slug, force: !!a.dataset.force, release: !!a.dataset.release });

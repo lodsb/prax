@@ -68,7 +68,7 @@ def summaries_needed(
     for doc_id, summary, held in store.translated_summaries(
         con, lang, untried_only=untried_only, ids=ids
     ):
-        native = summaries.native(held)
+        native = summaries.native(held, lang)
         if native is not None and summaries.acceptable(summary, native[1]):
             out.append((doc_id, native[0]))  # translated, but not usably
     return sorted(out)

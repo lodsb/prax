@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import time
 from collections.abc import Iterator
 from contextvars import ContextVar
 from pathlib import Path
@@ -77,7 +78,8 @@ def config_path() -> Path:
     return Path(os.environ.get("PRAX_CONFIG") or data_dir() / CONFIG_NAME)
 
 
-_parsed: tuple[Path, bytes, dict[str, Any]] | None = None  # the last file parsed
+# the last file parsed: its path, its (mtime, size) when read, its bytes, its data
+_parsed: tuple[Path, tuple[int, int], bytes, dict[str, Any]] | None = None
 
 
 def document() -> dict[str, Any]:
@@ -85,14 +87,29 @@ def document() -> dict[str, Any]:
     every call, so a person editing it sees the change at the next pass;
     it is parsed again only when its bytes changed. A search asked the
     file three or four things, and PyYAML's parse of a page is
-    milliseconds on a desktop and tens of them on the board."""
+    milliseconds on a desktop and tens of them on the board. The bytes are
+    read again only when the file's time or size moved: a pass over every
+    summary asked for a setting 14,758 times, and opening the file each
+    time was two of its three seconds (2026-10-11)."""
     global _parsed
     path = config_path()
+    try:
+        st = path.stat()
+    except OSError:
+        return {}
     if not path.is_file():
         return {}
+    seen = (st.st_mtime_ns, st.st_size)
+    # a file changed in the last two seconds is read anyway: two writes in
+    # one tick of the file system's clock may leave the same time and size
+    # (git's "racily clean")
+    settled = time.time_ns() - st.st_mtime_ns > 2_000_000_000
+    if settled and _parsed is not None and _parsed[0] == path and _parsed[1] == seen:
+        return _parsed[3]
     raw = path.read_bytes()
-    if _parsed is not None and _parsed[0] == path and _parsed[1] == raw:
-        return _parsed[2]
+    if _parsed is not None and _parsed[0] == path and _parsed[2] == raw:
+        _parsed = (path, seen, raw, _parsed[3])
+        return _parsed[3]
     data = yaml.safe_load(raw.decode("utf-8")) or {}
     if not isinstance(data, dict):
         raise ConfigError(f"{path}: expected a mapping at the top")
@@ -102,7 +119,7 @@ def document() -> dict[str, Any]:
             f"{path}: unknown section{'s' if len(unknown) > 1 else ''}"
             f" {', '.join(sorted(unknown))}; known: {', '.join(SECTIONS)}"
         )
-    _parsed = (path, raw, data)
+    _parsed = (path, seen, raw, data)
     return data
 
 

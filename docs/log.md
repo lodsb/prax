@@ -5783,6 +5783,39 @@ go. Pointer events replace the mouse ones, so a finger drags and a
 second pinches; a double tap opens. Measured on the live library: the
 region map answers in 0.3 s (5 KB).
 
+## 2026-10-11: what made the door stall, and the files it looked at
+
+The Pages view and a document page sometimes hung for seconds. The door
+logs every request over two seconds with what else was in flight, and
+the log of the last days held 4,545 of them: 3,967 were the worker's
+`GET /work/adjudicate`, 10 to 92 s each (median 12.7), then embed,
+extract, heal and summaries hand-outs. A hand-out is pure Python, and
+while one runs every other request of the door waits for the
+interpreter; the UI's were among them. It grew worse as the graph grew.
+
+The adjudicate hand-out plans entity resolution (`resolution.plan`),
+14.4 s on the live library. 15 of the 21 s profiled were not the plan
+but `ontology.lexicon()` asked 15,005 times by the venue tier, and each
+call stamped the ontology's files (a glob, some twenty `stat`s and two
+`Path.resolve`, about 1 ms on Windows) to see whether one had changed.
+The venue tier now holds the words for its pass (`venues.holding`), and
+`ontology._packed` keeps its answer per path (the resolves). The plan
+takes 1.7 s.
+
+The summaries hand-out had the same shape: `summaries.native` asked
+`language.canonical()` once a document, and `config.document()` opened
+`prax.yaml` on every `setting` (14,758 opens, 2 of 2.85 s). The loop now
+passes the language in, and the file is read again only when its time
+or size moved, or when it changed in the last two seconds (two writes in
+one tick of the file system's clock can leave both the same; git calls
+it racily clean). 0.8 s.
+
+`/questions` stays exact: it runs a search per standing question
+(0.7 s each, warm) whenever the store has changed, which on a busy
+library is every time. The Pages view no longer waits for it: the tree
+is drawn when the pages are in and the questions' state follows. A
+document page's requests answer in 3 to 460 ms.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

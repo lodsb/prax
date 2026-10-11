@@ -19,9 +19,12 @@ carries both ("Web Audio Conference WAC-2018").
 
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import functools
 import re
 import unicodedata
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 from prax.graph import ontology
@@ -136,9 +139,29 @@ def _words(lex: ontology.Lexicon) -> Words:
     )
 
 
+# The words a pass over many names holds (``holding``): the lexicon is
+# looked up once for the pass instead of once a name, which was 15,000
+# looks at the ontology's files in one plan of the venues, most of a
+# 14-second hand-out of the adjudicate step (2026-10-11).
+_HELD: contextvars.ContextVar[Words | None] = contextvars.ContextVar(
+    "venue_words", default=None
+)
+
+
 def words() -> Words:
-    """The venue words of the lexicon on disk."""
-    return _words(ontology.lexicon())
+    """The venue words of the lexicon on disk, or the ones a pass holds."""
+    held = _HELD.get()
+    return held if held is not None else _words(ontology.lexicon())
+
+
+@contextlib.contextmanager
+def holding() -> Iterator[Words]:
+    """Read the lexicon once for a pass over many names."""
+    token = _HELD.set(words())
+    try:
+        yield _HELD.get() or Words()
+    finally:
+        _HELD.reset(token)
 
 
 _YEAR = re.compile(r"(?<!\d)(19[5-9]\d|20[0-4]\d)(?!\d)")

@@ -131,15 +131,19 @@ def acceptable(text: str, original: str) -> str | None:
     return None
 
 
-def native(held: dict[str, Any]) -> tuple[str, str] | None:
+def native(
+    held: dict[str, Any], canonical: str | None = None
+) -> tuple[str, str] | None:
     """The summary as first written, ``(language, text)``, out of
     ``meta.summaries`` — or None when the only one there is English.
 
     It is what a translation is made from and remade from: translating a
-    translation compounds whatever the first one got wrong.
+    translation compounds whatever the first one got wrong. A caller
+    looping over many passes ``canonical``, the library's language.
     """
+    lang = canonical or language.canonical()
     for code, text in (held or {}).items():
-        if code != language.canonical() and isinstance(text, str) and text.strip():
+        if code != lang and isinstance(text, str) and text.strip():
             return str(code), text
     return None
 
