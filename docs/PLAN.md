@@ -53,7 +53,9 @@ so what needs no model comes first.
 
 Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
 after the prototype settles), the move to the board ("Deployment
-shape"), and the zoetrope disk and the NAS.
+shape"; not now, the user, 2026-10-12), and the rest from the NAS
+(later). The zoetrope disk is done (it was drive R:, the user,
+2026-10-12).
 
 ### For the user (the list of 2026-10-06)
 
@@ -95,8 +97,9 @@ in the plan is blocked on these, except where an item says so.
 reloaded for its `alarms` permission; then O1 and O7 re-checked.
 
 **Decisions for later**: AE (the distilled surfer), AH (the stack), the
-move to the board, the zoetrope disk and the NAS, and the rerank, which
-is measured only when it is meant to be on.
+move to the board (not now, 2026-10-12), the rest from the NAS (later),
+and the rerank, which is measured only when it is meant to be on. The
+zoetrope disk is done (drive R:, 2026-10-12).
 
 Not for a hand: the review queue's 23,964 misfit triples. They are
 the evidence a module grows from, read in bulk, not one by one.
@@ -756,8 +759,9 @@ numbered there) in the order the user agreed: one step a session.
 
 ## The backfill
 
-- [ ] **The old zoetrope disk** — the hash inventory and the import that
-      follows it (`docs/log.md`, Stage 1).
+- [x] **The old zoetrope disk** — the hash inventory and the import that
+      follows it (`docs/log.md`, Stage 1). Done: it was drive R: (the
+      user, 2026-10-12).
       On 2026-10-02 the 37 PDFs whose archived copies are cut short
       (Zotero's own copies are the same bytes) were listed in
       `refetch-later.txt`, untracked: they are probably on the NAS.
