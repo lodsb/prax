@@ -175,6 +175,12 @@ class Supervisor:
         }
         self.restart_now: set[str] = set()
         self.paused: set[str] = set()  # roles told to stop until told to start
+        # the roles a person stopped (``--stop <role>``): neither the door's
+        # demand nor its plan starts one again, only ``--start``, a restart
+        # or a swap a person asks for. Without it a model server that had
+        # gone idle was only marked paused and the next step that wanted
+        # it loaded it again (2026-10-12: the card asked for an experiment)
+        self.held: set[str] = set()
         # a group's resource on loan: who has it, who had it, when it goes
         # back (``_groups``). Empty until a swap is asked for
         self.groups: dict[str, dict[str, Any]] = {}
@@ -417,6 +423,8 @@ class Supervisor:
             for one in self._party(str(name)):
                 self._say(f"{one}: asked to stop until started again")
                 self.paused.add(one)
+                self.held.add(one)
+                self.idled.discard(one)  # stopped by a person, not for quiet
                 proc = self.procs.get(one)
                 if proc is not None and proc.poll() is None:
                     self._end(one, proc)
@@ -436,6 +444,7 @@ class Supervisor:
                     self._say(f"{one}: asked to start")
                     self.idled.discard(one)
                     self.paused.discard(one)
+                    self.held.discard(one)
                 else:
                     self._say(f"{one}: not stopped")
         elif cmd == "swap":
@@ -465,6 +474,7 @@ class Supervisor:
                 self.restart_now.add(name)
                 self.idled.discard(name)
                 self.paused.discard(name)  # a restart of a paused role starts it
+                self.held.discard(name)
                 proc = self.procs.get(name)
                 if proc is not None and proc.poll() is None:
                     self._end(name, proc)
@@ -740,6 +750,7 @@ class Supervisor:
         }
         for one in party:  # the borrower and its companions
             self.paused.discard(one)
+            self.held.discard(one)
             self.restart_now.discard(one)
         how = "beside" if fits else "instead of"
         others = ", ".join(was_up) or "nothing"
@@ -792,6 +803,8 @@ class Supervisor:
                 if proc is not None and proc.poll() is None:
                     self._end(one, proc)
         for name in loan["was_up"]:
+            if name in self.held:
+                continue  # stopped by a person while it was lent away
             self.paused.discard(name)
             self.idled.discard(name)  # one that waited, idle, for the card
         back = ", ".join(loan["was_up"]) or "nothing"
@@ -908,6 +921,8 @@ class Supervisor:
             asked = name in self.now or row.get("action") == "ask"
             if role.swap != "auto" and not asked:
                 continue
+            if name in self.held:
+                continue  # a person stopped it; the plan waits for --start
             loan = self.groups.get(role.group)
             if loan is None:
                 if name in self.paused:

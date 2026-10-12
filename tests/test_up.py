@@ -617,6 +617,45 @@ def test_a_quiet_server_stops_and_comes_back_when_work_asks(
         thread.join(timeout=10)
 
 
+def test_a_server_a_person_stopped_stays_stopped_when_work_asks(
+    data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--stop llama-server`` on a server already idle for quiet holds it:
+    work that waits for it does not load it again until ``--start``
+    (2026-10-12: the card was wanted for an experiment, and an idle server
+    only marked paused would have come back at the next step's demand)."""
+    data_dir.mkdir(parents=True, exist_ok=True)
+    mark, argv = child(tmp_path, "server", 60)
+    server = up.Role(
+        "llama-server",
+        argv,
+        health="http://127.0.0.1:1/health",
+        metrics="http://127.0.0.1:1/metrics",
+        idle_minutes=0.002,
+    )
+    sup = up.Supervisor([server], data_dir=data_dir, say=lambda _: None, tick=0.05)
+    monkeypatch.setattr(up, "healthy", lambda url, timeout=3.0: True)
+    monkeypatch.setattr(up, "IDLE_POLL", 0.0)
+    monkeypatch.setattr(up.Supervisor, "_server_activity", lambda self, role: 7.0)
+    waiting: dict[str, int] = {}
+    monkeypatch.setattr(
+        up.Supervisor, "_ask_demand", lambda self: setattr(self, "demand", waiting)
+    )
+    thread = threading.Thread(target=sup.run, daemon=True)
+    thread.start()
+    try:
+        wait_for(lambda: "llama-server" in sup.idled)
+        assert up.stop(data_dir, name="llama-server", wait=10)  # shown paused
+        waiting["llama-server"] = 3
+        time.sleep(0.5)  # several ticks with work waiting
+        assert runs_of(mark) == 1 and "llama-server" in sup.held
+        up.start(data_dir, "llama-server")
+        wait_for(lambda: runs_of(mark) >= 2)
+    finally:
+        up.stop(data_dir, wait=20)
+        thread.join(timeout=10)
+
+
 @pytest.mark.parametrize("free_mb", [100, 40000])
 def test_an_idle_server_waits_for_a_lent_card(
     data_dir: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, free_mb: int
