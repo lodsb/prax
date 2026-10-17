@@ -52,6 +52,27 @@ def test_a_page_reads_as_markdown_with_its_latex() -> None:
     assert l2h.short_title(l2h.book_title(PAGE)) == "Mathematics of the DFT"
 
 
+def test_the_older_latex2html_says_each_formula_once_and_keeps_its_scripts() -> None:
+    """latex2html before MathJax set a formula as a picture with its LaTeX
+    in the alt and again in a comment beside it, and a variable's
+    subscript as HTML: the formula once, the scripts as LaTeX, a footnote's
+    number as it was."""
+    page = (
+        "<p>The error was 0.0034<I>f</I><SUB><I>s</I></SUB> at"
+        " <I>f</I><SUB><I>s</I></SUB>=6&nbsp;kHz, by the map\n<!-- MATH\n"
+        " ${\\cal A}_{\\rho }$\n -->\n<IMG SRC='img16.png'"
+        " ALT='${\\cal A}_{\\rho }$'> of CO<SUB>2</SUB>, as in the"
+        " 19<SUP>th</SUP> century.<SUP><A HREF='#foot3'>3</A></SUP></p>"
+    )
+    md = l2h.to_markdown(page, "https://example.org/~jos/bbt/page.html")
+    assert md.strip() == (
+        "The error was 0.0034$f_{s}$ at $f_{s}$=6 kHz, by the map"
+        " ${\\cal A}_{\\rho }$ of CO$_{2}$, as in the 19$^{\\text{th}}$"
+        " century.3"
+    )
+    assert l2h.stamp() == "latex2html/2"
+
+
 def test_macros_expand_nested_and_with_arguments() -> None:
     defined = l2h.macros(CONFIG)
     assert l2h.expand("\\Abt x", defined) == "\\tilde{\\mathbf{A}} x"

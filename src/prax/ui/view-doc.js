@@ -156,7 +156,8 @@ function renderFormula(c) {
 // Maths is typeset by KaTeX (vendored) from what a parser wrote as LaTeX. A
 // formula chunk always, with the LaTeX a click away; the $…$ inside prose
 // only where a document carries real maths (a formula chunk, or marker's
-// text) and in an answer; never a search snippet, which is cut and marked.
+// text, a paper's LaTeX source, a latex2html book) and in an answer; never
+// a search snippet, which is cut and marked.
 // What KaTeX cannot parse stays as written, in the text's own colour.
 function tex(latex, display) {
   if (typeof katex === "undefined") return null;
@@ -196,8 +197,11 @@ function typesetMaths(root) {
     node.parentNode.replaceChild(frag, node);
   }
 }
+// the readers that write the mathematics as LaTeX, display or inline
+const MATHS_READERS = ["marker", "latex-source", "latex2html"];
 function hasMaths(doc, chunks) {
-  return (chunks || []).some((c) => c.kind === "formula") || String((doc.meta || {}).text_source || "").startsWith("marker");
+  const source = String((doc.meta || {}).text_source || "");
+  return (chunks || []).some((c) => c.kind === "formula") || MATHS_READERS.some((r) => source.startsWith(r));
 }
 
 // A reference chunk: the entry as written, and under it the library

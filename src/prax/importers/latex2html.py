@@ -38,7 +38,7 @@ from typing import Any
 from urllib.parse import unquote, urljoin, urlparse
 
 SOURCE = "latex2html"
-REVISION = 1
+REVISION = 2  # 2: no comment kept as text, sub- and superscripts as LaTeX
 USER_AGENT = "prax/latex2html (a personal research library; one request at a time)"
 MIN_DELAY = 2.0  # seconds between two requests where robots.txt asks for none
 TIMEOUT = 60.0
@@ -51,7 +51,7 @@ NOT_PAGES = re.compile(
 
 
 def stamp() -> str:
-    """The text's stamp: ``latex2html/1``."""
+    """The text's stamp: ``latex2html/2``."""
     return f"{SOURCE}/{REVISION}"
 
 
@@ -294,6 +294,33 @@ _DISPLAY_WRAP = re.compile(
 )
 _LABEL = re.compile(r"\\label\{[^}]*\}")
 _FBOX = re.compile(r"\\fbox\{\$\\displaystyle\s*(.*?)\$\}", re.DOTALL)
+# a sub- or superscript as the walker marks it (``\x00_{s}\x00``) until its
+# line is whole and it can join what it is a script of (``scripts``)
+_SCRIPT = r"\x00([_^])\{([^}\x00]*)\}\x00"
+_SCRIPTS = rf"((?:{_SCRIPT})+)"
+_ON_VARIABLE = re.compile(r"\*([^*\s]{1,12})\*" + _SCRIPTS)
+_ON_MATHS = re.compile(r"(\$[^$\n]+)\$" + _SCRIPTS)
+_LONE = re.compile(_SCRIPTS)
+_ONE = re.compile(_SCRIPT)
+
+
+def scripts(text: str) -> str:
+    """The walker's script marks as LaTeX: an italic variable ``*f*`` with
+    the subscript ``s`` as ``$f_{s}$``, a script of inline maths inside it,
+    and one after a plain word on its own (``CO$_{2}$``,
+    ``19$^{\\text{th}}$``)."""
+
+    def joined(marks: str, words: bool) -> str:
+        out = []
+        for kind, body in _ONE.findall(marks):
+            if words and len(body) > 1 and body.isalpha():
+                body = f"\\text{{{body}}}"
+            out.append(f"{kind}{{{body}}}")
+        return "".join(out)
+
+    text = _ON_VARIABLE.sub(lambda m: f"${m[1]}{joined(m[2], False)}$", text)
+    text = _ON_MATHS.sub(lambda m: f"{m[1]}{joined(m[2], False)}$", text)
+    return _LONE.sub(lambda m: f"${joined(m[1], True)}$", text)
 
 
 Macros = dict[str, tuple[str, int]]
@@ -403,9 +430,12 @@ class _Render:
         self.line: list[str] = []
 
     def math(self, text: str) -> str:
-        """Inline ``\\(…\\)`` as ``$…$``, the book's macros written out."""
-        return _INLINE_MATH.sub(
-            lambda m: "$" + expand(m.group(1).strip(), self.defined) + "$", text
+        """Inline ``\\(…\\)`` as ``$…$``, the book's macros written out,
+        and the scripts the HTML set as ``<sub>``/``<sup>`` joined to it."""
+        return scripts(
+            _INLINE_MATH.sub(
+                lambda m: "$" + expand(m.group(1).strip(), self.defined) + "$", text
+            )
         )
 
     def flush(self) -> None:
@@ -424,9 +454,16 @@ class _Render:
 
     def marked(self, el: Any) -> str:
         """One inline element as Markdown: emphasis kept, a picture by its
-        alternative text."""
-        tag = str(el.tag).lower() if isinstance(el.tag, str) else ""
+        alternative text, a sub- or superscript marked for ``scripts``. A
+        comment is nothing: latex2html writes each formula in one beside
+        its picture (``<!-- MATH $…$ -->``), whose alt says it again."""
+        if not isinstance(el.tag, str):
+            return ""
+        tag = el.tag.lower()
         inner = self.inline(el)
+        if tag in ("sub", "sup") and inner.strip() and el.find(".//a") is None:
+            body = " ".join(inner.replace("*", "").split())
+            return f"\x00{'_' if tag == 'sub' else '^'}{{{body}}}\x00"
         if tag in ("i", "em") and inner.strip():
             return f"*{inner.strip()}*"
         if tag in ("b", "strong") and inner.strip():
@@ -444,11 +481,13 @@ class _Render:
             self.line.append(child.tail or "")
 
     def element(self, el: Any) -> None:
-        tag = str(el.tag).lower() if isinstance(el.tag, str) else ""
+        if not isinstance(el.tag, str):
+            return  # a comment or a processing instruction (``marked``)
+        tag = el.tag.lower()
         cls = str(el.get("class") or "").upper()
         if tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
             self.flush()
-            title = " ".join(self.inline(el).split())
+            title = self.math(" ".join(self.inline(el).split()))
             if title:
                 self.blocks.append("#" * int(tag[1]) + " " + title)
         elif tag == "div" and cls == "MATHDISPLAY":
@@ -460,7 +499,7 @@ class _Render:
         elif tag == "table":
             self.flush()
             for row in el.iter("tr"):
-                cells = [" ".join(self.inline(c).split()) for c in row]
+                cells = [self.math(" ".join(self.inline(c).split())) for c in row]
                 if any(cells):
                     self.blocks.append(" | ".join(cells))
         elif tag in ("ul", "ol"):
