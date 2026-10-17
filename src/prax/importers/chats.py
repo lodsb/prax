@@ -203,7 +203,7 @@ def read_whatsapp(text: str, *, name: str) -> Conversation:
         if ampm == "am" and hour == 12:
             hour = 0
         try:  # the chat's own wall clock, naive like every stamp here
-            at = datetime(  # noqa: DTZ001
+            at = datetime(
                 y, month, day, hour, int(m.group("m")), int(m.group("s") or 0)
             )
         except ValueError:
@@ -232,7 +232,7 @@ def months(conv: Conversation) -> Iterator[tuple[str, list[Message]]]:
 
 
 def _pretty(month: str) -> str:
-    return datetime.strptime(month, "%Y-%m").strftime("%B %Y")  # noqa: DTZ007
+    return datetime.strptime(month, "%Y-%m").strftime("%B %Y")
 
 
 def render(conv: Conversation, month: str, msgs: list[Message]) -> str:
