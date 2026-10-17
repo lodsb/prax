@@ -237,11 +237,14 @@ _STAMP = re.compile(r"[a-z][a-z0-9-]{1,40}/[\w.+-]{1,40}")
 
 def _own_stamp(stamp: str) -> bool:
     """A stamp of the sender's own: the shape, and no extractor's name,
-    which the parse queue would take for its own reading."""
+    which the parse queue would take for its own reading; but for the
+    readings a client does as well (``parsers.SENDERS_TOO``)."""
     from prax import parsers
 
     if not _STAMP.fullmatch(stamp):
         return False
+    if stamp.split("/", 1)[0] in parsers.SENDERS_TOO:
+        return True
     try:
         parsers.by_name(stamp.split("/", 1)[0])
     except KeyError:

@@ -16,7 +16,7 @@ import sqlite3
 from collections.abc import Mapping
 from typing import Any
 
-from prax import models, store
+from prax import config, models, store
 from prax.parsers import figures
 from prax.text import language
 from prax.writing import summaries, titles
@@ -160,22 +160,147 @@ def _wants_crops(con: sqlite3.Connection, doc_id: int) -> bool:
     return bool(figures.bare_captions(lines))
 
 
+# -------------------------------------------------------- the PDF's reader
+# A PDF's first text is its text layer (pymupdf4llm), which loses the
+# mathematics and, for a scan, is an old OCR's. What reads it better
+# depends on what it is, and the door asks for that by itself instead of a
+# person asking per document (2026-10-17: thirty-four arXiv papers and
+# fourteen scans put right by hand in one night):
+#
+# - a paper on arXiv: its LaTeX source (``latex-source``), exact and
+#   without the card; marker if the source fails;
+# - a scan, with an OCR layer or not: marker reading every page itself
+#   (``fast-ocr``), its maths as LaTeX;
+# - a born-digital PDF that sets formulas in a maths font: marker as it is.
+#
+# Only for what a person added (``CAPTURE_SOURCES``): an import of a
+# thousand papers is a decision about the card, not a follow-up.
+
+SCANNED = 0.5  # the share of profiled pages that makes a PDF a scan
+
+
+def choose_reader_on() -> bool:
+    """``parse.choose_reader`` [``PRAX_CHOOSE_READER``], on by default."""
+    value = config.setting("parse.choose_reader", "PRAX_CHOOSE_READER", True)
+    return str(value).lower() not in ("0", "false", "no", "off")
+
+
+def _tried(meta: Mapping[str, Any]) -> set[str]:
+    """The extractors that have read the document already, by name."""
+    return {
+        str(h.get("extractor") or "").split("/", 1)[0]
+        for h in meta.get("parse_history") or []
+    }
+
+
+def _marker_mode(scan: bool) -> str | None:
+    """The marker reading's mode: the host's layout (``parse.marker_mode``),
+    with ``-ocr`` for a scan."""
+    base = str(config.setting("parse.marker_mode", "PRAX_MARKER_MODE", "fast"))
+    base = base.removesuffix("-ocr") if base else "fast"
+    if base not in ("fast", "balanced"):
+        base = "fast"
+    if scan:
+        return f"{base}-ocr"
+    return None if base == "fast" else base
+
+
+def _profile(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
+    from prax.parsers import pdf
+
+    info = store.original_info(con, doc_id)
+    if info is None or info["mime"] != "application/pdf":
+        return None
+    try:
+        data = info["path"].read_bytes()
+    except OSError:
+        return None
+    got = pdf.profile(data)
+    if not meta_arxiv_ok(store.get_meta(con, doc_id).get("arxiv")):
+        from prax.parsers import latexsrc
+
+        got["arxiv"] = latexsrc.arxiv_id_of(data)
+    return got
+
+
+def meta_arxiv_ok(value: Any) -> bool:
+    """Whether a document's ``meta.arxiv`` is an id the reading takes."""
+    try:
+        store.check_mode("latex-source", str(value))
+    except ValueError:
+        return False
+    return bool(value)
+
+
+def choose_reader(
+    con: sqlite3.Connection,
+    doc_id: int,
+    *,
+    stamp: str,
+    action: str,
+    pending: set[str],
+) -> str | None:
+    """The reading a captured PDF should have next for its text (the
+    section's comment), asked for and named; None when it has what suits
+    it, is not a captured PDF, or the host turned this off."""
+    if not choose_reader_on():
+        return None
+    meta = store.get_meta(con, doc_id)
+    if meta.get("source") not in store.CAPTURE_SOURCES:
+        return None
+    tried = _tried(meta)
+    if {"latex-source", "marker"} & pending:
+        return None  # one is on its way
+    source_failed = stamp.startswith("latex-source/") and action in (
+        "error",
+        "kept",
+        "empty",
+    )
+    first_text = stamp.startswith("pymupdf4llm/") and action in ("created", "upgraded")
+    if not (source_failed or first_text):
+        return None
+    prof = _profile(con, doc_id)
+    if prof is None:
+        return None
+    if first_text and "latex-source" not in tried:
+        arxiv = (
+            meta.get("arxiv") if meta_arxiv_ok(meta.get("arxiv")) else prof.get("arxiv")
+        )
+        if arxiv:
+            store.request_reading(
+                con, doc_id, "latex-source", mode=str(arxiv), by="door"
+            )
+            return "latex-source"
+    if "marker" in tried:
+        return None
+    scan = max(prof["scanned"], prof["ocr_layer"]) >= SCANNED
+    if scan or prof["maths"] or source_failed:
+        store.request_reading(con, doc_id, "marker", mode=_marker_mode(scan), by="door")
+        return "marker"
+    return None
+
+
 def follow_ups(
     con: sqlite3.Connection, doc_id: int, *, stamp: str, action: str
 ) -> str | None:
     """The reading the door places after a text landed under ``stamp``
     with ``action`` (``created``/``upgraded``; nothing after ``same`` or an
-    error), or None. A video capture with an automatic transcript gets the
-    polish first and its frames read once that has landed; a marker read
-    with display equations gets the formula readings; a capture with
-    figures nobody has read gets the vision model."""
-    if action not in ("created", "upgraded"):
-        return None
-    meta = store.get_meta(con, doc_id)
+    error, but for a source that failed), or None. A captured PDF gets the
+    reader that suits it first (``choose_reader``); a video capture with
+    an automatic transcript gets the polish first and its frames read once
+    that has landed; a marker read or a text from the LaTeX source with
+    display equations gets the formula readings; a capture with figures
+    nobody has read gets the vision model."""
     # what the document is already waiting for: since migration 21 a
     # reading queues beside the others instead of replacing them, so the
     # door only declines to ask for the same one twice
     pending = {r["extractor"] for r in store.pending_readings(con, doc_id)}
+    chosen = choose_reader(con, doc_id, stamp=stamp, action=action, pending=pending)
+    if chosen is not None:
+        return chosen
+    if action not in ("created", "upgraded"):
+        return None
+    meta = store.get_meta(con, doc_id)
     video = meta.get("video") or {}
     if (
         video.get("captions") == "asr"
@@ -186,7 +311,7 @@ def follow_ups(
             store.request_reading(con, doc_id, "polish", by="door")
         return "polish"
     if (
-        stamp.startswith("marker/")
+        stamp.startswith(("marker/", "latex-source/"))
         and formulas_are_free()
         and store.has_unread_formulas(con, doc_id)
     ):

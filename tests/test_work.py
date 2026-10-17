@@ -92,6 +92,9 @@ def test_parse_and_titles_through_the_door(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     con = client.app.state.con
+    # the reader a capture gets next is pipeline.choose_reader's (its own
+    # tests); here the parse alone
+    monkeypatch.setenv("PRAX_CHOOSE_READER", "off")
     # a pdf the door only registered: the worker fetches the original and parses
     pdf = Path("tests/fixtures/zotero/storage").rglob("*.pdf")
     src = next(iter(pdf), None)

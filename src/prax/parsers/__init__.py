@@ -75,7 +75,17 @@ from prax.text import mimes
 # the parts, each importing only from the ones before it (the readings'
 # own modules, figures, formulas, polish, vision, video and the queue,
 # stand beside them)
-ORDER = ("base", "code", "pdf", "marker", "web", "readings", "office", "djvu")
+ORDER = (
+    "base",
+    "code",
+    "pdf",
+    "marker",
+    "latexsrc",
+    "web",
+    "readings",
+    "office",
+    "djvu",
+)
 
 from . import djvu, office
 from .base import (  # noqa: F401
@@ -115,6 +125,13 @@ from .djvu import (  # noqa: F401
     _djvu_version,
     djvu_tool,
 )
+from .latexsrc import (  # noqa: F401
+    SENDERS_TOO,
+    _latex_source,
+    arxiv_id_of,
+)
+from .latexsrc import available as _latex_available
+from .latexsrc import pandoc_stamp as _latex_stamp
 from .marker import (  # noqa: F401
     _MARKER_CAPTION,
     _MARKER_IMAGE,
@@ -240,6 +257,15 @@ REGISTRY: list[Extractor] = [
         previous=True,  # a long scan in windows: the pages read before stay
     ),
     Extractor("docling", ("application/pdf",), _docling, "docling", explicit_only=True),
+    Extractor(
+        "latex-source",
+        ("application/pdf",),
+        _latex_source,
+        explicit_only=True,  # asked for by the door for a paper on arXiv
+        check=_latex_available,  # pandoc, a program
+        version_of=_latex_stamp,  # pandoc's version and the conversion's revision
+        previous=True,  # the PDF's text, to see a conversion that lost the paper
+    ),
     Extractor(
         "marker",
         ("application/pdf",),

@@ -5816,6 +5816,44 @@ library is every time. The Pages view no longer waits for it: the tree
 is drawn when the pages are in and the questions' state follows. A
 document page's requests answer in 3 to 460 ms.
 
+## 2026-10-17: a PDF gets the reader that suits it
+
+Forty-eight papers came in in one night, and every one needed a
+person to say how to read it. 34 were on arXiv. Their LaTeX source,
+fetched by hand and sent through `prax import latex`, gave 27 of them
+about 1,100 exact formula chunks; pandoc timed out or failed on 7. 14
+were scans of the 1970s IEEE transactions and a 1992 JAES survey, read
+from the scanner's OCR layer: no equations at all, an "o" in another
+font written `_o_`, words run together, the columns mixed. 12 were
+pictures of pages under invisible OCR text (render mode 3), some as
+one picture, some as thirty strips of 3% each. Two were born-digital
+(pdfeTeX with CMSY; a reprint set in Mathematical Pi).
+
+marker's default keeps a PDF's text layer and OCRs only where there is
+none, so the scanner's mistakes came through it. A marker mode with
+`-ocr` (`fast-ocr`, `balanced-ocr`) sends marker's `force_ocr`: every
+page read by surya. The survey went from no formulas to 109, each with
+its number, and its prose reads clean.
+
+The door now chooses (`pipeline.choose_reader`, from `follow_ups`):
+after a captured PDF's text layer lands, `parsers.pdf.profile` reads
+its first twelve pages without layout analysis (the pictures' area per
+page, the share of invisible text, the fonts) and the door asks for the
+`latex-source` reading for a paper on arXiv (`meta.arxiv`, or the stamp
+on page 1), marker `-ocr` for a scan, marker for a born-digital PDF set
+in a maths font. A source that fails, or converts to under 30% of the
+PDF's text (one came back as a single character), hands the paper to
+marker. The formulas reading follows a LaTeX text as it follows a
+marker one. Only captures are routed; `parse.choose_reader: off` turns
+it off. `latex-source` is the worker's half of `prax import latex`
+(`parsers.latexsrc`), stamped the same, so the door takes the
+importer's text as a sender's still (`parsers.SENDERS_TOO`) and an
+unasked parse never replaces it.
+
+Measured on the live papers: the profile marks the 12 scans as scans
+(1.0 and 1.0), the two born-digital ones and the arXiv papers as not
+(maths fonts on 4 to 11 of the pages profiled), with nothing to tune.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

@@ -609,7 +609,8 @@ Nothing here opens the database file.
 | `parse.ocr_max_pages` | the pages the OCR reads a pass; a longer scan is read in windows, the door asking for the next while pages wait (`meta.ocr`) |
 | `parse.ocr_language`, `.ocr_gpu` | the OCR recognizer's script (`ch`, `en`, `latin`, `arabic`, `cyrillic`…; part of the text-source stamp) and whether it runs on DirectML |
 | `parse.figures` [`PRAX_FIGURES`] | which figures the `figures` extractor reads: `captioned` (default; a PDF image no caption claims is often decoration) or `all` |
-| `parse.marker_url` [`PRAX_MARKER_URL`], `parse.marker_mode` [`PRAX_MARKER_MODE`] | marker's server for the `marker` extractor (the `marker` role of `prax up`); `fast` or `balanced` |
+| `parse.marker_url` [`PRAX_MARKER_URL`], `parse.marker_mode` [`PRAX_MARKER_MODE`] | marker's server for the `marker` extractor (the `marker` role of `prax up`); `fast` or `balanced`, either with `-ocr` (`fast-ocr`): every page read by marker's own OCR, the PDF's text layer set aside, for a scan |
+| `parse.choose_reader` [`PRAX_CHOOSE_READER`] | on (default): a captured PDF gets the reader that suits it after its text layer is read (`pipeline.choose_reader`): `latex-source` for a paper on arXiv, marker `-ocr` for a scan, marker for a born-digital PDF in a maths font; `off` leaves it on its text layer |
 | `parse.formula_readings` [`PRAX_FORMULA_READINGS`] | the `formulas` extractor reads the unread display equations (`new`) or every one again (`again`); `steps.formulas` names its model |
 | `parse.vision_pages`, `.vision_max_pages`, `.vision_dpi` | the `vision-pages` extractor: `scans` (pages without a text layer, default) or `all`; its page budget (200); the rendering resolution (150) |
 | `door.cors_origins`, `door.inbox_scan_seconds`, `door.clock_seconds` | the extension's origin; how often the door reads its drop folder; how often it looks at its schedule |

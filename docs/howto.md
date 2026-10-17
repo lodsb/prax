@@ -2021,6 +2021,33 @@ ten requests, not ten thousand uploads. An uploaded PDF shows "pending" in the I
 worker has been over it, or "no text found" when every extractor tried
 and found none. The view refreshes itself while something is pending.
 
+### The reader a PDF gets by itself
+
+A PDF you add is first read from its text layer. That loses the
+mathematics, and for an old scan the layer is the scanner's OCR, often
+bad. So the door looks at the PDF and asks for a better reader by
+itself (`pipeline.choose_reader`):
+
+- A paper on arXiv gets its LaTeX source: the worker fetches the
+  e-print, converts it with pandoc and files the text as
+  `latex-source/…`, the same text `prax import latex` writes. The
+  formulas come out exact, with no model and no card. The id is the
+  document's `meta.arxiv`, or the stamp arXiv prints on page 1.
+- A scan gets marker reading every page with its own OCR
+  (`marker` with mode `fast-ocr`). A scan is a page that is a picture,
+  in one piece or in strips, usually with invisible OCR text over it.
+- A born-digital PDF that sets formulas in a maths font (Computer
+  Modern, STIX, Cambria Math…) gets marker as it is.
+- Anything else keeps its text layer.
+
+If the LaTeX source is missing or pandoc fails on it, marker comes
+next. After a LaTeX or marker text, the formulas are read in words
+(the `formulas` reading). Only what you add is routed this way
+(`upload`, `capture`, `inbox`); an import is a decision about the card
+and stays on its text layer until you ask. `parse.choose_reader: off`
+in prax.yaml turns the choosing off. On the document page, "process…"
+still asks for any reader by hand.
+
 ### Jobs, and a UI that follows
 
 Every batch pass announces itself in the `jobs` table (`store.Job`,

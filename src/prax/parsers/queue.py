@@ -308,10 +308,14 @@ def senders_text(stamp: str) -> bool:
     """Whether a text came with its document from the sender's own source
     (``POST /ingest/file`` with ``text``: ``latex-source/3.9``), not from
     an extractor of prax's and not from a cache an extractor improves on
-    (``zotero-ft-cache``, which has no version)."""
+    (``zotero-ft-cache``, which has no version). A reading a client does
+    as well (``parsers.SENDERS_TOO``: the LaTeX source) counts as the
+    sender's, whoever produced it: its text is the better one either way."""
     parts = parsers.stamp_parts(stamp)
     if parts is None:
         return False
+    if parts[0] in parsers.SENDERS_TOO:
+        return True
     try:
         parsers.by_name(parts[0])
     except KeyError:

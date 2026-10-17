@@ -8,6 +8,7 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import importlib.util
+import re
 from pathlib import Path
 from typing import Any
 
@@ -51,6 +52,74 @@ def _has_text_layer(doc: Any) -> bool:
         step = max(1, (n - PROBE_PAGES) // PROBE_SPREAD)
         probe += list(range(PROBE_PAGES, n, step))[:PROBE_SPREAD]
     return any(doc[i].get_text().strip() for i in probe)
+
+
+# fonts a typeset formula is set in: TeX's maths fonts (Computer Modern,
+# the AMS symbols, Latin Modern, the Euler and script faces), STIX,
+# Cambria Math, and the maths faces of word processors and Mathematica
+# (MT Extra, Euclid, Mathematical Pi). "Symbol" is left out: a word
+# processor sets its bullets in it
+_MATH_FONT = re.compile(
+    r"CMMI|CMSY|CMEX|CMBSY|MSAM|MSBM|EUFM|EURM|RSFS|LMMath|LatinModernMath"
+    r"|STIX|CambriaMath|Cambria-Math|XITSMath|TeXGyre\w*Math|NewCMMath"
+    r"|MT-?Extra|Mathematica\d|Euclid|MathematicalPi|MathPi",
+    re.IGNORECASE,
+)
+SCAN_COVER = 0.8  # pictures covering this much of a page make it a scanned page
+OCR_INVISIBLE = 0.5  # this share of a page's text drawn invisibly is an OCR layer
+PROFILE_PAGES = 12  # the pages a profile looks at, from the first
+
+
+def profile(data: bytes) -> dict[str, Any]:
+    """What a PDF is, for choosing its reader (``pipeline.follow_ups``),
+    from its first ``PROFILE_PAGES`` pages, without layout analysis:
+
+    - ``scanned``: the share of them that are pictures of a page, one
+      picture or many strips (an old scanner wrote a page as thirty) whose
+      areas cover ``SCAN_COVER`` of it;
+    - ``ocr_layer``: the share whose text is mostly drawn invisibly
+      (render mode 3), the layer an OCR lays under a scan's picture so it
+      can be searched; its words are that OCR's, often bad;
+    - ``layer``: whether any of them has text at all;
+    - ``maths``: how many set something in a maths font, which a typeset
+      formula is and a scan's OCR layer never is.
+    """
+    out: dict[str, Any] = {
+        "pages": 0,
+        "scanned": 0.0,
+        "ocr_layer": 0.0,
+        "layer": False,
+        "maths": 0,
+    }
+    try:
+        doc = _pymupdf_open(data)
+    except Exception:  # noqa: BLE001 - a file MuPDF cannot open profiles as nothing
+        return out
+    with doc:
+        out["pages"] = n = doc.page_count
+        sample = range(min(n, PROFILE_PAGES))
+        scanned = ocr = 0
+        for i in sample:
+            page = doc[i]
+            area = abs(page.rect) or 1.0
+            covered = sum(
+                abs(r & page.rect)
+                for img in page.get_images(full=True)
+                for r in page.get_image_rects(img[0])
+            )
+            if covered >= SCAN_COVER * area:
+                scanned += 1
+            spans = page.get_texttrace()
+            if spans:
+                out["layer"] = True
+                hidden = sum(1 for t in spans if t.get("type") == 3)
+                if hidden >= OCR_INVISIBLE * len(spans):
+                    ocr += 1
+            if any(_MATH_FONT.search(str(f[3])) for f in page.get_fonts(full=True)):
+                out["maths"] += 1
+        out["scanned"] = scanned / max(1, len(sample))
+        out["ocr_layer"] = ocr / max(1, len(sample))
+    return out
 
 
 def _pymupdf4llm(data: bytes) -> str:

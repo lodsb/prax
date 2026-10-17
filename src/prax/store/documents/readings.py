@@ -41,6 +41,7 @@ READINGS = (
     "djvu",  # the next window of a long scan (stage Y)
     "docling",
     "marker",
+    "latex-source",  # a paper's text from its source on arXiv
     "trafilatura",
     "pymupdf4llm",
 ) + tuple(packs.readings())  # and the packs' (docs/packs.md)
@@ -55,6 +56,11 @@ MODES: dict[str, tuple[str, ...] | None] = {
     "figures": ("captioned", "all", "again", "all-again"),
     "formulas": ("new", "again"),  # the unread ones, or every one read again
     "pymupdf4llm-ocr": None,  # the recognizer's script: ch, en, latin, arabic…
+    "latex-source": None,  # the paper's arXiv id: 2501.13484, math.GT/0309136
+}
+# the free-form modes that are not a language word
+_MODE_PATTERNS = {
+    "latex-source": re.compile(r"\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7}"),
 }
 _MODE_WORD = re.compile(r"[a-z][a-z0-9_]*")
 
@@ -70,7 +76,11 @@ def check_mode(extractor: str, mode: str | None) -> None:
         raise ValueError(f"{extractor} takes no mode")
     allowed = MODES[extractor]
     if allowed is None:
-        if not _MODE_WORD.fullmatch(mode):
+        pattern = _MODE_PATTERNS.get(extractor)
+        if pattern is not None:
+            if not pattern.fullmatch(mode):
+                raise ValueError(f"an arXiv id, not {mode!r}")
+        elif not _MODE_WORD.fullmatch(mode):
             raise ValueError(f"a language word, not {mode!r}")
     elif mode not in allowed:
         raise ValueError(f"mode must be one of {allowed} for {extractor}")
