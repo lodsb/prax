@@ -31,16 +31,35 @@ def _marker_url() -> str:
     ).rstrip("/")
 
 
-def _marker_mode() -> str:
+MODES = ("fast", "balanced", "fast-ocr", "balanced-ocr")
+
+
+def _marker_setting() -> str:
     """``parse.marker_mode`` [``PRAX_MARKER_MODE``]: ``fast`` (layout on the
     CPU, the recognition model for the maths and the tables; 2 s a page
-    on a card) or ``balanced`` (the vision model lays out too)."""
+    on a card) or ``balanced`` (the vision model lays out too), and either
+    with ``-ocr``: every page read by marker's own OCR, the PDF's text
+    layer set aside. That is for a scan whose layer is an old OCR's
+    (letters in the wrong font, words run together, no maths): marker
+    otherwise keeps the layer's lines and its mistakes come through
+    (2026-10-17, a 1992 JAES scan). On a born-digital PDF the layer is
+    the better text, so it is a choice for one reading, never the
+    default."""
     mode = str(config.setting("parse.marker_mode", "PRAX_MARKER_MODE", "fast")).lower()
-    return mode if mode in ("fast", "balanced") else "fast"
+    return mode if mode in MODES else "fast"
+
+
+def _marker_mode() -> str:
+    """The layout half of the mode: ``fast`` or ``balanced``."""
+    return _marker_setting().removesuffix("-ocr")
+
+
+def _marker_ocr() -> bool:
+    return _marker_setting().endswith("-ocr")
 
 
 def _marker_variant() -> str:
-    return "" if _marker_mode() == "fast" else _marker_mode()
+    return "" if _marker_setting() == "fast" else _marker_setting()
 
 
 def _marker_version() -> str:
@@ -133,6 +152,8 @@ def _marker(data: bytes) -> str:
             "mode": _marker_mode(),
             "paginate_output": "true",
         }
+        if _marker_ocr():
+            form["force_ocr"] = "true"
         pages = count
         if span is not None:
             form["page_range"] = f"{span[0]}-{span[1]}"

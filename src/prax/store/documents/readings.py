@@ -47,7 +47,9 @@ READINGS = (
 # the setting a request may choose for one run, per extractor
 MODES: dict[str, tuple[str, ...] | None] = {
     "vision-pages": ("scans", "all"),  # the pages without a text layer, or every page
-    "marker": ("fast", "balanced"),  # the layout by rules, or by the vision model too
+    # the layout by rules, or by the vision model too; "-ocr" reads every
+    # page with marker's own OCR, for a scan whose text layer is bad
+    "marker": ("fast", "balanced", "fast-ocr", "balanced-ocr"),
     # the figures a caption claims or every image; "-again" reads the ones
     # this model has read before too, replacing its earlier reading
     "figures": ("captioned", "all", "again", "all-again"),

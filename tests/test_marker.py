@@ -71,6 +71,7 @@ class FakeMarker(BaseHTTPRequestHandler):
                 "pdf": b"%PDF" in body,
                 "paginate": b'name="paginate_output"\r\n\r\ntrue' in body,
                 "mode": b'name="mode"\r\n\r\nfast' in body,
+                "force_ocr": b'name="force_ocr"\r\n\r\ntrue' in body,
                 "page_range": (int(span.group(1)), int(span.group(2)))
                 if span
                 else None,
@@ -134,8 +135,25 @@ def test_the_stamp_reads_the_version_from_the_role_venv(
     assert parsers.by_name("marker").stamp == "marker/2.0.0"
     monkeypatch.setenv("PRAX_MARKER_MODE", "balanced")
     assert parsers.by_name("marker").stamp == "marker/2.0.0+balanced"
+    monkeypatch.setenv("PRAX_MARKER_MODE", "balanced-ocr")
+    assert parsers.by_name("marker").stamp == "marker/2.0.0+balanced-ocr"
     monkeypatch.setenv("PRAX_MARKER_MODE", "nonsense")
     assert parsers.by_name("marker").stamp == "marker/2.0.0"  # fast, the default
+
+
+@needs_pymupdf
+def test_an_ocr_mode_asks_marker_to_read_every_page_itself(
+    data_dir: Path, marker_server: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``fast-ocr``: the layout as ``fast``, and marker's own OCR over every
+    page instead of the PDF's text layer (a scan with an old OCR's layer)."""
+    monkeypatch.setenv("PRAX_MARKER_MODE", "fast-ocr")
+    FakeMarker.seen.clear()
+    parsers.by_name("marker")(AMBRITS_PDF.read_bytes())
+    assert FakeMarker.seen[0]["mode"] and FakeMarker.seen[0]["force_ocr"]
+    store.check_mode("marker", "balanced-ocr")  # a reading may ask for it
+    with pytest.raises(ValueError):
+        store.check_mode("marker", "ocr")
 
 
 def test_page_markers_are_the_chunkers() -> None:
@@ -155,7 +173,7 @@ def test_the_extractor_turns_the_servers_answer_into_an_artifact(
     text = ext(AMBRITS_PDF.read_bytes())
     assert FakeMarker.seen and FakeMarker.seen[0]["path"] == "/marker/upload"
     assert FakeMarker.seen[0]["pdf"] and FakeMarker.seen[0]["paginate"]
-    assert FakeMarker.seen[0]["mode"]
+    assert FakeMarker.seen[0]["mode"] and not FakeMarker.seen[0]["force_ocr"]
     assert "_page_0_Figure_3.jpeg" not in text  # marker's images: no files here
     assert "$$\\frac{\\partial^2 u}" in text  # the mathematics, as LaTeX
     assert "--- end of page.page_number=1 ---" in text
