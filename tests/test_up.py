@@ -791,6 +791,16 @@ def test_a_load_time_is_noted_and_kept(
         wait_for(lambda: sup.state["llama-server"]["state"] == "up")
         wait_for(lambda: sup.state["llama-server"]["load_s"] is not None)
         assert any("s from start" in line for line in said)
+        # the status file has it at the next write, not the moment it is noted
+        wait_for(
+            lambda: (
+                (up.status(data_dir) or {})
+                .get("roles", {})
+                .get("llama-server", {})
+                .get("load_s")
+                is not None
+            )
+        )
         assert cli.main(["up", "--status"]) == 0  # the command line says it
         assert "loads in" in capsys.readouterr().out
     finally:

@@ -224,6 +224,8 @@ def test_a_companion_moves_with_its_role_in_a_swap(
         assert status["groups"]["card"]["with"] == {"marker": ["ocr-server"]}
         up.swap(data_dir, "marker")
         wait_for(lambda: runs_of(mark_o) >= 1 and runs_of(mark_m) >= 1)
+        # the status file says so at its next write
+        wait_for(lambda: _status(data_dir)["groups"]["card"].get("holder") == "marker")
         group = _status(data_dir)["groups"]["card"]
         assert group["holder"] == "marker" and group["was_up"] == ["llama-server"]
         waiting.clear()  # nothing left: both go, the holder comes back

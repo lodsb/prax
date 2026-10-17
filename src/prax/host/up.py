@@ -123,6 +123,7 @@ LOADS_KEPT = 5  # load times kept per role; the status says their median
 COMMIT_RESERVE_MB = 4096
 SWAPS_KEPT = 5000  # swap lines kept (a busy day makes a few dozen)
 IDLE_POLL = 30.0  # how often an idle-watched server's /metrics is read
+STATUS_TRIES = 25  # replaces of the status file, 20 ms apart, while a reader holds it
 
 
 class Supervisor:
@@ -240,7 +241,17 @@ class Supervisor:
         tmp = path.with_name(f"{path.name}.{threading.get_ident()}.tmp")
         with self._status_lock, contextlib.suppress(OSError):
             tmp.write_text(json.dumps(snapshot, indent=1), encoding="utf-8")
-            tmp.replace(path)
+            # on Windows a replace fails while a reader (--status, the tray)
+            # has the file open, and the change was lost until the next
+            # heartbeat (CI's Windows job, 2026-10-10 and -17): try again
+            for attempt in range(STATUS_TRIES):
+                try:
+                    tmp.replace(path)
+                    break
+                except PermissionError:
+                    if attempt == STATUS_TRIES - 1:
+                        raise
+                    time.sleep(0.02)
 
     # -- one role
 
