@@ -70,6 +70,18 @@ OCR_INVISIBLE = 0.5  # this share of a page's text drawn invisibly is an OCR lay
 PROFILE_PAGES = 12  # the pages a profile looks at, from the first
 
 
+def image_cover(page: Any) -> float:
+    """The share of a page its pictures cover: near 1 for a picture of a
+    page, one picture or many strips, whatever text an OCR laid over it."""
+    area = abs(page.rect) or 1.0
+    covered = sum(
+        abs(r & page.rect)
+        for img in page.get_images(full=True)
+        for r in page.get_image_rects(img[0])
+    )
+    return float(covered / area)
+
+
 def profile(data: bytes) -> dict[str, Any]:
     """What a PDF is, for choosing its reader (``pipeline.follow_ups``),
     from its first ``PROFILE_PAGES`` pages, without layout analysis:
@@ -101,13 +113,7 @@ def profile(data: bytes) -> dict[str, Any]:
         scanned = ocr = 0
         for i in sample:
             page = doc[i]
-            area = abs(page.rect) or 1.0
-            covered = sum(
-                abs(r & page.rect)
-                for img in page.get_images(full=True)
-                for r in page.get_image_rects(img[0])
-            )
-            if covered >= SCAN_COVER * area:
+            if image_cover(page) >= SCAN_COVER:
                 scanned += 1
             spans = page.get_texttrace()
             if spans:

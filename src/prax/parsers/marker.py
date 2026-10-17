@@ -14,7 +14,7 @@ from prax.parsers import figures
 from prax.text import markup
 
 from .base import ExtractionError, NotYet
-from .pdf import _pymupdf_open
+from .pdf import SCAN_COVER, _pymupdf_open, image_cover
 
 MARKER_URL = "http://127.0.0.1:8765"
 _MARKER_PAGE = re.compile(r"\n*\{(\d+)\}-{20,}\n*")  # {n} and 48 dashes before page n
@@ -134,8 +134,15 @@ def _marker(data: bytes) -> str:
     with _pymupdf_open(data) as doc:
         count = doc.page_count
         figs = figures.pdf_figures(doc)
-        # the pages without a text layer: their pictures are marker's crops
-        scanned = {p.number for p in doc if len(p.get_text().strip()) < 20}
+        # the pictures of pages: their figures are marker's crops. A page
+        # without a text layer, or one a picture covers whatever an old OCR
+        # laid over it (2026-10-17: a scan in 33 strips with an OCR layer
+        # kept none of its 8 figures, its pages having text)
+        scanned = {
+            p.number
+            for p in doc
+            if len(p.get_text().strip()) < 20 or image_cover(p) >= SCAN_COVER
+        }
     # a long document a window of pages at a time, as pymupdf4llm reads
     # it: marker's server converts the range asked for and numbers the
     # pages as the document does, so the parts join as one

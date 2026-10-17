@@ -310,6 +310,19 @@ def follow_ups(
         if "polish" not in pending:
             store.request_reading(con, doc_id, "polish", by="door")
         return "polish"
+    # a PDF whose captions have no picture: the crop pass renders them off
+    # the page and runs no model at all, so there is nothing to be free.
+    # Never after itself. Asked beside the formulas, not after them: the
+    # door asks for one follow-up a text, and the formulas' own stamp never
+    # led to the crops (2026-10-17: 438 of 465 figures of a week's papers
+    # read from their source or by marker were a caption alone)
+    crops = (
+        stamp.startswith(("pymupdf4llm/", "marker/", "latex-source/", "formulas/"))
+        and "figure-crops" not in pending
+        and _wants_crops(con, doc_id)
+    )
+    if crops:
+        store.request_reading(con, doc_id, "figure-crops", by="door")
     if (
         stamp.startswith(("marker/", "latex-source/"))
         and formulas_are_free()
@@ -318,15 +331,7 @@ def follow_ups(
         if "formulas" not in pending:
             store.request_reading(con, doc_id, "formulas", by="door")
         return "formulas"
-    # a PDF whose captions have no picture: the crop pass renders them off
-    # the page and runs no model at all, so there is nothing to be free.
-    # Never after itself, and never for a scan (its pages are the picture)
-    if (
-        stamp.startswith(("pymupdf4llm/", "marker/", "latex-source/"))
-        and "figure-crops" not in pending
-        and _wants_crops(con, doc_id)
-    ):
-        store.request_reading(con, doc_id, "figure-crops", by="door")
+    if crops:
         return "figure-crops"
     # never the edge whose reading just landed: a model that read none of
     # the figures would be asked for them without end

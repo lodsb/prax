@@ -351,13 +351,15 @@ def test_a_marker_read_asks_for_the_formula_readings_next(
         meta = store.get_meta(con, pdf)
         assert meta["text_source"] == "marker/?"
         assert meta["parse_history"][-1]["outcome"] == "upgraded"
-        # the follow-up: a formulas request, placed by the door and
-        # queued beside anything else the document waits for
+        # the follow-ups: a formulas request, placed by the door and queued
+        # beside anything else the document waits for, and the crops of
+        # its caption with no picture beside it (never left for after)
         assert [x["extractor"] for x in store.pending_readings(con, pdf)] == [
-            "formulas"
+            "figure-crops",
+            "formulas",
         ]
-        assert store.pending_readings(con, pdf)[0]["by"] == "door"
-        assert client.get("/readings").json()["waiting"] == 1
+        assert {r["by"] for r in store.pending_readings(con, pdf)} == {"door"}
+        assert client.get("/readings").json()["waiting"] == 2
         # the formulas step off: a second marker read asks for nothing
         (data_dir / config.CONFIG_NAME).write_text("steps: {formulas: {model: none}}\n")
         models.reset()
@@ -452,3 +454,45 @@ def test_a_scanned_pages_pictures_are_markers_crops_filed_by_the_door(
         assert figures.find(scan, ref) == (crop, "image/jpeg")
         assert asked == [ref, ref] and scanned.call_count == 1
     assert figures.find(scan, ref) is None
+
+
+def test_a_scan_with_an_ocr_layer_keeps_markers_crops(
+    marker_server: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A page that is a picture keeps marker's crops of its figures even
+    when an old OCR laid text over it (the viewer shows words, the figures
+    are still only in the picture); a printed page's crops are dropped as
+    before, its figures being found in the original."""
+    import base64
+    import io
+
+    import pymupdf
+    from PIL import Image
+
+    with pymupdf.open() as doc:
+        page = doc.new_page()  # the scan: a picture of the page, words under it
+        pix = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 60, 80), False)
+        pix.clear_with(220)
+        page.insert_image(page.rect, pixmap=pix)
+        page.insert_text(
+            (72, 100), "Fig. 1. A filter, as the OCR read it." * 3, render_mode=3
+        )
+        printed = doc.new_page()  # a typed page
+        printed.insert_text((72, 100), "Typed words of the second page. " * 5)
+        scan = doc.tobytes()
+    buf = io.BytesIO()
+    Image.new("RGB", (120, 80), (30, 30, 200)).save(buf, "JPEG")
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    fake_out = (
+        "{0}" + "-" * 48 + "\n\nThe scan.\n\n![](_page_0_Figure_0.jpeg)\n\n"
+        "Fig. 1. A filter.\n\n"
+        "{1}" + "-" * 48 + "\n\nTyped.\n\n![](_page_1_Figure_0.jpeg)\n"
+    )
+    images = {"_page_0_Figure_0.jpeg": b64, "_page_1_Figure_0.jpeg": b64}
+    monkeypatch.setattr(
+        FakeMarker, "answer", staticmethod(lambda: (fake_out, images)), raising=False
+    )
+    text = parsers.by_name("marker")(scan)
+    inlined = list(figures.DATA_IMAGE.finditer(text))
+    assert [m.group("alt") for m in inlined] == ["Picture on page 1: Fig. 1. A filter."]
+    assert "_page_" not in text
