@@ -158,6 +158,51 @@ numbered there) in the order the user agreed: one step a session.
       - [x] **5.** Repairs that end an edge and write its correction do not record which edge corrects which (an hour for the record in the two repairs; a migration only if a new column is chosen over restated_as)
       - [x] **20.** The card plan's swaps are recorded only as log prose, so AI's last step has no data to measure (an hour)
 
+### The quality review of 2026-10-18
+
+The safety review of the range since 2026-10-04 first (20 defects,
+fixed), then the quality review in full mode over it: 23 findings
+(`docs/eval/code-review-2026-10-18.md`, numbered there). The user
+agreed on 2026-10-18 to fix the costly ones and the cheap language
+ones at once, and to plan the rest here.
+
+- [x] (2026-10-18, `docs/log.md`) **Fixed together.** 1 (a repair's
+      edges ended one commit per edge), 2 and 8 (five arXiv-id grammars),
+      3, 12, 16 and 21 (a fix decoded from a word, a scan rule of the
+      reader choice's own, the LaTeX readers listed three times), 5 (the
+      name repair knew research's types only), 6 and 14 (world dates
+      guarded in English only), 7 (latex2html's formulas never asked
+      for), 9 (the page poll scanned the edges table), 20 (a reference
+      list's biographies told by English verbs).
+- [ ] **4.** The PDF profile is not kept: every bump of the checks'
+      version re-reads and re-profiles every original (38 minutes on
+      the desktop for the library; more from a NAS, AQ). `meta.profile`
+      keyed by the original's hash with a `PROFILE_VERSION`, and one
+      assess function for the door and the pass (an hour or two, and one
+      profiling pass).
+- [ ] **10.** `cited_but_missing` runs up to 60 library-wide searches a
+      call (0.85 s here, seconds on the board): a cap and a deadline, or
+      the counts kept by the references pass (an hour).
+- [ ] **11.** The store's own document kinds (`SELF_KINDS`) are written
+      out in five places; `ontology.SELF_KINDS` is the one (under an hour).
+- [ ] **13.** The latex-source reading reaches into `importers.latex`
+      for the conversion: it belongs in `parsers` (half a day).
+- [ ] **15.** mdwiki copies the slug rule and the front-matter pattern:
+      one slug in `prax.text` (an hour).
+- [ ] **17.** mdwiki reads one wiki's layout and drops the files of
+      another without saying so: options, and a count of what it skips
+      (an hour).
+- [ ] **18.** The checks' thresholds and `SAME_PAPER` were tuned on this
+      library with no script to measure them again: `scripts/eval_quality.py`,
+      and `SAME_PAPER` a setting (an hour).
+- [ ] **19.** `COMMIT_RESERVE_MB` in `host/up.py` is a constant, 4 GB:
+      a setting (an hour).
+- [ ] **22.** Two detectors of a PDF whose text is not the document
+      (the thin and unreadable selections, and the checks): one, or a
+      sentence each on which is for what (an hour).
+- [ ] **23.** `store.changes` counts each side twice: one `GROUP BY` with
+      a healed column (an hour).
+
 ## Stages
 
 - [ ] **AO. A text says what is wrong with it.** The user, 2026-10-17:

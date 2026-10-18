@@ -49,17 +49,66 @@ _CITATION = re.compile(
     r"|\[\d+(?:[,–-]\s*\d+)*\]"
 )
 _SPACE = re.compile(r"\s+")
-# what a model writes for an end the sentence does not name
-_STAND_IN = re.compile(
-    r"(?i)^(the )?(author|authors|he|she|they|we|company|unknown|none)$"
-)
-# a name that is a date ("1984", "June 1977", "the mid-1980s"): a model
-# that has nowhere else to put the date makes it the fact's other end
-_DATE_NAME = re.compile(
-    r"(?i)^\W*(the\s+)?((early|mid|late)[-\s]*)?(\d{1,2}\.?\s+)?"
-    rf"(({'|'.join(dates.month_names())})\.?\s+)?(\d{{1,2}},?\s+)?"
-    r"(1[5-9]\d\d|20\d\d)s?(\s*[-–]\s*\d{2,4})?\W*$"
-)
+_NAME_TOKEN = re.compile(r"\d+(?:'?[^\W\d_]+)?|[^\W\d_]+'?")
+_NUMBER = re.compile(r"(\d+)('?[^\W\d_]*)")
+_FULL_YEAR = re.compile(r"1[5-9]\d\d|20\d\d")
+
+
+@dataclass(frozen=True)
+class Guards:
+    """The lexicon's words for an end that is no thing (``world_time:``):
+    a stand-in for an end the sentence does not name, and a date made a
+    name ("1984", "June 1977", "Mitte der 1980er"), which a model that has
+    nowhere else to put the date makes the fact's other end."""
+
+    articles: tuple[str, ...]
+    stand_ins: frozenset[str]
+    period_words: frozenset[str]
+    decade_endings: tuple[str, ...]
+
+    def stand_in(self, name: str) -> bool:
+        low = _SPACE.sub(" ", name.strip().lower())
+        for article in self.articles:
+            if low.startswith(article) and (
+                article.endswith("'") or low[len(article) : len(article) + 1] == " "
+            ):
+                low = low[len(article) :].strip()
+                break
+        return low in self.stand_ins or low in ontology.lexicon().exact
+
+    def date_name(self, name: str) -> bool:
+        tokens = _NAME_TOKEN.findall(name.lower())
+        months = set(dates.month_names())
+        year = False
+        for t in tokens:
+            m = _NUMBER.fullmatch(t)
+            if m is None:
+                if t.rstrip("'") not in self.period_words and t not in months:
+                    return False
+                continue
+            digits, ending = m.groups()
+            if _FULL_YEAR.fullmatch(digits) and (
+                not ending or ending in self.decade_endings
+            ):
+                year = True
+            elif ending or len(digits) > 2:  # a day, or a range's end: 1984-86
+                return False
+        return year
+
+
+def guards() -> Guards:
+    """The lexicon's ``world_time:`` guards."""
+    section = ontology.lexicon().section("world_time") or {}
+
+    def words(key: str) -> list[str]:
+        return [str(w).lower() for w in section.get(key) or []]
+
+    return Guards(
+        tuple(sorted(words("articles"), key=len, reverse=True)),
+        frozenset(words("stand_ins")),
+        frozenset(words("period_words")),
+        tuple(words("decade_endings")),
+    )
 
 
 @dataclass(frozen=True)
@@ -248,6 +297,7 @@ def checked(
     date whose year is in that quote, and two ends that are named things
     (not a date, not a stand-in). The dates are rewritten as checked."""
     shown = [_norm(s) for s in said]
+    guard = guards()
     dated = {r.name for r in dated_relations(onto)}
     out = []
     for t in triples:
@@ -261,7 +311,7 @@ def checked(
         if not begin and not end:
             continue
         if extraction._drop_reason(t) or any(
-            _DATE_NAME.match(n) or _STAND_IN.match(n) for n in (t.src, t.dst)
+            guard.date_name(n) or guard.stand_in(n) for n in (t.src, t.dst)
         ):
             continue
         try:

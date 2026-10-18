@@ -28,7 +28,7 @@ from typing import Any
 from prax.graph import ontology
 
 from ..base import _NOW, _reading, _scrubbed, _serialized
-from .edges import Edge, invalidate_edge, link
+from .edges import Edge, end_edges, link
 
 RULE_CAP = 20_000  # derivations a relation at most
 RULE_DEPTH = 6  # steps of a chain at most
@@ -240,9 +240,7 @@ def _write(
 
 @_serialized
 def _end(con: sqlite3.Connection, edge_ids: list[int]) -> None:
-    for eid in edge_ids:
-        invalidate_edge(con, eid)
-    con.commit()
+    end_edges(con, edge_ids)
 
 
 @_serialized

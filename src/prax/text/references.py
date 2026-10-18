@@ -27,9 +27,12 @@ year in an author-year entry; else the sentence after the author run.
 
 from __future__ import annotations
 
+import functools
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+
+from prax.text import arxiv
 
 _BLANK = re.compile(r"\n\s*\n")
 _MARK = re.compile(
@@ -37,7 +40,6 @@ _MARK = re.compile(
 )
 _LIST = re.compile(r"^\s*[-*•]\s+")
 _DOI = re.compile(r"\b(10\.\d{4,9}/[^\s\"'<>,;)\]]+)")
-_ARXIV = re.compile(r"arXiv[:\s]*(\d{4}\.\d{4,5}(?:v\d+)?)", re.IGNORECASE)
 _YEAR = re.compile(r"(?<!\d)((?:19|20)\d{2})[a-z]?(?!\d)")
 _QUOTED = re.compile(r"[“\"„«]\s*(.+?)\s*[,.]?\s*[”\"«»]")
 _EMPH = re.compile(r"(?<!\w)[_*]{1,2}(.+?)[_*]{1,2}(?!\w)")
@@ -143,13 +145,23 @@ class Reference:
 # through a comma, as an extractor reads a rule), "———,", "——.", "idem"
 _DITTO = re.compile(r"^(?:~~[,.]?~~|[—–-]{2,}|_{3,}|idem\b|ders\.)", re.IGNORECASE)
 # a biography a journal prints after the list: "**Juan Pablo Bello**
-# received the engineering degree…" (AL step 9, N3)
-_BIO = re.compile(
-    r"^\**[A-Z][\w.'’-]+(?:\s+[A-Z][\w.'’-]+){0,3}\**\s*,?\s+"
-    r"(?:\([^)]*\)\s+)?"
-    r"(?:received|receives|is|was|has|joined|studied|graduated|works|holds|"
-    r"obtained|completed|earned|got)\b"
-)
+# received the engineering degree…" (AL step 9, N3), its verbs in every
+# language the lexicon's ``biography:`` section holds
+_BIO_NAME = r"^\**[A-Z][\w.'’-]+(?:\s+[A-Z][\w.'’-]+){0,3}\**\s*,?\s+(?:\([^)]*\)\s+)?"
+
+
+@functools.lru_cache(maxsize=1)
+def _biography() -> re.Pattern[str]:
+    from prax.graph import ontology
+
+    verbs = (ontology.lexicon().section("biography") or {}).get("verbs") or []
+    alt = "|".join(
+        r"\s+".join(re.escape(w) for w in str(v).split())
+        for v in sorted(verbs, key=len, reverse=True)
+    )
+    return re.compile(rf"{_BIO_NAME}(?:{alt})\b" if alt else r"(?!)")
+
+
 _PROSE_MIN = 400  # an entry or a wrapped title is shorter, or opens like one
 
 
@@ -158,7 +170,7 @@ def is_prose(paragraph: str) -> bool:
     entry and not the wrapped part of one: an author's biography after
     the list, or a long paragraph that opens like no entry."""
     p = " ".join(_plain(paragraph or "").split())
-    if _BIO.match(p):
+    if _biography().match(p):
         return True
     if _MARK.match(p) or _LIST.match(p) or _author_run(p):
         return False
@@ -254,9 +266,7 @@ def parse(entry: str) -> Reference:
     d = _DOI.search(p)
     if d:
         ref.doi = d.group(1).rstrip(".").lower()
-    a = _ARXIV.search(p)
-    if a:
-        ref.arxiv = a.group(1).lower()
+    ref.arxiv = arxiv.named(p)
     ref.year = _year(p)
     q = _QUOTED.search(p)
     plain = _EMPH.sub(r"\1", p)

@@ -118,6 +118,7 @@ from .edges import (  # noqa: F401
     document_node,
     edge_hidden,
     end_edge,
+    end_edges,
     entities_with_degree,
     entity_name,
     evidence_place,

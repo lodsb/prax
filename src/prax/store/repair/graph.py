@@ -5,6 +5,7 @@ ontology versions."""
 
 from __future__ import annotations
 
+import functools
 import re
 import sqlite3
 import time
@@ -892,15 +893,31 @@ def _repair_spacing_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) -
 
 DAMAGED_PRODUCER = "heal:damaged-names"
 # the type a model wrote into the name, before it ("concept=social
-# networks", "Concept: creativity support system") or after it ("rhythm
-# complexity concept=EXTRACTED", "situated creativity concept=target")
-_TYPE_HEAD = re.compile(
-    r"^\s*(?:(?:concept|method|tool|target|type|dataset)\s*=|(?:concept|method)\s*:)\s*",
-    re.IGNORECASE,
-)
-_TYPE_TAIL = re.compile(
-    r"\s+(?:concept|method|tool|target|type)\s*=\s*\S+\s*$", re.IGNORECASE
-)
+# networks", "Concept: creativity support system", "device=Minimoog") or
+# after it ("rhythm complexity concept=EXTRACTED", "situated creativity
+# concept=target"): any type of the composed ontology and its aliases, and
+# the line format's own keys. Every pack's, not research's alone (the
+# quality review of 2026-10-18: a studio or kitchen name kept "device=").
+# A colon only after the words seen so, a title's own "Tool:" being common
+_WIRE_KEYS = ("type", "target")
+_COLON_TYPES = ("concept", "method")
+
+
+@functools.lru_cache(maxsize=4)
+def _type_marks(version: str) -> tuple[re.Pattern[str], re.Pattern[str]]:
+    onto = ontology.current()
+    words = sorted(
+        {*onto.types, *onto.type_aliases, *_WIRE_KEYS, "dataset"},
+        key=len,
+        reverse=True,
+    )
+    alt = "|".join(re.escape(w).replace("_", "[ _]") for w in words)
+    colon = "|".join(_COLON_TYPES)
+    head = re.compile(rf"^\s*(?:(?:{alt})\s*=|(?:{colon})\s*:)\s*", re.IGNORECASE)
+    tail = re.compile(rf"\s+(?:{alt})\s*=\s*\S+\s*$", re.IGNORECASE)
+    return head, tail
+
+
 # a drop cap the text layer gave twice, the letter and then the word that
 # starts with it: "f face recognition", "d discrete cosine transform"
 _DROP_CAP = re.compile(r"^([a-z]) (?=\1[a-z])")
@@ -917,7 +934,8 @@ def mended_name(name: str, etype: str) -> str:
     mend."""
     out = glyphs.accents(name)
     if etype not in _TITLED:
-        out = _TYPE_TAIL.sub("", _TYPE_HEAD.sub("", out))
+        head, tail = _type_marks(ontology.current().version)
+        out = tail.sub("", head.sub("", out))
         out = _DROP_CAP.sub("", out)
     out = re.sub(r"\s+", " ", out).strip()
     return out if len(out) >= 2 else name

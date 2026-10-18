@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import re
 
-from prax.text import schemaorg
+from prax.text import arxiv, schemaorg
 
 PRECISIONS = ("year", "month", "day")
 EARLIEST, LATEST = 1500, 2100  # a year outside is a number, not a date
@@ -103,22 +103,14 @@ def parse(text: str | None) -> tuple[str, str] | None:
     return None
 
 
-_ARXIV_NEW = re.compile(r"^(\d{2})(\d{2})\.\d{4,5}(?:v\d+)?$")
-_ARXIV_OLD = re.compile(r"^[a-z\-]+(?:\.[A-Z]{2})?/(\d{2})(\d{2})\d{3}(?:v\d+)?$")
-
-
 def from_arxiv(arxiv_id: str | None) -> tuple[str, str] | None:
     """The month of an arXiv paper's first version, from its id:
     ``2310.08560`` is 2023-10, ``hep-th/9901001`` 1999-01."""
-    s = str(arxiv_id or "").strip()
-    m = _ARXIV_NEW.match(s)
-    if m:
-        return _make(2000 + int(m.group(1)), int(m.group(2)))
-    m = _ARXIV_OLD.match(s)
-    if m:
-        yy = int(m.group(1))
-        return _make((1900 if yy >= 91 else 2000) + yy, int(m.group(2)))
-    return None
+    got = arxiv.yymm(arxiv_id)
+    if got is None:
+        return None
+    yy, month = got
+    return _make((1900 if yy >= 91 else 2000) + yy, month)
 
 
 # a web page's tags, in the order of trust: citation tags are what

@@ -31,6 +31,7 @@ import urllib.request
 from pathlib import Path
 
 from prax import config
+from prax.text import arxiv
 
 from .base import ExtractionError
 from .pdf import _pymupdf_open
@@ -51,19 +52,15 @@ MAX_MEMBERS = 10_000  # files in its archive
 # such came back as a single character, 2026-10-17)
 LEAST_SHARE = 0.3
 
-# a new-style id (2501.13484, 1308.3432v2) or an old one (math.GT/0309136)
-ARXIV_ID = re.compile(
-    r"(?<![\w.])(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(?:v\d+)?(?![\w])"
-)
 # the stamp arXiv prints in the margin, with its class and date
 # ("arXiv:2501.13484v2  [cs.CL]  23 Jan 2025"): a bare "arXiv:NNNN" on the
 # first page is as often a preprint the paper cites (the review of
 # 2026-10-18)
 _STAMP = re.compile(
-    r"arXiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(?:v\d+)?"
+    rf"arXiv:\s*({arxiv.ID}){arxiv.VERSION}"
     r"\s+\[[\w.-]+\]\s+\d{1,2}\s+[A-Z][a-z]{2}\s+\d{4}"
 )
-_BARE = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7})(?:v\d+)?")
+_BARE = re.compile(rf"arXiv:\s*({arxiv.ID}){arxiv.VERSION}")
 # the share of the source's long words the PDF's text must hold for the
 # two to be one paper: 0.83-0.99 for 62 of the library's papers read both
 # ways, 0.20-0.71 for each against another (2026-10-18)
@@ -71,16 +68,9 @@ SAME_PAPER = 0.75
 _LONG_WORD = re.compile(r"[a-zA-Z]{7,}")
 
 
-def arxiv_of(value: object) -> str | None:
-    """An arXiv id as the reading's mode takes it, without its version
-    (``2501.13484v2`` is ``2501.13484``), or None for anything else."""
-    m = ARXIV_ID.fullmatch(str(value or "").strip())
-    return m.group(1) if m else None
-
-
 def _named() -> str | None:
     """The id the reading was asked with (its mode), if any."""
-    return arxiv_of(config.setting("parse.arxiv_id", "PRAX_ARXIV_ID", ""))
+    return arxiv.canonical(config.setting("parse.arxiv_id", "PRAX_ARXIV_ID", ""))
 
 
 def arxiv_id_of(data: bytes) -> str | None:
@@ -94,11 +84,11 @@ def arxiv_id_of(data: bytes) -> str | None:
         return None
     m = _STAMP.search(text)
     if m:
-        return m.group(1)
+        return arxiv.canonical(m.group(1))
     # a journal's print names the preprint without arXiv's stamp: taken
     # when it is the only one on the page, and the converted text must
     # then be the paper (``same_paper``) before it is kept
-    bare = {b.group(1) for b in _BARE.finditer(text)}
+    bare = {arxiv.canonical(b.group(1)) for b in _BARE.finditer(text)}
     return bare.pop() if len(bare) == 1 else None
 
 

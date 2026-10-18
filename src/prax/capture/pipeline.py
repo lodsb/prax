@@ -168,8 +168,13 @@ def polish_is_free() -> bool:
 #
 # Only for what a person added (``CAPTURE_SOURCES``): an import of a
 # thousand papers is a decision about the card, not a follow-up.
+#
+# What a scan is, and which readers write LaTeX, is the checks' to say
+# (``parsers.quality``): the reader choice acts on their findings only.
 
-SCANNED = 0.5  # the share of profiled pages that makes a PDF a scan
+# the readers whose text this door judges a reader for: the PDF's own layer
+FIRST_READ = "pymupdf4llm/"
+SOURCE_READ = "latex-source/"
 
 
 def choose_reader_on() -> bool:
@@ -186,16 +191,9 @@ def _tried(meta: Mapping[str, Any]) -> set[str]:
     }
 
 
-def _marker_mode(scan: bool) -> str | None:
-    """The marker reading's mode: the host's layout (``parse.marker_mode``),
-    with ``-ocr`` for a scan."""
-    base = str(config.setting("parse.marker_mode", "PRAX_MARKER_MODE", "fast"))
-    base = base.removesuffix("-ocr") if base else "fast"
-    if base not in ("fast", "balanced"):
-        base = "fast"
-    if scan:
-        return f"{base}-ocr"
-    return None if base == "fast" else base
+def source_failed(stamp: str, action: str) -> bool:
+    """Whether the reading that landed is the LaTeX source, failing."""
+    return stamp.startswith(SOURCE_READ) and action in ("error", "kept", "empty")
 
 
 def assess(
@@ -257,17 +255,13 @@ def choose_reader(
     tried = _tried(meta)
     if {"latex-source", "marker"} & pending:
         return None  # one is on its way
-    source_failed = stamp.startswith("latex-source/") and action in (
-        "error",
-        "kept",
-        "empty",
-    )
-    if source_failed and str(meta.get("text_source") or "").startswith("latex-source/"):
+    failed = source_failed(stamp, action)
+    if failed and str(meta.get("text_source") or "").startswith(SOURCE_READ):
         # a re-read of the source that failed leaves the source's own text:
         # no marker over it (the review of 2026-10-18)
         return None
-    first_text = stamp.startswith("pymupdf4llm/") and action in ("created", "upgraded")
-    if not (source_failed or first_text):
+    first_text = stamp.startswith(FIRST_READ) and action in ("created", "upgraded")
+    if not (failed or first_text):
         return None
     if first_text and "latex-source" not in tried and profile.get("arxiv"):
         try:
@@ -280,13 +274,12 @@ def choose_reader(
     if "marker" in tried:
         return None
     named = quality.fixes(found)
-    # a scan with no text layer at all is a scan as much as one with an OCR's
-    scan = "marker-ocr" in named or (
-        max(profile["scanned"], profile["ocr_layer"]) >= SCANNED
-        and not profile.get("layer")
-    )
-    if scan or "marker" in named or "latex-source" in named or source_failed:
-        store.request_reading(con, doc_id, "marker", mode=_marker_mode(scan), by="door")
+    # the source failing, or a finding the source would have fixed: marker
+    # instead, reading every page itself when a finding says the PDF is a scan
+    marker = named.get("marker")
+    if marker is not None or "latex-source" in named or failed:
+        _, mode = quality.reading(marker or quality.Fix("marker"))
+        store.request_reading(con, doc_id, "marker", mode=mode, by="door")
         return "marker"
     return None
 
@@ -307,18 +300,13 @@ def follow_ups(
     # door only declines to ask for the same one twice
     pending = {r["extractor"] for r in store.pending_readings(con, doc_id)}
     landed = action in ("created", "upgraded")
-    source_failed = stamp.startswith("latex-source/") and action in (
-        "error",
-        "kept",
-        "empty",
-    )
     if action == "same" and stamp.startswith(("figure-crops/", "formulas/")):
         # an annotating reading that found nothing to add has still run on
         # this text: checked again, its finding stops naming it (the
         # review of 2026-10-18)
         assess(con, doc_id)
         return None
-    if not (landed or source_failed):
+    if not (landed or source_failed(stamp, action)):
         return None
     # what the checks find in the text the document now holds: kept, and
     # what decides the reader and the crops below
@@ -353,14 +341,17 @@ def follow_ups(
     # led to the crops (2026-10-17: 438 of 465 figures of a week's papers
     # read from their source or by marker were a caption alone)
     crops = (
-        stamp.startswith(("pymupdf4llm/", "marker/", "latex-source/", "formulas/"))
+        (
+            stamp.startswith((*quality.LAYER_READERS, "formulas/"))
+            or quality.writes_latex(stamp)
+        )
         and "figure-crops" not in pending
         and "figure-crops" in quality.fixes(found)
     )
     if crops:
         store.request_reading(con, doc_id, "figure-crops", by="door")
     if (
-        stamp.startswith(("marker/", "latex-source/"))
+        quality.writes_latex(stamp)
         and formulas_are_free()
         and store.has_unread_formulas(con, doc_id)
     ):

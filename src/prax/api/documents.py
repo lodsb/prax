@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from prax import (
     store,
 )
+from prax.parsers import quality
 
 from ._base import _con, ui_url
 
@@ -50,7 +51,14 @@ def get(
     )
     if stale:
         doc["stale"] = stale
-    return store.brief_document(doc) if brief else doc
+    if brief:
+        return store.brief_document(doc)
+    # whether its reader wrote the mathematics as LaTeX, for the page to
+    # typeset its inline maths (one list, ``quality.LATEX_READERS``)
+    doc["writes_latex"] = quality.writes_latex(
+        (doc.get("meta") or {}).get("text_source")
+    )
+    return doc
 
 
 @router.get("/search")

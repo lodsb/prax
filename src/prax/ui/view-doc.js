@@ -46,7 +46,7 @@ function qualityLine(q, doc) {
   if (!q || !(q.findings || []).length || q.text_hash !== doc.text_hash) return "";
   const each = q.findings.map((f) => {
     const seen = (f.evidence || []).join("\n");
-    const fix = f.fix ? ` → ${esc(f.fix)}` : "";
+    const fix = f.fix ? ` → ${esc(fixLabel(f.fix))}` : "";
     return `<a class="check-found" href="#admin?tab=checks&check=${encodeURIComponent(f.check)}" title="${esc(seen)}">${esc(f.check.replace(/-/g, " "))} ${f.count}</a>${fix}`;
   });
   return `<span class="muted">checks:</span> ${each.join(", ")}`;
@@ -212,11 +212,11 @@ function typesetMaths(root) {
     node.parentNode.replaceChild(frag, node);
   }
 }
-// the readers that write the mathematics as LaTeX, display or inline
-const MATHS_READERS = ["marker", "latex-source", "latex2html"];
+// whether the text holds LaTeX to typeset: a formula chunk, or a reader
+// that writes the mathematics as LaTeX inline too (the door says which,
+// parsers.quality.LATEX_READERS)
 function hasMaths(doc, chunks) {
-  const source = String((doc.meta || {}).text_source || "");
-  return (chunks || []).some((c) => c.kind === "formula") || MATHS_READERS.some((r) => source.startsWith(r));
+  return (chunks || []).some((c) => c.kind === "formula") || Boolean(doc.writes_latex);
 }
 
 // A reference chunk: the entry as written, and under it the library

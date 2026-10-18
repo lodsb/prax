@@ -135,6 +135,10 @@ not_a_name:
   exact:
     - unknown
     - none
+    - unbekannt
+    - keine
+    - inconnu
+    - aucun
     - n/a
     - n.d.
     - s.n.
@@ -367,3 +371,24 @@ notices:
 world_time:
   stems: [found, establish, join, appoint, elect, acquir, bought, sold, purchas, merg, mov, became, becom, retir, resign, renam, dissolv, close, open, launch, introduc, releas, fund, grant, award, member, director, professor, head, chair, lead, led, work, stud, employ, hired, serv, held, locat, based, built, construct, began, start, end, ceas, discontinu, gegründet, gründ, beigetret, ernannt, übernomm, übernahm, gekauft, kaufte, verkauf, umbenann, eingestellt, eröffn, geschlossen, arbeitet, leitet, gefördert, fondé, nommé, rejoint, racheté, acquis]
   words: [since, until, till, from, between, during, seit, bis, von, zwischen, depuis, jusqu]
+  # what a model writes for an end the sentence does not name, in every
+  # language whose sentences the cues above pick (the quality review of
+  # 2026-10-18: "unbekannt" and "die Firma" passed an English-only rule).
+  # Matched whole, lower case, after one of the articles; not_a_name's
+  # exact words are refused as well
+  articles: [the, a, an, der, die, das, den, dem, ein, eine, le, la, les, "l'", un, une]
+  stand_ins: [author, authors, he, she, it, they, we, company, firm, er, sie, es, wir, firma, unternehmen, gesellschaft, il, elle, ils, elles, nous, "on", entreprise, société, auteur, auteurs]
+  # the words that, around a year, make a name a date rather than a thing:
+  # "the mid-1980s", "Mitte der 1980er", "début 1990", "les années 1980"
+  # (a month name is one too, from prax.text.dates)
+  period_words: [the, early, mid, late, about, around, circa, ca, c, in, of, anfang, mitte, ende, der, den, frühen, späten, jahre, um, im, début, milieu, fin, des, les, années, en, vers]
+  # what a decade's year ends with: 1980s, 1980er, 1980ern
+  decade_endings: [s, "'s", er, ern]
+
+# what follows an author's name in the biography a journal prints after
+# its reference list ("Juan Pablo Bello received the engineering degree…",
+# "… studierte Elektrotechnik", "… a obtenu son doctorat"), which no entry
+# of the list does: `prax.text.references` sets such a paragraph aside.
+# A verb of several words is matched with any space between them
+biography:
+  verbs: [received, receives, is, was, has, joined, studied, graduated, works, holds, obtained, completed, earned, got, erhielt, studierte, promovierte, absolvierte, habilitierte, ist, war, arbeitet, leitet, lehrt, a obtenu, a étudié, a rejoint, est, était, obtint, travaille, dirige, enseigne]

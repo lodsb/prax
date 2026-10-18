@@ -42,7 +42,7 @@ from typing import IO, Any
 from prax import config, models, parsers, store
 from prax.capture import drop
 from prax.graph import ontology
-from prax.text import dates
+from prax.text import arxiv, dates
 
 log = logging.getLogger("prax.inbox")
 
@@ -255,19 +255,14 @@ def bot_check(data: bytes) -> str | None:
     return next((who for mark, who in BOT_CHECK_MARKS if mark in low), None)
 
 
-_ARXIV_URL = re.compile(
-    r"^https?://(?:www\.|export\.)?arxiv\.org/(?:abs|pdf)/"
-    r"(?P<id>\d{4}\.\d{4,5}|[a-z][a-z.\-]*/\d{7})(?:v\d+)?(?:\.pdf)?/?$",
-    re.IGNORECASE,
-)
 _DOI_URL = re.compile(r"^https?://(?:dx\.)?doi\.org/(?P<doi>10\.\S+)$", re.IGNORECASE)
 
 
 def url_ids(url: str) -> dict[str, str]:
     """What a URL says the document is: an arXiv id (``/abs/`` or
     ``/pdf/``) or a DOI (``doi.org``), as ``paper_meta`` keys them."""
-    if m := _ARXIV_URL.match(url):
-        return {"arxiv": m.group("id")}
+    if paper := arxiv.of_url(url):
+        return {"arxiv": paper}
     if m := _DOI_URL.match(url):
         return {"doi": urllib.parse.unquote(m.group("doi"))}
     return {}
@@ -661,9 +656,8 @@ def paper_meta(paper: dict[str, Any] | None) -> dict[str, Any]:
         if doi.lower().startswith("doi:"):
             doi = doi[4:].strip()
         out["doi"] = doi
-    arxiv = str(paper.get("arxiv") or "").strip()
-    if arxiv:
-        out["arxiv"] = re.sub(r"^(?:arxiv:)?", "", arxiv, flags=re.IGNORECASE).strip()
+    if named := arxiv.canonical(paper.get("arxiv")):
+        out["arxiv"] = named
     authors = [str(a).strip() for a in (paper.get("authors") or []) if str(a).strip()]
     if authors:
         out["creators"] = [{"name": a} for a in authors]

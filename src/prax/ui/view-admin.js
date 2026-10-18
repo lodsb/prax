@@ -39,12 +39,8 @@ const CHECK_ABOUT = {
   "short-text": "the text is much shorter than the PDF's own text layer",
   "leftovers": "what a reader left that is not text: a latex2html comment, a subscript as emphasis, an HTML entity",
 };
-// a fix as the reading the bulk request asks for: its extractor and mode
-const CHECK_FIX = {
-  "marker": { extractor: "marker", mode: null, card: true },
-  "marker-ocr": { extractor: "marker", mode: "fast-ocr", card: true },
-  "figure-crops": { extractor: "figure-crops", mode: null, card: false },
-};
+// the readings that wait for the card
+const CARD_READINGS = new Set(["marker"]);
 
 async function viewChecks(p) {
   view.innerHTML = `${adminTabs("checks")}
@@ -60,29 +56,29 @@ async function viewChecks(p) {
   let html = `<p class="tags">${chips.join(" · ")}</p>`;
   if (res.items) {
     html += `<p class="muted">${esc(CHECK_ABOUT[res.check] || "")}</p>`;
-    const fixes = new Set(res.items.map((i) => i.finding.fix).filter(Boolean));
-    for (const f of fixes) {
-      const fix = CHECK_FIX[f];
-      if (!fix) continue;  // the LaTeX source names its paper: asked for on its page
-      html += `<p><button data-fix="${esc(f)}">ask for ${esc(fix.extractor)}${fix.mode ? ` (${esc(fix.mode)})` : ""} for all ${res.total}</button>${fix.card ? ` <span class="muted">needs the card; waits for it</span>` : ""} <span class="decide-out"></span></p>`;
+    // each document is asked for the reading its own finding names, in the
+    // mode the door gives it (an arXiv id, marker's OCR on this host's layout)
+    const named = [...new Set(res.items.map((i) => (i.finding.fix || {}).extractor).filter(Boolean))];
+    if (named.length) {
+      const card = named.some((x) => CARD_READINGS.has(x));
+      html += `<p><button data-fix="1">ask for each one's fix (${esc(named.join(", "))}) for all ${res.total}</button>${card ? ` <span class="muted">marker needs the card; waits for it</span>` : ""} <span class="decide-out"></span></p>`;
     }
     html += `<table class="checks"><tr><th>document</th><th>text</th><th>found</th><th>what it saw</th><th>fix</th></tr>${res.items.map((i) => `<tr>
       <td><a href="#doc/${i.id}">${esc(i.title || `doc ${i.id}`)}</a></td>
       <td class="muted">${esc(i.text_source || "")}</td>
       <td>${i.finding.count}</td>
       <td><code>${esc((i.finding.evidence || [])[0] || "")}</code></td>
-      <td>${esc(i.finding.fix || "")}</td></tr>`).join("")}</table>`;
+      <td>${esc(fixLabel(i.finding.fix))}</td></tr>`).join("")}</table>`;
     const next = (Number(p.offset) || 0) + res.items.length;
     if (next < res.total) html += `<p><a href="#admin?tab=checks&check=${encodeURIComponent(res.check)}&offset=${next}">the next ${Math.min(50, res.total - next)}</a></p>`;
   }
   box.innerHTML = html;
   box.querySelectorAll("button[data-fix]").forEach((b) => b.addEventListener("click", async () => {
-    const fix = CHECK_FIX[b.dataset.fix];
-    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = `yes, ask for ${fix.extractor} for ${res.total} documents`; return; }
+    if (!b.dataset.sure) { b.dataset.sure = "1"; b.textContent = `yes, ask for the fixes of ${res.total} documents`; return; }
     b.disabled = true;
     const out = b.parentElement.querySelector(".decide-out");
     try {
-      const r = await post("/readings/bulk", { extractor: fix.extractor, mode: fix.mode, finding: res.check });
+      const r = await post("/readings/bulk", { finding: res.check });
       out.textContent = `asked for ${r.requested}, ${r.skipped} skipped`;
     } catch (err) { b.disabled = false; out.innerHTML = `<span class="error">${esc(err.message)}</span>`; }
   }));

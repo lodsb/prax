@@ -5920,6 +5920,67 @@ window. `test_up` counts the supervisor's reads of the demand instead of
 sleeping. CLAUDE.md names three more scripts that open the file, and
 architecture.md names the `quality` pass.
 
+## 2026-10-18: the quality review, and the fixes agreed
+
+The project's skill in full mode over the same range: 23 findings, 5
+rejected (`docs/eval/code-review-2026-10-18.md`). The user agreed to fix
+the costly ones and the cheap language ones now; the other ten are in
+the plan under "The quality review of 2026-10-18". Each fix has a test
+in `tests/test_review_quality_2026_10_18.py`, numbered as the review
+numbers it, and each failed on the code before the fix.
+
+- **A repair ends its edges in batches** (1). `store.end_edges` ends up
+  to `END_BATCH` (500) edges and records their endings in one commit;
+  `_invalidate` and the rule pass use it. One commit an edge, twice,
+  held the write lock 11.4 s for the 1,711 duplicate facts; the same in
+  one commit took 0.2 s on the review's test store. The test's 28 edges
+  were 56 commits before and are one now.
+- **One arXiv id** (2, 8). `prax.text.arxiv` is the grammar: new and
+  old style, the version dropped, the archive in lower case and the
+  subject class in upper (`math.GT/0309136`). The reference parser, the
+  capture's URL and paper ids, the published date, the margin stamp, the
+  reading's mode, the citation index and the references pass's library
+  index all use it. Before, a citation kept its version, an old-style id
+  was not read, and the citation index cut `solv-int/9901001` to `sol`.
+  Measured read-only over the library's 204,492 reference entries: 1,455
+  name a versioned id and 425 an old-style one. None of them is one of
+  the 197 library papers with an id, so the references pass links
+  nothing new here. The first version of the grammar ended an id at a
+  word character and lost 113 of the 301 id matches to Markdown's
+  emphasis (`_arXiv:1410.5401_`); it ends at a digit now, 301 of 301.
+  A chunk's parsed `data` is written when it is chunked, so the old-style
+  ids reach the citation index after a rechunk.
+- **A fix is a reading** (3, 12, 16, 21). A finding's `fix` is a
+  `quality.Fix`: the extractor, its mode where the finding knows it (an
+  arXiv id), and for marker `ocr`. `quality.reading` gives marker its
+  mode from the host's layout (`parse.marker_mode`), in one place for
+  the door's follow-up and the bulk request. `POST /readings/bulk` with
+  `finding` and no `extractor` asks each document for its own fix, so
+  the Admin page's button sends the finding only. On a host set to
+  balanced, the button asked for `fast-ocr` while the door asked for
+  `balanced-ocr`. A scan with no text layer is a finding, `no-layer`,
+  so the reader choice acts on findings only and its own threshold is
+  gone. `quality.writes_latex` is the one list of the readers that write
+  LaTeX. The maths check and the formula readings use it (the readings
+  left latex2html out, 7). The page reads `writes_latex` from `GET /get`
+  instead of keeping a list of its own. The checks are version 5: the nightly
+  quality pass checks every text again, about 38 minutes for the
+  library as measured on 2026-10-18. Until it has, a version 4 finding's
+  word asks for nothing in bulk.
+- **The page poll reads indexes only** (9). `document_fingerprint`
+  counts a document's live facts, which migration 16's partial index
+  serves; all of them, ended too, was a scan of the edges table (22 ms
+  a poll at 400,000 edges, every 10 s an open page).
+- **The words in data** (5, 6, 14, 20). `mended_name` takes out a type
+  of the composed ontology, every pack's, where research's six were
+  written out ("device=Minimoog" stayed). World dates' guards are the
+  lexicon's `world_time:` words in English, German and French: the
+  stand-ins and articles, the period words around a year and a decade's
+  endings. Before, "unbekannt", "die Firma" and "Mitte der 1980er"
+  passed. `not_a_name.exact` holds "unbekannt", "keine", "inconnu" and
+  "aucun" for every extraction. A biography after a reference list is told by
+  the lexicon's `biography:` verbs, German and French among them.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

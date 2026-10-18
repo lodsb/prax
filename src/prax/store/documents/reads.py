@@ -14,7 +14,7 @@ from urllib.parse import quote_plus
 
 from prax import packs
 from prax.graph import ontology
-from prax.text import dates
+from prax.text import arxiv, dates
 
 from ..base import (
     _TOKEN,
@@ -393,7 +393,11 @@ def document_fingerprint(con: sqlite3.Connection, doc_id: int) -> str | None:
     document is open and draws the page again only when it moved; the
     store's change stamp moves with every write anywhere, and re-reading a
     whole document on each was most of what a live page cost (2026-10-10).
-    Five lookups on indexes. None for a document that is not there."""
+    Four lookups on indexes; the facts are the live ones, which the
+    partial index of migration 16 serves (all of them, ended too, was a
+    scan of the edges table: 22 ms a poll at 400,000 edges, the quality
+    review of 2026-10-18). An edge that ends lowers the count, a new one
+    raises the largest id. None for a document that is not there."""
     row = con.execute(
         "SELECT title, text_hash, meta FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
@@ -405,7 +409,8 @@ def document_fingerprint(con: sqlite3.Connection, doc_id: int) -> str | None:
             "SELECT count(*), max(id) FROM chunks WHERE doc_id = ?", (doc_id,)
         ).fetchone(),
         con.execute(
-            "SELECT count(*), max(id), max(valid_to) FROM edges WHERE source_doc = ?",
+            "SELECT count(*), max(id) FROM edges"
+            " WHERE source_doc = ? AND valid_to IS NULL",
             (doc_id,),
         ).fetchone(),
         con.execute(
@@ -1172,8 +1177,8 @@ def _work_key(data: dict[str, Any]) -> str | None:
     id, else its title folded (a short or wordless title is no key)."""
     if data.get("doi"):
         return "doi:" + str(data["doi"]).lower().rstrip(".")
-    if data.get("arxiv"):
-        return "arxiv:" + str(data["arxiv"]).split("v")[0]
+    if paper := arxiv.canonical(data.get("arxiv")):
+        return "arxiv:" + paper
     words = _TOKEN.findall(str(data.get("title") or "").lower())
     if len(words) < 3 or sum(len(w) for w in words) < 15:
         return None

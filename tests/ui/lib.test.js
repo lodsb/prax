@@ -595,3 +595,11 @@ test("regionHue spreads neighbouring ids apart", () => {
   assert.ok(Math.abs(lib.regionHue(1) - lib.regionHue(2)) > 60);
   assert.ok(lib.regionHue(348) >= 0 && lib.regionHue(348) < 360);
 });
+
+test("fixLabel names a text check's fix as the reading it asks for", () => {
+  assert.equal(lib.fixLabel(null), "");
+  assert.equal(lib.fixLabel({ extractor: "marker", ocr: true }), "marker (OCR)");
+  assert.equal(lib.fixLabel({ extractor: "latex-source", mode: "2501.13484" }), "latex-source (2501.13484)");
+  assert.equal(lib.fixLabel({ extractor: "figure-crops" }), "figure-crops");
+  assert.equal(lib.fixLabel("marker-ocr"), "marker-ocr");  // kept before version 5
+});

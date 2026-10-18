@@ -6,14 +6,18 @@ waiting for a person to see it.
 and the original's profile (``parsers.pdf.profile``, for a PDF) and
 returns findings. A finding names its check, how often it saw it, up to
 ``EVIDENCE`` pieces of the text that show it, and the reading that would
-put it right where one would (``fix``); a finding without one only flags
-the document. No model and no store: the door keeps the result
-(``meta.quality``) and decides what to ask for.
+put it right where one would (``fix``, a ``Fix``: the extractor, its mode
+where the finding knows it, and for marker whether it reads every page
+itself, the host choosing the layout when it is asked: ``reading``); a
+finding without one only flags the document. No model and no store: the
+door keeps the result (``meta.quality``) and decides what to ask for.
 
 The checks, each from a fix a person asked for by hand on 2026-10-17:
 
 - ``ocr-layer``: a scan's text read from the layer an old OCR laid under
   its pictures (``fix``: marker reading every page itself);
+- ``no-layer``: a scan with no text layer at all, of which the reader
+  kept only the pictures (the same fix);
 - ``maths-as-text``: a PDF that sets formulas in a maths font, read by a
   reader that writes no LaTeX, with lines of loose symbols where the
   formulas were (``fix``: the paper's LaTeX source on arXiv, or marker);
@@ -34,23 +38,28 @@ from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
+from prax.text import arxiv as arxivids
 from prax.text import markup
 
 from . import figures
 
 # 2: a line with code is not a formula's debris; 3: the crops seen in the
-# history; 4: a slide's words over its background are no scan
-VERSION = 4
+# history; 4: a slide's words over its background are no scan; 5: a fix is
+# a reading with its mode, not a word to decode, and a scan without a
+# text layer is a finding (the quality review of 2026-10-18)
+VERSION = 5
 EVIDENCE = 3  # pieces of the text a finding shows
 SNIPPET = 120  # characters of each
 
-# the readers that write the mathematics as LaTeX
+# the readers that write the mathematics as LaTeX: what the maths check
+# leaves alone, what the formula readings follow and what the page
+# typesets (``writes_latex``). One list: the review of 2026-10-18 found
+# three, and the formula readings' left latex2html out
 LATEX_READERS = ("marker/", "latex-source/", "latex2html/")
 # the reader that reads a PDF's text layer as it stands
 LAYER_READERS = ("pymupdf4llm/", "pymupdf/")
 
-# the readings a finding names as its fix (marker-ocr is marker's, in its
-# OCR mode)
+# the readings a finding names as its fix
 FIXING = frozenset({"marker", "latex-source", "figure-crops"})
 
 SCANNED = 0.5  # the share of profiled pages that makes a PDF a scan
@@ -81,12 +90,66 @@ _LEFTOVERS = (
 )
 
 
+def writes_latex(stamp: str | None) -> bool:
+    """Whether the reader of ``stamp`` writes the mathematics as LaTeX."""
+    return str(stamp or "").startswith(LATEX_READERS)
+
+
+@dataclass(frozen=True)
+class Fix:
+    """The reading that would put a finding right: ``extractor`` (one of
+    ``FIXING``), its ``mode`` where the finding knows it (the arXiv id of
+    a ``latex-source``), and for marker whether it must read every page
+    itself (``ocr``), the layout being the host's (``reading``)."""
+
+    extractor: str
+    mode: str | None = None
+    ocr: bool = False
+
+    def as_dict(self) -> dict[str, Any]:
+        out: dict[str, Any] = {"extractor": self.extractor}
+        if self.mode:
+            out["mode"] = self.mode
+        if self.ocr:
+            out["ocr"] = True
+        return out
+
+    @classmethod
+    def of(cls, kept: Any) -> Fix | None:
+        """The fix a kept finding names (``meta.quality``), or None."""
+        if not isinstance(kept, Mapping) or kept.get("extractor") not in FIXING:
+            return None
+        mode = kept.get("mode")
+        return cls(
+            str(kept["extractor"]), str(mode) if mode else None, bool(kept.get("ocr"))
+        )
+
+
+def marker_mode(ocr: bool) -> str | None:
+    """marker's mode on this host: its layout (``parse.marker_mode``
+    [``PRAX_MARKER_MODE``], fast or balanced), with ``-ocr`` to read every
+    page itself; None for the plain fast read."""
+    from .marker import _marker_mode
+
+    base = _marker_mode()
+    if ocr:
+        return f"{base}-ocr"
+    return None if base == "fast" else base
+
+
+def reading(fix: Fix) -> tuple[str, str | None]:
+    """The extractor and mode a fix is asked for with on this host."""
+    if fix.extractor == "marker":
+        return "marker", marker_mode(fix.ocr)
+    return fix.extractor, fix.mode
+
+
 @dataclass(frozen=True)
 class Finding:
     check: str
     count: int
     evidence: tuple[str, ...] = ()
-    fix: str | None = None  # a reading: latex-source, marker, marker-ocr, figure-crops
+    fix: Fix | None = None
     detail: dict[str, Any] = field(default_factory=dict)
 
     def as_dict(self) -> dict[str, Any]:
@@ -94,7 +157,7 @@ class Finding:
         if self.evidence:
             out["evidence"] = list(self.evidence)
         if self.fix:
-            out["fix"] = self.fix
+            out["fix"] = self.fix.as_dict()
         if self.detail:
             out["detail"] = self.detail
         return out
@@ -181,13 +244,15 @@ def check(
     found: list[Finding] = []
     layer_read = stamp.startswith(LAYER_READERS)
 
-    scan = max(float(prof.get("scanned") or 0), float(prof.get("ocr_layer") or 0))
-    if pdf and layer_read and scan >= SCANNED and prof.get("layer"):
+    scan = scan_share(prof)
+    if pdf and layer_read and scan >= SCANNED:
+        # with a layer, an old OCR's text; without one, nothing but the
+        # pictures: a scan either way, which only marker's own OCR reads
         found.append(
             Finding(
-                "ocr-layer",
+                "ocr-layer" if prof.get("layer") else "no-layer",
                 round(scan * int(prof.get("pages") or 0)) or 1,
-                fix="marker-ocr",
+                fix=Fix("marker", ocr=True),
                 detail={
                     "scanned": prof.get("scanned"),
                     "ocr_layer": prof.get("ocr_layer"),
@@ -195,7 +260,7 @@ def check(
             )
         )
 
-    if pdf and not stamp.startswith(LATEX_READERS) and scan < SCANNED:
+    if pdf and not writes_latex(stamp) and scan < SCANNED:
         debris = debris_lines(lines)
         maths = int(prof.get("maths") or 0)
         if maths >= MATHS_PAGES and len(debris) >= DEBRIS_LINES:
@@ -204,7 +269,9 @@ def check(
                     "maths-as-text",
                     len(debris),
                     tuple(_snippet(x) for x in debris[:EVIDENCE]),
-                    fix="latex-source" if prof.get("arxiv") else "marker",
+                    fix=Fix("latex-source", str(prof["arxiv"]))
+                    if prof.get("arxiv")
+                    else Fix("marker"),
                     detail={
                         "maths_pages": maths,
                         **({"arxiv": prof["arxiv"]} if prof.get("arxiv") else {}),
@@ -220,7 +287,7 @@ def check(
                     "bare-figures",
                     len(bare),
                     tuple(_snippet(lines[i]) for i in bare[:EVIDENCE]),
-                    fix=None if "figure-crops" in since else "figure-crops",
+                    fix=None if "figure-crops" in since else Fix("figure-crops"),
                 )
             )
 
@@ -260,10 +327,25 @@ def profile_of(
     got = pdf.profile(data)
     # the id without its version: the reading's mode takes no other (the
     # review of 2026-10-18, a "2501.13484v2" stopped the follow-ups)
-    got["arxiv"] = latexsrc.arxiv_of(arxiv) or latexsrc.arxiv_id_of(data)
+    got["arxiv"] = arxivids.canonical(arxiv) or latexsrc.arxiv_id_of(data)
     return got
 
 
-def fixes(findings: list[Finding]) -> dict[str, Finding]:
-    """The findings that name a reading, by the reading."""
-    return {f.fix: f for f in findings if f.fix}
+def scan_share(profile: Mapping[str, Any]) -> float:
+    """How much of a PDF is a scan: the larger share of its profiled pages
+    that are a picture, or a picture with an OCR's text over it; past
+    ``SCANNED`` it is one."""
+    return max(float(profile.get("scanned") or 0), float(profile.get("ocr_layer") or 0))
+
+
+def fixes(findings: list[Finding]) -> dict[str, Fix]:
+    """The readings the findings name, by extractor; marker reads every
+    page itself when one of them needs it to."""
+    out: dict[str, Fix] = {}
+    for f in findings:
+        if f.fix is None:
+            continue
+        had = out.get(f.fix.extractor)
+        if had is None or (f.fix.ocr and not had.ocr):
+            out[f.fix.extractor] = f.fix
+    return out

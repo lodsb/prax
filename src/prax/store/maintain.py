@@ -40,7 +40,7 @@ from typing import Any
 
 from prax.graph import ontology
 from prax.ml import embeddings
-from prax.text import acronyms, dates, language, quotes, references, schemaorg
+from prax.text import acronyms, arxiv, dates, language, quotes, references, schemaorg
 
 from .base import _reading, _serialized, archive_path, now, vectors_available
 from .documents import (
@@ -332,7 +332,7 @@ def _library(con: sqlite3.Connection) -> dict[int, dict[str, Any]]:
             "creators": [c.get("name", "") for c in meta.get("creators") or []],
             "year": year,
             "doi": (str(meta.get("doi") or "")).lower().strip() or None,
-            "arxiv": (str(meta.get("arxiv") or "")).lower().strip() or None,
+            "arxiv": arxiv.canonical(meta.get("arxiv")),
         }
     return lib
 

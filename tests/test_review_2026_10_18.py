@@ -18,6 +18,7 @@ from prax.capture import pipeline
 from prax.importers import latex
 from prax.importers import latex2html as l2h
 from prax.parsers import ExtractionError, latexsrc, pdf, quality
+from prax.text import arxiv
 
 # ------------------------------------------- 3. an e-print reads the host
 
@@ -270,8 +271,8 @@ def test_a_versioned_arxiv_id_is_asked_for_without_its_version(
     got = pipeline.follow_ups(con, paper, stamp=LAYER, action="created")
     assert got == "latex-source"
     assert _waiting(con, paper) == [("latex-source", "2501.13484")]
-    assert latexsrc.arxiv_of("math.GT/0309136v1") == "math.GT/0309136"
-    assert latexsrc.arxiv_of("no id") is None
+    assert arxiv.canonical("math.GT/0309136v1") == "math.GT/0309136"
+    assert arxiv.canonical("no id") is None
 
 
 # ------------------------------------ 10. a preprint the paper cites

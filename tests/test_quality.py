@@ -32,7 +32,10 @@ def _checks(found: list[quality.Finding]) -> dict[str, quality.Finding]:
 def test_a_scans_ocr_layer_read_as_its_text_is_found() -> None:
     scan = {"pages": 8, "scanned": 1.0, "ocr_layer": 1.0, "layer": True, "maths": 0}
     got = _checks(quality.check("Words. " * 300, stamp=LAYER, mime=PDF, profile=scan))
-    assert got["ocr-layer"].fix == "marker-ocr" and got["ocr-layer"].count == 8
+    assert (
+        got["ocr-layer"].fix == quality.Fix("marker", ocr=True)
+        and got["ocr-layer"].count == 8
+    )
     # marker's own reading of every page is what it should be
     again = quality.check(
         "Words. " * 300, stamp="marker/2.0.0+fast-ocr", mime=PDF, profile=scan
@@ -43,12 +46,14 @@ def test_a_scans_ocr_layer_read_as_its_text_is_found() -> None:
 def test_maths_as_loose_symbols_is_found_and_names_its_reader() -> None:
     got = _checks(quality.check(GARBLED, stamp=LAYER, mime=PDF, profile=TYPED))
     f = got["maths-as-text"]
-    assert f.count == 3 and f.fix == "marker"
+    assert f.count == 3 and f.fix == quality.Fix("marker")
     assert f.evidence[0] == "e ( n ) = x ( n ) − y ( n )"
     on_arxiv = quality.check(
         GARBLED, stamp=LAYER, mime=PDF, profile={**TYPED, "arxiv": "2501.13484"}
     )
-    assert _checks(on_arxiv)["maths-as-text"].fix == "latex-source"
+    assert _checks(on_arxiv)["maths-as-text"].fix == quality.Fix(
+        "latex-source", "2501.13484"
+    )
     # a reader that writes LaTeX, or a paper with no maths font, is not flagged
     assert "maths-as-text" not in _checks(
         quality.check(GARBLED, stamp="marker/2.0.0", mime=PDF, profile=TYPED)
@@ -91,7 +96,10 @@ def test_a_caption_with_no_picture_asks_for_the_crops_once() -> None:
     got = _checks(
         quality.check(text, stamp="latex-source/3.9-r2", mime=PDF, profile=TYPED)
     )
-    assert got["bare-figures"].fix == "figure-crops" and got["bare-figures"].count == 1
+    assert (
+        got["bare-figures"].fix == quality.Fix("figure-crops")
+        and got["bare-figures"].count == 1
+    )
     # the crops leave text_source as it was: the history says they ran
     history = [
         {"extractor": "pymupdf4llm/1.28.2-r2", "outcome": "created"},

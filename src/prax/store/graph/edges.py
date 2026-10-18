@@ -494,6 +494,46 @@ def end_edge(
     return True
 
 
+# How many edges one commit of ``end_edges`` ends: a commit is an fsync,
+# and one per edge held the write lock 11.4 s for 1,711 duplicates (the
+# quality review of 2026-10-18); a batch keeps the lock brief either way.
+END_BATCH = 500
+
+
+@_serialized
+def end_edges(
+    con: sqlite3.Connection, edge_ids: list[int], *, run: str | None = None
+) -> list[int]:
+    """End these edges where they are still live, ``END_BATCH`` to a commit,
+    and with ``run`` record each ending (``edge_endings``) so
+    ``restore_run`` can undo it. Returns the ids this call ended; one
+    another pass ended first is left out."""
+    ended: list[int] = []
+    for i in range(0, len(edge_ids), END_BATCH):
+        part = edge_ids[i : i + END_BATCH]
+        marks = ",".join("?" * len(part))
+        live = [
+            int(r[0])
+            for r in con.execute(
+                f"SELECT id FROM edges WHERE id IN ({marks}) AND valid_to IS NULL",
+                part,
+            )
+        ]
+        if not live:
+            continue
+        marks = ",".join("?" * len(live))
+        con.execute(f"UPDATE edges SET valid_to = {_NOW} WHERE id IN ({marks})", live)
+        if run is not None:
+            con.executemany(
+                "INSERT OR IGNORE INTO edge_endings (edge_id, run, ended_at)"
+                f" VALUES (?, ?, {_NOW})",
+                [(e, run) for e in live],
+            )
+        con.commit()
+        ended.extend(live)
+    return ended
+
+
 @_reading
 def canonical_entity(con: sqlite3.Connection, entity_id: int) -> int:
     row = con.execute(

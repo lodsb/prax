@@ -864,6 +864,16 @@ function neighbourToward(from, cands, dx, dy) {
   return best;
 }
 
+// A text check's fix (meta.quality, parsers.quality.Fix) in words: the
+// reading, with the paper it fetches or marker reading every page itself.
+// A finding kept before the fix was a reading (version 4) shows its word.
+function fixLabel(fix) {
+  if (!fix) return "";
+  if (typeof fix === "string") return fix;
+  if (fix.ocr) return `${fix.extractor} (OCR)`;
+  return fix.mode ? `${fix.extractor} (${fix.mode})` : String(fix.extractor || "");
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { fixLabel, esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

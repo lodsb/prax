@@ -314,7 +314,9 @@ def request_reading(doc_id: int, req: ReadingReq, request: Request) -> dict[str,
 
 
 class BulkReadingReq(BaseModel):
-    extractor: str  # one of store.READINGS
+    # one of store.READINGS; none with ``finding``: the fix each document's
+    # finding names, with its mode (an arXiv id, marker's OCR)
+    extractor: str | None = None
     mode: str | None = None  # store.MODES
     ids: list[int] | None = None
     mime: str | None = None  # a type or a prefix: application/pdf, image/
@@ -345,15 +347,20 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
     (``read_figures`` with ``mode=again``), a list of ids — one reading
     request per document (``POST /doc/{id}/reading``);
     what the extractor does not read is skipped and counted. The worker
-    drains them like any request, and refuses a paid model. ``dry_run``
-    only counts."""
+    drains them like any request, and refuses a paid model. With
+    ``finding`` and no ``extractor``, each document gets the reading its
+    finding names (``parsers.quality.Fix``), in the mode this host gives
+    it. ``dry_run`` only counts."""
     con = _con(request)
-    if req.extractor not in store.READINGS:
-        raise HTTPException(400, f"extractor must be one of {store.READINGS}")
-    try:
-        store.check_mode(req.extractor, req.mode)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
+    if req.extractor is None and not req.finding:
+        raise HTTPException(400, "an extractor, or a finding whose fix to ask for")
+    if req.extractor is not None:
+        if req.extractor not in store.READINGS:
+            raise HTTPException(400, f"extractor must be one of {store.READINGS}")
+        try:
+            store.check_mode(req.extractor, req.mode)
+        except ValueError as exc:
+            raise HTTPException(400, str(exc)) from exc
     if not (
         req.ids
         or req.mime
@@ -408,10 +415,27 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    # the reading each document is asked for: the one named, or its fix
+    groups: dict[tuple[str, str | None], list[int]] = {}
+    unnamed = 0
+    if req.extractor is not None:
+        groups[(req.extractor, req.mode)] = ids
+    else:
+        named = store.finding_fixes(con, ids, str(req.finding))
+        for doc_id in ids:
+            fix = quality.Fix.of(named.get(doc_id))
+            if fix is None:
+                unnamed += 1
+                continue
+            groups.setdefault(quality.reading(fix), []).append(doc_id)
+    counts = {"selected": len(ids), "requested": 0, "skipped": unnamed}
     try:
-        counts = store.request_readings(
-            con, ids, req.extractor, mode=req.mode, by=req.by, dry_run=req.dry_run
-        )
+        for (extractor, mode), part in groups.items():
+            got = store.request_readings(
+                con, part, extractor, mode=mode, by=req.by, dry_run=req.dry_run
+            )
+            counts["requested"] += got["requested"]
+            counts["skipped"] += got["skipped"]
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     return {**counts, "dry_run": req.dry_run}

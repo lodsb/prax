@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..graph import (
-    invalidate_edge,
-    record_ending,
+    end_edges,
     resolve_review,
 )
 from ..jobs import job_finish
@@ -92,17 +91,9 @@ def _invalidate(
     con: sqlite3.Connection, edge_ids: list[int], *, run: str | None = None
 ) -> int:
     """End edges; with ``run``, record each under it (``edge_endings``),
-    so ``store.restore_run`` can undo the repair that ended them."""
-    done = 0
-    for edge_id in edge_ids:
-        try:
-            invalidate_edge(con, edge_id)
-        except (KeyError, ValueError):  # another pass ended it first
-            continue
-        if run is not None:
-            record_ending(con, edge_id, run)
-        done += 1
-    return done
+    so ``store.restore_run`` can undo the repair that ended them. An edge
+    another pass ended first is not counted."""
+    return len(end_edges(con, edge_ids, run=run))
 
 
 def _edges_of_entities(con: sqlite3.Connection, ids: list[int]) -> list[int]:

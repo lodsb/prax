@@ -9,6 +9,7 @@ import sqlite3
 from typing import Any
 
 from prax import packs
+from prax.text import arxiv
 
 from ..base import (
     _NOW,
@@ -58,9 +59,10 @@ MODES: dict[str, tuple[str, ...] | None] = {
     "pymupdf4llm-ocr": None,  # the recognizer's script: ch, en, latin, arabic…
     "latex-source": None,  # the paper's arXiv id: 2501.13484, math.GT/0309136
 }
-# the free-form modes that are not a language word
-_MODE_PATTERNS = {
-    "latex-source": re.compile(r"\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?/\d{7}"),
+# the free-form modes that are not a language word: an arXiv id as
+# ``prax.text.arxiv`` keys it
+_MODE_CHECKS = {
+    "latex-source": lambda mode: arxiv.canonical(mode) == mode,
 }
 _MODE_WORD = re.compile(r"[a-z][a-z0-9_]*")
 
@@ -76,9 +78,9 @@ def check_mode(extractor: str, mode: str | None) -> None:
         raise ValueError(f"{extractor} takes no mode")
     allowed = MODES[extractor]
     if allowed is None:
-        pattern = _MODE_PATTERNS.get(extractor)
-        if pattern is not None:
-            if not pattern.fullmatch(mode):
+        check = _MODE_CHECKS.get(extractor)
+        if check is not None:
+            if not check(mode):
                 raise ValueError(f"an arXiv id, not {mode!r}")
         elif not _MODE_WORD.fullmatch(mode):
             raise ValueError(f"a language word, not {mode!r}")
@@ -368,12 +370,8 @@ def select_for_reading(
         )
         args.append(finding)
         if fixed_by:
-            # marker-ocr is marker's fix too, in its OCR mode
-            sql += (
-                " AND (json_extract(f.value, '$.fix') = ?"
-                " OR json_extract(f.value, '$.fix') LIKE ? ESCAPE '!')"
-            )
-            args += [fixed_by, _like_prefix(fixed_by + "-")]
+            sql += " AND json_extract(f.value, '$.fix.extractor') = ?"
+            args.append(fixed_by)
         sql += ")"
     if unpolished:
         # a video with an automatic transcript whose text the polish has
@@ -434,6 +432,30 @@ MATHS_MIN_REFS = 15  # fewer references to numbered equations is not a maths pap
 # field manual and an op-amp datasheet with it (2026-10-06)
 NOT_MATHS_GENRES = ("manual", "datasheet")
 NOT_MATHS_P = 0.5  # the labeller's probability for it; a person's counts always
+
+
+@_reading
+def finding_fixes(
+    con: sqlite3.Connection, ids: list[int], check: str
+) -> dict[int, dict[str, Any]]:
+    """The fix ``check`` names in each of these documents' current text
+    (``meta.quality``: an extractor with its mode where the finding knows
+    it), for the ones whose finding names one."""
+    out: dict[int, dict[str, Any]] = {}
+    for i in range(0, len(ids), 500):
+        part = [int(x) for x in ids[i : i + 500]]
+        marks = ",".join("?" * len(part))
+        for doc_id, fix in con.execute(
+            "SELECT d.id, json_extract(f.value, '$.fix') FROM documents d,"
+            " json_each(d.meta, '$.quality.findings') f"
+            f" WHERE d.id IN ({marks})"
+            " AND json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
+            " AND json_extract(f.value, '$.check') = ?"
+            " AND json_type(f.value, '$.fix') = 'object'",
+            (*part, check),
+        ):
+            out[int(doc_id)] = json.loads(fix)
+    return out
 
 
 def _numbered_steps(con: sqlite3.Connection, ids: list[int]) -> set[int]:

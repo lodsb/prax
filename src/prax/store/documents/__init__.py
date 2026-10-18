@@ -135,6 +135,7 @@ from .readings import (  # noqa: F401
     equation_density,
     figure_blob,
     figures_to_read,
+    finding_fixes,
     finish_reading,
     finished_readings,
     has_unread_formulas,
