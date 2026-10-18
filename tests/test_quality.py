@@ -61,6 +61,10 @@ def test_maths_as_loose_symbols_is_found_and_names_its_reader() -> None:
     # address, a page counter, a bold label in a list
     prose = "| a | b |\n| 1 | 2 |\n" + "A sentence of ordinary words in a row. " * 40
     alarms = (
+        # the most found once: code with its backticks split by emphasis
+        "`\\xetex_if_engine:TF {` _(_ _`true code` )_ `} {` _(_ _`false code` )_ `}`\n"
+        "`entity` _(_ _`entityId` )_ `is` [ _(_ _`generic declaration` )_ ] = [\n"
+        "_(_ s _)_ ::= **`skip`** | _(_ s _)_ 1 _(_ s _)_ 2 = x\n"
         "- 2 `\\def\\raggedright{%`\n"
         "- 3 `\\let\\\\=\\@centercr`\n"
         "> 1 `http://gephi.org`\n"

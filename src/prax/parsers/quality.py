@@ -38,7 +38,7 @@ from prax.text import markup
 
 from . import figures
 
-VERSION = 1
+VERSION = 2  # 2: a line with code in it is not a formula's debris
 EVIDENCE = 3  # pieces of the text a finding shows
 SNIPPET = 120  # characters of each
 
@@ -120,6 +120,10 @@ def debris_lines(lines: list[str]) -> list[str]:
             or s.startswith(("![", "#"))
             or (s.startswith("|") and s.endswith("|"))  # a table's row, not |H(ω)|
             or markup.PAGE_MARK.match(s)
+            # code: pymupdf4llm sets monospace in backticks, a formula's
+            # debris in italics (a grammar, VHDL, LaTeX3's sources were the
+            # most "found" of the library, 2026-10-18)
+            or "`" in s
         ):
             continue
         tokens = _TOKEN.findall(_NOT_MATHS.sub(" ", s))
