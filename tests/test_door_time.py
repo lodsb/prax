@@ -130,3 +130,51 @@ def test_libreoffice_is_looked_for_once(monkeypatch: pytest.MonkeyPatch) -> None
         assert office.soffice_path() == first and len(looked) == n
     finally:
         office.soffice_path.cache_clear()
+
+
+def test_a_documents_links_are_found_through_its_aliases(
+    con: sqlite3.Connection,
+) -> None:
+    from prax.store.graph import context
+
+    doc = int(store.ingest_text(con, "text " * 20, title="Notes")["doc_id"])
+    _edge(con, store.Edge("Notes", "paper", "links_to", "Other", "paper"), doc)
+    _edge(con, store.Edge("Notes v1", "paper", "supersedes", "Older", "paper"), doc)
+    _edge(con, store.Edge("Elsewhere", "paper", "links_to", "Third", "paper"), doc)
+    # an alias of the document carries its facts; an entity of the same
+    # name merged into another thing is that thing's
+    store.merge_entities(con, _id(con, "Notes v1", "paper"), _id(con, "Notes", "paper"))
+    _edge(con, store.Edge("Notes", "page", "links_to", "Fourth", "paper"), doc)
+    store.merge_entities(
+        con,
+        _id(con, "Notes", "page"),
+        _id(con, "Elsewhere", "paper"),
+        across_types=True,
+    )
+    got = context._linked_documents(con, "Notes", limit=10)
+    assert sorted((x["rel"], x["title"]) for x in got["out"]) == [
+        ("links_to", "Other"),
+        ("supersedes", "Older"),
+    ]
+
+
+def test_the_graph_views_hubs_are_counted_again_only_when_the_graph_moved(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from prax.store.graph import context
+
+    doc = int(store.ingest_text(con, "text " * 20, title="P")["doc_id"])
+    _edge(con, store.Edge("P", "paper", "uses", "wavelets", "method"), doc)
+    counted = []
+    con.set_trace_callback(lambda sql: counted.append(1) if "deg(cid" in sql else None)
+    names = lambda: {n["name"] for n in store.hub_graph(con)["nodes"]}
+    assert "wavelets" in names() and len(counted) == 1
+    names()
+    assert len(counted) == 1  # nothing moved: the hubs held
+    _edge(con, store.Edge("P", "paper", "uses", "filters", "method"), doc)
+    assert "filters" in names() and len(counted) == 2
+    # on a host, a minute's grace after the graph moved
+    monkeypatch.setattr(context, "HUB_REFRESH", 60.0)
+    _edge(con, store.Edge("P", "paper", "uses", "chirps", "method"), doc)
+    assert "chirps" not in names() and len(counted) == 2
+    con.set_trace_callback(None)

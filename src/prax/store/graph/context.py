@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
+import time
 from typing import Any
 
 from prax.graph import ontology
@@ -327,18 +329,30 @@ def _linked_documents(
     evidence. At most ``limit`` a side."""
     onto = ontology.current()
     out: dict[str, list[dict[str, Any]]] = {"out": [], "in": []}
+    # the entities that are the title, and their aliases, first: then the
+    # live edges at either end through their indexes. Joining every live
+    # edge to its entities to keep the title's took 383 ms a document
+    # page, most of a context (2026-10-18)
     rows = con.execute(
         """
+        WITH named(id) AS (
+            SELECT id FROM entities WHERE name = ? AND canonical_id IS NULL),
+        ends(id) AS (
+            SELECT id FROM named
+             UNION SELECT id FROM entities WHERE canonical_id IN named),
+        touching(id) AS (
+            SELECT id FROM edges WHERE valid_to IS NULL AND src IN ends
+             UNION SELECT id FROM edges WHERE valid_to IS NULL AND dst IN ends)
         SELECT x.rel, x.evidence, x.source_doc, s.name AS src, s.type AS src_type,
                t.name AS dst, t.type AS dst_type
         FROM edges x JOIN entities s0 ON s0.id = x.src
         JOIN entities s ON s.id = COALESCE(s0.canonical_id, s0.id)
         JOIN entities t0 ON t0.id = x.dst
         JOIN entities t ON t.id = COALESCE(t0.canonical_id, t0.id)
-        WHERE x.valid_to IS NULL AND x.rel != 'cites' AND (s.name = ? OR t.name = ?)
+        WHERE x.id IN touching AND x.rel != 'cites' AND (s.name = ? OR t.name = ?)
         ORDER BY x.rel, x.id
         """,
-        (title, title),
+        (title, title, title),
     ).fetchall()
     seen: set[tuple[str, str, str]] = set()
     for r in rows:
@@ -366,6 +380,52 @@ def _linked_documents(
             }
         )
     return out
+
+
+# How long the graph view's hubs are served after the graph has changed.
+# Counting every entity's live edges is most of an overview, 0.97 s of
+# its 1.0 on 296,505 live edges (2026-10-18), and while extraction runs
+# the edges change every few seconds; the view is a map, and a minute
+# old is new enough. The edges a hub carries are read live.
+HUB_REFRESH = 60.0
+HUBS_KEPT = 32  # distinct hub questions held (a domain, a scope, a date…)
+
+_HUBS: dict[tuple[Any, ...], tuple[tuple[Any, ...], float, list[sqlite3.Row]]] = {}
+_HUBS_LOCK = threading.Lock()
+
+
+def graph_stamp(con: sqlite3.Connection) -> tuple[Any, ...]:
+    """What moves when the graph does: an edge written or ended, an entity
+    merged, a name changed (a rename writes a label). Each read on an
+    index, about 25 ms together."""
+    row = con.execute(
+        "SELECT (SELECT max(id) FROM edges),"
+        " (SELECT max(valid_to) FROM edges WHERE valid_to IS NOT NULL),"
+        " (SELECT count(*) FROM entities WHERE canonical_id IS NULL),"
+        " (SELECT max(id) FROM entity_labels)"
+    ).fetchone()
+    return tuple(row)
+
+
+def _hubs(
+    con: sqlite3.Connection, sql: str, args: tuple[Any, ...]
+) -> list[sqlite3.Row]:
+    """The rows of the hubs' query, served again while the graph has not
+    changed, or changed less than ``HUB_REFRESH`` seconds ago."""
+    where = str(con.execute("PRAGMA database_list").fetchone()[2])
+    key = (where, sql, args)
+    stamp = graph_stamp(con)
+    now = time.monotonic()
+    with _HUBS_LOCK:
+        held = _HUBS.get(key)
+    if held and (held[0] == stamp or now - held[1] < HUB_REFRESH):
+        return held[2]
+    rows = con.execute(sql, args).fetchall()
+    with _HUBS_LOCK:
+        _HUBS[key] = (stamp, now, rows)
+        while len(_HUBS) > HUBS_KEPT:
+            _HUBS.pop(next(iter(_HUBS)))
+    return rows
 
 
 @_reading
@@ -435,7 +495,8 @@ def hub_graph(
         pick = "e.id IN (SELECT value FROM json_each(?))"
         pick_args = (json.dumps(sorted(set(entities))),)
         limit = max(1, min(len(entities), 200))
-    nodes = con.execute(
+    nodes = _hubs(
+        con,
         f"""
         WITH ends(id) AS (
             SELECT src FROM edges WHERE valid_to IS NULL{docs}
@@ -451,7 +512,7 @@ def hub_graph(
         WHERE {pick} ORDER BY d.degree DESC, e.name LIMIT ?
         """,
         (*docs_args, *docs_args, *pick_args, limit),
-    ).fetchall()
+    )
     ids = [r["id"] for r in nodes]
     if not ids:
         return {"nodes": [], "edges": [], "links": []}

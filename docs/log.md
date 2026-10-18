@@ -6058,6 +6058,33 @@ releases the GIL, and did not appear.
   communities map 398 ms, a search 295 ms, an open document's poll
   217 ms (2.6 s at most), the page with its 22 files 554 ms and 682 KB.
 
+## 2026-10-18: the graph view and a document's context
+
+The third part, after the door was restarted on the first two (`prax up
+--data-dir C:\prax-data --restart door`, and the worker). `time_ui.py`
+with the same load, 5 rounds: an open document's poll 217 to 3 ms (its
+slowest 2.6 s to 20 ms), the page's bytes 682 to 207 KB, every answer
+over 1 KB compressed, and no slow request in the door's log from the
+worker's hand-outs. Left slow: the graph overview at 967 ms and a
+document's context at 383 ms. A py-spy profile put each in one query.
+
+- **A document's context.** `_linked_documents` joined every live edge
+  to its two entities and their canonical entities to keep the edges
+  whose end is named as the document's title: 483 ms a title on the live
+  store. It now finds the unmerged entities of that name and their
+  aliases, and the live edges at either end through `idx_edges_src` and
+  `idx_edges_dst`: 0.3 ms. The same rows for 200 titles (150 with
+  document links, 50 at random; 1,619 rows), read-only.
+- **The graph overview.** `hub_graph` counted every entity's live edges
+  on each request, 0.97 s of its 1.0. The rows of that query are held
+  per question (the SQL and its arguments, `HUBS_KEPT` = 32 of them)
+  with `graph_stamp`: the newest edge, the newest ending, the unmerged
+  entities and the newest label, 18 ms. They are counted again when the
+  stamp has moved and they are older than `HUB_REFRESH` (60 s). While
+  extraction runs the edges change every few seconds, and the view is a
+  map. The query reads no viewer's filter, so the rows are the same for
+  any token. The edges among the hubs and their documents are read live.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

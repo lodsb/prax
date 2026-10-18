@@ -57,6 +57,11 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from prax.steps import base
 
     monkeypatch.setattr(base, "model_down", lambda spec: False)
+    # the graph view's hubs are served a minute after the graph changed; a
+    # test reads them right after writing an edge
+    from prax.store.graph import context
+
+    monkeypatch.setattr(context, "HUB_REFRESH", 0.0)
     # a meta key the code writes and store.DocumentMeta does not name fails
     # the test that wrote it (a host only logs it)
     monkeypatch.setattr(store.checks, "strict_meta", True)
