@@ -6094,6 +6094,50 @@ each, which runs without the GIL and is not polled. The map could hold
 its rows the way the hubs do, but they are one a crossing fact and the
 viewer's filter applies to them.
 
+## 2026-10-18: craft, alone or with what is built on it
+
+The owner found every kitchen document under craft: "craft is mostly
+cooking, not exactly wrong but redundant". Stage K made it so on
+purpose. `Ontology.within` makes a module's filter hold the modules
+built on it, and kitchen and workshop are built on craft. On the live
+store that is 28 craft documents, 81 kitchen and 12 workshop, and none
+set to both craft and kitchen. The inclusion stays the default, because
+an ingredient is a material. The menu never said so.
+
+- **`only:craft`.** `ontology.ONLY` is a prefix for a module without the
+  modules built on it. `within("only:craft")` is `{craft}`, so every
+  filter that goes through it takes the form: `GET /documents`, a
+  search (`fusion.search` accepts it), the graph view, a document's
+  similar documents. A token's domains are still module names
+  (`api/wall.py` checks them).
+- **The menu.** `GET /domains/counts` (`store.domain_counts`, one read
+  of the distinct domain sets) gives each module `own`, `within`,
+  `requires` and `holds`, counted over what the viewer may see, plus the
+  `unassigned` count. `lib.moduleOptions` draws the menu as a tree, each
+  module under the first module it is built on: "craft + kitchen,
+  workshop (121)", then "craft only (28)", "kitchen (81)" and "workshop
+  (12)" under it. A document with no module set is in every filter and
+  in no count; the browse list's "unassigned" choice counts those.
+- **The twins.** The 26 ingredients with a craft `material` of the same
+  name were 22 merged already, by the subtype tier of resolution
+  (`material` → `ingredient`). Four were left: onion, Rote Bete,
+  Kichererbsen and kartoffel, each the `made_of` of one recipe. Their
+  ingredient twin had been folded into another name before they came
+  (onion into onions, Kichererbsen into chickpea), so no unmerged
+  ingredient had their name. `_subtypes` now also finds the specific
+  side by the labels it answers to (`store.answered_names`). That holds
+  only between two `naming: common` types: on proper names the labels
+  would have folded the 23rd ISMIR into the 26th, FlashAttention into
+  FlashAttention-2 and a board into its maker (60 folds without the
+  limit, read-only on the live store). With it, 29 folds: the four,
+  three more ingredients (Semmelbrösel, Süßkartoffeln, Mungbohnenstärke)
+  and 22 concepts under their German or English twin (`Frequenzmodulation`
+  → `frequency modulation`, `concept` → `feature`). One is wrong in
+  type rather than in identity: `synth pop` into the cuisine
+  `synthpop`, which the extractor typed. The 03:00 resolve applies
+  them. The label read takes 0.55 s of a plan's 2.5 s; with the planner's
+  own order it took 6 s, so the query scans the labels first.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

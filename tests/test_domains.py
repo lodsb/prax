@@ -458,3 +458,22 @@ def test_the_rules_are_applied_again_to_named_documents(
     assert got == {"rule 0": 1, "unmatched": 0}
     domains = [client.get(f"/doc/{i}/domains").json()["domains"] for i in ids]
     assert domains == [None, ["family"], ["research"]]
+
+
+def test_the_door_counts_the_domain_menu(three_modules: Path) -> None:
+    from fastapi.testclient import TestClient
+
+    from prax.api import app
+
+    with TestClient(app) as client:
+        a = client.post("/ingest", json={"text": "x " * 40, "title": "A"}).json()
+        client.post("/ingest", json={"text": "y " * 40, "title": "B"})
+        client.put(f"/doc/{a['doc_id']}/domains", json={"domains": ["family"]})
+        got = client.get("/domains/counts").json()
+    assert "core" not in got["modules"] and got["unassigned"] == 1
+    assert got["modules"]["family"] == {
+        "own": 1,
+        "within": 1,
+        "requires": ["core"],
+        "holds": [],
+    }

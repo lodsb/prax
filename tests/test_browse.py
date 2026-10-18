@@ -55,3 +55,38 @@ def test_a_search_by_module_keeps_the_modules_built_on_it(
         h["doc_id"] for h in store.search(con, "apple cake", mode="fts", domain="craft")
     }
     assert recipe in hits and paper not in hits
+
+
+def test_a_module_alone_leaves_the_modules_built_on_it_out(
+    con: sqlite3.Connection,
+) -> None:
+    # "craft is mostly cooking": the plain filter holds kitchen's recipes,
+    # ``only:craft`` the module's own documents
+    recipe = _doc(con, "Apple cake with cinnamon", ["kitchen"])
+    joint = _doc(con, "Joints in wood and cinnamon", ["craft"])
+    loose = _doc(con, "Nobody said", None)
+    assert ontology.current().within("only:craft") == {"craft"}
+    assert _listed(con, "only:craft") == {joint, loose}
+    hits = {
+        h["doc_id"]
+        for h in store.search(con, "cinnamon", mode="fts", domain="only:craft")
+    }
+    assert joint in hits and recipe not in hits
+
+
+def test_the_domain_menu_counts_each_module_alone_and_with_those_built_on_it(
+    con: sqlite3.Connection,
+) -> None:
+    _doc(con, "Apple cake", ["kitchen"])
+    _doc(con, "Pear cake", ["kitchen"])
+    _doc(con, "A pedal build", ["workshop"])
+    _doc(con, "Joints in wood", ["craft"])
+    _doc(con, "A paper", ["research", "kitchen"])
+    _doc(con, "Nobody said", None)
+    store.retire_document(con, _doc(con, "Gone", ["craft"]), reason="t")
+    got = store.domain_counts(con)
+    craft, kitchen = got["modules"]["craft"], got["modules"]["kitchen"]
+    assert craft == {"own": 1, "within": 5}
+    assert kitchen == {"own": 3, "within": 3}
+    assert got["modules"]["research"]["own"] == 1
+    assert got["unassigned"] == 1

@@ -603,3 +603,27 @@ test("fixLabel names a text check's fix as the reading it asks for", () => {
   assert.equal(lib.fixLabel({ extractor: "figure-crops" }), "figure-crops");
   assert.equal(lib.fixLabel("marker-ocr"), "marker-ocr");  // kept before version 5
 });
+
+test("moduleOptions draws the modules as a tree, with a module alone under it", () => {
+  const counts = {
+    craft: { requires: ["core"], own: 28, within: 121, holds: ["kitchen", "workshop"] },
+    kitchen: { requires: ["craft"], own: 81, within: 81, holds: [] },
+    workshop: { requires: ["craft", "studio"], own: 12, within: 12, holds: [] },
+    studio: { requires: ["core"], own: 300, within: 312, holds: ["workshop"] },
+    research: { requires: ["core"], own: 9000, within: 9000, holds: [] },
+  };
+  const html = lib.moduleOptions(["craft", "kitchen", "research", "studio", "workshop"], counts, "only:craft");
+  const rows = [...html.matchAll(/value="([^"]+)"[^>]*>([^<]+)</g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(rows, [
+    ["craft", "craft + kitchen, workshop (121)"],
+    ["only:craft", "  craft only (28)"],
+    ["kitchen", "  kitchen (81)"],
+    ["workshop", "  workshop (12)"],
+    ["research", "research (9000)"],
+    ["studio", "studio + workshop (312)"],
+    ["only:studio", "  studio only (300)"],
+  ]);
+  assert.match(html, /value="only:craft"[^>]* selected/);
+  // without counts the tree and its names stay
+  assert.match(lib.moduleOptions(["craft", "kitchen"], { kitchen: { requires: ["craft"] } }, ""), /craft \+ kitchen<\/option>/);
+});

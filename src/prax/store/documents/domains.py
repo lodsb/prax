@@ -14,8 +14,10 @@ from ..base import (
     MetaLike,
     _reading,
     _serialized,
+    decode_domains,
     document_hidden,
     domain_clause,
+    hidden_documents,
     now,
 )
 from .meta import _put_meta, get_meta, set_meta
@@ -209,6 +211,45 @@ def documents_in_domain(con: sqlite3.Connection, domain: str) -> list[int]:
             f"SELECT d.id FROM documents d WHERE 1 = 1{clause} ORDER BY d.id", args
         )
     ]
+
+
+@_reading
+def domain_counts(con: sqlite3.Connection) -> dict[str, Any]:
+    """How many live documents each module's filter finds, for the domain
+    picker: ``own``, those whose set names the module (``only:craft``),
+    and ``within``, with the modules built on it too (``craft``, which
+    holds kitchen's recipes). ``unassigned`` counts the documents no
+    module was set for, which a list filtered by any module also shows.
+    Counts what the viewer may see; one read of the distinct sets."""
+    hidden = hidden_documents(con)
+    sql = (
+        "SELECT json_extract(meta, '$.domains'), count(*) FROM documents"
+        " WHERE json_extract(meta, '$.retired') IS NULL"
+    )
+    args: list[Any] = []
+    if hidden:
+        sql += " AND id NOT IN (SELECT value FROM json_each(?))"
+        args.append(json.dumps(sorted(hidden)))
+    onto = ontology.current()
+    mods = [m for m in onto.modules if m != ontology.CORE]
+    reach = {m: onto.within(m) for m in mods}
+    own = dict.fromkeys(mods, 0)
+    within = dict.fromkeys(mods, 0)
+    unassigned = 0
+    for raw, n in con.execute(sql + " GROUP BY 1", args):
+        names = set(decode_domains(raw) or ())
+        if not names:
+            unassigned += n
+            continue
+        for m in names & own.keys():
+            own[m] += n
+        for m, below in reach.items():
+            if names & below:
+                within[m] += n
+    return {
+        "modules": {m: {"own": own[m], "within": within[m]} for m in mods},
+        "unassigned": unassigned,
+    }
 
 
 # How sure a label must be for a rule to name it, when the rule says not:

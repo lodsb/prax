@@ -134,7 +134,10 @@ def search(
     reranker = rerank_mod.current() if rerank is None or rerank else None
     if rerank and reranker is None:
         raise ValueError("rerank requested but PRAX_RERANK names no model")
-    if domain is not None and domain not in ontology.current().modules:
+    if (
+        domain is not None
+        and domain.removeprefix(ontology.ONLY) not in ontology.current().modules
+    ):
         raise ValueError(f"unknown domain {domain!r}")
     depth = config.number("rerank.depth", "PRAX_RERANK_DEPTH", RERANK_DEPTH)
     fetch = max(limit, int(depth)) if reranker else limit

@@ -874,6 +874,36 @@ function fixLabel(fix) {
   return fix.mode ? `${fix.extractor} (${fix.mode})` : String(fix.extractor || "");
 }
 
+// The domain menu's options: the modules as a tree, each under the first
+// module it is built on (workshop, on craft and studio, sits under craft).
+// A module's filter holds the modules built on it (``Ontology.within``),
+// so its line names them and counts them all, and "craft only" below it
+// (``only:craft``) is the module alone. ``counts`` is /domains/counts'
+// modules: own, within, requires, holds; without numbers the tree stays.
+function moduleOptions(mods, counts, selected) {
+  const of = (m) => counts[m] || {};
+  const parentOf = (m) => (of(m).requires || []).find((r) => r !== "core" && mods.includes(r));
+  const kids = (p) => mods.filter((m) => parentOf(m) === p);
+  const n = (v) => (v == null ? "" : ` (${v})`);
+  const out = [];
+  const option = (value, depth, label, hint) => out.push(
+    `<option value="${esc(value)}" title="${esc(hint)}"${value === selected ? " selected" : ""}>`
+    + `${esc("  ".repeat(depth) + label)}</option>`);
+  const walk = (m, depth) => {
+    const below = kids(m);
+    const holds = (of(m).holds || below).filter((x) => x !== m);
+    if (!holds.length) {
+      option(m, depth, m + n(of(m).within), m);
+    } else {
+      option(m, depth, `${m} + ${holds.join(", ")}${n(of(m).within)}`, `${m} and the modules built on it`);
+      option(`only:${m}`, depth + 1, `${m} only${n(of(m).own)}`, `${m}'s own documents, without the modules built on it`);
+    }
+    for (const k of below) walk(k, depth + 1);
+  };
+  for (const m of mods.filter((x) => !parentOf(x))) walk(m, 0);
+  return out.join("");
+}
+
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { fixLabel, esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

@@ -74,6 +74,20 @@ def delete_domain(doc_id: int, domain: str, request: Request) -> dict[str, Any]:
         raise HTTPException(404, str(exc)) from exc
 
 
+@router.get("/domains/counts")
+def domain_counts(request: Request) -> dict[str, Any]:
+    """Each module's documents for the domain picker: ``own`` (its filter
+    as ``only:<module>``), ``within`` (with the modules built on it, the
+    plain filter), ``holds`` (those modules) and ``requires``, which
+    draws the tree."""
+    got = store.domain_counts(_con(request))
+    onto = ontology.current()
+    for name, row in got["modules"].items():
+        row["requires"] = list(onto.modules[name].requires)
+        row["holds"] = sorted(onto.within(name) - {name})
+    return got
+
+
 class DryRunReq(BaseModel):
     rules: list[dict[str, Any]] | None = None  # None: the rules in prax.yaml
     pack: str | None = None  # or the rules a pack suggests (docs/packs.md)

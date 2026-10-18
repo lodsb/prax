@@ -896,8 +896,10 @@ def seed_documents(
                 "SELECT doc_id FROM pages WHERE slug = ?", (f"project-{project}",)
             )
         }
-    if domain:
-        clause, args = domain_clause(con, [domain], unset=False)
+    if domain:  # the module alone already: ``only:craft`` is craft here
+        clause, args = domain_clause(
+            con, [domain.removeprefix(ontology.ONLY)], unset=False
+        )
         ids |= {
             int(r[0])
             for r in con.execute(

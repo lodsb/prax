@@ -174,19 +174,42 @@ def _equal_names(ents: list[Entity], taken: set[int]) -> list[Candidate]:
     return out
 
 
-def _subtypes(ents: list[Entity], taken: set[int]) -> list[Candidate]:
+def _subtypes(
+    ents: list[Entity],
+    taken: set[int],
+    answers: dict[int, list[str]] | None = None,
+) -> list[Candidate]:
     """Tier 1c: one name under a type and its subtype. The ontology says an
     author is a person, a paper is a document, a venue is an organization;
     the extractor reaches for the general type when a document does not
     make the specific one plain, and the two are one thing. The specific
-    side survives, because it says more and the general is implied."""
+    side survives, because it says more and the general is implied.
+
+    The specific side is found by the names it answers to as well
+    (``answers``, ``store.answered_names``): the ingredient ``onion`` was
+    folded into ``onions`` before the material ``onion`` came, and the
+    material is still that ingredient. Only a survivor is found that way,
+    and only between two common types (``naming: common``): a word for a
+    kind of thing names the same kind in its labels, where a proper name's
+    labels hold another edition, a product of a maker, a renamed paper. A
+    general entity is dropped by its own name alone."""
     onto = ontology.current()
     by_plain: dict[str, list[Entity]] = defaultdict(list)
+    own: dict[str, set[int]] = defaultdict(set)
     for e in ents:
         if e["id"] not in taken and e["type"] not in SELF_KINDS:
-            by_plain[normalize(e["name"], plural=False)].append(e)
+            key = normalize(e["name"], plural=False)
+            by_plain[key].append(e)
+            own[key].add(e["id"])
+    for e in ents:
+        if e["id"] in taken or e["type"] in SELF_KINDS:
+            continue
+        for name in (answers or {}).get(e["id"], ()):
+            key = normalize(name, plural=False)
+            if key in by_plain and e["id"] not in {m["id"] for m in by_plain[key]}:
+                by_plain[key].append(e)
     out: list[Candidate] = []
-    for members in by_plain.values():
+    for key, members in by_plain.items():
         if len(members) < 2:
             continue
         by_type: dict[str, list[Entity]] = defaultdict(list)
@@ -199,7 +222,15 @@ def _subtypes(ents: list[Entity], taken: set[int]) -> list[Candidate]:
                 if general == specific or not onto.is_a(specific, general):
                     continue
                 for drop in others:
-                    if drop["id"] in taken or drop["id"] == keep["id"]:
+                    if (
+                        drop["id"] in taken
+                        or drop["id"] == keep["id"]
+                        or drop["id"] not in own[key]
+                        or (
+                            keep["id"] not in own[key]
+                            and general not in onto.common_types
+                        )
+                    ):
                         continue
                     out.append(_sure(keep, drop, f"{general}→{specific}", "subtype"))
                     taken.add(drop["id"])
@@ -306,7 +337,10 @@ def plan(
     taken: set[int] = set()
     out = Plan()
     out.sure = _equal_names(ents, taken)
-    out.subtypes = _subtypes(ents, taken)
+    onto = ontology.current()
+    specific = [t.name for t in onto.types.values() if t.parent]
+    specific = [t for t in specific if t in onto.common_types]
+    out.subtypes = _subtypes(ents, taken, store.answered_names(con, specific))
     out.sure += _initials(ents, taken)
     if etype is None or etype == "venue":
         out.venues, out.editions = _venues(con, ents, taken)

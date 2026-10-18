@@ -50,6 +50,9 @@ import yaml
 from prax import config
 
 CORE = "core"
+# A domain filter's prefix for a module without the modules built on it
+# (``Ontology.within``): ``only:craft`` leaves kitchen and workshop out
+ONLY = "only:"
 # The store's own kinds of document. A page is written here and a project
 # is declared here; neither is ever the extractor reaching for a general
 # type, so neither is proposed as one nor folded into its parent.
@@ -253,9 +256,11 @@ class Ontology:
         """The modules whose documents are also documents of ``domain``:
         the module and every module built on it. A kitchen document is
         read against craft as well, so it is a craft document too; a
-        filter by craft that took only craft's own listed 27 of the 130."""
-        if domain not in self.modules:
-            return frozenset({domain})
+        filter by craft that took only craft's own listed 27 of the 130.
+        ``only:craft`` (``ONLY``) is the module alone, for a person who
+        wants craft without the recipes built on it."""
+        if domain.startswith(ONLY) or domain not in self.modules:
+            return frozenset({domain.removeprefix(ONLY)})
         return frozenset(
             m.name for m in self.modules.values() if domain in _closure(m, self.modules)
         )

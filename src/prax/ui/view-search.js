@@ -9,13 +9,24 @@
 // Only an answer is kept: a page opened before the token was given would
 // otherwise hold an empty list until it is reloaded.
 let MODULES = null;
+let MODULE_COUNTS = {};  // per module: own, within, requires (/domains/counts)
+let UNASSIGNED_COUNT = null;
 let TYPE_PARENTS = {};  // each entity type's parent, for the graph's colours
 async function modules() {
   if (MODULES) return MODULES;
   try {
-    const onto = await api("/ontology");
+    const [onto, counts] = await Promise.all([
+      api("/ontology"),
+      api("/domains/counts").catch(() => null),
+    ]);
     MODULES = Object.keys(onto.modules || {}).filter((m) => m !== "core").sort();
     TYPE_PARENTS = Object.fromEntries(Object.entries(onto.types || {}).map(([t, d]) => [t, d.parent]));
+    MODULE_COUNTS = (counts && counts.modules) || {};
+    UNASSIGNED_COUNT = counts ? counts.unassigned : null;
+    // without counts the tree still comes from the ontology's requires
+    for (const [m, d] of Object.entries(onto.modules || {})) {
+      MODULE_COUNTS[m] = { requires: d.requires || [], ...MODULE_COUNTS[m] };
+    }
   } catch (err) {
     return [];
   }
@@ -23,10 +34,12 @@ async function modules() {
 }
 
 // ``unassigned`` adds the choice of the documents no module was set for
-// (the browse list's; a search has no use for it)
+// (the browse list's; a search has no use for it). The counts are the
+// documents set to a module; one with no module set is in every filter.
 function domainSelect(selected, name = "domain", title = "ontology module", unassigned = false) {
-  const opts = (MODULES || []).map((m) => `<option value="${esc(m)}" ${m === selected ? "selected" : ""}>${esc(m)}</option>`).join("");
-  const none = unassigned ? `<option value="unassigned" ${selected === "unassigned" ? "selected" : ""}>unassigned</option>` : "";
+  const opts = moduleOptions(MODULES || [], MODULE_COUNTS, selected);
+  const n = UNASSIGNED_COUNT == null ? "" : ` (${UNASSIGNED_COUNT})`;
+  const none = unassigned ? `<option value="unassigned" ${selected === "unassigned" ? "selected" : ""}>unassigned${n}</option>` : "";
   return `<select name="${name}" title="${title}"><option value="" ${!selected ? "selected" : ""}>every module</option>${opts}${none}</select>`;
 }
 

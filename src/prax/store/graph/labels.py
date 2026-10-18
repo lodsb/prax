@@ -624,6 +624,32 @@ def entity_names(con: sqlite3.Connection, etype: str) -> list[tuple[int, str]]:
     return [(int(r["id"]), str(r["name"])) for r in rows]
 
 
+def answered_names(con: sqlite3.Connection, types: list[str]) -> dict[int, list[str]]:
+    """Every label of the unmerged entities of these types besides their
+    name, by entity: the names they answer to (one folded into them, the
+    word a document printed). What the subtype tier of resolution matches
+    a general entity against, when the specific one of its name was folded
+    into another (material ``onion`` and ingredient ``onions``, which
+    holds ``onion``). A wire label is no name and is left out."""
+    wanted = set(types)
+    if not wanted:
+        return {}
+    # one pass over the labels, each entity by its key (CROSS JOIN keeps
+    # that order): the planner's own choice, entities by type first, took
+    # 6 s on 311,602 labels
+    rows = con.execute(
+        "SELECT l.entity_id, l.label, e.type FROM entity_labels l"
+        " CROSS JOIN entities e ON e.id = l.entity_id"
+        " WHERE e.canonical_id IS NULL AND l.kind != ? AND l.label != e.name",
+        (WIRE_KIND,),
+    )
+    out: dict[int, list[str]] = {}
+    for r in rows:
+        if r[2] in wanted:
+            out.setdefault(int(r[0]), []).append(str(r[1]))
+    return out
+
+
 WIRE_KIND = "wire"  # a label that was an extractor's wire syntax, kept as the record
 
 

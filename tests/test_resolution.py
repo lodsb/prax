@@ -612,3 +612,50 @@ def test_a_persons_decisions_like_a_pair_can_come_before_it() -> None:
     assert "decided these pairs before" not in resolution.local_prompt(
         "venue", "a", "b"
     )
+
+
+def test_a_general_entity_finds_its_subtype_by_the_names_it_answers_to(
+    con: sqlite3.Connection,
+) -> None:
+    """The kitchen's leftovers of 2026-10-18: the ingredient ``onion`` was
+    folded into ``onions``, then a recipe's ``made_of`` wrote the material
+    ``onion``. The material is that ingredient, found through the label
+    ``onion`` the fold left. A proper name's labels find nothing: the
+    maker ``Olimex`` answering to a board's name is no reason to fold the
+    organization of that name into it."""
+    doc = int(store.ingest_text(con, "a soup " * 30, title="Soup")["doc_id"])
+    for src, st, rel, dst, dt in (
+        ("onion soup", "dish", "calls_for", "onions", "ingredient"),
+        ("leek soup", "dish", "calls_for", "onion", "ingredient"),
+        ("corn chowder", "dish", "made_of", "onion", "material"),
+        ("A13 board", "device", "developed_by", "Olimex", "manufacturer"),
+        ("A13 module", "device", "developed_by", "Olimex A13", "manufacturer"),
+        ("A13 kit", "device", "developed_by", "Olimex A13", "organization"),
+    ):
+        store.link(
+            con,
+            store.Edge(src, st, rel, dst, dt),
+            source_doc=doc,
+            producer="t",
+            run="r",
+        )
+
+    def ent(name: str, etype: str) -> int:
+        return int(
+            con.execute(
+                "SELECT id FROM entities WHERE name = ? AND type = ?", (name, etype)
+            ).fetchone()[0]
+        )
+
+    onion = ent("onion", "ingredient")
+    store.merge_entities(con, onion, ent("onions", "ingredient"))
+    store.merge_entities(
+        con, ent("Olimex A13", "manufacturer"), ent("Olimex", "manufacturer")
+    )
+    plan = resolution.plan(con, likely=False)
+    folds = {(c.drop_name, c.keep_name, c.type) for c in plan.subtypes}
+    assert folds == {("onion", "onions", "material→ingredient")}
+    resolution.apply(con, plan, subtypes=True)
+    assert con.execute(
+        "SELECT canonical_id FROM entities WHERE name = 'onion' AND type = 'material'"
+    ).fetchone()[0] == ent("onions", "ingredient")

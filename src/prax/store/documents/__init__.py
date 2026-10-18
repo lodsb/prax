@@ -32,6 +32,7 @@ from .domains import (  # noqa: F401
     assign_domains,
     document_domains,
     documents_in_domain,
+    domain_counts,
     domains_dry_run,
     domains_of,
     expected_version,
