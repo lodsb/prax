@@ -74,6 +74,22 @@ def test_a_profile_tells_a_scan_from_a_typed_page() -> None:
     assert not pdfparts._MATH_FONT.search("TimesNewRomanPSMT")
 
 
+def test_a_broken_image_does_not_break_the_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """MuPDF raises on an image it cannot load (one of width zero, in the
+    library on 2026-10-18), and the door profiles every captured PDF when
+    its text lands: the image covers nothing, the page is still read."""
+
+    def broken(self: object, xref: int) -> list[object]:
+        raise RuntimeError("code=8: image width is zero (or less)")
+
+    monkeypatch.setattr(pymupdf.Page, "get_image_rects", broken)
+    got = pdfparts.profile(_scan())
+    assert got["pages"] == 2 and got["sampled"] == 2 and got["scanned"] == 0.0
+    assert got["layer"] and got["layer_chars"] > 0
+
+
 def test_a_captured_pdf_is_given_the_reader_that_suits_it(
     con: store.sqlite3.Connection,
 ) -> None:

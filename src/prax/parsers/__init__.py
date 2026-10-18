@@ -73,8 +73,8 @@ from prax.parsers import figures  # noqa: F401 - parsers.figures is used
 from prax.text import mimes
 
 # the parts, each importing only from the ones before it (the readings'
-# own modules, figures, formulas, polish, vision, video and the queue,
-# stand beside them)
+# own modules, figures, formulas, polish, vision, video, the queue and the
+# checks of a text, quality, stand beside them)
 ORDER = (
     "base",
     "code",

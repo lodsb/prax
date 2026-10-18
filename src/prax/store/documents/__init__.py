@@ -111,6 +111,7 @@ from .meta import (  # noqa: F401
     set_meta,
     set_mime,
     set_published,
+    set_quality,
     set_sections,
     set_summary,
     stamp_world_dates,

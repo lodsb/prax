@@ -687,6 +687,34 @@ def document_sections(
 
 
 @_serialized
+def set_quality(
+    con: sqlite3.Connection,
+    doc_id: int,
+    findings: list[dict[str, Any]],
+    *,
+    version: int,
+) -> dict[str, Any]:
+    """What the checks of a text found (``parsers.quality``, stage AO),
+    kept in ``meta.quality`` with the text artifact they read, so a new
+    text makes them stale rather than wrong."""
+    row = con.execute(
+        "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
+    ).fetchone()
+    if row is None:
+        raise KeyError(f"no such document: {doc_id}")
+    meta = json.loads(row["meta"] or "{}")
+    meta["quality"] = held = {
+        "version": version,
+        "at": now(),
+        "text_hash": row["text_hash"],
+        "findings": findings,
+    }
+    _put_meta(con, doc_id, meta)
+    con.commit()
+    return held
+
+
+@_serialized
 def set_sections(
     con: sqlite3.Connection,
     doc_id: int,

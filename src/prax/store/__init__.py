@@ -283,6 +283,7 @@ from .documents import (  # noqa: F401
     set_meta,
     set_mime,
     set_published,
+    set_quality,
     set_reference_links,
     set_sections,
     set_sensitivity,

@@ -160,6 +160,42 @@ numbered there) in the order the user agreed: one step a session.
 
 ## Stages
 
+- [ ] **AO. A text says what is wrong with it.** The user, 2026-10-17:
+      "the most fluent workflow atm for me is to drop it into prax and
+      tell you 'to fix it'. a bit annoying". Every fix of that week was a
+      pattern prax could have seen itself: a scan's OCR layer read as the
+      text, a paper's maths as a scatter of symbols, 438 of 465 figures a
+      caption alone, a latex2html comment kept as text (`MATH $…$ $…$`),
+      `*f**s*` for a subscript.
+
+      Steps 1 to 3 done 2026-10-18 (`docs/eval/quality-checks-2026-10-18.md`:
+      586 documents with maths as text, 353 scans read from their OCR
+      layer, 1,320 with bare captions, 5 short; a sample of 12 of the
+      maths all real after one tightening).
+
+      1. The checks (`prax.parsers.quality`): a text, its stamp and the
+         original's profile (`parsers.pdf.profile`) in, findings out,
+         each with its count, up to three pieces of evidence and the
+         reading that would put it right, if one would. No model, no
+         store. First checks: `ocr-layer`, `maths-as-text`,
+         `bare-figures`, `short-text`, `leftovers`.
+      2. The record: `meta.quality`, the findings with the checks'
+         version and the text's hash, written by the door when a text
+         lands, so a re-read makes it stale rather than wrong.
+      3. Measured over the library before anything acts on it: how many
+         documents each check flags, a sample of each read by hand
+         (`docs/eval/`). A check that flags what is fine is changed or
+         dropped before it can queue a reading.
+      4. Shown: the document page's line of findings, a Review list of
+         the flagged. And the HTML pymupdf4llm writes on purpose
+         (`<sup>` for a footnote's mark and an exponent, `<br>` in a
+         table's cell and a picture's text; 7,426 documents) shown as
+         what it means rather than as tags.
+      5. Acting: `pipeline.follow_ups` asks for the fix a finding names
+         instead of its own conditions (the reader choice and the crops
+         of 2026-10-17 are the first two). A check never ends or
+         replaces anything; a finding with no fix only flags.
+
 - [ ] **AI. A plan for the card: what waits, what a swap costs, and
       "do it now".** The user, 2026-10-01: "shouldn't the whole resource
       management be more aware of all the functionality and plan/batch?"
@@ -838,6 +874,38 @@ not done.
       `clean_heading`, and a summary's `parse` and `acceptable` in a
       repair: a judge of a model's answer stays with the caller that asked
       (CLAUDE.md), so they stay in `prax.writing`.)
+
+## Two architectural stages (the user, 2026-10-18; not yet ordered)
+
+- [ ] **AP. Ids that mean the same in another library.** "the document
+      ids should probably be derived from stable hashes, so i can merge a
+      friend's library in, or networking etc and also share a subgraph".
+      A document has one already: its original's sha256 (invariant 2);
+      the integer id is this store's alone. What has none is an entity
+      (its id and its name are local) and an edge. The shape to weigh:
+      the integer keys stay (every table and index is built on them),
+      and beside them a global id: a document's hash, an entity's minted
+      once (a ULID, kept through merges, its merged twins' ids as
+      aliases), an edge's the hash of its two ends' global ids, its
+      relation and its source document's hash. An export and an import
+      speak only global ids; a friend's entity meets this library's
+      through resolution (a likely pair, a person's decision), never by
+      an equal number. The wall decides what an export may hold: no
+      document a token could not see, no edge whose evidence is one.
+- [ ] **AQ. An original that stays where it is.** "on my nas LARGE
+      amounts of video or audio data, i dont want this to be duplicated
+      … there may be duplicates all over the place, too". The bytes
+      need not be in `archive/`: a document's original could be *held*
+      (copied in, as now) or *referenced* (a place it is read from), and
+      one hash may have many places — every copy on the NAS is a
+      location of the one document, which is also how the duplicates
+      are found. A table of locations (hash, place as a URI, size,
+      mtime, last seen, reachable), not edges: where bytes lie is
+      provenance of the file, and invariant 8 keeps provenance out of
+      the graph. A NAS crawl hashes cheaply first (size and sampled
+      blocks), fully only what it ingests. A worker reads a referenced
+      original from its place or through the door. Invariant 2 changes
+      with it, and the backup says what it cannot restore.
 
 ## Later / maybe
 

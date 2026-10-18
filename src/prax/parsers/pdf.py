@@ -74,11 +74,13 @@ def image_cover(page: Any) -> float:
     """The share of a page its pictures cover: near 1 for a picture of a
     page, one picture or many strips, whatever text an OCR laid over it."""
     area = abs(page.rect) or 1.0
-    covered = sum(
-        abs(r & page.rect)
-        for img in page.get_images(full=True)
-        for r in page.get_image_rects(img[0])
-    )
+    covered = 0.0
+    for img in page.get_images(full=True):
+        try:
+            rects = page.get_image_rects(img[0])
+        except Exception:  # noqa: BLE001, S112 - a broken image (width zero) covers nothing
+            continue
+        covered += sum(abs(r & page.rect) for r in rects)
     return float(covered / area)
 
 
@@ -94,7 +96,10 @@ def profile(data: bytes) -> dict[str, Any]:
       can be searched; its words are that OCR's, often bad;
     - ``layer``: whether any of them has text at all;
     - ``maths``: how many set something in a maths font, which a typeset
-      formula is and a scan's OCR layer never is.
+      formula is and a scan's OCR layer never is;
+    - ``layer_chars`` over ``sampled`` pages: how much text the layer
+      holds, whitespace left out, for telling a text that lost most of it
+      (``parsers.quality``).
     """
     out: dict[str, Any] = {
         "pages": 0,
@@ -102,6 +107,8 @@ def profile(data: bytes) -> dict[str, Any]:
         "ocr_layer": 0.0,
         "layer": False,
         "maths": 0,
+        "layer_chars": 0,
+        "sampled": 0,
     }
     try:
         doc = _pymupdf_open(data)
@@ -110,21 +117,30 @@ def profile(data: bytes) -> dict[str, Any]:
     with doc:
         out["pages"] = n = doc.page_count
         sample = range(min(n, PROFILE_PAGES))
-        scanned = ocr = 0
+        scanned = ocr = read = 0
         for i in sample:
-            page = doc[i]
-            if image_cover(page) >= SCAN_COVER:
+            try:
+                page = doc[i]
+                cover = image_cover(page)
+                spans = page.get_texttrace()
+                fonts = page.get_fonts(full=True)
+                chars = len("".join(page.get_text().split()))  # not its spacing
+            except Exception:  # noqa: BLE001, S112 - a page MuPDF cannot read is left out
+                continue
+            read += 1
+            if cover >= SCAN_COVER:
                 scanned += 1
-            spans = page.get_texttrace()
             if spans:
                 out["layer"] = True
                 hidden = sum(1 for t in spans if t.get("type") == 3)
                 if hidden >= OCR_INVISIBLE * len(spans):
                     ocr += 1
-            if any(_MATH_FONT.search(str(f[3])) for f in page.get_fonts(full=True)):
+            if any(_MATH_FONT.search(str(f[3])) for f in fonts):
                 out["maths"] += 1
-        out["scanned"] = scanned / max(1, len(sample))
-        out["ocr_layer"] = ocr / max(1, len(sample))
+            out["layer_chars"] += chars
+        out["sampled"] = read
+        out["scanned"] = scanned / max(1, read)
+        out["ocr_layer"] = ocr / max(1, read)
     return out
 
 

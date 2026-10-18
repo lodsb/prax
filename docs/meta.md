@@ -68,6 +68,7 @@ writer, and add its row here.
 | `ocr` | `dict[str, Any]` | an OCR reading's pages and progress |
 | `reading` | `dict[str, Any]` | the last reading that finished (readings queue) |
 | `lang` | `str` | ISO 639-1, prax.text.language |
+| `quality` | `dict[str, Any]` | what the checks of the text found (parsers.quality) |
 | `markup` | `dict[str, Any]` | the schema.org pass: hash, facts, type, genre |
 | `references` | `dict[str, Any]` | the references pass: entries, links |
 | `private` | `dict[str, Any]` | the rules' cues for "personal?" (stage V) |
