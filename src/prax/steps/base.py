@@ -199,6 +199,17 @@ def paid_refusal(step: str, spec: models.ModelSpec | None) -> str | None:
     return None
 
 
+def model_down(spec: models.ModelSpec | None) -> bool:
+    """Whether the step's model says it cannot answer now
+    (``models.ready``: a server that is not up, a key that is not set).
+    The worker then asks for nothing; the supervisor starts the server
+    from the demand, which the door counts without a hand-out. A batch
+    fetched for a server that was down was built, leased and given back
+    on every pass: in the database-only days of 2026-10 that was some
+    9 s of the door's time each 20 s, for work nobody could do."""
+    return spec is not None and not models.ready(spec).get("ok", True)
+
+
 class ModelStep(Step):
     """A step whose worker asks a local model about each item and posts
     the answers with a run name: titles, summaries, sections, vocabulary.
@@ -224,6 +235,8 @@ class ModelStep(Step):
         refused = paid_refusal(self.name, spec)
         if refused:
             return refused
+        if model_down(spec):
+            return None
         batch = p.fetch(self.name)
         items = batch.get("items") or []
         if not items:

@@ -6,6 +6,7 @@ LibreOffice.
 from __future__ import annotations
 
 import codecs
+import functools
 import re
 import shutil
 import subprocess
@@ -298,8 +299,11 @@ def _rtf(data: bytes) -> str:
     return re.sub(r"\n{3,}", "\n\n", out).strip()
 
 
+@functools.cache
 def soffice_path() -> str | None:
-    """LibreOffice's binary, when this machine has one."""
+    """LibreOffice's binary, when this machine has one. Looked for once a
+    process: the parse step's hand-out asks on every call, and the search
+    walks PATH (a LibreOffice installed later is seen after a restart)."""
     for name in ("soffice", "libreoffice"):
         found = shutil.which(name)
         if found:

@@ -47,6 +47,16 @@ def data_dir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     from prax.steps import embed
 
     embed.forget()
+    # and the resolution plan the adjudicate hand-out holds
+    from prax.steps import graph
+
+    graph.forget()
+    # a test's model is a stub runtime with no server behind it: the
+    # worker's look at the server before a fetch is off (a test of it
+    # turns it on again)
+    from prax.steps import base
+
+    monkeypatch.setattr(base, "model_down", lambda spec: False)
     # a meta key the code writes and store.DocumentMeta does not name fails
     # the test that wrote it (a host only logs it)
     monkeypatch.setattr(store.checks, "strict_meta", True)

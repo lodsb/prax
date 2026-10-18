@@ -4,6 +4,7 @@ the adjudication of the likely pairs."""
 
 from __future__ import annotations
 
+import threading
 import time
 from typing import Any
 
@@ -11,7 +12,7 @@ from prax import models, store
 from prax.ml import embeddings
 from prax.work import LEASE_SECONDS
 
-from . import leases
+from . import base, leases
 from .base import HandOut, Log, Pass, Step, TakeIn, paid_refusal, say
 
 
@@ -62,6 +63,8 @@ class Typing(Step):
         refused = paid_refusal(self.name, spec)
         if refused:
             return refused
+        if base.model_down(spec):
+            return None
         items = p.fetch(self.name).get("items") or []
         if not items:
             return None
@@ -164,23 +167,57 @@ class Resolve(Step):
         )
 
 
+# how long the adjudicate hand-out keeps a plan whose inputs have not
+# moved: the edges, which are not in the stamp, change only a survivor's
+# degree, and a pair decided on a stale one is still a pair
+PLAN_HELD_SECONDS = 600.0
+
+
 class Adjudicate(Step):
     """The likely pairs nobody has decided, to a worker with the
     adjudicate step's model (a paid one: the worker spends only when told
-    to); leased by the entity that would be dropped."""
+    to); leased by the entity that would be dropped.
+
+    The likely tier comes from the whole resolution plan, which normalizes
+    every entity's name: 3.4 s of the door's Python on 190,000 entities,
+    asked by a worker every pass and nearly always for the same answer
+    (2026-10-18). It is kept while ``store.resolution_stamp`` holds, up to
+    ``PLAN_HELD_SECONDS``; the leases and the scored pairs are read fresh."""
 
     name = "adjudicate"
 
-    def hand_out(self, h: HandOut) -> dict[str, Any]:
+    def __init__(self) -> None:
+        self._held: tuple[tuple[Any, ...], float, list[Any]] | None = None
+        self._lock = threading.Lock()
+
+    def forget(self) -> None:
+        """Drop the plan held (a test's next database is another library)."""
+        with self._lock:
+            self._held = None
+
+    def likely(self, con: Any) -> list[Any]:
+        """The plan's likely tier, computed again only when what it reads
+        has moved or it is ``PLAN_HELD_SECONDS`` old."""
         from prax.graph import resolution
 
+        stamp = store.resolution_stamp(con)
+        now = time.monotonic()
+        with self._lock:
+            held = self._held
+            if held and held[0] == stamp and now - held[1] < PLAN_HELD_SECONDS:
+                return held[2]
+            likely = resolution.plan(con).likely
+            self._held = (stamp, now, likely)
+            return likely
+
+    def hand_out(self, h: HandOut) -> dict[str, Any]:
         spec = models.resolve("adjudicate")
         if spec is None:
             return h.nothing()
         # a pair a model has put a number on and left is a person's now
         scored = set() if spec.paid else store.scored_pairs(h.con)
         items: list[dict[str, Any]] = []
-        for c in resolution.plan(h.con).likely:
+        for c in self.likely(h.con):
             if len(items) >= h.limit or not h.free(c.drop):
                 continue
             if (min(c.keep, c.drop), max(c.keep, c.drop)) in scored:
@@ -237,6 +274,8 @@ class Adjudicate(Step):
             return (
                 f"skipped: the adjudicate step is {spec.name} (paid); --spend runs it"
             )
+        if base.model_down(spec):
+            return None
         items = p.fetch(self.name, limit=p.limit * 20).get("items") or []
         if not items:
             return None
@@ -249,7 +288,13 @@ class Adjudicate(Step):
         )
 
 
-REGISTERED = {s.name: s for s in (Typing(), Resolve(), Adjudicate())}
+ADJUDICATE = Adjudicate()
+REGISTERED = {s.name: s for s in (Typing(), Resolve(), ADJUDICATE)}
+
+
+def forget() -> None:
+    """Drop what the door's half of these steps holds between hand-outs."""
+    ADJUDICATE.forget()
 
 
 # ------------------------------------------------ the worker's half

@@ -16,7 +16,7 @@ from prax.client import Door
 from prax.graph import extraction, ontology
 from prax.text import mimes
 
-from . import leases
+from . import base, leases
 from .base import HandOut, Log, ModelStep, Pass, Step, TakeIn, say
 
 REPORTED = ("linked", "existing", "queued", "rejected", "retired")
@@ -122,6 +122,8 @@ class Extract(Step):
         refused = self.refusal(p)
         if refused:
             return refused
+        if base.model_down(models.resolve(self.name)):
+            return None
         items = p.fetch(self.name).get("items") or []
         if not items:
             return None

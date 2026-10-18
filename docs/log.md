@@ -6009,6 +6009,55 @@ The poll of an open document already paused in a hidden tab, and its
 fingerprint was made cheap in the quality fixes. Next: the door's own
 time, measured with the worker running.
 
+## 2026-10-18: the door's time for a worker's hand-outs
+
+The second part. A request from the page waits while the door's Python
+builds a worker's batch (the GIL), and the worker asks every 20 s for
+each step. Timed on the running door with `limit=0`, which leases
+nothing, one pass of hand-outs cost about 9 s: adjudicate 3.4 s,
+titles 1.3 s, vocabulary 1.1 s, summaries and equations 0.6 s each,
+the rest less. `/work/demand`, 12 s a call in the slow log of the
+morning, took 46 ms. A py-spy profile of the door holding the GIL
+(`--gil`) put the time in two places: the adjudicate plan and the
+titles rows. The vocabulary step's two big queries run in SQLite, which
+releases the GIL, and did not appear.
+
+- **Adjudicate.** The hand-out took the likely tier from
+  `resolution.plan`, which normalizes the names of all 190,659 unmerged
+  entities: 3.39 s on the live store, read-only, for the same answer on
+  nearly every call. The step now holds the tier while
+  `store.resolution_stamp` stays the same: the undecided pairs (count,
+  newest, how many scored), the unmerged entities, the newest entity and
+  label. That costs 28 ms. The edges are not in the stamp, because
+  they change only which side of a pair survives; a plan older than
+  `PLAN_HELD_SECONDS` (600) is made again anyway. A pair handed out
+  from a stale plan is harmless: `merge_entities` refuses a pair that
+  is already merged, and `apply` skips it. The leases and the scored
+  pairs are read fresh on every call.
+- **Titles.** `store.title_rows` decoded every document's whole `meta`
+  in Python to read two keys: 75 MB of JSON (4 KB on average, 311 KB at
+  most) under the GIL. It now reads `title_source` and `titles_tried`
+  with `json_extract` and leaves the retired documents out in SQL: 748
+  to 278 ms, most of it in SQLite, with the same answer for all 17,720
+  documents.
+- **The worker asks for nothing while its model cannot answer.**
+  `steps.base.model_down` asks `models.ready` (cached for 10 s) before
+  a fetch, in every model step, extract, typing and adjudicate. In the
+  database-only days llama-server is down, and every pass built
+  batches, leased them and gave them back. The supervisor starts the
+  server from `/work/demand`, which needs no hand-out.
+- `parsers.office.soffice_path` is looked for once a process; the parse
+  hand-out asked on every call, and the search walks PATH.
+- `scripts/time_ui.py` times what the web UI asks for, as a page does:
+  the page and its files, the main views' first requests and an open
+  document's, the median and the slowest of each, the bytes on the wire
+  and whether they came compressed. It is a client of the door
+  (`PRAX_DOOR`, `PRAX_TOKEN`) and writes nothing. Before these changes,
+  on the door with the worker in database-only mode: the graph overview
+  1.2 s (2.9 s at most), an open document's context 525 ms, the
+  communities map 398 ms, a search 295 ms, an open document's poll
+  217 ms (2.6 s at most), the page with its 22 files 554 ms and 682 KB.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

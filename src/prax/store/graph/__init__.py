@@ -99,6 +99,7 @@ from .decisions import (  # noqa: F401
     queue_review,
     reopen_reviews,
     replace_entity_candidates,
+    resolution_stamp,
     resolve_review,
     resolve_review_many,
     retype_review,

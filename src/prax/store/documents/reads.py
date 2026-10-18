@@ -911,22 +911,47 @@ def translated_summaries(
     ]
 
 
+# what ``title_rows`` reads of a document's meta (``writing.titles.needs_title``
+# and the pipeline's ``titles_needed``), and which of them are objects
+TITLE_KEYS = ("title_source", "titles_tried")
+TITLE_OBJECTS = frozenset({"titles_tried"})
+
+
 @_reading
 def title_rows(
     con: sqlite3.Connection, ids: list[int] | None = None
 ) -> list[dict[str, Any]]:
     """``id, title, text_hash, meta`` of the live documents (or of
-    ``ids``), oldest first: what a title is judged from."""
-    sql = "SELECT id, title, text_hash, meta FROM documents"
+    ``ids``), oldest first: what a title is judged from. ``meta`` holds
+    only the keys a title is judged by (``TITLE_KEYS``), read by SQLite:
+    decoding every document's whole ``meta`` in Python was 75 MB of JSON
+    under the GIL on each titles hand-out, 1.3 s of the door
+    (2026-10-18)."""
+    keys = ", ".join(f"json_extract(meta, '$.{k}') AS {k}" for k in TITLE_KEYS)
+    sql = (
+        f"SELECT id, title, text_hash, {keys} FROM documents"
+        " WHERE coalesce(json_extract(meta, '$.retired'), 0) IN (0, '')"
+    )
     args: tuple[Any, ...] = ()
     if ids is not None:
-        sql += f" WHERE id IN ({','.join('?' * len(ids))})"
+        sql += f" AND id IN ({','.join('?' * len(ids))})"
         args = tuple(ids)
     out = []
     for r in con.execute(sql + " ORDER BY id", args):
-        meta = json.loads(r["meta"] or "{}")
-        if not meta.get("retired"):
-            out.append({**dict(r), "meta": meta})
+        meta = {}
+        for k in TITLE_KEYS:
+            v = r[k]
+            if v is not None:
+                # an object comes back as its JSON text
+                meta[k] = json.loads(v) if k in TITLE_OBJECTS else v
+        out.append(
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "text_hash": r["text_hash"],
+                "meta": meta,
+            }
+        )
     return out
 
 

@@ -102,6 +102,26 @@ def scored_pairs(con: sqlite3.Connection) -> set[tuple[int, int]]:
     }
 
 
+@_reading
+def resolution_stamp(con: sqlite3.Connection) -> tuple[Any, ...]:
+    """What a resolution plan reads, as a value that moves when it does: the
+    undecided pairs, the unmerged entities and the newest entity and label
+    (a rename writes one). Not the edges, which move a survivor's degree
+    with every extraction; a holder of a plan bounds that by its age.
+    Some 25 ms, against the plan's 3 s (2026-10-18)."""
+    pairs = con.execute(
+        "SELECT count(*), max(rowid), count(p_same) FROM entity_candidates"
+        " WHERE decided IS NULL AND held IS NULL"
+    ).fetchone()
+    ents = con.execute(
+        "SELECT count(*) FROM entities WHERE canonical_id IS NULL"
+    ).fetchone()
+    newest = con.execute(
+        "SELECT (SELECT max(id) FROM entities), (SELECT max(id) FROM entity_labels)"
+    ).fetchone()
+    return (*pairs, ents[0], *newest)
+
+
 def entity_candidates(
     con: sqlite3.Connection, etype: str | None = None
 ) -> list[dict[str, Any]]:

@@ -470,6 +470,7 @@ from .graph import (  # noqa: F401
     reopen_reviews,
     replace_communities,
     replace_entity_candidates,
+    resolution_stamp,
     resolve_review,
     resolve_review_many,
     restore_run,
