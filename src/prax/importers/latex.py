@@ -41,6 +41,27 @@ def stamp(pandoc_version: str) -> str:
 
 
 MAX_DEPTH = 12  # \input within \input, at most
+# what a source may read in, all its files together: a paper is a few
+# hundred kilobytes; an \input that reads one file in twice, and that file
+# another twice, doubles at every level (the review of 2026-10-18)
+MAX_SOURCE_CHARS = 20_000_000
+
+
+class SourceError(ValueError):
+    """A source that reads outside its folder or more than a paper holds."""
+
+
+def inside(folder: Path, candidate: Path) -> bool:
+    """Whether ``candidate`` is a file under ``folder`` once every link and
+    ``..`` is followed: a source names its own files, never one of the host
+    (an absolute path, ``../``, a link out; the review of 2026-10-18)."""
+    try:
+        real = candidate.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    return real.is_file() and real.is_relative_to(folder.resolve())
+
+
 PANDOC_SECONDS = 180
 
 _COMMENT = re.compile(r"(?<!\\)%.*")
@@ -178,22 +199,43 @@ def strip_comments(tex: str) -> str:
     return "\n".join(_COMMENT.sub("", line) for line in tex.splitlines())
 
 
-def flatten(main: Path, *, depth: int = 0) -> str:
+def flatten(
+    main: Path,
+    *,
+    depth: int = 0,
+    top: Path | None = None,
+    stack: frozenset[Path] = frozenset(),
+    budget: list[int] | None = None,
+) -> str:
     """The source with every ``\\input``, ``\\include`` and ``\\subfile``
-    read in, relative to the main file's folder (and then to the file's
-    own), ``.tex`` added where the name has none; a file not found is left
-    out with a comment in its place."""
+    read in, relative to the main file's folder, ``.tex`` added where the
+    name has none; a file not found is left out. Only a file under the main
+    file's folder (``top``) is read (``inside``), a file is never read
+    inside itself, and all of them together hold at most
+    ``MAX_SOURCE_CHARS`` (``SourceError`` past it)."""
+    top = top if top is not None else main.parent
+    budget = budget if budget is not None else [MAX_SOURCE_CHARS]
     text = strip_comments(main.read_text(encoding="utf-8", errors="replace"))
+    budget[0] -= len(text)
+    if budget[0] < 0:
+        raise SourceError(f"the source reads in over {MAX_SOURCE_CHARS} characters")
     if depth >= MAX_DEPTH:
         return text
-    roots = [main.parent]
+    here = stack | {main.resolve()}
 
     def inline(m: re.Match[str]) -> str:
         name = m.group(1).strip()
-        for root in roots:
+        # as TeX finds it: from the main file's folder, then the file's own
+        for root in dict.fromkeys((top, main.parent)):
             for candidate in (root / name, root / f"{name}.tex"):
-                if candidate.is_file() and candidate.suffix in (".tex", ""):
-                    return flatten(candidate, depth=depth + 1)
+                if (
+                    candidate.suffix in (".tex", "")
+                    and inside(top, candidate)
+                    and candidate.resolve() not in here
+                ):
+                    return flatten(
+                        candidate, depth=depth + 1, top=top, stack=here, budget=budget
+                    )
         return ""
 
     return _INPUT.sub(inline, text)
@@ -247,9 +289,13 @@ def bibliography(tex: str, folder: Path) -> tuple[str, list[tuple[str, str]]]:
 
 def _find(folder: Path, name: str, suffix: str) -> Path | None:
     for candidate in (folder / name, folder / f"{name}{suffix}"):
-        if candidate.is_file():
+        if inside(folder, candidate):
             return candidate
-    hits = sorted(folder.rglob(f"{Path(name).name}{suffix}"))
+    hits = [
+        h
+        for h in sorted(folder.rglob(f"{Path(name).name}{suffix}"))
+        if inside(folder, h)
+    ]
     return hits[0] if hits else None
 
 
@@ -480,6 +526,9 @@ def to_markdown(tex: str, binary: str, *, cwd: Path) -> str:
             "-t",
             "markdown_strict+tex_math_dollars+pipe_tables+backtick_code_blocks",
             "--wrap=none",
+            # pandoc reads no file of its own: flatten read the includes
+            # already, and \lstinputlisting{/any/file} would read the host's
+            "--sandbox",
         ],
         input=tex,
         capture_output=True,
@@ -546,7 +595,7 @@ def parts(main: Path) -> list[Path]:
     found = []
     for name in _INCLUDEPDF.findall(flatten(main)):
         tex = main.parent / f"{name}.tex"
-        if tex.is_file():
+        if inside(main.parent, tex):
             found.append(tex)
     return found
 

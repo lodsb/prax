@@ -5854,6 +5854,72 @@ Measured on the live papers: the profile marks the 12 scans as scans
 (1.0 and 1.0), the two born-digital ones and the arXiv papers as not
 (maths fonts on 4 to 11 of the pages profiled), with nothing to tune.
 
+## 2026-10-18: the safety and correctness review, and its fixes
+
+The review of everything since 2026-10-04 (`72710d3`, about 100
+commits) ran as a workflow: six reviewers by area, a skeptic for each
+finding. 28 findings were confirmed and none refuted; they are 20
+defects. `docs/eval/safety-review-2026-10-18.md` has each with its
+scenario and evidence, and what was done. Every fix has a test in
+`tests/test_review_2026_10_18.py` or beside the code it changed. Each
+of these tests failed on the code the review read.
+
+The wall and the host:
+
+- `write_page` checks the parent, the project, the documents it
+  annotates and a cycle before its first write, and marks a personal
+  page before its text is indexed (`sensitivity=`). A refused personal
+  page leaves nothing open.
+- A named token re-sending a document's bytes with a text of its own
+  changes nothing. Only the administrator may replace a text this way.
+- An e-print reads no file outside its folder: `\input` and
+  `\bibliography` are resolved and kept inside it, a file is never read
+  inside itself, the flattened source is capped at 20 M characters, and
+  pandoc runs with `--sandbox`. It unpacks to at most 500 MB in 10,000
+  files, checked before anything is written.
+- The latex2html crawl cache keeps every page inside it. A path that
+  decodes to `..`, a backslash or a drive is filed under `_/<sha256>`.
+- A page drawn for an agent is at most 2,400 px a side and 3.8 MP, and
+  a page MuPDF cannot draw answers 422. The MCP `figure` tool asks for
+  `max_px=1600`: a JPEG 2000, an SVG or a 5,000 px scan comes back as a
+  PNG a model takes (`figures.for_a_model`).
+
+The readers:
+
+- A versioned id in `meta.arxiv` (`2501.13484v2`) is asked for without
+  its version (`latexsrc.arxiv_of`). A mode the reading refuses costs
+  that reading only, not the follow-ups.
+- The id on a first page is arXiv's margin stamp with its class and
+  date. A bare `arXiv:` id is taken only when it is the only one on the
+  page. Over 4,000 of the library's PDFs, the stamp and the old pattern
+  agreed on 468 and the stamp lost none; four hits were bare ids, one of
+  which (doc 13873) had its own source. A text converted from a source
+  must also hold `SAME_PAPER` (0.75) of its long words in the PDF's
+  text: 0.83-0.99 for 62 papers read both ways, 0.20-0.71 against
+  another paper.
+- A page is a scan only when its visible text lies beneath the
+  picture or it has none (`pdf.picture_of_page`, from MuPDF's drawing
+  order). 150 of the 353 OCR-layer findings were slide decks and other
+  born-digital pages with a background picture; checks version 4 drops
+  them.
+- A failed re-read of the source leaves a LaTeX text alone: no marker
+  over it.
+- A reading the door or a pass asked for is no longer forced past the
+  too-short guard. Only a person's, an agent's, and the next window of
+  a long OCR are (`parse.FORCED_BY`).
+
+The small ones: the published and languages passes write only over the
+state they read, so a person's date set during a run stays.
+`set_quality` keeps the checks only for the text they read. An
+annotating reading that came back `same` checks the text again, and the
+bulk fix selects a finding only where it names the reading asked for.
+`since_text` walks back to the entry that wrote the text, past a `same`
+re-read and a failed attempt. `extraction:` is a known section of
+prax.yaml. The config cache trusts no stamp taken inside the two-second
+window. `test_up` counts the supervisor's reads of the demand instead of
+sleeping. CLAUDE.md names three more scripts that open the file, and
+architecture.md names the `quality` pass.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

@@ -313,6 +313,7 @@ def select_for_reading(
     unread_formulas: bool = False,
     maths: float | None = None,
     finding: str | None = None,
+    fixed_by: str | None = None,
     limit: int | None = None,
 ) -> list[int]:
     """The documents a reading is asked for at once: the ``ids`` given,
@@ -333,7 +334,9 @@ def select_for_reading(
     what a parser that reads the mathematics is for; never a manual or a
     datasheet, ``_numbered_steps``), and to the ones whose text the checks
     found this in (``finding``: ``maths-as-text``, ``ocr-layer``…, in
-    ``meta.quality`` of the text they now hold); every filter given must
+    ``meta.quality`` of the text they now hold; with ``fixed_by``, only
+    where the finding names that reading as its fix, so a reading that ran
+    and could not help is not asked again); every filter given must
     hold. Retired documents are never selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
@@ -361,9 +364,17 @@ def select_for_reading(
         sql += (
             " AND json_extract(meta, '$.quality.text_hash') = text_hash"
             " AND EXISTS (SELECT 1 FROM json_each(meta, '$.quality.findings') f"
-            " WHERE json_extract(f.value, '$.check') = ?)"
+            " WHERE json_extract(f.value, '$.check') = ?"
         )
         args.append(finding)
+        if fixed_by:
+            # marker-ocr is marker's fix too, in its OCR mode
+            sql += (
+                " AND (json_extract(f.value, '$.fix') = ?"
+                " OR json_extract(f.value, '$.fix') LIKE ? ESCAPE '!')"
+            )
+            args += [fixed_by, _like_prefix(fixed_by + "-")]
+        sql += ")"
     if unpolished:
         # a video with an automatic transcript whose text the polish has
         # not written yet

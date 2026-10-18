@@ -479,9 +479,14 @@ def ingest_bytes(
         # (a paper's ids and authors read off its abstract page): what the
         # document lacks is filled in, what it has is left alone
         _fill_in(con, doc_id, extra_meta)
+    # a sender's text replaces the text of a document it did not create
+    # only for the administrator: a named token re-sending known bytes
+    # could otherwise rewrite any document it can see, and the graph read
+    # from it (the review of 2026-10-18)
+    may_replace = result["created"] or store.VIEWER.get() is None
     taken = (
         _take_text(con, doc_id, text, str(text_source))
-        if text and text_source
+        if text and text_source and may_replace
         else None
     )
     indexed = store.is_indexed(con, doc_id) if taken else _index_now(con, doc_id, mime)

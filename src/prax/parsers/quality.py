@@ -38,9 +38,9 @@ from prax.text import markup
 
 from . import figures
 
-VERSION = (
-    3  # 2: a line with code is not a formula's debris; 3: the crops seen in the history
-)
+# 2: a line with code is not a formula's debris; 3: the crops seen in the
+# history; 4: a slide's words over its background are no scan
+VERSION = 4
 EVIDENCE = 3  # pieces of the text a finding shows
 SNIPPET = 120  # characters of each
 
@@ -48,6 +48,10 @@ SNIPPET = 120  # characters of each
 LATEX_READERS = ("marker/", "latex-source/", "latex2html/")
 # the reader that reads a PDF's text layer as it stands
 LAYER_READERS = ("pymupdf4llm/", "pymupdf/")
+
+# the readings a finding names as its fix (marker-ocr is marker's, in its
+# OCR mode)
+FIXING = frozenset({"marker", "latex-source", "figure-crops"})
 
 SCANNED = 0.5  # the share of profiled pages that makes a PDF a scan
 MATHS_PAGES = 2  # profiled pages in a maths font that make it a paper with formulas
@@ -141,17 +145,24 @@ def debris_lines(lines: list[str]) -> list[str]:
 
 def since_text(history: list[Mapping[str, Any]] | None, stamp: str) -> set[str]:
     """The readings that ran on the current text: the extractors in
-    ``meta.parse_history`` after the entry that wrote it (``stamp``, its
+    ``meta.parse_history`` after the entry that wrote it, the last that
+    ``created`` or ``upgraded`` a text under the reader of ``stamp`` (its
     ``text_source``). An annotating reading (the crops, the formulas)
-    leaves ``text_source`` as it was, so only the history says it ran; one
-    that ran on an earlier text says nothing of this one."""
+    leaves ``text_source`` as it was, so only the history says it ran; a
+    re-read that came back ``same`` (the stamp moves on, the text stays)
+    and an attempt that failed do not end the walk, and a failed one is no
+    reading that ran. One that ran on an earlier text says nothing of
+    this one, and a history that never wrote the text says nothing at all
+    (the review of 2026-10-18)."""
+    reader = stamp.split("/", 1)[0]
     out: set[str] = set()
     for h in reversed(history or []):
-        name = str(h.get("extractor") or "")
-        if name == stamp:
-            break
-        out.add(name.split("/", 1)[0])
-    return out
+        name = str(h.get("extractor") or "").split("/", 1)[0]
+        if name == reader and h.get("outcome") in ("created", "upgraded"):
+            return out
+        if "error" not in h:
+            out.add(name)
+    return set()
 
 
 def check(
@@ -247,10 +258,9 @@ def profile_of(
     from . import latexsrc, pdf
 
     got = pdf.profile(data)
-    named = str(arxiv or "").strip()
-    got["arxiv"] = (
-        named if latexsrc.ARXIV_ID.fullmatch(named) else latexsrc.arxiv_id_of(data)
-    )
+    # the id without its version: the reading's mode takes no other (the
+    # review of 2026-10-18, a "2501.13484v2" stopped the follow-ups)
+    got["arxiv"] = latexsrc.arxiv_of(arxiv) or latexsrc.arxiv_id_of(data)
     return got
 
 

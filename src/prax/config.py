@@ -48,6 +48,7 @@ SECTIONS = (
     # max_upload_mb
     "ontology",  # dir
     "graph",  # language: which of a thing's names this host shows
+    "extraction",  # standard_names, world_dates: what the extract prompt asks
     "paths",  # models (where fetched model files go), backup, llama_server
     "sources",  # what the importers need: github user and token
     "run",  # what `prax up` keeps alive on this host (prax.host.up)
@@ -79,7 +80,7 @@ def config_path() -> Path:
 
 
 # the last file parsed: its path, its (mtime, size) when read, its bytes, its data
-_parsed: tuple[Path, tuple[int, int], bytes, dict[str, Any]] | None = None
+_parsed: tuple[Path, tuple[int, int] | None, bytes, dict[str, Any]] | None = None
 
 
 def document() -> dict[str, Any]:
@@ -107,8 +108,12 @@ def document() -> dict[str, Any]:
     if settled and _parsed is not None and _parsed[0] == path and _parsed[1] == seen:
         return _parsed[3]
     raw = path.read_bytes()
+    # the stamp of a read inside the window is never trusted again: a second
+    # write in the same tick would leave it standing (the review of
+    # 2026-10-18); the first read after the window keeps one
+    stamp = seen if settled else None
     if _parsed is not None and _parsed[0] == path and _parsed[2] == raw:
-        _parsed = (path, seen, raw, _parsed[3])
+        _parsed = (path, stamp, raw, _parsed[3])
         return _parsed[3]
     data = yaml.safe_load(raw.decode("utf-8")) or {}
     if not isinstance(data, dict):
@@ -119,7 +124,7 @@ def document() -> dict[str, Any]:
             f"{path}: unknown section{'s' if len(unknown) > 1 else ''}"
             f" {', '.join(sorted(unknown))}; known: {', '.join(SECTIONS)}"
         )
-    _parsed = (path, seen, raw, data)
+    _parsed = (path, stamp, raw, data)
     return data
 
 

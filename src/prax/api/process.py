@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from prax import models, packs, store, work
 from prax.capture import routes
 from prax.graph import ontology
+from prax.parsers import quality
 
 from ._base import _con
 
@@ -395,6 +396,14 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
             unread_formulas=req.unread_formulas,
             maths=req.maths,
             finding=req.finding,
+            # a finding is asked for by the reading it names: the crops
+            # that ran and filled nothing are not asked again. A reading
+            # no check names is the asker's own choice, over all of them
+            fixed_by=(
+                req.extractor
+                if req.finding and req.extractor in quality.FIXING
+                else None
+            ),
             limit=req.limit,
         )
     except ValueError as exc:

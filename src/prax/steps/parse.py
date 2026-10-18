@@ -21,6 +21,12 @@ from prax.text import mimes
 from . import READING_STEPS, leases
 from .base import HandOut, Log, Pass, Step, TakeIn, say
 
+# who asks for a reading that is forced past the too-short guard: a person
+# or their agent, by name of a document, and the next window of a long
+# scan's OCR, which goes on with what they asked; the door's own
+# follow-ups, the clock's and the passes' are not
+FORCED_BY = frozenset({"human", "agent", "ocr-window"})
+
 
 def vision_is_free() -> bool:
     """Whether a reading by the vision model costs nothing (a local
@@ -171,7 +177,10 @@ class Parse(Step):
                 "old_len": doc["text_len"],
                 "extractor": req["extractor"],
                 "mode": req.get("mode"),
-                "force": True,
+                # a reading someone asked for takes what it finds; one the
+                # door or a pass asked for keeps a longer text against a
+                # shorter one (the review of 2026-10-18: marker over a scan)
+                "force": req.get("by") in FORCED_BY,
             }
             if doc["text_len"] and takes_previous(req["extractor"]):
                 # the extractor works on the current text: a second reading

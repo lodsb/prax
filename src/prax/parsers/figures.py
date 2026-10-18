@@ -372,14 +372,20 @@ class fetching:
 # looks at anyway
 PAGE_WIDTH = 1000
 PAGE_WIDTH_MAX = 1600
+# and no taller, nor larger, than that: a page a hundred times as tall as
+# wide drawn 1600 px across was half a gigabyte (the review of 2026-10-18)
+PAGE_SIDE_MAX = 2400
+PAGE_PIXELS_MAX = 1600 * 2400
 
 
 def page_png(
     path: Path, page: int, *, width: int = PAGE_WIDTH
 ) -> tuple[bytes | None, int]:
     """Page ``page`` (from 1) of the PDF at ``path`` drawn as a PNG
-    ``width`` pixels wide, and the PDF's page count; None for a page it
-    does not have. Raises ImportError where pymupdf is not installed."""
+    ``width`` pixels wide (no more than ``PAGE_SIDE_MAX`` tall nor
+    ``PAGE_PIXELS_MAX`` in all), and the PDF's page count; None for a page
+    it does not have. Raises ImportError where pymupdf is not installed,
+    ValueError for a page MuPDF cannot draw."""
     import pymupdf
 
     with pymupdf.open(path) as doc:
@@ -387,9 +393,56 @@ def page_png(
         if not 1 <= page <= count:
             return None, count
         p = doc[page - 1]
-        zoom = max(64, min(int(width), PAGE_WIDTH_MAX)) / max(float(p.rect.width), 1.0)
-        pix = p.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
-        return pix.tobytes("png"), count
+        wide = max(float(p.rect.width), 1.0)
+        tall = max(float(p.rect.height), 1.0)
+        zoom = min(
+            max(64, min(int(width), PAGE_WIDTH_MAX)) / wide,
+            PAGE_SIDE_MAX / tall,
+            (PAGE_PIXELS_MAX / (wide * tall)) ** 0.5,
+        )
+        try:
+            pix = p.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+            return pix.tobytes("png"), count
+        except Exception as exc:  # MuPDF's own errors are not one class
+            raise ValueError(f"page {page} cannot be drawn: {exc}"[:200]) from exc
+
+
+# what a client's model takes as a picture, and how large
+MODEL_MEDIA = frozenset({"image/png", "image/jpeg", "image/gif", "image/webp"})
+MODEL_BYTES = 3 * 1024 * 1024
+
+
+def for_a_model(
+    data: bytes, media: str, *, side: int = PAGE_WIDTH_MAX
+) -> tuple[bytes, str]:
+    """A picture as a model can take it: one of ``MODEL_MEDIA``, no side
+    over ``side`` pixels, under ``MODEL_BYTES``; drawn again as a PNG when
+    it is not (a JPEG 2000, a TIFF or an SVG out of an original, a scan's
+    page at 5,000 px; the review of 2026-10-18). ValueError for a picture
+    MuPDF cannot read."""
+    import pymupdf
+
+    try:
+        if media == "image/svg+xml":
+            with pymupdf.open(stream=data, filetype="svg") as doc:
+                rect = doc[0].rect
+                zoom = min(1.0, side / max(rect.width, rect.height, 1.0))
+                pix = doc[0].get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        else:
+            pix = pymupdf.Pixmap(data)
+    except Exception as exc:  # MuPDF's own errors are not one class
+        raise ValueError(f"a picture MuPDF cannot read: {exc}"[:200]) from exc
+    if (
+        media in MODEL_MEDIA
+        and max(pix.width, pix.height) <= side
+        and len(data) <= MODEL_BYTES
+    ):
+        return data, media
+    while max(pix.width, pix.height) > side:
+        pix.shrink(1)  # by half: never more than twice too small
+    if pix.colorspace is None or pix.colorspace.n not in (1, 3) or pix.alpha:
+        pix = pymupdf.Pixmap(pymupdf.csRGB, pix, 0)
+    return pix.tobytes("png"), "image/png"
 
 
 def media_of(data: bytes) -> str:

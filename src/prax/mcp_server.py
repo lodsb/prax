@@ -189,7 +189,7 @@ def figure(doc_id: int, ref: str) -> Any:
     caption and any reading of it are text already; this is for what they
     do not say.
     """
-    return _picture(f"/doc/{doc_id}/figure/{ref}")
+    return _picture(f"/doc/{doc_id}/figure/{ref}", {"max_px": 1600})
 
 
 @mcp.tool()

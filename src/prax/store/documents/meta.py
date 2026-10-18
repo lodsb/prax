@@ -693,17 +693,21 @@ def set_quality(
     findings: list[dict[str, Any]],
     *,
     version: int,
-) -> dict[str, Any]:
+    text_hash: str,
+) -> dict[str, Any] | None:
     """What the checks of a text found (``parsers.quality``, stage AO),
-    kept in ``meta.quality`` with the text artifact they read, so a new
-    text makes them stale rather than wrong."""
+    kept in ``meta.quality`` with the text artifact they read
+    (``text_hash``), so a new text makes them stale rather than wrong.
+    None, and nothing kept, when the document holds another text by now."""
     row = con.execute(
         "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
     if row is None:
         raise KeyError(f"no such document: {doc_id}")
+    if row["text_hash"] != text_hash:
+        return None  # a text that landed since: its own checks will run
     meta = json.loads(row["meta"] or "{}")
-    meta["quality"] = held = quality_record(findings, row["text_hash"], version)
+    meta["quality"] = held = quality_record(findings, text_hash, version)
     _put_meta(con, doc_id, meta)
     con.commit()
     return held

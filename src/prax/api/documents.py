@@ -202,10 +202,14 @@ SANDBOX_POLICY = "sandbox; default-src data: 'unsafe-inline'"
 
 
 @router.get("/doc/{doc_id}/figure/{ref}")
-def figure(doc_id: int, ref: str, request: Request) -> Response:
+def figure(
+    doc_id: int, ref: str, request: Request, max_px: int | None = None
+) -> Response:
     """A figure's bytes out of the document's original, by the hash the
     text references (``![caption](figure:<sha256>)``); immutable, so
-    cached for good."""
+    cached for good. ``max_px``: as a model takes a picture, drawn again
+    as a PNG no side of which is longer when it is not one already
+    (``figures.for_a_model``, what the MCP tool asks for)."""
     from prax.parsers import figures
 
     con = _con(request)
@@ -223,6 +227,12 @@ def figure(doc_id: int, ref: str, request: Request) -> Response:
     if found is None:
         raise HTTPException(404, "no such figure in the original")
     data, media = found
+    if max_px is not None:
+        side = max(64, min(max_px, figures.PAGE_WIDTH_MAX))
+        try:
+            data, media = figures.for_a_model(data, media, side=side)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     return Response(
         data,
         media_type=media,
@@ -266,6 +276,8 @@ def page_image(
         )
     except ImportError as exc:
         raise HTTPException(501, "this door cannot draw pages (no pymupdf)") from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     if png is None:
         raise HTTPException(404, f"no page {page}: it has {count}")
     return Response(png, media_type="image/png", headers=headers)

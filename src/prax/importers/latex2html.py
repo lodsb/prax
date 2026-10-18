@@ -28,6 +28,7 @@ and taken up again. Nothing here opens the store.
 from __future__ import annotations
 
 import base64
+import hashlib
 import re
 import time
 import urllib.robotparser
@@ -71,11 +72,31 @@ class Fetcher:
     _client: Any = None
 
     def _path(self, url: str) -> Path:
+        """Where the bytes of ``url`` are kept: the site's folder and the
+        URL's path below it, readable. A path the site wrote to climb out
+        (``..``, ``%2E%2E%2F``, a backslash, a drive) is kept under a hash
+        of the URL instead, and nothing ever lands outside the cache: the
+        site chooses the bytes (the review of 2026-10-18)."""
         u = urlparse(url)
+        site = u.netloc.replace(":", "_")
         rel = unquote(u.path).lstrip("/") or "index.html"
         if rel.endswith("/"):
             rel += "index.html"
-        return self.cache / u.netloc / rel
+        parts = rel.split("/")
+        unsafe = (
+            site in ("", ".", "..")
+            or "\\" in rel
+            or ":" in rel
+            or any(p in ("", ".", "..") for p in parts)
+        )
+        if site in ("", ".", ".."):
+            site = "_"
+        if unsafe:
+            parts = ["_", hashlib.sha256(url.encode("utf-8")).hexdigest()]
+        path = self.cache.joinpath(site, *parts)
+        if not path.resolve().is_relative_to(self.cache.resolve()):
+            raise ValueError(f"not a path of the crawl's cache: {url}")
+        return path
 
     def _robot(self, url: str) -> urllib.robotparser.RobotFileParser:
         u = urlparse(url)
@@ -170,7 +191,8 @@ def book_pages(index_url: str, html: str) -> tuple[str, ...]:
     out: list[str] = []
     for href in _HREF.findall(html):
         url = urljoin(base, href)
-        if not url.startswith(base) or "/" in url[len(base) :]:
+        rest = unquote(url[len(base) :]) if url.startswith(base) else "/"
+        if "/" in rest or "\\" in rest:  # another folder, ..%2F among them
             continue
         if NOT_PAGES.search(url) or url in out:
             continue

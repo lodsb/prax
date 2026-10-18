@@ -166,6 +166,9 @@ TEX = (
     + "\\end{document}"
 )
 
+# the paper's own words, as its PDF's text layer has them
+PDF_TEXT = "Introduction. The bound holds for every real x; the claim follows. "
+
 
 @pytest.mark.skipif(latex.pandoc() is None, reason="pandoc is not installed")
 def test_the_reading_turns_the_e_print_into_the_papers_text(
@@ -181,13 +184,13 @@ def test_the_reading_turns_the_e_print_into_the_papers_text(
     monkeypatch.setenv("PRAX_ARXIV_ID", "2501.13484")
     ext = parsers.by_name("latex-source")
     assert ext.stamp.startswith("latex-source/") and ext.explicit_only
-    text = ext(_typed("A paper."), previous="The PDF's text. " * 10)
+    text = ext(_typed("A paper."), previous=PDF_TEXT * 4)
     assert asked == ["2501.13484"]
     assert "# Introduction" in text
     assert any(x.startswith("$$") and "\\tag{1}" in x for x in text.splitlines())
     # a conversion that lost the paper is refused, not filed
     with pytest.raises(parsers.ExtractionError):
-        ext(_typed("A paper."), previous="The PDF's text. " * 2000)
+        ext(_typed("A paper."), previous=PDF_TEXT * 200)
 
 
 def test_an_e_print_without_source_is_an_error(monkeypatch: pytest.MonkeyPatch) -> None:

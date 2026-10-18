@@ -156,6 +156,12 @@ steps:
 # ontology:
 #   dir: /path/to/ontology     # [PRAX_ONTOLOGY] another set of module files
 
+# extraction:
+#   standard_names: false      # [PRAX_EXTRACT_STANDARD] the prompt gives each relation
+#                              #   its standard name too (schema:author); measured first
+#   world_dates: false         # [PRAX_EXTRACT_DATES] the prompt asks when a fact holds
+#                              #   where the text says so; the worlddates step does it now
+
 # sources:
 #   github:
 #     user: octocat            # [PRAX_GITHUB_USER] whose stars `prax import github` reads

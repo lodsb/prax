@@ -638,17 +638,34 @@ def test_a_server_a_person_stopped_stays_stopped_when_work_asks(
     monkeypatch.setattr(up, "IDLE_POLL", 0.0)
     monkeypatch.setattr(up.Supervisor, "_server_activity", lambda self, role: 7.0)
     waiting: dict[str, int] = {}
-    monkeypatch.setattr(
-        up.Supervisor, "_ask_demand", lambda self: setattr(self, "demand", waiting)
-    )
+    asked = [0]
+
+    def ask(self: up.Supervisor) -> None:
+        self.demand = waiting
+        asked[0] += 1
+
+    monkeypatch.setattr(up.Supervisor, "_ask_demand", ask)
+    started: list[str] = []
+    real_start = up.Supervisor._start
+
+    def start(self: up.Supervisor, role: up.Role) -> object:
+        started.append(role.name)
+        return real_start(self, role)
+
+    monkeypatch.setattr(up.Supervisor, "_start", start)
     thread = threading.Thread(target=sup.run, daemon=True)
     thread.start()
     try:
         wait_for(lambda: "llama-server" in sup.idled)
         assert up.stop(data_dir, name="llama-server", wait=10)  # shown paused
+        before = len(started)
         waiting["llama-server"] = 3
-        time.sleep(0.5)  # several ticks with work waiting
-        assert runs_of(mark) == 1 and "llama-server" in sup.held
+        # several of the supervisor's reads of the demand with work waiting,
+        # counted rather than slept for: a slow machine still sees them
+        seen = asked[0]
+        wait_for(lambda: asked[0] >= seen + 5)
+        assert len(started) == before and runs_of(mark) == 1
+        assert "llama-server" in sup.held
         up.start(data_dir, "llama-server")
         wait_for(lambda: runs_of(mark) >= 2)
     finally:

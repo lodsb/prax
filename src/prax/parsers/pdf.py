@@ -84,13 +84,33 @@ def image_cover(page: Any) -> float:
     return float(covered / area)
 
 
+def picture_of_page(page: Any, cover: float | None = None) -> bool:
+    """A picture of a page: pictures cover ``SCAN_COVER`` of it and the
+    text it shows, if any, is drawn before them, beneath (an OCR's), not
+    on top. A slide's words over its background picture are no scan (the
+    review of 2026-10-18: 117 decks were sent to OCR so). Invisible text
+    is not drawn at all: an OCR layer in render mode 3 is beneath too."""
+    if (image_cover(page) if cover is None else cover) < SCAN_COVER:
+        return False
+    log = page.get_bboxlog()
+    pictures = [k for k, (kind, _) in enumerate(log) if "image" in kind]
+    shown = [k for k, (kind, _) in enumerate(log) if kind in _SHOWN_TEXT]
+    if not pictures or not shown:
+        return True
+    return sum(k > pictures[0] for k in shown) < 0.5 * len(shown)
+
+
+_SHOWN_TEXT = frozenset({"fill-text", "stroke-text"})
+
+
 def profile(data: bytes) -> dict[str, Any]:
     """What a PDF is, for choosing its reader (``pipeline.follow_ups``),
     from its first ``PROFILE_PAGES`` pages, without layout analysis:
 
     - ``scanned``: the share of them that are pictures of a page, one
       picture or many strips (an old scanner wrote a page as thirty) whose
-      areas cover ``SCAN_COVER`` of it;
+      areas cover ``SCAN_COVER`` of it, with no text shown on top
+      (``picture_of_page``);
     - ``ocr_layer``: the share whose text is mostly drawn invisibly
       (render mode 3), the layer an OCR lays under a scan's picture so it
       can be searched; its words are that OCR's, often bad;
@@ -128,7 +148,7 @@ def profile(data: bytes) -> dict[str, Any]:
             except Exception:  # noqa: BLE001, S112 - a page MuPDF cannot read is left out
                 continue
             read += 1
-            if cover >= SCAN_COVER:
+            if picture_of_page(page, cover):
                 scanned += 1
             if spans:
                 out["layer"] = True

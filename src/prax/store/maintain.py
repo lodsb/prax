@@ -136,10 +136,12 @@ _SET_MARKUP = (
 _SET_PUBLISHED = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
     " '$.published', json(?)) WHERE id = ?"
+    # what the pass read: a date a person set while it ran stays theirs
+    " AND json_extract(meta, '$.published') IS NULL"
 )
 _SET_LANG = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
-    " '$.lang', ?) WHERE id = ?"
+    " '$.lang', ?) WHERE id = ? AND json_extract(meta, '$.lang') IS NULL"
 )
 _SET_QUALITY = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
@@ -148,6 +150,8 @@ _SET_QUALITY = (
 _SET_SUMMARY_LANG = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
     " '$.summary_lang', ?) WHERE id = ?"
+    " AND json_extract(meta, '$.summary_lang') IS NULL"
+    " AND json_extract(meta, '$.summary') = ?"
 )
 _SET_LABEL_LANG = "UPDATE OR IGNORE entity_labels SET lang = ? WHERE id = ?"
 _SET_PLACE = (
@@ -1082,7 +1086,7 @@ def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         if code is None:
             continue
         said[code] += 1
-        pending.append((code, r["id"]))
+        pending.append((code, r["id"], r["summary"]))
         if len(pending) >= BATCH:
             _write(con, _SET_SUMMARY_LANG, pending)
             pending = []

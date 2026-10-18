@@ -121,11 +121,10 @@ def put_page(slug: str, req: PageReq, request: Request) -> dict[str, Any]:
             part_of=req.part_of,
             parent=req.parent,
             force=req.force,
+            # marked before its text is indexed, and nothing written when
+            # the write is refused (the review of 2026-10-18)
+            sensitivity=req.sensitivity,
         )
-        if req.sensitivity is not None:
-            store.set_sensitivity(
-                con, int(written["doc_id"]), "personal", by=req.author
-            )
         job = _answer_new_blocks(con, written["slug"], req.text)
         written = {**written, "url": ui_url(request, int(written["doc_id"]))}
         return {**written, "job": job} if job is not None else written

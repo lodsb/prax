@@ -88,7 +88,9 @@ revisit threshold, under "Decision thresholds" below.
    of entity resolution (`resolve_entities.py --adjudicate`) and the
    measurement scripts (`eval_retrieval.py`, `eval_references.py`,
    `eval_confidence.py`, `eval_genres.py`, `eval_regions.py`, `eval_latex.py`,
-   `eval_paths.py`, `eval_venues.py`, `eval_swaps.py`,
+   `eval_paths.py`, `eval_venues.py`, `eval_swaps.py`, `eval_dates.py`,
+   `eval_followups.py` (through `prax.store`, so on a copy only),
+   `bench_world_dates.py`,
    `compare_extractors.py`, `bench_extractor.py`,
    `make_zotero_fixture.py`, and `check_private.py`, the pre-commit guard
    against the owner's private data; the eval scripts and the guard

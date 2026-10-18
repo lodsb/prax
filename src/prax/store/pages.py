@@ -16,7 +16,14 @@ from typing import Any, Final
 from prax.text import blocks, markup
 
 from .base import _read_archive, _reading, _serialized, document_hidden
-from .documents import _set_promote, get_meta, index_text, register, set_meta
+from .documents import (
+    _set_promote,
+    get_meta,
+    index_text,
+    register,
+    set_meta,
+    set_sensitivity,
+)
 from .graph import (
     Edge,
     document_node,
@@ -262,8 +269,15 @@ def write_page(
     part_of: str | None = None,
     parent: str | None = None,
     force: bool = False,
+    sensitivity: str | None = None,
 ) -> dict[str, Any]:
     """Create or replace a page's text as a new revision.
+
+    What can refuse the write (a document to annotate, a project, a parent
+    that is not there, a parent that would make a cycle) is checked before
+    anything is written, and a page asked to be ``personal`` is marked so
+    before its text is indexed: a refused write leaves no page, and never
+    an open one (the review of 2026-10-18).
 
     ``parent`` names, by slug, the page this one sits under in the tree of
     pages (``set_page_parent``); without it a ``part_of`` project is the
@@ -290,6 +304,14 @@ def write_page(
     if existing is not None and document_hidden(con, int(existing["doc_id"])):
         # a restricted viewer writes to nothing it may not see: as if absent
         raise KeyError(f"no page {slug!r}")
+    _refuse_write(
+        con,
+        None if existing is None else int(existing["doc_id"]),
+        annotates=annotates,
+        part_of=part_of,
+        parent=parent,
+        sensitivity=sensitivity,
+    )
     created = existing is None
     if created:
         title = title or slug.replace("-", " ").capitalize()
@@ -331,6 +353,8 @@ def write_page(
             ).fetchone()
             if row is not None:
                 rename_entity(con, row["id"], title)
+    if sensitivity is not None:
+        set_sensitivity(con, doc_id, sensitivity, by=author)
     indexed = index_text(con, doc_id, text, text_source=f"page/{author}")
     con.execute(
         "INSERT INTO page_revisions (doc_id, revision, text_hash, author, note)"
@@ -405,6 +429,53 @@ def write_page(
             set_page_parent(con, doc_id, above, by=author)
     con.commit()
     return {"doc_id": doc_id, "slug": slug, "revision": revision, "created": created}
+
+
+def _refuse_write(
+    con: sqlite3.Connection,
+    doc_id: int | None,
+    *,
+    annotates: list[int] | None,
+    part_of: str | None,
+    parent: str | None,
+    sensitivity: str | None,
+) -> None:
+    """What would refuse a page's write (``write_page``), raised before
+    anything is written: a sensitivity that is not ``personal``, a
+    document to annotate or a project that is not there, a parent that is
+    not there or would make a cycle (``doc_id`` None: a new page)."""
+    if sensitivity not in (None, "personal"):
+        raise ValueError("sensitivity on a write is personal, or none")
+    for target in annotates or []:
+        try:
+            document_node(con, target)
+        except KeyError:
+            raise KeyError(f"no such document to annotate: {target}") from None
+    if part_of and (
+        con.execute(
+            "SELECT 1 FROM pages WHERE slug = ? AND kind = 'project'",
+            (slugify(part_of),),
+        ).fetchone()
+        is None
+    ):
+        raise KeyError(f"no project page {part_of!r}")
+    if parent:
+        above = page_id(con, parent)
+        if above is None or document_hidden(con, above):
+            raise KeyError(f"no page {parent!r}")
+        if doc_id is not None and above != doc_id:
+            _refuse_cycle(con, doc_id, above)
+
+
+def _refuse_cycle(con: sqlite3.Connection, doc_id: int, parent: int) -> None:
+    """ValueError when ``parent`` sits under ``doc_id`` (or is it)."""
+    seen: set[int] = set()
+    above: int | None = parent
+    while above is not None and above not in seen:
+        if above == doc_id:
+            raise ValueError("that page sits under this one: a cycle")
+        seen.add(above)
+        above = _parent_of(con, above)
 
 
 def _parent_of(con: sqlite3.Connection, doc_id: int) -> int | None:
@@ -517,13 +588,7 @@ def set_page_parent(
             "SELECT 1 FROM pages WHERE doc_id = ?", (parent,)
         ).fetchone() is None or document_hidden(con, parent):
             raise KeyError(f"no such page: {parent}")
-        seen: set[int] = set()
-        above: int | None = parent
-        while above is not None and above not in seen:
-            if above == doc_id:
-                raise ValueError("that page sits under this one: a cycle")
-            seen.add(above)
-            above = _parent_of(con, above)
+        _refuse_cycle(con, doc_id, parent)
     meta = get_meta(con, doc_id)
     page = dict(meta.get("page") or {})
     if parent is None:

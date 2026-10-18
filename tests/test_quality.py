@@ -94,15 +94,29 @@ def test_a_caption_with_no_picture_asks_for_the_crops_once() -> None:
     assert got["bare-figures"].fix == "figure-crops" and got["bare-figures"].count == 1
     # the crops leave text_source as it was: the history says they ran
     history = [
-        {"extractor": "pymupdf4llm/1.28.2-r2"},
-        {"extractor": "figure-crops/1"},  # on an earlier text: says nothing
-        {"extractor": "latex-source/3.9-r2"},
-        {"extractor": "formulas/1+q"},
-        {"extractor": "figure-crops/1"},
+        {"extractor": "pymupdf4llm/1.28.2-r2", "outcome": "created"},
+        # on an earlier text: says nothing
+        {"extractor": "figure-crops/1", "outcome": "upgraded"},
+        {"extractor": "latex-source/3.9-r2", "outcome": "upgraded"},
+        {"extractor": "formulas/1+q", "outcome": "upgraded"},
+        {"extractor": "figure-crops/1", "outcome": "same"},
     ]
     since = quality.since_text(history, "latex-source/3.9-r2")
     assert since == {"formulas", "figure-crops"}
     assert quality.since_text(history[:3], "latex-source/3.9-r2") == set()
+    # a re-read of the same text moves the stamp on and ends nothing; a
+    # failed attempt ran on nothing; a history without the text, nothing
+    again = [
+        *history,
+        {"extractor": "latex-source/3.9-r3", "outcome": "same"},
+        {"extractor": "marker/1.10", "error": "the card is busy"},
+    ]
+    assert quality.since_text(again, "latex-source/3.9-r3") == {
+        "formulas",
+        "figure-crops",
+        "latex-source",
+    }
+    assert quality.since_text(history[:2], "latex-source/3.9-r2") == set()
     after = _checks(
         quality.check(
             text, stamp="latex-source/3.9-r2", mime=PDF, profile=TYPED, since=since
@@ -173,13 +187,23 @@ def test_the_door_keeps_the_findings_with_the_text_they_read(
 ) -> None:
     doc = store.ingest_text(con, "Words of a page. " * 30, title="t")["doc_id"]
     found = quality.check(GARBLED, stamp=LAYER, mime=PDF, profile=TYPED)
+    current = store.get_document(con, doc, max_chars=0)["text_hash"]
     held = store.set_quality(
-        con, doc, [f.as_dict() for f in found], version=quality.VERSION
+        con,
+        doc,
+        [f.as_dict() for f in found],
+        version=quality.VERSION,
+        text_hash=current,
     )
     meta = store.get_meta(con, doc)
-    assert meta["quality"] == held
-    assert held["text_hash"] == store.get_document(con, doc, max_chars=0)["text_hash"]
+    assert held is not None and meta["quality"] == held
+    assert held["text_hash"] == current
     assert held["findings"][0]["check"] == "maths-as-text"
+    # the checks of a text the document no longer holds are not kept
+    store.index_text(con, doc, "Another text of the page. " * 30)
+    kept = store.set_quality(con, doc, [], version=quality.VERSION, text_hash=current)
+    assert kept is None
+    assert store.get_meta(con, doc)["quality"] == held
 
 
 def test_the_quality_pass_checks_each_text_once(con: sqlite3.Connection) -> None:

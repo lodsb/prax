@@ -12,6 +12,7 @@ and nothing called it but its own test.
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Mapping
 from typing import Any
@@ -20,6 +21,8 @@ from prax import config, models, store
 from prax.parsers import figures, quality
 from prax.text import language
 from prax.writing import summaries, titles
+
+log = logging.getLogger("prax.pipeline")
 
 # ---------------------------------------------------------------- titles
 
@@ -221,7 +224,11 @@ def assess(
         doc["text"], stamp=stamp, mime=doc.get("mime"), profile=prof, since=since
     )
     store.set_quality(
-        con, doc_id, [f.as_dict() for f in found], version=quality.VERSION
+        con,
+        doc_id,
+        [f.as_dict() for f in found],
+        version=quality.VERSION,
+        text_hash=str(doc["text_hash"]),
     )
     return found, prof
 
@@ -255,14 +262,21 @@ def choose_reader(
         "kept",
         "empty",
     )
+    if source_failed and str(meta.get("text_source") or "").startswith("latex-source/"):
+        # a re-read of the source that failed leaves the source's own text:
+        # no marker over it (the review of 2026-10-18)
+        return None
     first_text = stamp.startswith("pymupdf4llm/") and action in ("created", "upgraded")
     if not (source_failed or first_text):
         return None
     if first_text and "latex-source" not in tried and profile.get("arxiv"):
-        store.request_reading(
-            con, doc_id, "latex-source", mode=str(profile["arxiv"]), by="door"
-        )
-        return "latex-source"
+        try:
+            store.request_reading(
+                con, doc_id, "latex-source", mode=str(profile["arxiv"]), by="door"
+            )
+            return "latex-source"
+        except ValueError:  # an id the mode refuses costs this reading only
+            log.warning("doc %d: no latex-source for %r", doc_id, profile["arxiv"])
     if "marker" in tried:
         return None
     named = quality.fixes(found)
@@ -298,6 +312,12 @@ def follow_ups(
         "kept",
         "empty",
     )
+    if action == "same" and stamp.startswith(("figure-crops/", "formulas/")):
+        # an annotating reading that found nothing to add has still run on
+        # this text: checked again, its finding stops naming it (the
+        # review of 2026-10-18)
+        assess(con, doc_id)
+        return None
     if not (landed or source_failed):
         return None
     # what the checks find in the text the document now holds: kept, and
