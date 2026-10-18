@@ -329,6 +329,7 @@ class BulkReadingReq(BaseModel):
     read_formulas: bool = False  # the same for display equations
     unread_formulas: bool = False
     maths: float | None = None  # references to numbered equations per 10k characters
+    finding: str | None = None  # what the checks found: maths-as-text, ocr-layer…
     limit: int | None = None
     dry_run: bool = False  # count, place nothing
     by: str = "human"
@@ -367,13 +368,14 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
         or req.read_formulas
         or req.unread_formulas
         or req.maths is not None
+        or req.finding
     ):
         raise HTTPException(
             400,
             "a selection: ids, mime, text_source, title, unreadable, thin,"
             " doctype, unpolished, read_figures, unread_figures, bare_captions,"
             " read_formulas,"
-            " unread_formulas or maths",
+            " unread_formulas, maths or finding",
         )
     try:
         ids = store.select_for_reading(
@@ -392,6 +394,7 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
             read_formulas=req.read_formulas,
             unread_formulas=req.unread_formulas,
             maths=req.maths,
+            finding=req.finding,
             limit=req.limit,
         )
     except ValueError as exc:
@@ -408,6 +411,18 @@ def request_readings(req: BulkReadingReq, request: Request) -> dict[str, Any]:
 @router.delete("/doc/{doc_id}/reading")
 def cancel_reading(doc_id: int, request: Request) -> dict[str, bool]:
     return {"removed": store.cancel_reading(_con(request), doc_id)}
+
+
+@router.get("/documents/quality")
+def documents_quality(
+    request: Request, check: str | None = None, offset: int = 0, limit: int = 30
+) -> dict[str, Any]:
+    """What the checks of a text found (stage AO, ``store.quality_page``):
+    how many documents each check flags, and with ``check`` those documents
+    and their evidence, the most found first. The Admin page's "text
+    checks" list; ``POST /readings/bulk`` with ``finding`` asks for a
+    check's fix over them."""
+    return store.quality_page(_con(request), check=check, offset=offset, limit=limit)
 
 
 @router.get("/readings")

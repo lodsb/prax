@@ -52,6 +52,7 @@ from .documents import (
     fill_text_lengths,
     get_meta,
     published_of,
+    quality_record,
     rechunk,
     reference_chunks,
     refresh_document_fields,
@@ -101,6 +102,7 @@ PASSES = (
     "published",
     "places",
     "markup",
+    "quality",
     "private",
     "names",
     "attachment",
@@ -138,6 +140,10 @@ _SET_PUBLISHED = (
 _SET_LANG = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
     " '$.lang', ?) WHERE id = ?"
+)
+_SET_QUALITY = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.quality', json(?)) WHERE id = ? AND text_hash = ?"
 )
 _SET_SUMMARY_LANG = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
@@ -971,6 +977,57 @@ def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     return {"read": len(rows), "dated": sum(found.values()), "by": dict(found)}
 
 
+def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
+    """The checks of every text not checked yet, or checked under an older
+    version of them or another text (``parsers.quality``, stage AO), kept
+    in ``meta.quality``. Nothing is asked for: a person, or the door when a
+    new text lands, decides what to read again.
+
+    A PDF's original is profiled (its first pages, no layout analysis):
+    38 minutes over the library's 11,493 on the desktop, 2026-10-18; after
+    that the nightly reads only what changed. A text that changed while
+    the pass read it is left for the next."""
+    from prax.parsers import quality
+
+    rows = con.execute(
+        "SELECT id, hash, mime, text_hash, json_extract(meta, '$.text_source') AS src,"
+        " json_extract(meta, '$.arxiv') AS arxiv FROM documents"
+        " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
+        " AND (COALESCE(json_extract(meta, '$.quality.text_hash'), '') != text_hash"
+        " OR COALESCE(json_extract(meta, '$.quality.version'), 0) < ?) ORDER BY id",
+        (quality.VERSION,),
+    ).fetchall()
+    found: Counter[str] = Counter()
+    pending: list[tuple[Any, ...]] = []
+    for n, r in enumerate(rows, 1):
+        try:
+            text = archive_path(r["text_hash"]).read_text(
+                encoding="utf-8", errors="replace"
+            )
+            data = (
+                archive_path(r["hash"]).read_bytes()
+                if r["mime"] == "application/pdf"
+                else None
+            )
+        except OSError:
+            continue
+        prof = quality.profile_of(data, mime=r["mime"], arxiv=r["arxiv"])
+        findings = quality.check(
+            text, stamp=str(r["src"] or ""), mime=r["mime"], profile=prof
+        )
+        found.update(f.check for f in findings)
+        held = quality_record(
+            [f.as_dict() for f in findings], r["text_hash"], quality.VERSION
+        )
+        pending.append((json.dumps(held), r["id"], r["text_hash"]))
+        if len(pending) >= BATCH:
+            _write(con, _SET_QUALITY, pending)
+            pending = []
+            job.update(done=n, total=len(rows), note=f"quality: {n} of {len(rows)}")
+    _write(con, _SET_QUALITY, pending)
+    return {"documents": len(rows), "found": dict(found)}
+
+
 def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     """The language of every document that does not say yet
     (``prax.text.language`` over the head of its text artifact), and of every
@@ -1256,6 +1313,7 @@ _RUN = {
     "published": _published,
     "places": _places,
     "markup": _markup,
+    "quality": _quality,
     "private": _private,
     "names": _names,
     "attachment": _attachment,

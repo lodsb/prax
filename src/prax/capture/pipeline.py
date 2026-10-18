@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from prax import config, models, store
-from prax.parsers import figures
+from prax.parsers import figures, quality
 from prax.text import language
 from prax.writing import summaries, titles
 
@@ -150,16 +150,6 @@ def polish_is_free() -> bool:
     return _free("polish")
 
 
-def _wants_crops(con: sqlite3.Connection, doc_id: int) -> bool:
-    """Whether this document holds a caption with no picture behind it —
-    a figure drawn with vector paths, which no extractor pulls out."""
-    doc = store.get_document(con, doc_id)
-    if not doc or doc.get("mime") != "application/pdf":
-        return False
-    lines = (doc.get("text") or "").split("\n")
-    return bool(figures.bare_captions(lines))
-
-
 # -------------------------------------------------------- the PDF's reader
 # A PDF's first text is its text layer (pymupdf4llm), which loses the
 # mathematics and, for a scan, is an old OCR's. What reads it better
@@ -205,31 +195,32 @@ def _marker_mode(scan: bool) -> str | None:
     return None if base == "fast" else base
 
 
-def _profile(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
-    from prax.parsers import pdf
-
-    info = store.original_info(con, doc_id)
-    if info is None or info["mime"] != "application/pdf":
-        return None
-    try:
-        data = info["path"].read_bytes()
-    except OSError:
-        return None
-    got = pdf.profile(data)
-    if not meta_arxiv_ok(store.get_meta(con, doc_id).get("arxiv")):
-        from prax.parsers import latexsrc
-
-        got["arxiv"] = latexsrc.arxiv_id_of(data)
-    return got
-
-
-def meta_arxiv_ok(value: Any) -> bool:
-    """Whether a document's ``meta.arxiv`` is an id the reading takes."""
-    try:
-        store.check_mode("latex-source", str(value))
-    except ValueError:
-        return False
-    return bool(value)
+def assess(
+    con: sqlite3.Connection, doc_id: int
+) -> tuple[list[quality.Finding], dict[str, Any] | None]:
+    """The checks of the document's current text under the stamp of what
+    wrote it (``parsers.quality``, stage AO), kept in ``meta.quality``
+    with the text's hash; the findings and the original's profile (None
+    but for a PDF)."""
+    doc = store.get_document(con, doc_id)
+    if doc is None or not doc.get("text"):
+        return [], None
+    stamp = str((doc.get("meta") or {}).get("text_source") or "")
+    prof = None
+    if doc.get("mime") == "application/pdf":
+        info = store.original_info(con, doc_id)
+        try:
+            data = info["path"].read_bytes() if info else None
+        except OSError:
+            data = None
+        prof = quality.profile_of(
+            data, mime=doc["mime"], arxiv=store.get_meta(con, doc_id).get("arxiv")
+        )
+    found = quality.check(doc["text"], stamp=stamp, mime=doc.get("mime"), profile=prof)
+    store.set_quality(
+        con, doc_id, [f.as_dict() for f in found], version=quality.VERSION
+    )
+    return found, prof
 
 
 def choose_reader(
@@ -239,11 +230,16 @@ def choose_reader(
     stamp: str,
     action: str,
     pending: set[str],
+    found: list[quality.Finding],
+    profile: dict[str, Any] | None,
 ) -> str | None:
     """The reading a captured PDF should have next for its text (the
     section's comment), asked for and named; None when it has what suits
-    it, is not a captured PDF, or the host turned this off."""
-    if not choose_reader_on():
+    it, is not a captured PDF, or the host turned this off. What the
+    checks found decides (``found``): a scan read from its OCR layer, or
+    maths left as loose symbols, gets marker; a paper on arXiv its source
+    first, whatever was found."""
+    if not choose_reader_on() or profile is None:
         return None
     meta = store.get_meta(con, doc_id)
     if meta.get("source") not in store.CAPTURE_SOURCES:
@@ -259,22 +255,20 @@ def choose_reader(
     first_text = stamp.startswith("pymupdf4llm/") and action in ("created", "upgraded")
     if not (source_failed or first_text):
         return None
-    prof = _profile(con, doc_id)
-    if prof is None:
-        return None
-    if first_text and "latex-source" not in tried:
-        arxiv = (
-            meta.get("arxiv") if meta_arxiv_ok(meta.get("arxiv")) else prof.get("arxiv")
+    if first_text and "latex-source" not in tried and profile.get("arxiv"):
+        store.request_reading(
+            con, doc_id, "latex-source", mode=str(profile["arxiv"]), by="door"
         )
-        if arxiv:
-            store.request_reading(
-                con, doc_id, "latex-source", mode=str(arxiv), by="door"
-            )
-            return "latex-source"
+        return "latex-source"
     if "marker" in tried:
         return None
-    scan = max(prof["scanned"], prof["ocr_layer"]) >= SCANNED
-    if scan or prof["maths"] or source_failed:
+    named = quality.fixes(found)
+    # a scan with no text layer at all is a scan as much as one with an OCR's
+    scan = "marker-ocr" in named or (
+        max(profile["scanned"], profile["ocr_layer"]) >= SCANNED
+        and not profile.get("layer")
+    )
+    if scan or "marker" in named or "latex-source" in named or source_failed:
         store.request_reading(con, doc_id, "marker", mode=_marker_mode(scan), by="door")
         return "marker"
     return None
@@ -295,10 +289,29 @@ def follow_ups(
     # reading queues beside the others instead of replacing them, so the
     # door only declines to ask for the same one twice
     pending = {r["extractor"] for r in store.pending_readings(con, doc_id)}
-    chosen = choose_reader(con, doc_id, stamp=stamp, action=action, pending=pending)
+    landed = action in ("created", "upgraded")
+    source_failed = stamp.startswith("latex-source/") and action in (
+        "error",
+        "kept",
+        "empty",
+    )
+    if not (landed or source_failed):
+        return None
+    # what the checks find in the text the document now holds: kept, and
+    # what decides the reader and the crops below
+    found, prof = assess(con, doc_id)
+    chosen = choose_reader(
+        con,
+        doc_id,
+        stamp=stamp,
+        action=action,
+        pending=pending,
+        found=found,
+        profile=prof,
+    )
     if chosen is not None:
         return chosen
-    if action not in ("created", "upgraded"):
+    if not landed:
         return None
     meta = store.get_meta(con, doc_id)
     video = meta.get("video") or {}
@@ -319,7 +332,7 @@ def follow_ups(
     crops = (
         stamp.startswith(("pymupdf4llm/", "marker/", "latex-source/", "formulas/"))
         and "figure-crops" not in pending
-        and _wants_crops(con, doc_id)
+        and "figure-crops" in quality.fixes(found)
     )
     if crops:
         store.request_reading(con, doc_id, "figure-crops", by="door")

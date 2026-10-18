@@ -1310,3 +1310,59 @@ def cited_but_missing(
             item["links"] = links
         missing.append({k: v for k, v in item.items() if v not in (None, [], {})})
     return {"looked_at": len(with_lists), "documents": len(ids), "missing": missing}
+
+
+# what the checks of a text found (stage AO): only of the text a document
+# holds now, a finding of an earlier one says nothing of it
+_CURRENT_QUALITY = (
+    " FROM documents d, json_each(d.meta, '$.quality.findings') f"
+    " WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
+    " AND json_extract(d.meta, '$.retired') IS NULL"
+)
+
+
+@_reading
+def quality_page(
+    con: sqlite3.Connection,
+    *,
+    check: str | None = None,
+    offset: int = 0,
+    limit: int = 30,
+) -> dict[str, Any]:
+    """How many documents each check found something in, and with
+    ``check`` those documents, the most found first, each with what was
+    found (``meta.quality``, ``parsers.quality``): the Admin page's "text
+    checks" list. A document's fix is a reading, asked for on its page or
+    for the list at once (``POST /readings/bulk`` with ``finding``)."""
+    counts = {
+        str(r[0]): int(r[1])
+        for r in con.execute(
+            "SELECT json_extract(f.value, '$.check'), count(*)"
+            + _CURRENT_QUALITY
+            + " GROUP BY 1 ORDER BY 2 DESC"
+        )
+    }
+    out: dict[str, Any] = {"checks": counts}
+    if check is None:
+        return out
+    rows = con.execute(
+        "SELECT d.id, d.title, d.mime, json_extract(d.meta, '$.text_source'),"
+        " f.value" + _CURRENT_QUALITY + " AND json_extract(f.value, '$.check') = ?"
+        " ORDER BY json_extract(f.value, '$.count') DESC, d.id LIMIT ? OFFSET ?",
+        (check, max(1, min(limit, 200)), max(0, offset)),
+    ).fetchall()
+    out.update(
+        check=check,
+        total=counts.get(check, 0),
+        items=[
+            {
+                "id": r[0],
+                "title": r[1],
+                "mime": r[2],
+                "text_source": r[3],
+                "finding": json.loads(r[4]),
+            }
+            for r in rows
+        ],
+    )
+    return out

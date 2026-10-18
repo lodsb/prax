@@ -4,6 +4,7 @@ each check on a text that has the fault and on one that does not."""
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 
 from prax import store
 from prax.parsers import quality
@@ -134,12 +135,20 @@ def test_what_a_reader_left_that_is_not_text() -> None:
     assert quality.check(table, stamp=LAYER, mime="text/html") == []
 
 
-def test_the_record_keeps_the_version_and_the_text_it_read() -> None:
+def test_a_finding_names_its_fix_and_a_pdf_its_arxiv_id() -> None:
+    import pymupdf
+
     found = quality.check(GARBLED, stamp=LAYER, mime=PDF, profile=TYPED)
-    rec = quality.record(found, text_hash="ab" * 32, at="2026-10-18T01:00:00Z")
-    assert rec["version"] == quality.VERSION and rec["text_hash"] == "ab" * 32
-    assert rec["findings"][0]["check"] == "maths-as-text"
-    assert quality.record([], text_hash=None, at="x")["findings"] == []
+    assert set(quality.fixes(found)) == {"marker"}
+    doc = pymupdf.open()
+    doc.new_page().insert_text((72, 72), "arXiv:1308.3432v2 [cs.LG] 9 Aug 2013")
+    data = doc.tobytes()
+    assert quality.profile_of(data, mime=PDF)["arxiv"] == "1308.3432"
+    assert (
+        quality.profile_of(data, mime=PDF, arxiv="2501.13484")["arxiv"] == "2501.13484"
+    )
+    assert quality.profile_of(data, mime=PDF, arxiv="no id")["arxiv"] == "1308.3432"
+    assert quality.profile_of(data, mime="text/html") is None
 
 
 def test_the_door_keeps_the_findings_with_the_text_they_read(
@@ -154,3 +163,56 @@ def test_the_door_keeps_the_findings_with_the_text_they_read(
     assert meta["quality"] == held
     assert held["text_hash"] == store.get_document(con, doc, max_chars=0)["text_hash"]
     assert held["findings"][0]["check"] == "maths-as-text"
+
+
+def test_the_quality_pass_checks_each_text_once(con: sqlite3.Connection) -> None:
+    doc = store.ingest_text(
+        con, r"the map MATH ${\cal A}$ ${\cal A}$ here. " * 20, title="t"
+    )["doc_id"]
+    first = store.maintain(con, only=["quality"])["quality"]
+    assert first["documents"] >= 1 and first["found"] == {"leftovers": 1}
+    held = store.get_meta(con, doc)["quality"]
+    assert held["version"] == quality.VERSION
+    assert held["findings"][0]["check"] == "leftovers"
+    # the next night reads only what changed
+    assert store.maintain(con, only=["quality"])["quality"]["documents"] == 0
+    store.index_text(con, doc, "Clean words of a page. " * 20, text_source="x/1")
+    again = store.maintain(con, only=["quality"])["quality"]
+    assert again["documents"] == 1 and again["found"] == {}
+    assert store.get_meta(con, doc)["quality"]["findings"] == []
+
+
+def test_the_admin_list_and_the_fix_for_its_documents(
+    data_dir: Path,
+) -> None:
+    """``GET /documents/quality`` counts each check's documents and lists
+    one check's, the most found first; ``POST /readings/bulk`` with
+    ``finding`` asks for the fix over them, and only of the text a
+    document holds now."""
+    from fastapi.testclient import TestClient
+
+    from prax.api import app
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    with TestClient(app) as client:
+        con = client.app.state.con
+        few = store.ingest_text(con, "a MATH $x$ $x$ b. " * 20, title="few")["doc_id"]
+        many = store.ingest_text(con, "c &nbsp; MATH $y$ d. " * 30, title="many")[
+            "doc_id"
+        ]
+        clean = store.ingest_text(con, "Clean words. " * 30, title="clean")["doc_id"]
+        store.maintain(con, only=["quality"])
+        got = client.get("/documents/quality").json()
+        assert got["checks"] == {"leftovers": 2} and "items" not in got
+        listed = client.get("/documents/quality?check=leftovers").json()
+        assert [i["id"] for i in listed["items"]] == [many, few]
+        assert listed["items"][0]["finding"]["count"] == 60
+        asked = client.post(
+            "/readings/bulk",
+            json={"extractor": "pymupdf4llm", "finding": "leftovers", "dry_run": True},
+        ).json()
+        assert asked["selected"] == 2
+        # a new text makes its old findings say nothing
+        store.index_text(con, few, "Now clean. " * 30, text_source="x/1")
+        assert client.get("/documents/quality").json()["checks"] == {"leftovers": 1}
+        assert clean not in {i["id"] for i in listed["items"]}

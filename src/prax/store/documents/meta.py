@@ -703,15 +703,23 @@ def set_quality(
     if row is None:
         raise KeyError(f"no such document: {doc_id}")
     meta = json.loads(row["meta"] or "{}")
-    meta["quality"] = held = {
-        "version": version,
-        "at": now(),
-        "text_hash": row["text_hash"],
-        "findings": findings,
-    }
+    meta["quality"] = held = quality_record(findings, row["text_hash"], version)
     _put_meta(con, doc_id, meta)
     con.commit()
     return held
+
+
+def quality_record(
+    findings: list[dict[str, Any]], text_hash: str | None, version: int
+) -> dict[str, Any]:
+    """``meta.quality``: the findings, the checks' version, when, and the
+    text they read (``set_quality`` and the ``quality`` pass)."""
+    return {
+        "version": version,
+        "at": now(),
+        "text_hash": text_hash,
+        "findings": findings,
+    }
 
 
 @_serialized

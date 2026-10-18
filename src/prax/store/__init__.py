@@ -255,6 +255,8 @@ from .documents import (  # noqa: F401
     promotion_candidates,
     published_of,
     published_tried,
+    quality_page,
+    quality_record,
     read_chunks,
     reading_requests,
     readings_done_since,

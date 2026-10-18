@@ -186,12 +186,16 @@ numbered there) in the order the user agreed: one step a session.
          documents each check flags, a sample of each read by hand
          (`docs/eval/`). A check that flags what is fine is changed or
          dropped before it can queue a reading.
-      4. Shown: the document page's line of findings, a Review list of
-         the flagged. And the HTML pymupdf4llm writes on purpose
-         (`<sup>` for a footnote's mark and an exponent, `<br>` in a
-         table's cell and a picture's text; 7,426 documents) shown as
-         what it means rather than as tags.
-      5. Acting: `pipeline.follow_ups` asks for the fix a finding names
+      4. (done 2026-10-18) Shown: the document page's line of findings
+         ("checks: maths as text 152 → marker", the evidence on hover)
+         and the Admin page's "text checks" tab, its counts, a check's
+         documents and a button asking for its fix over them. The HTML
+         pymupdf4llm writes on purpose (`<sup>`, `<br>`; 7,426 documents)
+         already shows as what it means: the page's sanitizer lets it
+         through and a table's cell splits on `<br>`.
+      5. (done 2026-10-18, the backlog's fixes that need the card not
+         asked for until the bigger power supply is in) Acting:
+         `pipeline.follow_ups` asks for the fix a finding names
          instead of its own conditions (the reader choice and the crops
          of 2026-10-17 are the first two). A check never ends or
          replaces anything; a finding with no fix only flags.

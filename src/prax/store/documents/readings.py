@@ -312,6 +312,7 @@ def select_for_reading(
     read_formulas: bool = False,
     unread_formulas: bool = False,
     maths: float | None = None,
+    finding: str | None = None,
     limit: int | None = None,
 ) -> list[int]:
     """The documents a reading is asked for at once: the ``ids`` given,
@@ -330,8 +331,10 @@ def select_for_reading(
     least that many references to numbered equations per 10,000
     characters of prose, and at least :data:`MATHS_MIN_REFS` of them —
     what a parser that reads the mathematics is for; never a manual or a
-    datasheet, ``_numbered_steps``); every filter
-    given must hold. Retired documents are never selected."""
+    datasheet, ``_numbered_steps``), and to the ones whose text the checks
+    found this in (``finding``: ``maths-as-text``, ``ocr-layer``…, in
+    ``meta.quality`` of the text they now hold); every filter given must
+    hold. Retired documents are never selected."""
     sql = "SELECT id FROM documents WHERE json_extract(meta, '$.retired') IS NULL"
     args: list[Any] = []
     if ids:
@@ -352,6 +355,15 @@ def select_for_reading(
         if doctype not in DOCTYPES:
             raise ValueError(f"doctype must be one of {sorted(DOCTYPES)}")
         sql += " AND " + DOCTYPES[doctype].replace("d.", "")
+    if finding:
+        # what the checks found in the text the document holds now: a
+        # finding of an earlier text says nothing of this one
+        sql += (
+            " AND json_extract(meta, '$.quality.text_hash') = text_hash"
+            " AND EXISTS (SELECT 1 FROM json_each(meta, '$.quality.findings') f"
+            " WHERE json_extract(f.value, '$.check') = ?)"
+        )
+        args.append(finding)
     if unpolished:
         # a video with an automatic transcript whose text the polish has
         # not written yet

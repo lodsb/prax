@@ -171,7 +171,10 @@ def check(
                     len(debris),
                     tuple(_snippet(x) for x in debris[:EVIDENCE]),
                     fix="latex-source" if prof.get("arxiv") else "marker",
-                    detail={"maths_pages": maths},
+                    detail={
+                        "maths_pages": maths,
+                        **({"arxiv": prof["arxiv"]} if prof.get("arxiv") else {}),
+                    },
                 )
             )
 
@@ -210,14 +213,24 @@ def check(
     return found
 
 
-def record(
-    findings: list[Finding], *, text_hash: str | None, at: str
-) -> dict[str, Any]:
-    """What ``meta.quality`` holds: the findings, the checks' version and
-    the text they were read from, so a new text makes them stale."""
-    return {
-        "version": VERSION,
-        "at": at,
-        "text_hash": text_hash,
-        "findings": [f.as_dict() for f in findings],
-    }
+def profile_of(
+    data: bytes | None, *, mime: str | None, arxiv: Any = None
+) -> dict[str, Any] | None:
+    """What the checks know of a PDF's original: its profile and its arXiv
+    id, the one given (``meta.arxiv``) when it is one, else the stamp on
+    its first page. None for anything else."""
+    if mime != "application/pdf" or not data:
+        return None
+    from . import latexsrc, pdf
+
+    got = pdf.profile(data)
+    named = str(arxiv or "").strip()
+    got["arxiv"] = (
+        named if latexsrc.ARXIV_ID.fullmatch(named) else latexsrc.arxiv_id_of(data)
+    )
+    return got
+
+
+def fixes(findings: list[Finding]) -> dict[str, Finding]:
+    """The findings that name a reading, by the reading."""
+    return {f.fix: f for f in findings if f.fix}

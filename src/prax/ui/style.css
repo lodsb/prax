@@ -466,6 +466,10 @@ th { border-bottom: 1px solid var(--fg); }
 /* the lists a person decides (view-decide.js): two sides, then the buttons */
 .decide-tabs { font-family: var(--font-ui); font-size: .9rem; margin: .2rem 0 .8rem; }
 .decide-row { border-bottom: 1px solid var(--line); padding: .7rem 0; }
+/* what the checks of a text found (stage AO): a link to the Admin list, and the list */
+.check-found { color: var(--accent); }
+table.checks { font-size: .9rem; }
+table.checks code { white-space: normal; word-break: break-word; }
 .decide-row.done .decide-pair { opacity: .5; }
 .decide-held { margin: 0 0 .4rem; color: var(--accent); font-size: .92em; }
 .decide-row.held { border-left: 3px solid var(--accent); padding-left: .6rem; }

@@ -39,6 +39,19 @@ function pendingLine(pending) {
   return `<p class="reading-line muted">waiting for a worker: ${what}</p>`;
 }
 
+// What the checks of a text found (stage AO, meta.quality): of the text
+// the document holds now only, each with what it saw on hover and the
+// reading that would put it right
+function qualityLine(q, doc) {
+  if (!q || !(q.findings || []).length || q.text_hash !== doc.text_hash) return "";
+  const each = q.findings.map((f) => {
+    const seen = (f.evidence || []).join("\n");
+    const fix = f.fix ? ` → ${esc(f.fix)}` : "";
+    return `<a class="check-found" href="#admin?tab=checks&check=${encodeURIComponent(f.check)}" title="${esc(seen)}">${esc(f.check.replace(/-/g, " "))} ${f.count}</a>${fix}`;
+  });
+  return `<span class="muted">checks:</span> ${each.join(", ")}`;
+}
+
 function metaLine(meta, doc) {
   const bits = [];
   if (meta.creators && meta.creators.length) bits.push(esc(meta.creators.map((c) => c.name).join(", ")));
@@ -47,6 +60,8 @@ function metaLine(meta, doc) {
   if (meta.doi) bits.push(`<a href="https://doi.org/${esc(meta.doi)}" target="_blank" rel="noopener">doi:${esc(meta.doi)}</a>`);
   if (meta.fields && meta.fields.publicationTitle) bits.push(esc(meta.fields.publicationTitle));
   if (meta.text_source) bits.push(`<span class="muted">text: ${esc(meta.text_source)}</span>`);
+  const checks = qualityLine(meta.quality, doc);
+  if (checks) bits.push(checks);
   if (meta.lang) bits.push(`<span class="muted" title="what the language pass read (meta.lang)">${esc(languageName(meta.lang))}</span>`);
   bits.push(`<span class="muted">domains:</span> ${domainChips(meta.domains, (d) => `#browse?${new URLSearchParams({ domain: d })}`, false)}`);
   if (meta.promote) bits.push(`<span class="muted" title="${esc(meta.promote.reason || "")}">promoted by ${esc(meta.promote.by)}</span>`);

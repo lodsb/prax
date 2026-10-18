@@ -107,6 +107,10 @@ def test_a_captured_pdf_is_given_the_reader_that_suits_it(
     scan = _captured(con, _scan())
     assert pipeline.follow_ups(con, scan, stamp=LAYER, action="created") == "marker"
     assert _waiting(con, scan) == [("marker", "fast-ocr")]
+    # through what the checks found, which the door keeps with the text
+    held = store.get_meta(con, scan)["quality"]
+    assert [f["check"] for f in held["findings"]] == ["ocr-layer"]
+    assert held["text_hash"] == store.get_document(con, scan, max_chars=0)["text_hash"]
     # a typed page without a formula: its text layer is the text
     plain = _captured(con, _typed("Just words."))
     assert pipeline.follow_ups(con, plain, stamp=LAYER, action="created") is None
