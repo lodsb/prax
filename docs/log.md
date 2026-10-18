@@ -6085,6 +6085,15 @@ document's context at 383 ms. A py-spy profile put each in one query.
   map. The query reads no viewer's filter, so the rows are the same for
   any token. The edges among the hubs and their documents are read live.
 
+After a restart, `time_ui.py` with the same load, against the morning's
+numbers: a document's context 525 to 49 ms, the graph overview 1.2 s to
+62 ms (its first call, which counts, 1.0 s), a search 295 to 202 ms,
+the communities map 398 to 234 ms, the text checks 270 to 176 ms. Left
+as they are: the communities map and the text checks are one SQL query
+each, which runs without the GIL and is not polled. The map could hold
+its rows the way the hubs do, but they are one a crossing fact and the
+viewer's filter applies to them.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
