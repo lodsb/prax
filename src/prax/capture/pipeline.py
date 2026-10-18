@@ -216,7 +216,10 @@ def assess(
         prof = quality.profile_of(
             data, mime=doc["mime"], arxiv=store.get_meta(con, doc_id).get("arxiv")
         )
-    found = quality.check(doc["text"], stamp=stamp, mime=doc.get("mime"), profile=prof)
+    since = quality.since_text((doc.get("meta") or {}).get("parse_history"), stamp)
+    found = quality.check(
+        doc["text"], stamp=stamp, mime=doc.get("mime"), profile=prof, since=since
+    )
     store.set_quality(
         con, doc_id, [f.as_dict() for f in found], version=quality.VERSION
     )

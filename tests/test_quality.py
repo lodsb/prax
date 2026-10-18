@@ -92,8 +92,21 @@ def test_a_caption_with_no_picture_asks_for_the_crops_once() -> None:
         quality.check(text, stamp="latex-source/3.9-r2", mime=PDF, profile=TYPED)
     )
     assert got["bare-figures"].fix == "figure-crops" and got["bare-figures"].count == 1
+    # the crops leave text_source as it was: the history says they ran
+    history = [
+        {"extractor": "pymupdf4llm/1.28.2-r2"},
+        {"extractor": "figure-crops/1"},  # on an earlier text: says nothing
+        {"extractor": "latex-source/3.9-r2"},
+        {"extractor": "formulas/1+q"},
+        {"extractor": "figure-crops/1"},
+    ]
+    since = quality.since_text(history, "latex-source/3.9-r2")
+    assert since == {"formulas", "figure-crops"}
+    assert quality.since_text(history[:3], "latex-source/3.9-r2") == set()
     after = _checks(
-        quality.check(text, stamp="figure-crops/1", mime=PDF, profile=TYPED)
+        quality.check(
+            text, stamp="latex-source/3.9-r2", mime=PDF, profile=TYPED, since=since
+        )
     )
     assert after["bare-figures"].fix is None  # the crops ran: only a flag
     pictured = "Prose.\n\n![Figure 1: The rig.](figure:" + "a" * 64 + ")\n"

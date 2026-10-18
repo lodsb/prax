@@ -991,7 +991,8 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 
     rows = con.execute(
         "SELECT id, hash, mime, text_hash, json_extract(meta, '$.text_source') AS src,"
-        " json_extract(meta, '$.arxiv') AS arxiv FROM documents"
+        " json_extract(meta, '$.arxiv') AS arxiv,"
+        " json_extract(meta, '$.parse_history') AS history FROM documents"
         " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
         " AND (COALESCE(json_extract(meta, '$.quality.text_hash'), '') != text_hash"
         " OR COALESCE(json_extract(meta, '$.quality.version'), 0) < ?) ORDER BY id",
@@ -1012,8 +1013,10 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         except OSError:
             continue
         prof = quality.profile_of(data, mime=r["mime"], arxiv=r["arxiv"])
+        stamp = str(r["src"] or "")
+        since = quality.since_text(json.loads(r["history"] or "[]"), stamp)
         findings = quality.check(
-            text, stamp=str(r["src"] or ""), mime=r["mime"], profile=prof
+            text, stamp=stamp, mime=r["mime"], profile=prof, since=since
         )
         found.update(f.check for f in findings)
         held = quality_record(

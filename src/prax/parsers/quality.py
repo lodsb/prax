@@ -30,7 +30,7 @@ Measured over the library on 2026-10-18
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,7 +38,9 @@ from prax.text import markup
 
 from . import figures
 
-VERSION = 2  # 2: a line with code in it is not a formula's debris
+VERSION = (
+    3  # 2: a line with code is not a formula's debris; 3: the crops seen in the history
+)
 EVIDENCE = 3  # pieces of the text a finding shows
 SNIPPET = 120  # characters of each
 
@@ -137,14 +139,31 @@ def debris_lines(lines: list[str]) -> list[str]:
     return out
 
 
+def since_text(history: list[Mapping[str, Any]] | None, stamp: str) -> set[str]:
+    """The readings that ran on the current text: the extractors in
+    ``meta.parse_history`` after the entry that wrote it (``stamp``, its
+    ``text_source``). An annotating reading (the crops, the formulas)
+    leaves ``text_source`` as it was, so only the history says it ran; one
+    that ran on an earlier text says nothing of this one."""
+    out: set[str] = set()
+    for h in reversed(history or []):
+        name = str(h.get("extractor") or "")
+        if name == stamp:
+            break
+        out.add(name.split("/", 1)[0])
+    return out
+
+
 def check(
     text: str,
     *,
     stamp: str,
     mime: str | None,
     profile: Mapping[str, Any] | None = None,
+    since: Collection[str] = (),
 ) -> list[Finding]:
-    """The findings of every check on one text (the module's docstring)."""
+    """The findings of every check on one text (the module's docstring);
+    ``since``, the readings that ran on it (``since_text``)."""
     lines = text.split("\n")
     pdf = mime == "application/pdf"
     prof = profile or {}
@@ -190,7 +209,7 @@ def check(
                     "bare-figures",
                     len(bare),
                     tuple(_snippet(lines[i]) for i in bare[:EVIDENCE]),
-                    fix=None if stamp.startswith("figure-crops/") else "figure-crops",
+                    fix=None if "figure-crops" in since else "figure-crops",
                 )
             )
 
