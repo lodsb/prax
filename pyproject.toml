@@ -17,6 +17,7 @@ classifiers = [
 ]
 dependencies = [
     "fastapi>=0.115",
+    "starlette>=1.0",  # GZipMiddleware(exclude_content_types=): a PDF is sent as it is (prax.api)
     "uvicorn>=0.30",
     "mcp>=2,<3",
     "pydantic>=2.7",

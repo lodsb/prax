@@ -5981,6 +5981,34 @@ numbers it, and each failed on the code before the fix.
   "aucun" for every extraction. A biography after a reference list is told by
   the lexicon's `biography:` verbs, German and French among them.
 
+## 2026-10-18: the web UI's files, cached and compressed
+
+The web UI performance work of 2026-10-18, its first part. A page load
+asked for 22 files: `index.html`, 19 scripts, two stylesheets and the
+fonts they name. Every one was served with `Cache-Control: no-cache`, so
+each load revalidated each of them, 22 round trips through a door that
+may be busy with a worker's hand-out. None was compressed: 676 KB of
+the UI's own files and KaTeX's.
+
+- `prax.api.ui` serves the UI. The page and its stylesheets are
+  rewritten as they are sent: every reference to a file of the UI
+  carries its version, the first 12 hex digits of its sha256
+  (`core.js?v=3f2a…`). The version is read again only when the file's
+  size or modification time moves. A file asked for with `v` is sent
+  with `max-age=31536000, immutable`; the page and a bare request stay
+  `no-cache`. A redeploy changes the names, so a stale script cannot
+  survive it. The page's ETag is of what is sent.
+- The door compresses its answers (Starlette's `GZipMiddleware`, level
+  6, from 1 KB). A PDF, a picture, a font and a 206 range are sent as
+  they are; `ask`'s stream is flushed per line, so it still arrives as
+  it is written. `starlette>=1.0` is required for the exclusion list.
+- Measured with the test client: the 22 files are 676 KB raw and 204 KB
+  sent. After the first load a page asks for `index.html` alone.
+
+The poll of an open document already paused in a hidden tab, and its
+fingerprint was made cheap in the quality fixes. Next: the door's own
+time, measured with the worker running.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

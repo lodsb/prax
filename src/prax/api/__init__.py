@@ -13,12 +13,10 @@ import threading
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from prax import config, store
@@ -44,10 +42,9 @@ from . import (
 from ._base import _con, max_upload
 from .pages import _answering, _answering_lock, _start_questions
 from .passes import start_backup, start_figures, start_maintain, start_resolve
+from .ui import UI_DIR, UIFiles
 
 __all__ = ["_answering", "_answering_lock", "_con", "app", "max_upload"]
-
-UI_DIR = Path(__file__).resolve().parent.parent / "ui"
 
 
 def _warm() -> None:
@@ -286,6 +283,25 @@ app.add_middleware(
     allow_private_network=True,
 )
 
+# The door's answers are compressed: JSON, the UI's scripts and a captured
+# page shrink five to ten times, which over a VPN is most of a page's
+# wait. What is compressed already (a PDF, a picture, a font) and a
+# range of a file are sent as they are. Level 6 is zlib's own default:
+# 9 costs the board twice the CPU for a few per cent.
+from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddleware
+
+app.add_middleware(
+    GZipMiddleware,
+    minimum_size=1024,
+    compresslevel=6,
+    exclude_content_types=(
+        *DEFAULT_EXCLUDED_CONTENT_TYPES,
+        "application/pdf",
+        "application/octet-stream",
+        "image/*",
+    ),
+)
+
 
 class SessionReq(BaseModel):
     token: str
@@ -344,36 +360,7 @@ def root() -> RedirectResponse:
     return RedirectResponse("/ui/")
 
 
-# What the UI page may load and run. The UI renders Markdown that other
-# people wrote (captured pages, a model's answer) into HTML, and marked
-# passes raw HTML through; this is what keeps a <script> or an onerror=
-# in that text from running with the session cookie: only the UI's own
-# files run as script, nothing inline, no javascript: links, no forms
-# posting elsewhere, no framing, images only from the door itself.
-UI_POLICY = (
-    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data:; connect-src 'self'; object-src 'none'; "
-    # a video document's player, loaded only when the reader presses play
-    "frame-src https://www.youtube-nocookie.com; "
-    "base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
-)
-
-
-class _UIFiles(StaticFiles):
-    """Static files that browsers revalidate on every load (ETag makes
-    that cheap), so a redeploy never leaves a stale script behind, and
-    that carry the UI's content security policy."""
-
-    def file_response(self, *args: Any, **kwargs: Any) -> Any:
-        response = super().file_response(*args, **kwargs)
-        response.headers["Cache-Control"] = "no-cache"
-        response.headers["Content-Security-Policy"] = UI_POLICY
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["Referrer-Policy"] = "no-referrer"
-        return response
-
-
-app.mount("/ui", _UIFiles(directory=UI_DIR, html=True), name="ui")
+app.mount("/ui", UIFiles(directory=UI_DIR, html=True), name="ui")
 
 
 for _router in (
