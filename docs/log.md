@@ -6208,7 +6208,7 @@ stage. The measurements are on the live store, read-only.
 `store.list_documents(domain=)` lists a module's own documents and
 those of the modules built on it, and no longer the 836 documents with
 no domain set. Those are listed under "unassigned". The list now holds
-what the domain menu counts (`store.domain_counts`): "craft" showed 121
+what the domain menu counts (`store.domain_counts`): "craft" showed 120
 in the menu and 957 rows before. A search by module still finds the
 unassigned documents (`legs.py`, `fusion.py`, `unset=True`): a search
 is read against every module a document may belong to, a list is not.
