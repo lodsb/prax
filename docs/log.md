@@ -6214,6 +6214,28 @@ unassigned documents (`legs.py`, `fusion.py`, `unset=True`): a search
 is read against every module a document may belong to, a list is not.
 `tests/test_browse.py` and `tests/test_domains.py` say it.
 
+## 2026-10-19: `store.graph.context` in three parts
+
+`store.graph.context` had grown to 1,167 lines doing three jobs. It is
+now three parts of `store.graph`, in its `ORDER` after `languages`:
+
+- `lookups` (215 lines): the small reads the steps and routes make
+  (`labels_of_entities`, `entity_answering`, `document_identities`,
+  `documents_by_hash`, `own_type`, `described_devices`, …). It imports
+  nothing of the graph package.
+- `context` (377): a document's facts and context for `ask` and the
+  document page (`document_facts`, `document_context`,
+  `_linked_documents`).
+- `views` (602): what the web UI draws (`hub_graph` with its held hubs
+  and `HUB_REFRESH`, `entity_marks`, `document_edges`, `seed_documents`,
+  `subgraph_edges`) and the Review page's lists (`candidates_page`,
+  `merges_page`, `_suspect`). It takes `entity_named_in` from `lookups`.
+
+No code moved between functions and every name is re-exported as
+before; only the tests that reach a part's private state
+(`HUB_REFRESH`, `_suspect`, in `conftest.py`, `test_door_time.py` and
+`test_decide.py`) now name `views`.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

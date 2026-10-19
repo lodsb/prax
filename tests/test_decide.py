@@ -11,7 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from prax import store
-from prax.store.graph import context
+from prax.store.graph import views
 
 
 def _edge(con: sqlite3.Connection, e: store.Edge, doc: int | None = None) -> None:
@@ -118,17 +118,16 @@ def test_one_merge_taken_back_and_recorded_different(con: sqlite3.Connection) ->
 
 
 def test_which_merges_are_suspect() -> None:
-    assert context._suspect("Kalman smoother", "extended Kalman smoother") == "narrower"
+    assert views._suspect("Kalman smoother", "extended Kalman smoother") == "narrower"
     assert (
-        context._suspect("postorder traversal", "preorder traversal")
-        == "one word apart"
+        views._suspect("postorder traversal", "preorder traversal") == "one word apart"
     )
-    assert context._suspect("spatialisation", "spatialization") is None  # one word
-    assert context._suspect("Gabor transform", "gabor transforms") is None  # plural
-    assert context._suspect("colour model", "color model") is None  # a spelling
+    assert views._suspect("spatialisation", "spatialization") is None  # one word
+    assert views._suspect("Gabor transform", "gabor transforms") is None  # plural
+    assert views._suspect("colour model", "color model") is None  # a spelling
     # a tracker is what does the tracking: a person should look
-    assert context._suspect("beat tracking", "beat trackers") == "one word apart"
-    assert context._suspect("notenschrift", "notation") is None  # a translation
+    assert views._suspect("beat tracking", "beat trackers") == "one word apart"
+    assert views._suspect("notenschrift", "notation") is None  # a translation
 
 
 def test_a_split_name_is_kept_apart_or_merged_across_types(

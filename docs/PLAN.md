@@ -854,7 +854,7 @@ Left:
 The pass itself is in `docs/log.md` (2026-09-30). These were found and
 not done.
 
-- [ ] (2026-10-04: `store.repair` done, four parts at 1,890 lines; `store.graph.context` at 954 is not yet past the line) **`store.repair` and `store.graph.context` in parts.** 1,697 and 954
+- [x] (2026-10-19: `store.graph.context` at 1,167 lines is three parts, `lookups`, `context` and `views`) (2026-10-04: `store.repair` done, four parts at 1,890 lines; `store.graph.context` at 954 is not yet past the line) **`store.repair` and `store.graph.context` in parts.** 1,697 and 954
       lines. Their tests reach private state (`repair._glyphs_seen`),
       which would move with the part that holds it.
 - [ ] **Typed shapes.** 869 `dict[str, Any]` annotations and no

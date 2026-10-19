@@ -161,7 +161,7 @@ def test_a_documents_links_are_found_through_its_aliases(
 def test_the_graph_views_hubs_are_counted_again_only_when_the_graph_moved(
     con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from prax.store.graph import context
+    from prax.store.graph import views
 
     doc = int(store.ingest_text(con, "text " * 20, title="P")["doc_id"])
     _edge(con, store.Edge("P", "paper", "uses", "wavelets", "method"), doc)
@@ -174,7 +174,7 @@ def test_the_graph_views_hubs_are_counted_again_only_when_the_graph_moved(
     _edge(con, store.Edge("P", "paper", "uses", "filters", "method"), doc)
     assert "filters" in names() and len(counted) == 2
     # on a host, a minute's grace after the graph moved
-    monkeypatch.setattr(context, "HUB_REFRESH", 60.0)
+    monkeypatch.setattr(views, "HUB_REFRESH", 60.0)
     _edge(con, store.Edge("P", "paper", "uses", "chirps", "method"), doc)
     assert "chirps" not in names() and len(counted) == 2
     con.set_trace_callback(None)
