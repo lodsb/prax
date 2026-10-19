@@ -4,7 +4,7 @@ Plan item AQ. Written 2026-09-27 for audio and video. Revised
 2026-10-19 into a design for any original. The user asked on
 2026-10-18: "on my nas LARGE amounts of video or audio data, i dont want this to be
 duplicated … there may be duplicates all over the place, too". Not
-built. The questions at the end need the user's answers before stage 1.
+built. The question at the end needs the user's answer before stage 3.
 
 ## The problem
 
@@ -66,6 +66,12 @@ The database stores `("nas-media", "Field recordings/2019/creek.wav")`.
 A host that mounts the share elsewhere changes its own `prax.yaml` and no
 row. A root this host does not map is named but unreachable here.
 
+Listing a root and serving from it are two different reaches. The NAS
+is reached over ssh today, and that is enough to list it: the crawler
+runs on the NAS (below). Serving a file needs the door to open it, so
+the door's host mounts the share (Samba). A root with no mount on the
+door's host is listed and searchable, and its files are out of reach.
+
 ### The schema (one migration)
 
 `places`, one row per file seen at a place:
@@ -74,12 +80,11 @@ row. A root this host does not map is named but unreachable here.
 |---|---|
 | `root`, `path` | the key; `path` is relative, with `/` separators |
 | `size`, `mtime` | as the crawl read them; a file whose two are unchanged is not read again |
-| `quick` | a cheap key: the size and three 64 KB blocks (start, middle, end), hashed |
-| `sha256` | the full hash, NULL until the file was read whole |
+| `sha256` | the full hash of the bytes |
 | `first_seen`, `last_seen` | UTC moments (`store.now()`) |
 | `gone` | when a crawl of its root no longer found it; the row stays |
 
-Indexes on `sha256` and on `quick`. A document's places are `places
+An index on `sha256`. A document's places are `places
 WHERE sha256 = documents.hash`. No foreign key, because a place may hold
 a file that is not a document.
 
@@ -88,23 +93,58 @@ today is held, so the default is the migration.
 
 ### The crawl
 
-`prax import places <root>` is a client, like the other importers
-(invariant 4). It runs on a machine that maps the root, and walks it the way
-`prax_send.py` walks a folder. A file whose size and mtime match its row is
-skipped. Any other file gets a `quick` key. Its full hash is read only
-when the file is to become a document, or when its `quick` key is shared
-by another file. That second case is where a duplicate may be. The client
-posts what it saw in batches to `POST /places`. A crawl that ends marks
-the rows of its root it did not see as `gone`.
+The crawler is `clients/send/prax_send.py`, which already does most of
+it. On 2026-09-28 it ran on the NAS itself over ssh and walked 5 TB
+(`docs/log.md`). It leaves out junctions, loops and a system drive's
+folders, hashes each file where it lies, and keeps a journal of what it
+hashed, so a stopped run resumes. A new `--places <root>` mode lists
+every file under the root, of any kind, and posts each one's path, size,
+mtime and sha256 to `POST /places` in batches. It sends no bytes. It is a
+client of the door like the other importers (invariant 4).
 
-Full hashing is the cost: gigabit Ethernet reads about 110 MB/s, so one
-terabyte is some 2.5 hours. The `quick` key keeps that cost to the
-files that need it.
+Every file is hashed in full, once. Running on the NAS, that reads at
+the disks' speed, not the network's. A small NAS's CPU may hold sha256
+to about 100 MB/s, so the first run over 5 TB takes some 14 hours, one
+night and a morning. After that a file whose size and mtime match its row is
+not read again. A run that ends marks the rows of its root it did not
+see as `gone`.
+
+A full hash for every file is what makes the questions below
+answerable. The 2026-10-19 draft of this note used a cheap key (size and
+sampled blocks) instead. That key can say that two files may be one, but
+not that a file moved, so it was dropped.
 
 With `--reference`, a new file of a referenced kind becomes a document
 without its bytes: `POST /ingest/reference` with the hash, MIME type,
 title, root and path. The other files are sent as now and held. Which
-kinds are referenced is question 2 below.
+kinds are referenced is the question at the end.
+
+### Asking where data is
+
+Because every place carries a full hash, three questions become reads
+of the table:
+
+- **Where is this?** The places of a document, a hash or a path: the
+  ones last seen, and the gone ones with when they went.
+- **It moved or was deleted: is there another copy?** The other places
+  with the same hash that are not gone. A file gone at one path and seen
+  at another in the same run was moved, and the answer says so.
+- **What exists only once?** The hashes with one live place, largest
+  first. That is the list of what a disk failure would lose.
+
+The door answers them at `GET /places` (by `doc`, `hash` or `root` and
+`path`) and `GET /places/single`. The MCP server gets a `where` tool, so
+an agent can ask "where is the creek recording" and get the places in a
+few hundred bytes (invariant 6).
+
+The places are not nodes or edges of the graph. An edge is evidence: a
+document said it, with a quote, a confidence and a run (invariant 8). A
+place is an observation of a crawl that changes every night. Half a
+million `stored_at` edges would also swamp a walk: the NAS would be the
+largest hub in the library. What can be an entity is the root itself,
+the NAS as a `device` that documents mention ("the NAS's RAID"). A walk
+from it then reaches what the library says about it, and `where` reaches
+what lies on it.
 
 ### Reading a referenced original
 
@@ -143,7 +183,7 @@ recording's keyframes are filed like a scanned page's crops
 (`figures.FILED`), so they are not lost when the NAS is down. A
 referenced PDF's figures are not filed: they are served out of the
 original by hash (CLAUDE.md, "Conventions"). That is one reason to keep
-PDFs held (question 2).
+PDFs held (the question at the end).
 
 ### What else changes
 
@@ -163,7 +203,7 @@ PDFs held (question 2).
   struck through. The Admin page gains a duplicates list: groups of
   places sharing a full hash, largest first.
 - **Size.** A row is about 150 bytes, so half a million files make some
-  75 MB of table. That is within the board's means; the index on `quick`
+  75 MB of table. That is within the board's means; the index on `sha256`
   serves the duplicates query.
 
 ## Stages
@@ -172,10 +212,11 @@ PDFs held (question 2).
    `store.original_source`, with every site above going through it. The
    tests use a temporary root. Nothing is referenced yet, so it must give
    the same answers as now.
-2. **The crawl.** `POST /places`, `prax import places`, and the `quick`
-   key. Places recorded for held documents, and the duplicates list
-   (`GET /places/duplicates`). This is useful before stage 3: it finds
-   the NAS's duplicates without referencing anything.
+2. **The crawl and `where`.** `POST /places`, `prax_send.py --places`,
+   the reads of "Asking where data is", the `where` tool and the
+   duplicates list (`GET /places/duplicates`). This is useful before
+   stage 3: it finds the NAS's duplicates and answers where a file is
+   without referencing anything, and it needs no mount.
 3. **References.** `POST /ingest/reference`, `--reference`, and range
    serving from a place. Then the backup's count, heal's ailment and the
    UI's places.
@@ -186,17 +227,15 @@ PDFs held (question 2).
 
 ## Questions for the user
 
-1. **Does the board mount the NAS?** If it does, the door serves a
-   referenced file from anywhere on the private network. If only the
-   desktop does, referenced originals are out of reach whenever the
-   desktop door is not the one asked.
-2. **What is referenced?** My recommendation: audio and video from a
+Two were answered on 2026-10-19. The NAS is reached over ssh and
+could be mounted with Samba, so the crawler runs on the NAS and the
+door mounts the share to serve from it. The crawl lists every file, so
+prax can name the other copies when one moves or is deleted. One
+question remains:
+
+1. **What is referenced?** My recommendation: audio and video from a
    `--reference` crawl, and every other file held. PDFs are small next to
    recordings, their figures and pages are served out of the original,
    and holding them keeps them when the NAS is gone. The alternative is a
    size line (say `door.max_upload_mb`, 256 MB). It also catches a large
    scanned book, but a 20 MB voice memo stays held.
-3. **Does the crawl list every file, or only the kinds prax reads?**
-   Every file finds every duplicate on the NAS (a copied photo folder
-   too), at the cost of more rows and `quick` reads. Only prax's kinds
-   keeps the table to what the library can use.

@@ -923,7 +923,7 @@ not done.
       through resolution (a likely pair, a person's decision), never by
       an equal number. The wall decides what an export may hold: no
       document a token could not see, no edge whose evidence is one.
-- [ ] (2026-10-19: designed in `docs/media-by-reference.md`, in four stages; three questions for the user first) **AQ. An original that stays where it is.** "on my nas LARGE
+- [ ] (2026-10-19: designed in `docs/media-by-reference.md`, in four stages; the crawl lists every file on the NAS from the NAS, the door mounts it with Samba to serve, `where` answers where a file and its copies are; what is referenced is still open) **AQ. An original that stays where it is.** "on my nas LARGE
       amounts of video or audio data, i dont want this to be duplicated
       … there may be duplicates all over the place, too". The bytes
       need not be in `archive/`: a document's original could be *held*
