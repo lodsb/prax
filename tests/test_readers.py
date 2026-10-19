@@ -209,6 +209,11 @@ def test_a_companion_moves_with_its_role_in_a_swap(
     ]
     sup = up.Supervisor(roles, data_dir=data_dir, say=lambda _l: None, tick=0.05)
     monkeypatch.setattr(up.hostinfo, "vram_free_mb", lambda: 100)
+    # the machine's own commit is not the test's: under the suite, beside a
+    # live llama-server, it left too little and the swap was refused
+    monkeypatch.setattr(
+        up.hostinfo, "memory", lambda: {"ram_free_mb": 64000, "commit_free_mb": 64000}
+    )
     waiting = {"marker": 1}
     monkeypatch.setattr(
         up.Supervisor, "_ask_demand", lambda self: setattr(self, "demand", waiting)
