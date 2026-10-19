@@ -174,34 +174,16 @@ ones at once, and to plan the rest here.
       guarded in English only), 7 (latex2html's formulas never asked
       for), 9 (the page poll scanned the edges table), 20 (a reference
       list's biographies told by English verbs).
-- [ ] **4.** The PDF profile is not kept: every bump of the checks'
-      version re-reads and re-profiles every original (38 minutes on
-      the desktop for the library; more from a NAS, AQ). `meta.profile`
-      keyed by the original's hash with a `PROFILE_VERSION`, and one
-      assess function for the door and the pass (an hour or two, and one
-      profiling pass).
-- [ ] **10.** `cited_but_missing` runs up to 60 library-wide searches a
-      call (0.85 s here, seconds on the board): a cap and a deadline, or
-      the counts kept by the references pass (an hour).
-- [ ] **11.** The store's own document kinds (`SELF_KINDS`) are written
-      out in five places; `ontology.SELF_KINDS` is the one (under an hour).
-- [ ] **13.** The latex-source reading reaches into `importers.latex`
-      for the conversion: it belongs in `parsers` (half a day).
-- [ ] **15.** mdwiki copies the slug rule and the front-matter pattern:
-      one slug in `prax.text` (an hour).
-- [ ] **17.** mdwiki reads one wiki's layout and drops the files of
-      another without saying so: options, and a count of what it skips
-      (an hour).
-- [ ] **18.** The checks' thresholds and `SAME_PAPER` were tuned on this
-      library with no script to measure them again: `scripts/eval_quality.py`,
-      and `SAME_PAPER` a setting (an hour).
-- [ ] **19.** `COMMIT_RESERVE_MB` in `host/up.py` is a constant, 4 GB:
-      a setting (an hour).
-- [ ] **22.** Two detectors of a PDF whose text is not the document
-      (the thin and unreadable selections, and the checks): one, or a
-      sentence each on which is for what (an hour).
-- [ ] **23.** `store.changes` counts each side twice: one `GROUP BY` with
-      a healed column (an hour).
+- [x] (2026-10-19, `docs/log.md`) **The other ten.** 4 (the PDF profile
+      kept by the original's hash, one `quality.assess`), 10 (the library's
+      citers counted only where they order the list, within a budget), 11
+      (`ontology.SELF_KINDS` in the five places), 13 (the LaTeX conversion
+      in `prax.parsers.latex`), 15 (one slug grammar, `prax.text.slugs`, and
+      the front-matter pattern from `prax.text.status`), 17 (mdwiki's
+      layout an option, what it leaves out counted), 18
+      (`scripts/eval_quality.py`; `SAME_PAPER` left a constant, in its
+      measured gap), 19 (`host.commit_reserve_mb`), 22 (heal's thin-texts
+      leaves the checks' scans to them), 23 (`changes` counts a side once).
 
 ## Stages
 

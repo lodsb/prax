@@ -52,7 +52,8 @@ _DATE = re.compile(r"\b(\d{4}-\d{2}-\d{2}|\d{4}-\d{2})\b")
 # a line's furniture before its first word: a quote mark, a heading, a
 # list dash, emphasis, an emoji-free warning sign of text
 _LEAD = re.compile(r"^[\s>#*_\-|]*(?:\[!?\w+\]\s*)?[\s*_]*")
-_FRONT = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
+# a Markdown file's YAML front matter; mdwiki strips it from a note too
+FRONT_MATTER = re.compile(r"\A---[ \t]*\n(.*?)\n---[ \t]*(?:\n|\Z)", re.DOTALL)
 _FRONT_KEY = re.compile(r"^([A-Za-z_\-]+)\s*:\s*(.*?)\s*$")
 
 
@@ -150,7 +151,7 @@ def _marks_a_status(line: str, rest: str, word: str, w: Words) -> bool:
 
 
 def _front_matter(text: str) -> dict[str, str]:
-    m = _FRONT.match(text)
+    m = FRONT_MATTER.match(text)
     if not m:
         return {}
     out: dict[str, str] = {}
@@ -209,7 +210,7 @@ def read(
                 else []
             )
             return Status(state, since, said, refs)
-    body = _FRONT.sub("", text, count=1)
+    body = FRONT_MATTER.sub("", text, count=1)
     for line in body.splitlines()[:HEAD_LINES]:
         rest = _LEAD.sub("", line).strip()
         if not rest:

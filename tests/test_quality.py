@@ -6,6 +6,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from prax import store
 from prax.parsers import quality
 
@@ -265,3 +267,41 @@ def test_the_admin_list_and_the_fix_for_its_documents(
         store.index_text(con, few, "Now clean. " * 30, text_source="x/1")
         assert client.get("/documents/quality").json()["checks"] == {"leftovers": 1}
         assert clean not in {i["id"] for i in listed["items"]}
+
+
+def test_a_pdfs_profile_is_read_from_its_original_once(
+    con: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The quality review of 2026-10-18 (4): a bump of the checks' version
+    re-read and re-profiled every original, 38 minutes for the library.
+    The profile is kept by the original's hash, and read again only when
+    its own version moves."""
+    import pymupdf
+
+    from prax.capture import pipeline
+    from prax.parsers import pdf
+
+    page = pymupdf.open()
+    page.new_page().insert_text((72, 72), "arXiv:1308.3432v2 [cs.LG] 9 Aug 2013")
+    doc = int(store.register(con, page.tobytes(), mime=PDF, title="p")["doc_id"])
+    store.index_text(con, doc, "Words of a paper. " * 40, text_source=LAYER)
+    profiled: list[int] = []
+    real = pdf.profile
+    monkeypatch.setattr(pdf, "profile", lambda d: profiled.append(1) or real(d))
+
+    first = store.maintain(con, only=["quality"])["quality"]
+    kept = store.get_meta(con, doc)["profile"]
+    assert first["profiled"] == 1 and len(profiled) == 1
+    assert kept["original"] == store.get_document(con, doc)["hash"]
+    assert kept["version"] == pdf.PROFILE_VERSION and kept["arxiv_stamp"] == "1308.3432"
+    # new checks read the text and the kept profile, not the original
+    monkeypatch.setattr(quality, "VERSION", quality.VERSION + 1)
+    again = store.maintain(con, only=["quality"])["quality"]
+    assert again["documents"] == 1 and again["profiled"] == 0 and len(profiled) == 1
+    _, prof = pipeline.assess(con, doc)  # and the door, when a text lands
+    assert prof is not None and prof["arxiv"] == "1308.3432" and len(profiled) == 1
+    # a new profile reads every original again
+    monkeypatch.setattr(pdf, "PROFILE_VERSION", pdf.PROFILE_VERSION + 1)
+    pipeline.assess(con, doc)
+    assert len(profiled) == 2
+    assert store.get_meta(con, doc)["profile"]["version"] == pdf.PROFILE_VERSION

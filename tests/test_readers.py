@@ -375,6 +375,10 @@ def test_a_load_that_would_leave_no_commit_does_not_fit(
     assert not sup._fits(big)  # 1.6 GB would be left
     again = up.Supervisor([big], data_dir=data_dir, say=lambda _l: None)
     assert again.commits == {"llama-server": 18379}  # kept across runs
+    # the reserve is the host's to say (the quality review of 2026-10-18, 19)
+    monkeypatch.setenv("PRAX_COMMIT_RESERVE_MB", "1024")
+    assert sup._fits(big)  # 1.6 GB left is more than this host keeps
+    monkeypatch.delenv("PRAX_COMMIT_RESERVE_MB")
     free["commit_free_mb"] = 30000
     assert sup._fits(big)
     monkeypatch.setattr(up.sys, "platform", "linux")  # overcommitted: no wall

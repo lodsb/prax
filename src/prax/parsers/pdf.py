@@ -68,6 +68,8 @@ _MATH_FONT = re.compile(
 SCAN_COVER = 0.8  # pictures covering this much of a page make it a scanned page
 OCR_INVISIBLE = 0.5  # this share of a page's text drawn invisibly is an OCR layer
 PROFILE_PAGES = 12  # the pages a profile looks at, from the first
+# the profile's shape: a bump profiles every kept one again (meta.profile)
+PROFILE_VERSION = 1
 
 
 def image_cover(page: Any) -> float:

@@ -694,11 +694,14 @@ def set_quality(
     *,
     version: int,
     text_hash: str,
+    profile: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """What the checks of a text found (``parsers.quality``, stage AO),
     kept in ``meta.quality`` with the text artifact they read
     (``text_hash``), so a new text makes them stale rather than wrong.
-    None, and nothing kept, when the document holds another text by now."""
+    ``profile``, when the original was read for them, is kept as
+    ``meta.profile`` (``quality.assess``). None, and nothing kept, when
+    the document holds another text by now."""
     row = con.execute(
         "SELECT meta, text_hash FROM documents WHERE id = ?", (doc_id,)
     ).fetchone()
@@ -708,6 +711,8 @@ def set_quality(
         return None  # a text that landed since: its own checks will run
     meta = json.loads(row["meta"] or "{}")
     meta["quality"] = held = quality_record(findings, text_hash, version)
+    if profile is not None:
+        meta["profile"] = profile
     _put_meta(con, doc_id, meta)
     con.commit()
     return held

@@ -277,6 +277,19 @@ def build_parser() -> argparse.ArgumentParser:
         " document's address (…/-/blob/master)",
     )
     s.add_argument(
+        "--wiki-folder",
+        metavar="NAME",
+        help="mdwiki: the folder a topic's wiki is in (default wiki)",
+    )
+    s.add_argument(
+        "--skip",
+        action="append",
+        metavar="FOLDER",
+        help="mdwiki: a folder that is not the wiki or its papers (repeatable;"
+        " replaces the default list: .git, .obsidian, _template, txt, admin,"
+        " public, vault, tests)",
+    )
+    s.add_argument(
         "--cache",
         metavar="DIR",
         help="latex2html: where the crawl keeps what it fetched"

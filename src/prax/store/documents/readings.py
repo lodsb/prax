@@ -271,11 +271,21 @@ def thin_documents(
     ``per_page`` bytes a page: a scan whose text layer is the cover's or
     the front matter's, taken for the book — what ``unreadable_documents``
     cannot see, since something was read. Rows of ``id``, ``pages``,
-    ``bytes`` and ``per_page``, the longest first; OCR is the way on."""
+    ``bytes`` and ``per_page``, the longest first; OCR is the way on.
+
+    A PDF the checks of its current text already call a scan (an
+    ``ocr-layer`` or ``no-layer`` finding, ``parsers.quality``) is theirs,
+    and left out: they see its pictures and name marker's OCR as its fix,
+    where this sees only bytes a page. This finds the rest, a scan whose
+    first pages carry text (the quality review of 2026-10-18, 22)."""
     rows = con.execute(
-        "SELECT id, text_hash FROM documents WHERE mime = 'application/pdf'"
+        "SELECT id, text_hash FROM documents d WHERE mime = 'application/pdf'"
         "   AND text_hash IS NOT NULL"
-        "   AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+        "   AND json_extract(meta, '$.retired') IS NULL"
+        "   AND NOT EXISTS (SELECT 1 FROM json_each(d.meta, '$.quality.findings') f"
+        "     WHERE json_extract(d.meta, '$.quality.text_hash') = d.text_hash"
+        "     AND json_extract(f.value, '$.check') IN ('ocr-layer', 'no-layer'))"
+        " ORDER BY id"
     ).fetchall()
     # what the parses recorded: a PDF without a count is not weighed
     # (``uncounted_pages``), rather than every one opened on every check

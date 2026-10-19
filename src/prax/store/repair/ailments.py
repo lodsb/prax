@@ -464,7 +464,8 @@ AILMENTS: tuple[Ailment, ...] = (
             "PDFs of five pages or more with under 100 bytes of text a page:"
             " scans whose text layer is the cover's, read as if it were the"
             " book (the front matter of a Google Books scan, say); only the"
-            " PDFs with a page count are weighed (uncounted-pages)"
+            " PDFs with a page count are weighed (uncounted-pages), and not"
+            " those the text checks already call a scan (Admin, text checks)"
         ),
         fix=(
             "ask for OCR over all of them (`prax reread --extractor"

@@ -69,6 +69,7 @@ writer, and add its row here.
 | `reading` | `dict[str, Any]` | the last reading that finished (readings queue) |
 | `lang` | `str` | ISO 639-1, prax.text.language |
 | `quality` | `dict[str, Any]` | what the checks of the text found (parsers.quality) |
+| `profile` | `dict[str, Any]` | a PDF original's profile for the checks, with the original's hash and `pdf.PROFILE_VERSION`, so a new version of the checks reads no original (`quality.assess`) |
 | `markup` | `dict[str, Any]` | the schema.org pass: hash, facts, type, genre |
 | `references` | `dict[str, Any]` | the references pass: entries, links |
 | `private` | `dict[str, Any]` | the rules' cues for "personal?" (stage V) |

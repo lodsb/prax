@@ -9,11 +9,10 @@ edges go through the same graph.
 from __future__ import annotations
 
 import json
-import re
 import sqlite3
 from typing import Any, Final
 
-from prax.text import blocks, markup
+from prax.text import blocks, markup, slugs
 
 from .base import _read_archive, _reading, _serialized, document_hidden
 from .documents import (
@@ -52,7 +51,6 @@ PAGE_KINDS = ("addendum", "project", "synthesis", "topic", "question", "briefing
 PAGE_AUTHORS = ("human", "agent")
 
 
-_SLUG_CHARS = re.compile(r"[^a-z0-9]+")
 # a link to a library document in a page's own prose, ``[title](#doc/12)``:
 # the page annotates that document, an edge kept while the link stands
 _DOC_LINK = markup.DOC_LINK
@@ -60,8 +58,7 @@ _LINK_EVIDENCE = "link in page"
 
 
 def slugify(text: str) -> str:
-    slug = _SLUG_CHARS.sub("-", text.lower()).strip("-")
-    return slug[:80] or "page"
+    return slugs.slug(text)
 
 
 def _page_original(slug: str, text: str) -> bytes:

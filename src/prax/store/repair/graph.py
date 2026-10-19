@@ -682,7 +682,7 @@ def _repair_not_venues(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> i
 
 TWINS_PRODUCER = "heal:document-twins"
 # a page or a project is its page's node, never folded into a document type
-_NOT_FOLDED = frozenset({"page", "project"})
+_NOT_FOLDED = ontology.SELF_KINDS
 
 
 def _document_twins(con: sqlite3.Connection) -> list[dict[str, Any]]:
@@ -771,7 +771,7 @@ def _repair_document_twins(con: sqlite3.Connection, rows: list[dict[str, Any]]) 
 
 SPACING_PRODUCER = "heal:spacing-twins"
 SPACING_MIN_CHARS = 6  # a shorter name joined up says too little ("ws fl")
-_NOT_SPACED = frozenset({"page", "project"})  # a page is its own node
+_NOT_SPACED = ontology.SELF_KINDS  # a page is its own node
 # an accent a PDF's text left beside its letter ("Fakulta¨t", "me´ta")
 _DETACHED = re.compile("[\u00a8\u00b4\u0060\u02c6\u02dc]")
 

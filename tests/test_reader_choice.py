@@ -15,7 +15,7 @@ import pytest
 
 from prax import parsers, store
 from prax.capture import pipeline
-from prax.importers import latex
+from prax.parsers import latex as conversion
 from prax.parsers import latexsrc
 from prax.parsers import pdf as pdfparts
 
@@ -170,7 +170,7 @@ TEX = (
 PDF_TEXT = "Introduction. The bound holds for every real x; the claim follows. "
 
 
-@pytest.mark.skipif(latex.pandoc() is None, reason="pandoc is not installed")
+@pytest.mark.skipif(conversion.pandoc() is None, reason="pandoc is not installed")
 def test_the_reading_turns_the_e_print_into_the_papers_text(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

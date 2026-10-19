@@ -15,9 +15,9 @@ from fastapi.testclient import TestClient
 
 from prax import store, work
 from prax.capture import pipeline
-from prax.importers import latex
 from prax.importers import latex2html as l2h
 from prax.parsers import ExtractionError, latexsrc, pdf, quality
+from prax.parsers import latex as conversion
 from prax.text import arxiv
 
 # ------------------------------------------- 3. an e-print reads the host
@@ -45,13 +45,13 @@ def test_a_source_reads_no_file_outside_its_folder(tmp_path: Path) -> None:
         " \\input{../host/notes} \\input{part}",
     )
     (paper / "part.tex").write_text("Its own part.", encoding="utf-8")
-    flat = latex.flatten(main)
+    flat = conversion.flatten(main)
     assert "Its own part." in flat
     assert "HOST-SECRET" not in flat
     # nor a bibliography named by an absolute path
     (host / "refs.bib").write_text("@article{k, title={HOST-BIB}}", encoding="utf-8")
-    assert latex._find(paper, (host / "refs").as_posix(), ".bib") is None
-    assert latex._find(paper, "../host/refs", ".bib") is None
+    assert conversion._find(paper, (host / "refs").as_posix(), ".bib") is None
+    assert conversion._find(paper, "../host/refs", ".bib") is None
 
 
 def test_a_source_that_reads_itself_or_doubles_is_bounded(
@@ -61,18 +61,18 @@ def test_a_source_that_reads_itself_or_doubles_is_bounded(
     main = _paper(paper, "\\input{main} \\input{a}")
     (paper / "a.tex").write_text("\\input{b}\\input{b}", encoding="utf-8")
     (paper / "b.tex").write_text("\\input{a}x" * 2, encoding="utf-8")
-    assert latex.flatten(main).count("x") <= 8  # no file inside itself
-    monkeypatch.setattr(latex, "MAX_SOURCE_CHARS", 300)
+    assert conversion.flatten(main).count("x") <= 8  # no file inside itself
+    monkeypatch.setattr(conversion, "MAX_SOURCE_CHARS", 300)
     for n in range(6):  # each level reads the next twice: 2**6 copies
         (paper / f"l{n}.tex").write_text(
             f"\\input{{l{n + 1}}}\\input{{l{n + 1}}}" + "y" * 20, encoding="utf-8"
         )
     (paper / "l6.tex").write_text("z" * 20, encoding="utf-8")
-    with pytest.raises(latex.SourceError):
-        latex.flatten(_paper(paper, "\\input{l0}"))
+    with pytest.raises(conversion.SourceError):
+        conversion.flatten(_paper(paper, "\\input{l0}"))
 
 
-@pytest.mark.skipif(latex.pandoc() is None, reason="pandoc is not installed")
+@pytest.mark.skipif(conversion.pandoc() is None, reason="pandoc is not installed")
 def test_pandoc_reads_no_file_of_its_own(tmp_path: Path) -> None:
     secret = tmp_path / "listing.txt"
     secret.write_text("HOST-LISTING-LINE", encoding="utf-8")
@@ -80,9 +80,9 @@ def test_pandoc_reads_no_file_of_its_own(tmp_path: Path) -> None:
         "\\documentclass{article}\\begin{document}Hi."
         f"\\lstinputlisting{{{secret.as_posix()}}}\\end{{document}}"
     )
-    binary = latex.pandoc()
+    binary = conversion.pandoc()
     assert binary is not None
-    out = latex.to_markdown(tex, binary, cwd=tmp_path)
+    out = conversion.to_markdown(tex, binary, cwd=tmp_path)
     assert "Hi." in out and "HOST-LISTING" not in out
 
 

@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import time
 from collections.abc import Mapping
 from typing import Any, cast
 from urllib.parse import quote_plus
@@ -1233,6 +1234,11 @@ def _title_held(title: str, held: set[str], held_sorted: list[str]) -> bool:
 
 
 CITERS_SCANNED = 500  # reference entries read to count a work's citers
+# seconds an answer spends counting the library's citers. Each count is a
+# phrase over every chunk: 4 ms warm, up to 3.5 s with the pages cold
+# (22.6 s for 60 works on the desktop, 2026-10-19), which a board's small
+# page cache makes the usual case. Past it a work says nothing.
+CITERS_BUDGET = 0.5
 
 
 def _library_citers(
@@ -1274,7 +1280,9 @@ def cited_but_missing(
     first, and each says how often the library cites it
     (``cited_in_library``, what the viewer sees): a reference every field
     cites (Adam, an acoustics textbook) is rarely what a topic lacks (AL
-    step 9, N4)."""
+    step 9, N4). Those counts are searches, so an answer spends at most
+    ``CITERS_BUDGET`` on them; ``citers_uncounted`` says how many works
+    went without."""
     hidden = hidden_documents(con)
     ids = [int(i) for i in dict.fromkeys(doc_ids) if int(i) not in hidden][:MISSING_SET]
     if not ids:
@@ -1323,7 +1331,19 @@ def cited_but_missing(
         (w for w in works.values() if len(w["cited_by"]) >= min_count),
         key=lambda w: (-len(w["cited_by"]), str(w["title"])),
     )[: limit * 2]
+    # the library's citers only order works cited equally often, so only
+    # the works that can still make the list are counted, the most cited
+    # first, within the budget (the quality review of 2026-10-18, 10)
+    if len(ranked) > limit:
+        cut = len(ranked[limit - 1]["cited_by"])
+        ranked = [w for w in ranked if len(w["cited_by"]) >= cut]
+    deadline = time.monotonic() + CITERS_BUDGET
+    uncounted = 0
     for w in ranked:
+        if time.monotonic() > deadline:
+            uncounted += 1
+            w["cited_in_library"] = None
+            continue
         w["cited_in_library"] = _library_citers(con, w.get("title"), hidden)
     ranked.sort(
         key=lambda w: (
@@ -1339,7 +1359,10 @@ def cited_but_missing(
         if links:
             item["links"] = links
         missing.append({k: v for k, v in item.items() if v not in (None, [], {})})
-    return {"looked_at": len(with_lists), "documents": len(ids), "missing": missing}
+    out = {"looked_at": len(with_lists), "documents": len(ids), "missing": missing}
+    if uncounted:
+        out["citers_uncounted"] = uncounted
+    return out
 
 
 # what the checks of a text found (stage AO): only of the text a document

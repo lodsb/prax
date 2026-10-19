@@ -538,7 +538,6 @@ from .maintain import (  # noqa: F401
     pass_notes,
 )
 from .pages import (  # noqa: F401
-    _SLUG_CHARS,
     PAGE_AUTHORS,
     PAGE_KINDS,
     PROJECT_SOURCE,

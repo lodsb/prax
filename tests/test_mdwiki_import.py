@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from prax import store
 from prax.importers import mdwiki
+from prax.text import slugs
 
 
 def _repo(root: Path) -> Path:
@@ -85,7 +87,8 @@ def test_a_long_path_keeps_a_slug_of_its_own() -> None:
         mdwiki.slug_for("m423", long.format(1)),
         mdwiki.slug_for("m423", long.format(2)),
     )
-    assert len(one) <= mdwiki.SLUG_CHARS and one != two
+    assert len(one) <= slugs.LIMIT and one != two
+    assert store.slugify(one) == one  # the door keeps it whole
 
 
 def test_a_note_sits_under_its_wiki_index_and_the_index_under_its_topic() -> None:
@@ -106,3 +109,22 @@ def test_a_note_sits_under_its_wiki_index_and_the_index_under_its_topic() -> Non
     assert p("diffusion/wiki/sources/ddpm.md", paths) == "diffusion/wiki/index.md"
     # a topic without a wiki index: its pages under the topic's README
     assert p("attention/wiki/notes/x.md", paths) == "attention/README.md"
+
+
+def test_another_layout_is_an_option_and_what_is_left_out_is_counted(
+    tmp_path: Path,
+) -> None:
+    # the quality review of 2026-10-18 (17): a wiki of another shape was
+    # imported as its READMEs, and said nothing
+    root = _repo(tmp_path)
+    # CLAUDE.md twice, the wiki's log, .obsidian's note and the admin page
+    assert mdwiki.left_out(root) == {"skipped": 5, "outside": 0}
+    (root / "notes" / "topic").mkdir(parents=True)
+    (root / "notes" / "topic" / "a.md").write_text("---  \nx: 1\n---\n# A\n\nbody\n")
+    assert mdwiki.left_out(root)["outside"] == 1
+    other = mdwiki.Layout(wiki="notes", skip=frozenset({".git", "admin"}))
+    got = {n.path: n for n in mdwiki.notes(root, "m", other)}
+    assert "notes/topic/a.md" in got and "diffusion/wiki/noise.md" not in got
+    # front matter with a space after its marker is front matter still (15)
+    assert got["notes/topic/a.md"].text == "# A\n\nbody\n"
+    assert mdwiki.pdfs(root, other) == ["diffusion/DDPM-2006.11239.pdf"]

@@ -34,7 +34,7 @@ Measured over the library on 2026-10-18
 from __future__ import annotations
 
 import re
-from collections.abc import Collection, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -247,7 +247,9 @@ def check(
     scan = scan_share(prof)
     if pdf and layer_read and scan >= SCANNED:
         # with a layer, an old OCR's text; without one, nothing but the
-        # pictures: a scan either way, which only marker's own OCR reads
+        # pictures: a scan either way, which only marker's own OCR reads.
+        # heal's thin-texts leaves these to this check and finds the scans
+        # the profile's first pages do not show (store.thin_documents)
         found.append(
             Finding(
                 "ocr-layer" if prof.get("layer") else "no-layer",
@@ -320,15 +322,80 @@ def profile_of(
     """What the checks know of a PDF's original: its profile and its arXiv
     id, the one given (``meta.arxiv``) when it is one, else the stamp on
     its first page. None for anything else."""
+    kept = _profiled(data, mime=mime)
+    return _with_arxiv(kept, arxiv) if kept else None
+
+
+def _profiled(data: bytes | None, *, mime: str | None) -> dict[str, Any] | None:
+    """The original's own part of the profile: ``pdf.profile`` and the arXiv
+    stamp on its first page, what ``meta.profile`` keeps."""
     if mime != "application/pdf" or not data:
         return None
     from . import latexsrc, pdf
 
     got = pdf.profile(data)
+    got["arxiv_stamp"] = latexsrc.arxiv_id_of(data)
+    return got
+
+
+def _with_arxiv(kept: Mapping[str, Any], arxiv: Any) -> dict[str, Any]:
+    got = {k: v for k, v in kept.items() if k not in ("version", "original")}
+    stamped = got.pop("arxiv_stamp", None)
     # the id without its version: the reading's mode takes no other (the
     # review of 2026-10-18, a "2501.13484v2" stopped the follow-ups)
-    got["arxiv"] = arxivids.canonical(arxiv) or latexsrc.arxiv_id_of(data)
+    got["arxiv"] = arxivids.canonical(arxiv) or stamped
     return got
+
+
+@dataclass
+class Assessment:
+    """What ``assess`` found of one text: the findings, the original's
+    profile as the checks read it (None but for a PDF), and the profile to
+    keep in ``meta.profile`` when the original was read for it (None when
+    the kept one served)."""
+
+    findings: list[Finding]
+    profile: dict[str, Any] | None
+    keep: dict[str, Any] | None = None
+
+
+def assess(
+    text: str,
+    *,
+    stamp: str,
+    mime: str | None,
+    original: str | None,
+    meta: Mapping[str, Any],
+    read: Callable[[], bytes | None],
+) -> Assessment:
+    """The checks of one text, for the door when a text lands and for the
+    nightly pass alike. A PDF's profile depends on its original's bytes
+    alone, which never change under their hash, so it is kept in
+    ``meta.profile`` with the original's hash and ``pdf.PROFILE_VERSION``,
+    and ``read`` (the original's bytes) is called only when no kept one
+    fits. A bump of the checks' ``VERSION`` then reads text artifacts and
+    nothing else: it was 38 minutes of re-profiling for the library's
+    11,493 PDFs (the quality review of 2026-10-18, 4)."""
+    from . import pdf
+
+    prof: dict[str, Any] | None = None
+    keep = None
+    if mime == "application/pdf":
+        kept = meta.get("profile")
+        if (
+            isinstance(kept, Mapping)
+            and kept.get("version") == pdf.PROFILE_VERSION
+            and kept.get("original") == original
+        ):
+            prof = _with_arxiv(kept, meta.get("arxiv"))
+        else:
+            fresh = _profiled(read(), mime=mime)
+            if fresh is not None:
+                keep = {"version": pdf.PROFILE_VERSION, "original": original, **fresh}
+                prof = _with_arxiv(keep, meta.get("arxiv"))
+    since = since_text(meta.get("parse_history"), stamp)
+    found = check(text, stamp=stamp, mime=mime, profile=prof, since=since)
+    return Assessment(found, prof, keep)
 
 
 def scan_share(profile: Mapping[str, Any]) -> float:

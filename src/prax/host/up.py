@@ -117,7 +117,8 @@ BACK_WHEN = ("idle", "never")  # when the group goes back to what held it
 GROUP_QUIET = 90.0  # seconds of no work for the borrower before it goes back
 DEMAND_SECONDS = 20.0  # how often the supervisor asks the door what waits
 LOADS_KEPT = 5  # load times kept per role; the status says their median
-# commit a loading role must leave free (Windows, where commit is enforced:
+# commit a loading role must leave free by default (Windows, where commit
+# is enforced; ``host.commit_reserve_mb`` in prax.yaml says another:
 # on 2026-10-06 the 27B beside marker left 628 MB, and a page file of twice
 # the RAM is what keeps the desktop alive past that)
 COMMIT_RESERVE_MB = 4096
@@ -697,7 +698,8 @@ class Supervisor:
         wrong yes wedges two servers on one card. A RAM figure the host
         cannot check does not refuse; one it can, does (2026-10-02: marker
         and the 35B together ran the machine out of memory). On Windows the
-        commit the party will take must leave ``COMMIT_RESERVE_MB`` free:
+        commit the party will take must leave ``host.commit_reserve_mb``
+        (``COMMIT_RESERVE_MB``, 4 GB) free:
         a server's VRAM is charged to commit there, and on 2026-10-06 the
         27B fit beside marker on the card and left 628 MB."""
         party = [r for r in self.roles if r.name in self._party(role.name)]
@@ -722,7 +724,10 @@ class Supervisor:
                 if self.state[r.name]["state"] not in ("up", "starting")
             ]
         need = sum(self._commit_need(r) for r in down)
-        return commit_free - need >= COMMIT_RESERVE_MB
+        reserve = config.number(
+            "host.commit_reserve_mb", "PRAX_COMMIT_RESERVE_MB", COMMIT_RESERVE_MB
+        )
+        return commit_free - need >= reserve
 
     def _swap(self, to: str, back_when: str = "idle", why: str = "") -> None:
         """Give the group's resource to ``to``: the members that hold it

@@ -2066,6 +2066,10 @@ with `--load-mode mmap`, 30 GB without. With IDEs and a browser open, a
 32 GB machine reaches its commit limit before its RAM runs out, and
 processes then fail to start. Give such a machine a fixed page file of
 at least twice its RAM, or close the big programs during a long pass.
+`prax up` refuses to start a role whose commit would leave less than
+`host.commit_reserve_mb` free (4096 by default; `PRAX_COMMIT_RESERVE_MB`
+for one run): set it lower on a machine with a small page file, higher
+on one that runs other big programs beside prax.
 A watching worker and a second one-off worker (`prax work --steps
 extract --scope all`) share the model server's slots, three on the
 desktop, and that is the limit. A second GPU model or a second model

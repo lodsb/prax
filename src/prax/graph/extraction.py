@@ -922,7 +922,7 @@ def _one_self_type(
         title, known = store.document_node(con, doc_id)
     except KeyError:
         return
-    if known in ("page", "project"):
+    if known in ontology.SELF_KINDS:
         return
     key = title.casefold()
 
@@ -931,7 +931,7 @@ def _one_self_type(
             name.casefold() == key
             and etype in onto.entity_types
             and onto.is_a(etype, "document")
-            and etype not in ("page", "project")
+            and etype not in ontology.SELF_KINDS
         )
 
     counts: dict[str, int] = {}
@@ -997,7 +997,7 @@ def apply(
         stray = [
             n
             for n, ty in ((t.src, t.src_type), (t.dst, t.dst_type))
-            if ty in ("page", "project") and n not in page_titles
+            if ty in ontology.SELF_KINDS and n not in page_titles
         ]
         if stray:
             store.queue_review(

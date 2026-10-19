@@ -90,6 +90,7 @@ revisit threshold, under "Decision thresholds" below.
    `eval_confidence.py`, `eval_genres.py`, `eval_regions.py`, `eval_latex.py`,
    `eval_paths.py`, `eval_venues.py`, `eval_swaps.py`, `eval_dates.py`,
    `eval_followups.py` (through `prax.store`, so on a copy only),
+   `eval_quality.py`,
    `bench_world_dates.py`,
    `compare_extractors.py`, `bench_extractor.py`,
    `make_zotero_fixture.py`, and `check_private.py`, the pre-commit guard

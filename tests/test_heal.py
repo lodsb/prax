@@ -204,6 +204,17 @@ def test_a_scan_read_as_its_cover_is_thin(con: sqlite3.Connection) -> None:
         ailment["examples"][0]["title"] is None and ailment["examples"][1]["id"] == scan
     )
     assert ailment["offers"][0]["thin"] == 100
+    # a scan the text checks already found is theirs, one answer for it
+    # (the quality review of 2026-10-18, 22); a finding of an older text
+    # says nothing of this one
+    text_hash = store.get_document(con, scan, max_chars=0)["text_hash"]
+    found_scan = [{"check": "ocr-layer", "count": 6}]
+    store.set_quality(con, scan, found_scan, version=5, text_hash=text_hash)
+    assert [o["id"] for o in store.thin_documents(con)] == [paper]
+    meta = store.get_meta(con, paper)
+    meta["quality"] = {"version": 5, "text_hash": "0" * 64, "findings": found_scan}
+    store.set_meta(con, paper, meta)
+    assert [o["id"] for o in store.thin_documents(con)] == [paper]
 
 
 def test_what_cannot_be_a_document_is_named_and_retired(

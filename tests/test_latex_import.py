@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from prax import store
 from prax.importers import latex
+from prax.parsers import latex as conversion
 
 MAIN = r"""\documentclass{article}
 \newcommand{\R}{\mathbb R}
@@ -77,20 +78,20 @@ def test_a_folder_is_a_manuscript_with_its_title_authors_and_date(
 
 def test_the_source_is_flattened_cited_and_numbered(tmp_path: Path) -> None:
     ms = latex.manuscripts(_manuscript(tmp_path).parent)[0]
-    tex = latex.flatten(ms.main)
+    tex = conversion.flatten(ms.main)
     assert "\\section{The bound}" in tex and "% a comment" not in tex
     assert "50\\% of it" in tex  # an escaped percent is not a comment
-    tex, entries = latex.bibliography(tex, ms.main.parent)
+    tex, entries = conversion.bibliography(tex, ms.main.parent)
     # plain: by the authors' surnames
     assert [k for k, _ in entries] == ["jones", "smith"]
     assert "Bo Jones, Cy Lee" in entries[0][1] and "doi:10.1/abc" in entries[1][1]
     assert "\\bibliography{" not in tex
-    tex = latex.number_citations(tex, [k for k, _ in entries])
+    tex = conversion.number_citations(tex, [k for k, _ in entries])
     assert "Smith~{[2]}" in tex and "Jones~{[1, Thm.~2]}" in tex
-    tex = latex.number_displays(tex)
+    tex = conversion.number_displays(tex)
     assert "\\tag{1}" in tex and "By (1) the claim" in tex
     assert "\\tag{2}" in tex and tex.count("\\tag{") == 2  # \nonumber row unnumbered
-    section = latex.references_section(entries)
+    section = conversion.references_section(entries)
     assert section.startswith("\\section*{References}") and "[2] Ann Smith" in section
 
 
@@ -99,9 +100,9 @@ def test_a_thebibliography_keeps_its_own_order(tmp_path: Path) -> None:
         "See \\cite{b}.\\begin{thebibliography}{9}"
         "\\bibitem{b} B. Second.\\bibitem[X]{a} A. First.\\end{thebibliography}"
     )
-    rest, entries = latex.bibliography(tex, tmp_path)
+    rest, entries = conversion.bibliography(tex, tmp_path)
     assert [k for k, _ in entries] == ["b", "a"] and "thebibliography" not in rest
-    assert latex.number_citations(rest, ["b", "a"]) == "See {[1]}."
+    assert conversion.number_citations(rest, ["b", "a"]) == "See {[1]}."
 
 
 def test_pandoc_markdown_is_tidied_as_prax_reads_it() -> None:
@@ -110,16 +111,16 @@ def test_pandoc_markdown_is_tidied_as_prax_reads_it() -> None:
         ' \\tag{4}\\\\\n c &= d \\tag{5} \\end{aligned}$$\n\n<div class="x">'
         "$$\\begin{equation*}x = 1\\label{e}\\end{equation*}$$</div>"
     )
-    out = latex.tidy(md)
+    out = conversion.tidy(md)
     assert "Text [3, 7] and Theorem 1." in out
     assert "$$\\begin{aligned} a &= b\\\\ c &= d \\end{aligned} \\tag{4–5}$$" in out
     assert "$$x = 1$$" in out and "<div" not in out
 
 
-@pytest.mark.skipif(latex.pandoc() is None, reason="pandoc is not installed")
+@pytest.mark.skipif(conversion.pandoc() is None, reason="pandoc is not installed")
 def test_a_manuscript_converts_end_to_end(tmp_path: Path) -> None:
     ms = latex.manuscripts(_manuscript(tmp_path).parent)[0]
-    text = latex.convert(ms, str(latex.pandoc()))
+    text = conversion.convert(ms.main, str(conversion.pandoc()))
     assert "# Introduction" in text and "# References" in text
     lines = text.splitlines()
     assert any(x.startswith("$$") and x.endswith("\\tag{1}$$") for x in lines)
@@ -198,12 +199,12 @@ FIGURES = (
 
 
 def test_a_figure_is_its_caption_line_with_the_number_the_pdf_prints() -> None:
-    out = latex.figure_captions(FIGURES)
+    out = conversion.figure_captions(FIGURES)
     assert "Figure 1: A line, $x$." in out and "Figure~1 shows" in out
     assert "Figure 2: Second." in out and "tikzpicture" not in out
-    by_section = latex.figure_captions(r"\numberwithin{figure}{section}" + FIGURES)
+    by_section = conversion.figure_captions(r"\numberwithin{figure}{section}" + FIGURES)
     assert "Figure 1.1: A line" in by_section and "Figure 2.1: Second." in by_section
-    assert latex.stamp("3.9") == f"latex-source/3.9-r{latex.REVISION}"
+    assert conversion.stamp("3.9") == f"latex-source/3.9-r{conversion.REVISION}"
 
 
 def test_a_text_past_a_form_field_comes_as_a_file_part(client: TestClient) -> None:

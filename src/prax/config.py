@@ -52,6 +52,7 @@ SECTIONS = (
     "paths",  # models (where fetched model files go), backup, llama_server
     "sources",  # what the importers need: github user and token
     "run",  # what `prax up` keeps alive on this host (prax.host.up)
+    "host",  # commit_reserve_mb: what a role's start must leave free (prax.host.up)
     "budget",  # daily_usd, monthly_usd: what the paid steps may spend (prax.ml.budget)
     "schedule",  # the door's clock: maintain and backup (prax.host.schedule)
     "private",  # what looks personal (prax.wall.private); the owner's names

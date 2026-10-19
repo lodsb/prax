@@ -147,6 +147,10 @@ _SET_QUALITY = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
     " '$.quality', json(?)) WHERE id = ? AND text_hash = ?"
 )
+_SET_PROFILE = (
+    "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
+    " '$.profile', json(?)) WHERE id = ?"
+)
 _SET_SUMMARY_LANG = (
     "UPDATE documents SET meta = json_set(COALESCE(meta, '{}'),"
     " '$.summary_lang', ?) WHERE id = ?"
@@ -987,16 +991,16 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     in ``meta.quality``. Nothing is asked for: a person, or the door when a
     new text lands, decides what to read again.
 
-    A PDF's original is profiled (its first pages, no layout analysis):
-    38 minutes over the library's 11,493 on the desktop, 2026-10-18; after
-    that the nightly reads only what changed. A text that changed while
-    the pass read it is left for the next."""
+    A PDF's original is profiled once (its first pages, no layout
+    analysis) and the profile kept in ``meta.profile`` by its hash
+    (``quality.assess``): 38 minutes over the library's 11,493 on the
+    desktop, 2026-10-18, which a bump of the checks' version no longer
+    repeats. A text that changed while the pass read it is left for the
+    next."""
     from prax.parsers import quality
 
     rows = con.execute(
-        "SELECT id, hash, mime, text_hash, json_extract(meta, '$.text_source') AS src,"
-        " json_extract(meta, '$.arxiv') AS arxiv,"
-        " json_extract(meta, '$.parse_history') AS history FROM documents"
+        "SELECT id, hash, mime, text_hash, meta FROM documents"
         " WHERE text_hash IS NOT NULL AND json_extract(meta, '$.retired') IS NULL"
         " AND (COALESCE(json_extract(meta, '$.quality.text_hash'), '') != text_hash"
         " OR COALESCE(json_extract(meta, '$.quality.version'), 0) < ?) ORDER BY id",
@@ -1004,35 +1008,47 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     ).fetchall()
     found: Counter[str] = Counter()
     pending: list[tuple[Any, ...]] = []
+    profiled: list[tuple[Any, ...]] = []
+    read_originals = 0
     for n, r in enumerate(rows, 1):
         try:
             text = archive_path(r["text_hash"]).read_text(
                 encoding="utf-8", errors="replace"
             )
-            data = (
-                archive_path(r["hash"]).read_bytes()
-                if r["mime"] == "application/pdf"
-                else None
-            )
         except OSError:
             continue
-        prof = quality.profile_of(data, mime=r["mime"], arxiv=r["arxiv"])
-        stamp = str(r["src"] or "")
-        since = quality.since_text(json.loads(r["history"] or "[]"), stamp)
-        findings = quality.check(
-            text, stamp=stamp, mime=r["mime"], profile=prof, since=since
+
+        def read(h: str = r["hash"]) -> bytes | None:
+            try:
+                return archive_path(h).read_bytes()
+            except OSError:
+                return None
+
+        meta = json.loads(r["meta"] or "{}")
+        got = quality.assess(
+            text,
+            stamp=str(meta.get("text_source") or ""),
+            mime=r["mime"],
+            original=r["hash"],
+            meta=meta,
+            read=read,
         )
-        found.update(f.check for f in findings)
+        found.update(f.check for f in got.findings)
         held = quality_record(
-            [f.as_dict() for f in findings], r["text_hash"], quality.VERSION
+            [f.as_dict() for f in got.findings], r["text_hash"], quality.VERSION
         )
         pending.append((json.dumps(held), r["id"], r["text_hash"]))
+        if got.keep is not None:
+            read_originals += 1
+            profiled.append((json.dumps(got.keep), r["id"]))
         if len(pending) >= BATCH:
             _write(con, _SET_QUALITY, pending)
-            pending = []
+            _write(con, _SET_PROFILE, profiled)
+            pending, profiled = [], []
             job.update(done=n, total=len(rows), note=f"quality: {n} of {len(rows)}")
     _write(con, _SET_QUALITY, pending)
-    return {"documents": len(rows), "found": dict(found)}
+    _write(con, _SET_PROFILE, profiled)
+    return {"documents": len(rows), "profiled": read_originals, "found": dict(found)}
 
 
 def _languages(con: sqlite3.Connection, job: Job) -> dict[str, Any]:

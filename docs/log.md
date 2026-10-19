@@ -6138,6 +6138,71 @@ an ingredient is a material. The menu never said so.
   them. The label read takes 0.55 s of a plan's 2.5 s; with the planner's
   own order it took 6 s, so the query scans the labels first.
 
+## 2026-10-19: the quality review's other ten findings
+
+The ten findings of the 2026-10-18 quality review that were planned
+(`docs/eval/code-review-2026-10-18.md`, numbered there), done as one
+stage. The measurements are on the live store, read-only.
+
+- **23, `changes` counts a side once.** With `corrections` off (the
+  MCP tool's default) each side was counted, then counted again with the
+  repairs' condition for `corrected`. `_side_counts` now groups by that
+  condition as a column and sets those rows apart. On 15 calls the same
+  answers, old code from a worktree against the new: a 17-day span 15.3
+  to 3.3 s, a month and a half 20.0 to 7.1 s, a day 0.63 to 0.50 s warm.
+- **10, `cited_but_missing`.** The library's count of a work's citers is
+  a phrase search over every chunk. On the live store, 60 of them took
+  22.6 s cold, one up to 3.5 s, and 0.25 s warm. A board's page cache
+  makes cold the usual case. The counts only order works cited equally
+  often, so only the works that can still make the list are counted,
+  the most cited first, within `CITERS_BUDGET` (0.5 s). Past it a work
+  carries no `cited_in_library` and the answer says `citers_uncounted`.
+  One search that has started is not cut, so a call can still run past
+  the budget by one cold search. Counts kept by the references pass were
+  weighed: every reference entry by its work key is 204,492 entries and
+  132,297 works, 6 s and 55 MB to build, too much for the board.
+- **4, the PDF profile kept.** `meta.profile` keeps `pdf.profile` and the
+  first page's arXiv stamp with the original's hash and
+  `pdf.PROFILE_VERSION` (1). `quality.assess` is the one function the
+  door (`pipeline.assess`) and the nightly pass call. It reads the
+  original only when no kept profile fits. A bump of the checks'
+  `VERSION` then reads text artifacts alone, where it re-profiled the
+  11,493 PDFs (38 minutes). The kept profiles fill in when the checks
+  next run over a document: on the next `VERSION` bump, once, or as a
+  text lands. `meta.arxiv` is still read at each check, so an id a
+  person sets later wins over the stamp.
+- **11.** The store's own kinds are `ontology.SELF_KINDS` in the two heal
+  repairs and the three places in extraction.
+- **13.** The LaTeX conversion moved from `importers.latex` to
+  `prax.parsers.latex`, a helper the `latexsrc` part imports at its top.
+  `convert` takes the main file, not a manuscript. `importers.latex` is
+  the folder walker (`manuscripts`, the README's title and authors, the
+  folder's date), 129 lines.
+- **15.** `prax.text.slugs` is the one slug grammar. `store.slugify` is
+  `slugs.slug`, and mdwiki's long-path slug is `slugs.tagged`, within
+  the limit by construction, so the door keeps it whole. mdwiki strips
+  front matter with `status.FRONT_MATTER`, which allows trailing spaces.
+- **17.** mdwiki's layout is a `Layout`: the wiki folder's name and the
+  skipped folders, `--wiki-folder` and `--skip` on `prax import mdwiki`.
+  `left_out` counts the Markdown files a layout does not read, and the
+  import prints them. Obsidian's `[[wikilinks]]` are not read; the
+  module's docstring says so.
+- **18.** `scripts/eval_quality.py` counts each check over the library,
+  samples ids, saves a run and diffs against it, and sweeps one of
+  `SCANNED`, `MATHS_PAGES`, `DEBRIS_LINES` or `SHORT`, with what enters
+  and leaves the check. It uses the kept profiles, so until they are
+  filled its PDF numbers need `--profile` (the 38 minutes). Today:
+  17,499 texts, 232 non-PDF documents with leftovers. `SAME_PAPER` stays
+  a constant: the gap it sits in (0.71 against 0.83) was measured.
+- **19.** The commit `prax up` leaves free is `host.commit_reserve_mb`
+  (4096; `PRAX_COMMIT_RESERVE_MB`), a new `host:` section of
+  `prax.yaml`, in the example and the howto (Jobs, and a UI that
+  follows).
+- **22.** heal's `thin-texts` leaves out a PDF whose current text the
+  checks already call a scan (`ocr-layer`, `no-layer`). They see its
+  pictures and name marker's OCR; heal finds the scans the profile's
+  first pages do not show. None is in both on the live store today.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

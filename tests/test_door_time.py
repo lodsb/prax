@@ -178,3 +178,20 @@ def test_the_graph_views_hubs_are_counted_again_only_when_the_graph_moved(
     _edge(con, store.Edge("P", "paper", "uses", "chirps", "method"), doc)
     assert "chirps" not in names() and len(counted) == 2
     con.set_trace_callback(None)
+
+
+def test_changes_counts_each_side_once(con: sqlite3.Connection) -> None:
+    # the quality review of 2026-10-18 (23): the corrections were counted
+    # by a second pass over the same edges
+    doc = int(store.ingest_text(con, "text " * 20, title="P")["doc_id"])
+    _edge(con, store.Edge("P", "paper", "uses", "wavelets", "method"), doc)
+    counted: list[str] = []
+    con.set_trace_callback(
+        lambda sql: (
+            counted.append(sql) if "GROUP BY e.rel, e.source_doc" in sql else None
+        )
+    )
+    got = store.changes(con, "2000-01-01")
+    con.set_trace_callback(None)
+    assert got["added"]["count"] == 1
+    assert len(counted) == len([k for k in got if k in ("added", "ended")])

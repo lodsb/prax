@@ -879,7 +879,15 @@ def changes(
     for side, (cond, at, bounds) in sides.items():
         sql_where = " AND ".join([cond, *where])
         values = [*bounds, *args]
-        counts, total = _side_counts(con, sql_where, values, join, hidden)
+        # one pass a side: the corrections counted beside what is listed
+        counts, total, corrected = _side_counts(
+            con,
+            " AND ".join([cond, *plain]),
+            values,
+            join,
+            hidden,
+            None if corrections else healed,
+        )
         facts = _side_facts(
             con, sql_where, values, join, at, hidden, min(limit, total), limit
         )
@@ -889,12 +897,8 @@ def changes(
             "facts": facts,
             "left_out": total - len(facts),
         }
-        if not corrections:
-            corrected = _side_counts(
-                con, " AND ".join([cond, *plain, healed]), values, join, hidden
-            )[1]
-            if corrected:
-                out[side]["corrected"] = corrected
+        if corrected:
+            out[side]["corrected"] = corrected
     return out
 
 
@@ -951,21 +955,29 @@ def _side_counts(
     values: list[Any],
     join: str,
     hidden: frozenset[int],
-) -> tuple[dict[str, int], int]:
-    """The edges of one side by relation, and their total; an edge from a
-    hidden document is not counted."""
+    aside: str | None = None,
+) -> tuple[dict[str, int], int, int]:
+    """The edges of one side by relation, their total, and how many of them
+    ``aside`` (a condition on an edge) sets apart, counted in the same pass
+    and left out of the other two; an edge from a hidden document is not
+    counted. The quality review of 2026-10-18 (23): a second pass for the
+    set-apart ones read the same edges again, twice the time."""
     counts: dict[str, int] = {}
-    total = 0
+    total = apart = 0
+    split = f"({aside})" if aside else "0"
     for r in con.execute(
-        f"SELECT e.rel, e.source_doc, count(*) FROM edges e{join}"
-        f" WHERE {sql_where} GROUP BY e.rel, e.source_doc",
+        f"SELECT e.rel, e.source_doc, {split} AS apart, count(*) FROM edges e{join}"
+        f" WHERE {sql_where} GROUP BY e.rel, e.source_doc, apart",
         values,
     ):
         if r[1] is not None and int(r[1]) in hidden:
             continue
-        counts[r[0]] = counts.get(r[0], 0) + int(r[2])
-        total += int(r[2])
-    return counts, total
+        if r[2]:
+            apart += int(r[3])
+            continue
+        counts[r[0]] = counts.get(r[0], 0) + int(r[3])
+        total += int(r[3])
+    return counts, total, apart
 
 
 def _side_facts(

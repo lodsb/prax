@@ -200,35 +200,38 @@ def assess(
     con: sqlite3.Connection, doc_id: int
 ) -> tuple[list[quality.Finding], dict[str, Any] | None]:
     """The checks of the document's current text under the stamp of what
-    wrote it (``parsers.quality``, stage AO), kept in ``meta.quality``
+    wrote it (``quality.assess``, stage AO), kept in ``meta.quality``
     with the text's hash; the findings and the original's profile (None
-    but for a PDF)."""
+    but for a PDF), which is read from the original only once."""
     doc = store.get_document(con, doc_id)
     if doc is None or not doc.get("text"):
         return [], None
-    stamp = str((doc.get("meta") or {}).get("text_source") or "")
-    prof = None
-    if doc.get("mime") == "application/pdf":
+    meta = store.get_meta(con, doc_id)
+
+    def read() -> bytes | None:
         info = store.original_info(con, doc_id)
         try:
-            data = info["path"].read_bytes() if info else None
+            return info["path"].read_bytes() if info else None
         except OSError:
-            data = None
-        prof = quality.profile_of(
-            data, mime=doc["mime"], arxiv=store.get_meta(con, doc_id).get("arxiv")
-        )
-    since = quality.since_text((doc.get("meta") or {}).get("parse_history"), stamp)
-    found = quality.check(
-        doc["text"], stamp=stamp, mime=doc.get("mime"), profile=prof, since=since
+            return None
+
+    got = quality.assess(
+        doc["text"],
+        stamp=str(meta.get("text_source") or ""),
+        mime=doc.get("mime"),
+        original=doc.get("hash"),
+        meta=meta,
+        read=read,
     )
     store.set_quality(
         con,
         doc_id,
-        [f.as_dict() for f in found],
+        [f.as_dict() for f in got.findings],
         version=quality.VERSION,
         text_hash=str(doc["text_hash"]),
+        profile=got.keep,
     )
-    return found, prof
+    return got.findings, got.profile
 
 
 def choose_reader(

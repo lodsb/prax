@@ -154,10 +154,17 @@ def test_an_entry_reads_its_year_and_its_surnames() -> None:
     assert got.year == 2010
 
 
+ONCE = (
+    "[9] J. Smith. A study of onset detection in noisy field recordings."
+    " Journal of Made-up Results, 2010."
+)
+
+
 def test_what_every_field_cites_comes_after_the_topics_own(con: Any) -> None:
     """N4: generic references ranked beside the topic's papers, and most
     works came back with no link."""
     from prax import store
+    from prax.store.documents import reads
 
     def paper(title: str, *refs: str) -> int:
         text = f"# {title}\n\n" + "Onset detection body text. " * 20
@@ -174,6 +181,25 @@ def test_what_every_field_cites_comes_after_the_topics_own(con: Any) -> None:
     assert (yin["cited_in_library"], adam["cited_in_library"]) == (2, 3)
     assert yin["year"] == 2002 and "search" in yin["links"]
     assert store.cited_but_missing(con, [a, b], min_count=3)["missing"] == []
+    # the counts are searches, and an answer spends a budget on them (the
+    # quality review of 2026-10-18, 10): past it a work says nothing
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(reads, "CITERS_BUDGET", -1.0)
+        spent = store.cited_but_missing(con, [a, b])
+    assert spent["citers_uncounted"] == 2
+    assert all("cited_in_library" not in w for w in spent["missing"])
+    # only the works that can still make the list are counted
+    asked: list[str] = []
+    with pytest.MonkeyPatch.context() as mp:
+        real = reads._library_citers
+        mp.setattr(
+            reads, "_library_citers", lambda c, t, h: asked.append(t) or real(c, t, h)
+        )
+        c = paper("Onsets three", YIN, ADAM, ONCE)
+        assert len(store.cited_but_missing(con, [a, c], limit=1)["missing"]) == 1
+    # YIN and Adam, cited twice, tie for the one place; the work cited
+    # once cannot make it and is not searched for
+    assert len(asked) == 2 and not any("noisy" in str(t) for t in asked)
 
 
 def test_a_sure_resolved_citation_costs_as_a_stated_one(con: Any) -> None:

@@ -5,7 +5,7 @@ A PDF's text layer loses the mathematics (MuPDF reads a display equation
 as a scatter of symbols); the source says it exactly, without a model or
 the card. The worker fetches the paper's e-print from arXiv, unpacks it
 beside the PDF, flattens and converts it with pandoc
-(``prax.importers.latex``) and hands the text back stamped
+(``prax.parsers.latex``) and hands the text back stamped
 ``latex-source/<pandoc>-r<revision>``, the stamp the importer writes, so
 a text from either is the same to the rest of prax.
 
@@ -33,6 +33,7 @@ from pathlib import Path
 from prax import config
 from prax.text import arxiv
 
+from . import latex
 from .base import ExtractionError
 from .pdf import _pymupdf_open
 
@@ -161,8 +162,6 @@ def unpack(blob: bytes, into: Path) -> None:
 
 
 def _main(folder: Path) -> Path | None:
-    from prax.importers import latex
-
     found = latex.main_tex(folder)
     if found is not None:
         return found
@@ -177,8 +176,6 @@ def _main(folder: Path) -> Path | None:
 def pandoc_stamp() -> str:
     """The version part of the stamp: pandoc's version and the conversion's
     revision (``3.9-r2``), ``?`` without pandoc."""
-    from prax.importers import latex
-
     binary = latex.pandoc()
     if binary is None:
         return "?"
@@ -186,15 +183,11 @@ def pandoc_stamp() -> str:
 
 
 def available() -> bool:
-    from prax.importers import latex
-
     return latex.pandoc() is not None
 
 
 def _latex_source(data: bytes, *, previous: str | None = None) -> str:
     """The paper's text from its arXiv source (the module's docstring)."""
-    from prax.importers import latex
-
     arxiv = _named() or arxiv_id_of(data)
     if arxiv is None:
         raise ExtractionError(
@@ -210,11 +203,8 @@ def _latex_source(data: bytes, *, previous: str | None = None) -> str:
         main = _main(folder)
         if main is None:
             raise ExtractionError(f"the source of {arxiv} has no \\begin{{document}}")
-        pdf = main.parent / "_prax_original.pdf"
-        pdf.write_bytes(data)
-        ms = latex.Manuscript(main.parent, pdf, main, arxiv, None, ())
         try:
-            text = latex.convert(ms, binary)
+            text = latex.convert(main, binary)
         except Exception as exc:
             raise ExtractionError(
                 f"pandoc could not convert {arxiv}: {exc}"[:400]

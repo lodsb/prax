@@ -221,14 +221,15 @@ def _latex(door: Door, a: Any) -> int:
     import hashlib
 
     from prax.importers import latex
+    from prax.parsers import latex as conversion
 
     if not a.files:
         out.fail("prax import latex <a folder of manuscripts, each a PDF and its .tex>")
-    binary = latex.pandoc()
+    binary = conversion.pandoc()
     if binary is None:
         out.fail("pandoc is needed", "pip install prax[latex], or pandoc on the PATH")
         return 2
-    stamp = latex.stamp(latex.pandoc_version(binary))
+    stamp = conversion.stamp(conversion.pandoc_version(binary))
     found = latex.manuscripts(Path(a.files[0]).expanduser())
     digests = {m.key: hashlib.sha256(m.pdf.read_bytes()).hexdigest() for m in found}
     held: set[str] = set()
@@ -256,7 +257,7 @@ def _latex(door: Door, a: Any) -> int:
     errors: list[str] = []
     for n, m in enumerate(todo, 1):
         try:
-            text = latex.convert(m, binary)
+            text = conversion.convert(m.main, binary)
         except Exception as exc:  # noqa: BLE001 - the PDF still goes, parsed as any
             errors.append(f"{m.key}: {exc}")
             text = None
@@ -303,8 +304,13 @@ def _mdwiki(door: Door, a: Any) -> int:
     name = a.name or root.name
     tags = [name, *(a.tag or [])]
     domains = ",".join(a.domain or [])
-    found_pdfs = mdwiki.pdfs(root)
-    found_notes = mdwiki.notes(root, name)
+    layout = mdwiki.Layout(
+        wiki=a.wiki_folder or mdwiki.WIKI,
+        skip=frozenset(a.skip) if a.skip else mdwiki.SKIP_DIRS,
+    )
+    found_pdfs = mdwiki.pdfs(root, layout)
+    found_notes = mdwiki.notes(root, name, layout)
+    unread = mdwiki.left_out(root, layout)
     if a.limit:
         found_pdfs, found_notes = found_pdfs[: a.limit], found_notes[: a.limit]
     out.say(
@@ -313,6 +319,12 @@ def _mdwiki(door: Door, a: Any) -> int:
             f"   {len(found_pdfs)} PDFs, {len(found_notes)} pages · {door.base_url}"
         )
     )
+    if unread["outside"] or unread["skipped"]:
+        out.hint(
+            f"  left out: {unread['outside']} Markdown files outside a"
+            f" {layout.wiki!r} folder or a README, {unread['skipped']} under a"
+            " skipped folder (--wiki-folder, --skip)"
+        )
     if a.dry_run:
         for shown in found_notes[:15]:
             out.say(f"  {shown.slug}  " + out.dim(shown.title[:60]))
@@ -376,7 +388,7 @@ def _mdwiki(door: Door, a: Any) -> int:
         pages[note.path] = int(got["doc_id"])
         written += 1
 
-    entries = mdwiki.topic_entries(found_notes)
+    entries = mdwiki.topic_entries(found_notes, layout)
     for stage in (1, 2):
         topics = {t: pages[p] for t, p in entries.items() if p in pages}
         for note in found_notes:
@@ -392,7 +404,7 @@ def _mdwiki(door: Door, a: Any) -> int:
     paths = set(pages)
     placed = 0
     for note in found_notes:
-        above = mdwiki.parent_of(note.path, paths)
+        above = mdwiki.parent_of(note.path, paths, layout)
         if note.path not in pages or above is None or above not in pages:
             continue
         try:
