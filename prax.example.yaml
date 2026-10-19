@@ -197,6 +197,10 @@ steps:
 
 # What `prax up` keeps of this machine (Windows, where a GPU server's VRAM
 # is charged to commit): the commit a role's start must leave free.
+# places:                     # where originals lie outside the archive (AQ)
+#   roots:                     # a share's name, and where this host mounts it
+#     nas-media: //nas/media   # the board might have /mnt/media instead
+#
 # host:
 #   commit_reserve_mb: 4096                # [PRAX_COMMIT_RESERVE_MB]
 

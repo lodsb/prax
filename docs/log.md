@@ -6236,6 +6236,44 @@ before; only the tests that reach a part's private state
 (`HUB_REFRESH`, `_suspect`, in `conftest.py`, `test_door_time.py` and
 `test_decide.py`) now name `views`.
 
+## 2026-10-19: AQ stage 1, where an original's bytes lie
+
+The design is `docs/media-by-reference.md`, revised with the user's
+answers: the NAS is reached over ssh and could be mounted with Samba,
+and the crawl should list every file, so prax can name the other copies
+of one that moved or was deleted. Stage 1 is the groundwork, and it
+changes no answer while nothing is referenced.
+
+- **Migration 49.** `places`, one row per file seen at a place: `root`
+  and `path` (the key), `size`, `mtime` in whole seconds, the full
+  `sha256`, `first_seen`, `last_seen` and `gone`, with an index on the
+  hash. No foreign key: a place may hold a file that is no document.
+  `documents.held` defaults to 1, which every document is today.
+- **Roots.** `places.roots` in `prax.yaml` names each share and where
+  this host mounts it (`store.place_roots`; a new `places` section). A
+  row holds the root's name, so a share mounted elsewhere on the board
+  changes no row.
+- **One reader.** `store.original_file(con, hash)` is the archive's file
+  when it is there. Otherwise it is the newest place on a mapped root
+  whose file still has the size and modification time it was hashed
+  with (two seconds' slack, `MTIME_SLACK`, for FAT and SMB). Otherwise
+  it is the archive's path, so a read fails as before. Every read of an
+  original goes through it: `original_info` (the door's original, page
+  image and figure routes, and the checks in `capture.pipeline`), the
+  `markup`, `published` and `quality` passes, `page_counts` and heal's
+  `_not_documents`. Workers fetch originals from the door, so they need
+  nothing.
+- **`store.record_places(con, root, entries)`**, the store's half of
+  stage 2's crawl. A place seen again is not gone. One whose hash changed
+  starts over with a new `first_seen`. A path must be relative, with `/`
+  separators, and stay inside its root.
+- The new store part is `documents.places`, second in the package's
+  `ORDER`. Invariant 2 in CLAUDE.md now names places.
+
+`tests/test_places.py` covers a held document, one read from a place
+through `GET /doc/{id}/original`, a changed file at its place, an
+unmapped root, paths that leave their root, and a bad root name.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

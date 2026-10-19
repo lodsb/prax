@@ -21,6 +21,7 @@ from ..base import (
     now,
 )
 from .meta import DOCTYPES, _put_meta, get_meta, set_meta
+from .places import original_file
 
 # A reading request: a person (or an agent) asks for a named extractor on
 # one document — the vision model over its scanned pages, a second reading
@@ -217,7 +218,7 @@ def page_counts(
         return out
     for doc_id, digest in todo:
         try:
-            with pymupdf.open(archive_path(digest)) as doc:
+            with pymupdf.open(original_file(con, digest)) as doc:
                 out[doc_id] = int(doc.page_count)
         except Exception:  # noqa: BLE001, S112 — not a PDF after all: left out
             continue

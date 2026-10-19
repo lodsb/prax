@@ -12,7 +12,7 @@ A package of parts, each importing only from the ones before it in
 
 from __future__ import annotations
 
-ORDER = ("meta", "text", "library", "domains", "genres", "readings", "reads")
+ORDER = ("meta", "places", "text", "library", "domains", "genres", "readings", "reads")
 
 from .domains import (  # noqa: F401
     PROMOTE_WEIGHTS,
@@ -119,6 +119,13 @@ from .meta import (  # noqa: F401
     stamp_world_dates,
     summary_tried,
     world_dates_needed,
+)
+from .places import (  # noqa: F401
+    MTIME_SLACK,
+    ROOT_NAME,
+    original_file,
+    place_roots,
+    record_places,
 )
 from .readings import (  # noqa: F401
     _EQ_REF,

@@ -113,6 +113,7 @@ class Document(TypedDict):
     meta: dict[str, Any]
     text_len: int  # the column may be NULL; get_document always says it
     sensitivity: str | None  # the wall: open, suspected, personal
+    held: int  # 1 when the archive holds the original, 0 when a place does
     text: str
     offset: int
     truncated: bool

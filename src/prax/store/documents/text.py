@@ -26,6 +26,7 @@ from ..base import (
     now,
 )
 from .meta import _is_indexed, _put_meta, _refresh_document_field, get_meta
+from .places import original_file
 
 
 @_serialized
@@ -462,7 +463,7 @@ def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None
     if row is None:
         return None
     return {
-        "path": archive_path(row["hash"]),
+        "path": original_file(con, row["hash"]),
         "mime": row["mime"] or "application/octet-stream",
         "title": row["title"],
         "original_path": row["original_path"],

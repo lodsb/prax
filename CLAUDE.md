@@ -34,8 +34,12 @@ revisit threshold, under "Decision thresholds" below.
    index lock and swapped in under it. Nothing else lives outside
    SQLite. No Postgres, no Neo4j, no server databases.
 2. **Files are content-addressed.** *(enforced, partly checked)* Originals (PDFs, HTML snapshots)
-   live at `data/archive/<sha256[:2]>/<sha256>`. The database stores
-   metadata and the hash only. Never store blobs in SQLite. The document
+   live at `data/archive/<sha256[:2]>/<sha256>`, or at a place: a root
+   named in `prax.yaml` (`places.roots`, mapped per host) and a path in
+   it, recorded with the file's hash in the `places` table (migration
+   49, plan item AQ, `docs/media-by-reference.md`).
+   `store.original_file` is the one answer to where an original is read
+   from. The database stores metadata and the hash only. Never store blobs in SQLite. The document
    hash is the sha256 of the **original bytes**, never of extracted
    text. Parsed text is its own content-addressed artifact
    (`documents.text_hash`). Chunks are a disposable index derived from
@@ -60,8 +64,8 @@ revisit threshold, under "Decision thresholds" below.
    step's logic calls up inside a function (`tests/test_invariants.py`).
    A module past two thousand lines becomes a package of parts
    with an `ORDER` of its own, a part importing only from the parts
-   before it: `documents` (meta, text, library, domains, genres,
-   readings, reads), `graph` (edges, decisions, labels, languages, lookups,
+   before it: `documents` (meta, places, text, library, domains,
+   genres, readings, reads), `graph` (edges, decisions, labels, languages, lookups,
    context, views, communities, traversal, rules, paths), `retrieval` (knobs, compounds, query, legs,
    vectors, fusion, similar) and `repair` (common, graph, documents,
    ailments). A switch a test turns is an attribute of a package's

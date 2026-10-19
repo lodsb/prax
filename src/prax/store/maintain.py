@@ -51,6 +51,7 @@ from .documents import (
     dedupe_captures,
     fill_text_lengths,
     get_meta,
+    original_file,
     published_of,
     quality_record,
     rechunk,
@@ -890,7 +891,8 @@ def _markup(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
     counts: Counter[str] = Counter()
     for n, r in enumerate(rows, 1):
         try:
-            page = schemaorg.of_page(archive_path(r["hash"]).read_bytes(), standards)
+            original = original_file(con, r["hash"]).read_bytes()
+            page = schemaorg.of_page(original, standards)
         except OSError:
             continue
         # the markup queues no review items: the extraction's stay open
@@ -968,7 +970,7 @@ def _published(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
         page = None
         if (r["mime"] or "") in ("text/html", "application/xhtml+xml"):
             try:
-                with archive_path(r["hash"]).open("rb") as fh:
+                with original_file(con, r["hash"]).open("rb") as fh:
                     page = dates.from_html(fh.read(dates.HEAD_BYTES))
             except OSError:
                 page = None
@@ -1020,7 +1022,7 @@ def _quality(con: sqlite3.Connection, job: Job) -> dict[str, Any]:
 
         def read(h: str = r["hash"]) -> bytes | None:
             try:
-                return archive_path(h).read_bytes()
+                return original_file(con, h).read_bytes()
             except OSError:
                 return None
 

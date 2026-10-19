@@ -12,10 +12,11 @@ from typing import Any
 from prax.text import glyphs
 
 from .. import documents as docs
-from ..base import _ASIDE, _read_archive, archive_path, now
+from ..base import _ASIDE, _read_archive, now
 from ..documents import (
     DUPLICATE_THRESHOLD,
     chunk_fingerprint,
+    original_file,
     retire_document,
     set_mime,
     similarity,
@@ -154,7 +155,7 @@ def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
         " ORDER BY id"
     ):
         try:
-            with open(archive_path(r["hash"]), "rb") as f:
+            with open(original_file(con, r["hash"]), "rb") as f:
                 head = f.read(1024)
         except OSError:
             continue

@@ -57,6 +57,7 @@ SECTIONS = (
     "schedule",  # the door's clock: maintain and backup (prax.host.schedule)
     "private",  # what looks personal (prax.wall.private); the owner's names
     "packs",  # the packs whose capability this host runs (docs/packs.md)
+    "places",  # roots: each named share and where this host mounts it
 ) + packs.setting_sections()  # and each pack's own section
 
 
