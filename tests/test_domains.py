@@ -363,8 +363,12 @@ def test_browse_and_similar_take_a_domain(
     store.set_domains(con, fam, ["family"])
     store.set_domains(con, res, ["research"])
     listed = store.list_documents(con, domain="family")
-    assert {d["id"] for d in listed["items"]} == {fam, free}  # unset is everywhere
-    assert listed["total"] == 2
+    # the list holds what the menu counts: no set is listed as unassigned
+    assert {d["id"] for d in listed["items"]} == {fam}
+    assert listed["total"] == 1
+    assert {
+        d["id"] for d in store.list_documents(con, domain="unassigned")["items"]
+    } == {free}
     assert {d["id"] for d in store.list_documents(con)["items"]} == {fam, res, free}
 
 

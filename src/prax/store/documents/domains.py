@@ -219,7 +219,8 @@ def domain_counts(con: sqlite3.Connection) -> dict[str, Any]:
     picker: ``own``, those whose set names the module (``only:craft``),
     and ``within``, with the modules built on it too (``craft``, which
     holds kitchen's recipes). ``unassigned`` counts the documents no
-    module was set for, which a list filtered by any module also shows.
+    module was set for, which a search filtered by any module also finds
+    (a browse list leaves them out).
     Counts what the viewer may see; one read of the distinct sets."""
     hidden = hidden_documents(con)
     sql = (

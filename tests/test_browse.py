@@ -35,8 +35,9 @@ def test_a_module_holds_the_documents_of_the_modules_built_on_it(
     paper = _doc(con, "A paper", ["research"])
     loose = _doc(con, "Nobody said", None)
     assert ontology.current().within("craft") >= {"craft", "kitchen", "workshop"}
-    assert _listed(con, "craft") == {recipe, build, joint, loose}
-    assert _listed(con, "kitchen") == {recipe, loose}
+    assert _listed(con, "craft") == {recipe, build, joint}
+    assert _listed(con, "kitchen") == {recipe}
+    assert loose not in _listed(con, "research")
     assert paper not in _listed(con, "craft")
 
 
@@ -66,7 +67,8 @@ def test_a_module_alone_leaves_the_modules_built_on_it_out(
     joint = _doc(con, "Joints in wood and cinnamon", ["craft"])
     loose = _doc(con, "Nobody said", None)
     assert ontology.current().within("only:craft") == {"craft"}
-    assert _listed(con, "only:craft") == {joint, loose}
+    assert _listed(con, "only:craft") == {joint}
+    assert loose not in _listed(con, "craft")
     hits = {
         h["doc_id"]
         for h in store.search(con, "cinnamon", mode="fts", domain="only:craft")

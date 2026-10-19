@@ -302,11 +302,11 @@ def list_documents(
     the retired documents instead of the live ones; ``domain`` keeps the
     documents of one ontology module and of the modules built on it (a
     kitchen document is a craft document too; one without a domain set is
-    in every module and stays, as in search), or with ``unassigned`` the
-    documents without a domain set alone; ``tag`` keeps the documents
-    carrying that tag (``project:synth``); ``genre`` and ``subject`` the
-    documents labelled so, by a person or a model (a level names every
-    document labelled under it); ``since`` the documents added at that
+    left out, unlike a search, so the list is what the menu counts), or
+    with ``unassigned`` the documents without a domain set alone; ``tag``
+    keeps the documents carrying that tag (``project:synth``); ``genre``
+    and ``subject`` the documents labelled so, by a person or a model (a
+    level names every document labelled under it); ``since`` the documents added at that
     moment or later (``2026-10-03`` or ``2026-10-03T14:00:00Z``, UTC);
     ``published_since``/``published_before`` those published in a span
     (``meta.published``, compared as written), the undated left out.
@@ -323,11 +323,12 @@ def list_documents(
         clauses.append("d.id NOT IN (SELECT value FROM json_each(?))")
         args.append(json.dumps(sorted(hidden)))
     if domain:
-        # a module holds its own, those of the modules built on it and the
-        # documents no module was set for; "unassigned" is those alone
+        # a module lists its own and those of the modules built on it;
+        # "unassigned" lists the documents no module was set for
 
-        names = () if domain == UNASSIGNED else ontology.current().within(domain)
-        clause, more = domain_clause(con, names, unset=True)
+        unset = domain == UNASSIGNED
+        names = () if unset else ontology.current().within(domain)
+        clause, more = domain_clause(con, names, unset=unset)
         clauses.append(clause.removeprefix(" AND "))
         args.extend(more)
     if tag:
