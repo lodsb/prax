@@ -977,15 +977,17 @@ not done.
             heal's `unreachable-originals`, the UI's places.
       - [ ] **Stage 4**, once the card runs: a transcription step.
 
-- [ ] (2026-10-20: a design study in `docs/life.md`, five stages, three questions) **AR. A life in the library.** The user, 2026-10-20: a family
+- [ ] (2026-10-20: a design study in `docs/biography.md`, five stages, two questions) **AR. A life in the library.** The user, 2026-10-20: a family
       tree, and with it personal photos, friends, their own projects,
-      artworks and releases, and a CV's events. A `life` pack on core;
-      a birth date as an event entity rather than a literal end; a
-      date's uncertainty (about, before, between) as a qualifier beside
-      its precision; the weight of a source by its genre; facts a person
-      states with a page as their source; photos as documents with EXIF
-      and XMP read before any model (after AQ stage 3); a GEDCOM
-      importer; kinship as a named path; every document personal.
+      artworks and releases, and a CV's events. A `biography` pack on
+      core, kinship included, with genealogy's sources, sameness cases,
+      GEDCOM importer and kinship paths in it; a birth as an event
+      entity rather than a literal end; a date's uncertainty (about,
+      before, between) as a qualifier beside its precision; the weight of
+      a source by its genre; facts a person states with a page as their
+      source; photos as a core capability (EXIF and XMP before any
+      model, `depicts` in core, after AQ stage 3); what is personal left
+      to the wall's rules, not implied by the pack.
 
 ## Later / maybe
 

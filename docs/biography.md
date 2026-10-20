@@ -1,4 +1,4 @@
-# A life in the library
+# Biography: a life in the library
 
 Plan item AR. Written 2026-10-20 as a design study. Not built.
 
@@ -8,6 +8,14 @@ the events of a CV (school, university, associations). This note asks
 whether prax's model can hold one person's life. It says what the model
 already has, what it lacks, and in what order the gaps would be closed.
 Nothing here names a real person; the examples are invented.
+
+The pack is `biography`, the user's choice of 2026-10-20 over `life`
+(too wide) and `family` (too narrow, the name the code reserved until
+then). It holds what any person's life is made of, kinship included,
+because a biography has parents and children too. What sets genealogy
+apart is its method, not its relations, and the method lives in the
+same pack (§1). Whether a document is personal is not the pack's to say
+(§9).
 
 A family tree is not one clean answer. Trees found online disagree,
 dates are "about 1872", and two people of the same name are one person
@@ -40,29 +48,44 @@ source, and a disagreement is kept, not settled by the last writer.
 
 ## What it lacks
 
-### 1. A pack: `life`
+### 1. A pack: `biography`
 
-A pack of its own (`src/prax/packs/life/`, `docs/packs.md`), with one
-module on top of core. A first draft:
+A pack of its own (`src/prax/packs/biography/`, `docs/packs.md`), with
+one module on top of core. A first draft:
 
 | kind | names |
 |---|---|
 | organization subtypes | `school`, `association`, `band` |
 | work subtypes | `artwork`, `release`, `project` |
 | event subtypes | `birth`, `death`, `marriage`, `exhibition`, `performance` |
-| document subtypes (self types) | `photo`, `certificate`, `letter`, `register_entry`, `family_tree`, `cv` |
+| document subtypes (self types) | `certificate`, `letter`, `register_entry`, `family_tree`, `cv` |
 | family relations | `child_of` (with `adopted_by`, `fostered_by` beside it), `spouse_of` (symmetric), `sibling_of` (symmetric) |
 | other people | `friend_of` (symmetric), `knows` (symmetric, weak) |
 | the CV | `studied_at`, `worked_at`, `member_of` |
 | works | `created_by`, `released_by`, `shown_at` |
-| what a picture shows | `depicts` (photo to person, place or event), `attended` (person to event) |
+| being there | `attended` (person to event) |
 
 `authored_by` stays core's relation for documents; `created_by` is for a
 work that is not a document, such as a painting.
 
 A domain rule sends a document to the pack: its genre (`certificate`,
-`family_tree`, `photo`), its source (a GEDCOM import), or a person's
-choice. The pack's own sameness cases go in its `sameness.yaml` (§4).
+`family_tree`, `cv`), its source (a GEDCOM import), or a person's
+choice.
+
+Genealogy is a method, and it is kept in the same pack. A historian's
+biography of a composer and a family's tree use the same relations.
+What genealogy adds is its sources (registers, certificates, census
+entries, trees other people made), its work (people known from three
+facts each, rebuilt across generations from records that disagree) and
+its tools. In the pack those are the document types above, the sameness
+cases (§4), the GEDCOM importer (§8) and kinship as a path (§10). They
+split into a `genealogy` pack on top of `biography` only if they grow
+large, and the split changes no fact's meaning.
+
+A photo is not the pack's. Any library can hold pictures, so the
+image reader (§7) is a capability of the core, and `depicts` (a picture
+to a person, a place or an event) is a core relation, a bump of
+`core.yaml`.
 
 ### 2. A birth date is a fact whose end is a date
 
@@ -93,7 +116,7 @@ arguments; the date as written stays in the evidence.
 
 One person appears in a GEDCOM file, a page captured from a genealogy
 site, a certificate and a photo's tags. Resolution already finds likely
-pairs. The life pack adds its cases to `sameness.yaml`:
+pairs. The pack adds its cases to its `sameness.yaml`:
 
 - the same name, birth year and place: one person;
 - the same name a generation apart (a son named after his father, a
@@ -133,7 +156,8 @@ page retires the facts whose sentence went, as a page's links do today.
 ### 7. Photos as documents
 
 prax reads pictures only inside a document, as figures. A photo needs a
-reader of its own (`prax.parsers.image`):
+reader of its own (`prax.parsers.image`). It belongs to no pack: a
+lab's micrographs and a museum's scans are pictures too.
 
 - **The taken date** from EXIF, as `meta.taken`. It is when the picture
   was made, not when it was published, so it is not `meta.published`.
@@ -172,11 +196,18 @@ Each reads its source and never writes to it (invariant 10).
 
 ### 9. The wall, for everyone in it
 
-Every document of the life pack is personal, and so is what it says
-about other people. Friends and relatives did not choose to be in the
-library. Today a rule may only set `suspected`, and a person decides.
-The pack's rule sets `suspected` on every document it is sent, and the
-Admin page's "personal?" tab takes the owner's answer in bulk.
+A pack says what things mean; the wall says who may see a document
+(stage U). The two stay apart. A historian's genealogy of a royal house
+is biography and not personal; the owner's CV is personal and not
+family. A pack that implied "personal" would get both wrong.
+
+What is personal is found as today: the `private:` rules in `prax.yaml`
+(the owner's names and private paths) and the defaults of
+`prax.wall.private` set `suspected`, and a person decides on the Admin
+page's "personal?" tab. A document about the owner's family names them,
+so the owner's surnames in `private:` reach it in any pack. Friends and
+relatives did not choose to be in the library, so what a personal
+document says about them is hidden with it.
 
 Living people need a rule of their own when AP (global ids and export)
 is built: an export leaves out every fact about a person with no
@@ -212,18 +243,18 @@ and each would serve other libraries too:
    checked into the tests. The date qualifier as a migration.
 2. **The owner's own account.** Facts from pages, kinship as a path, a
    person's facts in date order on their entity page.
-3. **Photos.** The image reader with EXIF and XMP, the pictures
-   referenced on the NAS. This stage waits for AQ stage 3.
+3. **Photos.** The image reader with EXIF and XMP, `depicts` in core,
+   the pictures referenced on the NAS. This stage waits for AQ stage 3.
 4. **Captions**, with the vision reading once the card runs.
 5. **A timeline view** in the UI: one person, or the whole family, by
    world date.
 
 ## Questions for the user
 
-1. **The pack's name.** `life` is the proposal. The code has said
-   `family` until now (CLAUDE.md, invariant 9), which is narrower than
-   what was asked for.
-2. **The photo library.** Which program keeps it, and does it write face
+The pack's name was the first question, answered the same day:
+`biography`. Two remain:
+
+1. **The photo library.** Which program keeps it, and does it write face
    tags to XMP? That decides how much of §7 needs no model.
-3. **Where the trees are now.** An exported GEDCOM file or a site's
+2. **Where the trees are now.** An exported GEDCOM file or a site's
    pages decides which importer comes first.
