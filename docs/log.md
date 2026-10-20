@@ -6282,6 +6282,60 @@ the items done by 2026-10-02, the orders agreed on 2026-09-26 and -27,
 the stages planned on 2026-09-25 and -29, and the engineering passes as
 they were planned. Each says when it was written.
 
+## 2026-10-20: the order of 2026-10-05, moved here
+
+Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5
+were done; 6 to 8 are in the new order. Verbatim:
+
+### The order, agreed 2026-10-05
+
+Rewritten the evening the quality review's fixes were done (the order of
+2026-10-04, whose first two items were the night's passes with
+`not-venues` and those fixes, is in `docs/log.md` of that day). The card
+is busy with the figure readings until about the night of 2026-10-05,
+so what needs no model comes first.
+
+1. (done 2026-10-05) **N3's rest** (AL step 9): the author biographies a two-column list
+   appends to an entry, and ditto authors taken from the entry before.
+2. (done 2026-10-05) **AL, "as Utopia does it"**, what needs no model: "ended, date
+   unknown" as a state of its own, the checks that tie a precision to its
+   date, an undated fact anchored to its document's date, a document's
+   lifecycle in `meta`.
+3. (measured 2026-10-05, both off:
+   `docs/eval/extraction-standard-names-and-dates-2026-10-05.md`; world
+   dates want a pass of their own, below in AL) **With the card, measured together on one sample**
+   (`bench_extractor`): AN's last item, the extraction prompt given the
+   standard names, and AL's, the extraction filling the world dates.
+   Both change the prompt; neither passes over the library before the
+   sample says so.
+4. (done 2026-10-06: the wire checks applied, both clear on a dry run
+   after; AJ's reader contract as code, and the desktop's prax.yaml
+   names the `surya` model and the `ocr-server` role, live at the next
+   start of `prax up`) **Next (2026-10-06): the wire syntax cleaned, then AJ's reader
+   contract.** `prax heal --check wire-names` (371 entities) and then
+   `--check wire-labels` (410 labels, more after the names), dry runs
+   shown, applied on the user's word; then **AJ's reader contract**
+   (below): a reader declares its processes and their resources, a role
+   names companions that move with it in a swap, a reader's own logs
+   are trimmed. Code first; trying it on marker waits for the card.
+5. (AK's split as code done 2026-10-06; the 27B stays for most steps,
+   the user's choice that day, so the split's measurement is set aside) **AK's split and the rest of AJ** (below): what a swap costs on the card, readers
+   under prax's hand; **AI**'s measurement after days of
+   `run/swaps.jsonl` (`scripts/eval_swaps.py`).
+6. **AA. Close Z** (below).
+7. **Measured improvements** ("Retrieval and ask", "The graph"): facts
+   as a search list, a focus entity as a vote, the sections pass's
+   vector arm, a compressed edge list, `confidence` as a number.
+8. **The engineering leftovers** (below): typed shapes (a search hit
+   first), the remaining complex functions, the UI helpers the
+   extension copies.
+
+Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
+after the prototype settles), the move to the board ("Deployment
+shape"; not now, the user, 2026-10-12), and the rest from the NAS
+(later). The zoetrope disk is done (it was drive R:, the user,
+2026-10-12).
+
 ## 2026-10-04: what the plan held that was done, moved here
 
 The order of 2026-10-02 with its by-hand list, the whole of stages AL,

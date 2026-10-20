@@ -8,54 +8,87 @@ Work one stage per Claude Code session. Each stage ends green: tests
 pass, `ruff` clean, and the stage's checklist fully ticked before moving
 on. Decisions: `docs/rationale.md`. Source details: `docs/sources.md`.
 
-## The order, agreed 2026-10-05
+## Where things stand (2026-10-20)
 
-Rewritten the evening the quality review's fixes were done (the order of
-2026-10-04, whose first two items were the night's passes with
-`not-venues` and those fixes, is in `docs/log.md` of that day). The card
-is busy with the figure readings until about the night of 2026-10-05,
-so what needs no model comes first.
+This replaces the order of 2026-10-05. That order is in `docs/log.md`
+under "Moved from the plan"; its items 1 to 5 are done, and 6 to 8 are
+below.
 
-1. (done 2026-10-05) **N3's rest** (AL step 9): the author biographies a two-column list
-   appends to an entry, and ditto authors taken from the entry before.
-2. (done 2026-10-05) **AL, "as Utopia does it"**, what needs no model: "ended, date
-   unknown" as a state of its own, the checks that tie a precision to its
-   date, an undated fact anchored to its document's date, a document's
-   lifecycle in `meta`.
-3. (measured 2026-10-05, both off:
-   `docs/eval/extraction-standard-names-and-dates-2026-10-05.md`; world
-   dates want a pass of their own, below in AL) **With the card, measured together on one sample**
-   (`bench_extractor`): AN's last item, the extraction prompt given the
-   standard names, and AL's, the extraction filling the world dates.
-   Both change the prompt; neither passes over the library before the
-   sample says so.
-4. (done 2026-10-06: the wire checks applied, both clear on a dry run
-   after; AJ's reader contract as code, and the desktop's prax.yaml
-   names the `surya` model and the `ocr-server` role, live at the next
-   start of `prax up`) **Next (2026-10-06): the wire syntax cleaned, then AJ's reader
-   contract.** `prax heal --check wire-names` (371 entities) and then
-   `--check wire-labels` (410 labels, more after the names), dry runs
-   shown, applied on the user's word; then **AJ's reader contract**
-   (below): a reader declares its processes and their resources, a role
-   names companions that move with it in a swap, a reader's own logs
-   are trimmed. Code first; trying it on marker waits for the card.
-5. (AK's split as code done 2026-10-06; the 27B stays for most steps,
-   the user's choice that day, so the split's measurement is set aside) **AK's split and the rest of AJ** (below): what a swap costs on the card, readers
-   under prax's hand; **AI**'s measurement after days of
-   `run/swaps.jsonl` (`scripts/eval_swaps.py`).
-6. **AA. Close Z** (below).
-7. **Measured improvements** ("Retrieval and ask", "The graph"): facts
-   as a search list, a focus entity as a vote, the sections pass's
-   vector arm, a compressed edge list, `confidence` as a number.
-8. **The engineering leftovers** (below): typed shapes (a search hit
-   first), the remaining complex functions, the UI helpers the
-   extension copies.
+### The state
 
-Waiting on the user: **AE** (the distilled surfer), **AH** (the stack,
-after the prototype settles), the move to the board ("Deployment
-shape"; not now, the user, 2026-10-12), and the rest from the NAS
-(later). The zoetrope disk is done (it was drive R:, the user,
-2026-10-12).
+- **The library.** 18,387 documents, every one held in the archive
+  (`documents.held` = 1). The database is at migration 49. No `places`
+  rows yet.
+- **The code.** The suite has 1,549 tests. The full run of 2026-10-19
+  gave one failure, a swap test that read the machine's memory. It is
+  fixed (a5aac19); the full suite has not run since.
+- **What runs.** The door and the worker run on the desktop under `prax
+  up`. The card is off until its hardware is fixed: llama-server is
+  held, so the local-model steps and the readings that need the card
+  (marker, the OCR readers, the figure readings) wait. Do not start
+  card work before then.
+- **Reviews.** The safety review and the quality review of 2026-10-18
+  are closed. All 20 defects and all 23 findings were fixed by
+  2026-10-19 (below). The next review is due after some weeks of
+  commits, over the range since 2026-10-18.
+
+### Done since 2026-10-05
+
+About 115 commits; `docs/log.md` has each night.
+
+- The 2026-10-05 order's items 1 to 5: N3's rest, AL "as Utopia does
+  it", the standard-names and world-dates measurements, the wire
+  checks, AJ's reader contract and AK's split as code.
+- The `worlddates` step on (2026-10-07), G2 and the spacing twins
+  applied (2026-10-09).
+- A PDF gets the reader that suits it (2026-10-17). AO steps 1 to 5:
+  the text checks, `meta.quality`, the counts over the library, the
+  document page's line and the Admin tab. The fixes the checks ask for
+  are queued for when the card runs.
+- The UI: pages as a tree, the graph view filtered and steady, the web
+  files cached and compressed, craft alone or with what builds on it,
+  a module's browse list without the unassigned.
+- The door's time for a worker's hand-outs. `store.graph.context` split
+  into `lookups`, `context` and `views`.
+- AQ designed (`docs/media-by-reference.md`) and its stage 1 built:
+  `places`, `places.roots`, `store.original_file`.
+
+### Next, in order
+
+1. **AQ stage 2: the crawl and `where`.** This stage needs no mount and
+   no card. It adds `POST /places` and `prax_send.py --places <root>`,
+   run on the NAS: every file hashed in full and posted in batches,
+   unseen rows marked `gone`. Then `GET /places` (by doc, hash, or root
+   and path), `GET /places/single`, `GET /places/duplicates`, and the
+   MCP `where` tool behind the wall. The first run over 5 TB takes about
+   14 hours at the NAS's hashing speed.
+2. **The user's answer on what is referenced** (`docs/media-by-reference.md`,
+   the question at the end). The recommendation is audio and video, with
+   everything else held. The alternative is a size line.
+3. **AQ stage 3: references.** `POST /ingest/reference`, `--reference`,
+   range serving from a place, the backup's `referenced` count, heal's
+   `unreachable-originals`, and the document page's places. The door's
+   host mounts the share with Samba for this stage.
+4. **Without the card, in any order.** AP's design note (global ids
+   beside the integer keys). The engineering leftovers: typed shapes (a
+   search hit first) and the remaining complex functions. The measured
+   improvements that need no model ("Retrieval and ask", "The graph").
+5. **Once the card runs.** AO's queued fixes: marker for the 586
+   documents with maths as text and the 353 scans read from their OCR
+   layer, and the crops. Then the latex2html re-import and its formulas.
+   Then AJ's trial on marker and its routing rules, AI's measurement
+   from `run/swaps.jsonl`, and AK. AQ stage 4 (a transcription step)
+   comes last.
+
+**Waiting on the user:**
+
+- the list below, whose numbers are of 2026-10-06;
+- AQ's question (step 2);
+- AE, the distilled surfer;
+- AH, the Rust spike, which waits until the schema stops moving
+  (migration 49 landed on 2026-10-19);
+- the move to the board (not now, 2026-10-12);
+- AA's labeller, retrained as genres are labelled.
 
 ### For the user (the list of 2026-10-06)
 
@@ -923,20 +956,26 @@ not done.
       through resolution (a likely pair, a person's decision), never by
       an equal number. The wall decides what an export may hold: no
       document a token could not see, no edge whose evidence is one.
-- [ ] (2026-10-19: designed in `docs/media-by-reference.md`, in four stages; the crawl lists every file on the NAS from the NAS, the door mounts it with Samba to serve, `where` answers where a file and its copies are; what is referenced is still open) (2026-10-19: stage 1 done: migration 49's `places` and `documents.held`, `places.roots`, `store.original_file` the one reader) **AQ. An original that stays where it is.** "on my nas LARGE
-      amounts of video or audio data, i dont want this to be duplicated
-      … there may be duplicates all over the place, too". The bytes
-      need not be in `archive/`: a document's original could be *held*
-      (copied in, as now) or *referenced* (a place it is read from), and
-      one hash may have many places — every copy on the NAS is a
-      location of the one document, which is also how the duplicates
-      are found. A table of locations (hash, place as a URI, size,
-      mtime, last seen, reachable), not edges: where bytes lie is
-      provenance of the file, and invariant 8 keeps provenance out of
-      the graph. A NAS crawl hashes cheaply first (size and sampled
-      blocks), fully only what it ingests. A worker reads a referenced
-      original from its place or through the door. Invariant 2 changes
-      with it, and the backup says what it cannot restore.
+- [ ] **AQ. An original that stays where it is.** The user, 2026-10-18:
+      "on my nas LARGE amounts of video or audio data, i dont want this
+      to be duplicated … there may be duplicates all over the place,
+      too". The design is `docs/media-by-reference.md` (2026-10-19, with
+      the user's answers): whether prax holds an original
+      (`documents.held`) is kept apart from where its copies lie (the
+      `places` table, a root named in `prax.yaml` and a path in it, every
+      file with its full hash). Places are provenance, not graph edges.
+      - [x] (2026-10-19) **Stage 1**: migration 49's `places` and
+            `documents.held`, `places.roots`, `store.original_file` the
+            one reader of an original, `store.record_places`.
+      - [ ] **Stage 2**: `POST /places`, `prax_send.py --places` run on
+            the NAS, `GET /places`, `/places/single`, `/places/duplicates`,
+            the MCP `where` tool.
+      - [ ] **The user's answer**: what is referenced (audio and video
+            recommended, or a size line).
+      - [ ] **Stage 3**: `POST /ingest/reference`, `--reference`, range
+            serving from a Samba mount, the backup's `referenced` count,
+            heal's `unreachable-originals`, the UI's places.
+      - [ ] **Stage 4**, once the card runs: a transcription step.
 
 ## Later / maybe
 
