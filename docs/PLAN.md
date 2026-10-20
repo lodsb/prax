@@ -977,6 +977,16 @@ not done.
             heal's `unreachable-originals`, the UI's places.
       - [ ] **Stage 4**, once the card runs: a transcription step.
 
+- [ ] (2026-10-20: a design study in `docs/life.md`, five stages, three questions) **AR. A life in the library.** The user, 2026-10-20: a family
+      tree, and with it personal photos, friends, their own projects,
+      artworks and releases, and a CV's events. A `life` pack on core;
+      a birth date as an event entity rather than a literal end; a
+      date's uncertainty (about, before, between) as a qualifier beside
+      its precision; the weight of a source by its genre; facts a person
+      states with a page as their source; photos as documents with EXIF
+      and XMP read before any model (after AQ stage 3); a GEDCOM
+      importer; kinship as a named path; every document personal.
+
 ## Later / maybe
 
 From the comparison of 2026-10-07 (`docs/compared.md`, "Ideas worth
