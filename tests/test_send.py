@@ -309,3 +309,38 @@ def test_the_sender_records_every_file_as_a_place_and_sends_none(
     gone = dict(con.execute("SELECT path, gone IS NOT NULL FROM places").fetchall())
     assert gone["music/song copy.flac"] == 1 and gone["music/song.flac"] == 0
     assert gone["photos/icloud/IMG_0001.HEIC"] == 0
+
+
+def test_the_sender_references_recordings_and_pictures_and_sends_no_byte(
+    door: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    share = tmp_path / "media"
+    (share / "icloud").mkdir(parents=True)
+    # the clip first by name: the sender still looks at the picture first
+    (share / "icloud" / "IMG_0001.MOV").write_bytes(b"mov " * 100)
+    (share / "icloud" / "IMG_0001.HEIC").write_bytes(b"heic " * 100)
+    (share / "music").mkdir()
+    (share / "music" / "song.flac").write_bytes(b"flac " * 100)
+    (share / "papers").mkdir()
+    (share / "papers" / "a.pdf").write_bytes(b"%PDF-1.4 a paper")
+    args = [str(share), "--door", door, "--state", str(tmp_path / "s.json")]
+    args += ["--quiet", "--places", "nas-media", "--reference", "--tags", "from:nas"]
+    sender = _sender()
+
+    assert sender.run(args) == 0
+    assert "2 referenced, 0 known before" in capsys.readouterr().out
+    con = store.connect()
+    rows = con.execute(
+        "SELECT mime, held, json_extract(meta, '$.tags') FROM documents ORDER BY mime"
+    ).fetchall()
+    assert [tuple(r) for r in rows] == [
+        ("audio/flac", 0, '["from:nas"]'),
+        ("image/heic", 0, '["from:nas"]'),
+    ]
+    assert con.execute("SELECT COUNT(*) FROM places").fetchone()[0] == 4
+    assert not any(store.config.archive_dir().rglob("*"))  # no byte came over
+
+    assert sender.run(args) == 0
+    assert "0 referenced, 2 known before" in capsys.readouterr().out
+    with pytest.raises(SystemExit):
+        sender.run([str(share), "--door", door, "--reference"])

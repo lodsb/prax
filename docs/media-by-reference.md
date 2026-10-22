@@ -1,8 +1,8 @@
 # Originals by reference
 
 Plan item AQ. Written 2026-09-27 for audio and video. Revised
-2026-10-19 into a design for any original. Stages 1 and 2 built
-(2026-10-19 and -22). The user asked on
+2026-10-19 into a design for any original. Stages 1 to 3 built
+(2026-10-19, -22 and -23). The user asked on
 2026-10-18: "on my nas LARGE amounts of video or audio data, i dont want this to be
 duplicated … there may be duplicates all over the place, too".
 The question at the end was answered on 2026-10-22 (photos) and
@@ -219,13 +219,64 @@ PDFs held (the question at the end).
    duplicates list (`GET /places/duplicates`). This is useful before
    stage 3: it finds the NAS's duplicates and answers where a file is
    without referencing anything, and it needs no mount.
-3. **References.** `POST /ingest/reference`, `--reference`, and range
-   serving from a place. Then the backup's count, heal's ailment and the
-   UI's places.
+3. (done 2026-10-23) **References.** `POST /ingest/reference` and
+   `prax_send.py --places NAME --reference`; range serving from a place;
+   the backup's `referenced` count; heal's `unreachable-originals`; the
+   places on a document's page and in `get`. What was built differs from
+   the sections above in four places, below.
 4. **A recording's text.** A transcription step (Whisper-class) reading
    the original through the door. It needs the card, so it waits for the
    new PSU. Until then a referenced recording is found by its title, its
    path's words and its tags.
+
+## What stage 3 built (2026-10-23)
+
+- **One request per batch, not per file.** `POST /ingest/reference`
+  takes a crawl's batch (at most `store.KNOWN_BATCH` entries, the shape
+  `POST /places` takes, each with an optional `mime`). It records every
+  entry as a place and makes each new file of a referenced kind a
+  document: `held` 0, the file name as its title, `meta.source`
+  `reference` and the capture's who and when (`inbox.ingest_references`,
+  `store.register_references`). A known hash is counted and left alone.
+  With `--reference` the sender posts its batches there instead of to
+  `/places`. The door decides the kind by the file name
+  (`mimes.of_name`), so the sender needs no table of its own.
+- **Which kinds** is `places.reference` in prax.yaml, by default
+  `audio/`, `video/` and `image/` (`store.REFERENCED`). DjVu is an image
+  type and a document, so it stays held.
+- **A Live Photo's clip** is a `.mov` with a picture of the same name in
+  the same folder (`.heic`, `.heif`, `.jpg`, `.jpeg`). It is recorded as
+  a place and made no document (`store.live_photo_clip`). The sender
+  puts a folder's pictures before its clips, so the picture's place is
+  there when the clip is looked at. A clip in the next batch from its
+  picture is still found, as that place was posted first.
+- **Not read yet**: a recording's tags and a photo's EXIF, preview and
+  thumbnail. A referenced file is found by its file name and the
+  folders it lies in, which its search field holds (`document_field`:
+  "audio recording" or "video", and the folder path), until a reading
+  adds more. The tags need a reader that opens the file through the
+  door; it belongs with stage 4 for recordings and with AR's photo
+  stage for pictures.
+
+Three things a referenced document is kept out of. It is not a waiting
+capture (`CAPTURE_SOURCES`), so the parse step never hands it to a
+worker and never asks the vision model about a referenced picture by
+itself: 20,000 personal photos are not sent to a model unasked. Heal's
+`not-documents` does not open it for a header, and
+`documents-without-an-extractor` does not count it.
+
+A referenced document that is later sent with its bytes is held from
+then on (`store.register` sets `held` 1). The private rules read its
+places' paths as they read `original_path`, so a photo under a path in
+`private.paths` is suspected when it is registered.
+
+`unreachable-originals` answers for a root this door does not map, or
+whose directory is missing, without opening a file. A mounted root is
+looked at file by file, at most `store.REACH_CHECKS` (2,000) files a
+call, so heal does not walk a share of 20,000 photos over the network.
+
+The Admin page's duplicates list is not built yet; `GET
+/places/duplicates` answers it.
 
 ## Questions for the user
 

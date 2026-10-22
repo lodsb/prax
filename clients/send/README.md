@@ -90,7 +90,7 @@ is the share's name in the door's prax.yaml (`places.roots`), so the
 same rows hold however a host mounts the share.
 
     python prax_send.py /volume1/media --places nas-media --door http://prax:8000
-    python prax_send.py /volume1/media/photos/icloud --places nas-media         --under photos/icloud --door http://prax:8000
+    python prax_send.py /volume1/media/photos/icloud --places nas-media \n        --under photos/icloud --door http://prax:8000
 
 Run it on the NAS: it reads every file once, at the disks' speed (about
 14 hours for 5 TB at 100 MB/s), and the journal keeps each hash while a
@@ -107,6 +107,28 @@ tool), what lies at several places (`GET /places/duplicates`) and what
 lies at one place only and is not in prax's archive (`GET
 /places/single`). All of it is for the administrator's token only.
 
-Audio and video are not sent. Reading a file from its place instead of
-copying it in is stage 3 of `docs/media-by-reference.md`, not built
-yet.
+## Recordings and photos by reference (`--reference`)
+
+With `--places NAME --reference`, each recording or picture prax does
+not know yet also becomes a document, and its bytes stay on the share.
+The door reads such a file from the share when it is opened or played,
+so the door's host must mount the share where `places.roots` says. The
+batches go to `POST /ingest/reference` instead of `POST /places`, and
+every file is still recorded as a place.
+
+    python prax_send.py /volume1/media --places nas-media --reference         --tags from:nas --door http://prax:8000
+
+Which kinds are referenced is the door's choice (`places.reference` in
+its prax.yaml: audio, video and images by default), by the file's name.
+Other files, PDFs among them, are only recorded; send them without
+`--places` to have prax hold them. A Live Photo's `.MOV` beside its
+picture stays a place of the picture rather than a document of its own.
+`--domains` and `--tags` are given to each new document. The last line
+says how many files were referenced and how many prax knew before.
+
+A referenced file is found by its name and folders until something
+reads it. A recording's tags, a transcript and a photo's preview come
+later (`docs/media-by-reference.md`, stage 4, and `docs/biography.md`).
+`prax heal` names the referenced files the door cannot reach
+(`unreachable-originals`), and a backup reports how many it does not
+hold (`referenced`).

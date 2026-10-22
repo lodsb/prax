@@ -22,6 +22,11 @@ indexes and the config — the few gigabytes that cannot be rebuilt — for
 a nightly run to a disk too small for the originals; the archive can
 follow to a bigger one whenever, since the copy's ``backup.json`` says
 what it holds.
+
+A referenced original (plan item AQ: a recording or a photo that lies on
+a NAS) is in no archive, so no backup holds it. The report says how many
+there are and their bytes (``referenced``), so a restore says what it
+cannot bring back and the NAS's own backup is known to be the one.
 """
 
 from __future__ import annotations
@@ -39,6 +44,7 @@ from prax import config
 from prax.ml import fetch
 
 from .base import _LOCK, now
+from .documents import referenced_originals
 from .jobs import Job
 
 MANIFEST = "backup.json"
@@ -126,6 +132,8 @@ def _run(
         "indexes": indexes,
         "trained": trained,
         "archive": copied,
+        # in no archive, so in no copy: they lie on a share (AQ stage 3)
+        "referenced": referenced_originals(con),
         "seconds": round(time.time() - started, 1),
     }
     (dest / MANIFEST).write_text(json.dumps(report, indent=2), encoding="utf-8")

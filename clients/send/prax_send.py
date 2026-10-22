@@ -25,6 +25,14 @@ is, so one folder can be crawled again alone.
     python prax_send.py /volume1/media/photos/icloud --places nas-media \\
         --under photos/icloud --door http://prax:8000
 
+With --reference as well, each recording or picture prax does not know
+yet becomes a document without its bytes: the door reads it from the
+share when asked (it mounts the share, places.roots), and a Live Photo's
+clip stays a place of its picture. Other kinds are only recorded.
+
+    python prax_send.py /volume1/media --places nas-media --reference \\
+        --tags from:nas --door http://prax:8000
+
 The token is PRAX_TOKEN in the environment, or --token-file (a file
 holding it); --token on the command line works too but shows in the
 process list. Each document keeps where it came from as meta.origin
@@ -627,6 +635,12 @@ def parse(argv):
         " NAME (prax.yaml places.roots) and send no file",
     )
     p.add_option(
+        "--reference",
+        action="store_true",
+        help="with --places: make each new recording or picture a document"
+        " the door reads from the share, without sending its bytes",
+    )
+    p.add_option(
         "--under",
         default="",
         metavar="FOLDER",
@@ -648,6 +662,8 @@ def parse(argv):
         p.error("which door? (--door or PRAX_DOOR)")
     if opts.places and len(roots) != 1:
         p.error("--places records one tree: one ROOT, the share or its --under folder")
+    if opts.reference and not opts.places:
+        p.error("--reference goes with --places NAME: the share the files lie on")
     return opts, roots
 
 
@@ -685,11 +701,23 @@ def places(opts, top, door, state):
     the crawl (``POST /places/done``), and the door marks what it did not
     see under ``--under`` as gone; a run with a file it could not read
     leaves the crawl open, so no file is called gone for that. A dry run
-    hashes and counts, and posts nothing."""
+    hashes and counts, and posts nothing. With ``--reference`` each batch
+    goes to ``POST /ingest/reference`` instead, which records the places
+    and makes the new recordings and pictures documents without their
+    bytes; a folder's pictures go before its clips, so a Live Photo's
+    picture is a place when its clip is looked at."""
     global PROGRESS
     name, under = opts.places, opts.under.strip("/")
     top = os.path.abspath(top)
-    counts = {"seen": 0, "bytes": 0, "read": 0, "failed": 0, "gone": 0}
+    counts = {
+        "seen": 0,
+        "bytes": 0,
+        "read": 0,
+        "failed": 0,
+        "gone": 0,
+        "referenced": 0,
+        "known": 0,
+    }
     started = time.time()
     progress = PROGRESS = Progress(quiet=opts.quiet, every=opts.progress_every)
     walked = {}
@@ -710,8 +738,19 @@ def places(opts, top, door, state):
         )
 
     def post(batch):
-        if batch and not opts.dry_run:
+        if not batch or opts.dry_run:
+            return
+        if not opts.reference:
             door.post("/places", {"root": name, "entries": batch})
+            return
+        payload = {"root": name, "entries": batch, "by": "send"}
+        for key in ("domains", "tags"):
+            value = getattr(opts, key)
+            if value:
+                payload[key] = [v.strip() for v in value.split(",") if v.strip()]
+        out = door.post("/ingest/reference", payload)
+        counts["referenced"] += out.get("created", 0)
+        counts["known"] += out.get("known", 0)
 
     say(
         opts,
@@ -720,6 +759,8 @@ def places(opts, top, door, state):
     batch = []
     try:
         for _, files in walk([top], None, opts.skip, opts.max_depth, progress, walked):
+            if opts.reference:
+                files = sorted(files, key=lambda f: (clip_last(f[0]), f[0]))
             for path, _size in files:
                 try:
                     digest = state.hash_of(path, read)
@@ -778,10 +819,21 @@ def places(opts, top, door, state):
             if not counts["failed"]
             else "the crawl left open: run again to mark what is gone"
         )
+        + (
+            ", %(referenced)d referenced, %(known)d known before" % counts
+            if opts.reference and not opts.dry_run
+            else ""
+        )
         + ", %d folders left out (%s)"
         % (walked.get("left_out", 0), human_time(time.time() - started))
     )
     return 1 if counts["failed"] else 0
+
+
+def clip_last(path):
+    """1 for a file a Live Photo's clip may be (``.mov``), else 0: what
+    puts a folder's pictures before its clips."""
+    return 1 if os.path.splitext(path)[1].lower() == ".mov" else 0
 
 
 def run(argv=None):

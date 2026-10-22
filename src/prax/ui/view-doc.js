@@ -39,6 +39,27 @@ function pendingLine(pending) {
   return `<p class="reading-line muted">waiting for a worker: ${what}</p>`;
 }
 
+// Where a file prax references rather than holds lies (AQ stage 3): its
+// places on the shares a crawl saw, and whether this door reaches one.
+function placesLine(doc) {
+  const p = doc.places;
+  if (!p) return "";
+  const shown = p.places.map((pl) => `<code>${esc(pl.root)}</code> ${esc(pl.path)}`).join(" · ");
+  const more = p.copies > p.places.length ? ` and ${p.copies - p.places.length} more` : "";
+  const reach = p.reachable ? "" : ` — <span class="error">out of reach from this door</span> (is the share mounted?)`;
+  return `<p class="reading-line muted">not held, read from where it lies: ${shown}${more}${reach}</p>`;
+}
+
+// A recording's own player: the original streamed from the door, which
+// answers ranges, so it seeks. A capture of a video page has its own
+// (playerHtml); this is for a file, held or on a share.
+function mediaHtml(doc, meta) {
+  const mime = (doc.mime || "").split(";")[0];
+  const tag = mime.startsWith("video/") ? "video" : mime.startsWith("audio/") ? "audio" : "";
+  if (!tag || meta.video || (doc.places && !doc.places.reachable)) return "";
+  return `<div class="doc-player"><${tag} class="doc-media" controls preload="metadata" src="${originalHref(doc.id)}"></${tag}></div>`;
+}
+
 // What the checks of a text found (stage AO, meta.quality): of the text
 // the document holds now only, each with what it saw on hover and the
 // reading that would put it right
@@ -611,13 +632,13 @@ async function viewDoc(id, p) {
         ${meta.retired ? `<a href="#" id="unretire" title="back into search and the graph">un-retire</a>` : `<a href="#" id="retire" title="out of search and the graph; row and file stay">retire…</a>`}
       </div>
     </div>
-    ${readingLine(meta.reading)}${pendingLine(doc.pending)}
+    ${readingLine(meta.reading)}${pendingLine(doc.pending)}${placesLine(doc)}
     <div id="domains-form" hidden></div>
     <div id="page-editor"></div>
   </header>
   ${rule()}
   ${figureStrip(chunks, doc.id)}
-  ${meta.video ? playerHtml(doc, chunks, meta) : ""}
+  ${meta.video ? playerHtml(doc, chunks, meta) : mediaHtml(doc, meta)}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
     <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? "" : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>

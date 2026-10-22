@@ -37,7 +37,10 @@ revisit threshold, under "Decision thresholds" below.
    live at `data/archive/<sha256[:2]>/<sha256>`, or at a place: a root
    named in `prax.yaml` (`places.roots`, mapped per host) and a path in
    it, recorded with the file's hash in the `places` table (migration
-   49, plan item AQ, `docs/media-by-reference.md`).
+   49, plan item AQ, `docs/media-by-reference.md`). A referenced
+   original (`documents.held` 0: a recording or a picture a crawl with
+   `--reference` saw, `places.reference`) is never copied into the
+   archive, so no backup holds it.
    `store.original_file` is the one answer to where an original is read
    from. The database stores metadata and the hash only. Never store blobs in SQLite. The document
    hash is the sha256 of the **original bytes**, never of extracted

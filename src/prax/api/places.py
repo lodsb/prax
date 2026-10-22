@@ -1,8 +1,9 @@
-"""Where files lie (plan item AQ, stage 2; ``docs/media-by-reference.md``):
-a crawl's half (``prax_send.py --places``: start, the batches of what it
-saw, the end) and the reads of the ``places`` table. The administrator's
-alone, as a path can be as personal as the file: none of these routes is
-in ``auth.RESTRICTED_ROUTES``."""
+"""Where files lie (plan item AQ, stages 2 and 3;
+``docs/media-by-reference.md``): a crawl's half (``prax_send.py
+--places``: start, the batches of what it saw, the end), the files it
+references rather than sends (``--reference``), and the reads of the
+``places`` table. The administrator's alone, as a path can be as personal
+as the file: none of these routes is in ``auth.RESTRICTED_ROUTES``."""
 
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from prax import store
+from prax.capture import inbox
 
 from ._base import _con
 
@@ -34,6 +36,15 @@ class CrawlEnd(BaseModel):
     prefix: str = ""
 
 
+class ReferenceReq(BaseModel):
+    root: str
+    entries: list[dict[str, Any]]
+    domains: list[str] | None = None
+    tags: list[str] | None = None
+    session: str | None = None
+    by: str = "send"
+
+
 @router.post("/places/start")
 def start_crawl(req: CrawlReq) -> dict[str, Any]:
     """A crawl of ``root`` (or of its folder ``prefix``) begins: the door's
@@ -53,6 +64,30 @@ def record_places(req: PlacesReq, request: Request) -> dict[str, Any]:
         raise HTTPException(413, f"at most {store.KNOWN_BATCH} entries a request")
     try:
         return store.record_places(_con(request), req.root, req.entries)
+    except (ValueError, KeyError, TypeError) as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/ingest/reference")
+def ingest_reference(req: ReferenceReq, request: Request) -> dict[str, Any]:
+    """Files a crawl saw at ``root`` (``prax_send.py --places NAME
+    --reference``), each as ``POST /places`` takes it with an optional
+    ``mime``: every one a place, and each recording or picture whose hash
+    is new a document without its bytes (``store.register_references``).
+    At most ``store.KNOWN_BATCH`` a request."""
+    if len(req.entries) > store.KNOWN_BATCH:
+        raise HTTPException(413, f"at most {store.KNOWN_BATCH} entries a request")
+    try:
+        store._check_domains(req.domains or [])
+        return inbox.ingest_references(
+            _con(request),
+            req.root,
+            req.entries,
+            domains=req.domains,
+            tags=req.tags,
+            session=req.session,
+            by=req.by,
+        )
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(400, str(exc)) from exc
 

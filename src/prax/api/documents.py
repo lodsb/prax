@@ -51,6 +51,12 @@ def get(
     )
     if stale:
         doc["stale"] = stale
+    # where its file lies, for a document prax does not hold: a referenced
+    # recording or picture (AQ stage 3); a held one says nothing
+    if not doc.get("held", 1):
+        places = store.places_in_brief(con, str(doc["hash"]))
+        if places is not None:
+            doc["places"] = places
     if brief:
         return store.brief_document(doc)
     # whether its reader wrote the mathematics as LaTeX, for the page to
@@ -183,10 +189,18 @@ def documents(
 
 @router.get("/doc/{doc_id}/original")
 def original(doc_id: int, request: Request) -> FileResponse:
-    """The archived original with its MIME type, shown inline (a PDF opens
-    in the browser's viewer; ``#page=N`` selects a page)."""
+    """The original with its MIME type, shown inline (a PDF opens in the
+    browser's viewer; ``#page=N`` selects a page): the archive's file, or a
+    referenced one's from its place, a range of it when asked (a video
+    seeks). A referenced original no place of which this door reaches is
+    a 404 that says so and names its roots."""
     info = store.original_info(_con(request), doc_id)
-    if info is None or not info["path"].exists():
+    if info is None:
+        raise HTTPException(404, "no such document")
+    if not info["path"].exists():
+        if not info["held"]:
+            where = ", ".join(info["roots"]) or "no place a crawl still sees"
+            raise HTTPException(404, f"out of reach: the original lies on {where}")
         raise HTTPException(404, "no such document")
     name = Path(info["original_path"] or info["title"] or f"document-{doc_id}").name
     headers = {

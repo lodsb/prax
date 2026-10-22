@@ -1,6 +1,7 @@
 """The ailments of documents: twins, files that are no documents, texts
 that failed to parse or to be read, readings never done, stale parses
-and extractions, and the edges and review items of retired documents."""
+and extractions, the edges and review items of retired documents, and
+referenced originals out of reach."""
 
 from __future__ import annotations
 
@@ -20,6 +21,7 @@ from ..documents import (
     retire_document,
     set_mime,
     similarity,
+    unreachable_originals,
 )
 from .common import CAP
 
@@ -152,7 +154,9 @@ def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
     for r in con.execute(
         "SELECT id, hash, mime, title FROM documents"
         " WHERE json_extract(meta, '$.retired') IS NULL AND text_hash IS NULL"
-        " ORDER BY id"
+        # a referenced file is one a crawl hashed where it lies: opening
+        # each over the network for a header would walk the whole share
+        " AND held = 1 ORDER BY id"
     ):
         try:
             with open(original_file(con, r["hash"]), "rb") as f:
@@ -167,6 +171,12 @@ def _not_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
             if len(out) >= CAP:
                 break
     return out
+
+
+def _unreachable_originals(con: sqlite3.Connection) -> list[dict[str, Any]]:
+    """Referenced documents (AQ) this door reaches no place of, each with
+    the roots its places are on (``documents.unreachable_originals``)."""
+    return unreachable_originals(con, limit=CAP)
 
 
 def _repair_not_documents(con: sqlite3.Connection, rows: list[dict[str, Any]]) -> int:
@@ -226,6 +236,9 @@ def _unparsable_documents(con: sqlite3.Connection) -> list[dict[str, Any]]:
         "SELECT mime, count(*) AS documents, min(id) AS first_id, min(title) AS title"
         " FROM documents WHERE text_hash IS NULL"
         "   AND json_extract(meta, '$.retired') IS NULL"
+        # a referenced recording waits for its transcription (AQ stage 4)
+        # and a referenced photo for its reading: no parser is meant for them
+        "   AND held = 1"
         " GROUP BY mime ORDER BY documents DESC LIMIT ?",
         (CAP,),
     ).fetchall()

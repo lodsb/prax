@@ -6323,6 +6323,67 @@ prax imports itself (the profile, the page images, the OCR paths). The
 `ingest` extra now holds `pymupdf4llm>=1.27,<2` and names `pymupdf`.
 The desktop's venv had 1.28.2 throughout, so the local suite never saw it.
 
+## 2026-10-23: AQ stage 3, an original that stays where it is
+
+The user's answer of the morning: audio and video are referenced in the
+same way as photos. With `prax_send.py --places NAME --reference`, a
+crawl's batches go to `POST /ingest/reference`
+(`inbox.ingest_references`, `store.register_references`). Every entry is
+a place. Each new file of a referenced kind (`places.reference`, by
+default audio, video and images) becomes a document with `held` 0, its
+file name as title and `meta.source` `reference`. The door names the
+kind from the file name (`mimes.of_name`, which now knows HEIC, FLAC,
+Matroska and the rest a phone or a music library writes). A Live Photo's
+`.mov` beside its picture stays a place (`store.live_photo_clip`), and
+the sender puts a folder's pictures before its clips. Bytes sent later
+for a referenced document make it held (`store.register`).
+
+The door serves a referenced original from its place through the same
+`FileResponse`, which answers ranges, so a video seeks. With no
+reachable place, `/doc/{id}/original` is a 404 that says "out of reach"
+and names the roots. `get` carries `places` (the live ones, at most
+five, the count and whether this door reaches one) for a document prax
+does not hold. The document page shows them and plays a recording. A
+backup's report says what it cannot bring back (`referenced`:
+documents and bytes), and heal's new `unreachable-originals` names the
+documents with no reachable place. It answers for an unmapped or
+unmounted root without opening a file and stats at most
+`REACH_CHECKS` (2,000) files a look.
+
+A referenced document is kept out of three things that would sweep a
+share. It is not a waiting capture, so no worker is handed it and the
+vision model is not asked about a referenced photo by itself. Heal's
+`not-documents` does not open it for a header, and
+`documents-without-an-extractor` does not count it. The private rules
+read its places' paths, so a photo under a path in `private.paths` is
+suspected as it is registered. Its search field holds "audio recording"
+or "video" and the folders it lies in, which is what finds it until
+something reads it. Left for later: the Admin page's duplicates list,
+and the tags and EXIF a reader would take out of the file.
+
+Tests: `tests/test_referenced_originals.py` (12) and the sender's
+`test_the_sender_references_recordings_and_pictures_and_sends_no_byte`.
+
+## 2026-10-23: the door's search down after the reboot, a mixed onnxruntime
+
+After the PSU swap the door came up, and every search that embeds a
+query answered 500 (668 times in the morning's log):
+`'InferenceSession' object has no attribute
+'is_webgpu_graph_capture_enabled'`. The worker failed its passes on the
+same 500 and was restarted nine times. The cause was the `pip install
+-e` of 2026-10-22, run while the door ran. `pymupdf-layout` and
+`magika` require the package `onnxruntime`, and this host has
+`onnxruntime-directml`, which installs into the same folder. pip wrote
+the new Python files and `onnxruntime.dll` and could not replace
+`onnxruntime_pybind11_state.pyd`, which the door held. The door that ran
+on kept the old modules in memory. The first start after the reboot
+loaded the mixed folder. The fix was to stop the worker and the door
+(`prax up --stop`), run `pip install --force-reinstall --no-deps
+onnxruntime-directml==1.24.4` and start them again; search answered at
+once. The lesson for this host: stop the door and the worker before a
+`pip install` into the venv, and reinstall `onnxruntime-directml` after
+any install that pulls `onnxruntime` (`pip check` names the two that do).
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

@@ -714,6 +714,28 @@ def ingest_upload(
     )
 
 
+def ingest_references(
+    con: sqlite3.Connection,
+    root: str,
+    entries: list[dict[str, Any]],
+    *,
+    domains: list[str] | None = None,
+    tags: list[str] | None = None,
+    session: str | None = None,
+    by: str | None = "send",
+) -> dict[str, Any]:
+    """Files a crawl saw at ``root`` that prax references rather than
+    holds (``store.register_references``, plan item AQ stage 3): each a
+    place, the new ones of a referenced kind documents without their
+    bytes, which get their domains as an upload does."""
+    meta = _capture_meta("reference", session=session, by=by, tags=tags)
+    out = store.register_references(con, root, entries, meta=meta)
+    for d in out["documents"]:
+        if d["created"]:
+            _give_domains(con, d["doc_id"], domains, by=by or "reference")
+    return out
+
+
 def _origin(origin: dict[str, Any] | None) -> dict[str, Any]:
     """``meta.origin`` from what a sender said: the host and the path,
     as strings, nothing else."""

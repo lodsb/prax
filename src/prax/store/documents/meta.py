@@ -500,7 +500,7 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
     """The retrieval field of a document, or None when it does not exist."""
     row = con.execute(
         """
-        SELECT d.title, d.mime, d.meta,
+        SELECT d.title, d.mime, d.meta, d.hash, d.held,
                (SELECT kind FROM chunks c WHERE c.doc_id = d.id ORDER BY seq LIMIT 1)
                    AS first_kind
         FROM documents d WHERE d.id = ?
@@ -520,6 +520,10 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
         words.append("scanned document")
     elif mime in _KIND_WORDS:
         words.append(_KIND_WORDS[mime])
+    elif mime.startswith("audio/"):
+        words.append("audio recording")
+    elif mime.startswith("video/"):
+        words.append("video")
     z = meta.get("zotero") or {}
     if z.get("kind") == "note":
         words.append("note")
@@ -539,6 +543,16 @@ def document_field(con: sqlite3.Connection, doc_id: int) -> str | None:
         words.append("image description")
     words += [w for w in _genre_words(meta) if w not in words]
     parts = [row["title"] or "", " ".join(words)]
+    if not row["held"]:
+        # a referenced file has no text until something reads it: the
+        # folders it lies in are what a person would search for it by
+        place = con.execute(
+            "SELECT path FROM places WHERE sha256 = ? AND gone IS NULL"
+            " ORDER BY last_seen DESC LIMIT 1",
+            (row["hash"],),
+        ).fetchone()
+        if place and "/" in place[0]:
+            parts.append(place[0].rsplit("/", 1)[0].replace("/", " "))
     creators = [c.get("name") for c in meta.get("creators", []) if c.get("name")]
     if creators:
         parts.append("by " + ", ".join(creators[:6]))

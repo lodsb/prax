@@ -9,7 +9,7 @@ import sqlite3
 from typing import Any
 
 from prax import packs
-from prax.text import chunking, glyphs, language
+from prax.text import chunking, glyphs, language, mimes
 
 from ..base import (
     _NOW,
@@ -26,7 +26,13 @@ from ..base import (
     now,
 )
 from .meta import _is_indexed, _put_meta, _refresh_document_field, get_meta
-from .places import original_file
+from .places import (
+    live_photo_clip,
+    original_file,
+    place_roots_of,
+    record_places,
+    referenced_kind,
+)
 
 
 @_serialized
@@ -44,11 +50,17 @@ def register(
 
     The hash is of the original bytes. Nothing is parsed or indexed here;
     ``parsed_at`` stays NULL until ``index_text`` runs.
-    Returns ``{'doc_id', 'hash', 'created'}``; a known hash is a no-op.
+    Returns ``{'doc_id', 'hash', 'created'}``; a known hash is a no-op,
+    but for a referenced document, whose bytes the archive now holds.
     """
     digest = _archive_bytes(data)
-    row = con.execute("SELECT id FROM documents WHERE hash = ?", (digest,)).fetchone()
+    row = con.execute(
+        "SELECT id, held FROM documents WHERE hash = ?", (digest,)
+    ).fetchone()
     if row:
+        if not row["held"]:
+            con.execute("UPDATE documents SET held = 1 WHERE id = ?", (row["id"],))
+            con.commit()
         return {"doc_id": row["id"], "hash": digest, "created": False}
     check_meta(meta or {})
     cur = con.execute(
@@ -58,6 +70,70 @@ def register(
     )
     con.commit()
     return {"doc_id": cur.lastrowid, "hash": digest, "created": True}
+
+
+@_serialized
+def register_references(
+    con: sqlite3.Connection,
+    root: str,
+    entries: list[dict[str, Any]],
+    *,
+    meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """What a crawl with ``--reference`` saw at ``root`` (the entries of
+    ``record_places``, each with an optional ``mime``): every entry is a
+    place, and each of a referenced kind (``referenced_kind``) whose hash
+    is new becomes a document without its bytes (``held`` 0), titled by
+    its file name and given ``meta``. A Live Photo's clip stays a place
+    (``live_photo_clip``). Returns the counts (``created``, ``known``,
+    ``held_kinds``, ``clips``) and ``documents``, each entry's ``path``
+    with its ``doc_id`` and ``created``."""
+    record_places(con, root, entries)
+    check_meta(meta or {})
+    out: dict[str, Any] = {
+        "created": 0,
+        "known": 0,
+        "held_kinds": 0,
+        "clips": 0,
+        "documents": [],
+    }
+    made: list[int] = []
+    for e in entries:
+        path, digest = str(e["path"]), str(e["sha256"]).lower()
+        name = path.rsplit("/", 1)[-1]
+        mime = str(e.get("mime") or "")
+        if not mime or mime == "application/octet-stream":
+            mime = mimes.of_name(name)
+        if not referenced_kind(mime):
+            out["held_kinds"] += 1
+            continue
+        if live_photo_clip(con, root, path):
+            out["clips"] += 1
+            continue
+        row = con.execute(
+            "SELECT id FROM documents WHERE hash = ?", (digest,)
+        ).fetchone()
+        if row is not None:
+            out["known"] += 1
+            out["documents"].append(
+                {"path": path, "doc_id": row["id"], "created": False}
+            )
+            continue
+        cur = con.execute(
+            "INSERT INTO documents (hash, mime, title, original_path, meta, held)"
+            " VALUES (?, ?, ?, ?, ?, 0)",
+            (digest, mime, name, name, json.dumps(meta or {})),
+        )
+        doc_id = int(cur.lastrowid or 0)
+        made.append(doc_id)
+        _refresh_document_field(con, doc_id)
+        out["created"] += 1
+        out["documents"].append({"path": path, "doc_id": doc_id, "created": True})
+    con.commit()
+    for doc_id in made:
+        # no text to read: the rules look at its name and where it lies
+        suspect(con, doc_id, "")
+    return out
 
 
 @_serialized
@@ -454,10 +530,12 @@ def text_hashes(con: sqlite3.Connection, doc_ids: list[int]) -> dict[int, str]:
 @_guards("doc", lambda: None)
 @_reading
 def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None:
-    """MIME type, title and archive path of a document's original, for
-    serving it; None when the document does not exist."""
+    """MIME type, title and path of a document's original, for serving
+    it (``original_file``: the archive's, or a place's), whether prax
+    holds it, and the roots its places are on; None when the document
+    does not exist."""
     row = con.execute(
-        "SELECT hash, mime, title, original_path FROM documents WHERE id = ?",
+        "SELECT hash, mime, title, original_path, held FROM documents WHERE id = ?",
         (doc_id,),
     ).fetchone()
     if row is None:
@@ -467,6 +545,8 @@ def original_info(con: sqlite3.Connection, doc_id: int) -> dict[str, Any] | None
         "mime": row["mime"] or "application/octet-stream",
         "title": row["title"],
         "original_path": row["original_path"],
+        "held": bool(row["held"]),
+        "roots": place_roots_of(con, row["hash"]),
     }
 
 
@@ -515,6 +595,16 @@ def suspect(
         row["original_path"] or "",
         row["source_url"] or "",
         str((meta.get("origin") or {}).get("path") or ""),
+        # where its file lies: a referenced one has no other path
+        *(
+            f"{p[0]}/{p[1]}"
+            for p in con.execute(
+                "SELECT root, path FROM places WHERE sha256 ="
+                " (SELECT hash FROM documents WHERE id = ?) AND gone IS NULL"
+                " LIMIT 20",
+                (doc_id,),
+            )
+        ),
     ]
     cues: list[str] = rules.cues(row["title"] or "", paths, text or "")
     if not cues:

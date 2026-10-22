@@ -46,6 +46,7 @@ from .documents import (
     _unembedded_chunks,
     _unparsable_documents,
     _unpolished_transcripts,
+    _unreachable_originals,
     _unread_figures,
     _unread_formulas,
     _unreadable_documents,
@@ -427,6 +428,21 @@ AILMENTS: tuple[Ailment, ...] = (
         ),
         find=_not_documents,
         repair=_repair_not_documents,
+    ),
+    Ailment(
+        name="unreachable-originals",
+        what=(
+            "documents prax references rather than holds (a recording, a"
+            " photo on a NAS) whose file this door reaches at no place: the"
+            " share is not mounted here, or the file moved or changed since"
+            " the last crawl"
+        ),
+        fix=(
+            "mount the roots named (places.roots in prax.yaml), or crawl the"
+            " share again (prax_send.py --places) so a moved file is found;"
+            " what was read from them stays searchable meanwhile"
+        ),
+        find=_unreachable_originals,
     ),
     Ailment(
         name="uncounted-pages",

@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from prax import config
+from prax.text import mimes
 
 from ..base import _reading, _serialized, archive_path, now
 
@@ -28,6 +29,43 @@ ROOT_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 # a FAT or SMB share keeps a modification time to two seconds
 MTIME_SLACK = 2
+# what a crawl with --reference makes a document without its bytes
+# (``places.reference``): recordings and pictures, the user's answer of
+# 2026-10-23. Everything else is held, PDFs above all: their figures and
+# pages are served out of the original, and a held one outlives the NAS
+REFERENCED = ("audio/", "video/", "image/")
+# a phone's Live Photo is a picture with a short clip of the same name
+# beside it: the clip is a place, and the picture is the document
+_LIVE_CLIP = (".mov",)
+_LIVE_PICTURE = (".heic", ".heif", ".jpg", ".jpeg")
+# heal stats a referenced original's file at most this many times a look,
+# so a share of 20,000 photos is not walked over the network each time
+REACH_CHECKS = 2000
+
+
+def referenced_kind(mime: str) -> bool:
+    """Whether a file of this type is referenced rather than held."""
+    kinds = tuple(config.words("places.reference", default=REFERENCED))
+    m = (mime or "").lower()
+    return m.startswith(kinds) and m not in mimes.DOCUMENT_IMAGES
+
+
+def live_photo_clip(con: sqlite3.Connection, root: str, path: str) -> bool:
+    """Whether the file at ``path`` is a Live Photo's clip: a ``.mov``
+    with a picture of the same name in the same folder, seen at ``root``."""
+    stem, dot, suffix = path.rpartition(".")
+    if not dot or "." + suffix.lower() not in _LIVE_CLIP:
+        return False
+    names = [stem + s for p in _LIVE_PICTURE for s in (p, p.upper())]
+    marks = ",".join("?" * len(names))
+    return (
+        con.execute(
+            f"SELECT 1 FROM places WHERE root = ? AND path IN ({marks})"
+            " AND gone IS NULL LIMIT 1",
+            (root, *names),
+        ).fetchone()
+        is not None
+    )
 
 
 def place_roots() -> dict[str, Path]:
@@ -69,9 +107,16 @@ def original_file(con: sqlite3.Connection, digest: str) -> Path:
     held = archive_path(digest)
     if held.exists():
         return held
-    roots = place_roots()
+    return _place_file(con, digest, place_roots()) or held
+
+
+def _place_file(
+    con: sqlite3.Connection, digest: str, roots: dict[str, Path]
+) -> Path | None:
+    """The newest live place of ``digest`` on one of ``roots`` whose file
+    has the size and modification time it was hashed with, or None."""
     if not roots:
-        return held
+        return None
     for r in con.execute(
         "SELECT root, path, size, mtime FROM places"
         " WHERE sha256 = ? AND gone IS NULL ORDER BY last_seen DESC",
@@ -88,7 +133,83 @@ def original_file(con: sqlite3.Connection, digest: str) -> Path:
             continue
         if st.st_size == r[2] and abs(int(st.st_mtime) - r[3]) <= MTIME_SLACK:
             return file
-    return held
+    return None
+
+
+def place_roots_of(con: sqlite3.Connection, digest: str) -> list[str]:
+    """The roots that hold a live place of ``digest``, by name."""
+    return [
+        r[0]
+        for r in con.execute(
+            "SELECT DISTINCT root FROM places WHERE sha256 = ? AND gone IS NULL"
+            " ORDER BY root",
+            (digest,),
+        )
+    ]
+
+
+@_reading
+def places_in_brief(
+    con: sqlite3.Connection, digest: str, *, limit: int = 5
+) -> dict[str, Any] | None:
+    """What ``get`` says of where a file lies: the live places (at most
+    ``limit``, the newest first), how many there are, and whether this
+    host reaches one. None when it has none."""
+    rows = con.execute(
+        "SELECT root, path FROM places WHERE sha256 = ? AND gone IS NULL"
+        " ORDER BY last_seen DESC, root, path",
+        (digest,),
+    ).fetchall()
+    if not rows:
+        return None
+    out: dict[str, Any] = {
+        "copies": len(rows),
+        "reachable": _place_file(con, digest, place_roots()) is not None,
+        "places": [{"root": r[0], "path": r[1]} for r in rows[: max(0, limit)]],
+    }
+    return out
+
+
+@_reading
+def referenced_originals(con: sqlite3.Connection) -> dict[str, int]:
+    """The documents whose original prax does not hold, and their bytes
+    (each file's size as a crawl last saw it): what a backup cannot bring
+    back."""
+    row = con.execute(
+        "SELECT COUNT(*), COALESCE(SUM(s), 0) FROM ("
+        " SELECT (SELECT MAX(size) FROM places p WHERE p.sha256 = d.hash) AS s"
+        " FROM documents d WHERE d.held = 0)"
+    ).fetchone()
+    return {"documents": int(row[0]), "bytes": int(row[1])}
+
+
+def unreachable_originals(
+    con: sqlite3.Connection, *, limit: int
+) -> list[dict[str, Any]]:
+    """Live referenced documents this host reaches no place of, each with
+    the roots its places are on. A root this host does not map, or whose
+    directory is not there (the share not mounted), answers for all of its
+    files at once; a mounted one is looked at file by file, at most
+    ``REACH_CHECKS`` files a call."""
+    roots = place_roots()
+    present = {n: p for n, p in roots.items() if p.is_dir()}
+    out: list[dict[str, Any]] = []
+    checks = 0
+    for r in con.execute(
+        "SELECT id, title, hash FROM documents WHERE held = 0"
+        " AND json_extract(meta, '$.retired') IS NULL ORDER BY id"
+    ):
+        on = place_roots_of(con, r["hash"])
+        if any(n in present for n in on):
+            if checks >= REACH_CHECKS:
+                continue
+            checks += 1
+            if _place_file(con, r["hash"], present) is not None:
+                continue
+        out.append({"id": r["id"], "title": r["title"], "roots": on})
+        if len(out) >= limit:
+            break
+    return out
 
 
 @_serialized

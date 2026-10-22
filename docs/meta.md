@@ -27,7 +27,7 @@ writer, and add its row here.
 
 | key | shape | what, and who writes it |
 |---|---|---|
-| `source` | `str` | zotero, capture, drop, feed, github, project, claude, citations… |
+| `source` | `str` | zotero, capture, drop, feed, github, project, claude, citations, reference (a file prax does not hold, AQ)… |
 | `origin` | `dict[str, Any]` | a drop folder's host and path |
 | `capture` | `dict[str, Any]` | the extension's at, session, by, note, mode |
 | `requested_url` | `str` | the URL asked for, where the capture landed elsewhere |

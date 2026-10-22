@@ -65,10 +65,11 @@ About 115 commits; `docs/log.md` has each night.
 2. (answered 2026-10-23) **The user's answer on what is referenced.**
    Photos, audio and video are; everything else is held
    (`docs/media-by-reference.md`, the question at the end).
-3. **AQ stage 3: references.** `POST /ingest/reference`, `--reference`,
-   range serving from a place, the backup's `referenced` count, heal's
-   `unreachable-originals`, and the document page's places. The door's
-   host mounts the share with Samba for this stage.
+3. (done 2026-10-23; its first run on the NAS is the user's, with the
+   share mounted on the door's host) **AQ stage 3: references.** `POST
+   /ingest/reference`, `--reference`, range serving from a place, the
+   backup's `referenced` count, heal's `unreachable-originals`, and the
+   document page's places.
 4. **Without the card, in any order.** AS, versions of a work (steps 1
    to 4 need no model). AP's design note (global ids beside the integer
    keys). The engineering leftovers: typed shapes (a
@@ -975,9 +976,16 @@ not done.
             user's.
       - [x] (2026-10-23) **The user's answer**: photos, audio and video
             are referenced, everything else held; no size line.
-      - [ ] **Stage 3**: `POST /ingest/reference`, `--reference`, range
-            serving from a Samba mount, the backup's `referenced` count,
-            heal's `unreachable-originals`, the UI's places.
+      - [x] (2026-10-23) **Stage 3**: `POST /ingest/reference` (a
+            crawl's batch), `prax_send.py --places NAME --reference`,
+            `places.reference` (audio, video, images), a Live Photo's
+            clip kept a place, `held` set again when the bytes come,
+            range serving from a place and "out of reach" with its
+            roots, `places` in `get`, the backup's `referenced` count,
+            heal's `unreachable-originals`, the document page's places
+            and player. Left for later: the Admin page's duplicates
+            list; a recording's tags and a photo's EXIF (stage 4 and
+            AR's photo stage).
       - [ ] **Stage 4**, once the card runs: a transcription step.
 
 - [ ] (2026-10-20: a design study in `docs/biography.md`, five stages, two questions) **AR. A life in the library.** The user, 2026-10-20: a family

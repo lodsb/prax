@@ -1956,7 +1956,10 @@ The ways in:
   and records where every file of a share lies instead, hashed in full:
   the share's name is in `places.roots` of prax.yaml, and the door then
   answers where a file is, its copies, and what lies only once
-  (`/places`, the MCP `where` tool). The options are in
+  (`/places`, the MCP `where` tool). With `--reference` as well, each
+  new recording or picture becomes a document whose bytes stay on the
+  share: the door reads it from there, so the door's host mounts the
+  share where `places.roots` says. The options are in
   `clients/send/README.md`.
 
 **The worker** takes every capture the rest of the way. It asks the

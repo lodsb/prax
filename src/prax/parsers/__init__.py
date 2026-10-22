@@ -64,7 +64,6 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import importlib.util
-import mimetypes
 import re
 from pathlib import Path
 
@@ -223,7 +222,7 @@ def guess_mime(name: str | None, fallback: str = "application/octet-stream") -> 
     suffix = Path(name or "").suffix.lower()
     if suffix in EXTRA_MIME_TYPES:
         return EXTRA_MIME_TYPES[suffix]
-    return mimetypes.guess_type(name or "")[0] or fallback
+    return mimes.of_name(name or "", fallback)
 
 
 EXTRA_MIME_TYPES = {

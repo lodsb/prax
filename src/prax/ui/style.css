@@ -563,6 +563,8 @@ main.stage { max-width: 1400px; }
 .doc-player .player-badge { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: .4rem .9rem; border: 1px solid var(--prax-ground); color: var(--prax-ground); background: rgba(0, 0, 0, .45); font: inherit; letter-spacing: .04em; }
 .doc-player iframe { width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--prax-rule); display: block; }
 .doc-player .player-meta { margin-top: .3rem; font-size: .9em; }
+.doc-player .doc-media { display: block; width: 100%; }
+.doc-player video.doc-media { max-height: 70vh; border: 1px solid var(--prax-rule); background: var(--prax-key); }
 a.moment { font-variant-numeric: tabular-nums; }
 .doc-more { padding: 1.2em 0 2em; text-align: center; font-size: 0.9em; }
 .doc-more .linkish { margin-left: 0.6em; }

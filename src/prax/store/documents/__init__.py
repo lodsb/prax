@@ -122,14 +122,22 @@ from .meta import (  # noqa: F401
 )
 from .places import (  # noqa: F401
     MTIME_SLACK,
+    REACH_CHECKS,
+    REFERENCED,
     ROOT_NAME,
     duplicate_places,
     end_crawl,
+    live_photo_clip,
     original_file,
     place_roots,
+    place_roots_of,
+    places_in_brief,
     places_of,
     record_places,
+    referenced_kind,
+    referenced_originals,
     single_copies,
+    unreachable_originals,
 )
 from .readings import (  # noqa: F401
     _EQ_REF,
@@ -244,6 +252,7 @@ from .text import (  # noqa: F401
     rechunk,
     reference_chunks,
     register,
+    register_references,
     set_chunk_marks,
     set_reference_links,
     set_text_source,
