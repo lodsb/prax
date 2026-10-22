@@ -6313,6 +6313,16 @@ and their refusals, the sender's dry run, real run and folder run
 against a door on a port, and the tool's cap. The first real crawl of
 the NAS is the user's to start.
 
+## 2026-10-22: CI red since 2026-10-19, an empty pymupdf4llm
+
+Every CI run from `7994c9d` (a commit of docs alone) on failed nine tests
+with `No module named 'pymupdf'`; `2bfb5a6` before it passed. pymupdf4llm
+2.0 came out between the two, and its wheel is 904 bytes: metadata, no
+code and no dependencies, so a fresh install had no `pymupdf`, which
+prax imports itself (the profile, the page images, the OCR paths). The
+`ingest` extra now holds `pymupdf4llm>=1.27,<2` and names `pymupdf`.
+The desktop's venv had 1.28.2 throughout, so the local suite never saw it.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
