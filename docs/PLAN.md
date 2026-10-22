@@ -55,7 +55,7 @@ About 115 commits; `docs/log.md` has each night.
 
 ### Next, in order
 
-1. **AQ stage 2: the crawl and `where`.** This stage needs no mount and
+1. (done 2026-10-22; its first run on the NAS is the user's) **AQ stage 2: the crawl and `where`.** This stage needs no mount and
    no card. It adds `POST /places` and `prax_send.py --places <root>`,
    run on the NAS: every file hashed in full and posted in batches,
    unseen rows marked `gone`. Then `GET /places` (by doc, hash, or root
@@ -967,9 +967,12 @@ not done.
       - [x] (2026-10-19) **Stage 1**: migration 49's `places` and
             `documents.held`, `places.roots`, `store.original_file` the
             one reader of an original, `store.record_places`.
-      - [ ] **Stage 2**: `POST /places`, `prax_send.py --places` run on
-            the NAS, `GET /places`, `/places/single`, `/places/duplicates`,
-            the MCP `where` tool.
+      - [x] (2026-10-22) **Stage 2**: `POST /places` with
+            `/places/start` and `/places/done`, `prax_send.py --places`
+            (and `--under` for one folder), `GET /places`,
+            `/places/single`, `/places/duplicates`, the MCP `where` tool;
+            the administrator's alone. Its first run on the NAS is the
+            user's.
       - [ ] **The user's answer**: what is referenced (audio and video
             recommended, or a size line).
       - [ ] **Stage 3**: `POST /ingest/reference`, `--reference`, range

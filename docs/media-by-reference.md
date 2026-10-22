@@ -1,10 +1,12 @@
 # Originals by reference
 
 Plan item AQ. Written 2026-09-27 for audio and video. Revised
-2026-10-19 into a design for any original. The user asked on
+2026-10-19 into a design for any original. Stages 1 and 2 built
+(2026-10-19 and -22). The user asked on
 2026-10-18: "on my nas LARGE amounts of video or audio data, i dont want this to be
-duplicated … there may be duplicates all over the place, too". Not
-built. The question at the end needs the user's answer before stage 3.
+duplicated … there may be duplicates all over the place, too".
+The question at the end is half answered (photos); the rest needs
+the user's answer before stage 3.
 
 ## The problem
 
@@ -212,7 +214,7 @@ PDFs held (the question at the end).
    `store.original_source`, with every site above going through it. The
    tests use a temporary root. Nothing is referenced yet, so it must give
    the same answers as now.
-2. **The crawl and `where`.** `POST /places`, `prax_send.py --places`,
+2. (done 2026-10-22) **The crawl and `where`.** `POST /places`, `prax_send.py --places`,
    the reads of "Asking where data is", the `where` tool and the
    duplicates list (`GET /places/duplicates`). This is useful before
    stage 3: it finds the NAS's duplicates and answers where a file is

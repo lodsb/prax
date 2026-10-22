@@ -261,3 +261,51 @@ def test_the_walk_leaves_a_profile_loop_and_its_junk_out(tmp_path: Path) -> None
         for path, _ in files
     }
     assert shallow == set()  # the pdfs are two folders down
+
+
+def test_the_sender_records_every_file_as_a_place_and_sends_none(
+    door: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    share = tmp_path / "media"
+    (share / "photos" / "icloud").mkdir(parents=True)
+    (share / "photos" / "icloud" / "IMG_0001.HEIC").write_bytes(b"heic " * 100)
+    (share / "photos" / "icloud" / "IMG_0001.MOV").write_bytes(b"mov " * 100)
+    (share / "music").mkdir()
+    (share / "music" / "song.flac").write_bytes(b"flac " * 100)
+    (share / "music" / "song copy.flac").write_bytes(b"flac " * 100)
+    (share / "@eaDir").mkdir()
+    (share / "@eaDir" / "thumb.jpg").write_bytes(b"the NAS's own")
+    state = tmp_path / "state.json"
+    sender = _sender()
+    args = [str(share), "--door", door, "--state", str(state), "--quiet"]
+    args += ["--places", "nas-media"]
+
+    assert sender.run([*args, "--dry-run"]) == 0
+    assert "4 files" in capsys.readouterr().out
+    con = store.connect()
+    assert con.execute("SELECT COUNT(*) FROM places").fetchone()[0] == 0
+
+    assert sender.run(args) == 0
+    assert "0 gone" in capsys.readouterr().out
+    rows = dict(con.execute("SELECT path, sha256 FROM places").fetchall())
+    assert sorted(rows) == [
+        "music/song copy.flac",
+        "music/song.flac",
+        "photos/icloud/IMG_0001.HEIC",
+        "photos/icloud/IMG_0001.MOV",
+    ]
+    assert rows["music/song.flac"] == hashlib.sha256(b"flac " * 100).hexdigest()
+    assert con.execute("SELECT COUNT(*) FROM documents").fetchone()[0] == 0
+    assert store.duplicate_places(con)["groups"] == 1
+
+    # the copy deleted, one folder crawled again alone: the rest stays
+    (share / "music" / "song copy.flac").unlink()
+    con.execute("UPDATE places SET last_seen = '2026-01-01T00:00:00Z'")
+    con.commit()
+    again = [str(share / "music"), "--door", door, "--state", str(state), "--quiet"]
+    again += ["--places", "nas-media", "--under", "music"]
+    assert sender.run(again) == 0
+    assert "1 gone" in capsys.readouterr().out
+    gone = dict(con.execute("SELECT path, gone IS NOT NULL FROM places").fetchall())
+    assert gone["music/song copy.flac"] == 1 and gone["music/song.flac"] == 0
+    assert gone["photos/icloud/IMG_0001.HEIC"] == 0

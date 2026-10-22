@@ -570,6 +570,37 @@ def status(doc_ids: list[int]) -> dict[str, Any]:
 
 
 @mcp.tool()
+def where(
+    doc_id: int | None = None,
+    hash: str | None = None,
+    root: str | None = None,
+    path: str | None = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """Where a file lies: a document's (``doc_id``), a hash's, or the one
+    at a place (``root`` and ``path``), with its other copies. Each place
+    is a root, a share named in prax.yaml, and a path in it, last seen by
+    a crawl; a gone one says when it went and, when the same bytes turned
+    up elsewhere later, ``moved_to``. ``copies`` counts the live places,
+    ``held`` says whether prax's archive has the bytes too. At most
+    ``limit`` places are listed. For the administrator's token only."""
+
+    def call() -> dict[str, Any]:
+        params: dict[str, Any] = {}
+        for k, v in (("doc", doc_id), ("hash", hash), ("root", root), ("path", path)):
+            if v is not None and v != "":
+                params[k] = v
+        found: dict[str, Any] = door().get_json("/places", params)
+        places = found.get("places") or []
+        if len(places) > limit:
+            found["places"] = places[:limit]
+            found["left_out"] = len(places) - limit
+        return found
+
+    return _answer(call)
+
+
+@mcp.tool()
 def health() -> dict[str, Any]:
     """Whether prax answers: the door's address as this server uses it,
     whether it is reachable, whether the token is accepted, and whether a

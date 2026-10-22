@@ -6,7 +6,11 @@ NAS's share is ``//nas/media`` on the desktop and ``/mnt/media`` on the
 board and the rows are the same. A crawl records what it saw at a root
 (``record_places``), every file with its full hash, held by prax or not.
 ``original_file`` is the one answer to where an original is read from: the
-archive's file, or else a place that still holds the same bytes.
+archive's file, or else a place that still holds the same bytes. A crawl
+that ends says so (``end_crawl``), and what it did not see is gone. Where
+a file is, its other copies and what exists once are reads of the table
+(``places_of``, ``single_copies``, ``duplicate_places``), for the
+administrator: a path can be as personal as the file.
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from typing import Any
 
 from prax import config
 
-from ..base import _serialized, archive_path, now
+from ..base import _reading, _serialized, archive_path, now
 
 ROOT_NAME = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -118,3 +122,186 @@ def record_places(
     )
     con.commit()
     return {"recorded": len(rows)}
+
+
+def _prefix(prefix: str) -> str:
+    """A crawl's folder inside its root: empty for the whole root."""
+    prefix = (prefix or "").strip("/")
+    if prefix and _parts(prefix) is None:
+        raise ValueError(f"prefix: a folder inside the root with '/', not {prefix!r}")
+    return prefix
+
+
+def _under(prefix: str) -> tuple[str, list[str]]:
+    """The SQL that keeps a root's rows to those under ``prefix``."""
+    if not prefix:
+        return "", []
+    like = prefix.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return " AND path LIKE ? ESCAPE '\\'", [like + "/%"]
+
+
+@_serialized
+def end_crawl(
+    con: sqlite3.Connection, root: str, since: str, prefix: str = ""
+) -> dict[str, int]:
+    """A crawl of ``root`` (or of its folder ``prefix``) that began at
+    ``since`` is over: each place in it the crawl did not see again is
+    gone from now. The row stays, so prax can say where a file was.
+    Returns ``{"gone"}``."""
+    if not ROOT_NAME.fullmatch(root or ""):
+        raise ValueError(f"root: a lower-case name, not {root!r}")
+    clause, args = _under(_prefix(prefix))
+    cur = con.execute(
+        "UPDATE places SET gone = ? WHERE root = ? AND gone IS NULL"
+        " AND last_seen < ?" + clause,
+        [now(), root, since, *args],
+    )
+    con.commit()
+    return {"gone": cur.rowcount}
+
+
+def _place(r: Any, mapped: dict[str, Path]) -> dict[str, Any]:
+    """A row of ``root, path, size, first_seen, last_seen, gone`` as an
+    answer's place."""
+    out = {
+        "root": r[0],
+        "path": r[1],
+        "size": r[2],
+        "first_seen": r[3],
+        "last_seen": r[4],
+        "mapped": r[0] in mapped,
+    }
+    if r[5]:
+        out["gone"] = r[5]
+    return out
+
+
+@_reading
+def places_of(
+    con: sqlite3.Connection,
+    *,
+    digest: str | None = None,
+    doc_id: int | None = None,
+    root: str | None = None,
+    path: str | None = None,
+) -> dict[str, Any] | None:
+    """Where the file of a hash, a document or a place lies: every place
+    of its hash, the live ones first, each with ``mapped`` (whether this
+    host maps its root) and, when gone, the moment it went. A gone place
+    whose bytes turned up at a place first seen after it was last seen
+    says ``moved_to``. ``copies`` counts the live places, ``held`` says
+    whether the archive has the bytes too. None when the hash, the
+    document or the place is unknown."""
+    if doc_id is not None:
+        row = con.execute(
+            "SELECT hash FROM documents WHERE id = ?", (doc_id,)
+        ).fetchone()
+        digest = row[0] if row else None
+    elif root is not None and path is not None:
+        row = con.execute(
+            "SELECT sha256 FROM places WHERE root = ? AND path = ?", (root, path)
+        ).fetchone()
+        digest = row[0] if row else None
+    if not digest:
+        return None
+    digest = digest.lower()
+    rows = con.execute(
+        "SELECT root, path, size, first_seen, last_seen, gone FROM places"
+        " WHERE sha256 = ? ORDER BY gone IS NOT NULL, last_seen DESC, root, path",
+        (digest,),
+    ).fetchall()
+    doc = con.execute("SELECT id FROM documents WHERE hash = ?", (digest,)).fetchone()
+    if not rows and doc is None:
+        return None
+    mapped = place_roots()
+    places = [_place(r, mapped) for r in rows]
+    live = [p for p in places if "gone" not in p]
+    for p in places:
+        if "gone" in p:
+            later = [q for q in live if q["first_seen"] > p["last_seen"]]
+            if later:
+                p["moved_to"] = f"{later[0]['root']}/{later[0]['path']}"
+    out: dict[str, Any] = {
+        "hash": digest,
+        "copies": len(live),
+        "held": archive_path(digest).exists(),
+        "places": places,
+    }
+    if doc is not None:
+        out["doc_id"] = doc[0]
+    return out
+
+
+@_reading
+def single_copies(
+    con: sqlite3.Connection, *, root: str | None = None, limit: int = 50
+) -> dict[str, Any]:
+    """The files with one live place and no copy in the archive, largest
+    first: what one disk's failure would lose. ``root`` keeps those whose
+    one place is there. Returns the count and bytes of all of them and the
+    first ``limit``."""
+    rows = con.execute(
+        "SELECT root, path, size, first_seen, last_seen, gone, sha256 FROM places"
+        " WHERE gone IS NULL"
+        " AND sha256 NOT IN (SELECT hash FROM documents WHERE held = 1)"
+        " GROUP BY sha256 HAVING COUNT(*) = 1"
+        + (" AND root = ?" if root else "")
+        + " ORDER BY size DESC",
+        (root,) if root else (),
+    ).fetchall()
+    mapped = place_roots()
+    kept = rows
+    return {
+        "files": len(kept),
+        "bytes": sum(r[2] for r in kept),
+        "largest": [{**_place(r, mapped), "hash": r[6]} for r in kept[: max(0, limit)]],
+    }
+
+
+@_reading
+def duplicate_places(
+    con: sqlite3.Connection,
+    *,
+    root: str | None = None,
+    min_size: int = 0,
+    limit: int = 50,
+    places_shown: int = 20,
+) -> dict[str, Any]:
+    """The files that lie at more than one live place, those whose extra
+    copies take the most space first (the size times the copies beyond
+    one). ``root`` keeps the groups with a place there. Each group lists
+    at most ``places_shown`` of its places and counts all of them. Returns
+    the count of groups, the bytes the extra copies take, and the first
+    ``limit`` groups."""
+    groups = con.execute(
+        "SELECT sha256, MAX(size), COUNT(*) FROM places WHERE gone IS NULL"
+        " AND size >= ? GROUP BY sha256 HAVING COUNT(*) > 1"
+        + (" AND SUM(root = ?) > 0" if root else "")
+        + " ORDER BY MAX(size) * (COUNT(*) - 1) DESC",
+        (min_size, root) if root else (min_size,),
+    ).fetchall()
+    mapped = place_roots()
+    out = []
+    for digest, size, n in groups[: max(0, limit)]:
+        rows = con.execute(
+            "SELECT root, path, size, first_seen, last_seen, gone FROM places"
+            " WHERE sha256 = ? AND gone IS NULL ORDER BY root, path LIMIT ?",
+            (digest, places_shown),
+        ).fetchall()
+        doc = con.execute(
+            "SELECT id FROM documents WHERE hash = ?", (digest,)
+        ).fetchone()
+        group: dict[str, Any] = {
+            "hash": digest,
+            "size": size,
+            "copies": n,
+            "places": [_place(r, mapped) for r in rows],
+        }
+        if doc is not None:
+            group["doc_id"] = doc[0]
+        out.append(group)
+    return {
+        "groups": len(groups),
+        "extra_bytes": sum(size * (n - 1) for _, size, n in groups),
+        "largest": out,
+    }

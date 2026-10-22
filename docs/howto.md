@@ -1952,7 +1952,11 @@ The ways in:
   kept in `~/.prax_send.json`) and sends only what is new. Each new
   document keeps where it came from as `meta.origin`, the host and the
   path. Audio and video stay where they are
-  (`docs/media-by-reference.md`). The options are in
+  (`docs/media-by-reference.md`). With `--places NAME` it sends nothing
+  and records where every file of a share lies instead, hashed in full:
+  the share's name is in `places.roots` of prax.yaml, and the door then
+  answers where a file is, its copies, and what lies only once
+  (`/places`, the MCP `where` tool). The options are in
   `clients/send/README.md`.
 
 **The worker** takes every capture the rest of the way. It asks the
@@ -2913,7 +2917,9 @@ Claude Code. A tool called while the door is down answers `{"error":
 `ask`, `maths`, `set_domains`, `set_title`, `promote`,
 `request_reading`, `get_page`, `write_page`, `append_page`,
 `update_section`, `ingest`, `capture_url`, `capture_urls`,
-`sync_project` (a working copy's tracked notes), `ingest_file` (a file on
+`sync_project` (a working copy's tracked notes), `where` (where a
+file lies on the shares a crawl recorded, and its other copies; for the
+administrator's token), `ingest_file` (a file on
 the machine running Claude Code, uploaded to the door), `status` (where
 documents are on their way to being read: queued with its place,
 processing, waiting for a reading and whether its server is up, nothing

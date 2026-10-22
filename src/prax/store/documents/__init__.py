@@ -123,9 +123,13 @@ from .meta import (  # noqa: F401
 from .places import (  # noqa: F401
     MTIME_SLACK,
     ROOT_NAME,
+    duplicate_places,
+    end_crawl,
     original_file,
     place_roots,
+    places_of,
     record_places,
+    single_copies,
 )
 from .readings import (  # noqa: F401
     _EQ_REF,

@@ -14,6 +14,17 @@ a second run over the same tree hashes only what changed.
     python prax_send.py ~/Documents --door https://prax.local:8443 \\
         --domains research --tags from:nas --dry-run
 
+With --places NAME it sends no file: it records where every file under
+ROOT lies, of any kind, hashed in full, as a place of the share that
+prax.yaml names NAME (places.roots), and a file an earlier crawl saw and
+this one did not is marked gone. Run it on the NAS, where the hashing
+reads at the disks' speed; --under says which folder of the share ROOT
+is, so one folder can be crawled again alone.
+
+    python prax_send.py /volume1/media --places nas-media --door http://prax:8000
+    python prax_send.py /volume1/media/photos/icloud --places nas-media \\
+        --under photos/icloud --door http://prax:8000
+
 The token is PRAX_TOKEN in the environment, or --token-file (a file
 holding it); --token on the command line works too but shows in the
 process list. Each document keeps where it came from as meta.origin
@@ -283,7 +294,7 @@ def walk(roots, exts, skip=(), max_depth=MAX_DEPTH, progress=None, stats=None):
     for root in roots:
         root = os.path.abspath(root)
         if os.path.isfile(root):
-            if os.path.splitext(root)[1].lower() in exts:
+            if exts is None or os.path.splitext(root)[1].lower() in exts:
                 yield os.path.dirname(root), [(root, os.path.getsize(root))]
             continue
         base = len(root.rstrip(os.sep).split(os.sep))
@@ -336,7 +347,7 @@ def walk(roots, exts, skip=(), max_depth=MAX_DEPTH, progress=None, stats=None):
                 path = os.path.join(here, name)
                 if os.path.islink(path):
                     continue
-                if os.path.splitext(name)[1].lower() in exts:
+                if exts is None or os.path.splitext(name)[1].lower() in exts:
                     try:
                         size = os.path.getsize(path)
                     except OSError:
@@ -517,6 +528,10 @@ class Door(object):
         body = json.dumps({"hashes": hashes}).encode("utf-8")
         return set(self._open("/known", body, "application/json")["known"])
 
+    def post(self, path, payload):
+        body = json.dumps(payload).encode("utf-8")
+        return self._open(path, body, "application/json")
+
     def send(self, path, fields):
         boundary = "prax" + uuid.uuid4().hex
         name = os.path.basename(fs_text(path))
@@ -604,6 +619,19 @@ def parse(argv):
         action="store_true",
         help="look at the folders an earlier run finished, too",
     )
+    p.add_option(
+        "--places",
+        default=None,
+        metavar="NAME",
+        help="record every file under ROOT, of any kind, as a place of the share"
+        " NAME (prax.yaml places.roots) and send no file",
+    )
+    p.add_option(
+        "--under",
+        default="",
+        metavar="FOLDER",
+        help="with --places: the folder of the share that ROOT is (default: its top)",
+    )
     p.add_option("--insecure", action="store_true", help="accept any TLS certificate")
     p.add_option("--quiet", action="store_true", help="only the summary")
     p.add_option(
@@ -618,6 +646,8 @@ def parse(argv):
         p.error("which tree? (ROOT)")
     if not opts.door:
         p.error("which door? (--door or PRAX_DOOR)")
+    if opts.places and len(roots) != 1:
+        p.error("--places records one tree: one ROOT, the share or its --under folder")
     return opts, roots
 
 
@@ -640,6 +670,120 @@ def exts_of(opts):
     return wanted
 
 
+def relative(path, top, under):
+    """A file's place in its share: its path under ``top`` with ``/``
+    separators, inside the share's folder ``under``."""
+    rel = os.path.relpath(fs_text(path), fs_text(top)).replace(os.sep, "/")
+    return under + "/" + rel if under else rel
+
+
+def places(opts, top, door, state):
+    """``--places``: every file under ``top``, of any kind, hashed in full
+    (the journal keeps a hash while a file's size and mtime stay) and
+    posted to the door in batches as a place of the share ``opts.places``
+    (``POST /places``). No byte is sent. A run that read every file ends
+    the crawl (``POST /places/done``), and the door marks what it did not
+    see under ``--under`` as gone; a run with a file it could not read
+    leaves the crawl open, so no file is called gone for that. A dry run
+    hashes and counts, and posts nothing."""
+    global PROGRESS
+    name, under = opts.places, opts.under.strip("/")
+    top = os.path.abspath(top)
+    counts = {"seen": 0, "bytes": 0, "read": 0, "failed": 0, "gone": 0}
+    started = time.time()
+    progress = PROGRESS = Progress(quiet=opts.quiet, every=opts.progress_every)
+    walked = {}
+    since = None
+    if not opts.dry_run:
+        since = door.post("/places/start", {"root": name, "prefix": under})["since"]
+
+    def read(n):
+        counts["read"] += n
+        progress.show(
+            "hashing | %d files (%s), %s read | %s/s"
+            % (
+                counts["seen"],
+                human_bytes(counts["bytes"]),
+                human_bytes(counts["read"]),
+                human_bytes(counts["read"] / max(0.001, time.time() - started)),
+            )
+        )
+
+    def post(batch):
+        if batch and not opts.dry_run:
+            door.post("/places", {"root": name, "entries": batch})
+
+    say(
+        opts,
+        "recording %s as the share %s%s" % (top, name, " / " + under if under else ""),
+    )
+    batch = []
+    try:
+        for _, files in walk([top], None, opts.skip, opts.max_depth, progress, walked):
+            for path, _size in files:
+                try:
+                    digest = state.hash_of(path, read)
+                    st = os.stat(path)
+                except (IOError, OSError) as exc:
+                    counts["failed"] += 1
+                    say(opts, "cannot read %s: %s" % (fs_text(path), exc))
+                    continue
+                counts["seen"] += 1
+                counts["bytes"] += st.st_size
+                batch.append(
+                    {
+                        "path": relative(path, top, under),
+                        "size": st.st_size,
+                        "mtime": int(st.st_mtime),
+                        "sha256": digest,
+                    }
+                )
+                if len(batch) >= BATCH:
+                    post(batch)
+                    state.save()
+                    batch = []
+        post(batch)
+        if since is not None and not counts["failed"]:
+            out = door.post(
+                "/places/done", {"root": name, "since": since, "prefix": under}
+            )
+            counts["gone"] = out.get("gone", 0)
+    except HTTPError as exc:
+        progress.done()
+        print(
+            "the door refused: HTTP %s (the token? the share's name?)" % exc.code,
+            file=sys.stderr,
+        )
+        return 2
+    except URLError as exc:
+        progress.done()
+        print("the door did not answer: %s" % exc, file=sys.stderr)
+        return 2
+    finally:
+        state.close()
+        PROGRESS = None
+    progress.done()
+    print(
+        "%d files (%s), %s hashed, %d failed, "
+        % (
+            counts["seen"],
+            human_bytes(counts["bytes"]),
+            human_bytes(counts["read"]),
+            counts["failed"],
+        )
+        + (
+            "nothing posted (a dry run)"
+            if opts.dry_run
+            else "%d gone since the last crawl" % counts["gone"]
+            if not counts["failed"]
+            else "the crawl left open: run again to mark what is gone"
+        )
+        + ", %d folders left out (%s)"
+        % (walked.get("left_out", 0), human_time(time.time() - started))
+    )
+    return 1 if counts["failed"] else 0
+
+
 def run(argv=None):
     """Walk, hash, ask and send, a batch of folders at a time as the walk
     finds them, so a tree of millions of files starts sending at once and
@@ -652,6 +796,8 @@ def run(argv=None):
     exts = exts_of(opts)
     door = Door(opts.door, token_of(opts), insecure=opts.insecure)
     state = State(opts.state or None)
+    if opts.places:
+        return places(opts, roots[0], door, state)
     host = opts.host or socket.gethostname()
     limit = int(opts.max_mb * (1 << 20))
     counts = {

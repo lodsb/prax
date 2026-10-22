@@ -81,6 +81,32 @@ Some folders are left out on purpose:
 
 The last line of a run says how many folders were left out.
 
-Audio and video are not sent. How the library should hold a file too
-large to copy, by reference to where it lives, is written down in
-`docs/media-by-reference.md` and not built.
+## Where every file lies (`--places`)
+
+With `--places NAME` the sender sends no file. It records where every
+file under the tree lies, of any kind: its path, size, modification time
+and full sha256, posted in batches to the door's `POST /places`. `NAME`
+is the share's name in the door's prax.yaml (`places.roots`), so the
+same rows hold however a host mounts the share.
+
+    python prax_send.py /volume1/media --places nas-media --door http://prax:8000
+    python prax_send.py /volume1/media/photos/icloud --places nas-media         --under photos/icloud --door http://prax:8000
+
+Run it on the NAS: it reads every file once, at the disks' speed (about
+14 hours for 5 TB at 100 MB/s), and the journal keeps each hash while a
+file's size and modification time stay, so a later run reads only what
+is new or changed. A run that read every file ends the crawl, and the
+door marks each file of the share (or of the `--under` folder) that it
+did not see again as gone; the row stays, so prax can still say where
+the file was and whether a copy is left. A run with a file it could not
+read leaves the crawl open and marks nothing gone. `--under` crawls one
+folder of the share alone, such as a folder a new dump went into.
+
+The door then answers where a file is (`GET /places`, the MCP `where`
+tool), what lies at several places (`GET /places/duplicates`) and what
+lies at one place only and is not in prax's archive (`GET
+/places/single`). All of it is for the administrator's token only.
+
+Audio and video are not sent. Reading a file from its place instead of
+copying it in is stage 3 of `docs/media-by-reference.md`, not built
+yet.

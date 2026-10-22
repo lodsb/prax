@@ -48,6 +48,7 @@ EXPECTED_TOOLS = {
     "why",
     "figure",
     "page_image",
+    "where",
 }
 
 
@@ -435,3 +436,17 @@ def test_a_client_looks_at_a_page_and_a_figure(proxied: TestClient) -> None:
     assert got.content[0].mime_type == "image/png"
     # a figure the document's text does not show is not served under it
     assert "error" in call("figure", doc_id=note, ref=ref)
+
+
+def test_where_names_a_files_places_and_keeps_its_answer_small(
+    proxied: TestClient,
+) -> None:
+    digest = "ab" * 32
+    entries = [
+        {"path": f"copies/{i}.wav", "size": 10, "mtime": 0, "sha256": digest}
+        for i in range(14)
+    ]
+    proxied.post("/places", json={"root": "nas", "entries": entries})
+    got = call("where", hash=digest, limit=5)
+    assert got["copies"] == 14 and len(got["places"]) == 5 and got["left_out"] == 9
+    assert "error" in call("where", hash="cd" * 32)

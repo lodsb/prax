@@ -6274,6 +6274,45 @@ changes no answer while nothing is referenced.
 through `GET /doc/{id}/original`, a changed file at its place, an
 unmapped root, paths that leave their root, and a bad root name.
 
+## 2026-10-22: AQ stage 2, where every file lies
+
+The crawl and its reads, which need no mount and no card. On the user's
+plan the phone's photo library goes onto the NAS first, and a crawl
+then shows what lies there and where the copies are.
+
+- **The crawl's three calls.** `POST /places/start` answers the door's
+  own time, `POST /places` takes a batch of what was seen (at most
+  `store.KNOWN_BATCH` entries), and `POST /places/done` hands the time
+  back: `store.end_crawl` marks each place under the root, or under the
+  crawl's folder (`prefix`), that was last seen before it as gone. The
+  door's clock decides, so a NAS whose clock is off marks nothing wrong.
+- **`prax_send.py --places NAME`.** Every file under the tree, of any
+  kind, hashed in full where it lies; the journal keeps a hash while a
+  file's size and mtime stay, so a second run reads only what changed.
+  `--under FOLDER` crawls one folder of the share alone (a new dump).
+  A run with a file it could not read leaves the crawl open, so no file
+  is called gone for an error. The walk leaves out what the send mode
+  leaves out (hidden files, a NAS's `@eaDir`, a copied profile's junk).
+- **The reads.** `store.places_of` (by hash, document, or root and
+  path): every place, the live ones first, `mapped` for a root this host
+  maps, `gone` with its moment, and `moved_to` when the same bytes were
+  first seen elsewhere after the place was last seen; `copies` and
+  `held`. `store.single_copies`: what lies once and is not in the
+  archive, largest first. `store.duplicate_places`: the groups whose
+  extra copies take the most space first, each listing at most twenty
+  places. The door serves them at `GET /places`, `/places/single` and
+  `/places/duplicates`, and the MCP `where` tool lists at most ten
+  places with `left_out`.
+- **The wall.** None of the routes is in `auth.RESTRICTED_ROUTES`: a
+  path can be as personal as its file, so where files lie is the
+  administrator's alone (`test_where_files_lie_is_the_administrators_alone`).
+
+Tests: a move and a deletion between two crawls, a crawl of one folder,
+duplicates and single copies with a held paper beside them, the routes
+and their refusals, the sender's dry run, real run and folder run
+against a door on a port, and the tool's cap. The first real crawl of
+the NAS is the user's to start.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was
