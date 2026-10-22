@@ -220,6 +220,25 @@ Each reads its source and never writes to it (invariant 10).
 - **A list of works** (releases, artworks, exhibitions) as a page or a
   CSV file.
 
+The owner's own works need no pack of their own yet (the user asked on
+2026-10-23 where their music and releases belong). A release is a
+`work` (core) `authored_by` its makers, `published_by` its label, with
+its tracks `part_of` it. Its audio and video are referenced originals
+like photos (`docs/media-by-reference.md`). Belonging is per document,
+in `meta.domains`, and a document may be in several packs:
+
+| file | domains |
+|---|---|
+| a clip of a child's birthday | biography |
+| a release's master, its artwork | biography, studio |
+| a recording of a concert the owner played | biography, studio |
+| a session's project files, a mix | studio |
+
+Biography holds the work as part of a life, and studio holds how it was
+made. A module for releases (catalogue numbers, ISRCs, editions, a
+discography) is added when a release needs a fact core cannot state.
+It goes on top of studio, the way kitchen is on top of craft.
+
 ### 9. The wall, for everyone in it
 
 A pack says what things mean; the wall says who may see a document

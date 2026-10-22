@@ -62,9 +62,9 @@ About 115 commits; `docs/log.md` has each night.
    and path), `GET /places/single`, `GET /places/duplicates`, and the
    MCP `where` tool behind the wall. The first run over 5 TB takes about
    14 hours at the NAS's hashing speed.
-2. **The user's answer on what is referenced** (`docs/media-by-reference.md`,
-   the question at the end). The recommendation is audio and video, with
-   everything else held. The alternative is a size line.
+2. (answered 2026-10-23) **The user's answer on what is referenced.**
+   Photos, audio and video are; everything else is held
+   (`docs/media-by-reference.md`, the question at the end).
 3. **AQ stage 3: references.** `POST /ingest/reference`, `--reference`,
    range serving from a place, the backup's `referenced` count, heal's
    `unreachable-originals`, and the document page's places. The door's
@@ -83,7 +83,6 @@ About 115 commits; `docs/log.md` has each night.
 **Waiting on the user:**
 
 - the list below, whose numbers are of 2026-10-06;
-- AQ's question (step 2);
 - AE, the distilled surfer;
 - AH, the Rust spike, which waits until the schema stops moving
   (migration 49 landed on 2026-10-19);
@@ -973,8 +972,8 @@ not done.
             `/places/single`, `/places/duplicates`, the MCP `where` tool;
             the administrator's alone. Its first run on the NAS is the
             user's.
-      - [ ] **The user's answer**: what is referenced (audio and video
-            recommended, or a size line).
+      - [x] (2026-10-23) **The user's answer**: photos, audio and video
+            are referenced, everything else held; no size line.
       - [ ] **Stage 3**: `POST /ingest/reference`, `--reference`, range
             serving from a Samba mount, the backup's `referenced` count,
             heal's `unreachable-originals`, the UI's places.

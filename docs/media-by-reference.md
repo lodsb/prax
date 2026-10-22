@@ -5,8 +5,8 @@ Plan item AQ. Written 2026-09-27 for audio and video. Revised
 (2026-10-19 and -22). The user asked on
 2026-10-18: "on my nas LARGE amounts of video or audio data, i dont want this to be
 duplicated … there may be duplicates all over the place, too".
-The question at the end is half answered (photos); the rest needs
-the user's answer before stage 3.
+The question at the end was answered on 2026-10-22 (photos) and
+2026-10-23 (audio and video), so stage 3 can start.
 
 ## The problem
 
@@ -232,15 +232,24 @@ PDFs held (the question at the end).
 Two were answered on 2026-10-19. The NAS is reached over ssh and
 could be mounted with Samba, so the crawler runs on the NAS and the
 door mounts the share to serve from it. The crawl lists every file, so
-prax can name the other copies when one moves or is deleted. One
-question remains:
+prax can name the other copies when one moves or is deleted. The
+third was answered in two parts:
 
-1. **What is referenced?** Part answered on 2026-10-22: photos are, on
-   the user's plan to copy the phone's library onto the NAS. prax keeps
-   their metadata, a preview and a thumbnail as derived artifacts
-   (`docs/biography.md`, §7). My recommendation for the rest: audio and
-   video from a `--reference` crawl, and every other file held. PDFs are small next to
-   recordings, their figures and pages are served out of the original,
-   and holding them keeps them when the NAS is gone. The alternative is a
-   size line (say `door.max_upload_mb`, 256 MB). It also catches a large
-   scanned book, but a 20 MB voice memo stays held.
+1. **What is referenced?** Photos, audio and video; every other file is
+   held. Photos were answered on 2026-10-22, on the user's plan to copy
+   the phone's library onto the NAS. prax keeps their metadata, a
+   preview and a thumbnail as derived artifacts (`docs/biography.md`,
+   §7). Audio and video were answered on 2026-10-23: "audio and video
+   are referenced in the same way". PDFs stay held: they are small next
+   to recordings, their figures and pages are served out of the
+   original, and holding them keeps them when the NAS is gone. The size
+   line (`door.max_upload_mb`) was the alternative and is not built.
+
+   A referenced recording is read like a photo, before any model: its
+   container's tags (ID3, Vorbis comments, MP4 atoms: title, artist,
+   album, date, duration) go into `meta`. Its derived artifacts are a
+   poster frame for a video, and later the transcript (stage 4).
+   Whether it is referenced decides nothing about what it is about. A
+   home video and a master of a release are both referenced, and
+   `meta.domains` puts one in biography and the other in biography and
+   studio (`docs/biography.md`, §8).
