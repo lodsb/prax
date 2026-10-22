@@ -233,8 +233,11 @@ door mounts the share to serve from it. The crawl lists every file, so
 prax can name the other copies when one moves or is deleted. One
 question remains:
 
-1. **What is referenced?** My recommendation: audio and video from a
-   `--reference` crawl, and every other file held. PDFs are small next to
+1. **What is referenced?** Part answered on 2026-10-22: photos are, on
+   the user's plan to copy the phone's library onto the NAS. prax keeps
+   their metadata, a preview and a thumbnail as derived artifacts
+   (`docs/biography.md`, §7). My recommendation for the rest: audio and
+   video from a `--reference` crawl, and every other file held. PDFs are small next to
    recordings, their figures and pages are served out of the original,
    and holding them keeps them when the NAS is gone. The alternative is a
    size line (say `door.max_upload_mb`, 256 MB). It also catches a large

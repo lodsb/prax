@@ -173,8 +173,34 @@ reading there is, and the tags a person already wrote cover most of it.
 
 A photo library is large and usually lies on a NAS. It is the case for
 which AQ references an original instead of copying it
-(`docs/media-by-reference.md`). Photos come after AQ stage 3. A
-thumbnail is a derived artifact, filed like a scanned page's crop.
+(`docs/media-by-reference.md`). The user's plan of 2026-10-22: the
+phone's library is copied onto the NAS, and prax keeps what it read and
+a smaller copy:
+
+- the original stays on the NAS, referenced by its hash and its place;
+- the metadata above, in `meta`;
+- a preview, about 1,600 pixels on the long side (some 300 KB as JPEG
+  or WebP), and a thumbnail of about 320 (some 20 KB). Both are derived
+  artifacts, filed by their own hash like a scanned page's crop
+  (`figures.FILED`), never in SQLite (invariant 2);
+- what the readings found: the caption as text, so a search finds it,
+  and the perceptual hash.
+
+20,000 photos then hold about 6 GB in the archive instead of the 60 to
+100 GB of their originals. With the NAS off, the library still shows
+every photo at screen size, and search and the graph work. The full
+original is there whenever the door's host has the share mounted.
+
+Two kinds of file need care. A phone's originals are HEIC, read with
+`pillow-heif`, and a Live Photo is a HEIC with a short `.MOV` of the
+same name beside it: one document, with the clip as a second place.
+And the same picture sent through a messenger or resized is another
+file with another hash. A perceptual hash (a 64-bit digest of what the
+picture looks like) finds those near-duplicates. The crawl finds exact
+copies by hash; the image reader finds near ones by the perceptual
+hash, and a group of near ones is shown, never merged by itself.
+
+Photos come after AQ stages 2 and 3.
 
 ### 8. Importers
 
