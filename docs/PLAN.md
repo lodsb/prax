@@ -69,8 +69,9 @@ About 115 commits; `docs/log.md` has each night.
    range serving from a place, the backup's `referenced` count, heal's
    `unreachable-originals`, and the document page's places. The door's
    host mounts the share with Samba for this stage.
-4. **Without the card, in any order.** AP's design note (global ids
-   beside the integer keys). The engineering leftovers: typed shapes (a
+4. **Without the card, in any order.** AS, versions of a work (steps 1
+   to 4 need no model). AP's design note (global ids beside the integer
+   keys). The engineering leftovers: typed shapes (a
    search hit first) and the remaining complex functions. The measured
    improvements that need no model ("Retrieval and ask", "The graph").
 5. **Once the card runs.** AO's queued fixes: marker for the 586
@@ -990,6 +991,62 @@ not done.
       source; photos as a core capability (EXIF and XMP before any
       model, `depicts` in core, after AQ stage 3); what is personal left
       to the wall's rules, not implied by the pack.
+
+- [ ] **AS. Versions of a work.** The user, 2026-10-23: "some of my old
+      papers are in prax in different versions … not sure if they should
+      be either a version or a dep graph". Three kinds of "the same
+      paper" are kept apart:
+
+      | kind | example | mechanism |
+      |---|---|---|
+      | same bytes | one PDF in two folders | one document, several places (AQ) |
+      | same text, other bytes | a PDF downloaded twice | a copy: heal's `twin-documents` retires it into the keeper (Jaccard of chunk hashes at least `DUPLICATE_THRESHOLD`, 0.9) |
+      | other text, one work | preprint, camera-ready, journal version | a version: nothing yet |
+
+      A version is not a dependency. A dependency is another work: a
+      journal paper that extends a conference paper, a thesis built from
+      papers, a citation. Those are research's `extends` (alias
+      `builds_on`) and the references pass's `cites`, and two works are
+      never folded.
+
+      Measured on 2026-10-23, read-only on the live store: 681 titles
+      are shared by more than one live document (1,877 documents). Of
+      the pairs in groups of at most six, 21 overlap at 0.9 or more
+      (copies, heal's), 155 at 0.5 to 0.9, 270 at 0.1 to 0.5 and 623
+      under 0.1 (mostly different texts with one title, "Introduction").
+      28 groups are larger. The overlap is of exact chunk hashes, so one
+      changed word changes a chunk and versions are undercounted. 337
+      documents are retired as a duplicate so far, and 9 `supersedes`
+      edges are live.
+
+      - [ ] **Step 1, the relation.** A document is a version of a
+            `work` (core's type: "a book as a work rather than as the
+            document at hand"): a relation document -> work, `same_as:
+            schema:exampleOfWork`. `version_of` is kitchen's alias for
+            `variant_of`, so the name is another (`example_of`). The
+            versions are ordered by `supersedes`, which search's
+            staleness already reads. Core 5, additive: the extraction
+            stamps move by migration.
+      - [ ] **Step 2, the candidates.** Pairs of live documents that are
+            likely versions: one title key (heal's) or one arXiv id with
+            another `vN`, or one DOI's preprint and its record; a shared
+            author surname; and an overlap under the twin line. A
+            measure that survives an edit (shingles of words, not chunk
+            hashes) ranks them. Kept as candidates like
+            `entity_candidates`, not written as edges.
+      - [ ] **Step 3, the decision.** A tab of the Review page shows a
+            pair side by side (title, date, length, a diff of their
+            headings) and takes "version", "copy" or "different". A
+            version writes the work (or joins the one either already
+            has), both `example_of` edges and `supersedes` from the
+            later to the earlier by `meta.published`, `producer: human`.
+            A copy retires the twin as heal does. "Different" is kept,
+            so the pair is not asked again.
+      - [ ] **Step 4, the reads.** Search shows a work's newest live
+            version and folds the others under it ("2 other versions",
+            with their ids). `get` names the work and its versions.
+            `traverse` from the work reaches every version's facts. The
+            owner's own papers are the first test set.
 
 ## Later / maybe
 
