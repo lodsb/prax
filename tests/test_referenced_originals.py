@@ -17,12 +17,22 @@ from prax.wall import auth
 CLIP = b"\x00\x00\x00\x18ftypmp42" + b"a creek at dusk " * 64
 
 
-def _config(data_dir: Path, *, roots: dict[str, Path], private: str = "") -> None:
+def _config(
+    data_dir: Path,
+    *,
+    roots: dict[str, Path],
+    private: str = "",
+    referenced_private: bool = True,
+) -> None:
     lines = ["places:", "  roots:"] + [
         f"    {name}: '{where.as_posix()}'" for name, where in roots.items()
     ]
+    if private or not referenced_private:
+        lines += ["private:"]
     if private:
-        lines += ["private:", f"  paths: ['{private}']"]
+        lines += [f"  paths: ['{private}']"]
+    if not referenced_private:
+        lines += ["  referenced: false"]
     (data_dir / config.CONFIG_NAME).write_text("\n".join(lines) + "\n", "utf-8")
 
 
@@ -231,7 +241,13 @@ def test_the_private_rules_read_where_a_referenced_file_lies(
     con: sqlite3.Connection, data_dir: Path, tmp_path: Path, client: TestClient
 ) -> None:
     share = tmp_path / "share"
-    _config(data_dir, roots={"nas": share}, private="photos/family/")
+    # with private.referenced off, only the rules decide
+    _config(
+        data_dir,
+        roots={"nas": share},
+        private="photos/family/",
+        referenced_private=False,
+    )
     photo = _on_share(share, "photos/family/IMG_0004.HEIC", b"heic family " * 20)
     view = _on_share(share, "photos/hills/IMG_0005.HEIC", b"heic hills " * 20)
     _reference(client, "nas", photo, view)
@@ -243,6 +259,62 @@ def test_the_private_rules_read_where_a_referenced_file_lies(
         "SELECT sensitivity FROM documents WHERE hash = ?", (view["sha256"],)
     ).fetchone()
     assert other["sensitivity"] is None
+
+
+def test_a_referenced_original_is_private_from_its_registration(
+    con: sqlite3.Connection, data_dir: Path, tmp_path: Path, client: TestClient
+) -> None:
+    share = tmp_path / "share"
+    _config(data_dir, roots={"nas": share})
+    photo = _on_share(share, "photos/hills/IMG_0006.HEIC", b"heic hills " * 20)
+    memo = _on_share(share, "memos/idea.m4a", b"m4a idea " * 20)
+    _reference(client, "nas", photo, memo)
+    for entry, kind in ((photo, "image"), (memo, "audio")):
+        row = con.execute(
+            "SELECT sensitivity, json_extract(meta, '$.private.cues') AS cues,"
+            " json_extract(meta, '$.sensitivity.by') AS by"
+            " FROM documents WHERE hash = ?",
+            (entry["sha256"],),
+        ).fetchone()
+        assert row["sensitivity"] == "suspected" and row["by"] == "rules"
+        assert f"referenced: {kind}" in row["cues"]
+    # a named token without --personal does not see them
+    doc_id = _doc(con, str(photo["sha256"]))["id"]
+    token = store.VIEWER.set(store.Viewer(name="t", domains=None, personal=False))
+    try:
+        assert doc_id in store.hidden_documents(con)
+    finally:
+        store.VIEWER.reset(token)
+    # a person releases one, and the nightly rules leave it open
+    store.set_sensitivity(con, doc_id, None)
+    store.maintain(con, only=["private"])
+    assert (
+        con.execute(
+            "SELECT sensitivity FROM documents WHERE id = ?", (doc_id,)
+        ).fetchone()[0]
+        is None
+    )
+
+
+def test_the_personal_list_sets_the_referenced_photos_aside(
+    con: sqlite3.Connection, data_dir: Path, tmp_path: Path, client: TestClient
+) -> None:
+    share = tmp_path / "share"
+    _config(data_dir, roots={"nas": share})
+    shots = [
+        _on_share(share, f"photos/IMG_{n:04}.HEIC", f"heic {n} ".encode() * 20)
+        for n in range(3)
+    ]
+    _reference(client, "nas", *shots)
+    bill = store.ingest_text(
+        con, "Kontoauszug for March", title="Kontoauszug 2019-03", mime="text/plain"
+    )
+    store.suspect(con, bill["doc_id"])
+    plain = client.get("/documents/suspected").json()
+    assert [it["id"] for it in plain["items"]] == [bill["doc_id"]]
+    assert plain["total"] == 1 and plain["referenced"] == 3
+    media = client.get("/documents/suspected", params={"referenced": True}).json()
+    assert media["total"] == 3 and len(media["items"]) == 3
 
 
 def test_a_reference_is_refused_a_bad_root_path_or_hash(client: TestClient) -> None:

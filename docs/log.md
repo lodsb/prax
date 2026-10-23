@@ -6384,6 +6384,33 @@ once. The lesson for this host: stop the door and the worker before a
 `pip install` into the venv, and reinstall `onnxruntime-directml` after
 any install that pulls `onnxruntime` (`pip check` names the two that do).
 
+## 2026-10-23: referenced photos and recordings private by default
+
+The user's answer to the question of the day: "they should probably be
+private by default". `store.register_references` now writes every new
+referenced document `suspected`, with the cue `referenced: image` (or
+`audio`, `video`) and `meta.sensitivity.by` `rules`
+(`store.referenced_private`, the setting `private.referenced`, on unless
+a host turns it off). The nightly `private` pass looks only at open
+documents, so it neither repeats the mark nor puts it back on one a
+person released.
+
+A photo library would have buried the Admin page's "personal?" list, so
+`store.suspected_page` leaves the referenced ones out and counts them
+(`referenced`), and `?referenced=true` lists them alone. The user's next
+idea is a media view where a group of photos is released at once; it is
+in the plan under AQ.
+
+The document page: "out of reach from this door" became "offline for
+now" with a "try again" link that asks `/get` again and draws the page
+once the share answers. A referenced picture no longer shows a broken
+image while its share is offline, and its page no longer suggests the
+vision model.
+
+Tests: two more in `tests/test_referenced_originals.py`; the one on the
+private paths runs with `private.referenced` off, so it still shows the
+path rule alone.
+
 # Moved from the plan
 
 What follows is not the record of a night. It is plan material that was

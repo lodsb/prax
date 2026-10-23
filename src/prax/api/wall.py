@@ -90,14 +90,23 @@ def private_rules(request: Request) -> dict[str, Any]:
 
 @router.get("/documents/suspected")
 def documents_suspected(
-    request: Request, offset: int = 0, limit: int = 30, state: str = "suspected"
+    request: Request,
+    offset: int = 0,
+    limit: int = 30,
+    state: str = "suspected",
+    referenced: bool = False,
 ) -> dict[str, Any]:
     """The documents the personal-document rules suspect and no person has
     decided about, with their cues (``store.suspected_page``): the Review
-    page's "personal?" list. A decision is ``PUT /doc/{id}/sensitivity``."""
+    page's "personal?" list, without the referenced photos and recordings
+    unless ``referenced``. A decision is ``PUT /doc/{id}/sensitivity``."""
     try:
         return store.suspected_page(
-            _con(request), state=state, offset=offset, limit=limit
+            _con(request),
+            state=state,
+            offset=offset,
+            limit=limit,
+            referenced=referenced,
         )
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc

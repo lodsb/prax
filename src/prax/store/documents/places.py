@@ -50,6 +50,15 @@ def referenced_kind(mime: str) -> bool:
     return m.startswith(kinds) and m not in mimes.DOCUMENT_IMAGES
 
 
+def referenced_private() -> bool:
+    """Whether a referenced original is ``suspected`` from its
+    registration (``private.referenced``, on by default; the user,
+    2026-10-23): a phone's photos and recordings are personal more often
+    than not, so a named token sees one only after a person releases it."""
+    said = config.setting("private.referenced", default=True)
+    return str(said).lower() not in ("false", "0", "no", "off")
+
+
 def live_photo_clip(con: sqlite3.Connection, root: str, path: str) -> bool:
     """Whether the file at ``path`` is a Live Photo's clip: a ``.mov``
     with a picture of the same name in the same folder, seen at ``root``."""

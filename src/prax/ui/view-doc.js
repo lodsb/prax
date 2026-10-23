@@ -46,8 +46,25 @@ function placesLine(doc) {
   if (!p) return "";
   const shown = p.places.map((pl) => `<code>${esc(pl.root)}</code> ${esc(pl.path)}`).join(" · ");
   const more = p.copies > p.places.length ? ` and ${p.copies - p.places.length} more` : "";
-  const reach = p.reachable ? "" : ` — <span class="error">out of reach from this door</span> (is the share mounted?)`;
-  return `<p class="reading-line muted">not held, read from where it lies: ${shown}${more}${reach}</p>`;
+  const reach = p.reachable ? ""
+    : ` — <span class="error">offline for now</span>: the share is not mounted on this door. <a href="#" class="places-retry">try again</a>`;
+  return `<p class="reading-line muted places-line">not held, read from where it lies: ${shown}${more}${reach}</p>`;
+}
+
+// The offline line's "try again": asks the door again and, once the share
+// answers, opens the page afresh with its player or picture
+function bindPlacesRetry(view, doc) {
+  const link = view.querySelector(".places-retry");
+  if (!link) return;
+  link.addEventListener("click", async (ev) => {
+    ev.preventDefault();
+    link.textContent = "asking…";
+    try {
+      const again = await api(`/get/${doc.id}`, { max_chars: 0 });
+      if (again.places && again.places.reachable) { viewDoc(doc.id, route().params); return; }
+      link.textContent = "still offline, try again";
+    } catch (err) { link.textContent = "try again"; }
+  });
 }
 
 // A recording's own player: the original streamed from the door, which
@@ -603,6 +620,8 @@ async function viewDoc(id, p) {
   const firstPage = highlight ? (chunks.find((c) => c.chunk_id === highlight) || {}).page : null;
   const pageMeta = meta.page || null;
   const nFigures = figureItems(chunks).length;
+  const isImage = (doc.mime || "").startsWith("image/");
+  const offline = !!(doc.places && !doc.places.reachable);
   view.innerHTML = `
   <header class="doc-head">
     ${ancestors.length ? `<div class="crumbs" role="navigation" aria-label="where this page sits">${ancestors.map((a) => `<a href="#doc/${a.doc_id}">${esc(a.title || a.slug)}</a>`).join(" › ")} ›</div>` : ""}
@@ -641,11 +660,12 @@ async function viewDoc(id, p) {
   ${meta.video ? playerHtml(doc, chunks, meta) : mediaHtml(doc, meta)}
   <div class="doc-layout">
     <aside class="doc-outline">${outline(chunks)}</aside>
-    <div class="doc-body">${(doc.mime || "").startsWith("image/") ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? "" : `<p class="muted">No text yet.${(doc.mime || "").startsWith("image/") ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>
+    <div class="doc-body">${isImage && !offline ? `<a href="${originalHref(doc.id)}" target="_blank" rel="noopener"><img class="doc-image" src="${originalHref(doc.id)}" alt="${esc(doc.title || "")}"></a>` : ""}${chunks.length ? "" : `<p class="muted">No text yet.${isImage && !doc.places ? " Describe it with <code>parse_pending.py --ids " + doc.id + " --extractor claude-vision</code>." : ""}</p>`}<div class="doc-more" hidden></div></div>
     <aside class="doc-context" id="doc-context"><p class="muted">Loading context…</p></aside>
   </div>`;
   const pages = pagedBody(view.querySelector(".doc-body"), chunks, highlight, doc, hasMaths(doc, chunks), referenceLinks(chunks));
   DOC_VIEW.pages = pages;  // for the click handlers bound once below
+  bindPlacesRetry(view, doc);
   const player = view.querySelector("#doc-player");
   DOC_VIEW.player = player;
   if (player) {

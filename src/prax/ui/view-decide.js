@@ -49,7 +49,8 @@ async function viewDecide(p) {
   const page = (o) => list.admin
     ? `#admin?${new URLSearchParams({ tab: p.list, offset: o })}`
     : `#review?${new URLSearchParams({ list: p.list, offset: o })}`;
-  const pager = `<div class="pager"><span class="muted">${res.total.toLocaleString()} to decide · ${res.items.length ? offset + 1 : 0}–${Math.min(offset + limit, res.total)}</span>
+  const aside = res.referenced ? ` · ${res.referenced.toLocaleString()} photos and recordings on a share set aside, private until released` : "";
+  const pager = `<div class="pager"><span class="muted">${res.total.toLocaleString()} to decide · ${res.items.length ? offset + 1 : 0}–${Math.min(offset + limit, res.total)}${aside}</span>
     ${offset > 0 ? `<a href="${page(Math.max(0, offset - limit))}">‹ previous</a>` : ""}
     ${offset + limit < res.total ? `<a href="${page(offset + limit)}">next ›</a>` : ""}</div>`;
   box.innerHTML = res.items.length

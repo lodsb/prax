@@ -270,6 +270,20 @@ then on (`store.register` sets `held` 1). The private rules read its
 places' paths as they read `original_path`, so a photo under a path in
 `private.paths` is suspected when it is registered.
 
+Every referenced original is suspected from its registration, whatever
+its path (`private.referenced`, on by default; the user, 2026-10-23). A
+phone's photos, videos and voice memos are personal more often than
+not, and a named token without `--personal` sees one only after a
+person releases it. The cue is `referenced: image` (or `audio`,
+`video`) in `meta.private.cues`, and `meta.sensitivity.by` is `rules`,
+so the nightly `private` pass leaves it as it is and never marks one a
+person released. The Admin page's "personal?" list leaves the
+referenced ones out and counts them (`GET /documents/suspected`,
+`referenced` in the answer; `?referenced=true` lists them). Releasing
+a group at once, an album or a folder or a trip, belongs to a media
+view of its own, which is not built yet. A host whose share holds no
+one's private life sets `private: {referenced: false}`.
+
 `unreachable-originals` answers for a root this door does not map, or
 whose directory is missing, without opening a file. A mounted root is
 looked at file by file, at most `store.REACH_CHECKS` (2,000) files a
@@ -277,6 +291,12 @@ call, so heal does not walk a share of 20,000 photos over the network.
 
 The Admin page's duplicates list is not built yet; `GET
 /places/duplicates` answers it.
+
+The document page of a referenced original whose share is not mounted
+says "offline for now" with its places and a "try again" link, which
+asks the door again and draws the page afresh with its player or its
+picture once the share answers. Neither is drawn while it is offline,
+and a referenced picture's page does not suggest the vision model.
 
 ## Questions for the user
 

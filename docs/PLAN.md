@@ -986,6 +986,18 @@ not done.
             and player. Left for later: the Admin page's duplicates
             list; a recording's tags and a photo's EXIF (stage 4 and
             AR's photo stage).
+      - [x] (2026-10-23) **Private by default**: every referenced
+            original `suspected` at registration (`private.referenced`),
+            set aside from the "personal?" list and counted there; the
+            document page's "offline for now" with "try again", and no
+            broken picture while offline.
+      - [ ] **A media view**, the user's idea of 2026-10-23: the
+            referenced photos and recordings as a library of their own
+            (by folder, by taken date once AR reads EXIF, by album),
+            with a group released or marked personal in one decision.
+            Not as opinionated as a photo program: it is the wall's tool
+            for media first. `GET /documents/suspected?referenced=true`
+            is its list today.
       - [ ] **Stage 4**, once the card runs: a transcription step.
 
 - [ ] (2026-10-20: a design study in `docs/biography.md`, five stages, two questions) **AR. A life in the library.** The user, 2026-10-20: a family
@@ -1100,9 +1112,9 @@ not done.
         vectors and their names never leave the host: no paid model, no
         vision API. A `face` chunk and a `depicts` edge to a person are
         hidden from a named token without `--personal`, and a picture
-        with a named face is `suspected` at least. Proposed on
-        2026-10-23, not yet decided: a referenced picture or recording
-        `suspected` from its registration, before any of this.
+        with a named face is `suspected` at least. A referenced picture
+        or recording is `suspected` from its registration already
+        (`private.referenced`, the user's choice of 2026-10-23).
       - **Measured before step 5 is on by default:** on a sample the
         owner names in step 4, how many faces are tagged at a distance
         line and how many of those are wrong. The line is

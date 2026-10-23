@@ -745,15 +745,28 @@ def suspected_page(
     state: str = "suspected",
     offset: int = 0,
     limit: int = 30,
+    referenced: bool = False,
 ) -> dict[str, Any]:
     """The documents of one sensitivity, with the cues the rules found in
     them. ``suspected``: what the rules suspect and no person has decided
     about, strong cues first (the Admin page's "personal?" list).
     ``personal``: every document a person marked personal, the last marked
-    first (its "marked personal" list, where one is opened again)."""
+    first (its "marked personal" list, where one is opened again).
+
+    A referenced original is suspected from its registration
+    (``private.referenced``), so a photo library would bury the list: the
+    suspected ones are left out unless ``referenced``, and counted as
+    ``referenced``, for a view that releases them in groups."""
     if state not in SENSITIVITY:
         raise ValueError(f"state is one of {SENSITIVITY}")
     where = " FROM documents WHERE sensitivity = ?"
+    aside = 0
+    if state == "suspected":
+        aside = con.execute(
+            "SELECT count(*) FROM documents WHERE sensitivity = ? AND held = 0",
+            (state,),
+        ).fetchone()[0]
+        where += " AND held = 0" if referenced else " AND held = 1"
     total = con.execute("SELECT count(*)" + where, (state,)).fetchone()[0]
     order = (
         " ORDER BY (json_extract(meta, '$.private.cues') LIKE '%strong:%'"
@@ -785,7 +798,7 @@ def suspected_page(
                 "decided": (meta.get("sensitivity") or {}).get("at"),
             }
         )
-    return {"total": int(total), "items": items}
+    return {"total": int(total), "items": items, "referenced": int(aside)}
 
 
 @_reading

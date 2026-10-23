@@ -32,6 +32,7 @@ from .places import (
     place_roots_of,
     record_places,
     referenced_kind,
+    referenced_private,
 )
 
 
@@ -90,6 +91,7 @@ def register_references(
     with its ``doc_id`` and ``created``."""
     record_places(con, root, entries)
     check_meta(meta or {})
+    private = referenced_private()
     out: dict[str, Any] = {
         "created": 0,
         "known": 0,
@@ -119,10 +121,23 @@ def register_references(
                 {"path": path, "doc_id": row["id"], "created": False}
             )
             continue
+        made_meta = dict(meta or {})
+        state = None
+        if private:
+            # suspected, not personal: a person releases it or confirms it
+            state = "suspected"
+            at = now()
+            made_meta["private"] = {
+                "cues": [f"referenced: {mime.split('/')[0]}"],
+                "at": at,
+                "read": False,
+            }
+            made_meta["sensitivity"] = {"state": state, "by": "rules", "at": at}
         cur = con.execute(
-            "INSERT INTO documents (hash, mime, title, original_path, meta, held)"
-            " VALUES (?, ?, ?, ?, ?, 0)",
-            (digest, mime, name, name, json.dumps(meta or {})),
+            "INSERT INTO documents"
+            " (hash, mime, title, original_path, meta, held, sensitivity)"
+            " VALUES (?, ?, ?, ?, ?, 0, ?)",
+            (digest, mime, name, name, json.dumps(made_meta), state),
         )
         doc_id = int(cur.lastrowid or 0)
         made.append(doc_id)
