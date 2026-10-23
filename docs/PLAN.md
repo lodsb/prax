@@ -1056,6 +1056,59 @@ not done.
             `traverse` from the work reaches every version's facts. The
             owner's own papers are the first test set.
 
+- [ ] **AT. Faces.** The user, 2026-10-23: "automatic face recognition
+      where i can identify the faces, so everyone is tagged". After AR's
+      photo stage, because the taken date and the place make a review
+      fast ("every face from one trip"). A person names a group once,
+      and the model tags what is clearly theirs.
+      - [ ] **Step 1, detection.** A worker step `faces` reads each
+            picture through the door (`/doc/N/original`, so a picture on
+            an unmounted share waits). A detector finds each face's box
+            and landmarks: YuNet (OpenCV, Apache 2.0, ONNX) on
+            onnxruntime. A face is a region of the picture: a `face`
+            chunk kind with the box as its locator and the detector's
+            score in `data` (R13: a kind and a locator shape, no table).
+            The detector's name and version are stamped on it.
+      - [ ] **Step 2, the vectors.** A recognition model (SFace, Apache
+            2.0; 128 or 512 dimensions by model) gives each face a
+            vector. It goes into an index of its own,
+            `vectors-face-<model>.usearch` beside the text ones
+            (invariant 1's pattern: a main file, a delta, a merge).
+            InsightFace's models are more accurate, and Immich uses
+            them, but their weights are licensed for non-commercial use
+            only, so prax does not ship them. A host may name one in
+            `prax.yaml` (`faces.model`).
+      - [ ] **Step 3, the groups.** The faces are clustered (HDBSCAN
+            over cosine distance) into groups that are probably one
+            person. A group is a candidate, kept like
+            `entity_candidates`. Nothing is named yet.
+      - [ ] **Step 4, naming.** A tab of the Review page shows a group
+            as a strip of faces and takes a person: a new `person`
+            entity or an existing one, so the face and the name in a
+            letter are one entity. It can also split a group, merge
+            two, mark a face "not a face" or "nobody to name". A name
+            writes `depicts` edges (picture -> person, core's, AR) with
+            `producer: human`. A face XMP already names (MWG regions)
+            and the people a Mac's Photos library names (`osxphotos`,
+            an importer) seed the groups.
+      - [ ] **Step 5, the new pictures.** A face close to a named
+            person's faces gets their name as an INFERRED `depicts` with
+            the distance as its confidence and the run as its producer.
+            A face between two people, or near none, goes to the tab.
+            A wrong tag is ended, never deleted (invariant 8).
+      - **The wall.** A face vector is biometric data. Faces, their
+        vectors and their names never leave the host: no paid model, no
+        vision API. A `face` chunk and a `depicts` edge to a person are
+        hidden from a named token without `--personal`, and a picture
+        with a named face is `suspected` at least. Proposed on
+        2026-10-23, not yet decided: a referenced picture or recording
+        `suspected` from its registration, before any of this.
+      - **Measured before step 5 is on by default:** on a sample the
+        owner names in step 4, how many faces are tagged at a distance
+        line and how many of those are wrong. The line is
+        `faces.match` in `prax.yaml`, measured again for another
+        library, never fixed in code.
+
 ## Later / maybe
 
 From the comparison of 2026-10-07 (`docs/compared.md`, "Ideas worth

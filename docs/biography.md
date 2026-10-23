@@ -168,8 +168,10 @@ lab's micrographs and a museum's scans are pictures too.
   schema). Those become `depicts` edges with no face recognition at all.
 - **A caption** from the vision reading, which needs the card.
 
-Face recognition is left out. It is expensive, it is the most sensitive
-reading there is, and the tags a person already wrote cover most of it.
+Face recognition is a stage of its own after this one (plan item AT,
+asked for on 2026-10-23). It is the most sensitive reading there is, so
+it runs on the host only. A face tag already written to XMP comes first
+and seeds it.
 
 A photo library is large and usually lies on a NAS. It is the case for
 which AQ references an original instead of copying it
