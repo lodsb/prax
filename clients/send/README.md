@@ -90,7 +90,8 @@ is the share's name in the door's prax.yaml (`places.roots`), so the
 same rows hold however a host mounts the share.
 
     python prax_send.py /volume1/media --places nas-media --door http://prax:8000
-    python prax_send.py /volume1/media/photos/icloud --places nas-media \n        --under photos/icloud --door http://prax:8000
+    python prax_send.py /volume1/media/photos/icloud --places nas-media \
+        --under photos/icloud --door http://prax:8000
 
 Run it on the NAS: it reads every file once, at the disks' speed (about
 14 hours for 5 TB at 100 MB/s), and the journal keeps each hash while a
