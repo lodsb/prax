@@ -707,3 +707,43 @@ def graph_event_undo(candidate_id: int, request: Request) -> dict[str, Any]:
         return store.undo_event(_con(request), candidate_id)
     except KeyError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+@router.get("/graph/events/{candidate_id}/timeline")
+def graph_event_timeline(candidate_id: int, request: Request) -> dict[str, Any]:
+    """A group's photos as its bursts, where a cut may go
+    (``store.event_timeline``)."""
+    try:
+        return store.event_timeline(_con(request), candidate_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+class EventCutReq(BaseModel):
+    at: str
+
+
+@router.post("/graph/events/{candidate_id}/split")
+def graph_event_split(
+    candidate_id: int, req: EventCutReq, request: Request
+) -> dict[str, Any]:
+    """A group split before the photos taken at ``at``, kept for every
+    pass after (``store.split_event``)."""
+    try:
+        return store.split_event(_con(request), candidate_id, at=req.at)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@router.post("/graph/events/{candidate_id}/join")
+def graph_event_join(candidate_id: int, request: Request) -> dict[str, Any]:
+    """A cut taken back: the group joins the one before it
+    (``store.join_event``)."""
+    try:
+        return store.join_event(_con(request), candidate_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc

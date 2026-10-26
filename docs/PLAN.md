@@ -1017,6 +1017,11 @@ not done.
             `depicts` from XMP and from faces (AT); a photo added later
             inside a decided event joining it; who attended an event,
             once photos depict people.
+      - [x] (2026-10-27) **Splitting a group**: a person's cut before a
+            burst of its photos (no gap of 3 h), kept in `event_cuts`
+            (migration 52) so every pass starts a group again there;
+            "join with the one before" takes it back
+            (`store.split_event`, `store.join_event`).
       - [ ] **A media view**, the user's idea of 2026-10-23: the
             referenced photos and recordings as a library of their own
             (by folder, by taken date once AR reads EXIF, by album),

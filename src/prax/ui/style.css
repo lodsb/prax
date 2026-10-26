@@ -478,6 +478,10 @@ table.checks code { white-space: normal; word-break: break-word; }
 .event-form { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .event-form input { flex: 1 1 16rem; min-width: 0; }
 .decide-row.done .event-thumbs { opacity: .5; }
+.event-timeline { margin-top: .4rem; }
+.event-burst { border-top: 1px solid var(--line); padding-top: .3rem; }
+.event-burst .event-thumbs { grid-template-columns: repeat(auto-fill, minmax(4.5rem, 1fr)); }
+.event-burst .event-thumbs img { height: 3.6rem; }
 .decide-pair { display: flex; gap: 1.2rem; flex-wrap: wrap; align-items: flex-start; }
 .decide-side { flex: 1 1 14rem; min-width: 0; }
 .decide-arrow { align-self: center; font-size: .84rem; }

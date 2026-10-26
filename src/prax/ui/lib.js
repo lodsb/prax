@@ -412,12 +412,29 @@ function eventRow(it) {
     ? `<form class="event-form"><input name="name" value="${esc(it.suggestion)}" aria-label="the event's name" maxlength="120">
         <button type="submit">an event</button>
         <button type="button" class="secondary" data-event-not>not one</button>
-        <span class="decide-out muted"></span></form>`
+        <button type="button" class="secondary" data-event-split>split…</button>
+        ${cues.cut ? `<button type="button" class="secondary" data-event-join>join with the one before</button>` : ""}
+        <span class="decide-out muted"></span></form><div class="event-timeline"></div>`
     : `<div class="decide-acts"><span>${it.state === "event" ? `an event: <b>${esc(it.name)}</b>` : "not an event"}</span>
         <button type="button" class="secondary" data-event-undo>undo</button>
         <span class="decide-out muted"></span></div>`;
   return `<article class="decide-row event-row" data-candidate="${it.id}">
     <p class="muted">${bits.join(" · ")}</p><div class="event-thumbs">${thumbs}</div>${acts}</article>`;
+}
+// A burst of a group's photos (store.event_timeline): its day and hours,
+// the second day only when it runs past midnight.
+function burstLabel(b) {
+  const a = b.first || "", z = b.last || "";
+  const end = a.slice(0, 10) === z.slice(0, 10) ? z.slice(11, 16) : `${z.slice(5, 10)} ${z.slice(11, 16)}`;
+  return `${a.slice(0, 10)} ${a.slice(11, 16)} – ${end}`;
+}
+// The bursts of a group, each with its thumbnails and, but for the
+// first, a cut before it.
+function timelineRows(t) {
+  return (t.bursts || []).map((b, i) => `<div class="event-burst">
+      <p class="muted">${i ? `<button type="button" class="secondary" data-cut="${esc(b.first)}">split here</button> ` : ""}${esc(burstLabel(b))} · ${b.photos.toLocaleString()} photo${b.photos === 1 ? "" : "s"}</p>
+      <div class="event-thumbs">${(b.sample || []).map((d) => `<a href="#doc/${d}"><img loading="lazy" src="/doc/${d}/thumb" alt=""></a>`).join("")}</div></div>`).join("")
+    || `<p class="muted">no dated photos in it</p>`;
 }
 // A document the personal-document rules suspect: what it is, where it
 // came from, and the cues (the owner's name is only ever "name").
@@ -931,5 +948,5 @@ function moduleOptions(mods, counts, selected) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
+  module.exports = { moduleOptions, fixLabel,esc, parseHash, headingPath, norm, locateChunk, citeLinks, mathSpans, figureItems, referenceLinks, citeMarkers, askInterior, askBlockMarkers, nextAskId, upPanel, waitingList, chunkTarget, publishedLabel, staleNote, staleSources, dateLine, mb, spendPanel, regionList, regionPage, regionName, regionLine, propertiesHtml, labelList, genreRow, eventRow, eventDays, burstLabel, timelineRows, nameDiff, pairRow, sameRule, suspectRow, cleanupRules, cleanupPreview, cleanupRuns, tokensTable, tokenSecret, privateRules, splitRow, mergeRow, entitySide, usd, waitingNote, domainChips, asideLine, ingredientsBox, amount, languageName, queueRate, checksBox, hashUnit, regionHue, strongLinks, placeLabels, neighbourToward };
 }

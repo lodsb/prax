@@ -204,3 +204,41 @@ def test_the_review_routes_and_the_nightly_pass(
     assert client.get("/graph/events", params={"state": "nope"}).status_code == 400
     assert client.post("/graph/events/999999/undo").status_code == 404
     assert client.post("/graph/events/find").json()["candidates"] == 3
+
+
+def test_a_person_splits_a_group_and_the_cut_is_kept(
+    con: sqlite3.Connection, client: TestClient
+) -> None:
+    # a week away and the days at home after it, with no day's gap between
+    trip = _photos(con, "2019-03-01T09:00:00", 10, every_minutes=600, tag="trip")
+    home = _photos(con, "2019-03-05T20:00:00", 9, every_minutes=120, tag="home")
+    store.find_event_candidates(con)
+    (whole,) = store.event_candidates_page(con)["items"]
+    assert whole["photos"] == 19
+    line = client.get(f"/graph/events/{whole['id']}/timeline").json()["bursts"]
+    # ten hours apart: every trip photo is its own burst, the evening one
+    assert [b["photos"] for b in line] == [1] * 10 + [9]
+    at = line[-1]["first"]
+    assert at == "2019-03-05T20:00:00"
+    got = client.post(f"/graph/events/{whole['id']}/split", json={"at": at}).json()
+    assert got["candidates"] == 2 and got["cut"] == at
+    first, second = store.event_candidates_page(con)["items"]
+    assert (first["photos"], second["photos"]) == (len(trip), len(home))
+    assert second["cues"]["cut"] == at and first["cues"]["cut"] == ""
+    # the nightly finds the groups again: the cut holds
+    store.maintain(con, only=["events"])
+    assert [i["photos"] for i in store.event_candidates_page(con)["items"]] == [10, 9]
+    # a cut outside the group, or in a decided one, is refused
+    second = store.event_candidates_page(con)["items"][1]
+    bad = client.post(f"/graph/events/{second['id']}/split", json={"at": at})
+    assert bad.status_code == 400
+    first = store.event_candidates_page(con)["items"][0]
+    store.decide_event(con, first["id"], event=True, name="Away")
+    joined = client.post(f"/graph/events/{second['id']}/join")
+    assert joined.status_code == 400 and "undo" in joined.json()["detail"]
+    store.undo_event(con, first["id"])
+    # joined again: one group
+    second = store.event_candidates_page(con)["items"][1]
+    assert client.post(f"/graph/events/{second['id']}/join").json()["candidates"] == 1
+    assert store.event_candidates_page(con)["items"][0]["photos"] == 19
+    assert client.post("/graph/events/999999/split", json={"at": at}).status_code == 404

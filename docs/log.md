@@ -6571,6 +6571,42 @@ the items done by 2026-10-02, the orders agreed on 2026-09-26 and -27,
 the stages planned on 2026-09-25 and -29, and the engineering passes as
 they were planned. Each says when it was written.
 
+## 2026-10-27: splitting a group of photos
+
+The user, on the events tab: "splitting is the issue". A group is
+decided whole, and the rule of a day's gap joins a trip to the weeks at
+home after it when a photo was taken every day. The largest group holds
+2,352 photos in twenty days. Read-only on the live store, the groups'
+bursts (runs with no gap of a given length):
+
+| photos | days | bursts at 2 h | 3 h | 6 h |
+|---|---|---|---|---|
+| 2,352 | 20 | 46 | 36 | 23 |
+| 1,321 | 11 | 22 | 19 | 11 |
+| 1,020 | 2 | 3 | 3 | 2 |
+| 409 | 7 | 11 | 10 | 7 |
+| 309 | 1 | 1 | 1 | 1 |
+
+A burst is what the page offers to cut before (`EVENT_BURST_HOURS` 3):
+36 rows for the largest group, each with its day, hours, count and six
+thumbnails. A day is too coarse for a party past midnight; a burst
+keeps it whole. A day of 309 photos with no gap of three hours cannot
+be split, which is right for one day's event.
+
+A cut is a moment, `event_cuts.at` (migration 52), and not a change to a
+candidate: `replace_event_candidates` drops and finds every open
+candidate again each night, so a split kept on the candidate would be
+joined back. `photo_groups` starts a group again at the first photo
+taken at or after a cut. `store.split_event` keeps the cut and finds the
+groups again (0.22 s over 12,983 dated photos), so each side is a
+candidate of its own, or none when under eight photos. The piece after a
+cut carries it in its cues, and `store.join_event` takes it back, unless
+a decided group ends within a day before it (undo that first). Routes:
+`GET /graph/events/{id}/timeline`, `POST …/split` (`{"at": …}`),
+`POST …/join`.
+
+Tests: `tests/test_events.py` (5). Suite: 1,591 passed, 4 skipped.
+
 ## 2026-10-20: the order of 2026-10-05, moved here
 
 Replaced in the plan by "Where things stand (2026-10-20)". Its items 1 to 5

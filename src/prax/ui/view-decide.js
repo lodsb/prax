@@ -19,7 +19,7 @@ const DECIDE_LISTS = {
   genre: { title: "genre", view: (p) => viewGenres(p),
     about: "What each document is and what it is about, in your words: the gold sample the genres step is measured against (docs/PLAN.md, stage Z). Tick every genre that fits and every subject it is about; the level in bold comes with them. Tick a level alone when nothing under it fits. A subject may be left out. \"to check\" holds a model's labels, the least sure first: save them as they are, or change the ticks first. \"decided a domain\" is the part of it a domain rule placed by those labels, where a wrong one costs the most. The documents come from each source in turn. About 150 is the aim." },
   events: { title: "events", view: (p) => viewEvents(p),
-    about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back." },
+    about: "Photos taken close together: no gap of a day between two of them, and one country. An event: name it (a folder's name or its place and months to start from), and each photo is recorded at it, with the event in the place most of them were taken. A name another event has joins that one. Not one: never asked again. Undo takes either back. Split…: cut a group before a burst of its photos, kept for every later pass; join takes a cut back." },
   merges: { path: "/graph/merges", title: "merges to check", render: mergeRow,
     about: "Merges already made whose names differ by one word, or where a name was folded into a narrower one. Right: kept, and marked checked. Wrong: the merged one stands on its own again." },
 };
@@ -262,6 +262,24 @@ async function viewEvents(p) {
       });
       form.querySelector("[data-event-not]").addEventListener("click", () =>
         send(`/graph/events/${id}`, { event: false }, () => "not an event"));
+      // a split or a join finds the groups again, so the page is drawn anew
+      const regroup = async (path, body) => {
+        try { await post(path, body); } catch (err) { out.innerHTML = `<span class="error">${esc(err.message)}</span>`; return; }
+        viewEvents(p);
+      };
+      const join = form.querySelector("[data-event-join]");
+      if (join) join.addEventListener("click", () => regroup(`/graph/events/${id}/join`, {}));
+      const line = row.querySelector(".event-timeline");
+      form.querySelector("[data-event-split]").addEventListener("click", async (e) => {
+        if (line.innerHTML) { line.innerHTML = ""; e.target.textContent = "split…"; return; }
+        e.target.textContent = "hide";
+        line.innerHTML = `<p class="muted">loading…</p>`;
+        let t;
+        try { t = await api(`/graph/events/${id}/timeline`); } catch (err) { showError(line, err); return; }
+        line.innerHTML = `<p class="muted">Split before a burst of photos; each side becomes a group of its own (fewer than eight photos are not asked about).</p>${timelineRows(t)}`;
+        line.querySelectorAll("[data-cut]").forEach((b) =>
+          b.addEventListener("click", () => regroup(`/graph/events/${id}/split`, { at: b.dataset.cut })));
+      });
     }
     const undo = row.querySelector("[data-event-undo]");
     if (undo) undo.addEventListener("click", () => send(`/graph/events/${id}/undo`, {}, (r) => `open again${r.ended ? `, ${r.ended} facts ended` : ""}`));
